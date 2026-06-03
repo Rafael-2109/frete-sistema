@@ -1,4 +1,35 @@
+<!-- doc:meta
+tipo: reference
+camada: L3
+sot_de: —
+hub: docs/inventario-2026-05/consolidacao/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Mineração Skill 2 — `transferindo-interno-odoo` (2026-05-24)
+
+> **Papel:** Mineração Skill 2 — `transferindo-interno-odoo` (2026-05-24).
+
+## Indice
+
+- [Scripts lidos por Claude Code (9 — leitura integral)](#scripts-lidos-por-claude-code-9-leitura-integral)
+  - [Service existente + base genérica + caso novo do main](#service-existente-base-genérica-caso-novo-do-main)
+  - [Padrões de transferência (4)](#padrões-de-transferência-4)
+  - [Casos especiais (4)](#casos-especiais-4)
+  - [Operação massiva (1)](#operação-massiva-1)
+- [Scripts minerados por subagente Explore (7 — síntese)](#scripts-minerados-por-subagente-explore-7-síntese)
+  - [1. `15_transferir_preprod_para_estoque_fb.py`](#1-15_transferir_preprod_para_estoque_fbpy)
+  - [2. `17_transferir_preprod_lf_para_estoque.py`](#2-17_transferir_preprod_lf_para_estoquepy)
+  - [3. `substituir_lote_205030410_fb.py`](#3-substituir_lote_205030410_fbpy)
+  - [4. `relotar_migracao_para_lotes_fb.py`](#4-relotar_migracao_para_lotes_fbpy)
+  - [5. `transferir_fluxo_c.py`](#5-transferir_fluxo_cpy)
+  - [6. `transferir_indisp_para_estoque_p15_cd.py`](#6-transferir_indisp_para_estoque_p15_cdpy)
+  - [7. `executar_fluxo_b_vivas.py`](#7-executar_fluxo_b_vivaspy)
+- [Síntese cross-arquivo (16 scripts agregados)](#síntese-cross-arquivo-16-scripts-agregados)
+  - [Padrões repetidos (convergem em 14+/18 scripts)](#padrões-repetidos-convergem-em-1418-scripts)
+  - [Bugs convergentes (G-TRANSFER-01)](#bugs-convergentes-g-transfer-01)
+  - [Átomos finais (Skill 2)](#átomos-finais-skill-2)
+  - [O que NÃO é coberto pela Skill 2 atomica (vira fluxo composto futuro)](#o-que-não-é-coberto-pela-skill-2-atomica-vira-fluxo-composto-futuro)
 
 > Registro consolidado da mineração C1 realizada em 2026-05-24 v2 (Skill 2 maturando). 9 scripts lidos integral por Claude Code + 7 scripts minerados por subagente Explore (sonnet, ~120s) + 2 do main. Total: 18 scripts.
 

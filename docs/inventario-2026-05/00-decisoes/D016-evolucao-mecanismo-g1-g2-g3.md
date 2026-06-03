@@ -2,7 +2,7 @@
 tipo: explanation
 camada: L3
 sot_de: —
-hub: docs/inventario-2026-05/INDEX.md
+hub: docs/inventario-2026-05/00-decisoes/INDEX.md
 superseded_by: —
 atualizado: 2026-06-02
 -->

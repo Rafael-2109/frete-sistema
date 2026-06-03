@@ -1,4 +1,29 @@
+<!-- doc:meta
+tipo: explanation
+camada: L3
+sot_de: —
+hub: docs/blueprint-agente/critica/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # CRÍTICA ARQUITETURAL — Eixo D (Ontologia / Modelo de Mundo)
+
+> **Papel:** CRÍTICA ARQUITETURAL — Eixo D (Ontologia / Modelo de Mundo).
+
+## Indice
+
+- [1. COERÊNCIA — encaixe nas 5 camadas e invariantes](#1-coerência-encaixe-nas-5-camadas-e-invariantes)
+- [2. REAPROVEITAMENTO — onde reusa de verdade e onde erra a peça](#2-reaproveitamento-onde-reusa-de-verdade-e-onde-erra-a-peça)
+  - [ERRO 2.1 — "Fase D0: backfill de entity_key é trivial, a Layer 2 já tem a chave em mãos e só não persiste" (l.190-191) está ERRADO na causa-raiz.](#erro-21-fase-d0-backfill-de-entity_key-é-trivial-a-layer-2-já-tem-a-chave-em-mãos-e-só-não-persiste-l190-191-está-errado-na-causa-raiz)
+  - [ERRO 2.2 — "Fase D2: promover entity_indexer a fonte de nós Cliente canônicos" (l.152-153, l.202-203) reusa a PEÇA ERRADA.](#erro-22-fase-d2-promover-entity_indexer-a-fonte-de-nós-cliente-canônicos-l152-153-l202-203-reusa-a-peça-errada)
+  - [ERRO 2.3 — `key_source="cadastro_cliente.cnpj_cpf"` (l.118) aponta para tabela inexistente.](#erro-23-key_sourcecadastro_clientecnpj_cpf-l118-aponta-para-tabela-inexistente)
+  - [Reaproveitamentos CORRETOS (creditados):](#reaproveitamentos-corretos-creditados)
+- [3. REALIZABILIDADE — valor + rollback por fase, e um acoplamento perigoso](#3-realizabilidade-valor-rollback-por-fase-e-um-acoplamento-perigoso)
+- [4. LACUNAS (a mais importante primeiro)](#4-lacunas-a-mais-importante-primeiro)
+- [5. AMBIÇÃO — o alvo ficou UM DEGRAU abaixo do SOTA que ele mesmo cita](#5-ambição-o-alvo-ficou-um-degrau-abaixo-do-sota-que-ele-mesmo-cita)
+- [RESUMO EXECUTIVO](#resumo-executivo)
+  - [Fontes externas consultadas](#fontes-externas-consultadas)
+- [Contexto](#contexto)
 
 > Revisor: arquiteto senior cético, na LENTE DE TETO (volume nunca julga valor).
 > Foco: coerência com as 5 camadas + invariantes, reaproveitamento real, realizabilidade
@@ -241,3 +266,7 @@ query de comunidade, não um scan linear.
 - [Zep: A Temporal Knowledge Graph Architecture for Agent Memory (arXiv 2501.13956)](https://arxiv.org/html/2501.13956v1) — quádruplo timestamp (t_created/t_expired + t_valid/t_invalid), 3 subgrafos (episode/semantic/community), entity resolution por embedding
 - [Graphiti — Neo4j](https://neo4j.com/blog/developer/graphiti-knowledge-graph-memory/) — invalidação vs descarte, retrieval híbrido
 - [GraphRAG community detection (Microsoft, Leiden)](https://www.mintlify.com/microsoft/graphrag/concepts/community-detection) — clusters hierárquicos para reasoning global (base da ambição de "query de comunidade")
+
+## Contexto
+
+Critica de eixo do blueprint — evolucao do agente logistico. Tema: CRÍTICA ARQUITETURAL — Eixo D (Ontologia / Modelo de Mundo)

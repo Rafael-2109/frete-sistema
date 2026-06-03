@@ -1,3 +1,11 @@
+<!-- doc:meta
+tipo: scratch
+camada: L3
+sot_de: —
+hub: docs/blueprint-agente/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # PROMPT — Testar + Continuar o WIRING do Agente
 
 > Cole isto como mensagem inicial da próxima sessão. Estado em 2026-05-31.

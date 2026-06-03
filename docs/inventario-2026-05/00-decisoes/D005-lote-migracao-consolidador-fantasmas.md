@@ -1,4 +1,14 @@
+<!-- doc:meta
+tipo: explanation
+camada: L3
+sot_de: —
+hub: docs/inventario-2026-05/00-decisoes/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # D005 — Lote `MIGRAÇÃO` na FB consolida estoque fantasma
+
+> **Papel:** D005 — Lote `MIGRAÇÃO` na FB consolida estoque fantasma.
 
 **Data**: 2026-05-17 (criado); 2026-05-18 (padronizado nome com cedilha)
 **Status**: aprovado, em implementacao
@@ -52,3 +62,7 @@ Apos primeira execucao de NF perda/transferencia para FB lote MIGRACAO:
 7. Se nao: tentar opcao 2 (indisponibilizar local de estoque)
 
 Documentar resultado em `docs/inventario-2026-05/03-canary/` apos teste.
+
+## Contexto
+
+ADR (decisao de arquitetura) — ciclo de inventario NACOM/LF/CD/FB 2026-05. Tema: Lote `MIGRAÇÃO` na FB consolida estoque fantasma

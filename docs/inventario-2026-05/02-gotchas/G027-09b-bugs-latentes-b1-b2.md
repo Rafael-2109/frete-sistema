@@ -1,4 +1,30 @@
+<!-- doc:meta
+tipo: explanation
+camada: L3
+sot_de: —
+hub: docs/inventario-2026-05/02-gotchas/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # G027 — Bugs latentes do `09b_executar_pre_etapa.py` (B1 + B2)
+
+> **Papel:** G027 — Bugs latentes do `09b_executar_pre_etapa.py` (B1 + B2).
+
+## Indice
+
+- [B1 — Validação pré-Odoo não persiste FALHA em DB](#b1-validação-pré-odoo-não-persiste-falha-em-db)
+  - [Sintoma](#sintoma)
+  - [Consequência](#consequência)
+  - [Workaround usado em PROD (sessão 2026-05-18)](#workaround-usado-em-prod-sessão-2026-05-18)
+  - [Fix sugerido (futuro)](#fix-sugerido-futuro)
+- [B2 — `localizar_doador` não soma múltiplos quants do mesmo lote](#b2-localizar_doador-não-soma-múltiplos-quants-do-mesmo-lote)
+  - [Sintoma](#sintoma)
+  - [Consequência](#consequência)
+  - [Workaround usado em PROD](#workaround-usado-em-prod)
+  - [Fix sugerido (futuro)](#fix-sugerido-futuro)
+- [Quando fixar](#quando-fixar)
+- [Ref](#ref)
+- [Contexto](#contexto)
 
 **Data**: 2026-05-18 fim de tarde
 **Origem**: extraído de `CHECKPOINT_2026_05_18_CD_FINALIZADO.md` §5 antes do arquivamento parcial
@@ -124,3 +150,7 @@ def localizar_doador_split(odoo, cod, lote_nome, qty_desejada, location_id, comp
 - `00-decisoes/D008-licoes-seguranca-operacional-e1-e2.md` — lições de segurança operacional descobertas na mesma sessão (E1 = duplicação acidental, E2 = workaround stock.lot.name ignorado)
 - `08-execucoes/EXECUCAO_PRE_ETAPA_CD_2026_05_18.md` — relatório de execução
 - `scripts/inventario_2026_05/09b_executar_pre_etapa.py` — script com bugs
+
+## Contexto
+
+Gotcha — ciclo de inventario NACOM/LF/CD/FB 2026-05. Tema: Bugs latentes do `09b_executar_pre_etapa.py` (B1 + B2)

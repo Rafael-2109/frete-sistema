@@ -1,3 +1,11 @@
+<!-- doc:meta
+tipo: scratch
+camada: L3
+sot_de: —
+hub: docs/inventario-2026-05/consolidacao/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # ROADMAP_SKILLS — moved
 
 > ⚠️ **ESTE ARQUIVO FOI MOVIDO.** A fonte única de verdade do roadmap das skills do orquestrador-Odoo é agora:

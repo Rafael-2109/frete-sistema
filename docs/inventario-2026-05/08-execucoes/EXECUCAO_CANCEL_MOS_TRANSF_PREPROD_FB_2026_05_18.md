@@ -1,3 +1,11 @@
+<!-- doc:meta
+tipo: scratch
+camada: L3
+sot_de: —
+hub: docs/inventario-2026-05/08-execucoes/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # EXECUCAO — Cancelar 149 MOs antigas + transferir Pre-Prod -> FB/Estoque (2026-05-18 23:21-23:32)
 
 **Origem do pedido**: Rafael — "Zere as qtds desses pickings nao 'done' e

@@ -1,3 +1,11 @@
+<!-- doc:meta
+tipo: scratch
+camada: L1
+sot_de: —
+hub: docs/inventario-2026-05/v10-skill2-indisp-em-lote/fase-c-bulk/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # FASE C bulk — execucao FB Indisponivel (153 cods restantes + cleanup)
 
 **Data**: 2026-05-25 v11

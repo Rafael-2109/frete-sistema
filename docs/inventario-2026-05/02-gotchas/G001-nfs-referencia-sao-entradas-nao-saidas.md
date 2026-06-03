@@ -1,4 +1,14 @@
+<!-- doc:meta
+tipo: reference
+camada: L3
+sot_de: —
+hub: docs/inventario-2026-05/02-gotchas/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # G001 — NFs de referência do prompt são ENTRADAS, não SAÍDAS
+
+> **Papel:** G001 — NFs de referência do prompt são ENTRADAS, não SAÍDAS.
 
 **Descoberto em:** 2026-05-17 (audit F0)
 **Severidade:** ALTA — afeta o desenho dos 4 services de NF

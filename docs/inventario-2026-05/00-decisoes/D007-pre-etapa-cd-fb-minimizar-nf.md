@@ -1,4 +1,34 @@
+<!-- doc:meta
+tipo: explanation
+camada: L3
+sot_de: —
+hub: docs/inventario-2026-05/00-decisoes/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # D007 — Pre-etapa CD/FB para minimizar NFs inter-filial
+
+> **Papel:** D007 — Pre-etapa CD/FB para minimizar NFs inter-filial.
+
+## Indice
+
+- [Problema](#problema)
+- [Decisao](#decisao)
+  - [Algoritmo pre-etapa por (cod_produto, company_id=CD)](#algoritmo-pre-etapa-por-cod_produto-company_idcd)
+  - [Estado final esperado no CD](#estado-final-esperado-no-cd)
+- [Novas acoes em `acao_decidida`](#novas-acoes-em-acao_decidida)
+  - [Convencao de campos](#convencao-de-campos)
+- [Onda 5 — semantica](#onda-5-semantica)
+- [Generalizacao para FB (futuro)](#generalizacao-para-fb-futuro)
+- [Restricao temporal de doador (regra critica)](#restricao-temporal-de-doador-regra-critica)
+- [Por que MIGRAÇÃO com cedilha (e nao MIGRACAO)](#por-que-migração-com-cedilha-e-nao-migracao)
+- [Servico novo](#servico-novo)
+- [Tests TDD (cobertura)](#tests-tdd-cobertura)
+- [Scripts novos (paralelos, evitam conflito com outra sessao)](#scripts-novos-paralelos-evitam-conflito-com-outra-sessao)
+- [Volume esperado pos-regeneracao](#volume-esperado-pos-regeneracao)
+- [Rollback](#rollback)
+- [Referencias](#referencias)
+- [Contexto](#contexto)
 
 **Data**: 2026-05-18
 **Status**: aprovado, em implementacao (CD agora, FB apos outra sessao finalizar)
@@ -282,3 +312,7 @@ Se algo ja foi EXECUTADO no Odoo (transferencia ou ajuste positivo):
 - Service ja existente reutilizado: `app/odoo/services/stock_internal_transfer_service.py` (D006)
 - Service ja existente: `app/odoo/services/stock_lot_service.py` (D006)
 - Patches para docs existentes: `D007-PATCHES-PARA-DOCS-EXISTENTES.md`
+
+## Contexto
+
+ADR (decisao de arquitetura) — ciclo de inventario NACOM/LF/CD/FB 2026-05. Tema: Pre-etapa CD/FB para minimizar NFs inter-filial

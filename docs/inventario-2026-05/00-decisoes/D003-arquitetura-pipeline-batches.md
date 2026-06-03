@@ -1,4 +1,28 @@
+<!-- doc:meta
+tipo: explanation
+camada: L3
+sot_de: —
+hub: docs/inventario-2026-05/00-decisoes/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # D003 — Arquitetura pipeline em batches (G004)
+
+> **Papel:** D003 — Arquitetura pipeline em batches (G004).
+
+## Indice
+
+- [Decisão](#decisão)
+- [Service renomeado/redesenhado](#service-renomeadoredesenhado)
+- [Mudancas no spec/plano](#mudancas-no-specplano)
+  - [Spec §6.2 — serviços](#spec-62-serviços)
+  - [Spec §7 — modelo de dados](#spec-7-modelo-de-dados)
+  - [Spec §8 — pipeline operacional](#spec-8-pipeline-operacional)
+  - [Plano — Fase 4 reescrita](#plano-fase-4-reescrita)
+  - [Plano — Fase 3 estendida](#plano-fase-3-estendida)
+- [Riscos pendentes](#riscos-pendentes)
+- [Itens em aberto (G005, G006 a investigar)](#itens-em-aberto-g005-g006-a-investigar)
+- [Contexto](#contexto)
 
 **Data:** 2026-05-17
 **Resolve:** G004 (padrao NACOM eh picking + robo CIEL IT + Playwright)
@@ -91,3 +115,7 @@ Em vez de 3 sub-tasks de `AccountMoveIntercompanyService.preview/executar/cancel
 
 - [ ] G005: `action_liberar_faturamento` existe em outros picking types ou apenas em "Expedicao Entre Filiais"?
 - [ ] G006: como o robô CIEL IT decide vincular invoice a picking (campo `ref` ou outro)?
+
+## Contexto
+
+ADR (decisao de arquitetura) — ciclo de inventario NACOM/LF/CD/FB 2026-05. Tema: Arquitetura pipeline em batches (G004)

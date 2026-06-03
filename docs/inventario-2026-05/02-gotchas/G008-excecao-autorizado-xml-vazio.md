@@ -1,4 +1,28 @@
+<!-- doc:meta
+tipo: explanation
+camada: L3
+sot_de: —
+hub: docs/inventario-2026-05/02-gotchas/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # G008 — excecao_autorizado: NF autorizada mas XML autorizado vazio
+
+> **Papel:** G008 — excecao_autorizado: NF autorizada mas XML autorizado vazio.
+
+## Indice
+
+- [Sintoma](#sintoma)
+- [Causa raiz](#causa-raiz)
+- [Solucoes possiveis](#solucoes-possiveis)
+  - [A. Re-consultar SEFAZ via UI Odoo (NAO AUTOMATIZADO)](#a-re-consultar-sefaz-via-ui-odoo-nao-automatizado)
+  - [B. Cancelar SEFAZ + recriar NF (LIMPA - recomendado se < 24h)](#b-cancelar-sefaz-recriar-nf-limpa---recomendado-se-24h)
+  - [C. Aceitar com ressalva sem entrada FB (NAO recomendado)](#c-aceitar-com-ressalva-sem-entrada-fb-nao-recomendado)
+- [Como evitar `excecao_autorizado` no futuro](#como-evitar-excecao_autorizado-no-futuro)
+- [Comportamento esperado em pos-execucao](#comportamento-esperado-em-pos-execucao)
+- [Caso real](#caso-real)
+- [Ref](#ref)
+- [Contexto](#contexto)
 
 **Descoberta**: 2026-05-18 sub-piloto bulk (NF 13150 RETNA/2026/00030)
 **Severidade**: HIGH (bloqueia entrada FB automatica)
@@ -109,3 +133,7 @@ NF 13150 (608630, RETNA/2026/00030) — sub-piloto bulk 2026-05-18:
 - G004 L5 (payment_provider_id obrigatorio)
 - G007 (custo_medio=0)
 - D006 secao L16
+
+## Contexto
+
+Gotcha — ciclo de inventario NACOM/LF/CD/FB 2026-05. Tema: excecao_autorizado: NF autorizada mas XML autorizado vazio

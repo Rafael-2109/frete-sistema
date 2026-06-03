@@ -1,4 +1,28 @@
+<!-- doc:meta
+tipo: reference
+camada: L3
+sot_de: —
+hub: docs/inventario-2026-05/02-gotchas/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # G003 — CFOP real no Odoo diverge do prompt original
+
+> **Papel:** G003 — CFOP real no Odoo diverge do prompt original.
+
+## Indice
+
+- [Contexto](#contexto)
+- [Achado em 00c (5 NFs recentes por direção)](#achado-em-00c-5-nfs-recentes-por-direção)
+- [Análise](#análise)
+  - [1. transf-filial: 5151 ≠ 5152](#1-transf-filial-5151-5152)
+  - [2. dev-industrializacao: 5949 vs 6902 (CFOP estadual vs interestadual)](#2-dev-industrializacao-5949-vs-6902-cfop-estadual-vs-interestadual)
+  - [3. Operações "dev-industrializacao" são 3 distintas](#3-operações-dev-industrializacao-são-3-distintas)
+- [Decisões propostas](#decisões-propostas)
+  - [Decisão 1 — Trocar `cfop` em `MATRIZ_INTERCOMPANY` por `fiscal_position_id` como chave principal](#decisão-1-trocar-cfop-em-matriz_intercompany-por-fiscal_position_id-como-chave-principal)
+  - [Decisão 2 — Estrutura `fiscal_position_id` por `(company_origem, company_destino)`](#decisão-2-estrutura-fiscal_position_id-por-company_origem-company_destino)
+  - [Decisão 3 — `cfop` no MATRIZ_INTERCOMPANY vira informacional (não usado pelo service)](#decisão-3-cfop-no-matriz_intercompany-vira-informacional-não-usado-pelo-service)
+- [Ação](#ação)
 
 **Descoberto em:** 2026-05-17 (audit 00c)
 **Severidade:** ALTA — afeta a definição de `MATRIZ_INTERCOMPANY`

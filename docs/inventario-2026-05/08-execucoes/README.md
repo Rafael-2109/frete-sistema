@@ -1,4 +1,14 @@
+<!-- doc:meta
+tipo: index
+camada: L1
+sot_de: —
+hub: docs/inventario-2026-05/08-execucoes/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Execuções operacionais — Inventário 2026-05
+
+> **Papel:** Execuções operacionais — Inventário 2026-05.
 
 Esta pasta agrupa **relatórios pós-execução** de operações pontuais realizadas durante o ciclo de inventário 2026-05.
 

@@ -1,4 +1,14 @@
+<!-- doc:meta
+tipo: reference
+camada: L3
+sot_de: —
+hub: docs/inventario-2026-05/00-decisoes/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # D014 — CFOP de ENTRADA, regra por tipo de produto e operações de referência
+
+> **Papel:** D014 — CFOP de ENTRADA, regra por tipo de produto e operações de referência.
 
 **Data:** 2026-05-21
 **Decidida por:** Rafael (validação fiscal 2026-05-21)

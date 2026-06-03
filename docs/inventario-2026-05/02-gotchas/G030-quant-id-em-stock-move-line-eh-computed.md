@@ -1,4 +1,26 @@
+<!-- doc:meta
+tipo: explanation
+camada: L3
+sot_de: —
+hub: docs/inventario-2026-05/02-gotchas/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # G030 — `stock.move.line.quant_id` em Odoo CIEL IT é COMPUTED `store: False`
+
+> **Papel:** G030 — `stock.move.line.quant_id` em Odoo CIEL IT é COMPUTED `store: False`.
+
+## Indice
+
+- [Sintoma](#sintoma)
+- [Causa raiz](#causa-raiz)
+- [Solução: cross-ref via TUPLA `(product_id, lot_id, location_id, company_id)`](#solução-cross-ref-via-tupla-product_id-lot_id-location_id-company_id)
+- [Validação AO VIVO 2026-05-24 v7](#validação-ao-vivo-2026-05-24-v7)
+- [Impacto arquitetural](#impacto-arquitetural)
+- [Padrão reaproveitável: campos computed `store: False`](#padrão-reaproveitável-campos-computed-store-false)
+- [Relacionado](#relacionado)
+- [Investigação histórica](#investigação-histórica)
+- [Contexto](#contexto)
 
 **Data:** 2026-05-24 v7 | **Skill afetada:** 9 `consultando-quant-odoo` (átomos novos `listar_move_lines_por_quant`/`listar_pickings_por_quant`)
 **Versão Odoo:** 17 EE (`nacomgoya-prd`)
@@ -163,3 +185,7 @@ Outros campos suspeitos a verificar (Odoo CIEL IT):
 | 2026-05-24 v7 (Fase A) | Claude Code | Probe AO VIVO identificou `quant_id` como many2one stock.quant — INFERÊNCIA INCORRETA: assumiu que era stored |
 | 2026-05-24 v7 (smoke C6) | Claude Code | Smoke real falhou — Odoo retornou lixo. Re-investigação via `fields_get` revelou `store: False` |
 | 2026-05-24 v7 (fix C2) | Claude Code | Refatorado para cross-ref via tupla. 19 pytest verdes + 2 smokes PROD ✅ |
+
+## Contexto
+
+Gotcha — ciclo de inventario NACOM/LF/CD/FB 2026-05. Tema: `stock.move.line.quant_id` em Odoo CIEL IT é COMPUTED `store: False`

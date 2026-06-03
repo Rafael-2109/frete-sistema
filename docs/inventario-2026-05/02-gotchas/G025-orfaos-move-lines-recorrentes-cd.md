@@ -1,4 +1,24 @@
+<!-- doc:meta
+tipo: reference
+camada: L3
+sot_de: —
+hub: docs/inventario-2026-05/02-gotchas/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # G025 — Orfaos de `stock.move.line` recorrentes no CD
+
+> **Papel:** G025 — Orfaos de `stock.move.line` recorrentes no CD.
+
+## Indice
+
+- [Sintoma](#sintoma)
+- [Volumetria descoberta](#volumetria-descoberta)
+- [Causa provavel](#causa-provavel)
+- [Limpeza segura](#limpeza-segura)
+- [Recomendacao operacional](#recomendacao-operacional)
+- [Script de limpeza (template)](#script-de-limpeza-template)
+- [Referencias](#referencias)
 
 > **Renumerado 2026-05-18**: antes era G007. Renomeado para G025 porque o nome
 > original G007 ja era ocupado por `G007-custo-zero-rejeita-sefaz.md` (descoberto

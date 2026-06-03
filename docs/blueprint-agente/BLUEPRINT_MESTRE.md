@@ -1,4 +1,29 @@
+<!-- doc:meta
+tipo: explanation
+camada: L3
+sot_de: —
+hub: docs/blueprint-agente/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # BLUEPRINT MESTRE — A Evolução do Agente Logístico Nacom
+
+> **Papel:** BLUEPRINT MESTRE — A Evolução do Agente Logístico Nacom.
+
+## Indice
+
+- [1. VISÃO ARQUITETURAL](#1-visão-arquitetural)
+- [2. GRAFO DE DEPENDÊNCIAS ENTRE EIXOS](#2-grafo-de-dependências-entre-eixos)
+- [3. SEQUÊNCIA DE EVOLUÇÃO EM ONDAS (ordenada por DEPENDÊNCIA ARQUITETURAL)](#3-sequência-de-evolução-em-ondas-ordenada-por-dependência-arquitetural)
+  - [ONDA 0 — A FUNDAÇÃO FÍSICA: entidade de passo/turno + registry descritivo](#onda-0-a-fundação-física-entidade-de-passoturno-registry-descritivo)
+  - [ONDA 1 — A FUNDAÇÃO SEMÂNTICA: sinal de qualidade step-level + higiene da ontologia](#onda-1-a-fundação-semântica-sinal-de-qualidade-step-level-higiene-da-ontologia)
+  - [ONDA 2 — O ATUADOR DE PLANEJAMENTO: super-loop com verifier de domínio](#onda-2-o-atuador-de-planejamento-super-loop-com-verifier-de-domínio)
+  - [ONDA 3 — FECHAR O FLYWHEEL: promoção automática gated + ontologia consultável](#onda-3-fechar-o-flywheel-promoção-automática-gated-ontologia-consultável)
+  - [ONDA 4 — O TETO DE ESCALA: registry executável + Skill-RAG + injeção `<world_model>`](#onda-4-o-teto-de-escala-registry-executável-skill-rag-injeção-world_model)
+- [4. POR EIXO — ESTADO → ALVO → PRIMEIRA ALAVANCA (incorporando a crítica)](#4-por-eixo-estado-alvo-primeira-alavanca-incorporando-a-crítica)
+- [5. INVARIANTES A PRESERVAR E RISCOS ARQUITETURAIS](#5-invariantes-a-preservar-e-riscos-arquiteturais)
+  - [O que NÃO está verificado (honestidade arquitetural)](#o-que-não-está-verificado-honestidade-arquitetural)
+- [Contexto](#contexto)
 
 > Síntese dos 5 eixos (A flywheel · D ontologia · B planejador · E qualidade · F governança),
 > integrando blueprint + crítica de cada um, num desenho **coerente, ambicioso e realizável**.
@@ -154,3 +179,7 @@ Os blueprints partiram de uma hipótese de fundação (E habilita A; D habilita 
 - Volume/custo de Voyage no bootstrap D2 e do judge online em turnos longos de Odoo (dimensiona INFRA — nº de workers, sampling — NÃO o valor da capacidade).
 - Conteúdo de `tool_skill_mapper` (service L5) — possível reuso para Skill-RAG (F§2), a auditar antes da Onda 4.
 - Campos exatos de agenda/incoterm em `carteira_principal`/`agendamentos_entrega` (D1 valida contra os 298 schemas).
+
+## Contexto
+
+Documento — evolucao do agente logistico. Tema: BLUEPRINT MESTRE — A Evolução do Agente Logístico Nacom

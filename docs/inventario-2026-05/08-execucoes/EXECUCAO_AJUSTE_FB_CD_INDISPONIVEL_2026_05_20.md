@@ -1,3 +1,11 @@
+<!-- doc:meta
+tipo: scratch
+camada: L3
+sot_de: —
+hub: docs/inventario-2026-05/08-execucoes/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # EXECUCAO — Ajuste FB + Transf CD → Indisponível (2026-05-20 02:52–03:51)
 
 **Script**: `scripts/inventario_2026_05/ajuste_fb_cd_indisponivel.py`

@@ -1,4 +1,42 @@
+<!-- doc:meta
+tipo: explanation
+camada: L3
+sot_de: —
+hub: docs/blueprint-agente/eixos/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # EIXO B — DE ROTEADOR A PLANEJADOR
+
+> **Papel:** EIXO B — DE ROTEADOR A PLANEJADOR.
+
+## Indice
+
+- [PARTE 1 — ESTADO REAL (com evidência)](#parte-1-estado-real-com-evidência)
+  - [1.1 O loop é single-shot reativo. Não existe fase de planejamento.](#11-o-loop-é-single-shot-reativo-não-existe-fase-de-planejamento)
+  - [1.2 Roteamento vive como PROSA. Zero enforcement.](#12-roteamento-vive-como-prosa-zero-enforcement)
+  - [1.3 Task* tools (SDK 0.2.82+) são COSMÉTICOS para orquestração.](#13-task-tools-sdk-0282-são-cosméticos-para-orquestração)
+  - [1.4 Auto-verificação: dois sensores passivos, zero atuador.](#14-auto-verificação-dois-sensores-passivos-zero-atuador)
+  - [1.5 Subagentes são FOLHAS. Topologia fan-out de 2 níveis, sem coordenação.](#15-subagentes-são-folhas-topologia-fan-out-de-2-níveis-sem-coordenação)
+  - [1.6 Retries existem — mas SÓ de conexão, nunca de tarefa.](#16-retries-existem-mas-só-de-conexão-nunca-de-tarefa)
+  - [1.7 `plan_mode` existe e está fiado — mas é só "read-only", não plan-and-execute.](#17-plan_mode-existe-e-está-fiado-mas-é-só-read-only-não-plan-and-execute)
+- [PARTE 2 — ALVO ARQUITETURAL (o teto)](#parte-2-alvo-arquitetural-o-teto)
+  - [2.1 Tese de desenho: um MODO PLANEJADOR como super-loop determinístico](#21-tese-de-desenho-um-modo-planejador-como-super-loop-determinístico)
+  - [2.2 Componentes nas 5 camadas do SDK](#22-componentes-nas-5-camadas-do-sdk)
+  - [2.3 Contratos de dados (o que precisa existir como estado)](#23-contratos-de-dados-o-que-precisa-existir-como-estado)
+  - [2.4 Fluxo de dados do super-loop](#24-fluxo-de-dados-do-super-loop)
+  - [2.5 Por que isto é o TETO e não "uma melhoria"](#25-por-que-isto-é-o-teto-e-não-uma-melhoria)
+- [PARTE 3 — CAMINHO INCREMENTAL (reaproveitando o existente)](#parte-3-caminho-incremental-reaproveitando-o-existente)
+  - [Fase B0 — TRIAGE determinístico + flag de modo (esforço P, risco baixo)](#fase-b0-triage-determinístico-flag-de-modo-esforço-p-risco-baixo)
+  - [Fase B1 — PlanState durável + Plan tools (promoção dos Task*) (esforço M, risco médio)](#fase-b1-planstate-durável-plan-tools-promoção-dos-task-esforço-m-risco-médio)
+  - [Fase B2 — VERIFY como gate (promover os 2 sensores a atuadores) (esforço M, risco médio)](#fase-b2-verify-como-gate-promover-os-2-sensores-a-atuadores-esforço-m-risco-médio)
+  - [Fase B3 — REPLAN com budget + escalonamento (esforço M, risco médio)](#fase-b3-replan-com-budget-escalonamento-esforço-m-risco-médio)
+  - [Fase B4 — Verifier como subagente + scatter-gather paralelo (esforço G, risco médio)](#fase-b4-verifier-como-subagente-scatter-gather-paralelo-esforço-g-risco-médio)
+  - [B5 — Prosa migra para tese (esforço P, risco baixo)](#b5-prosa-migra-para-tese-esforço-p-risco-baixo)
+  - [Dependências cross-eixo](#dependências-cross-eixo)
+  - [O que NÃO consegui verificar / ressalvas](#o-que-não-consegui-verificar-ressalvas)
+  - [Primeiro passo de maior alavancagem](#primeiro-passo-de-maior-alavancagem)
+- [Contexto](#contexto)
 
 > Orquestração como MECANISMO, não como prosa.
 > Lente de TETO: o objetivo é ELEVAR o que o agente pode fazer, não podar.
@@ -348,3 +386,7 @@ Três verifiers, escolhidos pelo `kind`/criticidade:
 mudança que converte o primeiro sensor em atuador e prova o conceito de verificação-
 como-passo com o MENOR raio de impacto — todo o aparato (Sonnet validator, score,
 detecção de tabela) já existe; falta só fechar a aresta do grafo.
+
+## Contexto
+
+Eixo do blueprint — evolucao do agente logistico. Tema: EIXO B — DE ROTEADOR A PLANEJADOR

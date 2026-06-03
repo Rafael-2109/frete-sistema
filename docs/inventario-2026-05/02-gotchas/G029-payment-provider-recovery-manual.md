@@ -1,4 +1,25 @@
+<!-- doc:meta
+tipo: reference
+camada: L3
+sot_de: —
+hub: docs/inventario-2026-05/02-gotchas/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # G029 — payment_provider_id ausente em recovery manual de NF
+
+> **Papel:** G029 — payment_provider_id ausente em recovery manual de NF.
+
+## Indice
+
+- [Sintoma](#sintoma)
+- [Causa raiz](#causa-raiz)
+- [Diagnóstico](#diagnóstico)
+- [Workaround imediato](#workaround-imediato)
+- [Fix proposto (não implementado)](#fix-proposto-não-implementado)
+- [Casos observados (2026-05-18)](#casos-observados-2026-05-18)
+- [Quando ocorre](#quando-ocorre)
+- [Ref](#ref)
 
 **Descoberta**: 2026-05-18 sessao 3 tarde (recovery 317461, 317416)
 **Severidade**: HIGH (NF fica em rascunho permanente, SEFAZ não autoriza)

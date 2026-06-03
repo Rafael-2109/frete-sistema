@@ -1,4 +1,30 @@
+<!-- doc:meta
+tipo: explanation
+camada: L3
+sot_de: —
+hub: docs/inventario-2026-05/00-decisoes/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # D008 — Lições de segurança operacional: scripts ad-hoc em PROD (E1 + E2)
+
+> **Papel:** D008 — Lições de segurança operacional: scripts ad-hoc em PROD (E1 + E2).
+
+## Indice
+
+- [E1 — Re-execução acidental causou duplicação no Odoo PROD](#e1-re-execução-acidental-causou-duplicação-no-odoo-prod)
+  - [O que aconteceu](#o-que-aconteceu)
+  - [Como foi descoberto](#como-foi-descoberto)
+  - [Recuperação](#recuperação)
+  - [Lição (PADRÃO OBRIGATÓRIO para scripts ad-hoc)](#lição-padrão-obrigatório-para-scripts-ad-hoc)
+- [E2 — Reinventei busca de `stock.lot` ignorando workaround existente](#e2-reinventei-busca-de-stocklot-ignorando-workaround-existente)
+  - [O que aconteceu](#o-que-aconteceu)
+  - [Workaround correto JÁ EXISTE no código do projeto](#workaround-correto-já-existe-no-código-do-projeto)
+  - [Recuperação](#recuperação)
+  - [Lição (PADRÃO OBRIGATÓRIO)](#lição-padrão-obrigatório)
+- [Por que documentar como D008 (decisão) e não G028 (gotcha)](#por-que-documentar-como-d008-decisão-e-não-g028-gotcha)
+- [Ref](#ref)
+- [Contexto](#contexto)
 
 **Data**: 2026-05-18 07:00-07:30 (sessão CD pré-etapa, fim de tarde)
 **Origem**: extraído de `CHECKPOINT_2026_05_18_CD_FINALIZADO.md` §4.1 antes do arquivamento parcial
@@ -85,7 +111,7 @@ Script `/tmp/resolver_9_bloq.py:buscar_saldo_virtual()` usou:
 lots = odoo.search_read('stock.lot', [['name', '=', lote_nome]], ['id', 'product_id'])
 ```
 
-Esbarrou no [bug do Odoo `stock.lot.name=`](../../app/odoo/services/stock_lot_service.py#L39-L52) que retorna vazio intermitente.
+Esbarrou no [bug do Odoo `stock.lot.name=`](../../../app/odoo/services/stock_lot_service.py#L39-L52) que retorna vazio intermitente.
 
 Caso 168026 cod=4360162 lote=218/25 falhou silenciosamente — o lote **EXISTE** (`id=42812`) mas a busca retornou vazio. Script tratou como "lote não encontrado" e pulou.
 
@@ -141,3 +167,7 @@ E1 e E2 estão relacionados pelo padrão maior: **scripts ad-hoc em PROD precisa
 - `app/odoo/services/recebimento_lf_odoo_service.py` linhas 4188-4275 — outro caso do mesmo workaround
 - `02-gotchas/G027-09b-bugs-latentes-b1-b2.md` — bugs do `09b` descobertos na mesma sessão (B1 não persistir FALHA + B2 não somar quants)
 - `08-execucoes/EXECUCAO_PRE_ETAPA_CD_2026_05_18.md` — execução completa da pré-etapa CD
+
+## Contexto
+
+ADR (decisao de arquitetura) — ciclo de inventario NACOM/LF/CD/FB 2026-05. Tema: Lições de segurança operacional: scripts ad-hoc em PROD (E1 + E2)

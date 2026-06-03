@@ -1,4 +1,28 @@
+<!-- doc:meta
+tipo: reference
+camada: L3
+sot_de: —
+hub: docs/inventario-2026-05/02-gotchas/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # G016 — SSL crash no meio do f5e_transmitir_sefaz perde commits
+
+> **Papel:** G016 — SSL crash no meio do f5e_transmitir_sefaz perde commits.
+
+## Indice
+
+- [Sintoma](#sintoma)
+- [Causa raiz](#causa-raiz)
+- [Estado pos-crash](#estado-pos-crash)
+- [Solucao IMPLEMENTADA (2026-05-18 sessao 2 manha)](#solucao-implementada-2026-05-18-sessao-2-manha)
+  - [Opcao A: commit antes de cada Playwright (defensivo)](#opcao-a-commit-antes-de-cada-playwright-defensivo)
+  - [Opcao B: try/except + rollback + retry](#opcao-b-tryexcept-rollback-retry)
+  - [Opcao C: psycopg2 keepalive (config-level)](#opcao-c-psycopg2-keepalive-config-level)
+  - [Recomendacao para LF completo (660 produtos)](#recomendacao-para-lf-completo-660-produtos)
+- [Ref](#ref)
+- [Update 2026-05-18 sessão 3 tarde — proteção no bulk script](#update-2026-05-18-sessão-3-tarde-proteção-no-bulk-script)
+- [Update 2026-05-18 sessão 3 tarde — sleep entre pickings (ETAPA B)](#update-2026-05-18-sessão-3-tarde-sleep-entre-pickings-etapa-b)
 
 **Descoberta**: 2026-05-18 sub-piloto etapa D (apos G015 fix)
 **Severidade**: HIGH (DB local desincroniza com Odoo — gera estado inconsistente)

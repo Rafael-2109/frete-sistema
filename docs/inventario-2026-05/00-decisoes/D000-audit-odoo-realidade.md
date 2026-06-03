@@ -1,4 +1,32 @@
+<!-- doc:meta
+tipo: explanation
+camada: L3
+sot_de: —
+hub: docs/inventario-2026-05/00-decisoes/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # D000 — Audit Run: realidade do Odoo
+
+> **Papel:** D000 — Audit Run: realidade do Odoo.
+
+## Indice
+
+- [Locations e Picking Types por Company](#locations-e-picking-types-por-company)
+  - [FB (`company_id=1`)](#fb-company_id1)
+  - [CD (`company_id=4`)](#cd-company_id4)
+  - [LF (`company_id=5`)](#lf-company_id5)
+- [NFs de Referência](#nfs-de-referência)
+  - [NF 94457 (`account.move.id=607443`)](#nf-94457-accountmoveid607443)
+  - [NF 13075 (`account.move.id=588577`)](#nf-13075-accountmoveid588577)
+  - [NF 147772 (`account.move.id=603226`)](#nf-147772-accountmoveid603226)
+  - [NF 94410 (`account.move.id=606166`)](#nf-94410-accountmoveid606166)
+- [Decisões derivadas](#decisões-derivadas)
+- [Itens em aberto](#itens-em-aberto)
+- [Audit 00e — Pickings inter-company](#audit-00e-pickings-inter-company)
+  - [Picking types OUTGOING por company](#picking-types-outgoing-por-company)
+  - [Pickings vinculados as NFs ref](#pickings-vinculados-as-nfs-ref)
+- [Contexto](#contexto)
 
 **Data:** 2026-05-17T15:30:44.661418
 **Origem:** `scripts/inventario_2026_05/00_audit_odoo_realidade.py`
@@ -208,3 +236,7 @@ Após este audit, atualizar:
 #### SDTRA/2026/00334 (account.move.id=607334)
 
 
+
+## Contexto
+
+ADR (decisao de arquitetura) — ciclo de inventario NACOM/LF/CD/FB 2026-05. Tema: Audit Run: realidade do Odoo

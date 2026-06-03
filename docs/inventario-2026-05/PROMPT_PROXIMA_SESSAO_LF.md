@@ -1,3 +1,11 @@
+<!-- doc:meta
+tipo: scratch
+camada: L3
+sot_de: —
+hub: docs/inventario-2026-05/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Prompt — Próxima sessão LF (continuação inventário 2026-05)
 
 **Foco exclusivo**: continuar ajuste de estoque da LF (company_id=5).

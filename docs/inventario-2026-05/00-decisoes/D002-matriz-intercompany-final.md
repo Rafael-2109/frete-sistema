@@ -1,4 +1,23 @@
+<!-- doc:meta
+tipo: reference
+camada: L3
+sot_de: —
+hub: docs/inventario-2026-05/00-decisoes/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # D002 — MATRIZ_INTERCOMPANY final (após audit 00d)
+
+> **Papel:** D002 — MATRIZ_INTERCOMPANY final (após audit 00d).
+
+## Indice
+
+- [Correção do falso positivo](#correção-do-falso-positivo)
+- [MATRIZ_INTERCOMPANY confirmada](#matriz_intercompany-confirmada)
+- [Direções sem precedente histórico — atenção do Rafael](#direções-sem-precedente-histórico-atenção-do-rafael)
+  - [Implicação para o inventário](#implicação-para-o-inventário)
+- [Decisões finais propostas](#decisões-finais-propostas)
+- [Variante histórica em LF→CD: 89 vs 64](#variante-histórica-em-lfcd-89-vs-64)
 
 **Data:** 2026-05-17
 **Resolve:** G003 (com info correta sobre Santana de Parnaiba/SP)

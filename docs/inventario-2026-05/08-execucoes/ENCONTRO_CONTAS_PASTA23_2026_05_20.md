@@ -1,3 +1,11 @@
+<!-- doc:meta
+tipo: scratch
+camada: L3
+sot_de: —
+hub: docs/inventario-2026-05/08-execucoes/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Encontro de Contas FB↔LF — Pasta23.xlsx (2026-05-20)
 
 > Doc de trabalho VIVO desta operação. Sobrevive a compactação de contexto.

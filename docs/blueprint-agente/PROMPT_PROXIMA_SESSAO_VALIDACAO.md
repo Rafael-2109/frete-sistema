@@ -1,3 +1,11 @@
+<!-- doc:meta
+tipo: scratch
+camada: L3
+sot_de: —
+hub: docs/blueprint-agente/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # PROMPT — Validação de Funcionamento + Medição de Resultados (Evolução do Agente, Ondas 0-4)
 
 > Estado em 2026-06-01. Todo o blueprint (22 itens, Ondas 0-4 + wiring + A3 gate + A4 promoção)

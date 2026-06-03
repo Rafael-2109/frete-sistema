@@ -37,3 +37,14 @@ def test_skill_md_isento_de_c6(tmp_path):
     p = _write(tmp_path, ".claude/skills/foo/SKILL.md", body)
     codes = [f.code for f in checks_struct.check_file(p, tmp_path, cfg)]
     assert "C6" not in codes, f"SKILL.md deve ser isento de C6; achou {codes}"
+
+def test_scratch_isento_de_c6(tmp_path):
+    # PAD-A Onda 4f: doc tipo:scratch (arquivo/handoff) >100 linhas NAO deve exigir TOC
+    cfg = config.load()
+    doc = ("<!-- doc:meta\ntipo: scratch\ncamada: L3\nsot_de: —\n"
+           "hub: docs/INDEX.md\nsuperseded_by: —\natualizado: 2026-06-03\n-->\n"
+           "# T\n" + ("\nlinha" * 130))
+    p = _write(tmp_path, "docs/historico/handoff.md", doc)
+    (tmp_path / "docs" / "INDEX.md").write_text("# i", encoding="utf-8")
+    codes = [f.code for f in checks_struct.check_file(p, tmp_path, cfg)]
+    assert "C6" not in codes, f"scratch deve ser isento de C6; achou {codes}"

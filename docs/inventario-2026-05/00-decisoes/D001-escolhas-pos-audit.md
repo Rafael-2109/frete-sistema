@@ -1,4 +1,30 @@
+<!-- doc:meta
+tipo: explanation
+camada: L3
+sot_de: —
+hub: docs/inventario-2026-05/00-decisoes/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # D001 — Escolhas pós-audit: MATRIZ_INTERCOMPANY final
+
+> **Papel:** D001 — Escolhas pós-audit: MATRIZ_INTERCOMPANY final.
+
+## Indice
+
+- [COMPANY_LOCATIONS final](#company_locations-final)
+- [PICKING_TYPES finais](#picking_types-finais)
+- [MATRIZ_INTERCOMPANY final](#matriz_intercompany-final)
+- [Surpresa importante: NF 147772 vem do CD, não da FB](#surpresa-importante-nf-147772-vem-do-cd-não-da-fb)
+- [Itens em aberto (G003 — investigar)](#itens-em-aberto-g003-investigar)
+- [Decisões a propagar](#decisões-a-propagar)
+- [G003 — Resultado da investigação (2026-05-17)](#g003-resultado-da-investigação-2026-05-17)
+  - [transf-filial CD → FB](#transf-filial-cd-fb)
+  - [dev-industrializacao FB → LF](#dev-industrializacao-fb-lf)
+  - [dev-industrializacao LF → FB](#dev-industrializacao-lf-fb)
+  - [dev-industrializacao LF → CD](#dev-industrializacao-lf-cd)
+- [G003 — Variacoes confirmadas (audit 00d)](#g003-variacoes-confirmadas-audit-00d)
+- [Contexto](#contexto)
 
 **Data:** 2026-05-17
 **Origem:** F0 Task 0.1 + investigação G001/G002 (`00b_investigar_gotchas.py`)
@@ -173,3 +199,7 @@ Filtro partner_id restrito (companies em Santana de Parnaiba/SP):
 | dev-industrializacao LF → CD | 5949:10 | id=89 (SAÍDA - RETRABALHO); id=64 (REMESSA DE VASILHAME) |
 | transf-filial FB → CD | 5152:10 | id=20 (SAÍDA - TRANSFERÊNCIA ENTRE FILIAIS) |
 | transf-filial CD → FB | 5151:10 | id=49 (SAÍDA - TRANSFERÊNCIA ENTRE FILIAIS) |
+
+## Contexto
+
+ADR (decisao de arquitetura) — ciclo de inventario NACOM/LF/CD/FB 2026-05. Tema: Escolhas pós-audit: MATRIZ_INTERCOMPANY final

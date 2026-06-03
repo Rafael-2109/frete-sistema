@@ -1,4 +1,14 @@
+<!-- doc:meta
+tipo: reference
+camada: L3
+sot_de: —
+hub: docs/inventario-2026-05/01-premissas/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # P011 — dev-industrializacao FB↔LF: fiscal_position por simetria com CD↔LF
+
+> **Papel:** P011 — dev-industrializacao FB↔LF: fiscal_position por simetria com CD↔LF.
 
 **Data:** 2026-05-17
 **Decidida por:** Rafael (resposta usuário 17/05)

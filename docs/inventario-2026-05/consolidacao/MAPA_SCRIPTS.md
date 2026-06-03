@@ -1,4 +1,31 @@
+<!-- doc:meta
+tipo: explanation
+camada: L3
+sot_de: —
+hub: docs/inventario-2026-05/consolidacao/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # MAPA DE MINERAÇÃO — os 90 scripts → gold-scripts
+
+> **Papel:** MAPA DE MINERAÇÃO — os 90 scripts → gold-scripts.
+
+## Indice
+
+- [→ `scripts/quant.py` (StockQuantAdjustmentService) — ajuste de inventário](#scriptsquantpy-stockquantadjustmentservice-ajuste-de-inventário)
+- [→ `scripts/transfer.py` (StockInternalTransferService) — transferência de lote](#scriptstransferpy-stockinternaltransferservice-transferência-de-lote)
+- [→ `scripts/quant.py` + orquestrador MIGRAÇÃO↔Indisponível](#scriptsquantpy-orquestrador-migraçãoindisponível)
+- [→ `app/odoo/estoque/scripts/picking.py` (StockPickingService) — cancelar / validar / devolver picking](#appodooestoquescriptspickingpy-stockpickingservice-cancelar-validar-devolver-picking)
+- [→ `scripts/mo.py` (StockMOService) — cancelar Manufacturing Order](#scriptsmopy-stockmoservice-cancelar-manufacturing-order)
+- [→ `scripts/reserva.py` (StockReservaService) — operar reservas no Odoo](#scriptsreservapy-stockreservaservice-operar-reservas-no-odoo)
+- [→ `scripts/consulta_quant.py` (StockQuantQueryService) — READ ao vivo no Odoo](#scriptsconsulta_quantpy-stockquantqueryservice-read-ao-vivo-no-odoo)
+- [→ `orchestrators/inventario_pipeline.py` (faturamento inter-company — ~20 gotchas)](#orchestratorsinventario_pipelinepy-faturamento-inter-company-20-gotchas)
+- [→ `app/odoo/estoque/scripts/pre_etapa.py` + `orchestrators/pre_etapa_executor.py` (Skill 6 `planejando-pre-etapa-odoo` 🟡 capinada 2026-05-24 v6 + estendida 2026-05-25 v9 com executor C3 macro)](#appodooestoquescriptspre_etapapy-orchestratorspre_etapa_executorpy-skill-6-planejando-pre-etapa-odoo-capinada-2026-05-24-v6-estendida-2026-05-25-v9-com-executor-c3-macro)
+- [→ gold de LEITURA / DIFF (`_utils.py` + 1-2 scripts de leitura consolidados) 📖](#gold-de-leitura-diff-_utilspy-1-2-scripts-de-leitura-consolidados)
+- [→ JÁ-MORTO (discovery F0 + pontuais — arquivar agora em `_historico/`)](#já-morto-discovery-f0-pontuais-arquivar-agora-em-_historico)
+- [Scripts criados DURANTE a sessão (2026-05-20) — operação viva (+10 → 100)](#scripts-criados-durante-a-sessão-2026-05-20-operação-viva-10-100)
+- [Cobertura — INSTANTÂNEO (não estável)](#cobertura-instantâneo-não-estável)
+- [Contexto](#contexto)
 
 > **NOTA (Onda 2 PAD-A):** "gold-script(s)" é vocabulário APOSENTADO — a constituição vigente do orquestrador Odoo é `app/odoo/estoque/CLAUDE.md` (services/primitivas C1/C2 · orchestrators C3). Este doc é mineração transitória válida; a consolidação real dos scripts é a Onda 3.
 
@@ -221,3 +248,7 @@ Este é o **inverso**: cada um dos 90 scripts → **qual gold-script absorve sua
 | orquestradores-exemplo (ajuste_inventario, transferir_lote) | 2 | | |
 
 > **Conferência (instantâneo):** write `34` (quant 11 + transfer 9 + indisp **7** + picking 1 + cancelar_mo 2 + cancelar_reserva 4) + orquestradores `15` (pipeline/escrit/resume 11 + pre_etapa 4) + exemplos `2` + leitura/check `39` (monitor 6 + raiz 11 + auditoria 22) + JÁ-MORTO `13` = **103** (101 `.py` + 2 `.sh`). Não contam: 106 logs `auditoria/log_*.json` (saída) + 2 `README.md` (docs).
+
+## Contexto
+
+Doc de consolidacao — ciclo de inventario NACOM/LF/CD/FB 2026-05. Tema: MAPA DE MINERAÇÃO — os 90 scripts → gold-scripts

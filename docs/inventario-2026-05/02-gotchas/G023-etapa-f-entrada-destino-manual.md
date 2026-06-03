@@ -1,4 +1,25 @@
+<!-- doc:meta
+tipo: reference
+camada: L3
+sot_de: —
+hub: docs/inventario-2026-05/02-gotchas/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # G023 — ETAPA F: entrada manual destino para NFs FB→{LF,CD}
+
+> **Papel:** G023 — ETAPA F: entrada manual destino para NFs FB→{LF,CD}.
+
+## Indice
+
+- [Problema](#problema)
+- [Padrão validado (pre-existente, manual)](#padrão-validado-pre-existente-manual)
+- [Implementação ETAPA F](#implementação-etapa-f)
+- [Fluxo](#fluxo)
+- [Execução validada (2026-05-18 13:58)](#execução-validada-2026-05-18-1358)
+- [Gotcha de naming convention](#gotcha-de-naming-convention)
+- [Gotcha de length (DB local)](#gotcha-de-length-db-local)
+- [Ref](#ref)
 
 **Status**: ✅ IMPLEMENTADO (sessão 3 tarde, 2026-05-18)
 **Severidade**: HIGH (sem essa etapa, mercadoria fica "Em Trânsito" indefinidamente)

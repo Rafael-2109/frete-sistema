@@ -1,4 +1,24 @@
+<!-- doc:meta
+tipo: explanation
+camada: L3
+sot_de: —
+hub: docs/inventario-2026-05/02-gotchas/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # G015 — Protecao automatica price_unit=0 em invoice pos-CIEL IT
+
+> **Papel:** G015 — Protecao automatica price_unit=0 em invoice pos-CIEL IT.
+
+## Indice
+
+- [Sintoma](#sintoma)
+- [Causa raiz](#causa-raiz)
+- [Solucao automatica](#solucao-automatica)
+- [Comportamento](#comportamento)
+- [Validacao](#validacao)
+- [Ref](#ref)
+- [Contexto](#contexto)
 
 **Descoberta**: 2026-05-18 sub-piloto bulk (apos G014 fix)
 **Severidade**: HIGH (SEFAZ rejeita XML schema com vUnCom=0)
@@ -96,3 +116,7 @@ Manual em invoice 626032 (2026-05-18 06:07):
 - G007 (manual: como corrigir price_unit=0 antes de SEFAZ)
 - L13 (fix etapa_b: validar custo_medio antes de criar pickings)
 - D006 secao L22 (a ser adicionada)
+
+## Contexto
+
+Gotcha — ciclo de inventario NACOM/LF/CD/FB 2026-05. Tema: Protecao automatica price_unit=0 em invoice pos-CIEL IT

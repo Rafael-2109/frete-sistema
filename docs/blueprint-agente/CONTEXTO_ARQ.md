@@ -1,4 +1,24 @@
+<!-- doc:meta
+tipo: explanation
+camada: L3
+sot_de: —
+hub: docs/blueprint-agente/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Mergulho Arquitetural do Agente — Contexto (LENTE DE TETO)
+
+> **Papel:** Mergulho Arquitetural do Agente — Contexto (LENTE DE TETO).
+
+## Indice
+
+- [POR QUE este mergulho existe (leia com atenção — corrige um erro anterior)](#por-que-este-mergulho-existe-leia-com-atenção-corrige-um-erro-anterior)
+- [Mandato de cada arquiteto](#mandato-de-cada-arquiteto)
+- [Arquitetura atual do agente (mapa — ponto de partida, APROFUNDE)](#arquitetura-atual-do-agente-mapa-ponto-de-partida-aprofunde)
+- [As 6 teses de partida (do mergulho inicial — APROFUNDE as que tocam seu eixo)](#as-6-teses-de-partida-do-mergulho-inicial-aprofunde-as-que-tocam-seu-eixo)
+- [Ferramentas disponíveis a você](#ferramentas-disponíveis-a-você)
+- [Output](#output)
+- [Contexto](#contexto)
 
 > Documento base para os arquitetos. LEIA inteiro antes de começar.
 
@@ -86,3 +106,7 @@ Regras de qualidade (a análise anterior foi superficial — NÃO repita):
 - Retorne um resumo de 8-15 linhas: as 3-5 alavancas principais do seu eixo (estado→alvo em 1 frase cada)
   + as dependências cross-eixo + o primeiro passo concreto de maior alavancagem.
 - READ-ONLY: não modifique código. Este é um mergulho de DESIGN.
+
+## Contexto
+
+Documento — evolucao do agente logistico. Tema: Mergulho Arquitetural do Agente — Contexto (LENTE DE TETO)

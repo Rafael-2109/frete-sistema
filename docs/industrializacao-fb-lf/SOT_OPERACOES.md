@@ -1,4 +1,31 @@
+<!-- doc:meta
+tipo: explanation
+camada: L3
+sot_de: —
+hub: docs/industrializacao-fb-lf/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # SOT — Operações de Industrialização FB↔LF (fonte única)
+
+> **Papel:** SOT — Operações de Industrialização FB↔LF (fonte única).
+
+## Indice
+
+- [0. Princípio fiscal-contábil (a regra)](#0-princípio-fiscal-contábil-a-regra)
+  - [Tributação por CFOP (✔v2 — NF de retorno é MISTA)](#tributação-por-cfop-v2-nf-de-retorno-é-mista)
+- [1. Decisão de conta (❓ Contador — base do SOT)](#1-decisão-de-conta-contador-base-do-sot)
+- [2. Mapa por operação (hoje → ideal → lever)](#2-mapa-por-operação-hoje-ideal-lever)
+  - [Etapa 1 — FB SAÍDA / Remessa (5901, CST51) — ✅ JÁ CORRETO (referência)](#etapa-1-fb-saída-remessa-5901-cst51-já-correto-referência)
+  - [Etapa 2 — LF ENTRADA / Recebe remessa (1901) — ✅ EXECUTADA E VALIDADA (Model B, 2026-06-01)](#etapa-2-lf-entrada-recebe-remessa-1901-executada-e-validada-model-b-2026-06-01)
+  - [Etapa 3 — LF PRODUÇÃO / MO (interno) — ✅ EXECUTADA E VALIDADA (2026-06-01)](#etapa-3-lf-produção-mo-interno-executada-e-validada-2026-06-01)
+  - [Etapa 4 — LF SAÍDA / Retorno (NF MISTA 5902+5903+5124) — 🔴 BLOQUEADO POR DESENHO (v2.4)](#etapa-4-lf-saída-retorno-nf-mista-590259035124-bloqueado-por-desenho-v24)
+  - [Etapa 5 — FB ENTRADA / Recebe retorno (1124+1902+1903) — 🔴 PRINCIPAL](#etapa-5-fb-entrada-recebe-retorno-112419021903-principal)
+- [3. Prova de fechamento (✔v2 — baixa única; caso com sobra)](#3-prova-de-fechamento-v2-baixa-única-caso-com-sobra)
+- [4. Levers — o que configurar](#4-levers-o-que-configurar)
+- [5. Decisões / verificações pendentes](#5-decisões-verificações-pendentes)
+- [Histórico](#histórico)
+- [Contexto](#contexto)
 
 > **Source of Truth único** do desenho-alvo. Mecanismo Odoo/CIEL IT + IDs: `ACHADOS_TECNICOS.md`. Índice geral: `README.md`. Supersede a abordagem antiga (`1150200001` como conta fiscal) — docs preliminares arquivados em `HISTORICO/` (DIRETRIZ, 00_FLUXO, CICLO_COMPLETO_MAPA, PASSO0).
 > **v2.1 (2026-05-30)** — corrigido após verificação adversarial (5 lentes) + reviewer de ambiguidades. Itens ✔v2/✔v2.1. **Reconciliado**: `movimento_estoque` é POR LINHA (não cabeçalho); sem ICMS em nenhuma etapa.
@@ -142,3 +169,7 @@ Remessa: insumos `I = Ic (consumido) + Is (sobra)`; valor agregado `S`. Invarian
 | 2.5 | 2026-06-01 | **EXPERIMENTO no_payment (sessão 5, NF-teste postada/excluída — zero sujeira)** — `ACHADOS §sessão 5 R2`. **Opção (a) [no_payment no j847] DESCARTADA:** em NF mista o `D CLIENTES` do serviço (5124) absorve a contrapartida da 5902; o no_payment só substitui o receivable em NF 100%-simbólica. **R1 RESOLVIDO:** a 1902/op 3252 debita a transitória 1150100011 (não o PA); Ativo→Ativo fecha via SVL físico do PA. **G4 caminho = opção (b): 5902 em NF SEPARADA** do serviço → aguarda aprovação FISCAL da Contadora (`MATERIAL_CONTADORA_G4.md`). |
 | 2.6 | 2026-06-02 | **EXPERIMENTO ENTRADA (sessão 6, NF-teste postada/excluída — zero sujeira) — R-UNIF PROVADO** (`ACHADOS §"ACHADO 2026-06-02 (sessão 6)"`). `no_payment=22800` no j1001 **sozinho NÃO baixa a ATIVA** numa NF mista de entrada: o `FORNECEDORES` do serviço (1124) absorve a 1902 (NET ATIVA=0, FORNECEDORES=−120,05), espelho do `R2` da saída. **G5a CONVERGE com G4:** a 1902 precisa vir em DOC SEPARADO do serviço — **mesma decisão fiscal (Contadora) resolve os 2 lados**. Estrutura real medida: **0/1600 ENTSI tocam a ATIVA**; 1124→op **1917** (docs diziam 3064/3134), 1902→op **2027** (autocancela); 490 mista / 1060 pura-serviço / 1 pura-1902; op 3252 recompute >400s (lento, normal). |
 | 2.7 | 2026-06-02 | **GROUNDING FLUXO 2-NF (sessão 7, READ-only, 5 scripts `s7_*`) — `ACHADOS §"ACHADO 2026-06-02 (sessão 7)"`.** O "COMO" da separação mapeado ao vivo: separação = **composição de linhas** (insumos 5902/1902 já simbólicos, 0 move; PA viaja na linha de serviço 5124↔1124, única com move). Journal = `picking_type.l10n_br_tipo_pedido` (1 picking=1 NF). **3 gaps p/ executar (b):** journal c/ no_payment PASSIVA `5101020001` inexistente; pt98 `tipo_pedido=False`; veículo da NF de insumos simbólica a definir. SARET prova o mecanismo (no_payment em doc total=0) mas é devolução de produto REAL. Anexado ao `MATERIAL_CONTADORA §5`. PA=Ic+S = resíduo do piloto (G8). |
+
+## Contexto
+
+Documento — industrializacao por encomenda FB<->LF. Tema: SOT — Operações de Industrialização FB↔LF (fonte única)

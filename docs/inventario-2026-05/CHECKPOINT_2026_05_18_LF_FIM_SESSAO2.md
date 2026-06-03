@@ -1,3 +1,11 @@
+<!-- doc:meta
+tipo: scratch
+camada: L3
+sot_de: —
+hub: docs/inventario-2026-05/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # CHECKPOINT — Fim Sessao 2 LF (2026-05-18 manha+tarde)
 
 **Sessao Claude Code 2**: 2026-05-18 ~07:30 → 12:30 UTC

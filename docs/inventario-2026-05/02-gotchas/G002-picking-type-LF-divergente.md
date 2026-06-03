@@ -1,4 +1,14 @@
+<!-- doc:meta
+tipo: reference
+camada: L3
+sot_de: —
+hub: docs/inventario-2026-05/02-gotchas/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # G002 — Divergência picking_type_id da LF
+
+> **Papel:** G002 — Divergência picking_type_id da LF.
 
 **Descoberto em:** 2026-05-17 (audit F0)
 **Severidade:** MÉDIA — afeta consumidor de `.claude/references/odoo/IDS_FIXOS.md`

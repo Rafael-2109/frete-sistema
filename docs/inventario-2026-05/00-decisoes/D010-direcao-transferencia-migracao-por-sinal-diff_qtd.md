@@ -1,4 +1,28 @@
+<!-- doc:meta
+tipo: explanation
+camada: L3
+sot_de: —
+hub: docs/inventario-2026-05/00-decisoes/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # D010 — Direção das transferências MIGRAÇÃO baseada no sinal de `diff_qtd`
+
+> **Papel:** D010 — Direção das transferências MIGRAÇÃO baseada no sinal de `diff_qtd`.
+
+## Indice
+
+- [Contexto](#contexto)
+- [Regra (INVIOLÁVEL — CORRIGIDA 2026-05-19 08:30 BRT)](#regra-inviolável-corrigida-2026-05-19-0830-brt)
+  - [Por que essa é a interpretação correta](#por-que-essa-é-a-interpretação-correta)
+- [Implementação (scripts vigentes)](#implementação-scripts-vigentes)
+  - [`15_transferencia_para_migracao.py`](#15_transferencia_para_migracaopy)
+  - [`15r_transferencia_reversa.py`](#15r_transferencia_reversapy)
+  - [Resultado acumulado (2026-05-19 manhã)](#resultado-acumulado-2026-05-19-manhã)
+- [Armadilha histórica (evitar)](#armadilha-histórica-evitar)
+- [Como aplicar a NOVA execução baseada em MONITOR_DIFF](#como-aplicar-a-nova-execução-baseada-em-monitor_diff)
+- [Casos especiais (tratamento)](#casos-especiais-tratamento)
+- [Referências cruzadas](#referências-cruzadas)
 
 **Data**: 2026-05-19
 **Status**: VIGENTE — SOT para qualquer script que opere sobre planilhas geradas pelo pipeline `monitor/`

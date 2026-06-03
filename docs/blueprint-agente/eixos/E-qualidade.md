@@ -1,4 +1,42 @@
+<!-- doc:meta
+tipo: explanation
+camada: L3
+sot_de: —
+hub: docs/blueprint-agente/eixos/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # EIXO E — Observabilidade de Qualidade
+
+> **Papel:** EIXO E — Observabilidade de Qualidade.
+
+## Indice
+
+- [PARTE 1 — ESTADO REAL (com evidência arquivo:linha)](#parte-1-estado-real-com-evidência-arquivolinha)
+  - [1.1 O que a telemetria mede HOJE: tudo menos qualidade](#11-o-que-a-telemetria-mede-hoje-tudo-menos-qualidade)
+  - [1.2 Os dois campos de qualidade que EXISTEM no schema mas nunca foram escritos](#12-os-dois-campos-de-qualidade-que-existem-no-schema-mas-nunca-foram-escritos)
+  - [1.3 O proxy de "resolução" é estrutural, não de qualidade (falso positivo sistemático)](#13-o-proxy-de-resolução-é-estrutural-não-de-qualidade-falso-positivo-sistemático)
+  - [1.4 Os SINAIS de qualidade que JÁ EXISTEM — mas morrem no chão](#14-os-sinais-de-qualidade-que-já-existem-mas-morrem-no-chão)
+  - [1.5 O que JÁ é LLM-as-judge no sistema (e por que não basta)](#15-o-que-já-é-llm-as-judge-no-sistema-e-por-que-não-basta)
+  - [1.6 Golden datasets existem, com rubrica rica, mas julgamento é MANUAL](#16-golden-datasets-existem-com-rubrica-rica-mas-julgamento-é-manual)
+  - [1.7 O ponto de injeção natural já está cabeado: `_stop_hook`](#17-o-ponto-de-injeção-natural-já-está-cabeado-_stop_hook)
+  - [1.8 Diagnóstico em uma frase](#18-diagnóstico-em-uma-frase)
+- [PARTE 2 — ALVO ARQUITETURAL (o teto)](#parte-2-alvo-arquitetural-o-teto)
+  - [2.1 Princípio: um Quality Signal Spine — uma nota por turno, fundida de N fontes](#21-princípio-um-quality-signal-spine-uma-nota-por-turno-fundida-de-n-fontes)
+  - [2.2 As cinco camadas do SDK — onde cada peça encaixa](#22-as-cinco-camadas-do-sdk-onde-cada-peça-encaixa)
+  - [2.3 Modelo de dados-alvo](#23-modelo-de-dados-alvo)
+  - [2.4 Online judge — reference-free, por turno, amostrado](#24-online-judge-reference-free-por-turno-amostrado)
+  - [2.5 Offline judge + calibração (o que torna o sinal CONFIÁVEL)](#25-offline-judge-calibração-o-que-torna-o-sinal-confiável)
+  - [2.6 Como vira combustível do Eixo A](#26-como-vira-combustível-do-eixo-a)
+- [PARTE 3 — CAMINHO INCREMENTAL (reaproveitando o existente)](#parte-3-caminho-incremental-reaproveitando-o-existente)
+  - [Fase E0 — Persistir os sinais implícitos que já existem (PARAR de jogar fora)](#fase-e0-persistir-os-sinais-implícitos-que-já-existem-parar-de-jogar-fora)
+  - [Fase E1 — Detector de correção/escalada no turno N+1 (sinal implícito mais forte)](#fase-e1-detector-de-correçãoescalada-no-turno-n1-sinal-implícito-mais-forte)
+  - [Fase E2 — Online judge do agente principal (cobertura onde não há feedback)](#fase-e2-online-judge-do-agente-principal-cobertura-onde-não-há-feedback)
+  - [Fase E3 — Offline harness + calibração (tornar o judge CONFIÁVEL)](#fase-e3-offline-harness-calibração-tornar-o-judge-confiável)
+  - [Fase E4 — Fusão + fechar o loop com o Eixo A](#fase-e4-fusão-fechar-o-loop-com-o-eixo-a)
+  - [Não-sabido / não verificado](#não-sabido-não-verificado)
+- [Fontes externas (ancoragem do alvo em padrões 2026)](#fontes-externas-ancoragem-do-alvo-em-padrões-2026)
+- [Contexto](#contexto)
 
 > A métrica que falta. FUNDAÇÃO do flywheel (Eixo A). Sem sinal de qualidade,
 > o loop de aprendizado não tem combustível — ele otimiza no escuro.
@@ -359,3 +397,7 @@ da literatura ("re-pergunta = falha; copiou output = sucesso").
   https://arxiv.org/pdf/2508.02994
 - LangChain *State of AI Agents 2026* (citado): qualidade = barreira #1 p/ deploy; sinais
   implícitos (re-pergunta/cópia/escalada) > star ratings.
+
+## Contexto
+
+Eixo do blueprint — evolucao do agente logistico. Tema: EIXO E — Observabilidade de Qualidade

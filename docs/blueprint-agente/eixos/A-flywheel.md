@@ -1,4 +1,36 @@
+<!-- doc:meta
+tipo: explanation
+camada: L3
+sot_de: —
+hub: docs/blueprint-agente/eixos/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # EIXO A — FLYWHEEL DE APRENDIZADO
+
+> **Papel:** EIXO A — FLYWHEEL DE APRENDIZADO.
+
+## Indice
+
+- [PARTE 1 — ESTADO REAL (com evidência)](#parte-1-estado-real-com-evidência)
+  - [1.1 O que existe e roda HOJE (sensores — ricos)](#11-o-que-existe-e-roda-hoje-sensores-ricos)
+  - [1.2 ONDE O LOOP QUEBRA — quatro rupturas, da mais grave à menos](#12-onde-o-loop-quebra-quatro-rupturas-da-mais-grave-à-menos)
+  - [1.3 Resposta à pergunta central](#13-resposta-à-pergunta-central)
+- [PARTE 2 — ALVO ARQUITETURAL (o teto)](#parte-2-alvo-arquitetural-o-teto)
+  - [2.1 Componente novo central: `quality_signal` (a camada Coach que falta)](#21-componente-novo-central-quality_signal-a-camada-coach-que-falta)
+  - [2.2 `importance_score` vira saída, não entrada (fecha Ruptura #4)](#22-importance_score-vira-saída-não-entrada-fecha-ruptura-4)
+  - [2.3 Promoção automática gated por eval (liga Ruptura #2 com segurança)](#23-promoção-automática-gated-por-eval-liga-ruptura-2-com-segurança)
+  - [2.4 Eval-in-the-loop: golden dataset deixa de ser manual (fecha Ruptura #5)](#24-eval-in-the-loop-golden-dataset-deixa-de-ser-manual-fecha-ruptura-5)
+  - [2.5 Encaixe nas 5 camadas do SDK](#25-encaixe-nas-5-camadas-do-sdk)
+- [PARTE 3 — CAMINHO INCREMENTAL](#parte-3-caminho-incremental)
+  - [Fase A0 — Ativar os sinais GRÁTIS que já são coletados e jogados fora (P, risco baixo)](#fase-a0-ativar-os-sinais-grátis-que-já-são-coletados-e-jogados-fora-p-risco-baixo)
+  - [Fase A1 — Construir `quality_signal` (batch judge + outcome) (M, risco médio)](#fase-a1-construir-quality_signal-batch-judge-outcome-m-risco-médio)
+  - [Fase A2 — Re-calibrar `importance`/`effective_count` por outcome (M, risco médio)](#fase-a2-re-calibrar-importanceeffective_count-por-outcome-m-risco-médio)
+  - [Fase A3 — Eval runner automatizado + gate no D8 (M, risco médio-alto)](#fase-a3-eval-runner-automatizado-gate-no-d8-m-risco-médio-alto)
+  - [Fase A4 — Promoção automática gated de diretrizes (G, risco alto)](#fase-a4-promoção-automática-gated-de-diretrizes-g-risco-alto)
+  - [Fase A5 — Golden dataset auto-crescente (P contínuo, risco baixo)](#fase-a5-golden-dataset-auto-crescente-p-contínuo-risco-baixo)
+- [RESUMO EXECUTIVO](#resumo-executivo)
+- [Contexto](#contexto)
 
 > Blueprint arquitetural. Lente de TETO: o agente JÁ tem mais maquinaria de aprendizado
 > que a maioria dos produtos de IA em produção em 2026. O problema não é "falta de
@@ -317,3 +349,7 @@ e parados.**
 ground-truth humano — o calibrador sem o qual o judge LLM da Fase A1 não tem como ser
 confiável. Sem ground-truth humano, o flywheel só substitui um proxy cego (eco) por outro
 (opinião de um Sonnet não-calibrado).
+
+## Contexto
+
+Eixo do blueprint — evolucao do agente logistico. Tema: EIXO A — FLYWHEEL DE APRENDIZADO

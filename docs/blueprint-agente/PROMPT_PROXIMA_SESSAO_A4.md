@@ -1,3 +1,11 @@
+<!-- doc:meta
+tipo: scratch
+camada: L3
+sot_de: —
+hub: docs/blueprint-agente/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # PROMPT — Iniciar A4 (promoção de diretriz) SEM repetir o drift da sessão A3
 
 > Estado em 2026-06-01. A3 (gate de regressão) está MERGEADA em main, PUSHADA (deploy PROD),

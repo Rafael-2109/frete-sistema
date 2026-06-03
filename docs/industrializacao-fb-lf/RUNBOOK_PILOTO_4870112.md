@@ -1,4 +1,36 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: docs/industrializacao-fb-lf/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # RUNBOOK — Piloto E2E 4870112 (Industrialização FB↔LF)
+
+## Indice
+
+- [0. Visão da sequência (5 etapas) e onde os levers entram](#0-visão-da-sequência-5-etapas-e-onde-os-levers-entram)
+- [0.5 — PLANO DO TESTE CONTROLADO (1 caixa, lote dedicado) — A0→K](#05-plano-do-teste-controlado-1-caixa-lote-dedicado-a0k)
+- [0.6 — CHECKPOINT 2026-06-01 (Etapa 1 EXECUTADA em PROD) + GOTCHAS de criação de remessa](#06-checkpoint-2026-06-01-etapa-1-executada-em-prod-gotchas-de-criação-de-remessa)
+- [0.7 — CHECKPOINT 2026-06-01 (Passo C / Entrada LF INICIADO — Model A) + GOTCHAS de entrada](#07-checkpoint-2026-06-01-passo-c-entrada-lf-iniciado-model-a-gotchas-de-entrada)
+  - [Execução 2026-06-01 (após "go" do Rafael) — estado e BLOQUEIO do picking](#execução-2026-06-01-após-go-do-rafael-estado-e-bloqueio-do-picking)
+  - [Continuação — A' (picking manual vinculado à PO) + BLOQUEIO lote inter-company (G-ENT-6)](#continuação-a-picking-manual-vinculado-à-po-bloqueio-lote-inter-company-g-ent-6)
+  - [EXECUÇÃO B1 (Model B) — entrada LF CONCLUÍDA (faltando só post) ✅](#execução-b1-model-b-entrada-lf-concluída-faltando-só-post)
+  - [Tarefa 2 (MO Etapa E) — ✅ CORRIGIDA E VALIDADA (2026-06-01, fix G-ENT-10)](#tarefa-2-mo-etapa-e-corrigida-e-validada-2026-06-01-fix-g-ent-10)
+  - [GOTCHA do dreno físico FB (G-DRENO-1, 2026-06-01)](#gotcha-do-dreno-físico-fb-g-dreno-1-2026-06-01)
+  - [GOTCHAS B1 novos (G-ENT-7..10)](#gotchas-b1-novos-g-ent-710)
+- [1. RECEITA — 16 componentes remetidos (1 caixa) ✅ validado ao vivo](#1-receita-16-componentes-remetidos-1-caixa-validado-ao-vivo)
+- [2. Lotes + disponibilidade em FB/Estoque(8) — ✅ validado · 🔴 1 bloqueador](#2-lotes-disponibilidade-em-fbestoque8-validado-1-bloqueador)
+- [3. Picking type de criação + locations ✅](#3-picking-type-de-criação-locations)
+- [4. Operação / CFOP 5901 por-linha ✅ resolvido ao vivo](#4-operação-cfop-5901-por-linha-resolvido-ao-vivo)
+- [5. Checklist pré-condições `action_liberar_faturamento` (ACHADOS §4, campos v17)](#5-checklist-pré-condições-action_liberar_faturamento-achados-4-campos-v17)
+- [6. Reaproveitar vs criar NOVA remessa — ✅ decisão: **NOVA**](#6-reaproveitar-vs-criar-nova-remessa-decisão-nova)
+- [7. Números do piloto ✅](#7-números-do-piloto)
+- [8. Sequência de execução (Etapa 1) — com gates](#8-sequência-de-execução-etapa-1-com-gates)
+- [9. Métrica de sucesso da Etapa 1 (G0) — **medir por LOTE/cadeia do piloto** (GOALS §B)](#9-métrica-de-sucesso-da-etapa-1-g0-medir-por-lotecadeia-do-piloto-goals-b)
+- [10. Etapa 5 (G5b) — aplicação da op 3252 ✅ script validado](#10-etapa-5-g5b-aplicação-da-op-3252-script-validado)
+- [11. Pendências](#11-pendências)
 
 > **Batch do piloto = 1 CAIXA de 4870112** (MOLHO SHOYU PET 12×1,01 L = 12 frascos). Unidade mínima.
 > **Papel deste doc:** procedimento de execução do piloto + **gotchas** (G-ENT/G-REM/G-DRENO) + drivers. Desenho-alvo e decisões = `SOT_OPERACOES.md §2`; índice = `README.md`.

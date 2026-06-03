@@ -1,4 +1,28 @@
+<!-- doc:meta
+tipo: how-to
+camada: L3
+sot_de: —
+hub: docs/industrializacao-fb-lf/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # PROPOSTA — Config das operações + journals de RETORNO (G4 LF + G5a FB)
+
+## Indice
+
+- [0. CONFIRMAÇÃO DA CONTADORA (2026-06-01) — desenho validado](#0-confirmação-da-contadora-2026-06-01-desenho-validado)
+- [1. Mapa de roteamento ATUAL (verificado ao vivo 2026-06-01)](#1-mapa-de-roteamento-atual-verificado-ao-vivo-2026-06-01)
+  - [FB (company 1) — ENTRADA do retorno](#fb-company-1-entrada-do-retorno)
+  - [LF (company 5) — SAÍDA do retorno](#lf-company-5-saída-do-retorno)
+  - [Referência (remessa — já funciona, a espelhar)](#referência-remessa-já-funciona-a-espelhar)
+- [2. IDs verificados (para a config)](#2-ids-verificados-para-a-config)
+- [3. Spec G5a — FB ENTRADA baixar a ATIVA `5101010001` (Design A)](#3-spec-g5a-fb-entrada-baixar-a-ativa-5101010001-design-a)
+- [4. Spec G4 — LF SAÍDA baixar a PASSIVA `5101020001` — 🔴 BLOQUEADO POR DESENHO](#4-spec-g4-lf-saída-baixar-a-passiva-5101020001-bloqueado-por-desenho)
+  - [As 3 opções (✅ provado qual serve)](#as-3-opções-provado-qual-serve)
+- [5. NF MISTA — granularidade por linha JÁ PROVADA (técnico, não Contador)](#5-nf-mista-granularidade-por-linha-já-provada-técnico-não-contador)
+- [6. "3 PERNAS" (AVCO Ic+S) — POLÍTICA confirmada; MECÂNICA é técnica/piloto](#6-3-pernas-avco-ics-política-confirmada-mecânica-é-técnicapiloto)
+- [7. Sequência proposta (revisada pós-grounding sessão 5)](#7-sequência-proposta-revisada-pós-grounding-sessão-5)
+- [8. Status das decisões — **G5a converge com G4** (ambos bloqueados por DESENHO fiscal)](#8-status-das-decisões-g5a-converge-com-g4-ambos-bloqueados-por-desenho-fiscal)
 
 > **Papel deste doc (anexo de EXECUÇÃO):** IDs, roteamento ao vivo e passos de dry-run da config G4/G5a. O **desenho-alvo e as DECISÕES** moram na `SOT_OPERACOES.md` (dona) — aqui só se expande o "como". Índice geral: `README.md`.
 >

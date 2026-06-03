@@ -1,4 +1,48 @@
+<!-- doc:meta
+tipo: state
+camada: L3
+sot_de: —
+hub: docs/inventario-2026-05/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # SOT — Inventário 2026-05 NACOM/LF
+
+> **Papel:** SOT — Inventário 2026-05 NACOM/LF.
+
+## Indice
+
+- [1. O QUE É ESTE TRABALHO](#1-o-que-é-este-trabalho)
+- [2. DOCUMENTOS-CHAVE (SOT em ordem de leitura)](#2-documentos-chave-sot-em-ordem-de-leitura)
+- [3. ESTADO POR FASE](#3-estado-por-fase)
+  - [Foundation (concluída)](#foundation-concluída)
+  - [Implementação (pendente)](#implementação-pendente)
+  - [§6.1 — Justificativa do cancelamento de F6](#61-justificativa-do-cancelamento-de-f6)
+  - [§7.2 — Ajustes em F7.2/F7.3 após inspeção da planilha real (2026-05-17)](#72-ajustes-em-f72f73-após-inspeção-da-planilha-real-2026-05-17)
+  - [§7.4.2 — Piloto 210030325 LF EXECUTADO + 5 fixes generalizados (2026-05-18 fim do dia)](#742-piloto-210030325-lf-executado-5-fixes-generalizados-2026-05-18-fim-do-dia)
+  - [§7.4.3 — D004 GENERALIZADA para FB+CD (2026-05-18 fim do dia)](#743-d004-generalizada-para-fbcd-2026-05-18-fim-do-dia)
+  - [§7.4.1 — REFINAMENTO 2026-05-18: TRANSFERIR quantidade entre lotes (sem renomear)](#741-refinamento-2026-05-18-transferir-quantidade-entre-lotes-sem-renomear)
+  - [§7.4 — Refator F7.3/F7.4: rename + diferença líquida + lote MIGRACAO (2026-05-17 final do dia)](#74-refator-f73f74-rename-diferença-líquida-lote-migracao-2026-05-17-final-do-dia)
+  - [§7.5 — Teste piloto end-to-end: produto `210030325` LF (definido pelo usuário 2026-05-17 fim do dia)](#75-teste-piloto-end-to-end-produto-210030325-lf-definido-pelo-usuário-2026-05-17-fim-do-dia)
+  - [§7.3 — Auditoria habilitada em F4/F5 (decisão usuário 2026-05-17)](#73-auditoria-habilitada-em-f4f5-decisão-usuário-2026-05-17)
+  - [Tarefas técnicas pendentes ao final (G003 sugestão de refator)](#tarefas-técnicas-pendentes-ao-final-g003-sugestão-de-refator)
+- [4. PRÓXIMA SESSÃO — COMO RETOMAR](#4-próxima-sessão-como-retomar)
+  - [Opção A: Subagent-driven (recomendado para Fases 3 e 4)](#opção-a-subagent-driven-recomendado-para-fases-3-e-4)
+  - [Opção B: Sessão direta sequencial](#opção-b-sessão-direta-sequencial)
+  - [Opção C: Híbrido (Recomendado por mim)](#opção-c-híbrido-recomendado-por-mim)
+- [5. CHECKLIST PARA NOVA SESSÃO](#5-checklist-para-nova-sessão)
+- [6. PROMPT INICIAL (status: ainda válido como referência)](#6-prompt-inicial-status-ainda-válido-como-referência)
+- [7. RISCOS CONHECIDOS](#7-riscos-conhecidos)
+  - [Desvios do plano aplicados em F4 (necessários, não opcionais)](#desvios-do-plano-aplicados-em-f4-necessários-não-opcionais)
+  - [Bugs encontrados em code-review pós-F4 e corrigidos (3 reviewers paralelos)](#bugs-encontrados-em-code-review-pós-f4-e-corrigidos-3-reviewers-paralelos)
+  - [Bugs MEDIUM não corrigidos (acceptable risks)](#bugs-medium-não-corrigidos-acceptable-risks)
+- [8. ARTEFATOS PERSISTIDOS](#8-artefatos-persistidos)
+  - [Em `main` (origin sincronizado)](#em-main-origin-sincronizado)
+  - [Pendente de criar](#pendente-de-criar)
+- [9. COMO ATUALIZAR ESTE SOT](#9-como-atualizar-este-sot)
+- [Atualizado](#atualizado)
+- [Estado atual](#estado-atual)
+- [Pendencias](#pendencias)
 
 **Source of Truth macro do trabalho.** Lido por nova sessão Claude Code (ou subagentes) para retomar de onde parou.
 
@@ -548,3 +592,15 @@ scripts/inventario_2026_05/
 Sempre que uma fase mudar de status, atualizar §3 (Estado por fase). Sempre que descobrir novo GOTCHA, atualizar §7 (Riscos). Sempre que criar novo artefato, atualizar §8 (Artefatos).
 
 **Este SOT é a única página que precisa estar sempre atual.** Spec e plano podem ficar desatualizados se decisões mudarem — quando isso acontecer, registrar em `00-decisoes/D00X.md` nova e referenciar aqui.
+
+## Atualizado
+
+Ver datas no corpo do documento (registro historico).
+
+## Estado atual
+
+Ver secoes do corpo acima (estado registrado na epoca).
+
+## Pendencias
+
+Ver itens listados no corpo acima.

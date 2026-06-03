@@ -1,3 +1,11 @@
+<!-- doc:meta
+tipo: scratch
+camada: L3
+sot_de: —
+hub: docs/inventario-2026-05/casos-pendentes/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Caso pendente: Tratar reservas pre-transferencia (71 cods Indisponivel — 2026-05-24)
 
 **Status:** ✅ **RESOLVIDO em 2026-05-24 v7** — 88 writes em PROD efetivados. 4 gaps arquiteturais implementados (Skills 9+2.4 estendidas + fluxo 2.6 + regra inviolavel prompt + tabela 5-caminhos + gotcha G030).

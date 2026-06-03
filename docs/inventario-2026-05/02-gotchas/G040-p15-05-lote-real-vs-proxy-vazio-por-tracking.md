@@ -1,4 +1,14 @@
+<!-- doc:meta
+tipo: reference
+camada: L3
+sot_de: —
+hub: docs/inventario-2026-05/02-gotchas/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # G040 — `P-15/05` é `stock.lot` REAL (não proxy-vazio) em produto `tracking='lot'`
+
+> **Papel:** G040 — `P-15/05` é `stock.lot` REAL (não proxy-vazio) em produto `tracking='lot'`.
 
 **Severidade**: HIGH (evaporação silenciosa de saldo em transferência interna)
 **Status**: ✅ CORRIGIDO 2026-05-29 (decisão "Opção B" do Rafael — invariante codificada no átomo Skill 2)

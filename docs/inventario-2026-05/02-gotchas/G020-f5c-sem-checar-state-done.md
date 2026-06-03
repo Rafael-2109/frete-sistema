@@ -1,4 +1,14 @@
+<!-- doc:meta
+tipo: reference
+camada: L3
+sot_de: —
+hub: docs/inventario-2026-05/02-gotchas/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # G020 — f5c liberar_faturamento NÃO checa pre-condicao state=done
+
+> **Papel:** G020 — f5c liberar_faturamento NÃO checa pre-condicao state=done.
 
 **Descoberta**: 2026-05-18 sessao 2 manha (teste 100 produtos LF)
 **Severidade**: MED (cascateia G019; robo CIEL IT nunca cria invoice)

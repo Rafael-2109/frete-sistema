@@ -1,4 +1,29 @@
+<!-- doc:meta
+tipo: reference
+camada: L3
+sot_de: —
+hub: docs/inventario-2026-05/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Audit Log — ajuste_estoque_inventario
+
+> **Papel:** Audit Log — ajuste_estoque_inventario.
+
+## Indice
+
+- [Motivacao](#motivacao)
+- [O que captura](#o-que-captura)
+- [Schema da audit table](#schema-da-audit-table)
+- [Gotchas](#gotchas)
+- [Queries uteis](#queries-uteis)
+  - [Timeline de 1 ajuste](#timeline-de-1-ajuste)
+  - [Quem fez reset EXECUTADO → PROPOSTO (caso NF 626032)](#quem-fez-reset-executado-proposto-caso-nf-626032)
+  - [DELETEs (operacao mais critica)](#deletes-operacao-mais-critica)
+  - [Atividade da ultima execucao bulk (agrupada por transacao)](#atividade-da-ultima-execucao-bulk-agrupada-por-transacao)
+  - [Volume por dia](#volume-por-dia)
+- [Convencao: setar `application_name` em scripts](#convencao-setar-application_name-em-scripts)
+- [Pos-implantacao](#pos-implantacao)
 
 **Implementado**: 2026-05-18
 **Migration**: `scripts/migrations/2026_05_18_audit_ajuste_estoque_inventario.{sql,py}`

@@ -1,4 +1,24 @@
+<!-- doc:meta
+tipo: reference
+camada: L3
+sot_de: —
+hub: docs/inventario-2026-05/consolidacao/manuais/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Manual — `StockQuantAdjustmentService` (gold-script: Ajuste de inventário)
+
+> **Papel:** Manual — `StockQuantAdjustmentService` (gold-script: Ajuste de inventário).
+
+## Indice
+
+- [O que faz](#o-que-faz)
+- [Quando usar](#quando-usar)
+- [Assinatura](#assinatura)
+- [Receitas (caso real → args)](#receitas-caso-real-args)
+- [Exemplos](#exemplos)
+- [Armadilhas](#armadilhas)
+- [Ponte para orquestrador](#ponte-para-orquestrador)
 
 > **NOTA (Onda 2 PAD-A):** "gold-script" é vocabulário APOSENTADO — hoje é o service/primitiva (C1) `app/odoo/estoque/scripts/quant.py`, skill `ajustando-quant-odoo`; constituição em `app/odoo/estoque/CLAUDE.md`. Este doc é mineração transitória válida.
 

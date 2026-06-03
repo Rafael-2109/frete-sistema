@@ -1,4 +1,64 @@
+<!-- doc:meta
+tipo: explanation
+camada: L3
+sot_de: —
+hub: docs/inventario-2026-05/00-decisoes/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # D006 — Transferir quantidade entre lotes (NAO renomear)
+
+> **Papel:** D006 — Transferir quantidade entre lotes (NAO renomear).
+
+## Indice
+
+- [Contexto](#contexto)
+- [Decisao](#decisao)
+- [Mantendo a acao `RENOMEAR_LOTE` no DB](#mantendo-a-acao-renomear_lote-no-db)
+- [Implementacao](#implementacao)
+- [Caso piloto 210030325 LF (validacao final)](#caso-piloto-210030325-lf-validacao-final)
+- [Generalizacao](#generalizacao)
+- [Impacto](#impacto)
+- [Riscos conhecidos](#riscos-conhecidos)
+- [Licoes aprendidas — piloto 210030325 LF (2026-05-18)](#licoes-aprendidas-piloto-210030325-lf-2026-05-18)
+  - [L1. Picking outgoing precisa `incoterm` + `carrier_id`](#l1-picking-outgoing-precisa-incoterm-carrier_id)
+  - [L2. Playwright `cids` + `menu_id` variam por CNPJ](#l2-playwright-cids-menu_id-variam-por-cnpj)
+  - [L3. Modal `o_technical_modal` intercepta clicks](#l3-modal-o_technical_modal-intercepta-clicks)
+  - [L4. Wizard de confirmacao apos "Transmitir NF-e"](#l4-wizard-de-confirmacao-apos-transmitir-nf-e)
+  - [L5. Invoice criada pelo robo CIEL IT sem `payment_provider_id`](#l5-invoice-criada-pelo-robo-ciel-it-sem-payment_provider_id)
+- [Licoes aprendidas — sub-piloto bulk 10 produtos (2026-05-18 madrugada)](#licoes-aprendidas-sub-piloto-bulk-10-produtos-2026-05-18-madrugada)
+  - [L6. Picking outgoing exige location virtual destino (Empresas incompativeis)](#l6-picking-outgoing-exige-location-virtual-destino-empresas-incompativeis)
+  - [L7. button_validate sem skip_backorder deixa picking em assigned](#l7-button_validate-sem-skip_backorder-deixa-picking-em-assigned)
+  - [L8. f5b/f5c/f5d so marcavam 1 ajuste por picking (multi-ajuste perdido)](#l8-f5bf5cf5d-so-marcavam-1-ajuste-por-picking-multi-ajuste-perdido)
+  - [L9. f5e re-transmitia mesma NF para cada ajuste do picking](#l9-f5e-re-transmitia-mesma-nf-para-cada-ajuste-do-picking)
+  - [L10. status auditoria excedeu VARCHAR(20)](#l10-status-auditoria-excedeu-varchar20)
+  - [L11. forcar_qty_done inflando alem do disponivel (saldo negativo)](#l11-forcar_qty_done-inflando-alem-do-disponivel-saldo-negativo)
+  - [L12. Distribuir demanda entre lotes reais (script 03 vs realidade)](#l12-distribuir-demanda-entre-lotes-reais-script-03-vs-realidade)
+  - [L13. price_unit=0 nas linhas (custo_medio zero — SEFAZ rejeita)](#l13-price_unit0-nas-linhas-custo_medio-zero-sefaz-rejeita)
+  - [L14. Conexao Odoo XML-RPC nao e thread-safe](#l14-conexao-odoo-xml-rpc-nao-e-thread-safe)
+  - [L15. carregar_ajustes precisa incluir EXECUTADO](#l15-carregar_ajustes-precisa-incluir-executado)
+  - [L16. excecao_autorizado vs autorizado normal (XML autorizado vazio)](#l16-excecao_autorizado-vs-autorizado-normal-xml-autorizado-vazio)
+  - [L17. Sentido invertido FB→LF: entrada FB nao se aplica](#l17-sentido-invertido-fblf-entrada-fb-nao-se-aplica)
+  - [Resumo do refinamento (10 fixes L6-L17)](#resumo-do-refinamento-10-fixes-l6-l17)
+- [Licoes aprendidas — sub-piloto bulk RE-EXECUCAO (2026-05-18 madrugada apos checkpoint)](#licoes-aprendidas-sub-piloto-bulk-re-execucao-2026-05-18-madrugada-apos-checkpoint)
+  - [L18. AjusteEstoqueInventario nao tem campo `tipo_divergencia` (G010)](#l18-ajusteestoqueinventario-nao-tem-campo-tipo_divergencia-g010)
+  - [L19. preencher_qty_done faltando no pipeline (RAIZ CRITICA — G011)](#l19-preencher_qty_done-faltando-no-pipeline-raiz-critica-g011)
+  - [L20. peso_liquido=0 (consequencia de L19 — G012)](#l20-peso_liquido0-consequencia-de-l19-g012)
+  - [L21. quantidade_volumes=0 (consequencia de L19 — G013)](#l21-quantidade_volumes0-consequencia-de-l19-g013)
+  - [Resumo dos 4 novos fixes L18-L21](#resumo-dos-4-novos-fixes-l18-l21)
+  - [Estado pos-L18-L21 fixes](#estado-pos-l18-l21-fixes)
+- [Licoes aprendidas — sub-piloto bulk (continuacao L22-L23, 2026-05-18)](#licoes-aprendidas-sub-piloto-bulk-continuacao-l22-l23-2026-05-18)
+  - [L22. Lotes vencidos bloqueiam auto-reserva (G014)](#l22-lotes-vencidos-bloqueiam-auto-reserva-g014)
+  - [L23. price_unit=0 em invoice criada pelo robo CIEL IT (G015)](#l23-price_unit0-em-invoice-criada-pelo-robo-ciel-it-g015)
+  - [Resumo L18-L23 (6 novos fixes)](#resumo-l18-l23-6-novos-fixes)
+- [Licoes aprendidas — root cause NF 626032 (2026-05-18 manha)](#licoes-aprendidas-root-cause-nf-626032-2026-05-18-manha)
+  - [L24. SSL crash no f5e perde commits DB (G016)](#l24-ssl-crash-no-f5e-perde-commits-db-g016)
+  - [L25. NCM=False em produto causa cstat 225 (G017 — RAIZ DEFINITIVA)](#l25-ncmfalse-em-produto-causa-cstat-225-g017-raiz-definitiva)
+  - [Resumo L24-L25 (mais 2 fixes pos-sub-piloto)](#resumo-l24-l25-mais-2-fixes-pos-sub-piloto)
+  - [Recovery NF 626032 (pos-investigacao)](#recovery-nf-626032-pos-investigacao)
+- [Arquivos modificados (commit `a8e0d0bb`)](#arquivos-modificados-commit-a8e0d0bb)
+- [Pendencias para bulk](#pendencias-para-bulk)
+- [Generalizacao D004 para FB+CD (2026-05-18 fim do dia)](#generalizacao-d004-para-fbcd-2026-05-18-fim-do-dia)
 
 **Data**: 2026-05-18
 **Status**: aprovado, implementado

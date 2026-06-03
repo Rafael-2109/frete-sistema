@@ -1,4 +1,14 @@
+<!-- doc:meta
+tipo: reference
+camada: L3
+sot_de: —
+hub: docs/industrializacao-fb-lf/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Material de decisão — fechamento contábil do RETORNO de industrialização (G4)
+
+> **Papel:** Material de decisão — fechamento contábil do RETORNO de industrialização (G4).
 
 > **Para:** Contadora · **De:** controle interno (grounding Odoo PROD 2026-06-01) · **Decisão pedida:** como fazer o RETORNO da industrialização **baixar a obrigação da LF** (conta `5101020001` PASSIVA), hoje não baixada.
 > Linguagem contábil; IDs Odoo entre parênteses. Tudo CST51 (ICMS suspenso); serviço 5124 sem ICMS (CBS/IBS/PIS/COFINS).

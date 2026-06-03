@@ -1,4 +1,24 @@
+<!-- doc:meta
+tipo: reference
+camada: L3
+sot_de: —
+hub: docs/inventario-2026-05/02-gotchas/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # G017 — NCM=False em produto causa cstat 225 (Schema XML invalido)
+
+> **Papel:** G017 — NCM=False em produto causa cstat 225 (Schema XML invalido).
+
+## Indice
+
+- [Sintoma](#sintoma)
+- [Root cause](#root-cause)
+- [Solução: validação pré-pickings](#solução-validação-pré-pickings)
+- [Recovery NF ja rejeitada (caso 626032)](#recovery-nf-ja-rejeitada-caso-626032)
+- [Como evitar (LF completo) — FIX IMPLEMENTADO](#como-evitar-lf-completo-fix-implementado)
+- [Diagnóstico de outras NFs](#diagnóstico-de-outras-nfs)
+- [Ref](#ref)
 
 **Descoberta**: 2026-05-18 root cause analysis NF 626032
 **Severidade**: HIGH (NF rejeitada SEFAZ + risco excecao_autorizado G008)

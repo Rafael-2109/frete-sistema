@@ -1,4 +1,24 @@
+<!-- doc:meta
+tipo: reference
+camada: L3
+sot_de: —
+hub: docs/inventario-2026-05/02-gotchas/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # G009 — Script 03 emite 1 ajuste por produto, mas estoque esta em N lotes
+
+> **Papel:** G009 — Script 03 emite 1 ajuste por produto, mas estoque esta em N lotes.
+
+## Indice
+
+- [Sintoma](#sintoma)
+- [Causa raiz](#causa-raiz)
+- [Solucao](#solucao)
+- [Codigo](#codigo)
+- [Concept: regra do usuario (2026-05-18)](#concept-regra-do-usuario-2026-05-18)
+- [Refactoring recomendado para script 03](#refactoring-recomendado-para-script-03)
+- [Ref](#ref)
 
 **Descoberta**: 2026-05-18 sub-piloto bulk (NF 13150 RETNA/2026/00030)
 **Severidade**: MED (gera NFs incompletas com qty menor que demand)

@@ -1,3 +1,11 @@
+<!-- doc:meta
+tipo: scratch
+camada: L3
+sot_de: —
+hub: docs/inventario-2026-05/08-execucoes/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # EXECUCAO — Ajuste negativo residual CD (2026-05-18 20:38-20:39)
 
 **Script**: `scripts/inventario_2026_05/11_ajuste_negativo_cd.py`

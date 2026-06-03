@@ -1,4 +1,28 @@
+<!-- doc:meta
+tipo: explanation
+camada: L3
+sot_de: —
+hub: docs/inventario-2026-05/consolidacao/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # MAPA GERAL — Operação de inventário 2026-05
+
+> **Papel:** MAPA GERAL — Operação de inventário 2026-05.
+
+## Indice
+
+- [1. As 3 gerações de mecanismo (por que existem ~90 scripts)](#1-as-3-gerações-de-mecanismo-por-que-existem-90-scripts)
+- [2. Camadas de abstração (o esqueleto — corrige a mistura anterior)](#2-camadas-de-abstração-o-esqueleto-corrige-a-mistura-anterior)
+- [3. Tabela mestra — assunto × gold-script × camada × fontes](#3-tabela-mestra-assunto-gold-script-camada-fontes)
+- [4. Gotchas por assunto (o ouro — fonte: `02-gotchas/`, 31 gotchas)](#4-gotchas-por-assunto-o-ouro-fonte-02-gotchas-31-gotchas)
+- [5. C0 — Constantes (estado de centralização)](#5-c0-constantes-estado-de-centralização)
+- [6. Gaps e sobreposições (fonte: `sa4`)](#6-gaps-e-sobreposições-fonte-sa4)
+- [7. As 3 semânticas de planilha (armadilha de design — fonte: `sa1`)](#7-as-3-semânticas-de-planilha-armadilha-de-design-fonte-sa1)
+- [8. Estado atual (fonte: `SOT.md` + `PENDENCIAS.md` — VIVOS; checkpoints em `99-historia/` = obsoletos)](#8-estado-atual-fonte-sotmd-pendenciasmd-vivos-checkpoints-em-99-historia-obsoletos)
+- [9. Roadmap de consolidação (bottom-up, revisado)](#9-roadmap-de-consolidação-bottom-up-revisado)
+- [10. Manuais (1 por gold-script — `consolidacao/manuais/`)](#10-manuais-1-por-gold-script-consolidacaomanuais)
+- [Contexto](#contexto)
 
 > **NOTA (Onda 2 PAD-A):** o termo "gold-script" foi aposentado — a constituição vigente do orquestrador Odoo é `app/odoo/estoque/CLAUDE.md` (vocabulário: services/primitivas C1/C2 · orchestrators C3). Este doc é mineração transitória válida; a consolidação real dos scripts é a Onda 3.
 
@@ -150,3 +174,7 @@ Qualquer gold-script/orquestrador de planilha DEVE deixar a semântica EXPLÍCIT
 - ⬜ stock_lot, internal_transfer, picking, indisponibilizacao, pre_etapa, pipeline (macro)
 
 > Evidência desta análise (rascunho, efêmero): `/tmp/subagent-findings/20260520-183839-adc073fc/phase1/sa1-4`.
+
+## Contexto
+
+Doc de consolidacao — ciclo de inventario NACOM/LF/CD/FB 2026-05. Tema: MAPA GERAL — Operação de inventário 2026-05

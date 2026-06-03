@@ -1,4 +1,14 @@
+<!-- doc:meta
+tipo: explanation
+camada: L1
+sot_de: —
+hub: docs/industrializacao-fb-lf/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Industrialização FB↔LF — Índice
+
+> **Papel:** Industrialização FB↔LF — Índice.
 
 Industrialização por encomenda no grupo: **FB** (encomendante) remete insumos → **LF** (industrializadora) produz e devolve o PA. Objetivo: fechar o fluxo físico+contábil para os insumos de terceiros **não inflarem o estoque** (passivo medido R$ 785k só no MOLHO SHOYU PET; `5101010001` FB acumulado R$ 60,8M).
 
@@ -46,3 +56,7 @@ Config base (reversível): ✅ op 3252 (`movimento_estoque=False`) · ✅ L1 (ca
 - Compensação 51010xx/51020xx vem do `account_no_payment_id` do **journal** (não da posição fiscal); journal = cabeçalho da NF (campo `l10n_br_tipo_pedido` do journal).
 - Sem ICMS em nenhuma etapa (CST51 + CBS/IBS/PIS/COFINS).
 > Fonte: `SOT_OPERACOES.md` (§2 etapa 4 v2.4 · §5 decisões · §histórico v2.4) + `ACHADOS §"ACHADO 2026-06-01 (sessão 5)"`.
+
+## Contexto
+
+Documento — industrializacao por encomenda FB<->LF. Tema: Industrialização FB↔LF — Índice

@@ -1,4 +1,25 @@
+<!-- doc:meta
+tipo: reference
+camada: L3
+sot_de: —
+hub: docs/inventario-2026-05/02-gotchas/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # G014 — FEFO bloqueia auto-reserva em lotes vencidos (PEPINO IND)
+
+> **Papel:** G014 — FEFO bloqueia auto-reserva em lotes vencidos (PEPINO IND).
+
+## Indice
+
+- [Sintoma](#sintoma)
+- [Causa raiz](#causa-raiz)
+- [Solucoes possiveis](#solucoes-possiveis)
+  - [A. Cancelar ajuste + tratar manualmente (recomendado para sub-piloto)](#a-cancelar-ajuste-tratar-manualmente-recomendado-para-sub-piloto)
+  - [B. Forcar via UI (manual)](#b-forcar-via-ui-manual)
+  - [C. Refator estrutural (LF completa)](#c-refator-estrutural-lf-completa)
+- [Como identificar produtos afetados antes de rodar bulk](#como-identificar-produtos-afetados-antes-de-rodar-bulk)
+- [Ref](#ref)
 
 **Descoberta**: 2026-05-18 sub-piloto bulk (apos fix L18-L21)
 **Severidade**: HIGH (estoque "fantasma" — 73k kg parecem livres mas nao reservam)

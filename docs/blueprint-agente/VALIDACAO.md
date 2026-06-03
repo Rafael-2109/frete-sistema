@@ -1,4 +1,42 @@
+<!-- doc:meta
+tipo: how-to
+camada: L3
+sot_de: —
+hub: docs/blueprint-agente/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Runbook de Validação — Evolução do Agente
+
+> **Papel:** Runbook de Validação — Evolução do Agente.
+
+## Indice
+
+- [Princípio](#princípio)
+  - [As 3 classes de testabilidade](#as-3-classes-de-testabilidade)
+- [Tabela-Resumo (15 features)](#tabela-resumo-15-features)
+- [Sequência de Ativação Recomendada](#sequência-de-ativação-recomendada)
+- [Receitas por Feature](#receitas-por-feature)
+  - [Classe A_local](#classe-a_local)
+  - [S0a — tabela `agent_step` *(sem flag)*](#s0a-tabela-agent_step-sem-flag)
+  - [E1 — captura de frustração (`AGENT_QUALITY_SPINE`)](#e1-captura-de-frustração-agent_quality_spine)
+  - [E2 — step_judge (PRM) (`AGENT_STEP_JUDGE`)](#e2-step_judge-prm-agent_step_judge)
+  - [D2 — Bootstrap de ontologia canônica (`AGENT_ONTOLOGY`)](#d2-bootstrap-de-ontologia-canônica-agent_ontology)
+  - [D4 — Tool MCP `query_ontology` (`AGENT_ONTOLOGY`)](#d4-tool-mcp-query_ontology-agent_ontology)
+  - [D3 — Proveniência bi-temporal (`AGENT_ONTOLOGY`)](#d3-proveniência-bi-temporal-agent_ontology)
+  - [B1 — PlanState durável (`AGENT_PLANNER`)](#b1-planstate-durável-agent_planner)
+  - [B2-arith+adv — `verify_arithmetic` + `verify_plan_adversarial` (`AGENT_VERIFY`)](#b2-arithadv-verify_arithmetic-verify_plan_adversarial-agent_verify)
+  - [B3 — replan + budget + escalate (`AGENT_PLANNER`)](#b3-replan-budget-escalate-agent_planner)
+  - [B-TRIAGE — `triage_meta` (`AGENT_PLANNER`)](#b-triage-triage_meta-agent_planner)
+  - [B2-domain — `verify_domain` (`AGENT_VERIFY`)](#b2-domain-verify_domain-agent_verify)
+  - [A3 — Eval Runner (`AGENT_EVAL_GATE`)](#a3-eval-runner-agent_eval_gate)
+  - [A4 — Promoção automática de diretriz (`AGENT_DIRECTIVE_PROMOTION`)](#a4-promoção-automática-de-diretriz-agent_directive_promotion)
+  - [F4/F5 — Skill Hints Advisory (`AGENT_SKILL_RAG`)](#f4f5-skill-hints-advisory-agent_skill_rag)
+  - [D5 — World Model Injection (`AGENT_WORLD_MODEL_INJECT`)](#d5-world-model-injection-agent_world_model_inject)
+- [Apêndice — Cheatsheet SQL de Inspeção](#apêndice-cheatsheet-sql-de-inspeção)
+- [Nota Final](#nota-final)
+  - [Falhas pré-existentes (baseline da main)](#falhas-pré-existentes-baseline-da-main)
+  - [Tudo está flag-OFF — validar não muda PROD](#tudo-está-flag-off-validar-não-muda-prod)
 
 **Como validar cada feature da evolução do agente.**
 
