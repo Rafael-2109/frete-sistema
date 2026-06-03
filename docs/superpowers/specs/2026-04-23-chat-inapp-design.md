@@ -1,4 +1,69 @@
+<!-- doc:meta
+tipo: explanation
+camada: L3
+sot_de: —
+hub: docs/superpowers/specs/INDEX.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # Chat in-app + alertas do sistema — Design Spec
+
+> **Papel:** Chat in-app + alertas do sistema — Design Spec.
+
+## Indice
+
+- [1. Objetivo e escopo](#1-objetivo-e-escopo)
+  - [1.1 Objetivo](#11-objetivo)
+  - [1.2 No escopo (MVP, "F1")](#12-no-escopo-mvp-f1)
+  - [1.3 Fora do escopo (adiado)](#13-fora-do-escopo-adiado)
+- [2. Decisoes ancora (resumo executivo)](#2-decisoes-ancora-resumo-executivo)
+- [3. Arquitetura](#3-arquitetura)
+  - [3.1 Camadas](#31-camadas)
+  - [3.2 Padrao SSE reutilizado](#32-padrao-sse-reutilizado)
+  - [3.3 Interacoes externas](#33-interacoes-externas)
+- [4. Modelos de dados](#4-modelos-de-dados)
+  - [4.1 `chat_thread`](#41-chat_thread)
+  - [4.2 `chat_member`](#42-chat_member)
+  - [4.3 `chat_message`](#43-chat_message)
+  - [4.4 `chat_attachment`](#44-chat_attachment)
+  - [4.5 `chat_mention`](#45-chat_mention)
+  - [4.6 `chat_reaction`](#46-chat_reaction)
+  - [4.7 `chat_forward`](#47-chat_forward)
+- [5. Regra de permissao cruzada](#5-regra-de-permissao-cruzada)
+  - [5.1 Definicao formal](#51-definicao-formal)
+  - [5.2 Propriedades derivadas](#52-propriedades-derivadas)
+  - [5.3 Enforcement](#53-enforcement)
+  - [5.4 Ponto aberto a validar pos-MVP](#54-ponto-aberto-a-validar-pos-mvp)
+- [6. Fluxos criticos](#6-fluxos-criticos)
+  - [6.1 Envio de mensagem (usuario)](#61-envio-de-mensagem-usuario)
+  - [6.2 Recebimento SSE (cliente)](#62-recebimento-sse-cliente)
+  - [6.3 "Compartilhar esta tela" (share_screen)](#63-compartilhar-esta-tela-share_screen)
+  - [6.4 Encaminhar mensagem do chat](#64-encaminhar-mensagem-do-chat)
+  - [6.5 Alerta do sistema (SystemNotifier)](#65-alerta-do-sistema-systemnotifier)
+  - [6.6 Thread de entidade (lazy)](#66-thread-de-entidade-lazy)
+- [7. UI (integracao com base.html)](#7-ui-integracao-com-basehtml)
+  - [7.1 Navbar](#71-navbar)
+  - [7.2 Drawer lateral](#72-drawer-lateral)
+  - [7.3 Painel de mensagens](#73-painel-de-mensagens)
+  - [7.4 "Compartilhar esta tela"](#74-compartilhar-esta-tela)
+  - [7.5 Integracao com design tokens](#75-integracao-com-design-tokens)
+- [8. Erros, bordas, observabilidade](#8-erros-bordas-observabilidade)
+- [9. Testes](#9-testes)
+  - [9.1 Unit (`tests/chat/`)](#91-unit-testschat)
+  - [9.2 Integracao (com DB fixtures)](#92-integracao-com-db-fixtures)
+  - [9.3 SSE (com Redis real ou mock)](#93-sse-com-redis-real-ou-mock)
+  - [9.4 Worker (alertas do sistema)](#94-worker-alertas-do-sistema)
+  - [9.5 E2E (smoke)](#95-e2e-smoke)
+- [10. Migrations](#10-migrations)
+  - [10.1 `scripts/migrations/2026-04-23_chat_schema.py`](#101-scriptsmigrations2026-04-23_chat_schemapy)
+  - [10.2 `scripts/migrations/2026-04-23_chat_schema.sql`](#102-scriptsmigrations2026-04-23_chat_schemasql)
+- [11. Fases de entrega](#11-fases-de-entrega)
+- [12. Dividas tecnicas e riscos](#12-dividas-tecnicas-e-riscos)
+  - [12.1 Dividas declaradas](#121-dividas-declaradas)
+  - [12.2 Riscos](#122-riscos)
+- [13. Referencias](#13-referencias)
+- [14. Aprovacao](#14-aprovacao)
+- [Contexto](#contexto)
 
 **Data**: 2026-04-23
 **Autor**: Rafael Nascimento (+ Claude Code via brainstorming)
@@ -657,3 +722,7 @@ no Render Shell. Inclui:
 - [x] Usuario (Rafael): aprovou decisoes 1-10 + bloco de defaults (pergunta 9) durante brainstorming 2026-04-23
 - [ ] Revisao final deste spec (ver secao "Proximos passos" no chat)
 - [ ] Plano de implementacao (writing-plans — proxima etapa)
+
+## Contexto
+
+_A completar (PAD-A Onda 4)._

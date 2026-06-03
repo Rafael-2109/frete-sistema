@@ -1,4 +1,27 @@
+<!-- doc:meta
+tipo: how-to
+camada: L3
+sot_de: —
+hub: docs/superpowers/plans/INDEX.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # A4 — Promoção Automática de Diretriz (batch) — Implementation Plan
+
+> **Papel:** A4 — Promoção Automática de Diretriz (batch) — Implementation Plan.
+
+## Indice
+
+- [CONTEXTO ANTI-DRIFT (ler antes de codar)](#contexto-anti-drift-ler-antes-de-codar)
+- [FILE STRUCTURE](#file-structure)
+- [DECISÕES DE DESIGN JÁ FECHADAS (não re-decidir)](#decisões-de-design-já-fechadas-não-re-decidir)
+- [ESCOPO DE ESCRITA — RESOLVIDO PELA DOC (2026-06-01)](#escopo-de-escrita-resolvido-pela-doc-2026-06-01)
+- [Task 1: Migration dupla + coluna `directive_status` em `AgentMemory`](#task-1-migration-dupla-coluna-directive_status-em-agentmemory)
+- [Task 2: `_build_operational_directives` filtra por `directive_status` (alavanca de ativação)](#task-2-_build_operational_directives-filtra-por-directive_status-alavanca-de-ativação)
+- [Task 3: `_persist_directive` real (escreve `status='shadow'`) — [Opção A]](#task-3-_persist_directive-real-escreve-statusshadow-opção-a)
+- [Task 4: `run_directive_promotion_batch` + módulo D8 32](#task-4-run_directive_promotion_batch-módulo-d8-32)
+- [Task 5: Self-audit, suíte completa, EXECUCAO.md](#task-5-self-audit-suíte-completa-execucaomd)
+- [Self-Review (preenchido)](#self-review-preenchido)
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) ou superpowers:executing-plans para implementar task-by-task. Steps usam checkbox (`- [ ]`).
 

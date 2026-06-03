@@ -1,4 +1,47 @@
+<!-- doc:meta
+tipo: how-to
+camada: L3
+sot_de: —
+hub: docs/superpowers/plans/INDEX.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # Auditor SPED ECD — Subagente + 4 Skills + Embeddings de Regras Normativas
+
+> **Papel:** Auditor SPED ECD — Subagente + 4 Skills + Embeddings de Regras Normativas.
+
+## Indice
+
+- [Premissas Validadas Antes do Plano](#premissas-validadas-antes-do-plano)
+- [File Structure](#file-structure)
+  - [Criados (19 arquivos)](#criados-19-arquivos)
+  - [Modificados (3 arquivos)](#modificados-3-arquivos)
+- [Decomposicao em 3 Fases](#decomposicao-em-3-fases)
+- [FASE 1 — Foundation (Skill Isolation + Parser + Subagent)](#fase-1-foundation-skill-isolation-parser-subagent)
+  - [Task 1.1: Isolamento de Skills no Agente Principal](#task-11-isolamento-de-skills-no-agente-principal)
+  - [Task 1.2: Skill `parseando-sped-ecd` — Parser de SPED em JSON estruturado](#task-12-skill-parseando-sped-ecd-parser-de-sped-em-json-estruturado)
+  - [Task 1.3: Subagente `auditor-sped-ecd.md`](#task-13-subagente-auditor-sped-ecdmd)
+- [Sumario](#sumario)
+- [Findings por Categoria](#findings-por-categoria)
+  - [BLOQUEANTE — Resolver antes do PVA](#bloqueante-resolver-antes-do-pva)
+- [Pendencias para Proxima Sessao](#pendencias-para-proxima-sessao)
+  - [Task 1.4: Checkpoint Fase 1 — Smoke E2E](#task-14-checkpoint-fase-1-smoke-e2e)
+  - [CHECKPOINT FASE 1 — Aprovacao Humana Obrigatoria](#checkpoint-fase-1-aprovacao-humana-obrigatoria)
+- [FASE 2 — Auditoria Contabil + Ground Truth](#fase-2-auditoria-contabil-ground-truth)
+  - [Task 2.1: `audit_balance.py` — Equacionalidade Contabil](#task-21-audit_balancepy-equacionalidade-contabil)
+  - [Task 2.2: `audit_hierarchy.py` — Validacao Hierarquia I050](#task-22-audit_hierarchypy-validacao-hierarquia-i050)
+  - [Task 2.3: SKILL.md `auditando-sped-contabil`](#task-23-skillmd-auditando-sped-contabil)
+  - [Task 2.4: `diff_truth.py` — Comparacao com SPED da Contadora](#task-24-diff_truthpy-comparacao-com-sped-da-contadora)
+  - [CHECKPOINT FASE 2 — Aprovacao Humana](#checkpoint-fase-2-aprovacao-humana)
+- [FASE 3 — Manual DSL + Embeddings de Regras](#fase-3-manual-dsl-embeddings-de-regras)
+  - [Task 3.1: Migration `sped_ecd_rule_embeddings`](#task-31-migration-sped_ecd_rule_embeddings)
+  - [Task 3.2: Indexer `sped_ecd_rules_indexer.py`](#task-32-indexer-sped_ecd_rules_indexerpy)
+  - [Task 3.3: DSL Engine + Skill `auditando-sped-vs-manual`](#task-33-dsl-engine-skill-auditando-sped-vs-manual)
+  - [Task 3.4: Checkpoint Final + Teste E2E Real](#task-34-checkpoint-final-teste-e2e-real)
+  - [CHECKPOINT FASE 3 FINAL — Revisao Humana](#checkpoint-fase-3-final-revisao-humana)
+- [Pendencias Discutidas mas NAO Implementadas Neste Plano](#pendencias-discutidas-mas-nao-implementadas-neste-plano)
+- [Glossario Critico (para esta plan)](#glossario-critico-para-esta-plan)
+- [Referencias](#referencias)
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 

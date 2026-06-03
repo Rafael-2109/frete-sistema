@@ -1,4 +1,95 @@
+<!-- doc:meta
+tipo: explanation
+camada: L3
+sot_de: —
+hub: docs/superpowers/specs/INDEX.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # Carregamento, Divergência e Fluxo NF — Design
+
+> **Papel:** Carregamento, Divergência e Fluxo NF — Design.
+
+## Indice
+
+- [1. Contexto e motivação](#1-contexto-e-motivação)
+  - [1.1 Problema observado em produção (2026-05-12)](#11-problema-observado-em-produção-2026-05-12)
+  - [1.2 Diagnóstico](#12-diagnóstico)
+  - [1.3 Conceito novo: Carregamento](#13-conceito-novo-carregamento)
+- [2. Modelo de dados](#2-modelo-de-dados)
+  - [2.1 Novas tabelas](#21-novas-tabelas)
+  - [2.2 Modificações em tabelas existentes](#22-modificações-em-tabelas-existentes)
+- [3. Diagrama de estados](#3-diagrama-de-estados)
+  - [3.1 AssaiSeparacao (D-A opção b)](#31-assaiseparacao-d-a-opção-b)
+  - [3.2 AssaiCarregamento](#32-assaicarregamento)
+  - [3.3 AssaiNfQpa.status_match](#33-assainfqpastatus_match)
+  - [3.4 AssaiPedidoVenda (R4.2 + CR-7)](#34-assaipedidovenda-r42-cr-7)
+- [4. Cardinalidades e relações](#4-cardinalidades-e-relações)
+- [5. SOT — Source of Truth por ordem temporal](#5-sot-source-of-truth-por-ordem-temporal)
+  - [5.1 Cenário A — Carregamento antes da NF](#51-cenário-a-carregamento-antes-da-nf)
+  - [5.2 Cenário B — NF antes do Carregamento](#52-cenário-b-nf-antes-do-carregamento)
+  - [5.3 Cenário C — Carregamento e NF simultâneos (chegam em paralelo)](#53-cenário-c-carregamento-e-nf-simultâneos-chegam-em-paralelo)
+- [6. Algoritmo de finalização do Carregamento (R1 confirmado)](#6-algoritmo-de-finalização-do-carregamento-r1-confirmado)
+  - [Exemplo numérico (do usuário)](#exemplo-numérico-do-usuário)
+  - [Timing dos eventos (A1 — Hipótese A)](#timing-dos-eventos-a1-hipótese-a)
+  - [Funções e exceptions auxiliares (CR-8 + CR-13 — referência para implementação)](#funções-e-exceptions-auxiliares-cr-8-cr-13-referência-para-implementação)
+- [7. Divergências (Section 5 detalhe)](#7-divergências-section-5-detalhe)
+  - [7.1 Quando criar divergência](#71-quando-criar-divergência)
+  - [7.2 Resoluções (Q13)](#72-resoluções-q13)
+  - [7.2.1 — A8: Validação MODELO_DIVERGENTE em `_calcular_match`](#721-a8-validação-modelo_divergente-em-_calcular_match)
+  - [7.3 Parser de CCe (R3 opção a)](#73-parser-de-cce-r3-opção-a)
+  - [7.4 — A14: Idempotência em `resolver_divergencia` e `_calcular_match`](#74-a14-idempotência-em-resolver_divergencia-e-_calcular_match)
+  - [7.1.1 — A7: Detecção de CHASSI_OUTRA_LOJA em fluxo NF](#711-a7-detecção-de-chassi_outra_loja-em-fluxo-nf)
+- [8. Modal Expedição obrigatório](#8-modal-expedição-obrigatório)
+  - [8.1 Quando aparece (Q15)](#81-quando-aparece-q15)
+  - [8.2 Comportamento do modal](#82-comportamento-do-modal)
+  - [8.3 UI](#83-ui)
+  - [8.4 — A10: Edição posterior de agendamento (sep sem expedição)](#84-a10-edição-posterior-de-agendamento-sep-sem-expedição)
+- [9. Cancelamento de NF (D3 + R5)](#9-cancelamento-de-nf-d3-r5)
+  - [9.1 Service `cancelar_nf_qpa(nf_id, motivo, operador_id)`](#91-service-cancelar_nf_qpanf_id-motivo-operador_id)
+  - [9.2 Quando "Sep sem Carregamento" tem NF cancelada (R5.2)](#92-quando-sep-sem-carregamento-tem-nf-cancelada-r52)
+  - [9.3 Quando Carregamento existe (R5.3)](#93-quando-carregamento-existe-r53)
+  - [9.4 Coluna nova em `assai_nf_qpa` (decisão técnica)](#94-coluna-nova-em-assai_nf_qpa-decisão-técnica)
+- [10. Cancelamento de Pedido (R4.1) — ROADMAP FUTURO](#10-cancelamento-de-pedido-r41-roadmap-futuro)
+- [11. Substituição de chassi entre lojas (Q21)](#11-substituição-de-chassi-entre-lojas-q21)
+  - [11.1 Cenário 1 — manual (operador escaneia chassi de outra loja)](#111-cenário-1-manual-operador-escaneia-chassi-de-outra-loja)
+  - [11.2 Cenário 2 — via NF importada (chassis batem com Sep de outra loja)](#112-cenário-2-via-nf-importada-chassis-batem-com-sep-de-outra-loja)
+  - [11.3 Service `substituir_chassi_entre_seps(chassi, sep_origem_id, sep_destino_id, operador_id)`](#113-service-substituir_chassi_entre_sepschassi-sep_origem_id-sep_destino_id-operador_id)
+- [12. Excel Q.P.A. — histórico de versões (D-C opção b)](#12-excel-qpa-histórico-de-versões-d-c-opção-b)
+  - [12.1 Modelo](#121-modelo)
+  - [12.2 Quando regenerar](#122-quando-regenerar)
+  - [12.3 UI](#123-ui)
+- [13. Espelhamento Nacom — `mirror_assai_to_separacao` (D-B opção c)](#13-espelhamento-nacom-mirror_assai_to_separacao-d-b-opção-c)
+  - [13.1 Quando disparar](#131-quando-disparar)
+  - [13.2 Caso Sep nasce diretamente em CARREGADA (Q4/Q6) ou FATURADA (S1=b)](#132-caso-sep-nasce-diretamente-em-carregada-q4q6-ou-faturada-s1b)
+- [14. Status do pedido — transição automática (R4.2)](#14-status-do-pedido-transição-automática-r42)
+  - [14.1 Service `recalcular_status_pedido(pedido_id)`](#141-service-recalcular_status_pedidopedido_id)
+  - [14.2 Quando chamar (S10=a — todos os callsites)](#142-quando-chamar-s10a-todos-os-callsites)
+  - [14.3 Migration de dados](#143-migration-de-dados)
+  - [14.4 Remoção da atualização `EM_PRODUCAO` (compra_service)](#144-remoção-da-atualização-em_producao-compra_service)
+- [15. Telas novas (UI)](#15-telas-novas-ui)
+  - [15.1 `/motos-assai/carregamento` — Lista + Iniciar](#151-motos-assaicarregamento-lista-iniciar)
+  - [15.2 `/motos-assai/carregamento/<id>` — Escanear chassis](#152-motos-assaicarregamentoid-escanear-chassis)
+  - [15.3 `/motos-assai/divergencias` — Lista + resolução](#153-motos-assaidivergencias-lista-resolução)
+  - [15.4 Modal Expedição (na importação NF)](#154-modal-expedição-na-importação-nf)
+  - [15.5 Modal "Substituir chassi entre lojas"](#155-modal-substituir-chassi-entre-lojas)
+  - [15.6 NFs órfãs antigas (S9=c — backfill no deploy)](#156-nfs-órfãs-antigas-s9c-backfill-no-deploy)
+- [16. Migrations](#16-migrations)
+- [17. Plano de implementação por fase](#17-plano-de-implementação-por-fase)
+  - [Pré-requisitos (CR-5)](#pré-requisitos-cr-5)
+  - [Fase 1 — Fundação (modelo + status)](#fase-1-fundação-modelo-status)
+  - [Fase 2 — Carregamento (operação principal)](#fase-2-carregamento-operação-principal)
+  - [Fase 3 — UI Carregamento](#fase-3-ui-carregamento)
+  - [Fase 4 — NF + Divergências](#fase-4-nf-divergências)
+  - [Fase 5 — Auxiliares](#fase-5-auxiliares)
+  - [Fase 6 — Validação em prod](#fase-6-validação-em-prod)
+- [18. Open issues / decisões em aberto](#18-open-issues-decisões-em-aberto)
+- [19. Decisões aprovadas — rastreamento](#19-decisões-aprovadas-rastreamento)
+  - [Decisoes da rodada S1-S22 (revisao pos-spec)](#decisoes-da-rodada-s1-s22-revisao-pos-spec)
+  - [Self-review v1.1 — contradicoes residuais corrigidas (CR-1..CR-16)](#self-review-v11-contradicoes-residuais-corrigidas-cr-1cr-16)
+  - [Decisões da rodada A1-A18 (revisão pós-v1.1, agente revisor externo)](#decisões-da-rodada-a1-a18-revisão-pós-v11-agente-revisor-externo)
+- [20. Referências](#20-referências)
+- [Contexto](#contexto)
 
 **Data**: 2026-05-12
 **Versão**: v1.2 (rodada A1-A18 do agente revisor externo)
@@ -1614,3 +1705,7 @@ CR-16: Migration 23 e ultima migration mas roda DEPOIS do deploy de codigo da Fa
 - Spec integração lista_pedidos (Plano 5): `2026-05-12-motos-assai-pedido-loja-plano-design.md`
 - Migration 17 (cleanup Sep 2 órfã): `scripts/migrations/motos_assai_17_cleanup_sep_2_orfa.{py,sql}`
 - CLAUDE.md do módulo: `app/motos_assai/CLAUDE.md`
+
+## Contexto
+
+_A completar (PAD-A Onda 4)._

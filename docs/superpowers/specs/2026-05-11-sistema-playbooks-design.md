@@ -1,4 +1,66 @@
+<!-- doc:meta
+tipo: explanation
+camada: L3
+sot_de: —
+hub: docs/superpowers/specs/INDEX.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # Sistema de Playbooks — Aprendizado Procedimental do Agente
+
+> **Papel:** Sistema de Playbooks — Aprendizado Procedimental do Agente.
+
+## Indice
+
+- [1. Contexto e diagnóstico](#1-contexto-e-diagnóstico)
+  - [O que temos hoje (memórias declarativas)](#o-que-temos-hoje-memórias-declarativas)
+  - [O que falta (memória procedimental — playbooks)](#o-que-falta-memória-procedimental-playbooks)
+- [2. Princípios de design](#2-princípios-de-design)
+  - [P1 — Validação humana é o trigger primário, não decisão do modelo](#p1-validação-humana-é-o-trigger-primário-não-decisão-do-modelo)
+  - [P2 — Capturar a sequência real, não a intenção declarada](#p2-capturar-a-sequência-real-não-a-intenção-declarada)
+  - [P3 — Replicar passos, não conceitos](#p3-replicar-passos-não-conceitos)
+  - [P4 — Safety acima de eficiência](#p4-safety-acima-de-eficiência)
+  - [P5 — Aprendizado contínuo, não estático](#p5-aprendizado-contínuo-não-estático)
+- [3. Estrutura do playbook](#3-estrutura-do-playbook)
+  - [3.1 Path e identidade](#31-path-e-identidade)
+  - [3.2 Conteúdo XML](#32-conteúdo-xml)
+- [4. Decisão chave — nomenclatura (slug vs LLM-nomeado)](#4-decisão-chave-nomenclatura-slug-vs-llm-nomeado)
+  - [Comparação](#comparação)
+  - [Recomendação: Híbrido](#recomendação-híbrido)
+  - [4.5 Domínio — propriedade derivada, não hardcoded no path](#45-domínio-propriedade-derivada-não-hardcoded-no-path)
+- [5. Decisão chave — trigger pattern](#5-decisão-chave-trigger-pattern)
+  - [Opções](#opções)
+  - [Algoritmo combinado](#algoritmo-combinado)
+- [5.5 Bootstrap retroativo via `claude_session_store`](#55-bootstrap-retroativo-via-claude_session_store)
+  - [Correção da hipótese inicial (S3 archive)](#correção-da-hipótese-inicial-s3-archive)
+  - [O que está disponível em `claude_session_store`](#o-que-está-disponível-em-claude_session_store)
+  - [Universo viável para bootstrap](#universo-viável-para-bootstrap)
+  - [Pipeline de bootstrap (one-time)](#pipeline-de-bootstrap-one-time)
+  - [Custo estimado de bootstrap (revisado)](#custo-estimado-de-bootstrap-revisado)
+  - [Justificativa estratégica (mantida)](#justificativa-estratégica-mantida)
+  - [Gotcha — IDs de sessão](#gotcha-ids-de-sessão)
+- [6. Fluxo de captura](#6-fluxo-de-captura)
+  - [6.1 Triggers de detecção (Hook `Stop`)](#61-triggers-de-detecção-hook-stop)
+  - [6.2 Pipeline pos-sessão](#62-pipeline-pos-sessão)
+- [7. Fluxo de aplicação](#7-fluxo-de-aplicação)
+  - [7.1 No `UserPromptSubmitHook`](#71-no-userpromptsubmithook)
+  - [7.2 Frame de injeção no contexto](#72-frame-de-injeção-no-contexto)
+  - [7.3 Decisão do modelo](#73-decisão-do-modelo)
+- [8. Ciclo de vida do playbook](#8-ciclo-de-vida-do-playbook)
+- [9. Métricas (dashboard admin)](#9-métricas-dashboard-admin)
+- [10. Não-objetivos v1 (deixar para v2)](#10-não-objetivos-v1-deixar-para-v2)
+- [11. Riscos e mitigações](#11-riscos-e-mitigações)
+- [12. Plano de implementação faseado](#12-plano-de-implementação-faseado)
+  - [Fase 1 — Foundation (3-4 dias)](#fase-1-foundation-3-4-dias)
+  - [Fase 2 — Bootstrap retroativo via `claude_session_store` (1-2 dias)](#fase-2-bootstrap-retroativo-via-claude_session_store-1-2-dias)
+  - [Fase 3 — Captura ao vivo (3-5 dias)](#fase-3-captura-ao-vivo-3-5-dias)
+  - [Fase 4 — Aplicação (2-3 dias)](#fase-4-aplicação-2-3-dias)
+  - [Fase 5 — Métricas + Deprecation (2 dias)](#fase-5-métricas-deprecation-2-dias)
+  - [Fase 6 — Frontmatter migration (paralela, ongoing)](#fase-6-frontmatter-migration-paralela-ongoing)
+  - [Fase 7 — Refinamento (continuo)](#fase-7-refinamento-continuo)
+- [13. Decisões em aberto (para discussão pos-aprovação)](#13-decisões-em-aberto-para-discussão-pos-aprovação)
+- [14. Referências](#14-referências)
+- [Contexto](#contexto)
 
 **Data**: 2026-05-11
 **Status**: Spec — aguardando aprovação para implementação
@@ -550,3 +612,7 @@ O modelo continua decidindo CASO aplicar (R3, safety), mas a sequência de tools
 - **`session_archive.py`** (S3): só arquiva subagentes (1.48% das sessões) — útil para forensics, NÃO para playbooks
 - **S3 storage geral**: `.claude/references/S3_STORAGE.md` (mapa completo de uso atual)
 - **Helper para IDs**: `_resolve_our_session_uuid()` em `session_archive.py:89` — necessário para cruzar SDK ID ↔ UUID
+
+## Contexto
+
+_A completar (PAD-A Onda 4)._

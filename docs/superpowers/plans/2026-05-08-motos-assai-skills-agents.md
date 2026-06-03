@@ -1,4 +1,43 @@
+<!-- doc:meta
+tipo: how-to
+camada: L3
+sot_de: —
+hub: docs/superpowers/plans/INDEX.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # Motos Assaí Skills + Agente Implementation Plan
+
+> **Papel:** Motos Assaí Skills + Agente Implementation Plan.
+
+## Indice
+
+- [File Structure](#file-structure)
+  - [Arquivos a criar](#arquivos-a-criar)
+  - [Arquivos a modificar (cross-refs)](#arquivos-a-modificar-cross-refs)
+  - [Service signatures relevantes (referência rápida)](#service-signatures-relevantes-referência-rápida)
+  - [Constantes (em `app/motos_assai/models/moto.py`)](#constantes-em-appmotos_assaimodelsmotopy)
+- [Padrões obrigatórios para TODAS as skills](#padrões-obrigatórios-para-todas-as-skills)
+  - [Padrão A: Header de script Python](#padrão-a-header-de-script-python)
+  - [Padrão B: Frontmatter SKILL.md](#padrão-b-frontmatter-skillmd)
+  - [Padrão C: Verificação de autorização em WRITE skills](#padrão-c-verificação-de-autorização-em-write-skills)
+- [FASE 1 — Skills READ (4 skills)](#fase-1-skills-read-4-skills)
+  - [Task 1.1: `consultando-estoque-assai` (READ)](#task-11-consultando-estoque-assai-read)
+  - [Task 1.2: `rastreando-chassi-assai` (READ)](#task-12-rastreando-chassi-assai-read)
+  - [Task 1.3: `acompanhando-pedido-compra-assai` (READ)](#task-13-acompanhando-pedido-compra-assai-read)
+  - [Task 1.4: `acompanhando-saida-assai` (READ)](#task-14-acompanhando-saida-assai-read)
+- [FASE 2 — Sub-agent (orquestração READ inicialmente)](#fase-2-sub-agent-orquestração-read-inicialmente)
+  - [Task 2.1: `gestor-motos-assai` agent](#task-21-gestor-motos-assai-agent)
+- [FASE 3 — Skills MIXED/WRITE (2 skills)](#fase-3-skills-mixedwrite-2-skills)
+  - [Task 3.1: `conferindo-recibo-assai` (READ + WRITE)](#task-31-conferindo-recibo-assai-read-write)
+  - [Task 3.2: `registrando-evento-moto-assai` (WRITE)](#task-32-registrando-evento-moto-assai-write)
+- [FASE 4 — Cross-refs + Eval + Verificação](#fase-4-cross-refs-eval-verificação)
+  - [Task 4.1: Atualizar `ROUTING_SKILLS.md`](#task-41-atualizar-routing_skillsmd)
+  - [Task 4.2: Atualizar `INDEX.md`, `CLAUDE.md` raiz, módulo CLAUDE.md, SKILL_IMPROVEMENT_ROADMAP](#task-42-atualizar-indexmd-claudemd-raiz-módulo-claudemd-skill_improvement_roadmap)
+  - [Task 4.3: Atualizar `tool_skill_mapper.py`](#task-43-atualizar-tool_skill_mapperpy)
+  - [Task 4.4: Criar golden dataset (eval offline)](#task-44-criar-golden-dataset-eval-offline)
+  - [Task 4.5: Verificação manual final](#task-45-verificação-manual-final)
+- [Critérios de Aceite Final](#critérios-de-aceite-final)
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 

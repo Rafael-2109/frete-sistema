@@ -1,4 +1,36 @@
+<!-- doc:meta
+tipo: how-to
+camada: L3
+sot_de: —
+hub: docs/superpowers/plans/INDEX.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # Motos Assaí — Plano 2B: Recibo Motochefe + Recebimento físico
+
+> **Papel:** Motos Assaí — Plano 2B: Recibo Motochefe + Recebimento físico.
+
+## Indice
+
+- [Visão de arquivos](#visão-de-arquivos)
+- [Task 1: `MotochefeReciboPdfExtractor` (PDF determinístico)](#task-1-motocheferecibopdfextractor-pdf-determinístico)
+- [Task 2: `MotochefeReciboXlsxExtractor` (Excel determinístico)](#task-2-motochefereciboxlsxextractor-excel-determinístico)
+- [Task 3: `MotochefeReciboLlmFallback`](#task-3-motocheferecibollmfallback)
+- [Task 4: Testes dos parsers de recibo](#task-4-testes-dos-parsers-de-recibo)
+- [Task 5: `recibo_service.importar`](#task-5-recibo_serviceimportar)
+- [Task 6: Form + Rota POST upload recibo](#task-6-form-rota-post-upload-recibo)
+- [Task 7: Template upload recibo](#task-7-template-upload-recibo)
+- [Task 8: Detalhe + lista de recibos](#task-8-detalhe-lista-de-recibos)
+- [Task 9: Migration UNIQUE parcial em `assai_recibo_item`](#task-9-migration-unique-parcial-em-assai_recibo_item)
+- [Task 10: `chassi_validator` service](#task-10-chassi_validator-service)
+- [Task 11: `moto_evento_service` helpers](#task-11-moto_evento_service-helpers)
+- [Task 12: `recebimento_service` (validação + registro + finalização)](#task-12-recebimento_service-validação-registro-finalização)
+- [Task 13: Wizard HTML (cópia adaptada do Hora)](#task-13-wizard-html-cópia-adaptada-do-hora)
+- [Task 14: JS do wizard (`recebimento_wizard.js`)](#task-14-js-do-wizard-recebimento_wizardjs)
+- [Task 15: Endpoints AJAX do recebimento](#task-15-endpoints-ajax-do-recebimento)
+- [Task 16: Testes do `recebimento_service`](#task-16-testes-do-recebimento_service)
+- [Task 17: Atualizar CLAUDE.md](#task-17-atualizar-claudemd)
+- [Self-review](#self-review)
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 

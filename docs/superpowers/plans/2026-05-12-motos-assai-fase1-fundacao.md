@@ -1,4 +1,52 @@
+<!-- doc:meta
+tipo: how-to
+camada: L3
+sot_de: —
+hub: docs/superpowers/plans/INDEX.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # Motos Assaí — Fase 1 (Fundação) Implementation Plan
+
+> **Papel:** Motos Assaí — Fase 1 (Fundação) Implementation Plan.
+
+## Indice
+
+- [File Structure](#file-structure)
+  - [Migrations a criar (em `scripts/migrations/`)](#migrations-a-criar-em-scriptsmigrations)
+  - [Models a criar (em `app/motos_assai/models/`)](#models-a-criar-em-appmotos_assaimodels)
+  - [Models a modificar (em `app/motos_assai/models/`)](#models-a-modificar-em-appmotos_assaimodels)
+  - [Services a criar/modificar](#services-a-criarmodificar)
+  - [Refactor cross-projeto (Big Bang A18)](#refactor-cross-projeto-big-bang-a18)
+  - [Tests a criar](#tests-a-criar)
+- [Tasks](#tasks)
+  - [Task 1: Pré-requisito — confirmar Migration 17 em prod](#task-1-pré-requisito-confirmar-migration-17-em-prod)
+  - [Task 2: Migration 18 — `assai_carregamento` + `assai_carregamento_item`](#task-2-migration-18-assai_carregamento-assai_carregamento_item)
+  - [Task 3: Migration 19 — `assai_divergencia`](#task-3-migration-19-assai_divergencia)
+  - [Task 4: Migration 20 — `assai_pedido_excel`](#task-4-migration-20-assai_pedido_excel)
+  - [Task 5: Migration 22 — Campos de cancelamento em `assai_nf_qpa`](#task-5-migration-22-campos-de-cancelamento-em-assai_nf_qpa)
+  - [Task 6: Migration 24 — CHECK constraints aceitar novos status](#task-6-migration-24-check-constraints-aceitar-novos-status)
+  - [Task 7: Migration 26 — `assai_nf_qpa_item_vinculo_historico`](#task-7-migration-26-assai_nf_qpa_item_vinculo_historico)
+  - [Task 8: Migration 27 — UNIQUE parcial NF ativa por sep](#task-8-migration-27-unique-parcial-nf-ativa-por-sep)
+  - [Task 9: Criar models Python — `AssaiCarregamento` + `AssaiCarregamentoItem`](#task-9-criar-models-python-assaicarregamento-assaicarregamentoitem)
+  - [Task 10: Criar model — `AssaiDivergencia`](#task-10-criar-model-assaidivergencia)
+  - [Task 11: Criar model — `AssaiPedidoExcel`](#task-11-criar-model-assaipedidoexcel)
+  - [Task 12: Criar model — `AssaiNfQpaItemVinculoHistorico`](#task-12-criar-model-assainfqpaitemvinculohistorico)
+  - [Task 13: Atualizar `models/separacao.py` — `SEPARACAO_STATUS_CARREGADA`](#task-13-atualizar-modelsseparacaopy-separacao_status_carregada)
+  - [Task 14: Atualizar `models/nf_qpa.py` — `NF_STATUS_CANCELADA` + 3 colunas](#task-14-atualizar-modelsnf_qpapy-nf_status_cancelada-3-colunas)
+  - [Task 15: Atualizar `models/moto.py` — `EVENTO_CARREGADA`](#task-15-atualizar-modelsmotopy-evento_carregada)
+  - [Task 16: Atualizar `models/pedido.py` — 4 status novos](#task-16-atualizar-modelspedidopy-4-status-novos)
+  - [Task 17: Service `recalcular_status_pedido`](#task-17-service-recalcular_status_pedido)
+  - [Task 18: Migration 21 — Backfill status pedido](#task-18-migration-21-backfill-status-pedido)
+  - [Task 19: Big Bang A18 — Pre-flight scan callsites legados](#task-19-big-bang-a18-pre-flight-scan-callsites-legados)
+  - [Task 20: Big Bang — Refactor callsites + remove updates EM_PRODUCAO](#task-20-big-bang-refactor-callsites-remove-updates-em_producao)
+  - [Task 21: A6 — Guards em `disponibilizar_service` para `CARREGADA`](#task-21-a6-guards-em-disponibilizar_service-para-carregada)
+  - [Task 22: A6 — Guards em `montagem_service` para `CARREGADA`](#task-22-a6-guards-em-montagem_service-para-carregada)
+  - [Task 23: Migration 25 — Backfill divergências legadas](#task-23-migration-25-backfill-divergências-legadas)
+  - [Task 24: Smoke tests Fase 1 — `test_models_constantes`](#task-24-smoke-tests-fase-1-test_models_constantes)
+  - [Task 25: Deploy Fase 1 em prod (Render)](#task-25-deploy-fase-1-em-prod-render)
+- [Self-review (executor — pre-execucao)](#self-review-executor-pre-execucao)
+- [Plano completo](#plano-completo)
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 

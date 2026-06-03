@@ -1,4 +1,36 @@
+<!-- doc:meta
+tipo: how-to
+camada: L3
+sot_de: —
+hub: docs/superpowers/plans/INDEX.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # Motos Assaí — Fase 5 (Substituir chassi + UI vincular NF + Parser CCe) Implementation Plan
+
+> **Papel:** Motos Assaí — Fase 5 (Substituir chassi + UI vincular NF + Parser CCe) Implementation Plan.
+
+## Indice
+
+- [File Structure](#file-structure)
+  - [Services a criar/modificar](#services-a-criarmodificar)
+  - [Parsers CCe (novos)](#parsers-cce-novos)
+  - [Routes a modificar](#routes-a-modificar)
+  - [Templates a criar/modificar](#templates-a-criarmodificar)
+  - [Tests a criar](#tests-a-criar)
+- [Tasks](#tasks)
+  - [Task 1: Service `substituir_chassi_entre_seps` (S20 + A4)](#task-1-service-substituir_chassi_entre_seps-s20-a4)
+  - [Task 2: Detecção CHASSI_OUTRA_LOJA em `registrar_chassi` (separacao)](#task-2-detecção-chassi_outra_loja-em-registrar_chassi-separacao)
+  - [Task 3: Detecção CHASSI_OUTRA_LOJA em `escanear_carregamento_item`](#task-3-detecção-chassi_outra_loja-em-escanear_carregamento_item)
+  - [Tasks 4-5: Modais "Substituir chassi" UI (sep + carregamento)](#tasks-4-5-modais-substituir-chassi-ui-sep-carregamento)
+  - [Task 6: Service `vincular_nf_manualmente` + UI](#task-6-service-vincular_nf_manualmente-ui)
+  - [Task 7: Parser CCe — base structure (`cce_pdf_extractor.py`)](#task-7-parser-cce-base-structure-cce_pdf_extractorpy)
+  - [Task 8: Parser CCe — fallback LLM](#task-8-parser-cce-fallback-llm)
+  - [Task 9: Service `aplicar_correcao_cce` (atualiza NfQpaItem + re-roda match)](#task-9-service-aplicar_correcao_cce-atualiza-nfqpaitem-re-roda-match)
+  - [Task 10: UI upload PDF CCe (modal de divergência)](#task-10-ui-upload-pdf-cce-modal-de-divergência)
+  - [Tasks 11-13: Smoke tests + Deploy](#tasks-11-13-smoke-tests-deploy)
+- [Self-review (executor)](#self-review-executor)
+- [Próximos passos pós-Fase 5](#próximos-passos-pós-fase-5)
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 

@@ -1,4 +1,36 @@
+<!-- doc:meta
+tipo: how-to
+camada: L3
+sot_de: —
+hub: docs/superpowers/plans/INDEX.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # Remessa VORTX — Injeção Direta no Odoo
+
+> **Papel:** Remessa VORTX — Injeção Direta no Odoo.
+
+## Indice
+
+- [Contexto Técnico (leia antes de codar)](#contexto-técnico-leia-antes-de-codar)
+  - [Dados NACOM na VORTX (confirmados pelo banco)](#dados-nacom-na-vortx-confirmados-pelo-banco)
+  - [Modelos Odoo envolvidos](#modelos-odoo-envolvidos)
+  - [IDs fixos Odoo](#ids-fixos-odoo)
+  - [DAC — Módulo 11 base 7 (validado pelo banco, spec VORTX página 13)](#dac-módulo-11-base-7-validado-pelo-banco-spec-vortx-página-13)
+  - [Padrões obrigatórios do projeto](#padrões-obrigatórios-do-projeto)
+- [File Structure](#file-structure)
+  - [Novos arquivos](#novos-arquivos)
+  - [Arquivos a modificar](#arquivos-a-modificar)
+- [Tasks](#tasks)
+  - [Task 1: Migration + Modelo RemessaVortxCache + Flag Usuário](#task-1-migration-modelo-remessavortxcache-flag-usuário)
+  - [Task 2: DAC Calculator (TDD)](#task-2-dac-calculator-tdd)
+  - [Task 3: Layout VORTX + CNAB Generator](#task-3-layout-vortx-cnab-generator)
+  - [Task 4: Nosso Número Service](#task-4-nosso-número-service)
+  - [Task 5: Odoo Injector (State Machine)](#task-5-odoo-injector-state-machine)
+  - [Task 6: Routes + Templates](#task-6-routes-templates)
+  - [Task 7: Habilitar usuários + Teste end-to-end manual](#task-7-habilitar-usuários-teste-end-to-end-manual)
+- [Riscos e Mitigações](#riscos-e-mitigações)
+- [Fase 2 (futuro)](#fase-2-futuro)
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 

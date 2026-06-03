@@ -1,4 +1,52 @@
+<!-- doc:meta
+tipo: explanation
+camada: L3
+sot_de: —
+hub: docs/superpowers/specs/INDEX.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # Spec — Ajuste de Inventário NACOM/LF + Infraestrutura Reutilizável
+
+> **Papel:** Spec — Ajuste de Inventário NACOM/LF + Infraestrutura Reutilizável.
+
+## Indice
+
+- [1. Filosofia (orientação do dono do projeto)](#1-filosofia-orientação-do-dono-do-projeto)
+- [2. Objetivo](#2-objetivo)
+- [3. Escopo](#3-escopo)
+  - [3.1 Dentro](#31-dentro)
+  - [3.2 Fora](#32-fora)
+- [4. Premissas confirmadas](#4-premissas-confirmadas)
+- [5. Glossário operacional](#5-glossário-operacional)
+  - [5.1 Empresas (IDs Odoo)](#51-empresas-ids-odoo)
+  - [5.2 Matriz operações fiscais inter-company (a consolidar em `constants/operacoes_fiscais.py`)](#52-matriz-operações-fiscais-inter-company-a-consolidar-em-constantsoperacoes_fiscaispy)
+- [6. Arquitetura — fundamentada no audit](#6-arquitetura-fundamentada-no-audit)
+  - [6.1 Princípio](#61-princípio)
+  - [6.2 Serviços novos (4 services — REVISADO 2026-05-17 após G004/D003)](#62-serviços-novos-4-services-revisado-2026-05-17-após-g004d003)
+  - [6.3 Constantes consolidadas (1 arquivo novo)](#63-constantes-consolidadas-1-arquivo-novo)
+  - [6.4 Reuso explícito por categoria (do audit)](#64-reuso-explícito-por-categoria-do-audit)
+- [7. Modelo de dados](#7-modelo-de-dados)
+  - [7.1 Tabela `operacao_odoo_auditoria` (nova, **polimórfica e reutilizável**)](#71-tabela-operacao_odoo_auditoria-nova-polimórfica-e-reutilizável)
+  - [7.2 Tabela `ajuste_estoque_inventario` (nova, enxuta)](#72-tabela-ajuste_estoque_inventario-nova-enxuta)
+  - [7.3 Migrations](#73-migrations)
+- [8. Pipeline operacional](#8-pipeline-operacional)
+  - [8.1 Fases (mapeadas dos 10 passos do prompt)](#81-fases-mapeadas-dos-10-passos-do-prompt)
+  - [8.1.1 F5 — Pipeline em batches (revisado 2026-05-17 após G004/D003)](#811-f5-pipeline-em-batches-revisado-2026-05-17-após-g004d003)
+  - [8.2 Ondas](#82-ondas)
+- [9. Hooks determinísticos](#9-hooks-determinísticos)
+- [10. Estratégia de canary](#10-estratégia-de-canary)
+  - [10.1 Canary técnico (O0) — antes de qualquer NF](#101-canary-técnico-o0-antes-de-qualquer-nf)
+  - [10.2 Canary fiscal — antes de cada CFOP em bulk](#102-canary-fiscal-antes-de-cada-cfop-em-bulk)
+- [11. Governança](#11-governança)
+- [12. Rollback](#12-rollback)
+- [13. Estrutura de arquivos final](#13-estrutura-de-arquivos-final)
+- [14. Referências obrigatórias (com linhas)](#14-referências-obrigatórias-com-linhas)
+- [15. Itens em aberto (resolver durante F0)](#15-itens-em-aberto-resolver-durante-f0)
+- [16. Critérios de aceite](#16-critérios-de-aceite)
+- [17. Pós-implementação (próximo trabalho, fora deste spec)](#17-pós-implementação-próximo-trabalho-fora-deste-spec)
+- [Self-review](#self-review)
+- [Contexto](#contexto)
 
 **Data**: 17/05/2026
 **Autor**: Rafael Nascimento (com Claude Code)
@@ -543,3 +591,7 @@ Isso será objeto de **outro brainstorming** com base no aprendizado real.
 - **Escopo enxuto**: 4 services + 1 arquivo de constantes + 2 tabelas + 2 playbooks. Sem skills, sem refator de legados.
 - **Reversibilidade da decisão de design**: se `MATRIZ_INTERCOMPANY` se mostrar limitada, posso voltar a 1 service por tipo_operacao sem perder o trabalho (constantes ficam, services se especializam). Caminho contrário é mais caro.
 - **Critérios de aceite**: 11 itens auditáveis após implementação
+
+## Contexto
+
+_A completar (PAD-A Onda 4)._

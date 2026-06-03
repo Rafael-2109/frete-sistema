@@ -1,4 +1,28 @@
+<!-- doc:meta
+tipo: how-to
+camada: L3
+sot_de: —
+hub: docs/superpowers/plans/INDEX.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # Big Bang Callsites List — Status Legados
+
+> **Papel:** Big Bang Callsites List — Status Legados.
+
+## Indice
+
+- [Objetivo](#objetivo)
+- [Resultado do grep exaustivo](#resultado-do-grep-exaustivo)
+- [Refatoracoes necessarias](#refatoracoes-necessarias)
+  - [A. Codigo de producao (refatorar)](#a-codigo-de-producao-refatorar)
+  - [B. Templates Jinja2 (refatorar)](#b-templates-jinja2-refatorar)
+  - [C. Aliases temporarios em __init__.py (remover)](#c-aliases-temporarios-em-__init__py-remover)
+  - [D. Tests (refatorar)](#d-tests-refatorar)
+  - [E. Preservar como historia](#e-preservar-como-historia)
+- [Decisoes de mapeamento](#decisoes-de-mapeamento)
+- [Validacao final](#validacao-final)
+- [Commits](#commits)
 
 **Data**: 2026-05-13
 **Spec**: `docs/superpowers/specs/2026-05-12-motos-assai-carregamento-divergencia-design.md` §14.4 + A18

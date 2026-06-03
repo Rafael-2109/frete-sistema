@@ -1,4 +1,69 @@
+<!-- doc:meta
+tipo: explanation
+camada: L3
+sot_de: —
+hub: docs/superpowers/specs/INDEX.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # Módulo Motos Assaí — Design
+
+> **Papel:** Módulo Motos Assaí — Design.
+
+## Indice
+
+- [1. Contexto e escopo](#1-contexto-e-escopo)
+  - [1.1 Operação](#11-operação)
+  - [1.2 Pipeline de 8 etapas (origem do design)](#12-pipeline-de-8-etapas-origem-do-design)
+  - [1.3 Modelos e produtos](#13-modelos-e-produtos)
+  - [1.4 Fronteira do módulo](#14-fronteira-do-módulo)
+- [2. Decisões aprovadas (Q&A com dono do produto)](#2-decisões-aprovadas-qa-com-dono-do-produto)
+- [3. Arquitetura](#3-arquitetura)
+  - [3.1 Abordagem: módulo standalone (Hora-style)](#31-abordagem-módulo-standalone-hora-style)
+  - [3.2 Estrutura de pastas](#32-estrutura-de-pastas)
+- [4. Modelo de dados (16 tabelas)](#4-modelo-de-dados-16-tabelas)
+  - [4.1 Cadastros](#41-cadastros)
+  - [4.2 Identidade da moto](#42-identidade-da-moto)
+  - [4.3 Pipeline pedido → compra → recibo](#43-pipeline-pedido-compra-recibo)
+  - [4.4 Separação e faturamento](#44-separação-e-faturamento)
+  - [4.5 Invariantes (paralelo ao Hora)](#45-invariantes-paralelo-ao-hora)
+- [5. Fluxos por etapa](#5-fluxos-por-etapa)
+  - [5.1 Etapa 1 — Pedido VOE entra](#51-etapa-1-pedido-voe-entra)
+  - [5.2 Etapa 2 — PO Motochefe consolidado](#52-etapa-2-po-motochefe-consolidado)
+  - [5.3 Etapa 3 — Recibo Motochefe entra](#53-etapa-3-recibo-motochefe-entra)
+  - [5.4 Etapa 4 — Recebimento físico (QR + Barcode + manual)](#54-etapa-4-recebimento-físico-qr-barcode-manual)
+  - [5.5 Etapa 5 — Montagem (ESTOQUE → MONTADA / PENDENTE)](#55-etapa-5-montagem-estoque-montada-pendente)
+  - [5.6 Etapa 6 — Disponibilizar (MONTADA → DISPONIVEL)](#56-etapa-6-disponibilizar-montada-disponivel)
+  - [5.7 Etapa 7 — Separação (DISPONIVEL → SEPARADA, vinculado a pedido+loja)](#57-etapa-7-separação-disponivel-separada-vinculado-a-pedidoloja)
+  - [5.8 Etapa 8 — Importar NF Q.P.A. + match](#58-etapa-8-importar-nf-qpa-match)
+- [6. Telas dinâmicas — UX/UI](#6-telas-dinâmicas-uxui)
+  - [6.1 Princípios](#61-princípios)
+  - [6.2 Tela de listagem padrão](#62-tela-de-listagem-padrão)
+  - [6.3 Tela de wizard (recebimento)](#63-tela-de-wizard-recebimento)
+  - [6.4 Telas rápidas (montagem, disponibilizar)](#64-telas-rápidas-montagem-disponibilizar)
+  - [6.5 Tela de separação](#65-tela-de-separação)
+  - [6.6 Dashboard](#66-dashboard)
+- [7. Permissões](#7-permissões)
+  - [7.1 Toggle master apenas (v1)](#71-toggle-master-apenas-v1)
+  - [7.2 Decorator (`app/motos_assai/decorators.py`)](#72-decorator-appmotos_assaidecoratorspy)
+  - [7.3 Tela admin de usuários (formulário)](#73-tela-admin-de-usuários-formulário)
+  - [7.4 Menu (`app/templates/base.html`)](#74-menu-apptemplatesbasehtml)
+  - [7.5 Redirect pós-login (`app/auth/utils.py`)](#75-redirect-pós-login-appauthutilspy)
+  - [7.6 Isolamento](#76-isolamento)
+- [8. Parsers em detalhe](#8-parsers-em-detalhe)
+  - [8.1 Pedido VOE Q.P.A. — extrator determinístico](#81-pedido-voe-qpa-extrator-determinístico)
+  - [8.2 Pedido VOE — fallback LLM](#82-pedido-voe-fallback-llm)
+  - [8.3 Recibo Motochefe](#83-recibo-motochefe)
+  - [8.4 NF Q.P.A. — adapter sem modificar CarVia](#84-nf-qpa-adapter-sem-modificar-carvia)
+  - [8.5 Resolução de modelo (`modelo_resolver`)](#85-resolução-de-modelo-modelo_resolver)
+- [9. Migrations e seeds](#9-migrations-e-seeds)
+  - [9.1 Migrations duais (DDL .sql + Python verificação)](#91-migrations-duais-ddl-sql-python-verificação)
+  - [9.2 Itens necessários do dono do produto antes da implementação](#92-itens-necessários-do-dono-do-produto-antes-da-implementação)
+- [10. Sequência de implementação](#10-sequência-de-implementação)
+- [11. Não-objetivos v1](#11-não-objetivos-v1)
+- [12. Riscos e mitigações](#12-riscos-e-mitigações)
+- [13. Referências](#13-referências)
+- [Contexto](#contexto)
 
 **Data**: 2026-05-07
 **Autor**: Rafael Nascimento (validado iterativamente com Claude)
@@ -825,3 +890,7 @@ def resolver_modelo(texto: str, origem: str) -> AssaiModelo | None:
 ---
 
 **Este design foi aprovado pelo dono do produto em 2026-05-07. Pronto para writing-plans.**
+
+## Contexto
+
+_A completar (PAD-A Onda 4)._

@@ -1,4 +1,51 @@
+<!-- doc:meta
+tipo: how-to
+camada: L3
+sot_de: —
+hub: docs/superpowers/plans/INDEX.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # Relatório de Confronto de Inventário — Implementation Plan
+
+> **Papel:** Relatório de Confronto de Inventário — Implementation Plan.
+
+## Indice
+
+- [Phase 1 — Foundation (esqueleto, modelos, migrations, schema fix)](#phase-1-foundation-esqueleto-modelos-migrations-schema-fix)
+  - [Task 1: Criar esqueleto do módulo `app/inventario/`](#task-1-criar-esqueleto-do-módulo-appinventario)
+  - [Task 2: Criar modelos (4 tabelas)](#task-2-criar-modelos-4-tabelas)
+  - [Task 3: Migrations DDL (Python + SQL idempotente)](#task-3-migrations-ddl-python-sql-idempotente)
+  - [Task 4: Fix schema JSON desatualizado de `movimentacao_estoque`](#task-4-fix-schema-json-desatualizado-de-movimentacao_estoque)
+- [Phase 2 — Services (lógica de negócio)](#phase-2-services-lógica-de-negócio)
+  - [Task 5: `inventario_loader.py` — parser xlsx do inventário base](#task-5-inventario_loaderpy-parser-xlsx-do-inventário-base)
+  - [Task 6: `confronto_service.py` — agregador principal](#task-6-confronto_servicepy-agregador-principal)
+  - [Task 7: `snapshot_odoo_service.py` — refresh Odoo](#task-7-snapshot_odoo_servicepy-refresh-odoo)
+  - [Task 8: `movimentacoes_odoo_service.py` — drill-down paginado](#task-8-movimentacoes_odoo_servicepy-drill-down-paginado)
+  - [Task 9: `export_xlsx_service.py` — XLSX 6 abas](#task-9-export_xlsx_servicepy-xlsx-6-abas)
+- [Phase 3 — Routes](#phase-3-routes)
+  - [Task 10: `ciclo_routes.py` (CRUD + upload xlsx)](#task-10-ciclo_routespy-crud-upload-xlsx)
+  - [Task 11: `confronto_routes.py` (tela principal + export)](#task-11-confronto_routespy-tela-principal-export)
+  - [Task 12: `ajustes_manuais_routes.py` (CRUD inline)](#task-12-ajustes_manuais_routespy-crud-inline)
+  - [Task 13: `snapshot_routes.py` (botão refresh + status job)](#task-13-snapshot_routespy-botão-refresh-status-job)
+  - [Task 14: `movimentacoes_routes.py` (drill-down)](#task-14-movimentacoes_routespy-drill-down)
+- [Phase 4 — Worker](#phase-4-worker)
+  - [Task 15: Worker `refresh_snapshot_worker` + integração](#task-15-worker-refresh_snapshot_worker-integração)
+- [Phase 5 — Frontend refinado (templates + JS + CSS)](#phase-5-frontend-refinado-templates-js-css)
+  - [Task 16: Reformular `ciclos.html` com upload xlsx + criar ciclo](#task-16-reformular-cicloshtml-com-upload-xlsx-criar-ciclo)
+  - [Task 17: Reformular `confronto.html` (tela principal interativa)](#task-17-reformular-confrontohtml-tela-principal-interativa)
+  - [Task 18: Reformular `ajustes_manuais.html` (CRUD inline)](#task-18-reformular-ajustes_manuaishtml-crud-inline)
+- [Phase 6 — Integração + Validação](#phase-6-integração-validação)
+  - [Task 19: Adicionar link no menu `base.html`](#task-19-adicionar-link-no-menu-basehtml)
+  - [Task 20: Test de rotas (integração)](#task-20-test-de-rotas-integração)
+  - [Task 21: Rodar migration em PROD (Render)](#task-21-rodar-migration-em-prod-render)
+  - [Task 22: Smoke test end-to-end](#task-22-smoke-test-end-to-end)
+  - [Task 23: Validação PROD — comparar tela com dados reais Render](#task-23-validação-prod-comparar-tela-com-dados-reais-render)
+- [Self-Review (concluído pelo writer)](#self-review-concluído-pelo-writer)
+  - [Cobertura da spec](#cobertura-da-spec)
+  - [Placeholder scan](#placeholder-scan)
+  - [Type/method consistency](#typemethod-consistency)
+- [Execução](#execução)
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 

@@ -1,4 +1,29 @@
+<!-- doc:meta
+tipo: explanation
+camada: L3
+sot_de: —
+hub: docs/superpowers/specs/INDEX.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # Spec — Transferência de saldo entre códigos (Odoo) mantendo lote
+
+> **Papel:** Spec — Transferência de saldo entre códigos (Odoo) mantendo lote.
+
+## Indice
+
+- [1. Objetivo](#1-objetivo)
+- [2. Decisões (confirmadas com o dono)](#2-decisões-confirmadas-com-o-dono)
+- [3. Arquitetura](#3-arquitetura)
+- [4. Contrato do service (`TransferenciaSaldoCodigoService`)](#4-contrato-do-service-transferenciasaldocodigoservice)
+- [5. Criação de lote no destino + GOTCHAS (atenção especial)](#5-criação-de-lote-no-destino-gotchas-atenção-especial)
+- [6. Tratamento de erros / atomicidade](#6-tratamento-de-erros-atomicidade)
+- [7. Validações](#7-validações)
+- [8. Espelho local (`MovimentacaoEstoque`)](#8-espelho-local-movimentacaoestoque)
+- [9. Fora de escopo (YAGNI)](#9-fora-de-escopo-yagni)
+- [10. Arquivos a criar/modificar](#10-arquivos-a-criarmodificar)
+- [11. Checklist de verificação (pré-entrega)](#11-checklist-de-verificação-pré-entrega)
+- [Contexto](#contexto)
 
 **Data**: 22/05/2026
 **Autor**: Rafael Nascimento (com Claude Code)
@@ -117,3 +142,7 @@ Bloqueios herdados das primitivas (retornam erro claro, sem gravar):
 - [ ] Bloqueio de `qty > disponível` (reserva) no front e no back.
 - [ ] Espelho local: 2 `MovimentacaoEstoque` (SAIDA+ENTRADA), sem duplicar sync.
 - [ ] Validações front + back.
+
+## Contexto
+
+_A completar (PAD-A Onda 4)._

@@ -1,4 +1,69 @@
+<!-- doc:meta
+tipo: explanation
+camada: L3
+sot_de: —
+hub: docs/superpowers/specs/INDEX.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # HORA — Cadastro, Estoque e Faturamento de Peças
+
+> **Papel:** HORA — Cadastro, Estoque e Faturamento de Peças.
+
+## Indice
+
+- [1. Contexto](#1-contexto)
+- [2. Premissas](#2-premissas)
+- [3. Decisões aprovadas (Q&A com usuário)](#3-decisões-aprovadas-qa-com-usuário)
+  - [Proteção de chassi (CONF-1)](#proteção-de-chassi-conf-1)
+  - [Backfill por delta (CONF-2)](#backfill-por-delta-conf-2)
+  - [Conferência peças (CONF-4)](#conferência-peças-conf-4)
+- [4. Schema (5 tabelas novas + 1 ALTER)](#4-schema-5-tabelas-novas-1-alter)
+  - [4.1 `hora_peca` — cadastro](#41-hora_peca-cadastro)
+  - [4.2 `hora_tagplus_peca_map` — mapeamento opcional pra TagPlus](#42-hora_tagplus_peca_map-mapeamento-opcional-pra-tagplus)
+  - [4.3 `hora_peca_movimento` — log de movimentações](#43-hora_peca_movimento-log-de-movimentações)
+  - [4.4 `hora_nf_entrada_item_peca` — peça em NF de entrada](#44-hora_nf_entrada_item_peca-peça-em-nf-de-entrada)
+  - [4.5 `hora_venda_item_peca` — peça em pedido de venda](#45-hora_venda_item_peca-peça-em-pedido-de-venda)
+  - [4.6 ALTER `hora_pedido_item` — peça em pedido de compra](#46-alter-hora_pedido_item-peça-em-pedido-de-compra)
+- [5. Migrations (3 arquivos `.py` + `.sql`)](#5-migrations-3-arquivos-py-sql)
+- [6. Modelos SQLAlchemy](#6-modelos-sqlalchemy)
+  - [Novos arquivos](#novos-arquivos)
+  - [Atualizado](#atualizado)
+- [7. Services](#7-services)
+  - [Novos](#novos)
+  - [Alterados](#alterados)
+  - [TagPlus](#tagplus)
+- [8. Routes](#8-routes)
+  - [Novas — `app/hora/routes/pecas_cadastro.py`](#novas-apphoraroutespecas_cadastropy)
+  - [Novas — `app/hora/routes/pecas_estoque.py`](#novas-apphoraroutespecas_estoquepy)
+  - [Alterações em `tagplus_routes.py`](#alterações-em-tagplus_routespy)
+  - [Alterações em `pedidos.py` (compra)](#alterações-em-pedidospy-compra)
+  - [Alterações em `vendas.py`](#alterações-em-vendaspy)
+- [9. Templates](#9-templates)
+  - [Novos](#novos)
+  - [Alterados](#alterados)
+  - [9.1 Padrão visual obrigatório (referência: módulo HORA)](#91-padrão-visual-obrigatório-referência-módulo-hora)
+- [10. Permissões + Menu](#10-permissões-menu)
+  - [`MODULOS_HORA`](#modulos_hora)
+  - [Menu (`base.html`)](#menu-basehtml)
+- [11. Proteção de chassi (detalhamento técnico)](#11-proteção-de-chassi-detalhamento-técnico)
+  - [Helper](#helper)
+  - [Aplicação no backfill](#aplicação-no-backfill)
+- [12. TagPlus — payload misto (moto + peça)](#12-tagplus-payload-misto-moto-peça)
+  - [Item moto (mantido)](#item-moto-mantido)
+  - [Item peça (novo)](#item-peça-novo)
+  - [CFOP por item](#cfop-por-item)
+  - [Faturas](#faturas)
+- [13. Backfill TagPlus — fluxo](#13-backfill-tagplus-fluxo)
+  - [Backfill produtos (catálogo)](#backfill-produtos-catálogo)
+  - [Backfill NFes (com peças)](#backfill-nfes-com-peças)
+  - [Backfill delta (NFes legadas)](#backfill-delta-nfes-legadas)
+- [14. Plano de implementação (12 fases)](#14-plano-de-implementação-12-fases)
+- [15. Testes (`tests/hora/`)](#15-testes-testshora)
+- [16. Riscos e mitigações](#16-riscos-e-mitigações)
+- [17. Não-objetivos (out of scope v1)](#17-não-objetivos-out-of-scope-v1)
+- [18. Pós-implementação](#18-pós-implementação)
+- [Contexto](#contexto)
 
 **Data**: 2026-05-05
 **Status**: spec aprovado, aguardando plano de implementação
@@ -558,3 +623,7 @@ Cada fase termina com self-audit:
 
 Atualizar `app/hora/CLAUDE.md` com nova seção:
 - "11. Peças (cadastro, estoque, faturamento)" — descrevendo schema, services, fronteira (peça ≠ moto), proteção chassi
+
+## Contexto
+
+_A completar (PAD-A Onda 4)._

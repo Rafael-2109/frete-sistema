@@ -1,4 +1,26 @@
+<!-- doc:meta
+tipo: how-to
+camada: L3
+sot_de: —
+hub: docs/superpowers/plans/INDEX.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # Pessoal F1 — Busca Global e Filtros Avançados
+
+> **Papel:** Pessoal F1 — Busca Global e Filtros Avançados.
+
+## Indice
+
+- [File Structure](#file-structure)
+- [Task 1: Infraestrutura de testes do módulo pessoal](#task-1-infraestrutura-de-testes-do-módulo-pessoal)
+- [Task 2: Migration — índice GIN pg_trgm](#task-2-migration-índice-gin-pg_trgm)
+- [Task 3: Filtro `valor_min` e `valor_max` — teste primeiro](#task-3-filtro-valor_min-e-valor_max-teste-primeiro)
+- [Task 4: Filtro `tem_categoria` — teste primeiro](#task-4-filtro-tem_categoria-teste-primeiro)
+- [Task 5: UI — segunda linha de filtros colapsável](#task-5-ui-segunda-linha-de-filtros-colapsável)
+- [Task 6: Salvar busca em localStorage](#task-6-salvar-busca-em-localstorage)
+- [Task 7: Validar cobertura e rodar suite](#task-7-validar-cobertura-e-rodar-suite)
+- [Notas finais](#notas-finais)
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 

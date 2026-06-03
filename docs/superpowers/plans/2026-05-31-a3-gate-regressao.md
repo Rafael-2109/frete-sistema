@@ -1,4 +1,27 @@
+<!-- doc:meta
+tipo: how-to
+camada: L3
+sot_de: —
+hub: docs/superpowers/plans/INDEX.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # Plano — A3 como GATE DE REGRESSÃO (fiel à spec)
+
+> **Papel:** Plano — A3 como GATE DE REGRESSÃO (fiel à spec).
+
+## Indice
+
+- [FIDELIDADE À SPEC (o que a A3 deve ser, com fonte)](#fidelidade-à-spec-o-que-a-a3-deve-ser-com-fonte)
+- [O QUE JÁ EXISTE (não reinventar)](#o-que-já-existe-não-reinventar)
+- [O QUE FALTA vs spec (os 4 itens do plano)](#o-que-falta-vs-spec-os-4-itens-do-plano)
+  - [A3-R1 — run_eval N-runs + agregação (domar o flaky)  [Task #4]](#a3-r1-run_eval-n-runs-agregação-domar-o-flaky-task-4)
+  - [A3-R2 — gate de regressão Δ (código-antes vs código-depois)  [Task #5]](#a3-r2-gate-de-regressão-δ-código-antes-vs-código-depois-task-5)
+  - [A3-R3 — calibração do judge (spot-check humano 5-10%)  [Task #6]](#a3-r3-calibração-do-judge-spot-check-humano-5-10-task-6)
+  - [A3-R4 — PASSO de gate no dominio-8 (report-only)  [Task #7]](#a3-r4-passo-de-gate-no-dominio-8-report-only-task-7)
+- [ORDEM (dependência)](#ordem-dependência)
+- [O QUE NÃO É A3 (não fazer aqui — fuga de escopo)](#o-que-não-é-a3-não-fazer-aqui-fuga-de-escopo)
+- [DoD (por item)](#dod-por-item)
 
 > Telos da A3 (eixos/A-flywheel.md:257-266): fechar Ruptura #5 (golden dataset fora do loop)
 > e Ruptura #3 (verified = opinião do Sonnet, sem baseline antes/depois). A A3 NÃO é vestibular

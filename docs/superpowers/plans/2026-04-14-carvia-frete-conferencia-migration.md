@@ -1,4 +1,79 @@
+<!-- doc:meta
+tipo: how-to
+camada: L3
+sot_de: —
+hub: docs/superpowers/plans/INDEX.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # CarVia: Migracao de conferencia de Sub para Frete (Escopo C)
+
+> **Papel:** CarVia: Migracao de conferencia de Sub para Frete (Escopo C).
+
+## Indice
+
+- [Phase 1 — Reversao de mudancas parciais da sessao anterior](#phase-1-reversao-de-mudancas-parciais-da-sessao-anterior)
+  - [Task 1.1: Remover 3 metodos dinamicos de CarviaSubcontrato](#task-11-remover-3-metodos-dinamicos-de-carviasubcontrato)
+  - [Task 1.2: Reverter sync frete→sub em editar_frete_carvia](#task-12-reverter-sync-fretesub-em-editar_frete_carvia)
+  - [Task 1.3: Reverter parametro valor_pago em ConferenciaService.registrar_conferencia](#task-13-reverter-parametro-valor_pago-em-conferenciaserviceregistrar_conferencia)
+  - [Task 1.4: Deletar backfill script obsoleto](#task-14-deletar-backfill-script-obsoleto)
+- [Phase 2 — Adicionar campos e metodos de conferencia em CarviaFrete](#phase-2-adicionar-campos-e-metodos-de-conferencia-em-carviafrete)
+  - [Task 2.1: Adicionar 5 campos de conferencia em CarviaFrete](#task-21-adicionar-5-campos-de-conferencia-em-carviafrete)
+  - [Task 2.2: Adicionar 3 metodos dinamicos em CarviaFrete](#task-22-adicionar-3-metodos-dinamicos-em-carviafrete)
+- [Phase 3 — Migration: add campos em carvia_fretes + backfill](#phase-3-migration-add-campos-em-carvia_fretes-backfill)
+  - [Task 3.1: Criar arquivo SQL idempotente](#task-31-criar-arquivo-sql-idempotente)
+  - [Task 3.2: Criar Python runner](#task-32-criar-python-runner)
+- [Phase 4 — Rename tabela aprovacoes (subcontrato → frete)](#phase-4-rename-tabela-aprovacoes-subcontrato-frete)
+  - [Task 4.1: Criar SQL de rename tabela + FK](#task-41-criar-sql-de-rename-tabela-fk)
+  - [Task 4.2: Criar Python runner rename](#task-42-criar-python-runner-rename)
+  - [Task 4.3: Atualizar modelo CarviaAprovacaoFrete](#task-43-atualizar-modelo-carviaaprovacaofrete)
+  - [Task 4.4: Atualizar __init__.py de models](#task-44-atualizar-__init__py-de-models)
+  - [Task 4.5: Remover relacionamento `aprovacoes` de CarviaSubcontrato + adicionar em CarviaFrete](#task-45-remover-relacionamento-aprovacoes-de-carviasubcontrato-adicionar-em-carviafrete)
+- [Phase 5 — Adicionar `frete_id` em CarviaContaCorrenteTransportadora](#phase-5-adicionar-frete_id-em-carviacontacorrentetransportadora)
+  - [Task 5.1: SQL add frete_id + backfill](#task-51-sql-add-frete_id-backfill)
+  - [Task 5.2: Python runner](#task-52-python-runner)
+  - [Task 5.3: Atualizar modelo CarviaContaCorrenteTransportadora](#task-53-atualizar-modelo-carviacontacorrentetransportadora)
+- [Phase 6 — Refactor AprovacaoFreteService (rename + operar em Frete)](#phase-6-refactor-aprovacaofreteservice-rename-operar-em-frete)
+  - [Task 6.1: Renomear arquivo do service](#task-61-renomear-arquivo-do-service)
+  - [Task 6.2: Reescrever service completo](#task-62-reescrever-service-completo)
+- [Phase 7 — Refactor ContaCorrenteService](#phase-7-refactor-contacorrenteservice)
+  - [Task 7.1: deve_lancar(frete)](#task-71-deve_lancarfrete)
+  - [Task 7.2: lancar_movimentacao(frete_id)](#task-72-lancar_movimentacaofrete_id)
+  - [Task 7.3: cancelar_movimentacoes(frete_id)](#task-73-cancelar_movimentacoesfrete_id)
+  - [Task 7.4: listar_extrato — trocar sub_valor_* para frete_valor_*](#task-74-listar_extrato-trocar-sub_valor_-para-frete_valor_)
+- [Phase 8 — Refactor ConferenciaService para operar em Frete](#phase-8-refactor-conferenciaservice-para-operar-em-frete)
+  - [Task 8.1: Substituir registrar_conferencia inteiro](#task-81-substituir-registrar_conferencia-inteiro)
+  - [Task 8.2: Substituir _verificar_fatura_completa](#task-82-substituir-_verificar_fatura_completa)
+  - [Task 8.3: Substituir resumo_conferencia_fatura](#task-83-substituir-resumo_conferencia_fatura)
+- [Phase 9 — Refactor aprovacao_routes.py](#phase-9-refactor-aprovacao_routespy)
+  - [Task 9.1: Atualizar imports (header do arquivo)](#task-91-atualizar-imports-header-do-arquivo)
+  - [Task 9.2: Atualizar listar_aprovacoes_subcontrato → listar_aprovacoes_frete](#task-92-atualizar-listar_aprovacoes_subcontrato-listar_aprovacoes_frete)
+  - [Task 9.3: Atualizar processar_aprovacao_subcontrato → processar_aprovacao_frete](#task-93-atualizar-processar_aprovacao_subcontrato-processar_aprovacao_frete)
+  - [Task 9.4: Atualizar aprovar_subcontrato e rejeitar_subcontrato](#task-94-atualizar-aprovar_subcontrato-e-rejeitar_subcontrato)
+  - [Task 9.5: Atualizar solicitar_aprovacao_subcontrato_manual](#task-95-atualizar-solicitar_aprovacao_subcontrato_manual)
+- [Phase 10 — Refactor fatura_routes callers](#phase-10-refactor-fatura_routes-callers)
+  - [Task 10.1: Linha 1614 — trocar import lazy + chamada](#task-101-linha-1614-trocar-import-lazy-chamada)
+  - [Task 10.2: Linhas 2175-2204 — check requer_aprovacao](#task-102-linhas-2175-2204-check-requer_aprovacao)
+- [Phase 11 — Remover endpoint registrar_pagamento_subcontrato](#phase-11-remover-endpoint-registrar_pagamento_subcontrato)
+  - [Task 11.1: Grep final por callers JS](#task-111-grep-final-por-callers-js)
+  - [Task 11.2: Deletar endpoint inteiro](#task-112-deletar-endpoint-inteiro)
+- [Phase 12 — Admin service cleanup](#phase-12-admin-service-cleanup)
+  - [Task 12.1: Remover resets obsoletos](#task-121-remover-resets-obsoletos)
+- [Phase 13 — Templates](#phase-13-templates)
+  - [Task 13.1: aprovacoes/processar.html — dict keys](#task-131-aprovacoesprocessarhtml-dict-keys)
+  - [Task 13.2: aprovacoes/listar.html — PERMANECE](#task-132-aprovacoeslistarhtml-permanece)
+  - [Task 13.3: conta_corrente/extrato.html — renomear sub_valor_*](#task-133-conta_correnteextratohtml-renomear-sub_valor_)
+  - [Task 13.4: subcontratos/detalhe.html — remover UI deprecada](#task-134-subcontratosdetalhehtml-remover-ui-deprecada)
+- [Phase 14 — Migration final: DROP campos de Sub](#phase-14-migration-final-drop-campos-de-sub)
+  - [Task 14.1: SQL drop idempotente](#task-141-sql-drop-idempotente)
+  - [Task 14.2: Python runner drop](#task-142-python-runner-drop)
+  - [Task 14.3: Remover campos do modelo CarviaSubcontrato](#task-143-remover-campos-do-modelo-carviasubcontrato)
+- [Phase 15 — Executar migrations em ordem + Self-audit final](#phase-15-executar-migrations-em-ordem-self-audit-final)
+  - [Task 15.1: Executar migrations na ordem correta](#task-151-executar-migrations-na-ordem-correta)
+  - [Task 15.2: Compile geral de todos os arquivos modificados](#task-152-compile-geral-de-todos-os-arquivos-modificados)
+  - [Task 15.3: Grep residual](#task-153-grep-residual)
+  - [Task 15.4: Teste manual end-to-end](#task-154-teste-manual-end-to-end)
+- [Self-Review Checklist](#self-review-checklist)
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) ou superpowers:executing-plans. Steps usam checkbox (`- [ ]`) para tracking.
 >

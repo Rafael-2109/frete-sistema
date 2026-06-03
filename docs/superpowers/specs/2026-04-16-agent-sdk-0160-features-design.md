@@ -1,4 +1,45 @@
+<!-- doc:meta
+tipo: explanation
+camada: L3
+sot_de: —
+hub: docs/superpowers/specs/INDEX.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # Design — Features SDK Claude Agent 0.1.60
+
+> **Papel:** Design — Features SDK Claude Agent 0.1.60.
+
+## Indice
+
+- [1. Contexto e Motivacao](#1-contexto-e-motivacao)
+- [2. Restricoes e Premissas](#2-restricoes-e-premissas)
+- [3. Arquitetura Geral](#3-arquitetura-geral)
+  - [3.1 Grupos de implementacao](#31-grupos-de-implementacao)
+  - [3.2 Fundacao comum — `sdk/subagent_reader.py`](#32-fundacao-comum-sdksubagent_readerpy)
+  - [3.3 Sanitizacao PII — `utils/pii_masker.py`](#33-sanitizacao-pii-utilspii_maskerpy)
+- [4. Detalhamento por Grupo](#4-detalhamento-por-grupo)
+  - [4.1 Grupo A — Backend/Leitura](#41-grupo-a-backendleitura)
+  - [4.2 Grupo B — UI #6 Linha inline expansivel](#42-grupo-b-ui-6-linha-inline-expansivel)
+  - [4.3 Grupo C — #2 Aposentar `/tmp/subagent-findings/` (soft)](#43-grupo-c-2-aposentar-tmpsubagent-findings-soft)
+  - [4.4 Grupo D — #4 Validacao anti-alucinacao (async)](#44-grupo-d-4-validacao-anti-alucinacao-async)
+- [5. Feature Flags — Resumo](#5-feature-flags-resumo)
+- [6. Plano de Fases](#6-plano-de-fases)
+- [7. Testing Strategy](#7-testing-strategy)
+  - [7.1 Unit](#71-unit)
+  - [7.2 Integration](#72-integration)
+  - [7.3 E2E](#73-e2e)
+  - [7.4 Validacao manual no rollout](#74-validacao-manual-no-rollout)
+- [8. Rollback](#8-rollback)
+- [9. Risk Assessment](#9-risk-assessment)
+- [10. Dependencias Externas](#10-dependencias-externas)
+- [11. Checklist de Conformidade](#11-checklist-de-conformidade)
+- [12. Proximos Passos](#12-proximos-passos)
+- [Apendice A — Mapa de arquivos](#apendice-a-mapa-de-arquivos)
+  - [Arquivos novos](#arquivos-novos)
+  - [Arquivos modificados](#arquivos-modificados)
+- [Apendice B — Decisoes tomadas no brainstorming](#apendice-b-decisoes-tomadas-no-brainstorming)
+- [Contexto](#contexto)
 
 **Data**: 2026-04-16
 **Status**: Aprovado (pendente revisao final do usuario)
@@ -701,3 +742,7 @@ Total modificados: 17 arquivos.
 | 11 | Validacao threshold | Score numerico 0-100, flag se `< 70` (env var) |
 | 12 | Validacao UX | Icone amarelo discreto, sem banner vermelho |
 | 13 | Worker #4 | Reaproveitar `worker_render.py` + `worker_atacadao.py` (nova queue `agent_validation`) |
+
+## Contexto
+
+_A completar (PAD-A Onda 4)._

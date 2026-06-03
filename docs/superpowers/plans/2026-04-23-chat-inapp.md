@@ -1,4 +1,48 @@
+<!-- doc:meta
+tipo: how-to
+camada: L3
+sot_de: —
+hub: docs/superpowers/plans/INDEX.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # Chat In-App — Implementation Plan
+
+> **Papel:** Chat In-App — Implementation Plan.
+
+## Indice
+
+- [Mapa de arquivos (decomposicao antes das tasks)](#mapa-de-arquivos-decomposicao-antes-das-tasks)
+  - [Arquivos a criar](#arquivos-a-criar)
+  - [Arquivos a modificar](#arquivos-a-modificar)
+- [Fases do plano](#fases-do-plano)
+- [Task 1: Criar estrutura do modulo + blueprint vazio](#task-1-criar-estrutura-do-modulo-blueprint-vazio)
+- [Task 2: Modelos SQLAlchemy (7 tabelas)](#task-2-modelos-sqlalchemy-7-tabelas)
+- [Task 3: Migration — SQL + Python](#task-3-migration-sql-python)
+- [Task 4: Markdown parser (extrair mentions + sanitizar)](#task-4-markdown-parser-extrair-mentions-sanitizar)
+- [Task 5: PermissionChecker (regra cruzada por sistemas)](#task-5-permissionchecker-regra-cruzada-por-sistemas)
+- [Task 6: ThreadService (CRUD + lazy entity/system_dm)](#task-6-threadservice-crud-lazy-entitysystem_dm)
+- [Task 7: AttachmentService (upload S3)](#task-7-attachmentservice-upload-s3)
+- [Task 8: MessageService (send/edit/delete + mentions + publish)](#task-8-messageservice-sendeditdelete-mentions-publish)
+- [Task 9: SystemNotifier (alert API)](#task-9-systemnotifier-alert-api)
+- [Task 10: Publisher Redis](#task-10-publisher-redis)
+- [Task 11: SSE stream generator](#task-11-sse-stream-generator)
+- [Task 12: Rotas de thread (list + create + members)](#task-12-rotas-de-thread-list-create-members)
+- [Task 13: Rotas de mensagem (send + edit + delete + reactions + forward)](#task-13-rotas-de-mensagem-send-edit-delete-reactions-forward)
+- [Task 14: Rotas de stream SSE + unread + search](#task-14-rotas-de-stream-sse-unread-search)
+- [Task 15: Rotas share/screen + entity thread](#task-15-rotas-sharescreen-entity-thread)
+- [Task 16: CSS base + badge navbar + include em base.html](#task-16-css-base-badge-navbar-include-em-basehtml)
+- [Task 17: JS client — SSE + badges + contador](#task-17-js-client-sse-badges-contador)
+- [Task 18: Drawer + lista de threads (UI)](#task-18-drawer-lista-de-threads-ui)
+- [Task 19: Botao "Compartilhar esta tela"](#task-19-botao-compartilhar-esta-tela)
+- [Task 20: Encaminhamento de mensagem (UI)](#task-20-encaminhamento-de-mensagem-ui)
+- [Task 21: Integrar SystemNotifier no worker de recebimento](#task-21-integrar-systemnotifier-no-worker-de-recebimento)
+- [Task 22: Integrar alerta DFE bloqueado (Fase 2 recebimento — match NF-PO)](#task-22-integrar-alerta-dfe-bloqueado-fase-2-recebimento-match-nf-po)
+- [Task 23: Integrar alerta CTe divergente (Fretes)](#task-23-integrar-alerta-cte-divergente-fretes)
+- [Task 24: CLAUDE.md do modulo + atualizar raiz](#task-24-claudemd-do-modulo-atualizar-raiz)
+- [Task 25: Smoke test E2E](#task-25-smoke-test-e2e)
+- [Self-review do plano](#self-review-do-plano)
+- [Execution Handoff](#execution-handoff)
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use `superpowers:subagent-driven-development` (recommended) or `superpowers:executing-plans` to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -3348,7 +3392,10 @@ git commit -m "feat(chat): UI encaminhamento de mensagem via botao ↪ + modal"
 
 - [ ] **Step 1: Localizar ponto de finalizacao**
 
-Run: `grep -rnE "status.*=.*['\"](concluido|finalizado|erro)['\"]|recebimento.*(save|commit)" app/recebimento/ --include="*.py" | head -20`
+Run:
+```bash
+grep -rnE "status.*=.*['\"](concluido|finalizado|erro)['\"]|recebimento.*(save|commit)" app/recebimento/ --include="*.py" | head -20
+```
 Expected: lista o(s) arquivo(s) onde o worker conclui recebimento.
 
 Examinar o arquivo e identificar (1) variavel `recebimento` (instancia Recebimento), (2) variavel `user_id` (quem iniciou o recebimento), (3) ponto logo ANTES do `commit` final.

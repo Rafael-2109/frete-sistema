@@ -1,4 +1,50 @@
+<!-- doc:meta
+tipo: explanation
+camada: L3
+sot_de: —
+hub: docs/superpowers/specs/INDEX.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # Módulo Pessoal — Evolução em 4 Fases
+
+> **Papel:** Módulo Pessoal — Evolução em 4 Fases.
+
+## Indice
+
+- [Contexto](#contexto)
+- [Objetivos](#objetivos)
+- [Não-objetivos (explícitos)](#não-objetivos-explícitos)
+- [Ordem de entrega](#ordem-de-entrega)
+- [Fase 1 — Busca global e filtros avançados](#fase-1-busca-global-e-filtros-avançados)
+  - [Backend](#backend)
+  - [Índice pg_trgm](#índice-pg_trgm)
+  - [Frontend](#frontend)
+  - [Mudanças de modelo](#mudanças-de-modelo)
+- [Fase 2 — Alertas de orçamento](#fase-2-alertas-de-orçamento)
+  - [Estratégia](#estratégia)
+  - [Service](#service)
+  - [Níveis](#níveis)
+  - [Frontend](#frontend)
+  - [Mudanças de modelo](#mudanças-de-modelo)
+- [Fase 3 — Hierarquia de categorias](#fase-3-hierarquia-de-categorias)
+  - [Modelo](#modelo)
+  - [Compatibilidade backward](#compatibilidade-backward)
+  - [Migration — Opção A (auto)](#migration-opção-a-auto)
+  - [Query helper](#query-helper)
+  - [Regras de integridade](#regras-de-integridade)
+  - [Tela de configuração](#tela-de-configuração)
+- [Fase 4 — Gastos recorrentes](#fase-4-gastos-recorrentes)
+  - [Modelo](#modelo)
+  - [Chave hierárquica de identificação](#chave-hierárquica-de-identificação)
+  - [Filtro estatístico de qualidade (qualifica como recorrente)](#filtro-estatístico-de-qualidade-qualifica-como-recorrente)
+  - [Detecção](#detecção)
+  - [Alertas sobre recorrentes](#alertas-sobre-recorrentes)
+  - [Tela `/pessoal/recorrentes`](#tela-pessoalrecorrentes)
+  - [Widget no dashboard](#widget-no-dashboard)
+- [Mudanças consolidadas de banco](#mudanças-consolidadas-de-banco)
+- [Riscos e mitigações](#riscos-e-mitigações)
+- [Abertos para próximo passo (writing-plans)](#abertos-para-próximo-passo-writing-plans)
 
 **Data:** 2026-04-20
 **Autor:** Rafael + Claude (brainstorming)

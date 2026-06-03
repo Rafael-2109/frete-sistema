@@ -1,4 +1,53 @@
+<!-- doc:meta
+tipo: explanation
+camada: L3
+sot_de: —
+hub: docs/superpowers/specs/INDEX.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # HORA — Transferência entre Filiais + Registro de Avaria
+
+> **Papel:** HORA — Transferência entre Filiais + Registro de Avaria.
+
+## Indice
+
+- [1. Contexto e motivação](#1-contexto-e-motivação)
+- [2. Decisões aprovadas (brainstorming 2026-04-22)](#2-decisões-aprovadas-brainstorming-2026-04-22)
+- [3. Arquitetura de alto nível](#3-arquitetura-de-alto-nível)
+  - [3.1 Novos tipos de evento em `moto_service.TIPOS_VALIDOS`](#31-novos-tipos-de-evento-em-moto_servicetipos_validos)
+  - [3.2 Ajuste em `estoque_service.EVENTOS_EM_ESTOQUE`](#32-ajuste-em-estoque_serviceeventos_em_estoque)
+- [4. Modelo de dados](#4-modelo-de-dados)
+  - [4.1 `hora_transferencia` (header)](#41-hora_transferencia-header)
+  - [4.2 `hora_transferencia_item` (linha)](#42-hora_transferencia_item-linha)
+  - [4.3 `hora_transferencia_auditoria` (append-only)](#43-hora_transferencia_auditoria-append-only)
+  - [4.4 `hora_avaria` (header)](#44-hora_avaria-header)
+  - [4.5 `hora_avaria_foto` (N fotos por avaria)](#45-hora_avaria_foto-n-fotos-por-avaria)
+- [5. Fluxo de eventos (`hora_moto_evento`)](#5-fluxo-de-eventos-hora_moto_evento)
+  - [5.1 Transferência — 3 tipos de evento](#51-transferência-3-tipos-de-evento)
+  - [5.2 Avaria — 1 evento por ocorrência](#52-avaria-1-evento-por-ocorrência)
+- [6. Services e responsabilidades](#6-services-e-responsabilidades)
+  - [6.1 `app/hora/services/transferencia_service.py` (novo)](#61-apphoraservicestransferencia_servicepy-novo)
+  - [6.2 `app/hora/services/avaria_service.py` (novo)](#62-apphoraservicesavaria_servicepy-novo)
+  - [6.3 `app/hora/services/transferencia_audit.py` (novo)](#63-apphoraservicestransferencia_auditpy-novo)
+  - [6.4 Ajustes em services existentes](#64-ajustes-em-services-existentes)
+- [7. Rotas e UI](#7-rotas-e-ui)
+  - [7.1 Transferência — `app/hora/routes/transferencias.py` (novo)](#71-transferência-apphoraroutestransferenciaspy-novo)
+  - [7.2 Avaria — `app/hora/routes/avarias.py` (novo)](#72-avaria-apphoraroutesavariaspy-novo)
+  - [7.3 Menu (`app/templates/base.html`)](#73-menu-apptemplatesbasehtml)
+  - [7.4 Integrações com telas existentes](#74-integrações-com-telas-existentes)
+- [8. Regras de autorização](#8-regras-de-autorização)
+- [9. Migrations (regra do projeto — dois artefatos)](#9-migrations-regra-do-projeto-dois-artefatos)
+- [10. Schemas JSON (`.claude/skills/consultando-sql/schemas/tables/`)](#10-schemas-json-claudeskillsconsultando-sqlschemastables)
+- [11. S3 storage (fotos)](#11-s3-storage-fotos)
+- [12. Fora de escopo (Fase 2)](#12-fora-de-escopo-fase-2)
+- [13. Riscos e trade-offs](#13-riscos-e-trade-offs)
+- [14. Checklist de aceitação (pré-entrega)](#14-checklist-de-aceitação-pré-entrega)
+  - [Backend](#backend)
+  - [Frontend](#frontend)
+  - [Integração](#integração)
+- [15. Referências](#15-referências)
+- [Contexto](#contexto)
 
 **Data**: 2026-04-22
 **Módulo**: `app/hora/` (Lojas HORA — PJ varejo B2C de motos elétricas)
@@ -607,3 +656,7 @@ Reusar padrão de `hora_peca_faltando_foto` e `hora_recebimento_conferencia.foto
 ---
 
 **Próximo passo**: após aprovação deste spec, invocar `superpowers:writing-plans` para gerar plano de implementação faseado (models → migrations → services → routes → templates → testes).
+
+## Contexto
+
+_A completar (PAD-A Onda 4)._

@@ -1,4 +1,14 @@
+<!-- doc:meta
+tipo: how-to
+camada: L3
+sot_de: —
+hub: docs/superpowers/plans/INDEX.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # Inventário Cíclico — Plano enxuto de implementação
+
+> **Papel:** Inventário Cíclico — Plano enxuto de implementação.
 
 Spec: `docs/superpowers/specs/2026-05-31-inventario-ciclico-contagem-ajustes-design.md`
 Branch: `feat/inventario-ciclico` (worktree). Validação: Rafael em PROD.

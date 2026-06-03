@@ -1,4 +1,47 @@
+<!-- doc:meta
+tipo: how-to
+camada: L3
+sot_de: —
+hub: docs/superpowers/plans/INDEX.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # Motos Assaí — Plano 1: Foundation + Cadastros (Implementation Plan)
+
+> **Papel:** Motos Assaí — Plano 1: Foundation + Cadastros (Implementation Plan).
+
+## Indice
+
+- [Visão de arquivos](#visão-de-arquivos)
+- [Task 1: Criar estrutura de diretórios](#task-1-criar-estrutura-de-diretórios)
+- [Task 2: Migration — toggle `sistema_motos_assai` em `usuarios`](#task-2-migration-toggle-sistema_motos_assai-em-usuarios)
+- [Task 3: Adicionar coluna em `Usuario` model](#task-3-adicionar-coluna-em-usuario-model)
+- [Task 4: Adicionar método `pode_acessar_motos_assai()`](#task-4-adicionar-método-pode_acessar_motos_assai)
+- [Task 5: Migration — schema completo (16 tabelas)](#task-5-migration-schema-completo-16-tabelas)
+- [Task 6: Models SQLAlchemy — `AssaiCd` e `AssaiLoja`](#task-6-models-sqlalchemy-assaicd-e-assailoja)
+- [Task 7: Models — `AssaiModelo` e `AssaiModeloAlias`](#task-7-models-assaimodelo-e-assaimodeloalias)
+- [Task 8: Models — `AssaiMoto` e `AssaiMotoEvento`](#task-8-models-assaimoto-e-assaimotoevento)
+- [Task 9: Models — `AssaiPedidoVenda` e `AssaiPedidoVendaItem`](#task-9-models-assaipedidovenda-e-assaipedidovendaitem)
+- [Task 10: Models — Compra e Recibo Motochefe](#task-10-models-compra-e-recibo-motochefe)
+- [Task 11: Models — `AssaiSeparacao` e `AssaiNfQpa`](#task-11-models-assaiseparacao-e-assainfqpa)
+- [Task 12: Decorator `require_motos_assai`](#task-12-decorator-require_motos_assai)
+- [Task 13: Blueprint registrado em `app/__init__.py`](#task-13-blueprint-registrado-em-app__init__py)
+- [Task 14: Atualizar `auth/forms.py` — checkbox sistema_motos_assai](#task-14-atualizar-authformspy-checkbox-sistema_motos_assai)
+- [Task 15: Atualizar `auth/routes.py` — leitura/escrita do flag](#task-15-atualizar-authroutespy-leituraescrita-do-flag)
+- [Task 16: Atualizar `auth/utils.py` — redirect pós-login](#task-16-atualizar-authutilspy-redirect-pós-login)
+- [Task 17: Atualizar `editar_usuario.html` — checkbox visual](#task-17-atualizar-editar_usuariohtml-checkbox-visual)
+- [Task 18: Adicionar item de menu no `base.html`](#task-18-adicionar-item-de-menu-no-basehtml)
+- [Task 19: Dashboard rota + template + CSS](#task-19-dashboard-rota-template-css)
+- [Task 20: Migration seed CD](#task-20-migration-seed-cd)
+- [Task 21: Migration seed lojas (39 lojas Assaí)](#task-21-migration-seed-lojas-39-lojas-assaí)
+- [Task 22: Migration seed modelos (X11_MINI, DOT, SOL)](#task-22-migration-seed-modelos-x11_mini-dot-sol)
+- [Task 23: CRUD Loja Assaí](#task-23-crud-loja-assaí)
+- [Task 24: CRUD Modelo + tela admin de regex_chassi](#task-24-crud-modelo-tela-admin-de-regex_chassi)
+- [Task 25: CRUD CD (apenas detalhe + editar — single record)](#task-25-crud-cd-apenas-detalhe-editar-single-record)
+- [Task 26: Testes core](#task-26-testes-core)
+- [Task 27: CLAUDE.md do módulo](#task-27-claudemd-do-módulo)
+- [Self-review do plano (auto)](#self-review-do-plano-auto)
+- [Execução](#execução)
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 

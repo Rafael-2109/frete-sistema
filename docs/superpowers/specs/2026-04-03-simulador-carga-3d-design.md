@@ -1,4 +1,31 @@
+<!-- doc:meta
+tipo: explanation
+camada: L3
+sot_de: —
+hub: docs/superpowers/specs/INDEX.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # Simulador 3D de Carga de Motos — Design Spec
+
+> **Papel:** Simulador 3D de Carga de Motos — Design Spec.
+
+## Indice
+
+- [Contexto](#contexto)
+- [Objetivo](#objetivo)
+- [Decisoes de Design](#decisoes-de-design)
+- [Arquitetura](#arquitetura)
+  - [Backend (Flask — dados apenas)](#backend-flask-dados-apenas)
+  - [Migration](#migration)
+  - [Frontend (JavaScript — IIFE, sem bundler)](#frontend-javascript-iife-sem-bundler)
+  - [CSS](#css)
+  - [Templates](#templates)
+- [Navegacao](#navegacao)
+- [Arquivos](#arquivos)
+  - [Criar (9 arquivos)](#criar-9-arquivos)
+  - [Modificar (6 arquivos)](#modificar-6-arquivos)
+- [Verificacao](#verificacao)
 
 **Data**: 2026-04-03
 **Status**: Aprovado

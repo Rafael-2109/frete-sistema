@@ -1,4 +1,49 @@
+<!-- doc:meta
+tipo: explanation
+camada: L3
+sot_de: —
+hub: docs/superpowers/specs/INDEX.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # Onboarding Tours — Lojas HORA + Motos Assaí
+
+> **Papel:** Onboarding Tours — Lojas HORA + Motos Assaí.
+
+## Indice
+
+- [1. Problema](#1-problema)
+- [2. Objetivo](#2-objetivo)
+- [3. Decisões arquiteturais](#3-decisões-arquiteturais)
+- [4. Arquitetura](#4-arquitetura)
+  - [4.1 Layout de arquivos](#41-layout-de-arquivos)
+  - [4.2 Contexto injetado no `base.html`](#42-contexto-injetado-no-basehtml)
+  - [4.3 Endpoint API](#43-endpoint-api)
+  - [4.4 Formato dos tours](#44-formato-dos-tours)
+  - [4.5 Engine — API pública](#45-engine-api-pública)
+  - [4.6 Tour macro adaptativo](#46-tour-macro-adaptativo)
+- [5. Catálogo de tours](#5-catálogo-de-tours)
+  - [5.1 HORA (1 macro + 13 mini-tours)](#51-hora-1-macro-13-mini-tours)
+  - [5.2 Motos Assaí (1 macro + 9 mini-tours)](#52-motos-assaí-1-macro-9-mini-tours)
+- [6. UX](#6-ux)
+  - [6.1 Tom dos textos](#61-tom-dos-textos)
+  - [6.2 Mobile](#62-mobile)
+  - [6.3 Botão "?"](#63-botão)
+  - [6.4 Skip / Replay](#64-skip-replay)
+  - [6.5 Fim do tour](#65-fim-do-tour)
+  - [6.6 Fallback](#66-fallback)
+  - [6.7 Acessibilidade](#67-acessibilidade)
+- [7. Ferramentas de operação](#7-ferramentas-de-operação)
+  - [7.1 `/admin/onboarding/health` (rota admin)](#71-adminonboardinghealth-rota-admin)
+  - [7.2 `/admin/onboarding/preview?tour=<id>` (rota admin)](#72-adminonboardingpreviewtourid-rota-admin)
+- [8. Manutenção](#8-manutenção)
+  - [8.1 Adicionar tour nova](#81-adicionar-tour-nova)
+  - [8.2 Quando uma tela muda](#82-quando-uma-tela-muda)
+  - [8.3 Reset de localStorage](#83-reset-de-localstorage)
+- [9. Plano faseado](#9-plano-faseado)
+- [10. Riscos](#10-riscos)
+- [11. Referências](#11-referências)
+- [Contexto](#contexto)
 
 **Data**: 2026-05-08
 **Status**: design aprovado — pendente plano de implementação
@@ -320,3 +365,7 @@ Macro Motos Assaí segue padrão equivalente, usando `adminOnly: true` em vez de
 - Motos Assaí toggle: `app/auth/models.py:Usuario.pode_acessar_motos_assai`
 - Decorator HORA: `app/hora/decorators.py:require_hora_perm`
 - Decorator Assaí: `app/motos_assai/decorators.py:require_motos_assai`
+
+## Contexto
+
+_A completar (PAD-A Onda 4)._

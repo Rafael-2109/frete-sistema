@@ -1,4 +1,26 @@
+<!-- doc:meta
+tipo: how-to
+camada: L3
+sot_de: —
+hub: docs/superpowers/plans/INDEX.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # Onda 3 — Fechar o Flywheel + Ontologia Consultável Implementation Plan
+
+> **Papel:** Onda 3 — Fechar o Flywheel + Ontologia Consultável Implementation Plan.
+
+## Indice
+
+- [AUDITORIA D2 (2026-05-31 — recon `/tmp/subagent-findings/d2-recon.md`)](#auditoria-d2-2026-05-31-recon-tmpsubagent-findingsd2-reconmd)
+- [GAP CRÍTICO (não no blueprint — RESOLVIDO por design)](#gap-crítico-não-no-blueprint-resolvido-por-design)
+- [Task 1 — D2: bootstrap de ontologia das tabelas-mestre (flag AGENT_ONTOLOGY, CLI/job)](#task-1-d2-bootstrap-de-ontologia-das-tabelas-mestre-flag-agent_ontology-clijob)
+- [Task 2 — D4: tool MCP `query_ontology` (read path da ontologia)](#task-2-d4-tool-mcp-query_ontology-read-path-da-ontologia)
+- [Task 3 — D3: fatos bi-temporais + episode subgraph (proveniência)](#task-3-d3-fatos-bi-temporais-episode-subgraph-proveniência)
+- [Task 4 — A3: eval runner + gate no D8 (golden datasets)](#task-4-a3-eval-runner-gate-no-d8-golden-datasets)
+- [Task 5 — A4: promoção automática de diretriz](#task-5-a4-promoção-automática-de-diretriz)
+- [Self-Review](#self-review)
+- [GATE-3](#gate-3)
 
 > **For agentic workers:** REQUIRED SUB-SKILL: superpowers:subagent-driven-development. Steps usam checkbox.
 > **Branch**: `feat/agente-evolucao` (worktree). NÃO push. Tudo flag-OFF.

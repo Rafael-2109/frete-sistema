@@ -1,4 +1,25 @@
+<!-- doc:meta
+tipo: how-to
+camada: L3
+sot_de: —
+hub: docs/superpowers/plans/INDEX.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # Onda 1 — Fundação Semântica (E↔D) Implementation Plan
+
+> **Papel:** Onda 1 — Fundação Semântica (E↔D) Implementation Plan.
+
+## Indice
+
+- [AUDITORIA DE PREMISSAS (2026-05-31 — recon `/tmp/subagent-findings/onda1-recon.md`)](#auditoria-de-premissas-2026-05-31-recon-tmpsubagent-findingsonda1-reconmd)
+- [File Structure](#file-structure)
+- [Task 1 — D0: higiene KG (strip do sufixo :E/:A) + 3 flags Onda 1](#task-1-d0-higiene-kg-strip-do-sufixo-ea-3-flags-onda-1)
+- [Task 2 — D0.5: confirmar escopo-empresa (user_id=0) com teste de regressão](#task-2-d05-confirmar-escopo-empresa-user_id0-com-teste-de-regressão)
+- [Task 3 — E1: capturar sinais (frustração + 👍👎) em `agent_step.outcome_signal`](#task-3-e1-capturar-sinais-frustração-em-agent_stepoutcome_signal)
+- [Task 4 — E2/A1: judge batch por passo (`step_judge`) ancorado no audit Odoo](#task-4-e2a1-judge-batch-por-passo-step_judge-ancorado-no-audit-odoo)
+- [Self-Review](#self-review)
+- [GATE-1 (antes da Onda 3)](#gate-1-antes-da-onda-3)
 
 > **For agentic workers:** REQUIRED SUB-SKILL: superpowers:subagent-driven-development. Steps usam checkbox.
 > **Branch**: `feat/agente-evolucao` (worktree `.claude/worktrees/agente-evolucao`). NÃO push.
