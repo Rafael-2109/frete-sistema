@@ -1,4 +1,14 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/financeiro/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opção 585 — Exportar Tabelas de Fretes
+
+> **Papel:** Opção 585 — Exportar Tabelas de Fretes.
 
 > **Módulo**: Comercial/Financeiro
 > **Páginas de ajuda**: 1 página consolidada

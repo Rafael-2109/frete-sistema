@@ -1,4 +1,41 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/operacional/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opcao 038 — Baixa de Entregas / Ocorrencias
+
+> **Papel:** Opcao 038 — Baixa de Entregas / Ocorrencias.
+
+## Indice
+
+- [Funcao](#funcao)
+- [Quando Usar](#quando-usar)
+- [Pre-requisitos](#pre-requisitos)
+- [Campos / Interface](#campos-interface)
+  - [Formas de Baixa](#formas-de-baixa)
+  - [Tela CTRC](#tela-ctrc)
+- [Fluxo de Uso](#fluxo-de-uso)
+  - [Baixar Entregas](#baixar-entregas)
+  - [Informar Pendencias](#informar-pendencias)
+  - [Retorno Veiculo (Romaneios Itinerantes)](#retorno-veiculo-romaneios-itinerantes)
+- [Integracao com Outras Opcoes](#integracao-com-outras-opcoes)
+- [Observacoes e Gotchas](#observacoes-e-gotchas)
+  - [Baixa Obrigatoria Dia Anterior](#baixa-obrigatoria-dia-anterior)
+  - [Romaneios Itinerantes](#romaneios-itinerantes)
+  - [Controle de Estadias](#controle-de-estadias)
+  - [CTRC Reentrega Automatica](#ctrc-reentrega-automatica)
+  - [Dados do Recebedor](#dados-do-recebedor)
+  - [Remuneracao Veiculos](#remuneracao-veiculos)
+  - [Integracao Parceiros](#integracao-parceiros)
+  - [Estorno de Ocorrencia](#estorno-de-ocorrencia)
+  - [Modulo FROTA](#modulo-frota)
+  - [Comprovantes](#comprovantes)
+  - [Encerramento MDF-e](#encerramento-mdf-e)
+- [POPs Relacionados](#pops-relacionados)
 
 > **Modulo**: Operacional — Coleta/Entrega
 > **Paginas de ajuda**: 5 paginas consolidadas

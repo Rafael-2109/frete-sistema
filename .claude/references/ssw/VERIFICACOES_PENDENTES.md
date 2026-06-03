@@ -1,4 +1,37 @@
+<!-- doc:meta
+tipo: reference
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # SSW — Verificacoes Pendentes [CONFIRMAR]
+
+> **Papel:** SSW — Verificacoes Pendentes [CONFIRMAR].
+
+## Indice
+
+- [Prioridade ALTA — VERIFICADAS via Playwright (16/02/2026)](#prioridade-alta-verificadas-via-playwright-16022026)
+  - [1. Opcao 062 — Relatorio de Parametros (NAO configuracao) — 8 marcadores](#1-opcao-062-relatorio-de-parametros-nao-configuracao-8-marcadores)
+  - [2. Opcao 459 — Adicionais Disponiveis para Faturar (NAO cadastro TDE) — 7 marcadores](#2-opcao-459-adicionais-disponiveis-para-faturar-nao-cadastro-tde-7-marcadores)
+  - [3. Opcao 462 — Bloquear Faturamento de CTRCs — 9 marcadores](#3-opcao-462-bloquear-faturamento-de-ctrcs-9-marcadores)
+- [Prioridade MEDIA — VERIFICADAS via Playwright (16/02/2026)](#prioridade-media-verificadas-via-playwright-16022026)
+  - [4. Opcao 437 — Faturamento Manual — 1 marcador](#4-opcao-437-faturamento-manual-1-marcador)
+  - [5. Opcao 515 — SPED Contribuicoes — 4 marcadores](#5-opcao-515-sped-contribuicoes-4-marcadores)
+  - [6. Opcao 108 — Instrucoes para Ocorrencias — 3 marcadores](#6-opcao-108-instrucoes-para-ocorrencias-3-marcadores)
+  - [7. Opcao 442 — Solicitar Credito/Debito em CTRC/Fatura — 2 marcadores](#7-opcao-442-solicitar-creditodebito-em-ctrcfatura-2-marcadores)
+  - [8. Opcao 436 — Faturamento Geral — 2 marcadores](#8-opcao-436-faturamento-geral-2-marcadores)
+- [Prioridade BAIXA — POPs com marcadores contextuais (PARCIALMENTE VERIFICADOS)](#prioridade-baixa-pops-com-marcadores-contextuais-parcialmente-verificados)
+  - [7. POP-C04 (Custos Extras) — 4 marcadores](#7-pop-c04-custos-extras-4-marcadores)
+  - [8. POP-C03 (CTe Complementar) — 1 marcador](#8-pop-c03-cte-complementar-1-marcador)
+  - [9. POP-C06 (Cancelar CTe) — 1 marcador](#9-pop-c06-cancelar-cte-1-marcador)
+  - [10. POP-E03 (Faturamento Automatico) — 2 marcadores](#10-pop-e03-faturamento-automatico-2-marcadores)
+  - [11. POP-F05 (Bloqueio Financeiro) — 1 marcador](#11-pop-f05-bloqueio-financeiro-1-marcador)
+- [NAO verificaveis via SSW (dependem de terceiros)](#nao-verificaveis-via-ssw-dependem-de-terceiros)
+- [Instrucoes para o Agente](#instrucoes-para-o-agente)
+- [Resumo Quantitativo](#resumo-quantitativo)
+- [Historico](#historico)
 
 > **Criado em**: 2026-02-16
 > **Objetivo**: Checklist de marcadores [CONFIRMAR] que podem ser resolvidos navegando no SSW via Playwright

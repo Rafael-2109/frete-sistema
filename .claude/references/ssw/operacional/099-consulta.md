@@ -1,4 +1,30 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/operacional/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opção 099 — Cobrança de Estadia na Entrega
+
+> **Papel:** Opção 099 — Cobrança de Estadia na Entrega.
+
+## Indice
+
+- [Função](#função)
+- [Quando Usar](#quando-usar)
+- [Pré-requisitos](#pré-requisitos)
+- [Campos / Interface](#campos-interface)
+- [Formas de Cobrança](#formas-de-cobrança)
+- [Cálculo da Estadia](#cálculo-da-estadia)
+- [Chegada Automática SSWMobile](#chegada-automática-sswmobile)
+- [Agendamento de Carregamento](#agendamento-de-carregamento)
+- [Fluxo de Uso — Manual](#fluxo-de-uso-manual)
+- [Fluxo de Uso — Automático](#fluxo-de-uso-automático)
+- [Integração com Outras Opções](#integração-com-outras-opções)
+- [Tipos de Documento](#tipos-de-documento)
+- [Observações e Gotchas](#observações-e-gotchas)
 
 > **Módulo**: Operacional — Cobrança de Serviços Adicionais
 > **Páginas de ajuda**: 1 página consolidada

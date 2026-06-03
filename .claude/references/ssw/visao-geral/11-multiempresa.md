@@ -1,4 +1,33 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/visao-geral/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # 11 — Multiempresa
+
+> **Papel:** 11 — Multiempresa.
+
+## Indice
+
+- [Sumario](#sumario)
+- [Conceito](#conceito)
+- [Configuracao](#configuracao)
+- [Opcoes por Empresa](#opcoes-por-empresa)
+  - [Cadastros](#cadastros)
+  - [Contas a Receber](#contas-a-receber)
+  - [Contas a Pagar](#contas-a-pagar)
+  - [Financeiro](#financeiro)
+  - [Parcerias](#parcerias)
+  - [Contabilidade](#contabilidade)
+  - [Imobilizado](#imobilizado)
+  - [Fiscal](#fiscal)
+- [Contexto CarVia](#contexto-carvia)
+  - [Opcoes que CarVia usa](#opcoes-que-carvia-usa)
+  - [Opcoes que CarVia NAO usa (mas deveria)](#opcoes-que-carvia-nao-usa-mas-deveria)
+  - [Responsaveis](#responsaveis)
 
 > **Fonte**: `visao_geral_multiempresa.htm` (18/10/2025)
 > **Links internos**: 60 | **Imagens**: 0

@@ -1,4 +1,30 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/comercial/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opcao 343 — Gera Arquivo de Cobranca CNAB
+
+> **Papel:** Opcao 343 — Gera Arquivo de Cobranca CNAB.
+
+## Indice
+
+- [Funcao](#funcao)
+- [Quando Usar](#quando-usar)
+- [Pre-requisitos](#pre-requisitos)
+- [Campos / Interface](#campos-interface)
+- [Fluxo de Uso](#fluxo-de-uso)
+  - [Remessa Normal (Primeira Vez)](#remessa-normal-primeira-vez)
+  - [Remessa de Instrucoes (Alteracoes)](#remessa-de-instrucoes-alteracoes)
+  - [Retransmitir Arquivo](#retransmitir-arquivo)
+  - [Cancelar Arquivo](#cancelar-arquivo)
+- [Integracao com Outras Opcoes](#integracao-com-outras-opcoes)
+- [Observacoes e Gotchas](#observacoes-e-gotchas)
+  - [Renomeacao de Arquivos Retransmitidos (Por Banco)](#renomeacao-de-arquivos-retransmitidos-por-banco)
+  - [Cancelamento de Arquivo](#cancelamento-de-arquivo)
 
 > **Modulo**: Comercial
 > **Paginas de ajuda**: 1 pagina consolidada (fonte: opcao 443)

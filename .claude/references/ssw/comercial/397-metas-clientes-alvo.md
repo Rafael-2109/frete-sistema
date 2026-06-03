@@ -1,4 +1,14 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/comercial/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opcao 397 — Metas e Clientes Alvo
+
+> **Papel:** Opcao 397 — Metas e Clientes Alvo.
 
 > **Modulo**: Comercial
 > **Paginas de ajuda**: 3 paginas consolidadas

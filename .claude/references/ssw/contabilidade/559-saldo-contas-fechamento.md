@@ -1,4 +1,14 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/contabilidade/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opção 559 — Saldo das Contas / Fechamento Contábil
+
+> **Papel:** Opção 559 — Saldo das Contas / Fechamento Contábil.
 
 > **Módulo**: Contabilidade
 > **Páginas de ajuda**: 1 página consolidada

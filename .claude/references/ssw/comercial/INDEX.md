@@ -1,4 +1,14 @@
+<!-- doc:meta
+tipo: index
+camada: L1
+sot_de: —
+hub: .claude/references/ssw/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Indice — Modulo Comercial SSW
+
+> **Papel:** Indice — Modulo Comercial SSW.
 
 > **Diretorio**: `.claude/references/ssw/comercial/`
 > **Atualizado em**: 2026-02-14

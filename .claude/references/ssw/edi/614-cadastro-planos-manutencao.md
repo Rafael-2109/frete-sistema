@@ -1,4 +1,14 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/edi/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opção 614 — Cadastro de Planos de Manutenção
+
+> **Papel:** Opção 614 — Cadastro de Planos de Manutenção.
 
 > **Módulo**: EDI
 > **Páginas de ajuda**: 2 páginas consolidadas

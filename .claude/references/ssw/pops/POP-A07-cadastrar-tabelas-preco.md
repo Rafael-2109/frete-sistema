@@ -1,4 +1,49 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/pops/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # POP-A07 — Cadastrar Tabelas de Preco por Rota
+
+> **Papel:** POP-A07 — Cadastrar Tabelas de Preco por Rota.
+
+## Indice
+
+- [Objetivo](#objetivo)
+- [Quando Executar (Trigger)](#quando-executar-trigger)
+- [Frequencia](#frequencia)
+- [Pre-requisitos](#pre-requisitos)
+- [Passo-a-Passo](#passo-a-passo)
+  - [ETAPA 1 — Preparar Dados para as 3 Tabelas](#etapa-1-preparar-dados-para-as-3-tabelas)
+  - [ETAPA 2 — Criar Primeira Tabela (Polo)](#etapa-2-criar-primeira-tabela-polo)
+  - [ETAPA 3 — Preencher Faixas de Peso (Polo)](#etapa-3-preencher-faixas-de-peso-polo)
+  - [ETAPA 4 — Preencher Adicionais (Polo)](#etapa-4-preencher-adicionais-polo)
+  - [ETAPA 5 — Salvar Primeira Tabela (Polo)](#etapa-5-salvar-primeira-tabela-polo)
+  - [ETAPA 6 — Criar Segunda Tabela (Regiao)](#etapa-6-criar-segunda-tabela-regiao)
+  - [ETAPA 7 — Criar Terceira Tabela (Interior)](#etapa-7-criar-terceira-tabela-interior)
+  - [ETAPA 8 — Verificar Tabelas na Cotacao](#etapa-8-verificar-tabelas-na-cotacao)
+- [Contexto CarVia](#contexto-carvia)
+  - [Hoje](#hoje)
+  - [Futuro (com POP implantado)](#futuro-com-pop-implantado)
+- [Erros Comuns e Solucoes](#erros-comuns-e-solucoes)
+- [Verificacao Playwright](#verificacao-playwright)
+- [Exemplo Completo: Tabelas CARP-CGR (Campo Grande/MS)](#exemplo-completo-tabelas-carp-cgr-campo-grandems)
+- [Integracao com Outras Opcoes](#integracao-com-outras-opcoes)
+- [Observacoes e Gotchas](#observacoes-e-gotchas)
+  - [Prioridades de Tabelas](#prioridades-de-tabelas)
+  - [Impostos Inclusos vs Repassados](#impostos-inclusos-vs-repassados)
+  - [Cubagem](#cubagem)
+  - [TDE (Taxa Dificil Entrega)](#tde-taxa-dificil-entrega)
+  - [TRT (Taxa Restricao Transito)](#trt-taxa-restricao-transito)
+  - [Base de Calculo](#base-de-calculo)
+  - [Replicacao e Importacao](#replicacao-e-importacao)
+  - [FOB Dirigido](#fob-dirigido)
+  - [Simulacao](#simulacao)
+- [POPs Relacionados](#pops-relacionados)
+- [Historico](#historico)
 
 > **Categoria**: A — Implantacao e Cadastros
 > **Prioridade**: P1 (Alta — necessario para cotacao e emissao de CT-e)

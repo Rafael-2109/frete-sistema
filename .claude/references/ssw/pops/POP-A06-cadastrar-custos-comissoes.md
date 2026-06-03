@@ -1,4 +1,34 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/pops/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # POP-A06 — Cadastrar Custos/Comissoes (Subcontratacao)
+
+> **Papel:** POP-A06 — Cadastrar Custos/Comissoes (Subcontratacao).
+
+## Indice
+
+- [Objetivo](#objetivo)
+- [Trigger](#trigger)
+- [Frequencia](#frequencia)
+- [Pre-requisitos](#pre-requisitos)
+- [Passo-a-Passo](#passo-a-passo)
+  - [ETAPA 1 — Verificar Pre-requisitos](#etapa-1-verificar-pre-requisitos)
+  - [ETAPA 2 — Acessar Opcao 408 e Selecionar Unidade](#etapa-2-acessar-opcao-408-e-selecionar-unidade)
+  - [ETAPA 3 — Criar Comissao Geral como Expedidora](#etapa-3-criar-comissao-geral-como-expedidora)
+  - [ETAPA 4 — Configurar Parametros de Custo](#etapa-4-configurar-parametros-de-custo)
+  - [ETAPA 5 — Gravar e Verificar Comissao](#etapa-5-gravar-e-verificar-comissao)
+  - [ETAPA 6 — (Opcional) Comissao Receptora e Tabelas Especificas](#etapa-6-opcional-comissao-receptora-e-tabelas-especificas)
+  - [ETAPA 7 — Verificar Integracao com Resultado](#etapa-7-verificar-integracao-com-resultado)
+- [Contexto CarVia](#contexto-carvia)
+- [Erros Comuns e Solucoes](#erros-comuns-e-solucoes)
+- [Verificacao Playwright](#verificacao-playwright)
+- [POPs Relacionados](#pops-relacionados)
+- [Historico de Revisoes](#historico-de-revisoes)
 
 > **Categoria**: A — Implantacao e Cadastros
 > **Prioridade**: P1 (Alta — define custo de subcontratacao, base para resultado do CTRC)

@@ -1,4 +1,33 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/pops/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # POP-D07 — Controlar Comprovantes de Entrega
+
+> **Papel:** POP-D07 — Controlar Comprovantes de Entrega.
+
+## Indice
+
+- [Objetivo](#objetivo)
+- [Trigger](#trigger)
+- [Frequência](#frequência)
+- [Pré-requisitos](#pré-requisitos)
+- [Passo-a-Passo](#passo-a-passo)
+  - [ETAPA 1: Captura do Comprovante pelo Motorista](#etapa-1-captura-do-comprovante-pelo-motorista)
+  - [ETAPA 2: Retorno do Veículo ao CD](#etapa-2-retorno-do-veículo-ao-cd)
+  - [ETAPA 3: Gravação da Ocorrência "SAIU PARA ENTREGA"](#etapa-3-gravação-da-ocorrência-saiu-para-entrega)
+  - [ETAPA 4: Escaneamento de Comprovantes em Papel](#etapa-4-escaneamento-de-comprovantes-em-papel)
+  - [ETAPA 5: Arquivamento Digital](#etapa-5-arquivamento-digital)
+  - [ETAPA 6: Consulta e Validação](#etapa-6-consulta-e-validação)
+- [Contexto CarVia (Hoje vs Futuro)](#contexto-carvia-hoje-vs-futuro)
+- [Erros Comuns e Soluções](#erros-comuns-e-soluções)
+- [Verificação Playwright](#verificação-playwright)
+- [POPs Relacionados](#pops-relacionados)
+- [Histórico de Revisões](#histórico-de-revisões)
 
 **Categoria**: D — Operacional: Transporte e Entrega
 **Prioridade**: P1 (Alta — prova jurídica de entrega)

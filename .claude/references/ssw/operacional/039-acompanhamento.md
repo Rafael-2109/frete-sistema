@@ -1,4 +1,31 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/operacional/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opcao 039 — Acompanhamento (Performance de Entregas)
+
+> **Papel:** Opcao 039 — Acompanhamento (Performance de Entregas).
+
+## Indice
+
+- [Funcao](#funcao)
+- [Quando Usar](#quando-usar)
+- [Pre-requisitos](#pre-requisitos)
+- [Relatorios Disponibilizados](#relatorios-disponibilizados)
+- [Abreviaturas Utilizadas](#abreviaturas-utilizadas)
+- [Calculo de Datas](#calculo-de-datas)
+  - [PREVENTR (Previsao Entrega CTRC)](#preventr-previsao-entrega-ctrc)
+  - [PREVENTR2 (Previsao Entrega Unidade Destino)](#preventr2-previsao-entrega-unidade-destino)
+- [Integracao com Outras Opcoes](#integracao-com-outras-opcoes)
+- [Observacoes e Gotchas](#observacoes-e-gotchas)
+  - [Calculo de Performance](#calculo-de-performance)
+  - [Periodo de Referencia](#periodo-de-referencia)
+  - [Disponibilizacao](#disponibilizacao)
+  - [CTRCs Sem Chegada](#ctrcs-sem-chegada)
 
 > **Modulo**: Operacional — Relatorios
 > **Paginas de ajuda**: 1 pagina consolidada

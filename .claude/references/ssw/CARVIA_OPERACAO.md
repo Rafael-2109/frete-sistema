@@ -1,4 +1,46 @@
+<!-- doc:meta
+tipo: reference
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # CarVia Logistica — Operacao e Processos
+
+> **Papel:** CarVia Logistica — Operacao e Processos.
+
+## Indice
+
+- [1. Perfil da Empresa](#1-perfil-da-empresa)
+  - [Origem](#origem)
+  - [Diferencial competitivo](#diferencial-competitivo)
+- [2. Equipe](#2-equipe)
+- [3. Clientes](#3-clientes)
+  - [Numeros atuais (1 mes de operacao)](#numeros-atuais-1-mes-de-operacao)
+- [4. Servicos e Modalidades](#4-servicos-e-modalidades)
+  - [4.1 Frete Fracionado](#41-frete-fracionado)
+  - [4.2 Frete Dedicado](#42-frete-dedicado)
+  - [4.3 Coleta](#43-coleta)
+- [5. Fluxo Operacional Atual](#5-fluxo-operacional-atual)
+  - [5.1 Fluxo Completo (como funciona HOJE)](#51-fluxo-completo-como-funciona-hoje)
+  - [5.2 Implantacao de Nova Rota (processo detalhado)](#52-implantacao-de-nova-rota-processo-detalhado)
+- [6. Infraestrutura SSW](#6-infraestrutura-ssw)
+  - [Opcoes SSW utilizadas HOJE](#opcoes-ssw-utilizadas-hoje)
+  - [Estrutura de unidades no SSW](#estrutura-de-unidades-no-ssw)
+  - [Estrategia de siglas](#estrategia-de-siglas)
+- [7. Gaps e Necessidades (priorizado por Rafael)](#7-gaps-e-necessidades-priorizado-por-rafael)
+  - [7.1 FINANCEIRO — Prioridade ALTA](#71-financeiro-prioridade-alta)
+  - [7.2 COMERCIAL — Prioridade MEDIA-ALTA](#72-comercial-prioridade-media-alta)
+  - [7.3 EMISSOES — Prioridade ALTA](#73-emissoes-prioridade-alta)
+  - [7.4 CONTROLE OPERACIONAL — Prioridade MEDIA](#74-controle-operacional-prioridade-media)
+  - [7.5 FISCAL — Prioridade BAIXA](#75-fiscal-prioridade-baixa)
+  - [7.6 FROTA — Prioridade BAIXA](#76-frota-prioridade-baixa)
+  - [7.7 QUESTOES LEGAIS — Prioridade ALTA](#77-questoes-legais-prioridade-alta)
+- [8. Mapa: Processo CarVia → Opcao SSW → Documentacao](#8-mapa-processo-carvia-opcao-ssw-documentacao)
+- [9. Relacao Sistema Fretes (Nacom) ↔ SSW (CarVia)](#9-relacao-sistema-fretes-nacom-ssw-carvia)
+- [10. Proximos Passos](#10-proximos-passos)
+  - [Fase 5A — Processos Prioritarios (criar POPs)](#fase-5a-processos-prioritarios-criar-pops)
 
 > **Criado em**: 2026-02-15
 > **Fonte**: Rafael Nascimento (idealizador e operador)

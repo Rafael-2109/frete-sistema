@@ -1,4 +1,27 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/logistica/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opção 696 — Previsão de Entrega por Cliente
+
+> **Papel:** Opção 696 — Previsão de Entrega por Cliente.
+
+## Indice
+
+- [Função](#função)
+- [Quando Usar](#quando-usar)
+- [Pré-requisitos](#pré-requisitos)
+- [Campos / Interface](#campos-interface)
+  - [Tela Principal — Cadastro de Prazos](#tela-principal-cadastro-de-prazos)
+- [Fluxo de Uso](#fluxo-de-uso)
+  - [Cadastro de prazos customizados](#cadastro-de-prazos-customizados)
+  - [Consulta de prazos cadastrados](#consulta-de-prazos-cadastrados)
+- [Integração com Outras Opções](#integração-com-outras-opções)
+- [Observações e Gotchas](#observações-e-gotchas)
 
 > **Módulo**: Logística/Comercial
 > **Páginas de ajuda**: 3 páginas consolidadas

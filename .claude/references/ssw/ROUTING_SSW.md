@@ -1,4 +1,45 @@
+<!-- doc:meta
+tipo: reference
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # SSW — Routing de Documentacao para o Agente
+
+> **Papel:** SSW — Routing de Documentacao para o Agente.
+
+## Indice
+
+- [Regra Zero: Nacom vs CarVia](#regra-zero-nacom-vs-carvia)
+- [Decision Tree Principal](#decision-tree-principal)
+- [Mapa Intencao → POP (45 POPs)](#mapa-intencao-pop-45-pops)
+  - [A — Implantacao e Cadastros](#a-implantacao-e-cadastros)
+  - [B — Comercial e Precificacao](#b-comercial-e-precificacao)
+  - [C — Operacional: Emissao](#c-operacional-emissao)
+  - [D — Operacional: Transporte e Entrega](#d-operacional-transporte-e-entrega)
+  - [E — Financeiro: Recebiveis](#e-financeiro-recebiveis)
+  - [F — Financeiro: Pagaveis](#f-financeiro-pagaveis)
+  - [G — Compliance, Frota e Gestao](#g-compliance-frota-e-gestao)
+- [Mapa Intencao → Opcao SSW (Top 50)](#mapa-intencao-opcao-ssw-top-50)
+- [Mapa Intencao → Fluxo (20 Fluxos)](#mapa-intencao-fluxo-20-fluxos)
+- [Mapa Visao Geral](#mapa-visao-geral)
+- [Arvores de Decisao — Cenarios Ambiguos](#arvores-de-decisao-cenarios-ambiguos)
+  - [1. "Emitir documento fiscal"](#1-emitir-documento-fiscal)
+  - [2. "Faturar"](#2-faturar)
+  - [3. "Registrar algo em estoque"](#3-registrar-algo-em-estoque)
+  - [4. "Opcao 020"](#4-opcao-020)
+  - [5. "Opcao 056 / Relatorio"](#5-opcao-056-relatorio)
+  - [6. "Cadastrar cliente"](#6-cadastrar-cliente)
+  - [7. "Consultar dados" (NOVO)](#7-consultar-dados-novo)
+  - [8. "Integracoes EDI" (NOVO)](#8-integracoes-edi-novo)
+  - [9. "Gerar relatorio" (NOVO)](#9-gerar-relatorio-novo)
+  - [10. "Controlar entregas" (NOVO)](#10-controlar-entregas-novo)
+- [Glossario de Diretorios](#glossario-de-diretorios)
+- [Opcoes Conhecidas SEM Documentacao](#opcoes-conhecidas-sem-documentacao)
+- [Errata B2 — Correcoes no Top 50 (ex-Top 40)](#errata-b2-correcoes-no-top-50-ex-top-40)
+- [Referencia Rapida — Documentos Transversais](#referencia-rapida-documentos-transversais)
 
 > **Criado em**: 2026-02-16
 > **Atualizado em**: 2026-02-16 (B2: decision trees, Top 40 errata, cross-ref)

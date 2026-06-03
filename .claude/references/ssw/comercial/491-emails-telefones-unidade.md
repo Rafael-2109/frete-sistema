@@ -1,4 +1,14 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/comercial/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opção 491 — E-mails e Telefones da Unidade
+
+> **Papel:** Opção 491 — E-mails e Telefones da Unidade.
 
 > **Módulo**: Comercial
 > **Páginas de ajuda**: 3 páginas consolidadas

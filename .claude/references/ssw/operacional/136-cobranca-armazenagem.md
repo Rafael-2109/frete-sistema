@@ -1,4 +1,14 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/operacional/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opção 136 — Cobrança de Armazenagem
+
+> **Papel:** Opção 136 — Cobrança de Armazenagem.
 
 > **Módulo**: Operacional/Comercial
 > **Referência interna**: Opção 199

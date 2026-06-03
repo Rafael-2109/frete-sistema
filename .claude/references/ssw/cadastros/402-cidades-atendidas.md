@@ -1,4 +1,40 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/cadastros/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opção 402 — Cadastro de Cidades Atendidas
+
+> **Papel:** Opção 402 — Cadastro de Cidades Atendidas.
+
+## Indice
+
+- [Função](#função)
+- [Quando Usar](#quando-usar)
+- [Pré-requisitos](#pré-requisitos)
+- [Campos / Interface](#campos-interface)
+  - [Tela Inicial](#tela-inicial)
+  - [Tela Principal](#tela-principal)
+  - [Link MAIS (Complementos)](#link-mais-complementos)
+- [Fluxo de Uso](#fluxo-de-uso)
+  - [Cadastrar Nova Cidade Atendida](#cadastrar-nova-cidade-atendida)
+  - [Replicar Configurações](#replicar-configurações)
+  - [Importar Dados de Parceiro](#importar-dados-de-parceiro)
+  - [Atualizar Prazos em Lote](#atualizar-prazos-em-lote)
+- [Integração com Outras Opções](#integração-com-outras-opções)
+- [Observações e Gotchas](#observações-e-gotchas)
+  - [Praça Operacional vs Praça Comercial](#praça-operacional-vs-praça-comercial)
+  - [Operações FEC (Fechada ou Completa)](#operações-fec-fechada-ou-completa)
+  - [Cálculo de Previsão de Entrega](#cálculo-de-previsão-de-entrega)
+  - [Faixas de CEPs](#faixas-de-ceps)
+  - [Atualização Automática](#atualização-automática)
+  - [Taxas e Valores](#taxas-e-valores)
+  - [Unidades Alternativas](#unidades-alternativas)
+  - [Importação e Exportação CSV](#importação-e-exportação-csv)
+- [POPs Relacionados](#pops-relacionados)
 
 > **Módulo**: Cadastros
 > **Páginas de ajuda**: 6 páginas consolidadas

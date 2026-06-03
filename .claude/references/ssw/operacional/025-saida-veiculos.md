@@ -1,4 +1,47 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/operacional/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opção 025 — Saída de Veículos
+
+> **Papel:** Opção 025 — Saída de Veículos.
+
+## Indice
+
+- [Função](#função)
+- [Quando Usar](#quando-usar)
+- [Pré-requisitos](#pré-requisitos)
+  - [Cadastros e Configurações](#cadastros-e-configurações)
+  - [Gerenciamento de Risco (opção 903)](#gerenciamento-de-risco-opção-903)
+  - [Seguradoras e EDI](#seguradoras-e-edi)
+- [Campos / Interface](#campos-interface)
+  - [Processo de Saída](#processo-de-saída)
+  - [Unificação de Manifestos em MDF-e](#unificação-de-manifestos-em-mdf-e)
+- [Fluxo de Uso](#fluxo-de-uso)
+  - [1. Fluxo Normal de Saída](#1-fluxo-normal-de-saída)
+  - [2. Geração de EDI FISCAL (Mato Grosso)](#2-geração-de-edi-fiscal-mato-grosso)
+  - [3. Geração de EDI de Averbação (Seguradoras)](#3-geração-de-edi-de-averbação-seguradoras)
+  - [4. SMP (Solicitação de Monitoramento Preventivo) Automático](#4-smp-solicitação-de-monitoramento-preventivo-automático)
+- [Integração com Outras Opções](#integração-com-outras-opções)
+  - [Opções Relacionadas - Fluxo Operacional](#opções-relacionadas---fluxo-operacional)
+  - [Opções Relacionadas - Cadastros](#opções-relacionadas---cadastros)
+  - [Opções Relacionadas - Gerenciamento de Risco](#opções-relacionadas---gerenciamento-de-risco)
+  - [Opções Relacionadas - EDI e Integrações](#opções-relacionadas---edi-e-integrações)
+  - [Opções Relacionadas - Relatórios](#opções-relacionadas---relatórios)
+  - [Opção 412 - Cálculo do Custo de Transferência](#opção-412---cálculo-do-custo-de-transferência)
+- [Observações e Gotchas](#observações-e-gotchas)
+  - [Regras Fiscais (MDF-e)](#regras-fiscais-mdf-e)
+  - [EDI de Averbação - IMPORTANTE](#edi-de-averbação---importante)
+  - [EDI FISCAL Mato Grosso](#edi-fiscal-mato-grosso)
+  - [SMP (Solicitação de Monitoramento Preventivo)](#smp-solicitação-de-monitoramento-preventivo)
+  - [Relatórios de Permanência](#relatórios-de-permanência)
+  - [Cálculo do Custo de Transferência (Opção 412)](#cálculo-do-custo-de-transferência-opção-412)
+  - [Integrações WebService (Opção 117)](#integrações-webservice-opção-117)
+- [POPs Relacionados](#pops-relacionados)
 
 > **Módulo**: Operacional
 > **Páginas de ajuda**: 8 páginas consolidadas (múltiplas opções relacionadas)

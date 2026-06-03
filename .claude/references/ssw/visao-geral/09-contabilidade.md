@@ -1,4 +1,30 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/visao-geral/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # 09 — Contabilidade
+
+> **Papel:** 09 — Contabilidade.
+
+## Indice
+
+- [Sumario](#sumario)
+- [2 Modos de Uso](#2-modos-de-uso)
+  - [Contabilidade Externa](#contabilidade-externa)
+  - [Contabilidade no SSW](#contabilidade-no-ssw)
+- [Configuracoes](#configuracoes)
+- [Processamento Contabil](#processamento-contabil)
+- [Livros e Arquivos](#livros-e-arquivos)
+- [Fluxo](#fluxo)
+- [Contexto CarVia](#contexto-carvia)
+  - [Opcoes que CarVia usa](#opcoes-que-carvia-usa)
+  - [Opcoes que CarVia NAO usa (mas deveria)](#opcoes-que-carvia-nao-usa-mas-deveria)
+  - [Opcoes relacionadas (outros modulos)](#opcoes-relacionadas-outros-modulos)
+  - [Responsaveis](#responsaveis)
 
 > **Fonte**: `visao_geral_contabilidade.htm` (11/01/2024)
 > **Links internos**: 40 | **Imagens**: 0

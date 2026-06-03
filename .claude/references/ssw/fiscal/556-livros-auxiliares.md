@@ -1,4 +1,38 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/fiscal/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opcao 556 — Livros Auxiliares (Diario, Saidas, Entradas)
+
+> **Papel:** Opcao 556 — Livros Auxiliares (Diario, Saidas, Entradas).
+
+## Indice
+
+- [Funcao](#funcao)
+- [Quando Usar](#quando-usar)
+- [Pre-requisitos](#pre-requisitos)
+- [Campos / Interface](#campos-interface)
+  - [Livro Diario (Opcao 545)](#livro-diario-opcao-545)
+  - [Livro Auxiliar de Saidas (Opcao 556)](#livro-auxiliar-de-saidas-opcao-556)
+  - [Livro Auxiliar de Entradas (Opcao 656)](#livro-auxiliar-de-entradas-opcao-656)
+- [Fluxo de Uso](#fluxo-de-uso)
+  - [Emitir Livro Diario](#emitir-livro-diario)
+  - [Emitir Livro Auxiliar de Saidas](#emitir-livro-auxiliar-de-saidas)
+  - [Emitir Livro Auxiliar de Entradas](#emitir-livro-auxiliar-de-entradas)
+  - [Consultar Lote de um Documento](#consultar-lote-de-um-documento)
+- [Integracao com Outras Opcoes](#integracao-com-outras-opcoes)
+- [Observacoes e Gotchas](#observacoes-e-gotchas)
+  - [Legislacao e Conceito](#legislacao-e-conceito)
+  - [Livro Diario](#livro-diario)
+  - [Livro Auxiliar de Saidas (Opcao 556)](#livro-auxiliar-de-saidas-opcao-556)
+  - [Livro Auxiliar de Entradas (Opcao 656)](#livro-auxiliar-de-entradas-opcao-656)
+  - [Praticidade vs Burocracia](#praticidade-vs-burocracia)
+  - [Tipos de Documentos](#tipos-de-documentos)
+  - [Multiempresas](#multiempresas)
 
 > **Modulo**: Fiscal
 > **Paginas de ajuda**: 3 paginas consolidadas

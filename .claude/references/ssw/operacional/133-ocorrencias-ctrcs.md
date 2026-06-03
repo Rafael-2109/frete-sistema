@@ -1,4 +1,34 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/operacional/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opção 133 — Informar Ocorrências em CTRCs
+
+> **Papel:** Opção 133 — Informar Ocorrências em CTRCs.
+
+## Indice
+
+- [Função](#função)
+- [Quando Usar](#quando-usar)
+- [Campos / Interface](#campos-interface)
+  - [Tela Inicial - Localização de CTRCs](#tela-inicial---localização-de-ctrcs)
+  - [Tela Principal - Incluir Ocorrências](#tela-principal---incluir-ocorrências)
+  - [Incluir Instruções](#incluir-instruções)
+  - [Ocorrências/Instruções do CTRC](#ocorrênciasinstruções-do-ctrc)
+- [Integração com Outras Opções](#integração-com-outras-opções)
+- [Observações e Gotchas](#observações-e-gotchas)
+  - [Características de Códigos SSW Importantes](#características-de-códigos-ssw-importantes)
+  - [Restrições de Ocorrências](#restrições-de-ocorrências)
+  - [Imagens de Comprovantes](#imagens-de-comprovantes)
+  - [Ocorrências em CTRCs Unitizados](#ocorrências-em-ctrcs-unitizados)
+  - [Ocorrências Gravadas como Instruções](#ocorrências-gravadas-como-instruções)
+  - [Estorno de Ocorrências](#estorno-de-ocorrências)
+  - [Ocorrências em Lotes](#ocorrências-em-lotes)
+- [POPs Relacionados](#pops-relacionados)
 
 > **Módulo**: Operacional
 > **Referência interna**: Opção 033

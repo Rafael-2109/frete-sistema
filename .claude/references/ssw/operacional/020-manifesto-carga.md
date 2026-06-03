@@ -1,4 +1,60 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/operacional/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opção 020 — Manifesto de Carga
+
+> **Papel:** Opção 020 — Manifesto de Carga.
+
+## Indice
+
+- [Função](#função)
+- [Quando Usar](#quando-usar)
+- [Pré-requisitos](#pré-requisitos)
+  - [Dados Cadastrais](#dados-cadastrais)
+  - [Liberações de Risco (opção 390)](#liberações-de-risco-opção-390)
+  - [Parametrização MDF-e](#parametrização-mdf-e)
+- [Campos / Interface](#campos-interface)
+  - [Tela Inicial — Criação da Placa Provisória](#tela-inicial-criação-da-placa-provisória)
+  - [Tela de Carregamento — Apontamento de CTRCs](#tela-de-carregamento-apontamento-de-ctrcs)
+  - [Tela de Emissão — Dados do Manifesto](#tela-de-emissão-dados-do-manifesto)
+- [Fluxo de Uso](#fluxo-de-uso)
+  - [1. Montagem da Placa Provisória](#1-montagem-da-placa-provisória)
+  - [2. Confirmação de Dados do Veículo](#2-confirmação-de-dados-do-veículo)
+  - [3. Contratação do Veículo (opção 072)](#3-contratação-do-veículo-opção-072)
+  - [4. Saída do Veículo (opção 025)](#4-saída-do-veículo-opção-025)
+  - [5. Chegada no Destino (opção 030)](#5-chegada-no-destino-opção-030)
+- [Integração com Outras Opções](#integração-com-outras-opções)
+  - [Antes da Emissão do Manifesto](#antes-da-emissão-do-manifesto)
+  - [Durante o Carregamento](#durante-o-carregamento)
+  - [Após a Emissão do Manifesto](#após-a-emissão-do-manifesto)
+  - [Operações Especiais](#operações-especiais)
+  - [Rastreamento e Averbação](#rastreamento-e-averbação)
+- [Observações e Gotchas](#observações-e-gotchas)
+  - [MDF-e (Manifesto Eletrônico de Documentos Fiscais)](#mdf-e-manifesto-eletrônico-de-documentos-fiscais)
+  - [Cancelamento de Manifesto](#cancelamento-de-manifesto)
+  - [Saída de Veículos](#saída-de-veículos)
+  - [Gerenciamento de Risco](#gerenciamento-de-risco)
+  - [Vínculo com CTRB/OS](#vínculo-com-ctrbos)
+  - [Posto Fiscal](#posto-fiscal)
+  - [Rejeições do SEFAZ](#rejeições-do-sefaz)
+  - [Operação Sem Papel](#operação-sem-papel)
+  - [Rastreamento](#rastreamento)
+  - [Geração Automática de Subcontratos](#geração-automática-de-subcontratos)
+  - [Divulgação de Placa Provisória (opção 210)](#divulgação-de-placa-provisória-opção-210)
+  - [Operação com Sorter (opção 220)](#operação-com-sorter-opção-220)
+  - [Operação Fluvial](#operação-fluvial)
+  - [Impressões Disponíveis (opção 025)](#impressões-disponíveis-opção-025)
+  - [Reimpressão e Retransmissão (opção 201)](#reimpressão-e-retransmissão-opção-201)
+  - [Operação Aérea (opção 069)](#operação-aérea-opção-069)
+  - [Arquivo Fronteira Rápida RN (opção 179)](#arquivo-fronteira-rápida-rn-opção-179)
+  - [Romaneio de Carregamento (opção 725)](#romaneio-de-carregamento-opção-725)
+  - [Conferência de Manifestos (opção 034)](#conferência-de-manifestos-opção-034)
+- [POPs Relacionados](#pops-relacionados)
 
 > **Módulo**: Operacional
 > **Páginas de ajuda**: 11 páginas consolidadas

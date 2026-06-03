@@ -1,4 +1,56 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/financeiro/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opcao 457 — Manutencao de Faturas
+
+> **Papel:** Opcao 457 — Manutencao de Faturas.
+
+## Indice
+
+- [Funcao](#funcao)
+- [Quando Usar](#quando-usar)
+- [Pre-requisitos](#pre-requisitos)
+- [Campos / Interface](#campos-interface)
+  - [Consulta de Fatura](#consulta-de-fatura)
+  - [Informacoes Exibidas](#informacoes-exibidas)
+  - [Menu da Opcao 457 (confirmado 2026-04-12)](#menu-da-opcao-457-confirmado-2026-04-12)
+  - [Codigos CNAB (Arquivo de Remessa 443) — NAO sao menu da 457](#codigos-cnab-arquivo-de-remessa-443-nao-sao-menu-da-457)
+- [Fluxo de Uso](#fluxo-de-uso)
+  - [Consultar Fatura](#consultar-fatura)
+  - [Alterar Data de Vencimento Individual](#alterar-data-de-vencimento-individual)
+  - [Lancar Credito (Desconto) ou Debito (Multa/Taxa)](#lancar-credito-desconto-ou-debito-multataxa)
+  - [Marcar Fatura para Serasa/Equifax/SPC](#marcar-fatura-para-serasaequifaxspc)
+  - [Baixar Fatura do Serasa/Equifax/SPC (cliente pagou / renegociou)](#baixar-fatura-do-serasaequifaxspc-cliente-pagou-renegociou)
+  - [Marcar/Desmarcar Fatura como Protestada](#marcardesmarcar-fatura-como-protestada)
+  - [Marcar Fatura como Perdida](#marcar-fatura-como-perdida)
+  - [Cancelar Fatura](#cancelar-fatura)
+  - [Incluir/Excluir CTRC da Fatura](#incluirexcluir-ctrc-da-fatura)
+  - [Registrar Pagamento Parcial / Liquidacao](#registrar-pagamento-parcial-liquidacao)
+  - [Mudar Cobranca (Carteira ↔ Agencia)](#mudar-cobranca-carteira-agencia)
+  - [Outras Operacoes](#outras-operacoes)
+  - [Envio de Codigos CNAB ao Banco (via Remessa 443)](#envio-de-codigos-cnab-ao-banco-via-remessa-443)
+- [Integracao com Outras Opcoes](#integracao-com-outras-opcoes)
+- [Observacoes e Gotchas](#observacoes-e-gotchas)
+  - [GOTCHA Critico — Menu 457 e numerado, NAO por siglas (corrigido 2026-04-12)](#gotcha-critico-menu-457-e-numerado-nao-por-siglas-corrigido-2026-04-12)
+  - [Codigos CNAB (Fluxo 457 → 443 → Banco → 444)](#codigos-cnab-fluxo-457-443-banco-444)
+  - [Tarifa Bancaria](#tarifa-bancaria)
+  - [Situacoes que Impedem Operacoes](#situacoes-que-impedem-operacoes)
+  - [Pagamento Parcial](#pagamento-parcial)
+  - [Fatura Perdida](#fatura-perdida)
+  - [Adicionais (Credito/Debito — opcoes 86 e 87 da 457)](#adicionais-creditodebito-opcoes-86-e-87-da-457)
+  - [Serasa/Equifax/SPC](#serasaequifaxspc)
+  - [Natura Pre-Fatura (ssw1911)](#natura-pre-fatura-ssw1911)
+  - [Repasse para Agencia](#repasse-para-agencia)
+  - [Desconto de Duplicatas](#desconto-de-duplicatas)
+  - [Arquivo Morto](#arquivo-morto)
+  - [Conciliacao Bancaria](#conciliacao-bancaria)
+- [POPs Relacionados](#pops-relacionados)
+- [Historico de Correcoes](#historico-de-correcoes)
 
 > **Modulo**: Financeiro
 > **Paginas de ajuda**: 9 paginas consolidadas

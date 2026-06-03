@@ -1,4 +1,35 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/operacional/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opcao 053 — Consulta Rapida (Recebimento de Reembolsos)
+
+> **Papel:** Opcao 053 — Consulta Rapida (Recebimento de Reembolsos).
+
+## Indice
+
+- [Funcao](#funcao)
+- [Quando Usar](#quando-usar)
+- [Pre-requisitos](#pre-requisitos)
+- [Campos / Interface (Opcao 053 - Recebimento)](#campos-interface-opcao-053---recebimento)
+  - [Cancelamento](#cancelamento)
+- [Campos / Interface (Opcao 041 - Capa de Lote)](#campos-interface-opcao-041---capa-de-lote)
+  - [Gerar Nova Capa](#gerar-nova-capa)
+  - [Reimprimir Capa](#reimprimir-capa)
+- [Fluxo de Uso](#fluxo-de-uso)
+  - [Receber Reembolso](#receber-reembolso)
+  - [Cancelar Reembolso](#cancelar-reembolso)
+  - [Emitir Capa de Lote](#emitir-capa-de-lote)
+- [Integracao com Outras Opcoes](#integracao-com-outras-opcoes)
+- [Observacoes e Gotchas](#observacoes-e-gotchas)
+  - [Somente Unidade de Destino](#somente-unidade-de-destino)
+  - [Recebimento Misto](#recebimento-misto)
+  - [Capa de Lote](#capa-de-lote)
+  - [CTRCs na Capa](#ctrcs-na-capa)
 
 > **Modulo**: Financeiro — Reembolso
 > **Paginas de ajuda**: 1 pagina consolidada

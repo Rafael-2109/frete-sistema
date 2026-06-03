@@ -1,4 +1,38 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/pops/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # POP-E03 — Faturar Automaticamente (Faturamento Geral)
+
+> **Papel:** POP-E03 — Faturar Automaticamente (Faturamento Geral).
+
+## Indice
+
+- [Objetivo](#objetivo)
+- [Quando Executar (Trigger)](#quando-executar-trigger)
+- [Frequencia](#frequencia)
+- [Pre-requisitos](#pre-requisitos)
+- [Passo-a-Passo](#passo-a-passo)
+  - [ETAPA 1 — Verificar Pre-Faturamento (Recomendado)](#etapa-1-verificar-pre-faturamento-recomendado)
+  - [ETAPA 2 — Acessar Opcao 436](#etapa-2-acessar-opcao-436)
+  - [ETAPA 3 — Configurar Parametros de Selecao](#etapa-3-configurar-parametros-de-selecao)
+  - [ETAPA 4 — Filtros Opcionais (Se Necessario)](#etapa-4-filtros-opcionais-se-necessario)
+  - [ETAPA 5 — Simulacao (Recomendado)](#etapa-5-simulacao-recomendado)
+  - [ETAPA 6 — Confirmar Processamento](#etapa-6-confirmar-processamento)
+  - [ETAPA 7 — Verificar Resultado](#etapa-7-verificar-resultado)
+- [Regras de Agrupamento (Opcao 384)](#regras-de-agrupamento-opcao-384)
+  - [Separacao de Faturas (Opcao 384)](#separacao-de-faturas-opcao-384)
+- [Contexto CarVia](#contexto-carvia)
+  - [Hoje](#hoje)
+  - [Futuro (com POP implantado)](#futuro-com-pop-implantado)
+- [Erros Comuns e Solucoes](#erros-comuns-e-solucoes)
+- [Verificacao Playwright](#verificacao-playwright)
+- [POPs Relacionados](#pops-relacionados)
+- [Historico](#historico)
 
 > **Versao**: 1.0
 > **Criado em**: 2026-02-16

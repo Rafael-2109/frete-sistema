@@ -1,4 +1,22 @@
+<!-- doc:meta
+tipo: reference
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # CarVia — Status de Adocao por POP
+
+> **Papel:** CarVia — Status de Adocao por POP.
+
+## Indice
+
+- [Legenda](#legenda)
+- [Tabela Completa](#tabela-completa)
+- [Resumo de Adocao](#resumo-de-adocao)
+- [Riscos Criticos](#riscos-criticos)
+- [Pendencias Operacionais](#pendencias-operacionais)
 
 > **Criado em**: 2026-02-16
 > **Atualizado em**: 2026-04-09 (C03 saiu de NAO IMPLANTADO → ATIVO via automacao Playwright)
@@ -30,7 +48,7 @@
 | **A05** | Cadastrar fornecedor | ATIVO | Rafael | Rafael | — | 478 |
 | **A06** | Cadastrar custos/comissoes | ATIVO | Rafael | Rafael | — | 408 |
 | **A07** | Cadastrar tabelas de preco | ATIVO | Rafael | Rafael | — | 420 |
-| **A08** | Cadastrar veiculo | PARCIAL | Rafael | Rafael | Cadastro incompleto — falta RNTRC de alguns | 026 |
+| **A08** | Cadastrar veiculo | PARCIAL | Rafael | Rafael | Cadastro incompleto — falta RNTRC (parte da frota) | 026 |
 | **A09** | Cadastrar motorista | PARCIAL | Rafael | Rafael | Cadastro sob demanda, sem processo formal | 028 |
 | **A10** | Implantar nova rota completa | ATIVO | Rafael | Rafael | — | 401→402→403→478→408→420 |
 | **B01** | Cotar frete para cliente | ATIVO | Rafael | Jessica | Transicao Rafael→Jessica pendente | 002 |

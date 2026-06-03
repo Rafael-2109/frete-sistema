@@ -1,4 +1,34 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/pops/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # POP-C04 — Registrar Custos Extras (TDE, Diaria, Pernoite)
+
+> **Papel:** POP-C04 — Registrar Custos Extras (TDE, Diaria, Pernoite).
+
+## Indice
+
+- [Objetivo](#objetivo)
+- [Quando Executar (Trigger)](#quando-executar-trigger)
+- [Frequencia](#frequencia)
+- [Pre-requisitos](#pre-requisitos)
+- [Passo-a-Passo](#passo-a-passo)
+  - [ETAPA 1 — Identificar o Evento Gerador](#etapa-1-identificar-o-evento-gerador)
+  - [ETAPA 2 — Cadastrar Custo Extra (Opcao 459)](#etapa-2-cadastrar-custo-extra-opcao-459)
+  - [ETAPA 3 — Verificar Disponibilidade para Faturamento](#etapa-3-verificar-disponibilidade-para-faturamento)
+  - [ETAPA 4 — Faturar Custos Extras](#etapa-4-faturar-custos-extras)
+  - [ETAPA 5 — Comunicar Cliente](#etapa-5-comunicar-cliente)
+- [Contexto CarVia](#contexto-carvia)
+  - [Hoje](#hoje)
+  - [Futuro (com POP implantado)](#futuro-com-pop-implantado)
+- [Erros Comuns e Solucoes](#erros-comuns-e-solucoes)
+- [Verificacao Playwright](#verificacao-playwright)
+- [POPs Relacionados](#pops-relacionados)
+- [Historico](#historico)
 
 > **Versao**: 1.0
 > **Criado em**: 2026-02-16

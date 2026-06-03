@@ -1,4 +1,33 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/financeiro/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opção 475 — Contas a Pagar (Programação de Despesas)
+
+> **Papel:** Opção 475 — Contas a Pagar (Programação de Despesas).
+
+## Indice
+
+- [Função](#função)
+- [Quando Usar](#quando-usar)
+- [Pré-requisitos](#pré-requisitos)
+- [Campos / Interface](#campos-interface)
+  - [Tela Inicial](#tela-inicial)
+  - [Dados Fiscais](#dados-fiscais)
+  - [Retenções](#retenções)
+  - [Dados do Pagamento](#dados-do-pagamento)
+- [Abas / Sub-telas](#abas-sub-telas)
+- [Fluxo de Uso](#fluxo-de-uso)
+  - [Inclusão Manual](#inclusão-manual)
+  - [Importação de NF-e Disponível](#importação-de-nf-e-disponível)
+  - [Acerto de CCF (Conta Corrente Fornecedor)](#acerto-de-ccf-conta-corrente-fornecedor)
+- [Integração com Outras Opções](#integração-com-outras-opções)
+- [Observações e Gotchas](#observações-e-gotchas)
+- [POPs Relacionados](#pops-relacionados)
 
 > **Módulo**: Financeiro
 > **Páginas de ajuda**: 25 páginas consolidadas

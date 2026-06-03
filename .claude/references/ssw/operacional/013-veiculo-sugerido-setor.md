@@ -1,4 +1,14 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/operacional/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opcao 013 — Veiculo Sugerido por Setor
+
+> **Papel:** Opcao 013 — Veiculo Sugerido por Setor.
 
 > **Modulo**: Operacional — Coleta/Entrega
 > **Paginas de ajuda**: 1 pagina consolidada

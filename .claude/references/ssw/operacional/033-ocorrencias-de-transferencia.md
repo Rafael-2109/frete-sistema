@@ -1,4 +1,14 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/operacional/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opção 033 — Ocorrências de Transferência
+
+> **Papel:** Opção 033 — Ocorrências de Transferência.
 
 > **Módulo**: Operacional — Gestão de Ocorrências
 > **Páginas de ajuda**: 5 páginas consolidadas

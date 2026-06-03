@@ -1,4 +1,14 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/fiscal/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opcao 542 — Conferencia da Fatura SEMPARAR
+
+> **Papel:** Opcao 542 — Conferencia da Fatura SEMPARAR.
 
 > **Modulo**: Fiscal
 > **Paginas de ajuda**: 1 pagina consolidada

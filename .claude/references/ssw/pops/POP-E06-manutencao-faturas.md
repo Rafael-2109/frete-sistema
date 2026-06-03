@@ -1,4 +1,40 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/pops/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # POP-E06 — Manter Faturas (Prorrogar, Protestar, Baixar)
+
+> **Papel:** POP-E06 — Manter Faturas (Prorrogar, Protestar, Baixar).
+
+## Indice
+
+- [Objetivo](#objetivo)
+- [Quando Executar (Trigger)](#quando-executar-trigger)
+- [Frequencia](#frequencia)
+- [Pre-requisitos](#pre-requisitos)
+- [Passo-a-Passo](#passo-a-passo)
+  - [ETAPA 1 — Consultar Fatura](#etapa-1-consultar-fatura)
+  - [ETAPA 2 — Alterar Vencimento Individual](#etapa-2-alterar-vencimento-individual)
+  - [ETAPA 3 — Operacoes Financeiras da Fatura (Menu 457)](#etapa-3-operacoes-financeiras-da-fatura-menu-457)
+  - [ETAPA 4 — Marcar para Serasa/Equifax/SPC](#etapa-4-marcar-para-serasaequifaxspc)
+  - [ETAPA 5 — Marcar Fatura como Perdida](#etapa-5-marcar-fatura-como-perdida)
+  - [ETAPA 6 — Retirar CTRC de Fatura](#etapa-6-retirar-ctrc-de-fatura)
+  - [ETAPA 7 — Lancar Credito ou Debito (Ajustar Valor)](#etapa-7-lancar-credito-ou-debito-ajustar-valor)
+  - [ETAPA 8 — Mudar Cobranca (Carteira ↔ Agencia)](#etapa-8-mudar-cobranca-carteira-agencia)
+  - [ETAPA 9 — Consultar Pagamentos Parciais](#etapa-9-consultar-pagamentos-parciais)
+- [Tarifa Bancaria](#tarifa-bancaria)
+- [Situacoes que Impedem Operacoes](#situacoes-que-impedem-operacoes)
+- [Contexto CarVia](#contexto-carvia)
+  - [Hoje](#hoje)
+  - [Futuro (com POP implantado)](#futuro-com-pop-implantado)
+- [Erros Comuns e Solucoes](#erros-comuns-e-solucoes)
+- [Verificacao Playwright](#verificacao-playwright)
+- [POPs Relacionados](#pops-relacionados)
+- [Historico](#historico)
 
 > **Versao**: 1.0
 > **Criado em**: 2026-02-16

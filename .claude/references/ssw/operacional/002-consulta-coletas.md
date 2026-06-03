@@ -1,4 +1,41 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/operacional/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opcao 002 — Cotacao de Fretes
+
+> **Papel:** Opcao 002 — Cotacao de Fretes.
+
+## Indice
+
+- [Funcao](#funcao)
+- [Quando Usar](#quando-usar)
+- [Pre-requisitos](#pre-requisitos)
+- [Campos / Interface](#campos-interface)
+- [Abas / Sub-telas](#abas-sub-telas)
+  - [Tela Inicial](#tela-inicial)
+  - [Tela de Cotacao](#tela-de-cotacao)
+- [Fluxo de Uso](#fluxo-de-uso)
+  - [Cotacao Simples](#cotacao-simples)
+  - [Consulta de Cotacoes](#consulta-de-cotacoes)
+- [Limites de Cotacao](#limites-de-cotacao)
+- [Integracao com Outras Opcoes](#integracao-com-outras-opcoes)
+- [Observacoes e Gotchas](#observacoes-e-gotchas)
+  - [Uso da Cotacao no CTRC](#uso-da-cotacao-no-ctrc)
+  - [Contratacao](#contratacao)
+  - [Cancelamento](#cancelamento)
+  - [Exclusao Automatica](#exclusao-automatica)
+  - [Usuarios Sem Bloqueio](#usuarios-sem-bloqueio)
+  - [Cotacoes da MTZ](#cotacoes-da-mtz)
+  - [Substituicao Tributaria](#substituicao-tributaria)
+  - [Retencoes de Orgaos Publicos](#retencoes-de-orgaos-publicos)
+  - [Comissao de Cotacao](#comissao-de-cotacao)
+  - [Restricao de Mercadorias](#restricao-de-mercadorias)
+- [POPs Relacionados](#pops-relacionados)
 
 > **Modulo**: Operacional — Cotacao
 > **Paginas de ajuda**: 5 paginas consolidadas

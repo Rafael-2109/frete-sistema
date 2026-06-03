@@ -1,4 +1,14 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/fiscal/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opção 534 — ECD (Escrituração Contábil Digital)
+
+> **Papel:** Opção 534 — ECD (Escrituração Contábil Digital).
 
 > **Módulo**: Fiscal
 > **Páginas de ajuda**: 2 páginas consolidadas

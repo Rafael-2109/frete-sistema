@@ -1,4 +1,14 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/comercial/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opção 211 — Unitização de Volumes do CTRC
+
+> **Papel:** Opção 211 — Unitização de Volumes do CTRC.
 
 > **Módulo**: Comercial / Operacional
 > **Páginas de ajuda**: 1 página consolidada

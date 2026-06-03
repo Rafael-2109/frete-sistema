@@ -1,4 +1,30 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/comercial/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opcao 379 — Geracao Automatica de Pre-CTRCs
+
+> **Papel:** Opcao 379 — Geracao Automatica de Pre-CTRCs.
+
+## Indice
+
+- [Funcao](#funcao)
+- [Quando Usar](#quando-usar)
+- [Pre-requisitos](#pre-requisitos)
+- [Campos / Interface](#campos-interface)
+- [Fluxo de Uso](#fluxo-de-uso)
+  - [Configuracao Inicial](#configuracao-inicial)
+  - [Geracao Automatica (Apos Configuracao)](#geracao-automatica-apos-configuracao)
+  - [Geracao Manual com Sugestao (Configuracao com "N")](#geracao-manual-com-sugestao-configuracao-com-n)
+- [Integracao com Outras Opcoes](#integracao-com-outras-opcoes)
+- [Observacoes e Gotchas](#observacoes-e-gotchas)
+- [Integracoes API Especificas (Clientes)](#integracoes-api-especificas-clientes)
+  - [BRITANIA (CNPJ raiz: 07019308)](#britania-cnpj-raiz-07019308)
+  - [ENJOEI (CNPJ raiz: 16922038)](#enjoei-cnpj-raiz-16922038)
 
 > **Modulo**: Comercial
 > **Paginas de ajuda**: 6 paginas consolidadas

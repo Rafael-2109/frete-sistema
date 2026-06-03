@@ -1,4 +1,60 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/relatorios/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opção 908 — Tabela de Ocorrências EDI (Configurações do Sistema)
+
+> **Papel:** Opção 908 — Tabela de Ocorrências EDI (Configurações do Sistema).
+
+## Indice
+
+- [Função](#função)
+- [Quando Usar](#quando-usar)
+- [Pré-requisitos](#pré-requisitos)
+- [Processo](#processo)
+  - [Envio de Ocorrências (CTRC)](#envio-de-ocorrências-ctrc)
+  - [Recepção de Ocorrências (de Parceiros)](#recepção-de-ocorrências-de-parceiros)
+  - [Coleta](#coleta)
+- [Campos / Interface](#campos-interface)
+  - [Tela Inicial](#tela-inicial)
+  - [Tela Principal](#tela-principal)
+- [Principais Integrações API Disponíveis](#principais-integrações-api-disponíveis)
+  - [INTELIPOST (ssw1673)](#intelipost-ssw1673)
+  - [NETSHOES (ssw1807)](#netshoes-ssw1807)
+  - [DAFITI (ssw1953)](#dafiti-ssw1953)
+  - [BRUDAM (ssw1872)](#brudam-ssw1872)
+  - [WEB (ssw2081)](#web-ssw2081)
+  - [RANDON (All TECH/All TRANSPORT) (ssw2175)](#randon-all-techall-transport-ssw2175)
+  - [OCORRÊNCIAS PADRÃO SSW (ssw2181)](#ocorrências-padrão-ssw-ssw2181)
+  - [BCUBE (ssw2241)](#bcube-ssw2241)
+  - [COMMED (ssw2245)](#commed-ssw2245)
+  - [MERIDIONAL (MOVVI) (ssw2257)](#meridional-movvi-ssw2257)
+- [Fluxo de Uso](#fluxo-de-uso)
+  - [Configurar Envio de Ocorrências (CTRC)](#configurar-envio-de-ocorrências-ctrc)
+  - [Configurar Envio de Ocorrências (Coleta)](#configurar-envio-de-ocorrências-coleta)
+  - [Configurar Recepção de Ocorrências (de Parceiros)](#configurar-recepção-de-ocorrências-de-parceiros)
+  - [Configurar Integração API](#configurar-integração-api)
+- [Integração com Outras Opções](#integração-com-outras-opções)
+- [Observações e Gotchas](#observações-e-gotchas)
+  - [Diferença XXX vs Domínio](#diferença-xxx-vs-domínio)
+  - [Ocorrências Finalizadoras](#ocorrências-finalizadoras)
+  - [Atualização Automática](#atualização-automática)
+  - [Formato do Código](#formato-do-código)
+  - [Ocorrências Consideradas](#ocorrências-consideradas)
+  - [Conversão Automática (Parceiros SSW)](#conversão-automática-parceiros-ssw)
+  - [Diferença opção 908 vs 909](#diferença-opção-908-vs-909)
+  - [Diferença opção 908 vs 927](#diferença-opção-908-vs-927)
+  - [Recepção de Arquivo de Ocorrências](#recepção-de-arquivo-de-ocorrências)
+  - [Envio Automático vs Manual](#envio-automático-vs-manual)
+  - [Monitoramento](#monitoramento)
+  - [Geolocalização](#geolocalização)
+  - [Comprovante de Entrega](#comprovante-de-entrega)
+  - [Reenvio](#reenvio)
+  - [Suporte](#suporte)
 
 > **Módulo**: Sistema
 > **Páginas de ajuda**: 81 páginas consolidadas (133KB)

@@ -1,4 +1,45 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/visao-geral/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # 02 — Operacional
+
+> **Papel:** 02 — Operacional.
+
+## Indice
+
+- [Sumario](#sumario)
+- [1. Coleta](#1-coleta)
+  - [Configuracoes](#configuracoes)
+  - [Cadastramento](#cadastramento)
+  - [Execucao](#execucao)
+  - [SSWMobile na Coleta](#sswmobile-na-coleta)
+  - [Coleta no Cliente](#coleta-no-cliente)
+  - [Descarga da Coleta](#descarga-da-coleta)
+- [2. Expedicao](#2-expedicao)
+  - [Emissao de Pre-CTRCs](#emissao-de-pre-ctrcs)
+  - [Autorizacao fiscal](#autorizacao-fiscal)
+  - [Verificacoes pre-envio (opção 483/Operacao)](#verificacoes-pre-envio-opção-483operacao)
+  - [CTRCs Complementares](#ctrcs-complementares)
+- [3. Transferencia](#3-transferencia)
+  - [Carregamento](#carregamento)
+  - [Contratacao do Veiculo (opção 072)](#contratacao-do-veiculo-opção-072)
+  - [Saida do Veiculo (opção 025)](#saida-do-veiculo-opção-025)
+- [4. Chegada da Transferencia (opção 030)](#4-chegada-da-transferencia-opção-030)
+- [5. Entrega](#5-entrega)
+  - [Carregamento para Entrega](#carregamento-para-entrega)
+  - [Baixa de Entregas (opção 038)](#baixa-de-entregas-opção-038)
+  - [Retaguarda](#retaguarda)
+- [6. Resolvendo Pendencias](#6-resolvendo-pendencias)
+- [Fluxo Completo](#fluxo-completo)
+- [Contexto CarVia](#contexto-carvia)
+  - [Opcoes que CarVia usa](#opcoes-que-carvia-usa)
+  - [Opcoes que CarVia NAO usa (mas deveria)](#opcoes-que-carvia-nao-usa-mas-deveria)
+  - [Responsaveis](#responsaveis)
 
 > **Fonte**: `visao_geral_operacional.htm` (08/03/2020)
 > **Links internos**: 107 | **Imagens**: 0

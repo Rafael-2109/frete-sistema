@@ -1,4 +1,47 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/logistica/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opção 704 — Cadastro do Ativo Imobilizado
+
+> **Papel:** Opção 704 — Cadastro do Ativo Imobilizado.
+
+## Indice
+
+- [Função](#função)
+- [Quando Usar](#quando-usar)
+- [Pré-requisitos](#pré-requisitos)
+- [Campos / Interface](#campos-interface)
+  - [Tela Inicial](#tela-inicial)
+  - [Tela Principal - Dados do Bem](#tela-principal---dados-do-bem)
+  - [Dados do Documento Fiscal](#dados-do-documento-fiscal)
+  - [Crédito Fiscal - ICMS](#crédito-fiscal---icms)
+  - [Crédito Fiscal - PIS/COFINS](#crédito-fiscal---piscofins)
+  - [Depreciação](#depreciação)
+  - [Links no Rodapé (Após Cadastro)](#links-no-rodapé-após-cadastro)
+- [Fluxo de Uso](#fluxo-de-uso)
+  - [Processo Completo de Ativo Imobilizado](#processo-completo-de-ativo-imobilizado)
+  - [Chamada via Contas a Pagar](#chamada-via-contas-a-pagar)
+- [Integração com Outras Opções](#integração-com-outras-opções)
+  - [Cadastros e Configuração](#cadastros-e-configuração)
+  - [Contas a Pagar](#contas-a-pagar)
+  - [Depreciação e Controles](#depreciação-e-controles)
+  - [Documentos Fiscais](#documentos-fiscais)
+  - [Faturamento](#faturamento)
+- [Observações e Gotchas](#observações-e-gotchas)
+  - [Objetivos do Sistema](#objetivos-do-sistema)
+  - [CFOP e Classificação](#cfop-e-classificação)
+  - [Créditos Fiscais](#créditos-fiscais)
+  - [Depreciação](#depreciação)
+  - [Baixa do Ativo](#baixa-do-ativo)
+  - [Inventário Físico](#inventário-físico)
+  - [Livro CIAP (opção 546)](#livro-ciap-opção-546)
+  - [Desafio de Implantação](#desafio-de-implantação)
+  - [Pontos de Atenção](#pontos-de-atenção)
 
 > **Módulo**: Logística (Patrimônio/Contabilidade)
 > **Páginas de ajuda**: 4 páginas consolidadas

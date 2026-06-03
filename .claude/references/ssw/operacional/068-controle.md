@@ -1,4 +1,35 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/operacional/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opcao 068 — Controle (Tabela Comissao de Cotacao)
+
+> **Papel:** Opcao 068 — Controle (Tabela Comissao de Cotacao).
+
+## Indice
+
+- [Funcao](#funcao)
+- [Quando Usar](#quando-usar)
+- [Pre-requisitos](#pre-requisitos)
+- [Campos / Interface](#campos-interface)
+  - [Tela Inicial](#tela-inicial)
+  - [Tela Principal](#tela-principal)
+- [Fluxo de Uso](#fluxo-de-uso)
+- [Integracao com Outras Opcoes](#integracao-com-outras-opcoes)
+- [Observacoes e Gotchas](#observacoes-e-gotchas)
+  - [Comissionado](#comissionado)
+  - [Pagamento](#pagamento)
+  - [Inativacao](#inativacao)
+  - [Base de Calculo](#base-de-calculo)
+  - [Calculo](#calculo)
+  - [Cotadores com Comissao](#cotadores-com-comissao)
+  - [CTRCs com Vendedores](#ctrcs-com-vendedores)
+  - [Supervisor/Suporte](#supervisorsuporte)
+  - [Relatorios](#relatorios)
 
 > **Modulo**: Comercial — Comissionamento
 > **Paginas de ajuda**: 1 pagina consolidada

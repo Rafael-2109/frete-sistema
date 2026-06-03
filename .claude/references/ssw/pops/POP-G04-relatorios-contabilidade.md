@@ -1,4 +1,39 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/pops/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # POP-G04 — Extrair Relatorios para Contabilidade
+
+> **Papel:** POP-G04 — Extrair Relatorios para Contabilidade.
+
+## Indice
+
+- [Objetivo](#objetivo)
+- [Quando Executar (Trigger)](#quando-executar-trigger)
+- [Frequencia](#frequencia)
+- [Pre-requisitos](#pre-requisitos)
+- [Passo-a-Passo](#passo-a-passo)
+  - [ETAPA 1 — Conferencia Pre-Geracao](#etapa-1-conferencia-pre-geracao)
+  - [ETAPA 2 — Gerar SPED Fiscal ICMS/IPI (Opcao 512)](#etapa-2-gerar-sped-fiscal-icmsipi-opcao-512)
+  - [ETAPA 3 — Gerar SPED Contribuicoes PIS/COFINS (Opcao 515)](#etapa-3-gerar-sped-contribuicoes-piscofins-opcao-515)
+  - [ETAPA 4 — Fechamento Fiscal (Opcao 567)](#etapa-4-fechamento-fiscal-opcao-567)
+  - [ETAPA 5 — Relatorios de Conferencia (Opcional)](#etapa-5-relatorios-de-conferencia-opcional)
+- [Contexto CarVia](#contexto-carvia)
+  - [Hoje](#hoje)
+  - [Futuro (mesmo processo)](#futuro-mesmo-processo)
+- [Erros Comuns e Solucoes](#erros-comuns-e-solucoes)
+- [Regras Especificas da Receita (A Confirmar)](#regras-especificas-da-receita-a-confirmar)
+- [Verificacao Playwright](#verificacao-playwright)
+- [POPs Relacionados](#pops-relacionados)
+- [Observacoes Finais](#observacoes-finais)
+  - [Diferenca SPED Fiscal vs. SPED Contribuicoes](#diferenca-sped-fiscal-vs-sped-contribuicoes)
+  - [SSW Atualiza Regras Automaticamente](#ssw-atualiza-regras-automaticamente)
+  - [Contabilidade Externa Experiente](#contabilidade-externa-experiente)
+- [Historico](#historico)
 
 > **Versao**: 1.0
 > **Criado em**: 2026-02-16

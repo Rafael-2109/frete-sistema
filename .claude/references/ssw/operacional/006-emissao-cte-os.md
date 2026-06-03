@@ -1,4 +1,45 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/operacional/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opção 006 — Emissão de CT-e/CT-e OS em Lote
+
+> **Papel:** Opção 006 — Emissão de CT-e/CT-e OS em Lote.
+
+## Indice
+
+- [Função](#função)
+- [Quando Usar](#quando-usar)
+- [Pré-requisitos](#pré-requisitos)
+  - [Importação de Documentos (Opção 071)](#importação-de-documentos-opção-071)
+  - [Padrões EDI Suportados](#padrões-edi-suportados)
+  - [Configurações Necessárias](#configurações-necessárias)
+- [Campos / Interface](#campos-interface)
+  - [Tela da Opção 006 — Emissão em Lote](#tela-da-opção-006-emissão-em-lote)
+- [Fluxo de Uso](#fluxo-de-uso)
+  - [1. Fluxo Geral (EDI/XML)](#1-fluxo-geral-edixml)
+  - [2. Fluxo com Romaneio (Cliente Pagador)](#2-fluxo-com-romaneio-cliente-pagador)
+  - [3. Fluxo de CT-e Reversa](#3-fluxo-de-ct-e-reversa)
+  - [4. Fluxo de CT-e Devolução (Natura)](#4-fluxo-de-ct-e-devolução-natura)
+  - [5. Fluxo de Redespacho Intermediário (Apontar Manifesto SSW)](#5-fluxo-de-redespacho-intermediário-apontar-manifesto-ssw)
+- [Integração com Outras Opções](#integração-com-outras-opções)
+  - [Antes da Emissão](#antes-da-emissão)
+  - [Após a Emissão](#após-a-emissão)
+  - [Integrações Específicas por Cliente](#integrações-específicas-por-cliente)
+- [Observações e Gotchas](#observações-e-gotchas)
+  - [Geração Automática de CTRCs](#geração-automática-de-ctrcs)
+  - [Repositório de Documentos (Opção 071)](#repositório-de-documentos-opção-071)
+  - [Arquivos EDI — Envio e Recebimento](#arquivos-edi-envio-e-recebimento)
+  - [CT-e Reversa (Opção 215)](#ct-e-reversa-opção-215)
+  - [CT-e Redespacho Intermediário — Apontar Manifesto SSW](#ct-e-redespacho-intermediário-apontar-manifesto-ssw)
+  - [Clientes com Requisitos Especiais](#clientes-com-requisitos-especiais)
+  - [Padrões EDI e Reforma Tributária](#padrões-edi-e-reforma-tributária)
+  - [Limitações e Configurações](#limitações-e-configurações)
+- [POPs Relacionados](#pops-relacionados)
 
 > **Módulo**: Operacional
 > **Páginas de ajuda**: 25 páginas consolidadas (múltiplos padrões EDI e integrações)

@@ -1,4 +1,47 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/cadastros/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opcao 925 — Cadastro de Usuarios
+
+> **Papel:** Opcao 925 — Cadastro de Usuarios.
+
+## Indice
+
+- [Funcao](#funcao)
+- [Quando Usar](#quando-usar)
+- [Pre-requisitos](#pre-requisitos)
+- [Campos / Interface](#campos-interface)
+  - [Dados Basicos](#dados-basicos)
+  - [Permissoes Especificas](#permissoes-especificas)
+  - [Gerenciamento Seguro](#gerenciamento-seguro)
+- [Fluxo de Uso](#fluxo-de-uso)
+  - [Cadastro de Novo Usuario](#cadastro-de-novo-usuario)
+  - [Alteracao de Usuario Existente](#alteracao-de-usuario-existente)
+  - [Bloqueio/Desbloqueio](#bloqueiodesbloqueio)
+  - [Rastreamento de Atividades](#rastreamento-de-atividades)
+  - [Listagens](#listagens)
+- [Integracao com Outras Opcoes](#integracao-com-outras-opcoes)
+- [Observacoes e Gotchas](#observacoes-e-gotchas)
+  - [Usuario Master](#usuario-master)
+  - [Usuarios Automaticos](#usuarios-automaticos)
+  - [Usuario Cliente](#usuario-cliente)
+  - [Multi-Empresa](#multi-empresa)
+  - [Limites de Acesso Simultaneo](#limites-de-acesso-simultaneo)
+  - [Gerenciamento Seguro](#gerenciamento-seguro)
+  - [Permissao "Informa Frete"](#permissao-informa-frete)
+  - [Permissao "Desbloqueia Resultado"](#permissao-desbloqueia-resultado)
+  - [Modo Restrito (Aponta CTRC = N)](#modo-restrito-aponta-ctrc-n)
+  - [Permissoes de Cadastro](#permissoes-de-cadastro)
+  - [Rastreamento e Auditoria](#rastreamento-e-auditoria)
+  - [Unidade de Simulacao](#unidade-de-simulacao)
+  - [Bloqueio SSW](#bloqueio-ssw)
+  - [Login e Nomenclatura](#login-e-nomenclatura)
+- [POPs Relacionados](#pops-relacionados)
 
 > **Modulo**: Cadastros
 > **Paginas de ajuda**: 6+ paginas consolidadas

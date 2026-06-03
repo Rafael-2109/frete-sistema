@@ -1,4 +1,14 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/comercial/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opcao 383 — Configuracao de Rastreamento de Clientes
+
+> **Papel:** Opcao 383 — Configuracao de Rastreamento de Clientes.
 
 > **Modulo**: Comercial
 > **Paginas de ajuda**: 2 paginas consolidadas (421 Sub-Regioes, 929 Gera Banco de Dados)

@@ -1,4 +1,32 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/embarcador/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opção 804 — Geração de CTRCs (Modal Aquaviário)
+
+> **Papel:** Opção 804 — Geração de CTRCs (Modal Aquaviário).
+
+## Indice
+
+- [Função](#função)
+- [Quando Usar](#quando-usar)
+- [Pré-requisitos](#pré-requisitos)
+- [Relação com Opção 004](#relação-com-opção-004)
+- [Campos / Interface](#campos-interface)
+- [Fluxo de Uso](#fluxo-de-uso)
+  - [Geração de CT-e Aquaviário](#geração-de-ct-e-aquaviário)
+  - [Tipos de Documentos Disponíveis](#tipos-de-documentos-disponíveis)
+- [Integração com Outras Opções](#integração-com-outras-opções)
+- [Observações e Gotchas](#observações-e-gotchas)
+  - [Modal Aquaviário vs. Rodoviário](#modal-aquaviário-vs-rodoviário)
+  - [Particularidades do Modal](#particularidades-do-modal)
+  - [Funcionalidades Compartilhadas](#funcionalidades-compartilhadas)
+  - [Referência Completa](#referência-completa)
+  - [Observação Importante](#observação-importante)
 
 > **Módulo**: Embarcador
 > **Páginas de ajuda**: Compartilha documentação com opção 004 (mesma tela, modal diferente)

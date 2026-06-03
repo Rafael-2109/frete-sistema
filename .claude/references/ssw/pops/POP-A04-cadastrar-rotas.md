@@ -1,4 +1,48 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/pops/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # POP-A04 — Cadastrar Rotas
+
+> **Papel:** POP-A04 — Cadastrar Rotas.
+
+## Indice
+
+- [Objetivo](#objetivo)
+- [Quando Executar (Trigger)](#quando-executar-trigger)
+- [Frequencia](#frequencia)
+- [Pre-requisitos](#pre-requisitos)
+- [Passo-a-Passo](#passo-a-passo)
+  - [ETAPA 1 — Acessar e Iniciar Cadastro](#etapa-1-acessar-e-iniciar-cadastro)
+  - [ETAPA 2 — Definir Origem e Destino](#etapa-2-definir-origem-e-destino)
+  - [ETAPA 3 — Preencher Prazo de Transferencia](#etapa-3-preencher-prazo-de-transferencia)
+  - [ETAPA 4 — Configurar Hora de Corte (Opcional)](#etapa-4-configurar-hora-de-corte-opcional)
+  - [ETAPA 5 — Informar Distancia e Pedagogios](#etapa-5-informar-distancia-e-pedagogios)
+  - [ETAPA 6 — Informar UFs Percorridas (Critico para MDF-e)](#etapa-6-informar-ufs-percorridas-critico-para-mdf-e)
+  - [ETAPA 7 — Salvar Rota](#etapa-7-salvar-rota)
+  - [ETAPA 8 — Verificar Prazo Total na Cotacao](#etapa-8-verificar-prazo-total-na-cotacao)
+- [Contexto CarVia](#contexto-carvia)
+  - [Hoje](#hoje)
+  - [Futuro (com POP implantado)](#futuro-com-pop-implantado)
+- [Erros Comuns e Solucoes](#erros-comuns-e-solucoes)
+- [Verificacao Playwright](#verificacao-playwright)
+- [Exemplo Completo: Rota CAR → CGR (Campo Grande/MS)](#exemplo-completo-rota-car-cgr-campo-grandems)
+- [Integracao com Outras Opcoes](#integracao-com-outras-opcoes)
+- [Observacoes e Gotchas](#observacoes-e-gotchas)
+  - [Prazo de Transferencia](#prazo-de-transferencia)
+  - [Hora de Corte](#hora-de-corte)
+  - [Quantidade de Pedagogios](#quantidade-de-pedagogios)
+  - [Unidades Alternativas](#unidades-alternativas)
+  - [Comissionamento](#comissionamento)
+  - [UFs Percorridas (Critico)](#ufs-percorridas-critico)
+  - [Rotas Bidirecionais](#rotas-bidirecionais)
+  - [Distancia para Calculo de Frete](#distancia-para-calculo-de-frete)
+- [POPs Relacionados](#pops-relacionados)
+- [Historico](#historico)
 
 > **Categoria**: A — Implantacao e Cadastros
 > **Prioridade**: P2 (Media — necessario para calculo de prazo e MDF-e)

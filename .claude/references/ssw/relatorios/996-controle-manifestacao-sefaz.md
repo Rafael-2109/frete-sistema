@@ -1,4 +1,40 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/relatorios/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opção 996 — CT-e em Desacordo e Desconhecimento NF-e
+
+> **Papel:** Opção 996 — CT-e em Desacordo e Desconhecimento NF-e.
+
+## Indice
+
+- [Função](#função)
+- [Quando Usar](#quando-usar)
+- [Pré-requisitos](#pré-requisitos)
+- [Processo](#processo)
+  - [Prestação CT-e em Desacordo](#prestação-ct-e-em-desacordo)
+  - [Desconhecimento NF-e](#desconhecimento-nf-e)
+- [Campos / Interface](#campos-interface)
+  - [Prestação em Desacordo (CT-e)](#prestação-em-desacordo-ct-e)
+  - [Desconhecimento da Operação (NF-e)](#desconhecimento-da-operação-nf-e)
+- [Fluxo de Uso](#fluxo-de-uso)
+  - [Manifestar CT-e em Desacordo](#manifestar-ct-e-em-desacordo)
+  - [Manifestar Desconhecimento NF-e](#manifestar-desconhecimento-nf-e)
+- [Integração com Outras Opções](#integração-com-outras-opções)
+- [Observações e Gotchas](#observações-e-gotchas)
+  - [CT-e em Desacordo vs Substituição](#ct-e-em-desacordo-vs-substituição)
+  - [Uso Correto](#uso-correto)
+  - [Atualização Automática](#atualização-automática)
+  - [Legislação](#legislação)
+  - [Chave de 44 Dígitos](#chave-de-44-dígitos)
+  - [IE e CNPJ Pagador](#ie-e-cnpj-pagador)
+  - [Diferença CT-e vs NF-e](#diferença-ct-e-vs-nf-e)
+  - [Quando NÃO Usar](#quando-não-usar)
+  - [Consequências da Manifestação](#consequências-da-manifestação)
 
 > **Módulo**: Sistema (Controle)
 > **Páginas de ajuda**: 1 página consolidada

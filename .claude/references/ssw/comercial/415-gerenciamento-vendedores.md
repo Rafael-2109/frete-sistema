@@ -1,4 +1,39 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/comercial/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opcao 415 — Gerenciamento de Vendedores
+
+> **Papel:** Opcao 415 — Gerenciamento de Vendedores.
+
+## Indice
+
+- [Funcao](#funcao)
+- [Quando Usar](#quando-usar)
+- [Pre-requisitos](#pre-requisitos)
+- [Campos / Interface](#campos-interface)
+  - [Tela Incluir Novo Vendedor](#tela-incluir-novo-vendedor)
+  - [Tela Comissionamento (por Cliente)](#tela-comissionamento-por-cliente)
+- [Fluxo de Uso](#fluxo-de-uso)
+  - [Cadastro Novo Vendedor:](#cadastro-novo-vendedor)
+  - [Vincular Cliente:](#vincular-cliente)
+  - [Troca em Lote:](#troca-em-lote)
+- [Integracao com Outras Opcoes](#integracao-com-outras-opcoes)
+- [Observacoes e Gotchas](#observacoes-e-gotchas)
+  - [Regras Fundamentais](#regras-fundamentais)
+  - [Tipos de Comissao](#tipos-de-comissao)
+  - [Formas de Calculo](#formas-de-calculo)
+  - [Relatorios (opcao 056 ou 300)](#relatorios-opcao-056-ou-300)
+  - [Relatorios Pessoais](#relatorios-pessoais)
+  - [CTRCs Complementares](#ctrcs-complementares)
+  - [Consulta de Comissao Paga](#consulta-de-comissao-paga)
+  - [Opcoes de Gestao](#opcoes-de-gestao)
+  - [Supervisao e Suporte](#supervisao-e-suporte)
+- [POPs Relacionados](#pops-relacionados)
 
 > **Modulo**: Comercial
 > **Paginas de ajuda**: 5 paginas consolidadas

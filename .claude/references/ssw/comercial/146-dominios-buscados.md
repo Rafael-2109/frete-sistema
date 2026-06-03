@@ -1,4 +1,14 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/comercial/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opção 146 — Domínios a Serem Buscados
+
+> **Papel:** Opção 146 — Domínios a Serem Buscados.
 
 > **Módulo**: Comercial
 > **Páginas de ajuda**: 2 páginas consolidadas

@@ -1,4 +1,40 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/pops/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # POP-C03 — Emitir CT-e Complementar
+
+> **Papel:** POP-C03 — Emitir CT-e Complementar.
+
+## Indice
+
+- [Objetivo](#objetivo)
+- [Quando Executar (Trigger)](#quando-executar-trigger)
+- [Frequencia](#frequencia)
+- [Pre-requisitos](#pre-requisitos)
+- [Passo-a-Passo](#passo-a-passo)
+  - [ETAPA 1 — Identificar o CT-e Original](#etapa-1-identificar-o-ct-e-original)
+  - [ETAPA 2 — Calcular Valores do Complemento](#etapa-2-calcular-valores-do-complemento)
+  - [ETAPA 3 — Emitir CT-e Complementar (Opcao 222)](#etapa-3-emitir-ct-e-complementar-opcao-222)
+  - [ETAPA 4 — Verificar Vinculacao](#etapa-4-verificar-vinculacao)
+  - [ETAPA 5 — Faturamento do Complemento](#etapa-5-faturamento-do-complemento)
+- [Automacao CarVia (CarviaEmissaoCteComplementar + Playwright)](#automacao-carvia-carviaemissaoctecomplementar-playwright)
+  - [Script Playwright (uso direto)](#script-playwright-uso-direto)
+  - [Integracao CarVia (via worker RQ)](#integracao-carvia-via-worker-rq)
+  - [Auto-calculo de valor (grossing up)](#auto-calculo-de-valor-grossing-up)
+  - [Retry de emissao travada em ERRO](#retry-de-emissao-travada-em-erro)
+- [Contexto CarVia](#contexto-carvia)
+  - [Hoje (2026-04-09)](#hoje-2026-04-09)
+  - [Antes da automacao (pre-2026-04-09)](#antes-da-automacao-pre-2026-04-09)
+  - [Futuro](#futuro)
+- [Erros Comuns e Solucoes](#erros-comuns-e-solucoes)
+- [Verificacao Playwright](#verificacao-playwright)
+- [POPs Relacionados](#pops-relacionados)
+- [Historico](#historico)
 
 > **Versao**: 2.0
 > **Criado em**: 2026-02-16

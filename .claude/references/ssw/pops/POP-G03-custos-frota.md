@@ -1,4 +1,38 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/pops/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # POP-G03 — Controlar Custos de Frota
+
+> **Papel:** POP-G03 — Controlar Custos de Frota.
+
+## Indice
+
+- [Objetivo](#objetivo)
+- [Quando Executar (Trigger)](#quando-executar-trigger)
+- [Frequencia](#frequencia)
+- [Pre-requisitos](#pre-requisitos)
+- [Passo-a-Passo](#passo-a-passo)
+  - [ETAPA 1 — Setup Inicial (Uma vez)](#etapa-1-setup-inicial-uma-vez)
+  - [ETAPA 2 — Registrar Abastecimentos](#etapa-2-registrar-abastecimentos)
+  - [ETAPA 3 — Registrar Manutencoes](#etapa-3-registrar-manutencoes)
+  - [ETAPA 4 — Registrar Outras Despesas de Frota](#etapa-4-registrar-outras-despesas-de-frota)
+  - [ETAPA 5 — Analise Mensal de Custos](#etapa-5-analise-mensal-de-custos)
+  - [ETAPA 6 — Decisao: Usar Veiculo Proprio ou Subcontratar?](#etapa-6-decisao-usar-veiculo-proprio-ou-subcontratar)
+- [Contexto CarVia](#contexto-carvia)
+  - [Hoje](#hoje)
+  - [Futuro (com POP implantado)](#futuro-com-pop-implantado)
+- [Erros Comuns e Solucoes](#erros-comuns-e-solucoes)
+- [Verificacao Playwright](#verificacao-playwright)
+- [Contexto CarVia — Controle de Pneus (Futuro)](#contexto-carvia-controle-de-pneus-futuro)
+- [Contexto CarVia — Manutencao Preventiva (Futuro)](#contexto-carvia-manutencao-preventiva-futuro)
+  - [Fluxo F15 — Manutencao Preventiva](#fluxo-f15-manutencao-preventiva)
+- [POPs Relacionados](#pops-relacionados)
+- [Historico](#historico)
 
 > **Versao**: 1.0
 > **Criado em**: 2026-02-16

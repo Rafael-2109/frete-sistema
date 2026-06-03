@@ -1,4 +1,35 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/pops/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # POP-C05 — Imprimir/Reimprimir CT-e
+
+> **Papel:** POP-C05 — Imprimir/Reimprimir CT-e.
+
+## Indice
+
+- [Objetivo](#objetivo)
+- [Quando Executar (Trigger)](#quando-executar-trigger)
+- [Frequencia](#frequencia)
+- [Pre-requisitos](#pre-requisitos)
+- [Passo-a-Passo](#passo-a-passo)
+  - [ETAPA 1 — Impressao Inicial (Apos Autorizacao)](#etapa-1-impressao-inicial-apos-autorizacao)
+  - [ETAPA 2 — Reimpressao (CT-e Ja Impresso)](#etapa-2-reimpressao-ct-e-ja-impresso)
+  - [ETAPA 3 — Reimpressao por NF-e (Quando Nao Sabe o Numero do CT-e)](#etapa-3-reimpressao-por-nf-e-quando-nao-sabe-o-numero-do-ct-e)
+  - [ETAPA 4 — Impressao de CT-e Especifico (Consulta pela Opcao 101)](#etapa-4-impressao-de-ct-e-especifico-consulta-pela-opcao-101)
+  - [ETAPA 5 — Conferir Impressao](#etapa-5-conferir-impressao)
+- [Diferenca entre Tipos de Impressao](#diferenca-entre-tipos-de-impressao)
+- [Contexto CarVia](#contexto-carvia)
+  - [Hoje](#hoje)
+  - [Futuro (com POP implantado)](#futuro-com-pop-implantado)
+- [Erros Comuns e Solucoes](#erros-comuns-e-solucoes)
+- [Verificacao Playwright](#verificacao-playwright)
+- [POPs Relacionados](#pops-relacionados)
+- [Historico](#historico)
 
 > **Versao**: 1.0
 > **Criado em**: 2026-02-16

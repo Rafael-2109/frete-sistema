@@ -1,4 +1,50 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/comercial/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opção 101 — Resultado/Consulta CTRC
+
+> **Papel:** Opção 101 — Resultado/Consulta CTRC.
+
+## Indice
+
+- [Função](#função)
+- [Quando Usar](#quando-usar)
+- [Pré-requisitos](#pré-requisitos)
+  - [Configurações Necessárias](#configurações-necessárias)
+  - [Permissões e Restrições](#permissões-e-restrições)
+- [Campos / Interface](#campos-interface)
+  - [Link "Resultado" (Opção 101/Resultado)](#link-resultado-opção-101resultado)
+  - [Relatórios de Indicadores](#relatórios-de-indicadores)
+  - [Opção 105 — Situação dos Reembolsos](#opção-105-situação-dos-reembolsos)
+  - [Opção 149 — Conferência do Armazém](#opção-149-conferência-do-armazém)
+  - [Opção 115 — Atualizar Dados da DANFE](#opção-115-atualizar-dados-da-danfe)
+  - [Link "Arquivos EDI" (Opção 101/Rodapé)](#link-arquivos-edi-opção-101rodapé)
+  - [Opção 903/Outros — Parâmetros Gerais](#opção-903outros-parâmetros-gerais)
+- [Fluxo de Uso](#fluxo-de-uso)
+  - [1. Análise de Resultado de CTRC](#1-análise-de-resultado-de-ctrc)
+  - [2. Monitoramento de Atrasados de Entrega](#2-monitoramento-de-atrasados-de-entrega)
+  - [3. Análise de CTRCs com Prejuízo](#3-análise-de-ctrcs-com-prejuízo)
+  - [4. Conferência de Armazém (Opção 149)](#4-conferência-de-armazém-opção-149)
+  - [5. Monitoramento de Integrações EDI/API](#5-monitoramento-de-integrações-ediapi)
+  - [6. Atualização de Dados DANFE (Opção 115)](#6-atualização-de-dados-danfe-opção-115)
+- [Integração com Outras Opções](#integração-com-outras-opções)
+- [Observações e Gotchas](#observações-e-gotchas)
+  - [Resultado Comercial](#resultado-comercial)
+  - [Indicadores de Gestão](#indicadores-de-gestão)
+  - [Conferência de Armazém (Opção 149)](#conferência-de-armazém-opção-149)
+  - [Integrações EDI/API](#integrações-ediapi)
+  - [Opção 115 — Atualizar Dados DANFE](#opção-115-atualizar-dados-danfe)
+  - [Opção 903/Outros](#opção-903outros)
+  - [Big Brother (Opção 145)](#big-brother-opção-145)
+  - [Relatórios Diários (Opção 056)](#relatórios-diários-opção-056)
+  - [Indicadores no Menu Principal](#indicadores-no-menu-principal)
+  - [Opção 166 vs Opção 168](#opção-166-vs-opção-168)
+- [POPs Relacionados](#pops-relacionados)
 
 > **Módulo**: Comercial
 > **Páginas de ajuda**: 22 páginas consolidadas

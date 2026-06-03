@@ -1,4 +1,36 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/operacional/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opcao 001 — Cadastro de Coletas
+
+> **Papel:** Opcao 001 — Cadastro de Coletas.
+
+## Indice
+
+- [Funcao](#funcao)
+- [Quando Usar](#quando-usar)
+- [Pre-requisitos](#pre-requisitos)
+- [Campos / Interface](#campos-interface)
+- [Situacoes da Coleta](#situacoes-da-coleta)
+- [Fluxo de Uso](#fluxo-de-uso)
+  - [Cadastro Manual](#cadastro-manual)
+  - [Cadastro Automatico](#cadastro-automatico)
+- [Integracao com Outras Opcoes](#integracao-com-outras-opcoes)
+- [Observacoes e Gotchas](#observacoes-e-gotchas)
+  - [Unidade de Coleta](#unidade-de-coleta)
+  - [Coleta Comandada Automaticamente](#coleta-comandada-automaticamente)
+  - [Coletas em Parceiros SSW](#coletas-em-parceiros-ssw)
+  - [Gerenciamento de Risco](#gerenciamento-de-risco)
+  - [Hora Limite](#hora-limite)
+  - [Gerar CTRC a Partir da Coleta](#gerar-ctrc-a-partir-da-coleta)
+  - [Rastreamento](#rastreamento)
+  - [Mensagens e Alertas](#mensagens-e-alertas)
+- [POPs Relacionados](#pops-relacionados)
 
 > **Modulo**: Operacional — Coleta/Entrega
 > **Paginas de ajuda**: 9 paginas consolidadas

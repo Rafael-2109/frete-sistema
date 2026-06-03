@@ -1,4 +1,32 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/pops/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # POP-A01 — Cadastrar Cliente Novo
+
+> **Papel:** POP-A01 — Cadastrar Cliente Novo.
+
+## Indice
+
+- [Objetivo](#objetivo)
+- [Trigger](#trigger)
+- [Frequencia](#frequencia)
+- [Pre-requisitos](#pre-requisitos)
+- [Passo-a-Passo](#passo-a-passo)
+  - [ETAPA 1 — Verificar se Cliente Ja Existe](#etapa-1-verificar-se-cliente-ja-existe)
+  - [ETAPA 2 — Preencher Dados Basicos (Opcao 483)](#etapa-2-preencher-dados-basicos-opcao-483)
+  - [ETAPA 3 — Configurar Parametros Operacionais (Opcao 483)](#etapa-3-configurar-parametros-operacionais-opcao-483)
+  - [ETAPA 4 — Configurar Faturamento (Opcao 384)](#etapa-4-configurar-faturamento-opcao-384)
+  - [ETAPA 5 — Verificar Cadastro Completo](#etapa-5-verificar-cadastro-completo)
+- [Contexto CarVia](#contexto-carvia)
+- [Erros Comuns e Solucoes](#erros-comuns-e-solucoes)
+- [Verificacao Playwright](#verificacao-playwright)
+- [POPs Relacionados](#pops-relacionados)
+- [Historico de Revisoes](#historico-de-revisoes)
 
 > **Categoria**: A — Implantacao e Cadastros
 > **Prioridade**: P1 (Alta — base para faturamento, cotacao e emissao de CT-e)

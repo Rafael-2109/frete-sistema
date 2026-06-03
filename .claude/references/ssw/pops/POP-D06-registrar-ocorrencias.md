@@ -1,4 +1,33 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/pops/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # POP-D06 — Registrar Ocorrências
+
+> **Papel:** POP-D06 — Registrar Ocorrências.
+
+## Indice
+
+- [Objetivo](#objetivo)
+- [Trigger](#trigger)
+- [Frequência](#frequência)
+- [Pré-requisitos](#pré-requisitos)
+- [Passo-a-Passo](#passo-a-passo)
+  - [ETAPA 1: Identificar e Registrar Ocorrência](#etapa-1-identificar-e-registrar-ocorrência)
+  - [ETAPA 2: Consultar Ocorrências Pendentes de Instrução](#etapa-2-consultar-ocorrências-pendentes-de-instrução)
+  - [ETAPA 3: Segregar Volumes com Instrução Automática (se habilitado)](#etapa-3-segregar-volumes-com-instrução-automática-se-habilitado)
+  - [ETAPA 4: Liberar Ocorrências Finalizadoras para EDI (se necessário)](#etapa-4-liberar-ocorrências-finalizadoras-para-edi-se-necessário)
+  - [ETAPA 5: Estornar Ocorrência (se registrada incorretamente)](#etapa-5-estornar-ocorrência-se-registrada-incorretamente)
+  - [ETAPA 6: Monitorar Prazo de Resolução (REGRA CRÍTICA)](#etapa-6-monitorar-prazo-de-resolução-regra-crítica)
+- [Contexto CarVia](#contexto-carvia)
+- [Erros Comuns e Soluções](#erros-comuns-e-soluções)
+- [Verificação Playwright](#verificação-playwright)
+- [POPs Relacionados](#pops-relacionados)
+- [Histórico de Revisões](#histórico-de-revisões)
 
 **Categoria**: D — Operacional: Transporte e Entrega
 **Prioridade**: P1 (Alta — rastreabilidade e resolução de problemas)

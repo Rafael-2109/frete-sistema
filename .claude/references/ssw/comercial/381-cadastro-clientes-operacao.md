@@ -1,4 +1,32 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/comercial/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opcao 381 — Cadastro de Clientes - Operacao
+
+> **Papel:** Opcao 381 — Cadastro de Clientes - Operacao.
+
+## Indice
+
+- [Funcao](#funcao)
+- [Quando Usar](#quando-usar)
+- [Pre-requisitos](#pre-requisitos)
+- [Campos / Interface](#campos-interface)
+  - [Emissao do Pre-CTRC](#emissao-do-pre-ctrc)
+  - [Envia Pre-CTRC ao SEFAZ](#envia-pre-ctrc-ao-sefaz)
+  - [DACTE/Comprovante de Entregas](#dactecomprovante-de-entregas)
+  - [Bloqueio Operacional](#bloqueio-operacional)
+- [Fluxo de Uso](#fluxo-de-uso)
+  - [Configuracao de Cliente (Operacao sem Papel)](#configuracao-de-cliente-operacao-sem-papel)
+  - [Configuracao de Cliente (Pesagem/Cubagem Obrigatoria)](#configuracao-de-cliente-pesagemcubagem-obrigatoria)
+  - [Configuracao de Cliente (Reembolso com Autorizacao)](#configuracao-de-cliente-reembolso-com-autorizacao)
+  - [Bloqueio Operacional](#bloqueio-operacional)
+- [Integracao com Outras Opcoes](#integracao-com-outras-opcoes)
+- [Observacoes e Gotchas](#observacoes-e-gotchas)
 
 > **Modulo**: Comercial
 > **Paginas de ajuda**: 2 paginas consolidadas

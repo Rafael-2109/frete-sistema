@@ -1,4 +1,43 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/operacional/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opcao 035 — Romaneio de Entregas
+
+> **Papel:** Opcao 035 — Romaneio de Entregas.
+
+## Indice
+
+- [Funcao](#funcao)
+- [Quando Usar](#quando-usar)
+- [Pre-requisitos](#pre-requisitos)
+- [Campos / Interface](#campos-interface)
+  - [Tela Emissao Romaneio](#tela-emissao-romaneio)
+  - [Facilidades por Romaneio](#facilidades-por-romaneio)
+- [Fluxo de Uso](#fluxo-de-uso)
+  - [Emissao Basica](#emissao-basica)
+  - [Emissao com Gerenciamento de Risco](#emissao-com-gerenciamento-de-risco)
+  - [Baixa de Entregas](#baixa-de-entregas)
+- [Integracao com Outras Opcoes](#integracao-com-outras-opcoes)
+- [Observacoes e Gotchas](#observacoes-e-gotchas)
+  - [Ordenacao de CTRCs](#ordenacao-de-ctrcs)
+  - [Romaneio Itinerante](#romaneio-itinerante)
+  - [Controle de Retorno](#controle-de-retorno)
+  - [Gerenciamento de Risco (GR)](#gerenciamento-de-risco-gr)
+  - [MDF-e de Romaneio](#mdf-e-de-romaneio)
+  - [Saida para Entrega (Codigo SSW 85)](#saida-para-entrega-codigo-ssw-85)
+  - [Operacao Sem Papel](#operacao-sem-papel)
+  - [Estou Chegando](#estou-chegando)
+  - [Conferencia de Carregamento](#conferencia-de-carregamento)
+  - [Cancelamento](#cancelamento)
+  - [Baixa Obrigatoria Dia Anterior](#baixa-obrigatoria-dia-anterior)
+  - [CTRCs Pendentes e Em Romaneios](#ctrcs-pendentes-e-em-romaneios)
+  - [Integracao SSWMobile](#integracao-sswmobile)
+- [POPs Relacionados](#pops-relacionados)
 
 > **Modulo**: Operacional — Coleta/Entrega
 > **Paginas de ajuda**: 8 paginas consolidadas

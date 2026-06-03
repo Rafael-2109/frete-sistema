@@ -1,4 +1,35 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/operacional/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opcao 108 — Instrucoes para Ocorrencias de Entrega
+
+> **Papel:** Opcao 108 — Instrucoes para Ocorrencias de Entrega.
+
+## Indice
+
+- [Funcao](#funcao)
+- [Diferenca entre Opcao 108 e Opcao 133](#diferenca-entre-opcao-108-e-opcao-133)
+- [Quando Usar](#quando-usar)
+- [Pre-requisitos](#pre-requisitos)
+- [Campos / Interface — VERIFICADOS](#campos-interface-verificados)
+  - [Secao 1: Sem Instrucao](#secao-1-sem-instrucao)
+  - [Secao 2: Filtros por Tipo](#secao-2-filtros-por-tipo)
+  - [Secao 3: Pesquisa por Responsabilidade](#secao-3-pesquisa-por-responsabilidade)
+  - [Secao 4: Relatorio por Periodo](#secao-4-relatorio-por-periodo)
+  - [Acoes Adicionais](#acoes-adicionais)
+  - [Campos Inferidos vs Reais](#campos-inferidos-vs-reais)
+- [Fluxo de Uso](#fluxo-de-uso)
+  - [Enviar Instrucao (Unidade Destino)](#enviar-instrucao-unidade-destino)
+  - [Consultar Sobras](#consultar-sobras)
+- [Integracao com Outras Opcoes](#integracao-com-outras-opcoes)
+- [Observacoes e Gotchas](#observacoes-e-gotchas)
+- [POPs Relacionados](#pops-relacionados)
+- [Status CarVia](#status-carvia)
 
 > **Modulo**: Cliente / Ocorrências (menu: Cliente > Ocorrências > 108)
 > **Status CarVia**: ACESSIVEL — NAO IMPLANTADO operacionalmente

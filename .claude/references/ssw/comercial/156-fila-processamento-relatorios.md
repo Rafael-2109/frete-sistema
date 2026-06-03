@@ -1,4 +1,39 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/comercial/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opcao 156 — Fila de Processamento de Relatorios
+
+> **Papel:** Opcao 156 — Fila de Processamento de Relatorios.
+
+## Indice
+
+- [Funcao](#funcao)
+- [Quando Usar](#quando-usar)
+- [Pre-requisitos](#pre-requisitos)
+- [Opcoes que Utilizam a Fila 156](#opcoes-que-utilizam-a-fila-156)
+  - [Opcao 453 — Fretes Expedidos/Recebidos por Unidade](#opcao-453-fretes-expedidosrecebidos-por-unidade)
+  - [Opcao 484 — Performance de Cobranças](#opcao-484-performance-de-cobranças)
+  - [Opcao 516 — Relatorio de Movimento](#opcao-516-relatorio-de-movimento)
+  - [Opcao 529 — Diario Auxiliar de Clientes](#opcao-529-diario-auxiliar-de-clientes)
+  - [Opcao 200 — Relacao de Manifestos Operacionais](#opcao-200-relacao-de-manifestos-operacionais)
+  - [Opcao 921 — Gera Banco de Dados de Tabelas de Fretes](#opcao-921-gera-banco-de-dados-de-tabelas-de-fretes)
+  - [Opcao 355 — Mapas e Arquivos Gerados](#opcao-355-mapas-e-arquivos-gerados)
+  - [Opcao 900 — Gera Banco de Dados de CTRCs/Manifestos](#opcao-900-gera-banco-de-dados-de-ctrcsmanifestos)
+  - [Opcao 550 — Composicao dos Fretes dos CTRCs](#opcao-550-composicao-dos-fretes-dos-ctrcs)
+  - [Opcao 161 — Pesquisa de Ocorrencias em Lote (CTRC Devolucao)](#opcao-161-pesquisa-de-ocorrencias-em-lote-ctrc-devolucao)
+  - [Opcao 162 — Pesquisa de Ocorrencias em Lote (Coleta)](#opcao-162-pesquisa-de-ocorrencias-em-lote-coleta)
+  - [Opcao 552 — Gerar Arquivos Fiscais do MDF-e](#opcao-552-gerar-arquivos-fiscais-do-mdf-e)
+- [Fluxo de Uso](#fluxo-de-uso)
+  - [Gerar e Visualizar Relatorio](#gerar-e-visualizar-relatorio)
+  - [Acompanhar Processamento](#acompanhar-processamento)
+- [Integracao com Outras Opcoes](#integracao-com-outras-opcoes)
+- [Observacoes e Gotchas](#observacoes-e-gotchas)
+- [POPs Relacionados](#pops-relacionados)
 
 > **Modulo**: Comercial
 > **Paginas de ajuda**: 12 paginas consolidadas (referencias cruzadas de outras opcoes)

@@ -1,4 +1,28 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/logistica/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opção 702 — Saída de Estoque e Emissão de NF de Transferência
+
+> **Papel:** Opção 702 — Saída de Estoque e Emissão de NF de Transferência.
+
+## Indice
+
+- [Função](#função)
+- [Quando Usar](#quando-usar)
+- [Pré-requisitos](#pré-requisitos)
+- [Campos / Interface](#campos-interface)
+  - [Tela — Saída de Estoque](#tela-saída-de-estoque)
+  - [Tela — Dados da NFT (apenas Armazém Geral)](#tela-dados-da-nft-apenas-armazém-geral)
+- [Fluxo de Uso](#fluxo-de-uso)
+  - [Armazém Geral — Emitir NFT](#armazém-geral-emitir-nft)
+  - [Operador Logístico — Saída sem NFT](#operador-logístico-saída-sem-nft)
+- [Integração com Outras Opções](#integração-com-outras-opções)
+- [Observações e Gotchas](#observações-e-gotchas)
 
 > **Módulo**: Logística/Armazém Geral
 > **Páginas de ajuda**: 2 páginas consolidadas

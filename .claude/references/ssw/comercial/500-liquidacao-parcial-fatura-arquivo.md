@@ -1,4 +1,27 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/comercial/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opção 500 — Liquidação Parcial de Fatura via Arquivo
+
+> **Papel:** Opção 500 — Liquidação Parcial de Fatura via Arquivo.
+
+## Indice
+
+- [Função](#função)
+- [Quando Usar](#quando-usar)
+- [Pré-requisitos](#pré-requisitos)
+- [Campos / Interface](#campos-interface)
+  - [Tela Inicial — Importação](#tela-inicial-importação)
+  - [Tela Principal — Processamento](#tela-principal-processamento)
+- [Fluxo de Uso](#fluxo-de-uso)
+- [Integração com Outras Opções](#integração-com-outras-opções)
+- [Observações e Gotchas](#observações-e-gotchas)
+- [POPs Relacionados](#pops-relacionados)
 
 > **Módulo**: Comercial/Financeiro
 > **Páginas de ajuda**: 2 páginas consolidadas

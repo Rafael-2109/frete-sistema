@@ -1,4 +1,41 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/relatorios/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opção 131 — Ordens de Serviço e Providências do Veículo
+
+> **Papel:** Opção 131 — Ordens de Serviço e Providências do Veículo.
+
+## Indice
+
+- [Função](#função)
+- [Quando Usar](#quando-usar)
+- [Pré-requisitos](#pré-requisitos)
+- [Processo](#processo)
+  - [Ordens de Serviço vs Ocorrências](#ordens-de-serviço-vs-ocorrências)
+  - [Relação de OSs Pendentes](#relação-de-oss-pendentes)
+- [Campos / Interface](#campos-interface)
+  - [Tela Inicial](#tela-inicial)
+  - [Tela Principal](#tela-principal)
+  - [Registro de Providências](#registro-de-providências)
+- [Fluxo de Uso](#fluxo-de-uso)
+  - [Incluir Nova OS/Ocorrência](#incluir-nova-osocorrência)
+  - [Consultar e Dar Providência](#consultar-e-dar-providência)
+  - [Gerar Relatórios](#gerar-relatórios)
+- [Integração com Outras Opções](#integração-com-outras-opções)
+- [Observações e Gotchas](#observações-e-gotchas)
+  - [Odômetro do Veículo](#odômetro-do-veículo)
+  - [Agendamento de Próximas OSs](#agendamento-de-próximas-oss)
+  - [Primeiro Agendamento](#primeiro-agendamento)
+  - [OSs Automáticas](#oss-automáticas)
+  - [Relação Veículos x Check-list](#relação-veículos-x-check-list)
+  - [Filtros de Seleção](#filtros-de-seleção)
+  - [Status PENDENTE](#status-pendente)
+- [POPs Relacionados](#pops-relacionados)
 
 > **Módulo**: Frota
 > **Páginas de ajuda**: 2 páginas consolidadas

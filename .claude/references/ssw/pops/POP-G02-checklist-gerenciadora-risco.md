@@ -1,4 +1,39 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/pops/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # POP-G02 — Checklist Gerenciadora de Risco
+
+> **Papel:** POP-G02 — Checklist Gerenciadora de Risco.
+
+## Indice
+
+- [Objetivo](#objetivo)
+- [Trigger](#trigger)
+- [Frequencia](#frequencia)
+- [Pre-requisitos](#pre-requisitos)
+- [Contexto CarVia](#contexto-carvia)
+  - [Seguradora](#seguradora)
+  - [Situacao Atual](#situacao-atual)
+- [Passo-a-Passo](#passo-a-passo)
+  - [ETAPA 1 — Verificar Configuracao SSW (Unica vez / Periodica)](#etapa-1-verificar-configuracao-ssw-unica-vez-periodica)
+  - [ETAPA 2 — Verificar Liberacoes do Veiculo (Opcao 026)](#etapa-2-verificar-liberacoes-do-veiculo-opcao-026)
+  - [ETAPA 3 — Verificar Liberacoes do Motorista (Opcao 028)](#etapa-3-verificar-liberacoes-do-motorista-opcao-028)
+  - [ETAPA 4 — Verificar Requisitos da Carga (Opcao 390)](#etapa-4-verificar-requisitos-da-carga-opcao-390)
+  - [ETAPA 5 — Registrar Consulta (Processo Fora do SSW)](#etapa-5-registrar-consulta-processo-fora-do-ssw)
+  - [ETAPA 6 — Checklist Final](#etapa-6-checklist-final)
+- [Regras da Seguradora ESSOR (A CONFIRMAR)](#regras-da-seguradora-essor-a-confirmar)
+- [Erros Comuns e Solucoes](#erros-comuns-e-solucoes)
+- [Monitoramento Diario](#monitoramento-diario)
+  - [Opcao 117 — Transacoes de WebService Recusadas](#opcao-117-transacoes-de-webservice-recusadas)
+  - [Opcao 056 — Relatorio 165 (Conferencia de Averbacao)](#opcao-056-relatorio-165-conferencia-de-averbacao)
+- [Verificacao Playwright (Parcial)](#verificacao-playwright-parcial)
+- [POPs Relacionados](#pops-relacionados)
+- [Historico de Revisoes](#historico-de-revisoes)
 
 > **Categoria**: G — Compliance, Frota e Gestao
 > **Prioridade**: P0 (URGENTE — complemento do G01)

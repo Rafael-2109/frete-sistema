@@ -1,4 +1,14 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/operacional/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opção 087 — Apreensão Fiscal de Mercadorias (TAD)
+
+> **Papel:** Opção 087 — Apreensão Fiscal de Mercadorias (TAD).
 
 > **Módulo**: Operacional — Controle Fiscal
 > **Páginas de ajuda**: 1 página consolidada

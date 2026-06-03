@@ -1,4 +1,44 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/edi/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opção 600 — EDI (Integração Eletrônica)
+
+> **Papel:** Opção 600 — EDI (Integração Eletrônica).
+
+## Indice
+
+- [Função](#função)
+- [Quando Usar](#quando-usar)
+- [Pré-requisitos](#pré-requisitos)
+- [Tipos de EDI Disponíveis](#tipos-de-edi-disponíveis)
+  - [EDI — NOTFIS (Recepção de Notas Fiscais)](#edi-notfis-recepção-de-notas-fiscais)
+  - [EDI — Layouts Específicos por Cliente](#edi-layouts-específicos-por-cliente)
+  - [EDI — EMBARCADOS](#edi-embarcados)
+  - [EDI — COBRANÇA](#edi-cobrança)
+  - [EDI — OCORRÊNCIAS](#edi-ocorrências)
+  - [EDI — Arquivos Especiais](#edi-arquivos-especiais)
+- [Campos / Interface](#campos-interface)
+- [Fluxo de Uso](#fluxo-de-uso)
+  - [Recepção de Arquivos NOTFIS](#recepção-de-arquivos-notfis)
+  - [Geração de Arquivos (EMBARCADOS / COBRANÇA / OCORRÊNCIAS)](#geração-de-arquivos-embarcados-cobrança-ocorrências)
+  - [Geração Automática (Recomendado)](#geração-automática-recomendado)
+- [Integração com Outras Opções](#integração-com-outras-opções)
+- [Observações e Gotchas](#observações-e-gotchas)
+  - [Recuperação de Arquivo Danificado](#recuperação-de-arquivo-danificado)
+  - [Registros Obrigatórios PROCEDA NOTFIS](#registros-obrigatórios-proceda-notfis)
+  - [Atualização de Cadastro](#atualização-de-cadastro)
+  - [Valores Máximos](#valores-máximos)
+  - [Apagamento de NFs](#apagamento-de-nfs)
+  - [Histórico](#histórico)
+  - [Processo Recomendado](#processo-recomendado)
+  - [Benefícios da Automação (Opção 603)](#benefícios-da-automação-opção-603)
+  - [Métodos de Recepção/Envio](#métodos-de-recepçãoenvio)
+  - [Observação Importante](#observação-importante)
 
 > **Módulo**: EDI
 > **Páginas de ajuda**: 87 páginas consolidadas (217KB)

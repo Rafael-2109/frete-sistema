@@ -1,4 +1,14 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/operacional/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opcao 055 — Lembretes do Cliente
+
+> **Papel:** Opcao 055 — Lembretes do Cliente.
 
 > **Modulo**: Cadastro — Clientes
 > **Paginas de ajuda**: Nao localizado arquivo consolidado

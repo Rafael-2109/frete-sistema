@@ -1,4 +1,34 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/fiscal/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opcao 515 — SPED Contribuicoes (PIS/COFINS)
+
+> **Papel:** Opcao 515 — SPED Contribuicoes (PIS/COFINS).
+
+## Indice
+
+- [Funcao](#funcao)
+- [Diferenca entre Opcao 512 e Opcao 515](#diferenca-entre-opcao-512-e-opcao-515)
+- [Quando Usar](#quando-usar)
+- [Pre-requisitos](#pre-requisitos)
+- [Campos / Interface](#campos-interface)
+  - [Campos Principais](#campos-principais)
+  - [Dados do Contabilista](#dados-do-contabilista)
+  - [Acoes Adicionais](#acoes-adicionais)
+  - [Campos Inferidos vs Reais](#campos-inferidos-vs-reais)
+- [Fluxo de Uso](#fluxo-de-uso)
+  - [Geracao do Arquivo](#geracao-do-arquivo)
+  - [Validacao](#validacao)
+  - [Transmissao](#transmissao)
+- [Integracao com Outras Opcoes](#integracao-com-outras-opcoes)
+- [Observacoes e Gotchas](#observacoes-e-gotchas)
+- [POPs Relacionados](#pops-relacionados)
+- [Status CarVia](#status-carvia)
 
 > **Modulo**: Fiscal / IR e PIS/COFINS (menu: Fiscal > IR e PIS/COFINS > 515)
 > **Status CarVia**: EXTERNO (contabilidade externa executa)

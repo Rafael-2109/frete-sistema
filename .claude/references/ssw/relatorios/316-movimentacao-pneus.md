@@ -1,4 +1,14 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/relatorios/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opção 132 — Pneus do Veículo (Movimentação)
+
+> **Papel:** Opção 132 — Pneus do Veículo (Movimentação).
 
 > **Módulo**: Frota
 > **Páginas de ajuda**: 1 página consolidada

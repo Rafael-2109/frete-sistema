@@ -1,4 +1,35 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/cadastros/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opção 404 — Cadastro de Setores de Coleta/Entrega
+
+> **Papel:** Opção 404 — Cadastro de Setores de Coleta/Entrega.
+
+## Indice
+
+- [Função](#função)
+- [Quando Usar](#quando-usar)
+- [Pré-requisitos](#pré-requisitos)
+- [Campos / Interface](#campos-interface)
+- [Fluxo de Uso](#fluxo-de-uso)
+  - [Cadastrar Setores em uma Cidade](#cadastrar-setores-em-uma-cidade)
+  - [Usar Setores na Remuneração de Agregados](#usar-setores-na-remuneração-de-agregados)
+  - [Filtrar Relatórios por Setor](#filtrar-relatórios-por-setor)
+- [Integração com Outras Opções](#integração-com-outras-opções)
+- [Observações e Gotchas](#observações-e-gotchas)
+  - [Setor 999 (Padrão)](#setor-999-padrão)
+  - [Faixas de CEP](#faixas-de-cep)
+  - [Remuneração por Setor (opção 409)](#remuneração-por-setor-opção-409)
+  - [Taxa de Difícil Acesso (TDA)](#taxa-de-difícil-acesso-tda)
+  - [Relatórios](#relatórios)
+  - [CTRCs Unitizados](#ctrcs-unitizados)
+  - [Unidades do Mesmo Armazém](#unidades-do-mesmo-armazém)
+- [POPs Relacionados](#pops-relacionados)
 
 > **Módulo**: Cadastros
 > **Páginas de ajuda**: 3 páginas consolidadas

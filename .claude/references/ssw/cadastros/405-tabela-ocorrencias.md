@@ -1,4 +1,43 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/cadastros/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opção 405 — Cadastro de Ocorrências
+
+> **Papel:** Opção 405 — Cadastro de Ocorrências.
+
+## Indice
+
+- [Função](#função)
+- [Quando Usar](#quando-usar)
+- [Pré-requisitos](#pré-requisitos)
+- [Campos / Interface](#campos-interface)
+  - [Tela Principal](#tela-principal)
+- [Fluxo de Uso](#fluxo-de-uso)
+  - [Cadastrar Nova Ocorrência](#cadastrar-nova-ocorrência)
+  - [Vincular Código SSW](#vincular-código-ssw)
+  - [Configurar Tabela EDI - Recebe (Opção 927)](#configurar-tabela-edi---recebe-opção-927)
+  - [Configurar Tabela EDI - Envia (Opção 908)](#configurar-tabela-edi---envia-opção-908)
+  - [Atribuir Ocorrências a CTRCs](#atribuir-ocorrências-a-ctrcs)
+- [Integração com Outras Opções](#integração-com-outras-opções)
+- [Observações e Gotchas](#observações-e-gotchas)
+  - [Códigos SSW com Características Especiais](#códigos-ssw-com-características-especiais)
+  - [Imagem do Comprovante](#imagem-do-comprovante)
+  - [Ocorrências em CTRCs Unitizados](#ocorrências-em-ctrcs-unitizados)
+  - [Ocorrências em Lotes](#ocorrências-em-lotes)
+  - [Ocorrências Gravadas como Instruções](#ocorrências-gravadas-como-instruções)
+  - [Ocorrências Finalizadoras](#ocorrências-finalizadoras)
+  - [Estorno de Ocorrência](#estorno-de-ocorrência)
+  - [Evento de Insucesso no CT-e](#evento-de-insucesso-no-ct-e)
+  - [Configuração de CTRCs Complementares Automáticos](#configuração-de-ctrcs-complementares-automáticos)
+  - [Rastreamento e E-mail](#rastreamento-e-e-mail)
+  - [Integração EDI](#integração-edi)
+  - [Remuneração de Agregados](#remuneração-de-agregados)
+- [POPs Relacionados](#pops-relacionados)
 
 > **Módulo**: Cadastros
 > **Páginas de ajuda**: 10 páginas consolidadas

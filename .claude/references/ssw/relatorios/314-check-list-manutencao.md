@@ -1,4 +1,34 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/relatorios/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opção 314 — Cadastro de Check-list de Manutenção
+
+> **Papel:** Opção 314 — Cadastro de Check-list de Manutenção.
+
+## Indice
+
+- [Função](#função)
+- [Quando Usar](#quando-usar)
+- [Pré-requisitos](#pré-requisitos)
+- [Processo](#processo)
+- [Campos / Interface](#campos-interface)
+  - [Novo Check-list](#novo-check-list)
+- [Fluxo de Uso](#fluxo-de-uso)
+- [Exemplo de Check-list](#exemplo-de-check-list)
+- [Integração com Outras Opções](#integração-com-outras-opções)
+- [Observações e Gotchas](#observações-e-gotchas)
+  - [Numeração Automática](#numeração-automática)
+  - [Periodicidade (Km)](#periodicidade-km)
+  - [Base para Itens](#base-para-itens)
+  - [Largura de Texto](#largura-de-texto)
+  - [Vinculação aos Veículos](#vinculação-aos-veículos)
+  - [Diferença Check-list vs Planos de Manutenção](#diferença-check-list-vs-planos-de-manutenção)
+- [POPs Relacionados](#pops-relacionados)
 
 > **Módulo**: Frota
 > **Páginas de ajuda**: 2 páginas consolidadas

@@ -1,4 +1,27 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/cadastros/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opção 944 — Manutenção da Tabela de CEPs
+
+> **Papel:** Opção 944 — Manutenção da Tabela de CEPs.
+
+## Indice
+
+- [Função](#função)
+- [Quando Usar](#quando-usar)
+- [Pré-requisitos](#pré-requisitos)
+- [Campos / Interface](#campos-interface)
+- [Fluxo de Uso](#fluxo-de-uso)
+  - [Alteração de CEP](#alteração-de-cep)
+  - [Inclusão de nova cidade](#inclusão-de-nova-cidade)
+- [Integração com Outras Opções](#integração-com-outras-opções)
+- [Observações e Gotchas](#observações-e-gotchas)
+- [POPs Relacionados](#pops-relacionados)
 
 > **Módulo**: Cadastros
 > **Páginas de ajuda**: 1 página consolidada (referência da opção 044 de consulta)

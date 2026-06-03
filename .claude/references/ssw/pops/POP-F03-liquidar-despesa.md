@@ -1,4 +1,31 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/pops/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # POP-F03 — Liquidar/Pagar Despesa
+
+> **Papel:** POP-F03 — Liquidar/Pagar Despesa.
+
+## Indice
+
+- [Objetivo](#objetivo)
+- [Trigger](#trigger)
+- [Frequencia](#frequencia)
+- [Pre-requisitos](#pre-requisitos)
+- [Passo-a-Passo](#passo-a-passo)
+  - [CENARIO A — Liquidar Uma Despesa](#cenario-a-liquidar-uma-despesa)
+  - [CENARIO B — Liquidar Diversas Despesas (Lote)](#cenario-b-liquidar-diversas-despesas-lote)
+  - [CENARIO C — Liquidar via Arquivo Bancario (Opcao 522)](#cenario-c-liquidar-via-arquivo-bancario-opcao-522)
+- [Estorno de Liquidacao](#estorno-de-liquidacao)
+- [Fluxo Completo: Despesa → Pagamento](#fluxo-completo-despesa-pagamento)
+- [Erros Comuns e Solucoes](#erros-comuns-e-solucoes)
+- [Verificacao Playwright](#verificacao-playwright)
+- [POPs Relacionados](#pops-relacionados)
+- [Historico de Revisoes](#historico-de-revisoes)
 
 > **Categoria**: F — Financeiro: Pagaveis
 > **Prioridade**: P1 (Alta — complemento do F01)

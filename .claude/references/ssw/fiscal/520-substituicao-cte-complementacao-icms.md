@@ -1,4 +1,33 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/fiscal/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opcao 520 — Substituicao de CT-e e Complementacao do ICMS
+
+> **Papel:** Opcao 520 — Substituicao de CT-e e Complementacao do ICMS.
+
+## Indice
+
+- [Funcao](#funcao)
+- [Quando Usar](#quando-usar)
+- [Pre-requisitos](#pre-requisitos)
+- [Campos / Interface](#campos-interface)
+  - [Substituicao de Frete](#substituicao-de-frete)
+  - [Emitir CTRC/NF Complementar](#emitir-ctrcnf-complementar)
+- [Fluxo de Uso](#fluxo-de-uso)
+  - [Substituicao de CT-e](#substituicao-de-ct-e)
+  - [Complementacao de ICMS/ISS](#complementacao-de-icmsiss)
+- [Integracao com Outras Opcoes](#integracao-com-outras-opcoes)
+- [Observacoes e Gotchas](#observacoes-e-gotchas)
+  - [CT-e Substituto](#ct-e-substituto)
+  - [CT-e Substituido](#ct-e-substituido)
+  - [CT-e Complementar](#ct-e-complementar)
+  - [Processos Relacionados](#processos-relacionados)
+  - [Funcoes Inativadas](#funcoes-inativadas)
 
 > **Modulo**: Fiscal
 > **Paginas de ajuda**: 1 pagina consolidada

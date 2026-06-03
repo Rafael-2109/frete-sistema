@@ -1,4 +1,14 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/comercial/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opção 206 — Chaves DANFEs Capturadas pelo SSWMobile 5 - Coleta
+
+> **Papel:** Opção 206 — Chaves DANFEs Capturadas pelo SSWMobile 5 - Coleta.
 
 > **Módulo**: Comercial / Expedição
 > **Páginas de ajuda**: 1 página consolidada

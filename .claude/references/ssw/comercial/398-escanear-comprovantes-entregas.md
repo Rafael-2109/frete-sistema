@@ -1,4 +1,14 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/comercial/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opcao 398 — Escanear Comprovantes de Entregas
+
+> **Papel:** Opcao 398 — Escanear Comprovantes de Entregas.
 
 > **Modulo**: Comercial
 > **Paginas de ajuda**: 1 pagina consolidada

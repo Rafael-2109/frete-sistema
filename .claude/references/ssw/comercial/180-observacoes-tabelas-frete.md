@@ -1,4 +1,32 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/comercial/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opcao 180 — Observacoes das Tabelas de Fretes
+
+> **Papel:** Opcao 180 — Observacoes das Tabelas de Fretes.
+
+## Indice
+
+- [Funcao](#funcao)
+- [Quando Usar](#quando-usar)
+- [Pre-requisitos](#pre-requisitos)
+- [Campos / Interface](#campos-interface)
+  - [Tela de Observacoes Genericas (Opcao 180)](#tela-de-observacoes-genericas-opcao-180)
+  - [Observacao do Cliente (Opcao 419)](#observacao-do-cliente-opcao-419)
+- [Composicao da Observacao Completa](#composicao-da-observacao-completa)
+  - [Estrutura](#estrutura)
+  - [Exemplo](#exemplo)
+- [Fluxo de Uso](#fluxo-de-uso)
+  - [Cadastrar Observacao Generica da Transportadora](#cadastrar-observacao-generica-da-transportadora)
+  - [Cadastrar Observacao Especifica do Cliente](#cadastrar-observacao-especifica-do-cliente)
+  - [Imprimir ou Enviar Tabela com Observacoes](#imprimir-ou-enviar-tabela-com-observacoes)
+- [Integracao com Outras Opcoes](#integracao-com-outras-opcoes)
+- [Observacoes e Gotchas](#observacoes-e-gotchas)
 
 > **Modulo**: Comercial
 > **Paginas de ajuda**: 2 paginas consolidadas (referencias na opcao 419)

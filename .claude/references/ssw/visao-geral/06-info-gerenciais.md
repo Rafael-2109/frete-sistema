@@ -1,4 +1,39 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/visao-geral/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # 06 — Informacoes Gerenciais (Opcao 056)
+
+> **Papel:** 06 — Informacoes Gerenciais (Opcao 056).
+
+## Indice
+
+- [Sumario](#sumario)
+- [Conceitos](#conceitos)
+- [Navegacao da Tela](#navegacao-da-tela)
+- [A. Os 6 Objetivos](#a-os-6-objetivos)
+  - [Objetivo 1 — Transportadora tem que dar LUCRO](#objetivo-1-transportadora-tem-que-dar-lucro)
+  - [Objetivo 2 — Entregas no Prazo](#objetivo-2-entregas-no-prazo)
+  - [Objetivo 3 — CTRC/Cliente tem que dar LUCRO](#objetivo-3-ctrccliente-tem-que-dar-lucro)
+  - [Objetivo 4 — Caminhao tem que dar LUCRO](#objetivo-4-caminhao-tem-que-dar-lucro)
+  - [Objetivo 5 — Unidade tem que dar LUCRO](#objetivo-5-unidade-tem-que-dar-lucro)
+  - [Objetivo 6 — Inadimplencia nao e LUCRO](#objetivo-6-inadimplencia-nao-e-lucro)
+- [B. Relatorios Comerciais](#b-relatorios-comerciais)
+  - [Monitoracao de Clientes](#monitoracao-de-clientes)
+  - [Producao de Vendedores](#producao-de-vendedores)
+  - [Comissionamento de Vendedores](#comissionamento-de-vendedores)
+  - [Comissionamento de Cotacao](#comissionamento-de-cotacao)
+- [C. Outros Relatorios](#c-outros-relatorios)
+- [Relatorios VITAIS (linha vermelha)](#relatorios-vitais-linha-vermelha)
+- [Contexto CarVia](#contexto-carvia)
+  - [Opcoes que CarVia usa](#opcoes-que-carvia-usa)
+  - [Opcoes que CarVia NAO usa (mas deveria)](#opcoes-que-carvia-nao-usa-mas-deveria)
+  - [Status de Implantacao](#status-de-implantacao)
+  - [Responsaveis](#responsaveis)
 
 > **Fonte**: `ssw0082.htm` (10/03/2025)
 > **Links internos**: 98 | **Imagens**: 4

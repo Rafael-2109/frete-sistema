@@ -1,4 +1,39 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/financeiro/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opcao 487 — Tabela TDE Externa
+
+> **Papel:** Opcao 487 — Tabela TDE Externa.
+
+## Indice
+
+- [Funcao](#funcao)
+- [Quando Usar](#quando-usar)
+- [Pre-requisitos](#pre-requisitos)
+- [Campos / Interface](#campos-interface)
+  - [Cadastro de TDE](#cadastro-de-tde)
+- [Fluxo de Uso](#fluxo-de-uso)
+  - [Cadastrar TDE por Remetente/Destinatario](#cadastrar-tde-por-remetentedestinatario)
+  - [Gerar Relatorio de Clientes com TDE (Opcao 473)](#gerar-relatorio-de-clientes-com-tde-opcao-473)
+  - [Disponibilizar TDE no Site da Transportadora](#disponibilizar-tde-no-site-da-transportadora)
+- [Integracao com Outras Opcoes](#integracao-com-outras-opcoes)
+- [Observacoes e Gotchas](#observacoes-e-gotchas)
+  - [Duas Formas de Cadastrar TDE](#duas-formas-de-cadastrar-tde)
+  - [Relatorio 473 - Combinacao](#relatorio-473---combinacao)
+  - [Raiz CNPJ (Opcao 394)](#raiz-cnpj-opcao-394)
+  - [Entrega Dificil - Multiplas Origens](#entrega-dificil---multiplas-origens)
+  - [Servicos Adicionais (Opcao 483)](#servicos-adicionais-opcao-483)
+  - [Prazo Adicional (Opcao 698)](#prazo-adicional-opcao-698)
+  - [Links Publicos para Site](#links-publicos-para-site)
+  - [Aplicacao de TDE](#aplicacao-de-tde)
+  - [Valor vs Percentual](#valor-vs-percentual)
+  - [Excel e E-mail](#excel-e-e-mail)
+- [POPs Relacionados](#pops-relacionados)
 
 > **Modulo**: Financeiro
 > **Paginas de ajuda**: 1 pagina consolidada

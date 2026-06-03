@@ -1,4 +1,14 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/embarcador/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opção 835 — Ajustar Data de Previsão de Entrega
+
+> **Papel:** Opção 835 — Ajustar Data de Previsão de Entrega.
 
 > **Módulo**: Embarcador
 > **Páginas de ajuda**: 1 página consolidada

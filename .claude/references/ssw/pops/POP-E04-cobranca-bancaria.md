@@ -1,4 +1,40 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/pops/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # POP-E04 — Emitir Cobranca Bancaria (Boleto)
+
+> **Papel:** POP-E04 — Emitir Cobranca Bancaria (Boleto).
+
+## Indice
+
+- [Objetivo](#objetivo)
+- [Trigger](#trigger)
+- [Frequencia](#frequencia)
+- [Pre-requisitos](#pre-requisitos)
+  - [Sistema](#sistema)
+  - [Operacional](#operacional)
+  - [Pessoas](#pessoas)
+- [Passo-a-Passo](#passo-a-passo)
+  - [ETAPA 1: Gerar Arquivo de Remessa (Opcao 443)](#etapa-1-gerar-arquivo-de-remessa-opcao-443)
+  - [ETAPA 2: Enviar Remessa ao Banco](#etapa-2-enviar-remessa-ao-banco)
+  - [ETAPA 3: Baixar Arquivo de Retorno](#etapa-3-baixar-arquivo-de-retorno)
+  - [ETAPA 4: Importar Retorno (Opcao 444)](#etapa-4-importar-retorno-opcao-444)
+  - [ETAPA 5: Validar Contabilizacao Automatica](#etapa-5-validar-contabilizacao-automatica)
+  - [ETAPA 6: Tratar Rejeicoes (Ocorrencia 003)](#etapa-6-tratar-rejeicoes-ocorrencia-003)
+  - [ETAPA 7: Monitorar Trocas de Arquivos (Opcao 446)](#etapa-7-monitorar-trocas-de-arquivos-opcao-446)
+  - [ETAPA 8: Conferir Valores de Retornos (Opcao 460)](#etapa-8-conferir-valores-de-retornos-opcao-460)
+  - [ETAPA 9: Configurar Protesto (Eventual)](#etapa-9-configurar-protesto-eventual)
+  - [ETAPA 10: Cancelar Boleto (Se Necessario)](#etapa-10-cancelar-boleto-se-necessario)
+- [Contexto CarVia](#contexto-carvia)
+- [Erros Comuns e Solucoes](#erros-comuns-e-solucoes)
+- [Verificacao Playwright](#verificacao-playwright)
+- [POPs Relacionados](#pops-relacionados)
+- [Historico de Revisoes](#historico-de-revisoes)
 
 **Categoria**: E — Financeiro: Recebiveis
 **Prioridade**: P2 (Media)

@@ -1,4 +1,45 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/relatorios/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opção 942 — Upload de Ajudas de Programas de EDI
+
+> **Papel:** Opção 942 — Upload de Ajudas de Programas de EDI.
+
+## Indice
+
+- [Função](#função)
+- [Quando Usar](#quando-usar)
+- [Pré-requisitos](#pré-requisitos)
+- [Processo](#processo)
+- [Como Confeccionar Documento de Ajuda](#como-confeccionar-documento-de-ajuda)
+  - [1. Obter Modelo](#1-obter-modelo)
+  - [2. Nome do Arquivo](#2-nome-do-arquivo)
+  - [3. Editar Ajuda](#3-editar-ajuda)
+  - [4. Salvar Documento](#4-salvar-documento)
+  - [5. Compactar](#5-compactar)
+  - [6. Upload](#6-upload)
+  - [7. Verificar](#7-verificar)
+- [Campos / Interface](#campos-interface)
+  - [Tela](#tela)
+- [Fluxo de Uso](#fluxo-de-uso)
+- [Integração com Outras Opções](#integração-com-outras-opções)
+- [Observações e Gotchas](#observações-e-gotchas)
+  - [Usuário Deve Entender](#usuário-deve-entender)
+  - [Nome do Arquivo](#nome-do-arquivo)
+  - [Arquivo Anexo](#arquivo-anexo)
+  - [Múltiplos Clientes](#múltiplos-clientes)
+  - [Links JavaScript](#links-javascript)
+  - [Compactação](#compactação)
+  - [Sobrescrita](#sobrescrita)
+  - [Disponibilização](#disponibilização)
+  - [Verificação](#verificação)
+  - [Modelo Obrigatório](#modelo-obrigatório)
+  - [Formato de Tabela](#formato-de-tabela)
 
 > **Módulo**: Sistema (Controle)
 > **Páginas de ajuda**: 1 página consolidada

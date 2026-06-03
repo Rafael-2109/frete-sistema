@@ -1,4 +1,35 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/pops/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # POP-C01 — Emitir CT-e para Frete Fracionado
+
+> **Papel:** POP-C01 — Emitir CT-e para Frete Fracionado.
+
+## Indice
+
+- [Objetivo](#objetivo)
+- [Trigger](#trigger)
+- [Frequencia](#frequencia)
+- [Pre-requisitos](#pre-requisitos)
+- [Passo-a-Passo](#passo-a-passo)
+  - [ETAPA 1 — Preparacao](#etapa-1-preparacao)
+  - [ETAPA 2 — Alterar Unidade para CAR](#etapa-2-alterar-unidade-para-car)
+  - [ETAPA 3 — Emitir Pre-CTRC (Opcao 004)](#etapa-3-emitir-pre-ctrc-opcao-004)
+  - [ETAPA 4 — Verificar Simulacao](#etapa-4-verificar-simulacao)
+  - [ETAPA 5 — Gravar Pre-CTRC](#etapa-5-gravar-pre-ctrc)
+  - [ETAPA 6 — Enviar CT-e ao SEFAZ (Opcao 007)](#etapa-6-enviar-ct-e-ao-sefaz-opcao-007)
+  - [ETAPA 7 — Imprimir CT-e (se necessario)](#etapa-7-imprimir-ct-e-se-necessario)
+  - [ETAPA 8 — Proximo Passo](#etapa-8-proximo-passo)
+- [Diferenca entre Fracionado e Carga Direta](#diferenca-entre-fracionado-e-carga-direta)
+- [Erros Comuns e Solucoes](#erros-comuns-e-solucoes)
+- [Verificacao Playwright](#verificacao-playwright)
+- [POPs Relacionados](#pops-relacionados)
+- [Historico de Revisoes](#historico-de-revisoes)
 
 > **Categoria**: C — Operacional: Emissao
 > **Prioridade**: P1 (Alta — processo mais frequente)

@@ -1,4 +1,30 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/visao-geral/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # 03 — Comercial
+
+> **Papel:** 03 — Comercial.
+
+## Indice
+
+- [Sumario](#sumario)
+- [1. Cliente](#1-cliente)
+- [2. Vendas](#2-vendas)
+- [3. Fretes — Hierarquia de Calculo](#3-fretes-hierarquia-de-calculo)
+  - [Tipos de Tabela do Cliente](#tipos-de-tabela-do-cliente)
+  - [Regras de selecao de tabela](#regras-de-selecao-de-tabela)
+  - [Gestao de tabelas](#gestao-de-tabelas)
+- [4. Vendedor](#4-vendedor)
+- [5. Resultado Comercial](#5-resultado-comercial)
+- [Contexto CarVia](#contexto-carvia)
+  - [Opcoes que CarVia usa](#opcoes-que-carvia-usa)
+  - [Opcoes que CarVia NAO usa (mas deveria)](#opcoes-que-carvia-nao-usa-mas-deveria)
+  - [Responsaveis](#responsaveis)
 
 > **Fonte**: `visao_geral_comercial.htm` (16/04/2022)
 > **Links internos**: 44 | **Imagens**: 1

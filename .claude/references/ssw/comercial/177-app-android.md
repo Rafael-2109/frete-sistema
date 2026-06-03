@@ -1,4 +1,32 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/comercial/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opcao 177 — App Android (SSW Mobile)
+
+> **Papel:** Opcao 177 — App Android (SSW Mobile).
+
+## Indice
+
+- [Funcao](#funcao)
+- [Quando Usar](#quando-usar)
+- [Pre-requisitos](#pre-requisitos)
+- [Funcionalidades Disponiveis](#funcionalidades-disponiveis)
+  - [Opcao 152 — Enderecamento de CTRC no Armazem (Android)](#opcao-152-enderecamento-de-ctrc-no-armazem-android)
+  - [Opcao 620 — Montagem de Diversos Paletes e Gaiolas (Android)](#opcao-620-montagem-de-diversos-paletes-e-gaiolas-android)
+- [Campos / Interface](#campos-interface)
+  - [App Android (Opcao 177)](#app-android-opcao-177)
+  - [Opcao 620 — Tela Principal (Android)](#opcao-620-tela-principal-android)
+- [Fluxo de Uso](#fluxo-de-uso)
+  - [Instalacao do App Android](#instalacao-do-app-android)
+  - [Enderecamento com Android (Opcao 152)](#enderecamento-com-android-opcao-152)
+  - [Separacao com Android (Opcao 620)](#separacao-com-android-opcao-620)
+- [Integracao com Outras Opcoes](#integracao-com-outras-opcoes)
+- [Observacoes e Gotchas](#observacoes-e-gotchas)
 
 > **Modulo**: Comercial
 > **Paginas de ajuda**: 2 paginas consolidadas (referencias nas opcoes 152 e 620)

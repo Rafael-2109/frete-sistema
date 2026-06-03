@@ -1,4 +1,37 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/pops/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # POP-D03 — Criar Manifesto e Emitir MDF-e
+
+> **Papel:** POP-D03 — Criar Manifesto e Emitir MDF-e.
+
+## Indice
+
+- [Objetivo](#objetivo)
+- [Trigger](#trigger)
+- [Frequencia](#frequencia)
+- [Pre-requisitos](#pre-requisitos)
+  - [Cadastros obrigatorios](#cadastros-obrigatorios)
+  - [Documentos obrigatorios](#documentos-obrigatorios)
+  - [Configuracoes SSW](#configuracoes-ssw)
+- [Passo-a-Passo](#passo-a-passo)
+  - [PARTE 1 — Criar Manifesto Operacional (Opcao 020)](#parte-1-criar-manifesto-operacional-opcao-020)
+  - [PARTE 2 — Dar Saida e Emitir MDF-e (Opcao 025)](#parte-2-dar-saida-e-emitir-mdf-e-opcao-025)
+  - [PARTE 3 — Apos o Embarque](#parte-3-apos-o-embarque)
+- [Regras do MDF-e](#regras-do-mdf-e)
+  - [Agrupamento por UF destino](#agrupamento-por-uf-destino)
+  - [Limite de CT-es](#limite-de-ct-es)
+  - [Cancelamento](#cancelamento)
+  - [Duplicidade](#duplicidade)
+- [Erros Comuns e Solucoes](#erros-comuns-e-solucoes)
+- [Verificacao Playwright](#verificacao-playwright)
+- [POPs Relacionados](#pops-relacionados)
+- [Historico de Revisoes](#historico-de-revisoes)
 
 > **Categoria**: D — Operacional: Transporte e Entrega
 > **Prioridade**: P0 (URGENTE — obrigatorio interestadual, nunca fizeram)

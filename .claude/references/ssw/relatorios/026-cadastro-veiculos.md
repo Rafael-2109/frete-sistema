@@ -1,4 +1,14 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/relatorios/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opção 026 — Cadastro de Veículos
+
+> **Papel:** Opção 026 — Cadastro de Veículos.
 
 > **Módulo**: Frota
 > **Páginas de ajuda**: 4 páginas consolidadas (referências indiretas)

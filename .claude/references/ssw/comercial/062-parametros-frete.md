@@ -1,4 +1,29 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/comercial/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opcao 062 — Parametros de Frete
+
+> **Papel:** Opcao 062 — Parametros de Frete.
+
+## Indice
+
+- [Funcao](#funcao)
+- [Quando Usar](#quando-usar)
+- [Pre-requisitos](#pre-requisitos)
+- [Campos / Interface — VERIFICADOS](#campos-interface-verificados)
+  - [Tela de Filtros (unica tela)](#tela-de-filtros-unica-tela)
+  - [Acoes Disponiveis](#acoes-disponiveis)
+- [Relacao com Opcoes Similares](#relacao-com-opcoes-similares)
+- [Fluxo de Uso](#fluxo-de-uso)
+- [Integracao com Outras Opcoes](#integracao-com-outras-opcoes)
+- [Observacoes e Gotchas](#observacoes-e-gotchas)
+- [POPs Relacionados](#pops-relacionados)
+- [Status CarVia](#status-carvia)
 
 > **Modulo**: Gestao / Resultado (menu: Gestão > Resultado > 062)
 > **Status CarVia**: ACESSIVEL — tela e um relatorio de filtro, NAO configuracao de parametros

@@ -1,4 +1,14 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/embarcador/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opção 813 — Avaliação da Equipe SSW
+
+> **Papel:** Opção 813 — Avaliação da Equipe SSW.
 
 > **Módulo**: Embarcador (Interno SSW)
 > **Páginas de ajuda**: 2 páginas consolidadas

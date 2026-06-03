@@ -1,4 +1,14 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/operacional/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opção 031 — CTRCs com Determinada Ocorrência
+
+> **Papel:** Opção 031 — CTRCs com Determinada Ocorrência.
 
 > **Módulo**: Operacional — Controle de Ocorrências
 > **Páginas de ajuda**: 3 páginas consolidadas

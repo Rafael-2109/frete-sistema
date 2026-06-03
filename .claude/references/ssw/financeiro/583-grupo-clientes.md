@@ -1,4 +1,46 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/financeiro/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opção 583 — Grupo de Clientes
+
+> **Papel:** Opção 583 — Grupo de Clientes.
+
+## Indice
+
+- [Função](#função)
+- [Quando Usar](#quando-usar)
+- [Pré-requisitos](#pré-requisitos)
+- [Campos / Interface](#campos-interface)
+  - [Cadastro do Grupo](#cadastro-do-grupo)
+- [Fluxo de Uso](#fluxo-de-uso)
+  - [Configuração Inicial](#configuração-inicial)
+  - [Uso em Operações](#uso-em-operações)
+- [Integração com Outras Opções](#integração-com-outras-opções)
+  - [Faturamento e Cobrança](#faturamento-e-cobrança)
+  - [Relatórios Gerenciais (opção 056)](#relatórios-gerenciais-opção-056)
+  - [Performance e Análise](#performance-e-análise)
+  - [Operações em Lote](#operações-em-lote)
+  - [Cadastros Relacionados](#cadastros-relacionados)
+  - [Análise de Inadimplência](#análise-de-inadimplência)
+  - [Outras Opções](#outras-opções)
+- [Observações e Gotchas](#observações-e-gotchas)
+  - [CTRCs Considerados nos Relatórios](#ctrcs-considerados-nos-relatórios)
+  - [Períodos e Datas](#períodos-e-datas)
+  - [Performance de Entregas (Opção 106)](#performance-de-entregas-opção-106)
+  - [Produção Mensal (Opção 511)](#produção-mensal-opção-511)
+  - [Pesquisa de Ocorrências (Opção 116)](#pesquisa-de-ocorrências-opção-116)
+  - [Notificações do Cliente (Opção 153)](#notificações-do-cliente-opção-153)
+  - [Faturamento Consolidado](#faturamento-consolidado)
+  - [Crescimento do Frete](#crescimento-do-frete)
+  - [Observações Financeiras](#observações-financeiras)
+  - [Instruções Gerais vs Bancárias](#instruções-gerais-vs-bancárias)
+  - [Pontos de Atenção](#pontos-de-atenção)
+- [POPs Relacionados](#pops-relacionados)
 
 > **Módulo**: Financeiro
 > **Páginas de ajuda**: 7 páginas consolidadas

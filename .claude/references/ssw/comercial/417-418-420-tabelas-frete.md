@@ -1,4 +1,45 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/comercial/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opcoes 417, 418, 420 — Tabelas de Frete
+
+> **Papel:** Opcoes 417, 418, 420 — Tabelas de Frete.
+
+## Indice
+
+- [Funcao](#funcao)
+- [Tipos de Tabelas](#tipos-de-tabelas)
+  - [Opcao 417 - Tabela Combinada](#opcao-417---tabela-combinada)
+  - [Opcao 418 - Tabela Percentual](#opcao-418---tabela-percentual)
+  - [Opcao 420 - Tabela por Faixa de Peso](#opcao-420---tabela-por-faixa-de-peso)
+  - [Opcao 427 - Tabela de Rota](#opcao-427---tabela-de-rota)
+  - [Opcao 923 - Tabela NTC (Referencia)](#opcao-923---tabela-ntc-referencia)
+- [Quando Usar](#quando-usar)
+- [Pre-requisitos](#pre-requisitos)
+- [Campos Comuns (Todas Tabelas)](#campos-comuns-todas-tabelas)
+- [Adicionais de Frete (Configurados nas Tabelas)](#adicionais-de-frete-configurados-nas-tabelas)
+  - [Taxas Percentuais](#taxas-percentuais)
+  - [Taxas Fixas/Condicionais](#taxas-fixascondicionais)
+  - [Servicos Adicionais](#servicos-adicionais)
+- [Integracao com Outras Opcoes](#integracao-com-outras-opcoes)
+- [Observacoes e Gotchas](#observacoes-e-gotchas)
+  - [Prioridades de Tabelas](#prioridades-de-tabelas)
+  - [FOB Dirigido](#fob-dirigido)
+  - [Simulacao](#simulacao)
+  - [Impostos Repassados](#impostos-repassados)
+  - [TDE (Taxa Dificil Entrega)](#tde-taxa-dificil-entrega)
+  - [TRT (Taxa Restricao Transito)](#trt-taxa-restricao-transito)
+  - [Cubagem](#cubagem)
+  - [Base de Calculo](#base-de-calculo)
+  - [Replicacao e Importacao](#replicacao-e-importacao)
+  - [Relatorios](#relatorios)
+  - [Consultas](#consultas)
+- [POPs Relacionados](#pops-relacionados)
 
 > **Modulo**: Comercial
 > **Referencias**: Opcoes 417 (Combinada), 418 (Percentual), 420 (Faixa Peso), 427 (Rota), 923 (NTC)

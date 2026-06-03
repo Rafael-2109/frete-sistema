@@ -1,4 +1,35 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/pops/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # POP-B05 — Gerar Relatórios Gerenciais
+
+> **Papel:** POP-B05 — Gerar Relatórios Gerenciais.
+
+## Indice
+
+- [Objetivo](#objetivo)
+- [Trigger](#trigger)
+- [Frequência](#frequência)
+- [Pré-requisitos](#pré-requisitos)
+- [Passo-a-Passo](#passo-a-passo)
+  - [ETAPA 1 — Acessar opção 056 (Informações Gerenciais)](#etapa-1-acessar-opção-056-informações-gerenciais)
+  - [ETAPA 2 — Revisar relatório 011 (CTRCs Atrasados) — DIÁRIO](#etapa-2-revisar-relatório-011-ctrcs-atrasados-diário)
+  - [ETAPA 3 — Revisar relatório 031 (CTRCs com Prejuízo) — DIÁRIO](#etapa-3-revisar-relatório-031-ctrcs-com-prejuízo-diário)
+  - [ETAPA 4 — Revisar relatório 040 (Faturas Vencidas) — SEMANAL](#etapa-4-revisar-relatório-040-faturas-vencidas-semanal)
+  - [ETAPA 5 — Revisar relatório 075 (Monitoração Clientes) — SEMANAL](#etapa-5-revisar-relatório-075-monitoração-clientes-semanal)
+  - [ETAPA 6 — Revisar relatórios mensais 001 e 168 (Situação Geral e Resultado Unidade)](#etapa-6-revisar-relatórios-mensais-001-e-168-situação-geral-e-resultado-unidade)
+  - [ETAPA 7 — Criar planilha de acompanhamento (primeira execução)](#etapa-7-criar-planilha-de-acompanhamento-primeira-execução)
+  - [ETAPA 8 — Integrar relatórios no menu principal SSW (Big Numbers)](#etapa-8-integrar-relatórios-no-menu-principal-ssw-big-numbers)
+- [Contexto CarVia](#contexto-carvia)
+- [Erros Comuns e Soluções](#erros-comuns-e-soluções)
+- [Verificação Playwright](#verificação-playwright)
+- [POPs Relacionados](#pops-relacionados)
+- [Histórico de Revisões](#histórico-de-revisões)
 
 **Categoria**: B — Comercial e Precificação
 **Prioridade**: P2 (Média — essencial mas depende da operação estar madura)

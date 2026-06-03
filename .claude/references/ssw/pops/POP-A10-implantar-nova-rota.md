@@ -1,4 +1,44 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/pops/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # POP-A10 — Implantar Nova Rota Completa
+
+> **Papel:** POP-A10 — Implantar Nova Rota Completa.
+
+## Indice
+
+- [Objetivo](#objetivo)
+- [Trigger](#trigger)
+- [Frequencia](#frequencia)
+- [Pre-requisitos](#pre-requisitos)
+- [Passo-a-Passo](#passo-a-passo)
+  - [ETAPA 1 — Identificar Parceiro e Extrair Dados do Sistema Fretes](#etapa-1-identificar-parceiro-e-extrair-dados-do-sistema-fretes)
+  - [ETAPA 2 — Criar Unidade do Parceiro (Opcao 401)](#etapa-2-criar-unidade-do-parceiro-opcao-401)
+  - [ETAPA 3 — Cadastrar Cidades Atendidas (Opcao 402)](#etapa-3-cadastrar-cidades-atendidas-opcao-402)
+  - [ETAPA 4 — Cadastrar Rota (Opcao 403)](#etapa-4-cadastrar-rota-opcao-403)
+  - [ETAPA 5 — Cadastrar Fornecedor (Opcao 478)](#etapa-5-cadastrar-fornecedor-opcao-478)
+  - [ETAPA 6 — Cadastrar Custos/Comissao (Opcao 408)](#etapa-6-cadastrar-custoscomissao-opcao-408)
+  - [ETAPA 7 — Cadastrar Tabelas de Preco CarVia (Opcao 420)](#etapa-7-cadastrar-tabelas-de-preco-carvia-opcao-420)
+  - [ETAPA 8 — Verificar Implantacao (Cotacao 002)](#etapa-8-verificar-implantacao-cotacao-002)
+- [Checklist Final](#checklist-final)
+- [Contexto CarVia](#contexto-carvia)
+- [Erros Comuns e Solucoes](#erros-comuns-e-solucoes)
+- [Verificacao Playwright](#verificacao-playwright)
+- [Exemplo Completo: Campo Grande/MS (Alemar)](#exemplo-completo-campo-grandems-alemar)
+- [POPs Relacionados](#pops-relacionados)
+- [Gotchas Operacionais (descobertos em Feb/2026)](#gotchas-operacionais-descobertos-em-feb2026)
+  - [478: Campo `inclusao=S` e bloqueante](#478-campo-inclusaos-e-bloqueante)
+  - [478: CCF NAO e prerequisito para 408](#478-ccf-nao-e-prerequisito-para-408)
+  - [478: Validacao de DDD e telefone](#478-validacao-de-ddd-e-telefone)
+  - [478: Acentuacao nas mensagens de erro](#478-acentuacao-nas-mensagens-de-erro)
+  - [408: Popup fecha = sucesso](#408-popup-fecha-sucesso)
+  - [Ordem obrigatoria: 478 → 485 → 408](#ordem-obrigatoria-478-485-408)
+- [Historico de Revisoes](#historico-de-revisoes)
 
 > **Categoria**: A — Implantacao e Cadastros
 > **Prioridade**: P1 (Alta — processo frequente e complexo)

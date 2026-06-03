@@ -1,4 +1,14 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/comercial/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opcao 191 — Instrucoes de Clientes (Embarcador)
+
+> **Papel:** Opcao 191 — Instrucoes de Clientes (Embarcador).
 
 > **Modulo**: Comercial
 > **Paginas de ajuda**: 1 pagina consolidada (referencia na opcao 192)

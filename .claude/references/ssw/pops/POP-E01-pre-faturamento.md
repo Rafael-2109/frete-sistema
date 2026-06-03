@@ -1,4 +1,33 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/pops/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # POP-E01 — Verificar CTRCs Disponiveis para Faturamento
+
+> **Papel:** POP-E01 — Verificar CTRCs Disponiveis para Faturamento.
+
+## Indice
+
+- [Objetivo](#objetivo)
+- [Trigger](#trigger)
+- [Frequencia](#frequencia)
+- [Pre-requisitos](#pre-requisitos)
+- [Passo-a-Passo](#passo-a-passo)
+  - [ETAPA 1 — Acessar Opcao 435](#etapa-1-acessar-opcao-435)
+  - [ETAPA 2 — Configurar Filtros](#etapa-2-configurar-filtros)
+  - [ETAPA 3 — Analisar Resultado](#etapa-3-analisar-resultado)
+  - [ETAPA 4 — Resolver Pendencias](#etapa-4-resolver-pendencias)
+  - [ETAPA 5 — Exportar Relatorio (Opcional)](#etapa-5-exportar-relatorio-opcional)
+  - [ETAPA 6 — Prosseguir para Faturamento](#etapa-6-prosseguir-para-faturamento)
+- [Indicadores de Saude](#indicadores-de-saude)
+- [Erros Comuns e Solucoes](#erros-comuns-e-solucoes)
+- [Verificacao Playwright](#verificacao-playwright)
+- [POPs Relacionados](#pops-relacionados)
+- [Historico de Revisoes](#historico-de-revisoes)
 
 > **Categoria**: E — Financeiro: Recebiveis
 > **Prioridade**: P1 (Alta — verificacao antes de faturar)

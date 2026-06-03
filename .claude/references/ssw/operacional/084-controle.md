@@ -1,4 +1,14 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/operacional/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opção 084 — Informar Pesos e Volumes de NFs (opção 148 — Resultados de Cubagem/Pesagem)
+
+> **Papel:** Opção 084 — Informar Pesos e Volumes de NFs (opção 148 — Resultados de Cubagem/Pesagem).
 
 > **Módulo**: Operacional — Controle de Cubagem e Pesagem
 > **Páginas de ajuda**: 1 página consolidada (opção 148)

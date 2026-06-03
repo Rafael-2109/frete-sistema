@@ -1,4 +1,34 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/operacional/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opcao 049 — Controle (Saiu para Entrega / Emissao Manual CTRCs)
+
+> **Papel:** Opcao 049 — Controle (Saiu para Entrega / Emissao Manual CTRCs).
+
+## Indice
+
+- [Funcao](#funcao)
+- [Quando Usar](#quando-usar)
+- [Pre-requisitos](#pre-requisitos)
+- [Funcao 1: Saiu para Entrega](#funcao-1-saiu-para-entrega)
+  - [Campos / Interface](#campos-interface)
+  - [Fluxo](#fluxo)
+  - [Cidade da Ocorrencia](#cidade-da-ocorrencia)
+- [Funcao 2: Emissao Manual CTRCs](#funcao-2-emissao-manual-ctrcs)
+  - [Campos / Interface](#campos-interface)
+  - [Fluxo](#fluxo)
+- [Integracao com Outras Opcoes](#integracao-com-outras-opcoes)
+- [Observacoes e Gotchas](#observacoes-e-gotchas)
+  - [Saiu para Entrega](#saiu-para-entrega)
+  - [Emissao Manual CTRC](#emissao-manual-ctrc)
+  - [Agrupamento NF](#agrupamento-nf)
+  - [Redespacho/Local Entrega](#redespacholocal-entrega)
+- [POPs Relacionados](#pops-relacionados)
 
 > **Modulo**: Operacional — Coleta/Entrega
 > **Paginas de ajuda**: 1 pagina consolidada

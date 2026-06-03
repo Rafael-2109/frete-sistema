@@ -1,4 +1,30 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/pops/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # POP-F01 — Lancar Contas a Pagar (Despesa)
+
+> **Papel:** POP-F01 — Lancar Contas a Pagar (Despesa).
+
+## Indice
+
+- [Objetivo](#objetivo)
+- [Trigger](#trigger)
+- [Frequencia](#frequencia)
+- [Pre-requisitos](#pre-requisitos)
+- [Passo-a-Passo](#passo-a-passo)
+  - [METODO A — Inclusao Manual](#metodo-a-inclusao-manual)
+  - [METODO B — Importacao de NF-e Disponivel](#metodo-b-importacao-de-nf-e-disponivel)
+- [CCF — Integracao Automatica](#ccf-integracao-automatica)
+- [Contexto CarVia](#contexto-carvia)
+- [Erros Comuns e Solucoes](#erros-comuns-e-solucoes)
+- [Verificacao Playwright](#verificacao-playwright)
+- [POPs Relacionados](#pops-relacionados)
+- [Historico de Revisoes](#historico-de-revisoes)
 
 > **Categoria**: F — Financeiro: Pagaveis
 > **Prioridade**: P1 (Alta — pagar transportadoras no SSW)

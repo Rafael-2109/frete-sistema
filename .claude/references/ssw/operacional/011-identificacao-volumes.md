@@ -1,4 +1,41 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/operacional/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opcao 011 — Identificacao de Volumes
+
+> **Papel:** Opcao 011 — Identificacao de Volumes.
+
+## Indice
+
+- [Funcao](#funcao)
+- [Quando Usar](#quando-usar)
+- [Pre-requisitos](#pre-requisitos)
+- [Campos / Interface](#campos-interface)
+  - [Opcao 113 — Identificacao de Volumes Manifestados](#opcao-113-identificacao-de-volumes-manifestados)
+  - [Opcao 115 — Atualiza Dados da DANFE](#opcao-115-atualiza-dados-da-danfe)
+  - [Opcao 118 — Liberacao para Etiquetagem](#opcao-118-liberacao-para-etiquetagem)
+  - [Opcao 168 — Carregamento do SSWCONF](#opcao-168-carregamento-do-sswconf)
+  - [Opcao 185 — Cubagem com Regua SSW](#opcao-185-cubagem-com-regua-ssw)
+- [Fluxo de Uso](#fluxo-de-uso)
+  - [Processo Simplificado (sem SSWBar)](#processo-simplificado-sem-sswbar)
+  - [Processo Completo com Etiquetas do Cliente](#processo-completo-com-etiquetas-do-cliente)
+  - [Processo Completo com Etiquetas Sequenciais SSW](#processo-completo-com-etiquetas-sequenciais-ssw)
+  - [Complementar Dados de DANFEs (opcao 115)](#complementar-dados-de-danfes-opcao-115)
+  - [Conferencia Off-line com SSWCONF (opcao 168)](#conferencia-off-line-com-sswconf-opcao-168)
+  - [Cubagem com Regua SSW (opcao 185)](#cubagem-com-regua-ssw-opcao-185)
+- [Integracao com Outras Opcoes](#integracao-com-outras-opcoes)
+- [Observacoes e Gotchas](#observacoes-e-gotchas)
+  - [Limites e Validacoes](#limites-e-validacoes)
+  - [Etiquetas](#etiquetas)
+  - [Complemento de Dados (opcao 115)](#complemento-de-dados-opcao-115)
+  - [SSWCONF (Conferencia Off-line)](#sswconf-conferencia-off-line)
+  - [Cubagem com Regua SSW](#cubagem-com-regua-ssw)
+  - [Processo Simplificado vs Completo](#processo-simplificado-vs-completo)
 
 > **Modulo**: Operacional — Expedicao / Coleta
 > **Paginas de ajuda**: 5 paginas consolidadas (113, 115, 118, 168, 185)

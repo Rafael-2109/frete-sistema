@@ -1,4 +1,37 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/fiscal/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opcao 546 — Gera Arquivo SPED FISCAL
+
+> **Papel:** Opcao 546 — Gera Arquivo SPED FISCAL.
+
+## Indice
+
+- [Funcao](#funcao)
+- [Quando Usar](#quando-usar)
+- [Pre-requisitos](#pre-requisitos)
+- [Campos / Interface](#campos-interface)
+- [Fluxo de Uso](#fluxo-de-uso)
+  - [Geracao de Arquivo Original](#geracao-de-arquivo-original)
+  - [Geracao de Arquivo Substituto](#geracao-de-arquivo-substituto)
+- [Integracao com Outras Opcoes](#integracao-com-outras-opcoes)
+- [Observacoes e Gotchas](#observacoes-e-gotchas)
+  - [Formas de Geracao (Entradas)](#formas-de-geracao-entradas)
+  - [Debitos ICMS (Saidas)](#debitos-icms-saidas)
+  - [Creditos ICMS (Entradas)](#creditos-icms-entradas)
+  - [ICMS Monofasico Combustiveis](#icms-monofasico-combustiveis)
+  - [Documentos Nao Enviados](#documentos-nao-enviados)
+  - [Fechamento Fiscal](#fechamento-fiscal)
+  - [Simulacao vs Envio](#simulacao-vs-envio)
+  - [Registros Entrada vs Todos](#registros-entrada-vs-todos)
+  - [Credito a Recuperar](#credito-a-recuperar)
+  - [Periodo Extemporaneo](#periodo-extemporaneo)
+  - [Estornos e Creditos Especiais](#estornos-e-creditos-especiais)
 
 > **Modulo**: Fiscal
 > **Paginas de ajuda**: 1 pagina consolidada

@@ -1,4 +1,29 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/comercial/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opção 923 — Cadastro das Tabelas NTC e Genérica
+
+> **Papel:** Opção 923 — Cadastro das Tabelas NTC e Genérica.
+
+## Indice
+
+- [Função](#função)
+- [Quando Usar](#quando-usar)
+- [Pré-requisitos](#pré-requisitos)
+- [Campos / Interface](#campos-interface)
+  - [Tela Inicial — Generalidades](#tela-inicial-generalidades)
+  - [Tela Tarifas](#tela-tarifas)
+- [Fluxo de Uso](#fluxo-de-uso)
+  - [Configuração inicial](#configuração-inicial)
+  - [Consulta e impressão (opção 427)](#consulta-e-impressão-opção-427)
+- [Integração com Outras Opções](#integração-com-outras-opções)
+- [Observações e Gotchas](#observações-e-gotchas)
+- [POPs Relacionados](#pops-relacionados)
 
 > **Módulo**: Comercial
 > **Páginas de ajuda**: 2 páginas consolidadas

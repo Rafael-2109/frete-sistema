@@ -1,4 +1,34 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/pops/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # POP-A05 — Cadastrar Fornecedor/Transportadora
+
+> **Papel:** POP-A05 — Cadastrar Fornecedor/Transportadora.
+
+## Indice
+
+- [Objetivo](#objetivo)
+- [Trigger](#trigger)
+- [Frequencia](#frequencia)
+- [Pre-requisitos](#pre-requisitos)
+- [Passo-a-Passo](#passo-a-passo)
+  - [ETAPA 1 — Verificar se Fornecedor Ja Existe](#etapa-1-verificar-se-fornecedor-ja-existe)
+  - [ETAPA 2 — Preencher Dados Cadastrais (Opcao 478)](#etapa-2-preencher-dados-cadastrais-opcao-478)
+  - [ETAPA 3 — Preencher Dados Bancarios (Opcao 478)](#etapa-3-preencher-dados-bancarios-opcao-478)
+  - [ETAPA 4 — Ativar CCF (Conta Corrente do Fornecedor)](#etapa-4-ativar-ccf-conta-corrente-do-fornecedor)
+  - [ETAPA 5 — Verificar Ativacao da CCF](#etapa-5-verificar-ativacao-da-ccf)
+  - [ETAPA 6 — Cadastrar como Transportadora (Opcao 485)](#etapa-6-cadastrar-como-transportadora-opcao-485)
+  - [ETAPA 7 — Verificar Cadastro Completo](#etapa-7-verificar-cadastro-completo)
+- [Contexto CarVia](#contexto-carvia)
+- [Erros Comuns e Solucoes](#erros-comuns-e-solucoes)
+- [Verificacao Playwright](#verificacao-playwright)
+- [POPs Relacionados](#pops-relacionados)
+- [Historico de Revisoes](#historico-de-revisoes)
 
 > **Categoria**: A — Implantacao e Cadastros
 > **Prioridade**: P1 (Alta — base para CCF, custos 408, contratacao 072 e contas a pagar 475)

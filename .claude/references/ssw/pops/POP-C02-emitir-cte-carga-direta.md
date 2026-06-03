@@ -1,4 +1,38 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/pops/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # POP-C02 — Emitir CT-e para Carga Direta
+
+> **Papel:** POP-C02 — Emitir CT-e para Carga Direta.
+
+## Indice
+
+- [Objetivo](#objetivo)
+- [Trigger](#trigger)
+- [Frequencia](#frequencia)
+- [Pre-requisitos](#pre-requisitos)
+- [Passo-a-Passo](#passo-a-passo)
+  - [ETAPA 1 — Verificar que etapas anteriores foram concluidas](#etapa-1-verificar-que-etapas-anteriores-foram-concluidas)
+  - [ETAPA 2 — Alterar Unidade para CAR](#etapa-2-alterar-unidade-para-car)
+  - [ETAPA 3 — Emitir Pre-CTRC (Opcao 004)](#etapa-3-emitir-pre-ctrc-opcao-004)
+  - [ETAPA 4 — Verificar Simulacao](#etapa-4-verificar-simulacao)
+  - [ETAPA 5 — Gravar Pre-CTRC](#etapa-5-gravar-pre-ctrc)
+  - [ETAPA 6 — Enviar CT-e ao SEFAZ (Opcao 007)](#etapa-6-enviar-ct-e-ao-sefaz-opcao-007)
+  - [ETAPA 7 — Proximos Passos (Sequencia Legal)](#etapa-7-proximos-passos-sequencia-legal)
+- [Multiplas NF-es na Mesma Carga](#multiplas-nf-es-na-mesma-carga)
+  - [Opcao A — CT-es Individuais ([opcao 004](../operacional/004-emissao-ctrcs.md))](#opcao-a-ct-es-individuais-opcao-004operacional004-emissao-ctrcsmd)
+  - [Opcao B — CT-e em Lote ([opcao 006](../operacional/006-emissao-cte-os.md))](#opcao-b-ct-e-em-lote-opcao-006operacional006-emissao-cte-osmd)
+  - [Opcao C — CT-e Unico com Multiplas NF-es](#opcao-c-ct-e-unico-com-multiplas-nf-es)
+- [Diferenca entre Carga Direta e Fracionado](#diferenca-entre-carga-direta-e-fracionado)
+- [Erros Comuns e Solucoes](#erros-comuns-e-solucoes)
+- [Verificacao Playwright](#verificacao-playwright)
+- [POPs Relacionados](#pops-relacionados)
+- [Historico de Revisoes](#historico-de-revisoes)
 
 > **Categoria**: C — Operacional: Emissao
 > **Prioridade**: P1 (Alta — segundo mais frequente, mais complexo)

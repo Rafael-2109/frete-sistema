@@ -1,4 +1,35 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/pops/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # POP-B01 — Cotar Frete para Cliente
+
+> **Papel:** POP-B01 — Cotar Frete para Cliente.
+
+## Indice
+
+- [Objetivo](#objetivo)
+- [Trigger](#trigger)
+- [Frequencia](#frequencia)
+- [Pre-requisitos](#pre-requisitos)
+- [Passo-a-Passo](#passo-a-passo)
+  - [ETAPA 1 — Pre-analise no Sistema Fretes](#etapa-1-pre-analise-no-sistema-fretes)
+  - [ETAPA 2 — Acessar Opcao 002 no SSW](#etapa-2-acessar-opcao-002-no-ssw)
+  - [ETAPA 3 — Informar Dados do Pagador](#etapa-3-informar-dados-do-pagador)
+  - [ETAPA 4 — Preencher Dados da Operacao](#etapa-4-preencher-dados-da-operacao)
+  - [ETAPA 5 — Simular e Verificar Proposta Inicial](#etapa-5-simular-e-verificar-proposta-inicial)
+  - [ETAPA 6 — Aplicar Desconto (Se Necessario)](#etapa-6-aplicar-desconto-se-necessario)
+  - [ETAPA 7 — Decidir: Contratar ou Apenas Informar](#etapa-7-decidir-contratar-ou-apenas-informar)
+  - [ETAPA 8 — Enviar Cotacao ao Cliente](#etapa-8-enviar-cotacao-ao-cliente)
+- [Contexto CarVia](#contexto-carvia)
+- [Erros Comuns e Solucoes](#erros-comuns-e-solucoes)
+- [Verificacao Playwright](#verificacao-playwright)
+- [POPs Relacionados](#pops-relacionados)
+- [Historico de Revisoes](#historico-de-revisoes)
 
 > **Categoria**: B — Comercial e Precificacao
 > **Prioridade**: P1 (Alta — processo ja existente, Jessica precisa aprender)

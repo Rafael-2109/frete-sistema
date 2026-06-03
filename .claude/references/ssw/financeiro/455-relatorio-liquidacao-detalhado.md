@@ -1,4 +1,38 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/financeiro/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opcao 455 — Relatorio de Liquidacao Detalhado
+
+> **Papel:** Opcao 455 — Relatorio de Liquidacao Detalhado.
+
+## Indice
+
+- [Funcao](#funcao)
+- [Quando Usar](#quando-usar)
+- [Pre-requisitos](#pre-requisitos)
+- [Campos / Interface](#campos-interface)
+  - [Filtros Disponiveis](#filtros-disponiveis)
+  - [Colunas do Relatorio](#colunas-do-relatorio)
+- [Fluxo de Uso](#fluxo-de-uso)
+  - [Gerar Relatorio de Liquidacao](#gerar-relatorio-de-liquidacao)
+  - [Identificar CTRCs com Bloqueio Financeiro](#identificar-ctrcs-com-bloqueio-financeiro)
+  - [Obter Arquivo CSV Base para Atualizacao de Previsao de Entrega](#obter-arquivo-csv-base-para-atualizacao-de-previsao-de-entrega)
+- [Integracao com Outras Opcoes](#integracao-com-outras-opcoes)
+- [Observacoes e Gotchas](#observacoes-e-gotchas)
+  - [Valor do Frete vs Base de Calculo](#valor-do-frete-vs-base-de-calculo)
+  - [Bloqueio Financeiro](#bloqueio-financeiro)
+  - [Descontos Financeiros](#descontos-financeiros)
+  - [Arquivo CSV Base](#arquivo-csv-base)
+  - [CTRCs Desconsiderados](#ctrcs-desconsiderados)
+  - [Periodo de Pesquisa](#periodo-de-pesquisa)
+  - [Cancelados/Anulados](#canceladosanulados)
+  - [Juros e Descontos](#juros-e-descontos)
+  - [Multi-empresa](#multi-empresa)
 
 > **Modulo**: Financeiro
 > **Paginas de ajuda**: 2 paginas consolidadas

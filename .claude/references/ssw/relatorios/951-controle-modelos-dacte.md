@@ -1,4 +1,53 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/relatorios/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opção 951 — Modelos Padrões de DACTEs
+
+> **Papel:** Opção 951 — Modelos Padrões de DACTEs.
+
+## Indice
+
+- [Função](#função)
+- [Quando Usar](#quando-usar)
+- [Pré-requisitos](#pré-requisitos)
+- [Modelos Disponíveis](#modelos-disponíveis)
+  - [Modelo 01](#modelo-01)
+  - [Modelos 02 e 03](#modelos-02-e-03)
+  - [Modelo 04](#modelo-04)
+  - [Modelos 05 e 06](#modelos-05-e-06)
+  - [Modelos 07 e 08](#modelos-07-e-08)
+  - [Modelo 09](#modelo-09)
+  - [Modelos 10 e 11](#modelos-10-e-11)
+  - [Modelos 12 e 13](#modelos-12-e-13)
+  - [Modelos 14 e 15](#modelos-14-e-15)
+  - [Modelo 16](#modelo-16)
+  - [Modelo 17](#modelo-17)
+- [Campos / Interface](#campos-interface)
+  - [Tela](#tela)
+  - [Uso Diferenciado](#uso-diferenciado)
+- [Fluxo de Uso](#fluxo-de-uso)
+  - [Definir Modelo Padrão](#definir-modelo-padrão)
+  - [Configurar Modelo Específico](#configurar-modelo-específico)
+  - [Upload de Imagem (Modelo 04)](#upload-de-imagem-modelo-04)
+- [Integração com Outras Opções](#integração-com-outras-opções)
+- [Observações e Gotchas](#observações-e-gotchas)
+  - [Tamanho Meia Página A4](#tamanho-meia-página-a4)
+  - [Prioridade](#prioridade)
+  - [Parâmetros Opcionais](#parâmetros-opcionais)
+  - [Imagem Modelo 04](#imagem-modelo-04)
+  - [Marcas d'Água](#marcas-dágua)
+  - [Impressão Individual vs Associada](#impressão-individual-vs-associada)
+  - [Modelo Duplicado](#modelo-duplicado)
+  - [Modelo Diferenciado](#modelo-diferenciado)
+  - [Ocultação de Valores (Modelo 17)](#ocultação-de-valores-modelo-17)
+  - [Declarações](#declarações)
+  - [Reversa](#reversa)
+  - [GOL](#gol)
 
 > **Módulo**: Sistema (Controle)
 > **Páginas de ajuda**: 1 página consolidada

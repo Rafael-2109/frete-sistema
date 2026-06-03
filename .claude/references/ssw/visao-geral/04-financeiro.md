@@ -1,4 +1,26 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/visao-geral/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # 04 — Financeiro
+
+> **Papel:** 04 — Financeiro.
+
+## Indice
+
+- [Sumario](#sumario)
+- [Conceitos Fundamentais](#conceitos-fundamentais)
+- [Fluxo Financeiro](#fluxo-financeiro)
+- [Opcoes Principais](#opcoes-principais)
+- [Regra do CCF (Conta Corrente do Fornecedor)](#regra-do-ccf-conta-corrente-do-fornecedor)
+- [Contexto CarVia](#contexto-carvia)
+  - [Opcoes que CarVia usa](#opcoes-que-carvia-usa)
+  - [Opcoes que CarVia NAO usa (mas deveria)](#opcoes-que-carvia-nao-usa-mas-deveria)
+  - [Responsaveis](#responsaveis)
 
 > **Fonte**: `visao_geral_financeiro.htm` (04/09/2020)
 > **Links internos**: 15 | **Imagens**: 1

@@ -1,9 +1,29 @@
+<!-- doc:meta
+tipo: index
+camada: L1
+sot_de: —
+hub: .claude/references/ssw/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Modulo OPERACIONAL — Coleta e Entrega — Indice
+
+> **Papel:** Modulo OPERACIONAL — Coleta e Entrega — Indice.
 
 > **Sistema**: SSW Sistemas
 > **Modulo**: Operacional — Coleta/Entrega
 > **Documentacao completa**: 18 opcoes documentadas
 > **Ultima atualizacao**: 2026-02-14
+
+## Indice
+
+- [Visao Geral](#visao-geral)
+- [Opcoes Documentadas](#opcoes-documentadas)
+- [Fluxo Operacional Tipico](#fluxo-operacional-tipico)
+- [Integracao com SSWMobile](#integracao-com-sswmobile)
+- [Referencias Cruzadas](#referencias-cruzadas)
+- [Observacoes Gerais](#observacoes-gerais)
+- [Documentacao Adicional](#documentacao-adicional)
 
 ## Visao Geral
 

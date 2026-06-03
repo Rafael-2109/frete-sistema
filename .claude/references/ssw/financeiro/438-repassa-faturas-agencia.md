@@ -1,4 +1,14 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/financeiro/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opção 438 — Repassa Faturas para Agência
+
+> **Papel:** Opção 438 — Repassa Faturas para Agência.
 
 > **Módulo**: Financeiro
 > **Páginas de ajuda**: 1 página consolidada

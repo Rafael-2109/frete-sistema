@@ -1,4 +1,33 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/financeiro/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opcao 462 — Bloqueio Financeiro de CTRC
+
+> **Papel:** Opcao 462 — Bloqueio Financeiro de CTRC.
+
+## Indice
+
+- [Funcao](#funcao)
+- [Quando Usar](#quando-usar)
+- [Pre-requisitos](#pre-requisitos)
+- [Campos / Interface — VERIFICADOS](#campos-interface-verificados)
+  - [Secao 1: Bloquear por CTRC](#secao-1-bloquear-por-ctrc)
+  - [Secao 2: Bloquear por Manifesto](#secao-2-bloquear-por-manifesto)
+  - [Secao 3: Relatorio de CTRCs Bloqueados](#secao-3-relatorio-de-ctrcs-bloqueados)
+  - [Campos NAO Encontrados (inferencia descartada)](#campos-nao-encontrados-inferencia-descartada)
+- [Fluxo de Uso](#fluxo-de-uso)
+  - [Bloquear CTRC](#bloquear-ctrc)
+  - [Verificar Bloqueio](#verificar-bloqueio)
+  - [Desbloquear CTRC](#desbloquear-ctrc)
+- [Integracao com Outras Opcoes](#integracao-com-outras-opcoes)
+- [Observacoes e Gotchas](#observacoes-e-gotchas)
+- [POPs Relacionados](#pops-relacionados)
+- [Status CarVia](#status-carvia)
 
 > **Modulo**: Contas a Receber / CTRCs disponíveis (menu: Contas a Receber > CTRCs disponíveis > 462)
 > **Status CarVia**: ACESSIVEL — tela verificada, NAO IMPLANTADO operacionalmente

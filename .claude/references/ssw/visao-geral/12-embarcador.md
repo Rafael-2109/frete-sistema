@@ -1,4 +1,35 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/visao-geral/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # 12 — Embarcador
+
+> **Papel:** 12 — Embarcador.
+
+## Indice
+
+- [Sumario](#sumario)
+- [Conceito](#conceito)
+  - [Inovacoes](#inovacoes)
+- [Configuracoes](#configuracoes)
+  - [Unidades (opção 401)](#unidades-opção-401)
+  - [Outras configuracoes](#outras-configuracoes)
+- [Operacao](#operacao)
+  - [CEE — Controle de Expedicao do Embarcador](#cee-controle-de-expedicao-do-embarcador)
+  - [Identificacao de Volumes](#identificacao-de-volumes)
+  - [Carregamento nos Veiculos](#carregamento-nos-veiculos)
+  - [Saida dos Veiculos (opção 025)](#saida-dos-veiculos-opção-025)
+  - [Consultas](#consultas)
+- [Fretes a Pagar](#fretes-a-pagar)
+- [Fluxo do Embarcador](#fluxo-do-embarcador)
+- [Contexto CarVia](#contexto-carvia)
+  - [Opcoes que CarVia usa](#opcoes-que-carvia-usa)
+  - [Opcoes que CarVia NAO usa (mas deveria)](#opcoes-que-carvia-nao-usa-mas-deveria)
+  - [Responsaveis](#responsaveis)
 
 > **Fonte**: `visao_geral_embarcador.htm` (06/12/2025)
 > **Links internos**: 36 | **Imagens**: 4

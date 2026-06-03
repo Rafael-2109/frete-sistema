@@ -1,4 +1,33 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/contabilidade/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opção 558 — Lançamentos Manuais
+
+> **Papel:** Opção 558 — Lançamentos Manuais.
+
+## Indice
+
+- [Função](#função)
+- [Quando Usar](#quando-usar)
+- [Pré-requisitos](#pré-requisitos)
+- [Campos / Interface](#campos-interface)
+  - [Tela Inicial](#tela-inicial)
+  - [Tela de Lançamento](#tela-de-lançamento)
+- [Fluxo de Uso](#fluxo-de-uso)
+  - [Lançamento Manual via Interface](#lançamento-manual-via-interface)
+  - [Importação via Arquivo CSV](#importação-via-arquivo-csv)
+  - [Continuação de Lote Interrompido](#continuação-de-lote-interrompido)
+  - [Reabertura de Lote](#reabertura-de-lote)
+- [Layout CSV para Importação](#layout-csv-para-importação)
+  - [Exemplo CSV](#exemplo-csv)
+- [Integração com Outras Opções](#integração-com-outras-opções)
+- [Observações e Gotchas](#observações-e-gotchas)
+- [POPs Relacionados](#pops-relacionados)
 
 > **Módulo**: Contabilidade
 > **Páginas de ajuda**: 2 páginas consolidadas

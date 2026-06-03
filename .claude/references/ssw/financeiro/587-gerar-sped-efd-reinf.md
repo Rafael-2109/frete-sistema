@@ -1,4 +1,26 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/financeiro/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opção 587 — Gera Arquivo SPED EFD Reinf (Atualizada)
+
+> **Papel:** Opção 587 — Gera Arquivo SPED EFD Reinf (Atualizada).
+
+## Indice
+
+- [Função](#função)
+- [Quando Usar](#quando-usar)
+- [Pré-requisitos](#pré-requisitos)
+- [Campos / Interface](#campos-interface)
+- [Fluxo de Uso](#fluxo-de-uso)
+  - [Preparação (executar uma vez)](#preparação-executar-uma-vez)
+  - [Processamento mensal](#processamento-mensal)
+- [Integração com Outras Opções](#integração-com-outras-opções)
+- [Observações e Gotchas](#observações-e-gotchas)
 
 > **Módulo**: Financeiro/Fiscal
 > **Páginas de ajuda**: 1 página consolidada (referência da opção 574 desatualizada)

@@ -1,4 +1,26 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/financeiro/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opção 436 — Faturamento Geral
+
+> **Papel:** Opção 436 — Faturamento Geral.
+
+## Indice
+
+- [Função](#função)
+- [Quando Usar](#quando-usar)
+- [Pré-requisitos](#pré-requisitos)
+- [Campos / Interface](#campos-interface)
+- [Abas / Sub-telas](#abas-sub-telas)
+- [Fluxo de Uso](#fluxo-de-uso)
+- [Integração com Outras Opções](#integração-com-outras-opções)
+- [Observações e Gotchas](#observações-e-gotchas)
+- [POPs Relacionados](#pops-relacionados)
 
 > **Módulo**: Financeiro
 > **Páginas de ajuda**: 6 páginas consolidadas

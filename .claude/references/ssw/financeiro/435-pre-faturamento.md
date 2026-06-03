@@ -1,4 +1,27 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/financeiro/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opcao 435 — CTRCs Disponiveis para Faturamento
+
+> **Papel:** Opcao 435 — CTRCs Disponiveis para Faturamento.
+
+## Indice
+
+- [Funcao](#funcao)
+- [Quando usar](#quando-usar)
+- [Pre-requisitos](#pre-requisitos)
+- [Campos / Interface](#campos-interface)
+  - [Filtros de Selecao](#filtros-de-selecao)
+  - [Colunas do Relatorio](#colunas-do-relatorio)
+- [Fluxo de Uso](#fluxo-de-uso)
+- [Integracao com outras opcoes](#integracao-com-outras-opcoes)
+- [Observacoes / Gotchas](#observacoes-gotchas)
+- [POPs Relacionados](#pops-relacionados)
 
 > **Modulo**: Financeiro
 > **URL ajuda**: `/ajuda/ssw0103.htm`
