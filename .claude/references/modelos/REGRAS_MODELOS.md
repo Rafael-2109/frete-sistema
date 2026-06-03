@@ -122,9 +122,9 @@ SEMPRE substituir por Separacao com status='PREVISAO' para fazer tudo que PreSep
 - Campo `origem` = numero do pedido de venda (NAO indica sistema de origem)
 
 ### Regras de Status NF:
-- `Lancado`: NF ativa
+- `Lançado`: NF ativa (valor gravado COM cedilha — query sem acento retorna 0 linhas)
 - `Cancelado`: NF cancelada
-- `Provisorio`: NF provisoria (aguardando confirmacao)
+- `Provisório`: NF provisoria (aguardando confirmacao — valor gravado COM acento)
 
 ### Reversao de NF (Nota de Credito):
 - `revertida=True`: Esta NF foi anulada por nota de credito
@@ -243,7 +243,7 @@ SEMPRE substituir por Separacao com status='PREVISAO' para fazer tudo que PreSep
 
 ## ContasAReceberSnapshot (app/financeiro/models.py)
 
-> Campos completos: ver schema em `.claude/skills/consultando-sql/schemas/tables/contas_a_receber_snapshots.json`
+> Campos completos: ver schema em `.claude/skills/consultando-sql/schemas/tables/contas_a_receber_snapshot.json`
 
 ### Regra: Historico de alteracoes em campos vindos do Odoo
 - `valor_anterior` e `valor_novo`: Armazenados como JSON string
@@ -267,7 +267,7 @@ Tipos: ENTRADA, SAIDA, AJUSTE, COMPRA
 
 ### ContatoAgendamento (app/cadastros_agendamento/models.py)
 
-> Campos completos: ver schema em `.claude/skills/consultando-sql/schemas/tables/contato_agendamento.json`
+> Campos completos: ver schema em `.claude/skills/consultando-sql/schemas/tables/contatos_agendamento.json`
 
 **Valores de `forma`**: `SEM AGENDAMENTO`, `Portal`, `Telefone`, `E-mail`, `WhatsApp` (NULL = sem agendamento)
 

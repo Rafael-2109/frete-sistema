@@ -1473,7 +1473,7 @@ def _criar_itens_da_api(
                         valor_conferido=str(ult.loja_id),
                     )
 
-            preco_ref, desconto, tabela_id, divergencia_tipo = _resolver_preco_tabela(
+            preco_ref, desconto, desconto_pct, tabela_id, divergencia_tipo = _resolver_preco_tabela(
                 moto.modelo_id, data_venda, preco_final_unit,
             )
             if divergencia_tipo:
@@ -1491,6 +1491,7 @@ def _criar_itens_da_api(
                 tabela_preco_id=tabela_id,
                 preco_tabela_referencia=preco_ref,
                 desconto_aplicado=desconto,
+                desconto_percentual=desconto_pct,
                 preco_final=preco_final_unit,
             )
             db.session.add(venda_item)

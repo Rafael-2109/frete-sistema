@@ -78,12 +78,17 @@ A chave unica de um perfil fiscal e composta por:
 
 **Empresas Compradoras Cadastradas:**
 
-| Empresa | ID Odoo | CNPJ |
-|---------|---------|------|
+| Empresa | partner_id (res.partner) | CNPJ |
+|---------|--------------------------|------|
 | NACOM GOYA - CD | 34 | 61.724.241/0003-30 |
 | NACOM GOYA - FB | 1 | 61.724.241/0001-78 |
 | NACOM GOYA - SC | 33 | 61.724.241/0002-59 |
 | LA FAMIGLIA - LF | 35 | 18.467.441/0001-63 |
+
+> ⚠️ Os IDs acima sao **partner_id** (`res.partner`), NAO o **company_id**. Os dois sao
+> distintos: company_id FB=1, SC=3, CD=4, LF=5 (ver `odoo/IDS_FIXOS.md`); partner_id
+> FB=1, SC=33, CD=34, LF=35 (`COMPANY_PARTNER_ID` em `app/odoo/constants/operacoes_fiscais.py`).
+> A chave do perfil fiscal e o CNPJ, nao o ID.
 
 ### Campos Validados
 

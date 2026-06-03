@@ -79,7 +79,7 @@ FaturamentoProduto (numero_nf)
     ├── IMPORTANTE: campo 'origem' = num_pedido (link direto!)
     ├── cnpj_cliente, nome_cliente
     ├── cod_produto, nome_produto
-    ├── qtd_faturada, valor_produto_faturado
+    ├── qtd_produto_faturado, valor_produto_faturado
     └── data_fatura
     │
     ▼

@@ -29,6 +29,12 @@
   </div>
 </div>
 
+{% if criterio_pedidos == 'vendedor' %}
+<div class="mb-2">
+  <span class="badge bg-info">Exibindo apenas os seus pedidos (critério: vendedor)</span>
+</div>
+{% endif %}
+
 <div id="filtros-vendas">
 {{ status_botoes('hora.vendas_lista',
                  [('COTACAO','Cotação'),('CONFIRMADO','Confirmado'),('FATURADO','Faturado'),('CANCELADO','Cancelado')],

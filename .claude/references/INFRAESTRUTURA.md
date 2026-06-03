@@ -113,10 +113,18 @@ mcp__render__list_deploys(serviceId="srv-d13m38vfte5s738t6p60", limit=5)
 - CPU pico: 8.6%. Memoria pico: 1.4 GB de 4 GB (35%).
 - Disco: 5 GB (atencao: `claude_session_store` cresce sem TTL — monitorar).
 
-**Gunicorn config atual** (`start_render.sh` gunicorn_config):
-- `workers=4, threads=2` gthread — 8 req concorrentes
-- `timeout=600s` (alinhado com Render 600s + SSE teto 540s web / 600s teams)
-- `graceful_timeout=60s` (deploy/reload)
+**Gunicorn — arquitetura Caddy split** (PROD `sistema-fretes`, 2 gunicorns isolados no mesmo container; `start_render.sh` orquestra Caddy + ambos):
+
+| Path | Proxy | Config | Workers × Threads | timeout / graceful |
+|------|-------|--------|-------------------|--------------------|
+| `/agente/*`, `/agente-lojas/*` | `127.0.0.1:5001` | `gunicorn_config_agente.py` | 1 × 8 (gthread) | 1800s / 1740s |
+| `/static/*` | Caddy serve do disco | — | — | — |
+| resto | `127.0.0.1:5002` | `gunicorn_config_sistema.py` | 4 × 2 (gthread) | 1800s / 1740s |
+
+- Proxy real = **Caddy** (`Caddyfile` na raiz; NAO ha `nginx.conf`).
+- Memoria: 1×800MB (agente) + 4×400MB (sistema) + 50MB (Caddy) ≈ 2.4GB de 8GB.
+- Motivo do split (2026-05-27): Claude Agent SDK e per-process; multi-worker + sticky session
+  quebrava 409. Ver `app/agente/CLAUDE.md` secao R-SPLIT-NGINX.
 
 **Decisoes:**
 - **NAO escalar workers** — uso real 5% da capacidade.
@@ -125,8 +133,11 @@ mcp__render__list_deploys(serviceId="srv-d13m38vfte5s738t6p60", limit=5)
 
 **Stack de timeouts** (ordem critica — nao quebrar):
 ```
-Heartbeat SSE 10s < AskUser web 55s < Inatividade 240s < SSE teto 540s < Gunicorn timeout 600s = Render hard limit 600s
+Heartbeat SSE 10s < AskUser web 55s < AskUser Teams 120s < Inatividade 300s < Stream max (teto) 1740s < Gunicorn timeout 1800s
 ```
+(Render web permite ate 100min/6000s; o gunicorn `timeout=1800s` e o limite binding.)
+Fonte: `app/agente/routes/_constants.py` (HEARTBEAT=10, INACTIVITY=300, MAX_STREAM=1740),
+`gunicorn_config_{agente,sistema}.py` (timeout=1800, graceful=1740), `TEAMS_ASK_USER_TIMEOUT=120`.
 Detalhes e ordem completa em `app/agente/CLAUDE.md` secao "Hierarquia de Timeouts".
 
 ---

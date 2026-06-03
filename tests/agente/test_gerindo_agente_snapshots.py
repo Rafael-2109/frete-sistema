@@ -91,6 +91,12 @@ READ_CASES = [
     # independente do banco) — trava as chaves {suggestion_key, found, versions}.
     ('melhorias', 'show', ['--key', '__SNAPSHOT_KEY_INEXISTENTE__']),
     ('melhorias', 'intelligence-report', []),
+    # infra (Onda 4 P10 — observabilidade infra/seguranca). flags cruza declared x
+    # db_evidence; gates le permissions.py; worker-status le Redis (degrada se off,
+    # shape FIXO com reachable/queues/workers — nunca status=query_error).
+    ('infra', 'flags', ['--days', '30']),
+    ('infra', 'gates', []),
+    ('infra', 'worker-status', []),
 ]
 
 CASE_IDS = [f"{s}.{sub}" for s, sub, _ in READ_CASES]

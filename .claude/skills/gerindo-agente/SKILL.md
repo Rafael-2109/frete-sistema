@@ -1,6 +1,6 @@
 ---
 name: gerindo-agente
-description: Esta skill deve ser usada quando o usuario precisa gerenciar o Agente Web — memorias persistentes, sessoes anteriores, padroes aprendidos, perfil comportamental, knowledge graph, diagnosticos de saude, analise de friccao, briefing intersessao ou manutencao do sistema. Exemplos que trigam: "memorias do usuario 5", "sessoes anteriores", "historico de conversas", "padroes aprendidos", "pitfalls do sistema", "knowledge graph", "entidades do grafo", "saude do agente", "health score", "metricas do agente", "memorias nao efetivas", "consolidar memorias", "reindexar embeddings", "cleanup do agente", "memorias empresa", "tier frio", "versoes de memoria", "pendencia resolvida", "conflitos de memoria", "cobertura de embeddings", "sumarizar sessao", "analise de friccao", "sinais de frustracao", "briefing entre sessoes", "briefing do agente", "sessoes do Teams", "modelo usado nas sessoes", "perfil comportamental", "perfil do usuario", "user.xml", "gerar perfil", "qualidade dos turnos", "judge score", "step quality", "cobertura de sinal", "adesao de regras", "reincidencia de erro", "sintoma Marcus", "metricas de roteamento", "recomendacoes do agente", "PlanState", "diretrizes operacionais", "diretrizes shadow", "funil de diretrizes", "saude do flywheel", "eval scores", "eval-gate", "calibracao do judge", "dialogo de melhoria", "sugestoes de melhoria", "intelligence report". NAO usar para: consultas SQL ou dados de negocio (usar consultando-sql), lembrar preferencias do PROPRIO Claude Code (usar auto-memory), cotacao de frete (usar cotando-frete), operacoes SSW (usar operando-ssw), Odoo (usar skills Odoo).
+description: Esta skill deve ser usada quando o usuario precisa gerenciar o Agente Web — memorias persistentes, sessoes anteriores, padroes aprendidos, perfil comportamental, knowledge graph, diagnosticos de saude, analise de friccao, briefing intersessao ou manutencao do sistema. Exemplos que trigam: "memorias do usuario 5", "sessoes anteriores", "historico de conversas", "padroes aprendidos", "pitfalls do sistema", "knowledge graph", "entidades do grafo", "saude do agente", "health score", "metricas do agente", "memorias nao efetivas", "consolidar memorias", "reindexar embeddings", "cleanup do agente", "memorias empresa", "tier frio", "versoes de memoria", "pendencia resolvida", "conflitos de memoria", "cobertura de embeddings", "sumarizar sessao", "analise de friccao", "sinais de frustracao", "briefing entre sessoes", "briefing do agente", "sessoes do Teams", "modelo usado nas sessoes", "perfil comportamental", "perfil do usuario", "user.xml", "gerar perfil", "qualidade dos turnos", "judge score", "step quality", "cobertura de sinal", "adesao de regras", "reincidencia de erro", "sintoma Marcus", "metricas de roteamento", "recomendacoes do agente", "PlanState", "diretrizes operacionais", "diretrizes shadow", "funil de diretrizes", "saude do flywheel", "eval scores", "eval-gate", "calibracao do judge", "dialogo de melhoria", "sugestoes de melhoria", "intelligence report", "flags de evolucao", "estado das flags", "flags ligadas/desligadas", "gates de acesso", "restricoes do agente", "filas RQ", "worker status", "status dos workers". NAO usar para: consultas SQL ou dados de negocio (usar consultando-sql), lembrar preferencias do PROPRIO Claude Code (usar auto-memory), cotacao de frete (usar cotando-frete), operacoes SSW (usar operando-ssw), Odoo (usar skills Odoo).
 allowed-tools: Read, Bash, Glob, Grep
 ---
 
@@ -122,6 +122,12 @@ O que o usuario quer?
 |   |   |-- "sugestoes de melhoria abertas" -> list-open [--category X]
 |   |   |-- "historico de uma sugestao"     -> show --key IMP-...
 |   |   |-- "intelligence report / serie"   -> intelligence-report
+|
+|-- Infra / seguranca (flags, gates, filas RQ) — READ (P10)
+|   -> scripts/infra.py
+|   |-- "estado das flags de evolucao"  -> flags [--days N]   (declarado x db_evidence PROD)
+|   |-- "gates de acesso / restricoes"  -> gates
+|   |-- "filas RQ / workers vivos"      -> worker-status
 ```
 
 > **Flywheel: o AGENTE WEB so usa os subcomandos de LEITURA acima.** Os subcomandos de
@@ -150,6 +156,7 @@ source .venv/bin/activate && python .claude/skills/gerindo-agente/scripts/{SCRIP
 | `loop.py` | **directives**, **corrections**, **loop-health** | Flywheel diretrizes (A4) — READ |
 | `eval.py` | **scores**, **cases** | Eval-gate offline (A3) — READ |
 | `melhorias.py` | **list-open**, **show**, **intelligence-report** | Dialogo melhoria (D8) + report (D7) — READ |
+| `infra.py` | **flags**, **gates**, **worker-status** | Infra/seguranca (P10) — READ |
 
 ## TRATAMENTO DE ERROS
 
@@ -166,6 +173,11 @@ source .venv/bin/activate && python .claude/skills/gerindo-agente/scripts/{SCRIP
 
 ## FEATURE FLAGS RELEVANTES
 
+> **Para o estado AO VIVO das flags de EVOLUCAO (Ondas 0-4 + loop corretivo) com o
+> ESTADO EFETIVO em PROD inferido do banco**, use `infra.py flags` (decision tree acima) —
+> e a fonte autoritativa e nao drifta. A tabela abaixo e referencia rapida das flags de
+> memoria/Teams (fora do escopo de `infra.py flags`) e PODE driftar.
+
 | Flag | Default | Funcao |
 |------|---------|--------|
 | `AGENT_AUTO_MEMORY_INJECTION` | true | Injeta memorias automaticamente |
@@ -176,7 +188,7 @@ source .venv/bin/activate && python .claude/skills/gerindo-agente/scripts/{SCRIP
 | `MEMORY_KNOWLEDGE_GRAPH` | true | Knowledge graph |
 | `SESSION_SEMANTIC_SEARCH` | true | Busca semantica sessoes |
 | `AGENT_BEHAVIORAL_PROFILE` | true | Gera user.xml (Tier 1) com perfil comportamental |
-| `AGENT_BEHAVIORAL_PROFILE_THRESHOLD` | 5 | Threshold de sessoes para geracao de perfil |
+| `AGENT_BEHAVIORAL_PROFILE_THRESHOLD` | 3 | Threshold de sessoes para geracao de perfil |
 | `USE_FRICTION_ANALYSIS` | true | Analise de friccao (5 sinais) |
 | `USE_INTERSESSION_BRIEFING` | true | Briefing entre sessoes |
 | `USE_SENTIMENT_DETECTION` | true | Deteccao de frustracao (inline) |
@@ -184,7 +196,7 @@ source .venv/bin/activate && python .claude/skills/gerindo-agente/scripts/{SCRIP
 | `POST_SESSION_EXTRACTION_MIN_MESSAGES` | 3 | Threshold minimo de msgs para extract |
 | `USE_SESSION_TURN_EMBEDDING` | true | Embedding inline de turnos |
 | `USE_DEBUG_MODE` | true | Features admin (target_user_id) |
-| `TEAMS_DEFAULT_MODEL` | claude-opus-4-7 | Modelo default do Teams bot (rollback: claude-opus-4-6) |
+| `TEAMS_DEFAULT_MODEL` | claude-opus-4-8 | Modelo default do Teams bot (rollback: claude-opus-4-7/4-6) |
 | `TEAMS_ASYNC_MODE` | true | Modo async do Teams |
 | `TEAMS_PROGRESSIVE_STREAMING` | true | Streaming progressivo Teams |
 

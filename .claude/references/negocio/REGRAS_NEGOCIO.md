@@ -162,7 +162,7 @@ Pedidos com mesmos `cod_uf + nome_cidade` podem ser consolidados.
 
 ### 3.3 Mesma Sub-Rota
 ```sql
-SELECT sub_rota FROM cadastro_sub_rotas
+SELECT sub_rota FROM cadastro_sub_rota
 WHERE cod_uf = ? AND nome_cidade ILIKE ?
 ```
 
@@ -264,7 +264,7 @@ percentual_completado = 1 - (valor_pendente / valor_original)
 
 **Busca:**
 ```sql
-SELECT * FROM separacoes
+SELECT * FROM separacao
 WHERE expedicao < CURRENT_DATE
   AND sincronizado_nf = False
   AND status NOT IN ('FATURADO', 'EMBARCADO')

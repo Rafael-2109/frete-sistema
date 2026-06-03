@@ -40,6 +40,49 @@ def _lojas_ativas_permitidas():
     return q.order_by(HoraLoja.nome).all()
 
 
+def _contexto_lookup_pedido_venda() -> dict:
+    """Monta as listas de lookup compartilhadas entre criacao e edicao de pedido.
+
+    Reutilizado por `tagplus_pedido_venda_novo` (criacao) e `vendas_detalhe`
+    (edicao unificada) para garantir DRY nas fontes de selects:
+    - modelos: modelos canonicos com chassi em estoque (visao global).
+    - formas_pagamento: formas mapeadas no TagPlus.
+    - vendedores_disponiveis: usuarios habilitados no modulo HORA.
+    - lojas_disponiveis: lojas ativas exceto matriz (para o SELECT de nova venda).
+    - lojas_ativas: lojas ativas filtradas por escopo (para troca de loja na venda).
+    """
+    from app.hora.services.estoque_service import opcoes_filtro_estoque
+    from app.hora.services import permissao_service, cadastro_service
+
+    opcoes = opcoes_filtro_estoque(
+        lojas_permitidas_ids=None,
+        apenas_canonicos=True,
+    )
+    modelos = opcoes['modelos']
+
+    formas_pagamento = (
+        HoraTagPlusFormaPagamentoMap.query
+        .order_by(HoraTagPlusFormaPagamentoMap.forma_pagamento_hora)
+        .all()
+    )
+
+    vendedores_disponiveis = permissao_service.listar_usuarios_habilitados()
+
+    lojas_disponiveis = cadastro_service.listar_lojas_para_pedido_venda(
+        lojas_permitidas_ids=None,
+    )
+
+    lojas_ativas = _lojas_ativas_permitidas()
+
+    return dict(
+        modelos=modelos,
+        formas_pagamento=formas_pagamento,
+        vendedores_disponiveis=vendedores_disponiveis,
+        lojas_disponiveis=lojas_disponiveis,
+        lojas_ativas=lojas_ativas,
+    )
+
+
 def _operador_atual() -> str:
     return getattr(current_user, 'nome', None) or 'desconhecido'
 
@@ -86,17 +129,28 @@ def vendas_lista():
         flash('Acesso negado a essa loja.', 'danger')
         return redirect(url_for('hora.vendas_lista'))
 
-    permitidas = lojas_permitidas_ids()
-    pagination = venda_service.paginar_vendas(
-        page=page, per_page=per_page,
-        lojas_permitidas_ids=permitidas,
-        status=status_filtro,
-        busca=busca,
-        loja_id=loja_id,
-        data_inicio=data_inicio,
-        data_fim=data_fim,
-        chassi=filtro_chassi,
-    )
+    criterio = (getattr(current_user, 'criterio_pedidos_hora', 'loja') or 'loja')
+    if criterio == 'vendedor':
+        nomes = [n for n in (
+            getattr(current_user, 'nome', None),
+            getattr(current_user, 'vendedor_vinculado', None),
+        ) if n]
+        filtro_vendedor = {'nomes': nomes, 'user_id': getattr(current_user, 'id', None)}
+        permitidas = None
+        pagination = venda_service.paginar_vendas(
+            page=page, per_page=per_page,
+            status=status_filtro, busca=busca, loja_id=loja_id,
+            data_inicio=data_inicio, data_fim=data_fim, chassi=filtro_chassi,
+            filtro_vendedor=filtro_vendedor,
+        )
+    else:
+        permitidas = lojas_permitidas_ids()
+        pagination = venda_service.paginar_vendas(
+            page=page, per_page=per_page,
+            lojas_permitidas_ids=permitidas,
+            status=status_filtro, busca=busca, loja_id=loja_id,
+            data_inicio=data_inicio, data_fim=data_fim, chassi=filtro_chassi,
+        )
 
     # Lojas para filtro
     lojas_q = HoraLoja.query.filter_by(ativa=True)
@@ -121,6 +175,7 @@ def vendas_lista():
         filtro_data_fim=data_fim_str,
         filtro_chassi=filtro_chassi,
         lojas_ativas=lojas_lista,
+        criterio_pedidos=criterio,
     )
 
 
@@ -232,33 +287,16 @@ def vendas_detalhe(venda_id: int):
         )
         return redirect(url_for('hora.vendas_lista'))
 
-    # Sempre popular lojas_ativas — operador pode trocar loja em vendas
-    # backfilladas que caem na matriz por causa do CNPJ emitente (regra
-    # fiscal: NFe HORA sai sempre com CNPJ da matriz). Filtrado por escopo.
-    lojas_ativas = _lojas_ativas_permitidas()
-
-    # Formas de pagamento dinamicas: mapeamentos cadastrados em
-    # HoraTagPlusFormaPagamentoMap (mesma fonte usada no formulario de pedido
-    # de venda manual). 'NAO_INFORMADO' eh sentinela (default da coluna) e
-    # sempre aparece como primeira opcao.
-    formas_pagamento = (
-        HoraTagPlusFormaPagamentoMap.query
-        .order_by(HoraTagPlusFormaPagamentoMap.forma_pagamento_hora)
-        .all()
-    )
-
-    # Vendedores habilitados — mesma fonte usada no formulario de novo pedido
-    # (tagplus_pedido_venda_novo). Permite SELECT com defesa em profundidade
-    # contra manipulacao de POST e mantem o nome canonico.
-    from app.hora.services import permissao_service
-    vendedores_disponiveis = permissao_service.listar_usuarios_habilitados()
+    # Monta todas as listas de lookup (modelos, formas, vendedores, lojas) via
+    # helper compartilhado com tagplus_pedido_venda_novo. O componente de cascata
+    # moto/cor/chassi e o select de vendedor precisam dessas listas em modo
+    # edicao do mesmo jeito que em modo criacao.
+    ctx = _contexto_lookup_pedido_venda()
 
     return render_template(
-        'hora/venda_detalhe.html',
+        'hora/tagplus/pedido_venda_novo.html',
         venda=venda,
-        lojas_ativas=lojas_ativas,
-        formas_pagamento=formas_pagamento,
-        vendedores_disponiveis=vendedores_disponiveis,
+        **ctx,
     )
 
 
@@ -1006,7 +1044,7 @@ def venda_adicionar_item_peca(venda_id: int):
     except (ValueError, InvalidOperation) as exc:
         flash(f'Erro ao adicionar peca: {exc}', 'danger')
 
-    return redirect(url_for('hora.venda_detalhe', venda_id=venda_id))
+    return redirect(url_for('hora.vendas_detalhe', venda_id=venda_id))
 
 
 @hora_bp.route('/vendas/<int:venda_id>/itens-peca/<int:item_id>/remover', methods=['POST'])
@@ -1026,4 +1064,4 @@ def venda_remover_item_peca(venda_id: int, item_id: int):
         flash('Peca removida do pedido.', 'success')
     except ValueError as exc:
         flash(f'Erro: {exc}', 'danger')
-    return redirect(url_for('hora.venda_detalhe', venda_id=venda_id))
+    return redirect(url_for('hora.vendas_detalhe', venda_id=venda_id))
