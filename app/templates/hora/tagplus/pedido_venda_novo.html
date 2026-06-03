@@ -734,8 +734,16 @@
       elPrecoInfo.textContent = 'Falha ao buscar preço: ' + e.message;
       elPrecoInfo.className = 'text-danger';
     }
-    // Recalcula valor final mantendo o desconto % atual (preserva intencao do operador).
-    recalcular('pct');
+    // Recalcula preservando o VALOR FINAL ja digitado (ancora 'valor') para
+    // nao introduzir drift de centavos ao re-buscar o preco de tabela (ex.: ao
+    // trocar a forma de pagamento entre a vista/a prazo). Na 1a carga, quando o
+    // valor ainda esta vazio/zero, inicializa pelo preco cheio via 'pct' (desconto 0).
+    const valorAtual = parseBR(elValor.value);
+    if (isNaN(valorAtual) || valorAtual <= 0) {
+      recalcular('pct');
+    } else {
+      recalcular('valor');
+    }
   }
 
   // ----------------- Sincronizacao desconto % <-> R$ <-> valor -----------
