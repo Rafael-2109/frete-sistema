@@ -56,6 +56,11 @@ atualizado: 2026-06-02
   - [embedding-coverage](#embedding-coverage)
   - [friction](#friction)
   - [briefing](#briefing)
+  - [step-quality](#step-quality)
+  - [step-coverage](#step-coverage)
+  - [rule-adhesion](#rule-adhesion)
+  - [routing](#routing)
+  - [recommendations](#recommendations)
 - [manutencao.py](#manutencaopy)
   - [consolidate](#consolidate)
   - [cold-move](#cold-move)
@@ -273,6 +278,46 @@ Mostra 5 sinais de friccao: queries repetidas, sessoes abandonadas, sinais de fr
 Sem argumentos adicionais.
 
 Mostra o briefing intersessao atual (XML): erros Odoo, falhas de importacao, alertas de memoria, commits recentes e ultimo intent. Controlado pela flag `USE_INTERSESSION_BRIEFING`.
+
+### step-quality
+| Argumento | Tipo | Obrigatorio | Default | Descricao |
+|-----------|------|-------------|---------|-----------|
+| `--days` | int | Nao | 30 | Periodo em dias |
+| `--all` | flag | Nao | false | Escopo do sistema inteiro (todos os usuarios) |
+
+Le `agent_step.outcome_signal` (gravado por `workers/step_judge.py` + `plan_verifier.py`). Agrega judge score/label, contagem de `componente_culpado`, adversarial refutado, frustracao alta, e o contraste **judge=success MAS adversarial refutou** (vies sem-tool). Distingue `empty` de erro. READ-only, custo $0.
+
+### step-coverage
+| Argumento | Tipo | Obrigatorio | Default | Descricao |
+|-----------|------|-------------|---------|-----------|
+| `--days` | int | Nao | 30 | Periodo em dias |
+| `--all` | flag | Nao | false | Escopo do sistema inteiro (todos os usuarios) |
+
+Cobertura de sinal por canal (web/teams) + gargalo PlanState (sessoes com `data->'plan'`). Revela lacunas estruturais: canal Teams nao instrumentado em `agent_step`, e B1 (PlanState ~0 -> promocao A4 vira no-op). READ-only, custo $0.
+
+### rule-adhesion
+| Argumento | Tipo | Obrigatorio | Default | Descricao |
+|-----------|------|-------------|---------|-----------|
+| `--days` | int | Nao | 30 | Periodo em dias |
+| `--all` | flag | Nao | false | Escopo do sistema inteiro (todos os usuarios) |
+
+Chama `insights_service.get_rule_adhesion_panel`. Mede o loop corretivo pessoal (sintoma Marcus): reincidencia por `error_signature` ANTES (`correction_count`) vs DEPOIS (`harmful_count`) da promocao a regra dura (`mandatory`). Degrada com graca se as colunas da Fase 3.1 ausentes. READ-only, custo $0.
+
+### routing
+| Argumento | Tipo | Obrigatorio | Default | Descricao |
+|-----------|------|-------------|---------|-----------|
+| `--days` | int | Nao | 30 | Periodo em dias |
+| `--all` | flag | Nao | false | Escopo do sistema inteiro (todos os usuarios) |
+
+Chama `insights_service.get_routing_metrics`. Taxa de ambiguidade (AskUserQuestion), sessoes struggling (muitas msgs/poucos tools), distribuicao de skills, instrumentacao. Distribuicao completa via `--json`. READ-only, custo $0.
+
+### recommendations
+| Argumento | Tipo | Obrigatorio | Default | Descricao |
+|-----------|------|-------------|---------|-----------|
+| `--days` | int | Nao | 30 | Periodo em dias |
+| `--all` | flag | Nao | false | Escopo do sistema inteiro (todos os usuarios) |
+
+Compoe `insights_service.get_insights_data` + `recommendations_engine.generate_recommendations` — lista COMPLETA (ate 5, ordenada por severidade), diferente de `insights` que trunca a 3. READ-only, custo $0.
 
 ---
 

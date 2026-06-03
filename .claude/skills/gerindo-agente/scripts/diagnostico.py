@@ -12,6 +12,16 @@ Subcomandos:
   embedding-coverage Cobertura de embeddings (memorias e sessoes)
   friction           Analise detalhada de friccao (5 sinais)
   briefing           Visualizar briefing intersessao atual
+
+  -- Camada de evolucao/qualidade (Onda 1, dado em agent_step + insights $0) --
+  step-quality       Qualidade por-turno: judge score/label, vies sem-tool, adversarial refutou
+  step-coverage      Cobertura de sinal por canal (web/teams) + gargalo PlanState
+  rule-adhesion      Adesao de regras / loop corretivo (reincidencia por error_signature) — $0
+  routing            Metricas de roteamento (ambiguidade, struggling, skills) — $0
+  recommendations    Recomendacoes acionaveis completas (rule-based, ate 5) — $0
+
+Escopo: subcomandos da camada de evolucao aceitam --all (sistema inteiro).
+Sem --all, usam --user-id. Distinguem 'empty'/'query_error' de zero silencioso.
 """
 
 import sys
@@ -68,6 +78,41 @@ SUBCOMMANDS = {
     'briefing': {
         'help': 'Visualizar briefing intersessao atual',
         'args': [],
+    },
+    'step-quality': {
+        'help': 'Qualidade por-turno (judge/verify) de agent_step',
+        'args': [
+            {'name': '--days', 'type': int, 'default': 30, 'help': 'Periodo em dias (default: 30)'},
+            {'name': '--all', 'action': 'store_true', 'dest': 'all_users', 'help': 'Sistema inteiro (todos os usuarios)'},
+        ],
+    },
+    'step-coverage': {
+        'help': 'Cobertura de sinal por canal + gargalo PlanState',
+        'args': [
+            {'name': '--days', 'type': int, 'default': 30, 'help': 'Periodo em dias (default: 30)'},
+            {'name': '--all', 'action': 'store_true', 'dest': 'all_users', 'help': 'Sistema inteiro (todos os usuarios)'},
+        ],
+    },
+    'rule-adhesion': {
+        'help': 'Adesao de regras / loop corretivo (custo $0)',
+        'args': [
+            {'name': '--days', 'type': int, 'default': 30, 'help': 'Periodo em dias (default: 30)'},
+            {'name': '--all', 'action': 'store_true', 'dest': 'all_users', 'help': 'Sistema inteiro (todos os usuarios)'},
+        ],
+    },
+    'routing': {
+        'help': 'Metricas de roteamento (custo $0)',
+        'args': [
+            {'name': '--days', 'type': int, 'default': 30, 'help': 'Periodo em dias (default: 30)'},
+            {'name': '--all', 'action': 'store_true', 'dest': 'all_users', 'help': 'Sistema inteiro (todos os usuarios)'},
+        ],
+    },
+    'recommendations': {
+        'help': 'Recomendacoes acionaveis completas (custo $0)',
+        'args': [
+            {'name': '--days', 'type': int, 'default': 30, 'help': 'Periodo em dias (default: 30)'},
+            {'name': '--all', 'action': 'store_true', 'dest': 'all_users', 'help': 'Sistema inteiro (todos os usuarios)'},
+        ],
     },
 }
 
@@ -482,6 +527,329 @@ def handle_briefing(args):
         print(xml)
 
 
+# ─────────────────────────────────────────────────────────────────────────
+# Camada de evolucao/qualidade (Onda 1) — agent_step + insights $0.
+# Escopo: --all => sistema inteiro (user_id=None); senao --user-id.
+# Distinguem 'empty'/'query_error'/'feature_disabled' de zero silencioso.
+# ─────────────────────────────────────────────────────────────────────────
+
+def _scope_uid(args):
+    """Resolve escopo: None (sistema inteiro) se --all, senao o --user-id."""
+    return None if getattr(args, 'all_users', False) else args.user_id
+
+
+def _scope_label(args):
+    return 'TODOS os usuarios' if _scope_uid(args) is None else f'user_id={args.user_id}'
+
+
+def handle_step_quality(args):
+    """Qualidade por-turno: judge score/label, vies sem-tool, adversarial refutou.
+
+    Fonte: agent_step.outcome_signal (gravado por workers/step_judge.py + plan_verifier.py).
+    Surface o sinal de ACERTO real (substitui as proxies de eco). O contraste
+    'judge=success MAS adversarial refutou' expoe o vies sem-tool do judge.
+    """
+    from app import db
+    from app.utils.timezone import agora_utc_naive
+    from datetime import timedelta
+    from sqlalchemy import text
+
+    uid = _scope_uid(args)
+    since = agora_utc_naive() - timedelta(days=args.days)
+    params = {'since': since, 'uid': uid}
+
+    agg_sql = text("""
+        SELECT
+          count(*) AS total,
+          count(*) FILTER (WHERE outcome_signal::jsonb ? 'judge') AS judged,
+          avg((outcome_signal::jsonb->'judge'->>'score')::numeric)
+             FILTER (WHERE (outcome_signal::jsonb->'judge'->>'score') ~ '^[0-9]+$') AS avg_score,
+          count(*) FILTER (WHERE outcome_signal::jsonb->'judge'->>'label' = 'success') AS judge_success,
+          count(*) FILTER (WHERE outcome_signal::jsonb->'judge'->>'label' = 'failure') AS judge_failure,
+          count(*) FILTER (WHERE (outcome_signal::jsonb->'judge'->>'componente_culpado') IS NOT NULL
+                            AND (outcome_signal::jsonb->'judge'->>'componente_culpado') <> 'null') AS with_culpado,
+          count(*) FILTER (WHERE (outcome_signal::jsonb->'verify'->'adversarial'->>'refuted') = 'true') AS adversarial_refuted,
+          count(*) FILTER (WHERE outcome_signal::jsonb->'judge'->>'label' = 'success'
+                            AND (outcome_signal::jsonb->'verify'->'adversarial'->>'refuted') = 'true') AS success_but_refuted,
+          count(*) FILTER (WHERE (outcome_signal::jsonb->>'frustration_score') ~ '^[0-9]+$'
+                            AND (outcome_signal::jsonb->>'frustration_score')::int >= 3) AS high_frustration
+        FROM agent_step
+        WHERE created_at >= :since AND (:uid IS NULL OR user_id = :uid)
+    """)
+    label_sql = text("""
+        SELECT COALESCE(outcome_signal::jsonb->'judge'->>'label', '(sem label)') AS label, count(*) AS n
+        FROM agent_step
+        WHERE created_at >= :since AND (:uid IS NULL OR user_id = :uid)
+          AND outcome_signal::jsonb ? 'judge'
+        GROUP BY 1 ORDER BY n DESC
+    """)
+    culpado_sql = text("""
+        SELECT outcome_signal::jsonb->'judge'->>'componente_culpado' AS comp, count(*) AS n
+        FROM agent_step
+        WHERE created_at >= :since AND (:uid IS NULL OR user_id = :uid)
+          AND (outcome_signal::jsonb->'judge'->>'componente_culpado') IS NOT NULL
+          AND (outcome_signal::jsonb->'judge'->>'componente_culpado') <> 'null'
+        GROUP BY 1 ORDER BY n DESC LIMIT 10
+    """)
+    try:
+        row = db.session.execute(agg_sql, params).fetchone()
+        labels = db.session.execute(label_sql, params).fetchall()
+        culpados = db.session.execute(culpado_sql, params).fetchall()
+    except Exception as e:
+        db.session.rollback()
+        err = {'status': 'query_error', 'error': str(e)}
+        print(format_json(err) if args.json_mode else f"Erro ao consultar agent_step: {e}")
+        return
+
+    total = (row.total if row else 0) or 0
+    data = {
+        'status': 'ok' if total > 0 else 'empty',
+        'period_days': args.days,
+        'scope': _scope_label(args),
+        'total_steps': total,
+        'judged': (row.judged or 0) if row else 0,
+        'avg_judge_score': round(float(row.avg_score), 1) if row and row.avg_score is not None else None,
+        'judge_success': (row.judge_success or 0) if row else 0,
+        'judge_failure': (row.judge_failure or 0) if row else 0,
+        'with_componente_culpado': (row.with_culpado or 0) if row else 0,
+        'adversarial_refuted': (row.adversarial_refuted or 0) if row else 0,
+        'success_but_refuted': (row.success_but_refuted or 0) if row else 0,
+        'high_frustration': (row.high_frustration or 0) if row else 0,
+        'label_distribution': [{'label': r.label, 'count': r.n} for r in labels],
+        'top_componente_culpado': [{'componente': r.comp, 'count': r.n} for r in culpados],
+    }
+
+    if args.json_mode:
+        print(format_json(data))
+        return
+
+    if total == 0:
+        print(f"Qualidade Step-level ({args.days} dias, {data['scope']}): SEM DADOS.")
+        print("(agent_step comecou 2026-05-30. Verifique a flag AGENT_STEP_JUDGE e o canal —")
+        print(" Teams pode nao estar instrumentado em agent_step.)")
+        return
+
+    print(f"Qualidade Step-level ({args.days} dias, {data['scope']}):\n")
+    print(f"  Steps: {total} | com judge: {data['judged']}")
+    if data['avg_judge_score'] is not None:
+        print(f"  Score medio do judge: {data['avg_judge_score']}/100")
+    print(f"  Judge success: {data['judge_success']} | failure: {data['judge_failure']}")
+    print(f"  Com componente_culpado: {data['with_componente_culpado']}")
+    print(f"  Adversarial refutou: {data['adversarial_refuted']}")
+    print(f"  [VIES sem-tool] judge=success MAS adversarial refutou: {data['success_but_refuted']}")
+    print(f"  Alta frustracao (score >= 3): {data['high_frustration']}")
+    if data['label_distribution']:
+        print("\n  Distribuicao de label do judge:")
+        for d in data['label_distribution']:
+            print(f"    {d['label']}: {d['count']}")
+    if data['top_componente_culpado']:
+        print("\n  Top componentes culpados:")
+        for d in data['top_componente_culpado']:
+            print(f"    {d['componente']}: {d['count']}")
+
+
+def handle_step_coverage(args):
+    """Cobertura de sinal por canal (web/teams) + gargalo PlanState.
+
+    Revela lacunas estruturais: canal Teams nao instrumentado em agent_step,
+    e o gargalo B1 (PlanState ~0 -> promocao A4 vira no-op).
+    """
+    from app import db
+    from app.utils.timezone import agora_utc_naive
+    from datetime import timedelta
+    from sqlalchemy import text
+
+    uid = _scope_uid(args)
+    since = agora_utc_naive() - timedelta(days=args.days)
+    params = {'since': since, 'uid': uid}
+
+    cov_sql = text("""
+        SELECT COALESCE(channel, '(null)') AS channel,
+               count(*) AS total,
+               count(*) FILTER (WHERE outcome_signal::jsonb ? 'judge') AS judged,
+               count(*) FILTER (WHERE outcome_signal::jsonb ? 'verify') AS verified,
+               count(*) FILTER (WHERE outcome_signal::jsonb ? 'triage') AS triaged,
+               max(created_at) AS last_step
+        FROM agent_step
+        WHERE created_at >= :since AND (:uid IS NULL OR user_id = :uid)
+        GROUP BY channel
+        ORDER BY count(*) DESC
+    """)
+    plan_sql = text("""
+        SELECT count(*) AS total,
+               count(*) FILTER (WHERE data::jsonb ? 'plan') AS with_plan,
+               count(*) FILTER (WHERE session_id LIKE 'teams_%') AS teams_sessions
+        FROM agent_sessions
+        WHERE created_at >= :since AND (:uid IS NULL OR user_id = :uid)
+    """)
+    try:
+        cov = db.session.execute(cov_sql, params).fetchall()
+        plan = db.session.execute(plan_sql, params).fetchone()
+    except Exception as e:
+        db.session.rollback()
+        err = {'status': 'query_error', 'error': str(e)}
+        print(format_json(err) if args.json_mode else f"Erro ao consultar cobertura: {e}")
+        return
+
+    by_channel = [{
+        'channel': r.channel,
+        'total': r.total,
+        'judged': r.judged,
+        'verified': r.verified,
+        'triaged': r.triaged,
+        'last_step': format_datetime(r.last_step),
+    } for r in cov]
+    total_steps = sum(c['total'] for c in by_channel)
+    sess_total = (plan.total or 0) if plan else 0
+    with_plan = (plan.with_plan or 0) if plan else 0
+    teams_sessions = (plan.teams_sessions or 0) if plan else 0
+
+    data = {
+        'status': 'ok' if total_steps > 0 or sess_total > 0 else 'empty',
+        'period_days': args.days,
+        'scope': _scope_label(args),
+        'steps_total': total_steps,
+        'by_channel': by_channel,
+        'plan_state': {
+            'sessions_total': sess_total,
+            'with_plan': with_plan,
+            'with_plan_pct': round(100.0 * with_plan / sess_total, 1) if sess_total else 0.0,
+            'teams_sessions': teams_sessions,
+        },
+    }
+
+    if args.json_mode:
+        print(format_json(data))
+        return
+
+    print(f"Cobertura de Sinal ({args.days} dias, {data['scope']}):\n")
+    if not by_channel:
+        print("  Nenhum step registrado no periodo (agent_step vazio).")
+    else:
+        rows = []
+        for c in by_channel:
+            rows.append([
+                c['channel'], str(c['total']), str(c['judged']),
+                str(c['verified']), str(c['triaged']), c['last_step'],
+            ])
+        print(format_table(['Canal', 'Steps', 'Judge', 'Verify', 'Triage', 'Ultimo'], rows))
+
+    ps = data['plan_state']
+    print(f"\n  PlanState (sessoes com plano super-loop): {ps['with_plan']}/{ps['sessions_total']} ({ps['with_plan_pct']}%)")
+    if ps['sessions_total'] > 0 and ps['with_plan_pct'] < 5:
+        print("  [GARGALO B1] PlanState ~0 -> promocao A4 (Distill->Deploy) vira no-op.")
+    if ps['teams_sessions'] > 0 and not any(c['channel'] == 'teams' for c in by_channel):
+        print(f"  [LACUNA] {ps['teams_sessions']} sessoes Teams no periodo, mas 0 steps Teams em agent_step (canal nao instrumentado).")
+
+
+def handle_rule_adhesion(args):
+    """Painel de adesao de regras / loop corretivo pessoal (sintoma Marcus). Custo $0.
+
+    Mede reincidencia por error_signature ANTES (correction_count) vs DEPOIS
+    (harmful_count) da promocao a regra dura ('mandatory').
+    """
+    from app.agente.services.insights_service import get_rule_adhesion_panel
+
+    data = get_rule_adhesion_panel(days=args.days, user_id=_scope_uid(args))
+
+    if args.json_mode:
+        print(format_json(data))
+        return
+
+    print(f"Adesao de Regras ({args.days} dias, {_scope_label(args)}):\n")
+    print(f"  Correcoes (em /memories/corrections/): {data.get('total_corrections', 0)}")
+    print(f"  Promovidas a regra dura (mandatory): {data.get('mandatory_count', 0)} ({data.get('mandatory_pct', 0)}%)")
+
+    outcome = data.get('outcome', {})
+    if not outcome.get('available', False):
+        print("\n  [!] Metricas de reincidencia indisponiveis (colunas Fase 3.1 ausentes no banco).")
+    else:
+        print(f"\n  Outcome com regra dura: reincidencias DEPOIS={outcome.get('harmful_total', 0)}, "
+              f"injecoes uteis={outcome.get('helpful_total', 0)}")
+
+    top = data.get('top_by_signature', [])
+    if top:
+        print("\n  Top assinaturas de erro (reincidencia antes -> depois da promocao):")
+        rows = []
+        for t in top:
+            rows.append([
+                truncate(str(t.get('error_signature', '')), 36),
+                str(t.get('ocorrencias', 0)),
+                str(t.get('reincidencia_total', 0)),
+                str(t.get('reincidencia_pos_promocao', 0)),
+                'Sim' if t.get('promovida') else 'Nao',
+            ])
+        print(format_table(['Assinatura', 'Ocorr', 'Antes', 'Depois', 'Regra dura'], rows))
+    else:
+        print("\n  (Sem assinaturas de erro registradas no periodo.)")
+
+
+def handle_routing(args):
+    """Metricas de roteamento (ambiguidade, struggling, distribuicao de skills). Custo $0."""
+    from app.agente.services.insights_service import get_routing_metrics
+
+    data = get_routing_metrics(days=args.days, user_id=_scope_uid(args))
+
+    if args.json_mode:
+        print(format_json(data))
+        return
+
+    total = data.get('total_sessions', 0)
+    if total == 0:
+        print(f"Roteamento ({args.days} dias, {_scope_label(args)}): sem sessoes no periodo.")
+        return
+
+    amb = data.get('ambiguidade', {})
+    instr = data.get('instrumentacao', {})
+    struggling = data.get('struggling', [])
+
+    print(f"Metricas de Roteamento ({args.days} dias, {_scope_label(args)}):\n")
+    print(f"  Sessoes: {total} (com summary: {data.get('sessions_com_summary', 0)})")
+    print(f"  Health (routing): {data.get('health_score', 0)}")
+    print(f"  Taxa AskUser (ambiguidade): {amb.get('taxa_askuser_pct', 0)}% ({amb.get('sessions_askuser', 0)} sessoes)")
+    print(f"  Taxa com Skill: {amb.get('taxa_skill_pct', 0)}% ({amb.get('sessions_com_skill', 0)} sessoes)")
+    print(f"  Sessoes struggling (>=15 msgs, <=2 tools): {len(struggling)}")
+    if instr:
+        ativos = [k for k, v in instr.items() if v]
+        print(f"  Instrumentacao ativa: {', '.join(ativos) if ativos else '(nenhuma)'}")
+    print("\n  (Distribuicao de skills/topicos completa via --json.)")
+
+
+def handle_recommendations(args):
+    """Recomendacoes acionaveis completas (rule-based, ate 5). Custo $0.
+
+    Diferente de 'insights' (que trunca a 3), aqui mostramos a lista completa
+    do recommendations_engine sobre as metricas ja computadas pelo insights_service.
+    """
+    from app.agente.services.insights_service import get_insights_data
+    from app.agente.services.recommendations_engine import generate_recommendations
+
+    metrics = get_insights_data(days=args.days, user_id=_scope_uid(args), compare=True)
+    recs = generate_recommendations(metrics)
+
+    if args.json_mode:
+        print(format_json({'total': len(recs), 'period_days': args.days,
+                           'scope': _scope_label(args), 'recommendations': recs}))
+        return
+
+    if not recs:
+        print(f"Recomendacoes ({args.days} dias, {_scope_label(args)}): nenhuma "
+              "(sem dados suficientes ou agente saudavel).")
+        return
+
+    print(f"Recomendacoes ({args.days} dias, {_scope_label(args)}) — {len(recs)}:\n")
+    for r in recs:
+        sev = str(r.get('severity', '?')).upper()
+        print(f"  [{sev}] {r.get('title', '')}")
+        desc = r.get('description', '')
+        if desc:
+            print(f"    {desc}")
+        action = r.get('action')
+        if isinstance(action, dict) and action.get('label'):
+            print(f"    -> Acao sugerida: {action['label']}")
+        print()
+
+
 HANDLERS = {
     'insights': handle_insights,
     'memory-metrics': handle_memory_metrics,
@@ -492,6 +860,11 @@ HANDLERS = {
     'embedding-coverage': handle_embedding_coverage,
     'friction': handle_friction,
     'briefing': handle_briefing,
+    'step-quality': handle_step_quality,
+    'step-coverage': handle_step_coverage,
+    'rule-adhesion': handle_rule_adhesion,
+    'routing': handle_routing,
+    'recommendations': handle_recommendations,
 }
 
 

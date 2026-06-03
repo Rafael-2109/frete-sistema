@@ -93,8 +93,9 @@ def handle_cold_move(args):
 
 def handle_summarize(args):
     """Sumarizar uma sessao."""
+    from flask import current_app
     from app.agente.models import AgentSession
-    from app.agente.services.session_summarizer import summarize_session
+    from app.agente.services.session_summarizer import summarize_and_save
 
     session = AgentSession.query.filter_by(
         session_id=args.session_id, user_id=args.user_id
@@ -105,11 +106,15 @@ def handle_summarize(args):
     if session.message_count and session.message_count < 3:
         error_exit("Sessao tem menos de 3 mensagens. Nao ha conteudo suficiente.")
 
-    app, _ = get_app_context()
+    # Reutiliza o app context ja aberto pelo main() (evita contexto-duplo / 2x create_app).
+    # BUGFIX: antes chamava summarize_session(app, ...), mas a assinatura real e
+    # summarize_session(messages, session_id) -> TypeError. A funcao de orquestracao
+    # correta e summarize_and_save(app, session_id, user_id) -> bool.
+    app = current_app._get_current_object()
 
     print(f"Sumarizando sessao {args.session_id}...")
     try:
-        result = summarize_session(app, args.session_id, args.user_id)
+        result = summarize_and_save(app, args.session_id, args.user_id)
         if result:
             # Recarregar sessao para pegar summary atualizado
             from app import db

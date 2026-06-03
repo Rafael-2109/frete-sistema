@@ -1,6 +1,6 @@
 ---
 name: gerindo-agente
-description: Esta skill deve ser usada quando o usuario precisa gerenciar o Agente Web — memorias persistentes, sessoes anteriores, padroes aprendidos, perfil comportamental, knowledge graph, diagnosticos de saude, analise de friccao, briefing intersessao ou manutencao do sistema. Exemplos que trigam: "memorias do usuario 5", "sessoes anteriores", "historico de conversas", "padroes aprendidos", "pitfalls do sistema", "knowledge graph", "entidades do grafo", "saude do agente", "health score", "metricas do agente", "memorias nao efetivas", "consolidar memorias", "reindexar embeddings", "cleanup do agente", "memorias empresa", "tier frio", "versoes de memoria", "pendencia resolvida", "conflitos de memoria", "cobertura de embeddings", "sumarizar sessao", "analise de friccao", "sinais de frustracao", "briefing entre sessoes", "briefing do agente", "sessoes do Teams", "modelo usado nas sessoes", "perfil comportamental", "perfil do usuario", "user.xml", "gerar perfil". NAO usar para: consultas SQL ou dados de negocio (usar consultando-sql), lembrar preferencias do PROPRIO Claude Code (usar auto-memory), cotacao de frete (usar cotando-frete), operacoes SSW (usar operando-ssw), Odoo (usar skills Odoo).
+description: Esta skill deve ser usada quando o usuario precisa gerenciar o Agente Web — memorias persistentes, sessoes anteriores, padroes aprendidos, perfil comportamental, knowledge graph, diagnosticos de saude, analise de friccao, briefing intersessao ou manutencao do sistema. Exemplos que trigam: "memorias do usuario 5", "sessoes anteriores", "historico de conversas", "padroes aprendidos", "pitfalls do sistema", "knowledge graph", "entidades do grafo", "saude do agente", "health score", "metricas do agente", "memorias nao efetivas", "consolidar memorias", "reindexar embeddings", "cleanup do agente", "memorias empresa", "tier frio", "versoes de memoria", "pendencia resolvida", "conflitos de memoria", "cobertura de embeddings", "sumarizar sessao", "analise de friccao", "sinais de frustracao", "briefing entre sessoes", "briefing do agente", "sessoes do Teams", "modelo usado nas sessoes", "perfil comportamental", "perfil do usuario", "user.xml", "gerar perfil", "qualidade dos turnos", "judge score", "step quality", "cobertura de sinal", "adesao de regras", "reincidencia de erro", "sintoma Marcus", "metricas de roteamento", "recomendacoes do agente", "PlanState". NAO usar para: consultas SQL ou dados de negocio (usar consultando-sql), lembrar preferencias do PROPRIO Claude Code (usar auto-memory), cotacao de frete (usar cotando-frete), operacoes SSW (usar operando-ssw), Odoo (usar skills Odoo).
 allowed-tools: Read, Bash, Glob, Grep
 ---
 
@@ -94,6 +94,11 @@ O que o usuario quer?
 |   |-- "cobertura embeddings"  -> embedding-coverage
 |   |-- "analise de friccao"    -> friction [--days N]
 |   |-- "briefing intersessao"  -> briefing
+|   |-- "qualidade dos turnos"  -> step-quality [--days N] [--all]
+|   |-- "cobertura de sinal"    -> step-coverage [--days N] [--all]
+|   |-- "adesao de regras"      -> rule-adhesion [--days N] [--all]
+|   |-- "metricas de roteamento"-> routing [--days N] [--all]
+|   |-- "recomendacoes"         -> recommendations [--days N] [--all]
 |
 |-- Manutencao (consolidar, cold, reindexar, cleanup)
 |   -> scripts/manutencao.py
@@ -120,7 +125,7 @@ source .venv/bin/activate && python .claude/skills/gerindo-agente/scripts/{SCRIP
 | `sessao.py` | list, search, semantic, view, summary, users, delete | Sessoes |
 | `padrao.py` | patterns, pitfalls, analyze, extract, empresa, profile | Padroes |
 | `grafo.py` | query, entities, links, relations, stats | Knowledge Graph |
-| `diagnostico.py` | insights, memory-metrics, health, effectiveness, cold-candidates, conflicts, embedding-coverage, friction, briefing | Diagnosticos |
+| `diagnostico.py` | insights, memory-metrics, health, effectiveness, cold-candidates, conflicts, embedding-coverage, friction, briefing, **step-quality**, **step-coverage**, **rule-adhesion**, **routing**, **recommendations** | Diagnosticos |
 | `manutencao.py` | consolidate, cold-move, summarize, reindex-memories, reindex-sessions, cleanup-orphans | Manutencao |
 
 ## TRATAMENTO DE ERROS
