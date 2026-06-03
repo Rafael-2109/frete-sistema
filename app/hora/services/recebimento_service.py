@@ -12,7 +12,7 @@ Fluxo:
 """
 from __future__ import annotations
 
-from typing import List, Optional
+from typing import List, Optional, Set
 
 from sqlalchemy import func as sa_func
 from sqlalchemy.orm import selectinload
@@ -462,6 +462,7 @@ def reiniciar_conferencia_para_chassis(
 def finalizar_recebimento(
     recebimento_id: int,
     operador: Optional[str] = None,
+    ignorar_chassis: Optional[Set[str]] = None,
 ) -> HoraRecebimento:
     """Marca MOTO_FALTANDO em batch para chassis da NF sem conferencia ativa,
     e seta status CONCLUIDO ou COM_DIVERGENCIA.
@@ -470,6 +471,12 @@ def finalizar_recebimento(
     faltantes — decisao 2026-05-07 do dono do modulo: "abandonada pela metade
     -> descartar". Conferencia abandonada nao deve bloquear o chassi de virar
     MOTO_FALTANDO se ele estiver na NF.
+
+    `ignorar_chassis` (2026-06-03): chassis declarados na NF que NAO devem virar
+    MOTO_FALTANDO mesmo sem conferencia ativa. Usado pelo recebimento automatico
+    para pular motos que ja sairam do estoque (VENDIDA/RESERVADA/EM_TRANSITO/...):
+    sem esse filtro, um chassi ja vendido apareceria como "faltante no
+    fechamento". Default None = comportamento historico (nenhum ignorado).
     """
     rec = HoraRecebimento.query.get(recebimento_id)
     if not rec:
@@ -502,7 +509,11 @@ def finalizar_recebimento(
         db.session.flush()
         db.session.expire(rec, ['conferencias'])
 
-    chassis_nf = {i.numero_chassi for i in rec.nf.itens_considerados}
+    ignorar_norm = {(c or '').strip().upper() for c in (ignorar_chassis or ())}
+    chassis_nf = {
+        i.numero_chassi for i in rec.nf.itens_considerados
+        if (i.numero_chassi or '').strip().upper() not in ignorar_norm
+    }
     chassis_conferidos_ativos = {
         c.numero_chassi for c in rec.conferencias if not c.substituida
     }
@@ -1299,17 +1310,36 @@ def criar_recebimento_automatico_da_nf(
       2. iniciar_recebimento -> AGUARDANDO_QTD
       3. definir_qtd_declarada(qtd = len(nf.itens)) -> EM_CONFERENCIA
       4. Para cada item NF:
-         a. resolve modelo canonico (None se nao resolver)
-         b. registra conferencia confirmada via registrar_conferencia_cega
+         a. GUARDA anti-ressurreicao: se o chassi ja saiu do estoque
+            (status_atual em EVENTOS_FORA_ESTOQUE | EVENTOS_EM_TRANSITO),
+            PULA — nao cria conferencia nem emite RECEBIDA (senao a moto
+            vendida reapareceria em estoque). Coleta em chassis_pulados_ja_fora.
+         b. resolve modelo canonico (None se nao resolver)
+         c. registra conferencia confirmada via registrar_conferencia_cega
             (reusa toda a logica: _redefinir_divergencias, _aplicar_correcao_moto,
              registrar_evento RECEBIDA, auditoria CONFERIU_MOTO).
-      5. finalizar_recebimento -> CONCLUIDO ou COM_DIVERGENCIA.
+      5. finalizar_recebimento(ignorar_chassis=pulados) -> CONCLUIDO ou
+         COM_DIVERGENCIA. Os pulados NAO viram MOTO_FALTANDO.
       6. Auditoria adicional RECEBIMENTO_AUTOMATICO no header.
 
     Retorna dict com totais.
     """
     from app.hora.services.modelo_resolver_service import resolver_modelo
     from app.hora.models import ALIAS_TIPO_NOME_NF
+    from app.hora.services.moto_service import status_atual
+    from app.hora.services.estoque_service import (
+        EVENTOS_EM_TRANSITO,
+        EVENTOS_FORA_ESTOQUE,
+    )
+
+    # Guarda anti-ressurreicao (2026-06-03): um chassi que JA SAIU do estoque
+    # (vendido/reservado/devolvido/em transito) nao pode ser "re-recebido" por
+    # este fluxo automatico — emitir RECEBIDA por cima de VENDIDA inverteria o
+    # estado e a moto reapareceria em estoque. Causou 505 motos invertidas no
+    # backfill 2026-05-16 (ver app/hora/CLAUDE.md "Guarda do recebimento
+    # automatico"). status_atual=None (nunca movimentada) ou estado em-estoque
+    # segue o fluxo normal de conferencia.
+    ESTADOS_JA_FORA = set(EVENTOS_FORA_ESTOQUE) | set(EVENTOS_EM_TRANSITO)
 
     nf = HoraNfEntrada.query.get(nf_id)
     if not nf:
@@ -1340,10 +1370,21 @@ def criar_recebimento_automatico_da_nf(
     qtd_nf = len(nf.itens_considerados)
     definir_qtd_declarada(recebimento_id=rec.id, qtd=qtd_nf, usuario=operador)
 
-    # 3. Registra cada conferencia (cada call faz commit interno)
+    # 3. Registra cada conferencia (cada call faz commit interno).
+    #    Pula chassis que ja sairam do estoque (guarda anti-ressurreicao):
+    #    eles entram em chassis_pulados_ja_fora e NAO viram MOTO_FALTANDO
+    #    (passados como ignorar_chassis ao finalizar). ordem_conf so avanca
+    #    quando uma conferencia e de fato criada (sem buracos na sequencia).
     conf_ids: List[int] = []
     chassis_sem_modelo_canonico: List[str] = []
-    for ordem, item in enumerate(nf.itens_considerados, start=1):
+    chassis_pulados_ja_fora: List[str] = []
+    ordem_conf = 0
+    for item in nf.itens_considerados:
+        estado_atual = status_atual(item.numero_chassi)
+        if estado_atual in ESTADOS_JA_FORA:
+            chassis_pulados_ja_fora.append(item.numero_chassi)
+            continue
+        ordem_conf += 1
         modelo_canonico = None
         if item.modelo_texto_original:
             modelo_canonico = (
@@ -1360,13 +1401,18 @@ def criar_recebimento_automatico_da_nf(
             cor_conferida=cor_norm,
             avaria_fisica=False,
             qr_code_lido=False,
-            ordem=ordem,
+            ordem=ordem_conf,
             operador=operador,
         )
         conf_ids.append(conf.id)
 
-    # 4. Finaliza (faz commit interno; trata MOTO_FALTANDO se sobrarem)
-    rec = finalizar_recebimento(recebimento_id=rec.id, operador=operador)
+    # 4. Finaliza (faz commit interno; trata MOTO_FALTANDO se sobrarem).
+    #    Os pulados NAO sao faltantes (ja foram vendidos) — vao em ignorar_chassis.
+    rec = finalizar_recebimento(
+        recebimento_id=rec.id,
+        operador=operador,
+        ignorar_chassis=set(chassis_pulados_ja_fora),
+    )
 
     # 5. Auditoria explicita marcando origem AUTOMATICA
     recebimento_audit.registrar(
@@ -1375,7 +1421,8 @@ def criar_recebimento_automatico_da_nf(
         usuario=operador,
         detalhe=(
             f'NF {nf.numero_nf} processada automaticamente: '
-            f'{qtd_nf} chassi(s), {len(chassis_sem_modelo_canonico)} sem modelo canonico. '
+            f'{qtd_nf} chassi(s), {len(chassis_sem_modelo_canonico)} sem modelo canonico, '
+            f'{len(chassis_pulados_ja_fora)} pulado(s) por ja estar fora de estoque. '
             f'Status final: {rec.status}.'
         ),
     )
@@ -1390,6 +1437,7 @@ def criar_recebimento_automatico_da_nf(
         'qtd_itens_nf': qtd_nf,
         'conferencias_criadas': len(conf_ids),
         'chassis_sem_modelo_canonico': chassis_sem_modelo_canonico,
+        'chassis_pulados_ja_fora': chassis_pulados_ja_fora,
         'status_final': rec.status,
     }
 

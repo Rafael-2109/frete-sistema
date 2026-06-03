@@ -33,6 +33,7 @@ atualizado: 2026-06-03
 - [16. Campo `consumidor_final` no faturamento TagPlus — 2026-05-07 (revisado)](#16-campo-consumidor_final-no-faturamento-tagplus-2026-05-07-revisado)
 - [17. Desconsiderar moto de NF de compra — 2026-06-03](#17-desconsiderar-moto-de-nf-de-compra--2026-06-03)
 - [18. Unificação da tela de Pedido de Venda + filtro loja/vendedor + fix desconto — 2026-06-03](#18-unificação-da-tela-de-pedido-de-venda--filtro-lojavendedor--fix-desconto--2026-06-03)
+- [19. Guarda do recebimento automático (anti-ressurreição) — 2026-06-03](#19-guarda-do-recebimento-automático-anti-ressurreição--2026-06-03)
 - [Onboarding Tours (2026-05-08)](#onboarding-tours-2026-05-08)
 - [Referências](#referências)
 
@@ -739,6 +740,23 @@ Permite marcar um item de NF de entrada (`HoraNfEntradaItem`) como **desconsider
 **Migration**: `scripts/migrations/hora_43_nf_item_desconsiderar.{py,sql}`.
 
 **Spec/Plano**: `docs/superpowers/specs/2026-06-03-hora-desconsiderar-moto-nf-design.md` · `docs/superpowers/plans/2026-06-03-hora-desconsiderar-moto-nf.md`.
+
+---
+
+## 19. Guarda do recebimento automático (anti-ressurreição) — 2026-06-03
+
+**Incidente**: o backfill `scripts/hora/backfill_recebimentos.py` (operador `BACKFILL_2026_05_16`) re-processou TODAS as NFs de entrada sem olhar o estado atual do chassi e emitiu um evento `RECEBIDA` (id/timestamp = momento do backfill) por cima de motos já `VENDIDA`. Como **estado da moto = último evento** (invariante 4), essas motos voltaram a contar como "em estoque". Medido em PROD: **505 chassis** cujo último estado real era `VENDIDA` passaram a aparecer como `RECEBIDA`.
+
+**Causa estrutural**: a máquina de estado é "último evento vence", sem validação de transição — `registrar_evento` (`moto_service.py`) aceita qualquer tipo da allow-list, e `criar_recebimento_automatico_da_nf` não checava o estado atual antes de conferir cada item. Nota: a derivação de "último evento" diverge entre `estoque_service` (`MAX(id)`) e `moto_service`/`rastreamento_completo` (`MAX(timestamp)`); hoje concordam, mas inserção retroativa pode fazê-las divergir (risco latente conhecido — **não** corrigido nesta entrega).
+
+**Guarda** (`recebimento_service.py`):
+- `criar_recebimento_automatico_da_nf` **pula** itens cujo `status_atual(chassi)` está em `EVENTOS_FORA_ESTOQUE | EVENTOS_EM_TRANSITO` (vendida/reservada/devolvida/NF emitida/NF cancelada/em trânsito). Não cria conferência nem emite `RECEBIDA`; coleta em `chassis_pulados_ja_fora` (no retorno e na auditoria `RECEBIMENTO_AUTOMATICO`).
+- `finalizar_recebimento` ganhou o parâmetro `ignorar_chassis: Optional[Set[str]] = None` (default = comportamento histórico). Os pulados são passados aí para **não** virarem `MOTO_FALTANDO` (eles não estão faltando — já foram vendidos).
+- Motos `RECEBIDA`/`CONFERIDA`/em estoque ou sem evento seguem o fluxo normal (o backfill deleta os recebimentos antes, então re-receber estoque legítimo continua válido).
+
+**Correção do passivo** (505 motos já gravadas): `scripts/hora/fix_backfill_vendidas_revertidas.py` re-emite `VENDIDA` (método aditivo A1) herdando `loja_id`/origem do último `VENDIDA` real. Dry-run por default, `--confirmar` para executar, idempotente (seleção zera após a correção). Não apaga o `RECEBIDA` do backfill (preserva histórico).
+
+**Testes**: `tests/hora/test_recebimento_automatico_blindagem.py` (4 casos: pula vendido; pula reservado/em-trânsito; `ignorar_chassis` não marca faltante; default marca faltante).
 
 ---
 

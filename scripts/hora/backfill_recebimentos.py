@@ -12,6 +12,11 @@ Fluxo:
      chassis convergirem no mesmo canonico.
   2. Exclui os recebimentos atuais (com verificacao de bloqueios antes).
   3. Roda `criar_recebimento_automatico_da_nf` para cada NF com loja_destino_id.
+     Guarda anti-ressurreicao (2026-06-03): o recebimento automatico PULA
+     chassis que ja sairam do estoque (VENDIDA/RESERVADA/EM_TRANSITO/...) — nao
+     emite RECEBIDA nem MOTO_FALTANDO. Evita repetir o incidente de 2026-05-16
+     (505 motos vendidas revertidas a RECEBIDA). O passivo daquela execucao e
+     corrigido por scripts/hora/fix_backfill_vendidas_revertidas.py.
 
 Uso:
     python scripts/hora/backfill_recebimentos.py              # dry-run
@@ -241,6 +246,7 @@ def executar_recebimentos(nfs: list[HoraNfEntrada]) -> dict:
         'com_divergencia': 0,
         'conferencias': 0,
         'chassis_sem_canonico': 0,
+        'chassis_pulados_ja_fora': 0,
         'falhas': [],
     }
     for idx, nf in enumerate(nfs, start=1):
@@ -254,13 +260,16 @@ def executar_recebimentos(nfs: list[HoraNfEntrada]) -> dict:
             totais['criados'] += 1
             totais['conferencias'] += res['conferencias_criadas']
             totais['chassis_sem_canonico'] += len(res['chassis_sem_modelo_canonico'])
+            pulados = len(res.get('chassis_pulados_ja_fora', []))
+            totais['chassis_pulados_ja_fora'] += pulados
             if res['status_final'] == 'CONCLUIDO':
                 totais['concluido'] += 1
             else:
                 totais['com_divergencia'] += 1
             print(
                 f'rec#{res["recebimento_id"]} status={res["status_final"]} '
-                f'sem_canon={len(res["chassis_sem_modelo_canonico"])}'
+                f'sem_canon={len(res["chassis_sem_modelo_canonico"])} '
+                f'pulados_ja_fora={pulados}'
             )
         except Exception as exc:  # noqa: BLE001
             totais['falhas'].append({'nf_id': nf.id, 'numero_nf': nf.numero_nf, 'erro': str(exc)})
@@ -336,6 +345,7 @@ def imprimir_resumo_pos(
     print(f'  COM_DIVERGENCIA: {totais_rec["com_divergencia"]}')
     print(f'  conferencias totais: {totais_rec["conferencias"]}')
     print(f'  chassis sem canonico (residual): {totais_rec["chassis_sem_canonico"]}')
+    print(f'  chassis pulados (ja fora do estoque — guarda): {totais_rec.get("chassis_pulados_ja_fora", 0)}')
     print(f'  falhas: {len(totais_rec["falhas"])}')
     if totais_rec['falhas']:
         for f in totais_rec['falhas']:
