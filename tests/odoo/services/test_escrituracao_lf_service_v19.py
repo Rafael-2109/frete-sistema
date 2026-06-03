@@ -1421,3 +1421,69 @@ def test_gerar_po_b_v23_2_account_nao_existe_destino_loga_warning(monkeypatch):
         if c.args[0] == 'purchase.order.line' and c.args[1] == 'write'
     ]
     assert len(chamadas_write) == 0
+
+
+# ============================================================
+# C10 (2026-06-02) — gerar_po_from_dfe forca context company do DFe
+# ------------------------------------------------------------
+# GOTCHA 1 (canary FB->LF): action_gerar_po_dfe usa a company do USUARIO
+# (uid 42=FB) -> PO.lines nascem com account_id da FB em vez do destino (LF),
+# travando criar_invoice_from_po com 'Empresas incompativeis'. Forcar
+# context allowed_company_ids/company_id = company do DFe resolve nativamente.
+# ============================================================
+
+def test_gerar_po_c10_context_company_no_dry_run():
+    """C10: o plano (dry_run) inclui a company do DFe no context."""
+    odoo = MagicMock()
+    odoo.read.return_value = [{
+        'purchase_id': False, 'purchase_fiscal_id': False,
+        'company_id': [5, 'LF'],
+    }]
+    odoo.search_read.return_value = []
+    svc = EscrituracaoLfService(odoo=odoo)
+    res = svc.gerar_po_from_dfe(dfe_id=4321, dry_run=True)
+    assert res['status'] == 'DRY_RUN_OK'
+    ctx = res['plano']['context']
+    assert ctx.get('company_id') == 5
+    assert ctx.get('allowed_company_ids') == [5]
+    assert ctx.get('validate_analytic') is True
+
+
+def test_gerar_po_c10_context_company_no_fire(monkeypatch):
+    """C10: o fire (action_gerar_po_dfe) e' chamado com context company do DFe."""
+    odoo = MagicMock()
+    odoo.read.side_effect = [
+        [{'purchase_id': False, 'purchase_fiscal_id': False,
+          'company_id': [5, 'LF']}],               # dfe_check
+        [{'purchase_id': [888, 'PO/2026/0002']}],  # poll
+    ]
+    odoo.search_read.return_value = []
+    odoo.execute_kw.return_value = None
+    svc = EscrituracaoLfService(odoo=odoo)
+    monkeypatch.setattr('time.sleep', lambda _: None)
+    res = svc.gerar_po_from_dfe(dfe_id=4321, poll_timeout_s=10, dry_run=False)
+    assert res['status'] == 'CRIADO'
+    fire_calls = [
+        c for c in odoo.execute_kw.call_args_list
+        if len(c.args) >= 2 and c.args[1] == 'action_gerar_po_dfe'
+    ]
+    assert len(fire_calls) == 1
+    ctx = fire_calls[0].args[3]['context']
+    assert ctx.get('company_id') == 5
+    assert ctx.get('allowed_company_ids') == [5]
+
+
+def test_gerar_po_c10_sem_company_id_fallback():
+    """C10 retrocompat: DFe sem company_id (mock legado) -> context so
+    validate_analytic (comportamento atual preservado)."""
+    odoo = MagicMock()
+    odoo.read.return_value = [{
+        'purchase_id': False, 'purchase_fiscal_id': False,
+    }]  # SEM company_id
+    odoo.search_read.return_value = []
+    svc = EscrituracaoLfService(odoo=odoo)
+    res = svc.gerar_po_from_dfe(dfe_id=4321, dry_run=True)
+    ctx = res['plano']['context']
+    assert ctx.get('validate_analytic') is True
+    assert 'company_id' not in ctx
+    assert 'allowed_company_ids' not in ctx

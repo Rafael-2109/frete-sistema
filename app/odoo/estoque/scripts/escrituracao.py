@@ -1684,12 +1684,26 @@ class EscrituracaoLfService:
         try:
             dfe_check = self.odoo.read(
                 'l10n_br_ciel_it_account.dfe', [dfe_id],
-                ['purchase_id', 'purchase_fiscal_id'],
+                ['purchase_id', 'purchase_fiscal_id', 'company_id'],  # C10: + company
             )
         except Exception as e:
             out['erro'] = f'erro_ler_dfe: {str(e)[:200]}'
             out['tempo_ms'] = int((time.time() - t0) * 1000)
             return out
+
+        # C10 (2026-06-02): forçar context company do DFe no action_gerar_po_dfe
+        # (GOTCHA 1 — sem isso a action usa a company do USUARIO e a PO.line nasce
+        # com account_id da company errada -> criar_invoice_from_po trava
+        # 'Empresas incompatíveis'). Deriva do próprio DFe (já está no destino).
+        _dfe_co = dfe_check[0].get('company_id') if dfe_check else None
+        _dfe_company_id = (
+            _dfe_co[0] if isinstance(_dfe_co, (list, tuple)) and _dfe_co
+            else (_dfe_co if isinstance(_dfe_co, int) else None)
+        )
+        ctx_gerar_po: Dict[str, Any] = {'validate_analytic': True}
+        if _dfe_company_id:
+            ctx_gerar_po['allowed_company_ids'] = [_dfe_company_id]
+            ctx_gerar_po['company_id'] = _dfe_company_id
 
         if dfe_check:
             chk = dfe_check[0]
@@ -1746,7 +1760,7 @@ class EscrituracaoLfService:
             out['plano'] = {
                 'action': 'l10n_br_ciel_it_account.dfe.action_gerar_po_dfe',
                 'dfe_ids': [dfe_id],
-                'context': {'validate_analytic': True},
+                'context': ctx_gerar_po,  # C10: inclui company do DFe
                 'fire_timeout_s': fire_timeout_s,
                 'poll_timeout_s': poll_timeout_s,
             }
@@ -1759,7 +1773,7 @@ class EscrituracaoLfService:
                 'l10n_br_ciel_it_account.dfe',
                 'action_gerar_po_dfe',
                 [[dfe_id]],
-                {'context': {'validate_analytic': True}},
+                {'context': ctx_gerar_po},  # C10: inclui company do DFe
                 timeout_override=fire_timeout_s,
                 expected_timeout=True,
             )
