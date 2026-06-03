@@ -502,6 +502,20 @@ MANDATORY_RULES_MAX_COUNT = int(os.getenv("AGENT_MANDATORY_RULES_MAX_COUNT", "12
 AGENT_CORRECTION_PROMOTION = os.getenv("AGENT_CORRECTION_PROMOTION", "true").lower() == "true"
 AGENT_CORRECTION_PROMOTION_THRESHOLD = int(os.getenv("AGENT_CORRECTION_PROMOTION_THRESHOLD", "2"))
 
+# Fase 3.4A do loop corretivo — posiciona <user_rules> no TOPO ABSOLUTO do contexto
+# injetado (antes de <user_memories>), nao mais na cauda (apos o footer). A Fase 0
+# (AgingBench) provou que a regra no topo rende muito mais (P3=89% vs P1=0%). Default ON:
+# e o coracao da cura de RETRIEVAL; aditivo (so reordena, nao adiciona/remove conteudo) e
+# reversivel por flag. OFF reproduz o comportamento legado (regras na cauda).
+USE_USER_RULES_TOP = os.getenv("AGENT_USER_RULES_TOP", "true").lower() == "true"
+
+# Fase 3.4B do loop corretivo — soma um eixo de RECORRENCIA (correction_count) ao composite
+# score de ranking das memorias contextuais. Default OFF: hoje correction_count e ~0 em
+# quase todas as memorias (so o loop o popula com o tempo); ligar antes disso apenas
+# redistribuiria os pesos de decay/importance (regressao silenciosa). Ligar so depois que o
+# contador estiver populado. OFF = formula historica EXATA preservada.
+USE_RECURRENCE_SCORE = os.getenv("AGENT_RECURRENCE_SCORE", "false").lower() == "true"
+
 # ====================================================================
 # Features SDK 0.1.60 — Subagent Transparency (2026-04-16)
 # ====================================================================
