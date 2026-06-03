@@ -1,4 +1,54 @@
+<!-- doc:meta
+tipo: reference
+camada: L2
+sot_de: —
+hub: .claude/references/INDEX.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # GOTCHAS Criticos - Integracao Odoo
+
+> **Papel:** GOTCHAS Criticos - Integracao Odoo.
+
+## Indice
+
+- [Conexao e Timeout](#conexao-e-timeout)
+  - [Timeout Override](#timeout-override)
+  - [Commit Preventivo](#commit-preventivo)
+- [Campos e Modelos que NAO EXISTEM](#campos-e-modelos-que-nao-existem)
+  - [Exemplo Correto - Buscar Razao Social](#exemplo-correto---buscar-razao-social)
+  - [Exemplo Correto - stock.move.line](#exemplo-correto---stockmoveline)
+- [Formato de Campos](#formato-de-campos)
+- [Comportamentos Inesperados](#comportamentos-inesperados)
+  - [Recalcular Impostos em `sale.order` (BR): NUNCA `action_update_taxes`](#recalcular-impostos-em-saleorder-br-nunca-action_update_taxes)
+  - [Integer 0 vs False no ORM Odoo](#integer-0-vs-false-no-orm-odoo)
+  - [Tratamento button_validate](#tratamento-button_validate)
+  - [Quality Checks - Ordem Critica](#quality-checks---ordem-critica)
+- [Ordem de Operacoes Critica](#ordem-de-operacoes-critica)
+- [Extrato Bancario: 3 Campos que o Odoo NAO Preenche para Boletos](#extrato-bancario-3-campos-que-o-odoo-nao-preenche-para-boletos)
+  - [Regra: SEMPRE Usar preparar_extrato_para_reconciliacao() (corrigido 2026-02-19)](#regra-sempre-usar-preparar_extrato_para_reconciliacao-corrigido-2026-02-19)
+  - [Services que JA Implementam](#services-que-ja-implementam)
+  - [Services que NAO Precisam (referencia)](#services-que-nao-precisam-referencia)
+- [Correcao Retroativa de Extrato Ja Reconciliado](#correcao-retroativa-de-extrato-ja-reconciliado)
+  - [⚠️ GOTCHAS Criticos](#gotchas-criticos)
+  - [Fluxo Completo (7 Passos)](#fluxo-completo-7-passos)
+  - [Identificacao de Counterparts (Passo 1)](#identificacao-de-counterparts-passo-1)
+  - [Script de Referencia](#script-de-referencia)
+- [NF-e Transfer: Campos Fiscais Stale (l10n_br _compute)](#nf-e-transfer-campos-fiscais-stale-l10n_br-_compute)
+  - [Metodos XML-RPC que NAO Resolvem](#metodos-xml-rpc-que-nao-resolvem)
+  - [Metodo que Funciona: Playwright (UI Odoo)](#metodo-que-funciona-playwright-ui-odoo)
+  - [Navegacao Robusta para Invoice Odoo](#navegacao-robusta-para-invoice-odoo)
+  - [Scripts de Referencia](#scripts-de-referencia)
+- [Matriz de Erros](#matriz-de-erros)
+- [Circuit Breaker](#circuit-breaker)
+- [Lotes com Data de Validade](#lotes-com-data-de-validade)
+  - [Exemplo Correto - Criar Lote com Validade](#exemplo-correto---criar-lote-com-validade)
+- [Campos e Imports Incorretos (Sentry)](#campos-e-imports-incorretos-sentry)
+  - [Campo `observacoes` inexistente em Separacao](#campo-observacoes-inexistente-em-separacao)
+  - [Campo `qtd_palletizacao` inexistente em carteira_principal](#campo-qtd_palletizacao-inexistente-em-carteira_principal)
+  - [Campo `validacao_dfe_id` inexistente em match_nf_po_item](#campo-validacao_dfe_id-inexistente-em-match_nf_po_item)
+  - [Import path errado para Odoo client](#import-path-errado-para-odoo-client)
+- [Gotchas Inter-Company Fiscal (Inventario 2026-05)](#gotchas-inter-company-fiscal-inventario-2026-05)
 
 **Ultima verificacao:** 27/05/2026 (revisao + adicoes Mai/2026: gotchas inventario 2026-05 LF NACOM em `docs/inventario-2026-05/02-gotchas/` — incluindo **G037 v18** sobre CFOP explicito, **G038 v22+** sobre l10n_br_origem ausente bloqueando SEFAZ e **G-MO-05 v6** sobre `medir_consumo_mo` indistinto por state inflando FURO em RESERVA FANTASMA)
 
@@ -487,8 +537,10 @@ Gotchas descobertos via analise de issues do Sentry (Marco/2026):
 
 ### Campo `observacoes` inexistente em Separacao
 
-- **ERRADO**: `Separacao.observacoes`
-- **CORRETO**: `observ_ped_1` (observacao do pedido) ou `obs_separacao` (observacao da separacao)
+```text
+ERRADO:  Separacao.observacoes
+CORRETO: observ_ped_1 (observacao do pedido) ou obs_separacao (observacao da separacao)
+```
 - **Local**: Model Python / scripts de separacao
 - SEMPRE verificar campo real no schema JSON antes de usar
 

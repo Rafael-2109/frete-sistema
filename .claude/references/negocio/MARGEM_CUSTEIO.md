@@ -1,4 +1,34 @@
+<!-- doc:meta
+tipo: reference
+camada: L2
+sot_de: —
+hub: .claude/references/INDEX.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # Margem e Custeio
+
+> **Papel:** Margem e Custeio.
+
+## Indice
+
+- [Formula da Margem Bruta](#formula-da-margem-bruta)
+- [Formula da Margem Liquida](#formula-da-margem-liquida)
+  - [Caso especial: BONIFICACAO](#caso-especial-bonificacao)
+  - [Campo pre-calculado](#campo-pre-calculado)
+- [Tabelas de Custeio](#tabelas-de-custeio)
+  - [CustoConsiderado (tabela `custo_considerado`)](#custoconsiderado-tabela-custo_considerado)
+  - [CustoFrete (tabela `custo_frete`)](#custofrete-tabela-custo_frete)
+  - [CustoMensal (tabela `custo_mensal`)](#customensal-tabela-custo_mensal)
+  - [ParametroCusteio (tabela `parametro_custeio`)](#parametrocusteio-tabela-parametro_custeio)
+  - [RegraComissao (tabela `regra_comissao`)](#regracomissao-tabela-regra_comissao)
+- [Consultas Uteis](#consultas-uteis)
+  - [Margem de um pedido](#margem-de-um-pedido)
+  - [Custo atual de um produto](#custo-atual-de-um-produto)
+  - [Percentual de frete por UF](#percentual-de-frete-por-uf)
+  - [Produtos sem custo cadastrado (potenciais margens NULL)](#produtos-sem-custo-cadastrado-potenciais-margens-null)
+  - [Saude do custeio (dormencia)](#saude-do-custeio-dormencia)
+- [Pontos de atencao para mantenedores](#pontos-de-atencao-para-mantenedores)
 
 Documentacao da composicao de margem bruta/liquida e tabelas de custeio.
 
@@ -195,7 +225,7 @@ WHERE custo_atual = TRUE;
    versao de CustoConsiderado, NUNCA chamar `recalcular_custo_considerado()` em
    produto MANUAL/PRODUCAO sem antes verificar que o tipo destino tem valor.
 2. **N+1 em ParametroCusteio**: usar parametros_cache em batch quando processar
-   muitos itens. Ver `_substituir_carteira_principal` (Sprint 2 - C13).
+   alto volume de itens. Ver `_substituir_carteira_principal` (Sprint 2 - C13).
 3. **Lock pessimista** ao criar nova versao: `with_for_update()` em
    `alterar_tipo_custo`, `cadastrar_custo_manual`, `_salvar_custo_propagado`.
 4. **Soma parcial em propagar_custos_bom**: BOM com componente sem custo gera

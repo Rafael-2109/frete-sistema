@@ -1,4 +1,31 @@
+<!-- doc:meta
+tipo: reference
+camada: L2
+sot_de: —
+hub: .claude/references/INDEX.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # IDs Fixos por Empresa - Odoo
+
+> **Papel:** IDs Fixos por Empresa - Odoo.
+
+## Indice
+
+- [Companies (CNPJ → Company ID)](#companies-cnpj-company-id)
+- [Locais "Indisponivel" por Empresa](#locais-indisponivel-por-empresa)
+- [Picking Types por Company](#picking-types-por-company)
+- [Operacoes de TRANSPORTE/CTe (l10n_br_operacao_id)](#operacoes-de-transportecte-l10n_br_operacao_id)
+  - [Mapeamento De-Para Operacoes](#mapeamento-de-para-operacoes)
+- [IDs do Frete/CTe](#ids-do-fretecte)
+- [Journals Financeiros](#journals-financeiros)
+  - [Journals Especiais (Hardcoded)](#journals-especiais-hardcoded)
+  - [Top 10 Journals por Frequencia](#top-10-journals-por-frequencia)
+- [Tolerancias de Validacao NF x PO](#tolerancias-de-validacao-nf-x-po)
+- [IDs de UI Odoo (Navegacao Web)](#ids-de-ui-odoo-navegacao-web)
+  - [URLs de Invoice](#urls-de-invoice)
+  - [Gotcha: networkidle vs domcontentloaded](#gotcha-networkidle-vs-domcontentloaded)
+- [Como Usar](#como-usar)
 
 **Ultima verificacao:** 31/Janeiro/2026 (product_id corrigido: 35→29993)
 **Fonte:** `app/fretes/services/lancamento_odoo_service.py`, `app/financeiro/routes/baixas.py`
@@ -109,7 +136,7 @@ def _obter_operacao_correta(operacao_atual_id, company_destino_id):
 | team_id | 119 | Sales Team (Frete) |
 | payment_provider_id | 30 | Payment Provider padrao |
 | product_id (FRETE) | 29993 | Produto FRETE - SERVICO (PRODUTO_SERVICO_FRETE_ID) |
-| product_tmpl_id (FRETE) | ~~34~~ | **VERIFICAR** - pode ter mudado junto com product_id |
+| product_tmpl_id (FRETE) | 34 (antigo) | **VERIFICAR** - pode ter mudado junto com product_id |
 | PAYMENT_TERM_A_VISTA | 2791 | account.payment.term "A VISTA" |
 
 ---

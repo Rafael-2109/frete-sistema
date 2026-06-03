@@ -1,4 +1,67 @@
+<!-- doc:meta
+tipo: explanation
+camada: L3
+sot_de: —
+hub: .claude/references/INDEX.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # Estudo: Best Practices de System Prompts (2026)
+
+> **Papel:** Estudo: Best Practices de System Prompts (2026).
+
+## Indice
+
+- [Context](#context)
+- [Metodologia](#metodologia)
+- [SUMARIO EXECUTIVO](#sumario-executivo)
+  - [Top 10 insights da pesquisa (priorizados por impacto no projeto)](#top-10-insights-da-pesquisa-priorizados-por-impacto-no-projeto)
+  - [Mudancas comportamentais Claude 4.6 vs 3.5/4.5](#mudancas-comportamentais-claude-46-vs-3545)
+- [BEST PRACTICES CONSOLIDADAS](#best-practices-consolidadas)
+  - [A. Fundamentos (General Principles)](#a-fundamentos-general-principles)
+  - [B. Estrutura XML](#b-estrutura-xml)
+  - [C. Output Control](#c-output-control)
+  - [D. Tool Use](#d-tool-use)
+  - [E. Thinking / Reasoning](#e-thinking-reasoning)
+  - [F. Agentic Systems](#f-agentic-systems)
+  - [G. Safety / Autonomy Balance](#g-safety-autonomy-balance)
+  - [H. Subagents / Orchestration](#h-subagents-orchestration)
+  - [I. Progressive Disclosure (Agent Skills)](#i-progressive-disclosure-agent-skills)
+  - [J. Memoria e Persistencia](#j-memoria-e-persistencia)
+  - [K. Context Management](#k-context-management)
+  - [L. Prompt Caching](#l-prompt-caching)
+  - [M. Constitutional Hierarchy](#m-constitutional-hierarchy)
+- [PRE-MORTEM](#pre-mortem)
+  - [PM-1. Risks da propria pesquisa](#pm-1-risks-da-propria-pesquisa)
+  - [PM-2. Risks de APLICAR as recomendacoes no sistema atual](#pm-2-risks-de-aplicar-as-recomendacoes-no-sistema-atual)
+  - [PM-3. Sinais de Alerta Universais](#pm-3-sinais-de-alerta-universais)
+  - [PM-4. Reversibilidade por tipo de mudanca](#pm-4-reversibilidade-por-tipo-de-mudanca)
+- [RED TEAM (atacando as best practices)](#red-team-atacando-as-best-practices)
+  - [RT-1. Ataque a Anthropic como fonte](#rt-1-ataque-a-anthropic-como-fonte)
+  - [RT-2. Ataque ao Golden Rule ("show to colleague")](#rt-2-ataque-ao-golden-rule-show-to-colleague)
+  - [RT-3. Ataque ao "context helps"](#rt-3-ataque-ao-context-helps)
+  - [RT-4. Ataque ao "use examples"](#rt-4-ataque-ao-use-examples)
+  - [RT-5. Ataque a "tell what to do, not what NOT to do"](#rt-5-ataque-a-tell-what-to-do-not-what-not-to-do)
+  - [RT-6. Ataque a progressive disclosure / skills](#rt-6-ataque-a-progressive-disclosure-skills)
+  - [RT-7. Ataque a nested subagents proibition](#rt-7-ataque-a-nested-subagents-proibition)
+  - [RT-8. Ataque a Constitutional Hierarchy](#rt-8-ataque-a-constitutional-hierarchy)
+  - [RT-9. Ataque a subagent reliability protocol](#rt-9-ataque-a-subagent-reliability-protocol)
+  - [RT-10. Ataque a prompt injection defenses](#rt-10-ataque-a-prompt-injection-defenses)
+  - [RT-11. Ataque a adaptive thinking](#rt-11-ataque-a-adaptive-thinking)
+  - [RT-12. Ataque a "starting fresh > compaction"](#rt-12-ataque-a-starting-fresh-compaction)
+  - [RT-13. Ataque ao leaked system prompt como referencia](#rt-13-ataque-ao-leaked-system-prompt-como-referencia)
+  - [RT-14. Golden dataset como eval e teatro (parcial)](#rt-14-golden-dataset-como-eval-e-teatro-parcial)
+- [GAPS: PROJETO NACOM vs STATE-OF-THE-ART](#gaps-projeto-nacom-vs-state-of-the-art)
+  - [Pontos Fortes (ja implementados)](#pontos-fortes-ja-implementados)
+  - [Gaps Identificados](#gaps-identificados)
+  - [Lacunas de Seguranca (prioridade)](#lacunas-de-seguranca-prioridade)
+- [Fontes](#fontes)
+  - [Anthropic oficial](#anthropic-oficial)
+  - [Context7](#context7)
+  - [Sources independentes](#sources-independentes)
+  - [Arquivos locais do projeto (cross-reference)](#arquivos-locais-do-projeto-cross-reference)
+- [Notas](#notas)
+- [Contexto](#contexto)
 
 **Versao**: 1.0
 **Data**: 2026-04-12
@@ -700,3 +763,7 @@ Use subagents when tasks can run in parallel, require isolated context, or invol
 - Pre-mortem e red team aplicados ao proprio corpus — as best practices carregam as limitacoes listadas em PM e RT sections. Nao tratar como verdades absolutas.
 - Toda aplicacao de recomendacao deve ter golden dataset baseline ANTES e DEPOIS.
 - Proxima revisao sugerida: 2026-07 (trimestral) ou quando `claude-agent-sdk >= 0.2.0` for lancado.
+
+## Contexto
+
+_A completar (PAD-A Onda 4)._

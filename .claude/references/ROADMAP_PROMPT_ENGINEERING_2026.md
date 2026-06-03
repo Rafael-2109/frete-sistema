@@ -1,4 +1,57 @@
+<!-- doc:meta
+tipo: explanation
+camada: L3
+sot_de: —
+hub: .claude/references/INDEX.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # Roadmap: Prompt Engineering & Agent Reliability (2026)
+
+> **Papel:** Roadmap: Prompt Engineering & Agent Reliability (2026).
+
+## Indice
+
+- [Changelog](#changelog)
+  - [2026-04-12 — Sprint 1 P0 completo + Baseline Render](#2026-04-12-sprint-1-p0-completo-baseline-render)
+  - [2026-04-12 (tarde) — Quality Review findings aplicados (v4.2.0 → v4.3.0)](#2026-04-12-tarde-quality-review-findings-aplicados-v420-v430)
+- [Context](#context)
+- [Metricas de Sucesso](#metricas-de-sucesso)
+  - [Performance (HTTP, ultimos 7 dias)](#performance-http-ultimos-7-dias)
+  - [Volume & Custo (agent_sessions, 7 dias)](#volume-custo-agent_sessions-7-dias)
+  - [Cache Hit Rate](#cache-hit-rate)
+  - [Qualidade & Seguranca](#qualidade-seguranca)
+- [Protocolo de Rollback](#protocolo-de-rollback)
+- [Prioridade P0 — Criticas (fazer em 1-2 semanas)](#prioridade-p0-criticas-fazer-em-1-2-semanas)
+  - [~~R1~~. [CONCLUIDA 2026-04-12 — audit-only, downgrade P0→P3] Audit "CRITICAL/MUST/NEVER/ALWAYS"](#r1-concluida-2026-04-12-audit-only-downgrade-p0p3-audit-criticalmustneveralways)
+  - [R2. [CONCLUIDA 2026-04-12] PROMPT_INJECTION_HARDENING.md](#r2-concluida-2026-04-12-prompt_injection_hardeningmd)
+  - [R3. [CONCLUIDA 2026-04-12 — audit-only] Validar session_context injection](#r3-concluida-2026-04-12-audit-only-validar-session_context-injection)
+  - [R4. [CONCLUIDA 2026-04-12] Audit uso de prefill — ZERO USO](#r4-concluida-2026-04-12-audit-uso-de-prefill-zero-uso)
+- [Prioridade P1 — Altas (2-4 semanas)](#prioridade-p1-altas-2-4-semanas)
+  - [R5. Golden dataset expansion 15 → 50+ casos](#r5-golden-dataset-expansion-15-50-casos)
+  - [R6. Adaptive thinking migration](#r6-adaptive-thinking-migration)
+  - [R7. Context awareness prompt](#r7-context-awareness-prompt)
+  - [R8. Memory injection validation](#r8-memory-injection-validation)
+- [Prioridade P2 — Medias (1-2 meses)](#prioridade-p2-medias-1-2-meses)
+  - [R9. Red team framework basico](#r9-red-team-framework-basico)
+  - [R10. Tool error handling patterns doc](#r10-tool-error-handling-patterns-doc)
+  - [R11. Cost tracking per-agent + token breakdown (cache hit rate instrumentation)](#r11-cost-tracking-per-agent-token-breakdown-cache-hit-rate-instrumentation)
+  - [R3b. XML escape em user_name no session_context (defense in depth)](#r3b-xml-escape-em-user_name-no-session_context-defense-in-depth)
+  - [R12. Multi-model LLM-as-judge](#r12-multi-model-llm-as-judge)
+  - [R13. Skill selection accuracy metric](#r13-skill-selection-accuracy-metric)
+- [Prioridade P3 — Roadmap (trimestres)](#prioridade-p3-roadmap-trimestres)
+  - [R14. CI/CD evals em PR](#r14-cicd-evals-em-pr)
+  - [R15. Structured outputs framework generalizado](#r15-structured-outputs-framework-generalizado)
+  - [R16. Agent Teams evaluation (quando stable)](#r16-agent-teams-evaluation-quando-stable)
+  - [R17. Few-shot examples em skills especificas](#r17-few-shot-examples-em-skills-especificas)
+- [Timeline Proposto](#timeline-proposto)
+  - [Sprint 1: **P0 100% RESOLVIDO** em 2026-04-12 (1 sessao)](#sprint-1-p0-100-resolvido-em-2026-04-12-1-sessao)
+  - [Sprint 2 (2 semanas): P1 completo](#sprint-2-2-semanas-p1-completo)
+  - [Mes 2 (4 semanas): P2 parcial](#mes-2-4-semanas-p2-parcial)
+  - [Trimestres seguintes: P3](#trimestres-seguintes-p3)
+- [Ownership / Decision Rights](#ownership-decision-rights)
+- [Notas](#notas)
+- [Contexto](#contexto)
 
 **Versao**: 1.3
 **Status**: Em andamento (2026-04-12) — **P0 100% resolvido** + **Quality Review findings aplicados** (system_prompt.md v4.2.0 → v4.3.0). Baseline Render coletado.
@@ -759,3 +812,7 @@ Report: pass/fail + diff de regressao.
 - Cada acao completada deve referenciar commit SHA no proprio doc
 - Re-avaliacao: a cada 4 semanas verificar se prioridades ainda fazem sentido
 - Acoes podem ser canceladas se STUDY for atualizado com novo learning
+
+## Contexto
+
+_A completar (PAD-A Onda 4)._

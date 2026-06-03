@@ -1,4 +1,14 @@
+<!-- doc:meta
+tipo: reference
+camada: L2
+sot_de: —
+hub: .claude/references/INDEX.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # Regras de Negocio - Sistema de Fretes
+
+> **Papel:** Regras de Negocio - Sistema de Fretes.
 
 **Ultima Atualizacao**: 07/03/2026
 **Uso**: Consultar quando precisar de logica de dominio detalhada
@@ -116,7 +126,7 @@ PCP:
 
 ## 1. Grupos Empresariais (por CNPJ)
 
-→ Ver [business.md#grupos-empresariais](../skills/gerindo-expedicao/references/business.md#grupos-empresariais) para prefixos CNPJ e queries SQL.
+→ Ver [business.md#grupos-empresariais](../../skills/gerindo-expedicao/references/business.md#grupos-empresariais) para prefixos CNPJ e queries SQL.
 
 **Resumo rápido:** Atacadão, Assaí, Tenda - identificados por prefixo CNPJ.
 
@@ -319,7 +329,7 @@ concentracao = valor_item / valor_total_pedido
 
 ## 12. Termos Comuns (Glossario)
 
-→ Ver [glossary.md](../skills/gerindo-expedicao/references/glossary.md) para glossário completo de termos do domínio.
+→ Ver [glossary.md](../../skills/gerindo-expedicao/references/glossary.md) para glossário completo de termos do domínio.
 
 ---
 
@@ -386,7 +396,7 @@ Senao:
 | Tipo | Quando Usar |
 |------|-------------|
 | `total` | Separando TODOS os itens com TODAS as quantidades |
-| `parcial` | Separando alguns itens OU quantidades parciais |
+| `parcial` | Separando parte dos itens OU quantidades parciais |
 
 **Calculo automatico:**
 ```python
