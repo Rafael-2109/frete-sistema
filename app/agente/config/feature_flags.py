@@ -494,6 +494,14 @@ USE_USER_RULES_CHANNEL = os.getenv("AGENT_USER_RULES_CHANNEL", "true").lower() =
 # duro deve ser pequeno e curado. Ver eixos/G-memoria-pessoal.md + plano loop corretivo.
 MANDATORY_RULES_MAX_COUNT = int(os.getenv("AGENT_MANDATORY_RULES_MAX_COUNT", "12"))
 
+# Fase 2 do loop corretivo — promocao de correcao PESSOAL recorrente a 'mandatory'.
+# Roda no batch DIARIO (modulo 32 directive_promotion), nao em script one-shot — assim a
+# licao do usuario e promovida automaticamente e nao fica esquecida. Correcao vem do usuario
+# (feedback humano confiavel); o filtro e a REINCIDENCIA (correction_count >= threshold),
+# nao o gate Odoo. Default ON (evita feature zumbi) — seguro: idempotente + cap na injecao.
+AGENT_CORRECTION_PROMOTION = os.getenv("AGENT_CORRECTION_PROMOTION", "true").lower() == "true"
+AGENT_CORRECTION_PROMOTION_THRESHOLD = int(os.getenv("AGENT_CORRECTION_PROMOTION_THRESHOLD", "2"))
+
 # ====================================================================
 # Features SDK 0.1.60 — Subagent Transparency (2026-04-16)
 # ====================================================================

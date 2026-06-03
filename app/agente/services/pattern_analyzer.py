@@ -1981,6 +1981,36 @@ def _save_personal_insight(
             from ..tools.memory_mcp_tool import _check_memory_duplicate
             dup_path = _check_memory_duplicate(user_id, content, current_path=path)
             if dup_path:
+                # Fase 2 (write-path UPDATE-vs-ADD): reincidencia NAO e descartada — e REFORCO.
+                # Repetir a MESMA correcao deve aumentar o peso (correction_count) da canonica,
+                # nao sumir nem duplicar (era a causa de 9 correcoes do mesmo erro coexistindo).
+                # Mem0 ADD/UPDATE/DELETE/NOOP: este caso = UPDATE. correction_count alimenta a
+                # promocao a 'mandatory' (Fase 2 batch) e a ordenacao do canal duro (Fase 1).
+                if tipo == 'correcao':
+                    try:
+                        canonica = AgentMemory.get_by_path(user_id, dup_path)
+                        if canonica is not None:
+                            canonica.correction_count = (canonica.correction_count or 0) + 1
+                            canonica.last_accessed_at = agora_utc_naive()
+                            canonica.importance_score = min(
+                                0.95, (canonica.importance_score or 0.7) + 0.05
+                            )
+                            db.session.commit()
+                            logger.info(
+                                f"[PERSONAL_EXTRACTION] Correcao reincidente REFORCADA: "
+                                f"'{dup_path}' correction_count={canonica.correction_count} "
+                                f"importance={canonica.importance_score:.2f}"
+                            )
+                            return True  # reforco conta como salvo (nao descarta o sinal)
+                    except Exception as reinf_err:
+                        try:
+                            db.session.rollback()
+                        except Exception:
+                            pass
+                        logger.debug(
+                            f"[PERSONAL_EXTRACTION] Reforco de reincidencia falhou "
+                            f"(ignorado, segue skip): {reinf_err}"
+                        )
                 logger.debug(
                     f"[PERSONAL_EXTRACTION] Dedup: '{path}' similar a '{dup_path}', skipping"
                 )

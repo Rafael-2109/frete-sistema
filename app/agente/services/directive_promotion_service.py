@@ -627,13 +627,72 @@ def _avaliar_e_contabilizar(candidata: dict, session_id: str, contadores: dict) 
 # run_directive_promotion_batch
 # ---------------------------------------------------------------------------
 
+def promover_correcoes_recorrentes(threshold: int = None, limit: int = 200, user_id: int = None) -> dict:
+    """Fonte 3 do batch (CORRECTION-RECURRENCE): promove correcoes PESSOAIS reincidentes
+    a priority='mandatory' para entrarem no canal duro <user_rules> (Fase 1 do loop).
+
+    Correcao vem do USUARIO (feedback humano de alta confianca); por isso o filtro NAO e
+    o gate Odoo (que protege a auto-promocao do agente), e sim a REINCIDENCIA: so promove
+    correcao com correction_count >= threshold (default AGENT_CORRECTION_PROMOTION_THRESHOLD).
+    Idempotente (correcao ja 'mandatory' e ignorada pelo filtro). Recorrente (modulo 32 D8):
+    a licao reincidente do usuario e promovida automaticamente, sem script one-shot. Best-effort.
+
+    Returns: {'avaliadas': N, 'promovidas': M}
+    """
+    out = {'avaliadas': 0, 'promovidas': 0}
+    try:
+        from app.agente.config.feature_flags import (
+            AGENT_CORRECTION_PROMOTION,
+            AGENT_CORRECTION_PROMOTION_THRESHOLD,
+        )
+    except Exception:
+        return out
+    if not AGENT_CORRECTION_PROMOTION:
+        return out
+    th = threshold if threshold is not None else AGENT_CORRECTION_PROMOTION_THRESHOLD
+    try:
+        from app.agente.models import AgentMemory
+        from app import db
+        q = AgentMemory.query.filter(
+            AgentMemory.path.like('/memories/corrections/%'),
+            AgentMemory.is_directory == False,  # noqa: E712
+            AgentMemory.is_cold == False,  # noqa: E712
+            AgentMemory.priority != 'mandatory',
+            AgentMemory.correction_count >= th,
+        )
+        if user_id is not None:
+            q = q.filter(AgentMemory.user_id == user_id)
+        candidatas = q.order_by(AgentMemory.correction_count.desc()).limit(limit).all()
+        out['avaliadas'] = len(candidatas)
+        for mem in candidatas:
+            mem.priority = 'mandatory'
+            out['promovidas'] += 1
+        if out['promovidas']:
+            db.session.commit()
+            logger.info(
+                f"[CORRECTION_PROMOTION] {out['promovidas']} correcoes recorrentes "
+                f"promovidas a 'mandatory' (threshold={th}, avaliadas={out['avaliadas']})"
+            )
+    except Exception as exc:
+        try:
+            from app import db
+            db.session.rollback()
+        except Exception:
+            pass
+        logger.warning(f"[CORRECTION_PROMOTION] falhou (ignorado): {exc}")
+    return out
+
+
 def run_directive_promotion_batch(lookback_hours: int = 24, limit: int = 50) -> dict:
     """Varredor A4-batch (D8 módulo 32). Flag-gated por AGENT_DIRECTIVE_PROMOTION.
 
-    DUAS fontes de candidata (a 2ª — Opção B / A4 V2 — desacopla do PlanState):
+    TRES fontes de candidata:
       1. PLANO: sessão com plano 100% concluído → propose_directive_from_plan.
       2. JUDGE: sessão de alta qualidade validada pelo judge (sem precisar de plano)
          → propose_directive_from_judge_session. Resolve o no-op eterno (0 PlanStates).
+      3. CORRECTION-RECURRENCE: correcao PESSOAL reincidente (correction_count >= threshold)
+         → promover_correcoes_recorrentes (priority='mandatory', canal duro <user_rules>).
+         Filtro = reincidencia (feedback humano), NAO o gate Odoo das fontes 1/2.
     Ambas passam pelo MESMO gate (evaluate_and_promote: R9 anti-gaming DOMINA + A3
     report-only). Best-effort: nunca levanta. Sessão processada por uma fonte NÃO é
     re-proposta pela outra (dedup por session_id)."""
@@ -693,6 +752,16 @@ def run_directive_promotion_batch(lookback_hours: int = 24, limit: int = 50) -> 
         except Exception as exc:
             logger.error(f"[directive_promotion] batch(judge): erro session={sid!r}: {exc}")
             _rollback_seguro()
+
+    # ── Fonte 3: CORRECTION-RECURRENCE — promove correcao PESSOAL recorrente a
+    # 'mandatory' (canal duro <user_rules>, Fase 1). Filtro = reincidencia
+    # (correction_count >= threshold), nao gate Odoo (correcao = feedback humano). ──
+    try:
+        _corr = promover_correcoes_recorrentes(limit=limit * 4)
+        contadores['correcoes_promovidas'] = _corr.get('promovidas', 0)
+    except Exception as exc:
+        logger.error(f"[directive_promotion] batch(correcao): erro: {exc}")
+        _rollback_seguro()
 
     try:
         from app import db
