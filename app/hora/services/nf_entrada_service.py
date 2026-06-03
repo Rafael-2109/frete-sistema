@@ -194,6 +194,151 @@ def importar_danfe_pdf(
     return nf
 
 
+def _motivo_bloqueio_desconsiderar(item) -> Optional[str]:
+    """Retorna o motivo (str) que impede desconsiderar o item, ou None se liberado.
+
+    Bloqueia se: chassi em pedido (HoraPedidoItem); NF já entrou em recebimento;
+    chassi conferido; moto tem qualquer evento (recebida/vendida/avariada/...);
+    chassi presente em outro item de NF considerado.
+    """
+    from app.hora.models import (
+        HoraPedidoItem, HoraRecebimento, HoraRecebimentoConferencia,
+    )
+    from app.hora.services.chassi_protecao_service import chassi_em_pedido
+    from app.hora.services.moto_service import status_atual
+
+    chassi = (item.numero_chassi or '').strip().upper()
+
+    if chassi_em_pedido(chassi):
+        ped = (
+            db.session.query(HoraPedidoItem)
+            .filter(HoraPedidoItem.numero_chassi == chassi).first()
+        )
+        ref = ped.pedido.numero_pedido if ped and ped.pedido else (ped.pedido_id if ped else '?')
+        return (
+            f'Moto {chassi} consta no pedido {ref}; '
+            f'desvincule do pedido antes de desconsiderar.'
+        )
+
+    if HoraRecebimento.query.filter_by(nf_id=item.nf_id).first():
+        return (
+            f'NF #{item.nf_id} já entrou em recebimento; '
+            f'desconsidere o item antes de iniciar o recebimento.'
+        )
+
+    if HoraRecebimentoConferencia.query.filter_by(
+        numero_chassi=chassi, substituida=False,
+    ).first():
+        return f'Moto {chassi} já foi conferida em um recebimento.'
+
+    ev = status_atual(chassi)
+    if ev:
+        return f"Moto {chassi} tem evento '{ev}'; não pode ser desconsiderada."
+
+    outro = (
+        HoraNfEntradaItem.query
+        .filter(
+            HoraNfEntradaItem.numero_chassi == chassi,
+            HoraNfEntradaItem.id != item.id,
+            HoraNfEntradaItem.desconsiderado.is_(False),
+        ).first()
+    )
+    if outro:
+        return (
+            f'Moto {chassi} também consta na NF #{outro.nf_id} (item considerado); '
+            f'não é seguro remover o cadastro da moto.'
+        )
+
+    return None
+
+
+def assert_item_moto_consistente(item) -> None:
+    """Invariante (substitui a FK): item considerado => moto existe;
+    item desconsiderado => moto não existe. Levanta AssertionError se violado.
+    """
+    from app.hora.models import HoraMoto
+    existe = HoraMoto.query.get((item.numero_chassi or '').strip().upper()) is not None
+    if item.desconsiderado and existe:
+        raise AssertionError(f'item desconsiderado {item.id} ainda tem HoraMoto')
+    if not item.desconsiderado and not existe:
+        raise AssertionError(f'item considerado {item.id} sem HoraMoto')
+
+
+def desconsiderar_item_nf(nf_item_id: int, operador: Optional[str] = None) -> dict:
+    """Marca um item de NF como desconsiderado e remove a HoraMoto.
+
+    Pré-condições (senão ValueError, sem mutar): não em pedido, NF sem
+    recebimento, chassi não conferido, sem evento de moto, sem outro item de
+    NF considerado com o mesmo chassi. Reversível via `reconsiderar_item_nf`.
+
+    Faz `flush()` (NÃO commit) — o commit é responsabilidade do caller (rota).
+    """
+    from app.hora.models import HoraMoto, HoraMotoEvento
+
+    item = HoraNfEntradaItem.query.get(nf_item_id)
+    if not item:
+        raise ValueError(f'Item de NF {nf_item_id} não encontrado.')
+    if item.desconsiderado:
+        return {'ok': True, 'ja_desconsiderado': True, 'nf_item_id': nf_item_id,
+                'numero_chassi': item.numero_chassi}
+
+    # 1) Validar TUDO antes de mutar
+    motivo = _motivo_bloqueio_desconsiderar(item)
+    if motivo:
+        raise ValueError(motivo)
+
+    chassi = (item.numero_chassi or '').strip().upper()
+    moto = HoraMoto.query.get(chassi)
+    # Defensivo: nunca remover moto com eventos (já barrado por _motivo via status_atual)
+    if moto is not None and HoraMotoEvento.query.filter_by(numero_chassi=chassi).first():
+        raise ValueError(f'Moto {chassi} tem eventos; não pode ser removida.')
+
+    # 2) Mutar (somente após validações)
+    item.desconsiderado = True
+    if moto is not None:
+        db.session.delete(moto)
+    db.session.flush()
+
+    current_app.logger.info(
+        f'hora: item NF #{nf_item_id} (chassi {chassi}) desconsiderado por '
+        f'{operador or "?"}; HoraMoto removida.'
+    )
+    return {'ok': True, 'nf_item_id': nf_item_id, 'numero_chassi': chassi}
+
+
+def reconsiderar_item_nf(nf_item_id: int, operador: Optional[str] = None) -> dict:
+    """Reverte a desconsideração: recria a HoraMoto e zera o flag.
+
+    Faz `flush()` (NÃO commit) — o commit é responsabilidade do caller (rota).
+    """
+    from app.hora.models import PENDENTE_ORIGEM_NF_ENTRADA
+    from app.hora.services.moto_service import get_or_create_moto
+
+    item = HoraNfEntradaItem.query.get(nf_item_id)
+    if not item:
+        raise ValueError(f'Item de NF {nf_item_id} não encontrado.')
+    if not item.desconsiderado:
+        raise ValueError('Item não está desconsiderado.')
+
+    get_or_create_moto(
+        numero_chassi=item.numero_chassi,
+        modelo_nome=item.modelo_texto_original,
+        cor=item.cor_texto_original or 'NAO_INFORMADA',
+        numero_motor=item.numero_motor_texto_original,
+        criado_por=operador,
+        origem_pendencia=PENDENTE_ORIGEM_NF_ENTRADA,
+        origem_id=item.nf_id,
+        fallback_sentinela=True,
+    )
+    item.desconsiderado = False
+    db.session.flush()
+    current_app.logger.info(
+        f'hora: item NF #{nf_item_id} (chassi {item.numero_chassi}) reconsiderado '
+        f'por {operador or "?"}; HoraMoto recriada.'
+    )
+    return {'ok': True, 'nf_item_id': nf_item_id, 'numero_chassi': item.numero_chassi}
+
+
 def vincular_nf_a_pedido(nf_id: int, pedido_id: int) -> None:
     """Vincula retroativamente uma NF a um pedido (caso não tenha sido informado no upload)."""
     nf = HoraNfEntrada.query.get(nf_id)

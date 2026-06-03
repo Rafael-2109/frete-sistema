@@ -5,6 +5,8 @@ from datetime import date, datetime, timedelta
 
 from flask import flash, jsonify, redirect, render_template, request, send_file, url_for
 from flask_login import current_user
+
+from app import db
 from app.hora.decorators import require_hora_perm
 
 from app.hora.models import HoraLoja, HoraNfEntrada, HoraPedido
@@ -193,6 +195,7 @@ def nfs_detalhe(nf_id: int):
     return render_template(
         'hora/nf_detalhe.html',
         nf=nf,
+        nf_tem_recebimento=bool(nf.recebimentos),
         pedidos_disponiveis=pedidos_disponiveis,
         lojas_ativas=lojas_ativas,
         vinculos_por_chassi=vinculos,
@@ -496,6 +499,73 @@ def nfs_editar_item(nf_id: int, item_id: int):
             return jsonify({'ok': False, 'erro': str(exc)}), 400
         flash(f'Erro: {exc}', 'danger')
 
+    return redirect(url_for('hora.nfs_detalhe', nf_id=nf.id))
+
+
+# ------------------------------------------------------------------------
+# Desconsiderar / reverter item de NF (moto que nao deve contar no estoque)
+# ------------------------------------------------------------------------
+
+@hora_bp.route('/nfs/<int:nf_id>/itens/<int:item_id>/desconsiderar', methods=['POST'])
+@require_hora_perm('nfs', 'editar')
+def nfs_desconsiderar_item(nf_id: int, item_id: int):
+    """Desconsidera uma moto da NF de compra (remove do estoque/recebimento).
+
+    O service valida bloqueios (moto em pedido, ja recebida) e levanta
+    ValueError com a mensagem. A rota faz o commit (service so da flush) e
+    rollback no erro.
+    """
+    nf = HoraNfEntrada.query.get_or_404(nf_id)
+    is_ajax = request.is_json or request.headers.get('Accept') == 'application/json'
+    if nf.loja_destino_id and not usuario_tem_acesso_a_loja(nf.loja_destino_id):
+        if is_ajax:
+            return jsonify({'ok': False, 'erro': 'acesso negado'}), 403
+        flash('Acesso negado: NF de loja fora do seu escopo.', 'danger')
+        return redirect(url_for('hora.nfs_lista'))
+    try:
+        res = nf_entrada_service.desconsiderar_item_nf(
+            item_id, operador=current_user.nome if hasattr(current_user, 'nome') else None,
+        )
+        db.session.commit()
+        if is_ajax:
+            return jsonify(res)
+        flash(f"Moto {res['numero_chassi']} desconsiderada.", 'success')
+    except ValueError as exc:
+        db.session.rollback()
+        if is_ajax:
+            return jsonify({'ok': False, 'erro': str(exc)}), 400
+        flash(f'Erro: {exc}', 'danger')
+    return redirect(url_for('hora.nfs_detalhe', nf_id=nf.id))
+
+
+@hora_bp.route('/nfs/<int:nf_id>/itens/<int:item_id>/reverter', methods=['POST'])
+@require_hora_perm('nfs', 'editar')
+def nfs_reverter_item(nf_id: int, item_id: int):
+    """Reverte a desconsideracao de uma moto (recria a moto / volta ao estoque).
+
+    O service valida e levanta ValueError. A rota faz o commit (service so da
+    flush) e rollback no erro.
+    """
+    nf = HoraNfEntrada.query.get_or_404(nf_id)
+    is_ajax = request.is_json or request.headers.get('Accept') == 'application/json'
+    if nf.loja_destino_id and not usuario_tem_acesso_a_loja(nf.loja_destino_id):
+        if is_ajax:
+            return jsonify({'ok': False, 'erro': 'acesso negado'}), 403
+        flash('Acesso negado: NF de loja fora do seu escopo.', 'danger')
+        return redirect(url_for('hora.nfs_lista'))
+    try:
+        res = nf_entrada_service.reconsiderar_item_nf(
+            item_id, operador=current_user.nome if hasattr(current_user, 'nome') else None,
+        )
+        db.session.commit()
+        if is_ajax:
+            return jsonify(res)
+        flash(f"Moto {res['numero_chassi']} reconsiderada.", 'success')
+    except ValueError as exc:
+        db.session.rollback()
+        if is_ajax:
+            return jsonify({'ok': False, 'erro': str(exc)}), 400
+        flash(f'Erro: {exc}', 'danger')
     return redirect(url_for('hora.nfs_detalhe', nf_id=nf.id))
 
 

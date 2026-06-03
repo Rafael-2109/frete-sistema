@@ -148,7 +148,7 @@ def validar_chassi_contra_recebimento(
     # cada modelo_id de pedido para o canonico correspondente.
     modelos_canonicos: dict[int, str] = {}
     cores: set[str] = set()
-    for i in rec.nf.itens:
+    for i in rec.nf.itens_considerados:
         if i.modelo_texto_original:
             mc = (
                 resolver_modelo(i.modelo_texto_original, tipo=ALIAS_TIPO_NOME_NF)
@@ -502,7 +502,7 @@ def finalizar_recebimento(
         db.session.flush()
         db.session.expire(rec, ['conferencias'])
 
-    chassis_nf = {i.numero_chassi for i in rec.nf.itens}
+    chassis_nf = {i.numero_chassi for i in rec.nf.itens_considerados}
     chassis_conferidos_ativos = {
         c.numero_chassi for c in rec.conferencias if not c.substituida
     }
@@ -661,7 +661,7 @@ def reprocessar_recebimentos_para_nf(
     if not recebimentos:
         return resultado
 
-    chassis_nf_atual = {i.numero_chassi for i in nf.itens}
+    chassis_nf_atual = {i.numero_chassi for i in nf.itens_considerados}
 
     for rec in recebimentos:
         resultado['recebimentos_processados'] += 1
@@ -917,7 +917,7 @@ def metricas_recebimento(rec: HoraRecebimento) -> dict:
     Considera apenas conferencias ATIVAS (substituida=False).
     """
     confs_ativas = [c for c in rec.conferencias if not c.substituida]
-    qtd_nf = sum(1 for _ in rec.nf.itens) if rec.nf else 0
+    qtd_nf = sum(1 for _ in rec.nf.itens_considerados) if rec.nf else 0
     qtd_faltando = 0
     qtd_extra = 0
     qtd_recebidas = 0
@@ -1001,7 +1001,7 @@ def comparativo_recebimento_nf(
     rec = HoraRecebimento.query.get_or_404(recebimento_id)
 
     # Chassis conhecidos: da NF + da conferencia ativa
-    chassis_nf = [i.numero_chassi for i in rec.nf.itens if i.numero_chassi]
+    chassis_nf = [i.numero_chassi for i in rec.nf.itens_considerados if i.numero_chassi]
     # Conferencia parcial (confirmado_em IS NULL) NAO conta como conferida:
     # operador abandonou o wizard sem completar (passos B, C, D). Decisao
     # 2026-05-07 do dono do modulo: "abandonada pela metade -> descartar".
@@ -1033,7 +1033,7 @@ def comparativo_recebimento_nf(
                 todos.append(c)
                 seen.add(c)
 
-    nf_por_chassi = {i.numero_chassi: i for i in rec.nf.itens if i.numero_chassi}
+    nf_por_chassi = {i.numero_chassi: i for i in rec.nf.itens_considerados if i.numero_chassi}
     conf_por_chassi = {c.numero_chassi: c for c in confs_ativas}
 
     linhas = []
@@ -1145,7 +1145,7 @@ def chassis_esperados_mas_nao_conferidos(recebimento_id: int) -> List[str]:
     rec = HoraRecebimento.query.get(recebimento_id)
     if not rec:
         return []
-    chassis_nf = {i.numero_chassi for i in rec.nf.itens}
+    chassis_nf = {i.numero_chassi for i in rec.nf.itens_considerados}
     chassis_conf = {c.numero_chassi for c in rec.conferencias if not c.substituida}
     return sorted(chassis_nf - chassis_conf)
 
@@ -1154,7 +1154,7 @@ def chassis_conferidos_nao_na_nf(recebimento_id: int) -> List[str]:
     rec = HoraRecebimento.query.get(recebimento_id)
     if not rec:
         return []
-    chassis_nf = {i.numero_chassi for i in rec.nf.itens}
+    chassis_nf = {i.numero_chassi for i in rec.nf.itens_considerados}
     chassis_conf = {c.numero_chassi for c in rec.conferencias if not c.substituida}
     return sorted(chassis_conf - chassis_nf)
 
@@ -1243,7 +1243,7 @@ def listar_nfs_para_recebimento_automatico(
     saida = []
     for nf in nfs:
         chassis = []
-        for it in nf.itens:
+        for it in nf.itens_considerados:
             canonico_nome = None
             if it.modelo_texto_original:
                 mc = (
@@ -1273,7 +1273,7 @@ def listar_nfs_para_recebimento_automatico(
             'loja_nome': nf.loja_destino.nome.strip() if nf.loja_destino else None,
             'pedido_id': nf.pedido_id,
             'pedido_numero': pedido.numero_pedido if pedido else None,
-            'qtd_motos_nf': len(nf.itens),
+            'qtd_motos_nf': len(nf.itens_considerados),
             'qtd_motos_pedido': qtd_motos_pedido,
             'qtd_motos_pedido_ja_faturadas': qtd_motos_pedido_ja_faturadas,
             'chassis': chassis,
@@ -1319,7 +1319,7 @@ def criar_recebimento_automatico_da_nf(
             f'NF {nf.numero_nf} (#{nf.id}) sem loja_destino_id. '
             f'Preencha a loja antes de criar recebimento automatico.'
         )
-    if not nf.itens:
+    if not nf.itens_considerados:
         raise ValueError(f'NF {nf.numero_nf} sem itens.')
 
     rec_existente = HoraRecebimento.query.filter_by(
@@ -1337,13 +1337,13 @@ def criar_recebimento_automatico_da_nf(
     )
 
     # 2. Define qtd_declarada (faz commit interno)
-    qtd_nf = len(nf.itens)
+    qtd_nf = len(nf.itens_considerados)
     definir_qtd_declarada(recebimento_id=rec.id, qtd=qtd_nf, usuario=operador)
 
     # 3. Registra cada conferencia (cada call faz commit interno)
     conf_ids: List[int] = []
     chassis_sem_modelo_canonico: List[str] = []
-    for ordem, item in enumerate(nf.itens, start=1):
+    for ordem, item in enumerate(nf.itens_considerados, start=1):
         modelo_canonico = None
         if item.modelo_texto_original:
             modelo_canonico = (
@@ -1678,7 +1678,7 @@ def _redefinir_divergencias(conf: HoraRecebimentoConferencia, rec: HoraRecebimen
     db.session.flush()
 
     item_nf = HoraNfEntradaItem.query.filter_by(
-        nf_id=rec.nf_id, numero_chassi=conf.numero_chassi,
+        nf_id=rec.nf_id, numero_chassi=conf.numero_chassi, desconsiderado=False,
     ).first()
 
     # Mantem o snapshot tipo_divergencia (compat) = prioridade: CHASSI_EXTRA > modelo/cor > avaria

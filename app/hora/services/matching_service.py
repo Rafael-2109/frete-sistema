@@ -44,7 +44,7 @@ class ScoreCandidato:
 
 
 def _chassis_nf(nf: HoraNfEntrada) -> set:
-    return {i.numero_chassi for i in nf.itens if i.numero_chassi}
+    return {i.numero_chassi for i in nf.itens_considerados if i.numero_chassi}
 
 
 def _chassis_pedido_preenchidos(pedido: HoraPedido) -> set:
@@ -177,7 +177,7 @@ def preview_match(nf_id: int, pedido_id: int) -> dict:
             'cor': i.cor_texto_original or '',
             'match': i.numero_chassi in intersecao,
         }
-        for i in nf.itens
+        for i in nf.itens_considerados
     ]
 
     pedido_itens = [
@@ -192,7 +192,7 @@ def preview_match(nf_id: int, pedido_id: int) -> dict:
         for i in pedido.itens
     ]
 
-    total_nf = len(nf.itens)
+    total_nf = len(nf.itens_considerados)
     total_pedido = len(pedido.itens)
     match = len(intersecao)
     pct_match = (match / total_nf * 100) if total_nf else 0.0
@@ -758,10 +758,10 @@ def resumo_vinculo_nf(
     """Agregado para lista de NFs. `chassis_por_pedido` (opcional):
     {pedido_id: set(chassis_do_pedido)} pre-carregado para evitar N+1.
     """
-    total_nf = len(nf.itens)
+    total_nf = len(nf.itens_considerados)
     if not nf.pedido_id:
         return {'total_nf': total_nf, 'match': 0, 'sem_pedido': True}
-    chassis_nf = {i.numero_chassi for i in nf.itens if i.numero_chassi}
+    chassis_nf = {i.numero_chassi for i in nf.itens_considerados if i.numero_chassi}
     if chassis_por_pedido is not None:
         chassis_ped = chassis_por_pedido.get(nf.pedido_id, set())
     else:
@@ -1031,7 +1031,7 @@ def comparativo_valores_nf(
     }
 
     nf_por_chassi: dict = {}
-    for it in nf.itens:
+    for it in nf.itens_considerados:
         out['qtd_chassis_nf'] += 1
         preco = it.preco_real or _zero()
         out['valor_chassis_nf'] += preco

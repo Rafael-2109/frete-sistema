@@ -167,6 +167,11 @@ class HoraNfEntrada(db.Model):
     )
 
     @property
+    def itens_considerados(self):
+        """Itens não-desconsiderados — base para recebimento/estoque."""
+        return [i for i in self.itens if not i.desconsiderado]
+
+    @property
     def itens_divergem_declaracao(self) -> bool:
         """True se a NF tem divergência entre itens-produto e chassis listados."""
         if self.qtd_declarada_itens is None:
@@ -190,11 +195,16 @@ class HoraNfEntradaItem(db.Model):
     )
     numero_chassi = db.Column(
         db.String(30),
-        db.ForeignKey('hora_moto.numero_chassi'),
+        # FK p/ hora_moto REMOVIDA na migration hora_43: item desconsiderado
+        # mantém o chassi declarado na NF sem HoraMoto. Integridade item<->moto
+        # garantida na aplicação (nf_entrada_service.assert_item_moto_consistente).
         nullable=False,
         index=True,
     )
     preco_real = db.Column(db.Numeric(15, 2), nullable=False)
+    desconsiderado = db.Column(
+        db.Boolean, nullable=False, default=False, server_default='false', index=True,
+    )
 
     # Texto original como apareceu na NF (antes de normalização via regex/LLM).
     # Permite auditar decisão do parser ex-post.
@@ -202,7 +212,12 @@ class HoraNfEntradaItem(db.Model):
     cor_texto_original = db.Column(db.String(100), nullable=True)
     numero_motor_texto_original = db.Column(db.String(100), nullable=True)
 
-    moto = db.relationship('HoraMoto', backref='nfs_entrada_itens')
+    moto = db.relationship(
+        'HoraMoto',
+        primaryjoin='foreign(HoraNfEntradaItem.numero_chassi) == HoraMoto.numero_chassi',
+        viewonly=True,
+        backref=db.backref('nfs_entrada_itens', viewonly=True),
+    )
 
     __table_args__ = (
         db.UniqueConstraint('nf_id', 'numero_chassi', name='uq_hora_nf_entrada_item_chassi'),

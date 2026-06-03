@@ -365,9 +365,14 @@
     <tbody>
       {% for item in nf.itens %}
         {% set v = vinculos_por_chassi.get(item.numero_chassi) %}
-        <tr class="border-top border-2">
+        <tr class="border-top border-2 {% if item.desconsiderado %}table-secondary text-muted{% endif %}">
           <td class="chassi-mono">
             <i class="fas fa-motorcycle text-secondary"></i> {{ item.numero_chassi }}
+            {% if item.desconsiderado %}
+              <span class="badge bg-secondary ms-1" title="Moto desconsiderada (fora do estoque/recebimento)">
+                <i class="fas fa-ban"></i> desconsiderada
+              </span>
+            {% endif %}
           </td>
           <td>{{ item.modelo_texto_original or '—' }}</td>
           <td>{{ item.cor_texto_original or '—' }}</td>
@@ -397,6 +402,29 @@
                     title="Corrigir chassi/motor deste item">
               <i class="fas fa-pen"></i>
             </button>
+            {% if item.desconsiderado %}
+            <form method="post" class="d-inline"
+                  action="{{ url_for('hora.nfs_reverter_item', nf_id=nf.id, item_id=item.id) }}">
+              <button type="submit" class="btn btn-sm btn-outline-success"
+                      title="Reverter: recria a moto e volta ao estoque/recebimento">
+                <i class="fas fa-rotate-left"></i> Reverter
+              </button>
+            </form>
+            {% elif not v and not nf_tem_recebimento %}
+            <form method="post" class="d-inline"
+                  action="{{ url_for('hora.nfs_desconsiderar_item', nf_id=nf.id, item_id=item.id) }}"
+                  onsubmit="return confirm('Desconsiderar esta moto? Ela sai do estoque/recebimento e o cadastro da moto é removido.');">
+              <button type="submit" class="btn btn-sm btn-outline-secondary"
+                      title="Desconsiderar: moto de outra empresa, não entra no estoque">
+                <i class="fas fa-ban"></i> Desconsiderar
+              </button>
+            </form>
+            {% elif not item.desconsiderado %}
+            <span class="text-muted small"
+                  title="{% if v %}Em pedido — desvincule antes{% elif nf_tem_recebimento %}NF já em recebimento{% endif %}">
+              <i class="fas fa-lock"></i>
+            </span>
+            {% endif %}
           </td>
           {% endif %}
         </tr>
