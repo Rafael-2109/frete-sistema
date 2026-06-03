@@ -12,6 +12,7 @@ from app.agente.services.directive_promotion_service import (
     promover_correcoes_recorrentes,
     demote_stale_rules,
 )
+from app.agente.routes._helpers import _track_outcome_by_recurrence
 
 
 @pytest.fixture
@@ -49,13 +50,14 @@ def cleanup(app, test_user):
 
 
 def _nova_correcao(user_id, path, content, *, priority='contextual', correction_count=0,
-                   importance=0.7, error_signature=None, harmful_count=0):
+                   importance=0.7, error_signature=None, harmful_count=0, usage_count=0):
     mem = AgentMemory.create_file(user_id, path, content)
     mem.priority = priority
     mem.correction_count = correction_count
     mem.importance_score = importance
     mem.error_signature = error_signature
     mem.harmful_count = harmful_count
+    mem.usage_count = usage_count
     db.session.commit()
     return mem
 
@@ -212,3 +214,60 @@ def test_demote_flap_free_nao_repromove(app, cleanup, monkeypatch):
     db.session.refresh(m)
     assert m.priority == 'contextual'   # NAO re-promovida (flap-free)
     assert out['promovidas'] == 0
+
+
+# ───────────────────────── 3.3: helpful via _track_outcome_by_recurrence ─────────────────────────
+
+def test_helpful_credita_regra_dura_limpa_a_cada_k(app, cleanup, monkeypatch):
+    """Regra dura injetada, harmful_count=0, usage_count multiplo de K -> helpful_count++."""
+    monkeypatch.setattr('app.agente.config.feature_flags.AGENT_OUTCOME_TRACKING', True)
+    monkeypatch.setattr('app.agente.config.feature_flags.AGENT_OUTCOME_HELPFUL_K_SESSIONS', 3)
+    ids, user_id = cleanup
+    mem = _nova_correcao(user_id, '/memories/corrections/help.xml', '[correcao] a\nDO: b',
+                         priority='mandatory', harmful_count=0, usage_count=3)
+    ids.append(mem.id)
+
+    _track_outcome_by_recurrence(user_id, [mem.id])
+    db.session.refresh(mem)
+    assert mem.helpful_count == 1
+
+
+def test_helpful_nao_credita_fora_do_multiplo_de_k(app, cleanup, monkeypatch):
+    """usage_count nao multiplo de K -> sem credito (bounded)."""
+    monkeypatch.setattr('app.agente.config.feature_flags.AGENT_OUTCOME_TRACKING', True)
+    monkeypatch.setattr('app.agente.config.feature_flags.AGENT_OUTCOME_HELPFUL_K_SESSIONS', 3)
+    ids, user_id = cleanup
+    mem = _nova_correcao(user_id, '/memories/corrections/help2.xml', '[correcao] a\nDO: b',
+                         priority='mandatory', harmful_count=0, usage_count=4)
+    ids.append(mem.id)
+
+    _track_outcome_by_recurrence(user_id, [mem.id])
+    db.session.refresh(mem)
+    assert mem.helpful_count == 0
+
+
+def test_helpful_nao_credita_regra_harmful(app, cleanup, monkeypatch):
+    """harmful_count > 0 -> nunca credita helpful (regra nao confiavel)."""
+    monkeypatch.setattr('app.agente.config.feature_flags.AGENT_OUTCOME_TRACKING', True)
+    monkeypatch.setattr('app.agente.config.feature_flags.AGENT_OUTCOME_HELPFUL_K_SESSIONS', 3)
+    ids, user_id = cleanup
+    mem = _nova_correcao(user_id, '/memories/corrections/help3.xml', '[correcao] a\nDO: b',
+                         priority='mandatory', harmful_count=1, usage_count=3)
+    ids.append(mem.id)
+
+    _track_outcome_by_recurrence(user_id, [mem.id])
+    db.session.refresh(mem)
+    assert mem.helpful_count == 0
+
+
+def test_helpful_flag_off_nao_credita(app, cleanup, monkeypatch):
+    """AGENT_OUTCOME_TRACKING OFF -> nenhum credito."""
+    monkeypatch.setattr('app.agente.config.feature_flags.AGENT_OUTCOME_TRACKING', False)
+    ids, user_id = cleanup
+    mem = _nova_correcao(user_id, '/memories/corrections/help4.xml', '[correcao] a\nDO: b',
+                         priority='mandatory', harmful_count=0, usage_count=3)
+    ids.append(mem.id)
+
+    _track_outcome_by_recurrence(user_id, [mem.id])
+    db.session.refresh(mem)
+    assert mem.helpful_count == 0
