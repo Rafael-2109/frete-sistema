@@ -180,7 +180,7 @@ def _build_candidate(
         has_toc = bool(
             re.search(r"(?im)^#{1,3}\s*(indice|table of contents|toc)\b", corpo_provisorio)
         )
-        if total_lines > cfg.toc_min_lines and not has_toc:
+        if total_lines >= cfg.toc_min_lines and not has_toc:
             toc_str = _doc_meta.gen_toc(corpo_provisorio)
 
     # --- montagem final do corpo ---
