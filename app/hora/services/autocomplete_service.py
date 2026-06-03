@@ -57,8 +57,17 @@ def _chassis_permitidos_subq(lojas_permitidas_ids: Optional[List[int]]):
 # ============================================================
 
 def chassis(q: str, lojas_permitidas_ids: Optional[List[int]] = None,
-            limit: int = _DEFAULT_LIMIT) -> List[dict]:
-    """Busca chassis por substring (sempre uppercase, ilike)."""
+            limit: int = _DEFAULT_LIMIT, disponivel: bool = False,
+            modelo_id: Optional[int] = None, cor: Optional[str] = None) -> List[dict]:
+    """Busca chassis por substring (sempre uppercase, ilike).
+
+    disponivel=True restringe a chassis cujo ULTIMO evento esta em
+    EVENTOS_EM_ESTOQUE (mesmo criterio canonico do estoque_service) — usado
+    pela tela de Pedido de Venda, onde so chassis em estoque podem ser
+    vendidos. `modelo_id`/`cor` filtram opcionalmente (cascata da tela de
+    venda). O JSON inclui `modelo_id` para o front preencher o filtro de
+    modelo ao escolher um chassi.
+    """
     q_norm = (q or '').strip().upper()
     if len(q_norm) < _MIN_CHARS:
         return []
@@ -68,6 +77,10 @@ def chassis(q: str, lojas_permitidas_ids: Optional[List[int]] = None,
         .join(HoraModelo, HoraMoto.modelo_id == HoraModelo.id)
         .filter(HoraMoto.numero_chassi.ilike(f'%{q_norm}%'))
     )
+    if modelo_id:
+        base = base.filter(HoraMoto.modelo_id == modelo_id)
+    if cor:
+        base = base.filter(HoraMoto.cor == cor.strip().upper())
 
     sub = _chassis_permitidos_subq(lojas_permitidas_ids)
     if sub is False:
@@ -75,10 +88,34 @@ def chassis(q: str, lojas_permitidas_ids: Optional[List[int]] = None,
     if sub is not None:
         base = base.filter(HoraMoto.numero_chassi.in_(sub))
 
+    if disponivel:
+        # Disponivel = ultimo evento do chassi em EVENTOS_EM_ESTOQUE. Reusa o
+        # criterio canonico do estoque_service (import lazy p/ evitar ciclo).
+        from sqlalchemy import and_
+        from app.hora.services.estoque_service import (
+            _subquery_ultimo_evento_id,
+            EVENTOS_EM_ESTOQUE,
+        )
+        ult = _subquery_ultimo_evento_id()
+        disp = (
+            db.session.query(HoraMotoEvento.numero_chassi)
+            .join(
+                ult,
+                and_(
+                    HoraMotoEvento.numero_chassi == ult.c.chassi,
+                    HoraMotoEvento.id == ult.c.max_id,
+                ),
+            )
+            .filter(HoraMotoEvento.tipo.in_(EVENTOS_EM_ESTOQUE))
+            .subquery()
+        )
+        base = base.filter(HoraMoto.numero_chassi.in_(disp))
+
     base = base.order_by(HoraMoto.numero_chassi).limit(limit)
     return [
         {
             'chassi': m.numero_chassi,
+            'modelo_id': m.modelo_id,
             'modelo': modelo.nome_modelo,
             'cor': m.cor,
             'label': f'{m.numero_chassi} — {modelo.nome_modelo} ({m.cor})',

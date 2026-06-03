@@ -589,7 +589,10 @@ def vendas_item_editar(venda_id: int, item_id: int):
         flash('Acesso negado.', 'danger')
         return redirect(url_for('hora.vendas_lista'))
 
-    novo_chassi = (request.form.get('novo_chassi') or '').strip() or None
+    # Frente A (2026-06-03): editar item NUNCA troca a moto. Trocar a moto =
+    # remover + readicionar. A rota nao le mais o campo de troca de chassi do
+    # form (defesa em profundidade); o service mantem a capacidade de troca
+    # apenas para os testes de workflow. So o valor final e ajustado aqui.
     valor_raw = (request.form.get('valor_final') or '').strip()
     novo_valor = None
     if valor_raw:
@@ -602,7 +605,7 @@ def vendas_item_editar(venda_id: int, item_id: int):
     try:
         venda_service.editar_item_pedido(
             venda_id=venda.id, item_id=item_id,
-            novo_chassi=novo_chassi, novo_valor=novo_valor,
+            novo_chassi=None, novo_valor=novo_valor,
             usuario=_operador_atual(),
         )
         flash('Item atualizado.', 'success')

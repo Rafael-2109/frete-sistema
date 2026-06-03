@@ -4,7 +4,7 @@ camada: L1
 sot_de: —
 hub: docs/superpowers/plans/INDEX.md
 superseded_by: —
-atualizado: 2026-06-02
+atualizado: 2026-06-03
 -->
 # Plans — indice
 > **Papel:** mapa dos planos de implementacao. So ponteiros.
@@ -16,6 +16,7 @@ atualizado: 2026-06-02
 - [PAD-A Onda 4 — Varredura por cluster](2026-06-02-pad-a-onda-4-varredura-cluster.md) — toolchain migracao + calibracao + sub-ondas 4a-4g (orfao-zero + link-rot-zero + doc:meta) + promove C1/C7/C8 a block
 - [HORA — Desconsiderar moto de NF de compra](2026-06-03-hora-desconsiderar-moto-nf.md) — flag desconsiderado por item + relaxa FK chassi + valida nao-em-pedido/nao-recebido (9 tasks TDD)
 - [HORA — Unificar Pedido de Venda + filtro loja/vendedor + fix desconto](2026-06-03-hora-unificar-pedido-venda.md) — tela unica cria+edita (remove venda_detalhe), criterio loja/vendedor por usuario, fix drift centavos (13 tasks)
+- [HORA — Pedido de Venda: editar item + Enter=Próximo + chassi autocomplete + regressões](2026-06-03-hora-pedido-venda-edicao-autocomplete.md) — editar moto = só desconto/valor (moto travada); Enter avança campo; chassi autocomplete; restaura CRÍTICOS+ALTOS da unificação (20 tasks, 3 fases)
 - [CarVia: Migracao de conferencia de Sub para Frete (Escopo C)](2026-04-14-carvia-frete-conferencia-migration.md)
 - [Remessa VORTX — Injeção Direta no Odoo](2026-04-15-remessa-vortx-odoo-injection.md)
 - [Agent SDK 0.1.60 Features — Implementation Plan](2026-04-16-agent-sdk-0160-features.md)

@@ -181,8 +181,10 @@
     const modeloId = elModelo.value;
     elCor.innerHTML = '<option value="">— carregando… —</option>';
     elCor.disabled = true;
-    elChassi.innerHTML = '<option value="">— escolha cor —</option>';
-    elChassi.disabled = true;
+    // Chassi e autocomplete (input), nao select: limpa o valor digitado e
+    // atualiza o filtro de disponibilidade conforme o modelo escolhido.
+    elChassi.value = '';
+    atualizarFiltroChassi();
     if (elValor) elValor.value = '';
     if (elPrecoInfo) elPrecoInfo.textContent = '';
     if (elCorStatus) elCorStatus.textContent = '';
@@ -218,52 +220,45 @@
     }
   }
 
-  async function carregarChassis() {
-    if (!elModelo || !elCor || !elChassi) return;
-    const modeloId = elModelo.value;
-    const cor = elCor.value;
-    elChassi.innerHTML = '<option value="">— carregando… —</option>';
-    elChassi.disabled = true;
-    if (elValor) elValor.value = '';
-    if (elPrecoInfo) elPrecoInfo.textContent = '';
-    if (elChassiStatus) elChassiStatus.textContent = '';
-
-    if (!modeloId || !cor) {
-      elChassi.innerHTML = '<option value="">— escolha cor —</option>';
-      return;
+  // Chassi virou autocomplete (data-hora-autocomplete="chassi"). A cascata
+  // modelo/cor agora so AJUSTA os filtros do autocomplete via
+  // data-hora-extra-params (lidos dinamicamente a cada fetch pelo autocomplete.js).
+  // disponivel=1 sempre — so chassis em estoque podem ser vendidos.
+  function atualizarFiltroChassi() {
+    if (!elChassi) return;
+    const params = ['disponivel=1'];
+    if (elModelo && elModelo.value) {
+      params.push('modelo_id=' + encodeURIComponent(elModelo.value));
     }
+    if (elCor && elCor.value) {
+      params.push('cor=' + encodeURIComponent(elCor.value));
+    }
+    elChassi.dataset.horaExtraParams = params.join('&');
+  }
+
+  // Ao escolher/digitar um chassi, busca os dados dele para preencher o modelo
+  // (quando o operador digitou o chassi direto, sem usar a cascata) e disparar
+  // o preco de tabela. Best-effort: o backend deriva modelo/cor do chassi de
+  // qualquer forma; aqui e so UX (preco depende do modelo).
+  async function preencherDadosDoChassi() {
+    if (!elChassi || !elChassi.value) return;
+    const chassi = elChassi.value.trim().toUpperCase();
+    if (chassi.length < 2) return;
     try {
-      const url = `{{ url_for('hora.tagplus_pedido_venda_api_chassis') }}?modelo_id=${encodeURIComponent(modeloId)}&cor=${encodeURIComponent(cor)}`;
-      const r = await fetch(url);
+      const r = await fetch(
+        `{{ url_for('hora.autocomplete_chassi') }}?q=${encodeURIComponent(chassi)}&disponivel=1&limit=1`,
+        { headers: { 'Accept': 'application/json' } }
+      );
       const data = await r.json();
-      if (!data.ok || !data.chassis || !data.chassis.length) {
-        elChassi.innerHTML = '<option value="">— sem chassis disponíveis —</option>';
-        if (elChassiStatus) {
-          elChassiStatus.textContent = 'Nenhum chassi disponível para esta combinação.';
-          elChassiStatus.className = 'text-warning';
-        }
-        return;
+      const item = Array.isArray(data) && data.length ? data[0] : null;
+      if (!item) return;
+      if (elModelo && !elModelo.value && item.modelo_id != null) {
+        elModelo.value = String(item.modelo_id);
+        atualizarPrecosRef();
       }
-      const opts = data.chassis.map(c => {
-        const flags = [];
-        if (c.avarias_abertas > 0) flags.push(`⚠ ${c.avarias_abertas} avaria(s)`);
-        if (c.pecas_faltando_abertas > 0) flags.push(`⚙ ${c.pecas_faltando_abertas} peça(s) faltando`);
-        const sufix = flags.length ? ` [${flags.join(' / ')}]` : '';
-        const loja = c.loja_nome ? ` — ${c.loja_nome}` : '';
-        return `<option value="${c.chassi}">${c.chassi}${loja}${sufix}</option>`;
-      }).join('');
-      elChassi.innerHTML = '<option value="">— escolha o chassi —</option>' + opts;
-      elChassi.disabled = false;
-      if (elChassiStatus) {
-        elChassiStatus.textContent = `${data.chassis.length} chassi(s) disponível(eis).`;
-        elChassiStatus.className = 'text-muted';
-      }
+      atualizarPrecoTabela();
     } catch (e) {
-      elChassi.innerHTML = '<option value="">— erro ao carregar —</option>';
-      if (elChassiStatus) {
-        elChassiStatus.textContent = 'Falha: ' + e.message;
-        elChassiStatus.className = 'text-danger';
-      }
+      // silencioso — best-effort
     }
   }
 
@@ -514,8 +509,18 @@
     });
   }
   if (elCor) {
-    elCor.addEventListener('change', carregarChassis);
+    elCor.addEventListener('change', () => {
+      atualizarFiltroChassi();
+      if (elChassi) elChassi.value = '';
+    });
   }
+  if (elChassi) {
+    // Selecao no dropdown do autocomplete dispara 'change' (ver autocomplete.js);
+    // tambem cobre blur apos digitar.
+    elChassi.addEventListener('change', preencherDadosDoChassi);
+  }
+  // Estado inicial do filtro do autocomplete de chassi (disponivel=1).
+  atualizarFiltroChassi();
 
   // Debounce de 1500ms: evita que `recalcular()` reformate os outros campos
   // (via setBR) a cada keystroke — operador via cursor pulando e desconto
@@ -620,11 +625,41 @@
     elAlertaFrete.style.display = '';
   }
 
-  if (elModFrete) elModFrete.addEventListener('change', atualizarVisibilidadeBlocoFrete);
-  if (elValorFrete) elValorFrete.addEventListener('input', atualizarAlertaFrete);
-  if (elTipoFrete) elTipoFrete.addEventListener('change', atualizarAlertaFrete);
+  // Preview multi-item (modo edicao): rateio/comparacao de frete CIF sobre os
+  // itens ja no pedido (tr[data-item-*]) -> #d-alerta-frete. So roda no modo
+  // edicao (onde #d-alerta-frete existe); no modo criacao retorna cedo.
+  function atualizarAlertaFreteEdicao() {
+    const box = document.getElementById('d-alerta-frete');
+    if (!box) return;
+    if (!elModFrete || elModFrete.value !== '0') { box.style.display = 'none'; return; }
+    const tipo = (elTipoFrete && elTipoFrete.value || '').trim();
+    const valorFrete = parseBR(elValorFrete && elValorFrete.value);
+    const itens = Array.from(document.querySelectorAll('tr[data-item-final]'))
+      .map(tr => ({ final: parseFloat(tr.dataset.itemFinal) || 0, tabela: parseFloat(tr.dataset.itemTabela) || 0 }));
+    if (!itens.length || !tipo || isNaN(valorFrete) || valorFrete <= 0) { box.style.display = 'none'; return; }
+    const somaFinais = arred2(itens.reduce((s, i) => s + i.final, 0));
+    const somaTabelas = arred2(itens.reduce((s, i) => s + i.tabela, 0));
+    if (tipo === 'INCLUSO') {
+      const base = arred2(somaFinais - valorFrete);
+      let html = `<strong>Itens R$ ${fmtBR(somaFinais)}</strong> − Frete R$ ${fmtBR(valorFrete)} = <strong>R$ ${fmtBR(base)}</strong> (base sem frete).`;
+      if (somaTabelas > 0 && base < somaTabelas) {
+        html += `<br><span class="text-danger">⚠ Abaixo R$ ${fmtBR(arred2(somaTabelas - base))} da soma das tabelas (R$ ${fmtBR(somaTabelas)}).</span>`;
+        box.classList.remove('alert-info'); box.classList.add('alert-warning');
+      } else { box.classList.remove('alert-warning'); box.classList.add('alert-info'); }
+      box.innerHTML = html;
+    } else { // ADICIONAR
+      box.classList.remove('alert-warning'); box.classList.add('alert-info');
+      box.innerHTML = `<strong>VALOR A FATURAR COM FRETE:</strong><br>Itens R$ ${fmtBR(somaFinais)} + R$ ${fmtBR(valorFrete)} (frete) = <strong>R$ ${fmtBR(arred2(somaFinais + valorFrete))}</strong>.`;
+    }
+    box.style.display = '';
+  }
+
+  if (elModFrete) elModFrete.addEventListener('change', () => { atualizarVisibilidadeBlocoFrete(); atualizarAlertaFreteEdicao(); });
+  if (elValorFrete) elValorFrete.addEventListener('input', () => { atualizarAlertaFrete(); atualizarAlertaFreteEdicao(); });
+  if (elTipoFrete) elTipoFrete.addEventListener('change', () => { atualizarAlertaFrete(); atualizarAlertaFreteEdicao(); });
   // Estado inicial.
   atualizarVisibilidadeBlocoFrete();
+  atualizarAlertaFreteEdicao();
 
   // ----------------- Validacao no submit -----------------------------------
   const elFormPedido = document.getElementById('form-pedido-venda');
@@ -659,6 +694,120 @@
       }
     });
   }
+
+  // ----------------- Frente A: sincronia desconto por-escopo --------------
+  // wireDescontoSync opera DENTRO de um rootEl (querySelector, nao
+  // getElementById global) — permite N instancias sem colisao de ids. Usado
+  // nos collapses de edicao de item (#item-edit-<id>), um por item, ancorado
+  // no preco de tabela do item (data-preco-tabela). A criacao continua usando
+  // recalcular() global (ids f-*) — caminhos independentes, sem conflito.
+  function wireDescontoSync(rootEl, precoTabela) {
+    const elPct = rootEl.querySelector('.js-desconto-pct');
+    const elRs  = rootEl.querySelector('.js-desconto-rs');
+    const elVal = rootEl.querySelector('.js-valor');
+    if (!elPct && !elRs && !elVal) return null;
+    const st = { preco: precoTabela, lock: false };
+    function recalc(origem) {
+      if (st.lock) return;
+      st.lock = true;
+      try {
+        const preco = st.preco;
+        if (preco == null || preco <= 0) return;
+        let pct = elPct ? parseBR(elPct.value) : NaN;
+        let rs  = elRs ? parseBR(elRs.value) : NaN;
+        let val = elVal ? parseBR(elVal.value) : NaN;
+        if (origem === 'pct') {
+          if (isNaN(pct)) pct = 0;
+          pct = Math.max(0, Math.min(100, pct));
+          rs = arred2(preco * pct / 100); val = arred2(preco - rs);
+        } else if (origem === 'rs') {
+          if (isNaN(rs)) rs = 0;
+          rs = Math.max(0, Math.min(preco, rs));
+          pct = preco > 0 ? arred2(rs / preco * 100) : 0; val = arred2(preco - rs);
+        } else { // valor
+          if (isNaN(val)) val = preco;
+          val = Math.max(0, Math.min(preco, val));
+          rs = arred2(preco - val); pct = preco > 0 ? arred2(rs / preco * 100) : 0;
+        }
+        if (elPct) setBR(elPct, arred2(pct));
+        if (elRs)  setBR(elRs, rs);
+        if (elVal) setBR(elVal, val);
+      } finally { st.lock = false; }
+    }
+    if (elPct) elPct.addEventListener('change', () => recalc('pct'));
+    if (elRs)  elRs.addEventListener('change', () => recalc('rs'));
+    if (elVal) elVal.addEventListener('change', () => recalc('valor'));
+    return { recalc, setPreco(p) { st.preco = p; } };
+  }
+
+  // Cada collapse de edicao de item (#item-edit-<id>) tem sua propria
+  // sincronia, ancorada no preco de tabela do item (data-preco-tabela).
+  document.querySelectorAll('[data-item-edit-root]').forEach(function(root) {
+    const preco = parseBR(root.dataset.precoTabela);
+    wireDescontoSync(root, isNaN(preco) ? null : preco);
+  });
+
+  // ----------------- Pagamentos (editor de edicao): soma ao vivo ----------
+  // O editor de edicao usa ids `pag-edit-*` (distintos do modo criacao). Soma
+  // os valores das formas e compara com o valor_total do pedido (data-pag-total).
+  (function() {
+    const cont = document.getElementById('pag-edit-container');
+    const somaEl = document.getElementById('pag-edit-soma');
+    if (!cont || !somaEl) return;
+    const total = parseFloat(cont.dataset.pagTotal || '0');
+    const avisoEl = document.getElementById('pag-edit-aviso');
+    function recalcPagEdit() {
+      let soma = 0;
+      cont.querySelectorAll('input[name="pagamento_valor"]').forEach(function(inp) {
+        const v = parseBR(inp.value);
+        if (!isNaN(v)) soma += v;
+      });
+      somaEl.textContent = 'R$ ' + fmtBR(soma);
+      if (avisoEl) avisoEl.style.display = (Math.abs(soma - total) > 0.01) ? '' : 'none';
+    }
+    cont.addEventListener('input', function(e) {
+      if (e.target && e.target.name === 'pagamento_valor') recalcPagEdit();
+    });
+    // Recalcula ao adicionar/remover linha (botoes usam onclick inline).
+    new MutationObserver(recalcPagEdit).observe(cont, { childList: true });
+    recalcPagEdit();
+  })();
+
+  // ----------------- Parcelamento: aviso de intervalo atipico (<7 dias) ---
+  (function() {
+    const elInt = document.getElementById('f-intervalo');
+    const avisoInt = document.getElementById('f-intervalo-aviso');
+    if (!elInt || !avisoInt) return;
+    function checkIntervalo() {
+      const v = parseInt(elInt.value || '0', 10);
+      avisoInt.style.display = (v > 0 && v < 7) ? '' : 'none';
+    }
+    elInt.addEventListener('input', checkIntervalo);
+    elInt.addEventListener('change', checkIntervalo);
+    checkIntervalo();
+  })();
+
+  // ----------------- Frente B: Enter = "Proximo" -------------------------
+  // Nas telas de pedido (novo + edicao — este script so carrega nelas), Enter
+  // num campo de texto/numero/select AVANCA para o proximo campo focavel do
+  // mesmo form, em vez de submeter. textarea mantem Enter (nova linha); o
+  // submit fica por clique no botao (ou Enter quando o foco ja esta no botao).
+  (function() {
+    const SEL = 'input:not([type=hidden]):not([type=submit]):not([type=button]):not([type=checkbox]):not([type=radio]), select';
+    document.addEventListener('keydown', function(ev) {
+      if (ev.key !== 'Enter' || ev.isComposing) return;
+      const el = ev.target;
+      if (!el || !el.matches || !el.matches(SEL)) return;
+      const form = el.closest('form');
+      if (!form) return;
+      ev.preventDefault();  // nao submete
+      const focaveis = Array.from(form.querySelectorAll(
+        'input:not([type=hidden]):not([disabled]), select:not([disabled]), textarea:not([disabled]), button:not([disabled])'
+      )).filter(e => e.offsetParent !== null && e.tabIndex !== -1);
+      const i = focaveis.indexOf(el);
+      if (i >= 0 && i + 1 < focaveis.length) focaveis[i + 1].focus();
+    });
+  })();
 
 })();
 </script>

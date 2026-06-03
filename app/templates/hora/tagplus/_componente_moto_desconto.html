@@ -1,7 +1,7 @@
       <div class="row g-3">
         <div class="col-md-4">
-          <label class="form-label">Modelo <span class="text-danger">*</span></label>
-          <select name="modelo_id" id="f-modelo" class="form-select" required>
+          <label class="form-label">Modelo <small class="text-muted">(filtro)</small></label>
+          <select name="modelo_id" id="f-modelo" class="form-select">
             <option value="">— escolha o modelo —</option>
             {% for m in modelos %}
               <option value="{{ m.id }}">{{ m.nome_modelo }}</option>
@@ -9,18 +9,18 @@
           </select>
         </div>
         <div class="col-md-4">
-          <label class="form-label">Cor <span class="text-danger">*</span></label>
-          <select name="cor_select" id="f-cor" class="form-select" required disabled>
+          <label class="form-label">Cor <small class="text-muted">(filtro)</small></label>
+          <select name="cor_select" id="f-cor" class="form-select" disabled>
             <option value="">— escolha o modelo primeiro —</option>
           </select>
           <small class="text-muted" id="cor-status"></small>
         </div>
         <div class="col-md-4">
           <label class="form-label">Chassi <span class="text-danger">*</span></label>
-          <select name="chassi" id="f-chassi" class="form-select chassi-mono" required disabled>
-            <option value="">— escolha cor —</option>
-          </select>
-          <small class="text-muted" id="chassi-status"></small>
+          <input type="text" name="chassi" id="f-chassi" class="form-control chassi-mono"
+                 data-hora-autocomplete="chassi" data-hora-min-chars="2"
+                 data-hora-extra-params="disponivel=1" autocomplete="off" required>
+          <small class="text-muted" id="chassi-status">Digite 2+ caracteres (so chassis em estoque). Modelo/cor filtram a busca.</small>
         </div>
       </div>
 
@@ -42,19 +42,19 @@
             <i class="fas fa-info-circle text-muted ms-1"
                title="Definido em Cadastros → Modelos. Trazido automaticamente conforme o tipo da forma de pagamento (À vista vs A prazo)."></i>
           </label>
-          <input type="text" id="f-preco-tabela" class="form-control" readonly
+          <input type="text" id="f-preco-tabela" class="form-control js-preco-tabela" readonly
                  placeholder="—" tabindex="-1">
           <small class="text-muted" id="preco-sugerido-info">Escolha o modelo e a forma de pagamento.</small>
         </div>
         <div class="col-md-2">
           <label class="form-label">Desconto (%)</label>
           <input type="text" name="desconto_percentual" id="f-desconto-pct"
-                 class="form-control" inputmode="decimal" placeholder="0,00" value="0,00">
+                 class="form-control js-desconto-pct" inputmode="decimal" placeholder="0,00" value="0,00">
         </div>
         <div class="col-md-3">
           <label class="form-label">Desconto (R$)</label>
           <input type="text" id="f-desconto-rs"
-                 class="form-control" inputmode="decimal" placeholder="0,00" value="0,00">
+                 class="form-control js-desconto-rs" inputmode="decimal" placeholder="0,00" value="0,00">
           <small class="text-muted">Preencha % ou R$ — o outro e calculado automaticamente.</small>
         </div>
         <div class="col-md-4">
@@ -62,7 +62,7 @@
             <strong>Valor final (R$)</strong> <span class="text-danger">*</span>
           </label>
           <input type="text" name="valor" id="f-valor"
-                 class="form-control fw-bold" required inputmode="decimal" placeholder="0,00">
+                 class="form-control fw-bold js-valor" required inputmode="decimal" placeholder="0,00">
           <small class="text-muted">Preço de tabela menos desconto. Editavel.</small>
         </div>
       </div>

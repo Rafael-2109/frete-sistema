@@ -4,7 +4,7 @@ camada: L1
 sot_de: —
 hub: docs/superpowers/specs/INDEX.md
 superseded_by: —
-atualizado: 2026-06-02
+atualizado: 2026-06-03
 -->
 # Specs — indice
 > **Papel:** mapa das specs de design. So ponteiros.
@@ -13,6 +13,7 @@ atualizado: 2026-06-02
 - [Atacadao — Split NF por Protocolo ST](2026-06-02-atacadao-split-protocolo-st-design.md) — quebra 1 pedido Atacadao RJ em 2 pedidos Odoo (ST vs demais)
 - [HORA — Desconsiderar moto de NF de compra](2026-06-03-hora-desconsiderar-moto-nf-design.md) — flag reversível por item: tira do estoque/recebimento e remove a HoraMoto, valida não-em-pedido/não-recebido
 - [HORA — Unificar tela de Pedido de Venda + filtro loja/vendedor + fix desconto](2026-06-03-hora-unificar-pedido-venda-design.md) — tela "Novo pedido" vira única (cria+edita, remove venda_detalhe); critério loja/vendedor por usuário; fix drift de centavos no desconto
+- [HORA — Pedido de Venda: editar item (moto travada), Enter=Próximo, chassi autocomplete + regressões](2026-06-03-hora-pedido-venda-edicao-autocomplete-design.md) — editar moto só ajusta desconto/valor (trocar = remover+readicionar); Enter avança campo; chassi vira autocomplete; restaura recursos CRÍTICOS+ALTOS perdidos na unificação
 - [Simulador 3D de Carga de Motos — Design Spec](2026-04-03-simulador-carga-3d-design.md)
 - [Reforma Modulo Pessoal — Controle Financeiro](2026-04-05-pessoal-controle-financeiro-design.md)
 - [Design — Features SDK Claude Agent 0.1.60](2026-04-16-agent-sdk-0160-features-design.md)

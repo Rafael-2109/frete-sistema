@@ -89,8 +89,10 @@
     const targetKey = input.dataset.horaTargetKey || DEFAULT_KEYS[tipo] || 'id';
     const targetEl = targetId ? document.getElementById(targetId) : null;
     // Query string extra (ex.: "sem_recebimento=1&ativo=1"). Permite que telas
-    // especificas restrinjam o conjunto sem precisar de endpoint novo.
-    const extraParams = (input.dataset.horaExtraParams || '').replace(/^[?&]+/, '');
+    // especificas restrinjam o conjunto sem precisar de endpoint novo. Lido
+    // DINAMICAMENTE no fetch (ver fetchData) — telas que mudam os filtros em
+    // runtime (cascata modelo/cor -> chassi no Pedido de Venda) so atualizam o
+    // dataset, sem reinicializar o autocomplete (evita dropdown duplicado).
 
     const { dd, position } = buildDropdown(input);
 
@@ -137,6 +139,8 @@
       }
       try {
         let qs = `?q=${encodeURIComponent(q)}`;
+        // Le os filtros extra do dataset NO MOMENTO do fetch (dinamico).
+        const extraParams = (input.dataset.horaExtraParams || '').replace(/^[?&]+/, '');
         if (extraParams) qs += '&' + extraParams;
         const resp = await fetch(`${url}${qs}`, {
           credentials: 'same-origin',

@@ -34,6 +34,7 @@ atualizado: 2026-06-03
 - [17. Desconsiderar moto de NF de compra — 2026-06-03](#17-desconsiderar-moto-de-nf-de-compra--2026-06-03)
 - [18. Unificação da tela de Pedido de Venda + filtro loja/vendedor + fix desconto — 2026-06-03](#18-unificação-da-tela-de-pedido-de-venda--filtro-lojavendedor--fix-desconto--2026-06-03)
 - [19. Guarda do recebimento automático (anti-ressurreição) — 2026-06-03](#19-guarda-do-recebimento-automático-anti-ressurreição--2026-06-03)
+- [20. Editar item (moto travada) + Enter=Próximo + chassi autocomplete + restauração de regressões — 2026-06-03](#20-editar-item-moto-travada--enterpróximo--chassi-autocomplete--restauração-de-regressões--2026-06-03)
 - [Onboarding Tours (2026-05-08)](#onboarding-tours-2026-05-08)
 - [Referências](#referências)
 
@@ -690,6 +691,25 @@ Três mudanças no Pedido de Venda (`HoraVenda`). Spec: `docs/superpowers/specs/
 **Bug latente corrigido**: `venda_adicionar_item_peca`/`venda_remover_item_peca` redirecionavam para `hora.venda_detalhe` (rota inexistente → BuildError) → corrigido para `hora.vendas_detalhe`.
 
 **Testes**: `tests/hora/test_pedido_filtro_vendedor.py` (filtro vendedor/loja + `criado_por_id`). Validação visual via Playwright: tela unificada (edição + criação) renderiza, cascata modelo→cor funciona, zero erros de console JS.
+
+---
+
+## 20. Editar item (moto travada) + Enter=Próximo + chassi autocomplete + restauração de regressões — 2026-06-03
+
+Quatro frentes na tela unificada de Pedido de Venda (`pedido_venda_novo.html`). Spec: `docs/superpowers/specs/2026-06-03-hora-pedido-venda-edicao-autocomplete-design.md`. Plano: `docs/superpowers/plans/2026-06-03-hora-pedido-venda-edicao-autocomplete.md`.
+
+**A — Editar item = só desconto/valor (moto travada)**: o collapse `#item-edit-<id>` mostra modelo/cor/chassi **read-only** e edita desconto %/R$ + valor final, sincronizados por `wireDescontoSync` (função por-escopo via classes `.js-desconto-pct/.js-desconto-rs/.js-valor` + `data-preco-tabela` no root — N instâncias sem colisão de ids). Só `valor_final` é submetido (backend deriva o desconto via `_resolver_preco_tabela`). **Trocar a moto = remover + readicionar.** A rota `vendas_item_editar` (`routes/vendas.py`) **deixou de ler `novo_chassi`** (defesa em profundidade); o service `editar_item_pedido` mantém a capacidade de troca só para os testes de workflow. Guard AST: `tests/hora/test_pedido_venda_editar_item.py`.
+
+**B — Enter = "Próximo"**: `_pedido_venda_scripts.html` intercepta Enter em `input`/`select` dos forms de pedido → foca o próximo campo (não submete). `textarea` mantém Enter; submit por clique. Escopo: páginas de pedido (o script só carrega nelas).
+
+**C — Chassi autocomplete**: o `<select id="f-chassi">` virou `<input data-hora-autocomplete="chassi" data-hora-extra-params="disponivel=1">`. Modelo/cor são **filtros opcionais** (sem `required`, label "(filtro)") que ajustam `data-hora-extra-params` (`modelo_id`/`cor`); ao escolher um chassi, o JS preenche modelo + preço de tabela. `autocomplete_service.chassis` ganhou `disponivel`/`modelo_id`/`cor` (disponível = último evento em `EVENTOS_EM_ESTOQUE`, critério canônico do `estoque_service`) + `modelo_id` no JSON; a rota `/autocomplete/chassi` repassa os filtros. **`app/static/js/hora/autocomplete.js` passou a ler `data-hora-extra-params` DINAMICAMENTE no fetch** (retrocompatível) — telas podem mudar os filtros em runtime sem reinit (evita dropdown duplicado). Testes: `tests/hora/test_autocomplete_chassi_disponivel.py`.
+
+**D — Restauração de regressões** (perdidas na unificação `9a50b5af8`/`e6cc96586`; auditoria de 33 itens na spec):
+- **Críticas**: seção "Peças do pedido" (tabela `itens_peca` + add via `data-hora-autocomplete="peca"` + remover c/ confirm; rotas `venda_adicionar_item_peca`/`venda_remover_item_peca`); botão "Reimportar do TagPlus" (`tagplus_backfill_nfe_unica`); `valor_frete`/`tipo_frete_calc` usam `disabled` (não `readonly`) quando travado — preserva frete FOB legado (input disabled não é submetido); confirm do descarte com aviso "A NFe NÃO será cancelada na SEFAZ"; aviso contextual de campos editáveis por status.
+- **Altas**: KPIs (loja/chave 44d/data/valor/itens); parcelamento (`numero_parcelas`/`intervalo_parcelas_dias`, editáveis COTAÇÃO/CONFIRMADO via `ro_oper`) + aviso intervalo<7d; auditoria com colunas Campo/De/Para; histórico de divergências (resolvidas); preview de frete CIF multi-item (`tr[data-item-chassi/final/tabela]` → `#d-alerta-frete`); vendedor fallback "(não habilitado)" (não zera legado); pagamentos (badge INCOMPLETO no header + linha "total vs pedido" + coluna Tipo via `formas_pagamento|selectattr` + soma ao vivo no editor `pag-edit-*`); guard de modalidade de frete legada (2/3/4/9).
+- **NÃO restaurado** (P-14 reclassificado como correção): endereço travado em FATURADO está **correto** — alinhado à matriz `_CAMPOS_EDITAVEIS_HEADER` (`venda_service.py`), onde FATURADO só aceita `observacoes`. O template antigo contrariava o backend. Backlog (médio/baixo): textos de confirm truncados, tooltips, placeholders, NF no `<h2>`, `origem_criacao`.
+
+**Sem migration** (nenhuma mudança de schema). Validação: pytest `tests/hora/` verde · `node --check` no JS renderizado · Jinja compila.
 
 ---
 
