@@ -194,6 +194,76 @@ def importar_danfe_pdf(
     return nf
 
 
+def _motivo_bloqueio_desconsiderar(item) -> Optional[str]:
+    """Retorna o motivo (str) que impede desconsiderar o item, ou None se liberado.
+
+    Bloqueia se: chassi em pedido (HoraPedidoItem); NF já entrou em recebimento;
+    chassi conferido; moto tem qualquer evento (recebida/vendida/avariada/...);
+    chassi presente em outro item de NF considerado.
+    """
+    from app.hora.models import (
+        HoraPedidoItem, HoraRecebimento, HoraRecebimentoConferencia,
+    )
+    from app.hora.services.chassi_protecao_service import chassi_em_pedido
+    from app.hora.services.moto_service import status_atual
+
+    chassi = (item.numero_chassi or '').strip().upper()
+
+    if chassi_em_pedido(chassi):
+        ped = (
+            db.session.query(HoraPedidoItem)
+            .filter(HoraPedidoItem.numero_chassi == chassi).first()
+        )
+        ref = ped.pedido.numero_pedido if ped and ped.pedido else (ped.pedido_id if ped else '?')
+        return (
+            f'Moto {chassi} consta no pedido {ref}; '
+            f'desvincule do pedido antes de desconsiderar.'
+        )
+
+    if HoraRecebimento.query.filter_by(nf_id=item.nf_id).first():
+        return (
+            f'NF #{item.nf_id} já entrou em recebimento; '
+            f'desconsidere o item antes de iniciar o recebimento.'
+        )
+
+    if HoraRecebimentoConferencia.query.filter_by(
+        numero_chassi=chassi, substituida=False,
+    ).first():
+        return f'Moto {chassi} já foi conferida em um recebimento.'
+
+    ev = status_atual(chassi)
+    if ev:
+        return f"Moto {chassi} tem evento '{ev}'; não pode ser desconsiderada."
+
+    outro = (
+        HoraNfEntradaItem.query
+        .filter(
+            HoraNfEntradaItem.numero_chassi == chassi,
+            HoraNfEntradaItem.id != item.id,
+            HoraNfEntradaItem.desconsiderado.is_(False),
+        ).first()
+    )
+    if outro:
+        return (
+            f'Moto {chassi} também consta na NF #{outro.nf_id} (item considerado); '
+            f'não é seguro remover o cadastro da moto.'
+        )
+
+    return None
+
+
+def assert_item_moto_consistente(item) -> None:
+    """Invariante (substitui a FK): item considerado => moto existe;
+    item desconsiderado => moto não existe. Levanta AssertionError se violado.
+    """
+    from app.hora.models import HoraMoto
+    existe = HoraMoto.query.get((item.numero_chassi or '').strip().upper()) is not None
+    if item.desconsiderado and existe:
+        raise AssertionError(f'item desconsiderado {item.id} ainda tem HoraMoto')
+    if not item.desconsiderado and not existe:
+        raise AssertionError(f'item considerado {item.id} sem HoraMoto')
+
+
 def vincular_nf_a_pedido(nf_id: int, pedido_id: int) -> None:
     """Vincula retroativamente uma NF a um pedido (caso não tenha sido informado no upload)."""
     nf = HoraNfEntrada.query.get(nf_id)

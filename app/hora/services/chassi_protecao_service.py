@@ -27,6 +27,20 @@ def chassi_protegido(numero_chassi: str | None) -> bool:
     return em_nf
 
 
+def chassi_em_pedido(numero_chassi: str | None) -> bool:
+    """True se o chassi consta em alguma linha de pedido de compra (HoraPedidoItem).
+
+    Diferente de `chassi_protegido`: NÃO considera HoraNfEntradaItem (que daria
+    sempre True ao validar o próprio item da NF).
+    """
+    chassi = (numero_chassi or '').strip().upper()
+    if not chassi:
+        return False
+    return db.session.query(HoraPedidoItem.id).filter(
+        HoraPedidoItem.numero_chassi == chassi,
+    ).limit(1).first() is not None
+
+
 def motivos_protecao(numero_chassi: str | None) -> List[dict]:
     """Lista motivos. Retorna [] se nao protegido."""
     chassi = (numero_chassi or '').strip().upper()

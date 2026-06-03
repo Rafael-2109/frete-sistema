@@ -105,3 +105,44 @@ def test_itens_considerados_exclui_desconsiderado(db):
     assert len(nf.itens) == 2
     assert len(nf.itens_considerados) == 1
     assert nf.itens_considerados[0].numero_chassi == c2
+
+
+# ---------------------------------------------------------------------------
+# Task 3 — Helpers de validação
+# ---------------------------------------------------------------------------
+def test_chassi_em_pedido(db):
+    from app.hora.services.chassi_protecao_service import chassi_em_pedido
+    loja, mod = _loja(), _modelo()
+    c = _chassi()
+    _pedido(loja, [c], mod)
+    assert chassi_em_pedido(c) is True
+    assert chassi_em_pedido(_chassi()) is False
+
+
+def test_motivo_bloqueio_em_pedido(db):
+    from app.hora.services.nf_entrada_service import _motivo_bloqueio_desconsiderar
+    loja, mod = _loja(), _modelo()
+    c = _chassi()
+    _pedido(loja, [c], mod)
+    nf = _nf(loja, [c], mod)  # mesma moto na NF
+    assert _motivo_bloqueio_desconsiderar(nf.itens[0]) is not None
+
+
+def test_motivo_bloqueio_recebido(db):
+    from app.hora.services.nf_entrada_service import _motivo_bloqueio_desconsiderar
+    loja, mod = _loja(), _modelo()
+    c = _chassi()
+    nf = _nf(loja, [c], mod)
+    item = nf.itens[0]
+    assert _motivo_bloqueio_desconsiderar(item) is None  # liberado
+    registrar_evento(numero_chassi=c, tipo='RECEBIDA', loja_id=loja.id)
+    db.session.flush()
+    assert _motivo_bloqueio_desconsiderar(item) is not None  # bloqueado por evento
+
+
+def test_assert_item_moto_consistente(db):
+    from app.hora.services.nf_entrada_service import assert_item_moto_consistente
+    loja, mod = _loja(), _modelo()
+    nf = _nf(loja, [_chassi()], mod)
+    item = nf.itens[0]
+    assert_item_moto_consistente(item)  # considerado + moto existe -> ok
