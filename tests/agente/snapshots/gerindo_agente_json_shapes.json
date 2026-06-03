@@ -677,6 +677,107 @@
     "total_links": "int",
     "total_relations": "int"
   },
+  "infra.flags": {
+    "command": "str",
+    "data": {
+      "declarados_on": "int",
+      "efetivas_prod_por_evidencia": "int",
+      "evidence_window": {
+        "evidence_window_days": "int",
+        "time_bound_keys": [
+          "str"
+        ]
+      },
+      "flags": [
+        {
+          "attr": "str",
+          "db_evidence": {
+            "kind": "null",
+            "metric": "null",
+            "signal": "str",
+            "value": "null"
+          },
+          "declared": "bool",
+          "default": "bool",
+          "env_var": "str",
+          "grupo": "str",
+          "verdict": "str"
+        }
+      ],
+      "scope": {
+        "data_source": "str",
+        "flags_source": "str",
+        "redis_target": "str"
+      },
+      "total_flags": "int"
+    },
+    "errors": [
+      "<empty>"
+    ],
+    "ok": "bool",
+    "warnings": [
+      "<empty>"
+    ]
+  },
+  "infra.gates": {
+    "command": "str",
+    "data": {
+      "debug_mode_flag": "bool",
+      "gates": [
+        {
+          "allow_list": "null",
+          "blocks": "str",
+          "enabled": "bool",
+          "enforcement": "str",
+          "flag": "str",
+          "name": "str",
+          "source": "str"
+        }
+      ],
+      "scope": {
+        "data_source": "str",
+        "flags_source": "str",
+        "redis_target": "str"
+      }
+    },
+    "errors": [
+      "<empty>"
+    ],
+    "ok": "bool",
+    "warnings": [
+      "<empty>"
+    ]
+  },
+  "infra.worker-status": {
+    "command": "str",
+    "data": {
+      "queues": [
+        {
+          "failed": "int",
+          "name": "str",
+          "queued": "int",
+          "started": "int"
+        }
+      ],
+      "reachable": "bool",
+      "scope": {
+        "data_source": "str",
+        "flags_source": "str",
+        "redis_target": "str"
+      },
+      "workers": [
+        "<empty>"
+      ],
+      "workers_total": "int"
+    },
+    "errors": [
+      "<empty>"
+    ],
+    "ok": "bool",
+    "warnings": [
+      "<empty>"
+    ]
+  },
   "loop.corrections": {
     "command": "str",
     "data": {

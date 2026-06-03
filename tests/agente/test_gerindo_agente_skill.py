@@ -26,7 +26,7 @@ SKILL_SCRIPTS = (
 )
 
 SCRIPTS = ['common', 'memoria', 'sessao', 'padrao', 'grafo', 'diagnostico', 'manutencao',
-           'loop', 'eval', 'melhorias']
+           'loop', 'eval', 'melhorias', 'infra']
 
 # Onda 1 (camada de evolucao/qualidade) — subcomandos novos em diagnostico.py.
 NOVOS_DIAGNOSTICO = {'step-quality', 'step-coverage', 'rule-adhesion', 'routing', 'recommendations'}
@@ -47,6 +47,9 @@ ONDA3_READ = {
     'eval': ONDA3_EVAL,
     'melhorias': ONDA3_MELHORIAS,
 }
+
+# Onda 4 (P10) — observabilidade de infra/seguranca (infra.py), TODOS READ.
+ONDA4_INFRA = {'flags', 'gates', 'worker-status'}
 
 
 def _load(name):
@@ -70,7 +73,7 @@ def test_script_importavel(name):
 
 
 @pytest.mark.parametrize('name', ['memoria', 'sessao', 'padrao', 'grafo', 'diagnostico', 'manutencao',
-                                  'loop', 'eval', 'melhorias'])
+                                  'loop', 'eval', 'melhorias', 'infra'])
 def test_subcommands_e_handlers_em_paridade(name):
     """SUBCOMMANDS e HANDLERS NUNCA podem divergir (subcomando sem handler = crash)."""
     mod = _load(name)
@@ -379,3 +382,164 @@ def test_onda3_write_guardado_por_confirm(name):
         assert 0 <= return_apos_guard < primeiro_efeito, (
             f"{name}.{sub}: sem `return` no bloco dry-run antes do efeito (escreveria em dry-run)"
         )
+
+
+# ─────────────────────────────────────────────────────────────────────────
+# Onda 4 — P10: observabilidade de infra/seguranca (infra.py). 3 subcomandos
+# TODOS READ (flags/gates/worker-status). Tudo ZERO-DB: importlib + inspect.
+# ─────────────────────────────────────────────────────────────────────────
+
+
+def test_infra_onda4_registrado():
+    """infra.py: flags/gates/worker-status registrados, callable e em paridade."""
+    m = _load('infra')
+    assert ONDA4_INFRA <= set(m.SUBCOMMANDS), f"faltam em SUBCOMMANDS: {ONDA4_INFRA - set(m.SUBCOMMANDS)}"
+    assert ONDA4_INFRA <= set(m.HANDLERS), f"faltam em HANDLERS: {ONDA4_INFRA - set(m.HANDLERS)}"
+    for sub in ONDA4_INFRA:
+        assert callable(m.HANDLERS[sub])
+
+
+def test_infra_main_delega_run_handler():
+    """infra usa o padrao Onda 2 (run_handler) — sem parse/contexto manual."""
+    m = _load('infra')
+    assert 'run_handler(' in inspect.getsource(m.main), "infra.main deveria delegar a run_handler"
+
+
+def test_infra_handlers_sem_contexto_duplo():
+    """Handlers de infra NAO reabrem app context (get_app_context) — run_handler ja cuida."""
+    m = _load('infra')
+    for fn in m.HANDLERS.values():
+        code = '\n'.join(l for l in inspect.getsource(fn).splitlines() if not l.lstrip().startswith('#'))
+        assert 'get_app_context(' not in code, (
+            f"infra.{fn.__name__}: contexto-duplo (get_app_context) nao deveria existir"
+        )
+
+
+def test_infra_handlers_sao_read_only():
+    """P10 e READ: nenhum handler de infra commita/add/delete (so rollback defensivo)."""
+    m = _load('infra')
+    for sub in ONDA4_INFRA:
+        code = '\n'.join(l for l in inspect.getsource(m.HANDLERS[sub]).splitlines()
+                         if not l.lstrip().startswith('#'))
+        assert 'session.commit(' not in code, f"infra.{sub}: handler READ nao pode commitar"
+        assert 'session.add(' not in code, f"infra.{sub}: handler READ nao pode add()"
+        assert 'session.delete(' not in code, f"infra.{sub}: handler READ nao pode delete()"
+
+
+def test_infra_flags_tem_days():
+    """infra.flags declara --days (janela da evidencia time-bound)."""
+    m = _load('infra')
+    argnames = {a['name'] for a in m.SUBCOMMANDS['flags']['args']}
+    assert '--days' in argnames, "infra.flags sem --days"
+
+
+def test_infra_evolution_flags_bem_formada():
+    """A tabela EVOLUTION_FLAGS e consistente: tuplas de 6, env vars unicas, grupos validos.
+
+    Trava a CONSISTENCIA INTERNA da enumeracao. O confronto contra feature_flags.py (nome/default
+    reais) e' feito por test_infra_evolution_flags_confronta_feature_flags.
+    """
+    m = _load('infra')
+    flags = m.EVOLUTION_FLAGS
+    assert len(flags) >= 12, "esperado >= 12 flags de evolucao (Ondas 0-4 + atuador)"
+    env_vars = [t[1] for t in flags]
+    assert len(env_vars) == len(set(env_vars)), "env vars duplicadas em EVOLUTION_FLAGS"
+    grupos_validos = {'Onda 0', 'Onda 1', 'Onda 2', 'Onda 3', 'Onda 4', 'Atuador', 'Loop corretivo'}
+    for attr, env_var, default, grupo, ev_key, ev_kind in flags:
+        assert isinstance(attr, str) and attr, "attr vazio"
+        assert env_var.startswith('AGENT_') or env_var.startswith('USE_'), f"env var atipica: {env_var}"
+        assert isinstance(default, bool), f"default de {env_var} nao e bool"
+        assert grupo in grupos_validos, f"grupo invalido: {grupo}"
+        assert ev_kind in (None, 'activity', 'readiness'), f"evidence_kind invalido em {env_var}: {ev_kind}"
+        # invariante: key e kind andam juntos (sem rastro => sem kind, e vice-versa).
+        assert (ev_key is None) == (ev_kind is None), (
+            f"{env_var}: evidence_key e evidence_kind devem ser ambos None ou ambos preenchidos"
+        )
+
+
+def test_infra_evidence_keys_existem_nas_metricas():
+    """Toda evidence_key referenciada em EVOLUTION_FLAGS existe no dict de metricas.
+
+    Defende contra typo que faria _evidence_for sempre retornar value=None (signal=unknown)
+    silenciosamente — quebrando a inferencia db_evidence que e o coracao do P10.
+    """
+    m = _load('infra')
+    metricas_validas = {
+        'agent_step_frustration', 'agent_step_judged', 'agent_step_verified',
+        'planstate_with_plan', 'planstate_total', 'eval_scores', 'eval_cases',
+        'directives_shadow', 'directives_injetaveis', 'corrections_mandatory',
+        'mandatory_rules_total', 'outcome_populated',
+    }
+    for attr, env_var, default, grupo, ev_key, ev_kind in m.EVOLUTION_FLAGS:
+        if ev_key is not None:
+            assert ev_key in metricas_validas, (
+                f"evidence_key '{ev_key}' de {env_var} nao existe nas metricas de _compute_evidence"
+            )
+
+
+def test_infra_evolution_flags_confronta_feature_flags():
+    """MED-6: confronta EVOLUTION_FLAGS contra feature_flags.py por TEXTO (ZERO import/DB).
+
+    Cada (attr, env_var, default) deve existir no arquivo fonte com o MESMO nome de env var e o
+    MESMO default. Pega drift real (renomear flag, mudar default) sem importar app (preserva ZERO-DB).
+    """
+    import re
+    m = _load('infra')
+    ff_path = (Path(__file__).resolve().parents[2]
+               / 'app' / 'agente' / 'config' / 'feature_flags.py')
+    ff_src = ff_path.read_text(encoding='utf-8')
+    for attr, env_var, default, grupo, ev_key, ev_kind in m.EVOLUTION_FLAGS:
+        # 1) o attr e' atribuido como simbolo de modulo em feature_flags.py.
+        assert re.search(rf'(?m)^{re.escape(attr)}\s*=', ff_src), (
+            f"EVOLUTION_FLAGS: '{attr}' nao e atribuido em feature_flags.py (drift de nome de simbolo?)"
+        )
+        # 2) o env var e' lido via os.getenv com o default esperado ('true'/'false').
+        default_str = 'true' if default else 'false'
+        pat = rf'os\.getenv\(\s*["\']{re.escape(env_var)}["\']\s*,\s*["\']({default_str})["\']'
+        assert re.search(pat, ff_src, re.IGNORECASE), (
+            f"feature_flags.py: nao achei os.getenv('{env_var}', '{default_str}') — "
+            f"drift de env var ou default de {attr}?"
+        )
+
+
+def test_infra_gerindo_write_blocked_em_sincronia_com_permissions():
+    """LOW-15: GERINDO_WRITE_BLOCKED (gates) deve espelhar o regex _GERINDO_WRITE_REGEX de
+    permissions.py. Se o gate ganhar/perder um subcomando WRITE e a lista nao acompanhar, o
+    subcomando `gates` mente. Confronto por TEXTO (ZERO import/DB)."""
+    import re
+    m = _load('infra')
+    perm_path = (Path(__file__).resolve().parents[2]
+                 / 'app' / 'agente' / 'config' / 'permissions.py')
+    perm_src = perm_path.read_text(encoding='utf-8')
+    # Extrai o 2o grupo da alternancia do regex: (approve|reject|promote-batch|review|run|respond)
+    mt = re.search(r'\((approve(?:\|[\w-]+)+)\)', perm_src)
+    assert mt, "nao localizei o grupo de subcomandos WRITE no regex de permissions.py"
+    regex_set = set(mt.group(1).split('|'))
+    assert regex_set == set(m.GERINDO_WRITE_BLOCKED), (
+        f"GERINDO_WRITE_BLOCKED fora de sincronia com permissions.py: "
+        f"so no regex={regex_set - set(m.GERINDO_WRITE_BLOCKED)}, "
+        f"so na lista={set(m.GERINDO_WRITE_BLOCKED) - regex_set}"
+    )
+
+
+def test_infra_evidence_for_shape_homogeneo():
+    """LOW-9/MED-7: _evidence_for SEMPRE retorna dict {metric,kind,value,signal} (nunca None).
+
+    Shape homogeneo impede o snapshot P12 de colapsar o campo polimorfico e mascarar regressao.
+    Cobre os ramos none/unknown/active/idle/ready/empty. _verdict aceita todos sem crash. ZERO-DB.
+    """
+    m = _load('infra')
+    KEYS = {'metric', 'kind', 'value', 'signal'}
+    casos = [
+        (m._evidence_for(None, None, {}), 'none', None),
+        (m._evidence_for('x', 'activity', {'x': None}), 'unknown', None),
+        (m._evidence_for('x', 'activity', {'x': 5}), 'active', 5),
+        (m._evidence_for('x', 'activity', {'x': 0}), 'idle', 0),
+        (m._evidence_for('x', 'readiness', {'x': 3}), 'ready', 3),
+        (m._evidence_for('x', 'readiness', {'x': 0}), 'empty', 0),
+    ]
+    for ev, sig, val in casos:
+        assert isinstance(ev, dict) and set(ev) == KEYS, f"shape errado: {ev}"
+        assert ev['signal'] == sig, f"signal esperado {sig}, veio {ev['signal']}"
+        assert ev['value'] == val
+        assert isinstance(m._verdict(True, ev), str) and isinstance(m._verdict(False, ev), str)

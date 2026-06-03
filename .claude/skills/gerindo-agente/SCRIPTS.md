@@ -80,6 +80,10 @@ atualizado: 2026-06-03
   - [list-open](#list-open)
   - [show](#show)
   - [intelligence-report](#intelligence-report)
+- [infra.py (observabilidade infra e seguranca — READ, P10)](#infrapy-observabilidade-infra-e-seguranca--read-p10)
+  - [flags](#flags)
+  - [gates](#gates)
+  - [worker-status](#worker-status)
 - [WRITE (dev-only — fase 3b)](#write-dev-only--fase-3b)
   - [loop.approve / loop.reject](#loopapprove--loopreject)
   - [loop.promote-batch](#looppromote-batch)
@@ -456,6 +460,33 @@ Historico completo (v1/v2/v3) de uma `suggestion_key`: author, status, title, de
 Sem argumentos adicionais (usa `--limit` para o tamanho da serie).
 
 Relatorio D7 mais recente (`AgentIntelligenceReport.get_latest`) + serie por `report_date` (montada por query — o modelo nao tem `get_series`) + top 5 recomendacoes de `report_json['recommendations']`. `latest` tem schema fixo (escalares null sem report) + flag `has_report`. READ-only, custo $0.
+
+---
+
+## infra.py (observabilidade infra e seguranca — READ, P10)
+
+> **READ-only (Onda 4 / P10).** Estado operacional do Agente Web. **HONESTIDADE DE AMBIENTE**:
+> flags e Redis sao lidos do AMBIENTE DO PROCESSO (rodado pelo agente web em PROD = reflete PROD;
+> rodado por dev local = reflete LOCAL). O **banco** e a unica fonte PROD-verdadeira quando rodado
+> local (`DATABASE_URL` aponta p/ PROD) — por isso `flags` cruza o declarado `[this-process]` com
+> `db_evidence` `[PROD via DB]`. O campo `scope` em cada subcomando rotula a procedencia.
+
+### flags
+| Argumento | Tipo | Obrigatorio | Default | Descricao |
+|-----------|------|-------------|---------|-----------|
+| `--days` | int | Nao | 30 | Janela (dias) p/ a evidencia time-bound (`agent_step`/PlanState) |
+
+Flags de evolucao (blueprint Ondas 0-4 + atuador + loop corretivo — fonte: secoes rotuladas em `feature_flags.py`). Por flag: `declared` (valor NESTE processo), `env_var`, `default` e **`db_evidence`** — o estado EFETIVO em PROD inferido do rastro no BANCO (env-INDEPENDENTE). `db_evidence.kind`: `activity` (a atividade da flag escreve a metrica -> rastro>0 = flag EFETIVA em PROD: ex. `agent_step` judged, `agent_eval_scores`, diretrizes `shadow`) vs `readiness` (atuador de injecao SEM rastro de injecao no DB -> a metrica mede o CONTEUDO pronto p/ injetar, NAO o estado da flag: `USE_OPERATIONAL_DIRECTIVES`/`USE_USER_RULES_CHANNEL`). Flags sem rastro DB limpo -> `db_evidence: null` (honesto, sem proxy enganoso). READ-only, custo $0. **Supersede a tabela estatica "FEATURE FLAGS RELEVANTES" da SKILL.md** (que driftava).
+
+### gates
+Sem argumentos adicionais.
+
+Gates de acesso runtime (`permissions.py` + flags de enforcement): `gerindo_write` (NEGA o agente web/Teams executar via Bash os WRITE da skill — `always_deny`), `estoque_restricao` (+ allow-list `ESTOQUE_RESTRICAO_ALLOWED_USER_IDS`, kill-switch `AGENT_ESTOQUE_RESTRICAO_ENFORCEMENT`), `debug_mode` (ContextVar por sessao — `enabled=null`, so admin), `reversibility_check` (`USE_REVERSIBILITY_CHECK`), `mandatory_hard_enforce` (`USE_MANDATORY_HARD_ENFORCE`). Cada gate: `enforcement`/`enabled`/`flag`/`allow_list`/`blocks`/`source` (shape homogeneo). enforcement/flags sao `[this-process]`. READ-only, custo $0.
+
+### worker-status
+Sem argumentos adicionais.
+
+Filas RQ do agente (`agent_judge`/`agent_eval`/`agent_validation`/`agent_background`/`artifacts`) com profundidade (`queued`/`started`/`failed`) + workers vivos (`Worker.all`). Le o Redis DESTE processo (`scope.redis_target` rotula local vs PROD). **Degrada com graca** se Redis off: `reachable=false` + `queues`/`workers` vazios + warning (shape FIXO — nunca `status=query_error`). READ-only, custo $0.
 
 ---
 
