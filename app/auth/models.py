@@ -39,6 +39,15 @@ class Usuario(db.Model, UserMixin):
     # Nao usa FK explicita (manter app/auth independente de app/hora).
     loja_hora_id = db.Column(db.Integer, nullable=True)
 
+    # Criterio de filtragem dos Pedidos de Venda HORA na listagem /hora/vendas:
+    #   'loja'     -> escopo por loja_hora_id (comportamento padrao).
+    #   'vendedor' -> apenas pedidos cujo vendedor (ou vendedor_vinculado) ou
+    #                 criado_por_id e este usuario (ignora escopo de loja).
+    # Definido na tela /hora/permissoes. Sem efeito fora da listagem de pedidos.
+    criterio_pedidos_hora = db.Column(
+        db.String(10), nullable=False, default='loja', server_default='loja',
+    )
+
     # Dados de controle
     criado_em = db.Column(db.DateTime, default=agora_utc_naive)
     aprovado_em = db.Column(db.DateTime, nullable=True)
