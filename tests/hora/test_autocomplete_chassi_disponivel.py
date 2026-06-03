@@ -6,19 +6,35 @@ EVENTOS_EM_ESTOQUE (mesmo criterio do estoque_service) — usado pela tela de
 Pedido de Venda, onde so chassis em estoque podem ser vendidos. O JSON passa a
 incluir `modelo_id` (para o front preencher o filtro de modelo ao escolher).
 
-Testes auto-contidos (memoria gotcha_testes_hora_residuo): loja via
-`loja_factory` (CNPJ unico) e modelo com nome unico — nada de identificadores
-fixos que colidem com residuo. A fixture `db` (begin_nested + rollback) reverte
-tudo no teardown; `registrar_evento`/`get_or_create_moto` so fazem flush.
+Testes auto-contidos: loja e modelo com identificadores UNICOS de uuid. NAO usa
+`loja_factory` (CNPJ de poucos digitos -> colide com residuo quando a suite
+inteira roda, pois o autouse de test_pedido_workflow faz commit e fura o
+savepoint — memoria gotcha_testes_hora_residuo). `_loja_unica` gera CNPJ de 14
+digitos de uuid.int, imune a colisao. `registrar_evento`/`get_or_create_moto`
+so fazem flush.
 """
 from __future__ import annotations
 
 import uuid
 
 from app import db as _db
-from app.hora.models import HoraModelo
+from app.hora.models import HoraLoja, HoraModelo
 from app.hora.services import autocomplete_service
 from app.hora.services.moto_service import get_or_create_moto, registrar_evento
+
+
+def _loja_unica():
+    """Loja com CNPJ unico de 14 digitos (uuid.int) — robusta a residuo."""
+    from app.utils.timezone import agora_utc_naive
+    cnpj = str(uuid.uuid4().int)[:14].ljust(14, '0')
+    loja = HoraLoja(
+        cnpj=cnpj, apelido='AC-' + cnpj[:8], nome='Loja AC ' + cnpj[:8],
+        razao_social='Loja AC LTDA', nome_fantasia='Loja AC', ativa=True,
+        atualizado_em=agora_utc_naive(),
+    )
+    _db.session.add(loja)
+    _db.session.flush()
+    return loja
 
 
 def _novo_modelo(nome=None):
@@ -43,9 +59,9 @@ def _moto_com_eventos(modelo_nome, loja_id, *tipos, cor='PRETA'):
     return chassi
 
 
-def test_chassis_disponivel_exclui_vendidos(db, loja_factory):
+def test_chassis_disponivel_exclui_vendidos(db):
     """disponivel=True retorna so chassis com ultimo evento em estoque."""
-    loja = loja_factory()
+    loja = _loja_unica()
     modelo = _novo_modelo()
     em_estoque = _moto_com_eventos(modelo.nome_modelo, loja.id, 'RECEBIDA', 'CONFERIDA')
     vendida = _moto_com_eventos(modelo.nome_modelo, loja.id, 'RECEBIDA', 'CONFERIDA', 'VENDIDA')
@@ -58,8 +74,8 @@ def test_chassis_disponivel_exclui_vendidos(db, loja_factory):
     assert vendida not in chassis
 
 
-def test_chassis_inclui_modelo_id_no_json(db, loja_factory):
-    loja = loja_factory()
+def test_chassis_inclui_modelo_id_no_json(db):
+    loja = _loja_unica()
     modelo = _novo_modelo()
     em_estoque = _moto_com_eventos(modelo.nome_modelo, loja.id, 'RECEBIDA', 'CONFERIDA')
     res = autocomplete_service.chassis(
@@ -73,9 +89,9 @@ def test_chassis_inclui_modelo_id_no_json(db, loja_factory):
     assert alvo[0]['modelo_id'] == modelo.id
 
 
-def test_chassis_filtra_por_modelo_id(db, loja_factory):
+def test_chassis_filtra_por_modelo_id(db):
     """modelo_id restringe ao modelo informado."""
-    loja = loja_factory()
+    loja = _loja_unica()
     modelo_a = _novo_modelo()
     modelo_b = _novo_modelo()
     do_a = _moto_com_eventos(modelo_a.nome_modelo, loja.id, 'RECEBIDA', 'CONFERIDA')
@@ -89,9 +105,9 @@ def test_chassis_filtra_por_modelo_id(db, loja_factory):
     assert do_b not in chassis
 
 
-def test_chassis_sem_disponivel_inclui_vendido(db, loja_factory):
+def test_chassis_sem_disponivel_inclui_vendido(db):
     """Default (disponivel=False) retorna qualquer chassi por substring."""
-    loja = loja_factory()
+    loja = _loja_unica()
     modelo = _novo_modelo()
     vendida = _moto_com_eventos(modelo.nome_modelo, loja.id, 'RECEBIDA', 'CONFERIDA', 'VENDIDA')
     res = autocomplete_service.chassis(q='AUTOC', lojas_permitidas_ids=None)
