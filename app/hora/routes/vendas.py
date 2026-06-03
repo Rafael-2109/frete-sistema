@@ -86,17 +86,28 @@ def vendas_lista():
         flash('Acesso negado a essa loja.', 'danger')
         return redirect(url_for('hora.vendas_lista'))
 
-    permitidas = lojas_permitidas_ids()
-    pagination = venda_service.paginar_vendas(
-        page=page, per_page=per_page,
-        lojas_permitidas_ids=permitidas,
-        status=status_filtro,
-        busca=busca,
-        loja_id=loja_id,
-        data_inicio=data_inicio,
-        data_fim=data_fim,
-        chassi=filtro_chassi,
-    )
+    criterio = (getattr(current_user, 'criterio_pedidos_hora', 'loja') or 'loja')
+    if criterio == 'vendedor':
+        nomes = [n for n in (
+            getattr(current_user, 'nome', None),
+            getattr(current_user, 'vendedor_vinculado', None),
+        ) if n]
+        filtro_vendedor = {'nomes': nomes, 'user_id': getattr(current_user, 'id', None)}
+        permitidas = None
+        pagination = venda_service.paginar_vendas(
+            page=page, per_page=per_page,
+            status=status_filtro, busca=busca, loja_id=loja_id,
+            data_inicio=data_inicio, data_fim=data_fim, chassi=filtro_chassi,
+            filtro_vendedor=filtro_vendedor,
+        )
+    else:
+        permitidas = lojas_permitidas_ids()
+        pagination = venda_service.paginar_vendas(
+            page=page, per_page=per_page,
+            lojas_permitidas_ids=permitidas,
+            status=status_filtro, busca=busca, loja_id=loja_id,
+            data_inicio=data_inicio, data_fim=data_fim, chassi=filtro_chassi,
+        )
 
     # Lojas para filtro
     lojas_q = HoraLoja.query.filter_by(ativa=True)
@@ -121,6 +132,7 @@ def vendas_lista():
         filtro_data_fim=data_fim_str,
         filtro_chassi=filtro_chassi,
         lojas_ativas=lojas_lista,
+        criterio_pedidos=criterio,
     )
 
 
