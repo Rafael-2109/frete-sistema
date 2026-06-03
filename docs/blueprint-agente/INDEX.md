@@ -20,5 +20,6 @@ atualizado: 2026-06-03
 - [PROMPT — Próxima sessão: Loop Corretivo Pessoal (backfill + Fase 3)](./PROMPT_PROXIMA_SESSAO_LOOP_CORRETIVO.md)
 - [PROMPT — Validação de Funcionamento + Medição de Resultados (Evolução do Agente, Ondas 0-4)](./PROMPT_PROXIMA_SESSAO_VALIDACAO.md)
 - [PROMPT — Testar + Continuar o WIRING do Agente](./PROMPT_PROXIMA_SESSAO_WIRING.md)
+- [PROMPT — Aposentar o A3 (eval caro): reverter fix + desligar flag + re-framing GATE-1](./PROMPT_PROXIMA_SESSAO_A3_DESATIVACAO.md)
 - [RECONCILIAÇÃO — Avaliação do Sistema de Memória ↔ Blueprint do Agente](./RECONCILIACAO_MEMORIA.md)
 - [Runbook de Validação — Evolução do Agente](./VALIDACAO.md)
