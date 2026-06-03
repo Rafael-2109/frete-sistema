@@ -19,7 +19,7 @@ SKILLS_DOMINIO_HORA: set[str] = {
     'acompanhando-pedido',         # M2
     'conferindo-recebimento',      # M2
     'consultando-pecas-faltando',  # M2
-    # 'registrando-venda',         # M3 (futuro)
+    'consultando-venda-loja',      # M3 — consultar venda + preco/desconto + margem (READ)
 }
 
 # Skills genericas compartilhadas com o agente logistico (I/O de arquivo)

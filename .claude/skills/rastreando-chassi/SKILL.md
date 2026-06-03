@@ -16,7 +16,7 @@ description: >-
 
   NAO USAR PARA:
   - Contagem/visao agregada (usar consultando-estoque-loja)
-  - Venda B2C (usar registrando-venda — M3)
+  - Consultar venda B2C (usar consultando-venda-loja)
   - Rastreamento cross-agente Nacom (chassis de caminhao) — nao se aplica
 allowed-tools: Read, Bash, Glob, Grep
 ---

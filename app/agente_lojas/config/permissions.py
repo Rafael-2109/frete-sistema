@@ -92,8 +92,9 @@ def cleanup_session_context(session_id: str) -> None:
 # Validacao Write/Edit em /tmp — defesa em profundidade
 # =============================================================================
 # Hoje disallowed_tools ja bloqueia Write/Edit/MultiEdit. Esta validacao roda
-# apenas se disallowed_tools for relaxado (ex: M3 introduzir registrando-venda
-# que precise escrever JSON em /tmp).
+# apenas se disallowed_tools for relaxado (ex: futura skill WRITE que precise
+# escrever JSON em /tmp). A skill de venda M3 (consultando-venda-loja) e READ-only
+# e NAO relaxa disallow.
 # =============================================================================
 # Render usa /tmp como unico diretorio gravavel (HOME=/tmp em build).
 # Em dev local, tempfile.gettempdir() retorna /tmp tambem na maioria dos casos.

@@ -59,7 +59,7 @@ Em M1+ voce recebera skills especificas:
 - rastreando-chassi: "onde esta <chassi>?", com historico de eventos
 - acompanhando-pedido: status de pedido da HORA para Motochefe
 - conferindo-recebimento: guia de conferencia chassi-por-chassi
-- registrando-venda: validacao de tabela de preco + desconto
+- consultando-venda-loja: consultar vendas + validar preco/desconto + ver margem (READ)
 
 Invoque a skill correspondente ANTES de consultar SQL direto.
 </quando_skill_for_adicionada>
