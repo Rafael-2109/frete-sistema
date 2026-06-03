@@ -717,5 +717,27 @@
     wireDescontoSync(root, isNaN(preco) ? null : preco);
   });
 
+  // ----------------- Frente B: Enter = "Proximo" -------------------------
+  // Nas telas de pedido (novo + edicao — este script so carrega nelas), Enter
+  // num campo de texto/numero/select AVANCA para o proximo campo focavel do
+  // mesmo form, em vez de submeter. textarea mantem Enter (nova linha); o
+  // submit fica por clique no botao (ou Enter quando o foco ja esta no botao).
+  (function() {
+    const SEL = 'input:not([type=hidden]):not([type=submit]):not([type=button]):not([type=checkbox]):not([type=radio]), select';
+    document.addEventListener('keydown', function(ev) {
+      if (ev.key !== 'Enter' || ev.isComposing) return;
+      const el = ev.target;
+      if (!el || !el.matches || !el.matches(SEL)) return;
+      const form = el.closest('form');
+      if (!form) return;
+      ev.preventDefault();  // nao submete
+      const focaveis = Array.from(form.querySelectorAll(
+        'input:not([type=hidden]):not([disabled]), select:not([disabled]), textarea:not([disabled]), button:not([disabled])'
+      )).filter(e => e.offsetParent !== null && e.tabIndex !== -1);
+      const i = focaveis.indexOf(el);
+      if (i >= 0 && i + 1 < focaveis.length) focaveis[i + 1].focus();
+    });
+  })();
+
 })();
 </script>
