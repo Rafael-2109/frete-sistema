@@ -178,6 +178,48 @@
       </div>
     </div>
 
+    <!-- Linha 4: Adesao de Regras (Fase 3.7 / O0.3 — loop corretivo pessoal) -->
+    <div class="charts-grid">
+      <div class="chart-card">
+        <h5><i class="fas fa-shield-halved"></i> Adesao de Regras</h5>
+        <div style="display:flex; gap:1rem; align-items:center; padding:0.5rem 0;">
+          <div>
+            <div class="kpi-value" id="ruleAdhesionMandatoryPct" style="font-size:2rem;">0%</div>
+            <div class="kpi-label" style="font-size:0.85rem;">Correcoes &rarr; regra dura</div>
+          </div>
+          <div style="flex:1; font-size:0.85rem;">
+            <div>Correcoes totais: <strong id="ruleAdhesionTotal">0</strong></div>
+            <div>Regras duras (mandatory): <strong id="ruleAdhesionMandatory">0</strong></div>
+            <div class="text-muted" style="margin-top:0.4rem;">
+              Reincidencia pos-regra: <span id="ruleAdhesionHarmful">0</span>
+              &middot; Injecoes limpas: <span id="ruleAdhesionHelpful">0</span>
+            </div>
+            <div id="ruleAdhesionUnavailable" class="text-muted" style="display:none; margin-top:0.3rem;">
+              <i class="fas fa-info-circle"></i> Metrica de outcome indisponivel (Fase 3.1).
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="chart-card">
+        <h5><i class="fas fa-arrow-trend-down"></i> Reincidencia por Assinatura</h5>
+        <div style="max-height:240px; overflow-y:auto; font-size:0.85rem;">
+          <table class="table table-sm mb-0">
+            <thead>
+              <tr>
+                <th>Assinatura do erro</th>
+                <th class="text-end" title="Reincidencias antes de virar regra dura">Antes</th>
+                <th class="text-end" title="Reincidencias depois de virar regra dura">Depois</th>
+                <th class="text-center">Regra</th>
+              </tr>
+            </thead>
+            <tbody id="ruleAdhesionTable">
+              <tr><td colspan="4" class="text-center text-muted" style="padding:1rem;">Sem dados</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
     <!-- ═══════════════════════════════════════════════════════════════
          ZONA 4: Tabs + Tabelas
          ═══════════════════════════════════════════════════════════════ -->
@@ -622,6 +664,7 @@ function renderAll(data) {
   renderFriction(data.friction || {});
   renderUsersTab(data.users, data.costs);
   renderCacheEfficiency(data.cache_efficiency || {});
+  renderRuleAdhesion(data.rule_adhesion || {});
 }
 
 // Fase 4 (2026-04-21): Cache efficiency KPI e top low-eff sessions
@@ -658,6 +701,48 @@ function renderCacheEfficiency(ce) {
       <td style="text-align:right; padding:0.3rem;" class="cost-badge">$${(s.cost_usd || 0).toFixed(2)}</td>
     </tr>
   `).join('');
+}
+
+// O0.3 (Fase 3.7): Adesao de regras — reincidencia por assinatura ANTES
+// (correction_count) vs DEPOIS (harmful_count) da promocao a regra dura.
+function renderRuleAdhesion(ra) {
+  const pct = ra.mandatory_pct || 0;
+  const elPct = document.getElementById('ruleAdhesionMandatoryPct');
+  if (elPct) elPct.textContent = pct.toFixed(1) + '%';
+  setText('ruleAdhesionTotal', ra.total_corrections || 0);
+  setText('ruleAdhesionMandatory', ra.mandatory_count || 0);
+
+  const outcome = ra.outcome || {};
+  setText('ruleAdhesionHarmful', outcome.harmful_total || 0);
+  setText('ruleAdhesionHelpful', outcome.helpful_total || 0);
+  const unavail = document.getElementById('ruleAdhesionUnavailable');
+  if (unavail) unavail.style.display = (outcome.available === false) ? 'block' : 'none';
+
+  const tbody = document.getElementById('ruleAdhesionTable');
+  if (!tbody) return;
+  const rows = ra.top_by_signature || [];
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted" style="padding:1rem;">Sem correcoes com assinatura</td></tr>';
+    return;
+  }
+  tbody.innerHTML = rows.map(r => {
+    const antes = r.reincidencia_total || 0;
+    const depois = r.reincidencia_pos_promocao || 0;
+    const melhorou = r.promovida && depois < antes;
+    const seta = melhorou
+      ? ' <i class="fas fa-arrow-down" title="reincidencia caiu apos virar regra dura"></i>'
+      : '';
+    const badge = r.promovida
+      ? '<span class="badge bg-success">dura</span>'
+      : '<span class="badge bg-secondary">&mdash;</span>';
+    return `
+    <tr>
+      <td style="padding:0.3rem;">${escHtml(truncate(r.error_signature || '-', 40))}</td>
+      <td class="text-end" style="padding:0.3rem;">${antes}</td>
+      <td class="text-end" style="padding:0.3rem;">${depois}${seta}</td>
+      <td class="text-center" style="padding:0.3rem;">${badge}</td>
+    </tr>`;
+  }).join('');
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
