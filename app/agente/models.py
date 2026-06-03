@@ -2121,6 +2121,38 @@ class AgentEvalCase(db.Model):
             'rate': rate,
         }
 
+    @classmethod
+    def record_human_verdict(
+        cls,
+        case_pk_id: int,
+        verdict: str,
+        reviewed_by: int,
+        note: Optional[str] = None,
+    ) -> Optional['AgentEvalCase']:
+        """
+        Grava o veredito HUMANO do spot-check (calibração — T5/GATE-1).
+
+        `verdict` ∈ {VERDICT_AGREE, VERDICT_DISAGREE} ('agree' = judge acertou,
+        'disagree' = judge errou). Qualquer outro valor → None (validação ANTES
+        de tocar o DB — defesa contra payload inválido da UI). `case_pk_id` é o
+        PK `id` do caso; inexistente → None.
+
+        FLUSH (NÃO commit): o caller (rota web) consolida no commit do request —
+        evita vazar savepoint de transações externas (gotcha_commit_service_vaza_savepoint).
+        Retorna o AgentEvalCase atualizado, ou None.
+        """
+        if verdict not in (cls.VERDICT_AGREE, cls.VERDICT_DISAGREE):
+            return None
+        case = db.session.get(cls, case_pk_id)
+        if case is None:
+            return None
+        case.human_verdict = verdict
+        case.human_note = note
+        case.reviewed_by = reviewed_by
+        case.reviewed_at = agora_utc_naive()
+        db.session.flush()
+        return case
+
 
 # =========================================================================
 # AgenteArtifact — Artifacts (bundle.html) gerados pela skill gerando-artifact

@@ -1710,3 +1710,96 @@ def _get_rule_adhesion_section(days: int = 30) -> dict:
     except Exception as e:
         logger.warning(f"[insights] rule_adhesion_section falhou: {e}")
         return {}
+
+
+# =========================================================================
+# T5 (GATE-1 / E3) — Painel de calibração do ONLINE judge (spot-check humano)
+# =========================================================================
+
+def _serialize_calibration_case(case) -> Dict[str, Any]:
+    """Serializa um AgentEvalCase do online judge para a UI de spot-check.
+
+    PURO (sem DB). `prioritario`=True quando a evidence carrega o marcador
+    ⚠ADVERSARIAL (judge=success refutado pelo adversarial — discordância de
+    ALTO VALOR de calibração, achado Task 3). A UI destaca esses casos.
+    """
+    ev = case.evidence or ''
+    recorded = getattr(case, 'recorded_at', None)
+    return {
+        'id': case.id,
+        'case_id': case.case_id,
+        'case_score': case.case_score,
+        'status': case.status,
+        'evidence': ev,
+        'prioritario': 'ADVERSARIAL' in ev,
+        'recorded_at': recorded.isoformat() if recorded else None,
+    }
+
+
+def get_judge_calibration_panel(
+    agent_name: Optional[str] = None,
+    fraction: float = 0.1,
+    seed: Optional[int] = None,
+    limit: int = 20,
+) -> Dict[str, Any]:
+    """Painel de calibração do ONLINE judge (T5 / GATE-1) — spot-check humano.
+
+    Retorna a taxa de concordância judge↔humano (`concordance_rate`) + uma
+    amostra de spot-check de 5-10% (`sample_unreviewed`), GARANTINDO que os casos
+    PRIORITÁRIOS (⚠ADVERSARIAL, achado Task 3) sempre apareçam para rotulagem —
+    são onde judge e adversarial disputam (maior valor de calibração).
+
+    Read-only. Best-effort (R1): erro → {'error': str}.
+    """
+    from app.agente.models import AgentEvalCase
+    from app.agente.workers.calibration_sampler import CALIBRATION_AGENT_NAME
+
+    an = agent_name or CALIBRATION_AGENT_NAME
+    try:
+        concordance = AgentEvalCase.concordance_rate(an)
+
+        # amostra de spot-check de 5-10% (A-flywheel.md:165)
+        amostra = AgentEvalCase.sample_unreviewed(an, fraction=fraction, seed=seed, min_n=1)
+
+        # garante os prioritários (⚠ADVERSARIAL) NÃO-revisados — achado Task 3:
+        # a discordância judge=success × adversarial.refuted é onde a rotulagem
+        # humana mais calibra; não pode se perder na amostragem aleatória.
+        prioritarios = (
+            AgentEvalCase.query
+            .filter(AgentEvalCase.agent_name == an)
+            .filter(AgentEvalCase.human_verdict.is_(None))
+            .filter(AgentEvalCase.evidence.ilike('%ADVERSARIAL%'))
+            .order_by(AgentEvalCase.recorded_at.desc())
+            .limit(limit)
+            .all()
+        )
+
+        # união (prioritários primeiro), dedup por id, cap em `limit`
+        vistos = set()
+        ordenados = []
+        for c in list(prioritarios) + list(amostra):
+            if c.id in vistos:
+                continue
+            vistos.add(c.id)
+            ordenados.append(c)
+        ordenados = ordenados[:limit]
+
+        casos = [_serialize_calibration_case(c) for c in ordenados]
+        n_prio = sum(1 for c in casos if c['prioritario'])
+
+        total_unreviewed = (
+            AgentEvalCase.query
+            .filter(AgentEvalCase.agent_name == an)
+            .filter(AgentEvalCase.human_verdict.is_(None))
+            .count()
+        )
+
+        return {
+            'concordance': concordance,
+            'casos': casos,
+            'prioritarios': n_prio,
+            'total_unreviewed': total_unreviewed,
+        }
+    except Exception as e:
+        logger.error(f"[INSIGHTS] judge calibration panel falhou: {e}")
+        return {'error': str(e)}

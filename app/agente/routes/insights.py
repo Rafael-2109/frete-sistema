@@ -340,3 +340,94 @@ def api_insights_rule_adhesion():
     except Exception as e:
         logger.error(f"[AGENTE] Erro nas metricas de adesao de regras: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@agente_bp.route('/api/insights/judge-calibration', methods=['GET'])
+@login_required
+def api_insights_judge_calibration():
+    """Painel de calibracao do ONLINE judge (T5 / GATE-1) — spot-check humano.
+
+    Admin-only. Lista casos NAO-revisados do '__online_judge__' (prioriza os
+    ⚠ADVERSARIAL — discordancia de alto valor, achado Task 3) + concordance_rate
+    judge↔humano. Read-only, custo $0.
+    GET /agente/api/insights/judge-calibration?fraction=0.1&limit=20&seed=
+    """
+    from app.agente.config.feature_flags import USE_AGENT_INSIGHTS
+
+    if not USE_AGENT_INSIGHTS:
+        return jsonify({'error': 'Insights desabilitado'}), 404
+
+    if current_user.perfil != 'administrador':
+        return jsonify({'error': 'Acesso restrito a administradores'}), 403
+
+    try:
+        fraction = request.args.get('fraction', 0.1, type=float)
+        limit = request.args.get('limit', 20, type=int)
+        limit = min(max(limit, 1), 100)
+        seed = request.args.get('seed', None, type=int)
+
+        from app.agente.services.insights_service import get_judge_calibration_panel
+
+        data = get_judge_calibration_panel(fraction=fraction, seed=seed, limit=limit)
+
+        if data.get('error'):
+            return jsonify({'success': False, 'error': data['error']}), 500
+
+        return jsonify({'success': True, 'data': data})
+
+    except Exception as e:
+        logger.error(f"[AGENTE] Erro no painel de calibracao do judge: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@agente_bp.route('/api/insights/judge-calibration/verdict', methods=['POST'])
+@login_required
+def api_insights_judge_calibration_verdict():
+    """Grava o veredito HUMANO de um caso do online judge (T5 / GATE-1). Admin-only.
+
+    POST JSON {case_id: <PK inteiro>, verdict: 'agree'|'disagree', note?: str}.
+    'agree' = judge acertou; 'disagree' = judge errou. Retorna concordance atualizada.
+    CSRF ativo (sem exempt) — o JS envia X-CSRFToken (meta tag base.html).
+    """
+    from app.agente.config.feature_flags import USE_AGENT_INSIGHTS
+
+    if not USE_AGENT_INSIGHTS:
+        return jsonify({'error': 'Insights desabilitado'}), 404
+
+    if current_user.perfil != 'administrador':
+        return jsonify({'error': 'Acesso restrito a administradores'}), 403
+
+    try:
+        payload = request.get_json(silent=True) or {}
+        case_id = payload.get('case_id')
+        verdict = payload.get('verdict')
+        note = (payload.get('note') or '').strip() or None
+
+        if not isinstance(case_id, int):
+            return jsonify({'success': False, 'error': 'case_id (PK inteiro) obrigatorio'}), 400
+
+        from app.agente.models import AgentEvalCase
+        from app import db
+
+        case = AgentEvalCase.record_human_verdict(
+            case_id, verdict, reviewed_by=current_user.id, note=note
+        )
+        if case is None:
+            return jsonify({
+                'success': False,
+                'error': 'verdict invalido (use agree|disagree) ou caso inexistente'
+            }), 400
+
+        db.session.commit()
+
+        concordance = AgentEvalCase.concordance_rate(case.agent_name)
+        return jsonify({'success': True, 'concordance': concordance})
+
+    except Exception as e:
+        logger.error(f"[AGENTE] Erro ao gravar verdict de calibracao: {e}")
+        try:
+            from app import db
+            db.session.rollback()
+        except Exception:
+            pass
+        return jsonify({'success': False, 'error': str(e)}), 500

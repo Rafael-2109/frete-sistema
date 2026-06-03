@@ -220,6 +220,46 @@
       </div>
     </div>
 
+    <!-- Linha 5: Calibracao do Judge (T5 / GATE-1 — spot-check humano do online judge) -->
+    <div class="charts-grid">
+      <div class="chart-card">
+        <h5><i class="fas fa-scale-balanced"></i> Calibracao do Judge</h5>
+        <div style="display:flex; gap:1rem; align-items:center; padding:0.5rem 0;">
+          <div>
+            <div class="kpi-value" id="judgeConcordanceRate" style="font-size:2rem;">&mdash;</div>
+            <div class="kpi-label" style="font-size:0.85rem;">Concordancia judge&harr;humano</div>
+          </div>
+          <div style="flex:1; font-size:0.85rem;">
+            <div>Revisados: <strong id="judgeReviewed">0</strong>
+              (<span id="judgeAgree">0</span> acertos / <span id="judgeDisagree">0</span> erros)</div>
+            <div>Backlog nao-revisado: <strong id="judgeUnreviewed">0</strong></div>
+            <div class="text-muted" style="margin-top:0.4rem;">
+              <i class="fas fa-triangle-exclamation"></i> Prioritarios (adversarial refutou) na amostra:
+              <strong id="judgePrioritarios">0</strong>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="chart-card">
+        <h5><i class="fas fa-list-check"></i> Casos para revisar (online judge)</h5>
+        <div style="max-height:320px; overflow-y:auto; font-size:0.85rem;">
+          <table class="table table-sm mb-0">
+            <thead>
+              <tr>
+                <th>Caso (step)</th>
+                <th class="text-center">Judge</th>
+                <th>Evidencia</th>
+                <th class="text-center">Judge acertou?</th>
+              </tr>
+            </thead>
+            <tbody id="judgeCalibrationTable">
+              <tr><td colspan="4" class="text-center text-muted" style="padding:1rem;">Carregando...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
     <!-- ═══════════════════════════════════════════════════════════════
          ZONA 4: Tabs + Tabelas
          ═══════════════════════════════════════════════════════════════ -->
@@ -743,6 +783,88 @@ function renderRuleAdhesion(ra) {
       <td class="text-center" style="padding:0.3rem;">${badge}</td>
     </tr>`;
   }).join('');
+}
+
+// T5 (GATE-1 / E3): Calibracao do online judge — spot-check humano.
+// GET lista casos nao-revisados ('__online_judge__', prioriza ⚠ADVERSARIAL) +
+// concordance_rate; POST grava agree/disagree (judge acertou/errou).
+async function loadJudgeCalibration() {
+  const tbody = document.getElementById('judgeCalibrationTable');
+  try {
+    const resp = await fetch('/agente/api/insights/judge-calibration', {
+      headers: { 'X-CSRFToken': csrfToken }
+    });
+    const json = await resp.json();
+    if (!json.success) {
+      if (tbody) tbody.innerHTML = `<tr><td colspan="4" class="text-center text-muted" style="padding:1rem;">${escHtml(json.error || 'Indisponivel')}</td></tr>`;
+      return;
+    }
+    renderJudgeCalibration(json.data);
+  } catch (e) {
+    if (tbody) tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted" style="padding:1rem;">Erro ao carregar</td></tr>';
+  }
+}
+
+function renderJudgeConcordance(c, prioritarios, unreviewed) {
+  const rate = (c && c.rate != null) ? (c.rate * 100).toFixed(0) + '%' : '—';
+  setText('judgeConcordanceRate', rate);
+  setText('judgeReviewed', (c && c.reviewed) || 0);
+  setText('judgeAgree', (c && c.agree) || 0);
+  setText('judgeDisagree', (c && c.disagree) || 0);
+  setText('judgeUnreviewed', unreviewed || 0);
+  setText('judgePrioritarios', prioritarios || 0);
+}
+
+function renderJudgeCalibration(data) {
+  renderJudgeConcordance(data.concordance, data.prioritarios, data.total_unreviewed);
+  const tbody = document.getElementById('judgeCalibrationTable');
+  if (!tbody) return;
+  const casos = data.casos || [];
+  if (!casos.length) {
+    tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted" style="padding:1rem;">Nenhum caso pendente de revisao</td></tr>';
+    return;
+  }
+  tbody.innerHTML = casos.map(c => {
+    const prioBadge = c.prioritario
+      ? ' <span class="badge bg-warning"><i class="fas fa-triangle-exclamation"></i> adversarial</span>'
+      : '';
+    const judgeBadge = (c.status === 'pass')
+      ? '<span class="badge bg-success">pass</span>'
+      : '<span class="badge bg-secondary">fail</span>';
+    const score = (c.case_score != null) ? (c.case_score * 100).toFixed(0) : '?';
+    return `
+    <tr id="judgeCase-${c.id}">
+      <td style="padding:0.3rem;">${escHtml(truncate(c.case_id || '-', 28))}${prioBadge}</td>
+      <td class="text-center" style="padding:0.3rem;">${judgeBadge} ${score}</td>
+      <td style="padding:0.3rem;">${escHtml(truncate(c.evidence || '-', 160))}</td>
+      <td class="text-center" style="padding:0.3rem; white-space:nowrap;">
+        <button class="btn btn-sm btn-success" onclick="submitJudgeVerdict(${c.id}, 'agree')" title="Judge acertou">acertou</button>
+        <button class="btn btn-sm btn-danger" onclick="submitJudgeVerdict(${c.id}, 'disagree')" title="Judge errou">errou</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+async function submitJudgeVerdict(caseId, verdict) {
+  try {
+    const resp = await fetch('/agente/api/insights/judge-calibration/verdict', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+      body: JSON.stringify({ case_id: caseId, verdict: verdict })
+    });
+    const json = await resp.json();
+    if (!json.success) {
+      alert('Erro: ' + (json.error || 'falha ao gravar veredito'));
+      return;
+    }
+    const row = document.getElementById('judgeCase-' + caseId);
+    if (row) row.remove();
+    const prevUnreviewed = parseInt(document.getElementById('judgeUnreviewed')?.textContent || '0', 10);
+    const prevPrio = parseInt(document.getElementById('judgePrioritarios')?.textContent || '0', 10);
+    if (json.concordance) renderJudgeConcordance(json.concordance, prevPrio, Math.max(0, prevUnreviewed - 1));
+  } catch (e) {
+    alert('Erro ao gravar veredito');
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1693,6 +1815,7 @@ function renderRoutingTab(d) {
 // ── Init ──
 document.addEventListener('DOMContentLoaded', () => {
   loadInsights();
+  loadJudgeCalibration();
 });
 </script>
 {% endblock %}
