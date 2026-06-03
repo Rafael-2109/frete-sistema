@@ -564,6 +564,21 @@ class AgentMemory(db.Model):
     # 'contextual': memoria contextual (default, <user_memories> via RAG)
     priority = db.Column(db.String(20), default='contextual', nullable=False)
 
+    # ── Fase 3 (loop corretivo): assinatura de erro (intencao normalizada) ──
+    # Hash/slug ESTAVEL da INTENCAO do erro corrigido (NAO o texto literal). Permite
+    # casar reincidencia entre sessoes (regra injetada + mesmo error_signature reaparece
+    # -> harmful) e medir a taxa de reincidencia por assinatura ANTES vs DEPOIS da
+    # promocao (DoD do loop corretivo). NULL = memoria sem assinatura (legado/nao-correcao).
+    error_signature = db.Column(db.String(64), nullable=True)
+
+    # ── Fase 3 (loop corretivo): medicao POR OUTCOME (desacoplada do eco textual) ──
+    # harmful_count: regra 'mandatory' estava ativa e o MESMO erro reincidiu mesmo assim
+    #   -> a regra dura falhou em prevenir (sinal NEGATIVO; alimenta demote/reescrita).
+    # helpful_count: regra 'mandatory' ativa e SEM reincidencia por K sessoes -> funcionou
+    #   (sinal POSITIVO). effective_count (eco memoria<->resposta) permanece so p/ dashboard.
+    harmful_count = db.Column(db.Integer, default=0, nullable=False)
+    helpful_count = db.Column(db.Integer, default=0, nullable=False)
+
     # Quem originou a memoria empresa (auditoria). NULL para pessoais.
     created_by = db.Column(
         db.Integer,
@@ -588,6 +603,8 @@ class AgentMemory(db.Model):
     # Constraint única: um usuário não pode ter dois arquivos com mesmo path
     __table_args__ = (
         db.UniqueConstraint('user_id', 'path', name='uq_user_memory_path'),
+        # Fase 3 (loop corretivo): metrica conta reincidencia por (user, assinatura)
+        db.Index('ix_agent_memories_user_errsig', 'user_id', 'error_signature'),
     )
 
     def __repr__(self):
