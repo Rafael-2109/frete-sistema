@@ -24,6 +24,12 @@
       "nullable": false
     },
     {
+      "name": "desconsiderado",
+      "type": "boolean",
+      "nullable": false,
+      "default": false
+    },
+    {
       "name": "modelo_texto_original",
       "type": "varchar(255)"
     },
@@ -40,10 +46,6 @@
     {
       "column": "nf_id",
       "references": "hora_nf_entrada.id"
-    },
-    {
-      "column": "numero_chassi",
-      "references": "hora_moto.numero_chassi"
     }
   ],
   "unique_constraints": [
@@ -64,6 +66,13 @@
       "name": "ix_hora_nf_entrada_item_numero_chassi",
       "columns": [
         "numero_chassi"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_hora_nf_entrada_item_desconsiderado",
+      "columns": [
+        "desconsiderado"
       ],
       "unique": false
     }

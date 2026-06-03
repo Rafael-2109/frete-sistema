@@ -91,16 +91,16 @@
   ],
   "indices": [
     {
-      "name": "ix_assai_carregamento_pedido_id",
+      "name": "ix_assai_carregamento_status",
       "columns": [
-        "pedido_id"
+        "status"
       ],
       "unique": false
     },
     {
-      "name": "ix_assai_carregamento_status",
+      "name": "ix_assai_carregamento_pedido_id",
       "columns": [
-        "status"
+        "pedido_id"
       ],
       "unique": false
     },

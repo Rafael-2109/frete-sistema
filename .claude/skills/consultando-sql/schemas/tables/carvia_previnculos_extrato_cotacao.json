@@ -98,16 +98,17 @@
   ],
   "indices": [
     {
-      "name": "ix_carvia_previnculos_extrato_cotacao_status",
+      "name": "ix_previnculo_ativo",
       "columns": [
+        "cotacao_id",
         "status"
       ],
       "unique": false
     },
     {
-      "name": "ix_carvia_previnculos_extrato_cotacao_extrato_linha_id",
+      "name": "ix_carvia_previnculos_extrato_cotacao_status",
       "columns": [
-        "extrato_linha_id"
+        "status"
       ],
       "unique": false
     },
@@ -135,10 +136,9 @@
       "unique": false
     },
     {
-      "name": "ix_previnculo_ativo",
+      "name": "ix_carvia_previnculos_extrato_cotacao_extrato_linha_id",
       "columns": [
-        "cotacao_id",
-        "status"
+        "extrato_linha_id"
       ],
       "unique": false
     }

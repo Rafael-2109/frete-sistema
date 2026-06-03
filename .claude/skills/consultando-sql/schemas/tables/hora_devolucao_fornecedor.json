@@ -89,16 +89,16 @@
       "unique": false
     },
     {
-      "name": "ix_hora_devolucao_fornecedor_nf_entrada_id",
+      "name": "ix_hora_devolucao_fornecedor_loja_id",
       "columns": [
-        "nf_entrada_id"
+        "loja_id"
       ],
       "unique": false
     },
     {
-      "name": "ix_hora_devolucao_fornecedor_loja_id",
+      "name": "ix_hora_devolucao_fornecedor_nf_entrada_id",
       "columns": [
-        "loja_id"
+        "nf_entrada_id"
       ],
       "unique": false
     }

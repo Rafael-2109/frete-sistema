@@ -40,17 +40,17 @@
   ],
   "indices": [
     {
-      "name": "idx_grupo_prefixo",
+      "name": "ix_grupo_empresarial_nome_grupo",
       "columns": [
-        "nome_grupo",
-        "prefixo_cnpj"
+        "nome_grupo"
       ],
       "unique": false
     },
     {
-      "name": "ix_grupo_empresarial_nome_grupo",
+      "name": "idx_grupo_prefixo",
       "columns": [
-        "nome_grupo"
+        "nome_grupo",
+        "prefixo_cnpj"
       ],
       "unique": false
     },

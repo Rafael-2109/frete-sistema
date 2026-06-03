@@ -139,6 +139,10 @@
       "type": "varchar(100)"
     },
     {
+      "name": "criado_por_id",
+      "type": "integer"
+    },
+    {
       "name": "observacoes",
       "type": "text"
     },
@@ -214,6 +218,13 @@
       "unique": false
     },
     {
+      "name": "ix_hora_venda_criado_por_id",
+      "columns": [
+        "criado_por_id"
+      ],
+      "unique": false
+    },
+    {
       "name": "ix_hora_venda_cpf_cliente",
       "columns": [
         "cpf_cliente"
@@ -242,16 +253,16 @@
       "unique": false
     },
     {
-      "name": "ix_hora_venda_origem_criacao",
+      "name": "ix_hora_venda_nf_saida_numero",
       "columns": [
-        "origem_criacao"
+        "nf_saida_numero"
       ],
       "unique": false
     },
     {
-      "name": "ix_hora_venda_nf_saida_numero",
+      "name": "ix_hora_venda_origem_criacao",
       "columns": [
-        "nf_saida_numero"
+        "origem_criacao"
       ],
       "unique": false
     },

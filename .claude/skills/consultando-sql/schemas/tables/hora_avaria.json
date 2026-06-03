@@ -72,16 +72,16 @@
       "unique": false
     },
     {
-      "name": "ix_hora_avaria_loja_id",
+      "name": "ix_hora_avaria_criado_em",
       "columns": [
-        "loja_id"
+        "criado_em"
       ],
       "unique": false
     },
     {
-      "name": "ix_hora_avaria_criado_em",
+      "name": "ix_hora_avaria_loja_id",
       "columns": [
-        "criado_em"
+        "loja_id"
       ],
       "unique": false
     },
