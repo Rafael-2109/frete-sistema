@@ -625,11 +625,41 @@
     elAlertaFrete.style.display = '';
   }
 
-  if (elModFrete) elModFrete.addEventListener('change', atualizarVisibilidadeBlocoFrete);
-  if (elValorFrete) elValorFrete.addEventListener('input', atualizarAlertaFrete);
-  if (elTipoFrete) elTipoFrete.addEventListener('change', atualizarAlertaFrete);
+  // Preview multi-item (modo edicao): rateio/comparacao de frete CIF sobre os
+  // itens ja no pedido (tr[data-item-*]) -> #d-alerta-frete. So roda no modo
+  // edicao (onde #d-alerta-frete existe); no modo criacao retorna cedo.
+  function atualizarAlertaFreteEdicao() {
+    const box = document.getElementById('d-alerta-frete');
+    if (!box) return;
+    if (!elModFrete || elModFrete.value !== '0') { box.style.display = 'none'; return; }
+    const tipo = (elTipoFrete && elTipoFrete.value || '').trim();
+    const valorFrete = parseBR(elValorFrete && elValorFrete.value);
+    const itens = Array.from(document.querySelectorAll('tr[data-item-final]'))
+      .map(tr => ({ final: parseFloat(tr.dataset.itemFinal) || 0, tabela: parseFloat(tr.dataset.itemTabela) || 0 }));
+    if (!itens.length || !tipo || isNaN(valorFrete) || valorFrete <= 0) { box.style.display = 'none'; return; }
+    const somaFinais = arred2(itens.reduce((s, i) => s + i.final, 0));
+    const somaTabelas = arred2(itens.reduce((s, i) => s + i.tabela, 0));
+    if (tipo === 'INCLUSO') {
+      const base = arred2(somaFinais - valorFrete);
+      let html = `<strong>Itens R$ ${fmtBR(somaFinais)}</strong> − Frete R$ ${fmtBR(valorFrete)} = <strong>R$ ${fmtBR(base)}</strong> (base sem frete).`;
+      if (somaTabelas > 0 && base < somaTabelas) {
+        html += `<br><span class="text-danger">⚠ Abaixo R$ ${fmtBR(arred2(somaTabelas - base))} da soma das tabelas (R$ ${fmtBR(somaTabelas)}).</span>`;
+        box.classList.remove('alert-info'); box.classList.add('alert-warning');
+      } else { box.classList.remove('alert-warning'); box.classList.add('alert-info'); }
+      box.innerHTML = html;
+    } else { // ADICIONAR
+      box.classList.remove('alert-warning'); box.classList.add('alert-info');
+      box.innerHTML = `<strong>VALOR A FATURAR COM FRETE:</strong><br>Itens R$ ${fmtBR(somaFinais)} + R$ ${fmtBR(valorFrete)} (frete) = <strong>R$ ${fmtBR(arred2(somaFinais + valorFrete))}</strong>.`;
+    }
+    box.style.display = '';
+  }
+
+  if (elModFrete) elModFrete.addEventListener('change', () => { atualizarVisibilidadeBlocoFrete(); atualizarAlertaFreteEdicao(); });
+  if (elValorFrete) elValorFrete.addEventListener('input', () => { atualizarAlertaFrete(); atualizarAlertaFreteEdicao(); });
+  if (elTipoFrete) elTipoFrete.addEventListener('change', () => { atualizarAlertaFrete(); atualizarAlertaFreteEdicao(); });
   // Estado inicial.
   atualizarVisibilidadeBlocoFrete();
+  atualizarAlertaFreteEdicao();
 
   // ----------------- Validacao no submit -----------------------------------
   const elFormPedido = document.getElementById('form-pedido-venda');

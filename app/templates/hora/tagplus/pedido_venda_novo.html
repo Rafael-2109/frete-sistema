@@ -425,7 +425,7 @@
         </tr></thead>
         <tbody>
           {% for item in venda.itens %}
-            <tr>
+            <tr data-item-chassi="{{ item.numero_chassi }}" data-item-final="{{ item.preco_final|float }}" data-item-tabela="{{ (item.preco_tabela_referencia or 0)|float }}">
               <td><a href="{{ url_for('hora.estoque_chassi_detalhe', numero_chassi=item.numero_chassi) }}" class="chassi-mono">{{ item.numero_chassi }}</a></td>
               <td>{{ item.moto.modelo.nome_modelo if item.moto and item.moto.modelo else '—' }}</td>
               <td>{{ item.moto.cor if item.moto else '—' }}</td>
