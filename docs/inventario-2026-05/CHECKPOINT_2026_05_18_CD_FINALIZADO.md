@@ -1,3 +1,11 @@
+<!-- doc:meta
+tipo: scratch
+camada: L3
+sot_de: —
+hub: docs/inventario-2026-05/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # CHECKPOINT — Pre-etapa CD FINALIZADA (2026-05-18 sessao 2)
 
 **Sessao Claude Code 2** (sequencia de `CHECKPOINT_2026_05_18_PRE_ETAPA_CD_EXECUTADA.md`)

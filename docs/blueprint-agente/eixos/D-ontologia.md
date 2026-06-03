@@ -1,4 +1,32 @@
+<!-- doc:meta
+tipo: explanation
+camada: L3
+sot_de: —
+hub: docs/blueprint-agente/eixos/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # EIXO D — ONTOLOGIA / MODELO DE MUNDO
+
+> **Papel:** EIXO D — ONTOLOGIA / MODELO DE MUNDO.
+
+## Indice
+
+- [PARTE 1 — ESTADO REAL (com evidência)](#parte-1-estado-real-com-evidência)
+  - [1.1 O que existe e como flui](#11-o-que-existe-e-como-flui)
+  - [1.2 ONDE o circuito quebra (o teto do design atual)](#12-onde-o-circuito-quebra-o-teto-do-design-atual)
+  - [1.3 Ativos de reaproveitamento já existentes (não jogar fora)](#13-ativos-de-reaproveitamento-já-existentes-não-jogar-fora)
+- [PARTE 2 — ALVO ARQUITETURAL (o teto)](#parte-2-alvo-arquitetural-o-teto)
+  - [2.1 Esquema de domínio (a ontologia tipada)](#21-esquema-de-domínio-a-ontologia-tipada)
+  - [2.2 Bi-temporalidade (Graphiti)](#22-bi-temporalidade-graphiti)
+  - [2.3 Povoamento a partir das FONTES ESTRUTURADAS (a virada central)](#23-povoamento-a-partir-das-fontes-estruturadas-a-virada-central)
+  - [2.4 Consulta: a ontologia vira CAPACIDADE do agente (onde encaixa nas 5 camadas)](#24-consulta-a-ontologia-vira-capacidade-do-agente-onde-encaixa-nas-5-camadas)
+  - [2.5 Alimenta o planejador (dependência com Eixo B)](#25-alimenta-o-planejador-dependência-com-eixo-b)
+- [PARTE 3 — CAMINHO INCREMENTAL (reaproveitando o existente)](#parte-3-caminho-incremental-reaproveitando-o-existente)
+  - [Dependências cross-eixo](#dependências-cross-eixo)
+  - [O que NÃO consegui verificar](#o-que-não-consegui-verificar)
+  - [Fontes externas](#fontes-externas)
+- [Contexto](#contexto)
 
 > De "recuperar fragmentos de conversa" para "raciocinar sobre o negócio da Nacom".
 > Blueprint de arquitetura. READ-ONLY. Evidência arquivo:linha em tudo.
@@ -241,3 +269,7 @@ lê o subgrafo em vez de `_DOMAIN_KEYWORDS`; composite ganha força-de-aresta + 
 - [LLM-Driven Ontology Construction for Enterprise Knowledge Graphs (arXiv 2602.01276)](https://www.arxiv.org/pdf/2602.01276)
 - [A Multi-Agent System for Semantic Mapping of Relational Data to Knowledge Graphs (arXiv 2511.06455)](https://arxiv.org/pdf/2511.06455)
 - [Graph-based Agent Memory: Taxonomy, Techniques, Applications (arXiv 2602.05665)](https://arxiv.org/html/2602.05665v1)
+
+## Contexto
+
+Eixo do blueprint — evolucao do agente logistico. Tema: EIXO D — ONTOLOGIA / MODELO DE MUNDO

@@ -1,4 +1,42 @@
+<!-- doc:meta
+tipo: explanation
+camada: L3
+sot_de: —
+hub: docs/blueprint-agente/eixos/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # EIXO F — GOVERNANÇA DAS 5 CAMADAS
+
+> **Papel:** EIXO F — GOVERNANÇA DAS 5 CAMADAS.
+
+## Indice
+
+- [PARTE 1 — ESTADO REAL (com evidência arquivo:linha)](#parte-1-estado-real-com-evidência-arquivolinha)
+  - [1.1 O inventário das 5 camadas (números reais, 2026-05-30)](#11-o-inventário-das-5-camadas-números-reais-2026-05-30)
+  - [1.2 O SINTOMA: o listing da meta-tool `Skill` estourou o budget de contexto da CLI](#12-o-sintoma-o-listing-da-meta-tool-skill-estourou-o-budget-de-contexto-da-cli)
+  - [1.3 A SOLUÇÃO ATUAL (B-MÉDIO): deny-list por domínio — eficaz mas é UM tampão de UMA camada](#13-a-solução-atual-b-médio-deny-list-por-domínio-eficaz-mas-é-um-tampão-de-uma-camada)
+  - [1.4 O EXEMPLAR MADURO: a constituição do `app/odoo/estoque/CLAUDE.md`](#14-o-exemplar-maduro-a-constituição-do-appodooestoqueclaudemd)
+  - [1.5 As 4 patologias concretas de drift (todas verificadas)](#15-as-4-patologias-concretas-de-drift-todas-verificadas)
+- [PARTE 2 — ALVO ARQUITETURAL (o teto)](#parte-2-alvo-arquitetural-o-teto)
+  - [2.1 Componente 1 — O REGISTRY ÚNICO de skills (fonte da verdade)](#21-componente-1-o-registry-único-de-skills-fonte-da-verdade)
+  - [2.2 Componente 2 — TAXONOMIA + NAMESPACING hierárquico](#22-componente-2-taxonomia-namespacing-hierárquico)
+  - [2.3 Componente 3 — CONTRATO universal de skill (generalizar o `## Contrato` do estoque)](#23-componente-3-contrato-universal-de-skill-generalizar-o-contrato-do-estoque)
+  - [2.4 Componente 4 — Routing como ÍNDICE GERADO, não prosa manual](#24-componente-4-routing-como-índice-gerado-não-prosa-manual)
+  - [2.5 Componente 5 — Tool-RAG / Skill-RAG por domínio (o teto de escala)](#25-componente-5-tool-rag-skill-rag-por-domínio-o-teto-de-escala)
+  - [2.6 Componente 6 — Lifecycle gate-based (nascimento→maturação→deprecação→remoção)](#26-componente-6-lifecycle-gate-based-nascimentomaturaçãodeprecaçãoremoção)
+  - [2.7 Componente 7 — Principal vs subagentes: contrato de compartilhamento/isolamento](#27-componente-7-principal-vs-subagentes-contrato-de-compartilhamentoisolamento)
+  - [2.8 Anti-drift: doc↔código por GERAÇÃO](#28-anti-drift-doccódigo-por-geração)
+- [PARTE 3 — CAMINHO INCREMENTAL (reaproveitando o existente)](#parte-3-caminho-incremental-reaproveitando-o-existente)
+  - [Fase 0 — Consolidar a deny-list dispersa em 1 arquivo (P, risco baixo)](#fase-0-consolidar-a-deny-list-dispersa-em-1-arquivo-p-risco-baixo)
+  - [Fase 1 — Registry DESCRITIVO (read-only) + script de catálogo (M, risco baixo)](#fase-1-registry-descritivo-read-only-script-de-catálogo-m-risco-baixo)
+  - [Fase 2 — CI guard + derivação ativa da deny-list (M, risco médio)](#fase-2-ci-guard-derivação-ativa-da-deny-list-m-risco-médio)
+  - [Fase 3 — Contrato universal nas SKILL.md (G, risco baixo, incremental)](#fase-3-contrato-universal-nas-skillmd-g-risco-baixo-incremental)
+  - [Fase 4 — Routing gerado + árvore enxuta no system_prompt (M, risco médio)](#fase-4-routing-gerado-árvore-enxuta-no-system_prompt-m-risco-médio)
+  - [Fase 5 — Skill-RAG semântico por domínio (G, risco médio) — o teto](#fase-5-skill-rag-semântico-por-domínio-g-risco-médio-o-teto)
+- [RESUMO EXECUTIVO (alavancas, dependências, primeiro passo)](#resumo-executivo-alavancas-dependências-primeiro-passo)
+  - [Limitações desta análise (o que NÃO verifiquei)](#limitações-desta-análise-o-que-não-verifiquei)
+- [Contexto](#contexto)
 
 > Blueprint arquitetural. Lente de TETO: o objetivo é elevar o teto de COERÊNCIA que sustenta crescimento ilimitado de skills/subagentes/services — NÃO podar. Volume só dimensiona infra.
 >
@@ -249,3 +287,7 @@ Tabelas de catálogo no CLAUDE.md raiz, `ROUTING_SKILLS.md`, e a lista de SUBAGE
 - [Red Hat — Tool RAG: The Next Breakthrough in Scalable AI Agents](https://next.redhat.com/2025/11/26/tool-rag-the-next-breakthrough-in-scalable-ai-agents/) (ToolScope; "feeding all tools overwhelms the model")
 - [Toolshed: Scale Tool-Equipped Agents with RAG-Tool Fusion (arXiv 2410.14594)](https://arxiv.org/pdf/2410.14594)
 - [Graph RAG-Tool Fusion (arXiv 2502.07223)](https://arxiv.org/pdf/2502.07223) (dependências estruturais entre tools ↔ FLUXOS L3 do estoque)
+
+## Contexto
+
+Eixo do blueprint — evolucao do agente logistico. Tema: EIXO F — GOVERNANÇA DAS 5 CAMADAS

@@ -1,4 +1,14 @@
+<!-- doc:meta
+tipo: reference
+camada: L3
+sot_de: —
+hub: docs/inventario-2026-05/02-gotchas/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # G026 — Tabela de fixes L6-L17 (sub-piloto bulk 10 produtos)
+
+> **Papel:** G026 — Tabela de fixes L6-L17 (sub-piloto bulk 10 produtos).
 
 **Data**: 2026-05-18 madrugada
 **Origem**: extraído de `99-historia/CHECKPOINT_2026_05_18_SUBPILOTO_FINAL.md` antes do arquivamento

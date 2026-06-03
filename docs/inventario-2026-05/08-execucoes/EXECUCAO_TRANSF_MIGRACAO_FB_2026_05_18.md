@@ -1,3 +1,11 @@
+<!-- doc:meta
+tipo: scratch
+camada: L3
+sot_de: —
+hub: docs/inventario-2026-05/08-execucoes/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # EXECUCAO — Transferencia MIGRACAO -> lotes canonicos FB (2026-05-18 22:59-23:02)
 
 **Script**: `scripts/inventario_2026_05/13_transferencia_migracao_fb.py`

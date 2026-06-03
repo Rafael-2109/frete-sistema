@@ -1,4 +1,26 @@
+<!-- doc:meta
+tipo: reference
+camada: L3
+sot_de: —
+hub: docs/inventario-2026-05/02-gotchas/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # G035 — `product.barcode` invalido como GTIN quebra SEFAZ Schema 225
+
+> **Papel:** G035 — `product.barcode` invalido como GTIN quebra SEFAZ Schema 225.
+
+## Indice
+
+- [Sintoma](#sintoma)
+- [Causa raiz](#causa-raiz)
+- [Casos concretos identificados](#casos-concretos-identificados)
+- [Fix aplicado](#fix-aplicado)
+- [Validacao pos-fix](#validacao-pos-fix)
+- [Como aplicar profilaticamente](#como-aplicar-profilaticamente)
+- [Why](#why)
+- [How to apply](#how-to-apply)
+- [Referencias](#referencias)
 
 **Severidade**: CRITICAL
 **Status**: ✅ IDENTIFICADO + FIX APLICADO (2026-05-19)

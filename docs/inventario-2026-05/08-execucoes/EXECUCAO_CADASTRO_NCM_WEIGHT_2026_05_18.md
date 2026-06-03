@@ -1,3 +1,11 @@
+<!-- doc:meta
+tipo: scratch
+camada: L3
+sot_de: —
+hub: docs/inventario-2026-05/08-execucoes/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Execução: Cadastro NCM + Weight em 3 produtos LF
 
 **Data**: 2026-05-18 08:19 UTC

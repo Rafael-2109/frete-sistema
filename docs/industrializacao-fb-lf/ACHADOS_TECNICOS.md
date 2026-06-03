@@ -1,4 +1,62 @@
+<!-- doc:meta
+tipo: explanation
+camada: L3
+sot_de: —
+hub: docs/industrializacao-fb-lf/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # ACHADOS TÉCNICOS — Industrialização FB↔LF (Odoo / CIEL IT)
+
+## Indice
+
+- [1. Como a contabilização é determinada (as duas camadas)](#1-como-a-contabilização-é-determinada-as-duas-camadas)
+  - [(1) FATURA (NF) — `account.move` fiscal → **CONFIGURÁVEL**](#1-fatura-nf-accountmove-fiscal-configurável)
+  - [(2) VALORAÇÃO DE ESTOQUE (SVL) — `account.move` no diário ESTOQUE → **CONFIGURÁVEL (por empresa)**](#2-valoração-de-estoque-svl-accountmove-no-diário-estoque-configurável-por-empresa)
+  - [Onde a valoração de estoque **NÃO** se configura (verificado por exaustão)](#onde-a-valoração-de-estoque-não-se-configura-verificado-por-exaustão)
+- [2. Mecanismo NACOM já existente: "Transferir TERCEIROS"](#2-mecanismo-nacom-já-existente-transferir-terceiros)
+- [3. Incidente `rule_type` (gotcha — não repetir)](#3-incidente-rule_type-gotcha-não-repetir)
+- [4. Quirks CIEL IT relevantes](#4-quirks-ciel-it-relevantes)
+- [5. Mapa de IDs](#5-mapa-de-ids)
+  - [Empresas / parceiros / armazéns](#empresas-parceiros-armazéns)
+  - [Locations](#locations)
+  - [Picking types](#picking-types)
+  - [Produto / BoM](#produto-bom)
+  - [Fiscal](#fiscal)
+  - [Contas (account.account)](#contas-accountaccount)
+  - [Sintomas contábeis na FB (28/05/2026, postados)](#sintomas-contábeis-na-fb-28052026-postados)
+- [ACHADO 2026-05-30 — A saída da FB ESTÁ correta (usa conta de compensação `5101010001`)](#achado-2026-05-30-a-saída-da-fb-está-correta-usa-conta-de-compensação-5101010001)
+  - [O problema NÃO está na saída — está no RETORNO (Etapa 5)](#o-problema-não-está-na-saída-está-no-retorno-etapa-5)
+- [ACHADO 2026-06-01 — roteamento G4/G5a verificado ao vivo + confirmação da Contadora](#achado-2026-06-01-roteamento-g4g5a-verificado-ao-vivo-confirmação-da-contadora)
+  - [Confirmação da Contadora (Etapas 4-5 + Opção A)](#confirmação-da-contadora-etapas-4-5-opção-a)
+  - [Roteamento `tipo_pedido(_entrada) → tipo.pedido.diario(empresa) → journal → no_payment`](#roteamento-tipo_pedido_entrada-tipopedidodiarioempresa-journal-no_payment)
+  - [Double-count confirmado ao vivo (G5b)](#double-count-confirmado-ao-vivo-g5b)
+  - [Lado físico FB da remessa (dreno 26489)](#lado-físico-fb-da-remessa-dreno-26489)
+  - [IDs-chave (config retorno)](#ids-chave-config-retorno)
+- [ACHADO 2026-06-01 (sessão 5) — grounding de EXECUÇÃO G4/G5a: mecanismo do `no_payment` validado + premissas REFUTADAS](#achado-2026-06-01-sessão-5-grounding-de-execução-g4g5a-mecanismo-do-no_payment-validado-premissas-refutadas)
+  - [TL;DR (conclusões da sessão 5 — ler isto primeiro; detalhe/evidências abaixo)](#tldr-conclusões-da-sessão-5-ler-isto-primeiro-detalheevidências-abaixo)
+  - [Mecanismo de roteamento e contabilização (CONFIRMADO ao vivo)](#mecanismo-de-roteamento-e-contabilização-confirmado-ao-vivo)
+  - [Premissas REFUTADAS (PROPOSTA §1/§4 + handoff antigo)](#premissas-refutadas-proposta-14-handoff-antigo)
+  - [Universo do j847 (mede o risco da opção G4-a) — j847 é DEDICADO ao regime](#universo-do-j847-mede-o-risco-da-opção-g4-a-j847-é-dedicado-ao-regime)
+  - [Universo do j1001 (mede o efeito GLOBAL de G5a) — quase-dedicado](#universo-do-j1001-mede-o-efeito-global-de-g5a-quase-dedicado)
+  - [RESÍDUOS abertos (não fecháveis por READ-ONLY — exigem NF em DRAFT)](#resíduos-abertos-não-fecháveis-por-read-only-exigem-nf-em-draft)
+- [ACHADO 2026-06-02 (sessão 6) — R-UNIF PROVADO EMPIRICAMENTE (a entrada espelha a saída) + estrutura REAL da ENTSI](#achado-2026-06-02-sessão-6-r-unif-provado-empiricamente-a-entrada-espelha-a-saída-estrutura-real-da-entsi)
+  - [TL;DR](#tldr)
+  - [Experimento (prova 100%, zero sujeira)](#experimento-prova-100-zero-sujeira)
+  - [Estrutura REAL da ENTSI (via `account.move.line` — corrige premissas dos docs)](#estrutura-real-da-entsi-via-accountmoveline-corrige-premissas-dos-docs)
+  - [Implicação operacional (= a do G4)](#implicação-operacional-a-do-g4)
+- [ACHADO 2026-06-02 (sessão 7) — GROUNDING DO FLUXO 2-NF (anatomia SARET + fluxo do PA, 3 esferas)](#achado-2026-06-02-sessão-7-grounding-do-fluxo-2-nf-anatomia-saret-fluxo-do-pa-3-esferas)
+  - [TL;DR (sessão 7)](#tldr-sessão-7)
+  - [A. Anatomia SARET (precedente vivo do `no_payment` em doc separado)](#a-anatomia-saret-precedente-vivo-do-no_payment-em-doc-separado)
+  - [B. Picking_types e journals do retorno (LF=5) — o "como" da separação](#b-picking_types-e-journals-do-retorno-lf5-o-como-da-separação)
+  - [C. Fluxo do PA × insumos — VND mista de retorno (saída LF) e ENTSI (entrada FB)](#c-fluxo-do-pa-insumos-vnd-mista-de-retorno-saída-lf-e-entsi-entrada-fb)
+  - [D. Como o PA recebe Ic+S no cenário 2-NF (esfera contábil — desenho + resíduo do piloto)](#d-como-o-pa-recebe-ics-no-cenário-2-nf-esfera-contábil-desenho-resíduo-do-piloto)
+  - [E. Pontos de código que assumem "1 NF por ciclo" (Frente 2 — a ajustar quando o caminho (b) for aprovado)](#e-pontos-de-código-que-assumem-1-nf-por-ciclo-frente-2-a-ajustar-quando-o-caminho-b-for-aprovado)
+  - [F. Mudanças no trabalho operacional (delta 1-NF → 2-NF)](#f-mudanças-no-trabalho-operacional-delta-1-nf-2-nf)
+  - [G. Como a NF é montada HOJE — o operador NÃO digita os insumos (fluxo operacional)](#g-como-a-nf-é-montada-hoje-o-operador-não-digita-os-insumos-fluxo-operacional)
+  - [H. Rastreabilidade remessa ↔ PA para o cenário 2-NF (vínculo de TELA nativo — `s7_rastreabilidade`)](#h-rastreabilidade-remessa-pa-para-o-cenário-2-nf-vínculo-de-tela-nativo-s7_rastreabilidade)
+  - [I. Subcontratação nativa + fluxo de ENTRADA (`s7_subcontratacao`) — base para "1 doc → resto automático"](#i-subcontratação-nativa-fluxo-de-entrada-s7_subcontratacao-base-para-1-doc-resto-automático)
+- [Contexto](#contexto)
 
 > **Papel deste doc:** mecanismo Odoo/CIEL IT + **IDs/constantes** (contas, operações, journals, locations, picking types). Desenho-alvo e decisões = `SOT_OPERACOES.md`. Índice geral: `README.md`.
 > Fatos **verificados ao vivo** (PROD) — "como o Odoo/CIEL IT realmente decide", não suposição. (A `DIRETRIZ.md` original foi para `HISTORICO/`.)
@@ -349,3 +407,7 @@ Journals sale LF com no_payment de compensação: j863 `industrializacao`→5101
 - ⇒ **VEREDITO: Forma 1 (subcontratação nativa) NÃO recomendada** — exigiria reativar um fluxo morto p/ 153 produtos + validar a camada fiscal CIEL IT do subcontracting (nunca exercitada) + retreinar operação. Alto risco/esforço, muda o dia-a-dia.
 - ⇒ **Forma 2 (pipeline deriva) é o caminho** — aderente ao fluxo atual. **A ENTRADA já é automática e vinculada** (`DFe → PO serv-industrializacao → invoice`, 3087 casos): 2 DFes (serviço + insumos) gerariam 2 escriturações automáticas, ligadas por refNFe/PO. **O trabalho concentra-se na SAÍDA** (separar a emissão que hoje funde tudo em 1 NF via expansão da BoM no robô — o nosso pipeline emite a 2ª NF de insumos derivada da BoM, OU customiza-se o `create_invoice` do CIEL IT).
 
+
+## Contexto
+
+Documento — industrializacao por encomenda FB<->LF. Tema: ACHADOS TÉCNICOS — Industrialização FB↔LF (Odoo / CIEL IT)

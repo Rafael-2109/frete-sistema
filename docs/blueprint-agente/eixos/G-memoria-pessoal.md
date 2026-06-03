@@ -2,7 +2,7 @@
 tipo: explanation
 camada: L3
 sot_de: eixo G do blueprint — memoria pessoal e recuperacao
-hub: docs/blueprint-agente/RECONCILIACAO_MEMORIA.md
+hub: docs/blueprint-agente/eixos/INDEX.md
 superseded_by: —
 atualizado: 2026-06-02
 -->

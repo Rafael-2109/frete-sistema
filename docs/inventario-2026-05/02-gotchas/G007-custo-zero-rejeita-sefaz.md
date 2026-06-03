@@ -1,4 +1,24 @@
+<!-- doc:meta
+tipo: explanation
+camada: L3
+sot_de: —
+hub: docs/inventario-2026-05/02-gotchas/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # G007 — custo_medio=0 gera price_unit=0 e SEFAZ rejeita schema XML
+
+> **Papel:** G007 — custo_medio=0 gera price_unit=0 e SEFAZ rejeita schema XML.
+
+## Indice
+
+- [Sintoma](#sintoma)
+- [Causa raiz](#causa-raiz)
+- [Solucao](#solucao)
+- [Recuperacao manual (se ainda assim invoice sair com price=0)](#recuperacao-manual-se-ainda-assim-invoice-sair-com-price0)
+- [Observacao critica para LF completa](#observacao-critica-para-lf-completa)
+- [Ref](#ref)
+- [Contexto](#contexto)
 
 **Descoberta**: 2026-05-18 sub-piloto bulk 10 produtos (NF 13150)
 **Severidade**: HIGH (NF rejeitada pelo SEFAZ — irreversivel sem cancelar e recriar)
@@ -98,3 +118,7 @@ pena auditar antes de rodar.
 - G004 (padrao real e' picking + robo CIEL IT)
 - G008 (excecao_autorizado SEFAZ — XML autorizado vazio)
 - D006 secao L13
+
+## Contexto
+
+Gotcha — ciclo de inventario NACOM/LF/CD/FB 2026-05. Tema: custo_medio=0 gera price_unit=0 e SEFAZ rejeita schema XML

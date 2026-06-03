@@ -1,4 +1,23 @@
+<!-- doc:meta
+tipo: reference
+camada: L3
+sot_de: —
+hub: docs/inventario-2026-05/02-gotchas/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # G004 — Padrão real de NF inter-company é picking + robô CIEL IT, não account.move direto
+
+> **Papel:** G004 — Padrão real de NF inter-company é picking + robô CIEL IT, não account.move direto.
+
+## Indice
+
+- [Padrão verdadeiro do sistema NACOM (extraído de `recebimento_lf_odoo_service.py`)](#padrão-verdadeiro-do-sistema-nacom-extraído-de-recebimento_lf_odoo_servicepy)
+- [O que estava errado no design](#o-que-estava-errado-no-design)
+- [Padrão correto (reescrito)](#padrão-correto-reescrito)
+- [Decisões necessárias](#decisões-necessárias)
+  - [Decisão D004-A: Padrão para ajuste de inventário](#decisão-d004-a-padrão-para-ajuste-de-inventário)
+- [Impactos no spec original](#impactos-no-spec-original)
 
 **Descoberto em:** 2026-05-17 (audit 00e + leitura `recebimento_lf_odoo_service.py:2122-2700`)
 **Severidade:** **CRITICA** — invalida parcialmente o design original do spec

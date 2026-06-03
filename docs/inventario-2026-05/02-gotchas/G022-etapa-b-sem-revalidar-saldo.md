@@ -1,4 +1,24 @@
+<!-- doc:meta
+tipo: reference
+camada: L3
+sot_de: —
+hub: docs/inventario-2026-05/02-gotchas/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # G022 — ETAPA B não re-valida saldo entre action_assign e button_validate
+
+> **Papel:** G022 — ETAPA B não re-valida saldo entre action_assign e button_validate.
+
+## Indice
+
+- [Sintoma](#sintoma)
+- [Evidência](#evidência)
+- [Refinamento (2026-05-18 sessão 3 batch 30) — Over-reservation pós-renomeação](#refinamento-2026-05-18-sessão-3-batch-30-over-reservation-pós-renomeação)
+- [Combinação com G021](#combinação-com-g021)
+- [Mitigação atual](#mitigação-atual)
+- [Fix proposto](#fix-proposto)
+- [Ref](#ref)
 
 **Status**: 🔴 ABERTO
 **Severidade**: MEDIUM

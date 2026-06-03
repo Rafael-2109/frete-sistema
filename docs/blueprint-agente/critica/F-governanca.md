@@ -1,4 +1,32 @@
+<!-- doc:meta
+tipo: explanation
+camada: L3
+sot_de: —
+hub: docs/blueprint-agente/critica/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # CRÍTICA ARQUITETURAL — Eixo F (Governança das 5 camadas)
+
+> **Papel:** CRÍTICA ARQUITETURAL — Eixo F (Governança das 5 camadas).
+
+## Indice
+
+- [VEREDITO: SÓLIDO — com 3 ajustes (1 correção de modelo, 2 completudes)](#veredito-sólido-com-3-ajustes-1-correção-de-modelo-2-completudes)
+- [1. COERÊNCIA — encaixe nas 5 camadas e respeito a invariantes](#1-coerência-encaixe-nas-5-camadas-e-respeito-a-invariantes)
+  - [1.1 O que está coerente (verificado)](#11-o-que-está-coerente-verificado)
+  - [1.2 ERRO DE MODELO (ajuste #1, o mais importante para coerência)](#12-erro-de-modelo-ajuste-1-o-mais-importante-para-coerência)
+- [2. REAPROVEITAMENTO — reusa de fato ou reinventa?](#2-reaproveitamento-reusa-de-fato-ou-reinventa)
+- [3. REALIZABILIDADE — valor + rollback por fase, acoplamento](#3-realizabilidade-valor-rollback-por-fase-acoplamento)
+- [4. LACUNAS — o que o blueprint NÃO considerou](#4-lacunas-o-que-o-blueprint-não-considerou)
+  - [4.1 (A MAIS IMPORTANTE) A camada L2 tools (MCP) ficou fora da governança](#41-a-mais-importante-a-camada-l2-tools-mcp-ficou-fora-da-governança)
+  - [4.2 Confiabilidade de retorno de subagente (cross-eixo omitido)](#42-confiabilidade-de-retorno-de-subagente-cross-eixo-omitido)
+  - [4.3 Citação de lifecycle não verificável (risco de fundação acadêmica frágil)](#43-citação-de-lifecycle-não-verificável-risco-de-fundação-acadêmica-frágil)
+  - [4.4 Risco não mapeado: o registry vira gargalo de PR cross-domínio](#44-risco-não-mapeado-o-registry-vira-gargalo-de-pr-cross-domínio)
+- [5. AMBIÇÃO — é o teto ou ficou tímido?](#5-ambição-é-o-teto-ou-ficou-tímido)
+  - [ELEVAÇÃO: O registry como GRAFO EXECUTÁVEL de capacidades, fonte do PLANEJADOR (eixo B)](#elevação-o-registry-como-grafo-executável-de-capacidades-fonte-do-planejador-eixo-b)
+- [SÍNTESE PARA O ORQUESTRADOR](#síntese-para-o-orquestrador)
+- [Contexto](#contexto)
 
 > Revisor: arquiteto sênior cético. Lente de TETO (proibido criticar por volume/over-engineering).
 > Base verificada contra código real (não só contra o blueprint).
@@ -187,3 +215,7 @@ planejador lê o mapa" e "o mapa É o planejador".
 - **Veredito**: SÓLIDO, ajustar 3 coisas — (1) `exposure` é relação N:M skill↔agente, não enum escalar; modelar como `SkillBinding` (aresta) ou o registry nasce com drift no dia 1; (2) o CI guard da Fase 2 precisa de auto-seed `incubating` para não inverter a cultura demand-driven; (3) a Fase 4 deve separar catálogo-gerável de boundaries-comportamentais-críticas do system_prompt (senão a geração apaga regra de negócio Web/Teams).
 - **Lacuna mais importante**: a camada L2 (tools/MCP, 12 servers) ficou inteira fora da governança, apesar de o problema-raiz citado (Tool-RAG) ser sobre TOOLS — e já existe `permissions.py::can_use_tool` que é o gate de tool por contexto, não unificado com o registry. O teto é um CAPABILITY registry (tools+skills+subagents no mesmo grafo de escopo), não um SKILL registry.
 - **Elevação de ambição**: o registry não é mapa para roteamento, é **grafo executável de capacidades** com pré/pós-condições (já presentes nos contratos do estoque) — o espaço de estados que o planejador do eixo B consome para orquestrar, transformando os fluxos L3 de documentação em planos cacheados. O mapa não é lido pelo planejador; o mapa É o planejador.
+
+## Contexto
+
+Critica de eixo do blueprint — evolucao do agente logistico. Tema: CRÍTICA ARQUITETURAL — Eixo F (Governança das 5 camadas)

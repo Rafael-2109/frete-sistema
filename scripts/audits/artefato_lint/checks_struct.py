@@ -53,7 +53,8 @@ def check_file(path: Path, root: Path, cfg) -> list[Finding]:
     # C6 TOC se >100 linhas
     from . import zones
     nlines = text.count("\n") + 1
-    toc_exempt = zones._match_any(rel, getattr(cfg, "toc_exempt_globs", []))
+    # scratch = arquivo/handoff: isento de TOC (lint-teatro num doc arquivado) — PAD-A Onda 4f
+    toc_exempt = zones._match_any(rel, getattr(cfg, "toc_exempt_globs", [])) or tipo == "scratch"
     if nlines > cfg.toc_min_lines and not toc_exempt and not re.search(
             r"(?im)^#{1,3}\s*(indice|table of contents|toc)\b", text):
         out.append(Finding("C6", rel, 1, f"arquivo {nlines} linhas sem TOC", "block"))

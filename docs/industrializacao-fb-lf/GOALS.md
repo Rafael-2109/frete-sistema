@@ -1,3 +1,11 @@
+<!-- doc:meta
+tipo: explanation
+camada: L3
+sot_de: —
+hub: docs/industrializacao-fb-lf/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # GOALS — Industrialização FB↔LF (metas com métrica de sucesso)
 
 > **Papel deste doc:** metas + **critério de sucesso objetivo** por goal (verificável em 1 ciclo-piloto do 4870112). O **desenho-alvo por operação** (atual×correto×mudança, CFOP/contábil/estoque) mora na **`SOT_OPERACOES.md §2`** (dona) — não é duplicado aqui. Índice: `README.md`.
@@ -37,3 +45,7 @@ Ciclo-piloto sem sobra: **`5101010001`(FB)=0 · `5101020001`(LF)=0 · estoque FB
 3. **Faturar retorno LF→FB** (Etapa 4) + **escriturar FB** (Etapa 5) no piloto — medir G4/G5a/G6/G8. **Gate:** abortar se `Δ5101020001(LF) != 0` ou `Δ5101010001(FB) != 0`.
 4. **3 pernas / AVCO** (G8): a NF de retorno declara `price_unit` do PA = Ic+S; medir no piloto (`PROPOSTA §6`).
 5. **Regularização** (G9) — Contador, separado.
+
+## Contexto
+
+Documento — industrializacao por encomenda FB<->LF. Tema: GOALS — Industrialização FB↔LF (metas com métrica de sucesso)

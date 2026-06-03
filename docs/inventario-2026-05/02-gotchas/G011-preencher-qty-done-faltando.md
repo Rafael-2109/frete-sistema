@@ -1,4 +1,24 @@
+<!-- doc:meta
+tipo: reference
+camada: L3
+sot_de: —
+hub: docs/inventario-2026-05/02-gotchas/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # G011 — preencher_qty_done faltando no pipeline (cascateia L20/L21)
+
+> **Papel:** G011 — preencher_qty_done faltando no pipeline (cascateia L20/L21).
+
+## Indice
+
+- [Sintoma](#sintoma)
+- [Causa raiz](#causa-raiz)
+- [Solucao](#solucao)
+  - [inventario_pipeline_service.py](#inventario_pipeline_servicepy)
+  - [09_executar_onda1_bulk.py](#09_executar_onda1_bulkpy)
+- [Validacao](#validacao)
+- [Ref](#ref)
 
 **Descoberta**: 2026-05-18 sub-piloto bulk (re-execucao apos G010 fix)
 **Severidade**: CRITICAL (raiz de L19/L20/L21 — bloqueia ANY picking do pipeline)

@@ -1,4 +1,24 @@
+<!-- doc:meta
+tipo: reference
+camada: L3
+sot_de: —
+hub: docs/inventario-2026-05/02-gotchas/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # G038 — `product.l10n_br_origem` ausente bloqueia transmissão SEFAZ via modal Odoo silencioso
+
+> **Papel:** G038 — `product.l10n_br_origem` ausente bloqueia transmissão SEFAZ via modal Odoo silencioso.
+
+## Indice
+
+- [Sintoma](#sintoma)
+- [Causa raiz](#causa-raiz)
+- [Como detectar (PRE-FLIGHT — RECOMENDADO)](#como-detectar-pre-flight-recomendado)
+- [Solução (manual — NÃO há auto-fix)](#solução-manual-não-há-auto-fix)
+- [Como evitar](#como-evitar)
+- [Onde está codificado](#onde-está-codificado)
+- [Caso real (descoberta)](#caso-real-descoberta)
 
 **Severidade**: HIGH (bloqueio SEFAZ + Playwright loop sem efeito)
 **Status**: ✅ DOCUMENTADO + DETECÇÃO PRE-FLIGHT CODIFICADA (2026-05-27 v22+ — retry pipeline INVENTARIO_2026_05 expôs o gotcha)

@@ -1,4 +1,24 @@
+<!-- doc:meta
+tipo: reference
+camada: L3
+sot_de: —
+hub: docs/inventario-2026-05/02-gotchas/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # G030 — Pipeline RecebimentoLfOdooService trava em Fase 4 (rare)
+
+> **Papel:** G030 — Pipeline RecebimentoLfOdooService trava em Fase 4 (rare).
+
+## Indice
+
+- [Sintoma](#sintoma)
+- [Estado no Odoo quando trava](#estado-no-odoo-quando-trava)
+- [Causa raiz hipotetizada](#causa-raiz-hipotetizada)
+- [Workaround manual](#workaround-manual)
+- [Para evitar (recomendação operacional)](#para-evitar-recomendação-operacional)
+- [Detecção](#detecção)
+- [Ref](#ref)
 
 **Descoberta**: 2026-05-18 sessao 3 tarde (RecLf 14)
 **Severidade**: MEDIUM (raro, manual fix simples)

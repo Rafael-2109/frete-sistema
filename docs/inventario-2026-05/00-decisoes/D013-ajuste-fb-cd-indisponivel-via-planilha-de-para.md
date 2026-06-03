@@ -1,4 +1,23 @@
+<!-- doc:meta
+tipo: explanation
+camada: L3
+sot_de: —
+hub: docs/inventario-2026-05/00-decisoes/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # D013 — Ajuste FB+CD via planilha De→Para (Estoque ↔ Indisponível)
+
+> **Papel:** D013 — Ajuste FB+CD via planilha De→Para (Estoque ↔ Indisponível).
+
+## Indice
+
+- [Contexto](#contexto)
+- [Decisão — mecanismo: inventory adjustment em 2 passos](#decisão-mecanismo-inventory-adjustment-em-2-passos)
+- [Regras de resolução (confirmadas pelo usuário)](#regras-de-resolução-confirmadas-pelo-usuário)
+- [Script](#script)
+- [Resultados (execução 2026-05-20 02:52–03:51)](#resultados-execução-2026-05-20-02520351)
+- [Riscos / observações](#riscos-observações)
 
 **Data**: 2026-05-20
 **Decisão do usuário**: ajustar estoque FB (company 1) e CD (company 4) por planilha

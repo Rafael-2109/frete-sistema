@@ -1,4 +1,24 @@
+<!-- doc:meta
+tipo: reference
+camada: L3
+sot_de: —
+hub: docs/inventario-2026-05/02-gotchas/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # G037 — Picking ETAPA F criado manualmente sem PO precisa de `l10n_br_cfop_id` explícito (CAMINHO B PALIATIVO)
+
+> **Papel:** G037 — Picking ETAPA F criado manualmente sem PO precisa de `l10n_br_cfop_id` explícito (CAMINHO B PALIATIVO).
+
+## Indice
+
+- [Sintoma](#sintoma)
+- [Causa raiz](#causa-raiz)
+- [Solução V1 (paliativo dentro do orchestrator Skill 8)](#solução-v1-paliativo-dentro-do-orchestrator-skill-8)
+- [Solução V2 (refator v19+ — caminho A correto)](#solução-v2-refator-v19-caminho-a-correto)
+- [Por que esta versão foi reescrita (lição AP5)](#por-que-esta-versão-foi-reescrita-lição-ap5)
+- [Relacionado](#relacionado)
+- [Histórico](#histórico)
 
 **Severidade**: MEDIUM (escopo restrito ao caminho B paliativo)
 **Status**: ✅ DOCUMENTADO (2026-05-26 v18 Fase 0 — REESCRITO após auditoria Rafael que detectou premissa errada na versão original v18)

@@ -1,4 +1,26 @@
+<!-- doc:meta
+tipo: reference
+camada: L3
+sot_de: —
+hub: docs/inventario-2026-05/02-gotchas/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # G034 — Robô CIEL IT aplica defaults PT 66 em DEV_* (CFOP 5124 errado)
+
+> **Papel:** G034 — Robô CIEL IT aplica defaults PT 66 em DEV_* (CFOP 5124 errado).
+
+## Indice
+
+- [Sintoma](#sintoma)
+- [Causa raiz](#causa-raiz)
+- [Fix implementado (v2 — 2026-05-18 19:38)](#fix-implementado-v2-2026-05-18-1938)
+  - [Limitação descoberta na 1ª iteração (v1)](#limitação-descoberta-na-1ª-iteração-v1)
+  - [Bug colateral corrigido (v1→v2)](#bug-colateral-corrigido-v1v2)
+- [Consequência sem fix](#consequência-sem-fix)
+- [Recovery do incidente original (batch 5 DEV_LF_FB)](#recovery-do-incidente-original-batch-5-dev_lf_fb)
+- [Limitação conhecida](#limitação-conhecida)
+- [Referências](#referências)
 
 **Status**: ✅ FIXADO (sessão 4, 2026-05-18 19:25)
 **Severidade**: CRITICAL (NF saiu com CFOP fiscalmente errado)

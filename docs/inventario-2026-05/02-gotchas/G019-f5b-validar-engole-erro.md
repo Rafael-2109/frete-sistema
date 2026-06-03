@@ -1,4 +1,23 @@
+<!-- doc:meta
+tipo: reference
+camada: L3
+sot_de: —
+hub: docs/inventario-2026-05/02-gotchas/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # G019 — f5b validar() engole erro e marca F5b_VALIDADO sem picking estar done
+
+> **Papel:** G019 — f5b validar() engole erro e marca F5b_VALIDADO sem picking estar done.
+
+## Indice
+
+- [Sintoma](#sintoma)
+- [Root cause](#root-cause)
+- [Sintoma confirmado](#sintoma-confirmado)
+- [Solucao proposta](#solucao-proposta)
+- [Recovery (estado atual)](#recovery-estado-atual)
+- [Ref](#ref)
 
 **Descoberta**: 2026-05-18 sessao 2 manha (teste 100 produtos LF)
 **Severidade**: CRITICAL (cascateia em G020 + invoice nunca criada pelo robo)

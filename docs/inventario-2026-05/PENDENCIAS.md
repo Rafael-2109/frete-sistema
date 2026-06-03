@@ -1,4 +1,74 @@
+<!-- doc:meta
+tipo: state
+camada: L3
+sot_de: —
+hub: docs/inventario-2026-05/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Pendências — INVENTARIO_2026_05
+
+> **Papel:** Pendências — INVENTARIO_2026_05.
+
+## Indice
+
+- [P1 — Padronização completa de lotes para `MI ###-###/AA`](#p1-padronização-completa-de-lotes-para-mi--aa)
+  - [Resumo](#resumo)
+  - [Escopo](#escopo)
+  - [Subtarefas](#subtarefas)
+  - [Riscos](#riscos)
+- [P2 — Desfazer ajustes emergenciais FB (2026-05-18)](#p2-desfazer-ajustes-emergenciais-fb-2026-05-18)
+  - [Resumo](#resumo)
+  - [Subtarefas](#subtarefas)
+  - [Por quê](#por-quê)
+  - [Alternativa: NÃO reverter](#alternativa-não-reverter)
+- [P3 — Lote `MI036-124/26` cod `104000002` não inventariado na FB](#p3-lote-mi036-12426-cod-104000002-não-inventariado-na-fb)
+  - [Resumo](#resumo)
+  - [Subtarefas](#subtarefas)
+  - [Comando de verificação](#comando-de-verificação)
+- [P4 — Divergências de quantidade (lista usuário 2026-05-18 vs planilha 16/05)](#p4-divergências-de-quantidade-lista-usuário-2026-05-18-vs-planilha-1605)
+  - [Resumo](#resumo)
+  - [Hipóteses (não decididas)](#hipóteses-não-decididas)
+  - [Implicação](#implicação)
+  - [Subtarefas](#subtarefas)
+- [P5 — 104000016 lote `T20241014` — drift de plano após emergencial](#p5-104000016-lote-t20241014-drift-de-plano-após-emergencial)
+  - [Resumo](#resumo)
+  - [Subtarefas](#subtarefas)
+- [P7 — E09 emergencial FB ~~PENDENTE~~ RESOLVIDO (2026-05-18 14:38)](#p7-e09-emergencial-fb-pendente-resolvido-2026-05-18-1438)
+  - [Solução aplicada](#solução-aplicada)
+  - [Implicações](#implicações)
+- [P8 — 19 pickings antigos do cod 104000003 reservando FB/Estoque](#p8-19-pickings-antigos-do-cod-104000003-reservando-fbestoque)
+  - [Resumo](#resumo)
+  - [Padrões observados](#padrões-observados)
+  - [Hipóteses](#hipóteses)
+  - [Subtarefas](#subtarefas)
+  - [Lista completa](#lista-completa)
+- [P10 — Lotes emergenciais em FB/Estoque, não em Linha de Pré-Produção](#p10-lotes-emergenciais-em-fbestoque-não-em-linha-de-pré-produção)
+  - [Resumo](#resumo)
+  - [Mapa de Linhas de Pré-Produção FB](#mapa-de-linhas-de-pré-produção-fb)
+  - [Fluxo correto](#fluxo-correto)
+  - [Subtarefas](#subtarefas)
+- [P9 — Ajuste contábil para entrada inventory adjustment E09 (30 un cod 104000003)](#p9-ajuste-contábil-para-entrada-inventory-adjustment-e09-30-un-cod-104000003)
+  - [Resumo](#resumo)
+  - [Subtarefas](#subtarefas)
+- [P6 — Picking 317346 LF pendente invoice CIEL IT](#p6-picking-317346-lf-pendente-invoice-ciel-it)
+  - [Resumo](#resumo)
+- [P11 — 10 produtos sem cadastro Odoo no CD](#p11-10-produtos-sem-cadastro-odoo-no-cd)
+  - [Resumo](#resumo)
+  - [Lista completa](#lista-completa)
+  - [Subtarefas (opção cadastrar)](#subtarefas-opção-cadastrar)
+  - [Alternativa: aceitar pendência](#alternativa-aceitar-pendência)
+  - [Relacionado](#relacionado)
+- [P12 — 9 produtos LF do Pasta17 com lotes dessincronizados (realocação não aplicável)](#p12-9-produtos-lf-do-pasta17-com-lotes-dessincronizados-realocação-não-aplicável)
+  - [Resumo](#resumo)
+  - [Lista](#lista)
+  - [Caminho recomendado](#caminho-recomendado)
+  - [Alternativa: NÃO recomendada](#alternativa-não-recomendada)
+- [P13 — 108 exceções do ajuste FB+CD → Indisponível (D013, 2026-05-20)](#p13-108-exceções-do-ajuste-fbcd-indisponível-d013-2026-05-20)
+- [Índice rápido](#índice-rápido)
+- [Atualizado](#atualizado)
+- [Estado atual](#estado-atual)
+- [Pendencias](#pendencias)
 
 **Última atualização**: 2026-05-20
 
@@ -318,7 +388,7 @@ Esta pendência convive com `Cat1_PRODUTO_ARQUIVADO` (8 ajustes, 4 produtos: 19,
 
 **Status**: PENDENTE — aguarda planilha regenerada
 **Empresa**: LF (`company_id=5`)
-**Descoberto em**: 2026-05-20 (realocação Pasta17 — ver [D012](00-decisoes/D012-ajuste-estoque-lf-via-planilha-direta.md))
+**Descoberto em**: 2026-05-20 (realocação Pasta17 — ver [D012](./00-decisoes/D012-ajuste-estoque-lf-via-planilha-direta.md))
 
 ### Resumo
 
@@ -365,7 +435,7 @@ Nenhuma é falha — o script foi defensivo (saldo fresco + clamp).
 
 **Notável — cod 109000100 OLEO**: planilha pede 40,4M kg (= valor do **monitor**, não saldo físico).
 Odoo tem 6,34M kg, 0 reservado, 99,9% já em Indisponivel; sobram 7.728 kg movíveis (lote 13194).
-Divergência **monitor × Odoo** a investigar. Detalhe: [EXECUCAO_AJUSTE_FB_CD_INDISPONIVEL_2026_05_20.md](08-execucoes/EXECUCAO_AJUSTE_FB_CD_INDISPONIVEL_2026_05_20.md).
+Divergência **monitor × Odoo** a investigar. Detalhe: [EXECUCAO_AJUSTE_FB_CD_INDISPONIVEL_2026_05_20.md](./08-execucoes/EXECUCAO_AJUSTE_FB_CD_INDISPONIVEL_2026_05_20.md).
 
 ---
 
@@ -386,3 +456,15 @@ Divergência **monitor × Odoo** a investigar. Detalhe: [EXECUCAO_AJUSTE_FB_CD_I
 | P11 | 10 produtos sem cadastro Odoo no CD (FALHA `Cat1_SEM_CADASTRO_ODOO`) | CD | Faturamento desses cods + fechamento ciclo CD |
 | P12 | 9 produtos LF Pasta17 com lotes dessincronizados (saldo líquido 0/negativo) | LF | Realocação completa Pasta17 (138/147 feitos) |
 | P13 | 108 exceções ajuste FB+CD→Indisponível (53 industrialização concorrente, 29 sem-lote, 17 saldo zero, 8 cod inexistente, 1 dup) | FB+CD | Fechamento ajuste D013 (2252/2360 feitos) |
+
+## Atualizado
+
+Ver datas no corpo do documento (registro historico).
+
+## Estado atual
+
+Ver secoes do corpo acima (estado registrado na epoca).
+
+## Pendencias
+
+Ver itens listados no corpo acima.

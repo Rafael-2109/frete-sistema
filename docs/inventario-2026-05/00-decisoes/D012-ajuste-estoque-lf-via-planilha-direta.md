@@ -1,4 +1,14 @@
+<!-- doc:meta
+tipo: explanation
+camada: L3
+sot_de: —
+hub: docs/inventario-2026-05/00-decisoes/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # D012 — Ajuste de estoque LF via planilha direta (criar saldo + realocação)
+
+> **Papel:** D012 — Ajuste de estoque LF via planilha direta (criar saldo + realocação).
 
 **Data**: 2026-05-20
 **Decisão do usuário**: ajustar estoque LF diretamente por planilha, via

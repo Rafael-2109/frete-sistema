@@ -1,4 +1,44 @@
+<!-- doc:meta
+tipo: state
+camada: L3
+sot_de: —
+hub: docs/blueprint-agente/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # EXECUÇÃO — Evolução do Agente (rastreador vivo)
+
+> **Papel:** EXECUÇÃO — Evolução do Agente (rastreador vivo).
+
+## Indice
+
+- [COMO USAR (protocolo inviolável)](#como-usar-protocolo-inviolável)
+  - [Definition of Done (DoD) — checklist por item](#definition-of-done-dod-checklist-por-item)
+  - [Checklist de REGRESSÃO — invariantes a NUNCA quebrar (Blueprint §5)](#checklist-de-regressão-invariantes-a-nunca-quebrar-blueprint-5)
+  - [Riscos transversais (mitigação obrigatória nos itens marcados)](#riscos-transversais-mitigação-obrigatória-nos-itens-marcados)
+- [GRAFO DE DEPENDÊNCIAS (resumo — ver Blueprint §2)](#grafo-de-dependências-resumo-ver-blueprint-2)
+- [ESTADO DE ATIVAÇÃO (2026-05-31) — FUNCIONAL vs WIRING PENDENTE](#estado-de-ativação-2026-05-31-funcional-vs-wiring-pendente)
+  - [✅ Funcional ao ligar a flag (caller ativo — ativados em PROD 2026-05-31)](#funcional-ao-ligar-a-flag-caller-ativo-ativados-em-prod-2026-05-31)
+  - [🟡 Shadow scaffolding — lógica+testes prontos, SEM caller no loop (precisa WIRING)](#shadow-scaffolding-lógicatestes-prontos-sem-caller-no-loop-precisa-wiring)
+  - [Ordem GATED de WIRING (recomendada — cada fase depende da anterior validada em PROD)](#ordem-gated-de-wiring-recomendada-cada-fase-depende-da-anterior-validada-em-prod)
+  - [📍 CHECKPOINT 2026-05-31 — Plano inicial de WIRING: FEITO vs FALTA](#checkpoint-2026-05-31-plano-inicial-de-wiring-feito-vs-falta)
+  - [📍 CHECKPOINT 2026-06-01 — A3 GATE DE REGRESSÃO MERGEADA + DEPLOY PROD + FLAGS](#checkpoint-2026-06-01-a3-gate-de-regressão-mergeada-deploy-prod-flags)
+  - [📍 CHECKPOINT 2026-06-01 (tarde) — VALIDAÇÃO DE FUNCIONAMENTO + MEDIÇÃO (Ondas 0-4)](#checkpoint-2026-06-01-tarde-validação-de-funcionamento-medição-ondas-0-4)
+- [ONDAS E ITENS](#ondas-e-itens)
+  - [ONDA 0 — FUNDAÇÃO FÍSICA  ·  GATE-0 destrava Ondas 1 e 2](#onda-0-fundação-física-gate-0-destrava-ondas-1-e-2)
+  - [ONDA 1 — FUNDAÇÃO SEMÂNTICA (E↔D em paralelo)  ·  GATE-1 destrava Onda 3 (flywheel)](#onda-1-fundação-semântica-ed-em-paralelo-gate-1-destrava-onda-3-flywheel)
+  - [ONDA 2 — ATUADOR DE PLANEJAMENTO  ·  GATE-2 destrava promoção de plano (Onda 3 A4)](#onda-2-atuador-de-planejamento-gate-2-destrava-promoção-de-plano-onda-3-a4)
+  - [ONDA 3 — FECHAR O FLYWHEEL  ·  (muda comportamento ativo — só sobre fundações confiáveis)](#onda-3-fechar-o-flywheel-muda-comportamento-ativo-só-sobre-fundações-confiáveis)
+- [ONDA 4 — TETO DE ESCALA](#onda-4-teto-de-escala)
+- [EIXOS C + G — MEMÓRIA PESSOAL & VIGILÂNCIA (avaliação de memória, 2026-06-02)](#eixos-c-g-memória-pessoal-vigilância-avaliação-de-memória-2026-06-02)
+- [BASELINE CONHECIDO (herdado da main — NÃO causado pela Onda 0)](#baseline-conhecido-herdado-da-main-não-causado-pela-onda-0)
+- [NÃO VERIFICADO (auditar antes da onda correspondente — Blueprint §honestidade)](#não-verificado-auditar-antes-da-onda-correspondente-blueprint-honestidade)
+- [DECISÕES DE DESIGN (registradas — não re-decidir)](#decisões-de-design-registradas-não-re-decidir)
+- [BLOQUEIOS ATIVOS](#bloqueios-ativos)
+- [LOG DE EXECUÇÃO (append-only — 1 linha por item concluído)](#log-de-execução-append-only-1-linha-por-item-concluído)
+- [Atualizado](#atualizado)
+- [Estado atual](#estado-atual)
+- [Pendencias](#pendencias)
 
 > **Este é o ÍNDICE DE VERDADE do projeto.** Sobrevive entre sessões. NENHUMA onda começa
 > sem consultar os gates aqui; NENHUM item é "done" sem marcar o checklist aqui.
@@ -399,3 +439,15 @@ não escritos (B3 adiado + sem feedback). Latência: judge/verify/triage 100% of
 - 2026-06-01 (tarde) — **RAFAEL ESCOLHEU OPÇÃO B + corrigir ambiguidade do prompt (implementado, TDD)**:
   (a) **Prompt** (`system_prompt.md` `<delegation_pattern>`): removida a contradição (`<task_management>` dizia "não p/ trivial", `<delegation_pattern>` dizia "sempre criar task p/ delegação"). Agora: **delegação ÚNICA não precisa de TaskCreate** (o spawn já emite task_started/progress/subagent_summary na UI); TaskCreate **só** em orquestração 2+ delegações/passos. (Risco: muda prompt LIVE — mudança cirúrgica.)
   (b) **A4 V2 / Opção B** (`directive_promotion_service.py`): nova fonte de candidata `propose_directive_from_judge_session` (sessão de ALTA QUALIDADE validada pelo judge: ≥2 passos julgados, 0 `failure`, média ≥0.7) — **independente de PlanState**, fiel à spec §2.3 (critério = quality_signal). Wirada como 2ª fonte em `run_directive_promotion_batch` (dedup por session_id; MESMO gate `evaluate_and_promote`: R9 anti-gaming + A3 report-only). Candidatas → `directive_status='shadow'` → **NUNCA injetadas** (dupla segurança intacta). TDD: 7 testes (6 pura + 1 batch judge), 3 batch existentes atualizados; **36 directive + 219 services/workers/sdk green**. **Evidência PROD**: 0 sessões qualificam HOJE (6 sessões ≥2 julgados, TODAS com falhas, média 33-51 < 70) — MAS o "0" deixou de ser **estrutural** (PlanState=Task nunca emitido) e virou **de dados** (janela ~14h só de sessões Odoo que falharam) → resolve sozinho com volume + sessões limpas + o judge corrigido (turnos informativos antes mal-pontuados viram success). **NÃO commitado/deployado** (branch `manutencao/semanal-2026-06-01`).
+
+## Atualizado
+
+Ver datas no corpo do documento (registro historico).
+
+## Estado atual
+
+Ver secoes do corpo acima (estado registrado na epoca).
+
+## Pendencias
+
+Ver itens listados no corpo acima.

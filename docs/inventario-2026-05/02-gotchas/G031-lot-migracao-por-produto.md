@@ -1,4 +1,26 @@
+<!-- doc:meta
+tipo: reference
+camada: L3
+sot_de: —
+hub: docs/inventario-2026-05/02-gotchas/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # G031 — `stock.lot` é POR PRODUTO; `LOTES_MIGRACAO_POR_COMPANY` NÃO é FK universal
+
+> **Papel:** G031 — `stock.lot` é POR PRODUTO; `LOTES_MIGRACAO_POR_COMPANY` NÃO é FK universal.
+
+## Indice
+
+- [Sintoma](#sintoma)
+- [Causa raiz](#causa-raiz)
+  - [Por que dry-run passou?](#por-que-dry-run-passou)
+- [Solução](#solução)
+  - [Constants documentadas](#constants-documentadas)
+- [Onde está codificada a invariante](#onde-está-codificada-a-invariante)
+- [Rollback do incidente 2026-05-24 v4](#rollback-do-incidente-2026-05-24-v4)
+- [Outros lugares que podem ter mesma falha (auditar)](#outros-lugares-que-podem-ter-mesma-falha-auditar)
+- [Ref](#ref)
 
 **Descoberta**: 2026-05-24 v4 (Skill 2 modo C `transferir_para_indisponivel` 1ª execução PROD)
 **Severidade**: HIGH (incidente real — 4.319,4019 un saíram de FB/Estoque sem chegar em FB/Indisp; rollback em ~10s)

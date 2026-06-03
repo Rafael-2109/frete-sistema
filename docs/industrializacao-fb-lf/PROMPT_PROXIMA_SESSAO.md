@@ -1,3 +1,11 @@
+<!-- doc:meta
+tipo: scratch
+camada: L3
+sot_de: —
+hub: docs/industrializacao-fb-lf/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # PROMPT — Próxima sessão (Industrialização FB↔LF)
 
 > **Atualizado 2026-06-02 (fim da 7ª sessão — grounding do FLUXO 2-NF nas 3 esferas; 3 gaps de execução mapeados; decisão fiscal ÚNICA segue pendente).**

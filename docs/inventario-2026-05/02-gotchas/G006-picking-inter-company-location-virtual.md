@@ -1,4 +1,14 @@
+<!-- doc:meta
+tipo: reference
+camada: L3
+sot_de: —
+hub: docs/inventario-2026-05/02-gotchas/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # G006 — Picking inter-company exige location virtual destino
+
+> **Papel:** G006 — Picking inter-company exige location virtual destino.
 
 **Descoberta**: 2026-05-18 sub-piloto bulk 10 produtos
 **Severidade**: HIGH (bloqueia validacao do picking)

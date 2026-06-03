@@ -1,4 +1,22 @@
+<!-- doc:meta
+tipo: explanation
+camada: L3
+sot_de: —
+hub: docs/inventario-2026-05/00-decisoes/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # D004 — Renomear lote + transferir apenas a diferença líquida
+
+> **Papel:** D004 — Renomear lote + transferir apenas a diferença líquida.
+
+## Indice
+
+- [Contexto](#contexto)
+- [Decisao](#decisao)
+- [Exemplo aplicado: 210030325 LF](#exemplo-aplicado-210030325-lf)
+- [Generalizacao 2026-05-18 (apos piloto OK)](#generalizacao-2026-05-18-apos-piloto-ok)
+- [Impacto no codigo](#impacto-no-codigo)
 
 **Data**: 2026-05-17
 **Status**:

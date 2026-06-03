@@ -1,4 +1,34 @@
+<!-- doc:meta
+tipo: explanation
+camada: L3
+sot_de: —
+hub: docs/blueprint-agente/critica/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Crítica Arquitetural — Eixo E (Observabilidade de Qualidade)
+
+> **Papel:** Crítica Arquitetural — Eixo E (Observabilidade de Qualidade).
+
+## Indice
+
+- [Resumo do veredito](#resumo-do-veredito)
+- [1. COERÊNCIA](#1-coerência)
+  - [1.1 Encaixe nas 5 camadas: correto, com uma imprecisão na camada 5](#11-encaixe-nas-5-camadas-correto-com-uma-imprecisão-na-camada-5)
+  - [1.2 Respeito às invariantes existentes](#12-respeito-às-invariantes-existentes)
+  - [1.3 A fusão (§2.6 / E4) é coerente mas o acoplamento com o Eixo A é subespecificado](#13-a-fusão-26-e4-é-coerente-mas-o-acoplamento-com-o-eixo-a-é-subespecificado)
+- [2. REAPROVEITAMENTO](#2-reaproveitamento)
+  - [Peças existentes NÃO aproveitadas (que deveriam):](#peças-existentes-não-aproveitadas-que-deveriam)
+- [3. REALIZABILIDADE](#3-realizabilidade)
+  - [Fase E0 — NÃO entrega valor com a chave proposta (precisa de pré-fase)](#fase-e0-não-entrega-valor-com-a-chave-proposta-precisa-de-pré-fase)
+  - [Fase E1/E2/E3 — realizáveis, rollback OK](#fase-e1e2e3-realizáveis-rollback-ok)
+  - [Fase E4 — acoplamento com Eixo A bem-sinalizado, mas a interface é vaga](#fase-e4-acoplamento-com-eixo-a-bem-sinalizado-mas-a-interface-é-vaga)
+- [4. LACUNAS (o que o blueprint NÃO considerou)](#4-lacunas-o-que-o-blueprint-não-considerou)
+- [5. AMBIÇÃO — o alvo ficou TÍMIDO para ESTE sistema](#5-ambição-o-alvo-ficou-tímido-para-este-sistema)
+  - [Elevação concreta (1, executável, reusa o existente):](#elevação-concreta-1-executável-reusa-o-existente)
+- [Retorno](#retorno)
+- [Fontes](#fontes)
+- [Contexto](#contexto)
 
 > Revisor: arquiteto sênior cético. Lente de TETO (NUNCA critico por volume/over-engineering).
 > Veredito, lacuna principal e elevação de ambição no final.
@@ -259,3 +289,7 @@ invisível num score agregado de turno.
 - [AgentPRM: Process Reward Models for LLM Agents — WWW 2026](https://dl.acm.org/doi/10.1145/3774904.3792551)
 - [STeCa: Step-level Trajectory Calibration — arXiv 2502.14276](https://arxiv.org/pdf/2502.14276)
 - [Verified Critical Step Optimization for LLM Agents — arXiv 2602.03412](https://arxiv.org/abs/2602.03412)
+
+## Contexto
+
+Critica de eixo do blueprint — evolucao do agente logistico. Tema: Crítica Arquitetural — Eixo E (Observabilidade de Qualidade)

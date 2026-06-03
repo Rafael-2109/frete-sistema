@@ -17,7 +17,7 @@ atualizado: 2026-06-02
 - `docs/industrializacao-fb-lf/README.md` — remessa de industrializacao (indice no proprio README)
 
 ## Agente (blueprint)
-- `docs/blueprint-agente/BLUEPRINT_MESTRE.md` — eixos A-F + criticas (sub-docs em eixos/ e critica/)
+- `docs/blueprint-agente/INDEX.md` — indice do blueprint do agente (BLUEPRINT_MESTRE, eixos A-G, criticas)
 
 ## Modulos
 - `docs/pallet/MAPEAMENTO_TELAS_PALLET.md` — pallet: mapeamento de telas

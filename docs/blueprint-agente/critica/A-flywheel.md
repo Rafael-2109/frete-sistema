@@ -1,4 +1,27 @@
+<!-- doc:meta
+tipo: explanation
+camada: L3
+sot_de: —
+hub: docs/blueprint-agente/critica/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # CRÍTICA ARQUITETURAL — Eixo A (Flywheel de Aprendizado)
+
+> **Papel:** CRÍTICA ARQUITETURAL — Eixo A (Flywheel de Aprendizado).
+
+## Indice
+
+- [0. Verificação das alegações (fiz auditoria linha-a-linha antes de criticar)](#0-verificação-das-alegações-fiz-auditoria-linha-a-linha-antes-de-criticar)
+- [1. COERÊNCIA — o alvo é internamente consistente e respeita invariantes?](#1-coerência-o-alvo-é-internamente-consistente-e-respeita-invariantes)
+- [2. REAPROVEITAMENTO — reusa de fato, ou reinventa? Peças não aproveitadas](#2-reaproveitamento-reusa-de-fato-ou-reinventa-peças-não-aproveitadas)
+- [3. REALIZABILIDADE — cada fase entrega valor com rollback? Acoplamento perigoso?](#3-realizabilidade-cada-fase-entrega-valor-com-rollback-acoplamento-perigoso)
+- [4. LACUNAS — o que o blueprint NÃO considerou](#4-lacunas-o-que-o-blueprint-não-considerou)
+- [5. AMBIÇÃO — é o TETO, ou ficou tímido?](#5-ambição-é-o-teto-ou-ficou-tímido)
+  - [ELEVAÇÃO DE AMBIÇÃO CONCRETA — `attribution_judge` (passo-nível), não só `quality_signal` (turn-nível)](#elevação-de-ambição-concreta-attribution_judge-passo-nível-não-só-quality_signal-turn-nível)
+- [VEREDITO](#veredito)
+  - [Fontes externas](#fontes-externas)
+- [Contexto](#contexto)
 
 > Revisor: arquiteto sênior cético. Lente de TETO (NUNCA por volume/over-engineering).
 > Veredito de uma linha: **SÓLIDO no diagnóstico, AJUSTAR no alvo — o teto ficou um andar abaixo
@@ -246,3 +269,7 @@ serve sinal CAUSAL aos eixos B (planejador) e F (governança).
 - [Stanford — survey de 47 métodos de credit assignment (arXiv 2604.09459)](https://arxiv.org/html/2604.09459v1)
 - [AgenTracer — who is inducing failure in LLM agentic systems](https://arxiv.org/pdf/2509.03312)
 - [Agent-in-the-Loop: data flywheel for LLM customer support (arXiv 2510.06674)](https://arxiv.org/html/2510.06674v1)
+
+## Contexto
+
+Critica de eixo do blueprint — evolucao do agente logistico. Tema: CRÍTICA ARQUITETURAL — Eixo A (Flywheel de Aprendizado)

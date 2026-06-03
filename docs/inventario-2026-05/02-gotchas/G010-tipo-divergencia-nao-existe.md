@@ -1,4 +1,14 @@
+<!-- doc:meta
+tipo: reference
+camada: L3
+sot_de: —
+hub: docs/inventario-2026-05/02-gotchas/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # G010 — AjusteEstoqueInventario nao tem campo `tipo_divergencia`
+
+> **Papel:** G010 — AjusteEstoqueInventario nao tem campo `tipo_divergencia`.
 
 **Descoberta**: 2026-05-18 sub-piloto bulk 10 produtos (re-execucao apos checkpoint)
 **Severidade**: HIGH (bloqueia criacao de ajustes compensatorios — cascateia para F5a_FALHA em todo o chunk)

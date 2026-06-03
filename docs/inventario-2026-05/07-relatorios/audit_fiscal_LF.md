@@ -1,3 +1,11 @@
+<!-- doc:meta
+tipo: scratch
+camada: L3
+sot_de: —
+hub: docs/inventario-2026-05/07-relatorios/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Audit Fiscal — Onda 1 LF (Inventario 2026-05)
 
 **Gerado**: 2026-05-18 (sessao pos root cause NF 626032)

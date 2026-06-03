@@ -1,4 +1,28 @@
+<!-- doc:meta
+tipo: reference
+camada: L3
+sot_de: —
+hub: docs/inventario-2026-05/00-decisoes/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # D011 — Locais `Indisponivel` por empresa para ajustes de inventário
+
+> **Papel:** D011 — Locais `Indisponivel` por empresa para ajustes de inventário.
+
+## Indice
+
+- [Contexto](#contexto)
+- [Estrutura criada (Odoo)](#estrutura-criada-odoo)
+  - [Por que ficam fora das regras](#por-que-ficam-fora-das-regras)
+- [Regra (INVIOLÁVEL — a partir de 2026-05-19)](#regra-inviolável-a-partir-de-2026-05-19)
+  - [Ajuste **negativo** (perda de estoque detectada no inventário)](#ajuste-negativo-perda-de-estoque-detectada-no-inventário)
+  - [Ajuste **positivo** (excesso de estoque detectado no inventário)](#ajuste-positivo-excesso-de-estoque-detectado-no-inventário)
+  - [Quem se aplica](#quem-se-aplica)
+- [Impacto nas decisões anteriores](#impacto-nas-decisões-anteriores)
+- [Implementação técnica (template)](#implementação-técnica-template)
+- [Como aplicar (operacional)](#como-aplicar-operacional)
+- [Referências cruzadas](#referências-cruzadas)
 
 **Data**: 2026-05-19
 **Status**: VIGENTE — SOT para qualquer novo script de ajuste de inventário (CD e FB) a partir desta data

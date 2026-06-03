@@ -1,4 +1,24 @@
+<!-- doc:meta
+tipo: reference
+camada: L3
+sot_de: —
+hub: docs/inventario-2026-05/02-gotchas/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # G036 — Lote com vírgula é literal real + lotes duplicados quebram operador `=`
+
+> **Papel:** G036 — Lote com vírgula é literal real + lotes duplicados quebram operador `=`.
+
+## Indice
+
+- [Sintoma](#sintoma)
+- [Causa raiz](#causa-raiz)
+- [Fix aplicado](#fix-aplicado)
+- [Como aplicar profilaticamente](#como-aplicar-profilaticamente)
+- [Variante correlata — lote de MESMO conceito com NOMES diferentes (`MIGRAÇÃO`/`MIGRACAO`)](#variante-correlata-lote-de-mesmo-conceito-com-nomes-diferentes-migraçãomigracao)
+- [Why](#why)
+- [Referências](#referências)
 
 **Severidade**: HIGH
 **Status**: ✅ IDENTIFICADO + FIX APLICADO (2026-05-20)

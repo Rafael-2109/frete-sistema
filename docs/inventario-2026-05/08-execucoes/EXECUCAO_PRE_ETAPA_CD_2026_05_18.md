@@ -1,3 +1,11 @@
+<!-- doc:meta
+tipo: scratch
+camada: L3
+sot_de: —
+hub: docs/inventario-2026-05/08-execucoes/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Execução Pré-etapa CD (Onda 5 D007) — 2026-05-18
 
 **Sessão paralela** Claude Code · Cd=4 (CD/Estoque) · Onda 5

@@ -1,4 +1,29 @@
+<!-- doc:meta
+tipo: reference
+camada: L3
+sot_de: —
+hub: docs/inventario-2026-05/02-gotchas/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # G-MO-05 — `medir_consumo_mo` indistinto por `state` inflava FURO_CONTABIL em MOs com apenas RESERVA FANTASMA
+
+> **Papel:** G-MO-05 — `medir_consumo_mo` indistinto por `state` inflava FURO_CONTABIL em MOs com apenas RESERVA FANTASMA.
+
+## Indice
+
+- [Sintoma](#sintoma)
+- [Causa raiz](#causa-raiz)
+- [Solução (v6 — 2026-05-27)](#solução-v6-2026-05-27)
+  - [Particionamento de states](#particionamento-de-states)
+  - [Nova assinatura](#nova-assinatura)
+  - [Guard refinado](#guard-refinado)
+  - [Novos status canônicos](#novos-status-canônicos)
+  - [Modos READ acessórios (§6.b)](#modos-read-acessórios-6b)
+- [Onde está codificada a invariante](#onde-está-codificada-a-invariante)
+- [Caso real (origem)](#caso-real-origem)
+- [Outros lugares que podem ter mesma falha (auditar)](#outros-lugares-que-podem-ter-mesma-falha-auditar)
+- [Ref](#ref)
 
 **Severidade**: MEDIUM (false-positive bloqueava cancelamento legítimo; nenhum dano físico — apenas forçava operador a criar script ad-hoc para bypass do guard)
 **Status**: ✅ CORRIGIDO em `app/odoo/estoque/scripts/mo.py` v6 (2026-05-27 — sessão Claude Code 27/05) — `medir_consumo_mo` retorna dict particionado `{done, reservado, total}`; guard G-MO-01 distingue FURO REAL (`done > TOL`) de RESERVA FANTASMA (`reservado > TOL` e `done = 0`).

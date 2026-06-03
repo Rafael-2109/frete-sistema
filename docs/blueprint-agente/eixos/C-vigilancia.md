@@ -2,7 +2,7 @@
 tipo: explanation
 camada: L3
 sot_de: eixo C do blueprint — vigilancia proativa e memoria temporal
-hub: docs/blueprint-agente/RECONCILIACAO_MEMORIA.md
+hub: docs/blueprint-agente/eixos/INDEX.md
 superseded_by: —
 atualizado: 2026-06-02
 -->

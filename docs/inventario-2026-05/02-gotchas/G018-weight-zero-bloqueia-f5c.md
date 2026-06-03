@@ -1,4 +1,25 @@
+<!-- doc:meta
+tipo: reference
+camada: L3
+sot_de: —
+hub: docs/inventario-2026-05/02-gotchas/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # G018 — weight=0 no produto bloqueia F5c liberar_faturamento
+
+> **Papel:** G018 — weight=0 no produto bloqueia F5c liberar_faturamento.
+
+## Indice
+
+- [Sintoma](#sintoma)
+- [Causa raiz](#causa-raiz)
+- [Caso real (sub-piloto sessao 2)](#caso-real-sub-piloto-sessao-2)
+- [Solucao IMPLEMENTADA](#solucao-implementada)
+- [Por que nao usar G015 (price_unit=0) approach?](#por-que-nao-usar-g015-price_unit0-approach)
+- [Trade-off fiscal](#trade-off-fiscal)
+- [Comparacao com gotchas relacionados](#comparacao-com-gotchas-relacionados)
+- [Ref](#ref)
 
 **Descoberta**: 2026-05-18 sessao 2 manha (audit fiscal LF 455 produtos)
 **Severidade**: HIGH (bloqueia F5c para 109 produtos da onda 1 LF)

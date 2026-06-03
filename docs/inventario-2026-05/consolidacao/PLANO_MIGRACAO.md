@@ -1,4 +1,25 @@
+<!-- doc:meta
+tipo: how-to
+camada: L3
+sot_de: —
+hub: docs/inventario-2026-05/consolidacao/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # PLANO DE MIGRAÇÃO — `app/odoo/estoque/` (gold-utils · gold-scripts · gold-orchestrators)
+
+> **Papel:** PLANO DE MIGRAÇÃO — `app/odoo/estoque/` (gold-utils · gold-scripts · gold-orchestrators).
+
+## Indice
+
+- [1. Estrutura-alvo](#1-estrutura-alvo)
+- [2. Gatilhos de substituição (por SITUAÇÃO do arquivo)](#2-gatilhos-de-substituição-por-situação-do-arquivo)
+- [3. gold-utils](#3-gold-utils)
+- [4. gold-scripts (mover `app/odoo/services/` → `app/odoo/estoque/scripts/`)](#4-gold-scripts-mover-appodooservices-appodooestoquescripts)
+- [5. gold-orchestrators](#5-gold-orchestrators)
+- [6. scripts/inventario_2026_05/ (~90) — destino por categoria](#6-scriptsinventario_2026_05-90-destino-por-categoria)
+- [7. Estratégia de shims (preservar operação ativa)](#7-estratégia-de-shims-preservar-operação-ativa)
+- [8. Ordem de execução (bottom-up — não inverter)](#8-ordem-de-execução-bottom-up-não-inverter)
 
 > **NOTA (Onda 2 PAD-A):** "gold-utils/gold-scripts/gold-orchestrators" é vocabulário APOSENTADO — a nomenclatura vigente é services/primitivas (C1/C2) · orchestrators (C3), definida em `app/odoo/estoque/CLAUDE.md`. Este doc é mineração transitória válida; a consolidação real dos scripts é a Onda 3.
 

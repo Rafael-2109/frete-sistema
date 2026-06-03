@@ -1,4 +1,24 @@
+<!-- doc:meta
+tipo: reference
+camada: L3
+sot_de: —
+hub: docs/inventario-2026-05/02-gotchas/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # G028 — Over-reservation em action_assign após renomeação de lote
+
+> **Papel:** G028 — Over-reservation em action_assign após renomeação de lote.
+
+## Indice
+
+- [Sintoma](#sintoma)
+- [Causa raiz](#causa-raiz)
+- [Fix implementado](#fix-implementado)
+- [Padrão herdado de](#padrão-herdado-de)
+- [Resultado em batches LF (validação 2026-05-18)](#resultado-em-batches-lf-validação-2026-05-18)
+- [Refatoração paralela em `09_executar_onda1_bulk.py`](#refatoração-paralela-em-09_executar_onda1_bulkpy)
+- [Ref](#ref)
 
 **Descoberta**: 2026-05-18 sessao 3 tarde (batch 30 e 15 prods LF)
 **Severidade**: CRITICAL (bloqueava 70-100% dos pickings PERDA em batches LF)

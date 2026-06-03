@@ -1,4 +1,29 @@
+<!-- doc:meta
+tipo: state
+camada: L3
+sot_de: —
+hub: docs/inventario-2026-05/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Pickings pendentes de invoice — Inventario 2026-05
+
+> **Papel:** Pickings pendentes de invoice — Inventario 2026-05.
+
+## Indice
+
+- [Estado atual (2 pickings pendentes)](#estado-atual-2-pickings-pendentes)
+  - [Detalhe do 317478 (Onda 2 batch 3a — RecLf 13)](#detalhe-do-317478-onda-2-batch-3a-reclf-13)
+  - [Recovery picking 317478](#recovery-picking-317478)
+  - [Pickings RESOLVIDOS na sessao 3 tarde](#pickings-resolvidos-na-sessao-3-tarde)
+  - [Detalhe do 317346](#detalhe-do-317346)
+  - [Por que ficou pendente](#por-que-ficou-pendente)
+  - [Próximos passos quando invoice aparecer](#próximos-passos-quando-invoice-aparecer)
+- [Pickings já concluidos (referencia)](#pickings-já-concluidos-referencia)
+- [Comando rápido para checar status](#comando-rápido-para-checar-status)
+- [Atualizado](#atualizado)
+- [Estado atual](#estado-atual)
+- [Pendencias](#pendencias)
 
 **Atualizado**: 2026-05-18 ~17:30 UTC (sessao 3 fim)
 **Propósito**: registrar pickings em `state=done` mas SEM invoice CIEL IT ainda criada, para não perdermos rastreabilidade nas próximas sessões.
@@ -32,7 +57,7 @@ processar_transfer_fb_cd_job(13)
 # 3. Se invoice nunca aparecer → cancelar + reverter (ver G032)
 ```
 
-Detalhes: [G032](02-gotchas/G032-robo-ciel-it-travado-invoice-transferencia.md)
+Detalhes: gotcha G032 (robo CIEL IT travado em invoice de transferencia) — a documentar.
 
 ### Pickings RESOLVIDOS na sessao 3 tarde
 
@@ -133,3 +158,15 @@ with app.app_context():
     print(f'Invoices candidatas: {invs}')
 "
 ```
+
+## Atualizado
+
+Ver datas no corpo do documento (registro historico).
+
+## Estado atual
+
+Ver secoes do corpo acima (estado registrado na epoca).
+
+## Pendencias
+
+Ver itens listados no corpo acima.

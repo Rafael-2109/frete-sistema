@@ -1,3 +1,11 @@
+<!-- doc:meta
+tipo: scratch
+camada: L3
+sot_de: —
+hub: docs/inventario-2026-05/01-premissas/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Padronização de lotes — INVENTARIO_2026_05
 
 **Criado**: 2026-05-18

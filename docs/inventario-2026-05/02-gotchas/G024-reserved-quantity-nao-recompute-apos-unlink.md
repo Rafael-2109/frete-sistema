@@ -1,4 +1,24 @@
+<!-- doc:meta
+tipo: reference
+camada: L3
+sot_de: —
+hub: docs/inventario-2026-05/02-gotchas/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # G024 — `stock.quant.reserved_quantity` NAO recompute apos `unlink` de move_line orfa
+
+> **Papel:** G024 — `stock.quant.reserved_quantity` NAO recompute apos `unlink` de move_line orfa.
+
+## Indice
+
+- [Sintoma](#sintoma)
+- [Causa raiz](#causa-raiz)
+- [Solucao implementada](#solucao-implementada)
+- [Como detectar](#como-detectar)
+- [Recomendacao](#recomendacao)
+- [Risco residual da solucao](#risco-residual-da-solucao)
+- [Referencias](#referencias)
 
 > **Renumerado 2026-05-18**: antes era G006. Renomeado para G024 porque o nome
 > original G006 ja era ocupado por `G006-picking-inter-company-location-virtual.md`

@@ -1,3 +1,11 @@
+<!-- doc:meta
+tipo: scratch
+camada: L3
+sot_de: —
+hub: docs/inventario-2026-05/08-execucoes/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Execução: Entrada manual LF da NF 627348 (PEPINO industrializacao)
 
 **Data**: 2026-05-18 08:39 UTC

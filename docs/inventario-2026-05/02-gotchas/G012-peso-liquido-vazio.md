@@ -1,4 +1,14 @@
+<!-- doc:meta
+tipo: reference
+camada: L3
+sot_de: —
+hub: docs/inventario-2026-05/02-gotchas/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # G012 — peso_liquido vazio em picking (consequencia de G011)
+
+> **Papel:** G012 — peso_liquido vazio em picking (consequencia de G011).
 
 **Descoberta**: 2026-05-18 sub-piloto bulk (apos G010 fix)
 **Severidade**: MED (bloqueia F5c action_liberar_faturamento)

@@ -1,4 +1,32 @@
+<!-- doc:meta
+tipo: explanation
+camada: L3
+sot_de: —
+hub: docs/blueprint-agente/critica/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # CRÍTICA ARQUITETURAL — Eixo B (de Roteador a Planejador)
+
+> **Papel:** CRÍTICA ARQUITETURAL — Eixo B (de Roteador a Planejador).
+
+## Indice
+
+- [VEREDITO: SÓLIDO — com 3 ajustes (1 correção factual que afeta a Fase B0, 2 lacunas)](#veredito-sólido-com-3-ajustes-1-correção-factual-que-afeta-a-fase-b0-2-lacunas)
+- [1. COERÊNCIA — boa, com UMA correção factual de fundação](#1-coerência-boa-com-uma-correção-factual-de-fundação)
+  - [1.a — ✅ Encaixe nas 5 camadas e invariantes](#1a-encaixe-nas-5-camadas-e-invariantes)
+  - [1.b — ❌ CORREÇÃO FACTUAL: `model_router` NÃO é o classificador de complexidade que o B0 supõe](#1b-correção-factual-model_router-não-é-o-classificador-de-complexidade-que-o-b0-supõe)
+- [2. REAPROVEITAMENTO — forte, mas 3 peças existentes não aproveitadas](#2-reaproveitamento-forte-mas-3-peças-existentes-não-aproveitadas)
+- [3. REALIZABILIDADE — boa, com 1 acoplamento perigoso e 1 risco de rollback](#3-realizabilidade-boa-com-1-acoplamento-perigoso-e-1-risco-de-rollback)
+- [4. LACUNAS — duas materiais](#4-lacunas-duas-materiais)
+  - [4.a — ⚠️ A MAIS IMPORTANTE: subagentes podem NÃO ser folhas — e ninguém verificou](#4a-a-mais-importante-subagentes-podem-não-ser-folhas-e-ninguém-verificou)
+  - [4.b — Aprovação humana do plano não funciona simetricamente nos 2 canais](#4b-aprovação-humana-do-plano-não-funciona-simetricamente-nos-2-canais)
+  - [4.c — Verificador adversarial NÃO cobre o erro que mais machuca a Nacom](#4c-verificador-adversarial-não-cobre-o-erro-que-mais-machuca-a-nacom)
+- [5. AMBIÇÃO — o alvo é o teto certo na FORMA, tímido no SUBSTRATO. Uma elevação concreta:](#5-ambição-o-alvo-é-o-teto-certo-na-forma-tímido-no-substrato-uma-elevação-concreta)
+  - [ELEVAÇÃO CONCRETA: o plano e o verifier devem ser TIPADOS PELA ONTOLOGIA LOGÍSTICA, não por `kind` genérico](#elevação-concreta-o-plano-e-o-verifier-devem-ser-tipados-pela-ontologia-logística-não-por-kind-genérico)
+- [Correção do "primeiro passo de maior alavancagem"](#correção-do-primeiro-passo-de-maior-alavancagem)
+- [Resumo executivo](#resumo-executivo)
+- [Contexto](#contexto)
 
 > Revisor: arquiteto senior cético. Lente de TETO (NÃO critico por volume/over-engineering).
 > Verifiquei cada evidência citada contra o código real. READ-ONLY.
@@ -236,3 +264,7 @@ ligar um gate e torcer pela calibração.
   codificados), não por `kind` genérico. Isso transforma o gate de "linter de forma" em "verificador
   com modelo de mundo Nacom", produz o audit trail que operações irreversíveis exigem, e cria o
   artefato (plano tipado) que o Eixo A precisa para promover heurística→diretriz.
+
+## Contexto
+
+Critica de eixo do blueprint — evolucao do agente logistico. Tema: CRÍTICA ARQUITETURAL — Eixo B (de Roteador a Planejador)

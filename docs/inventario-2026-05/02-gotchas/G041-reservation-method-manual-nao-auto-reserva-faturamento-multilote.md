@@ -1,4 +1,14 @@
+<!-- doc:meta
+tipo: reference
+camada: L3
+sot_de: —
+hub: docs/inventario-2026-05/02-gotchas/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # G041 — `picking_type.reservation_method='manual'` faz `action_assign` reservar ZERO → faturamento multi-lote falha não-deterministicamente
+
+> **Papel:** G041 — `picking_type.reservation_method='manual'` faz `action_assign` reservar ZERO → faturamento multi-lote falha não-deterministicamente.
 
 **Severidade**: HIGH (bloqueia `button_validate` da SAÍDA inter-company → trava faturamento SEFAZ de produto com 2+ lotes na origem)
 **Status**: 🟡 WORKAROUND validado em PROD (cirurgia: criar `stock.move.line` com `lot_id`). **Fix de código PENDENTE — needs-canary** (não implementar "no escuro" no caminho SEFAZ).
