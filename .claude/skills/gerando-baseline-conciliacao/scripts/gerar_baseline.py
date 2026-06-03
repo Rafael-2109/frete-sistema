@@ -288,7 +288,7 @@ def query_conciliacoes_d1(odoo_conn, data_ref):
     return dict(per_user)
 
 
-def montar_excel(agg, pendentes, d1, _journal_map, data_ref, output_path):
+def montar_excel(agg, pendentes, d1, _journal_map, data_ref, output_path, ordem_meses=None):
     """Monta Excel com 4 abas canonicas."""
     from openpyxl import Workbook
     from openpyxl.styles import Font, PatternFill
@@ -425,8 +425,15 @@ def montar_excel(agg, pendentes, d1, _journal_map, data_ref, output_path):
 
     total_pgtos = 0
     total_recebs = 0
-    # Aba 4 (Resumo): mesma regra cronologica da Aba 1.
-    for mes in sorted(pivot.keys(), key=_mes_ano_sort_key):
+    # Aba 4 (Resumo): ordem personalizada se fornecida, caso contrario cronologica.
+    # ordem_meses = lista de strings 'MM/YYYY' na sequencia desejada pelo usuario.
+    # Meses presentes nos dados mas nao na lista de ordem sao ignorados (comportamento
+    # esperado quando o usuario filtra um subconjunto de meses).
+    if ordem_meses:
+        meses_a_exibir = [m for m in ordem_meses if m in pivot]
+    else:
+        meses_a_exibir = sorted(pivot.keys(), key=_mes_ano_sort_key)
+    for mes in meses_a_exibir:
         # Subtotal do mes (verde claro)
         tot_mes_p = sum(j['pgtos'] for j in pivot[mes].values())
         tot_mes_r = sum(j['recebs'] for j in pivot[mes].values())
@@ -468,10 +475,19 @@ def main():
     parser = argparse.ArgumentParser(description='Gerar baseline canonico de extratos pendentes')
     parser.add_argument('--output-dir', default='/tmp', help='Diretorio de saida')
     parser.add_argument('--data-referencia', default=None, help='Data ref ISO (default hoje)')
+    parser.add_argument(
+        '--ordem-meses', default=None,
+        help=(
+            'Ordem personalizada de meses para aba Resumo, separados por virgula. '
+            'Formato: MM/YYYY,MM/YYYY,... (ex: 12/2025,01/2026,02/2026,11/2025,03/2026). '
+            'Se omitido, usa ordem cronologica padrao.'
+        ),
+    )
     args = parser.parse_args()
 
     data_ref = datetime.fromisoformat(args.data_referencia).date() if args.data_referencia else date.today()
     output_file = os.path.join(args.output_dir, f'extratos_pendentes_mes_journal_{_fmt_data_ref(data_ref)}.xlsx')
+    ordem_meses = [m.strip() for m in args.ordem_meses.split(',')] if args.ordem_meses else None
 
     print(f'[{datetime.now().isoformat(timespec="seconds")}] Gerando baseline data_ref={data_ref.isoformat()} -> {output_file}')
 
@@ -497,7 +513,10 @@ def main():
         # Pivot e derivado dentro do montar_excel
 
         print('[4/4] Montando Excel...')
-        result = montar_excel(agg, pendentes, d1, journal_map, data_ref, output_file)
+        if ordem_meses:
+            print(f'       Aba Resumo: ordem personalizada = {ordem_meses}')
+        result = montar_excel(agg, pendentes, d1, journal_map, data_ref, output_file,
+                              ordem_meses=ordem_meses)
 
     print()
     print(f'[OK] Baseline gerado: {output_file}')
