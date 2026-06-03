@@ -375,6 +375,22 @@
             <option value="INCLUSO" {% if venda.tipo_frete_calc == 'INCLUSO' %}selected{% endif %}>Valor frete incluso</option>
           </select>
         </div>
+        {# Parcelamento (editavel em COTACAO/CONFIRMADO; disabled em FATURADO/CANCELADO).
+           Rota vendas_editar le numero_parcelas/intervalo_parcelas_dias. #}
+        <div class="col-md-3">
+          <label class="form-label">Nº de parcelas</label>
+          <input type="number" name="numero_parcelas" min="1" max="60" class="form-control"
+                 value="{{ venda.numero_parcelas or 1 }}" {% if ro_oper %}disabled{% endif %}>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">Intervalo (dias)</label>
+          <input type="number" name="intervalo_parcelas_dias" id="f-intervalo" min="1" max="90" class="form-control"
+                 value="{{ venda.intervalo_parcelas_dias or 30 }}" {% if ro_oper %}disabled{% endif %}>
+          <small class="text-muted d-block">30 = mensal · 7 = semanal.</small>
+          <div id="f-intervalo-aviso" class="alert alert-warning mt-1 py-1 px-2 small" style="display:none;">
+            <i class="fas fa-exclamation-triangle"></i> Intervalo &lt; 7 dias — confirme se é mesmo isso.
+          </div>
+        </div>
         <div class="col-12">
           <label class="form-label">Observações</label>
           <textarea name="observacoes" class="form-control" rows="2" maxlength="500" {% if is_cancelado %}readonly{% endif %}>{{ venda.observacoes or '' }}</textarea>

@@ -717,6 +717,20 @@
     wireDescontoSync(root, isNaN(preco) ? null : preco);
   });
 
+  // ----------------- Parcelamento: aviso de intervalo atipico (<7 dias) ---
+  (function() {
+    const elInt = document.getElementById('f-intervalo');
+    const avisoInt = document.getElementById('f-intervalo-aviso');
+    if (!elInt || !avisoInt) return;
+    function checkIntervalo() {
+      const v = parseInt(elInt.value || '0', 10);
+      avisoInt.style.display = (v > 0 && v < 7) ? '' : 'none';
+    }
+    elInt.addEventListener('input', checkIntervalo);
+    elInt.addEventListener('change', checkIntervalo);
+    checkIntervalo();
+  })();
+
   // ----------------- Frente B: Enter = "Proximo" -------------------------
   // Nas telas de pedido (novo + edicao — este script so carrega nelas), Enter
   // num campo de texto/numero/select AVANCA para o proximo campo focavel do
