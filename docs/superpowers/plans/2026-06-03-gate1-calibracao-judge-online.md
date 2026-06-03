@@ -152,14 +152,18 @@ class TestVerifyArithmeticParser:
 
 ## Task 3
 
-**Investigar + reconciliar judge↔adversarial (discordância 63%).** Files: Modify `app/agente/workers/plan_verifier.py`; Test `tests/agente/workers/test_plan_verifier.py`.
+**Investigar judge↔adversarial (discordância 63%) — ✅ RECON CONCLUÍDO 2026-06-03.**
 
-- [ ] **Step 0a (recon PROD):** query — dos 127/201 divergentes, quantos têm `adversarial.ok=false` cujo texto conclui "sem problema" (mesmo bug do arithmetic) vs divergência REAL de critério (judge=intenção vs adversarial=faithfulness).
-- [ ] **Step 0b (recon código):** ler `verify_plan_adversarial` (:132) + `ADVERSARIAL_SYSTEM_PROMPT` (:32) + `_call_haiku_verifier` (:45) — confirmar se o parser tem a mesma fragilidade do arithmetic.
-- [ ] **Step 1 (decidir pelo recon):** (A) se bug de parser → mesmo fix por-marcador (TDD espelhando Task 2). (B) se divergência de critério → documentar como dimensões distintas + regra de combinação no `outcome_signal` (`verify.reconciled`).
-- [ ] **Step final:** TDD + commit `fix(verify): reconcilia judge x adversarial (parser e/ou regra de combinacao)`.
+**Resultado do recon (PROD, 201 steps com judge+adversarial):**
+- O adversarial usa o campo `refuted` (não `ok`); parser = JSON robusto (`_parse_adversarial_json`) — **NÃO é a mesma classe de bug do arithmetic.**
+- 127/201 (63%) `refuted=true`. Distribuição vs `judge.label`: 51 refuta `failure` (concordam: ruim), **39 refuta `success`** (discorda do judge), 41 aceita `failure`.
+- **Amostra dos 39 `reason` (refuta success) = SUBSTANTIVOS, não viés genérico**: "agente disse 'agora exporto' mas não confirmou salvamento real"; "judge deu 92 só pela saída do Bash, sem verificar se os 25 são realmente 'sem match'"; "Bash não valida operações Odoo, score alto por interpretação vaga ('certo')".
 
-**DoD:** discordância "artificial" (parser) eliminada; divergência de critério remanescente documentada/combinada.
+**Decisão (registrada — anti-drift):** a discordância **é SINAL, não ruído**. O adversarial aponta um **viés de CREDULIDADE do judge** (dá `success` quando tools rodam, sem exigir evidência de que a conclusão foi validada/persistida) — alinhado ao eixo E §2.4 (judge deve medir *correctness vs intenção*, não só faithfulness). **NÃO mexer no `JUDGE_SYSTEM_PROMPT` agora** (mudar o prompt do judge sem veredito humano = especular, pode piorar). A reconciliação se materializa na **Task 4**: o sampler de calibração **prioriza** para spot-check humano os casos `judge=success ∧ adversarial.refuted=true` (maior valor de calibração — onde os dois sinais disputam). O humano decide; o resultado (concordance + few-shot, eixo E §2.5) é que informará um eventual re-prompt do judge (frente futura O2/E4).
+
+**Sem mudança de código de produção nesta task** (decisão = não especular). Materializa-se na Task 4.
+
+**DoD:** achado + decisão documentados (aqui + EXECUCAO.md); priorização incorporada na Task 4.
 
 ## Task 4
 
@@ -168,7 +172,7 @@ class TestVerifyArithmeticParser:
 **Decisão de design:** reusar `AgentEvalCase` (genérica) como store dos casos a rotular, populada a partir dos STEPS julgados pelo online judge. Mapeamento: `case_id=step_uid`, `case_score=judge_score/100`, `evidence=judge_reason`, campos eval-offline (`n_runs`/`variance`/`invoke_failures`) com default. `sample_unreviewed`/`concordance_rate` (genéricos) funcionam sem mudança.
 
 - [ ] **Step 0 (recon):** confirmar estrutura de `outcome_signal['judge']` (`step_judge.py:_judge_core` + 2-3 linhas PROD).
-- [ ] **Step 1 (TDD):** `populate_calibration_cases(window_hours, cap)` — varre `agent_step` com judge presente, sem caso correspondente em `agent_eval_case` (dedup por `case_id=step_uid`), insere via `insert_case`. Flag `AGENT_EVAL_CALIBRATION`. Best-effort (INV-6).
+- [ ] **Step 1 (TDD):** `populate_calibration_cases(window_hours, cap)` — varre `agent_step` com judge presente, sem caso correspondente em `agent_eval_case` (dedup por `case_id=step_uid`), insere via `insert_case`. Flag `AGENT_EVAL_CALIBRATION`. Best-effort (INV-6). **PRIORIZAÇÃO (materializa a Task 3):** ordenar/selecionar primeiro os steps `judge.label='success' ∧ verify.adversarial.refuted=true` (discordância de alto valor) e os de `frustration_score` alto — são os casos onde a rotulagem humana mais calibra o judge. Gravar a razão da prioridade em `evidence` (ex: incluir o `adversarial.reason`).
 - [ ] **Step 2:** implementar (espelha `enqueue_pending_judges` `step_judge.py:310+`).
 - [ ] **Step 3:** wirar módulo D8 (espelha módulos 29/30/31; por-ciclo; report-only; try/except).
 - [ ] **Step 4:** testes verdes + commit `feat(e3): sampler de calibracao popula agent_eval_case do online judge`.
