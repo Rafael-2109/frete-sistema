@@ -1,4 +1,43 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/skills/gerindo-expedicao/SKILL.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # Testes de Validacao - Skill gerindo-expedicao
+
+> **Papel:** Testes de Validacao - Skill gerindo-expedicao.
+
+## Indice
+
+- [Categoria 1: Resolucao de Entidade (4 testes)](#categoria-1-resolucao-de-entidade-4-testes)
+  - [Teste 1.1: Grupo Empresarial Direto](#teste-11-grupo-empresarial-direto)
+  - [Teste 1.2: Grupo + Produto + Loja](#teste-12-grupo-produto-loja)
+  - [Teste 1.3: CNPJ Parcial](#teste-13-cnpj-parcial)
+  - [Teste 1.4: Abreviacao de Produto](#teste-14-abreviacao-de-produto)
+- [Categoria 2: Escolha de Script (4 testes)](#categoria-2-escolha-de-script-4-testes)
+  - [Teste 2.1: Produto + Cliente (NAO usar estoque)](#teste-21-produto-cliente-nao-usar-estoque)
+  - [Teste 2.2: Disponibilidade vs Prazo](#teste-22-disponibilidade-vs-prazo)
+  - [Teste 2.3: Estoque Puro (sem cliente)](#teste-23-estoque-puro-sem-cliente)
+  - [Teste 2.4: Termo "Chegou?" = --entradas](#teste-24-termo-chegou---entradas)
+- [Categoria 3: Uso de Contexto (3 testes)](#categoria-3-uso-de-contexto-3-testes)
+  - [Teste 3.1: Jargao "matar"](#teste-31-jargao-matar)
+  - [Teste 3.2: Termo Ambiguo (DEVE perguntar)](#teste-32-termo-ambiguo-deve-perguntar)
+  - [Teste 3.3: Cliente Estrategico](#teste-33-cliente-estrategico)
+- [Categoria 4: Acoes Criticas (2 testes)](#categoria-4-acoes-criticas-2-testes)
+  - [Teste 4.1: Simulacao Obrigatoria](#teste-41-simulacao-obrigatoria)
+  - [Teste 4.2: Campo Obrigatorio Faltando](#teste-42-campo-obrigatorio-faltando)
+- [Categoria 5: Analise Complexa (2 testes)](#categoria-5-analise-complexa-2-testes)
+  - [Teste 5.1: Ranking de Impacto](#teste-51-ranking-de-impacto)
+  - [Teste 5.2: Diagnostico de Causa](#teste-52-diagnostico-de-causa)
+- [Resumo dos Resultados](#resumo-dos-resultados)
+- [Resultado: 10/15 PASSOU (67%) + 5 A TESTAR](#resultado-1015-passou-67-5-a-testar)
+  - [Testes Confirmados (10/10 = 100%):](#testes-confirmados-1010-100)
+  - [Testes Pendentes (5):](#testes-pendentes-5)
+- [Verificacoes Criticas](#verificacoes-criticas)
+- [Comparacao: Pesquisa vs Agent SDK](#comparacao-pesquisa-vs-agent-sdk)
 
 Sequencia de 15 testes para validar qualidade das respostas do Agent SDK.
 

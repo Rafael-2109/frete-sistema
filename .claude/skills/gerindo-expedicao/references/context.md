@@ -1,4 +1,14 @@
+<!-- doc:meta
+tipo: reference
+camada: L2
+sot_de: —
+hub: .claude/skills/gerindo-expedicao/SKILL.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # Contexto Operacional - Nacom Goya
+
+> **Papel:** Contexto Operacional - Nacom Goya.
 
 Contexto da empresa, clientes e operacao para tomada de decisao.
 

@@ -1,4 +1,23 @@
+<!-- doc:meta
+tipo: reference
+camada: L2
+sot_de: —
+hub: .claude/skills/conciliando-transferencias-internas/SKILL.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # Codigo Operacional — Transferencias Internas
+
+> **Papel:** Codigo Operacional — Transferencias Internas.
+
+## Indice
+
+- [Helper: Preparar Extrato e Reconciliar](#helper-preparar-extrato-e-reconciliar)
+- [Situacao 1: Criar is_internal_transfer + Conciliar Ambos](#situacao-1-criar-is_internal_transfer-conciliar-ambos)
+- [Situacao 2: Encontrar Titulo e Conciliar Pagamento](#situacao-2-encontrar-titulo-e-conciliar-pagamento)
+- [Situacao 2b: Rastreamento de Cadeia Documental](#situacao-2b-rastreamento-de-cadeia-documental)
+  - [Execucao apos diagnostico](#execucao-apos-diagnostico)
+- [Levantamento em Lote](#levantamento-em-lote)
 
 Funcoes Python validadas em producao (30/03/2026). Usar como base para operacoes via XML-RPC.
 

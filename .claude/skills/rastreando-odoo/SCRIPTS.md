@@ -1,4 +1,30 @@
+<!-- doc:meta
+tipo: reference
+camada: L2
+sot_de: —
+hub: .claude/skills/rastreando-odoo/SKILL.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # Scripts — Rastreando Odoo (Detalhes)
+
+> **Papel:** Scripts — Rastreando Odoo (Detalhes).
+
+## Indice
+
+- [Ambiente Virtual](#ambiente-virtual)
+- [1. normalizar.py](#1-normalizarpy)
+- [2. rastrear.py](#2-rastrearpy)
+- [3. auditoria_faturas_compra.py](#3-auditoria_faturas_comprapy)
+- [4. auditoria_extrato_bancario.py](#4-auditoria_extrato_bancariopy)
+- [5. mapeamento_vinculos_completo.py](#5-mapeamento_vinculos_completopy)
+- [6. vincular_extrato_fatura_excel.py](#6-vincular_extrato_fatura_excelpy)
+- [Exemplos de Uso](#exemplos-de-uso)
+  - [Cenario 1: Rastrear NF de compra](#cenario-1-rastrear-nf-de-compra)
+  - [Cenario 2: Rastrear pedido de venda](#cenario-2-rastrear-pedido-de-venda)
+  - [Cenario 3: Auditoria faturas novembro](#cenario-3-auditoria-faturas-novembro)
+  - [Cenario 4: Extratos sem vinculo](#cenario-4-extratos-sem-vinculo)
+  - [Cenario 5: Vincular via planilha (dry-run)](#cenario-5-vincular-via-planilha-dry-run)
 
 Referencia detalhada de parametros, retornos e modos de operacao.
 

@@ -1,4 +1,34 @@
+<!-- doc:meta
+tipo: reference
+camada: L2
+sot_de: —
+hub: .claude/skills/lendo-documentos/SKILL.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # Formatos Bancarios — CNAB e OFX
+
+> **Papel:** Formatos Bancarios — CNAB e OFX.
+
+## Indice
+
+- [CNAB400 (Centro Nacional de Automacao Bancaria)](#cnab400-centro-nacional-de-automacao-bancaria)
+  - [Estrutura](#estrutura)
+  - [.rem vs .ret](#rem-vs-ret)
+  - [Layouts BMP 274 (retorno) — extraido pelo parser](#layouts-bmp-274-retorno-extraido-pelo-parser)
+  - [Codigos de Ocorrencia (tipo 1)](#codigos-de-ocorrencia-tipo-1)
+  - [Outros bancos](#outros-bancos)
+- [OFX (Open Financial Exchange)](#ofx-open-financial-exchange)
+  - [Formato](#formato)
+  - [Estrutura (resumida)](#estrutura-resumida)
+  - [Campos principais (dentro de `<STMTTRN>`)](#campos-principais-dentro-de-stmttrn)
+  - [Tipos de transacao (TRNTYPE)](#tipos-de-transacao-trntype)
+- [Fluxos tipicos de uso](#fluxos-tipicos-de-uso)
+  - [Conciliacao CNAB retorno → Odoo](#conciliacao-cnab-retorno-odoo)
+  - [Reconciliacao OFX (extrato) → Odoo](#reconciliacao-ofx-extrato-odoo)
+- [Limitacoes Conhecidas](#limitacoes-conhecidas)
+- [Referencias externas](#referencias-externas)
+- [Arquivos do projeto relacionados](#arquivos-do-projeto-relacionados)
 
 Referencia tecnica dos formatos que a skill `lendo-documentos` processa.
 

@@ -1,4 +1,35 @@
+<!-- doc:meta
+tipo: reference
+camada: L2
+sot_de: —
+hub: .claude/skills/operando-ssw/SKILL.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # Scripts — Operando SSW: CT-e (Detalhes)
+
+> **Papel:** Scripts — Operando SSW: CT-e (Detalhes).
+
+## Indice
+
+- [Ambiente Virtual](#ambiente-virtual)
+- [1. emitir_cte_004.py](#1-emitir_cte_004py)
+  - [Atualizacoes 2026-04-09](#atualizacoes-2026-04-09)
+- [2. consultar_ctrc_101.py](#2-consultar_ctrc_101py)
+- [3. cancelar_cte_004.py](#3-cancelar_cte_004py)
+- [4. gerar_fatura_ssw_437.py](#4-gerar_fatura_ssw_437py)
+- [5. emitir_cte_complementar_222.py](#5-emitir_cte_complementar_222py)
+  - [Pre-fase: auto-calculo do valor_outros](#pre-fase-auto-calculo-do-valor_outros)
+  - [Fluxo 11 fases](#fluxo-11-fases)
+  - [Retorno JSON](#retorno-json)
+  - [Gotchas criticos](#gotchas-criticos)
+- [Exemplos de Uso](#exemplos-de-uso)
+  - [Cenario 1: Emitir CT-e fracionado completo](#cenario-1-emitir-ct-e-fracionado-completo)
+  - [Cenario 2: Consultar CTRC por numero](#cenario-2-consultar-ctrc-por-numero)
+  - [Cenario 3: Consultar por NF e baixar DACTE + XML](#cenario-3-consultar-por-nf-e-baixar-dacte-xml)
+  - [Cenario 4: Cancelar CT-e dentro do prazo](#cenario-4-cancelar-ct-e-dentro-do-prazo)
+  - [Cenario 5: Emitir CT-e complementar com auto-calculo de valor](#cenario-5-emitir-ct-e-complementar-com-auto-calculo-de-valor)
+  - [Cenario 6: Emitir CT-e complementar com valor ja calculado](#cenario-6-emitir-ct-e-complementar-com-valor-ja-calculado)
 
 Referencia detalhada de parametros, retornos e modos de operacao para scripts CT-e.
 

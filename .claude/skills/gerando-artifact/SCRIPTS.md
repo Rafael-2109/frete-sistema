@@ -1,4 +1,14 @@
+<!-- doc:meta
+tipo: reference
+camada: L2
+sot_de: —
+hub: .claude/skills/gerando-artifact/SKILL.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # Scripts da Skill gerando-artifact
+
+> **Papel:** Scripts da Skill gerando-artifact.
 
 Scripts shell adaptados do `anthropics/skills/web-artifacts-builder` para
 gerar bundle.html no contexto do Sistema de Fretes.

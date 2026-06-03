@@ -109,8 +109,8 @@ domain = [
 | Diagnostico de cadeia (chamado automaticamente por Sit 2) | `rastrear_cadeia_documental()` | stmt_pag_id — retorna diagnostico, NAO executa |
 | Levantar todos os pares pendentes | `levantar_pares_transferencia_interna()` | — (aceita args de filtro) |
 
-Codigo completo: [references/codigo-operacional.md](references/codigo-operacional.md)
-Testes validados: [references/fluxo-validado.md](references/fluxo-validado.md)
+Codigo completo: [references/codigo-operacional.md](./references/codigo-operacional.md)
+Testes validados: [references/fluxo-validado.md](./references/fluxo-validado.md)
 
 ## REGRAS ANTI-ALUCINACAO
 
@@ -161,7 +161,7 @@ Linha de extrato com NACOM GOYA / 61.724.241
 
 **Fluxo**: Criar `account.payment` com `is_internal_transfer=True` (journal_id=A, destination_journal_id=B) → `action_post` → Odoo gera paired payment automaticamente → Conciliar AMBOS extratos com suas respectivas linhas PENDENTES.
 
-> Ver [codigo-operacional.md](references/codigo-operacional.md) secao "Situacao 1"
+> Ver [codigo-operacional.md](./references/codigo-operacional.md) secao "Situacao 1"
 
 ## Situacao 2 — Recebimento ja conciliado, pagamento pendente
 
@@ -179,7 +179,7 @@ a funcao `conciliar_pagamento_transferencia_existente()` **automaticamente** cha
 
 Na pratica, **a maioria dos extratos sera resolvida via Sit 2b**, nao via busca direta.
 
-> Ver [codigo-operacional.md](references/codigo-operacional.md) secao "Situacao 2"
+> Ver [codigo-operacional.md](./references/codigo-operacional.md) secao "Situacao 2"
 
 ## Situacao 2b — Rastreamento de Cadeia Documental (caminho principal)
 
@@ -204,7 +204,7 @@ escala para 2b porque payments consolidados e com data retroativa sao cenarios c
 Depositos creditam em D+0 por regra operacional. Se o agente quiser investigar
 inconsistencias, pode buscar janela ampliada, mas o match real e SEMPRE D+0.
 
-> Ver [codigo-operacional.md](references/codigo-operacional.md) secao "Situacao 2b"
+> Ver [codigo-operacional.md](./references/codigo-operacional.md) secao "Situacao 2b"
 
 ---
 
@@ -275,8 +275,8 @@ Fallback: se codigo bancario nao esta no mapa, buscar nome do journal no payment
 
 | Arquivo | Conteudo |
 |---------|----------|
-| [codigo-operacional.md](references/codigo-operacional.md) | Funcoes Python completas (4 funcoes) |
-| [fluxo-validado.md](references/fluxo-validado.md) | Testes reais com IDs de producao |
+| [codigo-operacional.md](./references/codigo-operacional.md) | Funcoes Python completas (4 funcoes) |
+| [fluxo-validado.md](./references/fluxo-validado.md) | Testes reais com IDs de producao |
 
 ## Skills Relacionadas
 

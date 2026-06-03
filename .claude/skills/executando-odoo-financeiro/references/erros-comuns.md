@@ -1,4 +1,65 @@
+<!-- doc:meta
+tipo: reference
+camada: L2
+sot_de: —
+hub: .claude/skills/executando-odoo-financeiro/SKILL.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # Erros Comuns no Odoo Financeiro
+
+> **Papel:** Erros Comuns no Odoo Financeiro.
+
+## Indice
+
+- [Erro 1: "cannot marshal None"](#erro-1-cannot-marshal-none)
+  - [Sintoma](#sintoma)
+  - [Causa](#causa)
+  - [Solucao](#solucao)
+  - [Metodos que frequentemente geram este erro](#metodos-que-frequentemente-geram-este-erro)
+- [Erro 2: Buscar NF pelo Campo Errado](#erro-2-buscar-nf-pelo-campo-errado)
+  - [Sintoma](#sintoma)
+  - [Causa](#causa)
+  - [Solucao](#solucao)
+- [Erro 3: Confundir IDs de Move vs Line](#erro-3-confundir-ids-de-move-vs-line)
+  - [Sintoma](#sintoma)
+  - [Regra](#regra)
+- [Erro 4: Partner ID False no Statement Line](#erro-4-partner-id-false-no-statement-line)
+  - [Sintoma](#sintoma)
+  - [Solucao](#solucao)
+- [Erro 5: Conta de Juros Errada por Empresa](#erro-5-conta-de-juros-errada-por-empresa)
+  - [Sintoma](#sintoma)
+  - [Causa](#causa)
+- [Erro 6: Extrato em Company Diferente do Titulo](#erro-6-extrato-em-company-diferente-do-titulo)
+  - [Sintoma](#sintoma)
+  - [Exemplo Real](#exemplo-real)
+  - [Solucao](#solucao)
+- [Erro 7: Tentar Reconciliar Linhas Ja Reconciliadas](#erro-7-tentar-reconciliar-linhas-ja-reconciliadas)
+  - [Sintoma](#sintoma)
+  - [Solucao](#solucao)
+- [Erro 8: Usar _criar_pagamento() em Vez de Wizard](#erro-8-usar-_criar_pagamento-em-vez-de-wizard)
+  - [Sintoma](#sintoma)
+  - [Causa](#causa)
+  - [Solucao](#solucao)
+- [Erro 9: Esquecer de Reconciliar Extrato](#erro-9-esquecer-de-reconciliar-extrato)
+  - [Sintoma](#sintoma)
+  - [Causa](#causa)
+  - [Solucao](#solucao)
+- [Erro 10: Buscar Payment pelo Valor Errado](#erro-10-buscar-payment-pelo-valor-errado)
+  - [Sintoma](#sintoma)
+  - [Causa](#causa)
+- [Erro 11: Extrato Reconciliado mas Campos Incorretos](#erro-11-extrato-reconciliado-mas-campos-incorretos)
+  - [Sintoma](#sintoma)
+  - [Causa](#causa)
+  - [Solucao](#solucao)
+  - [Checklist Atualizado (corrigido 2026-02-18)](#checklist-atualizado-corrigido-2026-02-18)
+- [Erro 12: Correcao Retroativa de Registros Ja Reconciliados](#erro-12-correcao-retroativa-de-registros-ja-reconciliados)
+  - [Sintoma](#sintoma)
+  - [Causa](#causa)
+  - [Solucao](#solucao)
+  - [Armadilhas](#armadilhas)
+  - [Referencia](#referencia)
+- [Checklist de Verificacao](#checklist-de-verificacao)
 
 Armadilhas encontradas durante a sessao de 22/01/2026 e como evita-las.
 
@@ -10,7 +71,7 @@ TypeError: cannot marshal None unless allow_none is enabled
 ```
 
 ### Causa
-O Odoo retorna `None` em algumas operacoes, mas o XML-RPC nao consegue serializar `None`.
+O Odoo retorna `None` em certas operacoes, mas o XML-RPC nao consegue serializar `None`.
 
 ### Solucao
 **IGNORAR ESTE ERRO!** A operacao foi executada com sucesso.

@@ -1,4 +1,14 @@
+<!-- doc:meta
+tipo: reference
+camada: L2
+sot_de: —
+hub: .claude/skills/cotando-frete/SKILL.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # Glossario de Frete
+
+> **Papel:** Glossario de Frete.
 
 ## Componentes do Calculo
 

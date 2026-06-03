@@ -1,4 +1,31 @@
+<!-- doc:meta
+tipo: reference
+camada: L2
+sot_de: —
+hub: .claude/skills/resolvendo-entidades/SKILL.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # Entidades por Tabela
+
+> **Papel:** Entidades por Tabela.
+
+## Indice
+
+- [CLIENTE (CNPJ/Nome)](#cliente-cnpjnome)
+  - [Formato do CNPJ](#formato-do-cnpj)
+- [PRODUTO (cod_produto)](#produto-cod_produto)
+  - [Cadastro Master](#cadastro-master)
+- [PEDIDO (num_pedido)](#pedido-num_pedido)
+  - [Formato do Pedido](#formato-do-pedido)
+- [CIDADE/UF](#cidadeuf)
+  - [Normalizacao](#normalizacao)
+- [Uso nas Skills](#uso-nas-skills)
+  - [resolver_grupo.py](#resolver_grupopy)
+  - [resolver_cliente.py](#resolver_clientepy)
+  - [resolver_produto.py](#resolver_produtopy)
+  - [resolver_pedido.py](#resolver_pedidopy)
+  - [resolver_cidade.py](#resolver_cidadepy)
 
 Mapeamento de onde cada entidade aparece no sistema.
 

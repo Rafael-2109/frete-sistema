@@ -1,4 +1,14 @@
+<!-- doc:meta
+tipo: reference
+camada: L2
+sot_de: —
+hub: .claude/skills/acessando-ssw/SKILL.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # Scripts — Acessando SSW (Detalhes)
+
+> **Papel:** Scripts — Acessando SSW (Detalhes).
 
 Referencia detalhada de parametros, retornos e modos de operacao.
 

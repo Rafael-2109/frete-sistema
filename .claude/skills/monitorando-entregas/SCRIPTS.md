@@ -1,4 +1,21 @@
+<!-- doc:meta
+tipo: reference
+camada: L2
+sot_de: —
+hub: .claude/skills/monitorando-entregas/SKILL.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # Scripts — Monitorando Entregas (Detalhes)
+
+> **Papel:** Scripts — Monitorando Entregas (Detalhes).
+
+## Indice
+
+- [Ambiente Virtual](#ambiente-virtual)
+- [1. consultando_status_entrega.py](#1-consultando_status_entregapy)
+- [2. consultando_devolucoes.py](#2-consultando_devolucoespy)
+- [3. consultando_devolucoes_detalhadas.py](#3-consultando_devolucoes_detalhadaspy)
 
 Referencia detalhada de parametros, retornos e modos de operacao.
 

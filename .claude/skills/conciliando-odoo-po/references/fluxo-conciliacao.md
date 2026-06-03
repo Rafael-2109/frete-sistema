@@ -1,4 +1,26 @@
+<!-- doc:meta
+tipo: reference
+camada: L2
+sot_de: —
+hub: .claude/skills/conciliando-odoo-po/SKILL.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # Fluxo Completo de Conciliacao PO x DFe
+
+> **Papel:** Fluxo Completo de Conciliacao PO x DFe.
+
+## Indice
+
+- [Visao Geral](#visao-geral)
+- [Diagrama do Fluxo](#diagrama-do-fluxo)
+- [Calculo do Saldo no PO Original](#calculo-do-saldo-no-po-original)
+- [Ponto Critico: Multi-PO com copy()](#ponto-critico-multi-po-com-copy)
+- [Como o PO de Referencia e Escolhido](#como-o-po-de-referencia-e-escolhido)
+- [Fluxo de Reversao](#fluxo-de-reversao)
+- [Dados Salvos na Validacao (acao_executada)](#dados-salvos-na-validacao-acao_executada)
+- [Endpoints (Rotas)](#endpoints-rotas)
+- [Template de Preview](#template-de-preview)
 
 ## Visao Geral
 

@@ -1,4 +1,41 @@
+<!-- doc:meta
+tipo: reference
+camada: L2
+sot_de: —
+hub: .claude/skills/rastreando-odoo/SKILL.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # Mapeamento de Relacionamentos Odoo
+
+> **Papel:** Mapeamento de Relacionamentos Odoo.
+
+## Indice
+
+- [Glossario de Modelos](#glossario-de-modelos)
+- [Modelos e Campos-Chave](#modelos-e-campos-chave)
+  - [Fluxo de Compra](#fluxo-de-compra)
+  - [Fluxo de Venda](#fluxo-de-venda)
+  - [Fluxo Financeiro](#fluxo-financeiro)
+  - [Fluxo de Devolução](#fluxo-de-devolução)
+  - [Parceiros](#parceiros)
+- [Tipos de Documento (move_type)](#tipos-de-documento-move_type)
+- [Tipos de DFE (finnfe)](#tipos-de-dfe-finnfe)
+- [Estratégias de Navegação](#estratégias-de-navegação)
+  - [A partir de NF de Compra (DFE)](#a-partir-de-nf-de-compra-dfe)
+  - [A partir de NF de Venda](#a-partir-de-nf-de-venda)
+  - [A partir de Devolução](#a-partir-de-devolução)
+  - [A partir de Título](#a-partir-de-título)
+  - [A partir de Fatura (busca inversa para DFE)](#a-partir-de-fatura-busca-inversa-para-dfe)
+- [Campos de Impostos (DFE)](#campos-de-impostos-dfe)
+- [Fluxo de Conciliacao Bancaria](#fluxo-de-conciliacao-bancaria)
+  - [Visao Geral](#visao-geral)
+  - [Modelos Envolvidos na Conciliacao](#modelos-envolvidos-na-conciliacao)
+  - [Contas Contabeis](#contas-contabeis)
+  - [Campos-Chave para Conciliacao](#campos-chave-para-conciliacao)
+  - [Estrategia de Navegacao: Extrato → Titulo](#estrategia-de-navegacao-extrato-titulo)
+  - [Regras de Validacao do Odoo](#regras-de-validacao-do-odoo)
+  - [Mapeamento de Vinculos (5 Visoes Cruzadas)](#mapeamento-de-vinculos-5-visoes-cruzadas)
 
 ## Glossario de Modelos
 

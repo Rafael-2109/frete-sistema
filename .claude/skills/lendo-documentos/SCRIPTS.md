@@ -1,4 +1,30 @@
+<!-- doc:meta
+tipo: reference
+camada: L2
+sot_de: —
+hub: .claude/skills/lendo-documentos/SKILL.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # Scripts — Lendo Documentos (Detalhes)
+
+> **Papel:** Scripts — Lendo Documentos (Detalhes).
+
+## Indice
+
+- [Ambiente Virtual](#ambiente-virtual)
+- [1. ler_doc.py](#1-ler_docpy)
+  - [Parametros](#parametros)
+  - [Resolucao de caminhos](#resolucao-de-caminhos)
+  - [Formatos suportados](#formatos-suportados)
+  - [Retorno JSON — Word (.docx)](#retorno-json-word-docx)
+  - [Retorno JSON — CNAB retorno (.ret / .cnab)](#retorno-json-cnab-retorno-ret-cnab)
+  - [Retorno JSON — OFX (.ofx)](#retorno-json-ofx-ofx)
+  - [Retorno JSON — CNAB remessa (.rem)](#retorno-json-cnab-remessa-rem)
+  - [Tratamento de dados](#tratamento-de-dados)
+  - [Dependencias](#dependencias)
+  - [Erros comuns](#erros-comuns)
+  - [Exemplos de uso](#exemplos-de-uso)
 
 Referencia detalhada de parametros, retornos e modos de operacao da skill
 `lendo-documentos`.

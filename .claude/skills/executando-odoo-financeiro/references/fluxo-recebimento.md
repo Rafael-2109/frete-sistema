@@ -1,4 +1,35 @@
+<!-- doc:meta
+tipo: reference
+camada: L2
+sot_de: —
+hub: .claude/skills/executando-odoo-financeiro/SKILL.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # Fluxo de Recebimento no Odoo
+
+> **Papel:** Fluxo de Recebimento no Odoo.
+
+## Indice
+
+- [Passo 1: Identificar os IDs Necessarios](#passo-1-identificar-os-ids-necessarios)
+  - [1.1 Buscar Titulo (Linha Receivable Nao Reconciliada)](#11-buscar-titulo-linha-receivable-nao-reconciliada)
+  - [1.2 Buscar Statement Line (Extrato Nao Reconciliado)](#12-buscar-statement-line-extrato-nao-reconciliado)
+  - [1.3 Buscar Linha Transitoria do Extrato](#13-buscar-linha-transitoria-do-extrato)
+- [Passo 2: Criar Pagamento](#passo-2-criar-pagamento)
+  - [2.1 Calcular Juros](#21-calcular-juros)
+  - [2.2 COM Juros: Usar Wizard account.payment.register](#22-com-juros-usar-wizard-accountpaymentregister)
+  - [2.3 Buscar Payment Criado](#23-buscar-payment-criado)
+- [Passo 3: Reconciliar Extrato](#passo-3-reconciliar-extrato)
+  - [3.1 Buscar Linha PENDENTES do Payment](#31-buscar-linha-pendentes-do-payment)
+  - [3.2 Reconciliar](#32-reconciliar)
+  - [3.3 Preparar Extrato ANTES de Reconciliar (OBRIGATORIO)](#33-preparar-extrato-antes-de-reconciliar-obrigatorio)
+- [Passo 4: Verificar Resultado](#passo-4-verificar-resultado)
+- [Codigo Completo Validado](#codigo-completo-validado)
+- [Resumo dos IDs Importantes](#resumo-dos-ids-importantes)
+  - [Modelos Odoo](#modelos-odoo)
+  - [Contas Contabeis](#contas-contabeis)
+  - [Journal](#journal)
 
 Documentacao completa do fluxo para criar pagamentos e reconciliar extratos.
 

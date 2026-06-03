@@ -1,4 +1,26 @@
+<!-- doc:meta
+tipo: reference
+camada: L2
+sot_de: —
+hub: .claude/skills/gerindo-expedicao/SKILL.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # Scripts — Gerindo Expedicao (Detalhes)
+
+> **Papel:** Scripts — Gerindo Expedicao (Detalhes).
+
+## Indice
+
+- [Ambiente Virtual](#ambiente-virtual)
+- [1. analisando_disponibilidade_estoque.py](#1-analisando_disponibilidade_estoquepy)
+- [2. consultando_situacao_pedidos.py](#2-consultando_situacao_pedidospy)
+- [3. consultando_produtos_estoque.py](#3-consultando_produtos_estoquepy)
+- [4. calculando_leadtime_entrega.py](#4-calculando_leadtime_entregapy)
+- [5. criando_separacao_pedidos.py](#5-criando_separacao_pedidospy)
+- [6. consultando_programacao_producao.py](#6-consultando_programacao_producaopy)
+- [7. resolver_entidades.py](#7-resolver_entidadespy)
+- [8. analisando_carteira_completa.py](#8-analisando_carteira_completapy)
 
 Referencia detalhada de parametros, retornos e modos de operacao.
 

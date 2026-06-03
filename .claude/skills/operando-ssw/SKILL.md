@@ -211,12 +211,12 @@ Scripts sao standalone (Playwright headless), NAO dependem do Flask app.
 
 | Quando o agente precisa de... | Ler |
 |-------------------------------|-----|
-| Cadastrar unidade/cidade/fornecedor/transportadora (401, 402, 478, 485) | [CADASTROS.md](references/CADASTROS.md) |
-| Criar comissao, gerar/importar CSV 408 | [COMISSOES.md](references/COMISSOES.md) |
-| Cotar frete na 002 (params, workflow, gotchas) | [COTACAO.md](references/COTACAO.md) |
-| Funcoes ssw_common, defaults, batch, mapeamento | [SSW_COMMON.md](references/SSW_COMMON.md) |
+| Cadastrar unidade/cidade/fornecedor/transportadora (401, 402, 478, 485) | [CADASTROS.md](./references/CADASTROS.md) |
+| Criar comissao, gerar/importar CSV 408 | [COMISSOES.md](./references/COMISSOES.md) |
+| Cotar frete na 002 (params, workflow, gotchas) | [COTACAO.md](./references/COTACAO.md) |
+| Funcoes ssw_common, defaults, batch, mapeamento | [SSW_COMMON.md](./references/SSW_COMMON.md) |
 | Emitir, consultar, cancelar CT-e ou gerar fatura (params, retornos) | [SCRIPTS.md](SCRIPTS.md) |
-| CT-e gotchas, FIELD_MAP, dimensoes moto, workflow completo | [CTE.md](references/CTE.md) |
+| CT-e gotchas, FIELD_MAP, dimensoes moto, workflow completo | [CTE.md](./references/CTE.md) |
 | Cadastrar unidade passo-a-passo | `POP-A02-cadastrar-unidade-parceira.md` |
 | Cadastrar cidades passo-a-passo | `POP-A03-cadastrar-cidades.md` |
 | Implantar rota completa | `POP-A10-implantar-nova-rota.md` |

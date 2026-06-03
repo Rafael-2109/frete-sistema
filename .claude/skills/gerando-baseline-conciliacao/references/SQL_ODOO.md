@@ -1,4 +1,20 @@
+<!-- doc:meta
+tipo: reference
+camada: L2
+sot_de: —
+hub: .claude/skills/gerando-baseline-conciliacao/SKILL.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # SQL Odoo para baseline de conciliacao
+
+> **Papel:** SQL Odoo para baseline de conciliacao.
+
+## Indice
+
+- [Query 1: Pendentes por Mes x Journal](#query-1-pendentes-por-mes-x-journal)
+  - [Estado ATUAL (data_ref = hoje)](#estado-atual-data_ref-hoje)
+  - [Estado HISTORICO (data_ref < hoje) — IMP-2026-05-11-001](#estado-historico-data_ref-hoje-imp-2026-05-11-001)
 
 Conexao: `app.odoo.utils.connection.get_odoo_connection()` → retorna objeto com metodos `execute_kw()` para XML-RPC.
 

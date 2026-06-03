@@ -1,4 +1,14 @@
+<!-- doc:meta
+tipo: reference
+camada: L2
+sot_de: —
+hub: .claude/skills/gerindo-expedicao/SKILL.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # Templates de Comunicacao
+
+> **Papel:** Templates de Comunicacao.
 
 Templates para comunicacao com PCP e Comercial.
 

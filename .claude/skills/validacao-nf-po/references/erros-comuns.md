@@ -1,4 +1,29 @@
+<!-- doc:meta
+tipo: reference
+camada: L2
+sot_de: —
+hub: .claude/skills/validacao-nf-po/SKILL.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # Erros Comuns na Validacao NF x PO
+
+> **Papel:** Erros Comuns na Validacao NF x PO.
+
+## Indice
+
+- [Armadilhas Encontradas e Solucoes](#armadilhas-encontradas-e-solucoes)
+- [ERRO 1: Campo `nfe_infnfe_dest_xnome` NAO Existe no Odoo](#erro-1-campo-nfe_infnfe_dest_xnome-nao-existe-no-odoo)
+- [ERRO 2: Preview Chamando Odoo (Deveria Ser 100% Local)](#erro-2-preview-chamando-odoo-deveria-ser-100-local)
+- [ERRO 3: Assinatura Incorreta de _buscar_dfe_lines()](#erro-3-assinatura-incorreta-de-_buscar_dfe_lines)
+- [ERRO 4: Tolerancia de Preco 5% no Preview vs 0% na Validacao](#erro-4-tolerancia-de-preco-5-no-preview-vs-0-na-validacao)
+- [ERRO 5: Dados do MatchNfPoItem ja Estao CONVERTIDOS](#erro-5-dados-do-matchnfpoitem-ja-estao-convertidos)
+- [ERRO 6: PedidoCompras.cod_produto vs cod_produto_interno](#erro-6-pedidocomprascod_produto-vs-cod_produto_interno)
+- [ERRO 7: Filtro de POs sem dfe_id](#erro-7-filtro-de-pos-sem-dfe_id)
+- [ERRO 8: Nao Verificar se Validacao Existe Antes do Preview](#erro-8-nao-verificar-se-validacao-existe-antes-do-preview)
+- [CHECKLIST: Antes de Modificar o Preview](#checklist-antes-de-modificar-o-preview)
+- [ERRO 9: DFE status=04 sem PO mas PO.dfe_id Existe no Odoo](#erro-9-dfe-status04-sem-po-mas-podfe_id-existe-no-odoo)
+- [ERRO 10: Periodo do "Executar Validacao" nao Pega DFEs Antigos](#erro-10-periodo-do-executar-validacao-nao-pega-dfes-antigos)
 
 ## Armadilhas Encontradas e Solucoes
 

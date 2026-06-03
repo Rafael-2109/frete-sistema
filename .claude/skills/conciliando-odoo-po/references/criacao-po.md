@@ -1,4 +1,31 @@
+<!-- doc:meta
+tipo: reference
+camada: L2
+sot_de: —
+hub: .claude/skills/conciliando-odoo-po/SKILL.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # Criacao de PO Conciliador no Odoo
+
+> **Papel:** Criacao de PO Conciliador no Odoo.
+
+## Indice
+
+- [Metodo Correto: `copy()` do Odoo](#metodo-correto-copy-do-odoo)
+  - [Por que copy() e nao create()](#por-que-copy-e-nao-create)
+- [Codigo Validado: Criar PO Conciliador](#codigo-validado-criar-po-conciliador)
+- [Codigo Validado: Criar Linha do PO Conciliador](#codigo-validado-criar-linha-do-po-conciliador)
+- [Campos que copy() Herda Automaticamente](#campos-que-copy-herda-automaticamente)
+  - [No Cabecalho (purchase.order)](#no-cabecalho-purchaseorder)
+  - [Na Linha (purchase.order.line)](#na-linha-purchaseorderline)
+- [Parametro `default` do copy()](#parametro-default-do-copy)
+  - [Valores especiais em `default`:](#valores-especiais-em-default)
+- [Ajuste de Quantidade no PO Original](#ajuste-de-quantidade-no-po-original)
+- [Confirmar PO Conciliador](#confirmar-po-conciliador)
+- [Cancelar PO Vazio](#cancelar-po-vazio)
+- [Vincular DFe ao PO](#vincular-dfe-ao-po)
+- [Teste Isolado de copy()](#teste-isolado-de-copy)
 
 ## Metodo Correto: `copy()` do Odoo
 

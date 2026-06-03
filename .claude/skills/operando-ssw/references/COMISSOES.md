@@ -1,4 +1,20 @@
+<!-- doc:meta
+tipo: reference
+camada: L2
+sot_de: —
+hub: .claude/skills/operando-ssw/SKILL.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # COMISSOES — 408
+
+> **Papel:** COMISSOES — 408.
+
+## Indice
+
+- [criar_comissao_408.py](#criar_comissao_408py)
+- [gerar_csv_comissao_408.py](#gerar_csv_comissao_408py)
+- [importar_comissao_cidade_408.py](#importar_comissao_cidade_408py)
 
 Documentacao detalhada dos scripts de comissao no SSW: criacao geral, geracao CSV por cidade e importacao.
 

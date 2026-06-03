@@ -1,4 +1,24 @@
+<!-- doc:meta
+tipo: reference
+camada: L2
+sot_de: —
+hub: .claude/skills/operando-ssw/SKILL.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # CADASTROS — 401, 402, 478, 485
+
+> **Papel:** CADASTROS — 401, 402, 478, 485.
+
+## Indice
+
+- [cadastrar_unidade_401.py](#cadastrar_unidade_401py)
+- [cadastrar_cidades_402.py](#cadastrar_cidades_402py)
+- [exportar_cidades_402.py](#exportar_cidades_402py)
+- [importar_cidades_402.py](#importar_cidades_402py)
+  - [Workflow Exportar → Modificar → Importar](#workflow-exportar-modificar-importar)
+- [cadastrar_fornecedor_478.py](#cadastrar_fornecedor_478py)
+- [cadastrar_transportadora_485.py](#cadastrar_transportadora_485py)
 
 Documentacao detalhada dos scripts de cadastro no SSW: unidades, cidades, fornecedores e transportadoras.
 

@@ -1,4 +1,30 @@
+<!-- doc:meta
+tipo: reference
+camada: L2
+sot_de: —
+hub: .claude/skills/conciliando-transferencias-internas/SKILL.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # Fluxo Validado — Transferencias Internas
+
+> **Papel:** Fluxo Validado — Transferencias Internas.
+
+## Indice
+
+- [Teste 1: Situacao 1 (criar + conciliar ambos)](#teste-1-situacao-1-criar-conciliar-ambos)
+  - [Sequencia executada:](#sequencia-executada)
+  - [Verificacao:](#verificacao)
+- [Teste 2: Situacao 2 (pagamento pendente, recebimento ja conciliado)](#teste-2-situacao-2-pagamento-pendente-recebimento-ja-conciliado)
+  - [Sequencia executada:](#sequencia-executada)
+  - [Verificacao:](#verificacao)
+- [Padroes Confirmados](#padroes-confirmados)
+- [Algoritmo: Rastreamento de Cadeia (Situacao 2b)](#algoritmo-rastreamento-de-cadeia-situacao-2b)
+  - [Cadeia rastreada:](#cadeia-rastreada)
+  - [Diagnostico retornado:](#diagnostico-retornado)
+  - [Decisao:](#decisao)
+  - [Por que Sit 2 direta falha neste caso:](#por-que-sit-2-direta-falha-neste-caso)
+  - [Validacao pendente:](#validacao-pendente)
 
 Codigo testado em producao em 30/03/2026.
 
