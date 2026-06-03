@@ -14,6 +14,75 @@ from ..config.feature_flags import USE_SUBAGENT_COST_GRANULAR
 
 logger = logging.getLogger('sistema_fretes')
 
+# ── Fase 3.5: HARD enforcement de invariantes duros formalizados (PreToolUse) ──
+import time as _enf_time
+from threading import Lock as _EnfLock
+
+_ENFORCE_CACHE: dict = {}            # {(user_id, time_bucket): [(token, rule_path), ...]}
+_ENFORCE_CACHE_LOCK = _EnfLock()
+_ENFORCE_TTL_SECONDS = 30
+
+
+def _enforce_decision(directives, tool_input_str):
+    """PURO/testavel: retorna (token, rule_path) do 1o token proibido encontrado no input
+    serializado (substring case-insensitive), ou None. NUNCA usa texto livre — so o token
+    EXPLICITO declarado por 'ENFORCE_DENY_SUBSTR:' em uma regra dura."""
+    s = (tool_input_str or '').lower()
+    for token, rule_path in (directives or []):
+        if token and token.lower() in s:
+            return (token, rule_path)
+    return None
+
+
+def _load_enforce_directives(user_id: int):
+    """Carrega (cacheado, TTL 30s) as diretivas DENY formalizaveis das regras duras do usuario.
+
+    Convencao: uma regra 'mandatory' que carrega 'ENFORCE_DENY_SUBSTR: <token>' no content vira
+    um invariante DURO. So invariantes EXPLICITAMENTE formalizados (curadoria humana) entram;
+    o error_signature (slug de metrica) NAO e usado. Retorna [(token, rule_path), ...]. Fail-open
+    (qualquer erro -> []). Roda fora do Flask context (padrao memory_injection: probe + create_app).
+    """
+    bucket = int(_enf_time.time() // _ENFORCE_TTL_SECONDS)
+    key = (user_id, bucket)
+    with _ENFORCE_CACHE_LOCK:
+        if key in _ENFORCE_CACHE:
+            return _ENFORCE_CACHE[key]
+    directives = []
+    try:
+        from contextlib import nullcontext
+        try:
+            from flask import current_app as _app_probe
+            _ = _app_probe.name
+            _ctx = nullcontext()
+        except RuntimeError:
+            from app import create_app as _create_app
+            _ctx = _create_app().app_context()
+        with _ctx:
+            from ..models import AgentMemory
+            import re as _re
+            rules = AgentMemory.query.filter(
+                AgentMemory.user_id.in_([user_id, 0]),
+                AgentMemory.is_directory == False,  # noqa: E712
+                AgentMemory.is_cold == False,  # noqa: E712
+                AgentMemory.priority == 'mandatory',
+                AgentMemory.content.ilike('%ENFORCE_DENY_SUBSTR%'),
+            ).limit(50).all()
+            for r in rules:
+                for m in _re.finditer(r'ENFORCE_DENY_SUBSTR:\s*(.+)', r.content or ''):
+                    token = m.group(1).strip()
+                    if token:
+                        directives.append((token, r.path))
+    except Exception as e:
+        logger.debug(f"[ENFORCE] load directives falhou (fail-open): {e}")
+        directives = []
+    with _ENFORCE_CACHE_LOCK:
+        # prune buckets antigos (cache nao cresce indefinidamente)
+        for k in list(_ENFORCE_CACHE.keys()):
+            if k[1] != bucket:
+                del _ENFORCE_CACHE[k]
+        _ENFORCE_CACHE[key] = directives
+    return directives
+
 
 def build_hooks(
     user_id: int,
@@ -150,6 +219,41 @@ def build_hooks(
                 output["hookSpecificOutput"]["updatedInput"] = updated_input
             return output
 
+        return {"continue_": True}
+
+    async def _enforce_mandatory_invariants(hook_input: PreToolUseHookInput, signal, context: HookContext):
+        """Fase 3.5 — HARD enforcement (PreToolUse) de invariantes DUROS formalizados.
+
+        So atua quando AGENT_MANDATORY_HARD_ENFORCE=true (default OFF — caminho comum retorna
+        imediato, custo zero). Bloqueia uma tool call cujo input serializado contenha um token
+        proibido declarado por uma regra dura via 'ENFORCE_DENY_SUBSTR: <token>'. FAIL-OPEN:
+        qualquer erro -> permite (nunca quebra o fluxo). NUNCA bloqueia por texto livre.
+        """
+        try:
+            from ..config.feature_flags import USE_MANDATORY_HARD_ENFORCE
+            if not USE_MANDATORY_HARD_ENFORCE:
+                return {"continue_": True}
+            directives = _load_enforce_directives(user_id)
+            hit = _enforce_decision(directives, str(hook_input.get('tool_input', '')))
+            if hit:
+                token, rule_path = hit
+                logger.warning(
+                    f"[ENFORCE] BLOQUEADO: input da tool contem token proibido '{token}' "
+                    f"(regra dura {rule_path}, user={user_id})"
+                )
+                return {
+                    "continue_": True,
+                    "hookSpecificOutput": {
+                        "hookEventName": "PreToolUse",
+                        "permissionDecision": "deny",
+                        "permissionDecisionReason": (
+                            f"[INVARIANTE] Regra dura do usuario proibe '{token}' "
+                            f"(fonte: {rule_path}). Ajuste a operacao para nao usar esse padrao."
+                        ),
+                    },
+                }
+        except Exception as e:
+            logger.debug(f"[ENFORCE] hook falhou (fail-open): {e}")
         return {"continue_": True}
 
     async def _audit_post_tool_use(hook_input: PostToolUseHookInput, signal, context: HookContext):
@@ -1324,11 +1428,13 @@ def build_hooks(
             return {}
 
     # ─── Registrar TODOS os hooks ───
+    # ORDEM: _keep_stream_open PRIMEIRO (mantem o stream aberto p/ can_use_tool); o enforcement
+    # (Fase 3.5, default OFF) vem DEPOIS — assim o deny so ocorre com o stream ja garantido.
     hooks = {
         "PreToolUse": [
             HookMatcher(
                 matcher=None,  # Aplica a TODAS as tools
-                hooks=[_keep_stream_open],
+                hooks=[_keep_stream_open, _enforce_mandatory_invariants],
             ),
         ],
         "PostToolUse": [

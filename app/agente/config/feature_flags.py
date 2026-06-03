@@ -534,6 +534,14 @@ AGENT_OUTCOME_HELPFUL_K_SESSIONS = int(os.getenv("AGENT_OUTCOME_HELPFUL_K_SESSIO
 AGENT_CORRECTION_DEMOTION = os.getenv("AGENT_CORRECTION_DEMOTION", "false").lower() == "true"
 AGENT_OUTCOME_HARMFUL_THRESHOLD = int(os.getenv("AGENT_OUTCOME_HARMFUL_THRESHOLD", "2"))
 
+# Fase 3.5 do loop corretivo — HARD enforcement (PreToolUse) de invariantes DUROS FORMALIZADOS.
+# So bloqueia tool call cujo input contenha um token proibido declarado EXPLICITAMENTE por uma
+# regra dura via 'ENFORCE_DENY_SUBSTR: <token>' (curadoria humana). NUNCA bloqueia por texto
+# livre; o error_signature (slug de metrica) NAO e usado p/ matching. Fail-open (erro -> permite).
+# Default OFF (DESVIO consciente da regra "flags ON"): enforcement DURO pode bloquear uma operacao
+# legitima por falso-positivo — so ligar com invariantes bem curados (nome de campo, op destrutiva).
+USE_MANDATORY_HARD_ENFORCE = os.getenv("AGENT_MANDATORY_HARD_ENFORCE", "false").lower() == "true"
+
 # ====================================================================
 # Features SDK 0.1.60 — Subagent Transparency (2026-04-16)
 # ====================================================================
