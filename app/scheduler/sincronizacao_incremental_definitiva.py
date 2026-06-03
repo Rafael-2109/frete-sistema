@@ -137,6 +137,15 @@ TRIAGE_ENQUEUER_ENABLED = os.environ.get("AGENT_PLANNER", "false").lower() == "t
 TRIAGE_ENQUEUER_LOOKBACK_HOURS = int(os.environ.get("TRIAGE_ENQUEUER_LOOKBACK_HOURS", "6"))
 TRIAGE_ENQUEUER_LIMIT = int(os.environ.get("TRIAGE_ENQUEUER_LIMIT", "50"))
 
+# Calibration Sampler (33º módulo) — Onda 1 / E3 (calibração do judge ONLINE),
+# flag-OFF por default. REUSA AGENT_EVAL_CALIBRATION. Roda POR CICLO (cada tick),
+# INLINE (sem RQ) — leve: DB sweep + insert. Popula agent_eval_case a partir dos
+# vereditos do online judge (substitui a fonte morta eval_runner/A3, aposentado)
+# p/ spot-check humano + concordance. DEFAULT false: modulo e' no-op. Ativar em deploy.
+CALIBRATION_SAMPLER_ENABLED = os.environ.get("AGENT_EVAL_CALIBRATION", "false").lower() == "true"
+CALIBRATION_SAMPLER_LOOKBACK_HOURS = int(os.environ.get("CALIBRATION_SAMPLER_LOOKBACK_HOURS", "24"))
+CALIBRATION_SAMPLER_LIMIT = int(os.environ.get("CALIBRATION_SAMPLER_LIMIT", "200"))
+
 # Directive Promotion (32º módulo) — Onda 3 / A4, flag-OFF por default
 # Roda POR CICLO (cada tick), INLINE (sem RQ) — leve: DB sweep + scoring, zero LLM.
 # DEFAULT false (flag AGENT_DIRECTIVE_PROMOTION): modulo e' no-op. Ativar em deploy.
@@ -2227,6 +2236,36 @@ def executar_sincronizacao():
                     pass
 
         logger.info(f"   [TIMER] Step 32 (Directive Promotion): {time.time() - _t_step:.1f}s")
+
+        # ── 3️⃣3️⃣ CALIBRATION SAMPLER — popula agent_eval_case do online judge (33º módulo) ──
+        # Onda 1 / E3 (re-apontado pós-aposentadoria A3). Flag AGENT_EVAL_CALIBRATION default OFF → no-op.
+        # Quando ON: varre AgentStep recentes (lookback) com outcome_signal['judge'] e
+        # insere casos em agent_eval_case (dedup por step_uid) p/ spot-check humano +
+        # concordance_rate. Prioriza discordância judge=success x adversarial.refuted (Task 3).
+        # Roda TODO ciclo (cap por limit). Best-effort: nunca falha o cron. NÃO entra em modulos_sync.
+        _t_step = time.time()
+
+        if CALIBRATION_SAMPLER_ENABLED:
+            try:
+                from app.agente.workers.calibration_sampler import populate_calibration_cases
+
+                _cs_result = populate_calibration_cases(
+                    lookback_hours=CALIBRATION_SAMPLER_LOOKBACK_HOURS,
+                    limit=CALIBRATION_SAMPLER_LIMIT,
+                )
+                logger.info(
+                    f"[CALIBRATION_SAMPLER] inseridos={_cs_result.get('inseridos', 0)} "
+                    f"candidatos={_cs_result.get('candidatos', 0)} "
+                    f"prioritarios={_cs_result.get('prioritarios', 0)}"
+                )
+            except Exception as e:
+                logger.error(f"[CALIBRATION_SAMPLER] Erro no modulo 33: {e}")
+                try:
+                    db.session.rollback()
+                except Exception:
+                    pass
+
+        logger.info(f"   [TIMER] Step 33 (Calibration Sampler): {time.time() - _t_step:.1f}s")
 
         # Limpar conexões ao final
         try:
