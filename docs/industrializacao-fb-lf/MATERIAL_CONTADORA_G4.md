@@ -13,6 +13,15 @@ atualizado: 2026-06-03
 > **Para:** Contadora · **De:** controle interno (grounding Odoo PROD 2026-06-01) · **Decisão pedida:** como fazer o RETORNO da industrialização **baixar a obrigação da LF** (conta `5101020001` PASSIVA), hoje não baixada.
 > Linguagem contábil; IDs Odoo entre parênteses. Tudo CST51 (ICMS suspenso); serviço 5124 sem ICMS (CBS/IBS/PIS/COFINS).
 
+## Indice
+
+- [0. DECISÃO DA CONTADORA — APROVADO (2026-06-02)](#0-decisão-da-contadora--aprovado-2026-06-02)
+- [1. O problema (medido ao vivo)](#1-o-problema-medido-ao-vivo)
+- [2. Lado FB (G5a) — MESMA decisão (corrigido 2026-06-02)](#2-lado-fb-g5a--mesma-decisão-corrigido-2026-06-02)
+- [3. Lado LF (G4) — a decisão: como a NF de retorno baixar a PASSIVA `5101020001`](#3-lado-lf-g4--a-decisão-como-a-nf-de-retorno-baixar-a-passiva-5101020001)
+- [4. Perguntas objetivas para a Contadora](#4-perguntas-objetivas-para-a-contadora)
+- [5. Como fica o ciclo com 2 documentos](#5-como-fica-o-ciclo-com-2-documentos-verificado-ao-vivo-2026-06-02-só-leitura)
+
 ---
 
 ## 0. DECISÃO DA CONTADORA — ✅ APROVADO (2026-06-02)
