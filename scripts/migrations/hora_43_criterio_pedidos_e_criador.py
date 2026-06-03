@@ -32,12 +32,18 @@ SQL_DDL = [
 ]
 
 SQL_BACKFILL = """
+-- Deterministico: agrega por venda e usa MIN(u.id) — evita resultado arbitrario
+-- quando ha usuarios homonimos (usuarios.nome nao e UNIQUE).
 UPDATE hora_venda v
-   SET criado_por_id = u.id
-  FROM hora_venda_auditoria a
-  JOIN usuarios u ON u.nome = a.usuario
- WHERE a.venda_id = v.id
-   AND a.acao = 'CRIOU'
+   SET criado_por_id = sub.user_id
+  FROM (
+      SELECT a.venda_id, MIN(u.id) AS user_id
+        FROM hora_venda_auditoria a
+        JOIN usuarios u ON u.nome = a.usuario
+       WHERE a.acao = 'CRIOU'
+       GROUP BY a.venda_id
+  ) sub
+ WHERE sub.venda_id = v.id
    AND v.criado_por_id IS NULL;
 """
 
