@@ -196,3 +196,35 @@ def test_desconsiderar_idempotente(db):
     res2 = desconsiderar_item_nf(item.id)
     assert res2['ok'] is True
     assert res2.get('ja_desconsiderado') is True
+
+
+# ---------------------------------------------------------------------------
+# Task 5 — Serviço reconsiderar_item_nf (reverter)
+# ---------------------------------------------------------------------------
+def test_reconsiderar_recria_moto(db):
+    from app.hora.services.nf_entrada_service import (
+        desconsiderar_item_nf, reconsiderar_item_nf, assert_item_moto_consistente,
+    )
+    loja, mod = _loja(), _modelo()
+    c = _chassi()
+    nf = _nf(loja, [c], mod)
+    item = nf.itens[0]
+    # modelo_texto_original = nome do modelo único -> reconsiderar resolve limpo (sem pendência)
+    item.modelo_texto_original = mod.nome_modelo
+    db.session.flush()
+    desconsiderar_item_nf(item.id)
+    assert HoraMoto.query.get(c) is None
+    res = reconsiderar_item_nf(item.id, operador='tester')
+    assert res['ok'] is True
+    db.session.refresh(item)
+    assert item.desconsiderado is False
+    assert HoraMoto.query.get(c) is not None
+    assert_item_moto_consistente(item)
+
+
+def test_reconsiderar_item_nao_desconsiderado_erro(db):
+    from app.hora.services.nf_entrada_service import reconsiderar_item_nf
+    loja, mod = _loja(), _modelo()
+    nf = _nf(loja, [_chassi()], mod)
+    with pytest.raises(ValueError):
+        reconsiderar_item_nf(nf.itens[0].id)

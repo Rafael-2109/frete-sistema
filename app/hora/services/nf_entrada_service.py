@@ -306,6 +306,39 @@ def desconsiderar_item_nf(nf_item_id: int, operador: Optional[str] = None) -> di
     return {'ok': True, 'nf_item_id': nf_item_id, 'numero_chassi': chassi}
 
 
+def reconsiderar_item_nf(nf_item_id: int, operador: Optional[str] = None) -> dict:
+    """Reverte a desconsideração: recria a HoraMoto e zera o flag.
+
+    Faz `flush()` (NÃO commit) — o commit é responsabilidade do caller (rota).
+    """
+    from app.hora.models import PENDENTE_ORIGEM_NF_ENTRADA
+    from app.hora.services.moto_service import get_or_create_moto
+
+    item = HoraNfEntradaItem.query.get(nf_item_id)
+    if not item:
+        raise ValueError(f'Item de NF {nf_item_id} não encontrado.')
+    if not item.desconsiderado:
+        raise ValueError('Item não está desconsiderado.')
+
+    get_or_create_moto(
+        numero_chassi=item.numero_chassi,
+        modelo_nome=item.modelo_texto_original,
+        cor=item.cor_texto_original or 'NAO_INFORMADA',
+        numero_motor=item.numero_motor_texto_original,
+        criado_por=operador,
+        origem_pendencia=PENDENTE_ORIGEM_NF_ENTRADA,
+        origem_id=item.nf_id,
+        fallback_sentinela=True,
+    )
+    item.desconsiderado = False
+    db.session.flush()
+    current_app.logger.info(
+        f'hora: item NF #{nf_item_id} (chassi {item.numero_chassi}) reconsiderado '
+        f'por {operador or "?"}; HoraMoto recriada.'
+    )
+    return {'ok': True, 'nf_item_id': nf_item_id, 'numero_chassi': item.numero_chassi}
+
+
 def vincular_nf_a_pedido(nf_id: int, pedido_id: int) -> None:
     """Vincula retroativamente uma NF a um pedido (caso não tenha sido informado no upload)."""
     nf = HoraNfEntrada.query.get(nf_id)
