@@ -2149,6 +2149,7 @@ def _query_vendas(
     data_fim=None,
     chassi: Optional[str] = None,
     eager_itens: bool = False,
+    filtro_vendedor: Optional[dict] = None,
 ):
     """Constroi query base de vendas com filtros — usado por listar e paginar.
 
@@ -2181,7 +2182,19 @@ def _query_vendas(
     )
     if status:
         query = query.filter(HoraVenda.status == status)
-    if lojas_permitidas_ids is not None:
+    if filtro_vendedor is not None:
+        # Criterio 'vendedor': ignora escopo de loja; pedidos do proprio usuario.
+        nomes = [n for n in (filtro_vendedor.get('nomes') or []) if n]
+        uid = filtro_vendedor.get('user_id')
+        conds = []
+        if nomes:
+            conds.append(HoraVenda.vendedor.in_(nomes))
+        if uid is not None:
+            conds.append(HoraVenda.criado_por_id == uid)
+        if not conds:
+            return None  # sem criterio resolvivel -> nada a mostrar
+        query = query.filter(or_(*conds))
+    elif lojas_permitidas_ids is not None:
         ids_list = list(lojas_permitidas_ids)
         if not ids_list:
             return None
@@ -2229,6 +2242,7 @@ def paginar_vendas(
     data_inicio=None,
     data_fim=None,
     chassi: Optional[str] = None,
+    filtro_vendedor: Optional[dict] = None,
 ):
     """Pagina vendas com filtros. Retorna `Pagination` (Flask-SQLAlchemy)
     ou None quando o usuario nao tem nenhuma loja permitida (lista vazia).
@@ -2244,6 +2258,7 @@ def paginar_vendas(
         data_fim=data_fim,
         chassi=chassi,
         eager_itens=True,  # listagem mostra itens (chassi+modelo+cor) inline.
+        filtro_vendedor=filtro_vendedor,
     )
     if query is None:
         return None
