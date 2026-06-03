@@ -264,6 +264,48 @@ def assert_item_moto_consistente(item) -> None:
         raise AssertionError(f'item considerado {item.id} sem HoraMoto')
 
 
+def desconsiderar_item_nf(nf_item_id: int, operador: Optional[str] = None) -> dict:
+    """Marca um item de NF como desconsiderado e remove a HoraMoto.
+
+    Pré-condições (senão ValueError, sem mutar): não em pedido, NF sem
+    recebimento, chassi não conferido, sem evento de moto, sem outro item de
+    NF considerado com o mesmo chassi. Reversível via `reconsiderar_item_nf`.
+
+    Faz `flush()` (NÃO commit) — o commit é responsabilidade do caller (rota).
+    """
+    from app.hora.models import HoraMoto, HoraMotoEvento
+
+    item = HoraNfEntradaItem.query.get(nf_item_id)
+    if not item:
+        raise ValueError(f'Item de NF {nf_item_id} não encontrado.')
+    if item.desconsiderado:
+        return {'ok': True, 'ja_desconsiderado': True, 'nf_item_id': nf_item_id,
+                'numero_chassi': item.numero_chassi}
+
+    # 1) Validar TUDO antes de mutar
+    motivo = _motivo_bloqueio_desconsiderar(item)
+    if motivo:
+        raise ValueError(motivo)
+
+    chassi = (item.numero_chassi or '').strip().upper()
+    moto = HoraMoto.query.get(chassi)
+    # Defensivo: nunca remover moto com eventos (já barrado por _motivo via status_atual)
+    if moto is not None and HoraMotoEvento.query.filter_by(numero_chassi=chassi).first():
+        raise ValueError(f'Moto {chassi} tem eventos; não pode ser removida.')
+
+    # 2) Mutar (somente após validações)
+    item.desconsiderado = True
+    if moto is not None:
+        db.session.delete(moto)
+    db.session.flush()
+
+    current_app.logger.info(
+        f'hora: item NF #{nf_item_id} (chassi {chassi}) desconsiderado por '
+        f'{operador or "?"}; HoraMoto removida.'
+    )
+    return {'ok': True, 'nf_item_id': nf_item_id, 'numero_chassi': chassi}
+
+
 def vincular_nf_a_pedido(nf_id: int, pedido_id: int) -> None:
     """Vincula retroativamente uma NF a um pedido (caso não tenha sido informado no upload)."""
     nf = HoraNfEntrada.query.get(nf_id)

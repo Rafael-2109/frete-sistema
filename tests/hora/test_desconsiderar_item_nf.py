@@ -146,3 +146,53 @@ def test_assert_item_moto_consistente(db):
     nf = _nf(loja, [_chassi()], mod)
     item = nf.itens[0]
     assert_item_moto_consistente(item)  # considerado + moto existe -> ok
+
+
+# ---------------------------------------------------------------------------
+# Task 4 — Serviço desconsiderar_item_nf
+# ---------------------------------------------------------------------------
+def test_desconsiderar_marca_e_remove_moto(db):
+    from app.hora.services.nf_entrada_service import desconsiderar_item_nf
+    loja, mod = _loja(), _modelo()
+    c = _chassi()
+    nf = _nf(loja, [c], mod)
+    item = nf.itens[0]
+    assert HoraMoto.query.get(c) is not None
+    res = desconsiderar_item_nf(item.id, operador='tester')
+    assert res['ok'] is True
+    db.session.refresh(item)
+    assert item.desconsiderado is True
+    assert HoraMoto.query.get(c) is None
+
+
+def test_desconsiderar_bloqueia_em_pedido(db):
+    from app.hora.services.nf_entrada_service import desconsiderar_item_nf
+    loja, mod = _loja(), _modelo()
+    c = _chassi()
+    _pedido(loja, [c], mod)
+    nf = _nf(loja, [c], mod)
+    with pytest.raises(ValueError, match='pedido'):
+        desconsiderar_item_nf(nf.itens[0].id)
+    assert HoraMoto.query.get(c) is not None  # moto preservada (validou antes de mutar)
+
+
+def test_desconsiderar_bloqueia_recebido(db):
+    from app.hora.services.nf_entrada_service import desconsiderar_item_nf
+    loja, mod = _loja(), _modelo()
+    c = _chassi()
+    nf = _nf(loja, [c], mod)
+    registrar_evento(numero_chassi=c, tipo='RECEBIDA', loja_id=loja.id)
+    db.session.flush()
+    with pytest.raises(ValueError):
+        desconsiderar_item_nf(nf.itens[0].id)
+
+
+def test_desconsiderar_idempotente(db):
+    from app.hora.services.nf_entrada_service import desconsiderar_item_nf
+    loja, mod = _loja(), _modelo()
+    nf = _nf(loja, [_chassi()], mod)
+    item = nf.itens[0]
+    desconsiderar_item_nf(item.id)
+    res2 = desconsiderar_item_nf(item.id)
+    assert res2['ok'] is True
+    assert res2.get('ja_desconsiderado') is True
