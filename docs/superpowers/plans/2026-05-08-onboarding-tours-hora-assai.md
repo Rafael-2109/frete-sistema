@@ -1,4 +1,38 @@
+<!-- doc:meta
+tipo: how-to
+camada: L3
+sot_de: —
+hub: docs/superpowers/plans/INDEX.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # Onboarding Tours HORA + Motos Assaí — Implementation Plan
+
+> **Papel:** Onboarding Tours HORA + Motos Assaí — Implementation Plan.
+
+## Indice
+
+- [File Structure](#file-structure)
+- [Task 1: Foundation — self-host library + core engine](#task-1-foundation-self-host-library-core-engine)
+- [Task 2: Endpoint `/api/onboarding/permissoes-matriz` com testes](#task-2-endpoint-apionboardingpermissoes-matriz-com-testes)
+- [Task 3: Injetar context + scripts no `app/templates/hora/base.html` + IDs no menu](#task-3-injetar-context-scripts-no-apptemplateshorabasehtml-ids-no-menu)
+- [Task 4: Injetar context + scripts no `base_motos_assai.html` + IDs no menu](#task-4-injetar-context-scripts-no-base_motos_assaihtml-ids-no-menu)
+- [Task 5: Tour macro HORA (`_macro.js`)](#task-5-tour-macro-hora-_macrojs)
+- [Task 6: Tour macro Motos Assaí (`_macro.js`)](#task-6-tour-macro-motos-assaí-_macrojs)
+- [Task 7: Mini-tour HORA `recebimento_nf`](#task-7-mini-tour-hora-recebimento_nf)
+- [Task 8: Mini-tour HORA `venda_manual_nova`](#task-8-mini-tour-hora-venda_manual_nova)
+- [Task 9: Mini-tour HORA `transferencia_nova`](#task-9-mini-tour-hora-transferencia_nova)
+- [Task 10: Mini-tour Motos Assaí `recebimento_wizard`](#task-10-mini-tour-motos-assaí-recebimento_wizard)
+- [Task 11: Mini-tours Assaí operação chão (`montagem_quick`, `disponibilizar_quick`, `separacao_chassi`)](#task-11-mini-tours-assaí-operação-chão-montagem_quick-disponibilizar_quick-separacao_chassi)
+- [Task 12: Mini-tours HORA admin pacote 1 (`vendas_aprovar`, `devolucao_venda`, `estoque_lista`, `avaria_nova`)](#task-12-mini-tours-hora-admin-pacote-1-vendas_aprovar-devolucao_venda-estoque_lista-avaria_nova)
+- [Task 13: Mini-tours HORA admin pacote 2 (`pecas_estoque`, `modelos_novo`, `modelos_pendencias`, `modelos_unificar`)](#task-13-mini-tours-hora-admin-pacote-2-pecas_estoque-modelos_novo-modelos_pendencias-modelos_unificar)
+- [Task 14: Mini-tours HORA admin pacote 3 (`tagplus_conta`, `permissoes`)](#task-14-mini-tours-hora-admin-pacote-3-tagplus_conta-permissoes)
+- [Task 15: Mini-tours Motos Assaí admin (`pedidos_upload`, `compras_nova`, `recibos_upload`, `faturamento`, `modelos_assai`)](#task-15-mini-tours-motos-assaí-admin-pedidos_upload-compras_nova-recibos_upload-faturamento-modelos_assai)
+- [Task 16: Página `/admin/onboarding/health`](#task-16-página-adminonboardinghealth)
+- [Task 17: Página `/admin/onboarding/preview`](#task-17-página-adminonboardingpreview)
+- [Task 18: Microcopy review + smoke test mobile real + cleanup](#task-18-microcopy-review-smoke-test-mobile-real-cleanup)
+- [Self-Review](#self-review)
+- [Execução](#execução)
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 

@@ -1,4 +1,81 @@
+<!-- doc:meta
+tipo: how-to
+camada: L3
+sot_de: —
+hub: docs/superpowers/plans/INDEX.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # HORA Peças — Implementation Plan
+
+> **Papel:** HORA Peças — Implementation Plan.
+
+## Indice
+
+- [File Structure](#file-structure)
+  - [Criar](#criar)
+  - [Modificar](#modificar)
+- [Padrão de Estilo (Lembretes Críticos)](#padrão-de-estilo-lembretes-críticos)
+- [Task 1: Migrations + Modelos SQLAlchemy (P1+P2)](#task-1-migrations-modelos-sqlalchemy-p1p2)
+  - [Step 1.1: Criar migration SQL hora_21](#step-11-criar-migration-sql-hora_21)
+  - [Step 1.2: Criar migration Python hora_21](#step-12-criar-migration-python-hora_21)
+  - [Step 1.3: Criar migration SQL hora_22](#step-13-criar-migration-sql-hora_22)
+  - [Step 1.4: Criar migration Python hora_22](#step-14-criar-migration-python-hora_22)
+  - [Step 1.5: Renomear peca.py atual para peca_faltando.py](#step-15-renomear-pecapy-atual-para-peca_faltandopy)
+  - [Step 1.6: Criar novo `app/hora/models/peca.py`](#step-16-criar-novo-apphoramodelspecapy)
+  - [Step 1.7: Atualizar `app/hora/models/__init__.py`](#step-17-atualizar-apphoramodels__init__py)
+  - [Step 1.8: ALTER hora_pedido_item no model](#step-18-alter-hora_pedido_item-no-model)
+- [Task 2: Services — peca, peca_estoque, chassi_protecao (P3)](#task-2-services-peca-peca_estoque-chassi_protecao-p3)
+  - [Step 2.1: Test peca_service — criar peça mínima](#step-21-test-peca_service-criar-peça-mínima)
+  - [Step 2.2: Implementar peca_service mínimo](#step-22-implementar-peca_service-mínimo)
+  - [Step 2.3: Test peca_estoque_service — saldo e movimento](#step-23-test-peca_estoque_service-saldo-e-movimento)
+  - [Step 2.4: Implementar peca_estoque_service](#step-24-implementar-peca_estoque_service)
+  - [Step 2.5: Test chassi_protecao_service](#step-25-test-chassi_protecao_service)
+  - [Step 2.6: Implementar chassi_protecao_service](#step-26-implementar-chassi_protecao_service)
+- [Task 3: Permissões + Migration data fix (P4)](#task-3-permissões-migration-data-fix-p4)
+  - [Step 3.1: Adicionar módulos em MODULOS_HORA](#step-31-adicionar-módulos-em-modulos_hora)
+  - [Step 3.2: Migration Python data fix (concede permissão a admins existentes)](#step-32-migration-python-data-fix-concede-permissão-a-admins-existentes)
+- [Task 4: Cadastro de Peças — UI completa (P5)](#task-4-cadastro-de-peças-ui-completa-p5)
+  - [Step 4.1: Criar routes pecas_cadastro](#step-41-criar-routes-pecas_cadastro)
+  - [Step 4.2: Registrar blueprint](#step-42-registrar-blueprint)
+  - [Step 4.3: Template lista (segue padrão modelos_lista.html)](#step-43-template-lista-segue-padrão-modelos_listahtml)
+  - [Step 4.4: Templates form e detalhe](#step-44-templates-form-e-detalhe)
+- [Task 5: Estoque de Peças — UI (P6)](#task-5-estoque-de-peças-ui-p6)
+  - [Step 5.1: Criar routes pecas_estoque](#step-51-criar-routes-pecas_estoque)
+  - [Step 5.2: Templates de estoque](#step-52-templates-de-estoque)
+- [Task 6: Pedido de Compra com peças (P7)](#task-6-pedido-de-compra-com-peças-p7)
+  - [Step 6.1: Test pedido com peças](#step-61-test-pedido-com-peças)
+  - [Step 6.2: Implementar pedido_service para peças](#step-62-implementar-pedido_service-para-peças)
+  - [Step 6.3: Routes AJAX](#step-63-routes-ajax)
+  - [Step 6.4: Template — seção Peças em pedido_detalhe.html](#step-64-template-seção-peças-em-pedido_detalhehtml)
+- [Task 7: NF de Entrada com peças (P8)](#task-7-nf-de-entrada-com-peças-p8)
+  - [Step 7.1: Test parser distingue motos de peças](#step-71-test-parser-distingue-motos-de-peças)
+  - [Step 7.2: Implementar parser distintivo](#step-72-implementar-parser-distintivo)
+  - [Step 7.3: Conferência → estoque](#step-73-conferência-estoque)
+  - [Step 7.4: Templates](#step-74-templates)
+- [Task 8: Pedido de Venda com peças (P9)](#task-8-pedido-de-venda-com-peças-p9)
+  - [Step 8.1: Test venda com peças](#step-81-test-venda-com-peças)
+  - [Step 8.2: Implementar venda_service para peças](#step-82-implementar-venda_service-para-peças)
+  - [Step 8.3: Routes + template venda_detalhe](#step-83-routes-template-venda_detalhe)
+- [Task 9: TagPlus payload misto (P10)](#task-9-tagplus-payload-misto-p10)
+  - [Step 9.1: Test payload misto](#step-91-test-payload-misto)
+  - [Step 9.2: Implementar payload misto](#step-92-implementar-payload-misto)
+- [Task 10: TagPlus backfill (proteção chassi + 2 backfills) (P11)](#task-10-tagplus-backfill-proteção-chassi-2-backfills-p11)
+  - [Step 10.1: Tests proteção e delta](#step-101-tests-proteção-e-delta)
+  - [Step 10.2: Implementar proteção chassi](#step-102-implementar-proteção-chassi)
+  - [Step 10.3: Backfill produtos](#step-103-backfill-produtos)
+  - [Step 10.4: Backfill delta](#step-104-backfill-delta)
+  - [Step 10.5: Rotas + templates](#step-105-rotas-templates)
+- [Task 11: Menu wiring + smoke tests + CLAUDE.md (P12)](#task-11-menu-wiring-smoke-tests-claudemd-p12)
+  - [Step 11.1: Menu base.html](#step-111-menu-basehtml)
+  - [Step 11.2: Smoke test geral](#step-112-smoke-test-geral)
+  - [Step 11.3: Atualizar CLAUDE.md](#step-113-atualizar-claudemd)
+  - [Step 11.4: Commit final + rodar suite completa](#step-114-commit-final-rodar-suite-completa)
+- [Self-Review (rodar após terminar plano)](#self-review-rodar-após-terminar-plano)
+  - [Spec coverage](#spec-coverage)
+  - [Padrão visual](#padrão-visual)
+  - [TDD](#tdd)
+- [Execution Handoff](#execution-handoff)
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 

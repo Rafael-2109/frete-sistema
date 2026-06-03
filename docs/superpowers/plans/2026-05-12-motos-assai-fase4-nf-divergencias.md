@@ -1,4 +1,33 @@
+<!-- doc:meta
+tipo: how-to
+camada: L3
+sot_de: —
+hub: docs/superpowers/plans/INDEX.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # Motos Assaí — Fase 4 (NF + Divergências + Cancelar NF) Implementation Plan
+
+> **Papel:** Motos Assaí — Fase 4 (NF + Divergências + Cancelar NF) Implementation Plan.
+
+## Indice
+
+- [File Structure](#file-structure)
+  - [Services a criar](#services-a-criar)
+  - [Services a modificar](#services-a-modificar)
+  - [Routes a criar/modificar](#routes-a-criarmodificar)
+  - [Templates a criar/modificar](#templates-a-criarmodificar)
+  - [Static (JS)](#static-js)
+  - [Migrations](#migrations)
+  - [Tests](#tests)
+- [Tasks](#tasks)
+  - [Task 1: Service `criar_divergencia()` + testes](#task-1-service-criar_divergencia-testes)
+  - [Task 2: Service `resolver_divergencia()` (S21 + A14)](#task-2-service-resolver_divergencia-s21-a14)
+  - [Task 3: Refatorar `_calcular_match` — D5 ignorar FATURADA + S8 gravar em assai_divergencia](#task-3-refatorar-_calcular_match-d5-ignorar-faturada-s8-gravar-em-assai_divergencia)
+  - [Task 4: Refatorar `ajustar_separacao_pela_nf` — A7 detectar CHASSI_OUTRA_LOJA](#task-4-refatorar-ajustar_separacao_pela_nf-a7-detectar-chassi_outra_loja)
+  - [Task 5: `ajustar_separacao_pela_nf` — S1 cria sep em FATURADA + A11 gera Excel](#task-5-ajustar_separacao_pela_nf-s1-cria-sep-em-faturada-a11-gera-excel)
+  - [Tasks 6-12: Cancelamento NF + Modal Expedição + UI Divergências](#tasks-6-12-cancelamento-nf-modal-expedição-ui-divergências)
+- [Self-review (executor)](#self-review-executor)
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 

@@ -1,4 +1,38 @@
+<!-- doc:meta
+tipo: explanation
+camada: L3
+sot_de: —
+hub: docs/superpowers/specs/INDEX.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # Inventário Cíclico — Contagem parcial por quant + Plano de ajustes — Design
+
+> **Papel:** Inventário Cíclico — Contagem parcial por quant + Plano de ajustes — Design.
+
+## Indice
+
+- [1. Visão e objetivos](#1-visão-e-objetivos)
+- [2. Não-objetivos (out of scope)](#2-não-objetivos-out-of-scope)
+- [3. Granularidades (decisão central)](#3-granularidades-decisão-central)
+- [4. Arquitetura (Abordagem 1 — sub-fluxo isolado)](#4-arquitetura-abordagem-1-sub-fluxo-isolado)
+- [5. Modelo de dados](#5-modelo-de-dados)
+  - [5.1 `ContagemInventario` (cabeçalho) — tabela `inventario_contagem`](#51-contageminventario-cabeçalho-tabela-inventario_contagem)
+  - [5.2 `ContagemInventarioItem` (1 linha = 1 quant) — tabela `inventario_contagem_item`](#52-contageminventarioitem-1-linha-1-quant-tabela-inventario_contagem_item)
+- [6. Regras de negócio](#6-regras-de-negócio)
+  - [6.1 Casamento e escopo — **por QUANT, nunca por item**](#61-casamento-e-escopo-por-quant-nunca-por-item)
+  - [6.2 Linha nova (lote criado no físico)](#62-linha-nova-lote-criado-no-físico)
+  - [6.3 Classificação → átomo (o que dá determinismo na aplicação)](#63-classificação-átomo-o-que-dá-determinismo-na-aplicação)
+  - [6.4 Integração com o Confronto (inventário vigente)](#64-integração-com-o-confronto-inventário-vigente)
+- [7. Fluxo (2 tempos)](#7-fluxo-2-tempos)
+- [8. Salvaguardas](#8-salvaguardas)
+- [9. Telas](#9-telas)
+- [10. Migrations](#10-migrations)
+- [11. Testes (~20)](#11-testes-20)
+- [12. Tratamento de erros e bordas](#12-tratamento-de-erros-e-bordas)
+- [13. Riscos e decisões](#13-riscos-e-decisões)
+- [14. Próximos passos](#14-próximos-passos)
+- [Contexto](#contexto)
 
 **Data**: 2026-05-31
 **Autor**: Rafael Nascimento + Claude (Opus 4.8)
@@ -272,3 +306,7 @@ Dois artefatos (regra `~/.claude/CLAUDE.md`):
 - `docs/superpowers/specs/2026-05-26-relatorio-confronto-inventario-design.md` (spec irmão — Confronto)
 - Memórias: `[[gotcha_inventory_adjustment_quant_negativo]]`, `[[gotcha_resetar_reserva_orfao_negativo]]`, `[[sequencia_unlink_zerar_residual]]`, `[[gotcha_lote_multiempresa_company_filter]]`, `[[skill2_transfer_interno_pattern]]` (G031)
 - Regras: `~/.claude/CLAUDE.md` (migrations, JSON sanitization, menu), `CLAUDE.md` (companies FB=1/CD=4/LF=5)
+
+## Contexto
+
+_A completar (PAD-A Onda 4)._

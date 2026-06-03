@@ -1,4 +1,30 @@
+<!-- doc:meta
+tipo: state
+camada: L3
+sot_de: —
+hub: docs/superpowers/reports/INDEX.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # Baseline Pré Sprint A — CarVia
+
+> **Papel:** Baseline Pré Sprint A — CarVia.
+
+## Indice
+
+- [A0.1 — CTe Comp órfãos (estima item A1)](#a01-cte-comp-órfãos-estima-item-a1)
+- [A0.2 — NFs sem item em fatura (estima item A2 — Bug #1)](#a02-nfs-sem-item-em-fatura-estima-item-a2-bug-1)
+- [A0.3 — CTe Comp sem CTRNC (estima item A3 — Bug #3)](#a03-cte-comp-sem-ctrnc-estima-item-a3-bug-3)
+- [A0.4 — Operações sem XML (bloqueio parcial A4.3)](#a04-operações-sem-xml-bloqueio-parcial-a43)
+- [A0.5 — Números sequenciais duplicados (bloqueia B2)](#a05-números-sequenciais-duplicados-bloqueia-b2)
+- [A0.6 — Baseline fatura cliente](#a06-baseline-fatura-cliente)
+- [Sumário Executivo](#sumário-executivo)
+  - [Alertas e decisões](#alertas-e-decisões)
+  - [Novo esforço total estimado (revisado pós A0)](#novo-esforço-total-estimado-revisado-pós-a0)
+  - [Recomendação para executar Sprint A](#recomendação-para-executar-sprint-a)
+- [Atualizado](#atualizado)
+- [Estado atual](#estado-atual)
+- [Pendencias](#pendencias)
 
 **Gerado em**: 2026-04-17 (UTC)
 **Fonte**: MCP Render `query_render_postgres` contra `dpg-d13m38vfte5s738t6p50-a` (produção)
@@ -162,3 +188,15 @@ Aplicar padrão análogo em `carvia_operacoes.cte_numero` e `carvia_cte_compleme
 **Ordem mantida**: A3 → A1+A2 → A4.1 → A4.2.
 
 **Prioridade ajustada**: como impacto histórico é baixo, o risco de **regressão** (quebrar o que funciona) > risco de **não-correção**. Disciplina dos princípios NN1-NN6 do plano continua crítica mesmo com volume baixo.
+
+## Atualizado
+
+_A completar (PAD-A Onda 4)._
+
+## Estado atual
+
+_A completar (PAD-A Onda 4)._
+
+## Pendencias
+
+_A completar (PAD-A Onda 4)._

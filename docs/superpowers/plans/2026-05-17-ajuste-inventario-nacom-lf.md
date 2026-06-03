@@ -1,4 +1,73 @@
+<!-- doc:meta
+tipo: how-to
+camada: L3
+sot_de: —
+hub: docs/superpowers/plans/INDEX.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # Ajuste de Inventário NACOM/LF — Plano de Implementação
+
+> **Papel:** Ajuste de Inventário NACOM/LF — Plano de Implementação.
+
+## Indice
+
+- [Pré-requisitos (executar uma vez antes de qualquer task)](#pré-requisitos-executar-uma-vez-antes-de-qualquer-task)
+- [Fase 0 — Audit Run (descobrir realidade do Odoo)](#fase-0-audit-run-descobrir-realidade-do-odoo)
+  - [Task 0.1: Script de audit `00_audit_odoo_realidade.py`](#task-01-script-de-audit-00_audit_odoo_realidadepy)
+  - [Task 0.2: Confirmar suposições com o dono do projeto](#task-02-confirmar-suposições-com-o-dono-do-projeto)
+- [Fase 1 — Infraestrutura local (constantes + models + migrations)](#fase-1-infraestrutura-local-constantes-models-migrations)
+  - [Task 1.1: Esqueleto `app/odoo/constants/`](#task-11-esqueleto-appodooconstants)
+  - [Task 1.2: Migration `operacao_odoo_auditoria`](#task-12-migration-operacao_odoo_auditoria)
+  - [Task 1.3: Migration `ajuste_estoque_inventario`](#task-13-migration-ajuste_estoque_inventario)
+- [Fase 2 — Service `stock_lot_service`](#fase-2-service-stock_lot_service)
+  - [Task 2.1: Esqueleto + buscar_por_nome](#task-21-esqueleto-buscar_por_nome)
+  - [Task 2.2: `criar()` com fallback](#task-22-criar-com-fallback)
+  - [Task 2.3: `renomear()` com guard](#task-23-renomear-com-guard)
+  - [Task 2.4: `inativar()` e `atualizar_validade()`](#task-24-inativar-e-atualizar_validade)
+- [Fase 3 — Service `stock_picking_service`](#fase-3-service-stock_picking_service)
+  - [Task 3.1: Esqueleto + `criar_transferencia`](#task-31-esqueleto-criar_transferencia)
+  - [Task 3.2: `confirmar_e_reservar` + `preencher_qty_done` + `validar`](#task-32-confirmar_e_reservar-preencher_qty_done-validar)
+  - [Task 3.3: `liberar_faturamento` (action_liberar_faturamento → robô CIEL IT)](#task-33-liberar_faturamento-action_liberar_faturamento-robô-ciel-it)
+  - [Task 3.4: `aguardar_invoice_do_robo` (fire-and-poll batch-friendly)](#task-34-aguardar_invoice_do_robo-fire-and-poll-batch-friendly)
+- [Fase 4 — Service `inventario_pipeline_service` (orquestrador batch)](#fase-4-service-inventario_pipeline_service-orquestrador-batch)
+  - [Task 4.0: REVOGADA — Fase 4 anterior (AccountMoveIntercompanyService.preview/executar/cancelar)](#task-40-revogada-fase-4-anterior-accountmoveintercompanyservicepreviewexecutarcancelar)
+  - [Task 4.1 REVOGADA: Esqueleto + `preview()`](#task-41-revogada-esqueleto-preview)
+  - [Task 4.2 REVOGADA: `executar()` — criar account.move + post](#task-42-revogada-executar-criar-accountmove-post)
+  - [Task 4.3 REVOGADA: `cancelar()` + integração com `stock_picking_service`](#task-43-revogada-cancelar-integração-com-stock_picking_service)
+- [Fase 4 (NOVA) — Service `InventarioPipelineService` (orquestrador pipeline)](#fase-4-nova-service-inventariopipelineservice-orquestrador-pipeline)
+  - [Task 4.1 (NOVA): Esqueleto + `f5a_criar_pickings()`](#task-41-nova-esqueleto-f5a_criar_pickings)
+  - [Task 4.2 (NOVA): `f5b_validar_pickings()`](#task-42-nova-f5b_validar_pickings)
+  - [Task 4.3 (NOVA): `f5c_liberar_faturamento()`](#task-43-nova-f5c_liberar_faturamento)
+  - [Task 4.4 (NOVA): `f5d_aguardar_invoices()` (1 polling longo)](#task-44-nova-f5d_aguardar_invoices-1-polling-longo)
+  - [Task 4.5 (NOVA): `f5e_transmitir_sefaz()` (serial via Playwright)](#task-45-nova-f5e_transmitir_sefaz-serial-via-playwright)
+- [Fase 5 — Service `indisponibilizacao_estoque_service`](#fase-5-service-indisponibilizacao_estoque_service)
+  - [Task 5.1: Canaries + indisponibilizar/reverter](#task-51-canaries-indisponibilizarreverter)
+- [Fase 6 — Hooks determinísticos](#fase-6-hooks-determinísticos)
+  - [Task 6.1: `pre_execute_nf.py`](#task-61-pre_execute_nfpy)
+  - [Task 6.2: `pos_execute_nf.py` + `pre_lote_rename.py` + `pre_execute_indisponibilizacao.py`](#task-62-pos_execute_nfpy-pre_lote_renamepy-pre_execute_indisponibilizacaopy)
+  - [Task 6.3: `pre_commit_docs.sh`](#task-63-pre_commit_docssh)
+- [Fase 7 — Scripts datados (executores)](#fase-7-scripts-datados-executores)
+  - [Task 7.1: `01_extrair_estoque_odoo.py`](#task-71-01_extrair_estoque_odoopy)
+  - [Task 7.2: `02_carregar_inventario_xlsx.py`](#task-72-02_carregar_inventario_xlsxpy)
+  - [Task 7.3: `03_confrontar_inv_vs_odoo.py`](#task-73-03_confrontar_inv_vs_odoopy)
+  - [Task 7.4: `04_propor_ajustes.py`](#task-74-04_propor_ajustespy)
+  - [Task 7.5: `05_canary_estoque_staging.py`](#task-75-05_canary_estoque_stagingpy)
+  - [Task 7.6: `06_canary_nfs_referencia.py`](#task-76-06_canary_nfs_referenciapy)
+  - [Task 7.7: `07_executar_onda1_lf_fb.py`](#task-77-07_executar_onda1_lf_fbpy)
+  - [Task 7.8: `08_executar_onda2_cd_fb.py`](#task-78-08_executar_onda2_cd_fbpy)
+  - [Task 7.9: `09_executar_onda3_indisponibilizacao.py`](#task-79-09_executar_onda3_indisponibilizacaopy)
+  - [Task 7.10: `10_reconciliar_pos_ajuste.py`](#task-710-10_reconciliar_pos_ajustepy)
+- [Fase 8 — Documentação (playbooks + estrutura de pastas)](#fase-8-documentação-playbooks-estrutura-de-pastas)
+  - [Task 8.1: Estrutura de pastas `docs/inventario-2026-05/`](#task-81-estrutura-de-pastas-docsinventario-2026-05)
+  - [Task 8.2: Playbook `OPERACOES_FISCAIS_NACOM_LF.md`](#task-82-playbook-operacoes_fiscais_nacom_lfmd)
+  - [Task 8.3: Playbook `OPERACOES_LOTE_E_INDISPONIBILIZACAO.md`](#task-83-playbook-operacoes_lote_e_indisponibilizacaomd)
+  - [Task 8.4: Atualizar `ROUTING_ODOO.md` com novos services](#task-84-atualizar-routing_odoomd-com-novos-services)
+- [Fase 9 — Execução operacional (ondas)](#fase-9-execução-operacional-ondas)
+  - [Task 9.1: Onda O0 — Canary técnico](#task-91-onda-o0-canary-técnico)
+  - [Task 9.2: Onda fiscal (canary por CFOP)](#task-92-onda-fiscal-canary-por-cfop)
+  - [Task 9.3 — 9.6: Ondas O1..O5](#task-93-96-ondas-o1o5)
+- [Self-Review](#self-review)
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 

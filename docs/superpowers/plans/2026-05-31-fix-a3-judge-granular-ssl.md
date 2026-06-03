@@ -1,4 +1,14 @@
+<!-- doc:meta
+tipo: how-to
+camada: L3
+sot_de: —
+hub: docs/superpowers/plans/INDEX.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # Plano — Fix A3: Judge Granular + SSL-drop na persistência
+
+> **Papel:** Plano — Fix A3: Judge Granular + SSL-drop na persistência.
 
 > Origem: A3 Fase 2 (2026-05-31) expôs 2 bugs reais. Baseline analista-carteira deu 0.600 (3/5),
 > mas inspeção I2 provou que ac-03/ac-04 são FALSOS-NEGATIVOS do judge binário (agente acertou).

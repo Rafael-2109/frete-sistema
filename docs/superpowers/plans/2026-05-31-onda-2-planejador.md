@@ -1,4 +1,25 @@
+<!-- doc:meta
+tipo: how-to
+camada: L3
+sot_de: —
+hub: docs/superpowers/plans/INDEX.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # Onda 2 — Atuador de Planejamento (super-loop + VERIFY) Implementation Plan
+
+> **Papel:** Onda 2 — Atuador de Planejamento (super-loop + VERIFY) Implementation Plan.
+
+## Indice
+
+- [AUDITORIA DE PREMISSAS (2026-05-31 — recon `/tmp/subagent-findings/onda2-recon.md`)](#auditoria-de-premissas-2026-05-31-recon-tmpsubagent-findingsonda2-reconmd)
+- [DEPENDÊNCIA CROSS-ONDA (registrada)](#dependência-cross-onda-registrada)
+- [Task 1 — B1: PlanState durável + flag AGENT_PLANNER/AGENT_VERIFY](#task-1-b1-planstate-durável-flag-agent_planneragent_verify)
+- [Task 2 — B2 arithmetic + adversarial verifiers (SHADOW, flag AGENT_VERIFY)](#task-2-b2-arithmetic-adversarial-verifiers-shadow-flag-agent_verify)
+- [Task 3 — B3: replan + escalate (escreve escalated_to_human)](#task-3-b3-replan-escalate-escreve-escalated_to_human)
+- [DIFERIDOS (pós-D2)](#diferidos-pós-d2)
+- [Self-Review](#self-review)
+- [GATE-2 (antes de promover plano na Onda 3)](#gate-2-antes-de-promover-plano-na-onda-3)
 
 > **For agentic workers:** REQUIRED SUB-SKILL: superpowers:subagent-driven-development. Steps usam checkbox.
 > **Branch**: `feat/agente-evolucao` (worktree). NÃO push. Tudo flag-OFF.

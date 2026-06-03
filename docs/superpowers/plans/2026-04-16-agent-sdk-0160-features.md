@@ -1,4 +1,49 @@
+<!-- doc:meta
+tipo: how-to
+camada: L3
+sot_de: —
+hub: docs/superpowers/plans/INDEX.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # Agent SDK 0.1.60 Features — Implementation Plan
+
+> **Papel:** Agent SDK 0.1.60 Features — Implementation Plan.
+
+## Indice
+
+- [Visao Geral das Fases](#visao-geral-das-fases)
+- [Fase 1 — Fundacao (backend/leitura)](#fase-1-fundacao-backendleitura)
+  - [Task 1.1: Modulo base `subagent_reader.py`](#task-11-modulo-base-subagent_readerpy)
+  - [Task 1.2: Modulo `pii_masker.py`](#task-12-modulo-pii_maskerpy)
+  - [Task 1.3: Feature flags das 5 features](#task-13-feature-flags-das-5-features)
+  - [Task 1.4: Endpoint admin #1 (debug forense)](#task-14-endpoint-admin-1-debug-forense)
+  - [Task 1.5: Migration do indice GIN (#3)](#task-15-migration-do-indice-gin-3)
+  - [Task 1.6: Cost granular #3 (extensao hooks + models + insights)](#task-16-cost-granular-3-extensao-hooks-models-insights)
+- [Checkpoint Fase 1](#checkpoint-fase-1)
+- [Fase 2 — UI + Memory Mining](#fase-2-ui-memory-mining)
+  - [Task 2.1: Emit `subagent_summary` via `client.py`](#task-21-emit-subagent_summary-via-clientpy)
+  - [Task 2.2: SSE passthrough em `chat.py` (camada 2)](#task-22-sse-passthrough-em-chatpy-camada-2)
+  - [Task 2.3: Rota user-facing lazy-fetch detalhes](#task-23-rota-user-facing-lazy-fetch-detalhes)
+  - [Task 2.4: CSS `_subagent-inline.css`](#task-24-css-_subagent-inlinecss)
+  - [Task 2.5: JS `renderSubagentLine` no `chat.js`](#task-25-js-rendersubagentline-no-chatjs)
+  - [Task 2.6: Memory mining #5](#task-26-memory-mining-5)
+  - [Task 2.7: Documentar eventos SSE em `app/agente/CLAUDE.md`](#task-27-documentar-eventos-sse-em-appagenteclaudemd)
+- [Checkpoint Fase 2](#checkpoint-fase-2)
+- [Fase 3 — Migracao Documental (#2)](#fase-3-migracao-documental-2)
+  - [Task 3.1: Verificar uso atual de `get_subagent_findings`](#task-31-verificar-uso-atual-de-get_subagent_findings)
+  - [Task 3.2: Atualizar `SUBAGENT_RELIABILITY.md` e `CLAUDE.md`](#task-32-atualizar-subagent_reliabilitymd-e-claudemd)
+- [Checkpoint Fase 3](#checkpoint-fase-3)
+- [Fase 4 — Validacao Anti-Alucinacao (#4)](#fase-4-validacao-anti-alucinacao-4)
+  - [Task 4.1: Job validator](#task-41-job-validator)
+  - [Task 4.2: Enqueue no `SubagentStop` hook](#task-42-enqueue-no-subagentstop-hook)
+  - [Task 4.3: Adicionar queue aos workers existentes](#task-43-adicionar-queue-aos-workers-existentes)
+  - [Task 4.4: Subscrever canal Redis no SSE generator (camada 2)](#task-44-subscrever-canal-redis-no-sse-generator-camada-2)
+  - [Task 4.5: Documentar #4 em `CLAUDE.md`](#task-45-documentar-4-em-claudemd)
+  - [Task 4.6: Verificar coverage de fase 4](#task-46-verificar-coverage-de-fase-4)
+- [Checkpoint Fase 4](#checkpoint-fase-4)
+- [Self-Review do Plano](#self-review-do-plano)
+- [Execution Handoff](#execution-handoff)
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 

@@ -1,4 +1,69 @@
+<!-- doc:meta
+tipo: explanation
+camada: L3
+sot_de: —
+hub: docs/superpowers/specs/INDEX.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # Enriquecimento da exibição de Subagents no Chat Web — Design
+
+> **Papel:** Enriquecimento da exibição de Subagents no Chat Web — Design.
+
+## Indice
+
+- [1. Contexto e motivação](#1-contexto-e-motivação)
+  - [1.1 Estado atual](#11-estado-atual)
+  - [1.2 Lacunas identificadas vs Claude Code Agent View](#12-lacunas-identificadas-vs-claude-code-agent-view)
+  - [1.3 APIs SDK disponíveis (verificadas no Context7 + docs.claude.com)](#13-apis-sdk-disponíveis-verificadas-no-context7-docsclaudecom)
+  - [1.4 Decisões aprovadas via Q&A (brainstorming)](#14-decisões-aprovadas-via-qa-brainstorming)
+- [2. Princípios de design](#2-princípios-de-design)
+- [3. Mapa de Fase 1 vs Fase 2](#3-mapa-de-fase-1-vs-fase-2)
+  - [3.1 Fora de escopo (P2, adiado)](#31-fora-de-escopo-p2-adiado)
+- [4. Arquitetura geral](#4-arquitetura-geral)
+  - [4.1 Camadas afetadas](#41-camadas-afetadas)
+  - [4.2 Feature flags (por capacidade)](#42-feature-flags-por-capacidade)
+- [5. Componentes detalhados](#5-componentes-detalhados)
+  - [5.1 Backend](#51-backend)
+  - [5.2 Frontend](#52-frontend)
+  - [5.3 Resumo de arquivos tocados](#53-resumo-de-arquivos-tocados)
+- [6. Fluxo de dados + riscos mapeados](#6-fluxo-de-dados-riscos-mapeados)
+  - [6.1 Cenário 1 — Subagent inicia e progride (P0.2, P0.3, P1.1)](#61-cenário-1-subagent-inicia-e-progride-p02-p03-p11)
+  - [6.2 Cenário 2 — Usuário abre modal de transcript (P0.1)](#62-cenário-2-usuário-abre-modal-de-transcript-p01)
+  - [6.3 Cenário 3 — Admin toggle "Mostrar PII"](#63-cenário-3-admin-toggle-mostrar-pii)
+  - [6.4 Cenário 4 — Rename/tag (Fase 2)](#64-cenário-4-renametag-fase-2)
+  - [6.5 Mapa de riscos e mitigações](#65-mapa-de-riscos-e-mitigações)
+  - [6.6 Pontos onde existing code NÃO muda (proteção contra regressão)](#66-pontos-onde-existing-code-não-muda-proteção-contra-regressão)
+- [7. Tratamento de erros](#7-tratamento-de-erros)
+  - [7.1 Erros frontend → backend (no modal)](#71-erros-frontend-backend-no-modal)
+  - [7.2 Erros do PII toggle (admin)](#72-erros-do-pii-toggle-admin)
+  - [7.3 Erros do rename/tag (Fase 2)](#73-erros-do-renametag-fase-2)
+  - [7.4 Erros do download `output_file` (Fase 2)](#74-erros-do-download-output_file-fase-2)
+  - [7.5 Erros silenciados + logados (não chegam ao usuário)](#75-erros-silenciados-logados-não-chegam-ao-usuário)
+  - [7.6 Logging server-side](#76-logging-server-side)
+  - [7.7 Loading / empty / error states no modal](#77-loading-empty-error-states-no-modal)
+  - [7.8 Telemetria](#78-telemetria)
+- [8. Testes](#8-testes)
+  - [8.1 Inventário](#81-inventário)
+  - [8.2 Testes unitários — Fase 1 (3 arquivos novos)](#82-testes-unitários-fase-1-3-arquivos-novos)
+  - [8.3 Smoketest existente — extensão](#83-smoketest-existente-extensão)
+  - [8.4 E2E manual checklist (Fase 1)](#84-e2e-manual-checklist-fase-1)
+  - [8.5 Regression visual](#85-regression-visual)
+  - [8.6 Smoketest pós-deploy automatizado](#86-smoketest-pós-deploy-automatizado)
+  - [8.7 Cobertura de testes — meta](#87-cobertura-de-testes-meta)
+  - [8.8 Garantia de não-quebrar-existente](#88-garantia-de-não-quebrar-existente)
+- [9. Definition of Done](#9-definition-of-done)
+  - [9.1 Fase 1 — Done quando TODOS os 18 itens checados](#91-fase-1-done-quando-todos-os-18-itens-checados)
+  - [9.2 Fase 2 — Done quando TODOS os 10 itens checados](#92-fase-2-done-quando-todos-os-10-itens-checados)
+- [10. Plano de rollout em prod (big-bang)](#10-plano-de-rollout-em-prod-big-bang)
+  - [10.1 Rollback atômico](#101-rollback-atômico)
+  - [10.2 Roadmap de testes do usuário (E2E pós-deploy)](#102-roadmap-de-testes-do-usuário-e2e-pós-deploy)
+  - [10.3 Validação automatizada complementar](#103-validação-automatizada-complementar)
+- [11. Timeline estimado](#11-timeline-estimado)
+- [12. Riscos residuais reconhecidos](#12-riscos-residuais-reconhecidos)
+- [13. Referências](#13-referências)
+- [14. Histórico de decisões durante brainstorming](#14-histórico-de-decisões-durante-brainstorming)
+- [Contexto](#contexto)
 
 **Data**: 2026-05-14
 **Versão**: v1.0
@@ -1173,3 +1238,7 @@ Fases podem ser separadas por dias ou semanas — não há acoplamento entre ela
 | Q6: Delivery shape | 1 spec coeso, 2 fases sequenciais | Evita re-design entre PRs; Fase 1 maior valor primeiro |
 | Q7: Arquitetura interna | Stateful em `chat.js` existente | `chat.js` é monolítico estável; padrão `#artifact-modal`; estado compartilhado |
 | Q8: Rollout em prod | **Big-bang** (todas flags `true` no merge) + Roadmap de testes manual obrigatório | Usuário prefere validar tudo de uma vez via roadmap estruturado (seção 10.2) em vez de habilitar incrementalmente. Flags mantidas como circuit breakers para rollback emergencial |
+
+## Contexto
+
+_A completar (PAD-A Onda 4)._

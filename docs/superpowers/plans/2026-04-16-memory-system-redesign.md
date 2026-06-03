@@ -1,4 +1,52 @@
+<!-- doc:meta
+tipo: how-to
+camada: L3
+sot_de: —
+hub: docs/superpowers/plans/INDEX.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # Memory System Redesign — 3 Channels Implementation Plan
+
+> **Papel:** Memory System Redesign — 3 Channels Implementation Plan.
+
+## Indice
+
+- [Motivacao](#motivacao)
+- [Diagnostico](#diagnostico)
+  - [4 problemas estruturais (todos no mesmo eixo: framing)](#4-problemas-estruturais-todos-no-mesmo-eixo-framing)
+  - [Insight central](#insight-central)
+- [Arquitetura Alvo](#arquitetura-alvo)
+  - [3 Canais com framing distinto](#3-canais-com-framing-distinto)
+  - [Ciclo de vida novo](#ciclo-de-vida-novo)
+  - [Mudancas de schema](#mudancas-de-schema)
+  - [Mudancas de injecao](#mudancas-de-injecao)
+  - [Mudancas de system_prompt](#mudancas-de-system_prompt)
+- [File Structure](#file-structure)
+  - [Novos arquivos](#novos-arquivos)
+  - [Arquivos modificados](#arquivos-modificados)
+  - [Testes](#testes)
+- [Tasks](#tasks)
+  - [Task 1: Branch + feature flag kill switch](#task-1-branch-feature-flag-kill-switch)
+  - [Task 2: Migration — coluna priority](#task-2-migration-coluna-priority)
+  - [Task 3: Testes unitarios L1 Rules builder](#task-3-testes-unitarios-l1-rules-builder)
+  - [Task 4: Integrar `_build_user_rules` no pipeline de injecao](#task-4-integrar-_build_user_rules-no-pipeline-de-injecao)
+  - [Task 5: Expandir filtro de `<operational_directives>` para aceitar `/protocolos/`](#task-5-expandir-filtro-de-operational_directives-para-aceitar-protocolos)
+  - [Task 6: Testes unitarios pattern_analyzer mandatory detection](#task-6-testes-unitarios-pattern_analyzer-mandatory-detection)
+  - [Task 7: Atualizar memory_mcp_tool para aceitar `priority`](#task-7-atualizar-memory_mcp_tool-para-aceitar-priority)
+  - [Task 8: Testes proteção memory_consolidator](#task-8-testes-proteção-memory_consolidator)
+  - [Task 9: Atualizar system_prompt.md (R0e nova + R0 update)](#task-9-atualizar-system_promptmd-r0e-nova-r0-update)
+  - [Task 10: Data migration — promover preferences Marcus + baseline](#task-10-data-migration-promover-preferences-marcus-baseline)
+  - [Task 11: Deploy staged (feature flag + monitoramento)](#task-11-deploy-staged-feature-flag-monitoramento)
+- [Verification](#verification)
+  - [Unit tests](#unit-tests)
+  - [Integration test](#integration-test)
+  - [Metric](#metric)
+  - [Sinal negativo — rollback criterios](#sinal-negativo-rollback-criterios)
+  - [Rollback plano](#rollback-plano)
+- [Referencias](#referencias)
+  - [Codigo atual](#codigo-atual)
+  - [Memorias impactadas (producao Render)](#memorias-impactadas-producao-render)
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 

@@ -1,4 +1,63 @@
+<!-- doc:meta
+tipo: explanation
+camada: L3
+sot_de: —
+hub: docs/superpowers/specs/INDEX.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # Skills e Agentes para Módulo motos_assai — Design Spec
+
+> **Papel:** Skills e Agentes para Módulo motos_assai — Design Spec.
+
+## Indice
+
+- [1. Objetivo](#1-objetivo)
+- [2. Decisões de design (resumo da sessão de brainstorming)](#2-decisões-de-design-resumo-da-sessão-de-brainstorming)
+- [3. Arquitetura](#3-arquitetura)
+  - [3.1 Fronteiras (NÃO fazer)](#31-fronteiras-não-fazer)
+  - [3.2 Autorização](#32-autorização)
+  - [3.3 Padrão de output](#33-padrão-de-output)
+- [4. Componentes detalhados (6 skills + 1 agente)](#4-componentes-detalhados-6-skills-1-agente)
+  - [4.1 `consultando-estoque-assai` (READ)](#41-consultando-estoque-assai-read)
+  - [4.2 `rastreando-chassi-assai` (READ)](#42-rastreando-chassi-assai-read)
+  - [4.3 `acompanhando-pedido-compra-assai` (READ)](#43-acompanhando-pedido-compra-assai-read)
+  - [4.4 `acompanhando-saida-assai` (READ)](#44-acompanhando-saida-assai-read)
+  - [4.5 `conferindo-recibo-assai` (READ + WRITE)](#45-conferindo-recibo-assai-read-write)
+  - [4.6 `registrando-evento-moto-assai` (WRITE)](#46-registrando-evento-moto-assai-write)
+  - [4.7 `gestor-motos-assai` (sub-agent)](#47-gestor-motos-assai-sub-agent)
+- [5. Pre-mortem (5 cenários específicos do domínio)](#5-pre-mortem-5-cenários-específicos-do-domínio)
+  - [Cenário 1: Chassi com evento posterior já existente](#cenário-1-chassi-com-evento-posterior-já-existente)
+  - [Cenário 2: Recibo Motochefe finalizado prematuramente](#cenário-2-recibo-motochefe-finalizado-prematuramente)
+  - [Cenário 3: Disponibilizar moto com pendência aberta](#cenário-3-disponibilizar-moto-com-pendência-aberta)
+  - [Cenário 4: Race condition em separação](#cenário-4-race-condition-em-separação)
+  - [Cenário 5: NF Q.P.A. importada com match DIVERGENTE](#cenário-5-nf-qpa-importada-com-match-divergente)
+  - [Self-critique (checklist antes de retornar resposta)](#self-critique-checklist-antes-de-retornar-resposta)
+- [6. Error handling (exit codes)](#6-error-handling-exit-codes)
+  - [Tratamento por skill (READ)](#tratamento-por-skill-read)
+  - [Tratamento por skill (WRITE)](#tratamento-por-skill-write)
+- [7. Data flow (fluxos típicos)](#7-data-flow-fluxos-típicos)
+  - [7.1 Fluxo A — Consulta READ](#71-fluxo-a-consulta-read)
+  - [7.2 Fluxo B — Operação WRITE (dry-run + confirmação)](#72-fluxo-b-operação-write-dry-run-confirmação)
+  - [7.3 Fluxo C — Cross-entidade (orquestração)](#73-fluxo-c-cross-entidade-orquestração)
+- [8. Testing](#8-testing)
+  - [8.1 Camada 1 — Testes unitários por skill](#81-camada-1-testes-unitários-por-skill)
+  - [8.2 Camada 2 — Testes de integração](#82-camada-2-testes-de-integração)
+  - [8.3 Camada 3 — Avaliação offline do agente](#83-camada-3-avaliação-offline-do-agente)
+  - [8.4 Casos de teste por skill (mínimo)](#84-casos-de-teste-por-skill-mínimo)
+  - [8.5 Golden dataset (exemplo)](#85-golden-dataset-exemplo)
+  - [8.6 Fixtures necessárias](#86-fixtures-necessárias)
+  - [8.7 Verificação pré-merge](#87-verificação-pré-merge)
+- [9. Atualizações em arquivos existentes (cross-refs obrigatórias)](#9-atualizações-em-arquivos-existentes-cross-refs-obrigatórias)
+  - [9.1 `.claude/references/ROUTING_SKILLS.md`](#91-claudereferencesrouting_skillsmd)
+  - [9.2 `.claude/references/INDEX.md`](#92-claudereferencesindexmd)
+  - [9.3 `CLAUDE.md` (raiz)](#93-claudemd-raiz)
+  - [9.4 `.claude/skills/SKILL_IMPROVEMENT_ROADMAP.md`](#94-claudeskillsskill_improvement_roadmapmd)
+  - [9.5 `app/motos_assai/CLAUDE.md`](#95-appmotos_assaiclaudemd)
+- [10. Critérios de aceite](#10-critérios-de-aceite)
+- [11. Riscos e mitigações](#11-riscos-e-mitigações)
+- [12. Próximos passos](#12-próximos-passos)
+- [Contexto](#contexto)
 
 **Data**: 2026-05-08
 **Status**: Spec aprovado em sessão de brainstorming, aguardando implementation plan
@@ -568,3 +627,7 @@ Após aprovação deste spec:
    - **Fase 3**: 2 skills MIXED/WRITE (conferindo-recibo-assai, registrando-evento-moto-assai)
    - **Fase 4**: integrar WRITE no agente + golden dataset + cross-refs
 3. Cada fase tem critérios de aceite próprios + verificação intermediária
+
+## Contexto
+
+_A completar (PAD-A Onda 4)._

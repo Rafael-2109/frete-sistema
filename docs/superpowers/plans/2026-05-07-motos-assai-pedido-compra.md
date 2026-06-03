@@ -1,4 +1,35 @@
+<!-- doc:meta
+tipo: how-to
+camada: L3
+sot_de: —
+hub: docs/superpowers/plans/INDEX.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # Motos Assaí — Plano 2A: Parser VOE + Pedido + Compra Motochefe
+
+> **Papel:** Motos Assaí — Plano 2A: Parser VOE + Pedido + Compra Motochefe.
+
+## Indice
+
+- [Visão de arquivos](#visão-de-arquivos)
+- [Task 1: Estender `IdentificadorDocumento` com padrão QPA](#task-1-estender-identificadordocumento-com-padrão-qpa)
+- [Task 2: `QpaPedidoExtractor` — extrator determinístico](#task-2-qpapedidoextractor-extrator-determinístico)
+- [Task 3: Testes do `QpaPedidoExtractor`](#task-3-testes-do-qpapedidoextractor)
+- [Task 4: Fallback LLM `QpaPedidoLlmFallback`](#task-4-fallback-llm-qpapedidollmfallback)
+- [Task 5: `modelo_resolver` service + testes](#task-5-modelo_resolver-service-testes)
+- [Task 6: `pedido_service.importar_pdf_voe`](#task-6-pedido_serviceimportar_pdf_voe)
+- [Task 7: Form + Rota POST upload pedido](#task-7-form-rota-post-upload-pedido)
+- [Task 8: Template upload pedido](#task-8-template-upload-pedido)
+- [Task 9: Tela de detalhe do pedido](#task-9-tela-de-detalhe-do-pedido)
+- [Task 10: Lista de pedidos](#task-10-lista-de-pedidos)
+- [Task 11: `compra_service.criar_consolidado`](#task-11-compra_servicecriar_consolidado)
+- [Task 12: Geração PDF do PO Motochefe](#task-12-geração-pdf-do-po-motochefe)
+- [Task 13: Form + Rota nova compra (preview)](#task-13-form-rota-nova-compra-preview)
+- [Task 14: Detalhe da compra + download PDF](#task-14-detalhe-da-compra-download-pdf)
+- [Task 15: Lista de compras + link no menu](#task-15-lista-de-compras-link-no-menu)
+- [Task 16: Atualizar CLAUDE.md do módulo](#task-16-atualizar-claudemd-do-módulo)
+- [Self-review do plano](#self-review-do-plano)
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 

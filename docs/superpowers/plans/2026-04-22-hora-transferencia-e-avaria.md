@@ -1,4 +1,42 @@
+<!-- doc:meta
+tipo: how-to
+camada: L3
+sot_de: —
+hub: docs/superpowers/plans/INDEX.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # HORA — Transferência entre Filiais + Registro de Avaria — Implementation Plan
+
+> **Papel:** HORA — Transferência entre Filiais + Registro de Avaria — Implementation Plan.
+
+## Indice
+
+- [Mapa de Arquivos](#mapa-de-arquivos)
+  - [Criar (16)](#criar-16)
+  - [Modificar](#modificar)
+- [Task 1: Estrutura de testes tests/hora/](#task-1-estrutura-de-testes-testshora)
+- [Task 2: Migration SQL](#task-2-migration-sql)
+- [Task 3: Migration Python](#task-3-migration-python)
+- [Task 4: Models SQLAlchemy](#task-4-models-sqlalchemy)
+- [Task 5: Adicionar EM_TRANSITO e CANCELADA em TIPOS_VALIDOS](#task-5-adicionar-em_transito-e-cancelada-em-tipos_validos)
+- [Task 6: Ajustar EVENTOS_EM_ESTOQUE + helper listar_em_transito](#task-6-ajustar-eventos_em_estoque-helper-listar_em_transito)
+- [Task 7: Helper `loja_origem_permitida_para_transferencia`](#task-7-helper-loja_origem_permitida_para_transferencia)
+- [Task 8: avaria_service.py completo](#task-8-avaria_servicepy-completo)
+- [Task 9: transferencia_audit.py](#task-9-transferencia_auditpy)
+- [Task 10: transferencia_service — criar_transferencia](#task-10-transferencia_service-criar_transferencia)
+- [Task 11: transferencia_service — confirmar_item_destino + finalizar_se_tudo_confirmado](#task-11-transferencia_service-confirmar_item_destino-finalizar_se_tudo_confirmado)
+- [Task 12: transferencia_service — cancelar_transferencia](#task-12-transferencia_service-cancelar_transferencia)
+- [Task 13: Routes avarias.py](#task-13-routes-avariaspy)
+- [Task 14: Routes transferencias.py](#task-14-routes-transferenciaspy)
+- [Task 15: Templates — avarias_lista.html](#task-15-templates-avarias_listahtml)
+- [Task 16: Templates — avaria_nova.html + avaria_detalhe.html](#task-16-templates-avaria_novahtml-avaria_detalhehtml)
+- [Task 17: Templates — transferencias_lista + transferencia_nova](#task-17-templates-transferencias_lista-transferencia_nova)
+- [Task 18: Templates — transferencia_detalhe + transferencia_confirmar_wizard](#task-18-templates-transferencia_detalhe-transferencia_confirmar_wizard)
+- [Task 19: Menu + integrações estoque_lista/chassi_detalhe](#task-19-menu-integrações-estoque_listachassi_detalhe)
+- [Task 20: Schemas JSON + CLAUDE.md do módulo](#task-20-schemas-json-claudemd-do-módulo)
+- [Task 21: Self-audit final](#task-21-self-audit-final)
+- [Verificação pós-implementação](#verificação-pós-implementação)
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 

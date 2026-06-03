@@ -1,4 +1,37 @@
+<!-- doc:meta
+tipo: how-to
+camada: L3
+sot_de: —
+hub: docs/superpowers/plans/INDEX.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # Motos Assaí — Plano 3: Pipeline de Saída + Polish
+
+> **Papel:** Motos Assaí — Plano 3: Pipeline de Saída + Polish.
+
+## Indice
+
+- [Visão de arquivos](#visão-de-arquivos)
+- [Task 1: `montagem_service.registrar`](#task-1-montagem_serviceregistrar)
+- [Task 2: Tela rápida de montagem](#task-2-tela-rápida-de-montagem)
+- [Task 3: Testes do `montagem_service`](#task-3-testes-do-montagem_service)
+- [Task 4: `disponibilizar_service.disponibilizar` + reverter](#task-4-disponibilizar_servicedisponibilizar-reverter)
+- [Task 5: Tela rápida disponibilizar + modal motivo](#task-5-tela-rápida-disponibilizar-modal-motivo)
+- [Task 6: Testes do `disponibilizar_service`](#task-6-testes-do-disponibilizar_service)
+- [Task 7: `separacao_service` (registrar/cancelar/finalizar)](#task-7-separacao_service-registrarcancelarfinalizar)
+- [Task 8: Tela de separação](#task-8-tela-de-separação)
+- [Task 9: Testes do `separacao_service`](#task-9-testes-do-separacao_service)
+- [Task 10: `faturamento_service.gerar_excel_qpa`](#task-10-faturamento_servicegerar_excel_qpa)
+- [Task 11: Rota download Excel + lista de separações faturáveis](#task-11-rota-download-excel-lista-de-separações-faturáveis)
+- [Task 12: `nf_qpa_adapter` (importar NF Q.P.A. + match)](#task-12-nf_qpa_adapter-importar-nf-qpa-match)
+- [Task 13: Rota upload NF Q.P.A. + detalhe](#task-13-rota-upload-nf-qpa-detalhe)
+- [Task 14: Testes faturamento + match](#task-14-testes-faturamento-match)
+- [Task 15: Adicionar `SOL` no parser CarVia](#task-15-adicionar-sol-no-parser-carvia)
+- [Task 16: CLAUDE.md final + dashboard atualizado](#task-16-claudemd-final-dashboard-atualizado)
+- [Task 17: UI lint + testes E2E + smoke](#task-17-ui-lint-testes-e2e-smoke)
+- [Self-review](#self-review)
+- [Resumo dos 4 documentos gerados](#resumo-dos-4-documentos-gerados)
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 

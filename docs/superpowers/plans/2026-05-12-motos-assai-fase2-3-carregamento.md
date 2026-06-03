@@ -1,4 +1,46 @@
+<!-- doc:meta
+tipo: how-to
+camada: L3
+sot_de: —
+hub: docs/superpowers/plans/INDEX.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # Motos Assaí — Fase 2-3 (Carregamento Service + UI) Implementation Plan
+
+> **Papel:** Motos Assaí — Fase 2-3 (Carregamento Service + UI) Implementation Plan.
+
+## Indice
+
+- [File Structure](#file-structure)
+  - [Services a criar/expandir](#services-a-criarexpandir)
+  - [Services a modificar](#services-a-modificar)
+  - [Routes a criar](#routes-a-criar)
+  - [Templates a criar](#templates-a-criar)
+  - [Static (JS) a criar](#static-js-a-criar)
+  - [Modificações UI](#modificações-ui)
+  - [Onboarding tours](#onboarding-tours)
+  - [Tests a criar](#tests-a-criar)
+- [Tasks](#tasks)
+  - [Task 1: Service `criar_carregamento` + testes](#task-1-service-criar_carregamento-testes)
+  - [Task 2: Service `escanear_carregamento_item` (lock pessimista S3=c) + testes](#task-2-service-escanear_carregamento_item-lock-pessimista-s3c-testes)
+  - [Task 3: Service `cancelar_carregamento_item` + testes](#task-3-service-cancelar_carregamento_item-testes)
+  - [Task 4: Service `cancelar_carregamento` (S5 distinção EM_CARREGAMENTO vs FINALIZADO)](#task-4-service-cancelar_carregamento-s5-distinção-em_carregamento-vs-finalizado)
+  - [Task 5: `finalizar_carregamento` Fase 1 — identificar/criar sep alvo](#task-5-finalizar_carregamento-fase-1-identificarcriar-sep-alvo)
+  - [Task 6: `finalizar_carregamento` Fase 2 — sobrescrever sep alvo (S2 realocação)](#task-6-finalizar_carregamento-fase-2-sobrescrever-sep-alvo-s2-realocação)
+  - [Task 7: `finalizar_carregamento` Fase 3 — limite pedido (CarregamentoExcedenteError)](#task-7-finalizar_carregamento-fase-3-limite-pedido-carregamentoexcedenteerror)
+  - [Task 8: `finalizar_carregamento` Fase 4 — sep CARREGADA + emitir CARREGADA](#task-8-finalizar_carregamento-fase-4-sep-carregada-emitir-carregada)
+  - [Task 9: `finalizar_carregamento` Fase 5 — regenerar Excel (S13 retry + CR-12 lock)](#task-9-finalizar_carregamento-fase-5-regenerar-excel-s13-retry-cr-12-lock)
+  - [Task 10: `finalizar_carregamento` Fase 6 — sincronizar mirror Nacom](#task-10-finalizar_carregamento-fase-6-sincronizar-mirror-nacom)
+  - [Task 11: `finalizar_carregamento` Fase 7 — divergência se NF BATEU (A4 BATEU→DIVERGENTE + A3)](#task-11-finalizar_carregamento-fase-7-divergência-se-nf-bateu-a4-bateudivergente-a3)
+  - [Task 12: `finalizar_carregamento` Fase 8 — recalcular_status_pedido (A13)](#task-12-finalizar_carregamento-fase-8-recalcular_status_pedido-a13)
+  - [Task 13: Service `alterar_carregamento` (S6=a reabre)](#task-13-service-alterar_carregamento-s6a-reabre)
+  - [Task 14: Atualizar `cancelar_separacao` para aceitar status `CARREGADA`](#task-14-atualizar-cancelar_separacao-para-aceitar-status-carregada)
+  - [Task 15: Atualizar `mirror_assai_to_separacao` para aceitar `(FECHADA, CARREGADA, FATURADA)` (S12)](#task-15-atualizar-mirror_assai_to_separacao-para-aceitar-fechada-carregada-faturada-s12)
+- [Fase 3 — UI (Tasks 16-25)](#fase-3-ui-tasks-16-25)
+  - [Task 16: Rota e template `lista_carregamentos`](#task-16-rota-e-template-lista_carregamentos)
+  - [Tasks 17-22: UI restante (escanear, modais finalizar/cancelar/alterar/excedente)](#tasks-17-22-ui-restante-escanear-modais-finalizarcancelaralterarexcedente)
+- [Self-review (executor)](#self-review-executor)
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 

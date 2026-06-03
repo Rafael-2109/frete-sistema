@@ -1,4 +1,27 @@
+<!-- doc:meta
+tipo: how-to
+camada: L3
+sot_de: —
+hub: docs/superpowers/plans/INDEX.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # Transferência de Saldo entre Códigos (Odoo) — Implementation Plan
+
+> **Papel:** Transferência de Saldo entre Códigos (Odoo) — Implementation Plan.
+
+## Indice
+
+- [File Structure](#file-structure)
+- [Task 1: Service scaffold + `resolver_produto`](#task-1-service-scaffold-resolver_produto)
+- [Task 2: `listar_lotes_cd_estoque`](#task-2-listar_lotes_cd_estoque)
+- [Task 3: `descobrir_destinos` (bidirecional)](#task-3-descobrir_destinos-bidirecional)
+- [Task 4: `transferir` — orquestração Odoo + compensação + validade](#task-4-transferir-orquestração-odoo-compensação-validade)
+- [Task 5: `_registrar_movimentacao_local` (espelho local)](#task-5-_registrar_movimentacao_local-espelho-local)
+- [Task 6: Rotas no `estoque_bp` (tela + api/lotes + api/executar)](#task-6-rotas-no-estoque_bp-tela-apilotes-apiexecutar)
+- [Task 7: Template + itens de menu](#task-7-template-itens-de-menu)
+- [Task 8: Verificação manual (smoke) + checklist do spec](#task-8-verificação-manual-smoke-checklist-do-spec)
+- [Notas de implementação](#notas-de-implementação)
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 

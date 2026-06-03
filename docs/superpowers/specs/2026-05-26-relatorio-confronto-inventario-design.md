@@ -1,4 +1,53 @@
+<!-- doc:meta
+tipo: explanation
+camada: L3
+sot_de: —
+hub: docs/superpowers/specs/INDEX.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # Relatório de Confronto de Inventário — Design
+
+> **Papel:** Relatório de Confronto de Inventário — Design.
+
+## Indice
+
+- [1. Visão e objetivos](#1-visão-e-objetivos)
+- [2. Arquitetura](#2-arquitetura)
+- [3. Modelos de dados](#3-modelos-de-dados)
+- [4. Routes](#4-routes)
+  - [4.1 ciclo_routes.py](#41-ciclo_routespy)
+  - [4.2 confronto_routes.py (rota principal)](#42-confronto_routespy-rota-principal)
+  - [4.3 ajustes_manuais_routes.py](#43-ajustes_manuais_routespy)
+  - [4.4 snapshot_routes.py](#44-snapshot_routespy)
+  - [4.5 movimentacoes_routes.py](#45-movimentacoes_routespy)
+- [5. Services](#5-services)
+  - [5.1 confronto_service.py](#51-confronto_servicepy)
+  - [5.2 inventario_loader.py](#52-inventario_loaderpy)
+  - [5.3 snapshot_odoo_service.py](#53-snapshot_odoo_servicepy)
+  - [5.4 movimentacoes_odoo_service.py](#54-movimentacoes_odoo_servicepy)
+  - [5.5 export_xlsx_service.py](#55-export_xlsx_servicepy)
+- [6. UI / Templates](#6-ui-templates)
+  - [6.1 confronto.html](#61-confrontohtml)
+  - [6.2 movimentacoes.html (drill-down em nova aba)](#62-movimentacoeshtml-drill-down-em-nova-aba)
+  - [6.3 ciclos.html](#63-cicloshtml)
+  - [6.4 ajustes_manuais.html](#64-ajustes_manuaishtml)
+  - [6.5 Menu (app/templates/base.html)](#65-menu-apptemplatesbasehtml)
+- [7. Worker RQ](#7-worker-rq)
+  - [7.1 refresh_snapshot_worker.py](#71-refresh_snapshot_workerpy)
+  - [7.2 Integração worker_render.py / start_worker_render.sh](#72-integração-worker_renderpy-start_worker_rendersh)
+- [8. Mapeamento de dados (validado em PROD 2026-05-26)](#8-mapeamento-de-dados-validado-em-prod-2026-05-26)
+- [9. Tratamento de erros e bordas](#9-tratamento-de-erros-e-bordas)
+- [10. Testes (estimativa ~30 testes)](#10-testes-estimativa-30-testes)
+  - [10.1 Unit tests](#101-unit-tests)
+  - [10.2 Integration tests](#102-integration-tests)
+  - [10.3 Smoke (manual, doc no fim do plano)](#103-smoke-manual-doc-no-fim-do-plano)
+- [11. Migrations](#11-migrations)
+- [12. Decisões inviáveis / inviabilidades aceitas](#12-decisões-inviáveis-inviabilidades-aceitas)
+- [13. Riscos e mitigações](#13-riscos-e-mitigações)
+- [14. Estimativa de esforço](#14-estimativa-de-esforço)
+- [15. Próximos passos](#15-próximos-passos)
+- [Contexto](#contexto)
 
 **Data**: 2026-05-26
 **Autor**: Rafael Nascimento + Claude (Opus 4.7)
@@ -730,3 +779,7 @@ CREATE INDEX IF NOT EXISTS ix_inventario_base_cod_produto ON inventario_base(cod
 - `~/.claude/CLAUDE.md` (regras dev — migrations, worker RQ, JSON sanitization)
 - `CLAUDE.md` (projeto — companies FB=1/CD=4/LF=5)
 - Validação PROD 2026-05-26: `tipo_movimentacao` valores reais (ENTRADA, FATURAMENTO, CONSUMO, PRODUÇÃO com Ç, etc.)
+
+## Contexto
+
+_A completar (PAD-A Onda 4)._

@@ -1,4 +1,40 @@
+<!-- doc:meta
+tipo: explanation
+camada: L3
+sot_de: —
+hub: docs/superpowers/specs/INDEX.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # Reforma Modulo Pessoal — Controle Financeiro
+
+> **Papel:** Reforma Modulo Pessoal — Controle Financeiro.
+
+## Indice
+
+- [Contexto](#contexto)
+- [Decisoes de Design](#decisoes-de-design)
+- [Schema](#schema)
+  - [Nova tabela: `pessoal_orcamentos`](#nova-tabela-pessoal_orcamentos)
+  - [Remocao: `ordem_exibicao` de `pessoal_categorias`](#remocao-ordem_exibicao-de-pessoal_categorias)
+- [Arquivos Novos](#arquivos-novos)
+- [Arquivos Modificados](#arquivos-modificados)
+- [Dashboard (`GET /pessoal/dashboard`)](#dashboard-get-pessoaldashboard)
+  - [Layout (top → bottom)](#layout-top-bottom)
+  - [Endpoints API](#endpoints-api)
+  - [Filtros de Query](#filtros-de-query)
+- [Pagina de Orcamento (`GET /pessoal/orcamento`)](#pagina-de-orcamento-get-pessoalorcamento)
+  - [Layout](#layout)
+  - [Endpoints API](#endpoints-api)
+- [Navegacao (base.html)](#navegacao-basehtml)
+- [Service Layer: `dashboard_service.py`](#service-layer-dashboard_servicepy)
+- [Fases de Implementacao](#fases-de-implementacao)
+  - [Fase 1 — Schema + Migration](#fase-1-schema-migration)
+  - [Fase 2 — Modelo + Cleanup](#fase-2-modelo-cleanup)
+  - [Fase 3 — Pagina de Orcamento](#fase-3-pagina-de-orcamento)
+  - [Fase 4 — Dashboard](#fase-4-dashboard)
+  - [Fase 5 — Navegacao](#fase-5-navegacao)
+- [Verificacao](#verificacao)
 
 **Data**: 2026-04-05
 **Status**: Aprovado

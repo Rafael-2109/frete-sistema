@@ -1,4 +1,35 @@
+<!-- doc:meta
+tipo: how-to
+camada: L3
+sot_de: —
+hub: docs/superpowers/plans/INDEX.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # Subagent UI Enrichment Implementation Plan
+
+> **Papel:** Subagent UI Enrichment Implementation Plan.
+
+## Indice
+
+- [Estratégia de fases](#estratégia-de-fases)
+- [Task 1: Feature flags](#task-1-feature-flags)
+- [Task 2: client.py + routes/chat.py — propagar usage + parent_tool_use_id (TDD)](#task-2-clientpy-routeschatpy-propagar-usage-parent_tool_use_id-tdd)
+- [Task 3: get_subagent_transcript em subagent_reader.py (TDD)](#task-3-get_subagent_transcript-em-subagent_readerpy-tdd)
+- [Task 4: Endpoint POST /pii-toggle (TDD)](#task-4-endpoint-post-pii-toggle-tdd)
+- [Task 5: Endpoint GET /transcript (TDD)](#task-5-endpoint-get-transcript-tdd)
+- [Task 6: Smoketest extension em admin_subagents.py](#task-6-smoketest-extension-em-admin_subagentspy)
+- [Task 7: CSS — extensões em _subagent-inline.css](#task-7-css-extensões-em-_subagent-inlinecss)
+- [Task 8: CSS — novo _subagent-modal.css](#task-8-css-novo-_subagent-modalcss)
+- [Task 9: Markup do modal em chat.html](#task-9-markup-do-modal-em-chathtml)
+- [Task 10: chat.js — extensões na linha inline (P0.2, P0.3, P1.1)](#task-10-chatjs-extensões-na-linha-inline-p02-p03-p11)
+- [Task 11: chat.js — openSubagentModal + closeSubagentModal + togglePII](#task-11-chatjs-opensubagentmodal-closesubagentmodal-togglepii)
+- [Task 12: Pre-merge — validação completa](#task-12-pre-merge-validação-completa)
+- [Task 13: Endpoint PATCH /subagents/<aid> (rename/tag, TDD)](#task-13-endpoint-patch-subagentsaid-renametag-tdd)
+- [Task 14: Endpoint GET /output_file (download JSONL, TDD)](#task-14-endpoint-get-output_file-download-jsonl-tdd)
+- [Task 15: chat.js — botões rename/tag/download no modal](#task-15-chatjs-botões-renametagdownload-no-modal)
+- [Task 16: Pre-merge Fase 2 — validação completa](#task-16-pre-merge-fase-2-validação-completa)
+- [Self-review](#self-review)
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 

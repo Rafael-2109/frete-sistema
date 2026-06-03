@@ -1,4 +1,35 @@
+<!-- doc:meta
+tipo: explanation
+camada: L3
+sot_de: —
+hub: docs/superpowers/specs/INDEX.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # Fallback OCR para pedidos HORA via imagem (print de WhatsApp)
+
+> **Papel:** Fallback OCR para pedidos HORA via imagem (print de WhatsApp).
+
+## Indice
+
+- [1. Contexto](#1-contexto)
+- [2. Objetivos](#2-objetivos)
+- [3. Decisao de motor de OCR](#3-decisao-de-motor-de-ocr)
+- [4. Arquitetura](#4-arquitetura)
+- [5. Componentes](#5-componentes)
+  - [5.1 Arquivos novos](#51-arquivos-novos)
+  - [5.2 Arquivos modificados](#52-arquivos-modificados)
+  - [5.3 Modelo](#53-modelo)
+- [6. Fluxo detalhado](#6-fluxo-detalhado)
+  - [6.1 Upload (sincrono)](#61-upload-sincrono)
+  - [6.2 Confirmacao (sincrono + assincrono)](#62-confirmacao-sincrono-assincrono)
+  - [6.3 Background (worker)](#63-background-worker)
+  - [6.4 Error handling](#64-error-handling)
+- [7. Testes](#7-testes)
+- [8. Riscos e mitigacoes](#8-riscos-e-mitigacoes)
+- [9. Plano de implementacao (alto-nivel)](#9-plano-de-implementacao-alto-nivel)
+- [10. Referencias](#10-referencias)
+- [Contexto](#contexto)
 
 **Data**: 2026-05-08
 **Modulo**: `app/hora`
@@ -541,3 +572,7 @@ Detalhes virao no plano executavel. Resumo de fases:
 - CLAUDE.md HORA: `app/hora/CLAUDE.md`
 - Regra de migrations duais: `~/.claude/CLAUDE.md` secao MIGRATIONS
 - Imagens de teste: `/mnt/c/Users/rafael.nascimento/Downloads/WhatsApp Image 2026-05-08 at 11.24.{32,33,33 (1)}.jpeg`
+
+## Contexto
+
+_A completar (PAD-A Onda 4)._

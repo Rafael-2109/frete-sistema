@@ -1,4 +1,37 @@
+<!-- doc:meta
+tipo: how-to
+camada: L3
+sot_de: —
+hub: docs/superpowers/plans/INDEX.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # Relatorio Final — Subagent UI Enrichment
+
+> **Papel:** Relatorio Final — Subagent UI Enrichment.
+
+## Indice
+
+- [Resumo executivo](#resumo-executivo)
+- [Commits entregues (13 total em `main`)](#commits-entregues-13-total-em-main)
+- [Mapa de arquivos modificados (16 arquivos)](#mapa-de-arquivos-modificados-16-arquivos)
+- [Capacidades entregues](#capacidades-entregues)
+  - [Fase 1 (P0.x + P1.1)](#fase-1-p0x-p11)
+  - [Fase 2 (P1.2 + P1.3)](#fase-2-p12-p13)
+- [Seguranca](#seguranca)
+  - [Defesa em profundidade implementada](#defesa-em-profundidade-implementada)
+  - [Issues corrigidas pelos 2 code-reviews](#issues-corrigidas-pelos-2-code-reviews)
+- [Validacao automatizada](#validacao-automatizada)
+- [Feature flags (5 novas)](#feature-flags-5-novas)
+- [Validacao em producao](#validacao-em-producao)
+  - [Timeline do deploy](#timeline-do-deploy)
+  - [Smoketest endpoint](#smoketest-endpoint)
+  - [Conversa com agente em prod via Playwright](#conversa-com-agente-em-prod-via-playwright)
+  - [Sentry monitoring (15min pos-deploy live)](#sentry-monitoring-15min-pos-deploy-live)
+  - [Roadmap manual (spec secao 10.2) — para usuario](#roadmap-manual-spec-secao-102-para-usuario)
+  - [Comandos de validacao do usuario](#comandos-de-validacao-do-usuario)
+- [Arquivos para review do usuario](#arquivos-para-review-do-usuario)
+- [Decisoes nao-triviais durante implementacao](#decisoes-nao-triviais-durante-implementacao)
 
 **Data**: 2026-05-14
 **Sessao autonoma de**: ~7h continuas

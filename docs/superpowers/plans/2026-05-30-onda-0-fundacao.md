@@ -1,4 +1,26 @@
+<!-- doc:meta
+tipo: how-to
+camada: L3
+sot_de: —
+hub: docs/superpowers/plans/INDEX.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # Onda 0 — Fundação Física (entidade de passo + registry descritivo) Implementation Plan
+
+> **Papel:** Onda 0 — Fundação Física (entidade de passo + registry descritivo) Implementation Plan.
+
+## Indice
+
+- [DECISÃO DE DESIGN BLOQUEANTE (resolver com Rafael ANTES da Task 1)](#decisão-de-design-bloqueante-resolver-com-rafael-antes-da-task-1)
+- [File Structure](#file-structure)
+- [Task 1 — Model `AgentStep` + migration dupla (S0a parte 1)](#task-1-model-agentstep-migration-dupla-s0a-parte-1)
+- [Task 2 — Wiring: gravar `agent_step` no PRIMARY + teste de integração (S0a parte 2)](#task-2-wiring-gravar-agent_step-no-primary-teste-de-integração-s0a-parte-2)
+- [Task 3 — Consolidar deny-list de skills numa fonte única (S0b)](#task-3-consolidar-deny-list-de-skills-numa-fonte-única-s0b)
+- [Task 4 — Capability Registry descritivo (S0c)](#task-4-capability-registry-descritivo-s0c)
+- [Self-Review (executar após escrever, antes de implementar)](#self-review-executar-após-escrever-antes-de-implementar)
+- [GATE-0 (antes de iniciar a Onda 1)](#gate-0-antes-de-iniciar-a-onda-1)
+- [Execution Handoff](#execution-handoff)
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development para implementar task-by-task (1 subagente fresco/tarefa + review entre tarefas). Steps usam checkbox `- [ ]`.
 
