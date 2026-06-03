@@ -221,6 +221,12 @@
   <div class="mt-2">
     <button type="submit" class="btn btn-primary btn-sm">Filtrar</button>
     <a href="{{ url_for('hora.estoque_lista') }}" class="btn btn-outline-secondary btn-sm">Limpar</a>
+    <button type="submit" class="btn btn-outline-success btn-sm"
+            formaction="{{ url_for('hora.estoque_exportar_xlsx') }}"
+            formmethod="get"
+            title="Excel com Chassi, Modelo, Cor e Loja — respeita os filtros aplicados acima.">
+      <i class="fas fa-file-excel"></i> Exportar Excel
+    </button>
   </div>
 </form>
 </div>{# /#filtros-estoque #}
