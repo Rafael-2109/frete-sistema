@@ -10,6 +10,7 @@ from app.agente.models import AgentMemory
 from app.agente.services.directive_promotion_service import (
     _reframe_as_compiled_memory,
     promover_correcoes_recorrentes,
+    demote_stale_rules,
 )
 
 
@@ -48,12 +49,13 @@ def cleanup(app, test_user):
 
 
 def _nova_correcao(user_id, path, content, *, priority='contextual', correction_count=0,
-                   importance=0.7, error_signature=None):
+                   importance=0.7, error_signature=None, harmful_count=0):
     mem = AgentMemory.create_file(user_id, path, content)
     mem.priority = priority
     mem.correction_count = correction_count
     mem.importance_score = importance
     mem.error_signature = error_signature
+    mem.harmful_count = harmful_count
     db.session.commit()
     return mem
 
@@ -156,3 +158,57 @@ def test_promocao_reescreve_em_frame_imperativo(app, cleanup):
     assert 'WHEN:' in mem.content
     assert out['promovidas'] == 1
     assert out.get('reescritas', 0) == 1
+
+
+# ───────────────────────── 3.6: demote_stale_rules ─────────────────────────
+
+def test_demote_flag_off_nao_rebaixa(app, cleanup, monkeypatch):
+    """Default OFF: nenhuma regra e rebaixada (seguro por padrao)."""
+    monkeypatch.setattr('app.agente.config.feature_flags.AGENT_CORRECTION_DEMOTION', False)
+    ids, user_id = cleanup
+    m = _nova_correcao(user_id, '/memories/corrections/dur-falha-off.xml', '[correcao] x\nDO: y',
+                       priority='mandatory', harmful_count=5)
+    ids.append(m.id)
+    out = demote_stale_rules(user_id=user_id)
+    db.session.refresh(m)
+    assert m.priority == 'mandatory'  # intacta
+    assert out['rebaixadas'] == 0
+
+
+def test_demote_rebaixa_regra_dura_harmful(app, cleanup, monkeypatch):
+    """Flag ON: regra dura com harmful_count >= threshold vira contextual + cold (fora de circulacao)."""
+    monkeypatch.setattr('app.agente.config.feature_flags.AGENT_CORRECTION_DEMOTION', True)
+    ids, user_id = cleanup
+    harmful = _nova_correcao(user_id, '/memories/corrections/dur-falha.xml', '[correcao] a\nDO: b',
+                             priority='mandatory', harmful_count=2)
+    ids.append(harmful.id)
+    limpa = _nova_correcao(user_id, '/memories/corrections/dur-limpa.xml', '[correcao] c\nDO: d',
+                           priority='mandatory', harmful_count=0)
+    ids.append(limpa.id)
+
+    out = demote_stale_rules(harmful_threshold=2, user_id=user_id)
+    db.session.refresh(harmful)
+    db.session.refresh(limpa)
+    assert harmful.priority == 'contextual'   # rebaixada
+    assert harmful.is_cold is True            # fora de circulacao
+    assert limpa.priority == 'mandatory'      # harmful_count=0 -> intacta
+    assert out['rebaixadas'] == 1
+
+
+def test_demote_flap_free_nao_repromove(app, cleanup, monkeypatch):
+    """Regra rebaixada (is_cold) NAO e re-promovida pela fonte 3 (filtra is_cold==False)."""
+    monkeypatch.setattr('app.agente.config.feature_flags.AGENT_CORRECTION_DEMOTION', True)
+    ids, user_id = cleanup
+    # cc alto (re-promoveria) MAS harmful -> demote -> cold -> promocao ignora
+    m = _nova_correcao(user_id, '/memories/corrections/flap.xml', '[correcao] e\nDO: f',
+                       priority='mandatory', correction_count=9, harmful_count=2)
+    ids.append(m.id)
+
+    demote_stale_rules(harmful_threshold=2, user_id=user_id)
+    db.session.refresh(m)
+    assert m.is_cold is True and m.priority == 'contextual'
+
+    out = promover_correcoes_recorrentes(threshold=2, user_id=user_id)
+    db.session.refresh(m)
+    assert m.priority == 'contextual'   # NAO re-promovida (flap-free)
+    assert out['promovidas'] == 0

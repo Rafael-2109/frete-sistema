@@ -730,6 +730,63 @@ def promover_correcoes_recorrentes(threshold: int = None, limit: int = 200, user
     return out
 
 
+def demote_stale_rules(harmful_threshold: int = None, limit: int = 200, user_id: int = None) -> dict:
+    """Fonte 3b do batch (DEMOTE): rebaixa regra dura que FALHOU repetidas vezes.
+
+    Espelho de promover_correcoes_recorrentes. Criterio = OUTCOME (nao eco textual): uma
+    correcao JA 'mandatory' (canal duro <user_rules>) com harmful_count >= threshold reincidiu
+    mesmo sendo regra dura -> a regra, como esta escrita, NAO previne o erro. Acao: priority->
+    'contextual' + is_cold=True (puxa de circulacao, pendente de reescrita humana).
+    FLAP-FREE: a promocao (fonte 3) filtra is_cold==False, entao a regra rebaixada NAO e
+    re-promovida no mesmo ciclo. Idempotente (regra ja contextual/cold sai do filtro).
+    Flag AGENT_CORRECTION_DEMOTION (default OFF — demote remove regra explicita do usuario).
+
+    Returns: {'avaliadas': N, 'rebaixadas': M}
+    """
+    out = {'avaliadas': 0, 'rebaixadas': 0}
+    try:
+        from app.agente.config.feature_flags import (
+            AGENT_CORRECTION_DEMOTION,
+            AGENT_OUTCOME_HARMFUL_THRESHOLD,
+        )
+    except Exception:
+        return out
+    if not AGENT_CORRECTION_DEMOTION:
+        return out
+    th = harmful_threshold if harmful_threshold is not None else AGENT_OUTCOME_HARMFUL_THRESHOLD
+    try:
+        from app.agente.models import AgentMemory
+        from app import db
+        q = AgentMemory.query.filter(
+            AgentMemory.path.like('/memories/corrections/%'),
+            AgentMemory.is_directory == False,  # noqa: E712
+            AgentMemory.priority == 'mandatory',
+            AgentMemory.harmful_count >= th,
+        )
+        if user_id is not None:
+            q = q.filter(AgentMemory.user_id == user_id)
+        candidatas = q.order_by(AgentMemory.harmful_count.desc()).limit(limit).all()
+        out['avaliadas'] = len(candidatas)
+        for mem in candidatas:
+            mem.priority = 'contextual'
+            mem.is_cold = True  # fora de circulacao ate reescrita humana (evita flap)
+            out['rebaixadas'] += 1
+        if out['rebaixadas']:
+            db.session.commit()
+            logger.info(
+                f"[CORRECTION_DEMOTION] {out['rebaixadas']} regras duras rebaixadas "
+                f"(harmful_count >= {th}, avaliadas={out['avaliadas']}) — pendentes de reescrita"
+            )
+    except Exception as exc:
+        try:
+            from app import db
+            db.session.rollback()
+        except Exception:
+            pass
+        logger.warning(f"[CORRECTION_DEMOTION] falhou (ignorado): {exc}")
+    return out
+
+
 def run_directive_promotion_batch(lookback_hours: int = 24, limit: int = 50) -> dict:
     """Varredor A4-batch (D8 módulo 32). Flag-gated por AGENT_DIRECTIVE_PROMOTION.
 
@@ -806,8 +863,19 @@ def run_directive_promotion_batch(lookback_hours: int = 24, limit: int = 50) -> 
     try:
         _corr = promover_correcoes_recorrentes(limit=limit * 4)
         contadores['correcoes_promovidas'] = _corr.get('promovidas', 0)
+        contadores['correcoes_reescritas'] = _corr.get('reescritas', 0)
     except Exception as exc:
         logger.error(f"[directive_promotion] batch(correcao): erro: {exc}")
+        _rollback_seguro()
+
+    # ── Fonte 3b: DEMOTE — regra dura que reincidiu repetidas vezes (harmful) sai de
+    # circulacao pendente de reescrita. Commit isolado dentro da funcao (nao reverte a
+    # promocao da fonte 3). Flag-gated (AGENT_CORRECTION_DEMOTION, default OFF). ──
+    try:
+        _dem = demote_stale_rules(limit=limit * 4)
+        contadores['regras_rebaixadas'] = _dem.get('rebaixadas', 0)
+    except Exception as exc:
+        logger.error(f"[directive_promotion] batch(demote): erro: {exc}")
         _rollback_seguro()
 
     try:

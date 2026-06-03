@@ -519,12 +519,20 @@ USE_RECURRENCE_SCORE = os.getenv("AGENT_RECURRENCE_SCORE", "false").lower() == "
 # Fase 3.3 do loop corretivo — medicao POR OUTCOME (harmful/helpful), desacoplada do eco
 # textual (effective_count). harmful++ = regra 'mandatory' estava ativa e o MESMO erro
 # reincidiu (a regra dura falhou em prevenir); helpful++ = regra 'mandatory' ativa e SEM
-# reincidencia por K sessoes. Default ON: so escreve em colunas NOVAS (harmful_count/
+# reincidencia por K injecoes. Default ON: so escreve em colunas NOVAS (harmful_count/
 # helpful_count) — aditivo e seguro; alimenta o demote (3.6) e o painel de adesao (3.7).
 AGENT_OUTCOME_TRACKING = os.getenv("AGENT_OUTCOME_TRACKING", "true").lower() == "true"
-# Nº de sessoes do usuario SEM reincidencia (apos a regra ficar 'mandatory') para creditar
-# helpful_count a uma regra dura. Conservador por padrao.
+# Nº de injecoes da regra dura SEM reincidencia (harmful_count==0) para creditar helpful_count
+# (1 credito a cada K injecoes limpas — bounded). Conservador por padrao.
 AGENT_OUTCOME_HELPFUL_K_SESSIONS = int(os.getenv("AGENT_OUTCOME_HELPFUL_K_SESSIONS", "3"))
+
+# Fase 3.6 do loop corretivo — DEMOTE de regra dura que reincidiu repetidas vezes mesmo
+# sendo 'mandatory' (harmful_count >= threshold). Rebaixa priority->'contextual' + is_cold=True
+# (puxa de circulacao pendente de reescrita humana). Flap-free: a promocao filtra is_cold==False.
+# Default OFF (DESVIO consciente da regra "flags ON"): demote REMOVE uma regra explicita do
+# usuario do canal duro — efeito potencialmente surpreendente; validar o criterio antes de ligar.
+AGENT_CORRECTION_DEMOTION = os.getenv("AGENT_CORRECTION_DEMOTION", "false").lower() == "true"
+AGENT_OUTCOME_HARMFUL_THRESHOLD = int(os.getenv("AGENT_OUTCOME_HARMFUL_THRESHOLD", "2"))
 
 # ====================================================================
 # Features SDK 0.1.60 — Subagent Transparency (2026-04-16)
