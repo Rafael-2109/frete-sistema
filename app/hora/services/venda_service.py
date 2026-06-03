@@ -622,6 +622,7 @@ def criar_venda_manual(
     numero_parcelas: int = 1,
     intervalo_parcelas_dias: int = 30,
     criado_por: Optional[str] = None,
+    criado_por_id: Optional[int] = None,
     loja_id_override: Optional[int] = None,
     pagamentos: Optional[List[dict]] = None,
     consumidor_final: Optional[bool] = None,
@@ -808,6 +809,7 @@ def criar_venda_manual(
             bool(consumidor_final) if consumidor_final is not None
             else inferir_consumidor_final(cpf_norm)
         ),
+        criado_por_id=criado_por_id,
     )
     db.session.add(venda)
     db.session.flush()

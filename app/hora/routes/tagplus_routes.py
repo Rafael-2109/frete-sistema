@@ -1204,6 +1204,7 @@ def tagplus_pedido_venda_criar():
             numero_parcelas=n_parcelas,
             intervalo_parcelas_dias=intervalo,
             criado_por=_operador(),
+            criado_por_id=getattr(current_user, 'id', None),
             loja_id_override=loja_id_int,
             pagamentos=pagamentos_in,
             valor_frete=valor_frete_raw,
