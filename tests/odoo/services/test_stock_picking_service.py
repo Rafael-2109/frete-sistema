@@ -1302,3 +1302,149 @@ def test_criar_picking_entrada_destino_manual_g023_company_id_forcado_em_moves()
     odoo.write.assert_any_call(
         'stock.move', [4001, 4002, 4003], {'company_id': 5},
     )
+
+
+# ============================================================================
+# C9 (2026-06-02) — purchase_line_id por move (entrada manual VINCULADA a PO)
+# ----------------------------------------------------------------------------
+# Canary INDUSTRIALIZACAO_FB_LF provou: DFe-resumo (status 06) NAO gera picking
+# nativo no confirm da PO (mesmo com route/account/picking_type/team corretos).
+# O fallback manual da folha 1.3.1 PASSO 8 precisa VINCULAR o picking a PO
+# (purchase_line_id) p/ que criar_invoice_from_po (Skill 7) gere a in_invoice
+# de entrada (CFOP 1901). Sem o campo, a PO fica orfa. Arg opcional +
+# retrocompativel (moves_data[i]['purchase_line_id']).
+# ============================================================================
+
+def test_criar_picking_entrada_manual_purchase_line_id_vinculado():
+    """C9: moves_data com purchase_line_id -> stock.move criado o inclui no
+    payload (vincula a PO.line p/ qty_received + criar_invoice_from_po)."""
+    odoo = MagicMock()
+    odoo.search_read.side_effect = [
+        [],  # idempotencia vazio
+        [{'id': 5001, 'product_id': [27914, 'AROMA'],
+          'quantity': 30.56, 'lot_id': False, 'lot_name': False}],
+    ]
+    odoo.create.return_value = 9777
+    odoo.search.return_value = [4001]
+    odoo.read.return_value = [{'state': 'done'}]
+    svc = StockPickingService(odoo=odoo)
+    svc.criar_picking_entrada_destino_manual(
+        company_destino_id=5, location_origem_id=26489,
+        location_destino_id=42,
+        moves_data=[
+            {'product_id': 27914, 'quantity': 30.56,
+             'lot_dest_name': 'P-02/06', 'purchase_line_id': 129982},
+        ],
+        picking_type_id=19,
+        origin='REMESSA-AVULSA-FB-LF-2026-06-02-ENTRADA',
+    )
+    create_calls = [
+        c for c in odoo.create.call_args_list
+        if c[0] and c[0][0] == 'stock.picking'
+    ]
+    assert len(create_calls) == 1
+    picking_data = create_calls[0][0][1]
+    moves = picking_data['move_ids_without_package']
+    move_dict = moves[0][2]
+    assert move_dict.get('purchase_line_id') == 129982
+
+
+def test_criar_picking_entrada_manual_sem_purchase_line_id_retrocompat():
+    """C9 retrocompat: sem purchase_line_id, o move_dict NAO inclui o campo
+    (comportamento atual preservado p/ os callsites legados da ETAPA F)."""
+    odoo = MagicMock()
+    odoo.search_read.side_effect = [
+        [],
+        [{'id': 5001, 'product_id': [1001, 'P'],
+          'quantity': 1.0, 'lot_id': False, 'lot_name': False}],
+    ]
+    odoo.create.return_value = 9778
+    odoo.search.return_value = [4001]
+    odoo.read.return_value = [{'state': 'done'}]
+    svc = StockPickingService(odoo=odoo)
+    svc.criar_picking_entrada_destino_manual(
+        company_destino_id=5, location_origem_id=26489,
+        location_destino_id=42,
+        moves_data=[
+            {'product_id': 1001, 'quantity': 1.0, 'lot_dest_name': 'L'},
+        ],
+        picking_type_id=19,
+        origin='INV-Z-ENTRADA-LF-NF333',
+    )
+    create_calls = [
+        c for c in odoo.create.call_args_list
+        if c[0] and c[0][0] == 'stock.picking'
+    ]
+    move_dict = create_calls[0][0][1]['move_ids_without_package'][0][2]
+    assert 'purchase_line_id' not in move_dict
+
+
+# ============================================================================
+# C9.1 (2026-06-02) — warehouse_id (do picking_type) + partner_id no picking
+# ----------------------------------------------------------------------------
+# Canary FB->LF provou: o picking MANUAL precisa dos mesmos campos do picking
+# NATIVO p/ o button_validate funcionar. Faltavam warehouse_id (gold tem
+# [4,LF]) e partner_id (gold tem FB=1) -> Fault "Source Location not set" na
+# cadeia de validacao do motor. O atomo passa a DERIVAR warehouse_id do
+# picking_type + aceitar partner_id (opcional). Retrocompativel.
+# ============================================================================
+
+def test_criar_picking_entrada_manual_c91_warehouse_derivado_e_partner():
+    """C9.1: deriva warehouse_id do picking_type + seta partner_id no picking
+    (replica o picking nativo p/ button_validate nao falhar)."""
+    odoo = MagicMock()
+    odoo.search_read.side_effect = [
+        [],  # idempotencia
+        [{'id': 5001, 'product_id': [27914, 'AROMA'],
+          'quantity': 30.56, 'lot_id': False, 'lot_name': False}],
+    ]
+    odoo.read.side_effect = [
+        [{'id': 19, 'warehouse_id': [4, 'LF']}],  # C9.1 le picking_type
+        [{'state': 'done'}],                       # G019 re-le state
+    ]
+    odoo.create.return_value = 9991
+    odoo.search.return_value = [4001]
+    svc = StockPickingService(odoo=odoo)
+    svc.criar_picking_entrada_destino_manual(
+        company_destino_id=5, location_origem_id=4, location_destino_id=42,
+        moves_data=[{'product_id': 27914, 'quantity': 30.56,
+                     'lot_dest_name': 'P-02/06', 'purchase_line_id': 129984}],
+        picking_type_id=19, origin='REMESSA-C91-ENTRADA', partner_id=1,
+    )
+    cc = [c for c in odoo.create.call_args_list
+          if c[0] and c[0][0] == 'stock.picking']
+    picking_data = cc[0][0][1]
+    # partner_id setado no picking (replica gold)
+    assert picking_data.get('partner_id') == 1
+    # warehouse_id derivado do picking_type, setado nos moves
+    move_dict = picking_data['move_ids_without_package'][0][2]
+    assert move_dict.get('warehouse_id') == 4
+
+
+def test_criar_picking_entrada_manual_c91_sem_partner_retrocompat():
+    """C9.1 retrocompat: sem partner_id, o picking_data NAO inclui o campo
+    (callsites legados ETAPA F preservados)."""
+    odoo = MagicMock()
+    odoo.search_read.side_effect = [
+        [],
+        [{'id': 5001, 'product_id': [1001, 'P'],
+          'quantity': 1.0, 'lot_id': False, 'lot_name': False}],
+    ]
+    odoo.read.side_effect = [
+        [{'id': 19, 'warehouse_id': False}],  # picking_type sem warehouse
+        [{'state': 'done'}],
+    ]
+    odoo.create.return_value = 9992
+    odoo.search.return_value = [4001]
+    svc = StockPickingService(odoo=odoo)
+    svc.criar_picking_entrada_destino_manual(
+        company_destino_id=5, location_origem_id=26489, location_destino_id=42,
+        moves_data=[{'product_id': 1001, 'quantity': 1.0, 'lot_dest_name': 'L'}],
+        picking_type_id=19, origin='INV-LEGADO-NF999',
+    )
+    cc = [c for c in odoo.create.call_args_list
+          if c[0] and c[0][0] == 'stock.picking']
+    picking_data = cc[0][0][1]
+    assert 'partner_id' not in picking_data
+    move_dict = picking_data['move_ids_without_package'][0][2]
+    assert 'warehouse_id' not in move_dict  # picking_type sem wh -> nao seta

@@ -1223,8 +1223,21 @@ class StockPickingService:
         moves_data: List[Dict[str, Any]],
         picking_type_id: int,
         origin: str,
+        partner_id: Optional[int] = None,
     ) -> Dict[str, Any]:
-        """🛑 DEPRECATED v19+ — tampão arquitetural AP2 (CLAUDE.md §6.5).
+        """⚠️ REABILITADO C9 (2026-06-02) p/ INDUSTRIALIZACAO_FB_LF avulsa.
+
+        ATUALIZACAO C9: o canary real INDUSTRIALIZACAO_FB_LF (2026-06-02) refutou
+        a premissa da deprecacao abaixo ("motor Odoo gera picking via DFe→PO").
+        Para DFe-resumo (status 06 — caso de INDUSTRIALIZACAO_FB_LF), a PO
+        confirma SEM disparar procurement (move_ids vazio) mesmo com
+        route/account/picking_type/team corretos. Logo, o picking de entrada
+        manual VOLTA a ser o caminho padrao (folha 1.3.1 PASSO 8), e NAO sera
+        removido em v20+. Estendido com 'purchase_line_id' por move (vincula a
+        PO p/ qty_received + criar_invoice_from_po).
+
+        --- contexto historico da deprecacao (preservado) ---
+        ex-DEPRECATED v19+ — tampão arquitetural AP2 (CLAUDE.md §6.5).
 
         **Pattern correto v19+**: ETAPA F do orchestrator NÃO deve criar
         picking de ENTRADA (Skill 8 = SAÍDA, fronteira fiscal Skill 7 ENTRADA).
@@ -1286,14 +1299,24 @@ class StockPickingService:
             location_destino_id: stock.location de estoque interno do destino
                 (ex. COMPANY_LOCATIONS[5]=42 para LF/Estoque).
             moves_data: [{'product_id': int, 'quantity': float,
-                          'lot_dest_name': str, 'name': str (opcional)}, ...]
+                          'lot_dest_name': str, 'name': str (opcional),
+                          'purchase_line_id': int (opcional — C9)}, ...]
                 NB: usa 'lot_dest_name' (nome padronizado p/ entrada manual,
                 ex. INV-{cod}-{YYYYMMDD}), distinto do 'lot_name' de SAIDA.
+                'purchase_line_id' (C9 2026-06-02): vincula o move a PO.line
+                (atualiza qty_received + habilita criar_invoice_from_po).
+                Necessario p/ INDUSTRIALIZACAO_FB_LF avulsa (DFe-resumo nao gera
+                picking nativo). Callsites legados da ETAPA F nao passam (opt).
             picking_type_id: stock.picking.type.id de ENTRADA do destino
                 (ex. PICKING_TYPE_ENTRADA_DESTINO_MANUAL[5]=19 para LF).
             origin: rastreabilidade + idempotencia. Caller monta string como
                 `f'INV-{ciclo}-ENTRADA-{label}-NF{invoice_id}'` (formato
                 consistente com script 09 L1547-1549).
+            partner_id: (C9.1 2026-06-02) emitente da NF (ex. FB=1). Setado no
+                picking p/ replicar o picking nativo — sem ele o button_validate
+                falha 'Source Location not set'. Opcional (callsites legados
+                omitem). NB: `warehouse_id` e' DERIVADO do picking_type
+                automaticamente (C9.1) e setado nos moves pelo mesmo motivo.
 
         Returns:
             Dict com:
@@ -1365,6 +1388,19 @@ class StockPickingService:
                     'tempo_ms': int((time.time() - inicio) * 1000),
                 }
 
+        # C9.1 (2026-06-02): derivar warehouse_id do picking_type. O picking
+        # NATIVO (gold standard) carrega warehouse_id; o manual sem ele faz o
+        # button_validate falhar 'Source Location not set' na cadeia do motor
+        # (canary FB->LF 2026-06-02). Determinístico — não é improviso.
+        _pt = self.odoo.read(
+            'stock.picking.type', [picking_type_id], ['warehouse_id'],
+        )
+        _wh = _pt[0].get('warehouse_id') if _pt else None
+        warehouse_id = (
+            _wh[0] if isinstance(_wh, (list, tuple)) and _wh
+            else (_wh if isinstance(_wh, int) else None)
+        )
+
         # 2. Criar stock.picking com moves
         moves_payload = []
         for m in moves_filtrados:
@@ -1375,6 +1411,17 @@ class StockPickingService:
                 'location_id': location_origem_id,
                 'location_dest_id': location_destino_id,
             }
+            # C9 (2026-06-02): vincular a PO.line quando fornecido. Necessario
+            # p/ INDUSTRIALIZACAO_FB_LF avulsa: o DFe-resumo (status 06) NAO
+            # gera picking nativo no confirm da PO, entao o fallback manual
+            # (folha 1.3.1 PASSO 8) precisa ligar o move a PO.line p/ atualizar
+            # qty_received e permitir criar_invoice_from_po (Skill 7) gerar a
+            # in_invoice de entrada (CFOP 1901). Opcional/retrocompativel.
+            if m.get('purchase_line_id'):
+                move_dict['purchase_line_id'] = m['purchase_line_id']
+            # C9.1: warehouse_id (do picking_type) replica o picking nativo.
+            if warehouse_id:
+                move_dict['warehouse_id'] = warehouse_id
             moves_payload.append((0, 0, move_dict))
 
         picking_data = {
@@ -1385,6 +1432,10 @@ class StockPickingService:
             'origin': origin,
             'move_ids_without_package': moves_payload,
         }
+        # C9.1: partner_id (emitente da NF) replica o picking nativo — sem ele
+        # o button_validate falha 'Source Location not set'. Opcional/retrocompat.
+        if partner_id:
+            picking_data['partner_id'] = partner_id
         picking_id = self.odoo.create('stock.picking', picking_data)
         logger.info(
             f'criar_picking_entrada_destino_manual: picking {picking_id} '
