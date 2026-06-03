@@ -31,6 +31,7 @@ atualizado: 2026-06-03
 - [12. Unificação de modelos (N nomes → 1 canônico) — 2026-05-06](#12-unificação-de-modelos-n-nomes-1-canônico-2026-05-06)
 - [15. Preço A vista / A prazo + desconto % por moto — 2026-05-06](#15-preço-a-vista-a-prazo-desconto-por-moto-2026-05-06)
 - [16. Campo `consumidor_final` no faturamento TagPlus — 2026-05-07 (revisado)](#16-campo-consumidor_final-no-faturamento-tagplus-2026-05-07-revisado)
+- [17. Desconsiderar moto de NF de compra — 2026-06-03](#17-desconsiderar-moto-de-nf-de-compra--2026-06-03)
 - [Onboarding Tours (2026-05-08)](#onboarding-tours-2026-05-08)
 - [Referências](#referências)
 
@@ -680,6 +681,30 @@ Tours guiados in-app via Driver.js para usuarios novos.
 
 **Engine:** `window.OnboardingEngine` (register/start/isVisible/listAllVisible)
 **Tracker:** `window.OnboardingTracker` (wasSeen/markSeen/resetModule)
+
+---
+
+## 17. Desconsiderar moto de NF de compra — 2026-06-03
+
+Permite marcar um item de NF de entrada (`HoraNfEntradaItem`) como **desconsiderado**: moto que veio em NF emitida para outra empresa e **não é da HORA**. O item sai do estoque/recebimento e o cadastro `HoraMoto` é removido, mas o item permanece na NF (reversível).
+
+**Modelo** (`app/hora/models/compra.py`):
+- `HoraNfEntradaItem.desconsiderado` (Boolean, default false).
+- FK `numero_chassi → hora_moto` **removida** (migration `hora_43`): item desconsiderado mantém o chassi declarado sem `HoraMoto`. `relationship('moto')` é `viewonly` com `primaryjoin`. Integridade item↔moto garantida por validação aplicativa (`nf_entrada_service.assert_item_moto_consistente`), não por FK.
+- `HoraNfEntrada.itens_considerados` — property que filtra `desconsiderado=False`; base do recebimento e do matching.
+
+**Serviços** (`app/hora/services/nf_entrada_service.py`):
+- `desconsiderar_item_nf(nf_item_id, operador)` — valida pré-condições e remove a `HoraMoto`. Faz `flush()` (NÃO commit) — o `commit()` é da rota.
+- `reconsiderar_item_nf(nf_item_id, operador)` — reverte: recria a `HoraMoto` via `get_or_create_moto` + zera o flag.
+- Gates (`_motivo_bloqueio_desconsiderar`): bloqueia se o chassi está em pedido (`chassi_protecao_service.chassi_em_pedido`), se a NF já entrou em recebimento, se o chassi foi conferido, se a moto tem qualquer evento, ou se o chassi consta em outro item de NF considerado.
+
+**Efeito no recebimento/matching**: `recebimento_service` usa `nf.itens_considerados` nos pontos "a receber" (qtd declarada, conferência automática, faltantes, esperados, listagem); `matching_service._chassis_nf` exclui desconsiderados. Estoque deriva de evento — item desconsiderado nunca recebe `RECEBIDA`.
+
+**UI**: `app/templates/hora/nf_detalhe.html` (badge "desconsiderada" + botões Desconsiderar/Reverter por item; cadeado quando em pedido ou NF já em recebimento) + rotas `nfs_desconsiderar_item`/`nfs_reverter_item` em `app/hora/routes/nfs.py` (perm `nfs/editar`).
+
+**Migration**: `scripts/migrations/hora_43_nf_item_desconsiderar.{py,sql}`.
+
+**Spec/Plano**: `docs/superpowers/specs/2026-06-03-hora-desconsiderar-moto-nf-design.md` · `docs/superpowers/plans/2026-06-03-hora-desconsiderar-moto-nf.md`.
 
 ---
 
