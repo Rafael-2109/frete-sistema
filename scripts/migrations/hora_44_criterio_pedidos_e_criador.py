@@ -1,4 +1,4 @@
-"""Migration HORA 43: criterio de listagem de pedidos por usuario + criador do pedido.
+"""Migration HORA 44: criterio de listagem de pedidos por usuario + criador do pedido.
 
 Mudancas:
   1. usuarios       -> +criterio_pedidos_hora VARCHAR(10) NOT NULL DEFAULT 'loja'
@@ -8,7 +8,7 @@ Mudancas:
 Idempotente — pode rodar 2x (IF NOT EXISTS + backfill so onde criado_por_id IS NULL).
 
 Uso:
-    python scripts/migrations/hora_43_criterio_pedidos_e_criador.py
+    python scripts/migrations/hora_44_criterio_pedidos_e_criador.py
 """
 import logging
 import os
@@ -82,7 +82,7 @@ def main() -> None:
                 'SELECT COUNT(*) FROM hora_venda WHERE criado_por_id IS NULL'
             )).scalar() or 0
         print(f'  vendas ainda sem criado_por_id (legado sem match): {sem_criador}')
-        print('\nMigration HORA 43 concluida com sucesso.')
+        print('\nMigration HORA 44 concluida com sucesso.')
 
 
 if __name__ == '__main__':

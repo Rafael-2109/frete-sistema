@@ -1,4 +1,4 @@
--- Migration HORA 43: criterio de listagem de pedidos por usuario + criador do pedido.
+-- Migration HORA 44: criterio de listagem de pedidos por usuario + criador do pedido.
 -- Idempotente (IF NOT EXISTS). Rodar no Render Shell.
 
 -- 1) Preferencia de criterio de filtragem de pedidos de venda por usuario.

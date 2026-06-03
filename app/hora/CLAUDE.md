@@ -677,7 +677,7 @@ Três mudanças no Pedido de Venda (`HoraVenda`). Spec: `docs/superpowers/specs/
 - Nova coluna `hora_venda.criado_por_id` INTEGER (sem FK; gravado por `criar_venda_manual`; backfill best-effort via `hora_venda_auditoria` acao=`CRIOU`).
 - `vendas_lista` lê o critério: `'loja'` = escopo por `loja_hora_id` (padrão atual); `'vendedor'` = `OR(HoraVenda.vendedor IN [nome, vendedor_vinculado], criado_por_id == user.id)` **ignorando** loja. Aplicado em `venda_service._query_vendas(filtro_vendedor=...)` / `paginar_vendas`.
 - Endpoint `POST /hora/permissoes/<id>/criterio-pedidos` (`permissoes_set_criterio_pedidos`, perm `usuarios/editar`, bloqueio self/admin) + `<select>` no card do usuário.
-- Migration dual: `scripts/migrations/hora_43_criterio_pedidos_e_criador.{py,sql}` (idempotente, IF NOT EXISTS + índice + backfill).
+- Migration dual: `scripts/migrations/hora_44_criterio_pedidos_e_criador.{py,sql}` (idempotente, IF NOT EXISTS + índice + backfill).
 
 **Bug latente corrigido**: `venda_adicionar_item_peca`/`venda_remover_item_peca` redirecionavam para `hora.venda_detalhe` (rota inexistente → BuildError) → corrigido para `hora.vendas_detalhe`.
 

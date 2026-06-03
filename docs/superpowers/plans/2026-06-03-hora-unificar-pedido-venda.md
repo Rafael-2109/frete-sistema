@@ -107,15 +107,15 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 ### Task 2: Migration dual — `usuarios.criterio_pedidos_hora` + `hora_venda.criado_por_id`
 
 **Files:**
-- Create: `scripts/migrations/hora_43_criterio_pedidos_e_criador.py`
-- Create: `scripts/migrations/hora_43_criterio_pedidos_e_criador.sql`
+- Create: `scripts/migrations/hora_44_criterio_pedidos_e_criador.py`
+- Create: `scripts/migrations/hora_44_criterio_pedidos_e_criador.sql`
 
 - [ ] **Step 1: Escrever o `.sql` idempotente**
 
-`scripts/migrations/hora_43_criterio_pedidos_e_criador.sql`:
+`scripts/migrations/hora_44_criterio_pedidos_e_criador.sql`:
 
 ```sql
--- Migration HORA 43: criterio de listagem de pedidos por usuario + criador do pedido.
+-- Migration HORA 44: criterio de listagem de pedidos por usuario + criador do pedido.
 -- Idempotente (IF NOT EXISTS). Rodar no Render Shell.
 
 -- 1) Preferencia de criterio de filtragem de pedidos de venda por usuario.
@@ -143,10 +143,10 @@ UPDATE hora_venda v
 
 - [ ] **Step 2: Escrever o `.py` (create_app + before/after + backfill)**
 
-`scripts/migrations/hora_43_criterio_pedidos_e_criador.py`:
+`scripts/migrations/hora_44_criterio_pedidos_e_criador.py`:
 
 ```python
-"""Migration HORA 43: criterio de listagem de pedidos por usuario + criador do pedido.
+"""Migration HORA 44: criterio de listagem de pedidos por usuario + criador do pedido.
 
 Mudancas:
   1. usuarios       -> +criterio_pedidos_hora VARCHAR(10) NOT NULL DEFAULT 'loja'
@@ -156,7 +156,7 @@ Mudancas:
 Idempotente — pode rodar 2x (IF NOT EXISTS + backfill so onde criado_por_id IS NULL).
 
 Uso:
-    python scripts/migrations/hora_43_criterio_pedidos_e_criador.py
+    python scripts/migrations/hora_44_criterio_pedidos_e_criador.py
 """
 import logging
 import os
@@ -224,7 +224,7 @@ def main() -> None:
                 'SELECT COUNT(*) FROM hora_venda WHERE criado_por_id IS NULL'
             )).scalar() or 0
         print(f'  vendas ainda sem criado_por_id (legado sem match): {sem_criador}')
-        print('\nMigration HORA 43 concluida com sucesso.')
+        print('\nMigration HORA 44 concluida com sucesso.')
 
 
 if __name__ == '__main__':
@@ -235,14 +235,14 @@ if __name__ == '__main__':
 
 Run (da raiz do repo, venv ativo):
 ```bash
-source .venv/bin/activate && python scripts/migrations/hora_43_criterio_pedidos_e_criador.py
+source .venv/bin/activate && python scripts/migrations/hora_44_criterio_pedidos_e_criador.py
 ```
 Expected: "Estado depois" com ambas as colunas `True`, contagem de backfill impressa, "concluida com sucesso".
 
 - [ ] **Step 4: Commit**
 
 ```bash
-git add scripts/migrations/hora_43_criterio_pedidos_e_criador.py scripts/migrations/hora_43_criterio_pedidos_e_criador.sql
+git add scripts/migrations/hora_44_criterio_pedidos_e_criador.py scripts/migrations/hora_44_criterio_pedidos_e_criador.sql
 git commit -m "feat(hora): migration 43 — criterio_pedidos_hora + hora_venda.criado_por_id
 
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
@@ -869,7 +869,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 - Modify: `app/hora/CLAUDE.md` (registrar a unificação e o critério de pedidos)
 - Modify: `docs/superpowers/plans/INDEX.md` (ponteiro para este plano)
 
-- [ ] **Step 1: Documentar no CLAUDE.md HORA** uma seção curta: "Pedido de Venda — tela unificada (criação+edição) e critério loja/vendedor", apontando para spec e plano, e registrando `usuarios.criterio_pedidos_hora` + `hora_venda.criado_por_id` (migration hora_43).
+- [ ] **Step 1: Documentar no CLAUDE.md HORA** uma seção curta: "Pedido de Venda — tela unificada (criação+edição) e critério loja/vendedor", apontando para spec e plano, e registrando `usuarios.criterio_pedidos_hora` + `hora_venda.criado_por_id` (migration hora_44).
 - [ ] **Step 2: Registrar o plano** em `docs/superpowers/plans/INDEX.md` (1 linha ponteiro).
 - [ ] **Step 3: Self-review final** — reler o spec (`2026-06-03-hora-unificar-pedido-venda-design.md`) e marcar que cada requisito foi entregue: (2) fix desconto ✓, (3) filtro loja/vendedor ✓ (migration+model+service+rota+UI), (1) unificação ✓ (partial+JS, vendas_detalhe→tela unificada, paridade de ações, venda_detalhe.html removida, bug latente corrigido).
 - [ ] **Step 4: Rodar a suíte HORA inteira + lint UI**:
