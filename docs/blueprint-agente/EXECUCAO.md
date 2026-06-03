@@ -319,6 +319,34 @@ não escritos (B3 adiado + sem feedback). Latência: judge/verify/triage 100% of
 
 ---
 
+### 📍 CHECKPOINT 2026-06-03 — Onda 0 (parte implementável) fechada + DEPLOY + flags ON + PONTOS A AVALIAR
+
+> ⚠️ **META-RESSALVA (pedido do Rafael):** o panorama/avaliação desta sessão foi produzido com **CONTEXTO CHEIO** → pode ser superficial/não-confiável. A próxima sessão DEVE **RE-VERIFICAR cada ponto abaixo DO ZERO em PROD** (MCP Render: PG `dpg-d13m38vfte5s738t6p50-a` · web `srv-d13m38vfte5s738t6p60` · worker `srv-d2muidggjchc73d4segg`), **NÃO assumir esta leitura**. O que está em "FATOS" foi medido nesta sessão; o que está em "PONTOS A AVALIAR" é hipótese/observação pendente.
+
+**FATOS desta sessão (medidos em PROD):**
+- **O0.2** — fix do validator anti-alucinação (worker em container separado não lia o transcript `/tmp` do web → `summary_dict` agora vai no payload do job). DEPLOYADO `d0757d7d3` (web+worker `live`, sem skew). Commits `c2923557c` (O0.2) + `d1bfc1655` (O0.3) + `21dcebf19` (checkpoint ROADMAP, **local não-pushado**).
+- **O0.3** — painel "Adesão de Regras" em `insights.html` (tabela `error_signature` × Antes/Depois). DEPLOYADO `0a00855c8` (web `live` 14:28Z).
+- **O0.5** — `agent_eval_scores`(8col)+`agent_eval_case`(15col) confirmadas em PROD.
+- **Flags LIGADAS em PROD** (via `update_environment_variables`, que dispara deploy de origin/main): `AGENT_RECURRENCE_SCORE=true` (web, O0.4) + `AGENT_SUBAGENT_VALIDATION=true` (web+worker, O0.2).
+- **Estado Onda 0**: ✅O0.1 · 🔵O0.2 · ✅O0.3 · 🔵O0.4 · ✅O0.5 · ⏳O0.6 · ✅O0.7. Parte implementável = FECHADA; resta observação (tempo/tráfego).
+- **Lição gravada** (memória CC): NUNCA usar `[skip render]` — segurou O0.2/O0.3 + frentes alheias fora de PROD (gap de 14 commits).
+
+**PONTOS A AVALIAR (próxima sessão, fresca — re-verificar do zero):**
+1. **Efeito do deploy do gap multi-frente** (`d0757d7d3`→`0a00855c8` levou `gerindo-agente` Onda 1/2, baseline, etc. de OUTRAS frentes junto, sem eu testá-las): houve regressão? Sentry/health/logs PROD limpos?
+2. **O0.2 ao vivo**: com tráfego real de subagente pós-deploy (10:55 BRT), aparece `[validator] concluido` (worker) + `subagent_validations`>0? Sem `TypeError` residual por skew? (na sessão: 0 spawns desde o deploy → não validável).
+3. **O0.4 (24h)**: `health_score` sem regressão + composite de memórias com cc>0 subindo de fato.
+4. **O0.6 (~1 semana)**: reincidência do Marcus por `error_signature` (~9 → ≤2) via `rule-adhesion?days=7&user_id=18` + `[MEMORY_INJECT] user_rules` user 18 nos logs.
+5. **O0.3 ao vivo**: `/agente/insights` renderiza a tabela com dados reais (não validei autenticado — só wiring estático).
+6. **B1 PlanState=0 (O3.2)**: re-medir em janela MAIOR — `Task` realmente 0×? Decisão de design (agente decompõe via Task × promover triage→PlanState). Pré-cond de A4 + verifier `domain`.
+7. **GATE-1 / viés do judge (E3)**: re-medir "sem-tool=`failure`" (era 88% em ~14h preliminar) com ≥1 semana de dados úteis — persiste? Calibração humana (`agent_eval_case`=0).
+8. **A3 baseline (Fase 2)**: corrigir o bug de transação (Sentry X7) que impediu persistir; re-rodar `eval_runner`; inspecionar `cases[].evidence` (caveat I2: stdout vazio rc=0 = `fail`, não infra).
+9. **D3 proveniência=0**: por que `relations` não gravam `source_session_id` apesar de `AGENT_ONTOLOGY` ON (0/7190).
+10. **Higiene de deploy**: worker 1 commit atrás (`d0757d7d3` vs HEAD — só docs/template-web, sem runtime) — alinhar ou deixar; e `e3ca9f34e` (commit alheio com `[skip render]` local não-pushado).
+
+**Próximo bloco**: Onda 1 (observabilidade) — desbloqueio-chave = **E3 calibração do judge**. Regra de ouro: NÃO ligar atuador novo antes de fechar GATE-1 (sinal confiável).
+
+---
+
 ## ONDAS E ITENS
 
 > Status: ⬜ pending · 🟡 em progresso · 🔵 shadow (código pronto, validando comportamento) · ✅ done
