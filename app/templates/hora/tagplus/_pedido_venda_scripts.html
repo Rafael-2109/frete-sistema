@@ -442,16 +442,11 @@
         elPrecoInfo.className = 'text-danger';
       }
     }
-    // Recalcula preservando o VALOR FINAL ja digitado (ancora 'valor') para
-    // nao introduzir drift de centavos ao re-buscar o preco de tabela (ex.: ao
-    // trocar a forma de pagamento entre a vista/a prazo). Na 1a carga, quando o
-    // valor ainda esta vazio/zero, inicializa pelo preco cheio via 'pct' (desconto 0).
-    const valorAtual = elValor ? parseBR(elValor.value) : NaN;
-    if (isNaN(valorAtual) || valorAtual <= 0) {
-      recalcular('pct');
-    } else {
-      recalcular('valor');
-    }
+    // TRAVA O DESCONTO (R$) digitado pelo operador ao re-buscar o preco de
+    // tabela (ex.: trocar forma de pagamento). Recalcula % e VALOR FINAL a
+    // partir do desconto fixo — o desconto NAO sofre drift de centavos.
+    // 1a carga: campo desconto R$ inicia em "0,00" -> rs=0 -> valor=preco cheio.
+    recalcular('rs');
   }
 
   // ----------------- Sincronizacao desconto % <-> R$ <-> valor -----------
