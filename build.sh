@@ -57,6 +57,16 @@ mkdir -p scripts
 echo "Inicializando banco..."
 python init_db.py
 
+# 5b. Migration idempotente FORA do guard (Fase 3 loop corretivo): adiciona as colunas
+#     error_signature/harmful_count/helpful_count + indice em agent_memories. NECESSARIA a
+#     cada deploy ate consolidar — db.create_all (init_db) NAO faz ALTER de coluna nova em
+#     tabela existente, e o `flask db upgrade` (alembic) nao cobre este script manual.
+#     ADD COLUMN IF NOT EXISTS -> no-op apos a 1a vez. CRITICO: o codigo da Fase 3 grava em
+#     colunas NOT NULL; sem esta migration, INSERT em agent_memories quebraria no deploy.
+echo "Fase 3 loop corretivo: migration agent_memories (error_signature/harmful/helpful)..."
+python scripts/migrations/2026_06_02_agent_memories_error_signature.py \
+    || echo "⚠️ migration error_signature falhou — verificar (continuando deploy)..."
+
 # ============================================================================
 # MIGRATIONS HISTORICAS — guardadas pela flag RUN_LEGACY_MIGRATIONS (default 0).
 #
