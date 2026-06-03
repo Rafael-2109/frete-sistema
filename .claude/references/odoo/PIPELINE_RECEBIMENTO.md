@@ -79,8 +79,8 @@ FASE 4: Recebimento Fisico
 | `primeira_compra` | Produto novo sem De-Para | Cadastrar De-Para |
 
 ### Tabelas Locais
-- `validacao_fiscal` - Registro de validacao
-- `perfil_fiscal` - Configuracao esperada por fornecedor/produto
+- `validacao_fiscal_dfe` - Registro de validacao
+- `perfil_fiscal_produto_fornecedor` - Configuracao esperada por fornecedor/produto
 
 ---
 
@@ -120,9 +120,9 @@ FASE 4: Recebimento Fisico
 | `bloqueado` | Divergencia grave | Requer acao manual |
 
 ### Tabelas Locais
-- `validacao_nf_po` - Registro de validacao
-- `validacao_nf_po_item` - Itens validados
-- `de_para_fornecedor` - Mapeamento codigo fornecedor → produto interno
+- `validacao_nf_po_dfe` - Registro de validacao
+- `match_nf_po_item` - Itens validados
+- `produto_fornecedor_depara` - Mapeamento codigo fornecedor → produto interno
 
 ---
 
@@ -151,8 +151,8 @@ FASE 4: Recebimento Fisico
 | N NFs = 1 PO | Multiplos splits |
 
 ### Tabelas Locais
-- `consolidacao_po` - Registro de consolidacao
-- `consolidacao_po_item` - Itens consolidados
+- `validacao_nf_po_dfe` - Registro da consolidacao (campos `po_consolidado_id`, `po_consolidado_name` apontam o PO Conciliador)
+- `match_nf_po_item` - Itens consolidados
 
 ---
 
@@ -233,7 +233,8 @@ else:
 
 ### Tabelas Locais
 - `recebimento_fisico` - Registro de recebimento
-- `recebimento_fisico_item` - Itens recebidos
+- `recebimento_lote` - Lotes recebidos por item
+- `recebimento_quality_check` - Quality checks do recebimento
 - `picking_recebimento` - Espelho do stock.picking
 - `picking_recebimento_move_line` - Espelho do stock.move.line
 
@@ -247,10 +248,10 @@ DFE (Odoo)
 ├─ l10n_br_status = 04 (PO Vinculado)
 │
 └─ FASE 1 (Local)
-   validacao_fiscal.status = aprovado
+   validacao_fiscal_dfe.status = aprovado
    │
    └─ FASE 2 (Local)
-      validacao_nf_po.status = aprovado
+      validacao_nf_po_dfe.status = aprovado
       │
       └─ FASE 3 (Odoo)
          purchase.order (Conciliador) state = purchase

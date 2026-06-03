@@ -270,7 +270,7 @@ Todas as 45 flags em `feature_flags.py` DEVEM continuar respeitadas. A migraçã
 
 | Flag nova | Env Var | Default | Função |
 |-----------|---------|---------|--------|
-| `USE_PERSISTENT_SDK_CLIENT` | `AGENT_PERSISTENT_SDK_CLIENT` | `false` | Ativa o novo path SDKClient |
+| `USE_PERSISTENT_SDK_CLIENT` | `AGENT_PERSISTENT_SDK_CLIENT` | `true` | Ativa o novo path SDKClient (default `true` — `feature_flags.py:422` / `client_pool.py:14`; ja LIVE em PROD) |
 
 ### 3.7 SSE Event Types (12 tipos)
 
@@ -291,13 +291,14 @@ O protocolo SSE frontend ↔ backend NÃO muda. Todos os event types DEVEM ser e
 | SSE11 | `destructive_action_warning` | permissions.py | Alerta irreversível |
 | SSE12 | `interrupt_ack` | routes.py | Confirmação interrupt |
 
-### 3.8 Timeout Cascade (INVARIANTE)
+### 3.8 Timeout Cascade
 
-Ordem OBRIGATÓRIA — **nunca alterar**:
+Ordem OBRIGATÓRIA (manter a relação `<` entre os níveis; os **valores** evoluíram com o split Caddy + gunicorn `timeout=1800s` — 2026-05-27):
 
 ```
-Heartbeat SSE (10s) < AskUser web (55s) < AskUser Teams (120s) < SDK stream_close (240s) < Stream max (540s) < Render hard (600s)
+Heartbeat SSE (10s) < AskUser web (55s) < AskUser Teams (120s) < Inatividade (300s) < Stream max/teto (1740s) < Gunicorn timeout (1800s)
 ```
+Fonte: `app/agente/routes/_constants.py` (HEARTBEAT=10, INACTIVITY=300, MAX_STREAM=1740) + `gunicorn_config_{agente,sistema}.py` (timeout=1800). Render web permite até 100min/6000s.
 
 ### 3.9 Thread-Safety Mechanisms (3 mecanismos — PRESERVAR)
 

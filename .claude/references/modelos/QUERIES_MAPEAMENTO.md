@@ -62,7 +62,7 @@ atualizado: 2026-06-02
 **Comando:** `--pedido VCD123`
 
 **Logica:**
-1. Buscar itens: CarteiraPrincipal WHERE num_pedido = 'VCD123' AND qtd_saldo > 0
+1. Buscar itens: CarteiraPrincipal WHERE num_pedido = 'VCD123' AND qtd_saldo_produto_pedido > 0
 2. Para cada item: calcular projecao de estoque (28 dias)
 3. Encontrar primeiro dia onde saldo >= quantidade necessaria
 4. Resposta = MAX(data) de todos os itens
@@ -356,7 +356,7 @@ Estoque atual: 1.200 un
 
 **Logica:**
 1. Buscar codigos de pessego
-2. carteira = SUM(CarteiraPrincipal.qtd_saldo) agrupado por pedido
+2. carteira = SUM(CarteiraPrincipal.qtd_saldo_produto_pedido) agrupado por pedido
 3. separacao = SUM(Separacao.qtd_saldo WHERE sincronizado_nf=False) agrupado por pedido
 4. falta_separar = carteira - separacao
 
