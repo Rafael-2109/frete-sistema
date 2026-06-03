@@ -105,6 +105,9 @@ O pipeline que entrega (ou não) a memória pessoal ao modelo:
 ### Plano executável (`docs/superpowers/plans/2026-06-02-loop-corretivo-pessoal.md`)
 A primeira frente acionável de G — a dor do Marcus — em formato TDD, flag-OFF.
 
+### Continuação (`PROMPT_PROXIMA_SESSAO_LOOP_CORRETIVO.md`)
+Prompt rigoroso para a próxima sessão limpa: backfill do passivo do Marcus (dry-run+OK) + Fase 3 (medição por outcome + tuning de posição + frame imperativo). Estado: Fases 0/1/2 ✅ (commits no worktree, não pushados).
+
 ## 6. Sequência (herda a regra de ouro do blueprint)
 
 **Medir antes de atuar.** A Onda 1 (observabilidade, eixo E) é pré-requisito de ligar qualquer atuador
