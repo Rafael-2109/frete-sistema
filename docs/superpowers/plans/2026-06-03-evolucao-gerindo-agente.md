@@ -24,9 +24,23 @@ atualizado: 2026-06-03
 
 ## Como continuar (proxima sessao)
 
-> **Entrada de continuidade — leia isto primeiro.** Atualizado 2026-06-03 pos-Onda 3 (fase 3a READ + 3b WRITE).
+> **Entrada de continuidade — leia isto primeiro.** Atualizado 2026-06-03 pos-Onda 4 P10.
 
-**Estado atual**: Ondas 0/1/2 LIVE em PROD (deploy `dep-d8g31m3eo5us7381cep0` / `d0757d7d3`).
+**CORRECAO DE ESTADO (2026-06-03, verificado)**: o handoff anterior dizia que os commits 3a/3b
+estavam "NAO pushados / aguardando push+deploy do Rafael". **Isso ficou STALE**: `HEAD==origin/main`
+(0/0) e o deploy `dep-d8g865eq1p3s73erk4m0` (commit `4b17efa6c`) esta **LIVE em PROD desde 19:47 de
+03/06** — como `4b17efa6c` esta no topo de `72e0467d1`(3b)+`0332b8f95`(3a), **toda a Onda 3 (READ+WRITE+
+gate) JA esta em PROD**. Logo o canary REAL (B) ja esta DESBLOQUEADO (nao depende mais de push/deploy).
+
+**Onda 4 P10 FEITA (2026-06-03, commit `b716076e2`)**: `infra.py` (flags/gates/worker-status, READ).
+O `flags` cruza DECLARADO [this-process] x **db_evidence [PROD via DB]** (env-independente) — fecha o
+blind spot de que flags/Redis lidos LOCAL != PROD (medido: STEP_JUDGE/EVAL_GATE/DIRECTIVE_PROMOTION
+declaradas OFF no .env local mas EFETIVAS em PROD via rastro DB). 66 ZERO-DB + 3 snapshot; review
+adversarial (16 achados: 2 HIGH+5 MED+9 LOW) TODOS fechados. **P13 (gate cross-user) ja foi entregue
+no 3b** via `_classify_gerindo_write`. Pendente da Onda 4: P4 (subagent-metrics, OBS-1 bloqueia
+cost-breakdown), P11 (ontologia D4), P9 (rede destrutivas).
+
+**Estado atual**: Ondas 0/1/2/3 LIVE em PROD; Onda 4 P10 commitado (`b716076e2`, NAO pushado por mim — push=Rafael).
 **Onda 3 COMPLETA** (fase 3a READ + fase 3b WRITE, commits locais, NAO pushados):
 - 3a (READ): `loop` (directives/corrections/loop-health), `eval` (scores/cases),
   `melhorias` (list-open/show/intelligence-report). Commit `0332b8f95`.
@@ -51,8 +65,11 @@ TEM. (b) `_will_inject` deve espelhar TODO o filtro de `_build_operational_direc
 (senao o preview mente). (c) correcoes->mandatory injetam via canal L1 `<user_rules>` (`USE_USER_RULES_CHANNEL`),
 INDEPENDENTE de `AGENT_OPERATIONAL_DIRECTIVES`. (d) `permissions.py` e exportado ao Teams.
 
-**Proximo: Onda 4** (observabilidade infra + seguranca + ontologia — P4/P10/P13/P11/P9) ou **canary REAL do
-WRITE em PROD** (apos push+deploy do Rafael; comecar por `promote-batch`/`approve` de 1 shadow com preview).
+**Proximo**: restante da Onda 4 (**P4** subagent-metrics — OBS-1 bloqueia cost-breakdown; **P11** ontologia
+D4; **P9** rede de seguranca das destrutivas) OU **canary REAL do WRITE em PROD** (JA DESBLOQUEADO — deploy
+live). Para o canary: usar `infra.py flags` primeiro (db_evidence confirma flags PROD), depois READ do funil +
+preview do `<do>`; dos 5 shadows so o **id=846** ("Verificar pedidos com entrega vencida [3 passos]", eff=17)
+e candidato real — os outros 4 sao auto-capturas de prompt cru ("Abordagem validada pelo judge: BOM DIA"...).
 
 **RE-LER antes de codar (anti-drift)**:
 - Esta secao + [Decisoes travadas](#decisoes-travadas) + [Ondas](#ondas) Onda 3 + [Gotchas](#gotchas).
@@ -196,9 +213,20 @@ Padrao universal: **dry-run e o DEFAULT**; so escreve com `--confirm` (preview s
 - **P4**: `subagent-metrics` (metrics_dashboard_service, 11 endpoints, 63 metrics) + `subagent-validations`
   (sessions.data — hoje 0, degradar) ; `cost-breakdown` BLOQUEADO por **OBS-1** (wirar callsite
   `cost_tracker.insert_entry` no caminho principal de `client.py` — agent_session_costs vazia; sessao separada).
-- **P10**: `flags`/`gates`/`worker-status` (estado real das 13 flags de evolucao + filas RQ).
-- **P13**: gate cross-user via `get_debug_mode()` (**target_file correto: `app/agente/config/permissions.py`**,
-  NAO feature_flags.py) — agente web bloqueado, dev livre.
+- **P10** ✅ FEITA (2026-06-03, commit `b716076e2`): `infra.py` `flags`/`gates`/`worker-status` (READ).
+  - `flags`: EVOLUTION_FLAGS (19: Ondas 0-4 + atuador + loop corretivo, fonte `feature_flags.py`) com
+    DECLARADO [this-process] x **db_evidence [PROD via DB]** (env-independente — fecha o blind spot).
+    `kind` activity (rastro=flag EFETIVA: judge/verify/frustration agent_step, eval_scores, shadows,
+    mandatory) vs readiness (atuador injecao sem rastro: directives_injetaveis, mandatory_rules) vs None.
+  - `gates`: gerindo_write (always_deny dos 6 WRITE), estoque_restricao (+allow-list), debug_mode,
+    reversibility (warn), hard_enforce — shape homogeneo, `[this-process]`.
+  - `worker-status`: filas RQ agente + workers; degrada se Redis off (shape fixo, nunca query_error).
+  - Gotchas/anti-drift codificados: db_evidence homogeneo (snapshot nao colapsa); confronto text-only
+    de EVOLUTION_FLAGS + GERINDO_WRITE_BLOCKED contra a fonte; deteccao PROD inclui host interno Render
+    (`dpg-`/`red-`/`RENDER` env). Review adversarial 16 achados (2 HIGH+5 MED+9 LOW) fechados.
+- **P13** ✅ FEITA (entregue na Onda 3 fase 3b): gate cross-user via `_classify_gerindo_write` em
+  `app/agente/config/permissions.py` — NEGA WRITE pelo agente web/Teams, dev-CLI livre. O subcomando
+  `gates` (P10) agora EXPOE esse gate. Nada a fazer aqui.
 - **P11**: `grafo.py` ontologia D4 (`query_ontology`) + provenance bi-temporal + bootstrap (WRITE idempotente)
   + fix `grafo.relations` (target nao aparece) e filtro `user_id` em `grafo.query`.
 - **P9**: rede de seguranca destrutivas (pre-contagem + export + cascade) + `gc-cold`/`gc-all`/`cleanup-empresa`.
