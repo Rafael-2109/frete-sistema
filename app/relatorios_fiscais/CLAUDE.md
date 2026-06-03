@@ -1,4 +1,48 @@
+<!-- doc:meta
+tipo: explanation
+camada: L1
+sot_de: —
+hub: CLAUDE.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Modulo Relatorios Fiscais — SPED ECD Centralizado
+
+> **Papel:** guia de desenvolvimento do modulo Relatorios Fiscais — geracao do SPED ECD centralizado (Leiaute 9) com ciclo iterativo de correcoes contra o PVA.
+
+## Indice
+
+- [Contexto](#contexto)
+- [CONTEXTO CRITICO PARA NOVA SESSAO](#contexto-critico-para-nova-sessao)
+- [TECH STACK ESPECIFICO](#tech-stack-especifico)
+- [ARQUITETURA — 5 SERVICES](#arquitetura-5-services)
+- [MAPEAMENTO BLOCO SPED → FUNCAO GERADORA (blocks.py)](#mapeamento-bloco-sped-funcao-geradora-blockspy)
+- [DADOS EXTRAIDOS — data.py](#dados-extraidos-datapy)
+- [CONSTANTES CRITICAS (constantes.py)](#constantes-criticas-constantespy)
+- [ROTAS (routes.py — Blueprint `relatorios_fiscais`)](#rotas-routespy-blueprint-relatorios_fiscais)
+- [ORDEM DE EMISSAO DOS BLOCOS (service.py:62 — `gerar_sped_ecd_centralizado`)](#ordem-de-emissao-dos-blocos-servicepy62-gerar_sped_ecd_centralizado)
+- [VALIDATOR (validator.py — pre-PVA)](#validator-validatorpy-pre-pva)
+- [HISTORICO DE VERSOES E DECISOES CRITICAS](#historico-de-versoes-e-decisoes-criticas)
+- [GOTCHAS — VOCE PRECISA SABER](#gotchas-voce-precisa-saber)
+  - [1. PVA exige I050+I051+I052 INTERCALADOS por conta (nao em blocos)](#1-pva-exige-i050i051i052-intercalados-por-conta-nao-em-blocos)
+  - [2. I052 so para contas analiticas COM mapeamento de aglutinacao](#2-i052-so-para-contas-analiticas-com-mapeamento-de-aglutinacao)
+  - [3. J100 usa codes REAIS do plano](#3-j100-usa-codes-reais-do-plano)
+  - [4. J150 usa codes FICTICIOS (DRE_REC_BRUTA, etc.)](#4-j150-usa-codes-ficticios-dre_rec_bruta-etc)
+  - [5. Saldo natural vs IND_DC](#5-saldo-natural-vs-ind_dc)
+  - [6. Encoding Latin-1 puro](#6-encoding-latin-1-puro)
+  - [7. PROD vs DEV worker](#7-prod-vs-dev-worker)
+  - [8. Consolidacao por code (nao por account_id)](#8-consolidacao-por-code-nao-por-account_id)
+  - [9. EncryptedFernetField em params do worker?](#9-encryptedfernetfield-em-params-do-worker)
+  - [10. RQ Job result NAO retorna o BytesIO](#10-rq-job-result-nao-retorna-o-bytesio)
+  - [11. SPED da contadora e GROUND TRUTH](#11-sped-da-contadora-e-ground-truth)
+  - [12. PVA externo vs validador interno: gap esperado](#12-pva-externo-vs-validador-interno-gap-esperado)
+- [COMO ITERAR EM CORRECOES (FLUXO)](#como-iterar-em-correcoes-fluxo)
+- [PROTOCOLO DE NOVA VERSAO](#protocolo-de-nova-versao)
+- [REFERENCIAS](#referencias)
+
+## Contexto
+
+~5K LOC, porem fiscal-critico. Modalidade centralizada (companies FB+SC+CD; LF tem ECD propria). Cada iteracao estoura contexto se ler PDF/SPED inteiros — usar `SPED_ECD_PLANO.md` (inventario de erros) e `manual_ecd/INDEX.md` em vez dos arquivos completos. Em PROD usa a fila RQ `sped_ecd`. (A secao `## CONTEXTO CRITICO PARA NOVA SESSAO` abaixo traz o checklist anti-estouro.)
 
 **Ultima atualizacao**: 2026-05-15
 **Versao atual**: V1.8 (em construcao — mudancas nao commitadas em `sped_ecd_*.py`)

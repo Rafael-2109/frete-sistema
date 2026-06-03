@@ -1,4 +1,39 @@
+<!-- doc:meta
+tipo: explanation
+camada: L1
+sot_de: —
+hub: CLAUDE.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Carteira — Guia de Desenvolvimento
+
+> **Papel:** guia de desenvolvimento do modulo Carteira — workspace principal do sistema (pedidos agrupados, separacoes, ruptura de estoque, programacao de lote, standby).
+
+## Indice
+
+- [Contexto](#contexto)
+- [Estrutura](#estrutura)
+- [Regras Criticas](#regras-criticas)
+  - [R1: CarteiraPrincipal NAO tem campos de separacao](#r1-carteiraprincipal-nao-tem-campos-de-separacao)
+  - [R2: main_routes.py contem apenas dashboard index()](#r2-main_routespy-contem-apenas-dashboard-index)
+  - [R3: PreSeparacaoItem e um Adapter](#r3-preseparacaoitem-e-um-adapter)
+  - [R4: 11 Blueprints registrados em routes/__init__.py](#r4-11-blueprints-registrados-em-routes__init__py)
+  - [R5: agrupamento_service.py usa batch queries (3 queries vs N+1)](#r5-agrupamento_servicepy-usa-batch-queries-3-queries-vs-n1)
+  - [R6: carteira_simples/ e pacote modularizado](#r6-carteira_simples-e-pacote-modularizado)
+  - [R7: 2 variantes de ruptura — escolher a correta](#r7-2-variantes-de-ruptura-escolher-a-correta)
+  - [R8: Template usa `data-pedido` (NAO `data-num-pedido`)](#r8-template-usa-data-pedido-nao-data-num-pedido)
+  - [R9: POSTs AJAX precisam de X-CSRFToken](#r9-posts-ajax-precisam-de-x-csrftoken)
+- [Modelos](#modelos)
+- [Padroes do Modulo](#padroes-do-modulo)
+  - [Enriquecimento de pedidos (agrupamento_service.py)](#enriquecimento-de-pedidos-agrupamento_servicepy)
+  - [Resposta JSON padrao das APIs](#resposta-json-padrao-das-apis)
+- [Interdependencias](#interdependencias)
+- [Skills Relacionadas](#skills-relacionadas)
+
+## Contexto
+
+~18.5K LOC, 50 arquivos. Exibe pedidos agrupados, gera separacoes, analisa ruptura de estoque, programa lotes (Atacadao/Sendas) e gerencia standby. Campos de tabela vem dos schemas JSON; regras CarteiraPrincipal vs Separacao em `.claude/references/modelos/REGRAS_CARTEIRA_SEPARACAO.md`. `main_routes.py` e apenas o dashboard `index()` — novas rotas em `routes/`.
 
 **LOC**: ~18.5K | **Arquivos**: 50 | **22 JS** (21 templates + 1 static) | **Atualizado**: 01/06/2026
 

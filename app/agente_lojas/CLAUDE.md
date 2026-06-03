@@ -1,4 +1,31 @@
+<!-- doc:meta
+tipo: explanation
+camada: L1
+sot_de: —
+hub: CLAUDE.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Agente Lojas HORA — Guia de Desenvolvimento
+
+> **Papel:** guia de desenvolvimento do agente dedicado as Lojas Motochefe (HORA), endpoint `/agente-lojas/*` — compartilha o SDK com `app/agente/` mas com system_prompt, skills, subagents e escopo de dados isolados.
+
+## Indice
+
+- [Contexto](#contexto)
+- [Porque existe um agente separado](#porque-existe-um-agente-separado)
+- [Estrutura](#estrutura)
+- [Reuso vs exclusivo](#reuso-vs-exclusivo)
+- [Autorizacao](#autorizacao)
+- [Escopo de dados por loja](#escopo-de-dados-por-loja)
+- [Particao de sessoes e memorias](#particao-de-sessoes-e-memorias)
+- [Fases de evolucao](#fases-de-evolucao)
+- [Gotchas](#gotchas)
+- [Referencias](#referencias)
+
+## Contexto
+
+Agente separado (decisao 2026-04-22) que reusa a infra do SDK mas atende so o operador de loja, sem o contexto logistico Nacom. Reforca em camada-tool o contrato de isolamento de `app/hora/CLAUDE.md` via `skills=sorted(SKILLS_PERMITIDAS)` (SDK 0.1.77+): skills do dominio Nacom Goya ficam rejeitadas pelo Skill tool. ~2400 LOC, 20 arquivos, status M2.
 
 **LOC**: ~2400 (+65 testes) | **Arquivos**: 20 | **Status**: M2 SDK completo + UX hardened (markdown render, TodoWrite UI, SessionStore opcional, historico de sessoes na UI, 65 testes automatizados) | **Atualizado**: 2026-05-09
 

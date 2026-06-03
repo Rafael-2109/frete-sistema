@@ -1,4 +1,37 @@
+<!-- doc:meta
+tipo: explanation
+camada: L1
+sot_de: —
+hub: CLAUDE.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Seguranca — Guia de Desenvolvimento
+
+> **Papel:** guia de desenvolvimento do modulo Seguranca — monitoramento de vulnerabilidades de colaboradores (breaches, forca de senha, seguranca DNS, score de risco).
+
+## Indice
+
+- [Contexto](#contexto)
+- [Estrutura de Telas](#estrutura-de-telas)
+- [Estrutura de Arquivos](#estrutura-de-arquivos)
+- [Regras Criticas](#regras-criticas)
+  - [R1: Senhas NUNCA armazenadas ou logadas](#r1-senhas-nunca-armazenadas-ou-logadas)
+  - [R2: Acesso restrito a administradores](#r2-acesso-restrito-a-administradores)
+  - [R3: Email breaches degradam gracefully](#r3-email-breaches-degradam-gracefully)
+  - [R4: Rate limiting HIBP](#r4-rate-limiting-hibp)
+  - [R5: Unique constraint previne duplicatas](#r5-unique-constraint-previne-duplicatas)
+  - [Setup HIBP (opcional)](#setup-hibp-opcional)
+- [Modelos](#modelos)
+- [Services](#services)
+- [Interdependencias](#interdependencias)
+- [Scheduler](#scheduler)
+- [Permissao](#permissao)
+- [Migrations](#migrations)
+
+## Contexto
+
+14 arquivos, ~2K LOC, 8 telas (todas restritas a administrador). Email breaches via HIBP, forca de senha via zxcvbn + HIBP k-anonymity, seguranca DNS (SPF/DMARC/MX), score de risco e varreduras automaticas.
 
 **14 arquivos** | **~2K LOC** | **8 templates** | **Atualizado**: 01/06/2026
 

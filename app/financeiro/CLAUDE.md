@@ -1,4 +1,68 @@
+<!-- doc:meta
+tipo: explanation
+camada: L1
+sot_de: —
+hub: CLAUDE.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Financeiro — Guia de Desenvolvimento
+
+> **Papel:** guia de desenvolvimento do modulo Financeiro — contas a receber/pagar, extratos bancarios, conciliacao Odoo, CNAB 400, comprovantes e baixas.
+
+## Indice
+
+- [Contexto](#contexto)
+- [Estrutura](#estrutura)
+  - [Workers locais](#workers-locais)
+- [Armadilhas que CAUSAM BUGS](#armadilhas-que-causam-bugs)
+  - [A1: status_match != status em ExtratoItem (e BaixaPagamentoItem)](#a1-status_match-status-em-extratoitem-e-baixapagamentoitem)
+  - [A2: Legacy FK vs M:N — dual binding de titulos](#a2-legacy-fk-vs-mn-dual-binding-de-titulos)
+  - [A3: titulo_id — deprecado em ExtratoItem, ATIVO em BaixaPagamentoItem](#a3-titulo_id-deprecado-em-extratoitem-ativo-em-baixapagamentoitem)
+  - [A4: nf_cancelada e property N+1, NAO campo SQL](#a4-nf_cancelada-e-property-n1-nao-campo-sql)
+  - [A5: calcular_valor_titulo filtra previsto=False, to_dict soma TUDO](#a5-calcular_valor_titulo-filtra-previstofalse-to_dict-soma-tudo)
+  - [A6: valor_titulo e CALCULADO — chamar atualizar_valor_titulo()](#a6-valor_titulo-e-calculado-chamar-atualizar_valor_titulo)
+  - [A7: Dois sistemas de baixa DISTINTOS](#a7-dois-sistemas-de-baixa-distintos)
+  - [A8: matches_candidatos e TEXT, nao JSONB](#a8-matches_candidatos-e-text-nao-jsonb)
+  - [A9: Float vs Numeric misturados para valores monetarios](#a9-float-vs-numeric-misturados-para-valores-monetarios)
+  - [A10: Parcela VARCHAR em Contas*, INTEGER em Extrato*/Baixa*](#a10-parcela-varchar-em-contas-integer-em-extratobaixa)
+- [Armadilhas Odoo](#armadilhas-odoo)
+  - [O1: TRANSITORIA (22199) -> PENDENTES (26868) obrigatorio](#o1-transitoria-22199---pendentes-26868-obrigatorio)
+  - [O2: Write-off wizard ja posta E reconcilia](#o2-write-off-wizard-ja-posta-e-reconcilia)
+  - [O3: amount_residual NEGATIVO para contas a pagar](#o3-amount_residual-negativo-para-contas-a-pagar)
+  - [O4: Parcela 1 no Odoo pode ser 0 ou False](#o4-parcela-1-no-odoo-pode-ser-0-ou-false)
+  - [O5: CNPJ formatado no Odoo: "XX.XXX.XXX/XXXX-XX"](#o5-cnpj-formatado-no-odoo-xxxxxxxxxxxx-xx)
+  - [O6: "cannot marshal None" = SUCESSO](#o6-cannot-marshal-none-sucesso)
+  - [O7: Bug desconto duplo — usar saldo_total, NAO balance](#o7-bug-desconto-duplo-usar-saldo_total-nao-balance)
+  - [O8: Multi-company: pagamento na empresa do TITULO, nao do extrato](#o8-multi-company-pagamento-na-empresa-do-titulo-nao-do-extrato)
+  - [O9: draft -> write -> post (Safe Write)](#o9-draft---write---post-safe-write)
+  - [O10: Titulos 2000-01-01 sao fantasmas](#o10-titulos-2000-01-01-sao-fantasmas)
+  - [O11: button_draft REMOVE reconciliacao existente (corrigido 2026-02-18)](#o11-button_draft-remove-reconciliacao-existente-corrigido-2026-02-18)
+  - [O12: account_id DEVE ser ULTIMO write antes de action_post (descoberto 2026-02-18)](#o12-account_id-deve-ser-ultimo-write-antes-de-action_post-descoberto-2026-02-18)
+- [Armadilhas de Rota/API](#armadilhas-de-rotaapi)
+  - [CNAB400 usa `cnab400_bp` (prefix `/cnab400/`), NAO `financeiro_bp`](#cnab400-usa-cnab400_bp-prefix-cnab400-nao-financeiro_bp)
+  - [@login_required adicionado em pagamentos_baixas.py e pendencias.py (2026-02-14)](#login_required-adicionado-em-pagamentos_baixaspy-e-pendenciaspy-2026-02-14)
+  - [exportar_contas_receber_json() e publica (Power Query)](#exportar_contas_receber_json-e-publica-power-query)
+  - [Resposta JSON: comprovantes = `'sucesso'` (pt), demais = `'success'` (en)](#resposta-json-comprovantes-sucesso-pt-demais-success-en)
+  - [Matching: tipo_transacao='saida' -> PagamentoMatchingService, outros -> ExtratoMatchingService](#matching-tipo_transacaosaida---pagamentomatchingservice-outros---extratomatchingservice)
+- [Armadilhas de Worker](#armadilhas-de-worker)
+  - [Lock Redis fail-open e INTENCIONAL](#lock-redis-fail-open-e-intencional)
+  - [success agora reflete erros (padronizado 2026-02-14)](#success-agora-reflete-erros-padronizado-2026-02-14)
+  - [ExtratoLote UNIQUE = (statement_id + tipo_transacao)](#extratolote-unique-statement_id-tipo_transacao)
+  - [CASCADE assimetrico](#cascade-assimetrico)
+  - [RQ job.started_at e UTC aware (corrigido 2026-02-14)](#rq-jobstarted_at-e-utc-aware-corrigido-2026-02-14)
+- [Padroes do Modulo](#padroes-do-modulo)
+  - [Constantes centralizadas em `constants.py`](#constantes-centralizadas-em-constantspy)
+  - [Context manager `_app_context_safe` em `workers/utils.py`](#context-manager-_app_context_safe-em-workersutilspy)
+  - [Imports Odoo sao LAZY](#imports-odoo-sao-lazy)
+- [Interdependencias](#interdependencias)
+- [Skills Relacionadas](#skills-relacionadas)
+  - [References da Skill executando-odoo-financeiro](#references-da-skill-executando-odoo-financeiro)
+  - [Outras referencias](#outras-referencias)
+
+## Contexto
+
+80 arquivos, ~46.1K LOC. Tem o maior `models.py` do projeto (40+ models, ~2.8K linhas). Gotchas completos (80+) em `app/financeiro/GOTCHAS.md`; campos de tabela nos schemas JSON. Processamento pesado via workers RQ (Redis).
 
 **80 arquivos** | **~46.1K LOC** | **Atualizado**: 01/06/2026
 
