@@ -6,12 +6,12 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 from scripts.audits.artefato_lint import config
+from scripts.docs import _doc_meta
 
 def build(tipo, tema, hub, data) -> str:
     cfg = config.load()
     secoes = cfg.required_sections.get(tipo, [])
-    header = (f"<!-- doc:meta\ntipo: {tipo}\ncamada: L2\nsot_de: {tema}\n"
-              f"hub: {hub}\nsuperseded_by: —\natualizado: {data}\n-->\n")
+    header = _doc_meta.build_header(tipo, hub, data, camada="L2", sot_de=tema)
     body = [f"# {tema}", "", "> **Papel:** <1 linha>.  **Abra quando:** <...>", ""]
     for s in secoes:
         if s == "Papel":
