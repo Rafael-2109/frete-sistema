@@ -1006,7 +1006,7 @@ def venda_adicionar_item_peca(venda_id: int):
     except (ValueError, InvalidOperation) as exc:
         flash(f'Erro ao adicionar peca: {exc}', 'danger')
 
-    return redirect(url_for('hora.venda_detalhe', venda_id=venda_id))
+    return redirect(url_for('hora.vendas_detalhe', venda_id=venda_id))
 
 
 @hora_bp.route('/vendas/<int:venda_id>/itens-peca/<int:item_id>/remover', methods=['POST'])
@@ -1026,4 +1026,4 @@ def venda_remover_item_peca(venda_id: int, item_id: int):
         flash('Peca removida do pedido.', 'success')
     except ValueError as exc:
         flash(f'Erro: {exc}', 'danger')
-    return redirect(url_for('hora.venda_detalhe', venda_id=venda_id))
+    return redirect(url_for('hora.vendas_detalhe', venda_id=venda_id))
