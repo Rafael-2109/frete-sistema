@@ -181,8 +181,10 @@
     const modeloId = elModelo.value;
     elCor.innerHTML = '<option value="">— carregando… —</option>';
     elCor.disabled = true;
-    elChassi.innerHTML = '<option value="">— escolha cor —</option>';
-    elChassi.disabled = true;
+    // Chassi e autocomplete (input), nao select: limpa o valor digitado e
+    // atualiza o filtro de disponibilidade conforme o modelo escolhido.
+    elChassi.value = '';
+    atualizarFiltroChassi();
     if (elValor) elValor.value = '';
     if (elPrecoInfo) elPrecoInfo.textContent = '';
     if (elCorStatus) elCorStatus.textContent = '';
@@ -218,52 +220,45 @@
     }
   }
 
-  async function carregarChassis() {
-    if (!elModelo || !elCor || !elChassi) return;
-    const modeloId = elModelo.value;
-    const cor = elCor.value;
-    elChassi.innerHTML = '<option value="">— carregando… —</option>';
-    elChassi.disabled = true;
-    if (elValor) elValor.value = '';
-    if (elPrecoInfo) elPrecoInfo.textContent = '';
-    if (elChassiStatus) elChassiStatus.textContent = '';
-
-    if (!modeloId || !cor) {
-      elChassi.innerHTML = '<option value="">— escolha cor —</option>';
-      return;
+  // Chassi virou autocomplete (data-hora-autocomplete="chassi"). A cascata
+  // modelo/cor agora so AJUSTA os filtros do autocomplete via
+  // data-hora-extra-params (lidos dinamicamente a cada fetch pelo autocomplete.js).
+  // disponivel=1 sempre — so chassis em estoque podem ser vendidos.
+  function atualizarFiltroChassi() {
+    if (!elChassi) return;
+    const params = ['disponivel=1'];
+    if (elModelo && elModelo.value) {
+      params.push('modelo_id=' + encodeURIComponent(elModelo.value));
     }
+    if (elCor && elCor.value) {
+      params.push('cor=' + encodeURIComponent(elCor.value));
+    }
+    elChassi.dataset.horaExtraParams = params.join('&');
+  }
+
+  // Ao escolher/digitar um chassi, busca os dados dele para preencher o modelo
+  // (quando o operador digitou o chassi direto, sem usar a cascata) e disparar
+  // o preco de tabela. Best-effort: o backend deriva modelo/cor do chassi de
+  // qualquer forma; aqui e so UX (preco depende do modelo).
+  async function preencherDadosDoChassi() {
+    if (!elChassi || !elChassi.value) return;
+    const chassi = elChassi.value.trim().toUpperCase();
+    if (chassi.length < 2) return;
     try {
-      const url = `{{ url_for('hora.tagplus_pedido_venda_api_chassis') }}?modelo_id=${encodeURIComponent(modeloId)}&cor=${encodeURIComponent(cor)}`;
-      const r = await fetch(url);
+      const r = await fetch(
+        `{{ url_for('hora.autocomplete_chassi') }}?q=${encodeURIComponent(chassi)}&disponivel=1&limit=1`,
+        { headers: { 'Accept': 'application/json' } }
+      );
       const data = await r.json();
-      if (!data.ok || !data.chassis || !data.chassis.length) {
-        elChassi.innerHTML = '<option value="">— sem chassis disponíveis —</option>';
-        if (elChassiStatus) {
-          elChassiStatus.textContent = 'Nenhum chassi disponível para esta combinação.';
-          elChassiStatus.className = 'text-warning';
-        }
-        return;
+      const item = Array.isArray(data) && data.length ? data[0] : null;
+      if (!item) return;
+      if (elModelo && !elModelo.value && item.modelo_id != null) {
+        elModelo.value = String(item.modelo_id);
+        atualizarPrecosRef();
       }
-      const opts = data.chassis.map(c => {
-        const flags = [];
-        if (c.avarias_abertas > 0) flags.push(`⚠ ${c.avarias_abertas} avaria(s)`);
-        if (c.pecas_faltando_abertas > 0) flags.push(`⚙ ${c.pecas_faltando_abertas} peça(s) faltando`);
-        const sufix = flags.length ? ` [${flags.join(' / ')}]` : '';
-        const loja = c.loja_nome ? ` — ${c.loja_nome}` : '';
-        return `<option value="${c.chassi}">${c.chassi}${loja}${sufix}</option>`;
-      }).join('');
-      elChassi.innerHTML = '<option value="">— escolha o chassi —</option>' + opts;
-      elChassi.disabled = false;
-      if (elChassiStatus) {
-        elChassiStatus.textContent = `${data.chassis.length} chassi(s) disponível(eis).`;
-        elChassiStatus.className = 'text-muted';
-      }
+      atualizarPrecoTabela();
     } catch (e) {
-      elChassi.innerHTML = '<option value="">— erro ao carregar —</option>';
-      if (elChassiStatus) {
-        elChassiStatus.textContent = 'Falha: ' + e.message;
-        elChassiStatus.className = 'text-danger';
-      }
+      // silencioso — best-effort
     }
   }
 
@@ -514,8 +509,18 @@
     });
   }
   if (elCor) {
-    elCor.addEventListener('change', carregarChassis);
+    elCor.addEventListener('change', () => {
+      atualizarFiltroChassi();
+      if (elChassi) elChassi.value = '';
+    });
   }
+  if (elChassi) {
+    // Selecao no dropdown do autocomplete dispara 'change' (ver autocomplete.js);
+    // tambem cobre blur apos digitar.
+    elChassi.addEventListener('change', preencherDadosDoChassi);
+  }
+  // Estado inicial do filtro do autocomplete de chassi (disponivel=1).
+  atualizarFiltroChassi();
 
   // Debounce de 1500ms: evita que `recalcular()` reformate os outros campos
   // (via setBR) a cada keystroke — operador via cursor pulando e desconto
