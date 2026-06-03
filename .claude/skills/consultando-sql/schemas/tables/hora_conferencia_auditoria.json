@@ -62,9 +62,9 @@
   ],
   "indices": [
     {
-      "name": "ix_hora_conferencia_auditoria_conferencia_id",
+      "name": "ix_hora_conferencia_auditoria_criado_em",
       "columns": [
-        "conferencia_id"
+        "criado_em"
       ],
       "unique": false
     },
@@ -76,16 +76,16 @@
       "unique": false
     },
     {
-      "name": "ix_hora_conferencia_auditoria_criado_em",
+      "name": "ix_hora_conferencia_auditoria_acao",
       "columns": [
-        "criado_em"
+        "acao"
       ],
       "unique": false
     },
     {
-      "name": "ix_hora_conferencia_auditoria_acao",
+      "name": "ix_hora_conferencia_auditoria_conferencia_id",
       "columns": [
-        "acao"
+        "conferencia_id"
       ],
       "unique": false
     },

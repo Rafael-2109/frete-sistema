@@ -100,16 +100,16 @@
   ],
   "indices": [
     {
-      "name": "ix_inventario_contagem_item_cod_produto",
+      "name": "ix_inventario_contagem_item_contagem_id",
       "columns": [
-        "cod_produto"
+        "contagem_id"
       ],
       "unique": false
     },
     {
-      "name": "ix_inventario_contagem_item_contagem_id",
+      "name": "ix_inventario_contagem_item_cod_produto",
       "columns": [
-        "contagem_id"
+        "cod_produto"
       ],
       "unique": false
     }

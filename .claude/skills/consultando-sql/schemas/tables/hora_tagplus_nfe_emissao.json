@@ -123,20 +123,6 @@
   ],
   "indices": [
     {
-      "name": "ix_hora_tagplus_nfe_emissao_venda_id",
-      "columns": [
-        "venda_id"
-      ],
-      "unique": true
-    },
-    {
-      "name": "ix_hora_tagplus_nfe_emissao_status",
-      "columns": [
-        "status"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_hora_tagplus_nfe_emissao_conta_id",
       "columns": [
         "conta_id"
@@ -156,6 +142,20 @@
         "tagplus_pedido_id"
       ],
       "unique": false
+    },
+    {
+      "name": "ix_hora_tagplus_nfe_emissao_status",
+      "columns": [
+        "status"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_hora_tagplus_nfe_emissao_venda_id",
+      "columns": [
+        "venda_id"
+      ],
+      "unique": true
     }
   ]
 }

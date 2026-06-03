@@ -53,16 +53,16 @@
   ],
   "indices": [
     {
-      "name": "ix_nf_transferencia_produto_snapshot_nf_snapshot_id",
+      "name": "ix_nf_transferencia_produto_snapshot_cod_produto",
       "columns": [
-        "nf_snapshot_id"
+        "cod_produto"
       ],
       "unique": false
     },
     {
-      "name": "ix_nf_transferencia_produto_snapshot_cod_produto",
+      "name": "ix_nf_transferencia_produto_snapshot_nf_snapshot_id",
       "columns": [
-        "cod_produto"
+        "nf_snapshot_id"
       ],
       "unique": false
     }

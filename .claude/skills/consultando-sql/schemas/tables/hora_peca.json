@@ -64,18 +64,18 @@
   ],
   "indices": [
     {
-      "name": "ix_hora_peca_ativo",
-      "columns": [
-        "ativo"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_hora_peca_codigo_interno",
       "columns": [
         "codigo_interno"
       ],
       "unique": true
+    },
+    {
+      "name": "ix_hora_peca_ativo",
+      "columns": [
+        "ativo"
+      ],
+      "unique": false
     }
   ]
 }

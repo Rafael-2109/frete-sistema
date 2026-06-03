@@ -51,16 +51,16 @@
   ],
   "indices": [
     {
-      "name": "ix_assai_carregamento_item_chassi",
+      "name": "ix_assai_carregamento_item_carregamento_id",
       "columns": [
-        "chassi"
+        "carregamento_id"
       ],
       "unique": false
     },
     {
-      "name": "ix_assai_carregamento_item_carregamento_id",
+      "name": "ix_assai_carregamento_item_chassi",
       "columns": [
-        "carregamento_id"
+        "chassi"
       ],
       "unique": false
     }

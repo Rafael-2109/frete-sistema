@@ -180,13 +180,6 @@
   ],
   "indices": [
     {
-      "name": "ix_ocorrencia_devolucao_autorizado_por_id",
-      "columns": [
-        "autorizado_por_id"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_ocorrencia_devolucao_numero_ocorrencia",
       "columns": [
         "numero_ocorrencia"
@@ -256,6 +249,13 @@
       "name": "ix_ocorrencia_devolucao_status",
       "columns": [
         "status"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_ocorrencia_devolucao_autorizado_por_id",
+      "columns": [
+        "autorizado_por_id"
       ],
       "unique": false
     }

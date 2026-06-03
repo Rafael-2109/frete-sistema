@@ -88,6 +88,14 @@
       "unique": false
     },
     {
+      "name": "ix_carvia_anexo_entidade",
+      "columns": [
+        "entidade_tipo",
+        "entidade_id"
+      ],
+      "unique": false
+    },
+    {
       "name": "ix_carvia_anexos_entidade_id",
       "columns": [
         "entidade_id"
@@ -98,14 +106,6 @@
       "name": "ix_carvia_anexos_entidade_tipo",
       "columns": [
         "entidade_tipo"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_carvia_anexo_entidade",
-      "columns": [
-        "entidade_tipo",
-        "entidade_id"
       ],
       "unique": false
     }
