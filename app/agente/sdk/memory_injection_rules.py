@@ -26,12 +26,20 @@ def _build_user_rules(user_id: int) -> Optional[str]:
     """
     from ..models import AgentMemory
     try:
+        from ..config.feature_flags import MANDATORY_RULES_MAX_COUNT
+        # Ordena por correction_count DESC (regras mais reincidentes primeiro) +
+        # cap MANDATORY_RULES_MAX_COUNT: adesao a instrucoes despenca >100-150
+        # regras (IFScale arXiv:2507.11538) — manter o canal duro pequeno e curado.
         rules = AgentMemory.query.filter(
             AgentMemory.user_id.in_([user_id, 0]),
             AgentMemory.is_directory == False,  # noqa: E712
             AgentMemory.is_cold == False,  # noqa: E712
             AgentMemory.priority == 'mandatory',
-        ).order_by(AgentMemory.user_id.asc(), AgentMemory.path.asc()).all()
+        ).order_by(
+            AgentMemory.correction_count.desc(),
+            AgentMemory.user_id.asc(),
+            AgentMemory.path.asc(),
+        ).limit(MANDATORY_RULES_MAX_COUNT).all()
 
         if not rules:
             return None

@@ -484,8 +484,15 @@ IMPROVEMENT_DIALOGUE_MIN_MESSAGES = int(os.getenv("AGENT_IMPROVEMENT_MIN_MESSAGE
 # Quando true: _build_user_rules() e chamado no inicio da injecao de memoria
 # Injeta <user_rules priority="mandatory"> como PRIMEIRO bloco em tier0_parts
 # Sempre injetado sem consumir budget — priority maxima no prompt.
-# Default false: ativacao gradual apos testes com usuarios piloto.
-USE_USER_RULES_CHANNEL = os.getenv("AGENT_USER_RULES_CHANNEL", "false").lower() == "true"
+# Default ON (2026-06-02): canal aditivo e quase inocuo ate a promocao (Fase 2 do
+# loop corretivo) encher o canal — quem promove a 'mandatory' passa pelo gate R9+A3.
+# Manter ON evita a feature virar zumbi (construida, desligada e esquecida).
+USE_USER_RULES_CHANNEL = os.getenv("AGENT_USER_RULES_CHANNEL", "true").lower() == "true"
+
+# Cap de regras no canal duro <user_rules>, ordenado por correction_count DESC.
+# Adesao a instrucoes despenca >100-150 regras (IFScale arXiv:2507.11538) — o canal
+# duro deve ser pequeno e curado. Ver eixos/G-memoria-pessoal.md + plano loop corretivo.
+MANDATORY_RULES_MAX_COUNT = int(os.getenv("AGENT_MANDATORY_RULES_MAX_COUNT", "12"))
 
 # ====================================================================
 # Features SDK 0.1.60 — Subagent Transparency (2026-04-16)

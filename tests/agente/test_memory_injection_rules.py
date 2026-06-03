@@ -145,3 +145,41 @@ def test_build_user_rules_skips_empty_content(app, cleanup_memories):
     assert 'regra valida' in result
     # Verificar que nao ha <rule> com content vazio/whitespace
     assert '/memories/empty_rule.xml' not in result
+
+
+def test_build_user_rules_caps_at_max_count(app, cleanup_memories):
+    """Mais regras mandatory que o cap -> injeta no maximo MANDATORY_RULES_MAX_COUNT (IFScale)."""
+    from app.agente.config.feature_flags import MANDATORY_RULES_MAX_COUNT
+    cleanup_ids, user_id = cleanup_memories
+    n = MANDATORY_RULES_MAX_COUNT + 3
+    for i in range(n):
+        mem = AgentMemory.create_file(user_id, f'/memories/rule_{i}.xml', f'REGRA {i}')
+        mem.priority = 'mandatory'
+        mem.correction_count = i  # variados p/ exercitar a ordenacao
+        db.session.flush()
+        cleanup_ids.append(mem.id)
+    db.session.commit()
+
+    result = _build_user_rules(user_id=user_id)
+    assert result is not None
+    assert result.count('<rule ') == MANDATORY_RULES_MAX_COUNT
+
+
+def test_build_user_rules_orders_by_correction_count_desc(app, cleanup_memories):
+    """Regra com maior correction_count (mais reincidente) aparece ANTES da de menor."""
+    cleanup_ids, user_id = cleanup_memories
+    # paths escolhidos p/ o teste ser discriminante: 'aaa' < 'zzz' alfabeticamente,
+    # entao SO a ordenacao por correction_count desc coloca ALTA antes de BAIXA.
+    low = AgentMemory.create_file(user_id, '/memories/aaa_regra.xml', 'REGRA BAIXA')
+    low.priority = 'mandatory'
+    low.correction_count = 1
+    high = AgentMemory.create_file(user_id, '/memories/zzz_regra.xml', 'REGRA ALTA')
+    high.priority = 'mandatory'
+    high.correction_count = 9
+    db.session.commit()
+    cleanup_ids.append(low.id)
+    cleanup_ids.append(high.id)
+
+    result = _build_user_rules(user_id=user_id)
+    assert result is not None
+    assert result.index('REGRA ALTA') < result.index('REGRA BAIXA')
