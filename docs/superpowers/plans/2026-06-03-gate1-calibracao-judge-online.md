@@ -70,7 +70,7 @@ O card O1.4 (A3 baseline) do ROADMAP está MORTO (A3 aposentado). O O1.5 (E3) re
 | `tests/agente/sdk/test_verifiers.py` | testes do fix arithmetic | Create/Modify (Task 2) |
 | `app/agente/workers/plan_verifier.py` | `verify_plan_adversarial` + `ADVERSARIAL_SYSTEM_PROMPT` + agregação verify | Modify (Task 3) |
 | `app/agente/workers/calibration_sampler.py` (NOVO) | varredor que popula `agent_eval_case` a partir de `agent_step.outcome_signal.judge` | Create (Task 4) |
-| `app/agente/scheduler/sincronizacao_incremental_definitiva.py` | novo módulo D8 que enfileira/roda o sampler | Modify (Task 4) |
+| `app/scheduler/sincronizacao_incremental_definitiva.py` | módulo 33 (D8) que roda o sampler — ✅ FEITO (path é `app/scheduler/`, não `app/agente/scheduler/`) | Modify (Task 4) |
 | `app/agente/models.py` | `AgentEvalCase` — helper extra se necessário | Modify (Task 4, se preciso) |
 | `app/agente/routes/insights.py` + `templates/agente/insights.html` | UI admin de spot-check + concordance | Modify (Task 5) |
 | `app/agente/config/feature_flags.py` | `AGENT_EVAL_CALIBRATION` (já existe) + nova flag do sampler | Modify (Task 4/6) |
@@ -210,6 +210,14 @@ class TestVerifyArithmeticParser:
 ## Ordem de execucao
 
 Task 1 → Task 2 → Task 3 → Task 4 → Task 5 → Task 6.
+
+**STATUS (2026-06-03, worktree `feat+gate1-calibracao-judge`, NÃO mergeado):**
+- ✅ **T1** ROADMAP reconciliado (`677cfe4dd`).
+- ✅ **T2** fix parser `verify_arithmetic` (`b46f3366e`, TDD, 154 testes verdes).
+- ✅ **T3** achado judge↔adversarial = viés de credulidade do judge (`f413b7291`, sem código).
+- ✅ **T4** sampler core (`a97da9284`, 7 testes) + wiring módulo 33 D8 (`418360ff4`, flag OFF=shadow).
+- ⬜ **T5** UI de spot-check humano (`routes/insights.py` + `insights.html`) — PRÓXIMA. Recon: ler o padrão do card "Adesão de Regras" (O0.3). Rota GET (`AgentEvalCase.sample_unreviewed('__online_judge__')` + `concordance_rate`) + POST (grava `human_verdict`/`reviewed_by`/`reviewed_at`). Destacar os prioritários (evidence com ⚠ADVERSARIAL).
+- ⬜ **T6** merge → deploy → ligar `AGENT_EVAL_CALIBRATION=true` no web. Sem DDL (agent_eval_case já existe). Depois: coleta ≥1 semana + rotular ≥10 → concordance≥80% = GATE-1 fechado.
 
 **"Fim do plano" entregável por código:** Tasks 1-5 mergeadas+deployadas + flag ligada (Task 6 steps 1-4). O GATE-1 formal (Task 6 step 5) depende SÓ de coleta (≥1 semana + rotulagem humana) — sem código pendente. É isso que impede a frente de "ficar incompleta": ao fim, NÃO há código pela metade, só dado a acumular.
 
