@@ -1,11 +1,12 @@
 """Gestao de usuarios e permissoes granulares do modulo HORA.
 
 3 telas:
-  GET  /hora/permissoes               - Lista usuarios + matriz Ver/Criar/Editar/Apagar
-                                         por modulo (10 modulos x 4 acoes).
-  POST /hora/permissoes/<id>/toggle   - Liga/desliga sistema_lojas (atalho).
-  POST /hora/permissoes/<id>/loja     - Define loja_hora_id (segregacao por loja).
-  POST /hora/permissoes/<id>/granular - Salva matriz completa em batch.
+  GET  /hora/permissoes                        - Lista usuarios + matriz Ver/Criar/Editar/Apagar
+                                                  por modulo (10 modulos x 4 acoes).
+  POST /hora/permissoes/<id>/toggle            - Liga/desliga sistema_lojas (atalho).
+  POST /hora/permissoes/<id>/loja              - Define loja_hora_id (segregacao por loja).
+  POST /hora/permissoes/<id>/granular          - Salva matriz completa em batch.
+  POST /hora/permissoes/<id>/criterio-pedidos  - Define criterio_pedidos_hora (loja|vendedor).
 
 Acesso protegido por (modulo='usuarios', acao=...) — admin sempre passa.
 """
@@ -198,6 +199,30 @@ def permissoes_set_loja(user_id: int):
 
     db.session.commit()
     flash(f'{usuario.nome}: {mensagem}.', 'success')
+    return redirect(url_for('hora.permissoes_lista'))
+
+
+@hora_bp.route('/permissoes/<int:user_id>/criterio-pedidos', methods=['POST'])
+@require_hora_perm('usuarios', 'editar')
+def permissoes_set_criterio_pedidos(user_id: int):
+    """Define o criterio de listagem de pedidos de venda do usuario.
+
+    'loja' (padrao) = escopo por loja_hora_id; 'vendedor' = pedidos do proprio
+    usuario (vendedor/criador), ignorando loja.
+    """
+    usuario = Usuario.query.get_or_404(user_id)
+    bloqueio = _bloqueia_se_alvo_invalido(usuario)
+    if bloqueio:
+        flash(bloqueio, 'danger')
+        return redirect(url_for('hora.permissoes_lista'))
+    criterio = (request.form.get('criterio_pedidos_hora') or '').strip().lower()
+    if criterio not in ('loja', 'vendedor'):
+        flash('Criterio invalido (use loja ou vendedor).', 'danger')
+        return redirect(url_for('hora.permissoes_lista'))
+    usuario.criterio_pedidos_hora = criterio
+    db.session.commit()
+    rotulo = 'por loja' if criterio == 'loja' else 'por vendedor (seus pedidos)'
+    flash(f'{usuario.nome}: pedidos filtrados {rotulo}.', 'success')
     return redirect(url_for('hora.permissoes_lista'))
 
 

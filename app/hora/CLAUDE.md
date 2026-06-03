@@ -32,6 +32,7 @@ atualizado: 2026-06-03
 - [15. Preço A vista / A prazo + desconto % por moto — 2026-05-06](#15-preço-a-vista-a-prazo-desconto-por-moto-2026-05-06)
 - [16. Campo `consumidor_final` no faturamento TagPlus — 2026-05-07 (revisado)](#16-campo-consumidor_final-no-faturamento-tagplus-2026-05-07-revisado)
 - [17. Desconsiderar moto de NF de compra — 2026-06-03](#17-desconsiderar-moto-de-nf-de-compra--2026-06-03)
+- [18. Unificação da tela de Pedido de Venda + filtro loja/vendedor + fix desconto — 2026-06-03](#18-unificação-da-tela-de-pedido-de-venda--filtro-lojavendedor--fix-desconto--2026-06-03)
 - [Onboarding Tours (2026-05-08)](#onboarding-tours-2026-05-08)
 - [Referências](#referências)
 
@@ -661,6 +662,33 @@ TagPlus.
 2. Reativar leitura do campo nas rotas (commit `c667c28d` tem o histórico).
 3. Reativar switch nos templates.
 4. Coluna no banco já existe — não precisa de migration.
+
+---
+
+## 18. Unificação da tela de Pedido de Venda + filtro loja/vendedor + fix desconto — 2026-06-03
+
+Três mudanças no Pedido de Venda (`HoraVenda`). Spec: `docs/superpowers/specs/2026-06-03-hora-unificar-pedido-venda-design.md`. Plano: `docs/superpowers/plans/2026-06-03-hora-unificar-pedido-venda.md`.
+
+**Tela única (criação + edição)** — `venda_detalhe.html` foi **REMOVIDO**. A tela `pedido_venda_novo.html` opera em 2 modos no mesmo template:
+- **Criação** (`tagplus_pedido_venda_novo`, sem `venda`): `{% else %}` — form único → `tagplus_pedido_venda_criar` (inalterado). Guarda pré-existente: sem modelos OU sem `formas_pagamento` mapeadas, o form é escondido e mostra alerta de configuração.
+- **Edição/Ver** (`vendas_detalhe`, com `venda`): `{% if venda %}` — timeline + todas as ações de workflow + edição por seção (respeitando `_CAMPOS_EDITAVEIS_HEADER`) + "adicionar moto" via componente de cascata. **Reusa as rotas granulares existentes** (`vendas_editar`, `vendas_pagamentos_editar`, `vendas_item_adicionar`, etc.) — zero lógica de salvar nova.
+- Componente extraído: `app/templates/hora/tagplus/_componente_moto_desconto.html` (markup modelo→cor→chassi + desconto, ids `f-modelo`/`f-cor`/`f-chassi`/`f-preco-tabela`/`f-desconto-pct`/`f-desconto-rs`/`f-valor`) + `_pedido_venda_scripts.html` (todo o JS, **defensivo** — cada grupo só inicializa se seus elementos existem). Reusados nos 2 modos.
+- `vendas_detalhe` e `tagplus_pedido_venda_novo` compartilham `_contexto_lookup_pedido_venda()` (em `routes/vendas.py`) para as listas de lookup (`modelos`, `formas_pagamento`, `vendedores_disponiveis`, `lojas_disponiveis`, `lojas_ativas`) — DRY.
+- Adicionar moto na edição: form `#form-add-moto-edicao` posta `numero_chassi`/`valor_final` (hidden inputs sincronizados por JS no submit a partir de `f-chassi`/`f-valor` do componente — a rota `vendas_item_adicionar` deriva o desconto do `valor_final` via `_resolver_preco_tabela`). Editar item existente mantém o form simples. Cascata só no "adicionar moto" (1 instância → sem colisão de ids).
+- Tour `vendas_aprovar.js`: ids `#timeline-status`, `#btn-confirmar`, `#btn-emitir-nfe`, `#secao-historico`, `#btn-cancelar-pedido` preservados na tela unificada (tour intacto).
+
+**Fix do desconto (drift de centavos)** — `atualizarPrecoTabela()` (em `_pedido_venda_scripts.html`) passou a ancorar o recálculo no **VALOR FINAL** (`recalcular('valor')`) em vez do `%` arredondado — elimina o drift (500,00 → 500,05) ao trocar forma de pagamento. 1ª carga (valor vazio/0) usa `'pct'` (preço cheio, desconto 0).
+
+**Filtro loja/vendedor** (por usuário, configurado em `/hora/permissoes`):
+- Nova coluna `usuarios.criterio_pedidos_hora` VARCHAR(10) DEFAULT `'loja'` (valores `'loja'` | `'vendedor'`).
+- Nova coluna `hora_venda.criado_por_id` INTEGER (sem FK; gravado por `criar_venda_manual`; backfill best-effort via `hora_venda_auditoria` acao=`CRIOU`).
+- `vendas_lista` lê o critério: `'loja'` = escopo por `loja_hora_id` (padrão atual); `'vendedor'` = `OR(HoraVenda.vendedor IN [nome, vendedor_vinculado], criado_por_id == user.id)` **ignorando** loja. Aplicado em `venda_service._query_vendas(filtro_vendedor=...)` / `paginar_vendas`.
+- Endpoint `POST /hora/permissoes/<id>/criterio-pedidos` (`permissoes_set_criterio_pedidos`, perm `usuarios/editar`, bloqueio self/admin) + `<select>` no card do usuário.
+- Migration dual: `scripts/migrations/hora_44_criterio_pedidos_e_criador.{py,sql}` (idempotente, IF NOT EXISTS + índice + backfill).
+
+**Bug latente corrigido**: `venda_adicionar_item_peca`/`venda_remover_item_peca` redirecionavam para `hora.venda_detalhe` (rota inexistente → BuildError) → corrigido para `hora.vendas_detalhe`.
+
+**Testes**: `tests/hora/test_pedido_filtro_vendedor.py` (filtro vendedor/loja + `criado_por_id`). Validação visual via Playwright: tela unificada (edição + criação) renderiza, cascata modelo→cor funciona, zero erros de console JS.
 
 ---
 

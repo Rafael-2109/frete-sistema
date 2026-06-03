@@ -1,6 +1,1226 @@
 {% extends "hora/base.html" %}
 
 {% block hora_content %}
+
+{# ================================================================
+   MODO EDICAO: venda existente passada pela rota vendas_detalhe.
+   Todas as acoes de workflow e edicao granular por secao.
+   ================================================================ #}
+{% if venda %}
+
+{% set pode_editar = current_user.tem_perm_hora('vendas', 'editar') %}
+{% set pode_apagar = current_user.tem_perm_hora('vendas', 'apagar') %}
+{% set pode_aprovar = current_user.tem_perm_hora('vendas', 'aprovar') %}
+{% set pode_criar = current_user.tem_perm_hora('vendas', 'criar') %}
+
+{% set status_badge = {
+    'INCOMPLETO': 'warning',
+    'COTACAO': 'secondary',
+    'CONFIRMADO': 'primary',
+    'FATURADO': 'success',
+    'CANCELADO': 'danger',
+}.get(venda.status, 'secondary') %}
+{% set is_incompleto = venda.status == 'INCOMPLETO' %}
+{% set is_cotacao = venda.status == 'COTACAO' %}
+{% set is_confirmado = venda.status == 'CONFIRMADO' %}
+{% set is_faturado = venda.status == 'FATURADO' %}
+{% set is_cancelado = venda.status == 'CANCELADO' %}
+{% set permite_editar_pagamentos = is_incompleto or is_cotacao %}
+{% set tem_emissao = venda.emissao_nfe is not none %}
+
+<div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+  <div>
+    <h2 class="mb-0">
+      Pedido #{{ venda.id }}
+      {% if venda.nf_saida_numero %}
+        <small class="text-muted">NF {{ venda.nf_saida_numero }}</small>
+      {% endif %}
+    </h2>
+    <small class="text-muted">
+      Criado em {{ venda.criado_em.strftime('%d/%m/%Y %H:%M') }}
+      {% if venda.origem_criacao %} · origem: <code>{{ venda.origem_criacao }}</code>{% endif %}
+    </small>
+  </div>
+  <div class="d-flex gap-2 align-items-center">
+    <span class="badge bg-{{ status_badge }} fs-6">{{ venda.status }}</span>
+    {% if venda.arquivo_pdf_s3_key %}
+      <a href="{{ url_for('hora.vendas_download_pdf', venda_id=venda.id) }}"
+         class="btn btn-sm btn-outline-secondary" target="_blank">
+        <i class="fas fa-file-pdf"></i> DANFE original
+      </a>
+    {% endif %}
+    {% if pode_criar and (is_confirmado or is_faturado or tem_emissao) %}
+      <a href="{{ url_for('hora.venda_nfe_status', venda_id=venda.id) }}"
+         class="btn btn-sm btn-outline-primary">
+        <i class="fas fa-file-invoice-dollar"></i> NFe (TagPlus)
+      </a>
+    {% endif %}
+    {# Reimportar do TagPlus: apenas para vendas com emissao TagPlus
+       (tagplus_nfe_id conhecido). Util quando o backfill em lote falhou
+       em algum campo e o operador quer re-rodar so esta NF apos o fix. #}
+    {% if pode_criar and tem_emissao and venda.emissao_nfe.tagplus_nfe_id %}
+      <form method="post"
+            action="{{ url_for('hora.tagplus_backfill_nfe_unica') }}"
+            class="d-inline"
+            onsubmit="return confirm('Reimportar esta NF do TagPlus? Campos vazios serao preenchidos a partir da API; edicoes manuais sao preservadas.');">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="tagplus_nfe_id"
+               value="{{ venda.emissao_nfe.tagplus_nfe_id }}">
+        <button type="submit" class="btn btn-sm btn-outline-warning"
+                title="Reexecuta o backfill apenas para esta NFe (sincrono)">
+          <i class="fas fa-redo"></i> Reimportar do TagPlus
+        </button>
+      </form>
+    {% endif %}
+  </div>
+</div>
+
+{# ---------------------------------------------------------------
+   Linha do tempo (status + marcos)
+   --------------------------------------------------------------- #}
+<div id="timeline-status">
+<div class="card mb-3">
+  <div class="card-body py-2">
+    <div class="d-flex flex-wrap gap-3">
+      <div><i class="fas fa-circle text-secondary"></i> Criado: <strong>{{ venda.criado_em.strftime('%d/%m %H:%M') }}</strong></div>
+      <div><i class="fas fa-circle {% if venda.confirmado_em %}text-primary{% else %}text-muted{% endif %}"></i>
+        Confirmado: {% if venda.confirmado_em %}<strong>{{ venda.confirmado_em.strftime('%d/%m %H:%M') }}</strong> por {{ venda.confirmado_por or '—' }}{% else %}<span class="text-muted">—</span>{% endif %}
+      </div>
+      <div><i class="fas fa-circle {% if venda.faturado_em %}text-success{% else %}text-muted{% endif %}"></i>
+        Faturado: {% if venda.faturado_em %}<strong>{{ venda.faturado_em.strftime('%d/%m %H:%M') }}</strong>{% else %}<span class="text-muted">—</span>{% endif %}
+      </div>
+      <div><i class="fas fa-circle {% if venda.cancelado_em %}text-danger{% else %}text-muted{% endif %}"></i>
+        Cancelado: {% if venda.cancelado_em %}<strong>{{ venda.cancelado_em.strftime('%d/%m %H:%M') }}</strong> por {{ venda.cancelado_por or '—' }}{% else %}<span class="text-muted">—</span>{% endif %}
+      </div>
+    </div>
+    {% if venda.cancelamento_motivo %}
+      <div class="mt-2 small text-muted">
+        <i class="fas fa-comment"></i> Motivo do cancelamento: {{ venda.cancelamento_motivo }}
+      </div>
+    {% endif %}
+  </div>
+</div>
+</div>{# /#timeline-status #}
+
+{# ---------------------------------------------------------------
+   Acoes principais (transicoes de status)
+   --------------------------------------------------------------- #}
+<div class="card mb-3">
+  <div class="card-body d-flex flex-wrap gap-2">
+    {# Confirmar pedido: vendedor padrao (perm 'editar') desde 2026-05-13.
+       Apos confirmar, apenas gerente (perm 'aprovar') reabre via "Voltar
+       para cotacao" abaixo. #}
+    {% if is_cotacao and pode_editar %}
+      <div id="btn-confirmar">
+      <form method="post" action="{{ url_for('hora.vendas_confirmar', venda_id=venda.id) }}"
+            onsubmit="return confirm('Confirmar pedido #{{ venda.id }}? Apos confirmar, apenas o gerente podera reabri-lo para edicao.');">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="btn btn-primary">
+          <i class="fas fa-check-circle"></i> Confirmar pedido
+        </button>
+      </form>
+      </div>
+    {% endif %}
+    {% if is_confirmado and pode_criar %}
+      <div id="btn-emitir-nfe">
+      {# Botao agora leva para preview read-only com totais e margem antes
+         de POSTar para venda_nfe_emitir. Confirmacao real esta no preview. #}
+      <a href="{{ url_for('hora.venda_nfe_preview', venda_id=venda.id) }}"
+         class="btn btn-success">
+        <i class="fas fa-paper-plane"></i> Emitir NFe
+      </a>
+      </div>
+    {% endif %}
+    {# Voltar para cotacao: apenas gerente (perm 'aprovar') desde 2026-05-13.
+       Vendedor comum nao reabre pedido CONFIRMADO. #}
+    {% if is_confirmado and pode_aprovar %}
+      <form method="post" action="{{ url_for('hora.vendas_voltar_cotacao', venda_id=venda.id) }}"
+            onsubmit="return confirm('Voltar pedido #{{ venda.id }} para COTACAO? Voce podera editar itens e cliente.');"
+            class="d-inline">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="btn btn-outline-secondary"
+                title="Permissao de gerente — somente quem tem 'aprovar' em vendas reabre pedidos.">
+          <i class="fas fa-undo"></i> Voltar para cotacao
+        </button>
+      </form>
+    {% endif %}
+    {% if is_faturado and tem_emissao and pode_criar %}
+      <a href="{{ url_for('hora.venda_nfe_status', venda_id=venda.id) }}" class="btn btn-outline-primary">
+        <i class="fas fa-file-invoice-dollar"></i> Gerenciar NFe
+      </a>
+    {% endif %}
+    {% if not is_cancelado and pode_apagar %}
+      <div id="btn-cancelar-pedido" class="d-inline-block">
+      <button type="button" class="btn btn-outline-danger" data-bs-toggle="collapse"
+              data-bs-target="#cancelar-pedido-form">
+        <i class="fas fa-ban"></i> Cancelar pedido
+      </button>
+      </div>
+    {% endif %}
+    {% set pode_descartar_teste = current_user.tem_perm_hora('vendas_descarte', 'apagar') %}
+    {% if is_faturado and pode_descartar_teste %}
+      <button type="button" class="btn btn-outline-warning" data-bs-toggle="collapse"
+              data-bs-target="#descartar-teste-form"
+              title="Descarta NF de teste pos janela 24h SEFAZ. NFe permanece valida na SEFAZ.">
+        <i class="fas fa-trash-alt"></i> Descartar (NF teste)
+      </button>
+    {% endif %}
+  </div>
+
+  {% if not is_cancelado and pode_apagar %}
+  <div id="cancelar-pedido-form" class="collapse">
+    <div class="card-body border-top">
+      <form method="post" action="{{ url_for('hora.vendas_cancelar', venda_id=venda.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <p class="text-muted small mb-2">
+          {% if is_faturado %}
+            <strong>Atencao:</strong> pedido FATURADO. Cancele a NFe primeiro
+            (janela 24h SEFAZ) e aguarde a confirmacao SEFAZ antes de cancelar
+            o pedido.
+          {% else %}
+            Chassis serao devolvidos ao estoque (evento DEVOLVIDA). Esta operacao
+            e auditada.
+          {% endif %}
+        </p>
+        <div class="row g-2 align-items-end">
+          <div class="col-md-9">
+            <label class="form-label small mb-1">Motivo (obrigatorio, min 3 chars)</label>
+            <input type="text" name="motivo" minlength="3" maxlength="500" required
+                   class="form-control form-control-sm"
+                   placeholder="Ex.: cliente desistiu, NF emitida em duplicidade, ...">
+          </div>
+          <div class="col-md-3">
+            <button type="submit" class="btn btn-sm btn-danger w-100"
+                    onclick="return confirm('Confirma cancelamento do pedido #{{ venda.id }}?');">
+              Cancelar pedido
+            </button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+  {% endif %}
+
+  {% if is_faturado and pode_descartar_teste %}
+  <div id="descartar-teste-form" class="collapse">
+    <div class="card-body border-top bg-warning-subtle">
+      <form method="post" action="{{ url_for('hora.vendas_descartar_teste', venda_id=venda.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <p class="small mb-2">
+          <strong>Descartar NF de teste:</strong> pedido vai para CANCELADO e
+          chassis voltam ao estoque, mas a <strong>NFe permanece valida na SEFAZ</strong>
+          (use apenas para limpar NFs de teste pos janela 24h). Auditado como
+          DESCARTOU_TESTE.
+        </p>
+        <div class="row g-2 align-items-end">
+          <div class="col-md-9">
+            <label class="form-label small mb-1">Motivo (obrigatorio, min 3 chars)</label>
+            <input type="text" name="motivo" minlength="3" maxlength="500" required
+                   class="form-control form-control-sm"
+                   placeholder="Ex.: NF de teste, cliente fictacio, ...">
+          </div>
+          <div class="col-md-3">
+            <button type="submit" class="btn btn-sm btn-warning w-100"
+                    onclick="return confirm('Descartar pedido #{{ venda.id }}? A NFe NAO sera cancelada na SEFAZ.');">
+              Descartar (NF teste)
+            </button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+  {% endif %}
+</div>
+
+{# ---------------------------------------------------------------
+   Divergencias abertas (bloco de alerta)
+   --------------------------------------------------------------- #}
+{% if venda.divergencias_abertas %}
+<div class="alert alert-warning">
+  <h5 class="alert-heading">
+    <i class="fas fa-exclamation-triangle"></i>
+    {{ venda.divergencias_abertas|length }} divergencia(s) aberta(s)
+  </h5>
+  <ul class="mb-0">
+    {% for d in venda.divergencias_abertas %}
+      <li>
+        <strong>{{ d.tipo }}</strong>
+        {%- if d.numero_chassi %} <span class="chassi-mono small">({{ d.numero_chassi }})</span>{% endif %}
+        {%- if d.detalhe %}: {{ d.detalhe }}{% endif %}
+        {% if pode_editar %}
+          <form method="post" action="{{ url_for('hora.vendas_resolver_divergencia', venda_id=venda.id, div_id=d.id) }}"
+                class="d-inline">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-sm btn-link p-0 ms-2">marcar como resolvida</button>
+          </form>
+        {% endif %}
+      </li>
+    {% endfor %}
+  </ul>
+</div>
+{% endif %}
+
+{# ---------------------------------------------------------------
+   Header KPIs
+   --------------------------------------------------------------- #}
+<div class="row g-3 mb-4">
+  <div class="col-md-3"><div class="hora-kpi">
+    <div class="hora-kpi-label">Loja emitente</div>
+    <div>
+      {% if venda.loja %}<strong>{{ venda.loja.rotulo_display }}</strong>
+      {% else %}<span class="text-warning"><i class="fas fa-exclamation-triangle"></i> sem loja</span>{% endif %}
+    </div>
+  </div></div>
+  <div class="col-md-3"><div class="hora-kpi">
+    <div class="hora-kpi-label">Chave de acesso</div>
+    <div class="chassi-mono small">{{ venda.nf_saida_chave_44 or '—' }}</div>
+  </div></div>
+  <div class="col-md-2"><div class="hora-kpi">
+    <div class="hora-kpi-label">Data</div>
+    <div>{{ venda.data_venda.strftime('%d/%m/%Y') }}</div>
+  </div></div>
+  <div class="col-md-2"><div class="hora-kpi">
+    <div class="hora-kpi-label">Valor total</div>
+    <div>{{ venda.valor_total|valor_br }}</div>
+  </div></div>
+  <div class="col-md-2"><div class="hora-kpi">
+    <div class="hora-kpi-label">Itens</div>
+    <div>{{ venda.itens|length }}</div>
+  </div></div>
+</div>
+
+{# Loja física + Vendedor (lado a lado). #}
+<div class="row g-3 mb-3">
+  {% set permite_editar_vendedor = pode_editar and not is_cancelado and not is_faturado %}
+  {% if lojas_ativas and pode_editar and not is_cancelado %}
+  <div class="col-md-6">
+    <form method="post" action="{{ url_for('hora.vendas_definir_loja', venda_id=venda.id) }}"
+          class="card p-3 h-100 {% if not venda.loja_id %}border-warning{% endif %}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <h5>
+        {% if not venda.loja_id %}
+          <i class="fas fa-exclamation-circle text-warning"></i> Definir loja física
+        {% else %}
+          <i class="fas fa-store"></i> Loja física da venda
+        {% endif %}
+      </h5>
+      <small class="text-muted d-block mb-2">
+        {% if not venda.loja_id %}
+          A NFe não sai com a loja física (sai sempre com CNPJ da matriz HORA).
+          Indique abaixo onde a venda foi feita.
+        {% else %}
+          Loja atual: <strong>{{ venda.loja.rotulo_display if venda.loja else 'desconhecida' }}</strong>.
+          Pode trocar caso o operador tenha registrado errado ou se foi backfill via API.
+        {% endif %}
+      </small>
+      <div class="row g-2 align-items-center">
+        <div class="col-md-8">
+          <select name="loja_id" class="form-select" required>
+            {% if not venda.loja_id %}
+              <option value="">— Selecione —</option>
+            {% endif %}
+            {% for loja in lojas_ativas %}
+              <option value="{{ loja.id }}"
+                      {% if venda.loja_id == loja.id %}selected{% endif %}>
+                {{ loja.rotulo_display }}{% if loja.cnpj %} · CNPJ {{ loja.cnpj }}{% endif %}
+              </option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-4">
+          <button type="submit"
+                  class="btn {% if not venda.loja_id %}btn-warning{% else %}btn-outline-primary{% endif %}">
+            {% if not venda.loja_id %}Definir loja{% else %}Trocar loja{% endif %}
+          </button>
+        </div>
+      </div>
+    </form>
+  </div>
+  {% endif %}
+
+  {# Mini-form Vendedor #}
+  <div class="col-md-{% if lojas_ativas and pode_editar and not is_cancelado %}6{% else %}12{% endif %}">
+    <form method="post" action="{{ url_for('hora.vendas_editar', venda_id=venda.id) }}"
+          class="card p-3 h-100">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <h5><i class="fas fa-user-tie"></i> Vendedor</h5>
+      <small class="text-muted d-block mb-2">
+        Responsável pela venda. Aparece na auditoria e em relatórios.
+      </small>
+      <div class="row g-2 align-items-center">
+        <div class="col-md-8">
+          {% set vendedor_atual = venda.vendedor or '' %}
+          {% set nomes_vendedores = vendedores_disponiveis|map(attribute='nome')|list %}
+          <select name="vendedor" class="form-select"
+                  {% if not permite_editar_vendedor %}disabled{% endif %}>
+            <option value="" {% if not vendedor_atual %}selected{% endif %}>— sem vendedor —</option>
+            {% for u in vendedores_disponiveis %}
+              <option value="{{ u.nome }}"
+                      {% if u.nome == vendedor_atual %}selected{% endif %}>
+                {{ u.nome }}{% if u.id == current_user.id %} (você){% endif %}
+              </option>
+            {% endfor %}
+            {% if vendedor_atual and vendedor_atual not in nomes_vendedores %}
+              <option value="{{ vendedor_atual }}" selected>{{ vendedor_atual }} · (não habilitado)</option>
+            {% endif %}
+          </select>
+        </div>
+        <div class="col-md-4">
+          <button type="submit" class="btn btn-outline-primary"
+                  {% if not permite_editar_vendedor %}disabled{% endif %}>
+            <i class="fas fa-save"></i> Salvar vendedor
+          </button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
+{# ---------------------------------------------------------------
+   Cliente + endereco + dados editaveis
+   --------------------------------------------------------------- #}
+<form method="post" action="{{ url_for('hora.vendas_editar', venda_id=venda.id) }}" class="row g-3 mb-4">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+  {% set bloqueia_cliente = is_faturado or is_cancelado %}
+  {% set bloqueia_endereco = is_cancelado %}
+  {% set bloqueia_oper = is_cancelado %}
+
+  <div class="col-md-6">
+    <div class="card p-3 h-100">
+      <h5 class="mb-3">Cliente</h5>
+      <div class="mb-2">
+        <label class="form-label small mb-1">Nome</label>
+        <input type="text" name="nome_cliente" maxlength="200" class="form-control form-control-sm"
+               value="{{ venda.nome_cliente or '' }}" {% if bloqueia_cliente %}readonly{% endif %}>
+      </div>
+      <div class="mb-2">
+        <label class="form-label small mb-1">CPF / CNPJ</label>
+        <input type="text" name="cpf_cliente" maxlength="18" class="form-control form-control-sm chassi-mono"
+               value="{{ venda.cpf_cliente or '' }}" {% if bloqueia_cliente %}readonly{% endif %}>
+      </div>
+      <div class="mb-2">
+        <label class="form-label small mb-1">Telefone</label>
+        <input type="text" name="telefone_cliente" maxlength="20" class="form-control form-control-sm"
+               value="{{ venda.telefone_cliente or '' }}" {% if bloqueia_oper %}readonly{% endif %}>
+      </div>
+      <div class="mb-2">
+        <label class="form-label small mb-1">Email</label>
+        <input type="email" name="email_cliente" maxlength="120" class="form-control form-control-sm"
+               value="{{ venda.email_cliente or '' }}" {% if bloqueia_oper %}readonly{% endif %}>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-6">
+    <div class="card p-3 h-100">
+      <h5 class="mb-3">Endereco</h5>
+      <div class="row g-2">
+        <div class="col-4">
+          <label class="form-label small mb-1">CEP</label>
+          <input type="text" name="cep" maxlength="9" class="form-control form-control-sm"
+                 value="{{ venda.cep or '' }}" {% if bloqueia_endereco %}readonly{% endif %}>
+        </div>
+        <div class="col-8">
+          <label class="form-label small mb-1">Logradouro</label>
+          <input type="text" name="endereco_logradouro" maxlength="255" class="form-control form-control-sm"
+                 value="{{ venda.endereco_logradouro or '' }}" {% if bloqueia_endereco %}readonly{% endif %}>
+        </div>
+        <div class="col-3">
+          <label class="form-label small mb-1">N&deg;</label>
+          <input type="text" name="endereco_numero" maxlength="20" class="form-control form-control-sm"
+                 value="{{ venda.endereco_numero or '' }}" {% if bloqueia_endereco %}readonly{% endif %}>
+        </div>
+        <div class="col-9">
+          <label class="form-label small mb-1">Complemento</label>
+          <input type="text" name="endereco_complemento" maxlength="100" class="form-control form-control-sm"
+                 value="{{ venda.endereco_complemento or '' }}" {% if bloqueia_endereco %}readonly{% endif %}>
+        </div>
+        <div class="col-6">
+          <label class="form-label small mb-1">Bairro</label>
+          <input type="text" name="endereco_bairro" maxlength="100" class="form-control form-control-sm"
+                 value="{{ venda.endereco_bairro or '' }}" {% if bloqueia_endereco %}readonly{% endif %}>
+        </div>
+        <div class="col-4">
+          <label class="form-label small mb-1">Cidade</label>
+          <input type="text" name="endereco_cidade" maxlength="100" class="form-control form-control-sm"
+                 value="{{ venda.endereco_cidade or '' }}" {% if bloqueia_endereco %}readonly{% endif %}>
+        </div>
+        <div class="col-2">
+          <label class="form-label small mb-1">UF</label>
+          <input type="text" name="endereco_uf" maxlength="2" class="form-control form-control-sm text-uppercase"
+                 value="{{ venda.endereco_uf or '' }}" {% if bloqueia_endereco %}readonly{% endif %}>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-6">
+    <div class="card p-3">
+      <h5 class="mb-3"><i class="fas fa-truck"></i> Parcelamento e Frete</h5>
+      <div class="mb-2 small">
+        {% set atual = venda.forma_pagamento or 'NAO_INFORMADO' %}
+        <span class="text-muted">Forma de pagamento (derivada):</span>
+        <span class="badge bg-secondary ms-1">{{ atual }}</span>
+        <a href="#forma-pagamento-multi" class="ms-2">
+          <i class="fas fa-arrow-down"></i> editar formas abaixo
+        </a>
+      </div>
+      <div class="row g-2 mb-2">
+        <div class="col-6">
+          <label class="form-label small mb-1">Nº de parcelas</label>
+          <input type="number" name="numero_parcelas" min="1" max="60"
+                 class="form-control form-control-sm"
+                 value="{{ venda.numero_parcelas or 1 }}"
+                 {% if bloqueia_oper %}readonly{% endif %}>
+        </div>
+        <div class="col-6">
+          <label class="form-label small mb-1">Intervalo (dias)</label>
+          <input type="number" name="intervalo_parcelas_dias" id="d-intervalo"
+                 min="1" max="90"
+                 class="form-control form-control-sm"
+                 value="{{ venda.intervalo_parcelas_dias or 30 }}"
+                 {% if bloqueia_oper %}readonly{% endif %}>
+          <small class="text-muted d-block">
+            <strong>30 = mensal (padrão)</strong> · 7 = semanal.
+          </small>
+          <div id="d-intervalo-aviso" class="alert alert-warning mt-1 py-1 px-2 small"
+               style="display:none;">
+            <i class="fas fa-exclamation-triangle"></i>
+            Intervalo &lt; 7 dias — confirme se é mesmo isso.
+          </div>
+        </div>
+      </div>
+      <div class="mb-2">
+        <label class="form-label small mb-1">Modalidade de frete (NFe)</label>
+        {% set mf = venda.modalidade_frete or '0' %}
+        <select name="modalidade_frete" id="d-modalidade-frete" class="form-select form-select-sm"
+                {% if bloqueia_oper %}disabled{% endif %}>
+          <option value="0" {% if mf == '0' %}selected{% endif %}>0 — Contratação Remetente (CIF)</option>
+          <option value="1" {% if mf == '1' %}selected{% endif %}>1 — Contratação Destinatário (FOB)</option>
+          {% if mf not in ('0', '1') %}
+            <option value="{{ mf }}" selected disabled>
+              {{ mf }} — (legado, troque para CIF ou FOB)
+            </option>
+          {% endif %}
+        </select>
+      </div>
+      <div id="d-bloco-frete" class="row g-2 mb-2">
+        <div class="col-7">
+          <label class="form-label small mb-1">Valor do frete (R$)</label>
+          <input type="text" name="valor_frete" id="d-valor-frete"
+                 class="form-control form-control-sm" inputmode="decimal"
+                 placeholder="0,00"
+                 value="{% if venda.valor_frete %}{{ venda.valor_frete|valor_br }}{% endif %}"
+                 {% if bloqueia_oper or mf != '0' %}disabled{% endif %}>
+        </div>
+        <div class="col-5">
+          <label class="form-label small mb-1">Tipo</label>
+          <select name="tipo_frete_calc" id="d-tipo-frete-calc" class="form-select form-select-sm"
+                  {% if bloqueia_oper or mf != '0' %}disabled{% endif %}>
+            <option value="">—</option>
+            <option value="ADICIONAR" {% if venda.tipo_frete_calc == 'ADICIONAR' %}selected{% endif %}>Adicionar valor frete</option>
+            <option value="INCLUSO"   {% if venda.tipo_frete_calc == 'INCLUSO'   %}selected{% endif %}>Valor frete incluso</option>
+          </select>
+        </div>
+        <div class="col-12">
+          <small id="d-frete-info" class="text-muted">
+            {% if mf == '0' %}
+              Aplicável quando frete é por conta do remetente (CIF).
+            {% else %}
+              <i class="fas fa-info-circle"></i>
+              Frete por conta do destinatário (FOB) — campos somente leitura.
+            {% endif %}
+          </small>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-6">
+    <div class="card p-3">
+      <h5 class="mb-3">Observacoes</h5>
+      <textarea name="observacoes" rows="4" class="form-control form-control-sm"
+                {% if is_cancelado %}readonly{% endif %}>{{ venda.observacoes or '' }}</textarea>
+    </div>
+  </div>
+
+  {% if pode_editar and not is_cancelado %}
+    <div class="col-12">
+      <button type="submit" class="btn btn-primary btn-sm">
+        <i class="fas fa-save"></i> Salvar edicoes do header
+      </button>
+      <small class="text-muted ms-2">
+        {% if is_faturado %}Pedido FATURADO — apenas observacoes sao editaveis.
+        {% elif is_confirmado %}Pedido CONFIRMADO — cliente nao pode mais ser alterado.
+        {% else %}COTACAO — todos os campos editaveis.{% endif %}
+      </small>
+    </div>
+  {% endif %}
+</form>
+
+{# ---------------------------------------------------------------
+   Formas de pagamento (multi-formas — hora_34)
+   --------------------------------------------------------------- #}
+<div id="forma-pagamento-multi" class="card mb-4">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <strong><i class="fas fa-money-bill-wave"></i> Formas de pagamento</strong>
+    {% if is_incompleto %}
+      <span class="badge bg-warning text-dark">
+        <i class="fas fa-exclamation-triangle"></i>
+        Pedido INCOMPLETO — soma das formas deve igualar o valor total
+      </span>
+    {% endif %}
+  </div>
+  <div class="card-body">
+    {% if not venda.pagamentos %}
+      <p class="text-muted mb-3">Nenhuma forma de pagamento registrada.</p>
+    {% else %}
+      <table class="table table-sm align-middle mb-3">
+        <thead>
+          <tr>
+            <th>Forma</th>
+            <th class="text-end">Valor</th>
+            <th class="text-center">Parcelas</th>
+            <th>AUT/ID</th>
+            <th class="text-center">Tipo</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% set ns = namespace(soma=0) %}
+          {% for p in venda.pagamentos %}
+            {% set ns.soma = ns.soma + p.valor|float %}
+            <tr>
+              <td><code>{{ p.forma_pagamento_hora }}</code></td>
+              <td class="text-end">R$ {{ '%.2f'|format(p.valor|float)|replace('.', ',') }}</td>
+              <td class="text-center">{{ p.numero_parcelas }}x</td>
+              <td>{{ p.aut_id or '—' }}</td>
+              <td class="text-center">
+                {% set fm = p.forma_map %}
+                {% if fm and fm.tipo_pagamento %}
+                  <small class="text-muted">{{ fm.tipo_pagamento }}</small>
+                {% else %}—{% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+          <tr class="fw-bold">
+            <td>Total formas</td>
+            <td class="text-end">R$ {{ '%.2f'|format(ns.soma)|replace('.', ',') }}</td>
+            <td colspan="3">
+              <span class="text-muted">vs Pedido: R$ {{ '%.2f'|format(venda.valor_total|float)|replace('.', ',') }}</span>
+              {% if (ns.soma - venda.valor_total|float)|abs > 0.01 %}
+                <span class="badge bg-warning text-dark ms-2">⚠ Diferença</span>
+              {% endif %}
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    {% endif %}
+
+    {% if permite_editar_pagamentos and pode_editar %}
+      <form method="post"
+            action="{{ url_for('hora.vendas_pagamentos_editar', venda_id=venda.id) }}"
+            id="form-pagamentos">
+        <div id="pag-edit-container">
+          {% for p in venda.pagamentos %}
+            {% set fm = p.forma_map %}
+            <div class="row g-2 align-items-end mb-2 pag-linha border rounded p-2">
+              <div class="col-md-4">
+                <label class="form-label small mb-1">Forma <span class="text-danger">*</span></label>
+                <select name="pagamento_forma" class="form-select form-select-sm pag-forma" required>
+                  <option value="">— escolha —</option>
+                  {% for f in formas_pagamento %}
+                    <option value="{{ f.forma_pagamento_hora }}"
+                            data-tipo="{{ f.tipo_pagamento or '' }}"
+                            data-aut="{{ '1' if f.exige_aut_id else '0' }}"
+                            {% if f.forma_pagamento_hora == p.forma_pagamento_hora %}selected{% endif %}>
+                      {{ f.forma_pagamento_hora }}{% if f.descricao %} · {{ f.descricao }}{% endif %}
+                    </option>
+                  {% endfor %}
+                </select>
+              </div>
+              <div class="col-md-3">
+                <label class="form-label small mb-1">Valor (R$) <span class="text-danger">*</span></label>
+                <input type="text" name="pagamento_valor" class="form-control form-control-sm pag-valor"
+                       inputmode="decimal" required
+                       value="{{ '%.2f'|format(p.valor|float)|replace('.', ',') }}">
+              </div>
+              <div class="col-md-2">
+                <label class="form-label small mb-1">Parcelas</label>
+                <input type="number" name="pagamento_parcelas" class="form-control form-control-sm"
+                       min="1" max="60" value="{{ p.numero_parcelas }}">
+              </div>
+              <div class="col-md-2 pag-aut-wrap"
+                   style="{% if not (fm and fm.exige_aut_id) %}display:none;{% endif %}">
+                <label class="form-label small mb-1">AUT/ID <span class="text-danger">*</span></label>
+                <input type="text" name="pagamento_aut_id" class="form-control form-control-sm pag-aut"
+                       maxlength="50" value="{{ p.aut_id or '' }}">
+              </div>
+              <div class="col-md-1 d-flex align-items-end">
+                <button type="button" class="btn btn-sm btn-outline-danger pag-remover">
+                  <i class="fas fa-times"></i>
+                </button>
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+        <div class="d-flex gap-2 align-items-center">
+          <button type="button" class="btn btn-sm btn-outline-primary" id="btn-add-pag-edit">
+            <i class="fas fa-plus"></i> Adicionar forma
+          </button>
+          <button type="submit" class="btn btn-sm btn-success">
+            <i class="fas fa-save"></i> Salvar pagamentos
+          </button>
+          <span class="ms-auto small text-muted">
+            Total: <strong id="pag-edit-soma">R$ 0,00</strong> /
+            Pedido: R$ {{ '%.2f'|format(venda.valor_total|float)|replace('.', ',') }}
+          </span>
+        </div>
+        <template id="tpl-pag-edit">
+          <div class="row g-2 align-items-end mb-2 pag-linha border rounded p-2">
+            <div class="col-md-4">
+              <label class="form-label small mb-1">Forma <span class="text-danger">*</span></label>
+              <select name="pagamento_forma" class="form-select form-select-sm pag-forma" required>
+                <option value="">— escolha —</option>
+                {% for f in formas_pagamento %}
+                  <option value="{{ f.forma_pagamento_hora }}"
+                          data-tipo="{{ f.tipo_pagamento or '' }}"
+                          data-aut="{{ '1' if f.exige_aut_id else '0' }}">
+                    {{ f.forma_pagamento_hora }}{% if f.descricao %} · {{ f.descricao }}{% endif %}
+                  </option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label small mb-1">Valor (R$) <span class="text-danger">*</span></label>
+              <input type="text" name="pagamento_valor" class="form-control form-control-sm pag-valor"
+                     inputmode="decimal" placeholder="0,00" required>
+            </div>
+            <div class="col-md-2">
+              <label class="form-label small mb-1">Parcelas</label>
+              <input type="number" name="pagamento_parcelas" class="form-control form-control-sm"
+                     min="1" max="60" value="1">
+            </div>
+            <div class="col-md-2 pag-aut-wrap" style="display:none;">
+              <label class="form-label small mb-1">AUT/ID <span class="text-danger">*</span></label>
+              <input type="text" name="pagamento_aut_id" class="form-control form-control-sm pag-aut" maxlength="50">
+            </div>
+            <div class="col-md-1 d-flex align-items-end">
+              <button type="button" class="btn btn-sm btn-outline-danger pag-remover">
+                <i class="fas fa-times"></i>
+              </button>
+            </div>
+          </div>
+        </template>
+      </form>
+    {% endif %}
+  </div>
+</div>
+
+{# ---------------------------------------------------------------
+   Itens do pedido
+   --------------------------------------------------------------- #}
+<h4>Itens do pedido</h4>
+
+{# Frete CIF (hora_38) — preview de rateio/comparacao por item.
+   Renderizado por JS no fim do template; aparece apenas quando
+   tipo_frete_calc + valor_frete preenchidos e modalidade='0'. #}
+<div id="d-alerta-frete" class="alert alert-info mb-3" style="display:none;"></div>
+
+<div class="table-responsive mb-3">
+  <table class="table table-sm align-middle">
+    <thead><tr>
+      <th>Chassi</th>
+      <th>Modelo</th>
+      <th>Cor</th>
+      <th>Tabela ref.</th>
+      <th>Desconto</th>
+      <th>Final</th>
+      {% if is_cotacao and pode_editar %}<th></th>{% endif %}
+    </tr></thead>
+    <tbody>
+      {% for item in venda.itens %}
+        <tr data-item-chassi="{{ item.numero_chassi }}"
+            data-item-final="{{ item.preco_final|float }}"
+            data-item-tabela="{{ (item.preco_tabela_referencia or 0)|float }}">
+          <td>
+            <a href="{{ url_for('hora.estoque_chassi_detalhe', numero_chassi=item.numero_chassi) }}"
+               class="chassi-mono">{{ item.numero_chassi }}</a>
+          </td>
+          <td>{{ item.moto.modelo.nome_modelo if item.moto and item.moto.modelo else '—' }}</td>
+          <td>{{ item.moto.cor if item.moto else '—' }}</td>
+          <td>{{ item.preco_tabela_referencia|valor_br }}</td>
+          <td>
+            {% if item.desconto_aplicado and item.desconto_aplicado > 0 %}
+              <span class="text-success">-{{ item.desconto_aplicado|valor_br }}</span>
+            {% else %}—{% endif %}
+          </td>
+          <td><strong>{{ item.preco_final|valor_br }}</strong></td>
+          {% if is_cotacao and pode_editar %}
+          <td>
+            <div class="d-flex gap-1">
+              <button type="button" class="btn btn-sm btn-outline-secondary"
+                      data-bs-toggle="collapse" data-bs-target="#item-edit-{{ item.id }}"
+                      title="Editar item">
+                <i class="fas fa-edit"></i>
+              </button>
+              <form method="post"
+                    action="{{ url_for('hora.vendas_item_remover', venda_id=venda.id, item_id=item.id) }}"
+                    onsubmit="return confirm('Remover item {{ item.numero_chassi }}? O chassi voltara ao estoque.');">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-sm btn-outline-danger" title="Remover item">
+                  <i class="fas fa-trash"></i>
+                </button>
+              </form>
+            </div>
+          </td>
+          {% endif %}
+        </tr>
+        {% if is_cotacao and pode_editar %}
+        <tr id="item-edit-{{ item.id }}" class="collapse">
+          <td colspan="7" class="bg-body-tertiary">
+            <form method="post"
+                  action="{{ url_for('hora.vendas_item_editar', venda_id=venda.id, item_id=item.id) }}"
+                  class="row g-2 align-items-end">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <div class="col-md-5">
+                <label class="form-label small mb-1">Trocar chassi (opcional)</label>
+                <input type="text" name="novo_chassi" maxlength="30" class="form-control form-control-sm chassi-mono"
+                       placeholder="Deixe vazio para manter {{ item.numero_chassi }}">
+              </div>
+              <div class="col-md-3">
+                <label class="form-label small mb-1">Novo valor final (opcional)</label>
+                <input type="text" name="valor_final" class="form-control form-control-sm"
+                       placeholder="Ex: 12500,00">
+              </div>
+              <div class="col-md-4">
+                <button type="submit" class="btn btn-sm btn-primary">Salvar</button>
+              </div>
+            </form>
+          </td>
+        </tr>
+        {% endif %}
+      {% endfor %}
+    </tbody>
+    <tfoot>
+      <tr>
+        <th colspan="5" class="text-end">Total:</th>
+        <th>{{ venda.valor_total|valor_br }}</th>
+        {% if is_cotacao and pode_editar %}<th></th>{% endif %}
+      </tr>
+    </tfoot>
+  </table>
+</div>
+
+{# ---------------------------------------------------------------
+   Adicionar moto via cascata rica (modelo -> cor -> chassi).
+   Usa _componente_moto_desconto.html, o mesmo do formulario de
+   criacao. O form posta para vendas_item_adicionar que espera
+   `numero_chassi` e `valor_final`. O componente gera `name=chassi`
+   e `name=valor`. Inputs hidden sincronizados no submit do form
+   fazem o mapeamento de nomes sem quebrar o componente.
+   --------------------------------------------------------------- #}
+{% if is_cotacao and pode_editar %}
+<div class="card p-3 mb-4 border-info">
+  <h6 class="mb-3"><i class="fas fa-plus-circle"></i> Adicionar moto ao pedido (cascata)</h6>
+  <form method="post"
+        action="{{ url_for('hora.vendas_item_adicionar', venda_id=venda.id) }}"
+        id="form-add-moto-edicao"
+        class="mb-0">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    {# Inputs com os nomes que vendas_item_adicionar espera (numero_chassi,
+       valor_final). Preenchidos por JS no submit a partir dos selects/inputs
+       do componente (name=chassi / name=valor). #}
+    <input type="hidden" name="numero_chassi" id="hid-add-numero-chassi">
+    <input type="hidden" name="valor_final"   id="hid-add-valor-final">
+    {% include 'hora/tagplus/_componente_moto_desconto.html' %}
+    <div class="mt-3">
+      <button type="submit" class="btn btn-info">
+        <i class="fas fa-plus"></i> Adicionar item ao pedido
+      </button>
+    </div>
+  </form>
+</div>
+<script>
+(function() {
+  // Sincroniza os hidden inputs (numero_chassi, valor_final) com os campos
+  // do componente (chassi, valor) antes do submit, para que vendas_item_adicionar
+  // receba os nomes que a rota espera sem alterar o componente compartilhado.
+  var form = document.getElementById('form-add-moto-edicao');
+  if (!form) return;
+  form.addEventListener('submit', function() {
+    var selChassi = document.getElementById('f-chassi');
+    var inpValor  = document.getElementById('f-valor');
+    var hidChassi = document.getElementById('hid-add-numero-chassi');
+    var hidValor  = document.getElementById('hid-add-valor-final');
+    if (selChassi && hidChassi) hidChassi.value = selChassi.value;
+    if (inpValor  && hidValor)  hidValor.value  = inpValor.value;
+  });
+})();
+</script>
+{% endif %}
+
+{# ---------------------------------------------------------------
+   Pecas (XOR moto) — itens_peca tem qtd, sem chassi
+   --------------------------------------------------------------- #}
+<h4 class="mt-4 mb-2"><i class="fas fa-cogs"></i> Peças do pedido ({{ venda.itens_peca|length }})</h4>
+<div class="card mb-3">
+  <div class="table-responsive">
+    <table class="table table-sm mb-0 align-middle">
+      <thead class="table-light">
+        <tr>
+          <th>Código</th>
+          <th>Descrição</th>
+          <th class="text-end">Qtd</th>
+          <th class="text-end">Preço un. ref.</th>
+          <th class="text-end">Desconto un.</th>
+          <th class="text-end">Preço final</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for ip in venda.itens_peca %}
+          <tr>
+            <td><code>{{ ip.peca.codigo_interno }}</code></td>
+            <td>{{ ip.peca.descricao }}</td>
+            <td class="text-end">{{ ip.qtd|numero_br(3) }} {{ ip.peca.unidade }}</td>
+            <td class="text-end">{{ ip.preco_unitario_referencia|valor_br }}</td>
+            <td class="text-end">{{ ip.desconto_aplicado|valor_br }}</td>
+            <td class="text-end"><strong>{{ ip.preco_final|valor_br }}</strong></td>
+            <td class="text-end">
+              {% if is_cotacao and pode_editar %}
+              <form method="post" action="{{ url_for('hora.venda_remover_item_peca', venda_id=venda.id, item_id=ip.id) }}"
+                    class="d-inline" onsubmit="return confirm('Remover {{ ip.peca.codigo_interno }} do pedido?');">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button class="btn btn-sm btn-outline-danger" title="Remover"><i class="fas fa-trash"></i></button>
+              </form>
+              {% endif %}
+            </td>
+          </tr>
+        {% else %}
+          <tr><td colspan="7" class="text-center text-muted">Nenhuma peça neste pedido.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% if is_cotacao and pode_editar %}
+  <div class="card-body border-top">
+    <h6 class="mb-2"><i class="fas fa-plus-circle"></i> Adicionar peça ao pedido</h6>
+    <form method="post" action="{{ url_for('hora.venda_adicionar_item_peca', venda_id=venda.id) }}"
+          class="row g-2 align-items-end">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="col-md-4">
+        <label class="form-label small mb-0">Peça</label>
+        <input type="text" id="venda-add-peca-txt" class="form-control form-control-sm"
+               data-hora-autocomplete="peca" data-hora-target-id="venda-add-peca-id"
+               placeholder="Buscar peça (min. 2 chars)" required>
+        <input type="hidden" name="peca_id" id="venda-add-peca-id" required>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label small mb-0">Qtd</label>
+        <input type="text" name="qtd" class="form-control form-control-sm" inputmode="decimal" required placeholder="0,000">
+      </div>
+      <div class="col-md-3">
+        <label class="form-label small mb-0">Valor unitário final</label>
+        <input type="text" name="valor_unitario_final" class="form-control form-control-sm"
+               inputmode="decimal" required placeholder="0,00">
+      </div>
+      <div class="col-md-auto">
+        <button class="btn btn-sm btn-primary"><i class="fas fa-plus"></i> Adicionar peça</button>
+      </div>
+    </form>
+    <small class="text-muted d-block mt-1">
+      <i class="fas fa-info-circle"></i> Saldo verificado na loja {{ venda.loja.rotulo_display if venda.loja else '—' }}.
+      Estoque é debitado ao adicionar; cancelar pedido devolve as peças.
+    </small>
+  </div>
+  {% endif %}
+</div>
+
+{# ---------------------------------------------------------------
+   Auditoria (timeline append-only)
+   --------------------------------------------------------------- #}
+{% if venda.auditoria %}
+<div id="secao-historico">
+<details class="mb-4">
+  <summary><strong><i class="fas fa-history"></i> Historico de auditoria ({{ venda.auditoria|length }} entradas)</strong></summary>
+  <div class="table-responsive mt-2">
+    <table class="table table-sm">
+      <thead><tr>
+        <th>Quando</th>
+        <th>Quem</th>
+        <th>Acao</th>
+        <th>Campo</th>
+        <th>De</th>
+        <th>Para</th>
+        <th>Detalhe</th>
+      </tr></thead>
+      <tbody>
+        {% for a in venda.auditoria %}
+          <tr>
+            <td><small>{{ a.criado_em.strftime('%d/%m %H:%M') }}</small></td>
+            <td><small>{{ a.usuario }}</small></td>
+            <td><span class="badge bg-secondary">{{ a.acao }}</span></td>
+            <td><small>{{ a.campo_alterado or '—' }}</small></td>
+            <td><small>{{ a.valor_antes or '—' }}</small></td>
+            <td><small>{{ a.valor_depois or '—' }}</small></td>
+            <td><small>{{ a.detalhe or '—' }}</small></td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</details>
+</div>{# /#secao-historico #}
+{% endif %}
+
+{# ---------------------------------------------------------------
+   Historico de divergencias (incluindo resolvidas)
+   --------------------------------------------------------------- #}
+{% if venda.divergencias %}
+<details class="mb-4">
+  <summary><strong>Historico de divergencias ({{ venda.divergencias|length }})</strong></summary>
+  <div class="table-responsive mt-2">
+    <table class="table table-sm">
+      <thead><tr>
+        <th>Tipo</th><th>Chassi</th><th>Detalhe</th>
+        <th>Criado</th><th>Resolvida</th><th>Por</th>
+      </tr></thead>
+      <tbody>
+        {% for d in venda.divergencias %}
+          <tr class="{% if d.resolvida_em %}text-muted{% endif %}">
+            <td><span class="badge bg-{% if d.resolvida_em %}secondary{% else %}warning {% endif %}">{{ d.tipo }}</span></td>
+            <td>{% if d.numero_chassi %}<code>{{ d.numero_chassi }}</code>{% else %}—{% endif %}</td>
+            <td><small>{{ d.detalhe or '—' }}</small></td>
+            <td><small>{{ d.criado_em.strftime('%d/%m %H:%M') }}</small></td>
+            <td><small>{{ d.resolvida_em.strftime('%d/%m %H:%M') if d.resolvida_em else '—' }}</small></td>
+            <td><small>{{ d.resolvida_por or '—' }}</small></td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</details>
+{% endif %}
+
+{# JS exclusivo do modo edicao (IDs d-*): aviso intervalo + editor de
+   pagamentos (pag-edit-container / tpl-pag-edit) + frete CIF multi-item.
+   IDs distintos dos usados por _pedido_venda_scripts.html (IDs f-* /
+   pagamentos-container / tpl-linha-pagamento) — zero colisao. #}
+<script>
+(function () {
+  // Aviso de intervalo atípico (<7 dias).
+  const el = document.getElementById('d-intervalo');
+  const aviso = document.getElementById('d-intervalo-aviso');
+  if (el && aviso) {
+    const checar = () => {
+      const v = parseInt(el.value, 10);
+      aviso.style.display = (v && v < 7) ? '' : 'none';
+    };
+    el.addEventListener('input', checar);
+    el.addEventListener('change', checar);
+    checar();
+  }
+
+  // ----- Editor de pagamentos multi-formas (INCOMPLETO/COTACAO) ----------
+  const pagContainer = document.getElementById('pag-edit-container');
+  const tplPag = document.getElementById('tpl-pag-edit');
+  const btnAdd = document.getElementById('btn-add-pag-edit');
+  const elSoma = document.getElementById('pag-edit-soma');
+  if (!pagContainer || !tplPag) return;
+
+  const fmtBR = (v) => isNaN(v) ? '0,00'
+    : Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const parseBR = (s) => {
+    if (!s) return NaN;
+    s = String(s).trim();
+    if (s.indexOf(',') >= 0 && s.indexOf('.') >= 0) s = s.replace(/\./g, '').replace(',', '.');
+    else if (s.indexOf(',') >= 0) s = s.replace(',', '.');
+    const n = Number(s);
+    return isFinite(n) ? n : NaN;
+  };
+
+  function atualizarSoma() {
+    let soma = 0;
+    pagContainer.querySelectorAll('.pag-valor').forEach(inp => {
+      const v = parseBR(inp.value);
+      if (!isNaN(v)) soma += v;
+    });
+    if (elSoma) elSoma.textContent = 'R$ ' + fmtBR(soma);
+  }
+
+  function wireLinha(linha) {
+    const sel = linha.querySelector('.pag-forma');
+    const valor = linha.querySelector('.pag-valor');
+    const autWrap = linha.querySelector('.pag-aut-wrap');
+    const autInput = linha.querySelector('.pag-aut');
+    const btnRemover = linha.querySelector('.pag-remover');
+    if (sel) {
+      const aplicarAut = () => {
+        const opt = sel.options[sel.selectedIndex];
+        const exigeAut = opt && opt.dataset.aut === '1';
+        if (autWrap) autWrap.style.display = exigeAut ? '' : 'none';
+        if (autInput) autInput.required = !!exigeAut;
+      };
+      sel.addEventListener('change', aplicarAut);
+      aplicarAut();
+    }
+    if (valor) {
+      valor.addEventListener('input', atualizarSoma);
+    }
+    if (btnRemover) btnRemover.addEventListener('click', () => {
+      linha.remove();
+      atualizarSoma();
+    });
+  }
+
+  // Wire linhas existentes (renderizadas pelo Jinja).
+  pagContainer.querySelectorAll('.pag-linha').forEach(wireLinha);
+  atualizarSoma();
+
+  if (btnAdd) btnAdd.addEventListener('click', () => {
+    const frag = tplPag.content.cloneNode(true);
+    const linha = frag.querySelector('.pag-linha');
+    pagContainer.appendChild(frag);
+    wireLinha(linha);
+    atualizarSoma();
+  });
+})();
+</script>
+
+<script>
+// =====================================================================
+// Frete CIF (modo edicao) — preview rateio/comparacao multi-item.
+// IDs com prefixo "d-" — distintos dos "f-" do _pedido_venda_scripts.html.
+// =====================================================================
+(function() {
+  const elModFrete   = document.getElementById('d-modalidade-frete');
+  const elBlocoFrete = document.getElementById('d-bloco-frete');
+  const elValorFrete = document.getElementById('d-valor-frete');
+  const elTipoFrete  = document.getElementById('d-tipo-frete-calc');
+  const elAlerta     = document.getElementById('d-alerta-frete');
+
+  if (!elAlerta) return;
+
+  const fmtBR = (v) => Number(v).toLocaleString(
+    'pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }
+  );
+  const arred2 = (n) => Math.round(n * 100) / 100;
+  const parseBR = (s) => {
+    if (s == null) return NaN;
+    s = String(s).trim();
+    if (!s) return NaN;
+    if (s.indexOf(',') >= 0 && s.indexOf('.') >= 0) {
+      s = s.replace(/\./g, '').replace(',', '.');
+    } else if (s.indexOf(',') >= 0) {
+      s = s.replace(',', '.');
+    }
+    const n = Number(s);
+    return isFinite(n) ? n : NaN;
+  };
+
+  function listarItensVisiveis() {
+    return Array.from(
+      document.querySelectorAll('tr[data-item-chassi]')
+    ).map(tr => ({
+      chassi: tr.dataset.itemChassi,
+      final: parseFloat(tr.dataset.itemFinal) || 0,
+      tabela: parseFloat(tr.dataset.itemTabela) || 0,
+    }));
+  }
+
+  function atualizarVisibilidadeBloco() {
+    if (!elBlocoFrete) return;
+    elBlocoFrete.style.display = '';
+    const cif = elModFrete && elModFrete.value === '0';
+    if (elValorFrete) elValorFrete.disabled = !cif;
+    if (elTipoFrete) elTipoFrete.disabled = !cif;
+    const elInfo = document.getElementById('d-frete-info');
+    if (elInfo) {
+      if (cif) {
+        elInfo.innerHTML = 'Aplicável quando frete é por conta do remetente (CIF).';
+      } else {
+        elInfo.innerHTML =
+          '<i class="fas fa-info-circle"></i> Frete por conta do destinatário (FOB)'
+          + ' — campos somente leitura.';
+      }
+    }
+    atualizarAlerta();
+  }
+
+  function atualizarAlerta() {
+    if (!elModFrete || elModFrete.value !== '0') {
+      elAlerta.style.display = 'none';
+      return;
+    }
+    const tipo = (elTipoFrete && elTipoFrete.value || '').trim();
+    const valorFrete = parseBR(elValorFrete && elValorFrete.value);
+    const itens = listarItensVisiveis();
+    if (!tipo || isNaN(valorFrete) || valorFrete <= 0 || itens.length === 0) {
+      elAlerta.style.display = 'none';
+      return;
+    }
+
+    const reset = () => {
+      elAlerta.classList.remove('alert-warning', 'alert-info');
+    };
+
+    if (tipo === 'INCLUSO') {
+      const totalFinal = itens.reduce((s, i) => s + i.final, 0);
+      let html = '<strong>Valor frete incluso — preço base por moto:</strong>';
+      html += '<ul class="mb-0 ps-3 mt-1">';
+      let temAlerta = false;
+      for (const it of itens) {
+        const fracao = totalFinal > 0 ? (it.final / totalFinal) : (1 / itens.length);
+        const rateio = arred2(valorFrete * fracao);
+        const base = arred2(it.final - rateio);
+        let linha = `<li><code class="chassi-mono">${it.chassi}</code> — `
+                  + `R$ ${fmtBR(it.final)} − R$ ${fmtBR(rateio)} `
+                  + `= <strong>R$ ${fmtBR(base)}</strong>`;
+        if (it.tabela > 0 && base < it.tabela) {
+          const diff = arred2(it.tabela - base);
+          linha += ` <span class="text-danger">⚠ Abaixo R$ ${fmtBR(diff)} `
+                + `da tabela R$ ${fmtBR(it.tabela)}</span>`;
+          temAlerta = true;
+        }
+        linha += '</li>';
+        html += linha;
+      }
+      html += '</ul>';
+      reset();
+      elAlerta.classList.add(temAlerta ? 'alert-warning' : 'alert-info');
+      elAlerta.innerHTML = html;
+    } else if (tipo === 'ADICIONAR') {
+      const rateio = arred2(valorFrete / itens.length);
+      let html = '<strong>VALOR A SER FATURADO COM FRETE:</strong>';
+      html += '<ul class="mb-0 ps-3 mt-1">';
+      for (const it of itens) {
+        const total = arred2(it.final + rateio);
+        html += `<li><code class="chassi-mono">${it.chassi}</code> — `
+             + `R$ ${fmtBR(it.final)} + R$ ${fmtBR(rateio)} (frete) `
+             + `= <strong>R$ ${fmtBR(total)}</strong></li>`;
+      }
+      html += '</ul>';
+      reset();
+      elAlerta.classList.add('alert-info');
+      elAlerta.innerHTML = html;
+    }
+    elAlerta.style.display = '';
+  }
+
+  if (elModFrete) elModFrete.addEventListener('change', atualizarVisibilidadeBloco);
+  if (elValorFrete) elValorFrete.addEventListener('input', atualizarAlerta);
+  if (elTipoFrete) elTipoFrete.addEventListener('change', atualizarAlerta);
+  atualizarAlerta();
+})();
+</script>
+
+{# ================================================================
+   MODO CRIACAO: sem venda passada — formulario original intacto.
+   ================================================================ #}
+{% else %}
+
 <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
   <h2><i class="fas fa-file-invoice-dollar"></i> Novo Pedido de Venda</h2>
   <div class="d-flex gap-2">
@@ -148,74 +1368,7 @@
           </small>
         </div>
       </div>
-      <div class="row g-3">
-        <div class="col-md-4">
-          <label class="form-label">Modelo <span class="text-danger">*</span></label>
-          <select name="modelo_id" id="f-modelo" class="form-select" required>
-            <option value="">— escolha o modelo —</option>
-            {% for m in modelos %}
-              <option value="{{ m.id }}">{{ m.nome_modelo }}</option>
-            {% endfor %}
-          </select>
-        </div>
-        <div class="col-md-4">
-          <label class="form-label">Cor <span class="text-danger">*</span></label>
-          <select name="cor_select" id="f-cor" class="form-select" required disabled>
-            <option value="">— escolha o modelo primeiro —</option>
-          </select>
-          <small class="text-muted" id="cor-status"></small>
-        </div>
-        <div class="col-md-4">
-          <label class="form-label">Chassi <span class="text-danger">*</span></label>
-          <select name="chassi" id="f-chassi" class="form-select chassi-mono" required disabled>
-            <option value="">— escolha cor —</option>
-          </select>
-          <small class="text-muted" id="chassi-status"></small>
-        </div>
-      </div>
-
-      <hr class="my-3">
-
-      <!-- Preços de referência do modelo (leve, informativo): -->
-      <div id="precos-ref-modelo" class="text-muted small mb-2"
-           style="display:none;">
-        <i class="fas fa-tag"></i>
-        <span>Tabela:</span>
-        <span class="ms-2">À vista: <strong id="ref-preco-avista">—</strong></span>
-        <span class="ms-3">A prazo: <strong id="ref-preco-aprazo">—</strong></span>
-      </div>
-
-      <div class="row g-3 align-items-start">
-        <div class="col-md-3">
-          <label class="form-label">
-            Preço de tabela (R$)
-            <i class="fas fa-info-circle text-muted ms-1"
-               title="Definido em Cadastros → Modelos. Trazido automaticamente conforme o tipo da forma de pagamento (À vista vs A prazo)."></i>
-          </label>
-          <input type="text" id="f-preco-tabela" class="form-control" readonly
-                 placeholder="—" tabindex="-1">
-          <small class="text-muted" id="preco-sugerido-info">Escolha o modelo e a forma de pagamento.</small>
-        </div>
-        <div class="col-md-2">
-          <label class="form-label">Desconto (%)</label>
-          <input type="text" name="desconto_percentual" id="f-desconto-pct"
-                 class="form-control" inputmode="decimal" placeholder="0,00" value="0,00">
-        </div>
-        <div class="col-md-3">
-          <label class="form-label">Desconto (R$)</label>
-          <input type="text" id="f-desconto-rs"
-                 class="form-control" inputmode="decimal" placeholder="0,00" value="0,00">
-          <small class="text-muted">Preencha % ou R$ — o outro e calculado automaticamente.</small>
-        </div>
-        <div class="col-md-4">
-          <label class="form-label">
-            <strong>Valor final (R$)</strong> <span class="text-danger">*</span>
-          </label>
-          <input type="text" name="valor" id="f-valor"
-                 class="form-control fw-bold" required inputmode="decimal" placeholder="0,00">
-          <small class="text-muted">Preço de tabela menos desconto. Editavel.</small>
-        </div>
-      </div>
+      {% include 'hora/tagplus/_componente_moto_desconto.html' %}
     </div>
   </div>
 
@@ -323,625 +1476,21 @@
   </div>
 </form>
 
-<script>
-(function() {
-  // ----------------- Helpers ---------------------------------------------
-  const fmtBR = (v) => {
-    if (v == null || isNaN(v)) return '';
-    return Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  };
-
-  // Debounce: posterga `fn` ate `ms` apos a ultima chamada. Expoe `.flush()`
-  // (executa pendente agora) e `.cancel()` (descarta pendente). Usado para
-  // evitar que recalculos disparem a cada keystroke e reformatem o campo
-  // enquanto o operador ainda digita (cursor pulando, calculo intermediario).
-  function debounce(fn, ms) {
-    let timer = null;
-    let lastArgs = null;
-    let lastThis = null;
-    const debounced = function(...args) {
-      lastArgs = args;
-      lastThis = this;
-      if (timer) clearTimeout(timer);
-      timer = setTimeout(() => {
-        timer = null;
-        fn.apply(lastThis, lastArgs);
-      }, ms);
-    };
-    debounced.flush = function() {
-      if (timer) {
-        clearTimeout(timer);
-        timer = null;
-        fn.apply(lastThis, lastArgs || []);
-      }
-    };
-    debounced.cancel = function() {
-      if (timer) { clearTimeout(timer); timer = null; }
-    };
-    return debounced;
-  }
-
-  const elModelo = document.getElementById('f-modelo');
-  const elCor = document.getElementById('f-cor');
-  const elChassi = document.getElementById('f-chassi');
-  const elValor = document.getElementById('f-valor');
-  const elPrecoTabela = document.getElementById('f-preco-tabela');
-  const elDescontoPct = document.getElementById('f-desconto-pct');
-  const elDescontoRs = document.getElementById('f-desconto-rs');
-  // Pagamentos multi-formas (migration hora_34): UI repetivel substitui o
-  // SELECT unico antigo. `formaRepresentativaParaPreco()` decide qual tipo
-  // (A_VISTA vs A_PRAZO) usar para resolver o preco do modelo.
-  const elPagContainer = document.getElementById('pagamentos-container');
-  const tplPagLinha = document.getElementById('tpl-linha-pagamento');
-  const elBtnAddPag = document.getElementById('btn-add-pagamento');
-  const elPagSoma = document.getElementById('pag-soma');
-  const elPagTotalPedido = document.getElementById('pag-total-pedido');
-  const elPagAviso = document.getElementById('pag-status-aviso');
-  const elPrecoInfo = document.getElementById('preco-sugerido-info');
-  const elCorStatus = document.getElementById('cor-status');
-  const elChassiStatus = document.getElementById('chassi-status');
-  const elPrecosRef = document.getElementById('precos-ref-modelo');
-  const elRefAvista = document.getElementById('ref-preco-avista');
-  const elRefAprazo = document.getElementById('ref-preco-aprazo');
-
-  // ----------------- Estado e helpers numericos --------------------------
-  // precoTabela e o preço de referência (vindo do backend); atualizado quando
-  // o modelo OU a forma de pagamento muda. Tudo em "Number" interno; a UI
-  // formata via fmtBR.
-  const state = { precoTabela: null, syncLock: false };
-
-  // Parse formato BR ("1.234,56") OU ingles ("1234.56"); retorna Number ou NaN.
-  function parseBR(s) {
-    if (s == null) return NaN;
-    s = String(s).trim();
-    if (!s) return NaN;
-    // Se tem virgula e ponto, ponto e milhar BR; remove e troca virgula.
-    if (s.indexOf(',') >= 0 && s.indexOf('.') >= 0) {
-      s = s.replace(/\./g, '').replace(',', '.');
-    } else if (s.indexOf(',') >= 0) {
-      s = s.replace(',', '.');
-    }
-    const n = Number(s);
-    return isFinite(n) ? n : NaN;
-  }
-
-  function setBR(input, value) {
-    if (input == null) return;
-    if (value == null || isNaN(value)) {
-      input.value = '';
-      return;
-    }
-    input.value = fmtBR(value);
-  }
-
-  function arred2(n) {
-    return Math.round(n * 100) / 100;
-  }
-
-  const elCep = document.getElementById('f-cep');
-  const btnCep = document.getElementById('btn-busca-cep');
-  const elCepStatus = document.getElementById('cep-status');
-  const elLogradouro = document.getElementById('f-logradouro');
-  const elComplemento = document.getElementById('f-complemento');
-  const elBairro = document.getElementById('f-bairro');
-  const elCidade = document.getElementById('f-cidade');
-  const elUf = document.getElementById('f-uf');
-
-  // ----------------- Detecção de tipo de documento (CPF/CNPJ) ---------------
-  // Apenas feedback visual — não influencia mais o payload TagPlus
-  // (consumidor_final agora é sempre True, ver payload_builder.py).
-  const elDoc = document.getElementById('f-cpf');
-  const elDocTipoInfo = document.getElementById('doc-tipo-info');
-
-  function detectarTipoDocumento() {
-    if (!elDocTipoInfo) return;
-    const digitos = (elDoc.value || '').replace(/\D/g, '');
-    if (digitos.length === 11) {
-      elDocTipoInfo.textContent = 'CPF detectado (PF).';
-      elDocTipoInfo.className = 'text-success';
-    } else if (digitos.length === 14) {
-      elDocTipoInfo.textContent = 'CNPJ detectado (PJ).';
-      elDocTipoInfo.className = 'text-success';
-    } else {
-      elDocTipoInfo.textContent = 'Digite 11 dígitos para CPF ou 14 para CNPJ.';
-      elDocTipoInfo.className = 'text-muted';
-    }
-  }
-
-  if (elDoc) {
-    elDoc.addEventListener('input', detectarTipoDocumento);
-    elDoc.addEventListener('blur', detectarTipoDocumento);
-  }
-
-  // ----------------- ViaCEP ------------------------------------------------
-  async function buscarCep() {
-    const cep = (elCep.value || '').replace(/\D/g, '');
-    if (cep.length !== 8) {
-      elCepStatus.textContent = 'CEP precisa ter 8 dígitos';
-      elCepStatus.className = 'text-danger';
-      return;
-    }
-    elCepStatus.textContent = 'Buscando…';
-    elCepStatus.className = 'text-muted';
-    try {
-      const r = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
-      const data = await r.json();
-      if (data.erro) {
-        elCepStatus.textContent = 'CEP não encontrado';
-        elCepStatus.className = 'text-danger';
-        return;
-      }
-      elLogradouro.value = data.logradouro || '';
-      elComplemento.value = data.complemento || '';
-      elBairro.value = data.bairro || '';
-      elCidade.value = data.localidade || '';
-      elUf.value = (data.uf || '').toUpperCase();
-      elCepStatus.textContent = 'OK — confira número e complemento';
-      elCepStatus.className = 'text-success';
-    } catch (e) {
-      elCepStatus.textContent = 'Falha ao consultar ViaCEP: ' + e.message;
-      elCepStatus.className = 'text-danger';
-    }
-  }
-  btnCep.addEventListener('click', buscarCep);
-  elCep.addEventListener('blur', () => {
-    const cep = (elCep.value || '').replace(/\D/g, '');
-    if (cep.length === 8) buscarCep();
-  });
-  // Mascara basica de CEP (00000-000) durante digitacao.
-  elCep.addEventListener('input', () => {
-    const v = (elCep.value || '').replace(/\D/g, '').slice(0, 8);
-    elCep.value = v.length > 5 ? `${v.slice(0,5)}-${v.slice(5)}` : v;
-  });
-
-  // ----------------- Cascata Modelo -> Cor -> Chassi -----------------------
-  async function carregarCores() {
-    const modeloId = elModelo.value;
-    elCor.innerHTML = '<option value="">— carregando… —</option>';
-    elCor.disabled = true;
-    elChassi.innerHTML = '<option value="">— escolha cor —</option>';
-    elChassi.disabled = true;
-    elValor.value = '';
-    elPrecoInfo.textContent = '';
-    elCorStatus.textContent = '';
-
-    if (!modeloId) {
-      elCor.innerHTML = '<option value="">— escolha o modelo primeiro —</option>';
-      return;
-    }
-    try {
-      const r = await fetch(`{{ url_for('hora.tagplus_pedido_venda_api_cores') }}?modelo_id=${encodeURIComponent(modeloId)}`);
-      const data = await r.json();
-      if (!data.ok || !data.cores || !data.cores.length) {
-        elCor.innerHTML = '<option value="">— sem cores em estoque —</option>';
-        elCorStatus.textContent = 'Nenhum chassi em estoque para este modelo.';
-        elCorStatus.className = 'text-warning';
-        return;
-      }
-      elCor.innerHTML = '<option value="">— escolha a cor —</option>'
-        + data.cores.map(c => `<option value="${c}">${c}</option>`).join('');
-      elCor.disabled = false;
-      elCorStatus.textContent = `${data.cores.length} cor(es) disponível(eis).`;
-      elCorStatus.className = 'text-muted';
-    } catch (e) {
-      elCor.innerHTML = '<option value="">— erro ao carregar —</option>';
-      elCorStatus.textContent = 'Falha: ' + e.message;
-      elCorStatus.className = 'text-danger';
-    }
-  }
-
-  async function carregarChassis() {
-    const modeloId = elModelo.value;
-    const cor = elCor.value;
-    elChassi.innerHTML = '<option value="">— carregando… —</option>';
-    elChassi.disabled = true;
-    elValor.value = '';
-    elPrecoInfo.textContent = '';
-    elChassiStatus.textContent = '';
-
-    if (!modeloId || !cor) {
-      elChassi.innerHTML = '<option value="">— escolha cor —</option>';
-      return;
-    }
-    try {
-      const url = `{{ url_for('hora.tagplus_pedido_venda_api_chassis') }}?modelo_id=${encodeURIComponent(modeloId)}&cor=${encodeURIComponent(cor)}`;
-      const r = await fetch(url);
-      const data = await r.json();
-      if (!data.ok || !data.chassis || !data.chassis.length) {
-        elChassi.innerHTML = '<option value="">— sem chassis disponíveis —</option>';
-        elChassiStatus.textContent = 'Nenhum chassi disponível para esta combinação.';
-        elChassiStatus.className = 'text-warning';
-        return;
-      }
-      const opts = data.chassis.map(c => {
-        const flags = [];
-        if (c.avarias_abertas > 0) flags.push(`⚠ ${c.avarias_abertas} avaria(s)`);
-        if (c.pecas_faltando_abertas > 0) flags.push(`⚙ ${c.pecas_faltando_abertas} peça(s) faltando`);
-        const sufix = flags.length ? ` [${flags.join(' / ')}]` : '';
-        const loja = c.loja_nome ? ` — ${c.loja_nome}` : '';
-        return `<option value="${c.chassi}">${c.chassi}${loja}${sufix}</option>`;
-      }).join('');
-      elChassi.innerHTML = '<option value="">— escolha o chassi —</option>' + opts;
-      elChassi.disabled = false;
-      elChassiStatus.textContent = `${data.chassis.length} chassi(s) disponível(eis).`;
-      elChassiStatus.className = 'text-muted';
-    } catch (e) {
-      elChassi.innerHTML = '<option value="">— erro ao carregar —</option>';
-      elChassiStatus.textContent = 'Falha: ' + e.message;
-      elChassiStatus.className = 'text-danger';
-    }
-  }
-
-  // ----------------- Pagamentos multi-formas -----------------------------
-  // Retorna a forma "representativa" para resolver preco — se alguma a prazo,
-  // pega ela; senao a primeira a vista. Espelha _classificar_formas_para_preco
-  // do backend (regra: qualquer A_PRAZO -> preco a prazo).
-  function formaRepresentativaParaPreco() {
-    if (!elPagContainer) return '';
-    const linhas = elPagContainer.querySelectorAll('.pag-linha');
-    let primeiraAVista = '';
-    for (const linha of linhas) {
-      const sel = linha.querySelector('.pag-forma');
-      if (!sel || !sel.value) continue;
-      const opt = sel.options[sel.selectedIndex];
-      const tipo = opt ? opt.dataset.tipo : '';
-      if (tipo === 'A_PRAZO') return sel.value;
-      if (tipo === 'A_VISTA' && !primeiraAVista) primeiraAVista = sel.value;
-    }
-    return primeiraAVista;
-  }
-
-  function atualizarSomaPagamentos() {
-    if (!elPagContainer) return;
-    let soma = 0;
-    elPagContainer.querySelectorAll('.pag-valor').forEach(inp => {
-      const v = parseBR(inp.value);
-      if (!isNaN(v)) soma += v;
-    });
-    if (elPagSoma) elPagSoma.textContent = 'R$ ' + fmtBR(soma);
-    const totalPedido = parseBR(elValor.value);
-    if (elPagTotalPedido) elPagTotalPedido.textContent =
-      isNaN(totalPedido) ? 'R$ 0,00' : 'R$ ' + fmtBR(totalPedido);
-    if (elPagAviso) {
-      const diff = Math.abs(soma - (isNaN(totalPedido) ? 0 : totalPedido));
-      if (diff > 0.01) {
-        elPagAviso.textContent = '⚠ Soma das formas difere do total — pedido salvara como INCOMPLETO.';
-        elPagAviso.style.display = '';
-      } else {
-        elPagAviso.style.display = 'none';
-      }
-    }
-  }
-
-  function adicionarLinhaPagamento() {
-    if (!tplPagLinha || !elPagContainer) return;
-    const frag = tplPagLinha.content.cloneNode(true);
-    const linha = frag.querySelector('.pag-linha');
-    elPagContainer.appendChild(frag);
-    // Wire handlers da linha recem-adicionada.
-    const sel = linha.querySelector('.pag-forma');
-    const valor = linha.querySelector('.pag-valor');
-    const autWrap = linha.querySelector('.pag-aut-wrap');
-    const autInput = linha.querySelector('.pag-aut');
-    const btnRemover = linha.querySelector('.pag-remover');
-    if (sel) sel.addEventListener('change', () => {
-      const opt = sel.options[sel.selectedIndex];
-      const exigeAut = opt && opt.dataset.aut === '1';
-      if (autWrap) autWrap.style.display = exigeAut ? '' : 'none';
-      if (autInput) autInput.required = !!exigeAut;
-      atualizarPrecoTabela();
-    });
-    if (valor) {
-      valor.addEventListener('input', atualizarSomaPagamentos);
-      valor.addEventListener('blur', () => {
-        const v = parseBR(valor.value);
-        if (!isNaN(v)) setBR(valor, arred2(v));
-      });
-    }
-    if (btnRemover) btnRemover.addEventListener('click', () => {
-      linha.remove();
-      atualizarSomaPagamentos();
-      atualizarPrecoTabela();
-    });
-    atualizarSomaPagamentos();
-  }
-
-  if (elBtnAddPag) elBtnAddPag.addEventListener('click', adicionarLinhaPagamento);
-  // Inicializa com 1 linha vazia.
-  if (elPagContainer && elPagContainer.children.length === 0) {
-    adicionarLinhaPagamento();
-  }
-
-  // ----------------- Refs A_VISTA / A_PRAZO (informativo) ----------------
-  async function atualizarPrecosRef() {
-    if (!elPrecosRef) return;
-    const modeloId = elModelo.value;
-    if (!modeloId) {
-      elPrecosRef.style.display = 'none';
-      return;
-    }
-    try {
-      const r = await fetch(
-        `{{ url_for('hora.tagplus_pedido_venda_api_preco_modelo') }}?modelo_id=${modeloId}`
-      );
-      const data = await r.json();
-      if (!data.ok) { elPrecosRef.style.display = 'none'; return; }
-      const av = data.preco_a_vista;
-      const ap = data.preco_a_prazo;
-      if (av == null && ap == null) {
-        elPrecosRef.style.display = 'none';
-        return;
-      }
-      if (elRefAvista) elRefAvista.textContent = av != null ? `R$ ${fmtBR(av)}` : '—';
-      if (elRefAprazo) elRefAprazo.textContent = ap != null ? `R$ ${fmtBR(ap)}` : '—';
-      elPrecosRef.style.display = '';
-    } catch (e) {
-      elPrecosRef.style.display = 'none';
-    }
-  }
-
-  // ----------------- Preço (modelo + forma) -> auto preenche -------------
-  async function atualizarPrecoTabela() {
-    const modeloId = elModelo.value;
-    if (!modeloId) {
-      state.precoTabela = null;
-      elPrecoTabela.value = '';
-      elPrecoInfo.textContent = 'Escolha o modelo e a forma de pagamento.';
-      elPrecoInfo.className = 'text-muted';
-      recalcular('pct');
-      return;
-    }
-    const forma = formaRepresentativaParaPreco();
-    const params = new URLSearchParams({ modelo_id: modeloId });
-    if (forma) params.set('forma_pagamento', forma);
-
-    elPrecoInfo.textContent = 'Buscando preço…';
-    elPrecoInfo.className = 'text-muted';
-    try {
-      const r = await fetch(`{{ url_for('hora.tagplus_pedido_venda_api_preco_modelo') }}?${params}`);
-      const data = await r.json();
-      if (!data.ok) {
-        state.precoTabela = null;
-        elPrecoTabela.value = '';
-        elPrecoInfo.textContent = 'Erro: ' + (data.error || 'desconhecido');
-        elPrecoInfo.className = 'text-danger';
-        return;
-      }
-      if (data.preco == null) {
-        state.precoTabela = null;
-        elPrecoTabela.value = '';
-        // Mostra o que foi tentado (informativo).
-        let msg = 'Modelo sem preço cadastrado.';
-        if (data.preco_a_vista != null) msg += ` (à vista: R$ ${fmtBR(data.preco_a_vista)})`;
-        if (data.preco_a_prazo != null) msg += ` (a prazo: R$ ${fmtBR(data.preco_a_prazo)})`;
-        elPrecoInfo.textContent = msg;
-        elPrecoInfo.className = 'text-warning';
-      } else {
-        state.precoTabela = arred2(Number(data.preco));
-        setBR(elPrecoTabela, state.precoTabela);
-        const tipoLabel = data.tipo_pagamento === 'A_VISTA'
-          ? 'à vista'
-          : (data.tipo_pagamento === 'A_PRAZO' ? 'a prazo' : 'forma sem classificação — usando preço à vista');
-        const fonteLabel = data.fonte === 'TABELA_LEGADA'
-          ? ' (de tabela legada com vigência)'
-          : '';
-        elPrecoInfo.textContent = `Preço de tabela ${tipoLabel}${fonteLabel}.`;
-        elPrecoInfo.className = 'text-muted';
-      }
-    } catch (e) {
-      state.precoTabela = null;
-      elPrecoTabela.value = '';
-      elPrecoInfo.textContent = 'Falha ao buscar preço: ' + e.message;
-      elPrecoInfo.className = 'text-danger';
-    }
-    // Recalcula valor final mantendo o desconto % atual (preserva intencao do operador).
-    recalcular('pct');
-  }
-
-  // ----------------- Sincronizacao desconto % <-> R$ <-> valor -----------
-  // origem: 'pct' | 'rs' | 'valor' — qual campo o operador acabou de mexer.
-  function recalcular(origem) {
-    if (state.syncLock) return;
-    state.syncLock = true;
-    try {
-      const preco = state.precoTabela;
-      if (preco == null || preco <= 0) {
-        // Sem preço de tabela: mantem o que o operador digitou.
-        if (origem === 'rs') {
-          const rs = parseBR(elDescontoRs.value);
-          if (!isNaN(rs)) setBR(elDescontoRs, arred2(rs));
-        } else if (origem === 'pct') {
-          // Sem preço, % nao tem como virar R$. Deixa zerado.
-          const pct = parseBR(elDescontoPct.value);
-          if (isNaN(pct)) setBR(elDescontoPct, 0);
-        }
-        return;
-      }
-
-      let pct = parseBR(elDescontoPct.value);
-      let rs = parseBR(elDescontoRs.value);
-      let valor = parseBR(elValor.value);
-
-      if (origem === 'pct') {
-        if (isNaN(pct)) pct = 0;
-        pct = Math.max(0, Math.min(100, pct));
-        rs = arred2(preco * pct / 100);
-        valor = arred2(preco - rs);
-        setBR(elDescontoPct, arred2(pct));
-        setBR(elDescontoRs, rs);
-        setBR(elValor, valor);
-      } else if (origem === 'rs') {
-        if (isNaN(rs)) rs = 0;
-        rs = Math.max(0, Math.min(preco, rs));
-        pct = preco > 0 ? arred2(rs / preco * 100) : 0;
-        valor = arred2(preco - rs);
-        setBR(elDescontoRs, arred2(rs));
-        setBR(elDescontoPct, pct);
-        setBR(elValor, valor);
-      } else if (origem === 'valor') {
-        // Operador edita o valor final manualmente — recalcula desconto.
-        if (isNaN(valor)) valor = preco;
-        valor = Math.max(0, Math.min(preco, valor));
-        rs = arred2(preco - valor);
-        pct = preco > 0 ? arred2(rs / preco * 100) : 0;
-        setBR(elValor, valor);
-        setBR(elDescontoRs, rs);
-        setBR(elDescontoPct, pct);
-      }
-    } finally {
-      state.syncLock = false;
-    }
-    // Notifica painel de pagamentos sobre mudanca em valor final.
-    atualizarSomaPagamentos();
-  }
-
-  elModelo.addEventListener('change', () => {
-    carregarCores();
-    atualizarPrecoTabela();
-    atualizarPrecosRef();
-  });
-  elCor.addEventListener('change', carregarChassis);
-
-  // Debounce de 1500ms: evita que `recalcular()` reformate os outros campos
-  // (via setBR) a cada keystroke — operador via cursor pulando e desconto
-  // sendo recalculado em valores intermediarios (ex: digitando "1500" o
-  // sistema calculava em 1, 15, 150, 1500). O evento `change` (Tab/blur/Enter)
-  // dispara IMEDIATO e cancela o debounce pendente, garantindo que ao sair
-  // do campo o calculo esta atualizado mesmo se o operador clicar Salvar
-  // antes dos 1.5s expirarem.
-  const RECALC_DEBOUNCE_MS = 1500;
-  const recalcPctDeb = debounce(() => recalcular('pct'), RECALC_DEBOUNCE_MS);
-  const recalcRsDeb = debounce(() => recalcular('rs'), RECALC_DEBOUNCE_MS);
-  const recalcValorDeb = debounce(() => {
-    recalcular('valor');
-    atualizarSomaPagamentos();
-    atualizarAlertaFrete();
-  }, RECALC_DEBOUNCE_MS);
-
-  elDescontoPct.addEventListener('input', recalcPctDeb);
-  elDescontoPct.addEventListener('change', () => { recalcPctDeb.cancel(); recalcular('pct'); });
-
-  elDescontoRs.addEventListener('input', recalcRsDeb);
-  elDescontoRs.addEventListener('change', () => { recalcRsDeb.cancel(); recalcular('rs'); });
-
-  elValor.addEventListener('input', recalcValorDeb);
-  elValor.addEventListener('change', () => {
-    recalcValorDeb.cancel();
-    recalcular('valor');
-    atualizarSomaPagamentos();
-    atualizarAlertaFrete();
-  });
-
-  // ----------------- Frete CIF (hora_38) ---------------------------------
-  // Mostra/esconde bloco de frete quando modalidade muda. INCLUSO compara
-  // (valor moto - frete) com preco de tabela; ADICIONAR mostra rateio
-  // (1 moto neste form, mas helper deixa pronto para multi-item no detalhe).
-  const elModFrete = document.getElementById('f-modalidade-frete');
-  const elBlocoFrete = document.getElementById('bloco-frete-cif');
-  const elValorFrete = document.getElementById('f-valor-frete');
-  const elTipoFrete = document.getElementById('f-tipo-frete-calc');
-  const elAlertaFrete = document.getElementById('alerta-frete');
-
-  function atualizarVisibilidadeBlocoFrete() {
-    if (!elBlocoFrete) return;
-    const cif = elModFrete && elModFrete.value === '0';
-    elBlocoFrete.style.display = cif ? '' : 'none';
-    if (!cif) {
-      // Limpa para nao enviar dado inutil ao backend (que ja descarta).
-      if (elValorFrete) elValorFrete.value = '';
-      if (elTipoFrete) elTipoFrete.value = '';
-      if (elAlertaFrete) elAlertaFrete.style.display = 'none';
-    } else {
-      atualizarAlertaFrete();
-    }
-  }
-
-  function atualizarAlertaFrete() {
-    if (!elAlertaFrete) return;
-    if (!elModFrete || elModFrete.value !== '0') {
-      elAlertaFrete.style.display = 'none';
-      return;
-    }
-    const tipo = (elTipoFrete && elTipoFrete.value || '').trim();
-    const valorFrete = parseBR(elValorFrete && elValorFrete.value);
-    const valorMoto = parseBR(elValor && elValor.value);
-    if (!tipo || isNaN(valorFrete) || valorFrete <= 0 || isNaN(valorMoto) || valorMoto <= 0) {
-      elAlertaFrete.style.display = 'none';
-      return;
-    }
-    const tabela = state.precoTabela;
-    if (tipo === 'INCLUSO') {
-      const base = arred2(valorMoto - valorFrete);
-      let html = `<strong>Moto R$ ${fmtBR(valorMoto)}</strong> − Frete R$ ${fmtBR(valorFrete)} `
-               + `= <strong>R$ ${fmtBR(base)}</strong> (preço base sem frete).`;
-      if (tabela != null && tabela > 0 && base < tabela) {
-        const diff = arred2(tabela - base);
-        html += `<br><span class="text-danger">⚠ Abaixo R$ ${fmtBR(diff)} `
-              + `da tabela R$ ${fmtBR(tabela)}.</span>`;
-        elAlertaFrete.classList.remove('alert-info');
-        elAlertaFrete.classList.add('alert-warning');
-      } else {
-        elAlertaFrete.classList.remove('alert-warning');
-        elAlertaFrete.classList.add('alert-info');
-      }
-      elAlertaFrete.innerHTML = html;
-    } else if (tipo === 'ADICIONAR') {
-      // Form atual cria 1 moto por pedido — rateio = frete inteiro nesta moto.
-      // (O detalhe ja cuida do rateio multi-item.)
-      const total = arred2(valorMoto + valorFrete);
-      elAlertaFrete.classList.remove('alert-warning');
-      elAlertaFrete.classList.add('alert-info');
-      elAlertaFrete.innerHTML =
-        `<strong>VALOR A SER FATURADO COM FRETE:</strong><br>`
-      + `Moto R$ ${fmtBR(valorMoto)} + R$ ${fmtBR(valorFrete)} (frete) `
-      + `= <strong>R$ ${fmtBR(total)}</strong>.`;
-    }
-    elAlertaFrete.style.display = '';
-  }
-
-  if (elModFrete) elModFrete.addEventListener('change', atualizarVisibilidadeBlocoFrete);
-  if (elValorFrete) elValorFrete.addEventListener('input', atualizarAlertaFrete);
-  if (elTipoFrete) elTipoFrete.addEventListener('change', atualizarAlertaFrete);
-  // Estado inicial.
-  atualizarVisibilidadeBlocoFrete();
-
-  // ----------------- Validacao no submit -----------------------------------
-  document.getElementById('form-pedido-venda').addEventListener('submit', (e) => {
-    // Garante que qualquer recalculo pendente (debounce 1.5s) foi aplicado
-    // antes de validar, caso o operador clique Salvar logo apos digitar.
-    recalcPctDeb.flush();
-    recalcRsDeb.flush();
-    recalcValorDeb.flush();
-
-    // Aceita CPF (11) ou CNPJ (14). Backend normaliza para apenas digitos
-    // (venda_service._normalizar_documento) e grava em String(14). UI deixa
-    // o operador digitar com mascara "00.000.000/0000-00".
-    const doc = (document.getElementById('f-cpf').value || '').replace(/\D/g, '');
-    if (doc.length !== 11 && doc.length !== 14) {
-      e.preventDefault();
-      alert('Documento deve ter 11 dígitos (CPF) ou 14 dígitos (CNPJ).');
-      return;
-    }
-    const cep = (elCep.value || '').replace(/\D/g, '');
-    if (cep.length !== 8) {
-      e.preventDefault();
-      alert('CEP deve ter 8 dígitos.');
-      return;
-    }
-    const valor = (elValor.value || '').replace(/\./g, '').replace(',', '.');
-    if (!valor || isNaN(Number(valor)) || Number(valor) <= 0) {
-      e.preventDefault();
-      alert('Valor deve ser maior que zero.');
-      return;
-    }
-  });
-
-})();
-</script>
-
 {% endif %}
+{% endif %}{# fim {% else %} (modo criacao) #}
+
+{# Scripts compartilhados: guardas de existencia em cada grupo de elementos
+   garantem que nenhum erro ocorre quando os IDs nao estao presentes
+   (ex.: cascata moto so existe no modo edicao com is_cotacao, e no modo
+   criacao; pagamentos-container so existe no modo criacao). #}
+{% include 'hora/tagplus/_pedido_venda_scripts.html' %}
+
 {% endblock %}
 
 {% block onboarding_tours %}
+{% if venda %}
+<script src="{{ url_for('static', filename='onboarding/tours/hora/vendas_aprovar.js') }}"></script>
+{% else %}
 <script src="{{ url_for('static', filename='onboarding/tours/hora/venda_manual_nova.js') }}"></script>
+{% endif %}
 {% endblock %}

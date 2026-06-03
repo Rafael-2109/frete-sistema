@@ -152,6 +152,10 @@ class HoraVenda(db.Model):
     vendedor = db.Column(db.String(100), nullable=True)
     # Preenchido manualmente na tela de detalhe pos-import OU via backfill
     # de pedido TagPlus (vendedor.nome em GET /pedidos/{id}).
+    criado_por_id = db.Column(db.Integer, nullable=True, index=True)
+    # Id do usuario (app.auth Usuario.id) que criou o pedido manual. Sem FK
+    # (padrao do modulo: nao acopla a usuarios). Usado pelo filtro 'vendedor'
+    # da listagem. Pedidos legados podem ter NULL (backfill best-effort).
     observacoes = db.Column(db.Text, nullable=True)
 
     # ----- Enriquecimento via GET /pedidos/{id} TagPlus -----

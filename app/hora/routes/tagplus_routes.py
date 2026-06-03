@@ -1020,45 +1020,14 @@ def tagplus_pedido_venda_novo():
     venda.
     """
     # Decisao de negocio (2026-05-06): qualquer operador HORA-habilitado pode
-    # criar pedido em qualquer loja, com chassi de qualquer loja. Por isso
-    # NAO aplicamos `lojas_permitidas_ids()` aqui — passamos None para listar
-    # todo o estoque + todas as lojas.
-
-    # Modelos com pelo menos 1 chassi em estoque (visao global, sem escopo).
-    # Apenas canonicos: aliases (BOB AM, etc.) sao agrupados sob o canonico
-    # (BOB) — operador ve uma linha so. Cores/chassis abaixo expandem
-    # automaticamente para incluir motos vinculadas a aliases.
-    from app.hora.services.estoque_service import opcoes_filtro_estoque
-    opcoes = opcoes_filtro_estoque(
-        lojas_permitidas_ids=None,
-        apenas_canonicos=True,
-    )
-    modelos = opcoes['modelos']
-
-    # Formas de pagamento mapeadas no TagPlus.
-    formas_pagamento = (
-        HoraTagPlusFormaPagamentoMap.query
-        .order_by(HoraTagPlusFormaPagamentoMap.forma_pagamento_hora)
-        .all()
-    )
-
-    # Vendedores: todos os usuarios habilitados no modulo HORA (sem escopo).
-    from app.hora.services import permissao_service
-    vendedores_disponiveis = permissao_service.listar_usuarios_habilitados()
-
-    # Lojas: todas ativas, exceto CNPJ matriz (regra fixa em
-    # cadastro_service.CNPJ_EXCLUIDO_PEDIDO_VENDA). Sem filtro de escopo.
-    from app.hora.services import cadastro_service
-    lojas_disponiveis = cadastro_service.listar_lojas_para_pedido_venda(
-        lojas_permitidas_ids=None,
-    )
+    # criar pedido em qualquer loja, com chassi de qualquer loja — listas
+    # globais (sem filtro de escopo). Helper compartilhado com vendas_detalhe.
+    from app.hora.routes.vendas import _contexto_lookup_pedido_venda
+    ctx = _contexto_lookup_pedido_venda()
 
     return render_template(
         'hora/tagplus/pedido_venda_novo.html',
-        modelos=modelos,
-        formas_pagamento=formas_pagamento,
-        vendedores_disponiveis=vendedores_disponiveis,
-        lojas_disponiveis=lojas_disponiveis,
+        **ctx,
     )
 
 
@@ -1204,6 +1173,7 @@ def tagplus_pedido_venda_criar():
             numero_parcelas=n_parcelas,
             intervalo_parcelas_dias=intervalo,
             criado_por=_operador(),
+            criado_por_id=getattr(current_user, 'id', None),
             loja_id_override=loja_id_int,
             pagamentos=pagamentos_in,
             valor_frete=valor_frete_raw,
