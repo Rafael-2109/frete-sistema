@@ -11,6 +11,7 @@ atualizado: 2026-06-01
 
 - [PAD-A — Arquitetura de Artefatos](2026-06-01-arquitetura-de-artefatos-design.md) — padrao deterministico docs+scripts
 - [Atacadao — Split NF por Protocolo ST](2026-06-02-atacadao-split-protocolo-st-design.md) — quebra 1 pedido Atacadao RJ em 2 pedidos Odoo (ST vs demais)
+- [HORA — Desconsiderar moto de NF de compra](2026-06-03-hora-desconsiderar-moto-nf-design.md) — flag reversível por item: tira do estoque/recebimento e remove a HoraMoto, valida não-em-pedido/não-recebido
 - [Simulador 3D de Carga de Motos — Design Spec](2026-04-03-simulador-carga-3d-design.md)
 - [Reforma Modulo Pessoal — Controle Financeiro](2026-04-05-pessoal-controle-financeiro-design.md)
 - [Design — Features SDK Claude Agent 0.1.60](2026-04-16-agent-sdk-0160-features-design.md)
