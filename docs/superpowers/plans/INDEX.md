@@ -14,6 +14,7 @@ atualizado: 2026-06-02
 - [PAD-A Onda 2 — Conflitos diagnosticados](2026-06-02-pad-a-onda-2-conflitos.md) — reconcilia 6 conflitos doc/memoria + 1 bug worker-RQ + aposenta gold-script
 - [PAD-A Onda 3 — Governanca dos scripts inventario/estoque](2026-06-02-pad-a-onda-3-governanca-scripts.md) — indice na zona + aposenta ~29 mortos + headers + estado-1-lugar + 2 ADRs
 - [PAD-A Onda 4 — Varredura por cluster](2026-06-02-pad-a-onda-4-varredura-cluster.md) — toolchain migracao + calibracao + sub-ondas 4a-4g (orfao-zero + link-rot-zero + doc:meta) + promove C1/C7/C8 a block
+- [HORA — Desconsiderar moto de NF de compra](2026-06-03-hora-desconsiderar-moto-nf.md) — flag desconsiderado por item + relaxa FK chassi + valida nao-em-pedido/nao-recebido (9 tasks TDD)
 - [CarVia: Migracao de conferencia de Sub para Frete (Escopo C)](2026-04-14-carvia-frete-conferencia-migration.md)
 - [Remessa VORTX — Injeção Direta no Odoo](2026-04-15-remessa-vortx-odoo-injection.md)
 - [Agent SDK 0.1.60 Features — Implementation Plan](2026-04-16-agent-sdk-0160-features.md)
