@@ -392,6 +392,43 @@ def _classify_estoque_restricao(
 
 
 
+# =============================================================================
+# GERINDO-AGENTE WRITE (2026-06-03) — gate dev-only do flywheel (Onda 3 fase 3b)
+# =============================================================================
+# Os scripts da skill gerindo-agente (loop.py/eval.py/melhorias.py) tem subcomandos
+# de ESCRITA (approve/reject/promote-batch/review/run/respond) que mutam o flywheel
+# do proprio agente — inclusive o PROMPT PROD VIVO (approve: directive shadow->ativa).
+# Sao DEV-ONLY: operados pelo Claude Code via CLI (que NAO passa por can_use_tool).
+# O agente web/Teams NUNCA deve executa-los via Bash. Este classificador detecta a
+# invocacao e o branch Bash de can_use_tool a NEGA. (Espelha _classify_estoque_restricao.)
+# Para liberar para admin no futuro: trocar o Deny por allow-list de user_id (como
+# ESTOQUE_RESTRICAO_ALLOWED_USER_IDS).
+# =============================================================================
+_GERINDO_WRITE_REGEX = None  # lazy-compiled
+
+
+def _classify_gerindo_write(tool_name: str, tool_input: dict) -> dict | None:
+    """Identifica Bash que invoca um subcomando WRITE da skill gerindo-agente (dev-only).
+
+    Returns: {script, subcomando} se for WRITE da skill; None caso contrario.
+    """
+    if tool_name != 'Bash':
+        return None
+    command = tool_input.get('command') or ''
+    if 'gerindo-agente' not in command:
+        return None
+    global _GERINDO_WRITE_REGEX
+    if _GERINDO_WRITE_REGEX is None:
+        import re as _re
+        _GERINDO_WRITE_REGEX = _re.compile(
+            r'(loop|eval|melhorias)\.py\s+(approve|reject|promote-batch|review|run|respond)\b'
+        )
+    m = _GERINDO_WRITE_REGEX.search(command)
+    if m:
+        return {'script': m.group(1), 'subcomando': m.group(2)}
+    return None
+
+
 async def can_use_tool(
     tool_name: str,
     tool_input: dict[str, Any],
@@ -544,6 +581,22 @@ async def can_use_tool(
         if tool_name == 'Bash':
             command = tool_input.get('command', '')
             description = tool_input.get('description', '')
+
+            # gerindo-agente WRITE e DEV-ONLY: negar pelo agente web/Teams (Onda 3 fase 3b).
+            gw = _classify_gerindo_write(tool_name, tool_input)
+            if gw is not None:
+                logger.warning(
+                    f"[PERMISSION] gerindo-agente WRITE DENY: {gw['script']}.{gw['subcomando']} "
+                    f"(dev-only) | agent_type={agent_type} | "
+                    f"session={(get_current_session_id() or 'N/A')[:8]}..."
+                )
+                return PermissionResultDeny(
+                    message=(
+                        f"O subcomando '{gw['subcomando']}' de gerindo-agente ({gw['script']}.py) "
+                        f"e de ESCRITA e DEV-ONLY (muta o flywheel/prompt do agente). NAO pode ser "
+                        f"executado pelo agente. Use apenas os subcomandos de LEITURA da skill."
+                    )
+                )
 
             # Log para auditoria
             logger.info(

@@ -31,10 +31,22 @@ SCRIPTS = ['common', 'memoria', 'sessao', 'padrao', 'grafo', 'diagnostico', 'man
 # Onda 1 (camada de evolucao/qualidade) — subcomandos novos em diagnostico.py.
 NOVOS_DIAGNOSTICO = {'step-quality', 'step-coverage', 'rule-adhesion', 'routing', 'recommendations'}
 
-# Onda 3 (flywheel READ) — scripts novos e seus subcomandos READ.
+# Onda 3 fase 3a (flywheel READ) — scripts novos e seus subcomandos READ.
 ONDA3_LOOP = {'directives', 'corrections', 'loop-health'}
 ONDA3_EVAL = {'scores', 'cases'}
 ONDA3_MELHORIAS = {'list-open', 'show', 'intelligence-report'}
+
+# Onda 3 fase 3b (flywheel WRITE) — subcomandos de ESCRITA, todos atras de --confirm.
+ONDA3_WRITE = {
+    'loop': {'approve', 'reject', 'promote-batch'},
+    'eval': {'review', 'run'},
+    'melhorias': {'respond'},
+}
+ONDA3_READ = {
+    'loop': ONDA3_LOOP,
+    'eval': ONDA3_EVAL,
+    'melhorias': ONDA3_MELHORIAS,
+}
 
 
 def _load(name):
@@ -301,12 +313,69 @@ def test_onda3_handlers_sem_contexto_duplo(name):
 
 
 @pytest.mark.parametrize('name', ['loop', 'eval', 'melhorias'])
-def test_onda3_sem_escrita_no_banco(name):
-    """Fase 3a e READ-ONLY: handlers nao podem commitar nem mutar (so rollback defensivo)."""
+def test_onda3_read_handlers_sem_escrita(name):
+    """Handlers de LEITURA nunca commitam/add/delete (so rollback defensivo)."""
     m = _load(name)
-    for fn in m.HANDLERS.values():
+    for sub in ONDA3_READ[name]:
+        fn = m.HANDLERS[sub]
         src = inspect.getsource(fn)
         code = '\n'.join(l for l in src.splitlines() if not l.lstrip().startswith('#'))
-        assert 'session.commit(' not in code, f"{name}.{fn.__name__}: READ-first nao pode commitar"
-        assert 'session.add(' not in code, f"{name}.{fn.__name__}: READ-first nao pode add()"
-        assert 'session.delete(' not in code, f"{name}.{fn.__name__}: READ-first nao pode delete()"
+        assert 'session.commit(' not in code, f"{name}.{sub}: handler READ nao pode commitar"
+        assert 'session.add(' not in code, f"{name}.{sub}: handler READ nao pode add()"
+        assert 'session.delete(' not in code, f"{name}.{sub}: handler READ nao pode delete()"
+
+
+# ─────────────────────────────────────────────────────────────────────────
+# Onda 3 fase 3b — flywheel WRITE. Invariante: dry-run e o DEFAULT; toda
+# escrita esta atras de --confirm (guard `if not args.confirm:`).
+# ─────────────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.parametrize('name', ['loop', 'eval', 'melhorias'])
+def test_onda3_write_registrado(name):
+    """Os subcomandos WRITE estao registrados (SUBCOMMANDS+HANDLERS) e sao callable."""
+    m = _load(name)
+    write = ONDA3_WRITE[name]
+    assert write <= set(m.SUBCOMMANDS), f"{name}: faltam WRITE em SUBCOMMANDS: {write - set(m.SUBCOMMANDS)}"
+    assert write <= set(m.HANDLERS), f"{name}: faltam WRITE em HANDLERS: {write - set(m.HANDLERS)}"
+    for sub in write:
+        assert callable(m.HANDLERS[sub])
+
+
+@pytest.mark.parametrize('name', ['loop', 'eval', 'melhorias'])
+def test_onda3_write_exige_confirm(name):
+    """Todo subcomando WRITE declara --confirm (sem ele = dry-run)."""
+    m = _load(name)
+    for sub in ONDA3_WRITE[name]:
+        argnames = {a['name'] for a in m.SUBCOMMANDS[sub]['args']}
+        assert '--confirm' in argnames, f"{name}.{sub} (WRITE) deveria declarar --confirm"
+
+
+@pytest.mark.parametrize('name', ['loop', 'eval', 'melhorias'])
+def test_onda3_write_guardado_por_confirm(name):
+    """Toda escrita (commit/dispatch) esta atras do guard `if not args.confirm:` (dry-run default).
+
+    Sem o guard, o handler escreveria mesmo em dry-run. Verificamos estruturalmente que cada
+    handler WRITE tem o gate de dry-run e que ele faz `return` antes de efetivar.
+    """
+    EFEITOS = ('session.commit(', 'run_directive_promotion_batch(', 'enqueue_eval_batch(', 'upsert_response(')
+    m = _load(name)
+    for sub in ONDA3_WRITE[name]:
+        fn = m.HANDLERS[sub]
+        src = inspect.getsource(fn)
+        code = '\n'.join(l for l in src.splitlines() if not l.lstrip().startswith('#'))
+        assert 'if not args.confirm:' in code, (
+            f"{name}.{sub} (WRITE) sem guard de dry-run `if not args.confirm:`"
+        )
+        guard_pos = code.index('if not args.confirm:')
+        efeito_positions = [code.find(e) for e in EFEITOS if code.find(e) != -1]
+        primeiro_efeito = min(efeito_positions) if efeito_positions else len(code)
+        # 1) o guard precede qualquer efeito colateral (commit/dispatch).
+        assert guard_pos < primeiro_efeito, (
+            f"{name}.{sub}: efeito colateral aparece ANTES do guard de dry-run"
+        )
+        # 2) o bloco dry-run faz `return` ANTES do efeito (senao escreveria em dry-run).
+        return_apos_guard = code.find('return', guard_pos)
+        assert 0 <= return_apos_guard < primeiro_efeito, (
+            f"{name}.{sub}: sem `return` no bloco dry-run antes do efeito (escreveria em dry-run)"
+        )

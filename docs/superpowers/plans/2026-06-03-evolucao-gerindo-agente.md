@@ -24,35 +24,35 @@ atualizado: 2026-06-03
 
 ## Como continuar (proxima sessao)
 
-> **Entrada de continuidade — leia isto primeiro.** Atualizado 2026-06-03 pos-Onda 3 fase 3a (READ).
+> **Entrada de continuidade — leia isto primeiro.** Atualizado 2026-06-03 pos-Onda 3 (fase 3a READ + 3b WRITE).
 
 **Estado atual**: Ondas 0/1/2 LIVE em PROD (deploy `dep-d8g31m3eo5us7381cep0` / `d0757d7d3`).
-**Onda 3 fase 3a (READ-first) FEITA** (commit local, ainda nao pushado): 3 scripts novos
-SOMENTE LEITURA — `loop.py` (directives/corrections/loop-health), `eval.py` (scores/cases),
-`melhorias.py` (list-open/show/intelligence-report). Cobertura: **45 testes ZERO-DB** + **33 snapshots**
-DB-bound (golden regravado cirurgicamente, 26 existentes intactos). Validado contra o banco local
-+ **cross-check PROD dos agregados** (funil 5 shadow / 81 legado / 0 ativa; eval 16 runs / 4 agentes /
-0 cases; 49 dialogos abertos; 5 intelligence reports). WRITE NAO exposto (dev-only na SKILL.md).
+**Onda 3 COMPLETA** (fase 3a READ + fase 3b WRITE, commits locais, NAO pushados):
+- 3a (READ): `loop` (directives/corrections/loop-health), `eval` (scores/cases),
+  `melhorias` (list-open/show/intelligence-report). Commit `0332b8f95`.
+- 3b (WRITE dev-only, dry-run default + `--confirm`): `loop` (approve/reject/promote-batch),
+  `eval` (review/run), `melhorias` (respond). **Gate TECNICO** em `can_use_tool`
+  (`permissions.py` `_classify_gerindo_write`) NEGA o WRITE pelo agente web/Teams.
+- Cobertura: **71 testes ZERO-DB** (54 skill + 17 gate) + **34 snapshots**. WRITE validado
+  end-to-end contra banco local (approve shadow->ativa, review, respond+cascade). Review
+  adversarial 3a (9 findings) + 3b (9 findings) — TODOS fechados.
 
-**Verificacoes desta sessao (perguntas do Rafael, todas confirmadas com fonte):**
-- **Cache do prompt NAO e comprometido pelo `approve`.** As diretrizes sao injetadas DINAMICAMENTE
-  pelo hook `UserPromptSubmit` (`hooks.py:1460` `additionalContext`), DEPOIS do prefixo estatico
-  cacheado (`client.py:1663`/`:377`). `memory_injection.py:428-431` documenta a intencao: nao por
-  memoria dinamica no system_prompt justamente para nao invalidar cache. Alinhado a Anthropic.
-- **Migration NAO falta.** PROD (`dpg-d13m38vfte5s738t6p50-a`) JA tem `directive_status` +
-  `error_signature`/`harmful_count`/`helpful_count` + indice `ix_agent_memories_user_errsig`
-  (migrations `2026_06_01_*` e `2026_06_02_*` rodaram). Acao do Rafael = ZERO.
-- **`debug_mode` nao deve ser reinventado** (Rafael tem razao): e so o transporte do bit admin
-  para a daemon thread das MCP tools (`permissions.py:86-98`); o subprocess CLI nem le ContextVar.
+**Verificacoes da sessao (perguntas do Rafael, confirmadas com fonte):**
+- **Cache do prompt NAO e comprometido pelo `approve`** — diretrizes injetadas DINAMICAMENTE via hook
+  `UserPromptSubmit` (`hooks.py:1460`), DEPOIS do prefixo estatico cacheado (`client.py:1663`/`:377`);
+  `memory_injection.py:428-431` documenta a intencao. Alinhado a Anthropic.
+- **Migration NAO falta** — PROD ja tem `directive_status` + Fase 3.1 + indice (acao Rafael = ZERO).
+- **`debug_mode` nao reinventado** — e so transporte do bit admin (`permissions.py:86-98`); o gate WRITE
+  usa allow-list/deny em `can_use_tool` (espelha `_classify_estoque_restricao`), NAO debug_mode.
 
-**Proximo: Onda 3 fase 3b — flywheel WRITE** (detalhe na secao [Ondas](#ondas)). Atras de `--confirm`,
-**dev-only** (Opcao A — NAO documentar WRITE na SKILL.md; o agente web so enxerga READ):
-1. `loop.approve` (shadow->ativa) — **ALTO RISCO** (muta o prompt vivo). Construir com PREVIEW
-   obrigatorio do `<do>` antes do flip. Ja desbloqueado (colunas em PROD; 5 shadows reais aguardando).
-2. `loop.reject`/`promote-batch`, `eval.review`/`run` (custo Haiku+Opus, aviso), `melhorias.respond`.
-3. **Gate P13** (so se WRITE for exposto ao agente web um dia): usar a allow-list de `can_use_tool`
-   (espelhar `_classify_estoque_restricao` + `ESTOQUE_RESTRICAO_ALLOWED_USER_IDS`, `permissions.py:808`),
-   NAO `debug_mode`. Dev-CLI ja e livre (nao passa por `can_use_tool`).
+**Gotchas fase 3b descobertos**: (a) `AgentMemory` NAO tem `reviewed_by` (so `reviewed_at`) — `AgentEvalCase`
+TEM. (b) `_will_inject` deve espelhar TODO o filtro de `_build_operational_directives`: flag
+`USE_OPERATIONAL_DIRECTIVES` + importance>=`MANDATORY_IMPORTANCE_THRESHOLD` + nivel-5 + `<prescricao>`/`DO:`
+(senao o preview mente). (c) correcoes->mandatory injetam via canal L1 `<user_rules>` (`USE_USER_RULES_CHANNEL`),
+INDEPENDENTE de `AGENT_OPERATIONAL_DIRECTIVES`. (d) `permissions.py` e exportado ao Teams.
+
+**Proximo: Onda 4** (observabilidade infra + seguranca + ontologia — P4/P10/P13/P11/P9) ou **canary REAL do
+WRITE em PROD** (apos push+deploy do Rafael; comecar por `promote-batch`/`approve` de 1 shadow com preview).
 
 **RE-LER antes de codar (anti-drift)**:
 - Esta secao + [Decisoes travadas](#decisoes-travadas) + [Ondas](#ondas) Onda 3 + [Gotchas](#gotchas).
@@ -176,16 +176,21 @@ local-vs-PROD. `melhorias.show` FORA do snapshot (shape exists/nao-exists, so co
 - **Cobertura**: 45 testes ZERO-DB + 33 snapshots DB-bound (golden regravado cirurgicamente, 26
   legados intactos). Validado local + cross-check PROD. SKILL.md/SCRIPTS.md atualizados (so READ).
 
-### Onda 3 fase 3b — flywheel WRITE (escrita total autorizada, dev-only) — PENDENTE
-- **loop.py**: `approve --confirm` (shadow->ativa, **ALTO RISCO** prompt vivo — PREVIEW do `<do>`),
-  `reject --confirm`, `promote-batch --confirm` (wrapper de
-  `directive_promotion_service.run_directive_promotion_batch:790`).
-- **eval.py**: `review --confirm` (ESCRITA `human_verdict`/`reviewed_by` — fecha gap UPDATE SQL manual,
-  `eval_runner.py:715-783`), `run --confirm` (dispara `eval_runner`, custo Haiku+Opus, aviso).
-- **melhorias.py**: `respond --confirm` sobre `agent_improvement_dialogue`. **Backing**:
-  `AgentImprovementDialogue.upsert_response:1334` (cascade p/ versao anterior) / rota PUT `/<id>/respond`
-  — NAO `improvement_suggester`. CUIDADO com o cascade silencioso de status.
-- **Gate**: dev-only (Opcao A). Se exposto ao agente web: allow-list em `can_use_tool` (NAO debug_mode).
+### Onda 3 fase 3b — flywheel WRITE (dev-only) — FEITA (2026-06-03)
+Padrao universal: **dry-run e o DEFAULT**; so escreve com `--confirm` (preview sem ele).
+- **loop.py**: `approve` (shadow->`ativa`, **ALTO RISCO** prompt vivo — preview com `_will_inject` fiel
+  ao filtro real + TOCTOU `with_for_update` + try/except commit), `reject` (->`despromovida`),
+  `promote-batch` (wrapper de `run_directive_promotion_batch:790`; preview do funil + flags incl.
+  `USE_USER_RULES_CHANNEL`). `AgentMemory` NAO tem `reviewed_by` — so `reviewed_at`.
+- **eval.py**: `review` (ESCRITA `human_verdict`/`reviewed_by` em `agent_eval_case` — fecha gap
+  `eval_runner.py:715-783`; aviso de sobrescrita), `run` (enqueue `enqueue_eval_batch`, custo Haiku+Opus,
+  gated `AGENT_EVAL_GATE`).
+- **melhorias.py**: `respond` via `AgentImprovementDialogue.upsert_response:1334` (cascade p/ v1; aviso de
+  sobrescrita de v2). Backing = MODELO + rota, NAO `improvement_suggester`.
+- **Gate TECNICO** (review 3b finding HIGH): `can_use_tool` `_classify_gerindo_write` (`permissions.py`)
+  NEGA o WRITE pelo agente web/Teams (Bash). Dev-CLI livre (nao passa por can_use_tool). Teste
+  `tests/agente/test_gerindo_write_gate.py`. `permissions.py` e exportado ao Teams.
+- Cobertura: 71 ZERO-DB + 34 snapshots; WRITE validado end-to-end contra banco local.
 
 ### Onda 4 — observabilidade infra + seguranca + ontologia
 - **P4**: `subagent-metrics` (metrics_dashboard_service, 11 endpoints, 63 metrics) + `subagent-validations`

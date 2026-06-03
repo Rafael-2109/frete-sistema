@@ -124,10 +124,11 @@ O que o usuario quer?
 |   |   |-- "intelligence report / serie"   -> intelligence-report
 ```
 
-> **Flywheel = somente LEITURA (Onda 3 fase 3a).** Os subcomandos de ESCRITA
-> (`approve` shadow->ativa, `reject`, `promote-batch`, `review`, `run`, `respond`)
-> sao **dev-only** e ainda NAO existem aqui — `approve` muta o prompt PROD em tempo
-> real (ALTO RISCO) e fica para a fase 3b (atras de `--confirm`).
+> **Flywheel: o AGENTE WEB so usa os subcomandos de LEITURA acima.** Os subcomandos de
+> ESCRITA (`approve` shadow->ativa, `reject`, `promote-batch`, `review`, `run`, `respond`)
+> existem em `loop.py`/`eval.py`/`melhorias.py` mas sao **DEV-ONLY** (operados pelo Claude Code
+> via CLI, atras de `--confirm`/dry-run). **NAO invoque WRITE pelo agente web** — `approve`
+> muta o prompt PROD em tempo real (ALTO RISCO). Params dos WRITE: ver `SCRIPTS.md` (dev).
 
 ## REFERENCIA RAPIDA
 

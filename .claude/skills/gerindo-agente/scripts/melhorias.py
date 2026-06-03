@@ -42,6 +42,19 @@ SUBCOMMANDS = {
         'help': 'Relatorio D7 mais recente + serie + top recomendacoes — custo $0',
         'args': [],
     },
+    # ── WRITE (fase 3b, DEV-ONLY) — dry-run e o DEFAULT; so escreve com --confirm ──
+    'respond': {
+        'help': '[WRITE] Responde uma sugestao (cria v2 claude_code, cascateia status). dry-run sem --confirm',
+        'args': [
+            {'name': '--key', 'type': str, 'required': True, 'help': 'suggestion_key (ex: IMP-2026-06-03-001)'},
+            {'name': '--status', 'type': str, 'required': True,
+             'help': 'responded|rejected|needs_revision|verified|closed'},
+            {'name': '--description', 'type': str, 'required': True, 'help': 'Texto da resposta'},
+            {'name': '--notes', 'type': str, 'default': None, 'help': 'implementation_notes opcional'},
+            {'name': '--files', 'type': str, 'default': None, 'help': 'affected_files separados por virgula'},
+            {'name': '--confirm', 'action': 'store_true', 'help': 'Efetiva a resposta (sem isso = preview)'},
+        ],
+    },
 }
 
 # Ordem de severidade para apresentacao (menor = mais grave).
@@ -270,15 +283,90 @@ def handle_intelligence_report(args):
         print(f"  [!] {w}")
 
 
+def _emit_write_error(command, data, msg, json_mode):
+    """Emite erro de WRITE de forma uniforme (envelope ok=False + texto)."""
+    success_output(command, data, json_mode=json_mode, errors=[msg])
+    if not json_mode:
+        print(f"ERRO: {msg}")
+
+
+def handle_respond(args):
+    """[WRITE] Responde uma sugestao do dialogo D8 (cria v2 'claude_code').
+
+    Backing: AgentImprovementDialogue.upsert_response (models.py:1334) — NAO improvement_suggester.
+    CASCADE: ao gravar a v2, o status da v1 (anterior) tambem e atualizado. dry-run mostra a
+    sugestao + aviso do cascade; --confirm grava + commita. v1 deve existir.
+    """
+    from app import db
+    from app.agente.models import AgentImprovementDialogue
+
+    status = (getattr(args, 'status', '') or '').strip().lower()
+    VALID = ('responded', 'rejected', 'needs_revision', 'verified', 'closed')
+    if status not in VALID:
+        _emit_write_error('respond', {'suggestion_key': args.key, 'applied': False},
+                          f"status invalido '{status}' (use {'|'.join(VALID)})", args.json_mode)
+        return
+
+    v1 = AgentImprovementDialogue.query.filter_by(suggestion_key=args.key, version=1).first()
+    if not v1:
+        _emit_write_error('respond', {'suggestion_key': args.key, 'applied': False},
+                          f"suggestion_key '{args.key}' nao encontrada (v1 ausente)", args.json_mode)
+        return
+
+    files = [f.strip() for f in (getattr(args, 'files', None) or '').split(',') if f.strip()] or None
+    existing_v2 = AgentImprovementDialogue.query.filter_by(suggestion_key=args.key, version=2).first()
+    preview = {
+        'suggestion_key': args.key,
+        'v1_title': v1.title, 'v1_category': v1.category, 'v1_status': v1.status,
+        'novo_status': status, 'v2_existente': existing_v2 is not None,
+        'affected_files': files or [],
+    }
+    warnings = ["CASCADE: gravar a v2 tambem atualiza o status da v1 (upsert_response)."]
+    if existing_v2 is not None:
+        warnings.append(f"ATENCAO: v2 ja existe (status={existing_v2.status}) — sera SOBRESCRITA.")
+
+    if not args.confirm:
+        data = {'dry_run': True, 'applied': False, 'preview': preview}
+        if args.json_mode:
+            success_output('respond', data, json_mode=True, warnings=warnings)
+            return
+        print(f"[DRY-RUN] respond key={args.key}:")
+        print(f"  v1: [{v1.category}] {truncate(v1.title or '', 90)} (status atual: {v1.status})")
+        print(f"  -> v2 (claude_code) status={status}")
+        for w in warnings:
+            print(f"  [!] {w}")
+        print("\n  Rode com --confirm para gravar a resposta.")
+        return
+
+    try:
+        AgentImprovementDialogue.upsert_response(
+            suggestion_key=args.key, version=2, author='claude_code', status=status,
+            description=args.description, implementation_notes=getattr(args, 'notes', None),
+            affected_files=files,
+        )
+        db.session.commit()
+    except ValueError as e:
+        db.session.rollback()
+        _emit_write_error('respond', {'suggestion_key': args.key, 'applied': False}, str(e), args.json_mode)
+        return
+
+    data = {'dry_run': False, 'applied': True, 'preview': preview}
+    if args.json_mode:
+        success_output('respond', data, json_mode=True, warnings=warnings)
+        return
+    print(f"OK: key={args.key} respondida (v2 claude_code, status={status}). v1 cascateada.")
+
+
 HANDLERS = {
     'list-open': handle_list_open,
     'show': handle_show,
     'intelligence-report': handle_intelligence_report,
+    'respond': handle_respond,
 }
 
 
 def main():
-    run_handler('Dialogo de melhoria (D8) + intelligence report (D7) do Agente Web (READ)',
+    run_handler('Dialogo de melhoria (D8) + intelligence report (D7) do Agente Web (READ + WRITE dev-only)',
                 SUBCOMMANDS, HANDLERS)
 
 

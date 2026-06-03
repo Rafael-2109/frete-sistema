@@ -38,6 +38,22 @@ SUBCOMMANDS = {
             {'name': '--status', 'type': str, 'default': None, 'help': 'Filtra por status: pass|fail|error (default: todos)'},
         ],
     },
+    # ── WRITE (fase 3b, DEV-ONLY) — dry-run e o DEFAULT; so escreve com --confirm ──
+    'review': {
+        'help': '[WRITE] Marca human_verdict de UM agent_eval_case (calibracao). dry-run sem --confirm',
+        'args': [
+            {'name': '--case-id', 'type': int, 'required': True, 'help': 'ID do agent_eval_case'},
+            {'name': '--verdict', 'type': str, 'required': True, 'help': 'agree|disagree (concorda/discorda do judge)'},
+            {'name': '--note', 'type': str, 'default': None, 'help': 'Nota livre opcional'},
+            {'name': '--confirm', 'action': 'store_true', 'help': 'Efetiva o veredito (sem isso = preview)'},
+        ],
+    },
+    'run': {
+        'help': '[WRITE] Enfileira eval_runner (CUSTO Haiku+Opus, 20-50min). dry-run sem --confirm',
+        'args': [
+            {'name': '--confirm', 'action': 'store_true', 'help': 'Enfileira de verdade na RQ agent_eval'},
+        ],
+    },
 }
 
 
@@ -206,14 +222,126 @@ def handle_cases(args):
         print(f"  [!] {w}")
 
 
+def _emit_write_error(command, data, msg, json_mode):
+    """Emite erro de WRITE de forma uniforme (envelope ok=False + texto)."""
+    success_output(command, data, json_mode=json_mode, errors=[msg])
+    if not json_mode:
+        print(f"ERRO: {msg}")
+
+
+def handle_review(args):
+    """[WRITE] Marca human_verdict de UM agent_eval_case. Fecha o gap do UPDATE manual.
+
+    dry-run: mostra o caso + verdict atual. --confirm: human_verdict/human_note/reviewed_by/
+    reviewed_at + commit. verdict deve ser agree|disagree (calibracao judge-vs-humano).
+    """
+    from app import db
+    from app.agente.models import AgentEvalCase
+    from app.utils.timezone import agora_utc_naive
+
+    verdict = (getattr(args, 'verdict', '') or '').strip().lower()
+    if verdict not in ('agree', 'disagree'):
+        _emit_write_error('review', {'case_id': args.case_id, 'applied': False},
+                          f"verdict invalido '{verdict}' (use agree|disagree)", args.json_mode)
+        return
+    case = AgentEvalCase.query.get(args.case_id)
+    if case is None:
+        _emit_write_error('review', {'case_id': args.case_id, 'applied': False},
+                          f"agent_eval_case id={args.case_id} nao encontrado", args.json_mode)
+        return
+
+    preview = {
+        'id': case.id, 'agent_name': case.agent_name, 'case_id': case.case_id,
+        'case_score': round(float(case.case_score), 4), 'status': case.status,
+        'human_verdict_atual': case.human_verdict, 'novo_verdict': verdict,
+    }
+    warnings = []
+    if case.human_verdict:
+        warnings.append(f"ATENCAO: sobrescrevendo verdict existente ('{case.human_verdict}' -> '{verdict}').")
+
+    if not args.confirm:
+        data = {'dry_run': True, 'applied': False, 'preview': preview}
+        if args.json_mode:
+            success_output('review', data, json_mode=True, warnings=warnings)
+            return
+        print(f"[DRY-RUN] review case_id={case.id} ({case.agent_name}/{case.case_id}):")
+        print(f"  score={preview['case_score']} status={case.status} | "
+              f"verdict atual={case.human_verdict or '-'} -> {verdict}")
+        for w in warnings:
+            print(f"  [!] {w}")
+        print("\n  Rode com --confirm para gravar o veredito.")
+        return
+
+    case.human_verdict = verdict
+    case.human_note = getattr(args, 'note', None)
+    case.reviewed_by = args.user_id
+    case.reviewed_at = agora_utc_naive()
+    try:
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        _emit_write_error('review', {'case_id': args.case_id, 'applied': False}, f"commit falhou: {e}", args.json_mode)
+        return
+    data = {'dry_run': False, 'applied': True, 'preview': preview}
+    if args.json_mode:
+        success_output('review', data, json_mode=True, warnings=warnings)
+        return
+    print(f"OK: case_id={case.id} human_verdict='{verdict}' (reviewed_by={args.user_id}).")
+    for w in warnings:
+        print(f"  [!] {w}")
+
+
+def handle_run(args):
+    """[WRITE] Enfileira o eval_runner (run_eval_batch) na RQ 'agent_eval'.
+
+    CUSTO REAL: ~105 chamadas Haiku + invokes Opus dos 4 subagentes (20-50min). Gated por
+    AGENT_EVAL_GATE (OFF -> {skipped: flag_off}). dry-run avisa o custo; --confirm enfileira.
+    Requer um worker processando a fila 'agent_eval' (Workers 1/2 em PROD).
+    """
+    from app.agente.config import feature_flags as ff
+    gate_on = bool(getattr(ff, 'AGENT_EVAL_GATE', False))
+
+    warnings = [
+        "CUSTO: ~105 chamadas Haiku + invokes Opus dos 4 subagentes (20-50min).",
+        "Requer worker na fila RQ 'agent_eval' (Workers 1/2 em PROD).",
+    ]
+    if not gate_on:
+        warnings.append("AGENT_EVAL_GATE=OFF -> enqueue_eval_batch retorna {skipped: flag_off} (no-op).")
+
+    if not args.confirm:
+        data = {'dry_run': True, 'enqueued': False, 'AGENT_EVAL_GATE': gate_on}
+        if args.json_mode:
+            success_output('run', data, json_mode=True, warnings=warnings)
+            return
+        print("[DRY-RUN] run (enfileirar eval_runner):\n")
+        print(f"  AGENT_EVAL_GATE={gate_on}")
+        for w in warnings:
+            print(f"  [!] {w}")
+        print("\n  Rode com --confirm para enfileirar na RQ 'agent_eval'.")
+        return
+
+    from app.agente.workers.eval_runner import enqueue_eval_batch
+    resultado = enqueue_eval_batch()
+    data = {'dry_run': False, 'enqueued': bool(resultado.get('enfileirado')), 'resultado': resultado,
+            'AGENT_EVAL_GATE': gate_on}
+    if args.json_mode:
+        success_output('run', data, json_mode=True, warnings=warnings)
+        return
+    print(f"OK: enqueue_eval_batch -> {resultado}")
+    for w in warnings:
+        print(f"  [!] {w}")
+
+
 HANDLERS = {
     'scores': handle_scores,
     'cases': handle_cases,
+    'review': handle_review,
+    'run': handle_run,
 }
 
 
 def main():
-    run_handler('Eval-gate offline (A3) do Agente Web (READ)', SUBCOMMANDS, HANDLERS)
+    run_handler('Eval-gate offline (A3) do Agente Web (READ + WRITE dev-only)', SUBCOMMANDS, HANDLERS)
 
 
 if __name__ == '__main__':

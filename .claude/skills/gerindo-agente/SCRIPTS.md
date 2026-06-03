@@ -80,6 +80,12 @@ atualizado: 2026-06-03
   - [list-open](#list-open)
   - [show](#show)
   - [intelligence-report](#intelligence-report)
+- [WRITE (dev-only — fase 3b)](#write-dev-only--fase-3b)
+  - [loop.approve / loop.reject](#loopapprove--loopreject)
+  - [loop.promote-batch](#looppromote-batch)
+  - [eval.review](#evalreview)
+  - [eval.run](#evalrun)
+  - [melhorias.respond](#melhoriasrespond)
 
 ## Argumentos Comuns (todos os scripts)
 
@@ -453,9 +459,76 @@ Relatorio D7 mais recente (`AgentIntelligenceReport.get_latest`) + serie por `re
 
 ---
 
+## WRITE (dev-only — fase 3b)
+
+> **NAO exposto ao agente web** (Opcao A — fora do decision tree da SKILL.md). Operado pelo
+> Claude Code via CLI. **`--dry-run` e o DEFAULT**: sem `--confirm`, o handler mostra o PREVIEW
+> do que mudaria e NAO escreve. Com `--confirm`, efetiva + commita. Todos validados end-to-end
+> contra o banco local (review fase 3b).
+>
+> **Gate TECNICO** (nao so a nota acima): `can_use_tool` (`app/agente/config/permissions.py`
+> `_classify_gerindo_write`) NEGA qualquer Bash do agente web/Teams que invoque um destes
+> subcomandos. O Claude Code CLI nao passa por `can_use_tool` -> dev livre. Cobertura:
+> `tests/agente/test_gerindo_write_gate.py`. Mutacoes em `permissions.py` sao exportadas ao Teams.
+
+### loop.approve / loop.reject
+| Argumento | Tipo | Obrigatorio | Default | Descricao |
+|-----------|------|-------------|---------|-----------|
+| `--id` | int | **Sim** | — | ID da AgentMemory (diretriz) |
+| `--confirm` | flag | Nao | false | Efetiva (sem isso = dry-run/preview) |
+
+`approve`: shadow -> **ativa** — **MUTA O PROMPT VIVO** (todos os usuarios). So aceita status `shadow`.
+O preview mostra o `<do>` + se a diretriz REALMENTE sera injetada (`will_inject` = nivel-5 + importance>=0.7 +
+nao-cold, espelha `_build_operational_directives`); avisa se for NO-OP de injecao. Seta `directive_status='ativa'`
++ `reviewed_at` (AgentMemory **nao tem** `reviewed_by` — o "quem" fica no log da CLI). `reject`: shadow/candidata
+-> `despromovida` (nao injetada).
+
+### loop.promote-batch
+| Argumento | Tipo | Obrigatorio | Default | Descricao |
+|-----------|------|-------------|---------|-----------|
+| `--lookback-hours` | int | Nao | 24 | Janela do batch em horas |
+| `--confirm` | flag | Nao | false | Executa (sem isso = preview do estado) |
+
+Roda `directive_promotion_service.run_directive_promotion_batch`. Cria shadows (PlanState/judge — nao
+injetadas) **E promove correcoes recorrentes a `mandatory`** (estas SAO injetadas via `<user_rules>`).
+Usa `--limit` (comum, default 20) como teto do batch. O batch commita internamente.
+
+### eval.review
+| Argumento | Tipo | Obrigatorio | Default | Descricao |
+|-----------|------|-------------|---------|-----------|
+| `--case-id` | int | **Sim** | — | ID do agent_eval_case |
+| `--verdict` | str | **Sim** | — | `agree` ou `disagree` (concorda/discorda do judge) |
+| `--note` | str | Nao | — | Nota livre |
+| `--confirm` | flag | Nao | false | Grava o veredito |
+
+Fecha o gap do UPDATE manual (`eval_runner.py:715-783`). Seta `human_verdict`/`human_note`/`reviewed_by`/`reviewed_at`.
+
+### eval.run
+| Argumento | Tipo | Obrigatorio | Default | Descricao |
+|-----------|------|-------------|---------|-----------|
+| `--confirm` | flag | Nao | false | Enfileira na RQ `agent_eval` |
+
+Chama `enqueue_eval_batch`. **CUSTO**: ~105 chamadas Haiku + invokes Opus dos 4 subagentes (20-50min).
+Gated por `AGENT_EVAL_GATE` (OFF -> `{skipped: flag_off}`). Requer worker na fila `agent_eval` (Workers 1/2 PROD).
+
+### melhorias.respond
+| Argumento | Tipo | Obrigatorio | Default | Descricao |
+|-----------|------|-------------|---------|-----------|
+| `--key` | str | **Sim** | — | suggestion_key (v1 deve existir) |
+| `--status` | str | **Sim** | — | responded\|rejected\|needs_revision\|verified\|closed |
+| `--description` | str | **Sim** | — | Texto da resposta |
+| `--notes` | str | Nao | — | implementation_notes |
+| `--files` | str | Nao | — | affected_files separados por virgula |
+| `--confirm` | flag | Nao | false | Grava a resposta |
+
+Cria v2 (`author='claude_code'`) via `AgentImprovementDialogue.upsert_response` (models.py:1334). **CASCADE**:
+gravar a v2 tambem atualiza o status da v1. Backing = MODELO + rota, **NAO** `improvement_suggester`.
+
+---
+
 ## Cobertura de testes
 
 | Arquivo | Tipo | O que cobre |
 |---------|------|-------------|
-| `tests/agente/test_gerindo_agente_skill.py` | ZERO-DB (importlib + inspect) | Contrato: paridade SUBCOMMANDS/HANDLERS, args, destrutivas exigem `--confirm`, envelope `success_output`, `format_datetime` TZ-safe, `run_handler`, ausencia de contexto-duplo em `padrao`. |
+| `tests/agente/test_gerindo_agente_skill.py` | ZERO-DB (importlib + inspect) | Contrato: paridade SUBCOMMANDS/HANDLERS, args, destrutivas exigem `--confirm`, envelope `success_output`, `format_datetime` TZ-safe, `run_handler`, ausencia de contexto-duplo em `padrao`. **Fase 3b**: handlers READ sem escrita; WRITE exigem `--confirm` e guardam a escrita atras de `if not args.confirm:` (efeito apos o guard). |
 | `tests/agente/test_gerindo_agente_snapshots.py` | DB-bound (subprocess), skippa sem `.env` | Rede de seguranca P12: trava o shape `--json` (esqueleto de tipos) de cada subcomando READ pelo caminho real `main()`/`run_handler`. Golden: `tests/agente/snapshots/gerindo_agente_json_shapes.json`. Regravar: `GERINDO_SNAPSHOT_RECORD=1 pytest ...`. |
