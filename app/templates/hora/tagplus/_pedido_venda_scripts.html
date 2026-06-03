@@ -660,5 +660,57 @@
     });
   }
 
+  // ----------------- Frente A: sincronia desconto por-escopo --------------
+  // wireDescontoSync opera DENTRO de um rootEl (querySelector, nao
+  // getElementById global) — permite N instancias sem colisao de ids. Usado
+  // nos collapses de edicao de item (#item-edit-<id>), um por item, ancorado
+  // no preco de tabela do item (data-preco-tabela). A criacao continua usando
+  // recalcular() global (ids f-*) — caminhos independentes, sem conflito.
+  function wireDescontoSync(rootEl, precoTabela) {
+    const elPct = rootEl.querySelector('.js-desconto-pct');
+    const elRs  = rootEl.querySelector('.js-desconto-rs');
+    const elVal = rootEl.querySelector('.js-valor');
+    if (!elPct && !elRs && !elVal) return null;
+    const st = { preco: precoTabela, lock: false };
+    function recalc(origem) {
+      if (st.lock) return;
+      st.lock = true;
+      try {
+        const preco = st.preco;
+        if (preco == null || preco <= 0) return;
+        let pct = elPct ? parseBR(elPct.value) : NaN;
+        let rs  = elRs ? parseBR(elRs.value) : NaN;
+        let val = elVal ? parseBR(elVal.value) : NaN;
+        if (origem === 'pct') {
+          if (isNaN(pct)) pct = 0;
+          pct = Math.max(0, Math.min(100, pct));
+          rs = arred2(preco * pct / 100); val = arred2(preco - rs);
+        } else if (origem === 'rs') {
+          if (isNaN(rs)) rs = 0;
+          rs = Math.max(0, Math.min(preco, rs));
+          pct = preco > 0 ? arred2(rs / preco * 100) : 0; val = arred2(preco - rs);
+        } else { // valor
+          if (isNaN(val)) val = preco;
+          val = Math.max(0, Math.min(preco, val));
+          rs = arred2(preco - val); pct = preco > 0 ? arred2(rs / preco * 100) : 0;
+        }
+        if (elPct) setBR(elPct, arred2(pct));
+        if (elRs)  setBR(elRs, rs);
+        if (elVal) setBR(elVal, val);
+      } finally { st.lock = false; }
+    }
+    if (elPct) elPct.addEventListener('change', () => recalc('pct'));
+    if (elRs)  elRs.addEventListener('change', () => recalc('rs'));
+    if (elVal) elVal.addEventListener('change', () => recalc('valor'));
+    return { recalc, setPreco(p) { st.preco = p; } };
+  }
+
+  // Cada collapse de edicao de item (#item-edit-<id>) tem sua propria
+  // sincronia, ancorada no preco de tabela do item (data-preco-tabela).
+  document.querySelectorAll('[data-item-edit-root]').forEach(function(root) {
+    const preco = parseBR(root.dataset.precoTabela);
+    wireDescontoSync(root, isNaN(preco) ? null : preco);
+  });
+
 })();
 </script>

@@ -42,19 +42,19 @@
             <i class="fas fa-info-circle text-muted ms-1"
                title="Definido em Cadastros → Modelos. Trazido automaticamente conforme o tipo da forma de pagamento (À vista vs A prazo)."></i>
           </label>
-          <input type="text" id="f-preco-tabela" class="form-control" readonly
+          <input type="text" id="f-preco-tabela" class="form-control js-preco-tabela" readonly
                  placeholder="—" tabindex="-1">
           <small class="text-muted" id="preco-sugerido-info">Escolha o modelo e a forma de pagamento.</small>
         </div>
         <div class="col-md-2">
           <label class="form-label">Desconto (%)</label>
           <input type="text" name="desconto_percentual" id="f-desconto-pct"
-                 class="form-control" inputmode="decimal" placeholder="0,00" value="0,00">
+                 class="form-control js-desconto-pct" inputmode="decimal" placeholder="0,00" value="0,00">
         </div>
         <div class="col-md-3">
           <label class="form-label">Desconto (R$)</label>
           <input type="text" id="f-desconto-rs"
-                 class="form-control" inputmode="decimal" placeholder="0,00" value="0,00">
+                 class="form-control js-desconto-rs" inputmode="decimal" placeholder="0,00" value="0,00">
           <small class="text-muted">Preencha % ou R$ — o outro e calculado automaticamente.</small>
         </div>
         <div class="col-md-4">
@@ -62,7 +62,7 @@
             <strong>Valor final (R$)</strong> <span class="text-danger">*</span>
           </label>
           <input type="text" name="valor" id="f-valor"
-                 class="form-control fw-bold" required inputmode="decimal" placeholder="0,00">
+                 class="form-control fw-bold js-valor" required inputmode="decimal" placeholder="0,00">
           <small class="text-muted">Preço de tabela menos desconto. Editavel.</small>
         </div>
       </div>
