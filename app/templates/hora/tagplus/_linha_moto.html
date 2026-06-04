@@ -25,7 +25,6 @@
 {% set is_existente = (modo_edicao and it) %}
 {# Item existente em edicao = chassi travado (so valor/desconto editam).
    Linha nova ou criacao = cascata completa. somente_leitura trava tudo. #}
-{% set chassi_travado = somente_leitura or is_existente %}
 <div class="moto-linha border rounded p-3 mb-2" data-row
      data-preco-tabela="{{ it.preco_tabela_referencia if it else '' }}">
   {% if modo_edicao %}

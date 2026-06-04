@@ -1483,6 +1483,10 @@ def _aplicar_itens(
         # guard, cairia no ramo "linha nova" e tentaria lockar o chassi.
         if item_id and item_id not in existentes:
             raise ValueError(f'item_id {item_id} nao pertence ao pedido #{venda.id}.')
+        # Valida o valor cedo: sem isto, Decimal(str(None)) levanta InvalidOperation
+        # (NAO subclasse de ValueError) e a rota retornaria HTTP 500 em vez de flash.
+        if entrada.get('valor_final') is None:
+            raise ValueError('Item sem valor final.')
         if item_id and item_id in existentes:
             # Item existente: so re-resolve preco se o valor_final mudou.
             # Sem troca de chassi (a rota nao troca chassi de item existente).

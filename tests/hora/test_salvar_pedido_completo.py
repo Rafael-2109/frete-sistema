@@ -79,3 +79,19 @@ def test_nao_remove_ultimo_item(db):
             pagamentos=[{'forma_pagamento_hora': 'DINHEIRO', 'valor': Decimal('0'),
                          'numero_parcelas': 1, 'aut_id': None}],
             usuario='t')
+
+
+def test_item_sem_valor_levanta_value_error(db):
+    """valor_final=None -> ValueError gracioso (NAO InvalidOperation/HTTP 500)."""
+    import pytest
+    venda, c1, c2, c3 = _setup_pedido_2_itens()
+    item_c1 = next(it for it in venda.itens if it.numero_chassi == c1)
+    item_c2 = next(it for it in venda.itens if it.numero_chassi == c2)
+    with pytest.raises(ValueError):
+        venda_service.salvar_pedido_completo(
+            venda_id=venda.id, header={},
+            itens=[{'item_id': item_c1.id, 'numero_chassi': c1, 'valor_final': None},
+                   {'item_id': item_c2.id, 'numero_chassi': c2, 'valor_final': Decimal('1000')}],
+            pagamentos=[{'forma_pagamento_hora': 'DINHEIRO', 'valor': Decimal('1000'),
+                         'numero_parcelas': 1, 'aut_id': None}],
+            usuario='t')
