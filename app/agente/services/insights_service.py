@@ -1767,6 +1767,66 @@ def _serialize_calibration_case(case) -> Dict[str, Any]:
     }
 
 
+def _enrich_calibration_cases(casos: list) -> None:
+    """Enriquece (in-place) os casos de calibracao com user_name + pergunta + resposta
+    do turno julgado, resolvendo case_id (=step_uid) -> AgentStep -> AgentSession.
+
+    Permite ao revisor humano avaliar SE O JUDGE ACERTOU vendo o turno real — antes so
+    havia a `evidence` resumida do proprio judge (truncada, sem usuario). Best-effort
+    (R1): cada caso degrada para os campos ausentes sem quebrar o painel. Batched:
+    1 query AgentStep + 1 Usuario + 1 AgentSession por sessao unica (<=20 casos).
+    """
+    if not casos:
+        return
+    try:
+        from app.agente.models import AgentStep, AgentSession
+        from app.auth.models import Usuario
+        from app.agente.workers.triage_shadow import _extract_user_message_text
+        from app.agente.workers.plan_verifier import _extract_assistant_response_text
+
+        step_uids = [c.get('case_id') for c in casos if c.get('case_id')]
+        if not step_uids:
+            return
+        steps = AgentStep.query.filter(AgentStep.step_uid.in_(step_uids)).all()
+        by_uid = {s.step_uid: s for s in steps}
+
+        user_ids = {s.user_id for s in steps if s.user_id}
+        nomes = {}
+        if user_ids:
+            for u in Usuario.query.filter(Usuario.id.in_(list(user_ids))).all():
+                nomes[u.id] = u.nome or u.email or f'user {u.id}'
+
+        sess_cache = {}
+        for c in casos:
+            st = by_uid.get(c.get('case_id'))
+            if st is None:
+                continue
+            c['user_name'] = nomes.get(st.user_id) or (
+                f'user {st.user_id}' if st.user_id else '—'
+            )
+            c['channel'] = getattr(st, 'channel', None)
+            sid = st.session_id
+            if not sid:
+                continue
+            if sid not in sess_cache:
+                sess_cache[sid] = AgentSession.query.filter_by(session_id=sid).first()
+            session = sess_cache[sid]
+            try:
+                turn_seq = int(str(c.get('case_id')).rsplit(':', 1)[-1])
+            except (ValueError, IndexError):
+                turn_seq = None
+            try:
+                c['pergunta'] = _extract_user_message_text(session, turn_seq)
+            except Exception:
+                pass
+            try:
+                c['resposta'] = _extract_assistant_response_text(session, turn_seq)
+            except Exception:
+                pass
+    except Exception as e:
+        logger.debug(f"[INSIGHTS] enrich calibration cases falhou (best-effort): {e}")
+
+
 def get_judge_calibration_panel(
     agent_name: Optional[str] = None,
     fraction: float = 0.1,
@@ -1816,6 +1876,7 @@ def get_judge_calibration_panel(
         ordenados = ordenados[:limit]
 
         casos = [_serialize_calibration_case(c) for c in ordenados]
+        _enrich_calibration_cases(casos)  # user_name + pergunta + resposta (avaliar o judge)
         n_prio = sum(1 for c in casos if c['prioritario'])
 
         total_unreviewed = (

@@ -254,13 +254,14 @@
             <thead>
               <tr>
                 <th>Caso (step)</th>
+                <th>Usuario</th>
                 <th class="text-center">Judge</th>
                 <th>Evidencia</th>
                 <th class="text-center">Judge acertou?</th>
               </tr>
             </thead>
             <tbody id="judgeCalibrationTable">
-              <tr><td colspan="4" class="text-center text-muted" style="padding:1rem;">Carregando...</td></tr>
+              <tr><td colspan="5" class="text-center text-muted" style="padding:1rem;">Carregando...</td></tr>
             </tbody>
           </table>
         </div>
@@ -848,17 +849,35 @@ function renderJudgeCalibration(data) {
       ? '<span class="badge bg-success">pass</span>'
       : '<span class="badge bg-secondary">fail</span>';
     const score = (c.case_score != null) ? (c.case_score * 100).toFixed(0) : '?';
+    const pergunta = c.pergunta || '(turno nao recuperado)';
+    const resposta = c.resposta || '(resposta nao recuperada)';
+    const evidencia = c.evidence || '-';
     return `
     <tr id="judgeCase-${c.id}">
-      <td style="padding:0.3rem;">${escHtml(truncate(c.case_id || '-', 28))}${prioBadge}</td>
+      <td style="padding:0.3rem;">${escHtml(truncate(c.case_id || '-', 24))}${prioBadge}</td>
+      <td style="padding:0.3rem; white-space:nowrap;">${escHtml(c.user_name || '—')}</td>
       <td class="text-center" style="padding:0.3rem;">${judgeBadge} ${score}</td>
-      <td style="padding:0.3rem;">${escHtml(truncate(c.evidence || '-', 160))}</td>
+      <td style="padding:0.3rem;">${escHtml(truncate(evidencia, 120))}
+        <button class="btn btn-sm btn-link p-0" style="font-size:0.8rem;" onclick="toggleJudgeDetail(${c.id})" title="Ver turno completo: pergunta, resposta e evidencia">ver</button>
+      </td>
       <td class="text-center" style="padding:0.3rem; white-space:nowrap;">
         <button class="btn btn-sm btn-success" onclick="submitJudgeVerdict(${c.id}, 'agree')" title="Judge acertou">acertou</button>
         <button class="btn btn-sm btn-danger" onclick="submitJudgeVerdict(${c.id}, 'disagree')" title="Judge errou">errou</button>
       </td>
+    </tr>
+    <tr id="judgeDetail-${c.id}" style="display:none;">
+      <td colspan="5" style="padding:0.6rem; background:var(--bg-light);">
+        <div style="margin-bottom:0.4rem;"><strong>Pergunta:</strong><div style="white-space:pre-wrap;">${escHtml(pergunta)}</div></div>
+        <div style="margin-bottom:0.4rem;"><strong>Resposta:</strong><div style="white-space:pre-wrap;">${escHtml(resposta)}</div></div>
+        <div><strong>Evidencia do judge:</strong><div style="white-space:pre-wrap;">${escHtml(evidencia)}</div></div>
+      </td>
     </tr>`;
   }).join('');
+}
+
+function toggleJudgeDetail(caseId) {
+  const row = document.getElementById('judgeDetail-' + caseId);
+  if (row) row.style.display = (row.style.display === 'none') ? 'table-row' : 'none';
 }
 
 async function submitJudgeVerdict(caseId, verdict) {
