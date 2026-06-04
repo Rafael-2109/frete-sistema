@@ -4,7 +4,7 @@ from app.hora.services import venda_service
 
 
 def test_helpers_existem_e_nao_comitam(db):
-    for nome in ('_aplicar_header', '_aplicar_pagamentos'):
+    for nome in ('_aplicar_header', '_aplicar_pagamentos', '_aplicar_itens'):
         fn = getattr(venda_service, nome, None)
         assert fn is not None, f'helper {nome} ausente'
         src = inspect.getsource(fn)

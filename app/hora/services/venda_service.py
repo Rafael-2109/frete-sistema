@@ -1478,6 +1478,11 @@ def _aplicar_itens(
     # 2) Atualizar existentes + criar novos.
     for entrada in itens:
         item_id = entrada.get('item_id')
+        # Defesa em profundidade: item_id preenchido que NAO pertence a esta venda
+        # e payload invalido (o front so envia item_id de itens reais). Sem este
+        # guard, cairia no ramo "linha nova" e tentaria lockar o chassi.
+        if item_id and item_id not in existentes:
+            raise ValueError(f'item_id {item_id} nao pertence ao pedido #{venda.id}.')
         if item_id and item_id in existentes:
             # Item existente: so re-resolve preco se o valor_final mudou.
             # Sem troca de chassi (a rota nao troca chassi de item existente).
