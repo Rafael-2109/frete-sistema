@@ -4,7 +4,7 @@ camada: L1
 sot_de: —
 hub: docs/superpowers/plans/INDEX.md
 superseded_by: —
-atualizado: 2026-06-03
+atualizado: 2026-06-04
 -->
 # Plans — indice
 > **Papel:** mapa dos planos de implementacao. So ponteiros.
@@ -56,3 +56,4 @@ atualizado: 2026-06-03
 - [PAD-A Onda 4g — SSW + SELAGEM (registro de execucao)](2026-06-03-pad-a-onda-4g-ssw-selagem.md) — ultima sub-onda: SSW 309 docs + global-zero + promove C1/C7/C8 a block
 - [consultando-venda-loja](2026-06-02-skill-consultando-venda-loja.md) — plano TDD da skill READ de vendas Lojas HORA (Onda F)
 - [carregando-motos-assai](2026-06-02-skill-carregando-motos-assai.md) — plano TDD da skill READ+WRITE de carregamento Assai (Onda F)
+- [Redesign consultar_sql — SQL-first](2026-06-04-redesign-consultar-sql-sql-first.md) — inverte a tool SQL do agente de tradutor NL→SQL (Generator Haiku que adivinha/trunca) para executor SQL-first + guard-rail determinístico; origem sessão #787
