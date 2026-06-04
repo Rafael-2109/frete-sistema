@@ -41,5 +41,15 @@ def test_ids_do_painel_existem_no_dom(html):
         'ruleAdhesionMandatory',
         'ruleAdhesionHarmful',
         'ruleAdhesionHelpful',
+        'ruleAdhesionContidas',
+        'ruleAdhesionReincidindo',
+        'ruleAdhesionPromovidas',
+        'ruleAdhesionTaxaContencao',
     ):
         assert f'id="{el_id}"' in html, f'falta elemento DOM id={el_id}'
+
+
+def test_contencao_wired(html):
+    # contencao retroativa: o JS le data.rule_adhesion.contencao e popula o DOM
+    assert 'ra.contencao' in html
+    assert 'contidas' in html

@@ -190,6 +190,13 @@
           <div style="flex:1; font-size:0.85rem;">
             <div>Correcoes totais: <strong id="ruleAdhesionTotal">0</strong></div>
             <div>Regras duras (mandatory): <strong id="ruleAdhesionMandatory">0</strong></div>
+            <div style="margin-top:0.4rem;">
+              Contencao:
+              <strong class="text-success" id="ruleAdhesionContidas">0</strong> contidas
+              &middot; <strong class="text-danger" id="ruleAdhesionReincidindo">0</strong> reincidindo
+              <span class="text-muted">(de <span id="ruleAdhesionPromovidas">0</span>
+              &middot; taxa <span id="ruleAdhesionTaxaContencao">0%</span>)</span>
+            </div>
             <div class="text-muted" style="margin-top:0.4rem;">
               Reincidencia pos-regra: <span id="ruleAdhesionHarmful">0</span>
               &middot; Injecoes limpas: <span id="ruleAdhesionHelpful">0</span>
@@ -755,6 +762,15 @@ function renderRuleAdhesion(ra) {
   const outcome = ra.outcome || {};
   setText('ruleAdhesionHarmful', outcome.harmful_total || 0);
   setText('ruleAdhesionHelpful', outcome.helpful_total || 0);
+
+  // contencao retroativa: quantas regras duras de fato contiveram o erro
+  const cont = ra.contencao || {};
+  setText('ruleAdhesionContidas', cont.contidas || 0);
+  setText('ruleAdhesionReincidindo', cont.reincidindo || 0);
+  setText('ruleAdhesionPromovidas', cont.promovidas || 0);
+  const elTaxa = document.getElementById('ruleAdhesionTaxaContencao');
+  if (elTaxa) elTaxa.textContent = (cont.taxa_contencao_pct || 0).toFixed(1) + '%';
+
   const unavail = document.getElementById('ruleAdhesionUnavailable');
   if (unavail) unavail.style.display = (outcome.available === false) ? 'block' : 'none';
 
