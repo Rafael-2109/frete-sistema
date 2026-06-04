@@ -721,6 +721,22 @@ Quatro frentes na tela unificada de Pedido de Venda (`pedido_venda_novo.html`). 
 
 ---
 
+## 21. Unificação multi-item do Pedido de Venda + "Salvar Pedido" único (FU-1/2/3/5) — 2026-06-04
+
+Resolve os follow-ups v2 da §20. Spec: `docs/superpowers/specs/2026-06-04-hora-pedido-venda-unificacao-multi-item-design.md`. Plano: `docs/superpowers/plans/2026-06-04-hora-pedido-venda-unificacao-multi-item.md`. **Sem migration.**
+
+- **FU-4 (não era código)**: o filtro modelo+cor do autocomplete já funcionava em PROD; o sintoma era **cache de browser** do `autocomplete.js` antigo (`Caddyfile` serve `/static/*` com `Cache-Control: immutable, max-age=604800` e a URL não tem `?v=`). Hard-refresh resolve. Risco sistêmico latente (qualquer mudança futura em JS/CSS fica invisível por 7d a quem já visitou) — cache-busting global fica como conserto opcional fora deste escopo.
+- **FU-1 — autocomplete lista ao clicar**: `autocomplete_service.chassis(permitir_vazio=)` + rota `/autocomplete/chassi` lê `vazio_ok=1`; `app/static/js/hora/autocomplete.js` ganhou `data-hora-open-on-focus` (focar/clicar com campo vazio lista o top-N). Opt-in (não afeta as ~20 telas). O chassi do componente de moto usa a flag.
+- **FU-3 — N motos na criação**: `criar_venda_manual(itens=[{numero_chassi, valor_final}, ...])` (retrocompatível: sem `itens`, usa `numero_chassi`/`valor_final` singulares). A rota `tagplus_pedido_venda_criar` lê `chassi[]`/`valor[]` via `_parse_itens_form`. Loop cria N `HoraVendaItem` + `RESERVADA` por item, `valor_total` = soma, status avaliado depois; 1 commit.
+- **FU-2 — área de motos idêntica nas 2 telas**: componente de **lista repetível** `_lista_motos.html` + `_linha_moto.html` (substituem `_componente_moto_desconto.html`, removido). Linha = só classes `.js-*` (sem ids `f-*` globais → sem colisão entre N linhas); item existente (edição) = chassi/modelo/cor read-only + hidden `item_id`, só valor/desconto editam; linha nova = cascata completa; `somente_leitura`/`ro_oper` trava tudo. JS por-linha (`wireLinhaMoto`, cascata + `wireDescontoSync` por escopo + add/remove); `atualizarSomaPagamentos` soma os `.js-valor` das linhas (não mais o `f-valor` global).
+- **FU-5 — um único "Salvar Pedido"**: novo `salvar_pedido_completo(venda_id, header, itens, pagamentos, usuario)` **reconcilia** numa transação compondo helpers **flush-only** `_aplicar_header` / `_aplicar_itens` (diff add/remove/update; `DEVOLVIDA`/`RESERVADA` + lock; guard "não remove o último") / `_aplicar_pagamentos`, com **1 commit**. Itens só em COTAÇÃO; pagamentos+`valor_total`+status só em INCOMPLETO/COTAÇÃO (não derruba CONFIRMADO+). **Corrige o gap itens↔pagamentos** (status reavaliado numa passada). Gotcha: `db.session.expire(venda, ['itens'])` após `_aplicar_itens` — a coleção em memória não reflete `delete()`/`add()` via session, sem isso o `sum()` somava estale. Rota `POST /vendas/<id>/salvar` (`vendas_salvar_pedido`); a tela de edição vira **um** form `#form-pedido-venda` → `vendas_salvar_pedido` (mesmo id da criação — branches exclusivas).
+- **Rotas granulares deprecadas** (decisão do dono): `vendas_editar`, `vendas_pagamentos_editar`, `vendas_item_adicionar/remover/editar` permanecem registradas (sem link na UI) — só os forms saíram do template; cleanup futuro. As funções de service `editar_venda`/`editar_pagamentos`/`adicionar_item_pedido`/etc. seguem (wrappers `helper + commit`; usadas por testes).
+- **Peças**: ficam inline (fora do v1; `venda_adicionar_item_peca`/`remover` AJAX).
+
+**Testes**: `test_criar_venda_multi_item`, `test_parse_itens_form`, `test_helpers_flush_only`, `test_salvar_pedido_completo`, `test_parse_form_edicao` (+ regressão `test_pedido_workflow`/`test_pedido_venda_editar_item`/`test_autocomplete_chassi_disponivel`) — 38 verdes. Validação comportamental no browser **não** executada nesta entrega (a pedido); Jinja compila + `node --check` no JS.
+
+---
+
 ## Onboarding Tours (2026-05-08)
 
 Tours guiados in-app via Driver.js para usuarios novos.
