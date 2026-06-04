@@ -14,6 +14,7 @@ atualizado: 2026-06-03
 - [HORA — Desconsiderar moto de NF de compra](2026-06-03-hora-desconsiderar-moto-nf-design.md) — flag reversível por item: tira do estoque/recebimento e remove a HoraMoto, valida não-em-pedido/não-recebido
 - [HORA — Unificar tela de Pedido de Venda + filtro loja/vendedor + fix desconto](2026-06-03-hora-unificar-pedido-venda-design.md) — tela "Novo pedido" vira única (cria+edita, remove venda_detalhe); critério loja/vendedor por usuário; fix drift de centavos no desconto
 - [HORA — Pedido de Venda: editar item (moto travada), Enter=Próximo, chassi autocomplete + regressões](2026-06-03-hora-pedido-venda-edicao-autocomplete-design.md) — editar moto só ajusta desconto/valor (trocar = remover+readicionar); Enter avança campo; chassi vira autocomplete; restaura recursos CRÍTICOS+ALTOS perdidos na unificação
+- [HORA — Pedido de Venda: unificação multi-item das 2 telas + submit único (FU-2/3/5)](2026-06-04-hora-pedido-venda-unificacao-multi-item-design.md) — componente de lista de motos idêntico em criação e edição; N motos na criação; um único "Salvar Pedido" que reconcilia header+itens+pagamentos numa transação
 - [Simulador 3D de Carga de Motos — Design Spec](2026-04-03-simulador-carga-3d-design.md)
 - [Reforma Modulo Pessoal — Controle Financeiro](2026-04-05-pessoal-controle-financeiro-design.md)
 - [Design — Features SDK Claude Agent 0.1.60](2026-04-16-agent-sdk-0160-features-design.md)
