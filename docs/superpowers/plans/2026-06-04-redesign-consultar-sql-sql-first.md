@@ -139,3 +139,38 @@ Por que adiciona valor (não é só remover): aproveita o modelo forte (consumid
 1. **Caminho "SQL → Excel" de 1ª classe?** Hoje `exportar.py` só lê stdin (`:296`). Opções: (a) deixar o agente compor `consultar_sql` (SQL-first) → `exportar.py` via stdin (suficiente após este redesign); (b) um modo `consultar_sql --export=excel` que já materializa o arquivo. Recomendado começar por (a); avaliar (b) se a composição via stdin ainda for atrito.
 2. **Aposentar o Evaluator (Haiku)?** Sem o Generator, o Evaluator perde o propósito principal (corrigir o adivinhador). Decidir se vira "corretor opcional do SQL do agente" (questionável — o Opus já é melhor) ou se é removido após o canary. Recomendado: manter inerte atrás da flag e remover na limpeza pós-canary.
 3. **Escopo da flag**: por-usuário (admin primeiro) vs global shadow. Recomendado shadow→admin→geral.
+
+---
+
+## Implementacao entregue (2026-06-04) + decisoes resolvidas
+
+Branch `feat/agente-sql-first` (worktree), TDD, flag OFF default. Decisoes em aberto resolvidas no inicio: **#1 = (a)** compor `consultar_sql` SQL-first -> `exportar.py` via stdin (NAO tocar `exportar.py` agora); **#2 = manter Evaluator inerte** atras da flag (no SQL-first pula Generator E Evaluator), remover na limpeza pos-canary; **#3 = flag unica multivalor** `SQL_AGENT_SQL_FIRST in {off,shadow,admin,on}`.
+
+| Task | Entrega |
+|---|---|
+| 1 | `looks_like_raw_sql` + `normalize_sql_candidate` (puras; guard anti-NL nao-ASCII fora de literal) |
+| 2+3 | branch SQL-first em `run(sql_first_mode)`: executa literal; guard-rail deterministico bloqueia so' `campo_inexistente` e devolve o schema REAL (campos + query_hints) |
+| 4 | `CONSULTAR_SQL_DESCRIPTION` (factual "quando habilitado") + `system_prompt.md` (nudge canary-safe) |
+| 5 | regra 13 (contas a receber vencidas) durable em `schema.json` (merge — nao e' regenerado) |
+| 6 | `resolve_sql_first_mode(is_admin)` em `feature_flags.py` + wiring na tool |
+| 7 | repro #787 deterministica (CTE complexa sobrevive literal, sem ROUND/reescrita) |
+
+Cobertura: `tests/agente/test_text_to_sql_sql_first.py` (56 testes deterministicos, sem DB/LLM via Generator/Executor monkeypatched). Flag OFF = baseline pytest preservado.
+
+## Runbook de canary (PROD, via env `SQL_AGENT_SQL_FIRST`)
+
+> Avanco controlado por env var (lido FRESH a cada request em `resolve_sql_first_mode` — nao precisa rebuild). Reverter = voltar o valor.
+
+1. **OFF (merge inicial)**: `SQL_AGENT_SQL_FIRST` ausente/`off`. Zero mudanca de comportamento (so' a description/system_prompt mudam, factuais).
+2. **shadow** (`=shadow`): TODOS observam. Buscar nos logs Render `[SQL_FIRST] shadow:` — mede taxa de `raw_sql` detectado e `would_block`. Sem mudanca de comportamento. Janela 24-48h.
+3. **admin** (`=admin`): admins (`USUARIOS_SQL_ADMIN`={1,55,62}) recebem SQL-first REAL; demais ficam em shadow. Validar com Rafael (user 1) o cenario #787 real (relatorio motos HORA): a CTE deve rodar literal, sem improviso Bash. Conferir `[SQL_FIRST] Executando SQL literal`.
+4. **on** (`=on`): geral. Monitorar `[SQL_FIRST] BLOQUEADO por campo inexistente` (taxa de feedback de schema) e erros do executor.
+
+**O que observar**: `would_block` alto em shadow = schema JSON possivelmente desatualizado (regenerar) OU agente errando campos (o feedback resolve). Fallback NL nao e' silenciado (a entrada que NAO e SQL cai no Generator normalmente).
+
+**Validacao manual #787 (read-only PROD)**: com `admin`/`on`, pedir ao agente o relatorio de motos HORA em estoque + pedido + NF de compra; confirmar que resolve via `consultar_sql` (SQL-first, CTE literal) e NAO via `Bash python -c`.
+
+## Backlog pos-canary
+- Remover o Evaluator (Decisao #2) apos `on` estabilizado.
+- Reavaliar Decisao #1 (b) (`consultar_sql --export=excel`) se compor via stdin ainda for atrito.
+- P4-P7 do roadmap (idioma/descoberta-schema, detector de frustracao, summary enganoso, verifier de entrega) — ver `2026-06-04-roadmap-correcoes-agente-787.md`.

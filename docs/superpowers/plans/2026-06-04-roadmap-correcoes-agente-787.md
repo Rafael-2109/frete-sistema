@@ -28,9 +28,8 @@ atualizado: 2026-06-04
 
 ## Como iniciar a próxima sessão
 
-1. **Foco primário: Fix B** (redesign SQL-first da tool `consultar_sql`). Abrir e executar o plano:
-   `docs/superpowers/plans/2026-06-04-redesign-consultar-sql-sql-first.md` (TDD, flag OFF + canary).
-2. **Não esquecer P4–P7:** são correções independentes do agente, cada uma pequena. Atacar após o Fix B, ou conforme a sua prioridade. Cada item abaixo já traz a evidência (arquivo:linha / id) para não redescobrir.
+1. ~~**Foco primário: Fix B**~~ ✅ **ENTREGUE** (2026-06-04, branch `feat/agente-sql-first`, flag `SQL_AGENT_SQL_FIRST` OFF, 56 testes). Runbook de canary + decisoes resolvidas no proprio plano: `docs/superpowers/plans/2026-06-04-redesign-consultar-sql-sql-first.md`.
+2. **Próxima sessão: P4–P7** — correções independentes do agente, cada uma pequena. Cada item abaixo já traz a evidência (arquivo:linha / id) para não redescobrir.
 3. Regra: cada fix em PR próprio, flag/canary quando muda comportamento, teste antes (TDD).
 
 ## Roadmap — status dos 7 achados
@@ -38,8 +37,8 @@ atualizado: 2026-06-04
 | ID | Achado | Natureza | Status | Onde resolver |
 |----|--------|----------|--------|---------------|
 | **P1** | Excel "vazio" no download (TMPDIR mismatch) | I/O — causa-raiz | ✅ **FEITO** (origin/main `788f76f07`, deploy `dep-d8gqa8mrnols73cmjrng`) | — |
-| **P2** | `mcp__sql` reescreve/trunca/alucina o SQL do agente | Ferramental | 🔜 **PRÓXIMO** | Fix B (doc dedicado) |
-| **P3** | Sem caminho de 1ª classe "SQL complexo → Excel" | Ferramental | 🔜 **PRÓXIMO** | Fix B (Decisão em aberto #1) |
+| **P2** | `mcp__sql` reescreve/trunca/alucina o SQL do agente | Ferramental | ✅ **ENTREGUE** (branch `feat/agente-sql-first`, SQL-first atrás de `SQL_AGENT_SQL_FIRST` OFF + canary) | Fix B (doc dedicado) |
+| **P3** | Sem caminho de 1ª classe "SQL complexo → Excel" | Ferramental | ✅ **RESOLVIDO via Decisão #1 (a)** — agente compõe `consultar_sql` SQL-first → `exportar.py` via stdin (sem improviso Bash) | Fix B (Decisão em aberto #1) |
 | **P4** | Agente escreve em inglês no meio do PT-BR + explora tabelas erradas | Prompt/descoberta | 📋 backlog | `system_prompt.md` + catálogo/schema HORA |
 | **P5** | `frustration_score=0` numa reclamação explícita | Sensor (E1) | 📋 backlog | `services/sentiment_detector.py` |
 | **P6** | Summary afirma sucesso (gerado antes da falha) | Sensor (E) | 📋 backlog | `services/session_summarizer.py` |

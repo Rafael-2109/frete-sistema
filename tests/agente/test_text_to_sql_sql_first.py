@@ -376,3 +376,67 @@ class TestToolDescription:
         assert "sql-first" in d or "sql first" in d
         # contrato: aceita SQL pronto + devolve schema real se errar campo
         assert "schema" in d
+
+
+# =====================================================================
+# Task 7 — Repro #787: CTE complexa do agente sobrevive LITERAL (sem improviso)
+# =====================================================================
+# Espelha estruturalmente o caso #787 ("relatorio motos HORA em estoque + pedido +
+# NF"): o agente escreveu o SQL correto (CTE multi-etapa) e o pipeline o
+# descartava/degradava (trocava coluna, adicionava ROUND, truncava em 500 tokens).
+# Determinístico (sem LLM/DB) — sua regra "evals LLM caros -> pytest".
+
+_CTE_787_LIKE = """WITH pendentes AS (
+    SELECT cod_produto, SUM(qtd_saldo) AS total_separado
+    FROM separacao
+    WHERE sincronizado_nf = False
+    GROUP BY cod_produto
+),
+faturado AS (
+    SELECT origem, COUNT(*) AS nfs
+    FROM faturamento_produto
+    WHERE status_nf = 'Lancado'
+    GROUP BY origem
+)
+SELECT p.cod_produto, p.total_separado, cp.num_pedido
+FROM pendentes p
+JOIN carteira_principal cp ON cp.cod_produto = p.cod_produto
+WHERE cp.ativo = True
+LIMIT 50"""
+
+
+class TestRepro787:
+    def test_complex_cte_detected_as_raw_sql(self):
+        assert T.looks_like_raw_sql(_CTE_787_LIKE) is True
+
+    def test_complex_cte_passes_safety(self):
+        sv = T.SQLSafetyValidator(blocked_tables=set())
+        is_safe, concerns = sv.validate(_CTE_787_LIKE)
+        assert is_safe is True, concerns
+
+    def test_complex_cte_not_blocked_by_deterministic_validator(self):
+        # Campos qualificados reais (cp.* em carteira_principal) -> sem campo_inexistente.
+        sp = T.SchemaProvider()
+        tables = T.extract_tables_from_sql(_CTE_787_LIKE)
+        det = T.SQLDeterministicValidator(sp).validate(_CTE_787_LIKE, tables, admin_mode=False)
+        campo = [i for i in det.get("issues", []) if str(i).startswith("campo_inexistente:")]
+        assert campo == [], campo
+
+    def test_complex_cte_runs_literal_without_generator(self, pipeline, monkeypatch):
+        captured = {}
+        monkeypatch.setattr(pipeline.generator, "generate", _boom_generator)
+
+        def fake_exec(sql, read_write=False):
+            captured["sql"] = sql
+            return ([{"cod_produto": "X", "total_separado": 10, "num_pedido": "VCD1"}],
+                    ["cod_produto", "total_separado", "num_pedido"])
+
+        monkeypatch.setattr(pipeline.executor, "execute", fake_exec)
+        res = pipeline.run(_CTE_787_LIKE, sql_first_mode="on")
+        assert res["sucesso"] is True
+        # Executado LITERAL: identico ao enviado (sem ROUND forcado, sem reescrita,
+        # sem truncamento, sem trocar coluna) — exatamente o que a #787 quebrava.
+        assert captured["sql"] == _CTE_787_LIKE
+        assert "ROUND" not in captured["sql"]
+        assert res["etapas"].get("sql_first") is True
+        assert res["etapas"].get("sql_first_blocked") is None
