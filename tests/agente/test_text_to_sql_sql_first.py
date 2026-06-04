@@ -101,3 +101,155 @@ class TestLooksLikeRawSqlNegative:
     def test_returns_real_bool(self):
         assert T.looks_like_raw_sql("SELECT * FROM t") is True
         assert T.looks_like_raw_sql("ola") is False
+
+
+# =====================================================================
+# Task 2 — Branch SQL-first em run() (Generator/Executor monkeypatched)
+# =====================================================================
+
+def _boom_generator(*args, **kwargs):
+    raise AssertionError("Generator NAO deveria ser chamado em SQL-first")
+
+
+@pytest.fixture(scope="module")
+def pipeline():
+    # Instancia o pipeline (so' carrega schemas JSON — sem DB, sem LLM).
+    return T.TextToSQLPipeline()
+
+
+class TestSqlFirstBranch:
+    def test_off_mode_uses_generator(self, pipeline, monkeypatch):
+        calls = {"gen": 0}
+
+        def fake_gen(q, catalog_text_override=None):
+            calls["gen"] += 1
+            return "SELECT cod_produto FROM carteira_principal LIMIT 5"
+
+        monkeypatch.setattr(pipeline.generator, "generate", fake_gen)
+        monkeypatch.setattr(pipeline.executor, "execute", lambda sql, read_write=False: ([], ["cod_produto"]))
+        res = pipeline.run("SELECT cod_produto FROM carteira_principal LIMIT 5", sql_first_mode="off")
+        # OFF: comportamento atual — a "pergunta" (mesmo SQL) passa pelo Generator
+        assert calls["gen"] == 1
+        assert res["etapas"].get("sql_first") is not True
+
+    def test_on_mode_raw_sql_skips_generator_executes_literal(self, pipeline, monkeypatch):
+        calls = {"gen": 0}
+        captured = {}
+
+        def fake_gen(q, catalog_text_override=None):
+            calls["gen"] += 1
+            return "SELECT 999 FROM outra"
+
+        def fake_exec(sql, read_write=False):
+            captured["sql"] = sql
+            captured["rw"] = read_write
+            return ([{"cod_produto": "ABC"}], ["cod_produto"])
+
+        monkeypatch.setattr(pipeline.generator, "generate", fake_gen)
+        monkeypatch.setattr(pipeline.executor, "execute", fake_exec)
+        literal = "SELECT cod_produto FROM carteira_principal WHERE ativo = True LIMIT 5"
+        res = pipeline.run(literal, sql_first_mode="on")
+        assert calls["gen"] == 0                  # Generator NAO chamado
+        assert res["sucesso"] is True
+        assert captured["sql"].startswith("SELECT cod_produto FROM carteira_principal")
+        assert res["sql"] == literal              # executado LITERAL (sem reescrita)
+        assert captured["rw"] is False            # nao-admin -> read-only
+        assert res["etapas"].get("sql_first") is True
+
+    def test_on_mode_strips_fences_before_executing(self, pipeline, monkeypatch):
+        captured = {}
+        monkeypatch.setattr(pipeline.generator, "generate", _boom_generator)
+        monkeypatch.setattr(pipeline.executor, "execute",
+                            lambda sql, read_write=False: captured.__setitem__("sql", sql) or ([], []))
+        res = pipeline.run("```sql\nSELECT cod_produto FROM carteira_principal\n```", sql_first_mode="on")
+        assert res["sucesso"] is True
+        assert captured["sql"] == "SELECT cod_produto FROM carteira_principal"
+
+    def test_on_mode_natural_language_falls_back_to_generator(self, pipeline, monkeypatch):
+        calls = {"gen": 0}
+
+        def fake_gen(q, catalog_text_override=None):
+            calls["gen"] += 1
+            return "SELECT cod_produto FROM carteira_principal LIMIT 5"
+
+        monkeypatch.setattr(pipeline.generator, "generate", fake_gen)
+        monkeypatch.setattr(pipeline.executor, "execute", lambda sql, read_write=False: ([], ["cod_produto"]))
+        res = pipeline.run("Quais produtos da carteira estao pendentes?", sql_first_mode="on")
+        assert calls["gen"] == 1                   # NL -> fallback Generator
+        assert res["etapas"].get("sql_first") is not True
+
+    def test_on_mode_admin_dml_executes_read_write(self, pipeline, monkeypatch):
+        captured = {}
+        monkeypatch.setattr(pipeline.generator, "generate", _boom_generator)
+
+        def fake_exec(sql, read_write=False):
+            captured["rw"] = read_write
+            captured["sql"] = sql
+            return ([], [])
+
+        monkeypatch.setattr(pipeline.executor, "execute", fake_exec)
+        res = pipeline.run(
+            "UPDATE cadastro_palletizacao SET tipo_materia_prima = 'MP' WHERE cod_produto = '1'",
+            sql_first_mode="on", admin_mode=True,
+        )
+        assert res["sucesso"] is True
+        assert captured["rw"] is True              # admin -> read_write
+        assert res["etapas"].get("sql_first") is True
+
+    def test_shadow_mode_logs_but_uses_generator(self, pipeline, monkeypatch):
+        calls = {"gen": 0}
+
+        def fake_gen(q, catalog_text_override=None):
+            calls["gen"] += 1
+            return "SELECT cod_produto FROM carteira_principal LIMIT 5"
+
+        monkeypatch.setattr(pipeline.generator, "generate", fake_gen)
+        monkeypatch.setattr(pipeline.executor, "execute", lambda sql, read_write=False: ([], ["cod_produto"]))
+        res = pipeline.run("SELECT cod_produto FROM carteira_principal LIMIT 5", sql_first_mode="shadow")
+        # SHADOW: observa (registra etapa) mas NAO muda comportamento (Generator roda)
+        assert calls["gen"] == 1
+        assert res["etapas"].get("sql_first") is not True
+        assert "sql_first_shadow" in res["etapas"]
+
+    def test_default_mode_off_when_param_omitted(self, pipeline, monkeypatch):
+        calls = {"gen": 0}
+
+        def fake_gen(q, catalog_text_override=None):
+            calls["gen"] += 1
+            return "SELECT cod_produto FROM carteira_principal LIMIT 5"
+
+        monkeypatch.setattr(pipeline.generator, "generate", fake_gen)
+        monkeypatch.setattr(pipeline.executor, "execute", lambda sql, read_write=False: ([], ["cod_produto"]))
+        # Sem sql_first_mode -> default "off" -> Generator (zero regressao)
+        res = pipeline.run("SELECT cod_produto FROM carteira_principal LIMIT 5")
+        assert calls["gen"] == 1
+
+
+# =====================================================================
+# Task 3 — Feedback de schema do Deterministic Validator (campo_inexistente)
+# =====================================================================
+
+class TestSqlFirstSchemaFeedback:
+    def test_nonexistent_field_blocks_with_real_fields(self, pipeline, monkeypatch):
+        called = {"exec": 0}
+
+        def fake_exec(sql, read_write=False):
+            called["exec"] += 1
+            return ([], [])
+
+        monkeypatch.setattr(pipeline.executor, "execute", fake_exec)
+        monkeypatch.setattr(pipeline.generator, "generate", _boom_generator)
+        sql = "SELECT s.campo_que_nao_existe FROM separacao s LIMIT 5"
+        res = pipeline.run(sql, sql_first_mode="on")
+        assert res["sucesso"] is False
+        assert called["exec"] == 0                       # NAO executou SQL invalida
+        assert "campo_que_nao_existe" in res["aviso"]    # cita o campo errado
+        assert "qtd_saldo" in res["aviso"]               # devolve campos REAIS da separacao
+        assert res["etapas"].get("sql_first_blocked")
+
+    def test_valid_field_executes(self, pipeline, monkeypatch):
+        monkeypatch.setattr(pipeline.generator, "generate", _boom_generator)
+        monkeypatch.setattr(pipeline.executor, "execute",
+                            lambda sql, read_write=False: ([{"qtd_saldo": 10}], ["qtd_saldo"]))
+        res = pipeline.run("SELECT s.qtd_saldo FROM separacao s LIMIT 5", sql_first_mode="on")
+        assert res["sucesso"] is True

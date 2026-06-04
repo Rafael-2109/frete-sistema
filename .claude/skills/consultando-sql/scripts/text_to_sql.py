@@ -1765,6 +1765,51 @@ class TextToSQLPipeline:
         max_rows = int(os.getenv("TEXT_TO_SQL_MAX_ROWS", "500"))
         self.executor = SQLExecutor(timeout_seconds=timeout, max_rows=max_rows)
 
+    def _build_schema_feedback(self, tables_used: list, campo_issues: list, admin_mode: bool = False) -> str:
+        """Feedback SQL-first: campos REAIS das tabelas usadas + query_hints/regras.
+
+        Devolvido ao agente quando o validador deterministico detecta campo
+        inexistente, para ele corrigir numa UNICA nova chamada — em vez de
+        passar pelo Generator Haiku (que adivinha). Reusa get_tables_schema_text
+        (campos + Query Hints + Regras de negocio).
+        """
+        schema_text = self.schema_provider.get_tables_schema_text(
+            tables_used, omit_blocked=admin_mode
+        )
+        issues_txt = " | ".join(str(i) for i in campo_issues)
+        return (
+            "SQL nao executada: campo(s) inexistente(s) detectado(s) pelo validador "
+            f"de schema (deterministico, sem LLM): {issues_txt}\n\n"
+            "Use os campos REAIS abaixo (e as Query Hints / Regras de negocio) para "
+            "corrigir a SQL e chamar consultar_sql novamente com o SQL corrigido:\n\n"
+            f"{schema_text}"
+        )
+
+    def _log_sql_first_shadow(self, literal_sql: str, admin_mode: bool, result: dict) -> None:
+        """Canary SHADOW: registra o que o SQL-first FARIA, sem mudar comportamento.
+
+        Roda o validador deterministico sobre o SQL bruto detectado e loga a taxa
+        de issues (em especial campo inexistente -> would_block). NAO altera o
+        fluxo: a query segue para o Generator (comportamento atual). Best-effort.
+        """
+        try:
+            tbls = extract_tables_from_sql(literal_sql)
+            det = SQLDeterministicValidator(self.schema_provider).validate(
+                literal_sql, tbls, admin_mode
+            )
+            campo = [i for i in det.get("issues", []) if str(i).startswith("campo_inexistente:")]
+            result["etapas"]["sql_first_shadow"] = {
+                "would_block": bool(campo),
+                "tables": tbls,
+                "issues": det.get("issues", [])[:5],
+            }
+            logger.info(
+                f"[SQL_FIRST] shadow: raw_sql detectado, tabelas={tbls}, "
+                f"would_block={bool(campo)}, issues={det.get('issues', [])[:3]}"
+            )
+        except Exception as e:
+            logger.debug(f"[SQL_FIRST] shadow log falhou (ok): {e}")
+
     def run(
         self,
         question: str,
@@ -1773,12 +1818,13 @@ class TextToSQLPipeline:
         debug_schemas: dict = None,
         admin_mode: bool = False,
         session_id: str = None,
+        sql_first_mode: str = "off",
     ) -> dict:
         """
         Executa pipeline completo.
 
         Args:
-            question: Pergunta em linguagem natural
+            question: Pergunta em linguagem natural OU SQL bruto (ver sql_first_mode).
             extra_blocked_tables: Tabelas bloqueadas adicionais (per-request, thread-safe).
                 Usado para bloqueio condicional (ex: pessoal_* para usuários não autorizados).
             debug_unblock_tables: Tabelas a desbloquear (debug mode admin).
@@ -1788,6 +1834,16 @@ class TextToSQLPipeline:
                 prompt do Evaluator (resolve IMP-2026-05-13-004). Apos DML executado com
                 sucesso, grava no Redis para a proxima query da sessao.
             admin_mode: Se True, bypass safety validator e permite escrita.
+            sql_first_mode: Canary SQL-first (Fix B, sessao #787). Valores:
+                - "off" (default): comportamento atual 100% — toda "pergunta" passa
+                  pelo Generator Haiku (NL->SQL). Zero regressao.
+                - "shadow": se a pergunta JA' e' SQL bruto, registra (log + etapa)
+                  o que aconteceria, mas NAO muda o comportamento (Generator roda).
+                - "on": se a pergunta JA' e' SQL bruto (looks_like_raw_sql), executa
+                  LITERAL — pula Generator E Evaluator; o validador deterministico
+                  vira guard-rail (bloqueia campo inexistente devolvendo schema real).
+                O escopo por usuario (admin->geral) e' resolvido no chamador (tool),
+                que passa o modo efetivo aqui. Pipeline permanece puro (sem user_id).
 
         Returns:
             Dict com resultado ou erro
@@ -1817,13 +1873,27 @@ class TextToSQLPipeline:
 
         try:
             # =====================================================
+            # SQL-FIRST: o agente (Opus) ja' enviou SQL pronto? (Fix B, #787)
+            # =====================================================
+            sql_first_mode = (sql_first_mode or "off").lower()
+            is_sql_first = False
+            sql_first_literal = ""
+            if sql_first_mode in ("on", "shadow") and looks_like_raw_sql(question):
+                sql_first_literal = normalize_sql_candidate(question)
+                if sql_first_mode == "on":
+                    is_sql_first = True
+                else:
+                    # SHADOW: so' observa (cai no fluxo normal — Generator)
+                    self._log_sql_first_shadow(sql_first_literal, admin_mode, result)
+
+            # =====================================================
             # ETAPA 0: TEMPLATE RETRIEVAL — Buscar queries similares
             # =====================================================
             template_match = None
             few_shot_examples = []
             try:
                 from app.embeddings.config import SQL_TEMPLATE_SEARCH, EMBEDDINGS_ENABLED
-                if EMBEDDINGS_ENABLED and SQL_TEMPLATE_SEARCH:
+                if not is_sql_first and EMBEDDINGS_ENABLED and SQL_TEMPLATE_SEARCH:
                     from app.embeddings.service import EmbeddingService
                     t0 = time.time()
                     svc = EmbeddingService()
@@ -1850,8 +1920,23 @@ class TextToSQLPipeline:
             except Exception as e:
                 logger.debug(f"[TEXT_TO_SQL] Template retrieval falhou (ignorando): {e}")
 
+            # SQL-FIRST: o agente enviou SQL pronto -> executar LITERAL (skip
+            # Generator E Evaluator; sem reescrita, sem ROUND forcado, sem
+            # truncamento de 500 tokens). O validador deterministico (ETAPA 1c)
+            # vira o guard-rail de entrada.
+            if is_sql_first:
+                sql = sql_first_literal
+                result["sql_original"] = sql
+                result["sql"] = sql
+                result["etapas"]["sql_first"] = True
+                result["etapas"]["generator_ms"] = 0
+                logger.info(
+                    f"[SQL_FIRST] Executando SQL literal do agente "
+                    f"(skip Generator+Evaluator): {sql[:200]}"
+                )
+
             # Se template direto, pular Generator
-            if template_match:
+            elif template_match:
                 sql = template_match["sql_text"]
                 result["sql_original"] = sql
                 result["sql"] = sql
@@ -1942,6 +2027,36 @@ class TextToSQLPipeline:
                         "[TEXT_TO_SQL] Deterministic aprovou — skip Haiku evaluator"
                     )
 
+            # SQL-FIRST guard-rail: o validador deterministico (schema real, sem
+            # LLM) vira a barreira de entrada. Bloqueia SO em campo inexistente
+            # (alta confianca — schema JSON e' a fonte de verdade do projeto) e
+            # devolve os campos REAIS + query_hints, p/ o agente corrigir numa
+            # unica nova chamada. Issues de tipo/data NAO bloqueiam (evita
+            # re-introduzir o falso-positivo de data IMP-2026-05-13-003) — viram
+            # aviso e Postgres e' o arbitro final.
+            if is_sql_first:
+                campo_issues = [
+                    i for i in det_result.get("issues", [])
+                    if str(i).startswith("campo_inexistente:")
+                ]
+                if campo_issues:
+                    result["sucesso"] = False
+                    result["aviso"] = self._build_schema_feedback(
+                        tables_in_sql, campo_issues, admin_mode
+                    )
+                    result["etapas"]["sql_first_blocked"] = campo_issues
+                    logger.info(
+                        f"[SQL_FIRST] BLOQUEADO por campo inexistente: {campo_issues[:3]}"
+                    )
+                    result["tempo_total_ms"] = int((time.time() - start_time) * 1000)
+                    return result
+                if det_result.get("issues"):
+                    result["aviso"] = (
+                        "SQL-first: avisos do validador deterministico (nao "
+                        "bloqueantes): "
+                        + " | ".join(str(i) for i in det_result["issues"][:3])
+                    )
+
             # =====================================================
             # ETAPA 2: EVALUATOR — Validar com schema detalhado
             # =====================================================
@@ -1969,10 +2084,13 @@ class TextToSQLPipeline:
                 except Exception as e:
                     logger.debug(f"[TEXT_TO_SQL] Sem session_context (ok): {e}")
 
-            # Skip Haiku se determinismo aprovou (read-only nao-admin)
-            skip_haiku_evaluator = det_result.get("skip_haiku", False)
+            # Skip Haiku se determinismo aprovou (read-only nao-admin) OU SQL-first
+            # (o agente Opus ja' e' superior ao Haiku — nao degradar).
+            skip_haiku_evaluator = is_sql_first or det_result.get("skip_haiku", False)
             if skip_haiku_evaluator:
-                result["etapas"]["evaluator_skipped"] = "deterministic_approved"
+                result["etapas"]["evaluator_skipped"] = (
+                    "sql_first" if is_sql_first else "deterministic_approved"
+                )
                 evaluation = {
                     "approved": True,
                     "improved_sql": None,
@@ -2098,8 +2216,10 @@ class TextToSQLPipeline:
             # =====================================================
             # O evaluator pode não capturar o padrão "OR campo = inteiro" (defensivo do LLM).
             # Esta sanitização remove cláusulas OR redundantes com tipo incompatível.
-            sql = _sanitize_type_mismatches(sql)
-            result["sql"] = sql
+            # SQL-first NAO muta o SQL do agente (execucao literal).
+            if not is_sql_first:
+                sql = _sanitize_type_mismatches(sql)
+                result["sql"] = sql
 
             # =====================================================
             # ETAPA 2c: DETECCAO — UUID em campo numerico
@@ -2196,14 +2316,17 @@ class TextToSQLPipeline:
                 except Exception as e:
                     logger.debug(f"[TEXT_TO_SQL] Falha ao gravar session_context (ok): {e}")
 
-            # Best-effort: salvar query bem-sucedida como template para few-shot
-            try:
-                from app.embeddings.indexers.sql_template_indexer import save_successful_query
-                _run_in_app_context(
-                    lambda: save_successful_query(question, sql, tables_in_sql)
-                )
-            except Exception:
-                pass  # Nao bloquear pipeline
+            # Best-effort: salvar query bem-sucedida como template para few-shot.
+            # NAO em SQL-first: a "pergunta" e' o proprio SQL (mapeamento NL->SQL
+            # nao faz sentido) — evita poluir o indice de templates.
+            if not is_sql_first:
+                try:
+                    from app.embeddings.indexers.sql_template_indexer import save_successful_query
+                    _run_in_app_context(
+                        lambda: save_successful_query(question, sql, tables_in_sql)
+                    )
+                except Exception:
+                    pass  # Nao bloquear pipeline
 
         except RuntimeError as e:
             result["aviso"] = str(e)
