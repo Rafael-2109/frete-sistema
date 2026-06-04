@@ -30,7 +30,7 @@ Skill para **criacao de arquivos** que o usuario pode baixar.
 PROIBIDO: Write("/tmp/relatorio.xlsx", conteudo)
 CORRETO:  echo '{"dados": [...]}' | python exportar.py --formato excel --nome relatorio
 ```
-O script gera UUID no nome, salva em `/tmp/agente_files/default/`, e retorna URL acessivel via HTTP.
+O script gera UUID no nome, salva em `$AGENTE_FILES_ROOT/agente_files/default/` (default `/tmp/agente_files/default/`), e retorna URL acessivel via HTTP. O diretorio e o MESMO que a rota de download serve — nunca depende de `$TMPDIR` (que difere entre o subprocesso CLI e o gunicorn).
 
 ### R2: SEMPRE usar url_completa na resposta
 ```
@@ -241,7 +241,7 @@ Quando o usuario pedir "exporte os 10 maiores pedidos para Excel":
 
 ## Notas
 
-- Arquivos salvos em `/tmp/agente_files/default/` com UUID no nome
+- Arquivos salvos em `$AGENTE_FILES_ROOT/agente_files/default/` (default `/tmp/agente_files/default/`) com UUID no nome
 - URL acessivel via HTTP no Render
 - Tamanho maximo recomendado: 10MB
 - Arquivos removidos apos 24h (limpeza do /tmp)

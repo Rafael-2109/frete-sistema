@@ -6,10 +6,17 @@ Importadas pelos sub-modulos que precisam.
 """
 
 import os
-import tempfile
 
-# Configuracao de uploads
-UPLOAD_FOLDER = os.path.join(tempfile.gettempdir(), 'agente_files')
+# Configuracao de uploads — fonte UNICA do diretorio de arquivos do agente.
+# NAO usar tempfile.gettempdir(): o CLI do Claude Agent SDK seta
+# TMPDIR=/tmp/claude-{uid} nos subprocessos Bash (onde a skill exportar.py GRAVA o
+# arquivo), enquanto o gunicorn que SERVE o download nao tem esse TMPDIR e resolveria
+# /tmp/agente_files -> os dois lados divergem e o download vem vazio (404).
+# Bug real: sessao #787 (2026-06-03), "arquivo vazio" no download de Excel.
+# AGENTE_FILES_ROOT (default /tmp) e herdado pelo CLI do ambiente do gunicorn,
+# mantendo GRAVACAO (exportar.py/ler.py/ler_doc.py) e LEITURA (rotas) alinhadas.
+AGENTE_FILES_ROOT = os.environ.get('AGENTE_FILES_ROOT', '/tmp')
+UPLOAD_FOLDER = os.path.join(AGENTE_FILES_ROOT, 'agente_files')
 
 # Whitelist de extensoes aceitas no upload
 # Expandido em 2026-04-14 (Fase A quick wins): +word, +texto, +bancarios, +webp

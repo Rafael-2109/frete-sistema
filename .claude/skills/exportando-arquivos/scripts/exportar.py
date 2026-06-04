@@ -18,7 +18,6 @@ import os
 import json
 import argparse
 import uuid
-import tempfile
 from datetime import datetime
 from decimal import Decimal
 
@@ -43,8 +42,12 @@ def get_upload_folder():
     Retorna o diretorio de upload para arquivos do agente.
     Mesmo diretorio usado pelo routes.py do agente.
     """
-    # Diretorio padrao: /tmp/agente_files
-    base_folder = os.path.join(tempfile.gettempdir(), 'agente_files')
+    # Fonte UNICA do diretorio (espelha app/agente/routes/_constants.py).
+    # NAO usar tempfile.gettempdir(): este script roda como subprocesso Bash do CLI,
+    # que seta TMPDIR=/tmp/claude-{uid}; o gunicorn que SERVE o download usa /tmp.
+    # Sem isso o arquivo cai em /tmp/claude-{uid}/agente_files e o download vem
+    # vazio (404) — bug da sessao #787 (2026-06-03).
+    base_folder = os.path.join(os.environ.get('AGENTE_FILES_ROOT', '/tmp'), 'agente_files')
 
     # Usar 'default' como session_id quando nao especificado
     # Em producao, o agente deveria passar o session_id real

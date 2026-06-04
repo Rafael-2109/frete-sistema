@@ -23,7 +23,6 @@ import sys
 import os
 import json
 import argparse
-import tempfile
 import traceback
 from datetime import datetime, date
 from decimal import Decimal
@@ -97,7 +96,10 @@ def url_para_caminho(url, user_id=None):
         if '..' in session_id or '/' in session_id or '..' in filename:
             return url
 
-        base_folder = os.path.join(tempfile.gettempdir(), 'agente_files')
+        # AGENTE_FILES_ROOT (default /tmp): mesma fonte que o gunicorn grava o upload.
+        # NAO usar tempfile.gettempdir() — TMPDIR=/tmp/claude-{uid} neste subprocesso CLI
+        # divergiria de /tmp/agente_files (onde a rota de upload salvou o arquivo).
+        base_folder = os.path.join(os.environ.get('AGENTE_FILES_ROOT', '/tmp'), 'agente_files')
 
         # Modo restrito: so tenta caminho do user fornecido
         if user_id is not None:
