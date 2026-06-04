@@ -57,3 +57,4 @@ atualizado: 2026-06-04
 - [consultando-venda-loja](2026-06-02-skill-consultando-venda-loja.md) — plano TDD da skill READ de vendas Lojas HORA (Onda F)
 - [carregando-motos-assai](2026-06-02-skill-carregando-motos-assai.md) — plano TDD da skill READ+WRITE de carregamento Assai (Onda F)
 - [Redesign consultar_sql — SQL-first](2026-06-04-redesign-consultar-sql-sql-first.md) — inverte a tool SQL do agente de tradutor NL→SQL (Generator Haiku que adivinha/trunca) para executor SQL-first + guard-rail determinístico; origem sessão #787
+- [Roadmap de correções do Agente — sessão #787](2026-06-04-roadmap-correcoes-agente-787.md) — rastreador dos 7 achados (P1 TMPDIR feito · P2/P3 Fix B próximo · P4 idioma/schema · P5 frustração · P6 summary · P7 judge/verifier de entrega); ponto de partida da próxima sessão
