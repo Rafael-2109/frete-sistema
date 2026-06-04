@@ -1034,6 +1034,30 @@ def editar_pagamentos(
             f'editados em INCOMPLETO ou COTACAO.'
         )
 
+    novo_status, _motivos = _aplicar_pagamentos(venda, pagamentos, usuario)
+    venda.status = novo_status
+
+    db.session.commit()
+    return venda
+
+
+def _aplicar_pagamentos(
+    venda: HoraVenda,
+    pagamentos: List[dict],
+    usuario: Optional[str] = None,
+) -> tuple[str, List[str]]:
+    """Helper FLUSH-ONLY: aplica os pagamentos a uma venda (sem commit).
+
+    Apaga os HoraVendaPagamento existentes, recria a partir de `pagamentos`
+    (normalizados), recalcula o cache `forma_pagamento` legacy e registra a
+    auditoria EDITOU_HEADER. NAO faz commit, NAO seta `venda.status` e NAO
+    valida o guard de status permitido — isso fica a cargo do caller (wrapper
+    publico `editar_pagamentos` ou orquestrador `salvar_pedido_completo`).
+
+    Returns:
+        (novo_status, motivos): avaliacao de status conforme os pagamentos
+        aplicados. O caller decide se/quando seta `venda.status`.
+    """
     pagamentos_norm = _normalizar_pagamentos(pagamentos)
     valor_total_dec = Decimal(str(venda.valor_total))
 
@@ -1061,8 +1085,6 @@ def editar_pagamentos(
         venda.forma_pagamento = 'NAO_INFORMADO'
 
     status_antes = venda.status
-    venda.status = novo_status
-
     detalhe = (
         f'Pagamentos editados: {len(pagamentos_norm)} forma(s). '
         f'Status {status_antes}->{novo_status}.'
@@ -1076,8 +1098,7 @@ def editar_pagamentos(
         detalhe=detalhe,
     )
 
-    db.session.commit()
-    return venda
+    return novo_status, motivos
 
 
 def voltar_para_cotacao(venda_id: int, usuario: Optional[str] = None) -> HoraVenda:
@@ -1210,8 +1231,78 @@ def editar_venda(
     venda = HoraVenda.query.get(venda_id)
     if not venda:
         raise ValueError(f'Venda {venda_id} nao encontrada')
+
+    dados = {
+        'vendedor': vendedor,
+        'forma_pagamento': forma_pagamento,
+        'telefone_cliente': telefone_cliente,
+        'email_cliente': email_cliente,
+        'observacoes': observacoes,
+        'nome_cliente': nome_cliente,
+        'cpf_cliente': cpf_cliente,
+        'cep': cep,
+        'endereco_logradouro': endereco_logradouro,
+        'endereco_numero': endereco_numero,
+        'endereco_complemento': endereco_complemento,
+        'endereco_bairro': endereco_bairro,
+        'endereco_cidade': endereco_cidade,
+        'endereco_uf': endereco_uf,
+        'modalidade_frete': modalidade_frete,
+        'numero_parcelas': numero_parcelas,
+        'intervalo_parcelas_dias': intervalo_parcelas_dias,
+        'consumidor_final': consumidor_final,
+        'valor_frete': valor_frete,
+        'tipo_frete_calc': tipo_frete_calc,
+    }
+    _aplicar_header(venda, dados, usuario)
+
+    db.session.commit()
+    return venda
+
+
+def _aplicar_header(
+    venda: HoraVenda,
+    dados: dict,
+    usuario: Optional[str] = None,
+) -> HoraVenda:
+    """Helper FLUSH-ONLY: aplica os campos do header a uma venda (sem commit).
+
+    Recebe a venda ja buscada e um `dados` dict (mesmas chaves que os kwargs de
+    `editar_venda`: vendedor, forma_pagamento, ..., valor_frete, tipo_frete_calc).
+    Para cada campo nao-None: normaliza, valida pela matriz `_CAMPOS_EDITAVEIS_HEADER`
+    (via `_validar_campo_editavel`, que tambem aplica a defesa NFe-em-voo), faz
+    setattr e registra auditoria EDITOU_HEADER. NAO faz commit — fica a cargo do
+    caller (wrapper publico `editar_venda` ou orquestrador `salvar_pedido_completo`).
+
+    Regras por status (mesmas de antes):
+    - COTACAO/INCOMPLETO: tudo (incluindo cliente/endereco e consumidor_final).
+    - CONFIRMADO: contato/endereco/operacionais + consumidor_final.
+    - FATURADO: so observacoes.
+    - CANCELADO: nada (raise).
+    """
     if venda.status == VENDA_STATUS_CANCELADO:
         raise TransicaoInvalidaError('Pedido cancelado nao pode ser editado.')
+
+    vendedor = dados.get('vendedor')
+    forma_pagamento = dados.get('forma_pagamento')
+    telefone_cliente = dados.get('telefone_cliente')
+    email_cliente = dados.get('email_cliente')
+    observacoes = dados.get('observacoes')
+    nome_cliente = dados.get('nome_cliente')
+    cpf_cliente = dados.get('cpf_cliente')
+    cep = dados.get('cep')
+    endereco_logradouro = dados.get('endereco_logradouro')
+    endereco_numero = dados.get('endereco_numero')
+    endereco_complemento = dados.get('endereco_complemento')
+    endereco_bairro = dados.get('endereco_bairro')
+    endereco_cidade = dados.get('endereco_cidade')
+    endereco_uf = dados.get('endereco_uf')
+    modalidade_frete = dados.get('modalidade_frete')
+    numero_parcelas = dados.get('numero_parcelas')
+    intervalo_parcelas_dias = dados.get('intervalo_parcelas_dias')
+    consumidor_final = dados.get('consumidor_final')
+    valor_frete = dados.get('valor_frete')
+    tipo_frete_calc = dados.get('tipo_frete_calc')
 
     def _atualizar(campo: str, novo_valor):
         antes = getattr(venda, campo)
@@ -1323,7 +1414,6 @@ def editar_venda(
         _atualizar('valor_frete', valor_dec_norm)
         _atualizar('tipo_frete_calc', tipo_norm)
 
-    db.session.commit()
     return venda
 
 
