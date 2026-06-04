@@ -1,19 +1,36 @@
 {# ============================================================
-   _linha_moto.html — UMA linha-moto repetivel (criacao multi-item).
+   _linha_moto.html — UMA linha-moto repetivel (criacao + edicao multi-item).
 
    Contexto esperado:
      it             — item (HoraVendaItem) ou None (linha vazia / template clone)
      modelos        — lista de modelos com chassi em estoque (para o select)
      somente_leitura— bool: True => disabled/readonly + sem botao remover
+     modo_edicao    — bool: True => nomes de campo item_* + chassi de item
+                      EXISTENTE travado (read-only). False (criacao) => nomes
+                      chassi/valor e cascata completa.
 
-   Derivado de _componente_moto_desconto.html, mas SEM ids globais f-*:
-   usa SO classes .js-* (querySelector por-linha, ver wireLinhaMoto no
-   _pedido_venda_scripts.html) para permitir N linhas sem colisao de id.
-   Renderiza tanto no loop quanto dentro de <template id="tpl-linha-moto">.
+   Nomes de campo por modo:
+     - criacao (modo_edicao falsy): name="chassi" / name="valor"
+       (lidos por _parse_itens_form -> tagplus_pedido_venda_criar).
+     - edicao (modo_edicao):        name="item_chassi" / name="item_valor"
+       + hidden name="item_id" (lidos por _parse_itens_edicao_form ->
+       vendas_salvar_pedido). Item EXISTENTE (it != None) tem chassi/modelo/cor
+       travados — o reconciliador IGNORA troca de chassi; so valor/desconto
+       editam.
+
+   JS usa SO classes .js-* (querySelector por-linha, ver wireLinhaMoto no
+   _pedido_venda_scripts.html) — independente do `name` — entao a cascata, a
+   sincronia de desconto e a soma de pagamentos funcionam nos 2 modos.
    ============================================================ #}
+{% set is_existente = (modo_edicao and it) %}
+{# Item existente em edicao = chassi travado (so valor/desconto editam).
+   Linha nova ou criacao = cascata completa. somente_leitura trava tudo. #}
+{% set chassi_travado = somente_leitura or is_existente %}
 <div class="moto-linha border rounded p-3 mb-2" data-row
      data-preco-tabela="{{ it.preco_tabela_referencia if it else '' }}">
+  {% if modo_edicao %}
   <input type="hidden" name="item_id" class="js-item-id" value="{{ it.id if it else '' }}">
+  {% endif %}
 
   <div class="d-flex justify-content-between align-items-start mb-2">
     <small class="text-muted"><i class="fas fa-motorcycle"></i> Moto</small>
@@ -24,35 +41,59 @@
     {% endif %}
   </div>
 
-  <div class="row g-3">
-    <div class="col-md-4">
-      <label class="form-label">Modelo <small class="text-muted">(filtro)</small></label>
-      <select class="form-select js-modelo" {% if somente_leitura %}disabled{% endif %}>
-        <option value="">— escolha o modelo —</option>
-        {% for m in modelos %}
-          <option value="{{ m.id }}">{{ m.nome_modelo }}</option>
-        {% endfor %}
-      </select>
+  {% if is_existente %}
+    {# Item existente: moto travada (chassi NAO trocavel). Modelo/cor exibidos
+       como texto read-only; o chassi vai num input readonly com o name correto. #}
+    <div class="row g-3 align-items-center">
+      <div class="col-md-4">
+        <label class="form-label">Modelo</label>
+        <div class="form-control-plaintext fw-semibold">
+          {{ it.moto.modelo.nome_modelo if it.moto and it.moto.modelo else '—' }}
+        </div>
+      </div>
+      <div class="col-md-4">
+        <label class="form-label">Cor</label>
+        <div class="form-control-plaintext">{{ it.moto.cor if it.moto else '—' }}</div>
+      </div>
+      <div class="col-md-4">
+        <label class="form-label">Chassi <i class="fas fa-lock text-muted ms-1" title="Para trocar a moto, remova o item e adicione outro."></i></label>
+        <input type="text" name="item_chassi" class="form-control chassi-mono js-chassi"
+               readonly tabindex="-1" value="{{ it.numero_chassi }}">
+      </div>
     </div>
-    <div class="col-md-4">
-      <label class="form-label">Cor <small class="text-muted">(filtro)</small></label>
-      <select class="form-select js-cor" disabled>
-        <option value="">— escolha o modelo primeiro —</option>
-      </select>
-      <small class="text-muted js-cor-status"></small>
+  {% else %}
+    {# Linha nova (criacao OU add-moto na edicao): cascata modelo -> cor -> chassi. #}
+    <div class="row g-3">
+      <div class="col-md-4">
+        <label class="form-label">Modelo <small class="text-muted">(filtro)</small></label>
+        <select class="form-select js-modelo" {% if somente_leitura %}disabled{% endif %}>
+          <option value="">— escolha o modelo —</option>
+          {% for m in modelos %}
+            <option value="{{ m.id }}">{{ m.nome_modelo }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-4">
+        <label class="form-label">Cor <small class="text-muted">(filtro)</small></label>
+        <select class="form-select js-cor" disabled>
+          <option value="">— escolha o modelo primeiro —</option>
+        </select>
+        <small class="text-muted js-cor-status"></small>
+      </div>
+      <div class="col-md-4">
+        <label class="form-label">Chassi <span class="text-danger">*</span></label>
+        <input type="text" name="{{ 'item_chassi' if modo_edicao else 'chassi' }}"
+               class="form-control chassi-mono js-chassi"
+               data-hora-autocomplete="chassi" data-hora-min-chars="2"
+               data-hora-open-on-focus="1"
+               data-hora-extra-params="disponivel=1" autocomplete="off"
+               {% if not somente_leitura %}required{% endif %}
+               {% if somente_leitura %}readonly{% endif %}
+               value="{{ it.numero_chassi if it else '' }}">
+        <small class="text-muted js-chassi-status">Clique para listar ou digite 2+ caracteres (so chassis em estoque). Modelo/cor filtram a busca.</small>
+      </div>
     </div>
-    <div class="col-md-4">
-      <label class="form-label">Chassi <span class="text-danger">*</span></label>
-      <input type="text" name="chassi" class="form-control chassi-mono js-chassi"
-             data-hora-autocomplete="chassi" data-hora-min-chars="2"
-             data-hora-open-on-focus="1"
-             data-hora-extra-params="disponivel=1" autocomplete="off"
-             {% if not somente_leitura %}required{% endif %}
-             {% if somente_leitura %}readonly{% endif %}
-             value="{{ it.numero_chassi if it else '' }}">
-      <small class="text-muted js-chassi-status">Clique para listar ou digite 2+ caracteres (so chassis em estoque). Modelo/cor filtram a busca.</small>
-    </div>
-  </div>
+  {% endif %}
 
   <hr class="my-3">
 
@@ -85,7 +126,8 @@
       <label class="form-label">
         <strong>Valor final (R$)</strong> <span class="text-danger">*</span>
       </label>
-      <input type="text" name="valor" class="form-control fw-bold js-valor" inputmode="decimal" placeholder="0,00"
+      <input type="text" name="{{ 'item_valor' if modo_edicao else 'valor' }}"
+             class="form-control fw-bold js-valor" inputmode="decimal" placeholder="0,00"
              {% if not somente_leitura %}required{% endif %}
              {% if somente_leitura %}readonly{% endif %}
              value="{{ it.preco_final|numero_br(2) if it and it.preco_final else '' }}">

@@ -88,6 +88,108 @@ def _operador_atual() -> str:
 
 
 # ------------------------------------------------------------------------
+# Helpers de parsing de formulario (puros, testaveis com MultiDict)
+# ------------------------------------------------------------------------
+
+def _parse_decimal_br(valor_raw: str):
+    """Parseia valor BR ('1.700,00') ou US ('1700.00') -> Decimal ou None.
+
+    Diferente de `_parse_decimal_form` (que levanta ValueError), este retorna
+    None quando o valor e vazio/invalido — usado nos parsers de form-array
+    onde linhas invalidas sao simplesmente ignoradas.
+    """
+    valor_str = (valor_raw or '').strip()
+    if not valor_str:
+        return None
+    if ',' in valor_str:
+        valor_str = valor_str.replace('.', '').replace(',', '.')
+    try:
+        return Decimal(valor_str)
+    except (InvalidOperation, ValueError):
+        return None
+
+
+def _parse_pagamentos_form(form) -> list[dict]:
+    """Le os arrays `pagamento_*` do form -> lista de dicts de pagamento.
+
+    Form-array esperado (cada index = 1 forma):
+      pagamento_forma[]    forma_pagamento_hora (string)
+      pagamento_valor[]    valor (string BR ',' ou US '.')
+      pagamento_parcelas[] numero_parcelas (int, default 1)
+      pagamento_aut_id[]   aut_id (string, opcional)
+
+    Linhas com forma vazia sao ignoradas. Valor vazio vira Decimal('0')
+    (linha mantida); valor nao-vazio invalido faz a linha ser ignorada
+    (comportamento historico de `vendas_pagamentos_editar`). Retorna
+    [{'forma_pagamento_hora', 'valor': Decimal, 'numero_parcelas': int,
+      'aut_id': str|None}].
+    """
+    formas_lista = form.getlist('pagamento_forma')
+    valores_lista = form.getlist('pagamento_valor')
+    parcelas_lista = form.getlist('pagamento_parcelas')
+    aut_ids_lista = form.getlist('pagamento_aut_id')
+
+    pagamentos: list[dict] = []
+    for i, forma_raw in enumerate(formas_lista):
+        forma = (forma_raw or '').strip().upper()
+        if not forma:
+            continue
+        valor_raw = (valores_lista[i] if i < len(valores_lista) else '0') or ''
+        if not valor_raw.strip():
+            # Valor vazio -> 0 (linha mantida), espelha o comportamento legado.
+            valor = Decimal('0')
+        else:
+            valor = _parse_decimal_br(valor_raw)
+            if valor is None:
+                # Valor nao-vazio mas invalido -> ignora a linha (legado: continue).
+                continue
+        try:
+            par = int((parcelas_lista[i] if i < len(parcelas_lista) else '1') or '1')
+        except ValueError:
+            par = 1
+        aut = (aut_ids_lista[i] if i < len(aut_ids_lista) else '').strip() or None
+        pagamentos.append({
+            'forma_pagamento_hora': forma,
+            'valor': valor,
+            'numero_parcelas': par,
+            'aut_id': aut,
+        })
+    return pagamentos
+
+
+def _parse_itens_edicao_form(form) -> list[dict]:
+    """Le os arrays `item_*` do form de edicao -> lista de dicts de item.
+
+    Form-array esperado (cada index = 1 moto-linha):
+      item_id[]     id do HoraVendaItem existente ('' => novo item)
+      item_chassi[] numero_chassi (string)
+      item_valor[]  valor_final (string BR ',' ou US '.')
+
+    Linhas com chassi vazio sao ignoradas (linha-template em branco). Retorna
+    [{'item_id': int|None, 'numero_chassi': str, 'valor_final': Decimal|None}],
+    formato consumido por `venda_service.salvar_pedido_completo`.
+    """
+    ids_lista = form.getlist('item_id')
+    chassis_lista = form.getlist('item_chassi')
+    valores_lista = form.getlist('item_valor')
+
+    itens: list[dict] = []
+    for i, chassi_raw in enumerate(chassis_lista):
+        chassi = (chassi_raw or '').strip()
+        if not chassi:
+            continue
+        id_raw = (ids_lista[i] if i < len(ids_lista) else '').strip()
+        item_id = int(id_raw) if id_raw.isdigit() else None
+        valor_raw = valores_lista[i] if i < len(valores_lista) else ''
+        itens.append({
+            'item_id': item_id,
+            'numero_chassi': chassi,
+            'valor_final': _parse_decimal_br(valor_raw),
+        })
+    return itens
+
+
+# ------------------------------------------------------------------------
 # Listagem
 # ------------------------------------------------------------------------
 
@@ -380,6 +482,53 @@ def vendas_editar(venda_id: int):
 
 
 # ------------------------------------------------------------------------
+# Salvar pedido completo (FU-5: UM unico submit reconcilia tudo)
+# ------------------------------------------------------------------------
+
+@hora_bp.route('/vendas/<int:venda_id>/salvar', methods=['POST'])
+@require_hora_perm('vendas', 'editar')
+def vendas_salvar_pedido(venda_id: int):
+    """FU-5: UM unico "Salvar Pedido" reconcilia header + itens + pagamentos.
+
+    Substitui os multiplos forms granulares (header, itens, add-moto,
+    pagamentos) por uma unica submissao que delega a
+    `venda_service.salvar_pedido_completo`. O service decide o que aplicar
+    por status (header sempre via matriz; itens/pagamentos so em
+    COTACAO/INCOMPLETO).
+    """
+    venda = HoraVenda.query.get_or_404(venda_id)
+    if venda.loja_id and not usuario_tem_acesso_a_loja(venda.loja_id):
+        flash('Acesso negado.', 'danger')
+        return redirect(url_for('hora.vendas_lista'))
+    if not venda.loja_id and lojas_permitidas_ids() is not None:
+        flash('Pedido sem loja definida — apenas admin edita.', 'warning')
+        return redirect(url_for('hora.vendas_lista'))
+
+    header = {k: request.form.get(k) for k in (
+        'vendedor', 'forma_pagamento', 'telefone_cliente', 'email_cliente',
+        'observacoes', 'nome_cliente', 'cpf_cliente', 'cep',
+        'endereco_logradouro', 'endereco_numero', 'endereco_complemento',
+        'endereco_bairro', 'endereco_cidade', 'endereco_uf',
+        'modalidade_frete', 'numero_parcelas', 'intervalo_parcelas_dias',
+        'valor_frete', 'tipo_frete_calc',
+    )}
+
+    try:
+        venda_service.salvar_pedido_completo(
+            venda_id=venda.id,
+            header=header,
+            itens=_parse_itens_edicao_form(request.form),
+            pagamentos=_parse_pagamentos_form(request.form),
+            usuario=_operador_atual(),
+        )
+        flash('Pedido salvo.', 'success')
+    except (ValueError, venda_service.TransicaoInvalidaError,
+            venda_service.ChassiIndisponivelError) as exc:
+        flash(f'Erro: {exc}', 'danger')
+    return redirect(url_for('hora.vendas_detalhe', venda_id=venda.id))
+
+
+# ------------------------------------------------------------------------
 # Editar formas de pagamento (multi-formas — INCOMPLETO ou COTACAO)
 # ------------------------------------------------------------------------
 
@@ -406,35 +555,7 @@ def vendas_pagamentos_editar(venda_id: int):
         flash('Pedido sem loja definida — apenas admin edita.', 'warning')
         return redirect(url_for('hora.vendas_lista'))
 
-    formas_lista = request.form.getlist('pagamento_forma')
-    valores_lista = request.form.getlist('pagamento_valor')
-    parcelas_lista = request.form.getlist('pagamento_parcelas')
-    aut_ids_lista = request.form.getlist('pagamento_aut_id')
-
-    pagamentos: list[dict] = []
-    for i, forma_raw in enumerate(formas_lista):
-        forma = (forma_raw or '').strip().upper()
-        if not forma:
-            continue
-        valor_raw = valores_lista[i] if i < len(valores_lista) else '0'
-        valor_str = (valor_raw or '').strip()
-        if ',' in valor_str:
-            valor_str = valor_str.replace('.', '').replace(',', '.')
-        try:
-            valor = Decimal(valor_str) if valor_str else Decimal('0')
-        except (InvalidOperation, ValueError):
-            continue
-        try:
-            par = int((parcelas_lista[i] if i < len(parcelas_lista) else '1') or '1')
-        except ValueError:
-            par = 1
-        aut = (aut_ids_lista[i] if i < len(aut_ids_lista) else '').strip() or None
-        pagamentos.append({
-            'forma_pagamento_hora': forma,
-            'valor': valor,
-            'numero_parcelas': par,
-            'aut_id': aut,
-        })
+    pagamentos = _parse_pagamentos_form(request.form)
 
     try:
         res = venda_service.editar_pagamentos(

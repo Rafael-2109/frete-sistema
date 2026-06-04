@@ -1,16 +1,20 @@
 {# ============================================================
-   _lista_motos.html — Lista repetivel de motos (criacao multi-item).
+   _lista_motos.html — Lista repetivel de motos (criacao + edicao multi-item).
 
    Contexto esperado:
      itens          — lista de itens (ou vazio/None => 1 linha vazia inicial)
      modelos        — lista de modelos com chassi em estoque
      somente_leitura— bool
+     modo_edicao    — bool (default false): True na EDICAO (vendas_salvar_pedido,
+                      nomes item_*); False na CRIACAO (tagplus_pedido_venda_criar,
+                      nomes chassi/valor).
 
-   Compartilhado criacao+edicao. Hoje so a CRIACAO usa este componente
-   (1 botao "Salvar Pedido"). Cada linha = _linha_moto.html. O botao
-   "Adicionar moto" clona o <template id="tpl-linha-moto"> via JS
-   (ver wireLinhaMoto / btn-add-moto-linha no _pedido_venda_scripts.html).
+   Compartilhado criacao+edicao (FU-2/FU-5). Cada linha = _linha_moto.html. O
+   botao "Adicionar moto" clona o <template id="tpl-linha-moto"> via JS (ver
+   wireLinhaMoto / btn-add-moto-linha no _pedido_venda_scripts.html). Em
+   somente_leitura (CONFIRMADO+) nao renderiza o botao add nem o template.
    ============================================================ #}
+{% set modo_edicao = modo_edicao | default(false) %}
 <div id="motos-container" data-somente-leitura="{{ '1' if somente_leitura else '0' }}">
   {% for it in (itens if itens else [None]) %}
     {% include 'hora/tagplus/_linha_moto.html' with context %}

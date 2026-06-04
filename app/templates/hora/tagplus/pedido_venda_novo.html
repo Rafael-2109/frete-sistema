@@ -246,9 +246,14 @@
 </form>
 {% endif %}
 
-{# ===================== MESMA TELA DO /NOVO: cards preenchidos ===================== #}
-{# Form unico de dados do pedido (cliente + endereco + frete + obs + vendedor) -> vendas_editar #}
-<form method="post" action="{{ url_for('hora.vendas_editar', venda_id=venda.id) }}" id="form-pedido-venda">
+{# ===================== FORM UNICO: Salvar Pedido (FU-5) ===================== #}
+{# UM unico form reconcilia header + motos + pagamentos via vendas_salvar_pedido
+   (delega a venda_service.salvar_pedido_completo). Substitui os 4 forms
+   granulares antigos (header/itens/add-moto/pagamentos). As rotas granulares
+   continuam registradas (deprecadas), so os FORMS sairam do template.
+   Peças permanecem em forms inline FORA deste form (apos o submit). #}
+{% if not is_cancelado %}
+<form method="post" action="{{ url_for('hora.vendas_salvar_pedido', venda_id=venda.id) }}" id="form-pedido-venda">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
   <!-- ========================== Cliente / Destinatário ========================== -->
@@ -376,7 +381,7 @@
           </select>
         </div>
         {# Parcelamento (editavel em COTACAO/CONFIRMADO; disabled em FATURADO/CANCELADO).
-           Rota vendas_editar le numero_parcelas/intervalo_parcelas_dias. #}
+           Rota vendas_salvar_pedido le numero_parcelas/intervalo_parcelas_dias. #}
         <div class="col-md-3">
           <label class="form-label">Nº de parcelas</label>
           <input type="number" name="numero_parcelas" min="1" max="60" class="form-control"
@@ -399,127 +404,147 @@
     </div>
   </div>
 
-  {% if not is_cancelado %}
-  <div class="d-flex gap-2 mb-3 align-items-center flex-wrap">
-    <button type="submit" class="btn btn-success"><i class="fas fa-save"></i> Salvar dados do pedido</button>
+  <!-- ========================== Moto vendida (itens) ========================== -->
+  {% set itens_editaveis = is_cotacao and pode_editar %}
+  <div class="card mb-3">
+    <div class="card-header"><strong><i class="fas fa-motorcycle"></i> Moto vendida ({{ venda.itens|length }})</strong></div>
+    <div class="card-body">
+      <div id="d-alerta-frete" class="alert alert-info mb-3" style="display:none;"></div>
+      {# Espelhos data-item-* dos itens p/ o preview de rateio de frete (JS le
+         tr[data-item-final]); a edicao real e feita nas linhas-moto abaixo. #}
+      <div class="d-none">
+        {% for item in venda.itens %}
+          <span data-item-final="{{ item.preco_final|float }}" data-item-tabela="{{ (item.preco_tabela_referencia or 0)|float }}"></span>
+        {% endfor %}
+      </div>
+      {% if not itens_editaveis %}
+        <p class="text-muted small mb-2">
+          {% if is_cancelado %}<i class="fas fa-ban"></i> Pedido CANCELADO.
+          {% elif is_faturado %}<i class="fas fa-lock"></i> Pedido FATURADO — motos travadas.
+          {% elif is_confirmado %}<i class="fas fa-lock"></i> Pedido CONFIRMADO — motos travadas (volte para cotação para editar).
+          {% else %}<i class="fas fa-lock"></i> Motos somente leitura neste status.{% endif %}
+        </p>
+      {% endif %}
+      {# Mesmo componente de lista de motos da criacao (FU-2). modo_edicao=True =>
+         nomes item_*; item existente trava chassi/modelo/cor; somente_leitura
+         (CONFIRMADO+/sem perm) trava tudo e esconde add/remover. #}
+      {% with itens = venda.itens, somente_leitura = not itens_editaveis, modo_edicao = true %}
+        {% include 'hora/tagplus/_lista_motos.html' with context %}
+      {% endwith %}
+      <div class="text-end mt-2"><strong>Total motos: {{ venda.valor_total|valor_br }}</strong></div>
+    </div>
+  </div>
+
+  <!-- ========================== Pagamento ========================== -->
+  <div class="card mb-3" id="campo-forma-pagamento">
+    <div class="card-header d-flex justify-content-between align-items-center">
+      <strong><i class="fas fa-money-bill-wave"></i> Pagamento</strong>
+      {% if is_incompleto %}<span class="badge bg-warning text-dark"><i class="fas fa-exclamation-triangle"></i> Pedido INCOMPLETO — soma das formas deve igualar o valor total</span>{% endif %}
+    </div>
+    <div class="card-body">
+      {% if permite_editar_pagamentos and pode_editar %}
+      <div id="pag-edit-container" data-pag-total="{{ venda.valor_total|float }}">
+        {% for p in venda.pagamentos %}
+        <div class="row g-2 align-items-end mb-2 pag-edit-linha border rounded p-2">
+          <div class="col-md-4">
+            <label class="form-label small mb-1">Forma</label>
+            <select name="pagamento_forma" class="form-select form-select-sm" required>
+              {% for f in formas_pagamento %}
+                <option value="{{ f.forma_pagamento_hora }}" {% if f.forma_pagamento_hora == p.forma_pagamento_hora %}selected{% endif %}>
+                  {{ f.forma_pagamento_hora }}{% if f.descricao %} · {{ f.descricao }}{% endif %}
+                </option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-3">
+            <label class="form-label small mb-1">Valor (R$)</label>
+            <input type="text" name="pagamento_valor" class="form-control form-control-sm" value="{{ p.valor|valor_br }}" required>
+          </div>
+          <div class="col-md-2">
+            <label class="form-label small mb-1">Parcelas</label>
+            <input type="number" name="pagamento_parcelas" class="form-control form-control-sm" min="1" max="60" value="{{ p.numero_parcelas or 1 }}">
+          </div>
+          <div class="col-md-2">
+            <label class="form-label small mb-1">AUT/ID</label>
+            <input type="text" name="pagamento_aut_id" class="form-control form-control-sm" maxlength="50" value="{{ p.aut_id or '' }}">
+          </div>
+          <div class="col-md-1 d-flex align-items-end">
+            <button type="button" class="btn btn-sm btn-outline-danger" onclick="this.closest('.pag-edit-linha').remove();"><i class="fas fa-times"></i></button>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      <template id="tpl-pag-edit">
+        <div class="row g-2 align-items-end mb-2 pag-edit-linha border rounded p-2">
+          <div class="col-md-4"><label class="form-label small mb-1">Forma</label>
+            <select name="pagamento_forma" class="form-select form-select-sm" required>
+              <option value="">— escolha —</option>
+              {% for f in formas_pagamento %}<option value="{{ f.forma_pagamento_hora }}">{{ f.forma_pagamento_hora }}{% if f.descricao %} · {{ f.descricao }}{% endif %}</option>{% endfor %}
+            </select></div>
+          <div class="col-md-3"><label class="form-label small mb-1">Valor (R$)</label><input type="text" name="pagamento_valor" class="form-control form-control-sm" required></div>
+          <div class="col-md-2"><label class="form-label small mb-1">Parcelas</label><input type="number" name="pagamento_parcelas" class="form-control form-control-sm" min="1" max="60" value="1"></div>
+          <div class="col-md-2"><label class="form-label small mb-1">AUT/ID</label><input type="text" name="pagamento_aut_id" class="form-control form-control-sm" maxlength="50"></div>
+          <div class="col-md-1 d-flex align-items-end"><button type="button" class="btn btn-sm btn-outline-danger" onclick="this.closest('.pag-edit-linha').remove();"><i class="fas fa-times"></i></button></div>
+        </div>
+      </template>
+      <button type="button" class="btn btn-sm btn-outline-primary mt-2"
+              onclick="var t=document.getElementById('tpl-pag-edit');document.getElementById('pag-edit-container').appendChild(t.content.cloneNode(true));">
+        <i class="fas fa-plus"></i> Adicionar forma de pagamento
+      </button>
+      <div class="mt-2 small d-flex gap-3 flex-wrap">
+        <span>Total formas: <strong id="pag-edit-soma">R$ 0,00</strong></span>
+        <span>Pedido: <strong>{{ venda.valor_total|valor_br }}</strong></span>
+        <span id="pag-edit-aviso" class="text-danger" style="display:none;">⚠ Soma difere do total — salvará como INCOMPLETO.</span>
+      </div>
+      {% else %}
+      {# Read-only (CONFIRMADO+): exibe formas como tabela. NAO submete campos
+         pagamento_* -> salvar_pedido_completo nao reconcilia pagamentos fora
+         de COTACAO/INCOMPLETO de qualquer forma. #}
+      <table class="table table-sm mb-0 align-middle">
+        <thead><tr><th>Forma</th><th class="text-end">Valor</th><th class="text-center">Parcelas</th><th>AUT/ID</th><th class="text-center">Tipo</th></tr></thead>
+        <tbody>
+          {% set ns = namespace(soma=0) %}
+          {% for p in venda.pagamentos %}
+            {% set ns.soma = ns.soma + p.valor|float %}
+            <tr>
+              <td>{{ p.forma_pagamento_hora }}</td>
+              <td class="text-end">{{ p.valor|valor_br }}</td>
+              <td class="text-center">{{ p.numero_parcelas or 1 }}x</td>
+              <td>{{ p.aut_id or '—' }}</td>
+              <td class="text-center"><small class="text-muted">{% set fm = (formas_pagamento | selectattr('forma_pagamento_hora', 'equalto', p.forma_pagamento_hora) | first) %}{% if fm and fm.tipo_pagamento %}{{ fm.tipo_pagamento }}{% else %}—{% endif %}</small></td>
+            </tr>
+          {% else %}
+            <tr><td colspan="5" class="text-muted">Nenhuma forma de pagamento registrada.</td></tr>
+          {% endfor %}
+          {% if venda.pagamentos %}
+          <tr class="fw-bold">
+            <td>Total formas</td>
+            <td class="text-end">{{ ns.soma|valor_br }}</td>
+            <td colspan="3"><span class="text-muted">vs Pedido: {{ venda.valor_total|valor_br }}</span>
+              {% if (ns.soma - venda.valor_total|float)|abs > 0.01 %}<span class="badge bg-warning text-dark ms-2">⚠ Diferença</span>{% endif %}
+            </td>
+          </tr>
+          {% endif %}
+        </tbody>
+      </table>
+      {% endif %}
+    </div>
+  </div>
+
+  {# ===================== UM unico botao Salvar Pedido (FU-5) ===================== #}
+  <div class="d-flex gap-2 mb-3 align-items-center flex-wrap" id="btn-salvar-cotacao">
+    <button type="submit" class="btn btn-success" id="btn-salvar"><i class="fas fa-save"></i> Salvar Pedido</button>
     <small class="text-muted">
       {% if is_faturado %}<i class="fas fa-lock"></i> Pedido FATURADO — apenas observações são editáveis.
-      {% elif is_confirmado %}<i class="fas fa-info-circle"></i> Pedido CONFIRMADO — cliente (nome/CPF) não pode mais ser alterado.
-      {% else %}<i class="fas fa-pen"></i> COTAÇÃO — todos os campos editáveis.{% endif %}
+      {% elif is_confirmado %}<i class="fas fa-info-circle"></i> Pedido CONFIRMADO — cliente, motos e pagamentos travados; salva contato/endereço/operacional.
+      {% else %}<i class="fas fa-pen"></i> Salva tudo de uma vez: dados, motos e pagamentos.{% endif %}
     </small>
   </div>
-  {% endif %}
 </form>
-
-<!-- ========================== Moto vendida (itens) ========================== -->
-<div class="card mb-3">
-  <div class="card-header"><strong><i class="fas fa-motorcycle"></i> Moto vendida ({{ venda.itens|length }})</strong></div>
-  <div class="card-body">
-    <div id="d-alerta-frete" class="alert alert-info mb-3" style="display:none;"></div>
-    <div class="table-responsive mb-0">
-      <table class="table table-sm align-middle mb-0">
-        <thead><tr>
-          <th>Chassi</th><th>Modelo</th><th>Cor</th><th class="text-end">Tabela ref.</th>
-          <th class="text-end">Desconto</th><th class="text-end">Final</th>
-          {% if is_cotacao and pode_editar %}<th></th>{% endif %}
-        </tr></thead>
-        <tbody>
-          {% for item in venda.itens %}
-            <tr data-item-chassi="{{ item.numero_chassi }}" data-item-final="{{ item.preco_final|float }}" data-item-tabela="{{ (item.preco_tabela_referencia or 0)|float }}">
-              <td><a href="{{ url_for('hora.estoque_chassi_detalhe', numero_chassi=item.numero_chassi) }}" class="chassi-mono">{{ item.numero_chassi }}</a></td>
-              <td>{{ item.moto.modelo.nome_modelo if item.moto and item.moto.modelo else '—' }}</td>
-              <td>{{ item.moto.cor if item.moto else '—' }}</td>
-              <td class="text-end">{{ item.preco_tabela_referencia|valor_br }}</td>
-              <td class="text-end">{% if item.desconto_aplicado and item.desconto_aplicado > 0 %}<span class="text-success">-{{ item.desconto_aplicado|valor_br }}</span>{% else %}—{% endif %}</td>
-              <td class="text-end"><strong>{{ item.preco_final|valor_br }}</strong></td>
-              {% if is_cotacao and pode_editar %}
-              <td>
-                <div class="d-flex gap-1">
-                  <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="collapse" data-bs-target="#item-edit-{{ item.id }}" title="Editar item"><i class="fas fa-edit"></i></button>
-                  <form method="post" action="{{ url_for('hora.vendas_item_remover', venda_id=venda.id, item_id=item.id) }}"
-                        onsubmit="return confirm('Remover item {{ item.numero_chassi }}? O chassi voltara ao estoque.');">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                    <button type="submit" class="btn btn-sm btn-outline-danger" title="Remover item"><i class="fas fa-trash"></i></button>
-                  </form>
-                </div>
-              </td>
-              {% endif %}
-            </tr>
-            {% if is_cotacao and pode_editar %}
-            <tr id="item-edit-{{ item.id }}" class="collapse">
-              <td colspan="7" class="bg-body-tertiary">
-                {# Editar item = so desconto/valor. Moto travada (modelo/cor/chassi
-                   read-only): trocar a moto = remover + readicionar. #}
-                <form method="post" action="{{ url_for('hora.vendas_item_editar', venda_id=venda.id, item_id=item.id) }}"
-                      class="row g-2 align-items-end"
-                      data-item-edit-root data-preco-tabela="{{ item.preco_tabela_referencia or 0 }}">
-                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                  <div class="col-12 small text-muted mb-1">
-                    <i class="fas fa-lock"></i> Moto travada:
-                    <span class="chassi-mono">{{ item.numero_chassi }}</span> ·
-                    {{ item.moto.modelo.nome_modelo if item.moto and item.moto.modelo else '—' }} ·
-                    {{ item.moto.cor if item.moto else '—' }}.
-                    Para trocar a moto, remova o item e adicione outro.
-                  </div>
-                  <div class="col-md-3">
-                    <label class="form-label small mb-1">Tabela ref.</label>
-                    <input type="text" class="form-control form-control-sm js-preco-tabela" readonly tabindex="-1"
-                           value="{{ item.preco_tabela_referencia|valor_br }}">
-                  </div>
-                  <div class="col-md-2">
-                    <label class="form-label small mb-1">Desconto (%)</label>
-                    <input type="text" class="form-control form-control-sm js-desconto-pct" inputmode="decimal"
-                           value="{{ item.desconto_percentual|numero_br(2) if item.desconto_percentual else '0,00' }}">
-                  </div>
-                  <div class="col-md-3">
-                    <label class="form-label small mb-1">Desconto (R$)</label>
-                    <input type="text" class="form-control form-control-sm js-desconto-rs" inputmode="decimal"
-                           value="{{ item.desconto_aplicado|numero_br(2) if item.desconto_aplicado else '0,00' }}">
-                  </div>
-                  <div class="col-md-2">
-                    <label class="form-label small mb-1">Valor final</label>
-                    <input type="text" name="valor_final" class="form-control form-control-sm fw-bold js-valor" inputmode="decimal"
-                           value="{{ item.preco_final|numero_br(2) }}">
-                  </div>
-                  <div class="col-md-2"><button type="submit" class="btn btn-sm btn-primary w-100">Salvar item</button></div>
-                </form>
-              </td>
-            </tr>
-            {% endif %}
-          {% endfor %}
-        </tbody>
-        <tfoot><tr><th colspan="5" class="text-end">Total:</th><th class="text-end">{{ venda.valor_total|valor_br }}</th>{% if is_cotacao and pode_editar %}<th></th>{% endif %}</tr></tfoot>
-      </table>
-    </div>
-
-    {# Adicionar moto via cascata rica (mesma do /novo) — so em COTACAO #}
-    {% if is_cotacao and pode_editar %}
-    <hr>
-    <h6 class="mb-3"><i class="fas fa-plus-circle"></i> Adicionar moto ao pedido</h6>
-    <form method="post" action="{{ url_for('hora.vendas_item_adicionar', venda_id=venda.id) }}" id="form-add-moto-edicao" class="mb-0">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <input type="hidden" name="numero_chassi" id="hid-add-numero-chassi">
-      <input type="hidden" name="valor_final" id="hid-add-valor-final">
-      {% include 'hora/tagplus/_componente_moto_desconto.html' %}
-      <div class="mt-3"><button type="submit" class="btn btn-info"><i class="fas fa-plus"></i> Adicionar item ao pedido</button></div>
-    </form>
-    <script>
-    (function() {
-      var form = document.getElementById('form-add-moto-edicao');
-      if (!form) return;
-      form.addEventListener('submit', function() {
-        var selChassi = document.getElementById('f-chassi');
-        var inpValor = document.getElementById('f-valor');
-        var hidChassi = document.getElementById('hid-add-numero-chassi');
-        var hidValor = document.getElementById('hid-add-valor-final');
-        if (selChassi && hidChassi) hidChassi.value = selChassi.value;
-        if (inpValor && hidValor) hidValor.value = inpValor.value;
-      });
-    })();
-    </script>
-    {% endif %}
-  </div>
-</div>
+{% else %}
+{# CANCELADO: sem form de edicao (salvar_pedido_completo levantaria guard). #}
+<div class="alert alert-secondary"><i class="fas fa-ban"></i> Pedido CANCELADO — edição desabilitada.</div>
+{% endif %}
 
 <!-- ========================== Peças do pedido (XOR moto; tem qtd, sem chassi) ========================== -->
 <h5 class="mt-4 mb-2"><i class="fas fa-cogs"></i> Peças do pedido ({{ venda.itens_peca|length }})</h5>
@@ -591,103 +616,6 @@
     </small>
   </div>
   {% endif %}
-</div>
-
-<!-- ========================== Pagamento ========================== -->
-<div class="card mb-3" id="campo-forma-pagamento">
-  <div class="card-header d-flex justify-content-between align-items-center">
-    <strong><i class="fas fa-money-bill-wave"></i> Pagamento</strong>
-    {% if is_incompleto %}<span class="badge bg-warning text-dark"><i class="fas fa-exclamation-triangle"></i> Pedido INCOMPLETO — soma das formas deve igualar o valor total</span>{% endif %}
-  </div>
-  <div class="card-body">
-    {% if permite_editar_pagamentos and pode_editar %}
-    <form method="post" action="{{ url_for('hora.vendas_pagamentos_editar', venda_id=venda.id) }}">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <div id="pag-edit-container" data-pag-total="{{ venda.valor_total|float }}">
-        {% for p in venda.pagamentos %}
-        <div class="row g-2 align-items-end mb-2 pag-edit-linha border rounded p-2">
-          <div class="col-md-4">
-            <label class="form-label small mb-1">Forma</label>
-            <select name="pagamento_forma" class="form-select form-select-sm" required>
-              {% for f in formas_pagamento %}
-                <option value="{{ f.forma_pagamento_hora }}" {% if f.forma_pagamento_hora == p.forma_pagamento_hora %}selected{% endif %}>
-                  {{ f.forma_pagamento_hora }}{% if f.descricao %} · {{ f.descricao }}{% endif %}
-                </option>
-              {% endfor %}
-            </select>
-          </div>
-          <div class="col-md-3">
-            <label class="form-label small mb-1">Valor (R$)</label>
-            <input type="text" name="pagamento_valor" class="form-control form-control-sm" value="{{ p.valor|valor_br }}" required>
-          </div>
-          <div class="col-md-2">
-            <label class="form-label small mb-1">Parcelas</label>
-            <input type="number" name="pagamento_parcelas" class="form-control form-control-sm" min="1" max="60" value="{{ p.numero_parcelas or 1 }}">
-          </div>
-          <div class="col-md-2">
-            <label class="form-label small mb-1">AUT/ID</label>
-            <input type="text" name="pagamento_aut_id" class="form-control form-control-sm" maxlength="50" value="{{ p.aut_id or '' }}">
-          </div>
-          <div class="col-md-1 d-flex align-items-end">
-            <button type="button" class="btn btn-sm btn-outline-danger" onclick="this.closest('.pag-edit-linha').remove();"><i class="fas fa-times"></i></button>
-          </div>
-        </div>
-        {% endfor %}
-      </div>
-      <template id="tpl-pag-edit">
-        <div class="row g-2 align-items-end mb-2 pag-edit-linha border rounded p-2">
-          <div class="col-md-4"><label class="form-label small mb-1">Forma</label>
-            <select name="pagamento_forma" class="form-select form-select-sm" required>
-              <option value="">— escolha —</option>
-              {% for f in formas_pagamento %}<option value="{{ f.forma_pagamento_hora }}">{{ f.forma_pagamento_hora }}{% if f.descricao %} · {{ f.descricao }}{% endif %}</option>{% endfor %}
-            </select></div>
-          <div class="col-md-3"><label class="form-label small mb-1">Valor (R$)</label><input type="text" name="pagamento_valor" class="form-control form-control-sm" required></div>
-          <div class="col-md-2"><label class="form-label small mb-1">Parcelas</label><input type="number" name="pagamento_parcelas" class="form-control form-control-sm" min="1" max="60" value="1"></div>
-          <div class="col-md-2"><label class="form-label small mb-1">AUT/ID</label><input type="text" name="pagamento_aut_id" class="form-control form-control-sm" maxlength="50"></div>
-          <div class="col-md-1 d-flex align-items-end"><button type="button" class="btn btn-sm btn-outline-danger" onclick="this.closest('.pag-edit-linha').remove();"><i class="fas fa-times"></i></button></div>
-        </div>
-      </template>
-      <button type="button" class="btn btn-sm btn-outline-primary mt-2"
-              onclick="var t=document.getElementById('tpl-pag-edit');document.getElementById('pag-edit-container').appendChild(t.content.cloneNode(true));">
-        <i class="fas fa-plus"></i> Adicionar forma de pagamento
-      </button>
-      <div class="mt-2 small d-flex gap-3 flex-wrap">
-        <span>Total formas: <strong id="pag-edit-soma">R$ 0,00</strong></span>
-        <span>Pedido: <strong>{{ venda.valor_total|valor_br }}</strong></span>
-        <span id="pag-edit-aviso" class="text-danger" style="display:none;">⚠ Soma difere do total — salvará como INCOMPLETO.</span>
-      </div>
-      <div class="mt-3"><button type="submit" class="btn btn-success"><i class="fas fa-save"></i> Salvar pagamentos</button></div>
-    </form>
-    {% else %}
-    <table class="table table-sm mb-0 align-middle">
-      <thead><tr><th>Forma</th><th class="text-end">Valor</th><th class="text-center">Parcelas</th><th>AUT/ID</th><th class="text-center">Tipo</th></tr></thead>
-      <tbody>
-        {% set ns = namespace(soma=0) %}
-        {% for p in venda.pagamentos %}
-          {% set ns.soma = ns.soma + p.valor|float %}
-          <tr>
-            <td>{{ p.forma_pagamento_hora }}</td>
-            <td class="text-end">{{ p.valor|valor_br }}</td>
-            <td class="text-center">{{ p.numero_parcelas or 1 }}x</td>
-            <td>{{ p.aut_id or '—' }}</td>
-            <td class="text-center"><small class="text-muted">{% set fm = (formas_pagamento | selectattr('forma_pagamento_hora', 'equalto', p.forma_pagamento_hora) | first) %}{% if fm and fm.tipo_pagamento %}{{ fm.tipo_pagamento }}{% else %}—{% endif %}</small></td>
-          </tr>
-        {% else %}
-          <tr><td colspan="5" class="text-muted">Nenhuma forma de pagamento registrada.</td></tr>
-        {% endfor %}
-        {% if venda.pagamentos %}
-        <tr class="fw-bold">
-          <td>Total formas</td>
-          <td class="text-end">{{ ns.soma|valor_br }}</td>
-          <td colspan="3"><span class="text-muted">vs Pedido: {{ venda.valor_total|valor_br }}</span>
-            {% if (ns.soma - venda.valor_total|float)|abs > 0.01 %}<span class="badge bg-warning text-dark ms-2">⚠ Diferença</span>{% endif %}
-          </td>
-        </tr>
-        {% endif %}
-      </tbody>
-    </table>
-    {% endif %}
-  </div>
 </div>
 
 {# Historico de auditoria #}
