@@ -385,22 +385,40 @@ class TestToolForwardsSqlFirstMode:
 
 
 # =====================================================================
-# Task 5 — Regra 13 (contas a receber vencidas) exposta via schema (durable)
+# Task 5 — Regras de negócio 9-13 expostas via schema (durable) — completa
 # =====================================================================
+# As regras 9-13 (antes embutidas SO no prompt do SQLGenerator, linhas ~778-782)
+# vivem nos `business_rules` das tabelas no schema.json e sao expostas ao agente
+# pelo feedback SQL-first (get_tables_schema_text -> _build_schema_feedback).
+# A auditoria #787 alegou que "9-12 seguem so' no Generator" — refutado por
+# verificacao: 9-12 ja' estavam em business_rules; so' a 13 (contas_a_receber)
+# foi adicionada. Estes testes TRAVAM a exposicao (regressao) das 5 regras.
 
-class TestSchemaRule13Exposed:
-    def test_contas_a_receber_business_rule_present(self):
-        sp = T.SchemaProvider()
-        rules = (sp.get_table_schema("contas_a_receber") or {}).get("business_rules", []) or []
-        joined = " ".join(rules).lower()
-        assert "vencidas" in joined        # palavra exclusiva da regra (nao e' nome de campo)
-        assert "parcela_paga" in joined
-        assert "vencimento" in joined
+class TestSchemaBusinessRulesExposed:
+    # tabela -> trechos exclusivos da regra (lower-case) que devem estar presentes
+    _REGRAS = {
+        "carteira_principal": ["qtd_saldo_produto_pedido > 0", "pedidos pendentes"],   # regra 9
+        "separacao": ["sincronizado_nf = false"],                                       # regra 10
+        "movimentacao_estoque": ["sum(qtd_movimentacao)"],                              # regra 11
+        "faturamento_produto": ["status_nf = 'lancado'", "revertida = false"],          # regra 12
+        "contas_a_receber": ["vencidas", "parcela_paga", "vencimento"],                 # regra 13
+    }
 
-    def test_rule13_in_schema_feedback_text(self):
+    @pytest.mark.parametrize("tabela,needles", list(_REGRAS.items()))
+    def test_business_rule_present_in_table_schema(self, tabela, needles):
         sp = T.SchemaProvider()
-        txt = sp.get_tables_schema_text(["contas_a_receber"]).lower()
-        assert "vencidas" in txt            # regra exposta no texto do schema (feedback SQL-first)
+        rules = " ".join((sp.get_table_schema(tabela) or {}).get("business_rules", []) or []).lower()
+        for n in needles:
+            assert n in rules, f"{tabela}: regra de negocio '{n}' ausente em business_rules"
+
+    @pytest.mark.parametrize("tabela,needles", list(_REGRAS.items()))
+    def test_business_rule_exposed_in_sql_first_feedback(self, tabela, needles):
+        # get_tables_schema_text alimenta _build_schema_feedback (caminho SQL-first):
+        # quando o agente erra um campo, recebe os campos REAIS + estas regras.
+        sp = T.SchemaProvider()
+        txt = sp.get_tables_schema_text([tabela]).lower()
+        for n in needles:
+            assert n in txt, f"{tabela}: regra '{n}' nao exposta no feedback SQL-first"
 
 
 # =====================================================================

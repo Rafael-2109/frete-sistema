@@ -151,18 +151,18 @@ Branch `feat/agente-sql-first` (worktree), TDD, flag OFF default. Decisoes em ab
 | 1 | `looks_like_raw_sql` + `normalize_sql_candidate` (puras; guard anti-NL nao-ASCII E artigo ingles `the`/`an` fora de literal — F1; probe remove tambem identificadores `"..."`) |
 | 2+3 | branch SQL-first em `run(sql_first_mode)`: executa literal; guard-rail deterministico bloqueia so' `campo_inexistente` e devolve o schema REAL (campos + query_hints) |
 | 4 | `CONSULTAR_SQL_DESCRIPTION` (factual "quando habilitado") + `system_prompt.md` (nudge canary-safe) |
-| 5 | **PARCIAL** — so' a regra 13 (contas a receber vencidas) migrada para `schema.json` (merge — nao e' regenerado). Regras 9-12 (pedidos pendentes, separacao, etc.) seguem SO no prompt do Generator → **backlog** (migrar para `business_rules` das tabelas respectivas). |
+| 5 | **COMPLETA** — regras 9-13 nos `business_rules` das tabelas (`schema.json`), expostas ao agente pelo feedback SQL-first (`get_tables_schema_text` → `_build_schema_feedback`). A 13 (contas_a_receber) foi adicionada; 9-12 (carteira_principal/separacao/movimentacao_estoque/faturamento_produto) JA' existiam — verificado, ver nota de hardening. Travadas por `TestSchemaBusinessRulesExposed` (5 tabelas × 2 superficies). |
 | 6 | `resolve_sql_first_mode(is_admin)` em `feature_flags.py` + wiring na tool |
 | 7 | repro #787 deterministica (CTE complexa sobrevive literal, sem ROUND/reescrita) |
 
-Cobertura: `tests/agente/test_text_to_sql_sql_first.py` (**71 testes** deterministicos, sem DB/LLM via Generator/Executor monkeypatched). Flag OFF = baseline pytest preservado.
+Cobertura: `tests/agente/test_text_to_sql_sql_first.py` (**79 testes** deterministicos, sem DB/LLM via Generator/Executor monkeypatched). Flag OFF = baseline pytest preservado.
 
 ### Hardening pos-auditoria adversarial (2026-06-04, pre-merge)
 
 Auditoria adversarial multi-dimensional (52 subagentes, 6 dimensoes) — **0 bloqueantes; safety = OK** (SQLSafetyValidator + `SET TRANSACTION READ ONLY` para nao-admin preservados no caminho SQL-first; atalho pula SO Generator+Evaluator). Fechado antes de ligar a flag global:
 - **F1 (detector):** guard anti-prosa-inglesa (`the`/`an` como palavra isolada fora de literal → NL) — fecha o falso positivo "Select the best option from the menu" (code-switch do Opus, P4). + `_sql_structural_probe` remove identificadores `"..."` → corrige falso negativo de identificador acentuado (`"Numero_produto"`). 8 testes.
 - **F2 (testes de seguranca):** `TestSqlFirstSecurity` exercita o BLOQUEIO real de DML de nao-admin no atalho (DELETE/UPDATE barrados na ETAPA 3; SELECT nao-admin = read-only; DROP/ALTER/TRUNCATE nem sao detectados como raw_sql) — rede de regressao que faltava (os 56 originais monkeypatcham o executor). 7 testes, discriminantes (admin permite vs nao-admin bloqueia).
-- **F3:** este registro (Task 5 = PARCIAL; cobertura 56→71).
+- **F3 + Task 5 reavaliada = COMPLETA:** o finding "regras 9-12 so' no Generator" foi **refutado por verificacao** — 9-12 ja' estavam em `business_rules` (carteira_principal/separacao/movimentacao_estoque/faturamento_produto) e expostas no feedback SQL-first; so' faltava a 13 (adicionada). Veredito raso do subagente (mesmo sintoma da "Nota de processo" do roadmap). Travado por `TestSchemaBusinessRulesExposed`. Cobertura 56→79.
 
 ## Runbook de canary (PROD, via env `SQL_AGENT_SQL_FIRST`)
 
@@ -183,7 +183,7 @@ Auditoria adversarial multi-dimensional (52 subagentes, 6 dimensoes) — **0 blo
 - P4-P7 do roadmap (idioma/descoberta-schema, detector de frustracao, summary enganoso, verifier de entrega) — ver `2026-06-04-roadmap-correcoes-agente-787.md`.
 
 ### Achados da auditoria adversarial (nao-bloqueantes — backlog)
-- **Task 5 completa**: migrar regras 9-12 do prompt do Generator (`text_to_sql.py` `SQLGenerator`) para `business_rules` das tabelas `carteira_principal`/`separacao`/`faturamento_produto` no `schema.json` — assim o agente as recebe no feedback de schema do SQL-first (hoje so' a regra 13).
+- **(OPCIONAL) Des-duplicar regras do Generator:** as regras 9-13 vivem em DOIS lugares — no prompt do `SQLGenerator` (linhas ~778-782) E nos `business_rules` do `schema.json`. Nao e' lixo: o Generator usa o catalogo LEVE (nome+descricao+key_fields), NAO le `business_rules`, entao precisa das regras no proprio prompt. So' vale consolidar se/quando o Generator passar a ler `business_rules` (ou for aposentado pos-canary). Ate la', manter as duas fontes em sincronia ao editar qualquer regra.
 - **Confusao diagnostica (MEDIUM):** quando um falso positivo residual do detector escapa, o validador deterministico pode reportar `campo_inexistente` em vez de o Postgres dar `syntax error`, confundindo o agente. Mitigado na origem por F1 (guard de artigo); melhoria opcional: se Postgres devolver `syntax error` numa entrada detectada como raw, logar como falso-positivo e cair no Generator automaticamente.
 - **Multi-statement regex (MEDIUM, PRE-EXISTENTE ao SQL-first):** `SQLSafetyValidator` detecta `;` via regex que tem falsos positivos com escape `\'` e comentarios com `;` — bloqueia queries validas com apostrofo. Componente de seguranca compartilhado; tocar com cuidado (nao e' regressao do SQL-first, mas o atalho aumenta a exposicao a SQL literal complexo).
 - **Guard-rail contornavel via `TEXT_TO_SQL_DETERMINISTIC_VALIDATOR=false` (MEDIUM):** se essa env var desabilitar o validador deterministico, o bloqueio de `campo_inexistente` do SQL-first e' pulado (NAO afeta o safety — DML de nao-admin continua barrado). Documentar a dependencia; nao setar `false` em PROD.
