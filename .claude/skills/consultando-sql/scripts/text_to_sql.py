@@ -230,6 +230,110 @@ def extract_tables_from_sql(sql: str) -> list:
 
 
 # =====================================================================
+# SQL-FIRST — Detector de SQL bruto + normalizador (Fix B, sessao #787)
+# =====================================================================
+# Premissa invertida: o chamador real e o Agente (Opus), que ja sabe SQL.
+# Quando ele envia SQL pronto, devemos executar LITERAL (sem Generator Haiku
+# que adivinha/trunca/reescreve). Estas funcoes PURAS decidem se a "pergunta"
+# ja e SQL e a normalizam. Conservador: na duvida -> NAO e SQL (fallback NL).
+
+# Markdown fence: ```sql ... ``` ou ``` ... ```
+_SQL_FENCE_RE = re.compile(r'^```[a-zA-Z]*\s*\n?(.*?)\n?```$', re.DOTALL)
+# Comentarios SQL no TOPO (para o SQL executado comecar com SELECT/WITH/DML)
+_LEADING_LINE_COMMENT_RE = re.compile(r'^\s*--[^\n]*(?:\n|$)')
+_LEADING_BLOCK_COMMENT_RE = re.compile(r'^\s*/\*.*?\*/', re.DOTALL)
+# Qualquer caractere nao-ASCII fora de literal -> sinal de linguagem natural
+# (identificadores/keywords do banco sao ASCII; acentos PT-BR so em literais).
+_NON_ASCII_RE = re.compile(r'[^\x00-\x7f]')
+# CTE: WITH <ident> AS (
+_CTE_HEAD_RE = re.compile(r'\bWITH\s+[a-zA-Z_]\w*\s+AS\s*\(', re.IGNORECASE)
+# DML em forma canonica de 2 palavras (safety ainda bloqueia escrita de nao-admin)
+_DML_HEAD_RE = re.compile(
+    r'^(?:INSERT\s+INTO\b|UPDATE\s+[a-zA-Z_"][\w".]*|DELETE\s+FROM\b)',
+    re.IGNORECASE,
+)
+
+
+def normalize_sql_candidate(text: str) -> str:
+    """Normaliza um candidato a SQL para execucao literal.
+
+    - Remove cercas markdown (```sql ... ```).
+    - Remove comentarios SQL do TOPO (-- / /* */) para a query comecar com
+      SELECT/WITH/DML (necessario para o SQLSafetyValidator).
+    - Faz strip de espacos nas pontas.
+
+    Comentarios no MEIO da query sao preservados (inofensivos no Postgres).
+    Retorna "" para entrada vazia.
+    """
+    if not text:
+        return ""
+    s = text.strip()
+    m = _SQL_FENCE_RE.match(s)
+    if m:
+        s = m.group(1).strip()
+    # Remover comentarios iniciais ate o primeiro token real
+    prev = None
+    while prev != s:
+        prev = s
+        s = _LEADING_LINE_COMMENT_RE.sub('', s, count=1)
+        s = _LEADING_BLOCK_COMMENT_RE.sub('', s, count=1)
+        s = s.lstrip()
+    return s.strip()
+
+
+def _sql_structural_probe(sql: str) -> str:
+    """Versao do SQL sem comentarios e sem literais de string.
+
+    Usada SO para analise estrutural (detectar SELECT/FROM/nao-ASCII) — nunca
+    para execucao. Remover literais evita que 'from'/acentos dentro de aspas
+    causem falso positivo/negativo.
+    """
+    sql = re.sub(r'/\*.*?\*/', ' ', sql, flags=re.DOTALL)
+    sql = re.sub(r'--[^\n]*', ' ', sql)
+    sql = re.sub(r"'[^']*'", "''", sql)
+    return sql
+
+
+def looks_like_raw_sql(text: str) -> bool:
+    """Heuristica CONSERVADORA: a entrada ja e SQL bruto (vs linguagem natural)?
+
+    True quando, apos normalizar:
+      - comeca com SELECT e contem FROM; ou
+      - e uma CTE (WITH <ident> AS ( ...); ou
+      - comeca com INSERT INTO / UPDATE <t> / DELETE FROM.
+    E NAO contem caractere nao-ASCII fora de literais (sinal de PT-BR/NL).
+
+    Na duvida retorna False (cai no fallback NL -> Generator). Falso negativo
+    so mantem o status quo; falso positivo e recuperavel (Postgres/Safety
+    devolvem erro claro e o agente reformula).
+
+    Limitacao conhecida: prosa em INGLES que comece com 'SELECT ... FROM'
+    (ex: "Select the best option from the menu") seria classificada como SQL.
+    O agente opera em PT-BR (a guarda de nao-ASCII cobre o idioma real); o
+    residual e recuperavel via erro do executor. Documentado de proposito.
+    """
+    s = normalize_sql_candidate(text)
+    if not s:
+        return False
+    probe = _sql_structural_probe(s)
+    # Guarda anti-NL: nao-ASCII fora de literal -> linguagem natural
+    if _NON_ASCII_RE.search(probe):
+        return False
+    head = probe.lstrip()
+    up = head.upper()
+    if re.match(r'WITH\b', up):
+        return bool(_CTE_HEAD_RE.search(probe))
+    if re.match(r'SELECT\b', up):
+        return bool(re.search(r'\bFROM\b', up))
+    if _DML_HEAD_RE.match(head):
+        # UPDATE exige SET (evita NL como "Update me on the status")
+        if up.startswith('UPDATE') and not re.search(r'\bSET\b', up):
+            return False
+        return True
+    return False
+
+
+# =====================================================================
 # SCHEMA PROVIDER (Arquitetura B — Catálogo + Retrieval)
 # =====================================================================
 
