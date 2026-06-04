@@ -29,7 +29,7 @@ atualizado: 2026-06-04
 ## Como iniciar a próxima sessão
 
 1. ~~**Foco primário: Fix B**~~ ✅ **EM PROD** (2026-06-04, mergeado em `main` `e3bf4908c`, flag `SQL_AGENT_SQL_FIRST=on` LIVE + hardening F1/F2, 79 testes). Plano + runbook: `docs/superpowers/plans/2026-06-04-redesign-consultar-sql-sql-first.md`.
-2. **P4–P7** na ordem — correções independentes, cada uma pequena. **P4 ✅ FEITO** (2026-06-04, branch `fix/agente-787-p4-p7`). Seguir **P5 → P6 → P7**. Cada item abaixo traz a evidência (arquivo:linha / id).
+2. **P4–P7** na ordem — correções independentes, cada uma pequena. **P4, P5 ✅ FEITOS** (2026-06-04, branch `fix/agente-787-p4-p7`). Seguir **P6 → P7**. Cada item abaixo traz a evidência (arquivo:linha / id).
 3. Regra: cada fix em PR próprio, flag/canary quando muda comportamento, teste antes (TDD).
 
 ## Roadmap — status dos 7 achados
@@ -40,7 +40,7 @@ atualizado: 2026-06-04
 | **P2** | `mcp__sql` reescreve/trunca/alucina o SQL do agente | Ferramental | ✅ **EM PROD** (`main` `e3bf4908c`, SQL-first com `SQL_AGENT_SQL_FIRST=on` LIVE, 79 testes + hardening F1/F2) | Fix B (doc dedicado) |
 | **P3** | Sem caminho de 1ª classe "SQL complexo → Excel" | Ferramental | ✅ **RESOLVIDO via Decisão #1 (a)** — agente compõe `consultar_sql` SQL-first → `exportar.py` via stdin (sem improviso Bash) | Fix B (Decisão em aberto #1) |
 | **P4** | Agente escreve em inglês no meio do PT-BR + explora tabelas erradas | Prompt/descoberta | ✅ **FEITO** (branch `fix/agente-787-p4-p7`: `<language_policy>` + domínio HORA no `<domain_detection>`, 5 testes) | `system_prompt.md` |
-| **P5** | `frustration_score=0` numa reclamação explícita | Sensor (E1) | 📋 backlog | `services/sentiment_detector.py` |
+| **P5** | `frustration_score=0` numa reclamação explícita | Sensor (E1) | ✅ **FEITO** (branch `fix/agente-787-p4-p7`: marcadores de falha de entrega + trend conservador, 18 testes) | `services/sentiment_detector.py` |
 | **P6** | Summary afirma sucesso (gerado antes da falha) | Sensor (E) | 📋 backlog | `services/session_summarizer.py` |
 | **P7** | Judge/verify detectam a falha mas não previnem; judge crédulo; sem verifier de ENTREGA | Atuador/blueprint | 📋 backlog | GATE-1/E3 + novo verifier de entrega |
 
@@ -70,7 +70,9 @@ Resumo: a tool `consultar_sql` é um tradutor NL→SQL (Generator Haiku, `max_to
 2. **Descoberta de schema HORA:** o catálogo (`get_catalog_text`, `text_to_sql.py:333`) e o `mcp__schema` não tornam óbvio que "lojas HORA" → tabelas `hora_*` (e que `pedido_compras` é Nacom). Avaliar: (a) nota no catálogo desambiguando domínios HORA vs Nacom; (b) `query_hints`/descrição que apontem o conjunto `hora_*` para perguntas de motos/lojas. Conecta com o Fix B (expor schema/hints ao agente).
 
 <a id="p5"></a>
-## P5 — Detector de frustração falhou 📋
+## P5 — Detector de frustração falhou ✅ FEITO
+
+**Resolvido (2026-06-04, branch `fix/agente-787-p4-p7`):** dois lados. (1) **Falso negativo** — marcadores de FALHA DE ENTREGA/RESULTADO em `FRUSTRATION_MARKERS` ("não gerou", "arquivo vazio", "não abre/abriu", "não baixou", "não carrega", "cadê", "deu erro/pau"); "Não gerou o excel, arquivo está vazio" agora pontua 3 (era 0). Marcadores escolhidos para NÃO colidir com consultas de negócio (evitados "não saiu"/"não veio"/"está vazio" genéricos — comuns no domínio logístico). (2) **Falso positivo (parte dos 49%)** — trend cross-turn (Sinal 6) de `all(s>=1)` → `all(s>=2)`: 3 mensagens curtas neutras seguidas não disparam mais (Sinal 5 = +1 não alimenta o trend). Smoke `tests/agente/test_sentiment_detector_p5.py` (18 testes). Ajuste fino adicional dos 49% exige os dados agregados de PROD (backlog).
 
 **Evidência:** `agent_step` id 203 (turno aberto pela mensagem *"Não gerou o excel, arquivo está vazio"*) tem `outcome_signal = {"frustration_score": 0}` — **falso negativo** numa reclamação explícita de falha. No agregado (4 dias, 203 steps): **100 com frustration>0 (49%)** — alto, sugere descalibração nos dois sentidos (excesso no geral, miss no caso óbvio).
 

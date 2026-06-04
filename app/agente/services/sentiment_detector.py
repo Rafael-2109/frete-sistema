@@ -58,6 +58,31 @@ FRUSTRATION_MARKERS = [
     r'\bque droga\b',
     r'\bque saco\b',
     r'\bpreciso disso\b',
+    # Falha de ENTREGA/RESULTADO de ferramenta (P5 #787 — "arquivo vazio" pontuava 0).
+    # Especificos para NAO colidir com consultas de negocio do dominio logistico
+    # (ex: "estoque vazio", "a NF nao saiu", "o pedido nao veio" sao perguntas, nao
+    # frustracao). Por isso evitamos marcadores ambiguos como "nao saiu"/"nao veio".
+    r'\bnão gerou\b',
+    r'\bnao gerou\b',
+    r'\bnão funcionou\b',
+    r'\bnao funcionou\b',
+    r'\bnão abriu\b',
+    r'\bnão abre\b',
+    r'\bnao abre\b',
+    r'\bnão baixou\b',
+    r'\bnão baixa\b',
+    r'\bnao baixa\b',
+    r'\bnão carrega\b',
+    r'\bnao carrega\b',
+    r'\bveio vazio\b',
+    r'\barquivo vazio\b',
+    r'\barquivo está vazio\b',
+    r'\barquivo esta vazio\b',
+    r'\bcadê\b',
+    r'\bcade\b',
+    r'\bdeu erro\b',
+    r'\bdeu pau\b',
+    r'\bdeu ruim\b',
 ]
 
 # Instrução injetada quando frustração é detectada.
@@ -149,7 +174,10 @@ def detect_frustration(
     # Se últimos 2+ turns tiveram score >= 1, frustração crescente
     # =================================================================
     if recent_scores and len(recent_scores) >= 2:
-        if all(s >= 1 for s in recent_scores[-2:]):
+        # P5 (#787): exige sinal REAL (>= 2) nos turnos anteriores. Mensagens curtas
+        # neutras (Sinal 5 = +1) NAO alimentam mais o trend — antes, 3 curtas
+        # seguidas atingiam o threshold (parte dos 49% de falsos positivos).
+        if all(s >= 2 for s in recent_scores[-2:]):
             score += 2
             logger.debug(f"[SENTIMENT] Trend cross-turn: scores recentes={recent_scores[-2:]}")
 
