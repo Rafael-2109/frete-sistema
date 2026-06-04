@@ -1658,7 +1658,8 @@ def get_rule_adhesion_panel(days: int = 30, user_id: Optional[int] = None) -> Di
                        MAX(correction_count) AS cc,
                        COALESCE(SUM(harmful_count), 0) AS harmful,
                        COALESCE(SUM(helpful_count), 0) AS helpful,
-                       BOOL_OR(priority = 'mandatory') AS promovida
+                       BOOL_OR(priority = 'mandatory') AS promovida,
+                       MAX(created_at) AS ultima
                 FROM agent_memories
                 WHERE path LIKE '/memories/corrections/%%'
                   AND error_signature IS NOT NULL
@@ -1685,6 +1686,36 @@ def get_rule_adhesion_panel(days: int = 30, user_id: Optional[int] = None) -> Di
                 'harmful_total': harmful_total,
                 'helpful_total': helpful_total,
                 'available': True,
+            }
+
+            # contencao (leitura RETROATIVA, $0): por assinatura JA promovida a regra dura,
+            # ela "reincidiu" se harmful_count>0 (sinal novo da Fase 3.3B) OU se houve correcao
+            # nova nos ultimos LIMIAR dias (proxy por MAX(created_at) — sem depender da data de
+            # promocao, que nao e registrada). Da leitura HOJE, antes de acumular sinal novo.
+            # Reusa as rows (top-20 por cc): as promovidas reincidem com cc alto e ficam no topo.
+            now = agora_utc_naive()
+            LIMIAR_CONTENCAO_DIAS = 21
+            promovidas = contidas = reincidindo = 0
+            for r in rows:
+                if not bool(r.promovida):
+                    continue
+                promovidas += 1
+                dias = (now - r.ultima).days if r.ultima else None
+                reincide = int(r.harmful or 0) > 0 or (
+                    dias is not None and dias <= LIMIAR_CONTENCAO_DIAS
+                )
+                if reincide:
+                    reincidindo += 1
+                else:
+                    contidas += 1
+            out['contencao'] = {
+                'promovidas': promovidas,
+                'contidas': contidas,
+                'reincidindo': reincidindo,
+                'limiar_dias': LIMIAR_CONTENCAO_DIAS,
+                'taxa_contencao_pct': (
+                    round(100.0 * contidas / promovidas, 1) if promovidas else 0.0
+                ),
             }
         except Exception as col_err:
             try:

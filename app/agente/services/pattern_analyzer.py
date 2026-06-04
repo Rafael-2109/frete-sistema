@@ -1907,6 +1907,53 @@ def _build_personal_extraction_path(tipo: str, descricao: str) -> str:
     return ""
 
 
+def _track_signature_recurrence(user_id: int, error_signature: str) -> bool:
+    """Fase 3.3B — sinal HARMFUL por error_signature (chave canonica de reincidencia).
+
+    Quando o usuario corrige o MESMO erro (mesma error_signature) e ja existe uma regra
+    DURA ('mandatory') viva com essa assinatura, a regra dura FALHOU em prevenir -> harmful++.
+    Desacoplado do dedup-de-CONTEUDO (`_check_memory_duplicate` casa por TEXTO, nao por
+    intencao — por isso o mesmo erro com outro caso/wording escapava e harmful_count ficava
+    0 universal). Usa o indice ix_agent_memories_user_errsig: a error_signature E a chave
+    projetada para casar o mesmo erro entre sessoes (ver instrucao do extrator). Flag-gated
+    (AGENT_OUTCOME_TRACKING). Best-effort: nunca propaga excecao (R1 dos services).
+
+    Returns: True se incrementou harmful em ao menos uma regra dura (=> o caller NAO deve
+    re-incrementar pelo caminho legado de conteudo, evitando dupla-contagem).
+    """
+    try:
+        from ..config.feature_flags import AGENT_OUTCOME_TRACKING
+        if not AGENT_OUTCOME_TRACKING or not error_signature:
+            return False
+        from ..models import AgentMemory
+        from app import db
+        regras = AgentMemory.query.filter(
+            AgentMemory.user_id == user_id,
+            AgentMemory.error_signature == error_signature[:64],
+            AgentMemory.priority == 'mandatory',
+            AgentMemory.is_cold == False,  # noqa: E712
+            AgentMemory.is_directory == False,  # noqa: E712
+        ).all()
+        if not regras:
+            return False
+        for mem in regras:
+            mem.harmful_count = (mem.harmful_count or 0) + 1
+        db.session.commit()
+        logger.info(
+            f"[OUTCOME] Reincidencia por assinatura '{error_signature}' (HARMFUL): "
+            f"{len(regras)} regra(s) dura(s) reincidiu(ram) user={user_id}"
+        )
+        return True
+    except Exception as exc:
+        try:
+            from app import db
+            db.session.rollback()
+        except Exception:
+            pass
+        logger.debug(f"[OUTCOME] track signature recurrence falhou (ignorado): {exc}")
+        return False
+
+
 def _save_personal_insight(
     user_id: int,
     tipo: str,
@@ -1929,6 +1976,13 @@ def _save_personal_insight(
     try:
         from ..models import AgentMemory
         from app import db
+
+        # Fase 3.3B: sinal HARMFUL por error_signature (chave canonica de reincidencia),
+        # ANTES e INDEPENDENTE do dedup-de-conteudo. Se ja existe regra dura com esta
+        # assinatura, esta nova correcao do MESMO erro => a regra dura falhou (harmful++).
+        signature_tracked = False
+        if tipo == 'correcao' and error_signature:
+            signature_tracked = _track_signature_recurrence(user_id, error_signature)
 
         content = (
             f'[{_xml_escape(tipo)}] {_xml_escape(descricao)}\n'
@@ -1974,11 +2028,16 @@ def _save_personal_insight(
                             # negativo; alimenta demote/reescrita na 3.6). So colunas novas (aditivo).
                             try:
                                 from ..config.feature_flags import AGENT_OUTCOME_TRACKING
+                                # Fallback legado por CONTEUDO: so conta harmful aqui quando NAO
+                                # houve casamento por assinatura acima (signature_tracked=False) —
+                                # ex.: correcao sem error_signature. Evita dupla-contagem quando
+                                # _track_signature_recurrence ja incrementou a mesma regra dura.
                                 if (AGENT_OUTCOME_TRACKING and canonica.priority == 'mandatory'
-                                        and hasattr(canonica, 'harmful_count')):
+                                        and hasattr(canonica, 'harmful_count')
+                                        and not signature_tracked):
                                     canonica.harmful_count = (canonica.harmful_count or 0) + 1
                                     logger.info(
-                                        f"[OUTCOME] Regra dura reincidiu (HARMFUL): '{dup_path}' "
+                                        f"[OUTCOME] Regra dura reincidiu (HARMFUL/conteudo): '{dup_path}' "
                                         f"harmful_count={canonica.harmful_count}"
                                     )
                             except Exception:
