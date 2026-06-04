@@ -356,3 +356,23 @@ class TestSchemaRule13Exposed:
         sp = T.SchemaProvider()
         txt = sp.get_tables_schema_text(["contas_a_receber"]).lower()
         assert "vencidas" in txt            # regra exposta no texto do schema (feedback SQL-first)
+
+
+# =====================================================================
+# Task 4 — Description da tool: contrato SQL-first + budget de tamanho
+# =====================================================================
+
+class TestToolDescription:
+    def _desc(self):
+        from app.agente.tools.text_to_sql_tool import CONSULTAR_SQL_DESCRIPTION
+        return CONSULTAR_SQL_DESCRIPTION
+
+    def test_description_within_budget(self):
+        # MCP tool description — manter enxuta (folga ampla vs limites do SDK).
+        assert 0 < len(self._desc()) < 2000
+
+    def test_description_mentions_sql_first_contract(self):
+        d = self._desc().lower()
+        assert "sql-first" in d or "sql first" in d
+        # contrato: aceita SQL pronto + devolve schema real se errar campo
+        assert "schema" in d

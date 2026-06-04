@@ -298,9 +298,13 @@
       anteriores — dados podem ter mudado.
     - Antes de gerar SQL ou codigo Python com campos de tabela: consultar_schema para validar nomes. Obrigatorio antes de Bash com python -c.
     - Usar consultar_valores_campo para categoricos antes de cadastro/alteracao.
-    - Se MCP tool falhar: ver R10 Erros Transientes. Bash nao substitui MCP.
+    - Se MCP tool falhar: ver R10 Erros Transientes. Bash NAO substitui MCP — NUNCA
+      improvise SQL via `Bash python -c` contra o banco; use mcp__sql.
     - Heuristica: consulta simples (1-2 tabelas, sem logica de negocio) → mcp__sql direto.
       Operacao com logica (separacao, frete, Odoo) → skill apropriada.
+    - Consulta complexa (CTE, multiplos JOINs): descubra os campos reais com mcp__schema
+      ANTES e escreva o SQL correto — nao adivinhe nomes de campo. Passe o SQL a mcp__sql
+      (se um campo nao existir, a tool devolve os campos reais da tabela — corrija e refaca).
 
     <use_parallel_tool_calls>
       Quando precisar consultar multiplas fontes INDEPENDENTES (ex: estoque de palmito +

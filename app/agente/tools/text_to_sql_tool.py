@@ -378,6 +378,37 @@ SQL_OUTPUT_SCHEMA: dict[str, Any] = {
 
 
 # =====================================================================
+# DESCRIPTION DA TOOL (constante testavel — budget de tamanho)
+# =====================================================================
+# Extraida para constante de modulo para permitir smoke de tamanho/conteudo
+# (Task 4 — Fix B). A clausula SQL-FIRST e' factual ("quando habilitado") para
+# nao induzir o agente a despejar CTE complexa enquanto o canary esta OFF.
+CONSULTAR_SQL_DESCRIPTION = (
+    "Converte uma pergunta em linguagem natural para SQL PostgreSQL e executa "
+    "no banco de dados do sistema de frete. Retorna dados formatados em tabela "
+    "e dados estruturados (columns, rows, row_count) para processamento programático. "
+    "Use para consultas analíticas: rankings, agregações, distribuições, "
+    "comparações, totais por período, etc. "
+    "Exemplos: 'Top 10 clientes por valor', 'Pedidos pendentes por estado', "
+    "'Valor médio de frete por transportadora'. "
+    "MODO LEITURA (default): aceita SELECT, validado em 3 camadas de segurança "
+    "(keywords destrutivas, tabelas bloqueadas, transação SET READ ONLY). "
+    "MODO ADMIN: quando o prompt contém <sql_admin_context>, esta MESMA tool "
+    "também aceita INSERT, UPDATE e DELETE diretamente (a 'pergunta' pode ser "
+    "o próprio comando SQL). NESTE MODO, NÃO use Bash+Python+SQLAlchemy para "
+    "modificar dados — chame consultar_sql direto. SEMPRE mostre o SQL gerado "
+    "ao usuário e obtenha confirmação ANTES de executar operações de escrita. "
+    "SQL-FIRST: para consultas complexas (CTE, múltiplos JOINs), descubra os campos "
+    "reais com mcp__schema e escreva o SQL correto; quando o modo SQL-first está "
+    "habilitado, a tool executa o SQL LITERAL (sem reescrever) e, se um campo não "
+    "existir, devolve os campos REAIS da tabela para você corrigir e chamar de novo. "
+    "FIDELIDADE: apresente valores EXATOS do resultado — não arredonde, não invente dados, "
+    "não adicione métricas não solicitadas. Se resultado vazio, informe claramente. "
+    "Se campo 'aviso' presente, mencione que houve correção automática."
+)
+
+
+# =====================================================================
 # CUSTOM TOOL — Enhanced MCP with Structured Output
 # =====================================================================
 
@@ -387,23 +418,7 @@ try:
 
     @enhanced_tool(
         "consultar_sql",
-        "Converte uma pergunta em linguagem natural para SQL PostgreSQL e executa "
-        "no banco de dados do sistema de frete. Retorna dados formatados em tabela "
-        "e dados estruturados (columns, rows, row_count) para processamento programático. "
-        "Use para consultas analíticas: rankings, agregações, distribuições, "
-        "comparações, totais por período, etc. "
-        "Exemplos: 'Top 10 clientes por valor', 'Pedidos pendentes por estado', "
-        "'Valor médio de frete por transportadora'. "
-        "MODO LEITURA (default): aceita SELECT, validado em 3 camadas de segurança "
-        "(keywords destrutivas, tabelas bloqueadas, transação SET READ ONLY). "
-        "MODO ADMIN: quando o prompt contém <sql_admin_context>, esta MESMA tool "
-        "também aceita INSERT, UPDATE e DELETE diretamente (a 'pergunta' pode ser "
-        "o próprio comando SQL). NESTE MODO, NÃO use Bash+Python+SQLAlchemy para "
-        "modificar dados — chame consultar_sql direto. SEMPRE mostre o SQL gerado "
-        "ao usuário e obtenha confirmação ANTES de executar operações de escrita. "
-        "FIDELIDADE: apresente valores EXATOS do resultado — não arredonde, não invente dados, "
-        "não adicione métricas não solicitadas. Se resultado vazio, informe claramente. "
-        "Se campo 'aviso' presente, mencione que houve correção automática.",
+        CONSULTAR_SQL_DESCRIPTION,
         {
             "pergunta": Annotated[
                 str,
