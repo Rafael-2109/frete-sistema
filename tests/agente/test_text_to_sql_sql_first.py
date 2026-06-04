@@ -253,3 +253,87 @@ class TestSqlFirstSchemaFeedback:
                             lambda sql, read_write=False: ([{"qtd_saldo": 10}], ["qtd_saldo"]))
         res = pipeline.run("SELECT s.qtd_saldo FROM separacao s LIMIT 5", sql_first_mode="on")
         assert res["sucesso"] is True
+
+
+# =====================================================================
+# Task 6 — resolve_sql_first_mode (flag SQL_AGENT_SQL_FIRST + escopo por admin)
+# =====================================================================
+
+class TestResolveSqlFirstMode:
+    def _r(self):
+        from app.agente.config.feature_flags import resolve_sql_first_mode
+        return resolve_sql_first_mode
+
+    def test_default_off_when_unset(self, monkeypatch):
+        monkeypatch.delenv("SQL_AGENT_SQL_FIRST", raising=False)
+        r = self._r()
+        assert r(True) == "off"
+        assert r(False) == "off"
+
+    def test_off_explicit(self, monkeypatch):
+        monkeypatch.setenv("SQL_AGENT_SQL_FIRST", "off")
+        r = self._r()
+        assert r(True) == "off" and r(False) == "off"
+
+    def test_shadow_for_everyone(self, monkeypatch):
+        monkeypatch.setenv("SQL_AGENT_SQL_FIRST", "shadow")
+        r = self._r()
+        assert r(True) == "shadow" and r(False) == "shadow"
+
+    def test_admin_stage_admin_on_others_shadow(self, monkeypatch):
+        monkeypatch.setenv("SQL_AGENT_SQL_FIRST", "admin")
+        r = self._r()
+        assert r(True) == "on"        # admin -> SQL-first real
+        assert r(False) == "shadow"   # nao-admin -> observa (sem mudar comportamento)
+
+    def test_on_for_everyone(self, monkeypatch):
+        monkeypatch.setenv("SQL_AGENT_SQL_FIRST", "on")
+        r = self._r()
+        assert r(True) == "on" and r(False) == "on"
+
+    def test_invalid_value_falls_back_off(self, monkeypatch):
+        monkeypatch.setenv("SQL_AGENT_SQL_FIRST", "garbage")
+        r = self._r()
+        assert r(True) == "off" and r(False) == "off"
+
+    def test_case_insensitive(self, monkeypatch):
+        monkeypatch.setenv("SQL_AGENT_SQL_FIRST", "ON")
+        r = self._r()
+        assert r(True) == "on"
+
+
+# =====================================================================
+# Task 6 — wiring na tool: _execute_in_app_context repassa sql_first_mode
+# =====================================================================
+
+class TestToolForwardsSqlFirstMode:
+    def test_execute_forwards_sql_first_mode_to_run(self, app):
+        from app.agente.tools import text_to_sql_tool as tool
+
+        captured = {}
+
+        class FakePipeline:
+            def run(self, pergunta, **kwargs):
+                captured["pergunta"] = pergunta
+                captured.update(kwargs)
+                return {"sucesso": True}
+
+        with app.app_context():
+            tool._execute_in_app_context(
+                FakePipeline(), "SELECT 1 FROM carteira_principal", sql_first_mode="on"
+            )
+        assert captured.get("sql_first_mode") == "on"
+
+    def test_execute_defaults_sql_first_mode_off(self, app):
+        from app.agente.tools import text_to_sql_tool as tool
+
+        captured = {}
+
+        class FakePipeline:
+            def run(self, pergunta, **kwargs):
+                captured.update(kwargs)
+                return {"sucesso": True}
+
+        with app.app_context():
+            tool._execute_in_app_context(FakePipeline(), "SELECT 1 FROM carteira_principal")
+        assert captured.get("sql_first_mode") == "off"

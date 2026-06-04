@@ -1017,3 +1017,44 @@ AGENT_DIRECTIVE_LOOKBACK_HOURS = int(os.getenv("AGENT_DIRECTIVE_LOOKBACK_HOURS",
 AGENT_DIRECTIVE_BATCH_LIMIT = int(os.getenv("AGENT_DIRECTIVE_BATCH_LIMIT", "50"))
 # floor de qualidade da sessão de origem (baseline do gate; não há golden do agente principal).
 AGENT_DIRECTIVE_MIN_QUALITY = float(os.getenv("AGENT_DIRECTIVE_MIN_QUALITY", "0.7"))
+
+# =====================================================================
+# SQL-FIRST CANARY (Fix B, sessao #787) — tool consultar_sql
+# =====================================================================
+# Inverte a premissa da tool: o chamador real e' o Agente (Opus), que ja' sabe
+# SQL. Quando ele envia SQL pronto, executar LITERAL (skip Generator Haiku que
+# adivinha/trunca/reescreve); o validador deterministico vira guard-rail.
+#
+# Flag UNICA multivalor, default 'off' (zero regressao). Canary por estagios:
+#   'off'    -> 100% comportamento atual (Generator NL->SQL para todos)
+#   'shadow' -> TODOS observam (log + etapa would_block), sem mudar comportamento
+#   'admin'  -> admins (USUARIOS_SQL_ADMIN) recebem SQL-first real; demais ficam
+#               em 'shadow' (continuam observando, sem mudanca de comportamento)
+#   'on'     -> SQL-first real para TODOS (estagio final 'geral')
+#
+# Lido FRESH em resolve_sql_first_mode() (nao constante de import) para o canary
+# poder avancar via env var sem rebuild. O escopo por admin e' resolvido aqui (no
+# chamador/tool); o pipeline (text_to_sql.run) so' recebe o modo efetivo.
+_SQL_FIRST_VALID = {"off", "shadow", "admin", "on"}
+
+
+def resolve_sql_first_mode(is_admin: bool) -> str:
+    """Resolve o modo SQL-first EFETIVO para este request (Fix B canary).
+
+    Le SQL_AGENT_SQL_FIRST do ambiente e aplica o escopo por admin, retornando
+    um dos modos que o pipeline entende: "off" | "shadow" | "on".
+
+    Args:
+        is_admin: True se o usuario esta em USUARIOS_SQL_ADMIN.
+
+    Returns:
+        "off"    -> pipeline mantem comportamento atual (Generator)
+        "shadow" -> pipeline observa/loga, sem mudar comportamento
+        "on"     -> pipeline executa SQL literal (SQL-first ativo)
+    """
+    raw = os.getenv("SQL_AGENT_SQL_FIRST", "off").strip().lower()
+    if raw not in _SQL_FIRST_VALID:
+        return "off"
+    if raw == "admin":
+        return "on" if is_admin else "shadow"
+    return raw  # off | shadow | on

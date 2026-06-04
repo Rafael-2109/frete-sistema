@@ -146,6 +146,7 @@ def _execute_in_app_context(
     debug_schemas: dict = None,
     admin_mode: bool = False,
     session_id: str = None,
+    sql_first_mode: str = "off",
 ) -> dict:
     """
     Executa pipeline garantindo Flask app context.
@@ -163,6 +164,8 @@ def _execute_in_app_context(
         admin_mode: Bypass seguranca SQL (keywords, tabelas, read-only)
         session_id: UUID da sessao do agente (T4 SQLSessionContext) — propagado
             para o pipeline para contexto DML cross-call em modo admin.
+        sql_first_mode: Modo SQL-first efetivo (Fix B canary): "off"|"shadow"|"on".
+            Resolvido em consultar_sql via resolve_sql_first_mode(is_sql_admin).
     """
     kwargs = {
         'extra_blocked_tables': extra_blocked_tables,
@@ -170,6 +173,7 @@ def _execute_in_app_context(
         'debug_schemas': debug_schemas,
         'admin_mode': admin_mode,
         'session_id': session_id,
+        'sql_first_mode': sql_first_mode,
     }
     try:
         from flask import current_app
@@ -491,6 +495,14 @@ try:
             except Exception:
                 pass  # ContextVar nao disponivel — degrada para sem session_context
 
+            # Fix B canary: resolver o modo SQL-first EFETIVO (off|shadow|on) por
+            # escopo de admin. Default "off" = comportamento atual (zero regressao).
+            try:
+                from ..config.feature_flags import resolve_sql_first_mode
+                sql_first_mode = resolve_sql_first_mode(is_sql_admin)
+            except Exception:
+                sql_first_mode = "off"
+
             # Executar com app context garantido
             result = _execute_in_app_context(
                 pipeline, pergunta,
@@ -499,6 +511,7 @@ try:
                 debug_schemas=debug_schemas,
                 admin_mode=admin_mode or debug_active,
                 session_id=session_id,
+                sql_first_mode=sql_first_mode,
             )
 
             # Formatar resultado legível (TextContent — backward compat)
