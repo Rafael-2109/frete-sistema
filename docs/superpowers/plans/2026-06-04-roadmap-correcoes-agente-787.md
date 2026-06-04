@@ -28,8 +28,8 @@ atualizado: 2026-06-04
 
 ## Como iniciar a próxima sessão
 
-1. ~~**Foco primário: Fix B**~~ ✅ **ENTREGUE** (2026-06-04, branch `feat/agente-sql-first`, flag `SQL_AGENT_SQL_FIRST` OFF, 56 testes). Runbook de canary + decisoes resolvidas no proprio plano: `docs/superpowers/plans/2026-06-04-redesign-consultar-sql-sql-first.md`.
-2. **Próxima sessão: P4–P7** — correções independentes do agente, cada uma pequena. Cada item abaixo já traz a evidência (arquivo:linha / id) para não redescobrir.
+1. ~~**Foco primário: Fix B**~~ ✅ **EM PROD** (2026-06-04, mergeado em `main` `e3bf4908c`, flag `SQL_AGENT_SQL_FIRST=on` LIVE + hardening F1/F2, 79 testes). Plano + runbook: `docs/superpowers/plans/2026-06-04-redesign-consultar-sql-sql-first.md`.
+2. **P4–P7** na ordem — correções independentes, cada uma pequena. **P4 ✅ FEITO** (2026-06-04, branch `fix/agente-787-p4-p7`). Seguir **P5 → P6 → P7**. Cada item abaixo traz a evidência (arquivo:linha / id).
 3. Regra: cada fix em PR próprio, flag/canary quando muda comportamento, teste antes (TDD).
 
 ## Roadmap — status dos 7 achados
@@ -37,9 +37,9 @@ atualizado: 2026-06-04
 | ID | Achado | Natureza | Status | Onde resolver |
 |----|--------|----------|--------|---------------|
 | **P1** | Excel "vazio" no download (TMPDIR mismatch) | I/O — causa-raiz | ✅ **FEITO** (origin/main `788f76f07`, deploy `dep-d8gqa8mrnols73cmjrng`) | — |
-| **P2** | `mcp__sql` reescreve/trunca/alucina o SQL do agente | Ferramental | ✅ **ENTREGUE** (branch `feat/agente-sql-first`, SQL-first atrás de `SQL_AGENT_SQL_FIRST` OFF + canary) | Fix B (doc dedicado) |
+| **P2** | `mcp__sql` reescreve/trunca/alucina o SQL do agente | Ferramental | ✅ **EM PROD** (`main` `e3bf4908c`, SQL-first com `SQL_AGENT_SQL_FIRST=on` LIVE, 79 testes + hardening F1/F2) | Fix B (doc dedicado) |
 | **P3** | Sem caminho de 1ª classe "SQL complexo → Excel" | Ferramental | ✅ **RESOLVIDO via Decisão #1 (a)** — agente compõe `consultar_sql` SQL-first → `exportar.py` via stdin (sem improviso Bash) | Fix B (Decisão em aberto #1) |
-| **P4** | Agente escreve em inglês no meio do PT-BR + explora tabelas erradas | Prompt/descoberta | 📋 backlog | `system_prompt.md` + catálogo/schema HORA |
+| **P4** | Agente escreve em inglês no meio do PT-BR + explora tabelas erradas | Prompt/descoberta | ✅ **FEITO** (branch `fix/agente-787-p4-p7`: `<language_policy>` + domínio HORA no `<domain_detection>`, 5 testes) | `system_prompt.md` |
 | **P5** | `frustration_score=0` numa reclamação explícita | Sensor (E1) | 📋 backlog | `services/sentiment_detector.py` |
 | **P6** | Summary afirma sucesso (gerado antes da falha) | Sensor (E) | 📋 backlog | `services/session_summarizer.py` |
 | **P7** | Judge/verify detectam a falha mas não previnem; judge crédulo; sem verifier de ENTREGA | Atuador/blueprint | 📋 backlog | GATE-1/E3 + novo verifier de entrega |
@@ -59,7 +59,9 @@ atualizado: 2026-06-04
 Resumo: a tool `consultar_sql` é um tradutor NL→SQL (Generator Haiku, `max_tokens=500`, instruído a **adivinhar** campos — `text_to_sql.py:655,675`), mas o chamador real é o Agente (Opus), que sabe mais que o Generator. O Generator vira camada de _downgrade_ que reescreve/trunca/alucina o SQL correto do agente. Proposta: **SQL-first** — o agente envia SQL; o `SQLDeterministicValidator` (schema real, sem LLM, já existe em `text_to_sql.py:738`) vira guard-rail de entrada e devolve os campos reais quando há erro; Generator NL→SQL vira fallback. Flag OFF + canary. P3 (export consulta banco) é a Decisão em aberto #1 do mesmo doc.
 
 <a id="p4"></a>
-## P4 — Idioma (inglês) + descoberta de schema ineficiente 📋
+## P4 — Idioma (inglês) + descoberta de schema ineficiente ✅ FEITO
+
+**Resolvido (2026-06-04, branch `fix/agente-787-p4-p7`):** (1) **idioma** — bloco `<language_policy>` no topo do `system_prompt.md` (toda saída + raciocínio EXPOSTO em PT-BR, proíbe code-switch para inglês com exemplo); (2) **domínio HORA** — terceira entrada no `<domain_detection>` mapeando "motos/lojas HORA" → tabelas `hora_*` + `consultar_schema`, distinguindo de Nacom (alimentos) e Motos Assai (`assai_*`). Smoke `tests/agente/test_system_prompt_p4.py` (5 testes) trava a presença das regras. Nota: as descrições dos `schemas/tables/*.json` são auto-geradas/regeneradas (não editáveis de forma durável) — por isso a desambiguação vive no prompt.
 
 **Evidência:** no turno 2 da #787 o agente escreveu, na resposta ao usuário PT-BR, trechos em inglês — *"The key tables are `moto`, `pedido_compras`. Let me look at their schemas."*, *"Let me filter them out."*, *"I need the columns…"*. Além disso, foi para `pedido_compras`/`moto` (que são da Nacom — matéria-prima) **antes** de descobrir que o correto era `hora_pedido`/`hora_nf_entrada` — gastando ~20K tokens de output só de exploração.
 
