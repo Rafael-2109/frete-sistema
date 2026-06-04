@@ -1417,6 +1417,184 @@ def _aplicar_header(
     return venda
 
 
+def _aplicar_itens(
+    venda: HoraVenda,
+    itens: List[dict],
+    usuario: Optional[str] = None,
+) -> HoraVenda:
+    """Helper FLUSH-ONLY: reconcilia (diff) os itens-moto de uma venda (sem commit).
+
+    Recebe a venda ja buscada e a lista DESEJADA de itens; cada dict tem as
+    chaves:
+        item_id: int | None  (None = linha nova; preenchido = item existente)
+        numero_chassi: str    (so usado em linha nova; troca de chassi de item
+                               existente e IGNORADA — a rota nunca troca chassi)
+        valor_final: Decimal  (preco final desejado)
+
+    Algoritmo de diff (reusa os MESMOS padroes de adicionar/remover/editar_item):
+      - Guard "nao remove o ultimo": se o resultado final teria 0 itens
+        (lista vazia ou todos removidos) -> ValueError ANTES de mutar (sem
+        estado parcial).
+      - Remove (DEVOLVIDA + delete) cada item existente cujo id nao esta na lista.
+      - Para item existente: se valor_final mudou, re-resolve preco da tabela
+        (sem troca de chassi).
+      - Para linha nova (item_id None): lock pessimista no chassi, valida loja,
+        cria HoraVendaItem + flush + evento RESERVADA.
+
+    NAO faz commit, NAO seta venda.status nem recalcula valor_total — isso fica
+    a cargo do caller (orquestrador salvar_pedido_completo).
+    """
+    existentes = {it.id: it for it in venda.itens}
+    ids_submetidos = {i['item_id'] for i in itens if i.get('item_id')}
+
+    # Guard "nao remove o ultimo": calcula a contagem final ANTES de mutar.
+    # remanescentes = itens existentes que continuam + linhas novas.
+    n_remanescentes = sum(1 for iid in existentes if iid in ids_submetidos)
+    n_novos = sum(1 for i in itens if not i.get('item_id'))
+    if (n_remanescentes + n_novos) < 1:
+        raise ValueError('Pedido precisa de ao menos 1 item.')
+
+    # 1) Remover: item existente cujo id NAO esta na lista submetida.
+    for iid, item in list(existentes.items()):
+        if iid in ids_submetidos:
+            continue
+        registrar_evento(
+            numero_chassi=item.numero_chassi,
+            tipo='DEVOLVIDA',
+            origem_tabela='hora_venda_item',
+            origem_id=item.id,
+            loja_id=venda.loja_id,
+            operador=usuario,
+            detalhe=f'Item removido do pedido #{venda.id} (salvar pedido)',
+        )
+        venda_audit.registrar_auditoria(
+            venda_id=venda.id, usuario=usuario or '',
+            acao='REMOVEU_ITEM', item_id=item.id,
+            detalhe=f'chassi={item.numero_chassi} valor={item.preco_final}',
+        )
+        db.session.delete(item)
+    db.session.flush()
+
+    # 2) Atualizar existentes + criar novos.
+    for entrada in itens:
+        item_id = entrada.get('item_id')
+        if item_id and item_id in existentes:
+            # Item existente: so re-resolve preco se o valor_final mudou.
+            # Sem troca de chassi (a rota nao troca chassi de item existente).
+            item = existentes[item_id]
+            valor_alvo = Decimal(str(entrada.get('valor_final')))
+            valor_atual = Decimal(str(item.preco_final))
+            if valor_alvo <= 0:
+                raise ValueError('Valor final deve ser maior que zero')
+            if valor_alvo != valor_atual:
+                moto = HoraMoto.query.get(item.numero_chassi)
+                if moto:
+                    preco_ref, desconto, desconto_pct, tabela_id, _ = _resolver_preco_tabela(
+                        moto.modelo_id, venda.data_venda, valor_alvo,
+                        forma_pagamento_hora=venda.forma_pagamento,
+                    )
+                    item.tabela_preco_id = tabela_id
+                    item.preco_tabela_referencia = preco_ref
+                    item.desconto_aplicado = desconto
+                    item.desconto_percentual = desconto_pct
+                item.preco_final = valor_alvo
+                venda_audit.registrar_auditoria(
+                    venda_id=venda.id, usuario=usuario or '',
+                    acao='EDITOU_ITEM', item_id=item.id,
+                    campo_alterado='preco_final',
+                    valor_antes=valor_atual, valor_depois=valor_alvo,
+                )
+        else:
+            # Linha nova: lock + validacao de loja + RESERVADA (igual adicionar_item_pedido).
+            valor_final_dec = Decimal(str(entrada.get('valor_final')))
+            if valor_final_dec <= 0:
+                raise ValueError('Valor final deve ser maior que zero')
+            moto, ult = _lock_chassi_e_validar_disponivel(entrada.get('numero_chassi') or '')
+            chassi_norm = moto.numero_chassi
+            if ult.loja_id and venda.loja_id and ult.loja_id != venda.loja_id:
+                raise ValueError(
+                    f'Chassi {chassi_norm} esta na loja {ult.loja_id}, mas pedido e da '
+                    f'loja {venda.loja_id} — adicione um chassi da mesma loja.'
+                )
+            preco_ref, desconto, desconto_pct, tabela_id, _ = _resolver_preco_tabela(
+                moto.modelo_id, venda.data_venda, valor_final_dec,
+                forma_pagamento_hora=venda.forma_pagamento,
+            )
+            item = HoraVendaItem(
+                venda_id=venda.id,
+                numero_chassi=chassi_norm,
+                tabela_preco_id=tabela_id,
+                preco_tabela_referencia=preco_ref,
+                desconto_aplicado=desconto,
+                desconto_percentual=desconto_pct,
+                preco_final=valor_final_dec,
+            )
+            db.session.add(item)
+            db.session.flush()
+            registrar_evento(
+                numero_chassi=chassi_norm,
+                tipo='RESERVADA',
+                origem_tabela='hora_venda_item',
+                origem_id=item.id,
+                loja_id=venda.loja_id or ult.loja_id,
+                operador=usuario,
+                detalhe=f'Pedido #{venda.id} item adicionado (salvar pedido)',
+            )
+            venda_audit.registrar_auditoria(
+                venda_id=venda.id, usuario=usuario or '',
+                acao='ADICIONOU_ITEM', item_id=item.id,
+                detalhe=f'chassi={chassi_norm} valor={valor_final_dec}',
+            )
+
+    db.session.flush()
+    return venda
+
+
+def salvar_pedido_completo(
+    venda_id: int,
+    header: dict,
+    itens: List[dict],
+    pagamentos: List[dict],
+    usuario: Optional[str] = None,
+) -> HoraVenda:
+    """Orquestrador FU-5: reconcilia header + itens + pagamentos numa UNICA transacao.
+
+    Compoe os helpers flush-only `_aplicar_header`, `_aplicar_itens` e
+    `_aplicar_pagamentos` e faz o UNICO commit ao final. Itens e pagamentos so
+    sao reconciliados em COTACAO/INCOMPLETO; em CONFIRMADO+ apenas o header e
+    aplicado (matriz `_CAMPOS_EDITAVEIS_HEADER`) e o status fica intacto (nao
+    derruba CONFIRMADO/FATURADO).
+
+    - Header: sempre aplicado (validado pela matriz por status).
+    - Itens: reconciliados (diff) apenas se o pedido estava em COTACAO.
+    - Pagamentos + valor_total + status: recalculados apenas em INCOMPLETO/COTACAO.
+    """
+    venda = HoraVenda.query.get(venda_id)
+    if venda is None:
+        raise ValueError('Venda nao encontrada.')
+
+    _aplicar_header(venda, header or {}, usuario)
+    status_inicial = venda.status
+
+    if status_inicial == VENDA_STATUS_COTACAO:
+        _aplicar_itens(venda, itens or [], usuario)
+        # _aplicar_itens fez delete()/add() via db.session (NAO mutou a colecao
+        # venda.itens em memoria) + flush. Expira a colecao para o sum() abaixo
+        # refletir o estado real do banco (sem o item removido, com o novo).
+        db.session.expire(venda, ['itens'])
+
+    if status_inicial in (VENDA_STATUS_INCOMPLETO, VENDA_STATUS_COTACAO):
+        # valor_total recalculado a partir dos itens ANTES de aplicar os
+        # pagamentos — _aplicar_pagamentos avalia o status contra venda.valor_total,
+        # entao o total precisa estar correto primeiro.
+        venda.valor_total = sum((it.preco_final for it in venda.itens), Decimal('0'))
+        novo_status, _motivos = _aplicar_pagamentos(venda, pagamentos or [], usuario)
+        venda.status = novo_status
+
+    db.session.commit()
+    return venda
+
+
 # --------------------------------------------------------------------------
 # Edicao de itens — so em COTACAO
 # --------------------------------------------------------------------------
