@@ -28,9 +28,29 @@ atualizado: 2026-06-04
 
 ## Como iniciar a próxima sessão
 
-1. ~~**Foco primário: Fix B**~~ ✅ **EM PROD** (2026-06-04, mergeado em `main` `e3bf4908c`, flag `SQL_AGENT_SQL_FIRST=on` LIVE + hardening F1/F2, 79 testes). Plano + runbook: `docs/superpowers/plans/2026-06-04-redesign-consultar-sql-sql-first.md`.
-2. **P4–P7** na ordem — correções independentes, cada uma pequena. **P4, P5, P6 ✅ FEITOS + P7 frente verifier ✅ FEITA** (2026-06-04, branch `fix/agente-787-p4-p7`). Resta a **frente 1 do P7 (calibração do judge)**, em trabalho separado (`feat+gate1-calibracao-judge`). Cada item abaixo traz a evidência (arquivo:linha / id).
-3. Regra: cada fix em PR próprio, flag/canary quando muda comportamento, teste antes (TDD).
+### CHECKPOINT 2026-06-04 — TODOS os 7 achados fechados por código + EM PROD
+
+| Eixo | Estado |
+|---|---|
+| **P1** TMPDIR/Excel vazio | ✅ PROD (`788f76f07`) |
+| **P2** SQL-first | ✅ PROD — flag `SQL_AGENT_SQL_FIRST=on` + hardening F1/F2 + Task 5 (79 testes). Doc: `2026-06-04-redesign-consultar-sql-sql-first.md` |
+| **P3** SQL→Excel via stdin | ✅ resolvido (agente compõe `consultar_sql` → `exportar.py`) |
+| **P4** idioma PT-BR + domínio HORA | ✅ PROD (`<language_policy>` + `<domain_detection>` no `system_prompt.md`, 5 testes) |
+| **P5** detector de frustração | ✅ PROD (marcadores de falha de entrega + trend `all(s>=2)`, 18 testes) |
+| **P6** summary não congela | ✅ PROD (`needs_summarization` + `stale_threshold=2`, 5 testes) |
+| **P7** verifier de ENTREGA | ✅ PROD (guard `_verificar_entrega` em `exportar.py`, 6 testes) |
+| **P7** calibração do judge (GATE-1) | ✅ **JÁ ESTAVA COMPLETA EM PROD** (frente PRÓPRIA, mergeada `40164221b`; flag dedicada `AGENT_CALIBRATION_SAMPLER=true`). NÃO era trabalho do #787 — só faltava o doc T6, consolidado em `d8d13761a`. |
+
+> **GUARDRAIL (inviolável):** `AGENT_EVAL_GATE` (A3 — eval LLM CARO) **permanece OFF. NÃO reativar.** O GATE-1 do judge usa a flag SEPARADA `AGENT_CALIBRATION_SAMPLER` (barata, sem LLM — não confundir).
+
+#### Pontos que FALTAM (atuar na nova sessão)
+
+1. **Validação real #787** (read-only PROD, admin user 1): pedir o relatório de motos HORA em estoque + pedido + NF; confirmar que resolve via `consultar_sql` SQL-first (CTE literal), SEM improviso `Bash python -c`. Logs `[SQL_FIRST] Executando SQL literal`. **Fecha o loop do Fix B.**
+2. **Backlog técnico do SQL-first** (ver `2026-06-04-redesign-consultar-sql-sql-first.md` → "Backlog pós-canary"): des-duplicar regras Generator↔schema (opcional), confusão diagnóstica `syntax error`→fallback, multi-statement regex (safety pré-existente), remover Evaluator pós-canary.
+3. **P5 — ajuste fino dos 49%** de falsos positivos do sentiment: exige análise dos dados agregados de PROD (`agent_step.outcome_signal`).
+4. **GATE-1 — coleta operacional** (NÃO é código; depende de tempo + humano): deixar o `calibration_sampler` acumular ≥1 semana, rotular ≥10 casos no card "Calibração do Judge" (página Insights do agente) → concordance≥80% fecha o GATE-1.
+
+Regra: cada fix em PR próprio, flag/canary quando muda comportamento, TDD.
 
 ## Roadmap — status dos 7 achados
 
@@ -42,7 +62,7 @@ atualizado: 2026-06-04
 | **P4** | Agente escreve em inglês no meio do PT-BR + explora tabelas erradas | Prompt/descoberta | ✅ **FEITO** (branch `fix/agente-787-p4-p7`: `<language_policy>` + domínio HORA no `<domain_detection>`, 5 testes) | `system_prompt.md` |
 | **P5** | `frustration_score=0` numa reclamação explícita | Sensor (E1) | ✅ **FEITO** (branch `fix/agente-787-p4-p7`: marcadores de falha de entrega + trend conservador, 18 testes) | `services/sentiment_detector.py` |
 | **P6** | Summary afirma sucesso (gerado antes da falha) | Sensor (E) | ✅ **FEITO** (branch `fix/agente-787-p4-p7`: `needs_summarization` ganha `stale_threshold` — regenera a cada exchange, 5 testes) | `models.py:needs_summarization` |
-| **P7** | Judge/verify detectam a falha mas não previnem; judge crédulo; sem verifier de ENTREGA | Atuador/blueprint | 🟡 **PARCIAL** — verifier de ENTREGA ✅ FEITO (guard `_verificar_entrega` em `exportar.py`, 6 testes); calibração judge ⏳ trabalho separado (`feat+gate1-calibracao-judge`) | guard + GATE-1/E3 |
+| **P7** | Judge/verify detectam a falha mas não previnem; judge crédulo; sem verifier de ENTREGA | Atuador/blueprint | ✅ **FECHADO (código)** — verifier de ENTREGA FEITO (guard `_verificar_entrega`, 6 testes); calibração do judge JÁ COMPLETA em PROD (frente própria GATE-1, `AGENT_CALIBRATION_SAMPLER=true`) — falta só coleta operacional (não-código) | guard + GATE-1/E3 |
 
 ---
 
