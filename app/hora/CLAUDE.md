@@ -716,6 +716,8 @@ Quatro frentes na tela unificada de Pedido de Venda (`pedido_venda_novo.html`). 
 - **FU-1 (UX)**: autocomplete deve **listar/preencher ao clicar** (hoje só com ≥2 chars digitados) — opt-in em `autocomplete.js` para não afetar as ~20 telas.
 - **FU-2 (refactor)**: área de "Moto vendida" **igual nas 2 telas** (criação vs edição).
 - **FU-3 (feature)**: pedido permite **N motos na CRIAÇÃO** (hoje cria 1; edição já permite N). Unifica com FU-2.
+- **FU-5 (UX)**: **um único "Salvar Pedido" no final** (hoje a edição tem vários "Salvar X" por seção/form granular). Ligado a FU-2+FU-3.
+- **Obs. (investigar)**: motos **aparecem OK em COTAÇÃO** (entrega validada); dúvida se em **INCOMPLETO** não aparecem — o "bug pré-existente" (motos sumidas na edição) está parcialmente esclarecido, verificar por status.
 
 ---
 
