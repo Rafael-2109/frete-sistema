@@ -4,6 +4,8 @@ from __future__ import annotations
 import uuid
 from decimal import Decimal
 
+import pytest
+
 from app import db as _db
 from app.hora.models import HoraLoja, HoraModelo, HoraVenda
 from app.hora.services import venda_service
@@ -70,3 +72,32 @@ def test_criar_venda_legado_chassi_singular_ainda_funciona(db):
         loja_id_override=loja.id, criado_por='t', **_endereco(),
     )
     assert len(venda.itens) == 1 and venda.itens[0].numero_chassi == c1
+
+
+def test_chassi_repetido_levanta_value_error(db):
+    """Chassi repetido no pedido (mesmo apos normalizar uppercase) -> ValueError."""
+    loja = _loja(); modelo = _modelo()
+    c1 = _chassi_estoque(modelo.nome_modelo, loja.id)
+    # Mesmo chassi em minusculas e maiusculas: forma canonica e a mesma (I1).
+    with pytest.raises(ValueError, match='repetido'):
+        venda_service.criar_venda_manual(
+            cpf_cliente='12345678909', nome_cliente='Cliente Dup',
+            itens=[{'numero_chassi': c1.lower(), 'valor_final': Decimal('1000.00')},
+                   {'numero_chassi': c1.upper(), 'valor_final': Decimal('900.00')}],
+            pagamentos=[{'forma_pagamento_hora': 'DINHEIRO', 'valor': Decimal('1900.00'),
+                         'numero_parcelas': 1, 'aut_id': None}],
+            loja_id_override=loja.id, criado_por='t', **_endereco(),
+        )
+
+
+def test_itens_lista_vazia_levanta_value_error(db):
+    """itens=[] -> ValueError ('Pedido precisa de ao menos 1 item.')."""
+    loja = _loja()
+    with pytest.raises(ValueError, match='ao menos 1 item'):
+        venda_service.criar_venda_manual(
+            cpf_cliente='12345678909', nome_cliente='Cliente Vazio',
+            itens=[],
+            pagamentos=[{'forma_pagamento_hora': 'DINHEIRO', 'valor': Decimal('1000.00'),
+                         'numero_parcelas': 1, 'aut_id': None}],
+            loja_id_override=loja.id, criado_por='t', **_endereco(),
+        )

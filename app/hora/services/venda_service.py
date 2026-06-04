@@ -663,26 +663,35 @@ def criar_venda_manual(
 ) -> HoraVenda:
     """Cria pedido de venda manual em status COTACAO ou INCOMPLETO.
 
-    1. Valida CPF, nome, valor, chassi.
-    2. SELECT FOR UPDATE no chassi (impede 2 operadores reservarem o mesmo).
-    3. Resolve loja_id da venda (override do form ou loja do chassi).
+    Aceita N motos via `itens=[{numero_chassi, valor_final}, ...]` (FU-3) ou,
+    retrocompat, 1 moto via `numero_chassi`/`valor_final` singulares. O
+    `valor_total` da venda e a SOMA dos `valor_final` de todos os itens.
+
+    1. Valida CPF, nome, e a lista de itens (N chassis, valor>0, sem repetidos).
+    2. SELECT FOR UPDATE em CADA chassi (impede 2 operadores reservando o mesmo).
+    3. Resolve loja_id da venda (override do form ou loja do 1o chassi).
     4. Multi-formas (migration hora_34): aceita `pagamentos: List[dict]` com
        N formas. Compat: se nao informado mas `forma_pagamento` sim, gera
-       1 pagamento sintetico com valor=valor_final.
+       1 pagamento sintetico com valor=valor_total.
     5. Resolve preco do modelo: se QUALQUER forma e A_PRAZO -> preco a prazo.
     6. Decide status final via `_avaliar_status_pagamento`:
        - COTACAO se pagamentos validos (soma == valor_total + AUT/ID OK).
        - INCOMPLETO senao (vendedor pode editar e completar depois).
-    7. Cria HoraVenda + HoraVendaItem + N HoraVendaPagamento.
-    8. Emite evento RESERVADA mesmo em INCOMPLETO (chassi reservado).
+    7. Cria HoraVenda + N HoraVendaItem + N HoraVendaPagamento.
+    8. Emite evento RESERVADA por chassi mesmo em INCOMPLETO (chassi reservado).
     9. Auditoria: CRIOU.
 
     Args:
+        numero_chassi/valor_final: legacy (1 moto). Ignorados se `itens` for
+            fornecido. Sem `itens` e sem ambos -> ValueError.
+        itens: lista de dicts {numero_chassi, valor_final} (N motos). Chassi
+            normalizado p/ uppercase; repetido (apos normalizar) -> ValueError;
+            valor_final<=0 -> ValueError.
         forma_pagamento: legacy. Quando `pagamentos` nao fornecido, gera 1
-            pagamento sintetico com essa forma e valor=valor_final. Se ambos
+            pagamento sintetico com essa forma e valor=valor_total. Se ambos
             None, status final sera INCOMPLETO (sem forma).
         pagamentos: lista de dicts com keys forma_pagamento_hora, valor,
-            numero_parcelas, aut_id. Soma deve igualar valor_final para sair
+            numero_parcelas, aut_id. Soma deve igualar valor_total para sair
             INCOMPLETO. Pagamentos invalidos (valor<=0 ou forma vazia) sao
             descartados.
     """
@@ -712,7 +721,10 @@ def criar_venda_manual(
     itens_norm = []
     vistos: set = set()
     for it in itens:
-        ch = (it.get('numero_chassi') or '').strip()
+        # Normaliza para a forma canonica (uppercase) ANTES de dedup —
+        # `_lock_chassi_e_validar_disponivel` tambem normaliza p/ uppercase,
+        # entao ['mi123','MI123'] sao o MESMO chassi (a tabela nao tem UNIQUE).
+        ch = (it.get('numero_chassi') or '').strip().upper()
         if not ch:
             raise ValueError('Item sem chassi.')
         if ch in vistos:
@@ -796,7 +808,7 @@ def criar_venda_manual(
     # Loja oficial da venda: override do form (se fornecido) OU loja do
     # primeiro chassi (criterio arbitrario para N itens — operador deve
     # usar loja_id_override em pedidos multi-item).
-    primeiro_chassi_norm = list(chassis_validados.keys())[0]
+    primeiro_chassi_norm = next(iter(chassis_validados))
     loja_id_chassi_primeiro = chassis_validados[primeiro_chassi_norm][1].loja_id
     loja_id = (
         int(loja_id_override) if loja_id_override is not None
@@ -864,9 +876,11 @@ def criar_venda_manual(
     db.session.flush()
 
     # Loop de itens: cria HoraVendaItem + evento RESERVADA por chassi.
-    chassi_norms_criados: list = []
+    chassi_norms_criados: list[str] = []
     for it in itens_norm:
-        chassi_norm = it['numero_chassi'].strip().upper()
+        # `numero_chassi` em itens_norm ja esta na forma canonica (uppercase),
+        # coerente com as chaves de chassis_validados.
+        chassi_norm = it['numero_chassi']
         valor_item_dec = it['valor_final']
         moto, ult = chassis_validados[chassi_norm]
 
