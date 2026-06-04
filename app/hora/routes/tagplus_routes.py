@@ -61,6 +61,39 @@ def _operador() -> str:
     return getattr(current_user, 'nome', None) or 'desconhecido'
 
 
+def _parse_itens_form(form) -> list:
+    """Monta a lista de itens (N motos) a partir de chassi[]/valor[] do form.
+
+    Valor em formato BR ('1.000,00') ou US; chassi vazio e ignorado; valor
+    invalido vira None (o service valida).
+
+    Args:
+        form: werkzeug MultiDict (ou qualquer objeto com .getlist()).
+
+    Returns:
+        Lista de dicts {'numero_chassi': str, 'valor_final': Decimal|None}.
+    """
+    from decimal import Decimal, InvalidOperation
+
+    chassis = form.getlist('chassi')
+    valores = form.getlist('valor')
+    itens = []
+    for i, ch in enumerate(chassis):
+        ch = (ch or '').strip()
+        if not ch:
+            continue
+        v_raw = (valores[i] if i < len(valores) else '') or ''
+        v_str = v_raw.strip()
+        if ',' in v_str:
+            v_str = v_str.replace('.', '').replace(',', '.')
+        try:
+            v = Decimal(v_str) if v_str else None
+        except (InvalidOperation, ValueError):
+            v = None
+        itens.append({'numero_chassi': ch, 'valor_final': v})
+    return itens
+
+
 # ============================================================
 # 1) Conta TagPlus — singleton (config + OAuth)
 # ============================================================
@@ -1041,13 +1074,9 @@ def tagplus_pedido_venda_criar():
     def _g(name: str, max_len: int = 255) -> str:
         return (request.form.get(name) or '').strip()[:max_len]
 
-    valor_raw = _g('valor', 30)
-    try:
-        valor_dec = Decimal(valor_raw.replace('.', '').replace(',', '.')) \
-            if ',' in valor_raw else Decimal(valor_raw)
-    except (InvalidOperation, ValueError):
-        flash(f'Valor invalido: {valor_raw!r}', 'danger')
-        return redirect(url_for('hora.tagplus_pedido_venda_novo'))
+    # Itens: N motos via chassi[]/valor[] (FU-3). _parse_itens_form ignora
+    # chassis vazios e deixa valor_final=None quando invalido (service valida).
+    itens = _parse_itens_form(request.form)
 
     # Frete: modalidade restrita a 0 (CIF) ou 1 (FOB) por decisao do dono
     # (2026-05-07). Outros valores (2, 3, 4, 9) ainda podem entrar via DANFE
@@ -1162,8 +1191,7 @@ def tagplus_pedido_venda_criar():
             endereco_bairro=_g('bairro', 100),
             endereco_cidade=_g('cidade', 100),
             endereco_uf=_g('uf', 2),
-            numero_chassi=_g('chassi', 30),
-            valor_final=valor_dec,
+            itens=itens,
             forma_pagamento=None,  # Legacy fallback: nao mais usado se ha pagamentos.
             telefone_cliente=_g('telefone', 20) or None,
             email_cliente=_g('email', 120) or None,
