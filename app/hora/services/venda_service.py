@@ -635,15 +635,15 @@ def _avaliar_status_pagamento(
 def criar_venda_manual(
     cpf_cliente: str,
     nome_cliente: str,
-    cep: Optional[str],
-    endereco_logradouro: Optional[str],
-    endereco_numero: Optional[str],
-    endereco_complemento: Optional[str],
-    endereco_bairro: Optional[str],
-    endereco_cidade: Optional[str],
-    endereco_uf: Optional[str],
-    numero_chassi: str,
-    valor_final: Decimal,
+    cep: Optional[str] = None,
+    endereco_logradouro: Optional[str] = None,
+    endereco_numero: Optional[str] = None,
+    endereco_complemento: Optional[str] = None,
+    endereco_bairro: Optional[str] = None,
+    endereco_cidade: Optional[str] = None,
+    endereco_uf: Optional[str] = None,
+    numero_chassi: Optional[str] = None,
+    valor_final: Optional[Decimal] = None,
     forma_pagamento: Optional[str] = None,
     telefone_cliente: Optional[str] = None,
     email_cliente: Optional[str] = None,
@@ -659,6 +659,7 @@ def criar_venda_manual(
     consumidor_final: Optional[bool] = None,
     valor_frete=None,
     tipo_frete_calc: Optional[str] = None,
+    itens: Optional[List[dict]] = None,
 ) -> HoraVenda:
     """Cria pedido de venda manual em status COTACAO ou INCOMPLETO.
 
@@ -702,13 +703,33 @@ def criar_venda_manual(
     if not nome_norm:
         raise ValueError('Nome do cliente obrigatorio')
 
-    if valor_final is None or Decimal(valor_final) <= 0:
-        raise ValueError('Valor final deve ser maior que zero')
+    # Normaliza para lista de itens (FU-3). Legado: numero_chassi/valor_final
+    # singulares -> 1 item. Novo: itens=[{numero_chassi, valor_final}, ...].
+    if itens is None:
+        if numero_chassi is None or valor_final is None:
+            raise ValueError('Informe itens=[...] ou numero_chassi/valor_final.')
+        itens = [{'numero_chassi': numero_chassi, 'valor_final': valor_final}]
+    itens_norm = []
+    vistos: set = set()
+    for it in itens:
+        ch = (it.get('numero_chassi') or '').strip()
+        if not ch:
+            raise ValueError('Item sem chassi.')
+        if ch in vistos:
+            raise ValueError(f'Chassi repetido no pedido: {ch}')
+        vistos.add(ch)
+        vf = it.get('valor_final')
+        if vf is None or Decimal(str(vf)) <= 0:
+            raise ValueError(f'Valor final do chassi {ch} deve ser maior que zero')
+        itens_norm.append({'numero_chassi': ch, 'valor_final': Decimal(str(vf))})
+    if not itens_norm:
+        raise ValueError('Pedido precisa de ao menos 1 item.')
 
-    valor_final_dec_pre = Decimal(str(valor_final))
+    # valor_total = soma dos itens (sera atualizado apos flush dos itens).
+    valor_total_dec = sum((it['valor_final'] for it in itens_norm), Decimal('0'))
 
     # Compat: se `pagamentos` nao foi fornecido mas `forma_pagamento` sim,
-    # cria pagamento sintetico (1 forma com valor=valor_final). Se nem um
+    # cria pagamento sintetico (1 forma com valor=valor_total). Se nem um
     # nem outro, lista fica vazia -> status final sera INCOMPLETO.
     pagamentos_norm = _normalizar_pagamentos(pagamentos)
     if not pagamentos_norm and forma_pagamento:
@@ -716,7 +737,7 @@ def criar_venda_manual(
         if forma_legacy and forma_legacy != 'NAO_INFORMADO':
             pagamentos_norm = [{
                 'forma_pagamento_hora': forma_legacy[:20],
-                'valor': valor_final_dec_pre,
+                'valor': valor_total_dec,
                 'numero_parcelas': max(1, int(numero_parcelas or 1)),
                 'aut_id': None,
             }]
@@ -759,22 +780,27 @@ def criar_venda_manual(
             f'intervalo_parcelas_dias fora do intervalo 1..90: {intervalo_parcelas_dias!r}'
         )
 
-    moto, ult = _lock_chassi_e_validar_disponivel(numero_chassi)
-    chassi_norm = moto.numero_chassi
-    loja_id_chassi = ult.loja_id
-    if not loja_id_chassi:
-        raise ValueError(
-            f'Chassi {chassi_norm} sem loja definida no ultimo evento — '
-            f'investigar inconsistencia em hora_moto_evento.'
-        )
+    # Lock + validacao de disponibilidade para TODOS os chassis (fase de
+    # validacao): feito antes de criar HoraVenda para falhar cedo.
+    # Guarda (moto, ult_evento) por chassi para reuse no loop de itens abaixo.
+    chassis_validados: dict = {}
+    for it in itens_norm:
+        moto, ult = _lock_chassi_e_validar_disponivel(it['numero_chassi'])
+        if not ult.loja_id:
+            raise ValueError(
+                f'Chassi {moto.numero_chassi} sem loja definida no ultimo evento — '
+                f'investigar inconsistencia em hora_moto_evento.'
+            )
+        chassis_validados[moto.numero_chassi] = (moto, ult)
 
-    # Loja oficial da venda: override do form (se fornecido) OU loja do chassi.
-    # Quando override e diferente da loja fisica do chassi, equivale a uma
-    # transferencia implicita: o evento RESERVADA gravado abaixo move o chassi
-    # para a loja escolhida (sem evento TRANSFERIDA formal). Decisao de
-    # negocio: usuario optou por nao restringir a coerencia loja-chassi.
+    # Loja oficial da venda: override do form (se fornecido) OU loja do
+    # primeiro chassi (criterio arbitrario para N itens — operador deve
+    # usar loja_id_override em pedidos multi-item).
+    primeiro_chassi_norm = list(chassis_validados.keys())[0]
+    loja_id_chassi_primeiro = chassis_validados[primeiro_chassi_norm][1].loja_id
     loja_id = (
-        int(loja_id_override) if loja_id_override is not None else int(loja_id_chassi)
+        int(loja_id_override) if loja_id_override is not None
+        else int(loja_id_chassi_primeiro)
     )
 
     cep_norm = ''.join(c for c in (cep or '') if c.isdigit()) or None
@@ -785,20 +811,12 @@ def criar_venda_manual(
     if uf_norm and len(uf_norm) != 2:
         raise ValueError(f'UF invalido: {endereco_uf!r} (esperado 2 letras)')
 
-    valor_final_dec = Decimal(str(valor_final))
     data_venda = date.today()
-    (
-        preco_tabela_ref, desconto, desconto_pct,
-        tabela_preco_id, divergencia_tipo,
-    ) = _resolver_preco_tabela(
-        moto.modelo_id, data_venda, valor_final_dec,
-        forma_pagamento_hora=forma_para_preco,
-    )
 
-    # Status final: COTACAO se pagamentos consistentes, senao INCOMPLETO.
-    # INCOMPLETO ainda reserva chassi; bloqueia confirmar/emitir NFe.
+    # Status final: COTACAO se pagamentos consistentes com valor_total, senao INCOMPLETO.
+    # Avaliado DEPOIS de calcular valor_total (soma dos itens).
     status_final, motivos_incompleto = _avaliar_status_pagamento(
-        pagamentos_norm, valor_final_dec,
+        pagamentos_norm, valor_total_dec,
     )
 
     venda = HoraVenda(
@@ -809,7 +827,7 @@ def criar_venda_manual(
         email_cliente=(email_cliente or '').strip()[:120] or None,
         data_venda=data_venda,
         forma_pagamento=forma_norm[:20],
-        valor_total=valor_final_dec,
+        valor_total=valor_total_dec,
         nf_saida_numero=None,
         nf_saida_chave_44=None,
         nf_saida_emitida_em=None,
@@ -845,36 +863,64 @@ def criar_venda_manual(
     db.session.add(venda)
     db.session.flush()
 
-    venda_item = HoraVendaItem(
-        venda_id=venda.id,
-        numero_chassi=chassi_norm,
-        tabela_preco_id=tabela_preco_id,
-        preco_tabela_referencia=preco_tabela_ref,
-        desconto_aplicado=desconto,
-        desconto_percentual=desconto_pct,
-        preco_final=valor_final_dec,
-    )
-    db.session.add(venda_item)
-    db.session.flush()
+    # Loop de itens: cria HoraVendaItem + evento RESERVADA por chassi.
+    chassi_norms_criados: list = []
+    for it in itens_norm:
+        chassi_norm = it['numero_chassi'].strip().upper()
+        valor_item_dec = it['valor_final']
+        moto, ult = chassis_validados[chassi_norm]
 
-    if divergencia_tipo:
-        if divergencia_tipo == 'PRECO_ACIMA_TABELA':
-            _registrar_divergencia(
-                venda_id=venda.id, tipo=divergencia_tipo,
-                numero_chassi=chassi_norm,
-                detalhe=(
-                    f'Preco final R${valor_final_dec} > tabela vigente. '
-                    'Item gravado sem desconto negativo.'
-                ),
-                valor_conferido=str(valor_final_dec),
-            )
-        else:
-            _registrar_divergencia(
-                venda_id=venda.id, tipo=divergencia_tipo,
-                numero_chassi=chassi_norm,
-                detalhe=f'Sem HoraTabelaPreco vigente para modelo {moto.modelo_id}.',
-                valor_conferido=str(valor_final_dec),
-            )
+        (
+            preco_tabela_ref, desconto, desconto_pct,
+            tabela_preco_id, divergencia_tipo,
+        ) = _resolver_preco_tabela(
+            moto.modelo_id, data_venda, valor_item_dec,
+            forma_pagamento_hora=forma_para_preco,
+        )
+
+        venda_item = HoraVendaItem(
+            venda_id=venda.id,
+            numero_chassi=chassi_norm,
+            tabela_preco_id=tabela_preco_id,
+            preco_tabela_referencia=preco_tabela_ref,
+            desconto_aplicado=desconto,
+            desconto_percentual=desconto_pct,
+            preco_final=valor_item_dec,
+        )
+        db.session.add(venda_item)
+        db.session.flush()
+
+        if divergencia_tipo:
+            if divergencia_tipo == 'PRECO_ACIMA_TABELA':
+                _registrar_divergencia(
+                    venda_id=venda.id, tipo=divergencia_tipo,
+                    numero_chassi=chassi_norm,
+                    detalhe=(
+                        f'Preco final R${valor_item_dec} > tabela vigente. '
+                        'Item gravado sem desconto negativo.'
+                    ),
+                    valor_conferido=str(valor_item_dec),
+                )
+            else:
+                _registrar_divergencia(
+                    venda_id=venda.id, tipo=divergencia_tipo,
+                    numero_chassi=chassi_norm,
+                    detalhe=f'Sem HoraTabelaPreco vigente para modelo {moto.modelo_id}.',
+                    valor_conferido=str(valor_item_dec),
+                )
+
+        # Evento RESERVADA: tira chassi do estoque disponivel — emitido mesmo em
+        # INCOMPLETO (a reserva e' valida; a venda e' que ainda esta a completar).
+        registrar_evento(
+            numero_chassi=chassi_norm,
+            tipo='RESERVADA',
+            origem_tabela='hora_venda_item',
+            origem_id=venda_item.id,
+            loja_id=loja_id,
+            operador=criado_por,
+            detalhe=f'Pedido #{venda.id} ({status_final}) para {nome_norm} CPF {cpf_norm}',
+        )
+        chassi_norms_criados.append(chassi_norm)
 
     # Persistencia das N formas de pagamento (multi-formas).
     for p in pagamentos_norm:
@@ -888,21 +934,9 @@ def criar_venda_manual(
     if pagamentos_norm:
         db.session.flush()
 
-    # Evento RESERVADA: tira chassi do estoque disponivel — emitido mesmo em
-    # INCOMPLETO (a reserva e' valida; a venda e' que ainda esta a completar).
-    registrar_evento(
-        numero_chassi=chassi_norm,
-        tipo='RESERVADA',
-        origem_tabela='hora_venda_item',
-        origem_id=venda_item.id,
-        loja_id=loja_id,
-        operador=criado_por,
-        detalhe=f'Pedido #{venda.id} ({status_final}) para {nome_norm} CPF {cpf_norm}',
-    )
-
     detalhe_audit = (
-        f'Pedido manual ({status_final}) chassi={chassi_norm} '
-        f'cliente={nome_norm} valor={valor_final_dec}'
+        f'Pedido manual ({status_final}) chassis={",".join(chassi_norms_criados)} '
+        f'cliente={nome_norm} valor_total={valor_total_dec}'
     )
     if motivos_incompleto:
         detalhe_audit += f' INCOMPLETO: {"; ".join(motivos_incompleto)}'
