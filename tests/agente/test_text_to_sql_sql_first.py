@@ -104,6 +104,51 @@ class TestLooksLikeRawSqlNegative:
 
 
 # =====================================================================
+# F1 (auditoria #787) — endurecer detector: prosa em INGLÊS não é SQL
+# =====================================================================
+# Achado HIGH: "Select the best option from the menu" era classificado como SQL.
+# O agente code-switcha para inglês sob carga (P4) — a guarda anti-NL (não-ASCII)
+# só cobre PT-BR. Prosa inglesa com artigo ("the"/"an") fora de literal => NL.
+
+class TestLooksLikeRawSqlEnglishProse:
+    @pytest.mark.parametrize("txt", [
+        "Select the best option from the menu",
+        "select the report from the dashboard",
+        "Select all the items from the warehouse list",
+        "select an item from the catalog",
+    ])
+    def test_english_prose_with_article_is_not_sql(self, txt):
+        # Artigo inglês ('the'/'an') como palavra isolada fora de literal => NL.
+        assert T.looks_like_raw_sql(txt) is False
+
+    def test_article_as_substring_of_identifier_still_sql(self):
+        # 'the'/'an' como SUBSTRING de identificador NÃO desqualifica (word boundary).
+        assert T.looks_like_raw_sql("SELECT * FROM the_table") is True
+        assert T.looks_like_raw_sql("SELECT another_col FROM t") is True
+        assert T.looks_like_raw_sql("SELECT * FROM cadastro WHERE nome = 'breathe'") is True
+
+    def test_article_inside_string_literal_still_sql(self):
+        # Artigo DENTRO de literal é removido no probe => não desqualifica.
+        assert T.looks_like_raw_sql("SELECT cod FROM t WHERE obs = 'the best option'") is True
+
+
+# =====================================================================
+# F1 (auditoria #787) — corrigir falso negativo: identificador "acentuado"
+# =====================================================================
+# Achado MEDIUM: _sql_structural_probe removia literais ('...') mas NÃO o
+# conteúdo de identificadores entre aspas duplas ("..."), então um acento ali
+# acionava a guarda não-ASCII e o SQL legítimo caía no fallback Generator.
+
+class TestDoubleQuotedIdentifierAccent:
+    def test_double_quoted_accented_identifier_is_sql(self):
+        assert T.looks_like_raw_sql('SELECT "Número_produto" FROM produtos') is True
+
+    def test_double_quoted_accented_identifier_in_cte_is_sql(self):
+        sql = 'WITH base AS (SELECT "Descrição" FROM produtos) SELECT * FROM base'
+        assert T.looks_like_raw_sql(sql) is True
+
+
+# =====================================================================
 # Task 2 — Branch SQL-first em run() (Generator/Executor monkeypatched)
 # =====================================================================
 
@@ -440,3 +485,76 @@ class TestRepro787:
         assert "ROUND" not in captured["sql"]
         assert res["etapas"].get("sql_first") is True
         assert res["etapas"].get("sql_first_blocked") is None
+
+
+# =====================================================================
+# F2 (auditoria #787) — caracterização de SEGURANÇA do caminho SQL-first
+# =====================================================================
+# Critério de aceite #5: o atalho SQL-first pula Generator+Evaluator MAS NÃO
+# afrouxa a ETAPA 3 (SQLSafetyValidator) nem o read-only de não-admin. Os 56
+# testes originais monkeypatcham o executor e não exercitavam o BLOQUEIO de DML
+# real — esta classe fecha esse gap (rede de regressão antes de ligar a flag
+# global). O safety validator roda REAL (não é monkeypatched).
+
+def _counting_executor(counter):
+    def _exec(sql, read_write=False):
+        counter["exec"] += 1
+        counter["rw"] = read_write
+        return ([], [])
+    return _exec
+
+
+class TestSqlFirstSecurity:
+    def test_nonadmin_delete_blocked_by_safety(self, pipeline, monkeypatch):
+        c = {"exec": 0, "rw": None}
+        monkeypatch.setattr(pipeline.executor, "execute", _counting_executor(c))
+        monkeypatch.setattr(pipeline.generator, "generate", _boom_generator)
+        # DELETE FROM é detectado como raw_sql (entra no atalho) e DEVE ser barrado.
+        res = pipeline.run("DELETE FROM separacao", sql_first_mode="on", admin_mode=False)
+        assert res["sucesso"] is not True
+        assert c["exec"] == 0                              # executor NÃO chamado
+        assert res["etapas"]["safety"]["safe"] is False    # barrado na ETAPA 3
+        assert "seguranca" in res.get("aviso", "").lower()
+
+    def test_nonadmin_update_blocked_by_safety(self, pipeline, monkeypatch):
+        c = {"exec": 0, "rw": None}
+        monkeypatch.setattr(pipeline.executor, "execute", _counting_executor(c))
+        monkeypatch.setattr(pipeline.generator, "generate", _boom_generator)
+        res = pipeline.run("UPDATE separacao SET qtd_saldo = 0 WHERE 1=1",
+                           sql_first_mode="on", admin_mode=False)
+        assert res["sucesso"] is not True
+        assert c["exec"] == 0
+        assert res["etapas"]["safety"]["safe"] is False
+
+    def test_admin_delete_permitted_discriminator(self, pipeline, monkeypatch):
+        # Discriminante: o MESMO verbo DELETE com admin_mode=True PASSA (bypass por
+        # design, read_write=True). Prova que os bloqueios acima não são triviais.
+        c = {"exec": 0, "rw": None}
+        monkeypatch.setattr(pipeline.executor, "execute", _counting_executor(c))
+        monkeypatch.setattr(pipeline.generator, "generate", _boom_generator)
+        res = pipeline.run("DELETE FROM separacao WHERE 1=1",
+                           sql_first_mode="on", admin_mode=True)
+        assert res["sucesso"] is True
+        assert c["exec"] == 1
+        assert c["rw"] is True                              # admin -> read_write
+
+    def test_nonadmin_select_is_read_only(self, pipeline, monkeypatch):
+        # Defesa em profundidade: SELECT não-admin no atalho roda read-only
+        # (SET TRANSACTION READ ONLY no executor — read_write=False sempre).
+        c = {"exec": 0, "rw": None}
+        monkeypatch.setattr(pipeline.executor, "execute", _counting_executor(c))
+        monkeypatch.setattr(pipeline.generator, "generate", _boom_generator)
+        res = pipeline.run("SELECT qtd_saldo FROM separacao LIMIT 5",
+                           sql_first_mode="on", admin_mode=False)
+        assert res["sucesso"] is True
+        assert c["rw"] is False
+
+    @pytest.mark.parametrize("ddl", [
+        "DROP TABLE separacao",
+        "ALTER TABLE separacao ADD COLUMN x int",
+        "TRUNCATE separacao",
+    ])
+    def test_destructive_ddl_not_detected_as_raw_sql(self, ddl):
+        # DDL destrutivo NÃO usa o atalho literal (o detector só aceita
+        # SELECT/CTE/DML). Cai no fallback Generator, onde o safety também barra.
+        assert T.looks_like_raw_sql(ddl) is False

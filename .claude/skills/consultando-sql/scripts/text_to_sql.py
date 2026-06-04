@@ -245,6 +245,12 @@ _LEADING_BLOCK_COMMENT_RE = re.compile(r'^\s*/\*.*?\*/', re.DOTALL)
 # Qualquer caractere nao-ASCII fora de literal -> sinal de linguagem natural
 # (identificadores/keywords do banco sao ASCII; acentos PT-BR so em literais).
 _NON_ASCII_RE = re.compile(r'[^\x00-\x7f]')
+# Artigo INGLES ('the'/'an') como palavra isolada fora de literal/identificador
+# -> sinal de prosa em ingles (o agente code-switcha sob carga — achado #787).
+# 'a' fica de fora de proposito (e nome de coluna valido); 'the'/'an' praticamente
+# nunca sao identificadores do dominio. Word-boundary nao casa substring
+# ('the_table', 'another_col' permanecem SQL).
+_ENGLISH_ARTICLE_RE = re.compile(r'\b(?:the|an)\b', re.IGNORECASE)
 # CTE: WITH <ident> AS (
 _CTE_HEAD_RE = re.compile(r'\bWITH\s+[a-zA-Z_]\w*\s+AS\s*\(', re.IGNORECASE)
 # DML em forma canonica de 2 palavras (safety ainda bloqueia escrita de nao-admin)
@@ -282,15 +288,19 @@ def normalize_sql_candidate(text: str) -> str:
 
 
 def _sql_structural_probe(sql: str) -> str:
-    """Versao do SQL sem comentarios e sem literais de string.
+    """Versao do SQL sem comentarios, sem literais de string e sem o conteudo
+    de identificadores entre aspas duplas.
 
-    Usada SO para analise estrutural (detectar SELECT/FROM/nao-ASCII) — nunca
-    para execucao. Remover literais evita que 'from'/acentos dentro de aspas
-    causem falso positivo/negativo.
+    Usada SO para analise estrutural (detectar SELECT/FROM/nao-ASCII/artigos) —
+    nunca para execucao. Remover literais ('...') e identificadores ("...") evita
+    que 'from'/acentos dentro de aspas causem falso positivo/negativo. Em especial,
+    um identificador acentuado valido (ex: "Numero_produto") nao deve acionar a
+    guarda anti-NL de nao-ASCII (achado #787).
     """
     sql = re.sub(r'/\*.*?\*/', ' ', sql, flags=re.DOTALL)
     sql = re.sub(r'--[^\n]*', ' ', sql)
     sql = re.sub(r"'[^']*'", "''", sql)
+    sql = re.sub(r'"[^"]*"', '""', sql)
     return sql
 
 
@@ -307,17 +317,21 @@ def looks_like_raw_sql(text: str) -> bool:
     so mantem o status quo; falso positivo e recuperavel (Postgres/Safety
     devolvem erro claro e o agente reformula).
 
-    Limitacao conhecida: prosa em INGLES que comece com 'SELECT ... FROM'
-    (ex: "Select the best option from the menu") seria classificada como SQL.
-    O agente opera em PT-BR (a guarda de nao-ASCII cobre o idioma real); o
-    residual e recuperavel via erro do executor. Documentado de proposito.
+    Guardas anti-prosa (achado #787): (1) nao-ASCII fora de literal -> PT-BR/NL;
+    (2) artigo ingles ('the'/'an') como palavra isolada -> prosa em ingles (o
+    agente code-switcha sob carga). Cobrem o padrao dominante "Select the X from
+    the Y". Residual (prosa inglesa SEM artigo, rara como input a uma tool SQL)
+    permanece recuperavel via erro do executor.
     """
     s = normalize_sql_candidate(text)
     if not s:
         return False
     probe = _sql_structural_probe(s)
-    # Guarda anti-NL: nao-ASCII fora de literal -> linguagem natural
+    # Guarda anti-NL (PT-BR): nao-ASCII fora de literal -> linguagem natural
     if _NON_ASCII_RE.search(probe):
+        return False
+    # Guarda anti-NL (ingles): artigo isolado fora de literal -> prosa
+    if _ENGLISH_ARTICLE_RE.search(probe):
         return False
     head = probe.lstrip()
     up = head.upper()
