@@ -327,17 +327,25 @@ class AgentSession(db.Model):
         from sqlalchemy.orm.attributes import flag_modified
         flag_modified(self, 'summary')
 
-    def needs_summarization(self, threshold: int = 5) -> bool:
+    def needs_summarization(self, threshold: int = 5, stale_threshold: int = 2) -> bool:
         """
         Verifica se a sessão precisa de (re)sumarização.
 
         Critérios:
-        1. message_count >= threshold
+        1. message_count >= threshold (mínimo para o PRIMEIRO summary)
         2. Não tem summary OU summary está stale
-           (stale = message_count cresceu >= threshold desde último summary)
+           (stale = cresceu >= stale_threshold mensagens desde o último summary)
+
+        P6 (#787): o stale usa `stale_threshold` (default 2 = 1 exchange), NÃO o
+        `threshold` inicial. Antes, reutilizar `threshold` (ex.: 3) congelava um
+        summary gerado cedo (p.ex. pelo gatilho de custo) quando a sessão crescia
+        só 1-2 msgs — o desfecho real (falha/reclamação) não era capturado.
+        `stale_threshold=2` garante que cada novo exchange completo atualize o
+        summary; `=1` desnecessário (custo Sonnet por msg isolada).
 
         Args:
-            threshold: Número mínimo de mensagens para trigger
+            threshold: Número mínimo de mensagens para o primeiro summary
+            stale_threshold: Mensagens novas desde o último summary para re-gerar
 
         Returns:
             True se precisa sumarizar
@@ -352,9 +360,9 @@ class AgentSession(db.Model):
         if not self.summary:
             return True
 
-        # Summary stale: cresceu N+ mensagens desde última sumarização
+        # Summary stale: cresceu stale_threshold+ mensagens desde última sumarização
         messages_since_summary = current_count - (self.summary_message_count or 0)
-        return messages_since_summary >= threshold
+        return messages_since_summary >= stale_threshold
 
     # =========================================================================
     # MÉTODOS DE CLASSE

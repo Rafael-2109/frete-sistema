@@ -29,7 +29,7 @@ atualizado: 2026-06-04
 ## Como iniciar a próxima sessão
 
 1. ~~**Foco primário: Fix B**~~ ✅ **EM PROD** (2026-06-04, mergeado em `main` `e3bf4908c`, flag `SQL_AGENT_SQL_FIRST=on` LIVE + hardening F1/F2, 79 testes). Plano + runbook: `docs/superpowers/plans/2026-06-04-redesign-consultar-sql-sql-first.md`.
-2. **P4–P7** na ordem — correções independentes, cada uma pequena. **P4, P5 ✅ FEITOS** (2026-06-04, branch `fix/agente-787-p4-p7`). Seguir **P6 → P7**. Cada item abaixo traz a evidência (arquivo:linha / id).
+2. **P4–P7** na ordem — correções independentes, cada uma pequena. **P4, P5, P6 ✅ FEITOS** (2026-06-04, branch `fix/agente-787-p4-p7`). Falta **P7**. Cada item abaixo traz a evidência (arquivo:linha / id).
 3. Regra: cada fix em PR próprio, flag/canary quando muda comportamento, teste antes (TDD).
 
 ## Roadmap — status dos 7 achados
@@ -41,7 +41,7 @@ atualizado: 2026-06-04
 | **P3** | Sem caminho de 1ª classe "SQL complexo → Excel" | Ferramental | ✅ **RESOLVIDO via Decisão #1 (a)** — agente compõe `consultar_sql` SQL-first → `exportar.py` via stdin (sem improviso Bash) | Fix B (Decisão em aberto #1) |
 | **P4** | Agente escreve em inglês no meio do PT-BR + explora tabelas erradas | Prompt/descoberta | ✅ **FEITO** (branch `fix/agente-787-p4-p7`: `<language_policy>` + domínio HORA no `<domain_detection>`, 5 testes) | `system_prompt.md` |
 | **P5** | `frustration_score=0` numa reclamação explícita | Sensor (E1) | ✅ **FEITO** (branch `fix/agente-787-p4-p7`: marcadores de falha de entrega + trend conservador, 18 testes) | `services/sentiment_detector.py` |
-| **P6** | Summary afirma sucesso (gerado antes da falha) | Sensor (E) | 📋 backlog | `services/session_summarizer.py` |
+| **P6** | Summary afirma sucesso (gerado antes da falha) | Sensor (E) | ✅ **FEITO** (branch `fix/agente-787-p4-p7`: `needs_summarization` ganha `stale_threshold` — regenera a cada exchange, 5 testes) | `models.py:needs_summarization` |
 | **P7** | Judge/verify detectam a falha mas não previnem; judge crédulo; sem verifier de ENTREGA | Atuador/blueprint | 📋 backlog | GATE-1/E3 + novo verifier de entrega |
 
 ---
@@ -79,7 +79,9 @@ Resumo: a tool `consultar_sql` é um tradutor NL→SQL (Generator Haiku, `max_to
 **Onde:** `app/agente/services/sentiment_detector.py` (flag `USE_SENTIMENT_DETECTION`). Ação: calibrar — expressões como "não gerou", "está vazio", "não funcionou", "de novo" deveriam pontuar. Considerar few-shot/lexicon PT-BR de insatisfação operacional. Validar contra os 49% para reduzir falsos positivos junto.
 
 <a id="p6"></a>
-## P6 — Summary da sessão enganoso 📋
+## P6 — Summary da sessão enganoso ✅ FEITO
+
+**Resolvido (2026-06-04, branch `fix/agente-787-p4-p7`):** causa-raiz = **timing**, não conteúdo (o prompt já captura `alertas`/`RESULTADO: bloqueios`). `AgentSession.needs_summarization` reusava o MESMO `threshold` (3) para o 1º summary E para "stale". Na #787 o gatilho de **custo** ($8.45) gerou o summary cedo (`summary_message_count=2`); a sessão cresceu para 4 (diff=2 `< 3`) e **não regenerou** → "sucesso" congelado antes da reclamação. Fix: parâmetro `stale_threshold` (default **2** = 1 exchange) separado do `threshold` inicial → cada novo exchange completo (incl. o último, com o desfecho) regenera o summary. `=2` e não `=1` evita custo Sonnet por mensagem isolada. Smoke `tests/agente/test_session_summary_p6.py` (5 testes). Caller `_helpers.py:235` inalterado (usa o default).
 
 **Evidência:** `agent_sessions.summary` da #787 foi gerado às `2026-06-03T20:11:16` com `message_count=2` (a sessão terminou com 4 mensagens). O `resumo_geral` afirma que o agente *"gerou o arquivo Excel disponibilizando o link"* (= sucesso) — mas o 1º arquivo estava **quebrado** (404). O summary **não tem** o bug do TMPDIR (capturou só o alerta do `mcp__sql`) e `tarefas_pendentes` ficou vazio. Ou seja: registra **sucesso onde houve falha**.
 
