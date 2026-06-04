@@ -58,7 +58,8 @@ def _chassis_permitidos_subq(lojas_permitidas_ids: Optional[List[int]]):
 
 def chassis(q: str, lojas_permitidas_ids: Optional[List[int]] = None,
             limit: int = _DEFAULT_LIMIT, disponivel: bool = False,
-            modelo_id: Optional[int] = None, cor: Optional[str] = None) -> List[dict]:
+            modelo_id: Optional[int] = None, cor: Optional[str] = None,
+            permitir_vazio: bool = False) -> List[dict]:
     """Busca chassis por substring (sempre uppercase, ilike).
 
     disponivel=True restringe a chassis cujo ULTIMO evento esta em
@@ -67,9 +68,19 @@ def chassis(q: str, lojas_permitidas_ids: Optional[List[int]] = None,
     vendidos. `modelo_id`/`cor` filtram opcionalmente (cascata da tela de
     venda). O JSON inclui `modelo_id` para o front preencher o filtro de
     modelo ao escolher um chassi.
+
+    `permitir_vazio=True` (FU-1): quando `q` e VAZIO, retorna o top-N (ate
+    `limit`) em vez de lista vazia — usado pelo autocomplete que "lista ao
+    clicar" (data-hora-open-on-focus). Nao afeta `q` com 1 caractere (esse
+    continua < _MIN_CHARS -> []), so o vazio total. Os filtros disponivel/
+    modelo_id/cor/loja seguem aplicados.
     """
     q_norm = (q or '').strip().upper()
-    if len(q_norm) < _MIN_CHARS:
+    if not q_norm:
+        if not permitir_vazio:
+            return []
+        # q vazio + permitir_vazio: segue o fluxo (ilike('%%') = top-N filtrado).
+    elif len(q_norm) < _MIN_CHARS:
         return []
 
     base = (

@@ -85,6 +85,10 @@
     }
     const minChars = parseInt(input.dataset.horaMinChars || '2', 10);
     const debounceMs = parseInt(input.dataset.horaDebounceMs || '200', 10);
+    // FU-1 (opt-in): com data-hora-open-on-focus="1", focar/clicar o campo
+    // (sem digitar) lista o top-N — envia q vazio + vazio_ok=1 ao backend.
+    // Default false -> as ~20 telas existentes seguem exigindo >= minChars.
+    const openOnFocus = input.dataset.horaOpenOnFocus === '1';
     const targetId = input.dataset.horaTargetId || null;
     const targetKey = input.dataset.horaTargetKey || DEFAULT_KEYS[tipo] || 'id';
     const targetEl = targetId ? document.getElementById(targetId) : null;
@@ -133,15 +137,20 @@
     }
 
     async function fetchData(q) {
-      if (q.length < minChars) {
+      const qNorm = q || '';
+      // openOnFocus permite q VAZIO (lista top-N); 1 caractere segue cortado.
+      const isEmptyTopN = openOnFocus && qNorm.length === 0;
+      if (qNorm.length < minChars && !isEmptyTopN) {
         close();
         return;
       }
       try {
-        let qs = `?q=${encodeURIComponent(q)}`;
+        let qs = `?q=${encodeURIComponent(qNorm)}`;
         // Le os filtros extra do dataset NO MOMENTO do fetch (dinamico).
         const extraParams = (input.dataset.horaExtraParams || '').replace(/^[?&]+/, '');
         if (extraParams) qs += '&' + extraParams;
+        // Sinaliza ao backend que o q vazio e intencional (retorna top-N).
+        if (isEmptyTopN) qs += '&vazio_ok=1';
         const resp = await fetch(`${url}${qs}`, {
           credentials: 'same-origin',
           headers: { 'Accept': 'application/json' },
@@ -160,10 +169,24 @@
 
     const debounced = debounce(fetchData, debounceMs);
 
+    // openTopN: lista top-N (q vazio) quando openOnFocus. Deduplica
+    // focus+click simultaneos do 1o clique via flag in-flight (evita 2 fetches).
+    let openFetchInFlight = false;
+    function openTopN() {
+      if (!openOnFocus || openFetchInFlight) return;
+      if ((input.value || '').length >= minChars) return;
+      openFetchInFlight = true;
+      fetchData('').finally(() => { openFetchInFlight = false; });
+    }
+
     input.addEventListener('input', () => debounced(input.value || ''));
     input.addEventListener('focus', () => {
       if ((input.value || '').length >= minChars) fetchData(input.value);
+      else openTopN();
     });
+    // Reabre a lista ao clicar com o campo ja focado (ex.: apos selecionar e
+    // querer trocar) — focus nao dispara nesse caso.
+    input.addEventListener('click', openTopN);
     input.addEventListener('blur', () => {
       // Pequeno delay para permitir click no dropdown.
       setTimeout(close, 150);

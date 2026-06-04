@@ -38,12 +38,15 @@ def _limit_arg(default: int = 20, maximum: int = 50) -> int:
 def autocomplete_chassi():
     # Filtros opcionais (tela de Pedido de Venda — cascata + disponibilidade):
     # disponivel=1 restringe a chassis em estoque; modelo_id/cor filtram.
+    # vazio_ok=1 (FU-1): permite q vazio retornar top-N (autocomplete "lista
+    # ao clicar"); sem ele, q vazio mantem o corte por _MIN_CHARS ([]).
     disponivel = (request.args.get('disponivel') or '0').strip() == '1'
     try:
         modelo_id = int(request.args.get('modelo_id') or 0) or None
     except ValueError:
         modelo_id = None
     cor = (request.args.get('cor') or '').strip().upper() or None
+    permitir_vazio = (request.args.get('vazio_ok') or '0').strip() == '1'
     return jsonify(autocomplete_service.chassis(
         q=request.args.get('q') or '',
         lojas_permitidas_ids=lojas_permitidas_ids(),
@@ -51,6 +54,7 @@ def autocomplete_chassi():
         disponivel=disponivel,
         modelo_id=modelo_id,
         cor=cor,
+        permitir_vazio=permitir_vazio,
     ))
 
 

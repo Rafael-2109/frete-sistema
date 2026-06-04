@@ -112,3 +112,35 @@ def test_chassis_sem_disponivel_inclui_vendido(db):
     vendida = _moto_com_eventos(modelo.nome_modelo, loja.id, 'RECEBIDA', 'CONFERIDA', 'VENDIDA')
     res = autocomplete_service.chassis(q='AUTOC', lojas_permitidas_ids=None)
     assert vendida in {r['chassi'] for r in res}
+
+
+# ============================================================
+# FU-1 (2026-06-04): autocomplete lista ao clicar (q vazio -> top-N)
+# ============================================================
+
+def test_chassis_permitir_vazio_retorna_top_n(db):
+    """q vazio + permitir_vazio=True retorna top-N (em estoque), respeitando filtros."""
+    loja = _loja_unica()
+    modelo = _novo_modelo()
+    em_estoque = _moto_com_eventos(modelo.nome_modelo, loja.id, 'RECEBIDA', 'CONFERIDA')
+    vendida = _moto_com_eventos(modelo.nome_modelo, loja.id, 'RECEBIDA', 'CONFERIDA', 'VENDIDA')
+
+    res = autocomplete_service.chassis(
+        q='', lojas_permitidas_ids=None, disponivel=True,
+        modelo_id=modelo.id, permitir_vazio=True,
+    )
+    chassis = {r['chassi'] for r in res}
+    assert em_estoque in chassis
+    assert vendida not in chassis
+
+
+def test_chassis_vazio_sem_permitir_retorna_lista_vazia(db):
+    """Default (permitir_vazio=False): q vazio retorna [] (convencao _MIN_CHARS preservada)."""
+    loja = _loja_unica()
+    modelo = _novo_modelo()
+    _moto_com_eventos(modelo.nome_modelo, loja.id, 'RECEBIDA', 'CONFERIDA')
+
+    res = autocomplete_service.chassis(
+        q='', lojas_permitidas_ids=None, disponivel=True, modelo_id=modelo.id,
+    )
+    assert res == []
