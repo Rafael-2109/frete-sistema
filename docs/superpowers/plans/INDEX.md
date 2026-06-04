@@ -17,6 +17,7 @@ atualizado: 2026-06-04
 - [HORA — Desconsiderar moto de NF de compra](2026-06-03-hora-desconsiderar-moto-nf.md) — flag desconsiderado por item + relaxa FK chassi + valida nao-em-pedido/nao-recebido (9 tasks TDD)
 - [HORA — Unificar Pedido de Venda + filtro loja/vendedor + fix desconto](2026-06-03-hora-unificar-pedido-venda.md) — tela unica cria+edita (remove venda_detalhe), criterio loja/vendedor por usuario, fix drift centavos (13 tasks)
 - [HORA — Pedido de Venda: editar item + Enter=Próximo + chassi autocomplete + regressões](2026-06-03-hora-pedido-venda-edicao-autocomplete.md) — editar moto = só desconto/valor (moto travada); Enter avança campo; chassi autocomplete; restaura CRÍTICOS+ALTOS da unificação (20 tasks, 3 fases)
+- [HORA — Pedido de Venda: unificação multi-item + submit único (FU-2/3/5)](2026-06-04-hora-pedido-venda-unificacao-multi-item.md) — componente _lista_motos compartilhado, N motos na criação, salvar_pedido_completo reconciliador (helpers flush-only + 1 commit), 11 tasks em 4 fases
 - [CarVia: Migracao de conferencia de Sub para Frete (Escopo C)](2026-04-14-carvia-frete-conferencia-migration.md)
 - [Remessa VORTX — Injeção Direta no Odoo](2026-04-15-remessa-vortx-odoo-injection.md)
 - [Agent SDK 0.1.60 Features — Implementation Plan](2026-04-16-agent-sdk-0160-features.md)
