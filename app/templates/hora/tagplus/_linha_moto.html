@@ -1,0 +1,95 @@
+{# ============================================================
+   _linha_moto.html — UMA linha-moto repetivel (criacao multi-item).
+
+   Contexto esperado:
+     it             — item (HoraVendaItem) ou None (linha vazia / template clone)
+     modelos        — lista de modelos com chassi em estoque (para o select)
+     somente_leitura— bool: True => disabled/readonly + sem botao remover
+
+   Derivado de _componente_moto_desconto.html, mas SEM ids globais f-*:
+   usa SO classes .js-* (querySelector por-linha, ver wireLinhaMoto no
+   _pedido_venda_scripts.html) para permitir N linhas sem colisao de id.
+   Renderiza tanto no loop quanto dentro de <template id="tpl-linha-moto">.
+   ============================================================ #}
+<div class="moto-linha border rounded p-3 mb-2" data-row
+     data-preco-tabela="{{ it.preco_tabela_referencia if it else '' }}">
+  <input type="hidden" name="item_id" class="js-item-id" value="{{ it.id if it else '' }}">
+
+  <div class="d-flex justify-content-between align-items-start mb-2">
+    <small class="text-muted"><i class="fas fa-motorcycle"></i> Moto</small>
+    {% if not somente_leitura %}
+      <button type="button" class="btn btn-sm btn-outline-danger js-remover-linha" title="Remover moto">
+        <i class="fas fa-trash"></i>
+      </button>
+    {% endif %}
+  </div>
+
+  <div class="row g-3">
+    <div class="col-md-4">
+      <label class="form-label">Modelo <small class="text-muted">(filtro)</small></label>
+      <select class="form-select js-modelo" {% if somente_leitura %}disabled{% endif %}>
+        <option value="">— escolha o modelo —</option>
+        {% for m in modelos %}
+          <option value="{{ m.id }}">{{ m.nome_modelo }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-md-4">
+      <label class="form-label">Cor <small class="text-muted">(filtro)</small></label>
+      <select class="form-select js-cor" disabled>
+        <option value="">— escolha o modelo primeiro —</option>
+      </select>
+      <small class="text-muted js-cor-status"></small>
+    </div>
+    <div class="col-md-4">
+      <label class="form-label">Chassi <span class="text-danger">*</span></label>
+      <input type="text" name="chassi" class="form-control chassi-mono js-chassi"
+             data-hora-autocomplete="chassi" data-hora-min-chars="2"
+             data-hora-open-on-focus="1"
+             data-hora-extra-params="disponivel=1" autocomplete="off"
+             {% if not somente_leitura %}required{% endif %}
+             {% if somente_leitura %}readonly{% endif %}
+             value="{{ it.numero_chassi if it else '' }}">
+      <small class="text-muted js-chassi-status">Clique para listar ou digite 2+ caracteres (so chassis em estoque). Modelo/cor filtram a busca.</small>
+    </div>
+  </div>
+
+  <hr class="my-3">
+
+  <div class="row g-3 align-items-start">
+    <div class="col-md-3">
+      <label class="form-label">
+        Preço de tabela (R$)
+        <i class="fas fa-info-circle text-muted ms-1"
+           title="Definido em Cadastros → Modelos. Trazido automaticamente conforme o tipo da forma de pagamento (À vista vs A prazo)."></i>
+      </label>
+      <input type="text" class="form-control js-preco-tabela" readonly tabindex="-1"
+             placeholder="—"
+             value="{{ it.preco_tabela_referencia|numero_br(2) if it and it.preco_tabela_referencia else '' }}">
+      <small class="text-muted js-preco-info">Escolha o modelo e a forma de pagamento.</small>
+    </div>
+    <div class="col-md-2">
+      <label class="form-label">Desconto (%)</label>
+      <input type="text" class="form-control js-desconto-pct" inputmode="decimal" placeholder="0,00"
+             value="{{ it.desconto_percentual|numero_br(2) if it and it.desconto_percentual else '0,00' }}"
+             {% if somente_leitura %}readonly{% endif %}>
+    </div>
+    <div class="col-md-3">
+      <label class="form-label">Desconto (R$)</label>
+      <input type="text" class="form-control js-desconto-rs" inputmode="decimal" placeholder="0,00"
+             value="{{ it.desconto_aplicado|numero_br(2) if it and it.desconto_aplicado else '0,00' }}"
+             {% if somente_leitura %}readonly{% endif %}>
+      <small class="text-muted">Preencha % ou R$ — o outro e calculado automaticamente.</small>
+    </div>
+    <div class="col-md-4">
+      <label class="form-label">
+        <strong>Valor final (R$)</strong> <span class="text-danger">*</span>
+      </label>
+      <input type="text" name="valor" class="form-control fw-bold js-valor" inputmode="decimal" placeholder="0,00"
+             {% if not somente_leitura %}required{% endif %}
+             {% if somente_leitura %}readonly{% endif %}
+             value="{{ it.preco_final|numero_br(2) if it and it.preco_final else '' }}">
+      <small class="text-muted">Preço de tabela menos desconto. Editavel.</small>
+    </div>
+  </div>
+</div>

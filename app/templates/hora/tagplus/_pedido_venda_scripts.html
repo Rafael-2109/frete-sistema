@@ -809,5 +809,189 @@
     });
   })();
 
+  // ----------------- Fase 2: lista multi-item (criacao por-linha) ---------
+  // Caminho POR-LINHA, ADITIVO: a cascata global acima (ids f-*) so existe na
+  // EDICAO (componente legado). Na criacao, cada moto e uma .moto-linha
+  // [data-row] dentro de #motos-container, wired por wireLinhaMoto (sem ids
+  // globais => N linhas sem colisao). Reusa parseBR/setBR/arred2/fmtBR/
+  // wireDescontoSync ja definidos no escopo desta IIFE.
+
+  // Busca o preco de tabela do modelo via API e preenche .js-preco-tabela da
+  // linha; re-ancora a sincronia de desconto no novo preco. Forma de pagamento
+  // (A_VISTA/A_PRAZO) e compartilhada no pedido, entao reusa
+  // formaRepresentativaParaPreco() (global) para escolher o preco.
+  async function atualizarPrecoTabelaLinha(row, syncCtl) {
+    const elMod = row.querySelector('.js-modelo');
+    const elPreco = row.querySelector('.js-preco-tabela');
+    const elInfo = row.querySelector('.js-preco-info');
+    if (!elMod) return;
+    const modeloId = elMod.value;
+    if (!modeloId) {
+      row.dataset.precoTabela = '';
+      if (elPreco) elPreco.value = '';
+      if (elInfo) { elInfo.textContent = 'Escolha o modelo e a forma de pagamento.'; elInfo.className = 'text-muted js-preco-info'; }
+      if (syncCtl) syncCtl.setPreco(null);
+      return;
+    }
+    const forma = (typeof formaRepresentativaParaPreco === 'function')
+      ? formaRepresentativaParaPreco() : '';
+    const params = new URLSearchParams({ modelo_id: modeloId });
+    if (forma) params.set('forma_pagamento', forma);
+    if (elInfo) { elInfo.textContent = 'Buscando preço…'; elInfo.className = 'text-muted js-preco-info'; }
+    try {
+      const r = await fetch(`{{ url_for('hora.tagplus_pedido_venda_api_preco_modelo') }}?${params}`);
+      const data = await r.json();
+      if (!data.ok || data.preco == null) {
+        row.dataset.precoTabela = '';
+        if (elPreco) elPreco.value = '';
+        if (syncCtl) syncCtl.setPreco(null);
+        if (elInfo) {
+          let msg = 'Modelo sem preço cadastrado.';
+          if (data && data.preco_a_vista != null) msg += ` (à vista: R$ ${fmtBR(data.preco_a_vista)})`;
+          if (data && data.preco_a_prazo != null) msg += ` (a prazo: R$ ${fmtBR(data.preco_a_prazo)})`;
+          elInfo.textContent = data && data.ok === false ? ('Erro: ' + (data.error || 'desconhecido')) : msg;
+          elInfo.className = (data && data.ok === false ? 'text-danger' : 'text-warning') + ' js-preco-info';
+        }
+        return;
+      }
+      const preco = arred2(Number(data.preco));
+      row.dataset.precoTabela = String(preco);
+      if (elPreco) setBR(elPreco, preco);
+      if (syncCtl) { syncCtl.setPreco(preco); syncCtl.recalc('rs'); }
+      if (elInfo) {
+        const tipoLabel = data.tipo_pagamento === 'A_VISTA' ? 'à vista'
+          : (data.tipo_pagamento === 'A_PRAZO' ? 'a prazo' : 'forma sem classificação — usando preço à vista');
+        const fonteLabel = data.fonte === 'TABELA_LEGADA' ? ' (de tabela legada com vigência)' : '';
+        elInfo.textContent = `Preço de tabela ${tipoLabel}${fonteLabel}.`;
+        elInfo.className = 'text-muted js-preco-info';
+      }
+    } catch (e) {
+      row.dataset.precoTabela = '';
+      if (elPreco) elPreco.value = '';
+      if (syncCtl) syncCtl.setPreco(null);
+      if (elInfo) { elInfo.textContent = 'Falha ao buscar preço: ' + e.message; elInfo.className = 'text-danger js-preco-info'; }
+    }
+  }
+
+  // Liga uma linha-moto: cascata de filtro do chassi (modelo/cor) + sincronia
+  // de desconto ancorada no preco de tabela da propria linha + remover.
+  function wireLinhaMoto(row) {
+    if (!row || row.dataset.linhaMotoInited === '1') return;
+    row.dataset.linhaMotoInited = '1';
+    const elMod = row.querySelector('.js-modelo');
+    const elCor = row.querySelector('.js-cor');
+    const elCh = row.querySelector('.js-chassi');
+
+    // Sincronia desconto %/R$/valor por-escopo (preco da linha).
+    const precoInicial = parseBR(row.dataset.precoTabela);
+    const syncCtl = wireDescontoSync(row, isNaN(precoInicial) ? null : precoInicial);
+
+    // Monta o filtro de disponibilidade do autocomplete de chassi a partir do
+    // modelo/cor da PROPRIA linha (lido dinamicamente pelo autocomplete.js).
+    function atualizarFiltro() {
+      if (!elCh) return;
+      const params = ['disponivel=1'];
+      if (elMod && elMod.value) params.push('modelo_id=' + encodeURIComponent(elMod.value));
+      if (elCor && elCor.value) params.push('cor=' + encodeURIComponent(elCor.value));
+      elCh.dataset.horaExtraParams = params.join('&');
+    }
+
+    // Carrega cores do modelo da linha (mesma API da cascata global).
+    async function carregarCoresLinha() {
+      if (!elMod || !elCor) return;
+      const modeloId = elMod.value;
+      const elCorStatus = row.querySelector('.js-cor-status');
+      elCor.innerHTML = '<option value="">— carregando… —</option>';
+      elCor.disabled = true;
+      if (elCh) elCh.value = '';
+      atualizarFiltro();
+      if (elCorStatus) elCorStatus.textContent = '';
+      if (!modeloId) {
+        elCor.innerHTML = '<option value="">— escolha o modelo primeiro —</option>';
+        return;
+      }
+      try {
+        const r = await fetch(`{{ url_for('hora.tagplus_pedido_venda_api_cores') }}?modelo_id=${encodeURIComponent(modeloId)}`);
+        const data = await r.json();
+        if (!data.ok || !data.cores || !data.cores.length) {
+          elCor.innerHTML = '<option value="">— sem cores em estoque —</option>';
+          if (elCorStatus) { elCorStatus.textContent = 'Nenhum chassi em estoque para este modelo.'; elCorStatus.className = 'text-warning js-cor-status'; }
+          return;
+        }
+        elCor.innerHTML = '<option value="">— escolha a cor —</option>'
+          + data.cores.map(c => `<option value="${c}">${c}</option>`).join('');
+        elCor.disabled = false;
+        if (elCorStatus) { elCorStatus.textContent = `${data.cores.length} cor(es) disponível(eis).`; elCorStatus.className = 'text-muted js-cor-status'; }
+      } catch (e) {
+        elCor.innerHTML = '<option value="">— erro ao carregar —</option>';
+        if (elCorStatus) { elCorStatus.textContent = 'Falha: ' + e.message; elCorStatus.className = 'text-danger js-cor-status'; }
+      }
+    }
+
+    if (elMod) {
+      elMod.addEventListener('change', () => {
+        carregarCoresLinha();
+        atualizarPrecoTabelaLinha(row, syncCtl);
+      });
+    }
+    if (elCor) {
+      elCor.addEventListener('change', () => {
+        atualizarFiltro();
+        if (elCh) elCh.value = '';
+      });
+    }
+    // Ao escolher/digitar um chassi direto: best-effort preenche modelo (se
+    // vazio) e busca o preco de tabela da linha.
+    if (elCh) {
+      elCh.addEventListener('change', async () => {
+        const chassi = (elCh.value || '').trim().toUpperCase();
+        if (chassi.length < 2) return;
+        try {
+          const r = await fetch(
+            `{{ url_for('hora.autocomplete_chassi') }}?q=${encodeURIComponent(chassi)}&disponivel=1&limit=1`,
+            { headers: { 'Accept': 'application/json' } }
+          );
+          const data = await r.json();
+          const item = Array.isArray(data) && data.length ? data[0] : null;
+          if (item && elMod && !elMod.value && item.modelo_id != null) {
+            elMod.value = String(item.modelo_id);
+          }
+          atualizarPrecoTabelaLinha(row, syncCtl);
+        } catch (e) { /* best-effort */ }
+      });
+    }
+
+    // Remover a linha (mantem sempre >= 1 linha no container).
+    const btnRemover = row.querySelector('.js-remover-linha');
+    if (btnRemover) {
+      btnRemover.addEventListener('click', () => {
+        const cont = document.getElementById('motos-container');
+        if (cont && cont.querySelectorAll('[data-row]').length > 1) {
+          row.remove();
+        }
+      });
+    }
+
+    // Estado inicial do filtro.
+    atualizarFiltro();
+  }
+
+  // Init das linhas ja presentes (criacao: 1 linha vazia).
+  document.querySelectorAll('#motos-container [data-row]').forEach(wireLinhaMoto);
+
+  // Add-linha: clona o template, re-inicializa autocomplete e wira a linha.
+  const btnAddLinha = document.getElementById('btn-add-moto-linha');
+  const tplLinha = document.getElementById('tpl-linha-moto');
+  const motosContainer = document.getElementById('motos-container');
+  if (btnAddLinha && tplLinha && motosContainer) {
+    btnAddLinha.addEventListener('click', () => {
+      const frag = tplLinha.content.cloneNode(true);
+      const row = frag.querySelector('[data-row]');
+      motosContainer.appendChild(frag);
+      if (window.HoraAutocomplete) window.HoraAutocomplete.init(row);
+      wireLinhaMoto(row);
+    });
+  }
+
 })();
 </script>

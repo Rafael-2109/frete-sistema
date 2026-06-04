@@ -1,0 +1,26 @@
+{# ============================================================
+   _lista_motos.html — Lista repetivel de motos (criacao multi-item).
+
+   Contexto esperado:
+     itens          — lista de itens (ou vazio/None => 1 linha vazia inicial)
+     modelos        — lista de modelos com chassi em estoque
+     somente_leitura— bool
+
+   Compartilhado criacao+edicao. Hoje so a CRIACAO usa este componente
+   (1 botao "Salvar Pedido"). Cada linha = _linha_moto.html. O botao
+   "Adicionar moto" clona o <template id="tpl-linha-moto"> via JS
+   (ver wireLinhaMoto / btn-add-moto-linha no _pedido_venda_scripts.html).
+   ============================================================ #}
+<div id="motos-container" data-somente-leitura="{{ '1' if somente_leitura else '0' }}">
+  {% for it in (itens if itens else [None]) %}
+    {% include 'hora/tagplus/_linha_moto.html' with context %}
+  {% endfor %}
+</div>
+{% if not somente_leitura %}
+<button type="button" class="btn btn-outline-secondary btn-sm mt-2" id="btn-add-moto-linha">
+  <i class="fas fa-plus"></i> Adicionar moto
+</button>
+<template id="tpl-linha-moto">
+  {% with it = None %}{% include 'hora/tagplus/_linha_moto.html' with context %}{% endwith %}
+</template>
+{% endif %}

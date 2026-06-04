@@ -880,7 +880,9 @@
           </small>
         </div>
       </div>
-      {% include 'hora/tagplus/_componente_moto_desconto.html' %}
+      {% set somente_leitura = false %}
+      {% set itens = [] %}
+      {% include 'hora/tagplus/_lista_motos.html' with context %}
     </div>
   </div>
 
@@ -982,7 +984,7 @@
 
   <div class="d-flex gap-2" id="btn-salvar-cotacao">
     <button type="submit" class="btn btn-success" id="btn-salvar">
-      <i class="fas fa-save"></i> Salvar e conferir NFe
+      <i class="fas fa-save"></i> Salvar Pedido
     </button>
     <a href="{{ url_for('hora.vendas_lista') }}" class="btn btn-secondary">Cancelar</a>
   </div>
