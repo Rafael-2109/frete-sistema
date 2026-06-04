@@ -337,3 +337,22 @@ class TestToolForwardsSqlFirstMode:
         with app.app_context():
             tool._execute_in_app_context(FakePipeline(), "SELECT 1 FROM carteira_principal")
         assert captured.get("sql_first_mode") == "off"
+
+
+# =====================================================================
+# Task 5 — Regra 13 (contas a receber vencidas) exposta via schema (durable)
+# =====================================================================
+
+class TestSchemaRule13Exposed:
+    def test_contas_a_receber_business_rule_present(self):
+        sp = T.SchemaProvider()
+        rules = (sp.get_table_schema("contas_a_receber") or {}).get("business_rules", []) or []
+        joined = " ".join(rules).lower()
+        assert "vencidas" in joined        # palavra exclusiva da regra (nao e' nome de campo)
+        assert "parcela_paga" in joined
+        assert "vencimento" in joined
+
+    def test_rule13_in_schema_feedback_text(self):
+        sp = T.SchemaProvider()
+        txt = sp.get_tables_schema_text(["contas_a_receber"]).lower()
+        assert "vencidas" in txt            # regra exposta no texto do schema (feedback SQL-first)

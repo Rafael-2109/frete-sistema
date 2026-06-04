@@ -281,6 +281,15 @@
         {"name": "dias_em_standby", "type": "integer", "description": "Dias em standby"},
         {"name": "criado_em", "type": "timestamp", "description": "Data de criacao"}
       ]
+    },
+    {
+      "name": "contas_a_receber",
+      "description": "Titulos a receber (parcelas de NFs). Cada registro = 1 parcela a receber.",
+      "business_rules": [
+        "Para 'contas a receber vencidas': filtrar vencimento < CURRENT_DATE AND parcela_paga = False",
+        "parcela_paga = True significa parcela quitada (baixada); False = em aberto",
+        "Total em aberto: SUM(valor) WHERE parcela_paga = False"
+      ]
     }
   ],
   "joins_comuns": [
