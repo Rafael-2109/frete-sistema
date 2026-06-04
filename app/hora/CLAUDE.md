@@ -711,6 +711,12 @@ Quatro frentes na tela unificada de Pedido de Venda (`pedido_venda_novo.html`). 
 
 **Sem migration** (nenhuma mudança de schema). Validação: pytest `tests/hora/` verde · `node --check` no JS renderizado · Jinja compila.
 
+**Follow-ups v2 (próxima sessão — NÃO feitos; reportados 2026-06-03 pós-deploy)** — detalhes na spec, seção "Follow-ups v2". Brainstorming antes de codar (FU-2+FU-3 são refactor grande):
+- **FU-4 (BUG, prioridade)**: autocomplete de chassi **não filtra modelo+cor** (o `data-hora-extra-params` é setado por `atualizarFiltroChassi`, mas o filtro não chega no fetch — investigar front/ordem de eventos ou deploy não concluído; backend tem teste verde).
+- **FU-1 (UX)**: autocomplete deve **listar/preencher ao clicar** (hoje só com ≥2 chars digitados) — opt-in em `autocomplete.js` para não afetar as ~20 telas.
+- **FU-2 (refactor)**: área de "Moto vendida" **igual nas 2 telas** (criação vs edição).
+- **FU-3 (feature)**: pedido permite **N motos na CRIAÇÃO** (hoje cria 1; edição já permite N). Unifica com FU-2.
+
 ---
 
 ## Onboarding Tours (2026-05-08)
