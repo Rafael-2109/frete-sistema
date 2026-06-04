@@ -289,7 +289,19 @@
       if (!isNaN(v)) soma += v;
     });
     if (elPagSoma) elPagSoma.textContent = 'R$ ' + fmtBR(soma);
-    const totalPedido = elValor ? parseBR(elValor.value) : NaN;
+    // Total do pedido: na criacao multi-item (sem f-valor global) soma os
+    // valores finais das N linhas-moto; no caminho legado (edicao add-moto)
+    // usa o f-valor unico.
+    let totalPedido;
+    const motosCont = document.getElementById('motos-container');
+    if (motosCont) {
+      totalPedido = 0;
+      motosCont.querySelectorAll('[data-row] .js-valor').forEach(inp => {
+        const v = parseBR(inp.value); if (!isNaN(v)) totalPedido += v;
+      });
+    } else {
+      totalPedido = elValor ? parseBR(elValor.value) : NaN;
+    }
     if (elPagTotalPedido) elPagTotalPedido.textContent =
       isNaN(totalPedido) ? 'R$ 0,00' : 'R$ ' + fmtBR(totalPedido);
     if (elPagAviso) {
@@ -686,11 +698,26 @@
         alert('CEP deve ter 8 dígitos.');
         return;
       }
-      const valor = elValor ? (elValor.value || '').replace(/\./g, '').replace(',', '.') : '';
-      if (!valor || isNaN(Number(valor)) || Number(valor) <= 0) {
-        e.preventDefault();
-        alert('Valor deve ser maior que zero.');
-        return;
+      // Valor: na criacao multi-item (sem f-valor global) valida CADA linha;
+      // so cai no caminho legado (f-valor unico) quando nao ha #motos-container.
+      const motoVals = Array.from(document.querySelectorAll('#motos-container [data-row] .js-valor'));
+      if (motoVals.length) {
+        const allOk = motoVals.every(inp => {
+          const n = Number((inp.value || '').replace(/\./g, '').replace(',', '.'));
+          return inp.value && !isNaN(n) && n > 0;
+        });
+        if (!allOk) {
+          e.preventDefault();
+          alert('Cada moto precisa de valor final maior que zero.');
+          return;
+        }
+      } else if (elValor) {
+        const valor = (elValor.value || '').replace(/\./g, '').replace(',', '.');
+        if (!valor || isNaN(Number(valor)) || Number(valor) <= 0) {
+          e.preventDefault();
+          alert('Valor deve ser maior que zero.');
+          return;
+        }
       }
     });
   }
@@ -857,7 +884,10 @@
       const preco = arred2(Number(data.preco));
       row.dataset.precoTabela = String(preco);
       if (elPreco) setBR(elPreco, preco);
+      // recalc atualiza .js-valor programaticamente (setBR nao dispara
+      // 'change'); avisa o painel de pagamentos manualmente.
       if (syncCtl) { syncCtl.setPreco(preco); syncCtl.recalc('rs'); }
+      atualizarSomaPagamentos();
       if (elInfo) {
         const tipoLabel = data.tipo_pagamento === 'A_VISTA' ? 'à vista'
           : (data.tipo_pagamento === 'A_PRAZO' ? 'a prazo' : 'forma sem classificação — usando preço à vista');
@@ -885,6 +915,15 @@
     // Sincronia desconto %/R$/valor por-escopo (preco da linha).
     const precoInicial = parseBR(row.dataset.precoTabela);
     const syncCtl = wireDescontoSync(row, isNaN(precoInicial) ? null : precoInicial);
+
+    // Notifica o painel de pagamentos quando o valor final/desconto da linha
+    // muda — wireDescontoSync recalcula .js-valor mas nao avisa o painel
+    // (que soma as linhas para o total do pedido). 'change' dispara depois do
+    // recalc por-escopo (ambos no mesmo evento, este foi adicionado depois).
+    ['.js-valor', '.js-desconto-pct', '.js-desconto-rs'].forEach(sel => {
+      const inp = row.querySelector(sel);
+      if (inp) inp.addEventListener('change', atualizarSomaPagamentos);
+    });
 
     // Monta o filtro de disponibilidade do autocomplete de chassi a partir do
     // modelo/cor da PROPRIA linha (lido dinamicamente pelo autocomplete.js).
@@ -968,6 +1007,7 @@
         const cont = document.getElementById('motos-container');
         if (cont && cont.querySelectorAll('[data-row]').length > 1) {
           row.remove();
+          atualizarSomaPagamentos();
         }
       });
     }
@@ -990,6 +1030,7 @@
       motosContainer.appendChild(frag);
       if (window.HoraAutocomplete) window.HoraAutocomplete.init(row);
       wireLinhaMoto(row);
+      atualizarSomaPagamentos();
     });
   }
 
