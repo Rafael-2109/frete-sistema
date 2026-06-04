@@ -82,4 +82,10 @@ python .claude/skills/exportando-arquivos/scripts/exportar.py --formato imagem -
 }
 ```
 
+**Guard de entrega (P7 #787):** apos gerar o arquivo, o script confirma que ele
+existe no diretorio servido e e NAO-VAZIO antes de declarar `sucesso: true`. Se o
+arquivo sair ausente ou com 0 bytes, retorna `sucesso: false` + `erro` ("Falha na
+verificacao de entrega: ...") e `arquivo: null` — NUNCA entrega URL de download
+para um arquivo quebrado. Ao receber `sucesso: false`, NAO informe link ao usuario.
+
 **Dependencias:** `pandas`, `xlsxwriter` (Excel), `shutil` (imagem).

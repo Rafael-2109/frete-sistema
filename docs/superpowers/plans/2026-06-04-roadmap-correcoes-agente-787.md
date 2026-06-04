@@ -29,7 +29,7 @@ atualizado: 2026-06-04
 ## Como iniciar a próxima sessão
 
 1. ~~**Foco primário: Fix B**~~ ✅ **EM PROD** (2026-06-04, mergeado em `main` `e3bf4908c`, flag `SQL_AGENT_SQL_FIRST=on` LIVE + hardening F1/F2, 79 testes). Plano + runbook: `docs/superpowers/plans/2026-06-04-redesign-consultar-sql-sql-first.md`.
-2. **P4–P7** na ordem — correções independentes, cada uma pequena. **P4, P5, P6 ✅ FEITOS** (2026-06-04, branch `fix/agente-787-p4-p7`). Falta **P7**. Cada item abaixo traz a evidência (arquivo:linha / id).
+2. **P4–P7** na ordem — correções independentes, cada uma pequena. **P4, P5, P6 ✅ FEITOS + P7 frente verifier ✅ FEITA** (2026-06-04, branch `fix/agente-787-p4-p7`). Resta a **frente 1 do P7 (calibração do judge)**, em trabalho separado (`feat+gate1-calibracao-judge`). Cada item abaixo traz a evidência (arquivo:linha / id).
 3. Regra: cada fix em PR próprio, flag/canary quando muda comportamento, teste antes (TDD).
 
 ## Roadmap — status dos 7 achados
@@ -42,7 +42,7 @@ atualizado: 2026-06-04
 | **P4** | Agente escreve em inglês no meio do PT-BR + explora tabelas erradas | Prompt/descoberta | ✅ **FEITO** (branch `fix/agente-787-p4-p7`: `<language_policy>` + domínio HORA no `<domain_detection>`, 5 testes) | `system_prompt.md` |
 | **P5** | `frustration_score=0` numa reclamação explícita | Sensor (E1) | ✅ **FEITO** (branch `fix/agente-787-p4-p7`: marcadores de falha de entrega + trend conservador, 18 testes) | `services/sentiment_detector.py` |
 | **P6** | Summary afirma sucesso (gerado antes da falha) | Sensor (E) | ✅ **FEITO** (branch `fix/agente-787-p4-p7`: `needs_summarization` ganha `stale_threshold` — regenera a cada exchange, 5 testes) | `models.py:needs_summarization` |
-| **P7** | Judge/verify detectam a falha mas não previnem; judge crédulo; sem verifier de ENTREGA | Atuador/blueprint | 📋 backlog | GATE-1/E3 + novo verifier de entrega |
+| **P7** | Judge/verify detectam a falha mas não previnem; judge crédulo; sem verifier de ENTREGA | Atuador/blueprint | 🟡 **PARCIAL** — verifier de ENTREGA ✅ FEITO (guard `_verificar_entrega` em `exportar.py`, 6 testes); calibração judge ⏳ trabalho separado (`feat+gate1-calibracao-judge`) | guard + GATE-1/E3 |
 
 ---
 
@@ -88,7 +88,11 @@ Resumo: a tool `consultar_sql` é um tradutor NL→SQL (Generator Haiku, `max_to
 **Onde:** `app/agente/services/session_summarizer.py` (flag `AGENT_SESSION_SUMMARY`). Ação: re-gerar/atualizar o summary **ao fim da sessão** (ou quando `message_count` cresce após o último summary), não congelar no meio. Idealmente, refletir reclamações do usuário e o desfecho real.
 
 <a id="p7"></a>
-## P7 — Judge/verify shadow + lacuna de verifier de ENTREGA 📋
+## P7 — Judge/verify shadow + lacuna de verifier de ENTREGA 🟡 PARCIAL
+
+**Estado (2026-06-04):** **Frente 2 (verifier/guard de ENTREGA) ✅ FEITA** (branch `fix/agente-787-p4-p7`). **Frente 1 (calibração do judge) ⏳ em andamento em trabalho separado** — worktree `feat+gate1-calibracao-judge` (plano `2026-06-03-gate1-calibracao-judge-online.md`; ver memória `frente_e3_gate1_calibracao`: T1-T4 feitos, faltam T4.5/T5/T6). NÃO duplicar aqui.
+
+**Frente 2 entregue:** guard determinístico `_verificar_entrega(filepath)` na skill `exportando-arquivos` (`scripts/exportar.py`) — após gerar o arquivo (Excel/CSV/JSON **e** imagem), confirma que existe no diretório servido e é **não-vazio** ANTES de declarar `sucesso`; se falhar, retorna `sucesso: false` + `erro` e **não** entrega URL (a #787 entregou um 404). Coerente com a filosofia do blueprint (guard determinístico PREVINE; verifier shadow só detecta). Com o Fix A (P1) o caso é raro por construção — este guard é a rede de segurança. Testes `tests/agente/test_export_delivery_guard_p7.py` (6) + nota no `SCRIPTS.md`.
 
 **Evidência:** judge e verify (E2/B2) RODARAM na #787 (logs do worker 23:27–23:28 UTC; lag real ~14 min, **não 3h** — `created_at` é BRT-naive). O judge **detectou a falha** (step 202: `label=failure, score=35`, "faltou validação da entrega") — mas:
 - a evidência do judge é **alucinada** ("URL truncada 'defau'"): a URL no log do web está completa; o judge recebeu input truncado;

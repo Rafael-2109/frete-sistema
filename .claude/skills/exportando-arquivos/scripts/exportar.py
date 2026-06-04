@@ -57,6 +57,21 @@ def get_upload_folder():
     return session_folder
 
 
+def _verificar_entrega(filepath):
+    """Guard de ENTREGA (P7 #787): o arquivo gerado existe no diretorio servido
+    e e NAO-VAZIO? Rede de seguranca deterministica — nao declarar sucesso (nem
+    entregar URL) para um arquivo quebrado/vazio (a #787 entregou um 404).
+
+    Returns:
+        (ok: bool, motivo: str) — ok=True somente se existe e tem tamanho > 0.
+    """
+    if not filepath or not os.path.exists(filepath):
+        return False, f"arquivo nao encontrado no diretorio servido: {filepath}"
+    if os.path.getsize(filepath) <= 0:
+        return False, f"arquivo gerado esta vazio (0 bytes): {filepath}"
+    return True, ""
+
+
 def gerar_excel(dados, nome_arquivo, titulo=None, colunas=None):
     """
     Gera arquivo Excel com os dados.
@@ -263,6 +278,18 @@ Exemplos:
                 return
 
             filepath, filename = copiar_imagem(args.imagem, args.nome)
+
+            # Guard de ENTREGA (P7 #787): imagem copiada existe e e nao-vazia?
+            ok_entrega, motivo_entrega = _verificar_entrega(filepath)
+            if not ok_entrega:
+                resultado['erro'] = f'Falha na verificacao de entrega: {motivo_entrega}'
+                resultado['mensagem'] = (
+                    'A imagem nao foi gerada corretamente (ausente ou vazia). '
+                    'NAO informe link ao usuario.'
+                )
+                print(json.dumps(resultado, ensure_ascii=False, indent=2))
+                return
+
             extensao = filepath.rsplit('.', 1)[-1].lower()
             tamanho = os.path.getsize(filepath)
 
@@ -340,6 +367,17 @@ Exemplos:
         else:  # json
             filepath, filename = gerar_json(dados, args.nome)
             extensao = 'json'
+
+        # Guard de ENTREGA (P7 #787): nao declarar sucesso com arquivo ausente/vazio.
+        ok_entrega, motivo_entrega = _verificar_entrega(filepath)
+        if not ok_entrega:
+            resultado['erro'] = f'Falha na verificacao de entrega: {motivo_entrega}'
+            resultado['mensagem'] = (
+                'O arquivo nao foi gerado corretamente (ausente ou vazio). '
+                'NAO informe link de download ao usuario.'
+            )
+            print(json.dumps(resultado, ensure_ascii=False, indent=2))
+            return
 
         # Obter tamanho do arquivo
         tamanho = os.path.getsize(filepath)
