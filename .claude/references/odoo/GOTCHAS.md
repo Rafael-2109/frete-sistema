@@ -200,6 +200,26 @@ odoo.execute_kw('sale.order', 'action_update_taxes', [[order_id]])
 4. Preferir reenfileirar via worker (fila `impostos`) quando possivel — usa
    Fire-and-Poll e cooldown para Odoo respirar
 
+### Picking complementar em SO faturado: validar lote ANTES de criar move_line
+
+> Principio + gatilho ficam inline no `system_prompt.md` (rule R11.2). Procedimento completo aqui (Camada 1).
+
+**Incidente (sessao 4722693c, 14/05/2026):** ao aumentar quantidade de pedido com metade ja
+faturada, o agente pegou lotes sem checar saldo nem validade, encadeou retries que mantinham
+conexoes Odoo abertas e contribuiu para pico de RAM no servidor.
+
+**Regra:** se o usuario pediu para aumentar quantidade e parte ja foi faturada, criar um NOVO
+picking apenas para o delta (NAO refazer o picking original). Antes de criar `move_line` com `lot_id`:
+1. Verificar `qty_available` real do lote (via `stock.quant` ou `stock.lot.product_qty`)
+2. Verificar `use_date` / `expiration_date` do lote — rejeitar se vencido
+3. Verificar que o lote esta na `location_id` correta (CD=32, nao FB)
+4. Se o wizard `expiry.picking.confirmation` aparecer: PARAR e perguntar ao usuario qual lote
+   substituto usar — NUNCA aceitar o wizard cegamente (significa que pegou lote vencido)
+
+**Por que**: NF-e e irreversivel apos a SEFAZ; picking fantasma (mercadoria nao expedida com NF
+emitida) = sonegacao; lote vencido faturado = recall/risco sanitario; retries em sequencia
+mantem conexoes Odoo abertas e podem derrubar a operacao inteira (pico de RAM).
+
 ### Integer 0 vs False no ORM Odoo
 
 O Odoo armazena campos Integer com valor `0` como `False` no PostgreSQL.

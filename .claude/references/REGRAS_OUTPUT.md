@@ -6,16 +6,17 @@ hub: .claude/references/INDEX.md
 superseded_by: —
 atualizado: 2026-06-02
 -->
-# Regras Complementares de Output (I1, I5, I6)
+# Regras Complementares de Output (I1, I5, I6, I7)
 
-> **Papel:** Regras Complementares de Output (I1, I5, I6).
+> **Papel:** Regras Complementares de Output (I1, I5, I6, I7).
 
-**Ultima Atualizacao**: 31/03/2026
+**Ultima Atualizacao**: 05/06/2026
 
 Regras de formatacao e linguagem para o agente web.
-Este arquivo contem apenas I1, I5, I6 — regras de FORMATACAO carregadas on-demand.
+Este arquivo contem I1, I5, I6 (formatacao) e I7 (entrega atomica de artefatos) — carregadas on-demand.
 I2 (Detalhar Faltas), I3 (Peso/Pallet) e I4 (Saldo Separacao) permanecem **inline no `system_prompt.md`**
-por serem safety-critical (ausencia causa decisao operacional errada).
+por serem safety-critical (ausencia causa decisao operacional errada). O `system_prompt.md` mantem
+o **principio + gatilho** de I7 (rule I7); o **procedimento completo** vive aqui (Camada 1).
 
 ---
 
@@ -48,3 +49,43 @@ Traduza para linguagem clara:
 
 Escolha uma abordagem e execute. Nao revisite decisoes a menos que novos dados contradigam.
 Consultas simples (estoque, status, saldo) nao precisam de pesquisa previa em sessoes anteriores.
+
+---
+
+## I7: Entrega Atomica de Artefatos
+
+> Principio + gatilho ficam inline no `system_prompt.md` (rule I7). Procedimento completo aqui (Camada 1).
+
+Quando voce gerar um arquivo para download (Excel, CSV, JSON, PDF, imagem) via skill
+(`exportando-arquivos`, `gerando-baseline-conciliacao`, `razao-geral-odoo`, etc.):
+
+1. **NAO responda ao usuario antes de ter o link em maos.** Aguarde o script terminar e
+   retornar `arquivo.url_completa`. Mensagens intermediarias ("gerando...", "script OK",
+   "extraindo dados", "preparando link") sem o link real anexo SAO PROIBIDAS — geram falsa
+   confirmacao e forcam o usuario a perguntar "gerou?" repetidamente.
+
+2. **A primeira mensagem ao usuario apos a geracao DEVE conter, no mesmo turno**:
+   - O link clicavel completo (`arquivo.url_completa` com dominio HTTPS)
+   - Resumo dos dados (total de registros, tamanho, ou variacao vs baseline anterior)
+   - Tabelas inline obrigatorias quando a skill prescrever (ex: baseline-conciliacao exige
+     Tabela 1 + Tabela 2 inline)
+
+3. **Geracao do arquivo e postagem do link sao a MESMA operacao do ponto de vista do
+   usuario.** Internamente sao etapas distintas (script roda, retorna JSON com URL), mas voce
+   so encerra o turno apos extrair `url_completa` do JSON e incluir na resposta. Nunca diga
+   "link acima" sem o link estar literalmente na mensagem.
+
+4. **Para scripts longos (>30s)**: ainda assim aguarde ate ter o link. Se precisar sinalizar
+   progresso (raro), faca UMA UNICA mensagem inicial "Processando, isso pode levar alguns
+   minutos" — e nao envie nada mais ate ter o link. Nao envie multiplos updates intermediarios.
+
+5. **Self-check antes de enviar a resposta de geracao**:
+   - O link esta na mensagem? (texto comecando com `https://`)
+   - O resumo dos dados esta presente?
+   - Se a skill prescreve tabelas inline, elas estao na mensagem?
+   Se qualquer item faltar → NAO envie. Aguarde ter tudo pronto.
+
+**Por que**: confirmar geracao em mensagem separada do link causa frustracao recorrente — o
+usuario interpreta silencio (script rodando) ou mensagem sem link como "travou" e pergunta
+"gerou?" repetidamente (ja houve sessao com 12 dessas). A unica confirmacao valida e a que ja
+inclui o artefato.

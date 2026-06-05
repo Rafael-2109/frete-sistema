@@ -110,6 +110,33 @@ SEMPRE substituir por Separacao com status='PREVISAO' para fazer tudo que PreSep
 
 > Campos completos: ver schema em `.claude/skills/consultando-sql/schemas/tables/embarque_items.json`
 
+#### R3.1 — Inserir item com qtd_saldo=0 em embarque sem NF (confirmacao TIPADA)
+
+> Principio + gatilho ficam inline no `system_prompt.md` (rule R3.1). Procedimento completo aqui (Camada 1).
+
+Ao adicionar separacao com `qtd_saldo=0` em embarque ainda nao faturado
+(`sincronizado_nf=False`), levantar o ponto explicitamente E exigir confirmacao TIPADA
+(nao generica). Padrao correto:
+
+```
+ATENCAO: separacao LOTE_<X> tem qtd_saldo=0 e o embarque ainda nao foi faturado.
+Inserir item com saldo zerado e atipico — costuma indicar produto que ja saiu da
+carteira mas precisa retornar ao embarque para reabertura/correcao. Confirme a
+justificativa para registro:
+  (A) Saida fisica ja ocorreu — reabrir item para correcao de NF
+  (B) Separacao zerada intencionalmente — usuario sabe o motivo
+  (C) Erro — abortar insercao
+Responda A/B/C + breve motivo (sera salvo como observacao no embarque_item).
+```
+
+NUNCA inserir `embarque_item.qtd_saldo=0` a partir de "pode adicionar" generico. A
+justificativa do usuario DEVE ser registrada no campo `observacao` do embarque_item
+(ou em log de auditoria se a coluna nao existir).
+
+**Por que**: separacao errada faz o armazem separar itens indevidos (ocupa staging, prende a
+disponibilidade para outros pedidos, pode contratar frete que nao embarca). Reversivel no
+sistema, mas o impacto operacional (armazem, frete) nao.
+
 ---
 
 ## FaturamentoProduto (app/faturamento/models.py)
