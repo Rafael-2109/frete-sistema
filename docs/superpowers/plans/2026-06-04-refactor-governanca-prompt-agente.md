@@ -13,13 +13,15 @@ atualizado: 2026-06-04
 > (`preset_operacional.md` + `system_prompt.md` + injeções de runtime) e instalar a
 > governança que impede o problema de voltar. Origem: avaliação de 2026-06-04.
 
-> 🔵 **PRÓXIMA SESSÃO — RETOMAR AQUI:** FASE 1 ✅ feita; **FASE 0 EM ANDAMENTO** e
-> **REENQUADRADA** (ver [Nota FASE 0](#nota-de-execucao-fase-0-2026-06-05) + [Rastreamento](#rastreamento-de-execucao-append-only)).
-> R-EXEC-3 aplicado sobre o próprio R-EXEC-1 (a pedido do Rafael 2026-06-05): o refactor
-> **NÃO depende de LLM eval** — a prova de "antes/depois" é **determinística** (pytest do
-> gate + medição de tamanho/custo), não golden dataset LLM. Golden dataset do Agente Web =
-> `tests/agent_evals/` (NÃO `.claude/evals/subagents/`, que testa subagentes). **NÃO pular
-> para a FASE 2**: depende da FASE 0 (matriz de provas + instrumentação de custo viva).
+> 🔵 **PRÓXIMA SESSÃO — RETOMAR AQUI:** **FASE 0 e FASE 1 FECHADAS** (em PROD; ver
+> [Nota FASE 0](#nota-de-execucao-fase-0-2026-06-05) + [Rastreamento](#rastreamento-de-execucao-append-only)).
+> Próximo = **FASE 2 (poda de altitude)** — o inchaço real (`system_prompt` ainda 858 linhas).
+> Prompt de retomada pronto: `docs/superpowers/plans/PROMPT_PROXIMA_SESSAO_refactor-prompt.md`.
+> Princípios desta linha (NÃO reabrir): refactor **NÃO usa LLM eval** — prova **determinística**
+> (pytest do gate + `prompt_size_audit` + smoke); **hipótese barata primeiro** (a causa de T0.2
+> era só a flag OFF, não bug — não over-investigar); **verificar a premissa de cada task**
+> (R-EXEC-3). **Ordem crítica da FASE 2: T2.1 (gate runtime, pytest) ANTES de T2.2 (comprimir
+> prompt)** — a defesa vira código antes de o texto sair do prompt.
 
 ## Indice
 
@@ -267,9 +269,9 @@ FASE 5 (governança) ───────┴──► transversal; T5.1/T5.2 id
 
 > Atualizar com `[x]` + commit SHA conforme cada task completa. NÃO reescrever histórico.
 
-- [ ] T0.1 **REENQUADRADO** → matriz de provas determinísticas (task → critério pytest/medição); golden dataset LLM descartado (ver Nota FASE 0) — _SHA:_
-- [~] T0.2 instrumentação — **diagnóstico CORRIGIDO via TDD** (2026-06-05): cálculo OK (logs PROD), `agent_session_costs` VAZIA há ~1 mês. **Causa real = flag `AGENT_COST_TRACKER_PERSIST` OFF em PROD (H1)**, NÃO bug. Hipótese "savepoint órfão (H3)" **REFUTADA**: o projeto tem commit-on-teardown (`app/__init__.py:1415`) que consolida o `begin_nested()` do `insert_entry` no fim de qualquer `app_context` (inclusive thread daemon `chat.py:483`). TDD + experimento provam que o código persiste com a flag ON. Fix = **ligar a flag em PROD** (env + deploy), não mudar código. Regressão: `tests/agente/sdk/test_cost_tracker_persist.py` (3 verdes). — _SHA:_
-- [ ] T0.3 baseline OBJETIVO: tamanho (`prompt_size_audit`) + suíte pytest verde + custo/cache de produção (pós-T0.2) — _SHA:_
+- [x] T0.1 matriz de provas determinísticas (task → critério pytest/medição) — DEFINIDA na Nota FASE 0; golden dataset LLM descartado. Refinar por-task no início da FASE 2.
+- [x] T0.2 instrumentação — **RESOLVIDO 2026-06-05** (commits main `7824e39c8`): causa = flag `AGENT_COST_TRACKER_PERSIST` OFF (H1). H3 "savepoint órfão" REFUTADO por TDD (commit-on-teardown `app/__init__.py:1415` salva o `begin_nested()`). Flag LIGADA em PROD (`update_environment_variables`) + deploy `dep-d8h4i2d8nd3s73brctsg`. Regressão travada (`tests/agente/sdk/test_cost_tracker_persist.py`, 3 verdes). ⚠️ **1º ato da próxima sessão: confirmar que `agent_session_costs` está populando** (fecha H1 empírico + dá custo/cache do T0.3).
+- [~] T0.3 baseline OBJETIVO: **tamanho congelado = 1036 linhas / ~17,4K tok** (`prompt_size_audit`, pós-dedup FASE 1) + rodar suíte pytest do agente (verde) no início da FASE 2; custo/cache de produção vem de `agent_session_costs` (pós-validação T0.2).
 - [x] T1.1 cutoff "May 2025" removido (`preset_operacional.md`) — commit main 2026-06-04
 - [x] T1.2 dedup — `<context_awareness>` (dono=`system_prompt` R6) + **`<language>` do preset removido 2026-06-05**: dono único = `<language_policy>` no `system_prompt` (superset anti-drift #787). Verificação corrigiu a avaliação conservadora da FASE 1 — o preset `<language>` ERA subconjunto literal, dedup limpa. communication_style/reversibility = sobreposição complementar (mantidos); prompt_injection = instância única. — commit main 2026-06-05
 - [x] T1.3 business_snapshot — **FEITO 2026-06-05 como dedup limpa** (NÃO comportamental — premissa do "adiado" estava errada): `empresa_briefing` JÁ é injetado no prompt (`client.py:506-541`) e contém os mesmos dados (50%/13%/R$16MM/~500 ped/gargalos) + detalhe único + serve o `pattern_analyzer`. Removido `<business_snapshot>` do `system_prompt`; dono único = briefing. Info 100% preservada (smoke + diff). — commit main 2026-06-05
