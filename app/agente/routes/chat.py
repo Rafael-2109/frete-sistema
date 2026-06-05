@@ -952,6 +952,7 @@ def _stream_chat_response(
 
                 elif event.type == 'done':
                     message_id = event.metadata.get('message_id', '') or str(agora_utc_naive().timestamp())
+                    response_state['message_id'] = message_id  # T0.2 fix: usado por _persist_session_cost
                     response_state['input_tokens'] = event.content.get('input_tokens', 0)
                     response_state['output_tokens'] = event.content.get('output_tokens', 0)
                     # G2 (2026-04-15): cache tokens para instrumentacao
@@ -1711,6 +1712,7 @@ def _save_messages_dedup(
             cache_read_tokens=response_state.get('cache_read_tokens', 0),
             cache_creation_tokens=response_state.get('cache_creation_tokens', 0),
             plan_dict=_plan_dict,
+            message_id=response_state.get('message_id'),
         )
         # Marca flag SO SE o commit do DB foi bem-sucedido.
         # Falhas de pos-processamento NAO afetam o retorno (isolados na propria
@@ -1724,6 +1726,52 @@ def _save_messages_dedup(
                 f"[AGENTE] _save_messages_to_db retornou False ({source}) — "
                 "flag _persisted NAO setada (outra thread pode tentar)"
             )
+
+
+def _persist_session_cost(
+    message_id: Optional[str],
+    session_id: Optional[str],
+    user_id: Optional[int],
+    input_tokens: int,
+    output_tokens: int,
+    cache_read_tokens: int,
+    cache_creation_tokens: int,
+    cost_usd: float,
+    model: Optional[str],
+) -> None:
+    """Persiste o breakdown de custo per-message em agent_session_costs.
+
+    DEVE ser chamada DE DENTRO de um app_context que COMMITA (o de
+    _save_messages_to_db, que faz db.session.commit() ao final). insert_entry usa
+    begin_nested (SAVEPOINT); quem consolida e' o commit do context pai.
+
+    Causa raiz (T0.2 corrigido 2026-06-05): antes, cost_tracker._persist_to_db
+    chamava insert_entry de DENTRO do loop de streaming, cujo app_context NAO
+    consolida o savepoint -> agent_session_costs ficava VAZIA (enquanto
+    AgentSession.total_cost_usd persistia, pois _save_messages_to_db commita
+    explicitamente). A persistencia per-message foi movida para ca'.
+
+    Best-effort: falha NUNCA quebra a persistencia de mensagens (savepoint isola).
+    """
+    from app.agente.config.feature_flags import USE_COST_TRACKER_PERSIST
+    if not USE_COST_TRACKER_PERSIST or not message_id:
+        return
+    try:
+        from app.agente.models import AgentSessionCost
+        AgentSessionCost.insert_entry(
+            message_id=message_id,
+            session_id=session_id,
+            user_id=user_id,
+            tool_name=None,
+            model=model,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            cache_read_tokens=cache_read_tokens,
+            cache_creation_tokens=cache_creation_tokens,
+            cost_usd=float(cost_usd or 0),
+        )
+    except Exception as e:
+        logger.warning(f"[COST] persist agent_session_costs falhou (ignorado): {e}")
 
 
 def _save_messages_to_db(
@@ -1742,6 +1790,7 @@ def _save_messages_to_db(
     cache_read_tokens: int = 0,
     cache_creation_tokens: int = 0,
     plan_dict: Optional[dict] = None,
+    message_id: Optional[str] = None,
 ) -> bool:
     """
     FEAT-030: Salva mensagens do usuário e assistente no banco.
@@ -1922,6 +1971,22 @@ def _save_messages_to_db(
                 logger.warning(
                     f"[PLAN] persistencia data['plan'] falhou (ignorado): {_plan_persist_err}"
                 )
+
+            # T0.2 fix (2026-06-05): persiste o breakdown de custo per-message AQUI
+            # (context dedicado que COMMITA) — nao no cost_tracker dentro do stream
+            # (savepoint orfao deixava agent_session_costs vazia). cost_usd ja'
+            # calculado acima (sdk|calc).
+            _persist_session_cost(
+                message_id=message_id,
+                session_id=our_session_id,
+                user_id=user_id,
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+                cache_read_tokens=cache_read_tokens,
+                cache_creation_tokens=cache_creation_tokens,
+                cost_usd=cost_usd,
+                model=model,
+            )
 
             db.session.commit()
             logger.debug(f"[AGENTE] Mensagens salvas na sessão {our_session_id[:8]}...")

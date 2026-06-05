@@ -240,16 +240,12 @@ class CostTracker:
         if user_id:
             self._user_costs[user_id] += cost_usd
 
-        # F8: persistencia opcional em DB (write-through best-effort).
-        # Falha de DB nao bloqueia stream — log debug e continua.
-        try:
-            from app.agente.config.feature_flags import USE_COST_TRACKER_PERSIST
-            if USE_COST_TRACKER_PERSIST:
-                self._persist_to_db(entry)
-        except Exception as _persist_err:
-            logger.debug(
-                f"[COST_TRACKER] Persist falhou (ignorado): {_persist_err}"
-            )
+        # Persistencia em DB MOVIDA para routes/chat.py:_persist_session_cost
+        # (T0.2 corrigido 2026-06-05). Persistir AQUI (dentro do loop de streaming)
+        # deixava o SAVEPOINT orfao -> agent_session_costs vazia. Este tracker
+        # mantem apenas o acumulador em MEMORIA (dashboard com flag OFF + alertas
+        # de sessao). O DB e' populado em _save_messages_to_db (context dedicado
+        # que commita), junto de AgentSession.total_cost_usd.
 
         # Log enriquecido com cache info quando disponivel
         cache_info = ""
@@ -268,46 +264,6 @@ class CostTracker:
         )
 
         return entry
-
-    def _persist_to_db(self, entry: CostEntry) -> None:
-        """F8: write-through persistence para agent_session_costs.
-
-        Best-effort: caller (record_cost) ja envolve em try/except. Aqui
-        garantimos que excecoes nao escapem para nao quebrar o caller.
-
-        IntegrityError em message_id duplicado eh tratado (rollback + None).
-        Falhas de DB sao logged em DEBUG (nao quebra stream).
-
-        M4 fix (2026-05-09): propaga self.settings.model — sem isso, todos os
-        registros gravavam model=NULL e dados historicos eram inutilizaveis
-        para agrupamento por modelo no dashboard.
-        """
-        try:
-            # Lazy import: evita ciclo (models -> tracker) e custo no cold start
-            from app.agente.models import AgentSessionCost
-            # Default model do settings — pode ser overridado per-request via
-            # agent_loader (subagente com model proprio), mas record_cost atual
-            # nao recebe model como parametro. Em fase futura, propagar via
-            # ResultMessage.model quando SDK expor.
-            default_model = getattr(self.settings, 'model', None)
-            AgentSessionCost.insert_entry(
-                message_id=entry.message_id,
-                session_id=entry.session_id,
-                user_id=entry.user_id,
-                tool_name=entry.tool_name,
-                model=default_model,
-                input_tokens=entry.input_tokens,
-                output_tokens=entry.output_tokens,
-                cache_read_tokens=entry.cache_read_tokens,
-                cache_creation_tokens=entry.cache_creation_tokens,
-                cost_usd=float(entry.cost_usd),
-            )
-        except Exception as e:
-            # Log debug — caller ja swallowed via outer try/except.
-            # Casos: DB indisponivel, schema inconsistente, transaction abortada.
-            logger.debug(
-                f"[COST_TRACKER] _persist_to_db falhou (ignorado): {e}"
-            )
 
     def _check_session_alert(self, session_id: str) -> None:
         """Verifica se sessão excedeu limite de custo."""
