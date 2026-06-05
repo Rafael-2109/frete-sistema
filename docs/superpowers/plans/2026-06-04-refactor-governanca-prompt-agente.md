@@ -15,9 +15,11 @@ atualizado: 2026-06-04
 
 > 🔵 **PRÓXIMA SESSÃO — RETOMAR AQUI:** **FASES 0, 1 e 2 FECHADAS** (em PROD; ver
 > [Nota FASE 2](#nota-de-execucao-fase-2-2026-06-05) + [Rastreamento](#rastreamento-de-execucao-append-only)).
-> FASE 2: gate `action_update_taxes` em código (T2.1, `8954563fe`) + poda `system_prompt` 858→750
-> (−108L, T2.2 `1c60d0bfe`). **Decisões abertas:** (a) **alvo −150/−250 NÃO atingido** com os 4 blocos
-> da T2.2 — expandir a poda para R0 (memory protocol) / routing (Camada 1) ou aceitar −108L? (b)
+> FASE 2: gate `action_update_taxes` em código (T2.1, `8954563fe`) + poda de altitude `system_prompt`
+> 858→765 (−93L; T2.2 `1c60d0bfe` + correção `fee8f1f17`). **Lição (após ler as FONTES STUDY+QUALITY_REVIEW):**
+> a meta NÃO é tamanho (STUDY #7: Anthropic não segue "short prompts"; QUALITY_REVIEW: ROI de enxugar
+> BAIXO) — é **altitude** (procedimento→Camada 1) preservando forças (os `<why>` = A2 Top Strength 5/5).
+> **Decisões abertas:** (a) expandir altitude p/ R0/routing (só se a altitude justificar, não o número)? (b)
 > **pendência T0.2:** `agent_session_costs` continua VAZIA (o diagnóstico "flag OFF" é duvidoso — o
 > default já é `true`; suspeita real = `record_cost` não alcançado no path persistente de PROD).
 > Depois = **FASE 3 (robustez)** — `<security_invariants>` + memory injection validation.
@@ -280,7 +282,7 @@ FASE 5 (governança) ───────┴──► transversal; T5.1/T5.2 id
 - [x] T1.4 doc auto-medida + `scripts/audits/prompt_size_audit.py` — commit main 2026-06-04
 - [x] T2.1 gate runtime estendido — **`action_update_taxes` (R11.1) bloqueado UNIVERSAL** (deny via Bash/Write/Edit + marcador de execução RPC), flag `USE_ODOO_TAX_GATE` default ON; 10 testes TDD; 63 verdes na suíte do gate. R12.1 (UPDATE/DELETE massa) segue só avisando (decisão Rafael). _SHA: 8954563fe_
 - [x] T2.2 prompt comprimido (princípio fica, detalhe sai) — **858→750 linhas (−108L / ~14.9K→~13.0K tok)**: R3.1→`REGRAS_MODELOS.md`, R11.2→`GOTCHAS.md`, I7→`REGRAS_OUTPUT.md`; R11(3-riscos)/R12 enxugados in-place; 7 pós-mortems `sessao <hex>` removidos; smoke 11/11 (princípio no prompt + procedimento na ref). _SHA: 1c60d0bfe_
-- [~] T2.3 re-medição (prova determinística, sem LLM): **750L / ~13.0K tok** (TOTAL estático 1036→928 / ~15.6K), balanço de tags OK, regressão gate+prompt 48 verdes. ⚠️ **Alvo −150/−250 NÃO atingido com os 4 blocos da T2.2 (deu −108)** — fechar o gap exigiria comprimir R0 (memory protocol) / routing, que NÃO estão na lista da T2.2 (R-EXEC-6: medir o real, não forçar).
+- [~] T2.3 re-medição (prova determinística, sem LLM): **765L / ~13.3K tok** (TOTAL estático 1036→943 / ~15.8K), balanço de tags OK, regressão verde. **Reposicionamento (após ler as FONTES — STUDY + QUALITY_REVIEW, que NÃO haviam sido lidas antes da T2.2):** o alvo "−150/−250 linhas" é métrica de baixo valor — STUDY insight #7 (Anthropic NÃO segue "short prompts"; prompt vazado ~200K tok, redundância intencional) + QUALITY_REVIEW ("ROI de enxugamento BAIXO; tokens baratos via cache"). A meta REAL é **altitude** (procedimento→Camada 1), cumprida. Os `<why>` (A2 = Top Strength 5/5) foram cortados na 1ª tentativa (perseguindo o número) e **restaurados** em `fee8f1f17`. Resultado final **−93L** vindo SÓ de altitude.
 - [ ] T3.1 security_invariants + meta_instruction_alert — _SHA:_
 - [ ] T3.2 memory injection validation — _SHA:_
 - [ ] T3.3 session_context granularidade — _SHA:_
@@ -392,11 +394,16 @@ T2.1 → T2.2 → T2.3 na ordem inviolável (defesa em código ANTES de podar o 
   na Camada 1 (R3.1→`REGRAS_MODELOS`, R11.2→`GOTCHAS`, I7→`REGRAS_OUTPUT`), 100% das regras
   comportamentais preservadas (smoke 11/11). Resultado **−108L**.
 
-- **R-EXEC-6 (alvo) — gap aberto:** os 4 blocos da T2.2 (R3.1/R11/R12/I7) rendem **−108L**, abaixo do
-  alvo −150/−250 da T2.3. Constatação: o prompt não está inchado por lixo — é denso de regra
-  comportamental (defesa) + routing. Fechar o gap exigiria comprimir R0 (memory protocol ~90L) /
-  `routing_strategy` (~60L) para Camada 1 (`MEMORY_PROTOCOL.md` / `ROUTING_SKILLS.md`) — possível, mas
-  são blocos FUNCIONAIS/core (mais risco) e NÃO listados na T2.2. **Pendente decisão de expandir.**
+- **Reposicionamento da meta (R-EXEC-6, após ler as FONTES):** eu NÃO havia lido `STUDY` /
+  `QUALITY_REVIEW` antes da T2.2 e tratei "−150/−250 linhas" como o objetivo — erro apontado pelo
+  Rafael. As fontes corrigem: **tamanho NÃO é a meta** (STUDY insight #7: prompt Anthropic ~200K tok
+  com redundância intencional; QUALITY_REVIEW: "ROI de enxugamento BAIXO, tokens baratos via cache").
+  A meta da FASE 2 é **altitude** — procedimento hiper-específico → Camada 1 (progressive disclosure)
+  — **preservando as forças**, em especial os `<why>` (A2 = Top Strength 5/5, "explicar o porquê
+  melhora instruction following"). 1ª tentativa cortou os `<why>` (degradou força → erro); corrigido
+  em `fee8f1f17`. Resultado **−93L** vindo SÓ de altitude. **Lição p/ FASE 3+: comprimir só onde for
+  PROCEDIMENTO, nunca motivação; não perseguir contagem de linhas.** Expandir para R0/routing só se a
+  altitude (não o número) justificar.
 
 - **Pendência T0.2 / `agent_session_costs` (não bloqueia a FASE 2):** o 1º ato da sessão (confirmar que
   a tabela populou) FALHOU — VAZIA com 11 sessões/48h (última pós-deploy). Como `feature_flags.py:794`
