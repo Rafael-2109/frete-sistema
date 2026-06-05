@@ -268,7 +268,7 @@ FASE 5 (governança) ───────┴──► transversal; T5.1/T5.2 id
 > Atualizar com `[x]` + commit SHA conforme cada task completa. NÃO reescrever histórico.
 
 - [ ] T0.1 **REENQUADRADO** → matriz de provas determinísticas (task → critério pytest/medição); golden dataset LLM descartado (ver Nota FASE 0) — _SHA:_
-- [~] T0.2 instrumentação — **diagnóstico FECHADO** (2026-06-05): cálculo OK (logs PROD provam `record_cost` com cache breakdown), mas `agent_session_costs` VAZIA há ~1 mês. Causa: `insert_entry` (`models.py:1514`) usa `begin_nested()` (SAVEPOINT) SEM commit, assumindo "transação de request Flask"; mas `record_cost` (`chat.py:978`) roda na thread daemon (`app_context` manual = rollback no teardown). Prova: `agent_invocation_metrics`=69 (mesma thread, COM commit explícito) vs cost=0. Fix = commit explícito do cost na thread (espelhar COMMIT GUARD A1) + confirmar flag `AGENT_COST_TRACKER_PERSIST`. **Sem mudança comportamental (telemetria).** — _SHA:_
+- [~] T0.2 instrumentação — **diagnóstico CORRIGIDO via TDD** (2026-06-05): cálculo OK (logs PROD), `agent_session_costs` VAZIA há ~1 mês. **Causa real = flag `AGENT_COST_TRACKER_PERSIST` OFF em PROD (H1)**, NÃO bug. Hipótese "savepoint órfão (H3)" **REFUTADA**: o projeto tem commit-on-teardown (`app/__init__.py:1415`) que consolida o `begin_nested()` do `insert_entry` no fim de qualquer `app_context` (inclusive thread daemon `chat.py:483`). TDD + experimento provam que o código persiste com a flag ON. Fix = **ligar a flag em PROD** (env + deploy), não mudar código. Regressão: `tests/agente/sdk/test_cost_tracker_persist.py` (3 verdes). — _SHA:_
 - [ ] T0.3 baseline OBJETIVO: tamanho (`prompt_size_audit`) + suíte pytest verde + custo/cache de produção (pós-T0.2) — _SHA:_
 - [x] T1.1 cutoff "May 2025" removido (`preset_operacional.md`) — commit main 2026-06-04
 - [x] T1.2 dedup — **PARCIAL**: só `<context_awareness>` (dedup limpa; dono único = `system_prompt` R6). language / communication_style / reversibility = NÃO eram dedup limpa → adiados; prompt_injection = instância única (não dup) → mantido. Ver nota FASE 1.
@@ -351,19 +351,21 @@ escrever a matriz" — o risco de virar roadmap parado encolhe.
 saídas), NÃO framework LLM. A *segurança* desse resíduo está no gate (T2.1), não no
 comportamento conversacional probabilístico.
 
-**Diagnóstico T0.2 — causa raiz da tabela vazia (2026-06-05):** o cálculo de custo FUNCIONA
+**Diagnóstico T0.2 — causa raiz (2026-06-05, CORRIGIDO via TDD):** o cálculo de custo FUNCIONA
 (logs PROD: dezenas de `[COST_TRACKER] Registrado` com `cache_read/cache_write/hit_rate`), mas
-`agent_session_costs` está vazia desde a migration (2026-05-09). Causa: `AgentSessionCost.insert_entry`
-(`models.py:1514`) usa `db.session.begin_nested()` (SAVEPOINT) SEM commit próprio — a docstring
-assume "JÁ EXISTE uma transaction do request Flask" cujo commit final consolida. Mas `record_cost`
-no path principal (`chat.py:978`) roda na **thread daemon** com `app_context` manual, que faz
-`session.remove()` (rollback) no teardown, NÃO commit. As *mensagens* persistem porque
-`_save_messages_to_db` tem commit explícito (`chat.py:1926`); o cost não tem. **Prova empírica:**
-`agent_invocation_metrics`=69 linhas (mesma thread/hook, COM commit explícito via COMMIT GUARD A1)
-vs `agent_session_costs`=0; 764 sessões no período. Resta confirmar se `AGENT_COST_TRACKER_PERSIST`
-também está OFF em PROD (env não-lível via MCP `get_service`). **Fix proposto (próximo GO):** commit
-explícito do cost na thread daemon, espelhando o A1 (`_a1_owns_ctx`), + validar a flag. Sem mudança
-comportamental do agente — telemetria pura.
+`agent_session_costs` está vazia desde a migration (2026-05-09). **Causa real = a flag
+`AGENT_COST_TRACKER_PERSIST` está OFF em PROD (H1)** — `_persist_to_db` nunca é chamado.
+A 1ª hipótese ("savepoint órfão na thread daemon", H3) foi **REFUTADA pelo TDD**: o projeto tem
+**commit-on-teardown** (`app/__init__.py:1404-1415` — `@app.teardown_appcontext` faz
+`db.session.commit()` quando não há exceção), que consolida o `begin_nested()` do `insert_entry` no
+fim de QUALQUER `app_context`, inclusive o manual da thread daemon (`chat.py:483`). Teste + experimento
+direto provam que o código persiste com a flag ON (`flush` sem commit explícito persiste; `rollback`
+explícito reverte). O contraste `agent_invocation_metrics`=69 vs cost=0 NÃO indica "falta commit" —
+indica **flags diferentes**: a telemetria A1 tem flag própria ON (`AGENT_INVOCATION_METRICS_PERSIST`),
+o cost tem `AGENT_COST_TRACKER_PERSIST` OFF. **Lição (R-EXEC-3):** o diagnóstico por leitura de código
+parecia sólido mas ignorou o commit-on-teardown global; só o TDD pegou — exatamente por isso a régua
+exige prova, não inferência. **Fix real:** ligar `AGENT_COST_TRACKER_PERSIST=true` no Render (env +
+deploy), não mudar código. Regressão travada em `tests/agente/sdk/test_cost_tracker_persist.py` (3 verdes).
 
 **Premissa a verificar em T2.1 (não antes):** o gate runtime cobre 100% do que R11/R12
 defendem? `action_update_taxes` (R11.1) hoje NÃO está coberto (`:136`); UPDATE/DELETE em
