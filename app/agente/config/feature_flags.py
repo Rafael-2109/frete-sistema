@@ -833,6 +833,26 @@ USE_ESTOQUE_RESTRICAO_ENFORCEMENT = os.getenv(
 ).lower() == "true"
 
 
+# =============================================================================
+# R11.1 — GATE action_update_taxes (FASE 2 / T2.1, 2026-06-05)
+# =============================================================================
+# Bloqueia (deny UNIVERSAL — sem allowlist), via can_use_tool, qualquer tentativa
+# de EXECUTAR `action_update_taxes` em sale.order via Bash/Write/Edit. Esse metodo
+# zera tax_id quando a fiscal_position mapeia impostos para vazio (ex.: posicao 49
+# "SAIDA - TRANSFERENCIA ENTRE FILIAIS") — anti-padrao real 4722693c (impostos de
+# 30 linhas de SO ja' faturado zerados). O metodo correto e'
+# `onchange_l10n_br_calcular_imposto` (mesmo do worker da fila `impostos`).
+#
+# Bloqueio universal (nem o admin executa pelo agente): nao ha uso legitimo desse
+# metodo pelo Agente Web/Teams. Detalhe + alternativa: GOTCHAS.md secao "Recalcular
+# Impostos em sale.order". Defesa best-effort (evasivel por string dinamica) — par
+# DETERMINISTICO do principio R11.1 que permanece no system_prompt (FASE 2: a defesa
+# vira codigo ANTES de o detalhe sair do prompt).
+#
+# Kill-switch: AGENT_ODOO_TAX_GATE=false desliga (rollback sem deploy).
+USE_ODOO_TAX_GATE = os.getenv("AGENT_ODOO_TAX_GATE", "true").lower() == "true"
+
+
 def _parse_allowed_user_ids_csv(raw: str) -> set[int]:
     """Parseia CSV de user_ids autorizados ('1,55' -> {1, 55}).
 

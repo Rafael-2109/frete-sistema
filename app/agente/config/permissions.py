@@ -429,6 +429,70 @@ def _classify_gerindo_write(tool_name: str, tool_input: dict) -> dict | None:
     return None
 
 
+# =============================================================================
+# R11.1 GATE (2026-06-05, FASE 2 / T2.1) — action_update_taxes PROIBIDO
+# =============================================================================
+# O agente NAO tem skill nomeada para recalcular imposto: o anti-padrao real
+# (sessao 4722693c) executou `action_update_taxes` via script Python ad-hoc
+# (`execute_kw('sale.order','action_update_taxes',...)`) rodado por Bash ou escrito
+# em /tmp. Este classificador detecta o vetor pelo CONTEUDO (Bash.command /
+# Write.content / Edit.new_string); o branch em can_use_tool o NEGA universalmente.
+# Best-effort: exige o metodo entre aspas (argumento de execute_kw) + indicio de
+# execucao RPC — assim permite `grep action_update_taxes` (investigacao) e o metodo
+# correto `onchange_l10n_br_calcular_imposto`. Evasivel por string dinamica (por isso
+# o principio R11.1 PERMANECE no system_prompt — defesa em profundidade).
+# =============================================================================
+_ODOO_TAX_GATE_REGEX = None  # lazy-compiled
+
+# Indicios de que o payload EXECUTA via Odoo RPC (vs. apenas mencionar/buscar)
+_ODOO_RPC_MARKERS = ('execute_kw', '.execute(', 'OdooConnection', 'models.execute')
+
+
+def _classify_odoo_tax_gate(tool_name: str, tool_input: dict) -> dict | None:
+    """Identifica tentativa de EXECUTAR action_update_taxes em sale.order (R11.1).
+
+    Returns:
+        Dict {action, description, reason} se for execucao proibida; None caso contrario.
+
+    Cobre Bash (command), Write (content) e Edit (new_string). Exige o metodo entre
+    aspas (forma de argumento de execute_kw) + um marcador de execucao RPC, para NAO
+    bloquear investigacao (`grep action_update_taxes`) nem o metodo correto.
+    """
+    if tool_name == 'Bash':
+        payload = tool_input.get('command') or ''
+    elif tool_name == 'Write':
+        payload = tool_input.get('content') or ''
+    elif tool_name == 'Edit':
+        payload = tool_input.get('new_string') or ''
+    else:
+        return None
+
+    if 'action_update_taxes' not in payload:
+        return None
+
+    global _ODOO_TAX_GATE_REGEX
+    if _ODOO_TAX_GATE_REGEX is None:
+        import re as _re
+        # metodo entre aspas = argumento de chamada (distingue de grep/comentario)
+        _ODOO_TAX_GATE_REGEX = _re.compile(r"""['"]action_update_taxes['"]""")
+
+    if not _ODOO_TAX_GATE_REGEX.search(payload):
+        return None  # mencao sem aspas (busca/leitura) — nao e' execucao
+
+    if not any(marker in payload for marker in _ODOO_RPC_MARKERS):
+        return None  # string solta sem indicio de execucao RPC
+
+    return {
+        'action': 'recalculo_imposto_proibido',
+        'description': (
+            'Execucao de action_update_taxes em sale.order — zera tax_id quando a '
+            'fiscal_position mapeia impostos para vazio. Metodo PROIBIDO (R11.1); use '
+            'onchange_l10n_br_calcular_imposto. Detalhe em GOTCHAS.md.'
+        ),
+        'reason': 'action_update_taxes',
+    }
+
+
 async def can_use_tool(
     tool_name: str,
     tool_input: dict[str, Any],
@@ -500,6 +564,34 @@ async def can_use_tool(
                 f"tool_use_id={tool_use_id or 'N/A'}"
                 f"{f' | desc={tool_description[:80]!r}' if tool_description else ''}"
             )
+
+        # ================================================================
+        # R11.1 GATE (FASE 2 / T2.1): action_update_taxes PROIBIDO (universal)
+        # Roda ANTES dos early-returns de /tmp (Write/Edit) porque o vetor real e'
+        # escrever um script em /tmp e roda-lo. Deny SEM allowlist — nao ha uso
+        # legitimo pelo agente; o metodo correto e' onchange_l10n_br_calcular_imposto.
+        # ================================================================
+        from .feature_flags import USE_ODOO_TAX_GATE
+
+        if USE_ODOO_TAX_GATE:
+            tax_info = _classify_odoo_tax_gate(tool_name, tool_input)
+            if tax_info:
+                logger.warning(
+                    f"[PERMISSION] ODOO_TAX_GATE DENY: {tax_info['reason']} | "
+                    f"tool={tool_name} | agent_type={agent_type} | "
+                    f"user_id={get_current_user_id()} | "
+                    f"session={(get_current_session_id() or 'N/A')[:8]}..."
+                )
+                return PermissionResultDeny(
+                    message=(
+                        "Operacao bloqueada (R11.1): executar `action_update_taxes` em "
+                        "sale.order zera os impostos quando a posicao fiscal mapeia para "
+                        "vazio (ex.: TRANSFERENCIA ENTRE FILIAIS). Use "
+                        "`onchange_l10n_br_calcular_imposto` (mesmo metodo do worker da "
+                        "fila `impostos`). Veja GOTCHAS.md secao 'Recalcular Impostos em "
+                        "sale.order'."
+                    )
+                )
 
         # ================================================================
         # REGRA: Write APENAS para /tmp
