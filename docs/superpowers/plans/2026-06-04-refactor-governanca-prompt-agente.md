@@ -22,7 +22,9 @@ atualizado: 2026-06-04
 > **Decisões abertas:** (a) expandir altitude p/ R0/routing (só se a altitude justificar, não o número)? (b)
 > **pendência T0.2:** `agent_session_costs` continua VAZIA (o diagnóstico "flag OFF" é duvidoso — o
 > default já é `true`; suspeita real = `record_cost` não alcançado no path persistente de PROD).
-> Depois = **FASE 3 (robustez)** — `<security_invariants>` + memory injection validation.
+> FASE 3: **T3.1 robustez FEITA no PRESET** (`785298a97` — `<security_invariants>` + meta-instruction;
+> decisão arquitetural = preset, NÃO o SP, p/ evitar drift). Falta T3.2 (memory injection escape/blocklist
+> em `memory_injection.py`), T3.3 (`session_context` granularidade), T3.4 (budget de injeção — medir).
 > Princípios desta linha (NÃO reabrir): refactor **NÃO usa LLM eval** — prova **determinística**
 > (pytest do gate + `prompt_size_audit` + smoke); **hipótese barata primeiro**; **verificar a
 > premissa de cada task** (R-EXEC-3).
@@ -283,7 +285,7 @@ FASE 5 (governança) ───────┴──► transversal; T5.1/T5.2 id
 - [x] T2.1 gate runtime estendido — **`action_update_taxes` (R11.1) bloqueado UNIVERSAL** (deny via Bash/Write/Edit + marcador de execução RPC), flag `USE_ODOO_TAX_GATE` default ON; 10 testes TDD; 63 verdes na suíte do gate. R12.1 (UPDATE/DELETE massa) segue só avisando (decisão Rafael). _SHA: 8954563fe_
 - [x] T2.2 prompt comprimido (princípio fica, detalhe sai) — **858→750 linhas (−108L / ~14.9K→~13.0K tok)**: R3.1→`REGRAS_MODELOS.md`, R11.2→`GOTCHAS.md`, I7→`REGRAS_OUTPUT.md`; R11(3-riscos)/R12 enxugados in-place; 7 pós-mortems `sessao <hex>` removidos; smoke 11/11 (princípio no prompt + procedimento na ref). _SHA: 1c60d0bfe_
 - [~] T2.3 re-medição (prova determinística, sem LLM): **765L / ~13.3K tok** (TOTAL estático 1036→943 / ~15.8K), balanço de tags OK, regressão verde. **Reposicionamento (após ler as FONTES — STUDY + QUALITY_REVIEW, que NÃO haviam sido lidas antes da T2.2):** o alvo "−150/−250 linhas" é métrica de baixo valor — STUDY insight #7 (Anthropic NÃO segue "short prompts"; prompt vazado ~200K tok, redundância intencional) + QUALITY_REVIEW ("ROI de enxugamento BAIXO; tokens baratos via cache"). A meta REAL é **altitude** (procedimento→Camada 1), cumprida. Os `<why>` (A2 = Top Strength 5/5) foram cortados na 1ª tentativa (perseguindo o número) e **restaurados** em `fee8f1f17`. Resultado final **−93L** vindo SÓ de altitude.
-- [ ] T3.1 security_invariants + meta_instruction_alert — _SHA:_
+- [x] T3.1 security_invariants + meta_instruction_alert — **no PRESET, não no SP** (decisão arquitetural Anthropic-best-practice: o preset é dono de safety/injection e já tinha `<prompt_injection>`/`<tool_results>`; o SP não tinha NADA de injection → pôr no SP criaria drift). Consolida a defesa de injection (resolve a duplicação interna `tool_results`↔`prompt_injection`) + meta-instruction §5.2; invariants de negócio R3/R4/`<scope>` **referenciados, não duplicados**. preset 97→117L; smoke 8/8; regressão 15 verdes. Test vectors §11 = spot-check manual pendente (exige rodar o agente). _SHA: 785298a97_
 - [ ] T3.2 memory injection validation — _SHA:_
 - [ ] T3.3 session_context granularidade — _SHA:_
 - [ ] T3.4 budget injeção medido — _SHA:_
@@ -411,6 +413,30 @@ T2.1 → T2.2 → T2.3 na ordem inviolável (defesa em código ANTES de podar o 
   não confirmada: `record_cost` (`chat.py:978`, handler do `done`) não alcançado no path persistente de
   PROD. NÃO investigado a fundo (decisão Rafael: seguir FASE 2). Retomar isto antes de confiar em
   custo/cache de produção.
+
+### Nota de execução — FASE 3 / T3.1 (2026-06-05)
+
+Gatilho: o Rafael perguntou (a) se as duplicidades do preset foram resolvidas e (b) se a robustez vai
+no system_prompt ou no preset. Autorizou "fazer o melhor pelas best practices Anthropic".
+
+- **Decisão (T3.1) — robustez no PRESET, não no SP.** O HARDENING §5 e a tabela da T3.1 diziam
+  "system_prompt", mas o HARDENING usa "system_prompt" como sinônimo de "Camada 0 estática" (preset+SP
+  são concatenados) e foi escrito sem considerar o preset. Verificado: a defesa de injection JÁ vive no
+  preset (`<safety><prompt_injection>` + `<tool_results>`); o SP não tem nada de injection (grep vazio).
+  Pôr no SP duplicaria a defesa em 2 arquivos (drift). Por separação de responsabilidades (preset =
+  safety/awareness; SP = comportamento/negócio), `<security_invariants>` + meta-instruction foram para o
+  **preset**, e os invariants de negócio (R3/R4/scope) são **referenciados**, não duplicados.
+
+- **Duplicidades do preset — status real (verificado):** ✅ resolvidas na FASE 1 (`language`,
+  `context_awareness`, `data_integrity`) + ✅ agora a duplicação interna de injection (`tool_results`↔
+  `prompt_injection`). ⚠️ **Permanecem (decisão: deixar — complementares, ROI baixo per QUALITY_REVIEW
+  "ROI de enxugamento BAIXO"):** `<communication_style>` (preset) ↔ R1 (SP); `<safety><reversibility>`
+  (preset) ↔ R3/L1 (SP); `<environment>` (preset, factual+TZ) ↔ `<environment>` (SP, motivação). São
+  facetas complementares (awareness vs regra/motivação), não drift factual — não justificam mexer.
+
+- **Pendente da FASE 3 (código, não tocado):** T3.2 (memory injection XML-escape/blocklist em
+  `memory_injection.py`), T3.3 (`session_context` granularidade em `hooks.py`), T3.4 (budget de injeção
+  — medir). Test vectors §11 do T3.1 = spot-check manual (rodar o agente).
 
 ---
 
