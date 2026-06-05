@@ -21,6 +21,7 @@ import json
 import logging
 import os
 import re
+import unicodedata
 from typing import Dict, Any, List, Optional
 
 import anthropic
@@ -34,6 +35,7 @@ logger = logging.getLogger(__name__)
 
 
 SONNET_MODEL = "claude-sonnet-4-6"
+HAIKU_MODEL = "claude-haiku-4-5-20251001"
 
 # Limite de caracteres totais das sessões para enviar ao Sonnet
 MAX_SESSIONS_CHARS = 24000
@@ -1907,6 +1909,92 @@ def _build_personal_extraction_path(tipo: str, descricao: str) -> str:
     return ""
 
 
+# Instrucao de normalizacao da assinatura de erro (snake_case da INTENCAO, nao do texto).
+# Mantida em SINCRONIA com a clausula `error_signature` do _PERSONAL_EXTRACTION_PROMPT (extrator
+# pos-sessao): AMBAS precisam produzir o MESMO espaco de assinaturas, senao a reincidencia entre
+# sessoes nao casa (o backfill assina o passivo; o extrator assina o organico; o casamento depende
+# de convergirem para a mesma string para o mesmo erro).
+_ERROR_SIGNATURE_SYSTEM = (
+    "Voce normaliza a INTENCAO de um erro que o usuario corrigiu, em UMA assinatura curta.\n"
+    "Regras:\n"
+    "- snake_case, sem acentos, max 60 chars; descreve a INTENCAO do erro, NAO o texto literal.\n"
+    "- Use a MESMA assinatura para o mesmo tipo de erro em situacoes diferentes (e a chave que "
+    "casa reincidencia entre sessoes).\n"
+    "- Exemplos: troca_de_escopo, data_formato_ano_mes, executou_padrao_vetado, "
+    "respondeu_cluster_errado, buscou_produto_errado.\n"
+    "Responda APENAS a assinatura em snake_case, sem aspas, sem pontuacao, sem explicacao."
+)
+
+# Stopwords PT curtas para o fallback deterministico (preserva o nucleo semantico).
+_SIG_STOPWORDS = frozenset({
+    'a', 'o', 'as', 'os', 'um', 'uma', 'de', 'do', 'da', 'dos', 'das', 'e', 'em', 'no', 'na',
+    'nos', 'nas', 'para', 'por', 'que', 'com', 'sem', 'ao', 'aos', 'se', 'ja', 'mais', 'the',
+})
+
+
+def _normalize_signature(raw: str) -> str:
+    """Normaliza texto livre em snake_case ASCII: sem acento, so [a-z0-9_], sem `_` nas bordas."""
+    if not raw:
+        return ''
+    txt = unicodedata.normalize('NFKD', raw).encode('ascii', 'ignore').decode('ascii')
+    txt = re.sub(r'[^a-z0-9]+', '_', txt.strip().lower())
+    return re.sub(r'_+', '_', txt).strip('_')
+
+
+def _deterministic_signature(descricao: str) -> str:
+    """Fallback SEM LLM: assinatura estavel a partir do nucleo semantico da descricao.
+
+    Determinismo e' o requisito-chave (mesma descricao -> mesma assinatura) para que correcoes
+    do mesmo erro casem entre sessoes mesmo quando o LLM esta indisponivel.
+    """
+    base = _normalize_signature(descricao)
+    if not base:
+        return ''
+    palavras = [w for w in base.split('_') if w and w not in _SIG_STOPWORDS]
+    return '_'.join(palavras or base.split('_'))
+
+
+def gerar_error_signature(descricao: str, prescricao: str = '', *, client=None) -> str:
+    """Gera a assinatura de intencao normalizada de um erro corrigido (loop corretivo).
+
+    Haiku (barato) com a instrucao compartilhada do extrator; fallback DETERMINISTICO (sem rede)
+    quando nao ha cliente/credencial ou o LLM falha. Sempre snake_case truncado em 64
+    (coluna `error_signature` = varchar(64)).
+
+    Reusado por: (a) backfill universal do passivo historico; (b) fallback organico em
+    `_save_personal_insight` quando o extrator pos-sessao omite o campo. Best-effort:
+    NUNCA levanta excecao (retorna '' apenas se a descricao for vazia).
+    """
+    descricao = (descricao or '').strip()
+    if not descricao:
+        return ''
+    texto = f"{descricao}\n{(prescricao or '').strip()}".strip()
+
+    # So tenta o LLM se houver como (cliente injetado OU credencial no ambiente). Sem isso
+    # (teste/ambiente sem chave) vai direto ao deterministico, sem tocar a rede.
+    if client is not None or os.getenv('ANTHROPIC_API_KEY'):
+        try:
+            cli = client or _get_anthropic_client()
+            resp = cli.messages.create(
+                model=HAIKU_MODEL,
+                max_tokens=24,
+                temperature=0,
+                system=[{
+                    "type": "text",
+                    "text": _ERROR_SIGNATURE_SYSTEM,
+                    "cache_control": {"type": "ephemeral"},
+                }],
+                messages=[{"role": "user", "content": texto[:600]}],
+            )
+            sig = _normalize_signature(resp.content[0].text if resp.content else '')
+            if sig:
+                return sig[:64]
+        except Exception as exc:
+            logger.debug(f"[SIGNATURE] LLM indisponivel, usando fallback deterministico: {exc}")
+
+    return _deterministic_signature(descricao)[:64]
+
+
 def _track_signature_recurrence(user_id: int, error_signature: str) -> bool:
     """Fase 3.3B — sinal HARMFUL por error_signature (chave canonica de reincidencia).
 
@@ -1976,6 +2064,20 @@ def _save_personal_insight(
     try:
         from ..models import AgentMemory
         from app import db
+
+        # Fase 3.4 (1b — captura organica residual): se for correcao e o extrator pos-sessao
+        # OMITIU a assinatura, gera-la AGORA (mesmo helper do backfill universal) ANTES de
+        # rastrear reincidencia e gravar — assim toda correcao fica recuperavel/casavel por
+        # assinatura, fechando o ~40% de omissao do extrator (medido em PROD 2026-06-04).
+        # Best-effort: nunca quebra o save (degrada para sem-assinatura).
+        if tipo == 'correcao' and not error_signature:
+            try:
+                error_signature = gerar_error_signature(descricao, prescricao) or ''
+            except Exception as _sig_exc:
+                logger.debug(
+                    f"[PERSONAL_EXTRACTION] fallback de assinatura falhou (ignorado): {_sig_exc}"
+                )
+                error_signature = ''
 
         # Fase 3.3B: sinal HARMFUL por error_signature (chave canonica de reincidencia),
         # ANTES e INDEPENDENTE do dedup-de-conteudo. Se ja existe regra dura com esta

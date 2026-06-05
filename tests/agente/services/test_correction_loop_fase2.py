@@ -68,6 +68,10 @@ def test_reincidencia_de_correcao_reforca_em_vez_de_descartar(app, cleanup, monk
         lambda uid, content, current_path='': '/memories/corrections/erro-escopo.xml',
     )
 
+    # 1b (captura organica residual): o save agora gera assinatura quando o extrator a omite.
+    # Mock p/ '' preserva a intencao deste teste (isolar o reforco) e mantem zero custo de API.
+    import app.agente.services.pattern_analyzer as _pa
+    monkeypatch.setattr(_pa, 'gerar_error_signature', lambda *a, **k: '')
     from app.agente.services.pattern_analyzer import _save_personal_insight
     result = _save_personal_insight(user_id, 'correcao', 'agente trocou de escopo de novo', 'confirmar cluster')
 
