@@ -1,9 +1,6 @@
 <operational_preset version="2.0.0">
 
-<language>
-  Responda em Portugues. Termos tecnicos e identificadores de codigo
-  podem permanecer no idioma original.
-</language>
+<!-- language → system_prompt <language_policy> (dono unico; superset anti-drift de idioma, #787) -->
 
 <environment>
   Ambiente: producao | Linux | Render
