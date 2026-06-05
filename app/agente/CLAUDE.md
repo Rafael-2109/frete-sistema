@@ -241,18 +241,24 @@ Segue o modelo de 5 camadas do Agent SDK (Anthropic):
 | Flag | System Prompt | Identidade | Tokens |
 |------|--------------|------------|--------|
 | `false` | `{preset: "claude_code", append: system_prompt.md}` | Claude Code + Agente (conflito) | ~7K |
-| `true` (default) | `preset_operacional.md + system_prompt.md` (string) | Apenas Agente (coerente) | ~2.7K |
+| `true` (default) | `preset_operacional.md + system_prompt.md + empresa_briefing.md` (string) | Apenas Agente (coerente) | **~17.5K** (medido) |
 
 ### Camadas (com flag true)
 
 ```
-┌──────────────────────────────────────────┐
-│ 1. preset_operacional.md (~600 tok)      │ ← Tools, safety, environment
-│ 2. system_prompt.md (~2.1K tok)          │ ← Comportamento, routing, regras
-│ 3. CLAUDE.md compartilhado (~1.5K tok)   │ ← Indice de referencias (unificado)
-│ 4. Dynamic injections (hook)             │ ← Memorias, contexto operacional
-└──────────────────────────────────────────┘
+STRING custom (option `system_prompt`) — 3 arquivos concatenados em _build_full_system_prompt():
+  1. preset_operacional.md  (~1.2K tok)   ← Tools, safety, environment
+  2. system_prompt.md       (~14.9K tok)  ← Comportamento, routing, regras
+  3. empresa_briefing.md    (~1.5K tok)   ← Vocabulario, cadeia de valor Nacom
+  = TOTAL string: ~17.5K tok (medido 2026-06-04)
++ CLAUDE.md raiz via setting_sources      ← project context (FORA da string custom)
++ Dynamic injections (hook UserPromptSubmit) ← memorias, session_context, diretivas
 ```
+
+> **Tamanho real = AUTO-MEDIDO.** Rode `python scripts/audits/prompt_size_audit.py`
+> apos qualquer edicao de prompt. NUNCA hardcodar de cabeca: esta doc ja esteve
+> ~6.5x defasada (afirmava ~2.7K, real ~17.5K — corrigido FASE 1 refactor 2026-06-04,
+> ver `docs/superpowers/plans/2026-06-04-refactor-governanca-prompt-agente.md`).
 
 ### Separacao de responsabilidades
 
@@ -281,8 +287,8 @@ Segue o modelo de 5 camadas do Agent SDK (Anthropic):
 - `AGENT_PROMPT_CACHE_OPTIMIZATION=false` restaura variaveis dinamicas no system prompt (via prepend)
 
 ### Arquivos envolvidos
-- `prompts/preset_operacional.md` — preset customizado (~65 linhas)
-- `prompts/system_prompt.md` — system prompt operacional (v4.2.0, estatico — sem vars dinamicas)
+- `prompts/preset_operacional.md` — preset customizado (103 linhas, medido — ver prompt_size_audit.py)
+- `prompts/system_prompt.md` — system prompt operacional (v4.3.3, estatico — sem vars dinamicas)
 - `sdk/client.py` — `_format_system_prompt()` (guard cache), `_user_prompt_submit_hook()` (session_context)
 - `config/feature_flags.py` — `USE_CUSTOM_SYSTEM_PROMPT`, `USE_PROMPT_CACHE_OPTIMIZATION`
 - `config/settings.py` — `operational_preset_path`

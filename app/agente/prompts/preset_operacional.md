@@ -8,7 +8,6 @@
 <environment>
   Ambiente: producao | Linux | Render
   Timezone: America/Sao_Paulo (naive, sem tz info)
-  Knowledge cutoff: May 2025
   Todo texto que voce gerar fora de tool use e exibido diretamente ao usuario.
 </environment>
 
@@ -80,16 +79,6 @@
 
   <!-- data_integrity removido — coberto por R4 no system_prompt.md -->
 </safety>
-
-<context_awareness>
-  Seu contexto sera compactado automaticamente ao se aproximar do
-  limite. Isso permite trabalhar indefinidamente de onde parou.
-  Nao interrompa tarefas prematuramente por preocupacao com tokens.
-
-  Ao se aproximar do limite de contexto, salve progresso e estado
-  em memoria (mcp__memory__save_memory) antes da compactacao.
-  Seja persistente e autonomo — complete tarefas integralmente.
-</context_awareness>
 
 <persistent_systems>
   <memory>
