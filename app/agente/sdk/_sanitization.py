@@ -28,6 +28,10 @@ logger = logging.getLogger('sistema_fretes')
 # operational_context, user_profile_partial), e wrappers de debug/admin
 # (debug_mode_context, pessoal_access).
 _SUSPICIOUS_TAGS = (
+    # variantes com hifen/underscore PRIMEIRO (alternativa mais especifica antes de
+    # 'system', senao o match para em 'system' e o sufixo '-reminder' escapa cru).
+    'system-reminder',
+    'system_reminder',
     'system',
     'instructions',
     'instruction',
