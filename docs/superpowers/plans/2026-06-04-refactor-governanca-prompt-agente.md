@@ -13,11 +13,13 @@ atualizado: 2026-06-04
 > (`preset_operacional.md` + `system_prompt.md` + injeções de runtime) e instalar a
 > governança que impede o problema de voltar. Origem: avaliação de 2026-06-04.
 
-> 🔵 **PRÓXIMA SESSÃO — RETOMAR AQUI:** FASE 1 ✅ feita (ver [Rastreamento](#rastreamento-de-execucao-append-only)).
-> O próximo passo é a **FASE 0 (golden dataset + instrumentação)** — bloqueante, sem gate
-> fácil. **NÃO pular para a FASE 2**: ela depende da FASE 0. O risco real é a FASE 0 (chata)
-> nunca acontecer e este plano virar mais um roadmap parado. Abrir este doc e seguir o
-> rastreamento; aplicar R-EXEC-1 (sem golden dataset, mudança comportamental não vai).
+> 🔵 **PRÓXIMA SESSÃO — RETOMAR AQUI:** FASE 1 ✅ feita; **FASE 0 EM ANDAMENTO** e
+> **REENQUADRADA** (ver [Nota FASE 0](#nota-de-execucao-fase-0-2026-06-05) + [Rastreamento](#rastreamento-de-execucao-append-only)).
+> R-EXEC-3 aplicado sobre o próprio R-EXEC-1 (a pedido do Rafael 2026-06-05): o refactor
+> **NÃO depende de LLM eval** — a prova de "antes/depois" é **determinística** (pytest do
+> gate + medição de tamanho/custo), não golden dataset LLM. Golden dataset do Agente Web =
+> `tests/agent_evals/` (NÃO `.claude/evals/subagents/`, que testa subagentes). **NÃO pular
+> para a FASE 2**: depende da FASE 0 (matriz de provas + instrumentação de custo viva).
 
 ## Indice
 
@@ -265,9 +267,9 @@ FASE 5 (governança) ───────┴──► transversal; T5.1/T5.2 id
 
 > Atualizar com `[x]` + commit SHA conforme cada task completa. NÃO reescrever histórico.
 
-- [ ] T0.1 golden dataset expandido — _SHA:_
-- [ ] T0.2 token/cache instrumentado — _SHA:_
-- [ ] T0.3 baseline ANTES congelado — _SHA:_
+- [ ] T0.1 **REENQUADRADO** → matriz de provas determinísticas (task → critério pytest/medição); golden dataset LLM descartado (ver Nota FASE 0) — _SHA:_
+- [~] T0.2 instrumentação — **diagnóstico FECHADO** (2026-06-05): cálculo OK (logs PROD provam `record_cost` com cache breakdown), mas `agent_session_costs` VAZIA há ~1 mês. Causa: `insert_entry` (`models.py:1514`) usa `begin_nested()` (SAVEPOINT) SEM commit, assumindo "transação de request Flask"; mas `record_cost` (`chat.py:978`) roda na thread daemon (`app_context` manual = rollback no teardown). Prova: `agent_invocation_metrics`=69 (mesma thread, COM commit explícito) vs cost=0. Fix = commit explícito do cost na thread (espelhar COMMIT GUARD A1) + confirmar flag `AGENT_COST_TRACKER_PERSIST`. **Sem mudança comportamental (telemetria).** — _SHA:_
+- [ ] T0.3 baseline OBJETIVO: tamanho (`prompt_size_audit`) + suíte pytest verde + custo/cache de produção (pós-T0.2) — _SHA:_
 - [x] T1.1 cutoff "May 2025" removido (`preset_operacional.md`) — commit main 2026-06-04
 - [x] T1.2 dedup — **PARCIAL**: só `<context_awareness>` (dedup limpa; dono único = `system_prompt` R6). language / communication_style / reversibility = NÃO eram dedup limpa → adiados; prompt_injection = instância única (não dup) → mantido. Ver nota FASE 1.
 - [~] T1.3 business_snapshot — **ADIADO p/ FASE 2**: contém Atacadão 50% / Assai 13% (insumo de P1-P7) = comportamental, não higiene
@@ -305,6 +307,68 @@ funcionando, não desvio:
   também falha `ET.fromstring`). Critério corrigido: **balanço de tags de bloco + smoke
   loader** (preset = zero desbalanço; 3 arquivos concatenam OK).
 - **Tamanho pós-FASE 1:** 1.046 linhas / ~17,5K tok (preset 111→103 linhas).
+
+### Nota de execução — FASE 0 (2026-06-05)
+
+R-EXEC-3 aplicado sobre o próprio R-EXEC-1 (a pedido do Rafael). 3 premissas do plano
+original **não se sustentaram** — verificadas com fonte, não de cabeça:
+
+- **P1 — golden dataset apontava para o alvo errado.** T0.1 dizia "expandir ROADMAP R5"
+  (`.claude/evals/subagents/`), mas esse dataset roda **subagentes** via `claude -p --agent`
+  (`eval_runner.py:77-88`) — NÃO passa pelo `system_prompt.md` que este refactor edita.
+  Quem exercita o system_prompt do **Agente Web** é `tests/agent_evals/run_evals.py`
+  (`:268` → `POST /agente/api/chat`).
+- **P2 — cobertura insuficiente.** As 20 tasks de `tests/agent_evals/tasks.json` cobrem
+  consulta/rastreamento/análise/memória/segurança, mas NÃO confirmação R3, Odoo-write
+  R11/R12, routing PRE/POS nem idioma PT-BR (as regras que a FASE 2 comprime).
+- **P3 — T0.2 não é "instrumentar do zero" (ROADMAP R11 vencido).** `cost_tracker.py` já
+  calcula breakdown de cache + `cache_hit_rate()` (G2, 2026-04-15, depois do baseline de
+  abril); `agent_session_costs` existe com schema completo; `insights.py` o expõe. MAS a
+  tabela está **VAZIA em PROD** (0 linhas, verificado via MCP Render) → T0.2 vira
+  "investigar por que + ligar + validar".
+
+**Decisão estruturante (Rafael, 2026-06-05):** o refactor do system_prompt **NÃO depende de
+LLM eval** ("custou fortuna e nada foi conclusivo"). A intenção de R-EXEC-1 ("não mudar
+comportamento às cegas") permanece inviolável; o **instrumento** muda de "golden dataset LLM
+antes/depois" para **prova determinística**:
+- **FASE 2:** T2.1 (gate runtime `permissions.py`) testável por pytest; a ordem T2.1→T2.2
+  faz a *segurança* virar código ANTES de o texto sair do prompt → poda provada por "pytest
+  do gate verde + diff revisado + tamanho caiu (`prompt_size_audit.py`)".
+- **FASE 3:** T3.2/T3.3 são código (pytest: escape/blocklist em `memory_injection.py`,
+  granularidade em `hooks.py`); T3.1 = presença por grep + spot-check manual de 2-3 vetores
+  `HARDENING §11`.
+- **FASE 4:** T4.1 = revisão manual dos ~7 soft candidates (R1 audit `ROADMAP:200-232` já
+  fez o pesado: 94% são safety L1/L3); T4.2 = métrica de produção (`agent_session_costs`).
+
+**FASE 0 reenquadrada:** T0.1 → matriz de provas determinísticas (não casos LLM);
+T0.2 → ligar a instrumentação de custo (diagnóstico em andamento); T0.3 → baseline objetivo
+(tamanho + suíte pytest verde + custo/cache de produção). Efeito colateral bom: a FASE 0
+deixa de ser "geração de casos LLM chata que nunca acontece" e vira "ligar instrumentação +
+escrever a matriz" — o risco de virar roadmap parado encolhe.
+
+**Resíduo não-determinístico assumido** (idioma PT-BR, qualidade do routing conversacional,
+"pedir confirmação proativamente"): tratado por **spot-check manual pontual** (ler 2-3
+saídas), NÃO framework LLM. A *segurança* desse resíduo está no gate (T2.1), não no
+comportamento conversacional probabilístico.
+
+**Diagnóstico T0.2 — causa raiz da tabela vazia (2026-06-05):** o cálculo de custo FUNCIONA
+(logs PROD: dezenas de `[COST_TRACKER] Registrado` com `cache_read/cache_write/hit_rate`), mas
+`agent_session_costs` está vazia desde a migration (2026-05-09). Causa: `AgentSessionCost.insert_entry`
+(`models.py:1514`) usa `db.session.begin_nested()` (SAVEPOINT) SEM commit próprio — a docstring
+assume "JÁ EXISTE uma transaction do request Flask" cujo commit final consolida. Mas `record_cost`
+no path principal (`chat.py:978`) roda na **thread daemon** com `app_context` manual, que faz
+`session.remove()` (rollback) no teardown, NÃO commit. As *mensagens* persistem porque
+`_save_messages_to_db` tem commit explícito (`chat.py:1926`); o cost não tem. **Prova empírica:**
+`agent_invocation_metrics`=69 linhas (mesma thread/hook, COM commit explícito via COMMIT GUARD A1)
+vs `agent_session_costs`=0; 764 sessões no período. Resta confirmar se `AGENT_COST_TRACKER_PERSIST`
+também está OFF em PROD (env não-lível via MCP `get_service`). **Fix proposto (próximo GO):** commit
+explícito do cost na thread daemon, espelhando o A1 (`_a1_owns_ctx`), + validar a flag. Sem mudança
+comportamental do agente — telemetria pura.
+
+**Premissa a verificar em T2.1 (não antes):** o gate runtime cobre 100% do que R11/R12
+defendem? `action_update_taxes` (R11.1) hoje NÃO está coberto (`:136`); UPDATE/DELETE em
+massa via `Bash`/SQL pode não ser interceptável como as tools Odoo nomeadas. Trecho que só o
+prompt protege NÃO pode ser podado (T2.2) sem defesa equivalente — senão é "fazer pela metade".
 
 ---
 
