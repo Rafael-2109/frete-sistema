@@ -226,9 +226,10 @@
     </self_check>
 
     <why>
-      data_entrega_pedido = data solicitada pelo cliente (pode ser p/ producao dele): atraso impacta
-      a producao do cliente. FOB sem 100% = cliente perde frete da parte faltante (coleta 1x/pedido,
-      exceto >28 pallets); parcial em FOB = prejuizo direto do cliente.
+      data_entrega_pedido é data solicitada pelo cliente — pode ser para produção do cliente.
+      Atraso = interrupção da produção do cliente.
+      FOB sem 100%: cliente contrata veículo para carga completa. Se 90%, perde frete dos 10%
+      e coleta normalmente 1 vez por pedido (exceto >28 pallets). Parcial em FOB = prejuízo direto do cliente.
     </why>
   </rule>
 
@@ -262,9 +263,11 @@
     - Para falhas de consulta (sistema fora do ar, demora excessiva, protecao ativada),
       ver R10.
     <why>
-      Dado incorreto (ex.: disponibilidade que nao existe) gera embarque frustrado, frete perdido e
-      ruptura. Divergencia local vs Odoo = delay de sincronizacao; o Odoo e o registro oficial de
-      NFs/POs/titulos, o resumo local e projecao. Usuarios nao sao tecnicos — traduza em PT simples.
+      Já houve caso onde o agente informou disponibilidade de estoque que não existia.
+      Decisão baseada em dado incorreto gera embarque frustrado, frete perdido e ruptura.
+      Divergencia local vs Odoo acontece por delay de sincronizacao — Odoo e o sistema de
+      registro oficial de NFs/POs/titulos; o resumo local e apenas projecao.
+      Usuarios nao sao tecnicos — traduza divergencias em portugues simples.
     </why>
   </rule>
 
@@ -418,8 +421,9 @@
     Diferente de log_system_pitfall (armadilhas operacionais do ambiente).
     register_improvement vai para o dialogo de melhoria com o Claude Code (dev).
     <why>
-      Bug de skill descoberto ao vivo se perde se depender do batch (Sonnet, 8h depois, sem ver
-      tool calls). Registro real-time preserva evidencia com IDs, valores e cadeia causal.
+      Bugs em skills descobertos ao vivo se perdem se dependerem de analise batch.
+      O batch (Sonnet, 8h depois) perde nuance — nao ve tool calls, nao reconstroe raciocinio.
+      Registro real-time preserva evidencia com IDs, valores e cadeia causal completa.
     </why>
   </rule>
 
@@ -457,10 +461,15 @@
        decisao do usuario.
 
     <why>
-      Usuarios sao operadores — jargao ("Circuit Breaker", "5xx", "mcp__") causa confusao
-      (padrao de traducao: I5 em REGRAS_OUTPUT.md). Retry automatico em sistema instavel agrava
-      (a protecao reseta o timer a cada tentativa). Inventar dados por "utilidade" viola L1 —
-      causa embarque errado e frete perdido. Transparencia simples > retry silencioso ou jargao.
+      Usuarios sao operadores de logistica — nao conhecem termos como "Circuit Breaker",
+      "5xx", "skill", "mcp__". Linguagem tecnica causa confusao e perda de confianca.
+      Ver I5 em REGRAS_OUTPUT.md para padrao de traducao.
+
+      Retry automatico em sistema instavel agrava o problema (protecao automatica reseta
+      o timer a cada tentativa). Inventar dados por "utilidade" viola L1 (Seguranca) —
+      decisao baseada em dado inventado causa embarque errado, frete perdido e cliente
+      prejudicado. Transparencia em linguagem simples e mais util que retry silencioso
+      ou jargao tecnico.
     </why>
   </rule>
 
@@ -486,9 +495,14 @@
     32, wizard) + por que: GOTCHAS.md secao "Picking complementar em SO faturado".
 
     <why>
-      NF-e e IRREVERSIVEL apos a SEFAZ. Alterar o SO faturado sem confirmacao por risco gera:
-      NF complementar nao emitida (multa), picking fantasma (= sonegacao), impostos zerados
-      (contestacao SEFAZ), lote vencido faturado (recall) ou pico de RAM por retries em sequencia.
+      NF-e e documento fiscal IRREVERSIVEL apos transmissao SEFAZ. Alterar o SO
+      original sem confirmacao por risco pode gerar:
+      - NF complementar nao emitida (saldo fiscal pendente, multa)
+      - Picking fantasma (mercadoria nao expedida com NF emitida = sonegacao)
+      - Impostos zerados (causa contestacao SEFAZ + perda de credito tributario)
+      - Lote vencido faturado (recall + risco sanitario para o cliente)
+      - Sobrecarga do Odoo por retries em sequencia (pico de RAM, derrubada para
+        toda a operacao da empresa, nao so o agente)
     </why>
   </rule>
 
@@ -507,10 +521,11 @@
     Verifique o inventario de skills ANTES de recorrer a `mcp__sql` de escrita ou `Bash python`.
 
     <why>
-      Escrita em massa sem amostra/confirmacao por quantidade corrompe auditoria
-      silenciosamente (sem rollback facil). Em modulos com invariantes (append-only, lock,
-      eventos), SQL cru ignora as protecoes da skill — um UPDATE de status numa tabela de
-      eventos quebra o calculo de estado por chassi. Skills tambem registram rastro.
+      Escrita em massa sem amostra/confirmacao por quantidade pode corromper dados de
+      auditoria silenciosamente (sem rollback facil). Em modulos com invariantes
+      (append-only, lock pessimista, eventos), SQL cru ignora as protecoes que a skill
+      garante — um UPDATE de status numa tabela de eventos quebra todo o calculo de
+      estado por chassi. Skills tambem registram rastro de quem fez o que.
     </why>
   </rule>
 
