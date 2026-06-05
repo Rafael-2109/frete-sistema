@@ -1816,17 +1816,21 @@ class RecebimentoLfOdooService:
         self._checkpoint(etapa=17, msg='Status atualizado')
 
     def _step_18_criar_movimentacoes(self, odoo):
-        """Etapa 18: Criar MovimentacaoEstoque."""
+        """Etapa 18: Garantir cadastro do produto acabado LF.
+
+        NAO cria MovimentacaoEstoque (controle e o lancamento manual de PRODUCAO);
+        apenas garante CadastroPalletizacao ACABADO_LF. Ver _criar_movimentacoes_estoque.
+        """
         rec = self._get_recebimento()
         if rec.etapa_atual >= 18:
             return
 
-        logger.info(f"  Etapa 18/18: Criando MovimentacaoEstoque")
-        self._atualizar_redis(rec.id, 5, 18, rec.total_etapas, 'Registrando movimentacoes...')
+        logger.info(f"  Etapa 18/18: Garantindo cadastro do produto acabado LF")
+        self._atualizar_redis(rec.id, 5, 18, rec.total_etapas, 'Garantindo cadastros...')
 
         try:
             self._criar_movimentacoes_estoque(odoo)
-            logger.info(f"  MovimentacaoEstoque criadas com sucesso")
+            logger.info(f"  Etapa 18 concluida (cadastros garantidos)")
         except Exception as e:
             # Nao falhar o recebimento por erro na movimentacao
             logger.warning(
@@ -3806,7 +3810,10 @@ class RecebimentoLfOdooService:
         """
         Etapa 37: Finalizar recebimento CD.
 
-        Registra MovimentacaoEstoque e marca transfer_status='concluido'.
+        Marca transfer_status='concluido'. NAO cria MovimentacaoEstoque: a
+        transferencia FB->CD e movimentacao entre filiais e NAO altera o saldo do
+        produto (o controle do produto acabado da LF e o lancamento MANUAL de
+        PRODUCAO). Ver _criar_movimentacoes_estoque para o racional completo.
         """
         rec = self._get_recebimento()
         if rec.etapa_atual >= 37:
@@ -3816,12 +3823,6 @@ class RecebimentoLfOdooService:
         self._atualizar_redis(
             rec.id, 7, 37, rec.total_etapas, 'Finalizando recebimento CD...'
         )
-
-        # Criar MovimentacaoEstoque para a transferencia
-        try:
-            self._criar_movimentacoes_transferencia()
-        except Exception as e:
-            logger.warning(f"  Erro ao criar MovimentacaoEstoque transfer (nao critico): {e}")
 
         self._checkpoint(
             etapa=37,
@@ -3884,112 +3885,6 @@ class RecebimentoLfOdooService:
         # Salvar no registro local
         lote_info.odoo_lot_id_cd = lot_id
         return lot_id
-
-    def _criar_movimentacoes_transferencia(self):
-        """Cria MovimentacaoEstoque de saida FB e entrada CD para a transferencia."""
-        from app.estoque.models import MovimentacaoEstoque
-
-        rec = self._get_recebimento()
-        lotes_transfer = self._get_transfer_lotes()
-
-        if not lotes_transfer:
-            return
-
-        # Buscar codigos de produto
-        from app.producao.models import CadastroPalletizacao
-        from app.odoo.utils.connection import get_odoo_connection
-
-        odoo = get_odoo_connection()
-        product_ids = list(set(lt.odoo_product_id for lt in lotes_transfer))
-        codigos = {}
-        if product_ids:
-            try:
-                produtos = odoo.execute_kw(
-                    'product.product', 'read',
-                    [product_ids],
-                    {'fields': ['id', 'default_code']}
-                )
-                codigos = {
-                    p['id']: p.get('default_code')
-                    for p in produtos if p.get('default_code')
-                }
-            except Exception as e:
-                logger.error(f"  Erro ao buscar codigos produto: {e}")
-
-        criadas = 0
-        for lote in lotes_transfer:
-            cod_produto = codigos.get(lote.odoo_product_id)
-            if not cod_produto:
-                continue
-
-            cadastro = CadastroPalletizacao.query.filter_by(
-                cod_produto=str(cod_produto)
-            ).first()
-            nome_produto = (
-                cadastro.nome_produto if cadastro
-                else lote.odoo_product_name or str(cod_produto)
-            )
-
-            # SAIDA da FB (transferencia)
-            saida_ref = f"transfer_out_{rec.odoo_transfer_out_picking_id}_{lote.odoo_product_id}"
-            existente_saida = MovimentacaoEstoque.query.filter_by(
-                odoo_move_id=saida_ref
-            ).first()
-            if not existente_saida:
-                saida = MovimentacaoEstoque(
-                    cod_produto=str(cod_produto),
-                    nome_produto=nome_produto,
-                    data_movimentacao=agora_utc_naive().date(),
-                    tipo_movimentacao='SAIDA',
-                    local_movimentacao='TRANSFERENCIA',
-                    qtd_movimentacao=-lote.quantidade,
-                    odoo_picking_id=str(rec.odoo_transfer_out_picking_id),
-                    odoo_move_id=saida_ref,
-                    tipo_origem='ODOO',
-                    lote_nome=lote.lote_nome,
-                    data_validade=lote.data_validade,
-                    num_pedido=rec.odoo_transfer_out_picking_name,
-                    observacao=(
-                        f"Transfer FB->CD via LF NF {rec.numero_nf} - "
-                        f"Lote: {lote.lote_nome}"
-                    ),
-                    criado_por=rec.usuario or 'Sistema Recebimento LF',
-                    ativo=True,
-                )
-                db.session.add(saida)
-                criadas += 1
-
-            # ENTRADA no CD (transferencia)
-            entrada_ref = f"transfer_in_{rec.odoo_transfer_in_picking_id}_{lote.odoo_product_id}"
-            existente_entrada = MovimentacaoEstoque.query.filter_by(
-                odoo_move_id=entrada_ref
-            ).first()
-            if not existente_entrada:
-                entrada = MovimentacaoEstoque(
-                    cod_produto=str(cod_produto),
-                    nome_produto=nome_produto,
-                    data_movimentacao=agora_utc_naive().date(),
-                    tipo_movimentacao='ENTRADA',
-                    local_movimentacao='TRANSFERENCIA',
-                    qtd_movimentacao=lote.quantidade,
-                    odoo_picking_id=str(rec.odoo_transfer_in_picking_id),
-                    odoo_move_id=entrada_ref,
-                    tipo_origem='ODOO',
-                    lote_nome=lote.lote_nome,
-                    data_validade=lote.data_validade,
-                    num_pedido=rec.odoo_transfer_in_picking_name,
-                    observacao=(
-                        f"Transfer FB->CD via LF NF {rec.numero_nf} - "
-                        f"Lote: {lote.lote_nome}"
-                    ),
-                    criado_por=rec.usuario or 'Sistema Recebimento LF',
-                    ativo=True,
-                )
-                db.session.add(entrada)
-                criadas += 1
-
-        commit_with_retry(db.session)
-        logger.info(f"  MovimentacaoEstoque transfer: {criadas} criadas")
 
     # =================================================================
     # Sub-rotinas reutilizadas
@@ -4339,34 +4234,35 @@ class RecebimentoLfOdooService:
 
     def _criar_movimentacoes_estoque(self, odoo):
         """
-        Cria MovimentacaoEstoque a partir dos lotes processados.
+        Garante CadastroPalletizacao (natureza ACABADO_LF) dos produtos acabados
+        recebidos da LF. NAO cria MovimentacaoEstoque.
 
-        REGRA (2026-05-26): SOMENTE produto acabado (tipo='manual', CFOP != 1902)
-        gera MovimentacaoEstoque. Componentes/insumos (tipo='auto', CFOP=1902/5902)
-        NAO devem entrar como compra — sao retorno de industrializacao da LF,
-        nao aquisicao. Gravar componentes inflava o estoque indevidamente.
+        REGRA (2026-06-05): o Recebimento LF NAO gera MovimentacaoEstoque. O
+        produto acabado da industrializacao da LF e controlado EXCLUSIVAMENTE pelo
+        lancamento MANUAL de PRODUCAO (tipo_movimentacao='PRODUCAO',
+        tipo_origem='MANUAL'). Criar ENTRADA/COMPRA aqui DUPLICAVA o saldo (e a
+        transferencia FB->CD, removida da etapa 37, ainda oscilava o estoque).
+        Mantida apenas a garantia de cadastro do produto acabado (idempotente).
 
-        Tambem grava numero_nf (RecebimentoLf.numero_nf) na MovimentacaoEstoque
-        para rastreabilidade.
+        Historico do escopo desta etapa:
+          - ate 2026-05-26: gravava COMPRA de componentes (tipo='auto') tambem
+          - 2026-05-26..2026-06-04: gravava COMPRA so do produto acabado (tipo='manual')
+          - desde 2026-06-05: NAO grava nenhuma MovimentacaoEstoque (so cadastro)
         """
-        from app.estoque.models import MovimentacaoEstoque
         from app.producao.models import CadastroPalletizacao
         from app.producao.services.cadastro_palletizacao_service import garantir_cadastro_basico
 
         rec = self._get_recebimento()
-        # Filtro chave: somente produto acabado (tipo='manual'); exclui componentes (tipo='auto')
+        # Somente produto acabado (tipo='manual'); componentes (tipo='auto') sao ignorados
         lotes_processados = rec.lotes.filter_by(processado=True, tipo='manual').all()
         if not lotes_processados:
             logger.info(
-                f"  Nenhum lote de produto acabado (tipo='manual') para MovimentacaoEstoque"
+                "  Nenhum lote de produto acabado (tipo='manual') — nada a cadastrar"
             )
             return
 
-        # Coletar product_ids e move_line_ids para busca batch
+        # Buscar codigos de produto (default_code) em batch
         product_ids = list(set(lt.odoo_product_id for lt in lotes_processados if lt.odoo_product_id))
-        move_line_ids = list(set(lt.odoo_move_line_id for lt in lotes_processados if lt.odoo_move_line_id))
-
-        # Buscar codigos de produto
         codigos = {}
         if product_ids:
             try:
@@ -4379,84 +4275,34 @@ class RecebimentoLfOdooService:
             except Exception as e:
                 logger.error(f"  Erro ao buscar codigos produto: {e}")
 
-        # Buscar move_ids das move_lines
-        move_ids = {}
-        if move_line_ids:
-            try:
-                mls = odoo.execute_kw(
-                    'stock.move.line', 'read',
-                    [move_line_ids],
-                    {'fields': ['id', 'move_id']}
-                )
-                for ml in mls:
-                    mid = ml.get('move_id')
-                    if mid:
-                        move_ids[ml['id']] = mid[0] if isinstance(mid, (list, tuple)) else mid
-            except Exception as e:
-                logger.error(f"  Erro ao buscar move_ids: {e}")
-
-        criadas = 0
+        garantidos = 0
         for lote in lotes_processados:
             try:
                 cod_produto = codigos.get(lote.odoo_product_id)
                 if not cod_produto:
                     continue
 
-                move_id = move_ids.get(lote.odoo_move_line_id)
-                if not move_id:
-                    continue
-
-                # Produto acabado da LF: registrar SEMPRE (output da industrializacao).
-                # Cria CadastroPalletizacao basico (natureza ACABADO_LF) se faltar.
-                cadastro = CadastroPalletizacao.query.filter_by(
+                # Garante CadastroPalletizacao basico (ACABADO_LF) se faltar — idempotente
+                existente = CadastroPalletizacao.query.filter_by(
                     cod_produto=str(cod_produto)
                 ).first()
-                if not cadastro:
-                    cadastro, _ = garantir_cadastro_basico(
+                if not existente:
+                    garantir_cadastro_basico(
                         cod_produto=str(cod_produto),
                         nome_produto=lote.odoo_product_name or str(cod_produto),
                         natureza='ACABADO_LF',
                         criado_por=rec.usuario or 'Sistema Recebimento LF',
                     )
-
-                # Verificar duplicacao
-                existente = MovimentacaoEstoque.query.filter_by(
-                    odoo_move_id=str(move_id)
-                ).first()
-                if existente:
-                    existente.lote_nome = lote.lote_nome
-                    existente.data_validade = lote.data_validade
-                    if not existente.numero_nf:
-                        existente.numero_nf = rec.numero_nf
-                    existente.atualizado_em = agora_utc_naive()
-                    continue
-
-                entrada = MovimentacaoEstoque(
-                    cod_produto=str(cod_produto),
-                    nome_produto=lote.odoo_product_name or cadastro.nome_produto,
-                    data_movimentacao=agora_utc_naive().date(),
-                    tipo_movimentacao='ENTRADA',
-                    local_movimentacao='COMPRA',
-                    qtd_movimentacao=lote.quantidade,
-                    odoo_picking_id=str(rec.odoo_picking_id),
-                    odoo_move_id=str(move_id),
-                    tipo_origem='ODOO',
-                    lote_nome=lote.lote_nome,
-                    data_validade=lote.data_validade,
-                    numero_nf=rec.numero_nf,
-                    num_pedido=rec.odoo_po_name,
-                    observacao=f"Recebimento LF {rec.odoo_picking_name} - NF {rec.numero_nf} - Lote: {lote.lote_nome}",
-                    criado_por=rec.usuario or 'Sistema Recebimento LF',
-                    ativo=True
-                )
-                db.session.add(entrada)
-                criadas += 1
+                    garantidos += 1
 
             except Exception as e:
-                logger.error(f"  Erro ao criar MovimentacaoEstoque para lote {lote.lote_nome}: {e}")
+                logger.error(f"  Erro ao garantir cadastro do lote {lote.lote_nome}: {e}")
 
         commit_with_retry(db.session)
-        logger.info(f"  MovimentacaoEstoque: {criadas} criadas")
+        logger.info(
+            f"  Cadastros ACABADO_LF garantidos: {garantidos} "
+            f"(nenhuma MovimentacaoEstoque criada — controle e o lancamento manual de PRODUCAO)"
+        )
 
     # =================================================================
     # Helpers de infraestrutura
