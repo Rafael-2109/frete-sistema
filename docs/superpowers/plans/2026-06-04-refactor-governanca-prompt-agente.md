@@ -22,9 +22,10 @@ atualizado: 2026-06-04
 > **Decisões abertas:** (a) expandir altitude p/ R0/routing (só se a altitude justificar, não o número)? (b)
 > **pendência T0.2:** `agent_session_costs` continua VAZIA (o diagnóstico "flag OFF" é duvidoso — o
 > default já é `true`; suspeita real = `record_cost` não alcançado no path persistente de PROD).
-> FASE 3: **T3.1 robustez FEITA no PRESET** (`785298a97` — `<security_invariants>` + meta-instruction;
-> decisão arquitetural = preset, NÃO o SP, p/ evitar drift). Falta T3.2 (memory injection escape/blocklist
-> em `memory_injection.py`), T3.3 (`session_context` granularidade), T3.4 (budget de injeção — medir).
+> FASE 3: **T3.1 (robustez no PRESET, `785298a97`) + T3.2 (RAG injection — buraco `<system-reminder>`,
+> `c616916ac`) FEITAS.** Falta: **T3.3** (`session_context` granularidade minuto — pode ser no-op, é
+> additionalContext fora do cache; medir antes), **T3.4** (budget de injeção Opus ilimitado — MEDIR
+> lost-in-the-middle antes de capar), **T3.1 test vectors §11** (Rafael faz no agente web).
 > Princípios desta linha (NÃO reabrir): refactor **NÃO usa LLM eval** — prova **determinística**
 > (pytest do gate + `prompt_size_audit` + smoke); **hipótese barata primeiro**; **verificar a
 > premissa de cada task** (R-EXEC-3).
@@ -286,7 +287,7 @@ FASE 5 (governança) ───────┴──► transversal; T5.1/T5.2 id
 - [x] T2.2 prompt comprimido (princípio fica, detalhe sai) — **858→750 linhas (−108L / ~14.9K→~13.0K tok)**: R3.1→`REGRAS_MODELOS.md`, R11.2→`GOTCHAS.md`, I7→`REGRAS_OUTPUT.md`; R11(3-riscos)/R12 enxugados in-place; 7 pós-mortems `sessao <hex>` removidos; smoke 11/11 (princípio no prompt + procedimento na ref). _SHA: 1c60d0bfe_
 - [~] T2.3 re-medição (prova determinística, sem LLM): **765L / ~13.3K tok** (TOTAL estático 1036→943 / ~15.8K), balanço de tags OK, regressão verde. **Reposicionamento (após ler as FONTES — STUDY + QUALITY_REVIEW, que NÃO haviam sido lidas antes da T2.2):** o alvo "−150/−250 linhas" é métrica de baixo valor — STUDY insight #7 (Anthropic NÃO segue "short prompts"; prompt vazado ~200K tok, redundância intencional) + QUALITY_REVIEW ("ROI de enxugamento BAIXO; tokens baratos via cache"). A meta REAL é **altitude** (procedimento→Camada 1), cumprida. Os `<why>` (A2 = Top Strength 5/5) foram cortados na 1ª tentativa (perseguindo o número) e **restaurados** em `fee8f1f17`. Resultado final **−93L** vindo SÓ de altitude.
 - [x] T3.1 security_invariants + meta_instruction_alert — **no PRESET, não no SP** (decisão arquitetural Anthropic-best-practice: o preset é dono de safety/injection e já tinha `<prompt_injection>`/`<tool_results>`; o SP não tinha NADA de injection → pôr no SP criaria drift). Consolida a defesa de injection (resolve a duplicação interna `tool_results`↔`prompt_injection`) + meta-instruction §5.2; invariants de negócio R3/R4/`<scope>` **referenciados, não duplicados**. preset 97→117L; smoke 8/8; regressão 15 verdes. Test vectors §11 = spot-check manual pendente (exige rodar o agente). _SHA: 785298a97_
-- [ ] T3.2 memory injection validation — _SHA:_
+- [x] T3.2 memory injection validation — **escape-na-injeção já existia (G4, 4 tiers de `_load_user_memories_for_context`); fechado o BURACO `<system-reminder>`** (vazava CRU — `_SUSPICIOUS_TAGS` tinha 'system' mas não a variante com hífen; o `(?:\s[^>]*)?/?>` funciona como word-boundary e o hífen quebrava o match) + teste adversarial (11 casos). Fortalece `sanitize_memory_content` (RAG) E `sanitize_user_input` (/api/chat). 35 verdes, 0 regressão. _SHA: c616916ac_
 - [ ] T3.3 session_context granularidade — _SHA:_
 - [ ] T3.4 budget injeção medido — _SHA:_
 - [ ] T4.1 imperativos re-validados sob 4.8 — _SHA:_
@@ -434,9 +435,23 @@ no system_prompt ou no preset. Autorizou "fazer o melhor pelas best practices An
   (preset) ↔ R3/L1 (SP); `<environment>` (preset, factual+TZ) ↔ `<environment>` (SP, motivação). São
   facetas complementares (awareness vs regra/motivação), não drift factual — não justificam mexer.
 
-- **Pendente da FASE 3 (código, não tocado):** T3.2 (memory injection XML-escape/blocklist em
-  `memory_injection.py`), T3.3 (`session_context` granularidade em `hooks.py`), T3.4 (budget de injeção
-  — medir). Test vectors §11 do T3.1 = spot-check manual (rodar o agente).
+- **FASE 3 — próximos passos (premissas JÁ verificadas nesta sessão, R-EXEC-3):**
+  - **T3.2 ✅ FEITO** (`c616916ac`): buraco `<system-reminder>` na sanitização de memória + teste
+    adversarial. O escape-na-injeção já existia (G4); a entrega foi fechar o vazamento + travar com teste.
+  - **T3.3 — `session_context` granularidade (`hooks.py:1369`).** Hoje
+    `data_hora = strftime("%d/%m/%Y %H:%M")` → granularidade **minuto**. ⚠️ **Premissa a confirmar ANTES
+    de mexer:** o `session_context` é injetado via hook UserPromptSubmit como **`additionalContext` (nas
+    messages), NÃO no `system_prompt` estático** — logo a variação por-minuto **não invalida o cache do
+    system prompt** (que já é estável). Ganho de reduzir p/ hora/período pode ser ~zero. AÇÃO: medir o
+    impacto real de cache (depende de `agent_session_costs` popular — ligado à pendência T0.2) ANTES de
+    reduzir; só mexer se houver dano mensurável. **Pode ser um no-op** (como o T0.2).
+  - **T3.4 — budget de injeção Tier 2 (`memory_injection.py:1079`).** Confirmado: no Opus,
+    "sem limite (1M context) — injetar TODAS as memórias retornadas" (`budget=None`). AÇÃO: **MEDIR** se
+    isso dilui (lost-in-the-middle) ANTES de capar — decisão por evidência, não a priori. Sem framework
+    LLM (veto Rafael): comparar `step_quality`/judge entre sessões com muitas vs poucas memórias, ou
+    spot-check manual. Só capar se houver dano mensurável.
+  - **T3.1 test vectors §11** (direct/meta-instruction/scope): **Rafael faz com o agente web** (exige
+    rodar o chat; não executável daqui).
 
 ---
 
