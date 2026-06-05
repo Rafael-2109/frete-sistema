@@ -13,15 +13,17 @@ atualizado: 2026-06-04
 > (`preset_operacional.md` + `system_prompt.md` + injeções de runtime) e instalar a
 > governança que impede o problema de voltar. Origem: avaliação de 2026-06-04.
 
-> 🔵 **PRÓXIMA SESSÃO — RETOMAR AQUI:** **FASE 0 e FASE 1 FECHADAS** (em PROD; ver
-> [Nota FASE 0](#nota-de-execucao-fase-0-2026-06-05) + [Rastreamento](#rastreamento-de-execucao-append-only)).
-> Próximo = **FASE 2 (poda de altitude)** — o inchaço real (`system_prompt` ainda 858 linhas).
-> Prompt de retomada pronto: `docs/superpowers/plans/PROMPT_PROXIMA_SESSAO_refactor-prompt.md`.
+> 🔵 **PRÓXIMA SESSÃO — RETOMAR AQUI:** **FASES 0, 1 e 2 FECHADAS** (em PROD; ver
+> [Nota FASE 2](#nota-de-execucao-fase-2-2026-06-05) + [Rastreamento](#rastreamento-de-execucao-append-only)).
+> FASE 2: gate `action_update_taxes` em código (T2.1, `8954563fe`) + poda `system_prompt` 858→750
+> (−108L, T2.2 `1c60d0bfe`). **Decisões abertas:** (a) **alvo −150/−250 NÃO atingido** com os 4 blocos
+> da T2.2 — expandir a poda para R0 (memory protocol) / routing (Camada 1) ou aceitar −108L? (b)
+> **pendência T0.2:** `agent_session_costs` continua VAZIA (o diagnóstico "flag OFF" é duvidoso — o
+> default já é `true`; suspeita real = `record_cost` não alcançado no path persistente de PROD).
+> Depois = **FASE 3 (robustez)** — `<security_invariants>` + memory injection validation.
 > Princípios desta linha (NÃO reabrir): refactor **NÃO usa LLM eval** — prova **determinística**
-> (pytest do gate + `prompt_size_audit` + smoke); **hipótese barata primeiro** (a causa de T0.2
-> era só a flag OFF, não bug — não over-investigar); **verificar a premissa de cada task**
-> (R-EXEC-3). **Ordem crítica da FASE 2: T2.1 (gate runtime, pytest) ANTES de T2.2 (comprimir
-> prompt)** — a defesa vira código antes de o texto sair do prompt.
+> (pytest do gate + `prompt_size_audit` + smoke); **hipótese barata primeiro**; **verificar a
+> premissa de cada task** (R-EXEC-3).
 
 ## Indice
 
@@ -276,9 +278,9 @@ FASE 5 (governança) ───────┴──► transversal; T5.1/T5.2 id
 - [x] T1.2 dedup — `<context_awareness>` (dono=`system_prompt` R6) + **`<language>` do preset removido 2026-06-05**: dono único = `<language_policy>` no `system_prompt` (superset anti-drift #787). Verificação corrigiu a avaliação conservadora da FASE 1 — o preset `<language>` ERA subconjunto literal, dedup limpa. communication_style/reversibility = sobreposição complementar (mantidos); prompt_injection = instância única. — commit main 2026-06-05
 - [x] T1.3 business_snapshot — **FEITO 2026-06-05 como dedup limpa** (NÃO comportamental — premissa do "adiado" estava errada): `empresa_briefing` JÁ é injetado no prompt (`client.py:506-541`) e contém os mesmos dados (50%/13%/R$16MM/~500 ped/gargalos) + detalhe único + serve o `pattern_analyzer`. Removido `<business_snapshot>` do `system_prompt`; dono único = briefing. Info 100% preservada (smoke + diff). — commit main 2026-06-05
 - [x] T1.4 doc auto-medida + `scripts/audits/prompt_size_audit.py` — commit main 2026-06-04
-- [ ] T2.1 gate runtime estendido — _SHA:_
-- [ ] T2.2 prompt comprimido (princípio fica, detalhe sai) — _SHA:_
-- [ ] T2.3 re-medição + golden DEPOIS — _SHA:_
+- [x] T2.1 gate runtime estendido — **`action_update_taxes` (R11.1) bloqueado UNIVERSAL** (deny via Bash/Write/Edit + marcador de execução RPC), flag `USE_ODOO_TAX_GATE` default ON; 10 testes TDD; 63 verdes na suíte do gate. R12.1 (UPDATE/DELETE massa) segue só avisando (decisão Rafael). _SHA: 8954563fe_
+- [x] T2.2 prompt comprimido (princípio fica, detalhe sai) — **858→750 linhas (−108L / ~14.9K→~13.0K tok)**: R3.1→`REGRAS_MODELOS.md`, R11.2→`GOTCHAS.md`, I7→`REGRAS_OUTPUT.md`; R11(3-riscos)/R12 enxugados in-place; 7 pós-mortems `sessao <hex>` removidos; smoke 11/11 (princípio no prompt + procedimento na ref). _SHA: 1c60d0bfe_
+- [~] T2.3 re-medição (prova determinística, sem LLM): **750L / ~13.0K tok** (TOTAL estático 1036→928 / ~15.6K), balanço de tags OK, regressão gate+prompt 48 verdes. ⚠️ **Alvo −150/−250 NÃO atingido com os 4 blocos da T2.2 (deu −108)** — fechar o gap exigiria comprimir R0 (memory protocol) / routing, que NÃO estão na lista da T2.2 (R-EXEC-6: medir o real, não forçar).
 - [ ] T3.1 security_invariants + meta_instruction_alert — _SHA:_
 - [ ] T3.2 memory injection validation — _SHA:_
 - [ ] T3.3 session_context granularidade — _SHA:_
@@ -373,6 +375,35 @@ deploy), não mudar código. Regressão travada em `tests/agente/sdk/test_cost_t
 defendem? `action_update_taxes` (R11.1) hoje NÃO está coberto (`:136`); UPDATE/DELETE em
 massa via `Bash`/SQL pode não ser interceptável como as tools Odoo nomeadas. Trecho que só o
 prompt protege NÃO pode ser podado (T2.2) sem defesa equivalente — senão é "fazer pela metade".
+
+### Nota de execução — FASE 2 (2026-06-05)
+
+T2.1 → T2.2 → T2.3 na ordem inviolável (defesa em código ANTES de podar o prompt). Em PROD (main).
+
+- **T2.1 (gate) — premissa confirmada:** `action_update_taxes` NÃO existe no codebase; o agente o
+  executa via script Python ad-hoc (`execute_kw`) rodado por Bash OU escrito em /tmp. Logo o gate
+  (`_classify_odoo_tax_gate`) intercepta pelo CONTEÚDO (Bash.command / Write.content / Edit.new_string
+  + marcador RPC) e roda ANTES dos early-returns de /tmp do Write/Edit (senão o vetor "escreve script
+  + roda" ficaria descoberto). Deny UNIVERSAL (sem allowlist — decisão Rafael). Best-effort
+  (evasível por string dinâmica) → princípio R11.1 PERMANECE no prompt. R12.1 ficou só avisando.
+
+- **T2.2 (poda):** 1ª tentativa foi conservadora demais (−34L, só pós-mortem + `<why>`) — Rafael
+  apontou como "cosmética" e fora do plano. Refeita FIEL: princípio+gatilho na Camada 0, procedimento
+  na Camada 1 (R3.1→`REGRAS_MODELOS`, R11.2→`GOTCHAS`, I7→`REGRAS_OUTPUT`), 100% das regras
+  comportamentais preservadas (smoke 11/11). Resultado **−108L**.
+
+- **R-EXEC-6 (alvo) — gap aberto:** os 4 blocos da T2.2 (R3.1/R11/R12/I7) rendem **−108L**, abaixo do
+  alvo −150/−250 da T2.3. Constatação: o prompt não está inchado por lixo — é denso de regra
+  comportamental (defesa) + routing. Fechar o gap exigiria comprimir R0 (memory protocol ~90L) /
+  `routing_strategy` (~60L) para Camada 1 (`MEMORY_PROTOCOL.md` / `ROUTING_SKILLS.md`) — possível, mas
+  são blocos FUNCIONAIS/core (mais risco) e NÃO listados na T2.2. **Pendente decisão de expandir.**
+
+- **Pendência T0.2 / `agent_session_costs` (não bloqueia a FASE 2):** o 1º ato da sessão (confirmar que
+  a tabela populou) FALHOU — VAZIA com 11 sessões/48h (última pós-deploy). Como `feature_flags.py:794`
+  tem default `true`, o diagnóstico H1 ("flag OFF") é DUVIDOSO (igual ao H3 que ele refutou). Suspeita
+  não confirmada: `record_cost` (`chat.py:978`, handler do `done`) não alcançado no path persistente de
+  PROD. NÃO investigado a fundo (decisão Rafael: seguir FASE 2). Retomar isto antes de confiar em
+  custo/cache de produção.
 
 ---
 
