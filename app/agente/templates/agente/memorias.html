@@ -1,0 +1,300 @@
+{% extends "base.html" %}
+
+{% block title %}Gestao de Memorias — Agente{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+
+  <!-- Header -->
+  <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <div>
+      <h2 class="mb-0"><i class="fas fa-brain"></i> Gestao de Memorias</h2>
+      <p class="text-muted mb-0">O que o agente aprendeu — conflitos, regras duras e tier frio. Edite, resolva ou arquive.</p>
+    </div>
+    <button class="btn btn-outline-primary btn-sm" onclick="loadMemories()" title="Atualizar">
+      <i class="fas fa-sync-alt"></i> Atualizar
+    </button>
+  </div>
+
+  <!-- KPIs -->
+  <div class="row g-3 mb-3">
+    <div class="col-6 col-md-3">
+      <div class="card h-100"><div class="card-body py-2">
+        <small class="text-muted">Memorias vivas</small>
+        <h3 class="mb-0" id="kpi-total">—</h3>
+      </div></div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="card h-100 border-warning" role="button" onclick="filtrarConflitos()" title="Ver so conflitos">
+        <div class="card-body py-2">
+          <small class="text-muted">Conflitos pendentes</small>
+          <h3 class="mb-0 text-warning" id="kpi-conflicts">—</h3>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="card h-100"><div class="card-body py-2">
+        <small class="text-muted">Regras duras</small>
+        <h3 class="mb-0" id="kpi-hard">—</h3>
+      </div></div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="card h-100"><div class="card-body py-2">
+        <small class="text-muted">Tier frio</small>
+        <h3 class="mb-0" id="kpi-cold">—</h3>
+      </div></div>
+    </div>
+  </div>
+
+  <!-- Filtros -->
+  <div class="card mb-3"><div class="card-body py-2">
+    <div class="row g-2 align-items-end">
+      <div class="col-12 col-md-3">
+        <label class="form-label mb-1 small">Usuario</label>
+        <select id="f-user" class="form-select form-select-sm" onchange="onFilterChange()">
+          <option value="">Todos</option>
+        </select>
+      </div>
+      <div class="col-6 col-md-2">
+        <label class="form-label mb-1 small">Categoria</label>
+        <select id="f-category" class="form-select form-select-sm" onchange="onFilterChange()">
+          <option value="">Todas</option>
+          <option value="structural">structural</option>
+          <option value="empresa">empresa</option>
+          <option value="permanent">permanent</option>
+          <option value="contextual">contextual</option>
+          <option value="operational">operational</option>
+          <option value="cold">cold</option>
+        </select>
+      </div>
+      <div class="col-12 col-md-4">
+        <label class="form-label mb-1 small">Busca (path ou conteudo)</label>
+        <input id="f-search" type="search" class="form-control form-control-sm" placeholder="ex: escopo, palmito, cluster..." onkeyup="if(event.key==='Enter')onFilterChange()">
+      </div>
+      <div class="col-6 col-md-3 d-flex gap-3 pb-1">
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" id="f-conflicts" onchange="onFilterChange()">
+          <label class="form-check-label small" for="f-conflicts">So conflitos</label>
+        </div>
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" id="f-cold" onchange="onFilterChange()">
+          <label class="form-check-label small" for="f-cold">Incluir frias</label>
+        </div>
+      </div>
+    </div>
+  </div></div>
+
+  <!-- Tabela -->
+  <div class="card"><div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-hover mb-0 align-middle">
+        <thead>
+          <tr>
+            <th class="col-nome">Memoria</th>
+            <th>Conteudo</th>
+            <th class="col-status">Sinais</th>
+            <th class="col-acoes text-end">Acoes</th>
+          </tr>
+        </thead>
+        <tbody id="tbl-memories">
+          <tr><td colspan="4" class="text-muted text-center py-4">Carregando…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div></div>
+  <p class="text-muted small mt-2" id="result-count"></p>
+</div>
+
+<!-- Modal de edicao -->
+<div class="modal fade" id="editModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="fas fa-pen"></i> Editar memoria</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+      </div>
+      <div class="modal-body">
+        <p class="text-muted small mb-1" id="edit-path">—</p>
+        <textarea id="edit-content" class="form-control" rows="10"></textarea>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-primary" id="edit-save" onclick="salvarEdicao()">Salvar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── estado + helpers ──────────────────────────────────────────────────────
+const _mem = { user: '', category: '', q: '', conflicts: false, cold: false, editing: null, modal: null };
+
+function _csrf(extra) {
+  const t = document.querySelector('meta[name="csrf-token"]');
+  return Object.assign({ 'X-CSRFToken': t ? t.getAttribute('content') : '' }, extra || {});
+}
+function escapeHtml(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+function truncate(s, n) { s = String(s || ''); return s.length > n ? s.slice(0, n) + '…' : s; }
+
+// ── carregamento ──────────────────────────────────────────────────────────
+async function loadUsers() {
+  try {
+    const r = await fetch('/agente/api/memories/users', { headers: _csrf() });
+    const d = await r.json();
+    if (!d.success) return;
+    const sel = document.getElementById('f-user');
+    d.users.forEach(u => {
+      const o = document.createElement('option');
+      o.value = u.id;
+      o.textContent = `${u.nome} (${u.memory_count})`;
+      sel.appendChild(o);
+    });
+  } catch (e) { console.debug('[MEM] users:', e); }
+}
+
+async function loadMemories() {
+  const tbody = document.getElementById('tbl-memories');
+  tbody.innerHTML = '<tr><td colspan="4" class="text-muted text-center py-4">Carregando…</td></tr>';
+  const p = new URLSearchParams();
+  if (_mem.user) p.set('user_id', _mem.user);
+  if (_mem.category) p.set('category', _mem.category);
+  if (_mem.q) p.set('q', _mem.q);
+  if (_mem.conflicts) p.set('conflicts_only', '1');
+  if (_mem.cold) p.set('include_cold', '1');
+  try {
+    const r = await fetch('/agente/api/admin/memories?' + p.toString(), { headers: _csrf() });
+    const d = await r.json();
+    if (!d.success) { tbody.innerHTML = `<tr><td colspan="4" class="text-danger text-center py-4">Erro: ${escapeHtml(d.error || '')}</td></tr>`; return; }
+    renderKPIs(d.stats);
+    renderTable(d.memories);
+  } catch (e) {
+    tbody.innerHTML = '<tr><td colspan="4" class="text-danger text-center py-4">Falha ao carregar</td></tr>';
+  }
+}
+
+function renderKPIs(s) {
+  document.getElementById('kpi-total').textContent = s.total;
+  document.getElementById('kpi-conflicts').textContent = s.conflicts;
+  document.getElementById('kpi-hard').textContent = s.hard_rules;
+  document.getElementById('kpi-cold').textContent = s.cold;
+}
+
+function _badges(m) {
+  const b = [];
+  if (m.has_potential_conflict) b.push('<span class="badge bg-warning">conflito</span>');
+  if (m.is_hard_rule) b.push('<span class="badge bg-primary">dura</span>');
+  if (m.is_cold) b.push('<span class="badge bg-secondary">fria</span>');
+  if ((m.harmful_count || 0) > 0) b.push(`<span class="badge bg-danger" title="reincidencias">reincidiu ${m.harmful_count}x</span>`);
+  if (m.reviewed_at) b.push('<span class="badge bg-success">revisada</span>');
+  if ((m.usage_count || 0) > 0) b.push(`<span class="badge bg-light">usada ${m.usage_count}x</span>`);
+  if (m.error_signature) b.push(`<span class="badge bg-light" title="error_signature">⌗ ${escapeHtml(m.error_signature)}</span>`);
+  return b.join(' ');
+}
+
+function _acoes(m) {
+  let html = `<button class="btn btn-sm btn-outline-secondary" title="Editar" onclick="abrirEdicao(${m.id})"><i class="fas fa-pen"></i></button> `;
+  if (m.has_potential_conflict) {
+    html += `<button class="btn btn-sm btn-outline-success" title="Marcar conflito como resolvido" onclick="resolverConflito(${m.id})"><i class="fas fa-check"></i></button> `;
+  }
+  if (!m.reviewed_at) {
+    html += `<button class="btn btn-sm btn-outline-info" title="Marcar como revisada" onclick="revisar(${m.id})"><i class="fas fa-eye"></i></button> `;
+  }
+  html += `<button class="btn btn-sm btn-outline-danger" title="Deletar" onclick="deletar(${m.id})"><i class="fas fa-trash"></i></button>`;
+  return html;
+}
+
+let _rows = [];
+function renderTable(rows) {
+  _rows = rows;
+  const tbody = document.getElementById('tbl-memories');
+  document.getElementById('result-count').textContent = `${rows.length} memoria(s)`;
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="4" class="text-muted text-center py-4">Nenhuma memoria com esses filtros.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = rows.map(m => {
+    const rowCls = m.has_potential_conflict ? 'table-warning' : '';
+    const nome = escapeHtml(m.path.replace('/memories/', ''));
+    return `<tr class="${rowCls}">
+      <td><code class="small">${nome}</code><br><span class="text-muted small">${escapeHtml(m.category || '')} · ${escapeHtml(m.escopo || '')}</span></td>
+      <td><span class="small">${escapeHtml(truncate(m.content, 160))}</span></td>
+      <td>${_badges(m)}</td>
+      <td class="text-end text-nowrap">${_acoes(m)}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ── filtros ───────────────────────────────────────────────────────────────
+function onFilterChange() {
+  _mem.user = document.getElementById('f-user').value;
+  _mem.category = document.getElementById('f-category').value;
+  _mem.q = document.getElementById('f-search').value.trim();
+  _mem.conflicts = document.getElementById('f-conflicts').checked;
+  _mem.cold = document.getElementById('f-cold').checked;
+  loadMemories();
+}
+function filtrarConflitos() {
+  document.getElementById('f-conflicts').checked = true;
+  onFilterChange();
+}
+
+// ── acoes ─────────────────────────────────────────────────────────────────
+function abrirEdicao(id) {
+  const m = _rows.find(x => x.id === id);
+  if (!m) return;
+  _mem.editing = id;
+  document.getElementById('edit-path').textContent = m.path;
+  document.getElementById('edit-content').value = m.content || '';
+  _mem.modal.show();
+}
+async function salvarEdicao() {
+  const id = _mem.editing;
+  const content = document.getElementById('edit-content').value;
+  const btn = document.getElementById('edit-save');
+  btn.disabled = true;
+  try {
+    const r = await fetch(`/agente/api/memories/${id}`, {
+      method: 'PUT', headers: _csrf({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ content })
+    });
+    const d = await r.json();
+    if (!d.success) { alert('Erro: ' + (d.error || '')); return; }
+    _mem.modal.hide();
+    loadMemories();
+  } finally { btn.disabled = false; }
+}
+async function _put(url) {
+  const r = await fetch(url, { method: 'PUT', headers: _csrf() });
+  const d = await r.json();
+  if (!d.success) { alert('Erro: ' + (d.error || '')); return false; }
+  return true;
+}
+async function resolverConflito(id) { if (await _put(`/agente/api/memories/${id}/resolve-conflict`)) loadMemories(); }
+async function revisar(id) { if (await _put(`/agente/api/memories/${id}/review`)) loadMemories(); }
+async function deletar(id) {
+  const m = _rows.find(x => x.id === id);
+  if (!confirm(`Deletar a memoria?\n\n${m ? m.path : id}`)) return;
+  const r = await fetch(`/agente/api/memories/${id}`, { method: 'DELETE', headers: _csrf() });
+  const d = await r.json();
+  if (!d.success) { alert('Erro: ' + (d.error || '')); return; }
+  loadMemories();
+}
+
+// ── init ──────────────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', function () {
+  _mem.modal = new bootstrap.Modal(document.getElementById('editModal'));
+  // deep-link: /agente/memorias?conflitos=1 (vindo da recomendacao do insights)
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('conflitos') === '1') {
+    _mem.conflicts = true;
+    document.getElementById('f-conflicts').checked = true;
+  }
+  loadUsers();
+  loadMemories();
+});
+</script>
+{% endblock %}

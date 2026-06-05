@@ -228,8 +228,8 @@ def generate_recommendations(metrics: Dict[str, Any]) -> List[Dict[str, Any]]:
                 'metric_value': conflicting,
                 'threshold': 0,
                 'action': {
-                    'type': 'switch_tab',
-                    'target': 'memories',
+                    'type': 'open_url',
+                    'target': '/agente/memorias?conflitos=1',
                     'label': 'Ver memorias',
                 },
             })

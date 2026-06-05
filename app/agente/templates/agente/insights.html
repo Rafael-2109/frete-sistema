@@ -993,6 +993,11 @@ function executeRecommendationAction(action) {
         setTimeout(() => el.parentElement?.classList.remove('chart-highlight'), 2000);
       }
       break;
+
+    case 'open_url':
+      // Navega para outra pagina (ex: recomendacao de conflito -> tela de Memorias)
+      if (action.target) window.location.assign(action.target);
+      break;
   }
 }
 
