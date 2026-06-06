@@ -2224,3 +2224,7 @@ def api_transferencia_executar():
     except Exception as e:  # noqa: BLE001
         logger.error(f'api_transferencia_executar erro: {e}')
         return jsonify({'success': False, 'message': f'Erro: {e}'}), 200
+
+
+# Rotas da tela admin de Transferência de Estoque (3 modos) — registra ao importar
+from app.estoque import transferencia_estoque_routes  # noqa: E402,F401
