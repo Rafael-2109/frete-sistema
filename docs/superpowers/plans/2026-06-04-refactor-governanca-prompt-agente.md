@@ -19,9 +19,11 @@ atualizado: 2026-06-04
 > 858→765 (−93L; T2.2 `1c60d0bfe` + correção `fee8f1f17`). **Lição (após ler as FONTES STUDY+QUALITY_REVIEW):**
 > a meta NÃO é tamanho (STUDY #7: Anthropic não segue "short prompts"; QUALITY_REVIEW: ROI de enxugar
 > BAIXO) — é **altitude** (procedimento→Camada 1) preservando forças (os `<why>` = A2 Top Strength 5/5).
-> **Decisões abertas:** (a) expandir altitude p/ R0/routing (só se a altitude justificar, não o número)? (b)
-> **pendência T0.2:** `agent_session_costs` continua VAZIA (o diagnóstico "flag OFF" é duvidoso — o
-> default já é `true`; suspeita real = `record_cost` não alcançado no path persistente de PROD).
+> **Decisão aberta:** expandir altitude p/ R0/routing (só se a altitude justificar, não o número)?
+> **T0.2 RESOLVIDO** (`dadf7f1ba`+`95421b1b6`): o custo SEMPRE esteve em `agent_sessions.total_cost_usd`
+> (coluna; 55/56 sessões/7d = $533,76); `agent_session_costs` (2ª via, breakdown de cache) ficava vazia
+> porque `record_cost` persistia via SAVEPOINT SEM commit no loop de streaming — movido p/
+> `_persist_session_cost` em `_save_messages_to_db` (context que commita). Diagnóstico "flag OFF" estava ERRADO.
 > FASE 3: **T3.1 (robustez no PRESET, `785298a97`) + T3.2 (RAG injection — buraco `<system-reminder>`,
 > `c616916ac`) FEITAS.** Falta: **T3.3** (`session_context` granularidade minuto — pode ser no-op, é
 > additionalContext fora do cache; medir antes), **T3.4** (budget de injeção Opus ilimitado — MEDIR
@@ -278,6 +280,7 @@ FASE 5 (governança) ───────┴──► transversal; T5.1/T5.2 id
 
 - [x] T0.1 matriz de provas determinísticas (task → critério pytest/medição) — DEFINIDA na Nota FASE 0; golden dataset LLM descartado. Refinar por-task no início da FASE 2.
 - [x] T0.2 instrumentação — **RESOLVIDO 2026-06-05** (commits main `7824e39c8`): causa = flag `AGENT_COST_TRACKER_PERSIST` OFF (H1). H3 "savepoint órfão" REFUTADO por TDD (commit-on-teardown `app/__init__.py:1415` salva o `begin_nested()`). Flag LIGADA em PROD (`update_environment_variables`) + deploy `dep-d8h4i2d8nd3s73brctsg`. Regressão travada (`tests/agente/sdk/test_cost_tracker_persist.py`, 3 verdes). ⚠️ **1º ato da próxima sessão: confirmar que `agent_session_costs` está populando** (fecha H1 empírico + dá custo/cache do T0.3).
+  - **⛔ CORREÇÃO FINAL 2026-06-05** (após o Rafael perguntar se não era duplicação de local — o diagnóstico acima estava ERRADO): (1) o custo NUNCA esteve perdido — sempre gravado em `agent_sessions.total_cost_usd` (coluna; 55/56 sessões/7d = **$533,76**, via `_save_messages_to_db` que commita). `agent_session_costs` é uma **2ª via per-message** (breakdown de cache). (2) A flag tem default `true` → "flag OFF" (H1) era falso e ligá-la não populou. (3) **Causa raiz REAL** = H3 estava certo na essência: `record_cost._persist_to_db` usava `begin_nested()` (SAVEPOINT) **SEM commit**, no app_context do loop de streaming que **não consolida** o savepoint (o TDD do `7824e39c8` mascarou usando um `with app.app_context()` limpo, que commita no teardown). **Fix (`dadf7f1ba` + `95421b1b6`):** persistência movida para `_persist_session_cost`, chamado em `_save_messages_to_db` (context que commita, junto de `total_cost_usd`); via deprecada `_persist_to_db` + seu teste removidos; novo `tests/agente/sdk/test_cost_persist_fix.py` (reprodução da causa + persistência + idempotência + flag OFF). Regressão: 211 verdes em `tests/agente/sdk/`.
 - [~] T0.3 baseline OBJETIVO: **tamanho congelado = 1036 linhas / ~17,4K tok** (`prompt_size_audit`, pós-dedup FASE 1) + rodar suíte pytest do agente (verde) no início da FASE 2; custo/cache de produção vem de `agent_session_costs` (pós-validação T0.2).
 - [x] T1.1 cutoff "May 2025" removido (`preset_operacional.md`) — commit main 2026-06-04
 - [x] T1.2 dedup — `<context_awareness>` (dono=`system_prompt` R6) + **`<language>` do preset removido 2026-06-05**: dono único = `<language_policy>` no `system_prompt` (superset anti-drift #787). Verificação corrigiu a avaliação conservadora da FASE 1 — o preset `<language>` ERA subconjunto literal, dedup limpa. communication_style/reversibility = sobreposição complementar (mantidos); prompt_injection = instância única. — commit main 2026-06-05
