@@ -13,7 +13,7 @@ atualizado: 2026-06-04
 > (`preset_operacional.md` + `system_prompt.md` + injeções de runtime) e instalar a
 > governança que impede o problema de voltar. Origem: avaliação de 2026-06-04.
 
-> 🔵 **PRÓXIMA SESSÃO — RETOMAR AQUI:** **FASES 0, 1 e 2 FECHADAS** (em PROD; ver
+> 🔵 **PRÓXIMA SESSÃO — RETOMAR AQUI:** **FASES 0, 1, 2 e 5 FECHADAS** (em PROD; ver
 > [Nota FASE 2](#nota-de-execucao-fase-2-2026-06-05) + [Rastreamento](#rastreamento-de-execucao-append-only)).
 > FASE 2: gate `action_update_taxes` em código (T2.1, `8954563fe`) + poda de altitude `system_prompt`
 > 858→765 (−93L; T2.2 `1c60d0bfe` + correção `fee8f1f17`). **Lição (após ler as FONTES STUDY+QUALITY_REVIEW):**
@@ -296,10 +296,10 @@ FASE 5 (governança) ───────┴──► transversal; T5.1/T5.2 id
 - [ ] T4.1 imperativos re-validados sob 4.8 — _SHA:_
 - [ ] T4.2 adaptive thinking — _SHA:_
 - [ ] T4.3 custom vs preset+append — **🟢 PRÓXIMA SESSÃO PARALELA (decisão Rafael 2026-06-05; a FASE 5 roda em outra sessão simultânea).** Zona `client.py` / `feature_flags.py` **ISOLADA** — não toca `system_prompt`/`preset`/`CLAUDE.md` nem os arquivos da FASE 5. **Escopo:** POC determinístico comparando o modo atual (`USE_CUSTOM_SYSTEM_PROMPT=true` → string custom em `_build_full_system_prompt`, `client.py:1655-1674`) vs `preset:"claude_code" + append + excludeDynamicSections`. **Premissa a verificar 1º (R-EXEC-3):** o preset `claude_code` do SDK 0.2.89 ainda existe e o que ele injeta hoje (tom/tools/safety) — a string custom "apodrece" porque o preset evolui (a FASE 1 já provou drift). **Critério:** medir tamanho/tokens + cache-prefix + DIFF do que cada modo injeta; **SEM LLM eval** (prova determinística + spot-check). **Coordenação:** editar SÓ esta linha do rastreamento e rebase no push (a FASE 5 também edita este plano). _SHA:_
-- [ ] T5.1 gatilho de poda — _SHA:_
-- [ ] T5.2 doc auto-medida — _SHA:_
-- [ ] T5.3 checklist princípio/procedimento — _SHA:_
-- [ ] T5.4 cadência de review religada — _SHA:_
+- [x] T5.1 gatilho de poda — **delta-based** (`prompt_size_audit.py --check-delta` + baseline.json + hook `pre-commit-prompt-lint.sh` wired no wrapper PAD-A; bloqueia crescimento vs baseline, redução sempre passa; só dispara se o commit toca um dos 3 prompts). 11 pytest + smoke e2e do hook. _SHA: 25c1a860d_
+- [x] T5.2 doc auto-medida — **bloco entre marcadores `<!-- prompt-size:start/end -->` no `app/agente/CLAUDE.md`, reescrito por `--update-claude-md`** (idempotente; números manuais defasados "~17.5K/~14.9K/103L" removidos → apontam para o bloco). _SHA: 68b190a57_
+- [x] T5.3 checklist princípio/procedimento — **seção "Governança do prompt" em `app/agente/CLAUDE.md`** (R-EXEC-5: C0 vs C1; "remove causa erro?"; `<why>`=força, comprimir só procedimento). _SHA: 2b0346b30_
+- [x] T5.4 cadência de review religada — **trimestral** (última v4.2.0 abr/2026; **próxima jul/2026**) + gatilho "bypass `--no-verify`/baseline subiu → re-review". Mesma seção. _SHA: 2b0346b30_
 
 **Checkpoints (gates):** C0 🔴 → C1 → C2 🔴 → C3 → C4 🔴 → C5. 🔴 = exige OK do Rafael.
 
@@ -455,6 +455,39 @@ no system_prompt ou no preset. Autorizou "fazer o melhor pelas best practices An
     spot-check manual. Só capar se houver dano mensurável.
   - **T3.1 test vectors §11** (direct/meta-instruction/scope): **Rafael faz com o agente web** (exige
     rodar o chat; não executável daqui).
+
+### Nota de execução — FASE 5 (2026-06-06)
+
+Sessão da FASE 5 (zona `scripts/audits/` + `app/agente/CLAUDE.md`), paralela à T4.3
+(zona `client.py`, isolada — sem colisão de arquivos). Toda a fase é **dev-tooling +
+doc**: zero DDL, zero runtime do agente, zero PROD; reversível por `git revert`.
+
+- **1º ato (confirmação empírica do estado, R-EXEC-3):** a pendência T0.2 do handoff já
+  estava **fechada** pelo Rafael (`dadf7f1ba`+`95421b1b6`+`8f3a86d32`). Verifiquei via MCP
+  Render: `agent_session_costs` **popula** (7 registros com `model`+`cache_read`; `recorded_at`
+  confirmado UTC pelo epoch do `message_id`); o fix `dadf7f1ba` está **live** (deploy
+  `dep-d8hkdd5ckfvc73fqggf0`, 22:06 UTC 05/06) mas **sem tráfego desde 19:51 UTC** → "0 custos
+  pós-deploy" = falta de uso, **não regressão**. Cleanup do teste obsoleto: o Rafael já o
+  removera (`95421b1b6`); meu commit do delete foi no-op.
+
+- **T5.1 — gatilho de poda (decisão de design):** o `--check N` (teto absoluto, T1.4) foi
+  mantido por retrocompat, mas o gatilho real é **delta-based** — bloqueia o que o plano-raiz
+  combate (acreção: adição sem poda), não um teto arbitrário (alinhado à lição "tamanho NÃO é
+  a meta"). Baseline persistido (`prompt_size_baseline.json`) + comparação por `system_prompt`
+  E total; **redução nunca bloqueia**. Hook dispara **só** se o commit toca um dos 3 prompts.
+  Prova: 11 pytest (funções puras `snapshot`/`comparar_delta`/`atualizar_bloco_marcado`) +
+  smoke e2e (crescimento +2L staged → exit 1; revertido).
+
+- **T5.2 — doc auto-medida:** marcadores no CLAUDE.md + `--update-claude-md` (idempotente).
+  A defasagem de 6,5x que originou o plano era número manual; agora a fonte é o bloco gerado.
+
+- **T5.3/T5.4 — processo:** checklist C0-vs-C1 + cadência trimestral (próxima jul/2026) na
+  seção "Governança do prompt". O gatilho técnico (T5.1) materializa o "editou prompt →
+  re-review" (todo crescimento força decisão consciente no pre-commit).
+
+- **Pendências reais que sobram (não-FASE-5):** T3.3/T3.4 (bloqueadas por medição de
+  cache/custo — depende de tráfego pós-fix; T3.3 provável no-op), FASE 4 (T4.1/T4.2 + T4.3 em
+  sessão paralela), T3.1 test vectors §11 (Rafael no agente web).
 
 ---
 
