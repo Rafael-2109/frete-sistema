@@ -18,6 +18,7 @@ atualizado: 2026-06-04
 - [HORA — Unificar Pedido de Venda + filtro loja/vendedor + fix desconto](2026-06-03-hora-unificar-pedido-venda.md) — tela unica cria+edita (remove venda_detalhe), criterio loja/vendedor por usuario, fix drift centavos (13 tasks)
 - [HORA — Pedido de Venda: editar item + Enter=Próximo + chassi autocomplete + regressões](2026-06-03-hora-pedido-venda-edicao-autocomplete.md) — editar moto = só desconto/valor (moto travada); Enter avança campo; chassi autocomplete; restaura CRÍTICOS+ALTOS da unificação (20 tasks, 3 fases)
 - [HORA — Pedido de Venda: unificação multi-item + submit único (FU-2/3/5)](2026-06-04-hora-pedido-venda-unificacao-multi-item.md) — componente _lista_motos compartilhado, N motos na criação, salvar_pedido_completo reconciliador (helpers flush-only + 1 commit), 11 tasks em 4 fases
+- [Redução de Custo do Agente — Fast-path + Downgrade de Modelo](2026-06-06-reducao-custo-agente-fast-path.md) — tira rotina do loop Opus (41%/$667 do custo é estruturado); FASE 1 baseline Marcus (script já existe) + FASE 2 model_router downgrade + FASE 3 fast-path vinculação Gabriella; mede via session_automation_audit.py; NÃO toca conversa_analise (51% genuíno)
 - [CarVia: Migracao de conferencia de Sub para Frete (Escopo C)](2026-04-14-carvia-frete-conferencia-migration.md)
 - [Remessa VORTX — Injeção Direta no Odoo](2026-04-15-remessa-vortx-odoo-injection.md)
 - [Agent SDK 0.1.60 Features — Implementation Plan](2026-04-16-agent-sdk-0160-features.md)
