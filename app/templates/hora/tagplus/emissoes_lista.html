@@ -6,6 +6,11 @@
 <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
   <h2><i class="fas fa-file-invoice-dollar"></i> NFs de Saída</h2>
   <div class="d-flex gap-2">
+    {% if current_user.tem_perm_hora('tagplus', 'ver') %}
+      <a href="{{ url_for('hora.tagplus_notificacoes_lista') }}" class="btn btn-outline-secondary">
+        <i class="fas fa-bell"></i> Notificações WhatsApp
+      </a>
+    {% endif %}
     {% if current_user.tem_perm_hora('vendas', 'criar') %}
       <a href="{{ url_for('hora.tagplus_pedido_venda_novo') }}" class="btn btn-primary">
         <i class="fas fa-plus-circle"></i> Novo pedido de venda
