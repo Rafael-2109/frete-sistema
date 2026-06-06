@@ -12,9 +12,11 @@ Regra: Tudo que não é moto -> Peças (Há modelos diferentes)
 
 ### 4
 Envio de NF para email do cliente através de botão na tela "Enviar NF Email" com email faturamento@motochefesp.com.br + email do cliente no pedido (salvar histórico).
+(campo email no pedido + auditoria)
 
 ### 6
 Adicionar campo Origem para identificar de onde o cliente conheceu a loja: [SELECT] Google, Instagram, Facebook e Outros +[TEXT]
+
 
 ### 32
 Pre-fillar a loja vinculada ao usuario quando houver no momento da criação de um pedido de vendas mas deixar o SELECT liberado para substituição.
