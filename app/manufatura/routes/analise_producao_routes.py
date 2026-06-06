@@ -15,9 +15,71 @@ from app.manufatura.services.bom_service import ServicoBOM
 from app.manufatura.services.analise_producao_export_service import AnaliseProducaoExportService
 from app.producao.models import CadastroPalletizacao
 from app.estoque.services.estoque_simples import ServicoEstoqueSimples
-from sqlalchemy import func, literal_column
+from sqlalchemy import func, literal_column, or_
 
 logger = logging.getLogger(__name__)
+
+
+def _anexar_componentes_fora_bom(componentes_lista, consumos_existentes, ajustes_existentes):
+    """
+    Acrescenta a `componentes_lista` (montada a partir do BOM ATUAL via explodir_bom)
+    os componentes que foram EFETIVAMENTE apontados (tem CONSUMO ou AJUSTE vinculado a
+    esta producao/operacao) mas que NAO constam no BOM atual.
+
+    Caso de uso: produziu-se com o componente A; depois o BOM foi alterado para B.
+    A Analise deve mostrar A (consumo real apontado) E B (previsto pelo BOM atual).
+
+    Esses componentes "fora do BOM" entram com consumo_previsto=0, qtd_necessaria=0 e
+    flag fora_bom=True (o frontend exibe um badge). Dedup por cod_produto.
+    Retorna a mesma lista (mutada).
+    """
+    cods_no_bom = {c['cod_produto'] for c in componentes_lista}
+    # Marca os do BOM como dentro do BOM (default explicito p/ o frontend)
+    for c in componentes_lista:
+        c.setdefault('fora_bom', False)
+
+    cods_apontados = set(consumos_existentes.keys()) | set(ajustes_existentes.keys())
+    cods_faltantes = [cod for cod in cods_apontados if cod not in cods_no_bom]
+    if not cods_faltantes:
+        return componentes_lista
+
+    # Nomes via CadastroPalletizacao (batch); fallback generico se nao cadastrado
+    nomes = {}
+    try:
+        cadastros = CadastroPalletizacao.query.filter(
+            CadastroPalletizacao.cod_produto.in_([str(c) for c in cods_faltantes])
+        ).all()
+        nomes = {cad.cod_produto: cad.nome_produto for cad in cadastros}
+    except Exception as e:
+        logger.warning(f"Falha ao buscar nomes de componentes fora do BOM: {e}")
+
+    for cod in cods_faltantes:
+        consumo_registrado = consumos_existentes.get(cod, 0)
+        ajuste_estoque = ajustes_existentes.get(cod, 0)
+        ajuste_registrado = -ajuste_estoque  # visao de consumo (mesma regra do achatar_bom)
+        consumo_real = consumo_registrado + ajuste_registrado
+        try:
+            estoque_atual = ServicoEstoqueSimples.calcular_estoque_atual(cod)
+        except Exception:
+            estoque_atual = 0
+
+        componentes_lista.append({
+            'cod_produto': cod,
+            'nome_produto': nomes.get(cod, f'Produto {cod}'),
+            'tipo': 'COMPONENTE',
+            'nivel': 1,
+            'qtd_necessaria': 0,
+            'consumo_previsto': 0,
+            'consumo_registrado': round(consumo_registrado, 3),
+            'ajuste_registrado': round(ajuste_registrado, 3),
+            'consumo_real': round(consumo_real, 3),
+            'estoque_atual': round(estoque_atual, 3),
+            'tem_estrutura': False,
+            'produto_produzido': False,
+            'fora_bom': True,
+        })
+
+    return componentes_lista
 
 
 def register_analise_producao_routes(bp):
@@ -545,6 +607,9 @@ def register_analise_producao_routes(bp):
                 return resultados
 
             componentes_lista = achatar_bom(bom_explodido)
+            componentes_lista = _anexar_componentes_fora_bom(
+                componentes_lista, consumos_existentes, ajustes_existentes
+            )
 
             return jsonify({
                 'success': True,
@@ -668,6 +733,9 @@ def register_analise_producao_routes(bp):
 
             # Achatar estrutura
             componentes_lista = achatar_bom(bom_explodido)
+            componentes_lista = _anexar_componentes_fora_bom(
+                componentes_lista, consumos_existentes, ajustes_existentes
+            )
 
             return jsonify({
                 'success': True,
@@ -907,6 +975,43 @@ def register_analise_producao_routes(bp):
             db.session.rollback()
             logger.error(f"Erro ao ajustar consumo do grupo: {e}")
             return jsonify({'success': False, 'message': str(e)}), 500
+
+    @bp.route('/analise-producao/buscar-produtos')  # type: ignore
+    @login_required
+    def buscar_produtos_componente():
+        """
+        Autocomplete de produtos para 'Adicionar Componente' no modal de análise.
+        Busca por código E descrição (ILIKE), apenas produtos comprados/produzidos ativos.
+        Dispara com >=3 caracteres (espelha o requisito de ">2 caracteres preenchidos").
+        """
+        termo = (request.args.get('q') or '').strip()
+        if len(termo) < 3:
+            return jsonify({'success': True, 'produtos': []})
+
+        try:
+            like = f'%{termo}%'
+            produtos = CadastroPalletizacao.query.filter(
+                CadastroPalletizacao.ativo.is_(True),
+                or_(
+                    CadastroPalletizacao.produto_comprado.is_(True),
+                    CadastroPalletizacao.produto_produzido.is_(True),
+                ),
+                or_(
+                    CadastroPalletizacao.cod_produto.ilike(like),
+                    CadastroPalletizacao.nome_produto.ilike(like),
+                )
+            ).order_by(CadastroPalletizacao.cod_produto).limit(20).all()
+
+            return jsonify({
+                'success': True,
+                'produtos': [
+                    {'cod_produto': p.cod_produto, 'nome_produto': p.nome_produto}
+                    for p in produtos
+                ]
+            })
+        except Exception as e:
+            logger.error(f"Erro ao buscar produtos para componente: {e}")
+            return jsonify({'success': False, 'message': str(e), 'produtos': []}), 500
 
     @bp.route('/analise-producao/<int:producao_id>/consumos-vinculados')  # type: ignore
     @login_required

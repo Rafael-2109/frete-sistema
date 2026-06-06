@@ -1,0 +1,124 @@
+{# ============================================================================
+   Modal de Análise de Componentes (compartilhado)
+   Usado em: manufatura/analise_producao/index.html e estoque/listar_movimentacoes.html
+   Requer: Bootstrap 5, SweetAlert2 (Swal) e o script analise_producao_componentes.js.
+   CSRF lido de <meta name="csrf-token"> (já presente no base.html).
+============================================================================ #}
+<div class="modal fade" id="modalComponentes" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-xl-custom">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-sitemap me-2"></i>
+                    Análise de Componentes
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <!-- Informações da Produção -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h6 class="mb-0"><i class="fas fa-industry me-2"></i>Produção</h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-2">
+                                <label class="form-label text-muted small">ID</label>
+                                <p class="fw-bold mb-0" id="modal-prod-id">-</p>
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label text-muted small">Código</label>
+                                <p class="fw-bold mb-0" id="modal-prod-codigo">-</p>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label text-muted small">Produto</label>
+                                <p class="fw-bold mb-0" id="modal-prod-nome">-</p>
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label text-muted small">Qtd Produzida</label>
+                                <p class="fw-bold text-success mb-0" id="modal-prod-qtd">-</p>
+                            </div>
+                            <div class="col-md-1">
+                                <label class="form-label text-muted small">Data</label>
+                                <p class="fw-bold mb-0" id="modal-prod-data">-</p>
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label text-muted small">Ordem Produção</label>
+                                <p class="fw-bold mb-0" id="modal-prod-op">-</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tabela de Componentes -->
+                <div class="card">
+                    <div class="card-header card-header-theme">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <h6 class="mb-0"><i class="fas fa-cubes me-2"></i>Componentes da BOM</h6>
+                            <div>
+                                <span class="badge bg-info me-2">
+                                    <i class="fas fa-info-circle me-1"></i>
+                                    Preencha Ajuste ou Consumo Real - o outro será calculado automaticamente
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive" style="max-height: 500px; overflow-y: auto;">
+                            <table class="table table-sm table-hover mb-0" id="tabelaComponentes">
+                                <thead class="table-thead-theme sticky-header">
+                                    <tr>
+                                        <th style="min-width: 250px;">Componente</th>
+                                        <th class="text-center">Tipo</th>
+                                        <th class="text-end">Estoque</th>
+                                        <th class="text-end">Consumo Previsto</th>
+                                        <th class="text-end" style="width: 120px;">Ajuste</th>
+                                        <th class="text-end" style="width: 120px;">Consumo Real</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="corpoComponentes">
+                                    <tr>
+                                        <td colspan="6" class="text-center py-4">
+                                            <i class="fas fa-spinner fa-spin me-2"></i>
+                                            Carregando componentes...
+                                        </td>
+                                    </tr>
+                                </tbody>
+                                <tfoot>
+                                    <tr id="rowAdicionarComponente">
+                                        <td colspan="6" class="bg-body-tertiary">
+                                            <div class="d-flex align-items-center gap-2">
+                                                <button type="button" class="btn btn-sm btn-outline-primary"
+                                                        onclick="mostrarBuscaComponente()">
+                                                    <i class="fas fa-plus me-1"></i> Adicionar Componente
+                                                </button>
+                                                <div id="buscaComponenteWrap" class="position-relative"
+                                                     style="display:none; min-width: 380px;">
+                                                    <input type="text" id="inputBuscaComponente"
+                                                           class="form-control form-control-sm" autocomplete="off"
+                                                           placeholder="Digite código ou descrição (mín. 3 caracteres)..."
+                                                           oninput="buscarComponentes()">
+                                                    <div id="dropdownBuscaComponente"
+                                                         class="list-group position-absolute w-100 shadow"
+                                                         style="z-index: 1080; max-height: 260px; overflow-y: auto; display:none; bottom: 100%;"></div>
+                                                </div>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="fas fa-times me-1"></i>Fechar
+                </button>
+                <button type="button" class="btn btn-success" id="btnSalvarAjustes" onclick="salvarAjustes()">
+                    <i class="fas fa-save me-1"></i>Salvar Ajustes
+                </button>
+            </div>
+        </div>
+    </div>
+</div>

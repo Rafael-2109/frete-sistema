@@ -185,7 +185,10 @@
                             </thead>
                             <tbody>
                                 {% for mov in movimentacoes.items %}
-                                <tr id="row-{{ mov.id }}">
+                                {% set _ns = namespace(pid=None) %}
+                                {% if 'PRODUÇÃO' in mov.tipo_movimentacao or 'PRODUCAO' in mov.tipo_movimentacao %}{% set _ns.pid = mov.id %}
+                                {% elif mov.tipo_movimentacao == 'CONSUMO' and mov.producao_pai_id %}{% set _ns.pid = mov.producao_pai_id %}{% endif %}
+                                <tr id="row-{{ mov.id }}"{% if _ns.pid %} class="linha-analise-producao" style="cursor:pointer;" onclick="abrirModalComponentes({{ _ns.pid }})" title="Clique para analisar os componentes desta produção"{% endif %}>
                                     <td class="text-muted">{{ mov.id }}</td>
                                     <td>{{ mov.data_movimentacao|formatar_data_segura or '-' }}</td>
                                     <td>
@@ -271,7 +274,7 @@
                                             <span class="text-muted">-</span>
                                         {% endif %}
                                     </td>
-                                    <td>
+                                    <td onclick="event.stopPropagation();">
                                         <div class="btn-group btn-group-sm" role="group">
                                             <a href="javascript:void(0)"
                                                onclick="editarMovimentacao({{ mov.id }})"
@@ -876,7 +879,10 @@
     </div>
 </div>
 
+{% include 'manufatura/analise_producao/_modal_componentes.html' %}
+
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<script src="{{ url_for('static', filename='js/analise_producao_componentes.js') }}"></script>
 <script>
 // Inicializar datas do modal de exportação com período padrão (últimos 30 dias)
 document.addEventListener('DOMContentLoaded', function() {
