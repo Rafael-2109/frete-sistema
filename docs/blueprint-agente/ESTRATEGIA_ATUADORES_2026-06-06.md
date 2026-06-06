@@ -19,6 +19,7 @@ atualizado: 2026-06-06
 - REMOVER (R1–R6)
 - IMPLEMENTAR (I1–I6)
 - Sequência de ataque
+- Backlog (condicionado a caso-prova)
 - Casos-prova (sessões reais PROD)
 - Fontes ponteiradas
 
@@ -82,14 +83,26 @@ PONTEIRO: `app/agente/workers/step_judge.py` · `app/agente/sdk/verifiers.py`.
 
 ## IMPLEMENTAR (o que de fato muda o comportamento)
 
-**I1 — [Categoria A] Regra estável → CÓDIGO via D8 + discernimento.** O agente deve DISCERNIR "isto é regra de
-formato/processo estável" (→ registrar no D8 para virar código) vs "correção pessoal" (→ memória). Hoje ele joga
-tudo em memória. Adicionar critério no protocolo + endurecer `register_improvement` (dedup + guard de
-trivialidade, que faltam — SA5).
-ALVO IMEDIATO (dor provada): mover "ordem cronológica dos meses" para o **código da skill** que gera o baseline
-(ordenar sempre) — mata a reincidência do Marcus sem depender de recuperação.
-PONTEIRO: `.claude/skills/gerando-baseline-conciliacao/` (SKILL.md + scripts) · `app/agente/tools/memory_mcp_tool.py:3299` (register_improvement) · `app/agente/services/improvement_suggester.py`.
-DoD: skill gera baseline com meses em ordem cronológica por construção (teste); agente registra regra-estável no D8, não em /memories/.
+**I1 — [Categoria A] Regra estável → CÓDIGO + D8. ✅ NÚCLEO JÁ PROVADO (não é alvo pendente).**
+Regra de formato/processo estável vira CÓDIGO, não memória. **Verificado:** a ordem cronológica dos
+meses do baseline (dor recorrente do Marcus) JÁ está resolvida em código —
+`.claude/skills/gerando-baseline-conciliacao/scripts/gerar_baseline.py:66` (`_mes_ano_sort_key`,
+usado em :193 e :334). Isso é a **evidência de que a abordagem funciona**, NÃO um TODO. O que falta é
+GENERALIZAR o mecanismo (não o baseline):
+- **Discernimento sem depender do soft (§3a):** NÃO confiar no agente "decidir registrar no D8" (camada
+  soft, falso-negativo silencioso). Recorrência DETERMINÍSTICA — mesma `error_signature` / mesmo
+  artefato corrigido de novo pelo mesmo usuário — FORÇA candidata D8 automaticamente. Trilho pronto:
+  captura universal de error_signature + loop corretivo medindo por signature (em PROD).
+- **Transversal vs específica:** regra transversal com semântica contratável (formatação BR, encoding,
+  "se há coluna de data → ordenar asc COM override") → default no atuador genérico
+  `.claude/skills/exportando-arquivos/scripts/exportar.py` (detectar + override, NUNCA regra cega).
+  Regra de negócio → código da skill, caso a caso.
+- **Gate de SAÍDA do D8 autônomo (§3c):** `register_improvement` precisa de dedup + guard de
+  trivialidade (gate de ENTRADA, SA5) **E** verificação pós-implementação (gate de SAÍDA: o commit da
+  manhã tocou o arquivo certo? o teste passou?). Sem o gate de saída, "implementa sozinho de manhã" é
+  vetor de regressão silenciosa.
+PONTEIRO: `gerar_baseline.py:66` (prova) · `exportando-arquivos/scripts/exportar.py` (default transversal) · `app/agente/tools/memory_mcp_tool.py:3299` (register_improvement) · `app/agente/services/improvement_suggester.py`.
+DoD: recorrência por error_signature gera candidata D8 sem clique do agente; default de ordenação no exportar.py com override; gate de saída valida commit+teste do D8 autônomo.
 
 **I2 — [Categoria B] GROUNDING: verificar a fonte ANTES de afirmar estrutura.** O maior tipo de erro. Duas peças:
 (a) protocolo no system_prompt: "afirmação sobre existência de campo/tela/função/comportamento exige verificar a
@@ -125,11 +138,28 @@ DoD: prompt injeta índice + ≤N itens recuperados por gatilho (I3), não 66 po
 
 ## Sequência de ataque (ordem de valor × prova de conceito)
 
-1. **I1 baseline (alvo concreto, dor provada, zero IA):** ordem dos meses → código da skill. Prova "regra estável = código via D8". Baixo risco.
-2. **I2 grounding (maior tipo de erro):** protocolo + verificador de estrutura. Ataca alucinação (549/630/801).
-3. **I4 enforcement WRITE Odoo:** segurança; usa R9 (ground-truth pronto).
+> I1 (regra estável → código) JÁ está PROVADO no baseline (`gerar_baseline.py:66`). **NÃO é alvo — é a
+> evidência.** O 1º alvo é o atuador do erro DOMINANTE e provado (alucinação de estrutura, 4/4 casos).
+
+1. **I2 grounding — 1º ALVO (erro dominante, 4/4 casos):** verificar a fonte (schema/rota/código/arquivo)
+   ANTES de afirmar estrutura. Ataca a alucinação (549/630/692/801) — o maior valor provado.
+2. **I4 enforcement WRITE Odoo:** segurança; usa R9 (ground-truth pronto).
+3. **I1 generalização (§3a/§3c):** recorrência determinística por error_signature força candidata D8 +
+   gate de saída do D8 autônomo + default transversal no `exportar.py`. (O baseline já está feito.)
 4. **Limpeza R2/R3/R1/R6:** remover eval_runner/eval_gate, desligar fonte judge-driven A4, cortar injeção de pressão, tirar judge cego do caminho de atuação.
 5. **I3 gatilho determinístico + I6 progressive disclosure + I5 ciclo de vida:** refundação do retrieval/memória (maior, estrutural).
+
+## Backlog — condicionado a caso-prova (NÃO é alvo até existir erro real em PROD)
+
+**Categoria E — interpretação/roteamento por contexto do usuário** (ex: "NF" = fornecedor vs cliente
+conforme a área de quem pede). **ESPECULATIVA:** zero caso-prova minerado — os 4 casos reais são todos
+B (alucinação). Nasce de exemplo hipotético, não de erro observado. **Revisitar SÓ quando surgir um
+erro real de interpretação por perfil em PROD** (minerar a sessão antes de virar alvo).
+- Se for feita: o atuador é a **regra que CONFIRMA em WRITE** — perfil (`usuarios.perfil`/`cargo`) como
+  *prior* que enviesa a leitura e a ordem de verificação, **NUNCA** pula a checagem nem auto-decide em
+  ação de risco (senão reproduz o R1: sinal fraco virando pressão que pula o dry-run).
+- **NÃO** injetar `usuarios.perfil` no session_context como "atuador forte": injeção no prompt é SOFT,
+  independente de o dado ser cadastral. Dado factual ≠ atuador forte — confundir os dois é o erro a evitar.
 
 ## Casos-prova (sessões reais PROD — não inventar, citar)
 - **549** (08/05, user 1): inventou tela/botão/URL de upload de recibo; só verificou o código após reclamação. → B.
