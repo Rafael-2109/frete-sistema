@@ -125,35 +125,41 @@ def _baixar_danfe_pdf(api, tagplus_id: str) -> Optional[bytes]:
 
 
 def _enviar_para_destinos(reg, texto, anexo_b64, anexo_filename, vendedor):
-    """Envia ao grupo e (se houver) à DM do vendedor. Atualiza flags/status."""
+    """Envia ao grupo e (se houver) à DM do vendedor. Idempotente por destino:
+    só envia ao destino ainda não entregue (suporta reenvio de PARCIAL sem
+    duplicar a mensagem no destino que já recebeu). Atualiza flags/status.
+    """
     grupo_jid = os.environ.get('TAGPLUS_NOTIFY_WHATSAPP_GROUP_JID', '').strip()
     if not grupo_jid:
         reg.status = 'ERRO'
         reg.erro = 'TAGPLUS_NOTIFY_WHATSAPP_GROUP_JID não configurado'
         return
 
-    grupo_ok = False
-    try:
-        send_whatsapp(grupo_jid, texto, skip_rate_limit=True,
-                      anexo_b64=anexo_b64, anexo_filename=anexo_filename)
-        grupo_ok = True
-    except WhatsAppNotifyError as exc:
-        reg.erro = f'Grupo: {exc}'
-    reg.enviado_grupo = grupo_ok
-
-    if vendedor is not None and getattr(vendedor, 'telefone', None):
-        reg.vendedor_user_id = getattr(vendedor, 'id', None)
+    # Grupo — só envia se ainda não entregue (idempotência de reenvio)
+    if not reg.enviado_grupo:
         try:
-            send_whatsapp(vendedor.telefone, texto, skip_rate_limit=True,
+            send_whatsapp(grupo_jid, texto, skip_rate_limit=True,
                           anexo_b64=anexo_b64, anexo_filename=anexo_filename)
-            reg.enviado_vendedor = True
+            reg.enviado_grupo = True
         except WhatsAppNotifyError as exc:
-            reg.enviado_vendedor = False
-            reg.erro = ((reg.erro or '') + f' | Vendedor: {exc}').strip(' |')
-    else:
-        reg.enviado_vendedor = None
+            reg.erro = f'Grupo: {exc}'
 
-    if not grupo_ok:
+    # Vendedor — só tenta se ainda não entregue à DM
+    if reg.enviado_vendedor is not True:
+        if vendedor is not None and getattr(vendedor, 'telefone', None):
+            reg.vendedor_user_id = getattr(vendedor, 'id', None)
+            try:
+                send_whatsapp(vendedor.telefone, texto, skip_rate_limit=True,
+                              anexo_b64=anexo_b64, anexo_filename=anexo_filename)
+                reg.enviado_vendedor = True
+            except WhatsAppNotifyError as exc:
+                reg.enviado_vendedor = False
+                reg.erro = ((reg.erro or '') + f' | Vendedor: {exc}').strip(' |')
+        # se não há vendedor a notificar, preserva o estado atual
+        # (None quando nunca houve vendedor)
+
+    # Status final pelo estado acumulado das flags
+    if not reg.enviado_grupo:
         reg.status = 'ERRO'
     elif reg.enviado_vendedor is False:
         reg.status = 'PARCIAL'
@@ -178,6 +184,13 @@ def processar_notificacao_async(app, registro_id: int) -> None:
             reg.status = 'PROCESSANDO'
             reg.tentativas = (reg.tentativas or 0) + 1
             _commit_with_retry()
+
+            # Kill switch dedicado da feature (registra mas não envia)
+            if os.environ.get('TAGPLUS_NOTIFY_ENABLED', 'true').strip().lower() in ('false', '0', 'no'):
+                reg.status = 'IGNORADO'
+                reg.erro = 'TAGPLUS_NOTIFY_ENABLED desabilitado'
+                _commit_with_retry()
+                return
 
             api = _get_api()
             vendedor_nome = None

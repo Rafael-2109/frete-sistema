@@ -48,3 +48,8 @@ def test_evento_fora_do_escopo_ignorado(client):
                         headers={"X-Hub-Secret": WEBHOOK_SECRET})
     assert r.status_code == 200
     assert not disp.called
+
+
+def test_sem_assinatura_401(client):
+    r = client.post(URL, json=_payload(tid="77777"))  # sem X-Hub-Secret
+    assert r.status_code == 401

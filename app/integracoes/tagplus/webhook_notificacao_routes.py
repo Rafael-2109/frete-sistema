@@ -28,6 +28,12 @@ EVENTO_TIPO = {
 @csrf.exempt
 @tagplus_notificacao.route('/integracoes/tagplus/webhook/notificacao', methods=['POST'])
 def webhook_notificacao():
+    # Endurecimento: este endpoint exige assinatura (não aceita o modo inseguro
+    # herdado de validar_assinatura, pois a URL é pública).
+    if not request.headers.get('X-Hub-Secret') and not request.headers.get('X-TagPlus-Signature'):
+        logger.warning("[TAGPLUS-NOTIF] Webhook sem cabeçalho de assinatura rejeitado")
+        return jsonify({'erro': 'assinatura obrigatória'}), 401
+
     ok, motivo = validar_assinatura(request)
     if not ok:
         logger.warning(f"[TAGPLUS-NOTIF] Webhook rejeitado: {motivo}")

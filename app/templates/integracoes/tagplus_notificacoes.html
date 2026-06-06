@@ -38,6 +38,7 @@
           <td>
             {% if n.status in ['ERRO', 'PARCIAL'] %}
             <form method="post" action="{{ url_for('tagplus_notificacao.notificacao_reenviar', reg_id=n.id) }}" class="d-inline">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
               <button class="btn btn-sm btn-outline-primary" type="submit">Reenviar</button>
             </form>
             {% endif %}
