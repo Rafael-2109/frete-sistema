@@ -241,16 +241,16 @@ Segue o modelo de 5 camadas do Agent SDK (Anthropic):
 | Flag | System Prompt | Identidade | Tokens |
 |------|--------------|------------|--------|
 | `false` | `{preset: "claude_code", append: system_prompt.md}` | Claude Code + Agente (conflito) | ~7K |
-| `true` (default) | `preset_operacional.md + system_prompt.md + empresa_briefing.md` (string) | Apenas Agente (coerente) | **~17.5K** (medido) |
+| `true` (default) | `preset_operacional.md + system_prompt.md + empresa_briefing.md` (string) | Apenas Agente (coerente) | **ver bloco auto-medido ↓** |
 
 ### Camadas (com flag true)
 
 ```
 STRING custom (option `system_prompt`) — 3 arquivos concatenados em _build_full_system_prompt():
-  1. preset_operacional.md  (~1.2K tok)   ← Tools, safety, environment
-  2. system_prompt.md       (~14.9K tok)  ← Comportamento, routing, regras
-  3. empresa_briefing.md    (~1.5K tok)   ← Vocabulario, cadeia de valor Nacom
-  = TOTAL string: ~17.5K tok (medido 2026-06-04)
+  1. preset_operacional.md   ← Tools, safety, environment
+  2. system_prompt.md        ← Comportamento, routing, regras
+  3. empresa_briefing.md     ← Vocabulario, cadeia de valor Nacom
+  (tamanhos reais por arquivo: ver bloco auto-medido abaixo)
 + CLAUDE.md raiz via setting_sources      ← project context (FORA da string custom)
 + Dynamic injections (hook UserPromptSubmit) ← memorias, session_context, diretivas
 ```
@@ -259,6 +259,21 @@ STRING custom (option `system_prompt`) — 3 arquivos concatenados em _build_ful
 > apos qualquer edicao de prompt. NUNCA hardcodar de cabeca: esta doc ja esteve
 > ~6.5x defasada (afirmava ~2.7K, real ~17.5K — corrigido FASE 1 refactor 2026-06-04,
 > ver `docs/superpowers/plans/2026-06-04-refactor-governanca-prompt-agente.md`).
+
+<!-- prompt-size:start (auto: scripts/audits/prompt_size_audit.py --update-claude-md) -->
+| Componente | Linhas | Bytes | Tokens (est.) |
+|------------|-------:|------:|--------------:|
+| `preset_operacional.md` | 117 | 5079 | ~1.5K tok |
+| `system_prompt.md` | 765 | 46467 | ~13.3K tok |
+| `empresa_briefing.md` | 81 | 5084 | ~1.5K tok |
+| **TOTAL estatico** | **963** | **56630** | **~16.2K tok** |
+
+> Medido por `scripts/audits/prompt_size_audit.py` (tokens = bytes/3.5, estimativa pt-BR+XML). NUNCA editar a mao — rode `--update-claude-md`.
+<!-- prompt-size:end -->
+
+> Gatilho de poda (FASE 5): o pre-commit roda `prompt_size_audit.py --check-delta`
+> e bloqueia qualquer commit que faça o prompt **crescer** vs `prompt_size_baseline.json`
+> sem decisão consciente. Crescimento legítimo: rode `--update-baseline && --update-claude-md`.
 
 ### Separacao de responsabilidades
 
@@ -287,7 +302,7 @@ STRING custom (option `system_prompt`) — 3 arquivos concatenados em _build_ful
 - `AGENT_PROMPT_CACHE_OPTIMIZATION=false` restaura variaveis dinamicas no system prompt (via prepend)
 
 ### Arquivos envolvidos
-- `prompts/preset_operacional.md` — preset customizado (103 linhas, medido — ver prompt_size_audit.py)
+- `prompts/preset_operacional.md` — preset customizado (tamanho no bloco auto-medido — `prompt_size_audit.py`)
 - `prompts/system_prompt.md` — system prompt operacional (v4.3.3, estatico — sem vars dinamicas)
 - `sdk/client.py` — `_format_system_prompt()` (guard cache), `_user_prompt_submit_hook()` (session_context)
 - `config/feature_flags.py` — `USE_CUSTOM_SYSTEM_PROMPT`, `USE_PROMPT_CACHE_OPTIMIZATION`
