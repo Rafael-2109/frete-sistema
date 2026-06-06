@@ -1323,6 +1323,34 @@ def tagplus_pedido_venda_api_preco_modelo():
 
 
 # ============================================================
+# 4.7) Historico de notificacoes WhatsApp + reenvio manual
+# ============================================================
+
+@hora_bp.route('/tagplus/notificacoes', methods=['GET'])
+@require_hora_perm('tagplus', 'ver')
+def tagplus_notificacoes_lista():
+    """Historico das notificacoes WhatsApp (NFe aprovada / pedido confirmado)."""
+    from app.hora.models.tagplus import HoraTagPlusNotificacaoWhatsapp
+    page = request.args.get('page', 1, type=int)
+    pag = (HoraTagPlusNotificacaoWhatsapp.query
+           .order_by(HoraTagPlusNotificacaoWhatsapp.criado_em.desc())
+           .paginate(page=page, per_page=50, error_out=False))
+    return render_template('hora/tagplus/notificacoes.html', pag=pag)
+
+
+@hora_bp.route('/tagplus/notificacoes/<int:reg_id>/reenviar', methods=['POST'])
+@require_hora_perm('tagplus', 'editar')
+def tagplus_notificacao_reenviar(reg_id):
+    """Reenfileira uma notificacao WhatsApp para reprocessamento."""
+    from app.hora.models.tagplus import HoraTagPlusNotificacaoWhatsapp
+    from app.hora.services.tagplus.notificacao_whatsapp import reenfileirar
+    reg = HoraTagPlusNotificacaoWhatsapp.query.get_or_404(reg_id)
+    reenfileirar(reg.id)
+    flash(f'Reenvio disparado para {reg.tipo} #{reg.ref_id}.', 'info')
+    return redirect(url_for('hora.tagplus_notificacoes_lista'))
+
+
+# ============================================================
 # 5) Acoes na venda (NFe)
 # ============================================================
 

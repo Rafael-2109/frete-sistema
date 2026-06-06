@@ -445,3 +445,45 @@ def enfileirar_notificacao(tipo: str, ref_id: int) -> None:
     except Exception as exc:
         logger.exception('HORA notificacao: falha ao enfileirar notificacao %s/%s: %s',
                          tipo, ref_id, exc)
+
+
+def reenfileirar(registro_id: int) -> None:
+    """Reseta status para PENDENTE e reenfileira o job no RQ.
+
+    Usado pelo reenvio manual da tela de histórico (H4). Sempre reenfileira
+    independentemente do status atual (força retry mesmo em ENVIADO).
+
+    Não propaga exceções — loga e segue.
+
+    Args:
+        registro_id: ID de HoraTagPlusNotificacaoWhatsapp.
+    """
+    try:
+        from app import db
+        from app.hora.models.tagplus import HoraTagPlusNotificacaoWhatsapp
+
+        reg = db.session.get(HoraTagPlusNotificacaoWhatsapp, registro_id)
+        if not reg:
+            logger.error('HORA notificacao reenfileirar: registro %s não encontrado', registro_id)
+            return
+
+        reg.status = 'PENDENTE'
+        reg.erro = None
+        db.session.commit()
+
+        redis_url = os.environ.get('REDIS_URL')
+        if redis_url:
+            from rq import Queue
+            from redis import Redis
+
+            Queue(QUEUE_NAME, connection=Redis.from_url(redis_url)).enqueue(
+                'app.hora.workers.emissao_nfe_worker.processar_notificacao',
+                registro_id,
+            )
+        else:
+            # Fallback síncrono (dev sem Redis)
+            logger.info('HORA notificacao: sem REDIS_URL, processando sincronamente')
+            processar_notificacao(registro_id)
+
+    except Exception as exc:
+        logger.exception('HORA notificacao: falha ao reenfileirar %s: %s', registro_id, exc)

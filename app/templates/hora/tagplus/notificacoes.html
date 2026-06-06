@@ -1,0 +1,152 @@
+{% extends "hora/base.html" %}
+{% from "hora/_pagination.html" import render_pagination %}
+
+{% block hora_content %}
+<div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+  <h2><i class="fas fa-bell"></i> Notificacoes WhatsApp</h2>
+</div>
+
+{# ---- Mapa de badges por status ---- #}
+{% set status_badge = {
+    'PENDENTE':    'secondary',
+    'PROCESSANDO': 'info',
+    'ENVIADO':     'success',
+    'PARCIAL':     'warning',
+    'ERRO':        'danger',
+    'IGNORADO':    'dark'
+} %}
+{% set status_label = {
+    'PENDENTE':    'Pendente',
+    'PROCESSANDO': 'Processando',
+    'ENVIADO':     'Enviado',
+    'PARCIAL':     'Parcial',
+    'ERRO':        'Erro',
+    'IGNORADO':    'Ignorado'
+} %}
+
+{% if not pag.items %}
+  <div class="alert alert-secondary">
+    Nenhuma notificacao registrada.
+  </div>
+{% else %}
+<div class="table-responsive">
+  <table class="table table-sm table-hover align-middle">
+    <thead>
+      <tr>
+        <th>Quando</th>
+        <th>Tipo</th>
+        <th>Numero</th>
+        <th>Cliente</th>
+        <th>Vendedor</th>
+        <th>Loja</th>
+        <th title="Enviado para o grupo">Grupo</th>
+        <th title="Enviado por DM ao vendedor">Vendedor DM</th>
+        <th title="PDF DANFE anexado">PDF</th>
+        <th>Status</th>
+        <th>Erro</th>
+        <th class="text-end">Acao</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for n in pag.items %}
+        <tr>
+          <td>
+            <small>{{ n.criado_em.strftime('%d/%m %H:%M') if n.criado_em else '—' }}</small>
+          </td>
+          <td>
+            <span class="badge bg-secondary">{{ n.tipo }}</span>
+          </td>
+          <td>
+            {% if n.numero %}
+              <strong>{{ n.numero }}</strong>
+            {% else %}
+              <span class="text-muted">—</span>
+            {% endif %}
+            <div class="small text-muted">ref #{{ n.ref_id }}</div>
+          </td>
+          <td>
+            {% if n.cliente_nome %}
+              <small>{{ n.cliente_nome }}</small>
+            {% else %}
+              <span class="text-muted">—</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if n.vendedor_nome %}
+              <small>{{ n.vendedor_nome }}</small>
+            {% else %}
+              <span class="text-muted">—</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if n.loja_nome %}
+              <small>{{ n.loja_nome }}</small>
+            {% else %}
+              <span class="text-muted">—</span>
+            {% endif %}
+          </td>
+          <td class="text-center">
+            {% if n.enviado_grupo %}
+              <span class="badge bg-success">OK</span>
+            {% else %}
+              <span class="text-muted">—</span>
+            {% endif %}
+          </td>
+          <td class="text-center">
+            {% if n.enviado_vendedor is none %}
+              <span class="text-muted small">n/a</span>
+            {% elif n.enviado_vendedor %}
+              <span class="badge bg-success">OK</span>
+            {% else %}
+              <span class="badge bg-danger">falhou</span>
+            {% endif %}
+          </td>
+          <td class="text-center">
+            {% if n.anexou_pdf %}
+              <span title="PDF DANFE anexado">&#128206;</span>
+            {% else %}
+              <span class="text-muted">—</span>
+            {% endif %}
+          </td>
+          <td>
+            <span class="badge bg-{{ status_badge.get(n.status, 'secondary') }}">
+              {{ status_label.get(n.status, n.status) }}
+            </span>
+            {% if n.tentativas and n.tentativas > 1 %}
+              <div class="small text-muted">{{ n.tentativas }} tentativa(s)</div>
+            {% endif %}
+          </td>
+          <td>
+            {% if n.erro %}
+              <small class="text-danger" title="{{ n.erro }}">
+                {{ n.erro[:60] }}{% if n.erro|length > 60 %}…{% endif %}
+              </small>
+            {% else %}
+              <span class="text-muted">—</span>
+            {% endif %}
+          </td>
+          <td class="text-end">
+            {% if n.status in ('ERRO', 'PARCIAL') %}
+              {% if current_user.tem_perm_hora('tagplus', 'editar') %}
+                <form method="post"
+                      action="{{ url_for('hora.tagplus_notificacao_reenviar', reg_id=n.id) }}"
+                      style="display:inline;">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                  <button type="submit" class="btn btn-sm btn-outline-warning py-0"
+                          title="Reenviar notificacao">
+                    <i class="fas fa-redo-alt"></i> Reenviar
+                  </button>
+                </form>
+              {% endif %}
+            {% else %}
+              <span class="text-muted">—</span>
+            {% endif %}
+          </td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{{ render_pagination(pag, request) }}
+{% endif %}
+{% endblock %}
