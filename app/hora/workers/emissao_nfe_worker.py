@@ -48,6 +48,17 @@ def processar_webhook(conta_id: int, event_type: str, data: list) -> None:
             ctx.pop()
 
 
+def processar_notificacao(registro_id: int) -> None:
+    """Job RQ (fila hora_nfe): processa uma notificação WhatsApp da HORA."""
+    ctx = _ensure_app_context()
+    try:
+        from app.hora.services.tagplus.notificacao_whatsapp import processar_notificacao as _proc
+        _proc(registro_id)
+    finally:
+        if ctx is not None:
+            ctx.pop()
+
+
 # Backoff de polling: (limite_decorrido_segundos, proximo_delay_segundos).
 # Inicio agressivo (10s) cobrindo casos triviais; depois afrouxa para nao
 # bombardear API. Apos 1h desiste — cron de reconciliacao (30min) cuida.

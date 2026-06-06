@@ -1002,6 +1002,16 @@ def confirmar_venda(venda_id: int, usuario: Optional[str] = None) -> HoraVenda:
     )
 
     db.session.commit()
+
+    try:
+        from app.hora.services.tagplus.notificacao_whatsapp import enfileirar_notificacao
+        enfileirar_notificacao('PEDIDO', venda.id)
+    except Exception:
+        import logging as _logging
+        _logging.getLogger(__name__).exception(
+            'Falha ao enfileirar notificacao WhatsApp pedido (venda=%s)', venda.id,
+        )
+
     return venda
 
 

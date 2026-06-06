@@ -84,6 +84,8 @@ class WebhookHandler:
                     logger.warning('Evento desconhecido: %s', event_type)
                     continue
                 db.session.commit()
+                if event_type == EVENT_NFE_APROVADA:
+                    _disparar_notificacao_nfe_safe(emissao.id)
             except Exception:
                 logger.exception(
                     'Falha processando item webhook event=%s tagplus_id=%s',
@@ -360,3 +362,12 @@ class WebhookHandler:
             if c:
                 return str(c)[:1000]
         return 'Denegacao sem motivo identificavel — ver response_webhook.'
+
+
+def _disparar_notificacao_nfe_safe(emissao_id: int) -> None:
+    """Enfileira notificacao WhatsApp de NF aprovada. Best-effort — nunca quebra o webhook."""
+    try:
+        from app.hora.services.tagplus.notificacao_whatsapp import enfileirar_notificacao
+        enfileirar_notificacao('NFE', emissao_id)
+    except Exception:
+        logger.exception('Falha ao enfileirar notificacao WhatsApp NF (emissao=%s)', emissao_id)
