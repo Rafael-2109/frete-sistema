@@ -487,3 +487,45 @@ class HoraDanfeParserAppend(db.Model):
             f'<HoraDanfeParserAppend v{self.versao} '
             f'ativo={self.ativo} criado_em={self.criado_em}>'
         )
+
+
+class HoraTagPlusNotificacaoWhatsapp(db.Model):
+    """Dedupe/auditoria das notificações WhatsApp de NFe aprovada / pedido confirmado da HORA.
+
+    `ref_id` é polimórfico por `tipo`:
+      - tipo='NFE'    -> HoraTagPlusNfeEmissao.id
+      - tipo='PEDIDO' -> HoraVenda.id
+    UNIQUE (tipo, ref_id) garante idempotência (uma notificação por evento).
+    Flags enviado_grupo/enviado_vendedor permitem reenvio só do destino pendente.
+    """
+    __tablename__ = 'hora_tagplus_notificacao_whatsapp'
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    tipo = db.Column(db.String(10), nullable=False)    # PEDIDO | NFE
+    ref_id = db.Column(db.Integer, nullable=False)     # HoraVenda.id ou HoraTagPlusNfeEmissao.id
+
+    numero = db.Column(db.String(30), nullable=True)        # numero NFe (NFE) ou id pedido (PEDIDO)
+    cliente_nome = db.Column(db.String(255), nullable=True)
+    vendedor_nome = db.Column(db.String(120), nullable=True)
+    loja_nome = db.Column(db.String(120), nullable=True)
+    valor = db.Column(db.Numeric(15, 2), nullable=True)
+
+    enviado_grupo = db.Column(db.Boolean, nullable=False, default=False, server_default='false')
+    enviado_vendedor = db.Column(db.Boolean, nullable=True)  # NULL = não havia vendedor a notificar
+
+    status = db.Column(db.String(15), nullable=False, default='PENDENTE')  # PENDENTE/PROCESSANDO/ENVIADO/PARCIAL/ERRO/IGNORADO
+    erro = db.Column(db.Text, nullable=True)
+    tentativas = db.Column(db.Integer, nullable=False, default=0)
+    anexou_pdf = db.Column(db.Boolean, nullable=False, default=False, server_default='false')
+
+    enviado_em = db.Column(db.DateTime, nullable=True)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive, nullable=False)
+
+    __table_args__ = (
+        db.UniqueConstraint('tipo', 'ref_id', name='uq_hora_tagplus_notif_tipo_ref'),
+        db.Index('idx_hora_tagplus_notif_status', 'status'),
+    )
+
+    def __repr__(self):
+        return f'<HoraTagPlusNotificacaoWhatsapp {self.tipo} ref={self.ref_id} {self.status}>'
