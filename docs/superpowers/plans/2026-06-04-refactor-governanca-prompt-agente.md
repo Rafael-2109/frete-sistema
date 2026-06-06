@@ -621,7 +621,17 @@ Reclassificação (BEST_PRACTICES `:243`):
   subagente respondendo em inglês; rollback = restaurar o caps.
 
 Prova determinística (sem LLM eval, veto Rafael): instrução de formato permanece (grep) + style
-não toca golden-path. **Não em lote** (PM-2.1 `:405`): 3 edições individuais, mesma categoria.
+não toca golden-path. **Não em lote** (PM-2.1 `:405`): 5 edições individuais (3 R$ + 2 idioma),
+mesma categoria.
+
+**Varredura abrangente dos 16 agents (a pedido do Rafael — 2026-06-06):** grep de style markers
+(idioma / formato R$ / tom positivo agressivo) em TODOS os agents → os **5 dial-backs acima são os
+únicos** style-positivo-agressivo. Os demais `SEMPRE/sempre` são **data-correctness ou funcional
+não-default → MANTIDOS** (R-EXEC-5b na direção CORRETA = "remover causa erro? → mantém"): `NULLIF`
+(÷ por zero, `analista-performance:202/225`), `abs()`/`parcela_to_int()` (armadilhas O3/A10,
+`auditor-financeiro:63/215`), `Sempre mostrar o RESUMO` (`raio-x:157` — resumo NÃO é output default;
+o imperativo garante a estrutura, ao contrário do R$ que já é o padrão PT-BR). Negativas de style
+ficam por RT-5.2. **Conclusão: dial-back de style ESGOTADO nos agents — nada mais a suavizar.**
 
 ### Nota de execução — FASE 4 / T4.2 (2026-06-06)
 
