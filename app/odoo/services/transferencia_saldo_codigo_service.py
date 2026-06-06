@@ -107,6 +107,115 @@ class TransferenciaSaldoCodigoService:
             out.append({'codigo': str(c), 'nome': nome})
         return out
 
+    def transferir_v2(
+        self, *,
+        company_id: int,
+        cod_origem, location_id_origem: int, lote_nome_origem,
+        cod_destino, location_id_destino: int, lote_nome_destino,
+        qty, usuario, dry_run: bool = False,
+    ) -> Dict[str, Any]:
+        """Transferência genérica de saldo entre códigos (qualquer empresa/local/lote).
+
+        Generaliza transferir() (CD-only): parametriza company_id + locations +
+        lotes origem/destino. A trava de par vira AVISO (r['aviso_par']) — NÃO
+        bloqueia. dry_run=True simula (não cria lote, não grava espelho local).
+        Reduz origem → cria/aumenta destino (compensa se o aumento falhar).
+        """
+        cod_origem, cod_destino = str(cod_origem).strip(), str(cod_destino).strip()
+        qty = round(float(qty), CASAS)
+        r: Dict[str, Any] = {
+            'cod_origem': cod_origem, 'cod_destino': cod_destino,
+            'company_id': company_id,
+            'location_id_origem': location_id_origem,
+            'location_id_destino': location_id_destino,
+            'lote_nome_origem': lote_nome_origem,
+            'lote_nome_destino': lote_nome_destino,
+            'qty': qty, 'usuario': usuario, 'dry_run': dry_run,
+            'lote_criado': False, 'aviso_par': False, 'status': None,
+        }
+        if qty <= 0:
+            raise ValueError(f'qty deve ser > 0 (recebido {qty})')
+
+        # 1. aviso de par (NÃO bloqueia — D2)
+        destinos = {d['codigo'] for d in self.descobrir_destinos(cod_origem)}
+        r['aviso_par'] = cod_destino not in destinos
+
+        # 2. resolver produtos
+        origem = self.resolver_produto(cod_origem)
+        destino = self.resolver_produto(cod_destino)
+        pid_o, pid_d = origem['product_id'], destino['product_id']
+
+        # 3. resolver lote origem + validade (para herdar no destino)
+        lot_id_origem: Optional[int] = None
+        validade: Optional[str] = None
+        if lote_nome_origem:
+            lot_id_origem = self.lot_svc.buscar_por_nome(lote_nome_origem, pid_o, company_id)
+            if not lot_id_origem:
+                raise ValueError(
+                    f'lote {lote_nome_origem!r} nao encontrado no produto '
+                    f'{cod_origem} (company {company_id})')
+            lots = self.odoo.read('stock.lot', [lot_id_origem], ['expiration_date'])
+            validade = (lots[0].get('expiration_date') or None) if lots else None
+
+        # 4. reduzir origem
+        r_red = self.adjustment_svc.ajustar_quant(
+            product_id=pid_o, company_id=company_id, location_id=location_id_origem,
+            lot_id=lot_id_origem, delta=-qty, delta_esperado=-qty, tolerancia_delta=0.001,
+            validar_nao_negativar=True, validar_nao_abaixo_reserva=True, dry_run=dry_run)
+        r['reducao'] = r_red
+        if r_red['status'] not in ('EXECUTADO', 'DRY_RUN_OK', 'EXECUTADO_AUTO_CORRIGIDO'):
+            r['status'] = 'FALHA_REDUCAO'
+            r['erro'] = r_red.get('erro')
+            return r
+        r['origem_antes'], r['origem_apos'] = r_red.get('qty_antes'), r_red.get('qty_apos')
+
+        # 5. resolver/garantir lote destino no produto destino
+        lot_id_destino: Optional[int] = None
+        if lote_nome_destino:
+            exp = validade if destino['use_expiration_date'] else None
+            if dry_run:
+                lot_id_destino = self.lot_svc.buscar_por_nome(lote_nome_destino, pid_d, company_id)
+                r['lote_criado'] = lot_id_destino is None
+            else:
+                lot_id_destino, criado = self.lot_svc.criar_se_nao_existe(
+                    lote_nome_destino, pid_d, company_id, expiration_date=exp)
+                r['lote_criado'] = criado
+
+        # 6. aumentar destino
+        if dry_run and lote_nome_destino and lot_id_destino is None:
+            # lote será criado no executar; quant nova começa em 0 → preview manual
+            r['destino_antes'], r['destino_apos'] = 0.0, qty
+            r['aumento'] = {'status': 'DRY_RUN_OK', 'qty_antes': 0.0,
+                            'qty_apos': qty, 'acao': 'created'}
+            r['status'] = 'DRY_RUN_OK'
+            return r
+
+        r_aum = self.adjustment_svc.ajustar_quant(
+            product_id=pid_d, company_id=company_id, location_id=location_id_destino,
+            lot_id=lot_id_destino, delta=qty, delta_esperado=qty, tolerancia_delta=0.001,
+            criar_se_faltar=True, validar_nao_negativar=True,
+            validar_nao_abaixo_reserva=True, dry_run=dry_run)
+        r['aumento'] = r_aum
+        if r_aum['status'] not in ('EXECUTADO', 'DRY_RUN_OK', 'EXECUTADO_AUTO_CORRIGIDO'):
+            if not dry_run:
+                comp = self.adjustment_svc.ajustar_quant(
+                    product_id=pid_o, company_id=company_id, location_id=location_id_origem,
+                    lot_id=lot_id_origem, delta=qty,
+                    validar_nao_negativar=False, validar_nao_abaixo_reserva=False)
+                r['compensacao'] = comp
+            r['status'] = 'FALHA_AUMENTO_COMPENSADO'
+            r['erro'] = r_aum.get('erro')
+            return r
+        r['destino_antes'], r['destino_apos'] = r_aum.get('qty_antes'), r_aum.get('qty_apos')
+
+        # 7. espelho local (somente executar real — D8)
+        if not dry_run:
+            self._registrar_movimentacao_local(
+                cod_origem, origem['name'], cod_destino, destino['name'],
+                lote_nome_destino or lote_nome_origem, qty, usuario)
+        r['status'] = 'DRY_RUN_OK' if dry_run else 'EXECUTADO'
+        return r
+
     def transferir(self, cod_origem, cod_destino, lote_nome, qty,
                    usuario) -> Dict[str, Any]:
         """Transfere `qty` de cod_origem→cod_destino mantendo `lote_nome` em
