@@ -19,12 +19,18 @@ atualizado: 2026-06-02
 - [4. resolver_pedido.py](#4-resolver_pedidopy)
 - [5. resolver_cidade.py](#5-resolver_cidadepy)
 - [6. resolver_uf.py](#6-resolver_ufpy)
+- [7. resolver_transportadora.py](#7-resolver_transportadorapy)
 - [Exemplos de Uso](#exemplos-de-uso)
   - [Cenario 1: Resolver grupo antes de consultar entregas](#cenario-1-resolver-grupo-antes-de-consultar-entregas)
   - [Cenario 2: Resolver produto por abreviacao](#cenario-2-resolver-produto-por-abreviacao)
   - [Cenario 3: Multiplos pedidos](#cenario-3-multiplos-pedidos)
 
 Referencia detalhada de parametros, retornos e estrategias de resolucao.
+
+> **Consolidacao (Onda D, 2026-06-01):** a logica destes scripts vive em `app/resolvedores/`
+> (SoT unico, testavel via pytest). Os scripts sao wrappers finos que chamam
+> `app.resolvedores.resolver_*_cli`. O contrato CLI (flags + JSON) e preservado 1:1.
+> O bug de acento de `resolver_cidade` foi corrigido (accent-insensitive real: `itanhaem` casa `Itanhaém`).
 
 ---
 
@@ -213,6 +219,41 @@ python .claude/skills/resolvendo-entidades/scripts/resolver_uf.py [opcoes]
 | Parametro | Obrig | Descricao | Exemplo |
 |-----------|-------|-----------|---------|
 | `--uf` | Sim | Sigla do estado (2 letras) | `--uf SP` |
+| `--fonte` | Nao | carteira, separacao, entregas (default: entregas) | `--fonte carteira` |
+| `--limite` | Nao | Maximo de resultados (default: 100) | `--limite 50` |
+
+---
+
+## 7. resolver_transportadora.py
+
+**Proposito:** Resolve transportadora por nome parcial ou CNPJ.
+
+```bash
+source .venv/bin/activate && \
+python .claude/skills/resolvendo-entidades/scripts/resolver_transportadora.py [opcoes]
+```
+
+| Parametro | Obrig | Descricao | Exemplo |
+|-----------|-------|-----------|---------|
+| `--termo` | Sim | Nome parcial ou CNPJ | `--termo TAC`, `--termo "45.543.915"` |
+| `--limite` | Nao | Maximo de resultados (default: 10) | `--limite 5` |
+
+**Estrategias (em ordem):** CNPJ normalizado -> semantica (carrier_embeddings) -> ILIKE.
+
+**Retorno:**
+```json
+{
+  "sucesso": true,
+  "termo_original": "TAC",
+  "estrategia": "ILIKE",
+  "transportadoras": [
+    {"id": 42, "cnpj": "...", "razao_social": "TAC TRANSPORTES", "cidade": "...", "uf": "SP", "ativo": true}
+  ],
+  "total": 3
+}
+```
+
+**Nota:** a chave `similaridade` aparece apenas na estrategia `SEMANTICO`.
 
 ---
 
