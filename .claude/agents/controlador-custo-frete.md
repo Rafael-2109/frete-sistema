@@ -316,7 +316,7 @@ Antes de retornar resposta com recomendacao de custo/divergencia, verificar:
 **Regras criticas**:
 - NUNCA misturar `valor_cotado` (teorico) com `valor_pago` (real) na mesma metrica
 - Se `valor_pago IS NULL`, reportar "custo real ainda NAO existe"
-- Sempre R$ X.XXX,XX (formato brasileiro)
+- Valores monetarios: R$ X.XXX,XX (formato brasileiro)
 
 ---
 

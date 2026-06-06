@@ -298,7 +298,7 @@ FASE 5 (governança) ───────┴──► transversal; T5.1/T5.2 id
 - [x] T3.2 memory injection validation — **escape-na-injeção já existia (G4, 4 tiers de `_load_user_memories_for_context`); fechado o BURACO `<system-reminder>`** (vazava CRU — `_SUSPICIOUS_TAGS` tinha 'system' mas não a variante com hífen; o `(?:\s[^>]*)?/?>` funciona como word-boundary e o hífen quebrava o match) + teste adversarial (11 casos). Fortalece `sanitize_memory_content` (RAG) E `sanitize_user_input` (/api/chat). 35 verdes, 0 regressão. _SHA: c616916ac_
 - [ ] T3.3 session_context granularidade — _SHA:_
 - [ ] T3.4 budget injeção medido — _SHA:_
-- [x] T4.1 imperativos re-validados sob 4.8 — **VERIFICAÇÃO: confirma o R1 sob Opus 4.8 / v4.3.3, ZERO edição justificada** (detalhe na [Nota FASE 4 / T4.1](#nota-de-execucao-fase-4-t41-2026-06-06)). _SHA: — (sem código)_
+- [x] T4.1 imperativos re-validados sob 4.8 — **dial-back POR OCORRÊNCIA** (correção pós-cobrança Rafael 2026-06-06): 3 imperativos de _style_ positivo agressivo suavizados (`R$` caps em `gestor-carvia:148`/`auditor-financeiro:238`/`controlador-custo-frete:319`); safety/domain/P1-P7 + negativas-claras (RT-5.2) MANTIDOS; idioma suavizado nos 2 subagents (decisão Rafael), SP:26 intocado (#787) (detalhe na [Nota FASE 4 / T4.1](#nota-de-execucao-fase-4-t41-2026-06-06)). _SHA: &lt;commit pendente&gt;_
 - [x] T4.2 adaptive thinking — **VERIFICAÇÃO: já implementado e ativo em PROD (web `auto`→`high` Opus, Teams `medium`, 8 subagentes `xhigh`), ZERO edição justificada**. ⚠️ **Achado fora-escopo (revisão profunda)**: `agente_lojas` roda Opus 4.8 SEM thinking — **DIFERIDO p/ sessão própria do Lojas HORA** (decisão Rafael 2026-06-06; NÃO é pendência deste plano). Detalhe na [Nota FASE 4 / T4.2](#nota-de-execucao-fase-4-t42-2026-06-06). _SHA: — (sem código)_
 - [x] T4.3 custom vs preset+append — **DECISÃO: MANTER custom** (POC determinístico + smoke empírico Haiku, 2026-06-06; detalhe na [Nota FASE 4](#nota-de-execucao-fase-4-t43-2026-06-06)). Registro do escopo original: Zona `client.py` / `feature_flags.py` **ISOLADA** — não toca `system_prompt`/`preset`/`CLAUDE.md` nem os arquivos da FASE 5. **Escopo:** POC determinístico comparando o modo atual (`USE_CUSTOM_SYSTEM_PROMPT=true` → string custom em `_build_full_system_prompt`, `client.py:1655-1674`) vs `preset:"claude_code" + append + excludeDynamicSections`. **Premissa a verificar 1º (R-EXEC-3):** o preset `claude_code` do SDK 0.2.89 ainda existe e o que ele injeta hoje (tom/tools/safety) — a string custom "apodrece" porque o preset evolui (a FASE 1 já provou drift). **Critério:** medir tamanho/tokens + cache-prefix + DIFF do que cada modo injeta; **SEM LLM eval** (prova determinística + spot-check). **Coordenação:** editou SÓ esta linha + Nota FASE 4 (FASE 5 fechou em paralelo, `a40331228`). **Resultado:** preset `claude_code` existe no SDK 0.2.89, mas migrar imporia identidade "Claude Code" (header `yoK`, fn `K98` do CLI 2.1.167) ANTES do append + ~5,9K tok de coding-guidance (+13,3% tok/request: custom **18.389** vs preset+append **20.835** tok); `exclude_dynamic_sections` poda só −164 tok; header neutro `hoK` só existe SEM append (incompatível com injetar `system_prompt.md`). Comentário factual corrigido em `client.py`. _SHA: 4e97ffae8_
 - [x] T5.1 gatilho de poda — **delta-based** (`prompt_size_audit.py --check-delta` + baseline.json + hook `pre-commit-prompt-lint.sh` wired no wrapper PAD-A; bloqueia crescimento vs baseline, redução sempre passa; só dispara se o commit toca um dos 3 prompts). 11 pytest + smoke e2e do hook. _SHA: 25c1a860d_
@@ -591,8 +591,10 @@ dry-run / anti-fabricação / `NULLIF`+`revertida=False` = query correctness). *
 que a 1ª passada teria mascarado:** 3 negativos do SP são de *style*, não safety (`:322` "NAO
 use card em lista longa", `:391` "NAO usar artifact p/ tabela simples", `:435` "usuários são
 logística, NAO devs"). MANTER mesmo assim — são **restritivos** (limitam formato/tom), não
-amplificadores de tool; o overtriggering-4.6 que o dial-back ataca **não se aplica a regra
-restritiva**, e reformular p/ positivo = cosmético sem ganho (R-EXEC-5b).
+amplificadores de tool; e reformular p/ positivo PERDERIA a lista específica que os torna
+claros (`:322` listas >8 itens; `:391` tabelas/texto/gráficos; `:435` tools/HTTP/mcp__) —
+**RT-5.2: negativa clara > positiva vaga**. Manter por RT-5.2, NÃO por "cosmético" (ver
+Correção abaixo — a 1ª versão desta nota dava a razão errada).
 
 **Argumento "sob Opus 4.8" (o eixo da task):** o dial-back nasceu para o 4.6 que
 *overtriggerava* com linguagem agressiva. 4.8 é mais literal → o que importa é o **escopo**
@@ -600,9 +602,26 @@ restritiva**, e reformular p/ positivo = cosmético sem ganho (R-EXEC-5b).
 condicional (SC3) ou são invariantes legítimos sem escopo (safety/domain/idioma-#787).
 Suavizar para reduzir "agressividade" resolveria um problema do 4.6 que não se aplica.
 
-**Sem edição de código/prompt. Sem flag. Reversível por definição (nada mudou).** Refactors
-fora do escopo "agressividade de linguagem" (padronizar SC2; referenciar o language_policy
-a partir dos subagents em SC1) ficam registrados como possibilidade, não como pendência.
+**Correção (pós-cobrança do Rafael — 2026-06-06):** o Rafael apontou que a doc (STUDY#1 `:115`,
+BEST_PRACTICES `:236,:243`) sugere dial-back de imperativo/caps de *style* — e estava certo: a 1ª
+versão desta nota usou "mexer é cosmético" (R-EXEC-5b **invertido**) para JUSTIFICAR manter casos
+de style, quando a régua manda **substituir style/routing, manter safety, decidir por ocorrência**.
+Reclassificação (BEST_PRACTICES `:243`):
+- **SUAVIZADO** — style POSITIVO agressivo (`SEMPRE/sempre formato R$`), não sustenta P1-P7 (PM-2.1
+  não bloqueia): `gestor-carvia:148`, `auditor-financeiro:238`, `controlador-custo-frete:319` →
+  declarativo. Instrução de formato preservada. **Decisão por linha**: no `gestor-carvia` o
+  `NUNCA arredondar sem avisar` (integridade financeira) foi MANTIDO no mesmo bloco.
+- **MANTIDO** — negativa CLARA com lista específica (RT-5.2): `:322`/`:391`/`:435`.
+- **MANTIDO** — safety/domain/P1-P7 (doc "manter NEVER em safety" + PM-2.1 cenário A): `NUNCA
+  action_update_taxes`, `FOB SEMPRE completo`, `dry-run OBRIGATÓRIO`, query correctness, etc.
+- **idioma — RESOLVIDO (Rafael decidiu SUAVIZAR, 2026-06-06)**: `SEMPRE responder em Portugues`
+  → `Responda em portugues do Brasil` em `especialista-odoo:34` + `desenvolvedor-integracao-odoo:35`
+  (instrução permanece, só sai o caps). `<language_policy>` SP:26 **NÃO tocado** (é o #787; reabrir
+  = regressão). Risco aceito: reincidência de drift de idioma nos subagents — sinal de alerta =
+  subagente respondendo em inglês; rollback = restaurar o caps.
+
+Prova determinística (sem LLM eval, veto Rafael): instrução de formato permanece (grep) + style
+não toca golden-path. **Não em lote** (PM-2.1 `:405`): 3 edições individuais, mesma categoria.
 
 ### Nota de execução — FASE 4 / T4.2 (2026-06-06)
 

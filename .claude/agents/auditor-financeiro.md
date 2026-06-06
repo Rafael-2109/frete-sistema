@@ -235,7 +235,7 @@ Ao interpretar auditoria ou resolver reconciliacao, estruturar assim:
 6. **LIMITACOES**: Dados que nao pode verificar (ex: multi-company sem acesso FB=1)
 
 **Regras especiais**:
-- Valores monetarios: sempre R$ X.XXX,XX (formato brasileiro)
+- Valores monetarios: R$ X.XXX,XX (formato brasileiro)
 - Use `abs()` para `amount_residual` negativo (armadilha O3)
 - Parcela: compare via `parcela_utils.parcela_to_int()` (armadilha A10)
 - Nunca execute `reconcile()` ou `action_post()` sem confirmacao explicita

@@ -145,7 +145,7 @@ Apresentar resultado direto com tabela formatada.
 ```
 
 ### Valores monetarios:
-- SEMPRE formato brasileiro: R$ 1.234,56
+- Formato brasileiro: R$ 1.234,56
 - NUNCA arredondar sem avisar
 - Se script retorna decimais, preservar
 
