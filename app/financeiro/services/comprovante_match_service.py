@@ -193,9 +193,12 @@ class ComprovanteMatchService:
         if comprovante_ids:
             query = query.filter(ComprovantePagamentoBoleto.id.in_(comprovante_ids))
         else:
-            # Todos que NAO tem lancamento CONFIRMADO ou LANCADO
+            # Todos que NAO tem lancamento CONFIRMADO, LANCADO ou ERRO.
+            # 'ERRO' = quarentena (FIX IMP-2026-06-05-001): o comprovante ja tem um
+            # payment criado no Odoo (execucao interrompida pos-criacao); re-matchear
+            # criaria um lancamento PENDENTE novo mascarando o payment orfao existente.
             subq = db.session.query(LancamentoComprovante.comprovante_id).filter(
-                LancamentoComprovante.status.in_(['CONFIRMADO', 'LANCADO'])
+                LancamentoComprovante.status.in_(['CONFIRMADO', 'LANCADO', 'ERRO'])
             )
             query = query.filter(~ComprovantePagamentoBoleto.id.in_(subq))
 

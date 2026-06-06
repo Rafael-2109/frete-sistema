@@ -37,6 +37,19 @@ Indice de execucoes do dialogo de melhoria Agent SDK <-> Claude Code.
 | 31 | 2026-05-28 | 0 | 0 | 0 | 0 | SKIP (sem backlog) |
 | 32 | 2026-05-29 | 1 | 0 | 1 | 0 | OK (peso cubado CarVia ja existe + formula proposta incorreta; causa-raiz real = matching de nome modelo<->NF) |
 | 33 | 2026-06-02 | 1 | 0 | 0 | 1 | OK (re-incidencia do #32 — proposta; premissas falsas: coluna inexistente + formula ja usa max; causa-raiz real = cotacao nao cobre modelo "MIA MOTO CHEFE" da NF) |
+| 34 | 2026-06-06 | 2 | 1 | 1 | 0 | OK (IMP-001 critico: anti-duplicacao payment comprovante — quarentena+idempotencia em services, 5 TDD; IMP-002 rejeitado: ja resolvido pelo fix I4 CarVia) |
+
+## 2026-06-06
+- **OK** — 2 sugestoes avaliadas: 1 respondida (implementada), 1 rejeitada. v2 persistida (IDs 128, 129). Commit direto em `main`.
+- **IMP-2026-06-05-001 "Batch lancar comprovantes duplica payment no Odoo"** (critical, skill_bug): **CONFIRMADO no codigo**. `lancar_no_odoo` cria o `account.payment` antes de reconciliar; o `except` salvava `erro_lancamento` mas NAO mudava `status` (ficava `CONFIRMADO`), e `lancar_batch` reprocessa todos os `CONFIRMADO` → cada rodada criava OUTRO payment orfao (incidente PROD 05/06: R$ 29.522,03 em 3 payments).
+  - **Implementado (auto, apenas em `services/*.py`)**:
+    - `comprovante_lancamento_service.py`: `STATUS_QUARENTENA='ERRO'` + `_payment_existe_e_postado` + `_checar_guarda_idempotencia` + flag `payment_criado`. Falha pos-criacao → `status='ERRO'` (batch nao reprocessa). Payment ja postado pre-existente → quarentena sem recriar. Residuo de rollback (payment inexistente) → limpa e prossegue. Aplicado em `lancar_no_odoo` e `_lancar_titulo_individual` (cobre worker batch).
+    - `comprovante_match_service.py:~198`: re-matching exclui `status='ERRO'` (comprovante em quarentena nao reaparece mascarando payment orfao).
+  - **Sem migration** (`status` e `String(20)` sem CHECK). UI ja suporta (badge fallback + exibe erro).
+  - **TDD**: `tests/financeiro/test_comprovante_lancamento_quarentena.py` (5 casos). `tests/financeiro/`: 61 passed, zero regressao.
+  - **Propostas (tocam routes/models, fora do escopo auto)**: P1 endpoint `desconfirmar` (CONFIRMADO/ERRO → PENDENTE/REJEITADO) + botao no hub; P2 coluna `odoo_payment_ids` para acumular todos os IDs.
+- **IMP-2026-06-05-002 "AdminService.excluir_fatura_cliente nao nulifica carvia_fretes.fatura_cliente_id"** (warning, gotcha_report): **REJEITADO — ja resolvido**. O fix exato existe em PROD desde o fix I4 (`REVISAO_ARQUITETURA_2026`), aplicado entre a criacao da sugestao (05/06 19:01) e a avaliacao do D8. `admin_service.py:225-230` nulifica `CarviaFrete.fatura_cliente_id` antes do delete e registra `fretes_desvinculados` na auditoria; teste `tests/carvia/test_admin_delete_fatura_fk.py` (2 casos) verde. Sugestao usava numeracao de linha pre-fix.
+- **Gate A3 (PASSO 3.5)**: pulado — mudanca so tocou services de financeiro + teste, nenhum agente com golden dataset afetado.
 
 ## 2026-06-02
 - **OK** — 1 sugestao avaliada e **respondida com PROPOSTA** (`IMP-2026-06-01-001`); v2 persistida (`auto_implemented=false`).

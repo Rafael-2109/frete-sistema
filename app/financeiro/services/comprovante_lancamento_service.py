@@ -47,6 +47,12 @@ class ComprovanteLancamentoService:
     Serviço para lançar pagamentos no Odoo a partir de comprovantes confirmados.
     """
 
+    # Status de quarentena: lançamento cujo payment já foi criado no Odoo mas a
+    # reconciliação falhou depois. NÃO é reprocessado pelo batch (que busca apenas
+    # status='CONFIRMADO') — impede a criação de payments órfãos duplicados.
+    # (FIX IMP-2026-06-05-001)
+    STATUS_QUARENTENA = 'ERRO'
+
     def __init__(self):
         self._baixa_service = None
         self.estatisticas = {
@@ -62,6 +68,84 @@ class ComprovanteLancamentoService:
             from app.financeiro.services.baixa_pagamentos_service import BaixaPagamentosService
             self._baixa_service = BaixaPagamentosService()
         return self._baixa_service
+
+    # =========================================================================
+    # IDEMPOTÊNCIA / QUARENTENA (FIX IMP-2026-06-05-001)
+    # =========================================================================
+
+    def _payment_existe_e_postado(self, payment_id: Optional[int]) -> bool:
+        """Verifica se um account.payment existe e está postado no Odoo.
+
+        Usado pela guarda de idempotência. Em caso de falha na verificação
+        (Odoo indisponível, timeout), retorna True — lado financeiramente
+        seguro: assume que o payment pode existir, evitando duplicação.
+        """
+        if not payment_id:
+            return False
+        try:
+            registros = self.baixa_service.connection.search_read(
+                'account.payment',
+                [['id', '=', payment_id]],
+                fields=['id', 'state'],
+                limit=1,
+            )
+            if not registros:
+                return False
+            return registros[0].get('state') == 'posted'
+        except Exception as e:
+            logger.warning(
+                f"  [Idempotencia] Falha ao verificar payment {payment_id} no Odoo: {e}. "
+                f"Assumindo que existe (nao duplicar)."
+            )
+            return True
+
+    def _checar_guarda_idempotencia(self, lanc: LancamentoComprovante) -> Optional[Dict]:
+        """Impede criar um 2º payment para um lançamento que já gerou um.
+
+        Cenário: uma execução anterior criou o payment mas falhou na etapa
+        seguinte (reconciliação), deixando o lançamento preso. Sem esta guarda,
+        cada nova rodada do batch criava OUTRO payment órfão postado no Odoo.
+
+        - Se odoo_payment_id existe E o payment está postado no Odoo:
+          move para quarentena ('ERRO') e retorna dict de erro (NÃO recriar).
+        - Se odoo_payment_id é resíduo de rollback (payment inexistente no Odoo):
+          limpa o campo e retorna None (seguro recriar).
+        - Se não há odoo_payment_id: retorna None (fluxo normal).
+
+        NÃO persiste — o caller decide commit (lancar_no_odoo) ou flush
+        (_lancar_titulo_individual).
+        """
+        if not lanc.odoo_payment_id:
+            return None
+
+        if self._payment_existe_e_postado(lanc.odoo_payment_id):
+            lanc.status = self.STATUS_QUARENTENA
+            lanc.erro_lancamento = (
+                f'Quarentena: payment {lanc.odoo_payment_id} ja existe e esta postado '
+                f'no Odoo (execucao anterior interrompida apos a criacao). Resolver '
+                f'manualmente (reconciliar ou cancelar o payment) antes de relancar.'
+            )
+            logger.error(
+                f"  [Idempotencia] Lancamento {lanc.id} movido p/ "
+                f"{self.STATUS_QUARENTENA}: payment {lanc.odoo_payment_id} ja postado "
+                f"no Odoo. Evitando duplicacao."
+            )
+            return {
+                'sucesso': False,
+                'lancamento_id': lanc.id,
+                'erro': lanc.erro_lancamento,
+                'quarentena': True,
+            }
+
+        # Resíduo de rollback: payment_id setado mas inexistente no Odoo.
+        logger.warning(
+            f"  [Idempotencia] Lancamento {lanc.id} tinha odoo_payment_id="
+            f"{lanc.odoo_payment_id} residual (payment inexistente no Odoo — rollback). "
+            f"Limpando e prosseguindo."
+        )
+        lanc.odoo_payment_id = None
+        lanc.odoo_payment_name = None
+        return None
 
     # =========================================================================
     # LANÇAMENTO INDIVIDUAL (SÍNCRONO)
@@ -126,6 +210,12 @@ class ComprovanteLancamentoService:
             f"journal_id={journal_id}, valor={comp.valor_pago}"
         )
 
+        # FIX IMP-2026-06-05-001: rastreia se o payment foi criado nesta execução.
+        # Se uma exceção ocorrer DEPOIS da criação, o lançamento vai para quarentena
+        # ('ERRO') em vez de ficar em CONFIRMADO — impedindo que o batch reprocesse
+        # e crie um payment órfão duplicado.
+        payment_criado = False
+
         try:
             # 0. Verificar se o título ainda tem saldo a pagar no Odoo
             titulo_check = self.baixa_service.buscar_titulo_por_id(lanc.odoo_move_line_id)
@@ -145,6 +235,13 @@ class ComprovanteLancamentoService:
                     f"Sincronizando sem criar payment."
                 )
                 return self._sincronizar_titulo_ja_quitado(lanc, comp, titulo_check, usuario)
+
+            # 0b. Guarda de idempotência: se uma execução anterior já criou um payment
+            # para este lançamento mas falhou depois, NÃO criar outro (duplicação Odoo).
+            guarda = self._checar_guarda_idempotencia(lanc)
+            if guarda is not None:
+                db.session.commit()
+                return guarda
 
             # 1. Determinar se há juros (valor_pago > valor do título)
             valor_pago = float(comp.valor_pago)
@@ -184,6 +281,7 @@ class ComprovanteLancamentoService:
 
             lanc.odoo_payment_id = payment_id
             lanc.odoo_payment_name = payment_name
+            payment_criado = True  # a partir daqui, falhas levam à quarentena
 
             if not usou_writeoff:
                 # 2. Postar payment (wizard já posta automaticamente)
@@ -336,14 +434,24 @@ class ComprovanteLancamentoService:
         except Exception as e:
             logger.error(f"  ❌ Erro no lançamento {lancamento_id}: {e}", exc_info=True)
 
-            # Salvar erro sem reverter status
             lanc.erro_lancamento = str(e)[:1000]
+            # FIX IMP-2026-06-05-001: se o payment já foi criado nesta execução, NÃO
+            # deixar em CONFIRMADO (o batch reprocessaria e criaria outro payment).
+            # Mover para quarentena exige resolução manual antes de relançar.
+            if payment_criado:
+                lanc.status = self.STATUS_QUARENTENA
+                logger.error(
+                    f"  Lancamento {lancamento_id} movido p/ {self.STATUS_QUARENTENA} "
+                    f"(payment {lanc.odoo_payment_id} criado, etapa seguinte falhou). "
+                    f"NAO sera reprocessado pelo batch."
+                )
             db.session.commit()
 
             return {
                 'sucesso': False,
                 'lancamento_id': lancamento_id,
                 'erro': str(e),
+                'quarentena': payment_criado,
             }
 
     # =========================================================================
@@ -585,6 +693,9 @@ class ComprovanteLancamentoService:
             f"juros=R$ {juros:.2f}"
         )
 
+        # FIX IMP-2026-06-05-001: ver lancar_no_odoo. Idêntico para Multi-NF.
+        payment_criado = False
+
         try:
             # 0. Verificar saldo no Odoo
             titulo_check = self.baixa_service.buscar_titulo_por_id(lanc.odoo_move_line_id)
@@ -603,6 +714,12 @@ class ComprovanteLancamentoService:
                 )
                 result = self._sincronizar_titulo_ja_quitado(lanc, comp, titulo_check, usuario)
                 return {**result, 'credit_line_id': None}
+
+            # 0b. Guarda de idempotência (anti-duplicação) — ver lancar_no_odoo.
+            guarda = self._checar_guarda_idempotencia(lanc)
+            if guarda is not None:
+                db.session.flush()
+                return {**guarda, 'credit_line_id': None}
 
             # 1. Determinar valor do payment e juros
             # No Multi-NF, juros já vem distribuído proporcionalmente
@@ -641,6 +758,7 @@ class ComprovanteLancamentoService:
 
             lanc.odoo_payment_id = payment_id
             lanc.odoo_payment_name = payment_name
+            payment_criado = True  # a partir daqui, falhas levam à quarentena
 
             if not usou_writeoff:
                 # 2. Postar payment
@@ -713,11 +831,19 @@ class ComprovanteLancamentoService:
         except Exception as e:
             logger.error(f"    Erro título {lanc.id}: {e}", exc_info=True)
             lanc.erro_lancamento = str(e)[:1000]
+            # FIX IMP-2026-06-05-001: payment criado + falha posterior -> quarentena.
+            if payment_criado:
+                lanc.status = self.STATUS_QUARENTENA
+                logger.error(
+                    f"    Titulo {lanc.id} movido p/ {self.STATUS_QUARENTENA} "
+                    f"(payment {lanc.odoo_payment_id} criado, etapa seguinte falhou)."
+                )
             db.session.flush()
             return {
                 'sucesso': False,
                 'lancamento_id': lanc.id,
                 'erro': str(e),
+                'quarentena': payment_criado,
             }
 
     def _reconciliar_grupo_com_extrato(
