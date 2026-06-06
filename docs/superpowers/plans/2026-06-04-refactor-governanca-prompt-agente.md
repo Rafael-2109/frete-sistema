@@ -13,8 +13,13 @@ atualizado: 2026-06-04
 > (`preset_operacional.md` + `system_prompt.md` + injeções de runtime) e instalar a
 > governança que impede o problema de voltar. Origem: avaliação de 2026-06-04.
 
-> 🔵 **PRÓXIMA SESSÃO — RETOMAR AQUI:** **FASES 0, 1, 2 e 5 FECHADAS** (em PROD; ver
+> 🔵 **PRÓXIMA SESSÃO — RETOMAR AQUI:** **FASES 0, 1, 2, 4 e 5 FECHADAS** (em PROD; ver
 > [Nota FASE 2](#nota-de-execucao-fase-2-2026-06-05) + [Rastreamento](#rastreamento-de-execucao-append-only)).
+> **FASE 4 fechou 2026-06-06 — as 3 tasks viraram VERIFICAÇÃO** (T4.1 imperativos: confirma R1 sob
+> Opus 4.8, zero edição · T4.2 adaptive thinking: já implementado e ativo, zero edição · T4.3 custom
+> vs preset: manter custom): nenhuma mudou comportamento; só falta o OK formal do Checkpoint 4 🔴.
+> **Resta só a FASE 3:** T3.1+T3.2 FEITAS; **T3.3/T3.4** (bloqueadas por medição de cache/custo —
+> tráfego pós-fix T0.2; T3.3 provável no-op) + **T3.1 test vectors §11** (você, no agente web).
 > FASE 2: gate `action_update_taxes` em código (T2.1, `8954563fe`) + poda de altitude `system_prompt`
 > 858→765 (−93L; T2.2 `1c60d0bfe` + correção `fee8f1f17`). **Lição (após ler as FONTES STUDY+QUALITY_REVIEW):**
 > a meta NÃO é tamanho (STUDY #7: Anthropic não segue "short prompts"; QUALITY_REVIEW: ROI de enxugar
@@ -293,8 +298,8 @@ FASE 5 (governança) ───────┴──► transversal; T5.1/T5.2 id
 - [x] T3.2 memory injection validation — **escape-na-injeção já existia (G4, 4 tiers de `_load_user_memories_for_context`); fechado o BURACO `<system-reminder>`** (vazava CRU — `_SUSPICIOUS_TAGS` tinha 'system' mas não a variante com hífen; o `(?:\s[^>]*)?/?>` funciona como word-boundary e o hífen quebrava o match) + teste adversarial (11 casos). Fortalece `sanitize_memory_content` (RAG) E `sanitize_user_input` (/api/chat). 35 verdes, 0 regressão. _SHA: c616916ac_
 - [ ] T3.3 session_context granularidade — _SHA:_
 - [ ] T3.4 budget injeção medido — _SHA:_
-- [ ] T4.1 imperativos re-validados sob 4.8 — _SHA:_
-- [ ] T4.2 adaptive thinking — _SHA:_
+- [x] T4.1 imperativos re-validados sob 4.8 — **VERIFICAÇÃO: confirma o R1 sob Opus 4.8 / v4.3.3, ZERO edição justificada** (detalhe na [Nota FASE 4 / T4.1](#nota-de-execucao-fase-4-t41-2026-06-06)). _SHA: — (sem código)_
+- [x] T4.2 adaptive thinking — **VERIFICAÇÃO: já implementado e ativo em PROD (web `auto`→`high` Opus, Teams `medium`, 8 subagentes `xhigh`), ZERO edição justificada**. ⚠️ **Achado fora-escopo (revisão profunda)**: `agente_lojas` roda Opus 4.8 SEM thinking — **DIFERIDO p/ sessão própria do Lojas HORA** (decisão Rafael 2026-06-06; NÃO é pendência deste plano). Detalhe na [Nota FASE 4 / T4.2](#nota-de-execucao-fase-4-t42-2026-06-06). _SHA: — (sem código)_
 - [x] T4.3 custom vs preset+append — **DECISÃO: MANTER custom** (POC determinístico + smoke empírico Haiku, 2026-06-06; detalhe na [Nota FASE 4](#nota-de-execucao-fase-4-t43-2026-06-06)). Registro do escopo original: Zona `client.py` / `feature_flags.py` **ISOLADA** — não toca `system_prompt`/`preset`/`CLAUDE.md` nem os arquivos da FASE 5. **Escopo:** POC determinístico comparando o modo atual (`USE_CUSTOM_SYSTEM_PROMPT=true` → string custom em `_build_full_system_prompt`, `client.py:1655-1674`) vs `preset:"claude_code" + append + excludeDynamicSections`. **Premissa a verificar 1º (R-EXEC-3):** o preset `claude_code` do SDK 0.2.89 ainda existe e o que ele injeta hoje (tom/tools/safety) — a string custom "apodrece" porque o preset evolui (a FASE 1 já provou drift). **Critério:** medir tamanho/tokens + cache-prefix + DIFF do que cada modo injeta; **SEM LLM eval** (prova determinística + spot-check). **Coordenação:** editou SÓ esta linha + Nota FASE 4 (FASE 5 fechou em paralelo, `a40331228`). **Resultado:** preset `claude_code` existe no SDK 0.2.89, mas migrar imporia identidade "Claude Code" (header `yoK`, fn `K98` do CLI 2.1.167) ANTES do append + ~5,9K tok de coding-guidance (+13,3% tok/request: custom **18.389** vs preset+append **20.835** tok); `exclude_dynamic_sections` poda só −164 tok; header neutro `hoK` só existe SEM append (incompatível com injetar `system_prompt.md`). Comentário factual corrigido em `client.py`. _SHA: 4e97ffae8_
 - [x] T5.1 gatilho de poda — **delta-based** (`prompt_size_audit.py --check-delta` + baseline.json + hook `pre-commit-prompt-lint.sh` wired no wrapper PAD-A; bloqueia crescimento vs baseline, redução sempre passa; só dispara se o commit toca um dos 3 prompts). 11 pytest + smoke e2e do hook. _SHA: 25c1a860d_
 - [x] T5.2 doc auto-medida — **bloco entre marcadores `<!-- prompt-size:start/end -->` no `app/agente/CLAUDE.md`, reescrito por `--update-claude-md`** (idempotente; números manuais defasados "~17.5K/~14.9K/103L" removidos → apontam para o bloco). _SHA: 68b190a57_
@@ -540,6 +545,114 @@ se uma versão futura do SDK expuser "preset mínimo só‑identidade `hoK` + ap
 reavaliar — hoje inexistente. Observação 2ª ordem (não-zona, registrada p/ FASE 5): a estimativa
 `bytes/3.5` do `prompt_size_audit.py` subestima ~16% vs tokenizer real (custom: ~16,2K est. vs
 18,4K real; divisor real ≈ 3,08).
+
+### Nota de execução — FASE 4 / T4.1 (2026-06-06)
+
+Re-validar os imperativos do `system_prompt` + os 7 soft candidates do R1 sob Opus 4.8.
+**Resultado: VERIFICAÇÃO — confirma o R1 integralmente sob v4.3.3 + Opus 4.8; ZERO edição
+justificada** (R-EXEC-3: a premissa do dial-back não se sustenta → a task vira verificação).
+Mesmo padrão do próprio R1 (audit-only, ROADMAP downgrade P0→P3) e da T4.3 (manter custom).
+
+**Premissa re-verificada (R-EXEC-3):** o R1 auditou v4.2.0 (407L) + 12 agents em abr/2026.
+Re-localizei tudo sob v4.3.3 (765L): os 7 soft candidates ainda existem (linhas só +2); o
+system_prompt cresceu e foi comprimido desde então → re-auditei também os imperativos novos.
+
+**`system_prompt.md` — 8 imperativos positivos, TODOS legítimos (zero style puro):**
+`:26` idioma (language_policy #787) · `:34` `.rem`=CNAB (declarativo factual) · `:88`
+"SEMPRE/NUNCA" (metadata, é definição não instrução) · `:137` nova consulta (data
+integrity / query correctness) · `:711` FOB completo (business rule L3) · `:390`/`:563`
+marker/link DEVE (functional requirement) · `:515` UPDATE/DELETE PROIBIDO (safety
+append-only R12.2). **Confirma o R1 sob v4.3.3:** o SP não tem gordura imperativa de style
+(coerente — a FASE 2 já passou nele com a régua de altitude).
+
+**7 soft candidates (todos em subagent) — veredito por candidato:**
+- **SC1 idioma** (`especialista-odoo:34`, `desenvolvedor-integracao-odoo:35` "SEMPRE
+  responder em Portugues"): **MANTER**. A premissa do R1 MUDOU — após abril o #787 elevou
+  idioma de *style* a *invariante* (drift de idioma foi bug real; `system_prompt:26` foi
+  reforçado com SEMPRE de propósito). Dial-back aqui = REGRESSÃO. Sob 4.8 (mais literal) o
+  imperativo ajuda a travar PT-BR. (Bônus: nos 2 agents o "SEMPRE responder em Portugues"
+  divide bloco com "NUNCA inventar campos"/"SEMPRE confirmar antes de ESCRITA" = safety L1 +
+  reversibility, que NÃO se toca.)
+- **SC2 formato R$** (`gestor-carvia:148` caps; `auditor-financeiro:238`,
+  `controlador-custo-frete:319` já em minúsculo): **MANTER**. Cosmético de valor nulo
+  (R-EXEC-5b "remove causa erro mensurável?" = não; régua anti-cosmético, T2.2 1ª tentativa).
+- **SC3 routing** (`gestor-carvia:66`, `gestor-estoque-producao:174` resolvendo-entidades):
+  **MANTER**. O escopo condicional JÁ EXISTE (`gestor-carvia:64` "Se o usuario fornece nome
+  generico"; `gestor-estoque:174` "quando usuario fornecer nome generico") — formato ideal
+  `X when Y`. A leitura da FONTE derrubou a hipótese inicial de "tornar condicional": já é.
+
+**Cobertura AMPLIADA (correção de superficialidade, a pedido do Rafael — 2026-06-06):** a 1ª
+passada validou só o escopo do R1 (6 agents) e classificou os negativos do SP por atacado —
+fraco. Revisão estendeu para o **universo atual = 16 agents** (10 NUNCA auditados por ninguém:
+`gestor-ssw` 9 imperativos, `analista-performance-logistica` 6, `gestor-recebimento` 5, etc.) +
+os **16 `NUNCA` e 27 `NAO` do SP classificados caso a caso**. Resultado: **0 soft candidate de
+AÇÃO novo** — os agents pós-abril nascem corretos (herdaram `PROTOCOLO DE CONFIABILIDADE` /
+dry-run / anti-fabricação / `NULLIF`+`revertida=False` = query correctness). **Achado honesto
+que a 1ª passada teria mascarado:** 3 negativos do SP são de *style*, não safety (`:322` "NAO
+use card em lista longa", `:391` "NAO usar artifact p/ tabela simples", `:435` "usuários são
+logística, NAO devs"). MANTER mesmo assim — são **restritivos** (limitam formato/tom), não
+amplificadores de tool; o overtriggering-4.6 que o dial-back ataca **não se aplica a regra
+restritiva**, e reformular p/ positivo = cosmético sem ganho (R-EXEC-5b).
+
+**Argumento "sob Opus 4.8" (o eixo da task):** o dial-back nasceu para o 4.6 que
+*overtriggerava* com linguagem agressiva. 4.8 é mais literal → o que importa é o **escopo**
+(gatilho condicional), não a agressividade. Todos os imperativos examinados ou têm escopo
+condicional (SC3) ou são invariantes legítimos sem escopo (safety/domain/idioma-#787).
+Suavizar para reduzir "agressividade" resolveria um problema do 4.6 que não se aplica.
+
+**Sem edição de código/prompt. Sem flag. Reversível por definição (nada mudou).** Refactors
+fora do escopo "agressividade de linguagem" (padronizar SC2; referenciar o language_policy
+a partir dos subagents em SC1) ficam registrados como possibilidade, não como pendência.
+
+### Nota de execução — FASE 4 / T4.2 (2026-06-06)
+
+Adaptive thinking para decisões críticas (P1-P7, Odoo-write). **Resultado: VERIFICAÇÃO —
+JÁ implementado e ativo em todos os paths de produção; ZERO edição justificada** (R-EXEC-3:
+a migração que o R6 pedia já aconteceu organicamente via upgrades do SDK + seletor de effort).
+Terceira verificação da FASE 4 (T4.1, T4.3 idem) — coerente com "re-validação estratégica".
+
+**Premissa re-verificada (R-EXEC-3) — o que R6 pedia vs o que existe:**
+- `thinking:{type:"adaptive"}` + campo nativo `effort` substituindo `budget_tokens` manual:
+  ✅ FEITO (`client.py:1716-1735`; o próprio comentário `:1711` diz "substitui o workaround").
+- Adaptive thinking nas decisões críticas: ✅ todos os paths de PROD têm thinking ligado:
+  - **Web principal**: seletor default `'auto'` → Opus = `high` (`chat.js:367-372`) → seta
+    `effort=high` + `thinking:{adaptive,display:omitted}`.
+  - **Teams principal**: `effort_level="medium"` hardcoded (`app/teams/services.py:772,1194`).
+  - **8 subagentes Opus pesados** (P1-P7 via `analista-carteira`; Odoo via `especialista-odoo`/
+    `gestor-*`/`auditor-financeiro`; + `auditor-sped-ecd`): `effort: xhigh` no frontmatter.
+  - **Haiku**: `off` (apropriado). O fallback backend `'off'` (`chat.py:110`) NUNCA é atingido
+    em PROD — web e Teams sempre passam effort explícito.
+
+**Critérios R6 — status:**
+| Critério R6 | Estado |
+|---|---|
+| `budget_tokens` → adaptive+effort | ✅ feito |
+| adaptive p/ decisões críticas | ✅ web `high` / Teams `medium` / subagentes `xhigh` |
+| flag `USE_ADAPTIVE_THINKING` | ⚠️ não existe nominal — governança equivalente (seletor `auto` + campo nativo + `agent_thinking_display` per-user). Criar agora = cerimônia sem ganho. |
+| rollout 1→5→all | N/A — já em PROD via seletor |
+| Sonnet → `low` default | ⚠️ **divergência**: código usa Sonnet → `medium` (`chat.js:371`). Baixo impacto (Opus é o default; Sonnet pouco usado; `medium` defensável). Recomendo MANTER. |
+| latência p95 <30% / custo <20% | ⏳ **trem perdido**: a guarda do R6 pressupunha rollout gated com baseline ANTES; como a adoção foi orgânica, não há grupo de controle "sem thinking". Avaliação possível = custo ABSOLUTO atual (`agent_session_costs`, pós-fix T0.2), não delta — = mesma pendência genérica de custo de produção. |
+
+**Achado da revisão profunda (correção de superficialidade — 2026-06-06):** a 1ª passada não
+olhou o **`agente_lojas`** (Lojas HORA). Ele herda `model="claude-opus-4-8"` de `AgentSettings`
+(`settings.py:36`) mas **NÃO seta `effort`/`thinking`** em `options_kwargs` (`client.py:218-290`,
+só model/skills/session/output) → roda **Opus 4.8 SEM extended thinking**. Inconsistente com TODOS
+os paths Nacom (web `high` / Teams `medium`). **Fora do escopo estrito de T4.2** (P1-P7/Odoo-write
+Nacom; Lojas HORA é domínio isolado, sem Odoo-write Nacom), então NÃO altera o veredito da task.
+**Decisão Rafael (2026-06-06): tratar numa sessão PRÓPRIA do Lojas HORA, fora deste plano** —
+opções então: (a) ligar `effort` no `agente_lojas` (coerência) OU (b) se as tarefas de loja são
+simples, baixar o modelo Opus → Sonnet/Haiku (Opus $5/$25 vs Haiku $0.25/$1.25 — pode estar
+pagando Opus sem usar o thinking que o justifica). Registrado aqui só como ponteiro, NÃO como
+pendência da FASE 4.
+
+**Resíduo real (seu, janela com tráfego):** avaliar o custo absoluto do `effort=high` default
+no web Opus contra o orçamento (via `agent_session_costs`). Não bloqueante — é a mesma medição
+de custo de produção já listada em T0.3.
+
+**Sem edição de código. Sem flag nova. Divergência Sonnet=`medium` registrada (recomendação:
+manter).** Drift de doc colateral (não-zona): o `app/agente/CLAUDE.md` afirma "7 subagentes
+xhigh"; são **8** (`auditor-sped-ecd` entrou depois) — anotado para a governança de doc, fora
+do escopo T4.2.
 
 ---
 

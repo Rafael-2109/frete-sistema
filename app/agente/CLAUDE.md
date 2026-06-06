@@ -839,8 +839,8 @@ Apos baseline numerico estavel: prosseguir para **Fase B (Quality)**.
   `client.py`, propagado em `StreamEvent('done').content['api_error_status']` e SSE
   `done_payload`. Sentry tag `anthropic_http_status` (e `anthropic_http_5xx=true` quando
   >= 500) para classificar 429/500/529 sem inspecao de string em `errors[]`.
-- **Effort xhigh per-subagente** (SDK 0.1.74): 7 subagentes Opus pesados (`analista-carteira`,
-  `auditor-financeiro`, `desenvolvedor-integracao-odoo`, `especialista-odoo`,
+- **Effort xhigh per-subagente** (SDK 0.1.74): 8 subagentes Opus pesados (`analista-carteira`,
+  `auditor-financeiro`, `auditor-sped-ecd`, `desenvolvedor-integracao-odoo`, `especialista-odoo`,
   `gestor-recebimento`, `gestor-motos-assai`, `raio-x-pedido`) marcados `effort: xhigh` no
   frontmatter. `agent_loader.py` parseia com forward-compat (`_SDK_HAS_EFFORT_FIELD`
   introspection). Sonnet ignorado (xhigh fallback para high = no-op).
