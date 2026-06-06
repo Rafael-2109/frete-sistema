@@ -293,7 +293,22 @@ def register_conciliacao_routes(bp):
             if filtro_cnpj:
                 cnpj_c = ''.join(c for c in (d.get('cnpj_cliente') or '') if c.isdigit())
                 cnpj_t = ''.join(c for c in (d.get('cnpj_transportadora') or '') if c.isdigit())
-                if filtro_cnpj not in cnpj_c and filtro_cnpj not in cnpj_t:
+                # I5: tambem casar destinatario/remetente da carga (enrichment de
+                # fatura_cliente) — em frete o pagador pode ser o destinatario.
+                cnpjs_carga = [
+                    ''.join(c for c in (dest.get('cnpj') or '') if c.isdigit())
+                    for dest in (d.get('destinatarios') or [])
+                    if isinstance(dest, dict)
+                ]
+                cnpj_rem = ''.join(c for c in (d.get('remetente_cnpj') or '') if c.isdigit())
+                if cnpj_rem:
+                    cnpjs_carga.append(cnpj_rem)
+                casou = (
+                    filtro_cnpj in cnpj_c
+                    or filtro_cnpj in cnpj_t
+                    or any(filtro_cnpj in cc for cc in cnpjs_carga if cc)
+                )
+                if not casou:
                     return False
             if filtro_numero:
                 if filtro_numero not in str(d.get('numero') or '').upper():

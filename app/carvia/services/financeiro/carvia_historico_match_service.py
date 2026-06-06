@@ -77,7 +77,8 @@ class CarviaHistoricoMatchService:
 
         Args:
             linha: CarviaExtratoLinha — linha bancaria conciliada
-            tipo_documento: str — apenas 'fatura_cliente' e processado no escopo atual
+            tipo_documento: str — tipo do doc conciliado (fatura_cliente,
+                fatura_transportadora, despesa, custo_entrega); gravado real (I6)
             documento_id: int — id do documento conciliado
             conciliacao_id: int|None — ponteiro solto para audit
 
@@ -179,7 +180,9 @@ class CarviaHistoricoMatchService:
                     descricao_linha_raw=descricao_raw,
                     descricao_tokens=descricao_tokens,
                     cnpj_pagador=cnpj,
-                    tipo_documento='fatura_cliente',
+                    # I6: gravar o tipo REAL (antes era hardcoded 'fatura_cliente',
+                    # o que impedia o lado pagar/transportadora de acumular historico).
+                    tipo_documento=tipo_documento,
                     conciliacao_id=conciliacao_id,
                     registrado_em=agora_utc_naive(),
                 )
@@ -238,8 +241,10 @@ class CarviaHistoricoMatchService:
                 CarviaHistoricoMatchExtrato.cnpj_pagador,
                 db.func.count().label('ocorrencias'),
             ).filter(
+                # I6: nao filtra por tipo — o boost em pontuar_documentos casa
+                # por cnpj_doc (cliente OU transportadora), entao o lado pagar
+                # tambem se beneficia do historico aprendido por contraparte.
                 CarviaHistoricoMatchExtrato.descricao_tokens == tokens,
-                CarviaHistoricoMatchExtrato.tipo_documento == 'fatura_cliente',
             ).group_by(
                 CarviaHistoricoMatchExtrato.cnpj_pagador,
             ).all()
@@ -299,8 +304,9 @@ class CarviaHistoricoMatchService:
                 CarviaHistoricoMatchExtrato.cnpj_pagador,
                 db.func.count().label('ocorrencias'),
             ).filter(
+                # I6: sem filtro de tipo (ver cnpjs_aprendidos) — historico de
+                # todos os tipos contribui; o match por cnpj_doc escopa no boost.
                 CarviaHistoricoMatchExtrato.descricao_tokens.in_(tokens_unicos),
-                CarviaHistoricoMatchExtrato.tipo_documento == 'fatura_cliente',
             ).group_by(
                 CarviaHistoricoMatchExtrato.descricao_tokens,
                 CarviaHistoricoMatchExtrato.cnpj_pagador,

@@ -191,7 +191,7 @@ class AdminService:
         """
         from app.carvia.models import (
             CarviaFaturaCliente, CarviaFaturaClienteItem,
-            CarviaOperacao, CarviaCteComplementar,
+            CarviaOperacao, CarviaCteComplementar, CarviaFrete,
         )
 
         fatura = CarviaFaturaCliente.query.get(fatura_id)
@@ -222,6 +222,13 @@ class AdminService:
             if cte_comp.status == 'FATURADO':
                 cte_comp.status = 'EMITIDO'
 
+        # 2b. Nullify CarviaFrete.fatura_cliente_id — a FK e declarada sem
+        # ON DELETE (NO ACTION no Postgres), entao um frete apontando para a
+        # fatura bloquearia o delete com IntegrityError. (REVISAO_ARQUITETURA_2026 I4)
+        fretes_desvinculados = CarviaFrete.query.filter_by(
+            fatura_cliente_id=fatura_id
+        ).update({'fatura_cliente_id': None}, synchronize_session=False)
+
         # 3. Limpeza financeira
         self._limpar_movimentacao_financeira('fatura_cliente', fatura_id)
 
@@ -243,6 +250,7 @@ class AdminService:
                 'itens_deletados': len(itens),
                 'ops_revertidas': len(ops_vinculadas),
                 'ctes_comp_revertidos': len(ctes_comp),
+                'fretes_desvinculados': fretes_desvinculados,
             },
         )
 
@@ -268,7 +276,8 @@ class AdminService:
         """
         from app.carvia.models import (
             CarviaFaturaTransportadora, CarviaFaturaTransportadoraItem,
-            CarviaSubcontrato, CarviaConciliacao,
+            CarviaSubcontrato, CarviaConciliacao, CarviaFrete,
+            CarviaContaCorrenteTransportadora, CarviaCustoEntrega,
         )
 
         fatura = CarviaFaturaTransportadora.query.get(fatura_id)
@@ -298,6 +307,24 @@ class AdminService:
             if sub.status == 'FATURADO':
                 sub.status = 'CONFIRMADO'
 
+        # 1b. Nullify CarviaFrete + ContaCorrente (FKs sem ON DELETE = NO ACTION,
+        # bloqueariam o delete) e reverter status dos CustoEntrega (a FK e
+        # SET NULL, mas o DB nao reverte o status). (REVISAO_ARQUITETURA_2026 I4)
+        fretes_desvinculados = CarviaFrete.query.filter_by(
+            fatura_transportadora_id=fatura_id
+        ).update({'fatura_transportadora_id': None}, synchronize_session=False)
+        CarviaContaCorrenteTransportadora.query.filter_by(
+            fatura_transportadora_id=fatura_id
+        ).update({'fatura_transportadora_id': None}, synchronize_session=False)
+        ces_revertidos = 0
+        for ce in CarviaCustoEntrega.query.filter_by(
+            fatura_transportadora_id=fatura_id
+        ).all():
+            ce.fatura_transportadora_id = None
+            if ce.status in ('VINCULADO_FT', 'PAGO'):
+                ce.status = 'PENDENTE'
+            ces_revertidos += 1
+
         # 2. Limpeza financeira
         self._limpar_movimentacao_financeira('fatura_transportadora', fatura_id)
 
@@ -318,6 +345,8 @@ class AdminService:
             detalhes={
                 'itens_deletados': len(itens),
                 'subs_revertidos': len(subs),
+                'fretes_desvinculados': fretes_desvinculados,
+                'ces_revertidos': ces_revertidos,
             },
         )
 

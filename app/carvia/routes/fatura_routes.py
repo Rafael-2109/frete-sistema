@@ -248,12 +248,34 @@ def register_fatura_routes(bp):
                 # Gerar numero automaticamente
                 numero_fatura = CarviaFaturaCliente.gerar_numero_fatura()
 
-                # Pagador: usar selecionado ou default (remetente)
-                fatura_cnpj = pagador_cnpj if pagador_cnpj else cnpj_cliente
-                fatura_nome = pagador_nome if pagador_cnpj else (
-                    operacoes[0].nome_cliente if operacoes else
-                    ctes_comp[0].nome_cliente if ctes_comp else ''
-                )
+                # Pagador: usar selecionado; senao DERIVAR do tomador do CTe (SOT)
+                # em vez de assumir sempre o remetente — tomador=emitente NAO e
+                # regra dura. (REVISAO_ARQUITETURA_2026 exemplo I7)
+                if pagador_cnpj:
+                    fatura_cnpj = pagador_cnpj
+                    fatura_nome = pagador_nome
+                else:
+                    fatura_cnpj = cnpj_cliente
+                    fatura_nome = (
+                        operacoes[0].nome_cliente if operacoes else
+                        ctes_comp[0].nome_cliente if ctes_comp else ''
+                    )
+                    # So muda o default para o destinatario quando TODAS as
+                    # operacoes declaram tomador=DESTINATARIO e ha um unico
+                    # destinatario (caso contrario, mantem remetente = sem regressao).
+                    tomadores = {(op.cte_tomador or '').upper() for op in operacoes}
+                    if operacoes and tomadores == {'DESTINATARIO'}:
+                        from app.carvia.utils.papeis_frete import (
+                            resolver_papeis_operacao,
+                        )
+                        dests = {}
+                        for op in operacoes:
+                            papeis = resolver_papeis_operacao(op) or {}
+                            dest = papeis.get('dest') or {}
+                            if dest.get('cnpj'):
+                                dests[dest['cnpj']] = dest.get('nome') or ''
+                        if len(dests) == 1:
+                            (fatura_cnpj, fatura_nome), = dests.items()
 
                 fatura = CarviaFaturaCliente(
                     cnpj_cliente=fatura_cnpj,
