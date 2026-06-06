@@ -295,7 +295,7 @@ FASE 5 (governança) ───────┴──► transversal; T5.1/T5.2 id
 - [ ] T3.4 budget injeção medido — _SHA:_
 - [ ] T4.1 imperativos re-validados sob 4.8 — _SHA:_
 - [ ] T4.2 adaptive thinking — _SHA:_
-- [ ] T4.3 custom vs preset+append — **🟢 PRÓXIMA SESSÃO PARALELA (decisão Rafael 2026-06-05; a FASE 5 roda em outra sessão simultânea).** Zona `client.py` / `feature_flags.py` **ISOLADA** — não toca `system_prompt`/`preset`/`CLAUDE.md` nem os arquivos da FASE 5. **Escopo:** POC determinístico comparando o modo atual (`USE_CUSTOM_SYSTEM_PROMPT=true` → string custom em `_build_full_system_prompt`, `client.py:1655-1674`) vs `preset:"claude_code" + append + excludeDynamicSections`. **Premissa a verificar 1º (R-EXEC-3):** o preset `claude_code` do SDK 0.2.89 ainda existe e o que ele injeta hoje (tom/tools/safety) — a string custom "apodrece" porque o preset evolui (a FASE 1 já provou drift). **Critério:** medir tamanho/tokens + cache-prefix + DIFF do que cada modo injeta; **SEM LLM eval** (prova determinística + spot-check). **Coordenação:** editar SÓ esta linha do rastreamento e rebase no push (a FASE 5 também edita este plano). _SHA:_
+- [x] T4.3 custom vs preset+append — **DECISÃO: MANTER custom** (POC determinístico + smoke empírico Haiku, 2026-06-06; detalhe na [Nota FASE 4](#nota-de-execucao-fase-4-t43-2026-06-06)). Registro do escopo original: Zona `client.py` / `feature_flags.py` **ISOLADA** — não toca `system_prompt`/`preset`/`CLAUDE.md` nem os arquivos da FASE 5. **Escopo:** POC determinístico comparando o modo atual (`USE_CUSTOM_SYSTEM_PROMPT=true` → string custom em `_build_full_system_prompt`, `client.py:1655-1674`) vs `preset:"claude_code" + append + excludeDynamicSections`. **Premissa a verificar 1º (R-EXEC-3):** o preset `claude_code` do SDK 0.2.89 ainda existe e o que ele injeta hoje (tom/tools/safety) — a string custom "apodrece" porque o preset evolui (a FASE 1 já provou drift). **Critério:** medir tamanho/tokens + cache-prefix + DIFF do que cada modo injeta; **SEM LLM eval** (prova determinística + spot-check). **Coordenação:** editou SÓ esta linha + Nota FASE 4 (FASE 5 fechou em paralelo, `a40331228`). **Resultado:** preset `claude_code` existe no SDK 0.2.89, mas migrar imporia identidade "Claude Code" (header `yoK`, fn `K98` do CLI 2.1.167) ANTES do append + ~5,9K tok de coding-guidance (+13,3% tok/request: custom **18.389** vs preset+append **20.835** tok); `exclude_dynamic_sections` poda só −164 tok; header neutro `hoK` só existe SEM append (incompatível com injetar `system_prompt.md`). Comentário factual corrigido em `client.py`. _SHA: 4e97ffae8_
 - [x] T5.1 gatilho de poda — **delta-based** (`prompt_size_audit.py --check-delta` + baseline.json + hook `pre-commit-prompt-lint.sh` wired no wrapper PAD-A; bloqueia crescimento vs baseline, redução sempre passa; só dispara se o commit toca um dos 3 prompts). 11 pytest + smoke e2e do hook. _SHA: 25c1a860d_
 - [x] T5.2 doc auto-medida — **bloco entre marcadores `<!-- prompt-size:start/end -->` no `app/agente/CLAUDE.md`, reescrito por `--update-claude-md`** (idempotente; números manuais defasados "~17.5K/~14.9K/103L" removidos → apontam para o bloco). _SHA: 68b190a57_
 - [x] T5.3 checklist princípio/procedimento — **seção "Governança do prompt" em `app/agente/CLAUDE.md`** (R-EXEC-5: C0 vs C1; "remove causa erro?"; `<why>`=força, comprimir só procedimento). _SHA: 2b0346b30_
@@ -488,6 +488,58 @@ doc**: zero DDL, zero runtime do agente, zero PROD; reversível por `git revert`
 - **Pendências reais que sobram (não-FASE-5):** T3.3/T3.4 (bloqueadas por medição de
   cache/custo — depende de tráfego pós-fix; T3.3 provável no-op), FASE 4 (T4.1/T4.2 + T4.3 em
   sessão paralela), T3.1 test vectors §11 (Rafael no agente web).
+
+### Nota de execução — FASE 4 / T4.3 (2026-06-06)
+
+Sessão T4.3 paralela (zona `client.py` isolada; FASE 5 fechou em paralelo, `a40331228`).
+**Decisão: MANTER o custom string. SEM LLM eval — prova determinística (código SDK +
+binário CLI) + smoke empírico de tokens** (Haiku, dir isolado, `--setting-sources ""
+--tools ""`; ~$0.11 total). A pergunta do Rafael ("o `hoK` não seria um caso de uso?")
+foi o eixo da investigação e está respondida abaixo.
+
+**Premissa confirmada (R-EXEC-3):**
+- Preset `claude_code` ainda existe no SDK 0.2.89 (`types.py:40`). `exclude_dynamic_sections`
+  existe (`types.py:42`), enviado via initialize `excludeDynamicSections` (`query.py:209`) —
+  só com `ClaudeSDKClient` (que o app usa, `client_pool.py`) e só em modo preset.
+- Modo custom → `--system-prompt <str>`; modo preset → `--append-system-prompt <append>`
+  (`subprocess_cli.py:230,235`). No modo preset atual o `append` = só `system_prompt.md`
+  (perde `preset_operacional` **e** `empresa_briefing`; `client.py:1670`).
+- **Identidade é header FIXO antes do append.** Binário CLI 2.1.167, fn `K98`: com append =
+  `yoK` "You are Claude Code, … running within the Claude Agent SDK"; **sem append** = `hoK`
+  "You are a Claude agent, built on … the Claude Agent SDK". O `hoK` (neutro, sem "Claude
+  Code") **só sai SEM append** — e sem append não há como injetar `system_prompt.md`/briefing
+  (`subprocess_cli.py:235` só passa nosso conteúdo via `--append-system-prompt`). É um
+  ou‑exclusivo estrutural → o `hoK` é conceitualmente o header certo para "agente próprio",
+  mas inutilizável com o nosso conteúdo. O modo custom já entrega o ideal que o `hoK` aponta
+  (identidade própria *específica* "Agente Logístico Nacom", não o genérico "a Claude agent").
+
+**Smoke empírico (tokenizer real; system prompt isolado = total − baseline 2.420 tok):**
+
+| Modo | tok | nota |
+|---|---:|---|
+| preset claude_code puro (`hoK`) | **+5.854** | corpo coding-guidance + identidade |
+| preset + `exclude_dynamic_sections` | +5.690 | poda só **−164 tok** (3%) |
+| **custom atual (a)** | **+18.389** | identidade própria, zero ruído |
+| só `system_prompt.md` (= o append) | +14.974 | — |
+| **preset + append (b, `yoK`)** | **+20.835** | +2.446 tok vs custom |
+
+Validação cruzada: 14.974 + 5.854 = 20.828 ≈ medido 20.835 (Δ **+7 tok** = header `yoK`>`hoK`
+— confirma empiricamente a fn `K98`). A medição é internamente consistente.
+
+**Por que MANTER:** migrar (b) custaria **+2.446 tok/request (+13,3%)**, imporia a identidade
+"Claude Code" e ~5,9K tok de coding-guidance (git/gh/PR/code-style) irrelevante ao agente
+logístico; `exclude_dynamic_sections` é quase inócuo. O custom é menor, tem identidade própria
+precisa e zero ruído. Isto **fecha a T4.3 como verificação** (resultado válido por R-EXEC-3).
+
+**Achados factuais corrigidos (zona isolada `client.py`, _SHA: 4e97ffae8_):** (1) comentário
+dizia "default false" → corrigido p/ "default TRUE" (`feature_flags.py:454`); (2) estimativa
+"preset ~3-4K tok" (`client.py:509`) defasada — real **~5,9K**.
+
+**Sem mudança de comportamento** (decisão = manter; sem flag nova). **Monitorar (governança):**
+se uma versão futura do SDK expuser "preset mínimo só‑identidade `hoK` + append limpo",
+reavaliar — hoje inexistente. Observação 2ª ordem (não-zona, registrada p/ FASE 5): a estimativa
+`bytes/3.5` do `prompt_size_audit.py` subestima ~16% vs tokenizer real (custom: ~16,2K est. vs
+18,4K real; divisor real ≈ 3,08).
 
 ---
 
