@@ -170,19 +170,34 @@ class CTeXMLParserCarvia(CTeXMLParser):
         return self._get_tag_text('nCT')
 
     def get_chave_acesso(self) -> Optional[str]:
-        """Extrai chave de acesso do CTe (44 digitos)"""
-        # Tag <chCTe> dentro de <protCTe>
-        chave = self._get_tag_text('chCTe')
-        if chave and len(chave) == 44:
-            return chave
+        """Extrai chave de acesso do PROPRIO CTe (44 digitos).
 
-        # Fallback: atributo Id de <infCte>
+        BUG I1 (REVISAO_ARQUITETURA_2026): num CTe COMPLEMENTAR existem DOIS
+        <chCTe> no XML — `<infCteComp>/<chCTe>` (chave do CTe PAI) e
+        `<protCTe>/.../<chCTe>` (chave do PROPRIO documento). A busca generica
+        `_get_tag_text('chCTe')` retornava o PRIMEIRO (o do pai), fazendo TODO
+        complementar herdar a chave do CTe original. No import, o dedup por
+        cte_chave_acesso colidia: o 2o complementar do mesmo pai era tratado
+        como "ja importado" e descartado silenciosamente.
+
+        Por isso usamos o atributo Id de <infCte> (chave do PROPRIO documento,
+        sempre presente e assinada) como primario, e <chCTe> ESCOPADO ao
+        <protCTe> como fallback — nunca o <infCteComp>/<chCTe> do pai.
+        """
+        # 1. Atributo Id de <infCte> = chave do PROPRIO documento.
         inf_cte = self._find_tag('infCte')
         if inf_cte is not None:
             inf_id = inf_cte.get('Id', '')
             digits = re.sub(r'\D', '', inf_id)
             if len(digits) == 44:
                 return digits
+
+        # 2. Fallback: <chCTe> ESCOPADO ao <protCTe> (chave propria no protocolo).
+        prot = self._find_tag('protCTe')
+        if prot is not None:
+            chave = self._get_tag_text_in('chCTe', prot)
+            if chave and len(chave) == 44:
+                return chave
 
         return None
 

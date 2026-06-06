@@ -218,6 +218,7 @@ def register_nf_routes(bp):
                 CarviaOperacao.id,
                 CarviaOperacao.cte_numero,
                 CarviaOperacao.ctrc_numero,
+                CarviaOperacao.status,
             ).join(
                 CarviaOperacao,
                 CarviaOperacaoNf.operacao_id == CarviaOperacao.id,
@@ -225,11 +226,14 @@ def register_nf_routes(bp):
                 CarviaOperacaoNf.nf_id.in_(nf_ids)
             ).all()
             seen_cte = set()
-            for nf_id, op_id, cte_num, ctrc_num in rows_cte:
+            for nf_id, op_id, cte_num, ctrc_num, op_status in rows_cte:
                 key = (nf_id, op_id)
                 if key not in seen_cte:
                     seen_cte.add(key)
-                    ctes_por_nf[nf_id].append({'id': op_id, 'cte_numero': cte_num, 'ctrc_numero': ctrc_num})
+                    ctes_por_nf[nf_id].append({
+                        'id': op_id, 'cte_numero': cte_num,
+                        'ctrc_numero': ctrc_num, 'status': op_status,
+                    })
 
             # Query 5: Frete ID por NF (para indicador clicavel na listagem)
             from app.carvia.models import CarviaFrete

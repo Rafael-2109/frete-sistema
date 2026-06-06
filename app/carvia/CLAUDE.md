@@ -61,6 +61,7 @@ Sempre prefira ler o sub-doc correspondente ao topico ao inves de reconstruir co
 | [AUDIT_ADMIN_SERVICE.md](AUDIT_ADMIN_SERVICE.md) | Hard delete, bypass de guards, gaps de auditoria |
 | [INTEGRACAO_EMBARQUE.md](INTEGRACAO_EMBARQUE.md) | Fluxo embarque legado, decisoes, progresso (historico) |
 | [REVISAO_GAPS.md](REVISAO_GAPS.md) | 37 gaps mapeados com fluxogramas (12/14 corrigidos) |
+| [REVISAO_ARQUITETURA_2026.md](REVISAO_ARQUITETURA_2026.md) | Avaliacao arquitetural (modelo ideal venda+subcontratacao) + gaps conceituais em macro/processo/vinculacao/FK/exibicao, com classificacao epistemica por afirmacao |
 | [FLUXOGRAMA_COMPLETO.md](FLUXOGRAMA_COMPLETO.md) | Mermaid completo do processo E2E (atualizado) |
 | [MIGRATIONS.md](MIGRATIONS.md) | Historico de migrations especificas do CarVia |
 | [fluxograma_refatoracao.md](fluxograma_refatoracao.md) | Mermaid do processo E2E (historico) |

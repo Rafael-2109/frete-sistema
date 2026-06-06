@@ -10,6 +10,7 @@ import logging
 from flask import flash, redirect, url_for, request, render_template, jsonify
 from flask_login import login_required, current_user
 
+from app import db
 from app.utils.auth_decorators import require_admin
 
 logger = logging.getLogger(__name__)
@@ -92,7 +93,13 @@ def register_admin_routes(bp):
         service = AdminService()
 
         metodo = getattr(service, config['metodo'])
-        resultado = metodo(id, motivo, current_user.email)
+        try:
+            resultado = metodo(id, motivo, current_user.email)
+        except Exception as exc:  # noqa: BLE001 — defesa: nunca devolver HTTP 500 cru
+            db.session.rollback()
+            logger.exception("Erro ao excluir %s #%s: %s", tipo, id, exc)
+            flash(f'Erro ao excluir: {exc}', 'danger')
+            return redirect(request.referrer or url_for(config['redirect']))
 
         if resultado['sucesso']:
             flash(

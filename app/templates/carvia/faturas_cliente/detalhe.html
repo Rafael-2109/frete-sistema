@@ -256,7 +256,7 @@
                         {% endif %}
                     </div>
                     <p class="text-muted small mb-0">
-                        Soma CTe: R$ {{ "%.2f"|format(operacoes|selectattr('cte_valor')|map(attribute='cte_valor')|sum) }}
+                        Soma CTe: R$ {{ "%.2f"|format(operacoes|selectattr('cte_valor')|rejectattr('status', 'equalto', 'CANCELADO')|map(attribute='cte_valor')|sum) }}
                     </p>
                     <div class="d-flex justify-content-between align-items-center mt-2">
                         <h6 class="mb-0">CTe Complementares: {{ ctes_complementares|length }}</h6>
@@ -269,8 +269,17 @@
                     </div>
                     {% if ctes_complementares %}
                     <p class="text-muted small mb-0">
-                        Soma Complementar: {{ ctes_complementares|selectattr('cte_valor')|map(attribute='cte_valor')|sum|valor_br }}
+                        Soma Complementar: {{ ctes_complementares|selectattr('cte_valor')|rejectattr('status', 'equalto', 'CANCELADO')|map(attribute='cte_valor')|sum|valor_br }}
                     </p>
+                    {% endif %}
+                    {# I2: alerta de divergencia entre valor_total e a soma dos CTes ativos #}
+                    {% set _soma_ops = operacoes|selectattr('cte_valor')|rejectattr('status', 'equalto', 'CANCELADO')|map(attribute='cte_valor')|sum %}
+                    {% set _soma_comp = ctes_complementares|selectattr('cte_valor')|rejectattr('status', 'equalto', 'CANCELADO')|map(attribute='cte_valor')|sum %}
+                    {% if (fatura.valor_total|float - (_soma_ops + _soma_comp))|abs > 1.0 %}
+                    <div class="alert alert-warning py-1 px-2 small mt-2 mb-0" role="alert">
+                        <i class="fas fa-triangle-exclamation"></i>
+                        Valor da fatura ({{ fatura.valor_total|valor_br }}) diverge da soma dos CTes ativos ({{ (_soma_ops + _soma_comp)|valor_br }}).
+                    </div>
                     {% endif %}
                 </div>
             </div>

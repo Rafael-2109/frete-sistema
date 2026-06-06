@@ -94,7 +94,21 @@ def pontuar_documentos(linha, docs, cnpjs_historico=None):
     for doc in docs:
         sv = _score_valor(valor_extrato, float(doc.get('saldo', 0)))
         sd = _score_data(data_extrato, doc.get('vencimento', ''), doc.get('data', ''))
-        sn = _score_nome(texto_extrato, doc.get('nome', ''))
+        # I5: nome pode bater com pagador, remetente OU destinatario da carga
+        # (em frete o banco frequentemente mostra o nome de quem efetivamente
+        # paga). Usa o melhor jaccard entre essas identidades disponiveis.
+        nomes_doc = [doc.get('nome', '')]
+        if doc.get('remetente_nome'):
+            nomes_doc.append(doc.get('remetente_nome'))
+        nomes_doc += [
+            dest.get('nome', '')
+            for dest in (doc.get('destinatarios') or [])
+            if isinstance(dest, dict) and dest.get('nome')
+        ]
+        sn = max(
+            (_score_nome(texto_extrato, n) for n in nomes_doc if n),
+            default=_score_nome(texto_extrato, doc.get('nome', '')),
+        )
 
         score = (
             sv * PESOS['valor']
@@ -128,6 +142,34 @@ def pontuar_documentos(linha, docs, cnpjs_historico=None):
             score = max(score, 0.80)
         else:
             doc['score_cnpj_direto'] = False
+
+        # I5: destinatario/remetente como sinal adicional de identidade ("+").
+        # Nao e filtro duro (CIF pode ser pago pelo remetente; conta-ordem por
+        # terceiro). So aplica quando o doc traz esses dados (enriquecimento de
+        # fatura_cliente) e o pagador cadastrado NAO casou diretamente; o boost
+        # fica um degrau abaixo do match do pagador (0.85 CNPJ / 0.70 raiz).
+        if not cnpj_match_direto:
+            sec_score = 0.0
+            sec_tipo = None
+            candidatos_sec = [
+                ('DESTINATARIO', re.sub(r'\D', '', dest.get('cnpj') or ''))
+                for dest in (doc.get('destinatarios') or [])
+                if isinstance(dest, dict) and dest.get('cnpj')
+            ]
+            cnpj_rem = re.sub(r'\D', '', doc.get('remetente_cnpj') or '')
+            if cnpj_rem and cnpj_rem != cnpj_doc_limpo:
+                candidatos_sec.append(('REMETENTE', cnpj_rem))
+            for papel, cnpj_sec in candidatos_sec:
+                if not cnpj_sec:
+                    continue
+                if cnpj_sec in cnpjs_extraidos and sec_score < 0.85:
+                    sec_score, sec_tipo = 0.85, f'CNPJ_{papel}'
+                elif cnpj_sec[:8] in raizes_extraidas and sec_score < 0.70:
+                    sec_score, sec_tipo = 0.70, f'RAIZ_{papel}'
+            if sec_score > 0:
+                doc['score_cnpj_direto'] = True
+                doc['score_cnpj_direto_tipo'] = sec_tipo
+                score = max(score, sec_score)
 
         # R17: boost por historico aprendido (padrao descricao+CNPJ)
         ocorrencias_hist = cnpjs_historico.get(cnpj_doc, 0) if cnpj_doc else 0
