@@ -65,3 +65,47 @@ def test_dados_codigo_agrupa_por_local_e_lote(client):
     lotes = {l['lote']: l for l in d['por_lote']}
     assert lotes['MIGRAÇÃO']['is_migracao'] is True
     assert d['reservada_total'] == 200.0
+
+
+def test_autocomplete_produto_filtra_min_chars(client):
+    with patch('flask_login.utils._get_user', return_value=_admin()):
+        resp = client.get('/estoque/transferencia-estoque/api/autocomplete/produto?q=a')
+    assert resp.status_code == 200
+    assert resp.get_json() == []  # < 2 chars
+
+
+def test_autocomplete_produto_ok(client):
+    odoo = MagicMock()
+    odoo.search_read.return_value = [
+        {'id': 100, 'default_code': '4729098', 'name': 'AZEITE', 'tracking': 'lot'},
+        {'id': 101, 'default_code': None, 'name': 'SEM CODIGO', 'tracking': 'none'},
+    ]
+    with patch('flask_login.utils._get_user', return_value=_admin()), \
+         patch('app.estoque.transferencia_estoque_routes.get_odoo_connection', return_value=odoo):
+        resp = client.get('/estoque/transferencia-estoque/api/autocomplete/produto?q=azeite')
+    out = resp.get_json()
+    assert len(out) == 1  # sem default_code é descartado
+    assert out[0]['cod'] == '4729098' and out[0]['product_id'] == 100
+    assert out[0]['label'].startswith('4729098')
+
+
+def test_autocomplete_local_por_empresa(client):
+    odoo = MagicMock()
+    odoo.search_read.return_value = [
+        {'id': 32, 'complete_name': 'CD/Estoque'},
+        {'id': 31090, 'complete_name': 'CD/Indisponivel'},
+    ]
+    with patch('flask_login.utils._get_user', return_value=_admin()), \
+         patch('app.estoque.transferencia_estoque_routes.get_odoo_connection', return_value=odoo):
+        resp = client.get('/estoque/transferencia-estoque/api/autocomplete/local?q=cd&empresa=CD')
+    out = resp.get_json()
+    assert {o['location_id'] for o in out} == {32, 31090}
+    # domain usou company_id da empresa CD (4)
+    domain = odoo.search_read.call_args[0][1]
+    assert ['company_id', '=', 4] in domain
+
+
+def test_autocomplete_local_empresa_invalida(client):
+    with patch('flask_login.utils._get_user', return_value=_admin()):
+        resp = client.get('/estoque/transferencia-estoque/api/autocomplete/local?q=x&empresa=ZZ')
+    assert resp.status_code == 200 and resp.get_json() == []
