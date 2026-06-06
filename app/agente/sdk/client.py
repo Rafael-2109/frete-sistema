@@ -1652,8 +1652,17 @@ Nunca invente informações."""
                 )
 
         # =================================================================
-        # System Prompt: preset claude_code vs preset operacional
-        # Flag: USE_CUSTOM_SYSTEM_PROMPT (default false para rollback seguro)
+        # System Prompt: custom string vs preset claude_code
+        # Flag: USE_CUSTOM_SYSTEM_PROMPT (default TRUE — ver feature_flags.py;
+        #   rollback: AGENT_CUSTOM_SYSTEM_PROMPT=false → preset claude_code + append).
+        # T4.3 (2026-06-06, plano governanca FASE 4): custom MANTIDO. Smoke
+        #   empirico (Haiku, dir isolado) provou que migrar ao preset:
+        #   (1) imporia identidade "Claude Code" (header yoK, binario CLI fn K98)
+        #       ANTES do nosso append → conflito com "Agente Logistico";
+        #   (2) somaria ~5.9K tok de coding-guidance irrelevante (+13% tok/request);
+        #   (3) exclude_dynamic_sections poda so' ~164 tok (nao salva o caso).
+        #   O header neutro "hoK" (You are a Claude agent) so' existe SEM append
+        #   → incompativel com injetar system_prompt.md. Ver "Nota FASE 4" no plano.
         # =================================================================
         from ..config.feature_flags import USE_CUSTOM_SYSTEM_PROMPT
 
