@@ -308,6 +308,22 @@ STRING custom (option `system_prompt`) — 3 arquivos concatenados em _build_ful
 - `config/feature_flags.py` — `USE_CUSTOM_SYSTEM_PROMPT`, `USE_PROMPT_CACHE_OPTIMIZATION`
 - `config/settings.py` — `operational_preset_path`
 
+### Governanca do prompt (FASE 5 — impede a acrecao de voltar)
+
+> O prompt dobrou (407→862 linhas em ~6 semanas) porque tinha processo de ADICAO
+> (todo incidente virava regra) e nenhum de PODA. Estas regras SAO o processo de poda.
+
+**Checklist OBRIGATORIO antes de adicionar QUALQUER regra ao prompt (R-EXEC-5):**
+1. **E principio (Camada 0) ou procedimento (Camada 1)?**
+   - Principio (identidade, constituicao, regra de negocio como CONCEITO, routing de alto nivel) → fica no prompt.
+   - Procedimento hiper-especifico (campos Odoo, nome de wizard, location, passo-a-passo, pos-mortem `sessao <hex>`) → vai para skill/reference (`GOTCHAS.md`, `REGRAS_MODELOS.md`, `REGRAS_OUTPUT.md`); o prompt guarda so' o PRINCIPIO + gatilho (3-5 linhas).
+2. **Remover esta linha causa erro mensuravel?** Se nao → nao entra (ou sai). (`STUDY` A-pruning / P1.)
+3. **Motivacao (`<why>`) e' FORCA, nao gordura** — explicar o porque melhora instruction following (A2 Top Strength 5/5). Comprimir SO' procedimento, NUNCA motivacao. (Licao da FASE 2: cortar `<why>` degradou e foi revertido — `fee8f1f17`.)
+
+**Gatilho automatico:** o pre-commit (`prompt_size_audit.py --check-delta`, hook `pre-commit-prompt-lint.sh`) BLOQUEIA todo commit que faca o prompt CRESCER vs `prompt_size_baseline.json`. Crescimento consciente (com poda compensatoria) = rodar `--update-baseline && --update-claude-md` e incluir no mesmo commit. Bypass: `git commit --no-verify`.
+
+**Cadencia de review (T5.4):** review do system_prompt e' **trimestral** (prometida em `STUDY_PROMPT_ENGINEERING_2026_QUALITY_REVIEW.md` e nao cumprida — religada aqui). Ultima: v4.2.0 (abr/2026, score 4,39/5). **Proxima: jul/2026.** Gatilho extra: sempre que o `--check-delta` for bypassado (`--no-verify`) ou o baseline subir, agendar re-review. A fonte de tamanho e' o bloco auto-medido acima (nunca de cabeca).
+
 ---
 
 ## Regras Criticas
