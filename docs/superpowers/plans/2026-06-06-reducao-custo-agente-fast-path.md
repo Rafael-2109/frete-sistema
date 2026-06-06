@@ -263,23 +263,33 @@ FASE 0 (baseline) ──► FASE 1 (baseline Marcus, independente, quick win)
 
 > Marcar `[x]` + SHA conforme completa. NÃO reescrever histórico.
 
-- [ ] T0.1 baseline de custo congelado — _snapshot:_
-- [ ] T0.2 flags + padrões atuais mapeados — _SHA:_
-- [ ] T1.1 baseline como ação determinística — _SHA:_
-- [ ] T1.2 cron/rota + pytest + acesso UI — _SHA:_
-- [ ] T1.3 Marcus comunicado — _data:_
-- [ ] T2.1 padrões no model_router — _SHA:_
-- [ ] T2.2 flags de routing on — _SHA:_
-- [ ] T2.3 exclusões (vinculação/SEFAZ/financeiro) garantidas — _SHA:_
-- [ ] T3.1 mapa do fluxo de vinculação — _doc:_
+> **MUDANÇA DE ABORDAGEM da FASE 1 (06/06, decisão do Rafael):** em vez de botão/cron
+> (T1.1/T1.2 originais), a FASE 1 virou um **fast-path determinístico** — intercepta
+> "atualizar baseline" trivial (≤4 palavras, sem data/variação) ANTES do LLM, roda o
+> script e responde com link + 3 tabelas, **sem nem Sonnet**. Preserva o hábito do
+> Marcus (Teams) e zera o custo LLM do caso trivial. Variação/falha → fallback ao LLM
+> (R-EXEC-6). Implementação: `app/agente/sdk/baseline_fastpath.py` + wires Teams/Web +
+> flag `AGENT_BASELINE_FASTPATH` (ON). Spot-check PROD OK (62 pendentes, D-1 271).
+
+- [x] T0.1 baseline de custo congelado — _snapshot 06/06: $1.624,50 / 338 sessões (45d); conversa_analise $823 (51%, NÃO TOCAR); economizável $520 (~32%)_
+- [x] T0.2 flags + padrões atuais mapeados — _routing ON nos 2 canais (confirmado em logs PROD); model_router BINÁRIO (Opus default / Sonnet único fast); env Web real = `AGENT_WEB_SMART_MODEL_ROUTING`_
+- [x] T1.1 baseline como ação determinística — _fast-path (não botão/cron): `21c3fa6c8` (script) + `647ebc810` (módulo+29 testes)_
+- [x] T1.2 wire + pytest + entrega — _`a071b4af8` (Teams+Web+flag); entrega via `/agente/api/files/default/` (#787); 29 testes TDD_
+- [~] T1.3 Marcus comunicado — _N/A no fast-path: transparente (Marcus segue pedindo "atualizar baseline" no Teams igual)_
+- [x] T2.1 padrões no model_router — _`93b8f71bc` (5 categorias → Sonnet, "Tudo Sonnet" conservador)_
+- [x] T2.2 flags de routing on — _já ON (FASE 0); sem mudança_
+- [x] T2.3 exclusões (vinculação/SEFAZ/financeiro) garantidas — _`93b8f71bc` + testes (faturar/financeiro/análise → Opus; 0 over-routes)_
+- [ ] T3.1 mapa do fluxo de vinculação — _doc:_ (FASE 3 — sessão própria)
 - [ ] T3.2 serviço orquestrador + fallback — _SHA:_
 - [ ] T3.3 acionamento + fallback LLM — _SHA:_
-- [ ] T4.1 re-medição vs baseline — _snapshot:_
+- [ ] T4.1 re-medição vs baseline — _snapshot:_ (após ≥1 semana com F1+F2 em PROD)
 - [ ] T4.2 conversa_analise estável — _verificação:_
 - [ ] T5.1 doc do mecanismo — _SHA:_
 - [ ] T5.2 cadência de review de custo — _SHA:_
 
-**Checkpoints:** C0 🔴 → C1 → C2 🔴 → C3 🔴 → C4 → C5. 🔴 = exige OK do Rafael.
+**Checkpoints:** C0 🔴 ✅ → C1 ✅(spot-check PROD) → C2 🔴 _(validar qualidade Sonnet das consultas em PROD)_ → C3 🔴 → C4 → C5. 🔴 = exige OK do Rafael.
+
+**Estado (06/06):** FASE 0/1/2 EM PROD (deploys `dep-d8hr6gtckfvc73ft96a0` F1 + `dep-d8hratpoagis73d28an0` F2). Próximo: **C2** (observar consultas reais em Sonnet ~1 semana → confirmar qualidade); depois **FASE 4** (re-medir custo) ou **FASE 3** (fast-path vinculação NF×PO, sessão própria). Rollback: `AGENT_BASELINE_FASTPATH=false` (F1) / remover patterns ou `AGENT_WEB_SMART_MODEL_ROUTING=false`+`TEAMS_SMART_MODEL_ROUTING=false` (F2).
 
 ---
 
