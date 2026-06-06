@@ -466,7 +466,7 @@ def api_programacao_linhas_dados():
         com_historico = request.args.get('com_historico', 'false').lower() == 'true'  # ✅ NOVO parâmetro
 
         if not mes or not ano:
-            hoje = date.today()
+            hoje = agora_utc_naive().date()
             mes = hoje.month
             ano = hoje.year
 
@@ -979,7 +979,7 @@ def imprimir_programacao():
     """
     try:
         from app.producao.models import ProgramacaoProducao
-        from datetime import date, timedelta
+        from datetime import timedelta
         from collections import defaultdict
 
         # Parâmetros de filtro
@@ -989,7 +989,7 @@ def imprimir_programacao():
 
         # Validar datas
         if not data_inicio_str or not data_fim_str:
-            hoje = date.today()
+            hoje = agora_utc_naive().date()
             data_inicio = hoje
             data_fim = hoje + timedelta(days=7)
         else:

@@ -4,6 +4,7 @@ Implementa a lógica de negócio conforme escopo.md item 2
 """
 import logging
 from datetime import datetime, date
+from app.utils.timezone import agora_utc_naive  # corte "hoje" em BRT (servidor roda em UTC)
 from typing import Dict, List, Any, Optional
 from sqlalchemy import func, extract
 from app import db
@@ -382,7 +383,7 @@ class NecessidadeProducaoService:
         try:
             from calendar import monthrange
 
-            hoje = date.today()
+            hoje = agora_utc_naive().date()
 
             # Calcular primeiro e último dia do mês
             primeiro_dia = date(ano, mes, 1)
@@ -457,7 +458,7 @@ class NecessidadeProducaoService:
             if data_programada:
                 data_prog = datetime.strptime(data_programada, '%Y-%m-%d').date()
             else:
-                data_prog = date.today()
+                data_prog = agora_utc_naive().date()
 
             # Criar programação
             programacao = ProgramacaoProducao(

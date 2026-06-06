@@ -15,7 +15,7 @@ from app.utils.timezone import agora_utc_naive
 from sqlalchemy import func, text
 from sqlalchemy.orm import load_only
 import logging
-from datetime import datetime, date, timedelta
+from datetime import timedelta
 import time
 from typing import Dict, List
 
@@ -199,7 +199,7 @@ def calcular_projecao_em_memoria(estoque_atual: float, saidas: List, producoes: 
     """
     Calcula projeção de 7 dias em memória (muito rápido)
     """
-    data_inicio = date.today()
+    data_inicio = agora_utc_naive().date()
     projecao = []
     estoque_dia = float(estoque_atual)
     menor_estoque = estoque_dia

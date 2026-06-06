@@ -9,7 +9,7 @@ Rotas de CRUD de Separacoes da Carteira Simplificada
 """
 
 from flask import request, jsonify
-from datetime import date, datetime, timedelta
+from datetime import datetime, timedelta
 from sqlalchemy import and_, func
 import logging
 
@@ -48,7 +48,7 @@ def _calcular_estoque_separacoes(separacoes_lista):
     Returns:
         dict: {cod_produto: {'estoque_atual': float, 'programacao': list}}
     """
-    hoje = date.today()
+    hoje = agora_utc_naive().date()
     data_fim = hoje + timedelta(days=28)
 
     produtos_unicos = list(set(sep.cod_produto for sep in separacoes_lista))
@@ -581,7 +581,7 @@ def atualizar_separacao_lote():
 
             # OPT-B8: Batch em vez de loop individual (2 queries em vez de 3N)
             try:
-                hoje = date.today()
+                hoje = agora_utc_naive().date()
                 data_fim = hoje + timedelta(days=28)
                 batch_result = ServicoEstoqueSimples.calcular_estoque_batch(
                     codigos_produtos=codigos_afetados,

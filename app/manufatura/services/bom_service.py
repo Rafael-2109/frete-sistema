@@ -4,7 +4,8 @@ Gerencia estrutura hierárquica de produtos (Acabados → Intermediários → Co
 """
 
 from typing import Dict, List, Any, Optional, Set
-from datetime import date, timedelta
+from datetime import date
+from app.utils.timezone import agora_utc_naive  # corte "hoje" em BRT (servidor roda em UTC)
 import logging
 
 from app import db
@@ -330,7 +331,7 @@ class ServicoBOM:
         """
         try:
             if data_necessidade is None:
-                data_necessidade = date.today()
+                data_necessidade = agora_utc_naive().date()
 
             # Buscar dados do produto
             cadastro = CadastroPalletizacao.query.filter_by(
@@ -344,10 +345,10 @@ class ServicoBOM:
             estoque_atual = ServicoEstoqueSimples.calcular_estoque_atual(cod_produto)
 
             # Calcular estoque projetado na data
-            if data_necessidade == date.today():
+            if data_necessidade == agora_utc_naive().date():
                 estoque_projetado = estoque_atual
             else:
-                dias = (data_necessidade - date.today()).days
+                dias = (data_necessidade - agora_utc_naive().date()).days
                 projecao = ServicoEstoqueSimples.calcular_projecao(cod_produto, dias)
 
                 # Buscar estoque na data específica
@@ -381,7 +382,7 @@ class ServicoBOM:
                 'estoque_projetado': 0,
                 'qtd_falta': qtd_necessaria,
                 'necessita_programacao': True,
-                'data_necessidade': data_necessidade.isoformat() if data_necessidade else date.today().isoformat(),
+                'data_necessidade': data_necessidade.isoformat() if data_necessidade else agora_utc_naive().date().isoformat(),
                 'erro': str(e)
             }
 
@@ -416,7 +417,7 @@ class ServicoBOM:
         """
         try:
             if data_necessidade is None:
-                data_necessidade = date.today()
+                data_necessidade = agora_utc_naive().date()
 
             # 1. Explodir BOM completo
             bom_explodido = ServicoBOM.explodir_bom(cod_produto, qtd_necessaria)

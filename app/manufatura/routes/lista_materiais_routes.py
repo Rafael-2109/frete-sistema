@@ -10,7 +10,6 @@ from app.producao.models import CadastroPalletizacao
 from app.manufatura.services.bom_service import ServicoBOM
 from app.manufatura.services.auditoria_service import ServicoAuditoria
 from app.estoque.services.estoque_simples import ServicoEstoqueSimples
-from datetime import datetime, date
 from app.utils.timezone import agora_utc_naive
 from io import BytesIO
 import pandas as pd
@@ -115,7 +114,7 @@ def register_lista_materiais_routes(bp):
                 try:
                     estoque_info = ServicoEstoqueSimples.obter_resumo_estoque(
                         comp.cod_produto_componente,
-                        date.today()
+                        agora_utc_naive().date()
                     )
                     estoque_atual = estoque_info.get('estoque_atual', 0) if estoque_info else 0
                 except Exception as e:

@@ -9,7 +9,7 @@ Rotas de consulta da Carteira Simplificada
 """
 
 from flask import render_template, request, jsonify
-from datetime import date, datetime, timedelta
+from datetime import datetime, timedelta
 from sqlalchemy import and_, func, or_, case
 import logging
 import time
@@ -27,6 +27,7 @@ from app.carteira.utils.separacao_utils import (
 )
 from app.embarques.models import Embarque, EmbarqueItem
 from app.transportadoras.models import Transportadora
+from app.utils.timezone import agora_utc_naive  # corte "hoje" em BRT (servidor roda em UTC)
 
 from . import carteira_simples_bp
 from .helpers import validar_numero_json, calcular_saidas_nao_visiveis
@@ -281,7 +282,7 @@ def obter_dados():
                 logger.warning("Nenhum produto para calcular estoque")
                 tempos['estoque_batch'] = time.time() - t1
             else:
-                hoje = date.today()
+                hoje = agora_utc_naive().date()
                 data_fim = hoje + timedelta(days=28)
 
                 # Usar metodo batch (2 queries em vez de N*2)

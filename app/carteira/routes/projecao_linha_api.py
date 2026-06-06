@@ -4,7 +4,8 @@ Retorna saida, producao e saldo dia-a-dia para todos os produtos
 da mesma linha_producao do produto clicado.
 """
 
-from datetime import date, timedelta
+from datetime import timedelta
+from app.utils.timezone import agora_utc_naive  # corte "hoje" em BRT (servidor roda em UTC)
 from flask import jsonify
 from flask_login import login_required
 import logging
@@ -82,7 +83,7 @@ def obter_projecao_linha(cod_produto):
         )
 
         # 6. Montar datas D0-D14
-        hoje = date.today()
+        hoje = agora_utc_naive().date()
         datas = [(hoje + timedelta(days=d)).isoformat() for d in range(DIAS_PROJECAO + 1)]
 
         # 7. Montar resposta por produto

@@ -9,6 +9,7 @@ Data: 02/09/2025
 
 from datetime import date, timedelta
 from typing import Dict, Any, Optional
+from app.utils.timezone import agora_utc_naive  # corte "hoje" em BRT (servidor roda em UTC)
 import logging
 
 from app import db
@@ -120,9 +121,9 @@ class SaldoEstoqueCompativel:
         try:
             # Usar ServicoEstoqueSimples para calcular saídas previstas
             saidas = ServicoEstoqueSimples.calcular_saidas_previstas(
-                cod_produto, 
-                date.today(), 
-                date.today() + timedelta(days=90)
+                cod_produto,
+                agora_utc_naive().date(),
+                agora_utc_naive().date() + timedelta(days=90)
             )
             
             total = sum(dia.get('saida_prevista', 0) for dia in saidas.values())
@@ -237,7 +238,7 @@ class SaldoEstoqueCompativel:
                 qtd_movimentacao=qtd_ajuste,  # Já vem com sinal correto
                 tipo_movimentacao=tipo_ajuste,
                 local_movimentacao='AJUSTE',
-                data_movimentacao=date.today(),
+                data_movimentacao=agora_utc_naive().date(),
                 observacao=motivo or f"Ajuste manual",
                 tipo_origem='MANUAL',
                 criado_por=usuario

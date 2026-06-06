@@ -4,7 +4,7 @@ Funções relacionadas à análise de estoque e projeção de ruptura
 """
 
 from typing import Dict, Any, List
-from datetime import date, datetime, timedelta
+from datetime import date, timedelta
 from sqlalchemy import func, and_
 import logging
 
@@ -133,10 +133,10 @@ def _analisar_produto_ruptura(cod_produto: str, quantidade_necessaria: float,
     estoque_atual = _buscar_estoque_atual(cod_produto)
 
     # Buscar projeção de saídas até a data
-    saidas_projetadas = _calcular_saidas_projetadas(cod_produto, date.today(), data_agendamento)
+    saidas_projetadas = _calcular_saidas_projetadas(cod_produto, agora_utc_naive().date(), data_agendamento)
 
     # Buscar projeção de entradas (produção)
-    entradas_projetadas = _calcular_entradas_projetadas(cod_produto, date.today(), data_agendamento)
+    entradas_projetadas = _calcular_entradas_projetadas(cod_produto, agora_utc_naive().date(), data_agendamento)
 
     # Calcular estoque projetado
     estoque_projetado = estoque_atual + entradas_projetadas - saidas_projetadas - quantidade_necessaria
@@ -193,7 +193,7 @@ def _calcular_saidas_projetadas(cod_produto: str, data_inicio: date, data_fim: d
     INCLUI ITENS ATRASADOS (expedicao < hoje)
     """
     try:
-        hoje = date.today()
+        hoje = agora_utc_naive().date()
 
         # Buscar pedidos em carteira (incluindo ATRASADOS)
         # Pedidos atrasados
@@ -300,7 +300,7 @@ def sugerir_data_sem_ruptura(cnpjs: List[str], data_inicial: date = None) -> Dic
         Dicionário com sugestões de datas
     """
     if not data_inicial:
-        data_inicial = date.today() + timedelta(days=2)
+        data_inicial = agora_utc_naive().date() + timedelta(days=2)
         # Ajustar para dia útil
         while data_inicial.weekday() >= 5:
             data_inicial += timedelta(days=1)

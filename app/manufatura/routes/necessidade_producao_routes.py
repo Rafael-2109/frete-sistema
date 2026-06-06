@@ -202,7 +202,7 @@ def register_necessidade_producao_routes(bp):
             total_sem_separacao = total_carteira - total_separado
 
             # Buscar programações de produção (entradas futuras)
-            hoje = date.today()
+            hoje = agora_utc_naive().date()
             programacoes = ProgramacaoProducao.query.filter(
                 ProgramacaoProducao.cod_produto == cod_produto,
                 ProgramacaoProducao.data_programacao >= hoje
@@ -529,7 +529,7 @@ def register_necessidade_producao_routes(bp):
                 return jsonify({'erro': 'Código do produto é obrigatório'}), 400
 
             # Usar mês/ano atual se não fornecido
-            hoje = date.today()
+            hoje = agora_utc_naive().date()
             if not mes:
                 mes = hoje.month
             if not ano:

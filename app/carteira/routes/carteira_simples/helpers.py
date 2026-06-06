@@ -6,12 +6,12 @@ Funcoes auxiliares da Carteira Simplificada
 - calcular_saidas_nao_visiveis: saidas TODAS - FILTRADAS para projecao de estoque
 """
 
-from datetime import date
 import logging
 
 from app import db
 from app.separacao.models import Separacao
 from app.embarques.models import EmbarqueItem
+from app.utils.timezone import agora_utc_naive  # corte "hoje" em BRT (servidor roda em UTC)
 
 logger = logging.getLogger(__name__)
 
@@ -145,7 +145,7 @@ def calcular_saidas_nao_visiveis(
         logger.info(f"   Separacoes NAO visiveis: {len(separacoes_nao_visiveis)}")
 
         # 3. Agrupar por produto + data COM UNIFICACAO
-        hoje = date.today()
+        hoje = agora_utc_naive().date()
         saidas_por_produto_data = {}
 
         # Construir lookup reverso ANTES do loop (O(1) por separacao)

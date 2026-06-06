@@ -65,7 +65,7 @@ def listar(rede):
             'portal': portal,
             'dados_cnpj': dados_cnpj,
             'total_cnpjs': len(dados_cnpj),
-            'data_atual': date.today(),
+            'data_atual': agora_utc_naive().date(),
             'vendedor': vendedor,
             'equipe_vendas': equipe_vendas
         }
@@ -305,7 +305,7 @@ def _analisar_status_cnpj(dados_cnpj):
     """
     # date já está importado no topo do arquivo
 
-    hoje = date.today()
+    hoje = agora_utc_naive().date()
     
     # Variáveis de análise
     tem_separacao_ou_nf = False
@@ -931,7 +931,7 @@ def analisar_estoques(rede):
         ).all()
         
         resultado = []
-        data_hoje = date.today()
+        data_hoje = agora_utc_naive().date()
         
         for produto in produtos_rede:
             # Buscar estoque atual
@@ -1084,7 +1084,7 @@ def _calcular_data_minima_expedicao(dias_uteis_expedicao):
     """
     Calcula D+2 uteis, ajustado para dias de expedicao permitidos (seg-qui).
     """
-    data = date.today()
+    data = agora_utc_naive().date()
     dias_adicionados = 0
 
     while dias_adicionados < 2:
@@ -1140,7 +1140,7 @@ def _otimizar_cnpjs_ruptura(
 
     Complexidade: O(CNPJs x datas x produtos_ruptura) — trivial em memoria.
     """
-    hoje = date.today()
+    hoje = agora_utc_naive().date()
     dias_projecao = 28
 
     # Montar timeline de estoque para produtos em ruptura
@@ -1269,7 +1269,7 @@ def sugerir_datas(rede):
             return jsonify({
                 'success': True,
                 'sugestoes': {},
-                'data_minima': date.today().strftime('%Y-%m-%d'),
+                'data_minima': agora_utc_naive().date().strftime('%Y-%m-%d'),
                 'distribuicao_dias': {}
             })
 
@@ -1544,7 +1544,7 @@ def analisar_ruptura_cnpj(cnpj):
 
             # Calcular projeção D+7
             def calcular_projecao(estoque_atual, saidas, producoes):
-                data_inicio = date.today()
+                data_inicio = agora_utc_naive().date()
                 estoque_dia = float(estoque_atual)
                 menor_estoque = estoque_dia
 
@@ -1796,7 +1796,7 @@ def analisar_ruptura_lote():
             ).all()
             
             disponibilidade = {}
-            data_completa = date.today()
+            data_completa = agora_utc_naive().date()
             percentual_disponivel = 100.0
             
             for pedido in pedidos:
@@ -1829,7 +1829,7 @@ def analisar_ruptura_lote():
                     
                     # Calcular data quando estará disponível
                     for dias in range(1, 30):
-                        data_futura = date.today() + timedelta(days=dias)
+                        data_futura = agora_utc_naive().date() + timedelta(days=dias)
                         
                         # Projetar estoque futuro
                         producoes = db.session.query(

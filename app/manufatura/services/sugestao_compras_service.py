@@ -21,6 +21,7 @@ import math
 import time
 import logging
 from datetime import date, timedelta
+from app.utils.timezone import agora_utc_naive  # corte "hoje" em BRT (servidor roda em UTC)
 from collections import defaultdict
 from typing import Dict, Any, Optional, Tuple
 
@@ -56,7 +57,7 @@ class ServicoSugestaoCompras:
             Dict com sugestoes por componente
         """
         t0 = time.time()
-        hoje = date.today()
+        hoje = agora_utc_naive().date()
         data_fim = hoje + timedelta(days=dias_horizonte)
 
         # ========================================
@@ -530,7 +531,7 @@ class ServicoSugestaoCompras:
             PedidoCompras.cod_produto.in_(codigos_unificados)
         ).order_by(PedidoCompras.data_pedido_previsao).all()
 
-        hoje = date.today()
+        hoje = agora_utc_naive().date()
 
         lista_pedidos = []
         total_pedidos_saldo = 0.0
@@ -633,7 +634,7 @@ class ServicoSugestaoCompras:
         """
         Modal 2: Projecao dia-a-dia do cardex (estoque projetado).
         """
-        hoje = date.today()
+        hoje = agora_utc_naive().date()
         data_inicio = hoje + timedelta(days=dia_inicio)
         data_fim_abs = hoje + timedelta(days=dia_fim)
 
@@ -713,7 +714,7 @@ class ServicoSugestaoCompras:
         Quando saldo fica negativo, gera sugestao arredondada ao lote minimo
         com data_pedir = data_chegada - lead_time.
         """
-        hoje = date.today()
+        hoje = agora_utc_naive().date()
         data_inicio = hoje + timedelta(days=dia_inicio)
         data_fim_abs = hoje + timedelta(days=dia_fim)
         # Horizonte estendido para capturar todas as sugestoes

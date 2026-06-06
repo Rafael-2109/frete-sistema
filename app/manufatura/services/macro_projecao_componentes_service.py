@@ -11,8 +11,8 @@ Autor: Sistema de Fretes
 Data: 13/01/2026
 """
 
-from datetime import date
 from decimal import Decimal
+from app.utils.timezone import agora_utc_naive  # corte "hoje" em BRT (servidor roda em UTC)
 from typing import Dict, List, Any, Set
 from collections import defaultdict
 from sqlalchemy import func, extract
@@ -41,7 +41,7 @@ class MacroProjecaoComponentesService:
     """
 
     def __init__(self):
-        self.hoje = date.today()
+        self.hoje = agora_utc_naive().date()
         self.mes_atual = self.hoje.month
         self.ano_atual = self.hoje.year
 

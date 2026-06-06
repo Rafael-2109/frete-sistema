@@ -6,6 +6,7 @@ Performance garantida < 50ms por consulta
 from datetime import date, timedelta
 from typing import Dict, List, Optional, Any
 from concurrent.futures import ThreadPoolExecutor
+from app.utils.timezone import agora_utc_naive  # corte "hoje" em BRT (servidor roda em UTC)
 import logging
 import cachetools
 
@@ -84,7 +85,7 @@ class ServicoEstoqueSimples:
         try:
             # Obter códigos unificados
             codigos = UnificacaoCodigos.get_todos_codigos_relacionados(cod_produto)
-            hoje = date.today()
+            hoje = agora_utc_naive().date()
 
             # Query para itens ATRASADOS (expedicao < hoje) ou SEM DATA (expedicao NULL)
             # Estes serão agrupados como saída para HOJE
@@ -209,7 +210,7 @@ class ServicoEstoqueSimples:
             if cached is not None:
                 logger.debug(f"✅ Cache HIT para {cod_produto} (projeção {dias} dias, D+1={entrada_em_d_plus_1})")
                 return cached
-            hoje = date.today()
+            hoje = agora_utc_naive().date()
             data_fim = hoje + timedelta(days=dias)
 
             # 1. Estoque atual (1 query)
@@ -376,7 +377,7 @@ class ServicoEstoqueSimples:
         Performance esperada: < 100ms
         """
         try:
-            hoje = date.today()
+            hoje = agora_utc_naive().date()
             data_limite = hoje + timedelta(days=dias_limite)
             
             # 1. Buscar produtos únicos que têm movimentação
@@ -430,10 +431,10 @@ class ServicoEstoqueSimples:
         """
         try:
             if data_necessaria is None:
-                data_necessaria = date.today()
+                data_necessaria = agora_utc_naive().date()
             
             # Se for hoje, verificar estoque atual
-            if data_necessaria == date.today():
+            if data_necessaria == agora_utc_naive().date():
                 estoque_atual = ServicoEstoqueSimples.calcular_estoque_atual(cod_produto)
                 
                 return {
@@ -444,7 +445,7 @@ class ServicoEstoqueSimples:
                 }
             
             # Se for futuro, calcular projeção até a data
-            dias = (data_necessaria - date.today()).days
+            dias = (data_necessaria - agora_utc_naive().date()).days
             projecao = ServicoEstoqueSimples.calcular_projecao(cod_produto, dias)
             
             # Buscar saldo na data específica
@@ -596,7 +597,7 @@ class ServicoEstoqueSimples:
             return {}
 
         try:
-            hoje = date.today()
+            hoje = agora_utc_naive().date()
 
             # Se mapa_unificacao não fornecido, calcular em batch
             if mapa_unificacao is None:
@@ -734,7 +735,7 @@ class ServicoEstoqueSimples:
             return {}
 
         try:
-            hoje = date.today()
+            hoje = agora_utc_naive().date()
             data_fim = hoje + timedelta(days=dias)
 
             # ─── 1. Mapa de unificação em batch (1 query) ───

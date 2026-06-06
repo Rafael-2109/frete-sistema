@@ -11,7 +11,7 @@ Data: 13/01/2026
 
 from flask import Blueprint, render_template, jsonify, make_response, request
 from flask_login import login_required
-from datetime import date
+from app.utils.timezone import agora_utc_naive  # corte "hoje" em BRT (servidor roda em UTC)
 
 from app.manufatura.services.macro_projecao_componentes_service import MacroProjecaoComponentesService
 
@@ -133,7 +133,7 @@ def exportar_excel():
         # Criar resposta
         response = make_response(excel_bytes)
         response.headers['Content-Type'] = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-        response.headers['Content-Disposition'] = f'attachment; filename=macro_projecao_componentes_{date.today().strftime("%Y%m%d")}.xlsx'
+        response.headers['Content-Disposition'] = f'attachment; filename=macro_projecao_componentes_{agora_utc_naive().date().strftime("%Y%m%d")}.xlsx'
 
         return response
 

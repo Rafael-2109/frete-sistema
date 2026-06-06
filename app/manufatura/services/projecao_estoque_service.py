@@ -17,6 +17,7 @@ from decimal import Decimal
 from collections import defaultdict
 from typing import Dict, List, Any
 from sqlalchemy import func, or_
+from app.utils.timezone import agora_utc_naive  # corte "hoje" em BRT (servidor roda em UTC)
 
 from app import db
 from app.manufatura.models import (
@@ -75,7 +76,7 @@ class ServicoProjecaoEstoque:
                 projecoes.append(projecao)
 
         return {
-            'data_projecao': date.today().isoformat(),
+            'data_projecao': agora_utc_naive().date().isoformat(),
             'dias_projetados': 60,
             'total_produtos': len(projecoes),
             'projecoes': projecoes
@@ -98,7 +99,7 @@ class ServicoProjecaoEstoque:
         ).order_by(CadastroPalletizacao.cod_produto).all()
 
         componentes = []
-        data_inicio = date.today()
+        data_inicio = agora_utc_naive().date()
         data_fim = data_inicio + timedelta(days=60)
 
         for produto in produtos_comprados:
@@ -149,7 +150,7 @@ class ServicoProjecaoEstoque:
 
         return {
             'sucesso': True,
-            'data_calculo': date.today().isoformat(),
+            'data_calculo': agora_utc_naive().date().isoformat(),
             'total_componentes': len(componentes),
             'componentes': componentes
         }
@@ -163,7 +164,7 @@ class ServicoProjecaoEstoque:
         """
         t0 = time.time()
 
-        hoje = date.today()
+        hoje = agora_utc_naive().date()
         data_inicio = hoje
         data_fim = hoje + timedelta(days=60)
 
@@ -697,7 +698,7 @@ class ServicoProjecaoEstoque:
         Returns:
             Dict com projeção diária
         """
-        data_inicio = date.today()
+        data_inicio = agora_utc_naive().date()
         data_fim = data_inicio + timedelta(days=dias)
 
         # Estoque atual
@@ -1355,8 +1356,8 @@ class ServicoProjecaoEstoque:
 
         DIFERENTE de _calcular_consumo_carteira que usa Saldo Carteira
         """
-        data_inicio = date.today()
-        data_fim = date.today() + timedelta(days=365)  # 1 ano à frente
+        data_inicio = agora_utc_naive().date()
+        data_fim = agora_utc_naive().date() + timedelta(days=365)  # 1 ano à frente
 
         consumo_total = 0.0
         cache_estoque = {}  # Cache temporário para este cálculo
@@ -1413,7 +1414,7 @@ class ServicoProjecaoEstoque:
                 'qtd_pedidos_no_prazo': float
             }
         """
-        hoje = date.today()
+        hoje = agora_utc_naive().date()
         detalhes_mesclados = []
         qtd_atrasados = 0.0
         qtd_requisicoes_no_prazo = 0.0
@@ -1608,7 +1609,7 @@ class ServicoProjecaoEstoque:
         # Calcular dia a dia
         timeline = []
         estoque_atual = float(estoque_inicial)
-        data_atual = date.today()
+        data_atual = agora_utc_naive().date()
 
         for i in range(61):  # D0 a D60
             entrada_dia = entradas_por_data.get(data_atual, 0)

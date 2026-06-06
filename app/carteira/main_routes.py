@@ -6,7 +6,8 @@ from app.carteira.models import (
     SaldoStandby
 )
 from sqlalchemy import func, inspect
-from datetime import date, timedelta
+from datetime import timedelta
+from app.utils.timezone import agora_utc_naive  # corte "hoje" em BRT (servidor roda em UTC)
 import logging
 from app.permissions.permissions import check_permission
 
@@ -88,10 +89,10 @@ def index():
 
         # PEDIDOS COM EXPEDICAO PROXIMA (7 dias)
         # Campo expedicao foi REMOVIDO de CarteiraPrincipal - usar data_pedido
-        data_limite = date.today() + timedelta(days=7)
+        data_limite = agora_utc_naive().date() + timedelta(days=7)
         expedicoes_proximas = CarteiraPrincipal.query.filter(
             CarteiraPrincipal.data_pedido <= data_limite,
-            CarteiraPrincipal.data_pedido >= date.today() - timedelta(days=30),
+            CarteiraPrincipal.data_pedido >= agora_utc_naive().date() - timedelta(days=30),
             CarteiraPrincipal.ativo == True,
             CarteiraPrincipal.qtd_saldo_produto_pedido > 0
         ).count()
