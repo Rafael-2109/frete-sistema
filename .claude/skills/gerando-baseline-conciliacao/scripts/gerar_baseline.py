@@ -195,16 +195,17 @@ def query_odoo_pendentes(odoo_conn, data_ref):
     return dict(agg), pendentes_top, journal_map
 
 
-def query_conciliacoes_d1(odoo_conn, data_ref):
-    """Query 3: Conciliacoes D-1 (UNIAO 3 fontes).
+def _query_conciliacoes_dia(odoo_conn, dia):
+    """Conciliacoes realizadas em UM dia especifico (UNIAO 3 fontes).
 
-    Aba 3 - armadilha documentada: consultar apenas 1 fonte = contagem errada.
+    Base compartilhada por query_conciliacoes_d1 (dia anterior, aba 3 do Excel) e
+    query_conciliacoes_d0 (dia atual, so na apresentacao de chat do fast-path).
+    Armadilha documentada: consultar apenas 1 fonte = contagem errada.
     """
     from app import db
 
-    ontem = (data_ref - timedelta(days=1))
-    inicio = f'{ontem.isoformat()} 00:00:00'
-    fim = f'{ontem.isoformat()} 23:59:59'
+    inicio = f'{dia.isoformat()} 00:00:00'
+    fim = f'{dia.isoformat()} 23:59:59'
 
     per_user = defaultdict(lambda: {'linhas': 0, 'pgtos': 0, 'recebs': 0, 'vl_deb': 0.0, 'vl_cred': 0.0})
 
@@ -264,8 +265,8 @@ def query_conciliacoes_d1(odoo_conn, data_ref):
             FROM lancamento_comprovante
             WHERE status = 'LANCADO'
               AND lancado_em IS NOT NULL
-              AND DATE(lancado_em) = :ontem
-        """), {'ontem': ontem})
+              AND DATE(lancado_em) = :dia
+        """), {'dia': dia})
         for row in result:
             nome = row[0]
             if not nome or nome.upper().startswith('SYNC_'):
@@ -286,6 +287,20 @@ def query_conciliacoes_d1(odoo_conn, data_ref):
     # e empresa separada do grupo com fluxo financeiro proprio — NAO misturar.
 
     return dict(per_user)
+
+
+def query_conciliacoes_d1(odoo_conn, data_ref):
+    """Query 3: Conciliacoes do DIA ANTERIOR (D-1) a data_ref. Alimenta a aba 3."""
+    return _query_conciliacoes_dia(odoo_conn, data_ref - timedelta(days=1))
+
+
+def query_conciliacoes_d0(odoo_conn, data_ref):
+    """Conciliacoes do DIA ATUAL (D-0) = data_ref — IMP-2026-05-13-002.
+
+    Usada SO na apresentacao de chat do fast-path (baseline_fastpath). NAO altera
+    o Excel canonico (montar_excel continua recebendo apenas d1).
+    """
+    return _query_conciliacoes_dia(odoo_conn, data_ref)
 
 
 def montar_excel(agg, pendentes, d1, _journal_map, data_ref, output_path, ordem_meses=None):
@@ -471,6 +486,47 @@ def montar_excel(agg, pendentes, d1, _journal_map, data_ref, output_path, ordem_
     }
 
 
+def gerar_baseline_arquivo(data_ref=None, output_dir='/tmp', ordem_meses=None):
+    """Gera o Excel do baseline e retorna os dados estruturados.
+
+    REQUER um Flask app_context ATIVO (o chamador cria). NAO cria app — assim
+    serve tanto o CLI (`main`, que cria o context) quanto o fast-path do agente
+    (`app/agente/sdk/baseline_fastpath.py`, que ja roda dentro de um request com
+    context). Levanta RuntimeError se o Odoo nao conectar.
+
+    Returns dict: output_file, agg, pendentes, d1, d0, journal_map, result,
+    total, data_ref.
+    """
+    data_ref = data_ref or date.today()
+    os.makedirs(output_dir, exist_ok=True)
+    output_file = os.path.join(
+        output_dir, f'extratos_pendentes_mes_journal_{_fmt_data_ref(data_ref)}.xlsx'
+    )
+
+    from app.odoo.utils.connection import get_odoo_connection
+    odoo_conn = get_odoo_connection()
+    if not odoo_conn:
+        raise RuntimeError('Nao foi possivel conectar ao Odoo')
+
+    agg, pendentes, journal_map = query_odoo_pendentes(odoo_conn, data_ref)
+    d1 = query_conciliacoes_d1(odoo_conn, data_ref)
+    d0 = query_conciliacoes_d0(odoo_conn, data_ref)
+    result = montar_excel(agg, pendentes, d1, journal_map, data_ref, output_file,
+                          ordem_meses=ordem_meses)
+    total = result.get('total_pendentes', sum(v['linhas'] for v in agg.values()))
+    return {
+        'output_file': output_file,
+        'agg': agg,
+        'pendentes': pendentes,
+        'd1': d1,
+        'd0': d0,
+        'journal_map': journal_map,
+        'result': result,
+        'total': total,
+        'data_ref': data_ref,
+    }
+
+
 def main():
     parser = argparse.ArgumentParser(description='Gerar baseline canonico de extratos pendentes')
     parser.add_argument('--output-dir', default='/tmp', help='Diretorio de saida')
@@ -491,32 +547,22 @@ def main():
 
     print(f'[{datetime.now().isoformat(timespec="seconds")}] Gerando baseline data_ref={data_ref.isoformat()} -> {output_file}')
 
-    # Conectar Flask app + Odoo
+    # Conectar Flask app + Odoo. A logica vive em gerar_baseline_arquivo (reusada
+    # pelo fast-path do agente); main() apenas cria o app_context e imprime.
     from app import create_app
     app = create_app()
-    with app.app_context():
-        from app.odoo.utils.connection import get_odoo_connection
-        odoo_conn = get_odoo_connection()
-        if not odoo_conn:
-            print('[ERRO] Nao foi possivel conectar ao Odoo')
-            sys.exit(1)
+    try:
+        with app.app_context():
+            print('[*] Consultando Odoo (pendentes + conciliacoes D-1/D-0) e montando Excel...')
+            if ordem_meses:
+                print(f'    Aba Resumo: ordem personalizada = {ordem_meses}')
+            dados = gerar_baseline_arquivo(data_ref, args.output_dir, ordem_meses)
+    except RuntimeError as e:
+        print(f'[ERRO] {e}')
+        sys.exit(1)
 
-        print('[1/4] Consultando pendentes por Mes x Journal (Odoo)...')
-        agg, pendentes, journal_map = query_odoo_pendentes(odoo_conn, data_ref)
-        print(f'       {len(agg)} combinacoes Mes x Journal, {len(pendentes)} linhas detalhadas (top N).')
-
-        print('[2/4] Consultando conciliacoes D-1 (UNIAO 3 fontes)...')
-        d1 = query_conciliacoes_d1(odoo_conn, data_ref)
-        print(f'       {len(d1)} usuarios com conciliacoes em D-1.')
-
-        print('[3/4] Calculando pivot para Resumo...')
-        # Pivot e derivado dentro do montar_excel
-
-        print('[4/4] Montando Excel...')
-        if ordem_meses:
-            print(f'       Aba Resumo: ordem personalizada = {ordem_meses}')
-        result = montar_excel(agg, pendentes, d1, journal_map, data_ref, output_file,
-                              ordem_meses=ordem_meses)
+    output_file = dados['output_file']
+    result = dados['result']
 
     print()
     print(f'[OK] Baseline gerado: {output_file}')
