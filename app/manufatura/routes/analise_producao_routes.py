@@ -5,7 +5,8 @@ Inclui agrupamento por Ordem de Produção (OP) + Produto
 """
 from flask import render_template, request, jsonify, make_response
 from flask_login import login_required, current_user
-from datetime import datetime, date
+from datetime import datetime
+from app.utils.timezone import agora_utc_naive  # corte "hoje" em BRT (servidor roda em UTC)
 from types import SimpleNamespace
 import logging
 
@@ -453,7 +454,7 @@ def register_analise_producao_routes(bp):
 
             # Retornar como download
             sufixo_bom = '_com_bom' if com_bom else ''
-            filename = f'analise_producao_{agrupamento}{sufixo_bom}_{date.today().strftime("%Y%m%d")}.xlsx'
+            filename = f'analise_producao_{agrupamento}{sufixo_bom}_{agora_utc_naive().date().strftime("%Y%m%d")}.xlsx'
             response = make_response(excel_bytes)
             response.headers['Content-Type'] = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
             response.headers['Content-Disposition'] = f'attachment; filename={filename}'
