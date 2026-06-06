@@ -362,6 +362,17 @@ USE_WEB_SMART_MODEL_ROUTING = os.getenv(
 # Default Sonnet 4.6 (mesmo do Teams). Rollback: deixar Opus setando igual.
 WEB_FAST_MODEL = os.getenv("AGENT_WEB_FAST_MODEL", "claude-sonnet-4-6")
 
+# FASE 1 (plano 2026-06-06-reducao-custo-agente-fast-path): fast-path
+# DETERMINISTICO do baseline de conciliacao (Marcus). Quando "atualizar baseline"
+# e' trivial (curto, sem data/variacao), roda o script gerar_baseline.py SEM LLM
+# (nem Opus nem Sonnet) e responde com link + tabelas. Qualquer variacao ou falha
+# cai no fluxo normal do agente (R-EXEC-6 fallback). Implementacao:
+# app/agente/sdk/baseline_fastpath.py (Teams: services.py; Web: routes/chat.py).
+# Rollback total: AGENT_BASELINE_FASTPATH=false.
+AGENT_BASELINE_FASTPATH = os.getenv(
+    "AGENT_BASELINE_FASTPATH", "true"
+).lower() == "true"
+
 # ====================================================================
 # Session Lifecycle (Fase 2, 2026-04-21)
 # ====================================================================

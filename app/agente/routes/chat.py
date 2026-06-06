@@ -409,6 +409,74 @@ def api_chat():
                 },
             )
 
+        # FASE 1 fast-path (plano docs/superpowers/plans/2026-06-06-reducao-custo-
+        # agente-fast-path): "atualizar baseline" trivial e resolvido SEM LLM.
+        # Roda o determinismo na VIEW (como o repeat short-circuit acima roda
+        # detect_recent_repeat) para PRESERVAR o fallback: se ok=False ou der
+        # excecao, NAO retorna aqui e cai no _stream_chat_response (LLM) abaixo.
+        # Trade-off: a 1a resposta espera o I/O do baseline (~5-20s) antes do 1o
+        # byte — aceitavel (o LLM levaria o mesmo). So o caminho feliz e' pego
+        # (should_intercept_baseline e' conservador). Ver R-EXEC-6.
+        try:
+            from app.agente.config.feature_flags import AGENT_BASELINE_FASTPATH
+            if AGENT_BASELINE_FASTPATH and message:
+                from app.agente.sdk.baseline_fastpath import (
+                    should_intercept_baseline, executar_baseline_fastpath,
+                )
+                if should_intercept_baseline(message):
+                    _fp = executar_baseline_fastpath(session_id=session_id, user_id=user_id)
+                    if _fp.get("ok"):
+                        from app.agente.routes._helpers import _sse_event as _sse_event_local
+                        _fp_text = _fp["resposta"]
+
+                        def _baseline_fastpath_stream():
+                            try:
+                                yield _sse_event_local('start', {'session_id': session_id})
+                                yield _sse_event_local('text', {
+                                    'content': _fp_text, 'session_id': session_id,
+                                })
+                                yield _sse_event_local('done', {
+                                    'session_id': session_id,
+                                    'total_cost_usd': 0.0,
+                                    'input_tokens': 0, 'output_tokens': 0,
+                                    'via_baseline_fastpath': True,
+                                })
+                                # Persiste a interacao (espelha _repeat_short_circuit_stream:
+                                # so persiste se a sessao ja existe — sem get_or_create).
+                                try:
+                                    from app.agente.models import AgentSession as _AS
+                                    from app import db as _db
+                                    _sess = _AS.query.filter_by(session_id=session_id).first()
+                                    if _sess:
+                                        _sess.add_user_message(message)
+                                        _sess.add_assistant_message(
+                                            content=_fp_text,
+                                            input_tokens=0, output_tokens=0, tools_used=None,
+                                        )
+                                        _db.session.commit()
+                                except Exception as _persist_err:
+                                    logger.warning(
+                                        f"[AGENTE] baseline fast-path persist falhou: {_persist_err}"
+                                    )
+                            finally:
+                                # Fix Sentry PYTHON-FLASK-KP: gunicorn rejeita yield None.
+                                yield ''
+
+                        logger.info(f"[AGENTE] baseline fast-path (sem LLM) user={user_id}")
+                        return Response(
+                            stream_with_context(_baseline_fastpath_stream()),
+                            mimetype='text/event-stream',
+                            headers={
+                                'Cache-Control': 'no-cache',
+                                'X-Accel-Buffering': 'no',
+                                'Connection': 'keep-alive',
+                            },
+                        )
+                    else:
+                        logger.info("[AGENTE] baseline fast-path falhou -> fluxo LLM")
+        except Exception as _fp_err:
+            logger.warning(f"[AGENTE] fast-path baseline ignorado (-> LLM): {_fp_err}")
+
         return Response(
             stream_with_context(_stream_chat_response(
                 message=enriched_message,
