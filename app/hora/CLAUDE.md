@@ -805,6 +805,30 @@ Permite marcar um item de NF de entrada (`HoraNfEntradaItem`) como **desconsider
 
 ---
 
+## 22. Notificação WhatsApp de NF emitida / pedido confirmado (TagPlus) — 2026-06-06
+
+Réplica do fluxo N8N: notifica um **grupo único de vendas** no WhatsApp **e a DM do vendedor** quando uma NFe da loja é aprovada e quando um pedido de venda é confirmado. NF leva o **PDF da DANFE anexado**. Spec: `docs/superpowers/specs/2026-06-06-hora-tagplus-notificacao-whatsapp-design.md`. Plano: `docs/superpowers/plans/2026-06-06-hora-tagplus-notificacao-whatsapp.md`.
+
+> **Origem**: a 1ª tentativa foi feita por engano no TagPlus da Nacom (`app/integracoes/tagplus/`) e **revertida**; a implementação correta vive toda em `app/hora/` (fronteira do módulo).
+
+**Gatilhos (best-effort — nunca quebram o fluxo principal)**:
+- **NF aprovada**: `webhook_handler.WebhookHandler.processar` chama `_disparar_notificacao_nfe_safe(emissao.id)` **após o commit**, só para `nfe_aprovada`.
+- **Pedido confirmado**: `venda_service.confirmar_venda` chama `enfileirar_notificacao('PEDIDO', venda.id)` **após o commit** do status `CONFIRMADO`.
+
+**Processamento**: job `processar_notificacao(registro_id)` na fila RQ **`hora_nfe`** (já em PROD). Service `app/hora/services/tagplus/notificacao_whatsapp.py`: `enfileirar_notificacao(tipo, ref_id)` (dedupe por `UNIQUE(tipo, ref_id)` + enqueue), `processar_notificacao` (busca venda/NFe → formata → resolve vendedor → baixa DANFE via `ApiClient` → envia grupo + DM), `reenfileirar`, `_resolver_vendedor` (casa `HoraVenda.vendedor` com `usuarios.vendedor_vinculado`/`nome` + `whatsapp_autorizado` + `telefone`), `_enviar_para_destinos` (idempotente por destino: `enviado_grupo`/`enviado_vendedor`).
+
+**Envio**: reusa `app/utils/whatsapp_notify.send_whatsapp(target, text, anexo_b64=, anexo_filename=)` (gateway OpenClaw, anexo via `buffer` base64).
+
+**Model/migration**: `HoraTagPlusNotificacaoWhatsapp` (`app/hora/models/tagplus.py`) + `scripts/migrations/hora_45_tagplus_notificacao_whatsapp.{py,sql}`.
+
+**Tela**: `/hora/tagplus/notificacoes` (`require_hora_perm('tagplus','ver')`; reenviar = `'editar'`) — `app/templates/hora/tagplus/notificacoes.html` (extends `hora/base.html`). Menu: grupo "Faturamento (TagPlus)" no `_sidebar.html`.
+
+**Env**: `HORA_TAGPLUS_NOTIFY_GROUP_JID` (JID `...@g.us`, obrigatório) + `HORA_TAGPLUS_NOTIFY_ENABLED` (kill switch) + reuso `OPENCLAW_GATEWAY_*`. Vendedor sem cadastro/autorização → fallback só-grupo (status `ENVIADO`, `enviado_vendedor=NULL`).
+
+**Testes**: `tests/hora/test_notificacao_whatsapp_model.py` (2), `test_notificacao_whatsapp_service.py` (4), `test_notificacao_gatilhos.py` (4), `test_notificacao_tela.py` (4), `tests/test_whatsapp_notify_anexo.py` (2). Gotcha: a tabela acumula resíduo de teste local se o teardown abortar — `DELETE FROM hora_tagplus_notificacao_whatsapp` antes de re-rodar.
+
+---
+
 ## Referências
 
 - **Contrato de design**: `docs/hora/INVARIANTES.md`
