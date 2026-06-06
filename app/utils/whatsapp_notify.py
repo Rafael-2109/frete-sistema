@@ -138,6 +138,9 @@ def send_whatsapp(
     *,
     skip_rate_limit: bool = False,
     timeout: float = _HTTP_TIMEOUT,
+    anexo_b64: str | None = None,
+    anexo_filename: str | None = None,
+    anexo_mimetype: str = "application/pdf",
 ) -> dict:
     """Envia mensagem WhatsApp via gateway OpenClaw.
 
@@ -148,6 +151,14 @@ def send_whatsapp(
         skip_rate_limit: True desabilita rate limit local (usar APENAS para
             envio em massa via fila externa que ja garante throttling).
         timeout: Timeout HTTP em segundos.
+        anexo_b64: Conteudo do arquivo em base64 (opcional). Quando fornecido,
+            o gateway envia o arquivo junto com a mensagem (ex.: PDF da DANFE).
+            Requer que o gateway OpenClaw suporte os campos buffer/filename/
+            mimeType/caption no tool "message".
+        anexo_filename: Nome do arquivo para o destinatario (ex.: "danfe_3706.pdf").
+            Ignorado se anexo_b64 nao fornecido.
+        anexo_mimetype: MIME type do arquivo (default: "application/pdf").
+            Ignorado se anexo_b64 nao fornecido.
 
     Returns:
         dict: resposta JSON do gateway (`{"ok": true, "result": {...}}`).
@@ -160,6 +171,9 @@ def send_whatsapp(
     Exemplo:
         >>> from app.utils.whatsapp_notify import send_whatsapp
         >>> send_whatsapp("+5511991642998", "VCD123 saiu para entrega")
+        >>> # Com anexo (DANFE em base64):
+        >>> send_whatsapp("+5511991642998", "Segue a NF", anexo_b64="JVBERi...",
+        ...               anexo_filename="danfe_3706.pdf")
     """
     if not _ENABLED:
         logger.info(
@@ -187,14 +201,22 @@ def send_whatsapp(
     #   "name" (NAO "tool") + "args" (NAO "params").
     # Outros formatos retornam "tool execution failed" sem extrair args, ou
     # "action required" quando args fica em key errada.
+    msg_args = {
+        "action": "send",
+        "channel": "whatsapp",
+        "target": target_norm,
+        "message": text,
+    }
+    if anexo_b64:
+        msg_args["buffer"] = anexo_b64
+        msg_args["mimeType"] = anexo_mimetype
+        msg_args["caption"] = text
+        if anexo_filename:
+            msg_args["filename"] = anexo_filename
+
     payload = {
         "name": "message",
-        "args": {
-            "action": "send",
-            "channel": "whatsapp",
-            "target": target_norm,
-            "message": text,
-        },
+        "args": msg_args,
     }
 
     # Path: gateway sempre usa /tools/invoke. Quando HMAC ativo, prepend
