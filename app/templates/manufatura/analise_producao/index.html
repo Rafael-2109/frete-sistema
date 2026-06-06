@@ -706,8 +706,12 @@ function salvarAjustes() {
         if (!inputAjuste) return;
 
         const ajusteNovo = parseFloat(inputAjuste.value) || 0;
-        // Inverter: no frontend negativo = consumiu mais, backend espera positivo = consumiu mais
-        const ajusteOriginal = -(original.ajuste_registrado || 0);
+        // Baseline DEVE ser idêntico ao valor inicial do input (preencherModalComponentes)
+        // e ao usado em marcarLinha(): -(consumo_real - consumo_previsto).
+        // Usar ajuste_registrado aqui divergia quando consumo_registrado != consumo_previsto
+        // (ex.: produção sem CONSUMO vinculado), zerando a diferença e disparando
+        // "Nenhum ajuste para salvar" indevidamente.
+        const ajusteOriginal = -(original.consumo_real - original.consumo_previsto);
 
         const diferenca = ajusteNovo - ajusteOriginal;
 
