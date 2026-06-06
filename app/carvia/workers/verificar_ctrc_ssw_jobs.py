@@ -334,7 +334,13 @@ def verificar_ctrc_cte_comp_job(cte_comp_id: int) -> dict:
             # Upload DACTE PDF para S3 (se baixado com sucesso) ANTES
             # do commit, para sincronizar ctrc_numero + cte_pdf_path.
             dacte_s3_path = None
-            dacte_path_local = dados.get('dacte') if baixar_dacte else None
+            # `consultar_ctrc_101.py` retorna o caminho do DACTE no TOP-LEVEL do
+            # resultado (gerar_saida(..., dacte=path) -> {'dacte': ...}), NAO
+            # dentro de `dados`. Ler de `dados.get('dacte')` retornava sempre
+            # None e o DACTE de CTe Comp nunca era baixado (mesmo pattern dos
+            # consumidores que funcionam: baixar_pdf_ssw_operacao_job e
+            # _persistir_artefatos_complementar, ambos leem resultado.get('dacte')).
+            dacte_path_local = resultado.get('dacte') if baixar_dacte else None
             if baixar_dacte and dacte_path_local and os.path.exists(dacte_path_local):
                 try:
                     from app.utils.file_storage import get_file_storage

@@ -37,6 +37,11 @@
                title="Download XML autorizado SEFAZ">
                 <i class="fas fa-file-code"></i> XML
             </a>
+            {% endif %}
+            {# DACTE gateado por cte_pdf_path (SOT do download), NAO por
+               cte_xml_path — alinha com detalhe_operacao.html e evita exibir o
+               botao quando o PDF ainda nao foi baixado. #}
+            {% if cte_comp.cte_pdf_path %}
             <a href="{{ url_for('carvia.download_cte_comp_dacte', cte_comp_id=cte_comp.id) }}"
                class="btn btn-outline-primary" target="_blank"
                title="Download DACTE PDF">

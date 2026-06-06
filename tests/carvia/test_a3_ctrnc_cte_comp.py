@@ -256,6 +256,79 @@ class TestCasoBVerificacao:
 
 
 # ---------------------------------------------------------------------------
+# Caso A com DACTE: baixa PDF quando cte_pdf_path vazio
+# ---------------------------------------------------------------------------
+
+class TestCasoADownloadDacte:
+    """Caso A com `baixar_dacte=True` (cte_pdf_path vazio).
+
+    Regressao: o script `consultar_ctrc_101.py` retorna o caminho do DACTE
+    no TOP-LEVEL do resultado (`gerar_saida(..., dacte=path)` -> `{'dacte': ...}`),
+    NAO dentro de `dados`. O job deve ler `resultado['dacte']`, fazer upload S3
+    e gravar `cte_pdf_path`. O bug lia `dados.get('dacte')` (sempre None),
+    entao o DACTE nunca era baixado para CTes complementares.
+    """
+
+    def test_baixa_dacte_top_level_e_grava_cte_pdf_path(self, app, tmp_path):
+        # Arquivo DACTE local fake (o job valida os.path.exists antes do upload)
+        dacte_local = tmp_path / "CAR000194-5-dacte.pdf"
+        dacte_local.write_bytes(b"%PDF-1.4 fake dacte")
+
+        with app.app_context():
+            cte_comp = _fake_cte_comp(
+                ctrc_numero='CAR-194-5', cte_numero='191', status='EMITIDO'
+            )
+            # cte_pdf_path vazio -> baixar_dacte=True (MagicMock seria truthy)
+            cte_comp.cte_pdf_path = None
+
+            fake_storage = MagicMock()
+            fake_storage.save_file.return_value = (
+                'carvia/ctes_pdf/CAR-194-5-42-dacte.pdf'
+            )
+
+            with patch(
+                'app.db'
+            ) as mock_db, patch(
+                'app.carvia.workers._ssw_helpers.consultar_101_por_cte_com_dacte'
+            ) as mock_consultar_dacte, patch(
+                'app.carvia.workers._ssw_helpers.consultar_101_por_cte'
+            ) as mock_consultar_sem_dacte, patch(
+                'app.carvia.workers._ssw_helpers.liberar_conexao_antes_playwright'
+            ), patch(
+                'app.carvia.workers._ssw_helpers.commit_com_retry'
+            ) as mock_commit, patch(
+                'app.utils.file_storage.get_file_storage',
+                return_value=fake_storage,
+            ):
+                mock_db.session.get.return_value = cte_comp
+                # Estrutura real do script: 'dacte' e IRMAO de 'dados', nao filho
+                mock_consultar_dacte.return_value = {
+                    'sucesso': True,
+                    'dados': {'ctrc_completo': 'CAR000194-5'},
+                    'dacte': str(dacte_local),
+                }
+                mock_commit.side_effect = lambda fn: fn()
+
+                from app.carvia.workers.verificar_ctrc_ssw_jobs import (
+                    verificar_ctrc_cte_comp_job,
+                )
+                resultado = verificar_ctrc_cte_comp_job(42)
+
+            # Usou a variante COM dacte (baixar_dacte=True), nao a sem dacte
+            mock_consultar_dacte.assert_called_once_with(
+                '191', filial='CAR', operacao_id='cte_comp_42'
+            )
+            mock_consultar_sem_dacte.assert_not_called()
+            # Fez upload do PDF para o S3
+            fake_storage.save_file.assert_called_once()
+            # Persistiu o caminho S3 em cte_pdf_path (SOT do download)
+            assert cte_comp.cte_pdf_path == 'carvia/ctes_pdf/CAR-194-5-42-dacte.pdf'
+            assert resultado['cte_pdf_path'] == (
+                'carvia/ctes_pdf/CAR-194-5-42-dacte.pdf'
+            )
+
+
+# ---------------------------------------------------------------------------
 # Caso C: SKIPPED (ambos vazios)
 # ---------------------------------------------------------------------------
 
