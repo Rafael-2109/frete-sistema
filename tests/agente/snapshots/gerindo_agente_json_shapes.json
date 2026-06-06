@@ -239,6 +239,13 @@
     "resolution_rate": "float",
     "resolved_sessions": "int",
     "rule_adhesion": {
+      "contencao": {
+        "contidas": "int",
+        "limiar_dias": "int",
+        "promovidas": "int",
+        "reincidindo": "int",
+        "taxa_contencao_pct": "float"
+      },
       "mandatory_count": "int",
       "mandatory_pct": "float",
       "outcome": {
@@ -420,8 +427,13 @@
     "instrumentacao": {
       "correction_count_ativo": "bool",
       "effective_count_ativo": "bool",
-      "resolves_to_ativo": "bool",
       "usage_count_ativo": "bool"
+    },
+    "instrumentacao_experimental": {
+      "resolves_to": {
+        "count": "int",
+        "status": "str"
+      }
     },
     "period_days": "int",
     "sessions_com_summary": "int",
@@ -446,6 +458,13 @@
     "total_sessions": "int"
   },
   "diagnostico.rule-adhesion": {
+    "contencao": {
+      "contidas": "int",
+      "limiar_dias": "int",
+      "promovidas": "int",
+      "reincidindo": "int",
+      "taxa_contencao_pct": "float"
+    },
     "mandatory_count": "int",
     "mandatory_pct": "float",
     "outcome": {

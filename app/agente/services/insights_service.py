@@ -1104,6 +1104,23 @@ def get_memory_metrics(days: int = 30, user_id: Optional[int] = None) -> Dict[st
 # T3: MÉTRICAS DE SAÚDE DO ROTEAMENTO
 # =============================================================================
 
+def _compute_routing_instrumentacao_score(instrumentacao: dict) -> float:
+    """Pontuacao (0-40) da instrumentacao do routing: fracao de indicadores reais ativos.
+
+    Conta SO os indicadores realmente instrumentados (correction_count/effective_count/
+    usage_count). `resolves_to` (KG) NAO entra: o produtor (`_record_routing_resolution`)
+    so dispara num caminho raro (AskUserQuestion + match de string) e o proprio system_prompt
+    pede para resolver sem perguntar — entao penalizava o health por uma feature
+    quase-nunca-exercida (teto pratico antigo: 30/40). Vira informativo em
+    `instrumentacao_experimental`. Auditoria 2026-06-06.
+    """
+    n = len(instrumentacao)
+    if n == 0:
+        return 0.0
+    ativos = sum(1 for v in instrumentacao.values() if v)
+    return min(40.0, (ativos / n) * 40.0)
+
+
 def get_routing_metrics(days: int = 30, user_id: Optional[int] = None) -> Dict[str, Any]:
     """
     Métricas de saúde do roteamento do agente — custo $0 (zero LLM).
@@ -1146,9 +1163,11 @@ def get_routing_metrics(days: int = 30, user_id: Optional[int] = None) -> Dict[s
                 'topics': [],
                 'instrumentacao': {
                     'correction_count_ativo': False,
-                    'resolves_to_ativo': False,
                     'effective_count_ativo': False,
                     'usage_count_ativo': False,
+                },
+                'instrumentacao_experimental': {
+                    'resolves_to': {'count': 0, 'status': 'nao_instrumentado'},
                 },
             }
 
@@ -1281,19 +1300,25 @@ def get_routing_metrics(days: int = 30, user_id: Optional[int] = None) -> Dict[s
             relation_type='resolves_to',
         ).count()
 
+        # So indicadores reais contam no score. resolves_to (KG) e informativo — ver
+        # _compute_routing_instrumentacao_score (penalizava o health por feature nao-instrumentada).
         instrumentacao = {
             'correction_count_ativo': inst_correction_count > 0,
-            'resolves_to_ativo': inst_resolves_to > 0,
             'effective_count_ativo': inst_effective_count > 0,
             'usage_count_ativo': inst_usage_count > 0,
         }
-        campos_ativos = sum(1 for v in instrumentacao.values() if v)
+        instrumentacao_experimental = {
+            'resolves_to': {
+                'count': inst_resolves_to,
+                'status': 'ativo' if inst_resolves_to > 0 else 'nao_instrumentado',
+            },
+        }
 
         # ── Health Score do Routing ──
         taxa_askuser = round(100 * sessions_askuser / max(sessions_com_summary, 1), 1)
         n_struggling = len(struggling)
 
-        score_inst = min(40, (campos_ativos / max(len(instrumentacao), 1)) * 40)
+        score_inst = _compute_routing_instrumentacao_score(instrumentacao)
         score_amb = 30 if taxa_askuser < 5 else (20 if taxa_askuser < 15 else (10 if taxa_askuser < 30 else 0))
         score_str = 30 if n_struggling == 0 else (20 if n_struggling < 3 else (10 if n_struggling < 10 else 0))
         health_score = round(score_inst + score_amb + score_str)
@@ -1315,6 +1340,7 @@ def get_routing_metrics(days: int = 30, user_id: Optional[int] = None) -> Dict[s
             'top_corrected': top_corrected_list,
             'topics': topics,
             'instrumentacao': instrumentacao,
+            'instrumentacao_experimental': instrumentacao_experimental,
         }
 
     except Exception as e:
