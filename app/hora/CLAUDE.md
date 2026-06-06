@@ -35,6 +35,7 @@ atualizado: 2026-06-03
 - [18. Unificação da tela de Pedido de Venda + filtro loja/vendedor + fix desconto — 2026-06-03](#18-unificação-da-tela-de-pedido-de-venda--filtro-lojavendedor--fix-desconto--2026-06-03)
 - [19. Guarda do recebimento automático (anti-ressurreição) — 2026-06-03](#19-guarda-do-recebimento-automático-anti-ressurreição--2026-06-03)
 - [20. Editar item (moto travada) + Enter=Próximo + chassi autocomplete + restauração de regressões — 2026-06-03](#20-editar-item-moto-travada--enterpróximo--chassi-autocomplete--restauração-de-regressões--2026-06-03)
+- [21. Unificação multi-item do Pedido de Venda + "Salvar Pedido" único (FU-1/2/3/5) — 2026-06-04](#21-unificação-multi-item-do-pedido-de-venda--salvar-pedido-único-fu-1235--2026-06-04)
 - [Onboarding Tours (2026-05-08)](#onboarding-tours-2026-05-08)
 - [Referências](#referências)
 
@@ -110,7 +111,7 @@ Em 1 linha por invariante:
 
 > O módulo tem **46 tabelas** `hora_*` em produção (lista completa: `grep -rhoE "__tablename__\s*=\s*['\"]hora_[a-z0-9_]+" app/hora/`). A lista abaixo cobre o núcleo conceitual; as auxiliares (empréstimo, devolução fornecedor/venda, conferência/auditoria, parser DANFE, pagamentos) seguem o mesmo padrão.
 
-Documentação detalhada no plano `/home/rafaelnascimento/.claude/plans/toasty-snuggling-sunrise.md`. Resumo:
+Documentação detalhada na análise de primeiros princípios do módulo (comando `/fp-lojas-motochefe` — `.claude/commands/fp-lojas-motochefe.md`). Resumo:
 
 **Cadastros**:
 - `hora_loja` — lojas físicas (identidade, CNPJ, nome).
@@ -807,8 +808,7 @@ Permite marcar um item de NF de entrada (`HoraNfEntradaItem`) como **desconsider
 ## Referências
 
 - **Contrato de design**: `docs/hora/INVARIANTES.md`
-- **Análise de primeiros princípios**: `/home/rafaelnascimento/.claude/plans/toasty-snuggling-sunrise.md`
-- **Contexto original do processo atual (Excel/WhatsApp)**: `.claude/plans/CONTROLE_MOTOS.md`
+- **Análise de primeiros princípios**: comando `/fp-lojas-motochefe` (`.claude/commands/fp-lojas-motochefe.md`)
 - **Precedente de chassi como PK** (ver, não copiar): `app/motochefe/models/produto.py:45`
 - **Parsers reusáveis**: `app/carvia/services/parsers/danfe_pdf_parser.py`, `app/carvia/services/pricing/moto_recognition_service.py`
 - **Regra de migrations duais**: `/home/rafaelnascimento/.claude/CLAUDE.md` seção "MIGRATIONS"

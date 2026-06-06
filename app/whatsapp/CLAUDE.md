@@ -4,7 +4,7 @@ camada: L1
 sot_de: —
 hub: CLAUDE.md
 superseded_by: —
-atualizado: 2026-06-03
+atualizado: 2026-06-06
 -->
 # WhatsApp Bot — Guia de Desenvolvimento
 
@@ -37,15 +37,15 @@ atualizado: 2026-06-03
 
 ## Contexto
 
-~875 LOC, 5 arquivos Python + plugin TS externo. O plugin `nacom-bridge` (em `~/.openclaw/plugins/`) faz roteamento deterministico e posta inbound aqui; o processamento fica todo no Agent SDK. Ground truth do OpenClaw em `memory/openclaw_whatsapp_integration.md`.
+~875 LOC, 5 arquivos Python + plugin TS externo. O plugin `nacom-bridge` (em `~/.openclaw/plugins/`) faz roteamento deterministico e posta inbound aqui; o processamento fica todo no Agent SDK. Ground truth do OpenClaw na memoria do Agente Web (`openclaw_whatsapp_integration.md`, fora deste repo).
 
-**LOC**: ~875 | **Arquivos**: 5 (Python) + plugin TS externo | **Atualizado**: 09/05/2026
+**LOC**: ~875 | **Arquivos**: 5 (Python) + plugin TS externo | **Atualizado**: 06/06/2026
 
 Canal WhatsApp via OpenClaw + Baileys (NAO oficial Cloud API). Plugin externo
 `nacom-bridge` (em `~/.openclaw/plugins/`) faz roteamento deterministico e
 posta inbound aqui. Cerebro fica TODO no Agent SDK Nacom.
 
-> **Memoria base**: `memory/openclaw_whatsapp_integration.md` — ground truth
+> **Memoria base**: `openclaw_whatsapp_integration.md` (memoria do Agente Web, fora deste repo) — ground truth
 > sobre OpenClaw + caminhos locais para Pyright/Pylance navegar.
 
 ---

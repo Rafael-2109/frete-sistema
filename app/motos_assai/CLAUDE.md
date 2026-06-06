@@ -4,7 +4,7 @@ camada: L1
 sot_de: —
 hub: CLAUDE.md
 superseded_by: —
-atualizado: 2026-06-03
+atualizado: 2026-06-06
 -->
 # Módulo Motos Assaí
 
@@ -71,7 +71,7 @@ atualizado: 2026-06-03
 
 29 tabelas com prefixo `assai_`, blueprint isolado. Pipeline completo implementado: Cadastros -> Parser VOE -> Pedido -> Compra -> Recibo Motochefe -> Recebimento fisico -> Saida (NF Q.P.A.). Fronteira estrita contra HORA/CarVia/Motochefe (reuso so via adapter/subclasse).
 
-**Data**: 2026-05-13
+**Data da implementacao**: 2026-05-13
 **Status**: Foundation + Cadastros (Plano 1) + Parser VOE + Pedido + Compra (Plano 2) + Recibo Motochefe + Recebimento físico (Plano 3) + Pipeline de saída completo (Plano 4) + **Integração lista_pedidos.html (Plano 5)** + **CCe como entidade com match reverso (2026-05-13)** — TODOS implementados.
 **Propósito**: gerenciar a operação B2B Q.P.A. → Sendas/Assaí com motos elétricas, isolada de outros módulos.
 
@@ -550,7 +550,7 @@ Os seguintes tipos de evento em `assai_moto_evento` foram ativados neste plano:
 
 ## Módulo completo — visão geral arquitetural
 
-- **16 tabelas** com prefixo `assai_` (ver spec `docs/superpowers/specs/2026-05-07-motos-assai-design.md`)
+- **29 tabelas** com prefixo `assai_` (ver secao "Modelo de dados (29 tabelas)" acima; a spec inicial `docs/superpowers/specs/2026-05-07-motos-assai-design.md` descreve as 16 tabelas da fundacao, expandidas pelos Planos 2-5)
 - **Toggle master** `sistema_motos_assai` em `usuarios` → decorator `@require_motos_assai`
 - **9 etapas do pipeline** implementadas (ESTOQUE → MONTADA → DISPONIVEL → SEPARADA → FATURADA)
 - **Parsers determinísticos** com fallback LLM (Haiku 4.5 → Sonnet 4.6) em PDFs e Excel
@@ -749,6 +749,10 @@ Tours guiados in-app via Driver.js para usuarios novos.
 - Plano 2: `docs/superpowers/plans/2026-05-07-motos-assai-pedido-compra.md`
 - Plano 3: `docs/superpowers/plans/2026-05-07-motos-assai-recibo-recebimento.md`
 - Plano 4: `docs/superpowers/plans/2026-05-07-motos-assai-saida-polish.md`
+- Plano fase 1 (fundacao): `docs/superpowers/plans/2026-05-12-motos-assai-fase1-fundacao.md`
+- Plano fase 2-3 (carregamento): `docs/superpowers/plans/2026-05-12-motos-assai-fase2-3-carregamento.md`
+- Plano fase 4 (NF + divergencias): `docs/superpowers/plans/2026-05-12-motos-assai-fase4-nf-divergencias.md`
+- Plano fase 5 (auxiliares): `docs/superpowers/plans/2026-05-12-motos-assai-fase5-auxiliares.md`
 - Padrão arquitetural de referência: `app/hora/CLAUDE.md`
 - Identificador de documento (rede QPA): `app/pedidos/leitura/identificador.py`
 - Parser base de PDF: `app/pedidos/leitura/base.py:PDFExtractor`

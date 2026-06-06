@@ -4,7 +4,7 @@ camada: L1
 sot_de: —
 hub: CLAUDE.md
 superseded_by: —
-atualizado: 2026-06-03
+atualizado: 2026-06-06
 -->
 # Modulo Relatorios Fiscais — SPED ECD Centralizado
 
@@ -44,9 +44,8 @@ atualizado: 2026-06-03
 
 ~5K LOC, porem fiscal-critico. Modalidade centralizada (companies FB+SC+CD; LF tem ECD propria). Cada iteracao estoura contexto se ler PDF/SPED inteiros — usar `SPED_ECD_PLANO.md` (inventario de erros) e `manual_ecd/INDEX.md` em vez dos arquivos completos. Em PROD usa a fila RQ `sped_ecd`. (A secao `## CONTEXTO CRITICO PARA NOVA SESSAO` abaixo traz o checklist anti-estouro.)
 
-**Ultima atualizacao**: 2026-05-15
-**Versao atual**: V1.8 (em construcao — mudancas nao commitadas em `sped_ecd_*.py`)
-**Versao em PROD**: V1.7 (commit `dbfc5006`, 2026-05-14)
+**Ultima atualizacao**: 2026-06-06
+**Versao SPED**: ver `VERSAO_SPED` em `services/sped_ecd_constantes.py` (valor em 2026-06-06: `V36`). NAO hardcodar o numero aqui — ele avanca a cada iteracao de correcao contra o PVA. Historico de versoes e decisoes: secao `## HISTORICO DE VERSOES E DECISOES CRITICAS` (abaixo) + `SPED_ECD_PLANO.md`.
 
 > Este CLAUDE.md cobre o modulo `app/relatorios_fiscais/`. Apesar de ser pequeno em LOC (~5K), ele consome SPED ECD (fiscal critico) com ciclo iterativo de correcoes contra PVA. Cada iteracao estoura contexto se ler PDF/SPED inteiros.
 
@@ -57,7 +56,7 @@ atualizado: 2026-06-03
 **SE voce esta abrindo este CLAUDE.md agora:**
 
 1. **NUNCA leia o PDF de erros nem o SPED gerado inteiros** — consultar `SPED_ECD_PLANO.md` (este diretorio) com inventario das ~30 categorias de erro.
-2. **NUNCA leia os 5 services completos de uma vez** (3653 linhas total) — usar offsets `Read(offset=N, limit=M)`.
+2. **NUNCA leia os 5 services completos de uma vez** (~4600 linhas total) — usar offsets `Read(offset=N, limit=M)`.
 3. **PROD usa fila `sped_ecd` no worker** — adicionar fila a worker_render.py + start_worker_render.sh (regra `~/.claude/CLAUDE.md`). JA REGISTRADA — bug historico SPED ECD V1.3 (commit `9d4e11d2`).
 4. **Modo dev iterativo**: usar `scripts/sped_ecd/gerar_sped.py` (standalone, sem RQ).
 5. **Manual ECD em PDF NAO precisa ser lido inteiro** — usar `manual_ecd/INDEX.md` e abrir so o bloco/registro relevante.
@@ -86,16 +85,16 @@ atualizado: 2026-06-03
 
 | Arquivo | LOC | Responsabilidade |
 |---------|-----|------------------|
-| `services/sped_ecd_service.py` | 486 | Orquestrador — sequencia blocos, escreve BytesIO, gerencia S3 |
-| `services/sped_ecd_constantes.py` | 247 | IDs Odoo, mapeamentos account_type→COD_NAT/referencial, signatarios |
-| `services/sped_ecd_blocks.py` | 1180 | Geradores por bloco (1 funcao por registro/grupo) |
-| `services/sped_ecd_data.py` | 1052 | Extracao Odoo XML-RPC (plano contas, saldos, lancamentos) |
-| `services/sped_ecd_validator.py` | 688 | Validacao pre-PVA — ~30 regras estruturais e de negocio |
+| `services/sped_ecd_service.py` | 521 | Orquestrador — sequencia blocos, escreve BytesIO, gerencia S3 |
+| `services/sped_ecd_constantes.py` | 308 | IDs Odoo, mapeamentos account_type→COD_NAT/referencial, signatarios |
+| `services/sped_ecd_blocks.py` | 1544 | Geradores por bloco (1 funcao por registro/grupo) |
+| `services/sped_ecd_data.py` | 1540 | Extracao Odoo XML-RPC (plano contas, saldos, lancamentos) |
+| `services/sped_ecd_validator.py` | 692 | Validacao pre-PVA — ~30 regras estruturais e de negocio |
 | `workers/sped_ecd_worker.py` | 258 | Job RQ assincrono (chama service, valida, S3) |
 | `routes.py` | 579 | Form + status + download (Blueprint `relatorios_fiscais`) |
-| `services/razao_geral_service.py` | ~370 | Razao Geral (relatorio fiscal separado, sem relacao com SPED ECD) |
+| `services/razao_geral_service.py` | 406 | Razao Geral (relatorio fiscal separado, sem relacao com SPED ECD) |
 
-**Total modulo SPED ECD**: ~3911 LOC (services + worker + script standalone)
+**Total modulo SPED ECD**: ~4990 LOC (5 services 4605 + worker 258 + script standalone `scripts/sped_ecd/gerar_sped.py` 127). LOC defasa rapido — recalcular via `scripts/audits/claude_md_stats_audit.py`.
 
 ---
 

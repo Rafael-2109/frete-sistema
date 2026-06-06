@@ -53,7 +53,7 @@ app/teams/
   ├── __init__.py      # 5 LOC — Blueprint /api/teams
   ├── models.py        # 81 LOC — TeamsTask (lifecycle 6 estados)
   ├── bot_routes.py    # 482 LOC — 5 endpoints + auth HMAC
-  └── services.py      # 1,919 LOC — Core: user/session/response/async processing
+  └── services.py      # 1,997 LOC — Core: user/session/response/async processing
 ```
 
 ## Regras Criticas

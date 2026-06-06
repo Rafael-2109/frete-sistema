@@ -4,7 +4,7 @@ camada: L1
 sot_de: —
 hub: CLAUDE.md
 superseded_by: —
-atualizado: 2026-06-03
+atualizado: 2026-06-06
 -->
 # Modulo Devolucao — Guia para Claude Code
 
@@ -46,7 +46,7 @@ atualizado: 2026-06-03
 
 ~13.9K LOC (17 arquivos) + 7 templates + 32 migrations, versao 3.0.0 (Fases 1-4.5 em prod, 5-6 pendentes). Este CLAUDE.md e o indice do modulo; detalhes profundos nos sub-docs (CLAUDE_APIS, CLAUDE_MODELOS, CLAUDE_FLUXOS) e o historico narrativo do produto no `README.md`.
 
-**Ultima Atualizacao**: 22/04/2026
+**Ultima Atualizacao**: 06/06/2026
 **Stats**: ~13.9K LOC Python (17 arquivos) + 7 templates + 32 migrations
 **Versao**: 3.0.0 (Fase 1-4.5 prod, Fase 5-6 pendentes)
 
@@ -113,7 +113,7 @@ app/templates/devolucao/
   termo_descarte.html                   # PDF do termo de descarte
 ```
 
-**Menu**: `base.html:509` — `url_for('devolucao.devolucao_ocorrencia.index')`
+**Menu**: `_sidebar.html:89` — `url_for('devolucao.devolucao_ocorrencia.index')`
 
 ---
 
@@ -163,7 +163,7 @@ Definido em **3 lugares** (`nfd_service.py:51`, `reversao_service.py:44`, `ocorr
 Mencionado em `prompt.md` como pendencia. NFDs podem ter `data_resolucao` (ocorrencia) diferente de `data_entrada` (NFD no Odoo). Investigar caso `/devolucao/ocorrencias/5004`.
 
 ### 10. `abort(4xx)` NAO funciona
-Global exception handler faz re-raise. **SEMPRE** usar `return jsonify({'erro': '...'}), N`. Regra global — ver `memory/app_abort_4xx_gotcha.md`.
+Global exception handler faz re-raise. **SEMPRE** usar `return jsonify({'erro': '...'}), N`. Regra global (a regra ja esta inline acima; gotcha historico registrado na memoria do Agente Web, fora deste repo).
 
 ### 11. CNPJ_EXCLUIDOS em filtros do dashboard
 `ocorrencia_routes.py:83-89` filtra por `NOT LIKE '{prefixo}%'` no `cnpj_emitente`. Ao adicionar filtros/agregacoes, **sempre replicar** o filtro de exclusao.
@@ -328,7 +328,7 @@ Leitura obrigatoria antes de mexer em templates ou dashboard. Entre os pedidos:
 
 ## Quick References
 
-- Rotas: `app/__init__.py:822` (import) e `:884` (register)
-- Link no menu: `app/templates/base.html:509`
+- Rotas: `app/__init__.py:876` (import) e `:941` (register)
+- Link no menu: `app/templates/_sidebar.html:89`
 - Agent SDK: **nao ha skill dedicada** — usar `especialista-odoo` ou `raio-x-pedido` para fluxos que cruzam com Odoo
 - Scheduler: `app/scheduler/sincronizacao_incremental_definitiva.py` (`NFDService.importar_nfds`, `ReversaoService.importar_reversoes`, `MonitoramentoSyncService.sincronizar_monitoramento`)

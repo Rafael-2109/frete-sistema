@@ -4,7 +4,7 @@ camada: L1
 sot_de: —
 hub: CLAUDE.md
 superseded_by: —
-atualizado: 2026-06-03
+atualizado: 2026-06-06
 -->
 # Seguranca — Guia de Desenvolvimento
 
@@ -33,7 +33,7 @@ atualizado: 2026-06-03
 
 14 arquivos, ~2K LOC, 8 telas (todas restritas a administrador). Email breaches via HIBP, forca de senha via zxcvbn + HIBP k-anonymity, seguranca DNS (SPF/DMARC/MX), score de risco e varreduras automaticas.
 
-**14 arquivos** | **~2K LOC** | **8 templates** | **Atualizado**: 01/06/2026
+**14 arquivos** | **~2K LOC** | **8 templates** | **Atualizado**: 06/06/2026
 
 Monitoramento de vulnerabilidades de colaboradores: email breaches (HIBP),
 forca de senhas (zxcvbn + HIBP k-anonymity), seguranca DNS (SPF/DMARC/MX),

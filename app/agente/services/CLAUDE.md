@@ -1,6 +1,6 @@
 # Agente Services — Guia de Desenvolvimento
 
-**LOC**: ~11.9K | **Arquivos**: 20 | **Atualizado**: 2026-06-01
+**LOC**: ~12.8K | **Arquivos**: 20 | **Atualizado**: 2026-06-06
 
 Hub de analise, otimizacao e aprendizado de sessoes em 3 camadas (P0 core, P1 UX, P2 analytics).
 
@@ -11,24 +11,24 @@ Hub de analise, otimizacao e aprendizado de sessoes em 3 camadas (P0 core, P1 UX
 ```
 app/agente/services/
   ├── _utils.py                       #    57 LOC — Helpers compartilhados (parse_llm_json_response)
-  ├── pattern_analyzer.py             # 2,247 LOC — Patterns prescritivos + perfil + extracao (P1-3)
-  ├── insights_service.py             # 1,605 LOC — Dashboard admin: metricas + health_score (P2)
-  ├── knowledge_graph_service.py      # 1,082 LOC — KG 3 layers: regex/Voyage/Sonnet (T3-3)
+  ├── pattern_analyzer.py             # 2,432 LOC — Patterns prescritivos + perfil + extracao (P1-3)
+  ├── insights_service.py             # 1,897 LOC — Dashboard admin: metricas + health_score (P2)
+  ├── knowledge_graph_service.py      # 1,160 LOC — KG 3 layers: regex/Voyage/Sonnet (T3-3)
   ├── memory_consolidator.py          #   736 LOC — Consolidacao + tier frio (P0)
   ├── metrics_dashboard_service.py    #   690 LOC — Dashboard telemetria subagent (Fase A1+A3)
   ├── improvement_suggester.py        #   602 LOC — Dialogo melhoria Agent SDK <-> Claude Code (D8)
   ├── eval_gate_service.py            #   568 LOC — Gate de avaliacao offline (A3 golden dataset)
-  ├── directive_promotion_service.py  #   498 LOC — Promocao automatica de diretriz (A4 Distill→Deploy)
+  ├── directive_promotion_service.py  #   887 LOC — Promocao automatica de diretriz (A4 Distill→Deploy)
   ├── ontology_bootstrap.py           #   211 LOC — Bootstrap da ontologia (knowledge graph / ontology_query)
   ├── intersession_briefing.py        #   576 LOC — Briefing entre sessoes, zero LLM (P0)
   ├── artifact_service.py             #   491 LOC — Rate limit + spec validation + S3 upload (artifacts)
   ├── friction_analyzer.py            #   490 LOC — Deteccao de friccao heuristica (P2-4)
   ├── session_summarizer.py           #   480 LOC — Resumos M1 estruturados via Sonnet (P0-2)
   ├── sql_evaluator_falses_service.py #   387 LOC — Detector de falsos negativos no SQL evaluator
-  ├── tool_skill_mapper.py            #   350 LOC — Mapeamento Tool → Categoria → Dominio (lookup)
+  ├── tool_skill_mapper.py            #   383 LOC — Mapeamento Tool → Categoria → Dominio (lookup)
   ├── recommendations_engine.py       #   279 LOC — Recomendacoes rule-based para dashboard
   ├── suggestion_generator.py         #   223 LOC — Sugestoes pos-resposta via Sonnet (P1-1)
-  └── sentiment_detector.py           #   214 LOC — Deteccao LOCAL de frustracao, zero API (P1-2)
+  └── sentiment_detector.py           #   260 LOC — Deteccao LOCAL de frustracao, zero API (P1-2)
 ```
 
 ## Regras Criticas
@@ -112,8 +112,8 @@ Roda em daemon thread. NUNCA bloquear o response path com extracao.
 | 2 | Voyage Semantic Search | ~300ms | ~$0.0001 |
 | 3 | Sonnet piggyback (relacoes) | 0ms extra | zero (reutiliza contextual retrieval) |
 
-`strip_xml_tags()` e exportada — usada por `memory_mcp_tool.py` e `routes.py`. Alterar assinatura quebra 3+ callers.
-— FONTE: `knowledge_graph_service.py:2-7,81`
+`strip_xml_tags()` e usada apenas INTERNAMENTE no `knowledge_graph_service.py` (via `normalize_for_comparison()` + extracao de entidades). Alterar assinatura afeta dedup/comparacao de memorias do KG.
+— FONTE: `knowledge_graph_service.py` (definicao + callers internos)
 
 ### session_summarizer: campo `acoes_usuario`
 = acoes do USUARIO (lancou, consultou, cancelou), NAO do agente. Confundir = resumo sem valor.
@@ -149,10 +149,10 @@ POST endpoint: `/api/improvement-dialogue`. GET: `/api/improvement-dialogue/pend
 ### Chamadores externos (quem chama services/)
 | Caller | Services usados |
 |--------|----------------|
-| `routes.py` | sentiment, suggestions, summarizer, patterns (5 funcoes), friction, insights, KG (strip_xml) |
+| `routes/` (chat, _helpers, insights, admin_learning) | sentiment, suggestions, summarizer, patterns (5 funcoes), friction, insights |
 | `sincronizacao_incremental_definitiva.py` | improvement_suggester (batch, modulo 25) |
 | `client.py` | intersession_briefing, KG (query_graph_memories) |
-| `memory_mcp_tool.py` | consolidator (2 funcoes), KG (extract, remove, strip_xml) |
+| `memory_mcp_tool.py` | consolidator (2 funcoes), KG (extract, remove) |
 
 ### Interdependencias internas
 | Service | Depende de |

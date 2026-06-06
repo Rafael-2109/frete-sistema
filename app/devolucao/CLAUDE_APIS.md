@@ -20,7 +20,7 @@ frete_bp          # 'devolucao.devolucao_frete.*'          /frete
 cadastro_bp       # 'devolucao.devolucao_cadastro.*'       /cadastros
 ```
 
-**Menu**: `app/templates/base.html:257` → `url_for('devolucao.devolucao_ocorrencia.index')`
+**Menu**: `app/templates/_sidebar.html:89` → `url_for('devolucao.devolucao_ocorrencia.index')`
 
 **Todas as rotas requerem `@login_required`** (exceto se documentado).
 

@@ -25,9 +25,9 @@ atualizado: 2026-06-03
 
 ## Contexto
 
-Agente separado (decisao 2026-04-22) que reusa a infra do SDK mas atende so o operador de loja, sem o contexto logistico Nacom. Reforca em camada-tool o contrato de isolamento de `app/hora/CLAUDE.md` via `skills=sorted(SKILLS_PERMITIDAS)` (SDK 0.1.77+): skills do dominio Nacom Goya ficam rejeitadas pelo Skill tool. ~2400 LOC, 20 arquivos, status M2.
+Agente separado (decisao 2026-04-22) que reusa a infra do SDK mas atende so o operador de loja, sem o contexto logistico Nacom. Reforca em camada-tool o contrato de isolamento de `app/hora/CLAUDE.md` via `skills=sorted(SKILLS_PERMITIDAS)` (SDK 0.1.77+): skills do dominio Nacom Goya ficam rejeitadas pelo Skill tool. ~2172 LOC, 17 arquivos Python, status M2.
 
-**LOC**: ~2400 (+65 testes) | **Arquivos**: 20 | **Status**: M2 SDK completo + UX hardened (markdown render, TodoWrite UI, SessionStore opcional, historico de sessoes na UI, 65 testes automatizados) | **Atualizado**: 2026-05-09
+**LOC**: ~2172 (+34 testes em tests/agente_lojas) | **Arquivos**: 17 (Python) | **Status**: M2 SDK completo + UX hardened (markdown render, TodoWrite UI, SessionStore opcional, historico de sessoes na UI, 34 testes automatizados) | **Atualizado**: 06/06/2026
 
 Agente dedicado ao pessoal das Lojas Motochefe (HORA), endpoint `/agente-lojas/*`.
 Compartilha SDK com `app/agente/` mas com system_prompt, skills, subagents e
@@ -174,9 +174,9 @@ compartilha com 'web' (nao e critico enquanto nao houver memorias).
 | M2 (SDK Fase A) | AskUserQuestion + can_use_tool + frontend rico (tool_call/tool_result/thinking/error/modal ask) | **Concluido** (2026-05-09) |
 | M2 (SDK Fase B) | Event loop persistente + output_format + stderr_callback + max_budget_usd + barreira SDK skills | **Concluido** (2026-05-09) |
 | M2 (SDK Fase C) | Hooks PostToolUse audit + permissions hardening | **Concluido** (2026-05-09) |
-| M2 (UX P0) | Markdown rendering (marked + DOMPurify), TodoWrite progress UI, 65 testes (can_use_tool, scope_injector, todos parser) | **Concluido** (2026-05-09) |
+| M2 (UX P0) | Markdown rendering (marked + DOMPurify), TodoWrite progress UI, 34 testes (can_use_tool, scope_injector, todos parser) | **Concluido** (2026-05-09) |
 | M2 (UX P1) | PostgresSessionStore opt-in (`AGENT_LOJAS_SESSION_STORE_ENABLED`), historico de sessoes no UI (dropdown + nova sessao) | **Concluido** (2026-05-09) |
-| M3   | Venda + isolamento total de memoria + Cost tracking granular por subagente | Planejado |
+| M3   | Venda + isolamento total de memoria + Cost tracking granular por subagente | **Parcial** — skill `consultando-venda-loja` ja na whitelist (`SKILLS_DOMINIO_HORA`); isolamento total de memoria + cost tracking pendentes |
 | M4   | Analytics (apos fase financeira HORA) | Planejado |
 
 ---

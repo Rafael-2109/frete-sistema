@@ -4,7 +4,7 @@ camada: L1
 sot_de: —
 hub: CLAUDE.md
 superseded_by: —
-atualizado: 2026-06-03
+atualizado: 2026-06-06
 -->
 # Agente Logistico Web — Guia de Desenvolvimento
 
@@ -41,7 +41,7 @@ atualizado: 2026-06-03
   - [Prerequisitos de execucao](#prerequisitos-de-execucao)
   - [S3 Storage (screenshots, archive)](#s3-storage-screenshots-archive)
   - [Arquivos legados — NAO usar, NAO estender](#arquivos-legados-nao-usar-nao-estender)
-  - [Services (17 arquivos, ~10.5K LOC)](#services-17-arquivos-105k-loc)
+  - [Services (20 arquivos, ~12.8K LOC)](#services-20-arquivos-128k-loc)
   - [MCP Tools de memoria (memory_mcp_tool.py v2.1.0 Enhanced, 12 operacoes)](#mcp-tools-de-memoria-memory_mcp_toolpy-v210-enhanced-12-operacoes)
   - [MCP Tools de sessao (session_search_tool.py v4.0.0 Enhanced, 4 operacoes)](#mcp-tools-de-sessao-session_search_toolpy-v400-enhanced-4-operacoes)
   - [Debug Mode — Injecao de Contexto (client.py)](#debug-mode-injecao-de-contexto-clientpy)
@@ -72,9 +72,9 @@ atualizado: 2026-06-03
 
 ## Contexto
 
-Encapsula o Claude Agent SDK (chat web SSE + Teams bot async); ~48.9K LOC em 96 arquivos. O rastreador VIVO da evolucao (flywheel/blueprint Ondas 0-4) e `docs/blueprint-agente/EXECUCAO.md`; o historico do SDK (0.1.49 -> 0.2.89) fica em `SDK_CHANGELOG.md`. Regra inviolavel: antes de mexer em qualquer item do flywheel (judge/verify/triage/eval-gate A3/promocao A4), ler a spec do eixo + a critica (licao anti-drift).
+Encapsula o Claude Agent SDK (chat web SSE + Teams bot async); ~51K LOC em 97 arquivos. O rastreador VIVO da evolucao (flywheel/blueprint Ondas 0-4) e `docs/blueprint-agente/EXECUCAO.md`; o historico do SDK (0.1.49 -> 0.2.89) fica em `SDK_CHANGELOG.md`. Regra inviolavel: antes de mexer em qualquer item do flywheel (judge/verify/triage/eval-gate A3/promocao A4), ler a spec do eixo + a critica (licao anti-drift).
 
-**LOC**: ~48.9K | **Arquivos**: 96 | **Atualizado**: 01/06/2026
+**LOC**: ~51K | **Arquivos**: 97 | **Atualizado**: 06/06/2026
 
 Wrapper do Claude Agent SDK: chat web (SSE) + Teams bot (async).
 
@@ -212,10 +212,11 @@ app/agente/                          # Root — 6 arquivos
 │   └── text_to_sql_tool.py          # Text-to-SQL (Enhanced v2.0.0)
 ├── utils/                           # Helpers de modulo — 2 arquivos
 │   └── pii_masker.py                # Mascaramento regex CPF/CNPJ/email (SDK 0.1.60 fase 2)
-└── workers/                         # Workers RQ locais — 8 arquivos
+└── workers/                         # Workers RQ locais — 9 arquivos
     ├── __init__.py
     ├── artifact_worker.py           # build_artifact_job (Vite+React+TS+Tailwind, queue artifacts)
     ├── background_jobs.py           # Jobs background diversos (varredores D8, enqueue)
+    ├── calibration_sampler.py       # Amostra turnos para calibracao do judge (flag AGENT_CALIBRATION_SAMPLER)
     ├── eval_runner.py               # Runner de avaliacao offline (A3 golden dataset, queue agent_judge)
     ├── plan_verifier.py             # Verify B2 do super-loop (shadow, queue agent_judge)
     ├── step_judge.py                # Judge por step do plano (shadow)
@@ -521,7 +522,7 @@ Screenshots Playwright (`playwright-screenshots/{YYYY-MM}/`) e archive de sessoe
 |---------|--------|
 | `historia.md` (76K) | Apenas referencia historica |
 
-### Services (17 arquivos, ~10.5K LOC)
+### Services (20 arquivos, ~12.8K LOC)
 Guia completo de regras, gotchas e interdependencias: **`services/CLAUDE.md`**
 Todos controlados por feature flags em `config/feature_flags.py`.
 
@@ -791,8 +792,8 @@ Apos baseline numerico estavel: prosseguir para **Fase B (Quality)**.
 | `created_by` | INTEGER nullable FK usuarios.id | Quem originou (auditoria) |
 
 ### Busca inclui user_id=0
-- `service.py:_search_pgvector_memories()` → `WHERE user_id = ANY([user_id, 0])`
-- `service.py:_search_fallback_memories()` → `.filter(user_id.in_([user_id, 0]))`
+- `app/embeddings/service.py:_search_pgvector_memories()` → `WHERE user_id = ANY([user_id, 0])`
+- `app/embeddings/service.py:_search_fallback_memories()` → `.filter(user_id.in_([user_id, 0]))`
 - `client.py` fallback recencia → `.filter(user_id.in_([user_id, 0]))`
 - `knowledge_graph_service.py:query_graph_memories()` → `WHERE user_id = ANY([user_id, 0])`
 

@@ -77,7 +77,7 @@ app/fretes/
   ├── models.py                     # 1.214 LOC — 9 models (Frete, FaturaFrete, DespesaExtra, etc.)
   ├── email_models.py               #    57 LOC — EmailAnexado
   ├── frota_models.py               #   139 LOC — FrotaVeiculo, FrotaDespesa
-  ├── routes.py                     # 6.915 LOC — fretes_bp (~90 endpoints) + funcoes exportadas
+  ├── routes.py                     # 7.208 LOC — fretes_bp (~90 endpoints) + funcoes exportadas
   ├── cte_routes.py                 #   561 LOC — cte_bp (/fretes/ctes)
   ├── frota_routes.py               #   633 LOC — frota_bp (/fretes/frota)
   ├── email_routes.py               #   138 LOC — emails_bp (/fretes/emails)
@@ -111,7 +111,7 @@ app/fretes/
 | `frota_bp` | `/fretes/frota` | `frota_routes.py` | ~8 |
 | `emails_bp` | `/fretes/emails` | `email_routes.py` | ~5 |
 
-Registrados em `app/__init__.py:873-938` via lazy import dentro de `create_app()`.
+Registrados em `app/__init__.py:882-885` (imports) + `:947` (register dos 4 blueprints) via lazy import dentro de `create_app()`.
 
 ---
 
