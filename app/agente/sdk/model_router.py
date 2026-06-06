@@ -98,6 +98,54 @@ _FAST_MODEL_PATTERNS: list[tuple[re.Pattern[str], str]] = [
         ),
         "confirmacao_curta",
     ),
+    # ───────────── FASE 2 (plano 2026-06-06-reducao-custo-agente-fast-path) ─────────
+    # Downgrade Opus->Sonnet de CONSULTAS read-only + cotacao + CarVia. Decisao do
+    # Rafael: "Tudo Sonnet" (conservador, sem Haiku). Regex ancorados nos _TEMPLATES
+    # ja testados de scripts/audits/session_automation_audit.py (T2.1), porem mais
+    # conservadores no routing. NAO inclui faturamento (SEFAZ, irreversivel) nem
+    # financeiro (julgamento) — T2.3. 'saldo' isolado foi REMOVIDO de consulta_estoque
+    # (ambiguo com saldo financeiro). conversa_analise (default) permanece Opus.
+    (
+        re.compile(
+            r"recalcul\w*.*frete|frete.*(m[íi]n|min)\.?\s*peso|"
+            r"atualizar.*embarque.*carvia|embarque.*carvia.*frete",
+            re.IGNORECASE,
+        ),
+        "recalculo_frete_carvia",
+    ),
+    (
+        re.compile(
+            r"foi entregue|\bentregue\b|que dia.*(embarc|fatur)|\bembarcou\b|"
+            r"cad[êe]\w*\s+(o |a |os |as |meu |minha |esse |essa )?(pedido|entrega|nf|nota|carga|merc)|"
+            r"\bstatus\b|\brastre|\bcanhoto\b|onde\s+est\w+.*(pedido|nf|nota|entrega|carga)|"
+            r"quando\s+(foi\s+)?(entreg|fatur|embarc)|j[áa]\s+(foi\s+)?(entreg|fatur)",
+            re.IGNORECASE,
+        ),
+        "monitoramento_entrega",
+    ),
+    (
+        re.compile(
+            r"cota[çc][ãa]o|quanto\s+(custa|sai|fica|vai|é|e)\b.*frete|"
+            r"\bfrete\s+(para|pra|de\s)|valor\s+do\s+frete|pre[çc]o\s+do\s+frete|\bfrete\s+pra\b",
+            re.IGNORECASE,
+        ),
+        "cotacao",
+    ),
+    (
+        re.compile(
+            r"quanto\s+(tem|temos|de)\b|estoque\s+d|tem\s+em\s+estoque|disponibilidade",
+            re.IGNORECASE,
+        ),
+        "consulta_estoque",
+    ),
+    (
+        re.compile(
+            r"movimenta[çc][ãa]o\b|movimenta[çc][õo]es\b|"
+            r"validade\s+(do\s+|de\s+)?lote|hist[óo]rico.*lote",
+            re.IGNORECASE,
+        ),
+        "consulta_movimentacao",
+    ),
 ]
 
 
