@@ -1,0 +1,24 @@
+{
+  "arquivos": {
+    "preset_operacional.md": {
+      "linhas": 117,
+      "bytes": 5079,
+      "tokens": 1451
+    },
+    "system_prompt.md": {
+      "linhas": 765,
+      "bytes": 46467,
+      "tokens": 13276
+    },
+    "empresa_briefing.md": {
+      "linhas": 81,
+      "bytes": 5084,
+      "tokens": 1452
+    }
+  },
+  "total": {
+    "linhas": 963,
+    "bytes": 56630,
+    "tokens": 16180
+  }
+}

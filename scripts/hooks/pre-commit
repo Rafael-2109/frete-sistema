@@ -10,3 +10,4 @@ cd "$ROOT"
 bash scripts/hooks/pre-commit-ui-lint.sh
 bash scripts/hooks/pre-commit-doc-lint.sh
 bash scripts/hooks/pre-commit-script-lint.sh
+bash scripts/hooks/pre-commit-prompt-lint.sh
