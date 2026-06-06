@@ -117,16 +117,14 @@ class TestProposeDirectiveFromPlan:
 
         assert propose_directive_from_plan({}, 'sessao-xyz') is None
 
-    def test_plano_unico_step_concluido(self):
-        """Plano com apenas um step completed → candidata válida."""
+    def test_plano_unico_step_nao_promove(self):
+        """Plano de 1 passo → None (acao unica hiper-especifica, nao fluxo transferivel).
+        Endurecimento auditoria 2026-06-06: antes virava candidata e gerava
+        'Fluxo: ...[1 passos]' lixo (ex: 'Cancelar payment 33439')."""
         from app.agente.services.directive_promotion_service import propose_directive_from_plan
 
         plan = _plano_todos_concluidos('consultar disponibilidade Atacadão')
-        result = propose_directive_from_plan(plan, 's1')
-
-        assert result is not None
-        assert result['status'] == 'candidata'
-        assert len(result.get('prescricao', '')) > 0
+        assert propose_directive_from_plan(plan, 's1') is None
 
     def test_step_com_status_pending_retorna_none(self):
         """Plano com step ainda pending (não falho, mas incompleto) → None."""
@@ -453,7 +451,8 @@ class TestRunBatch:
     def test_abstem_sem_judge_score(self):
         from app.agente.services import directive_promotion_service as svc
         from unittest.mock import patch
-        plan = {'steps': {'1': {'subject': 'consultar', 'status': 'completed'}}}
+        plan = {'steps': {'1': {'subject': 'consultar', 'status': 'completed'},
+                          '2': {'subject': 'validar', 'status': 'completed'}}}  # 2 passos (min p/ fluxo)
         with patch.object(svc, 'AGENT_DIRECTIVE_PROMOTION', True), \
              patch.object(svc, '_buscar_sessoes_com_plano_concluido', return_value=[self._sess('s1', plan)]), \
              patch.object(svc, '_buscar_sessoes_recentes', return_value=[]), \
@@ -466,7 +465,8 @@ class TestRunBatch:
     def test_promove_quando_qualidade_e_sem_falha_odoo(self):
         from app.agente.services import directive_promotion_service as svc
         from unittest.mock import patch
-        plan = {'steps': {'1': {'subject': 'consultar', 'status': 'completed'}}}
+        plan = {'steps': {'1': {'subject': 'consultar', 'status': 'completed'},
+                          '2': {'subject': 'validar', 'status': 'completed'}}}  # 2 passos (min p/ fluxo)
         with patch.object(svc, 'AGENT_DIRECTIVE_PROMOTION', True), \
              patch.object(svc, '_buscar_sessoes_com_plano_concluido', return_value=[self._sess('s1', plan)]), \
              patch.object(svc, '_buscar_sessoes_recentes', return_value=[]), \
@@ -480,7 +480,8 @@ class TestRunBatch:
     def test_rejeita_falha_odoo_dominante(self):
         from app.agente.services import directive_promotion_service as svc
         from unittest.mock import patch
-        plan = {'steps': {'1': {'subject': 'x', 'status': 'completed'}}}
+        plan = {'steps': {'1': {'subject': 'x', 'status': 'completed'},
+                          '2': {'subject': 'y', 'status': 'completed'}}}  # 2 passos (min p/ fluxo)
         with patch.object(svc, 'AGENT_DIRECTIVE_PROMOTION', True), \
              patch.object(svc, '_buscar_sessoes_com_plano_concluido', return_value=[self._sess('s1', plan)]), \
              patch.object(svc, '_buscar_sessoes_recentes', return_value=[]), \
