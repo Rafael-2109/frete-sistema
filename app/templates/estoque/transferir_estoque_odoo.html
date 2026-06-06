@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block title %}Transferência de Estoque (Odoo){% endblock %}
+{% block content %}
+<div class="container-fluid py-3" id="te-app">
+  <h4><i class="fas fa-right-left text-warning"></i> Transferência de Estoque (Odoo)
+    <span class="badge bg-danger">admin</span></h4>
+  <p class="text-muted">Transfere saldo dentro da mesma empresa (não emite NF). Simule antes de confirmar.</p>
+
+  <div class="card mb-3"><div class="card-body">
+    <div class="row g-2 align-items-end">
+      <div class="col-md-2">
+        <label class="form-label">Empresa</label>
+        <select id="te-empresa" class="form-select">
+          {% for e in empresas %}<option value="{{ e }}">{{ e }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="col-md-4">
+        <label class="form-label">Modo</label>
+        <select id="te-modo" class="form-select">
+          <option value="1">1 · Local → Local</option>
+          <option value="2">2 · Lote → Lote</option>
+          <option value="3" selected>3 · Código → Código</option>
+        </select>
+      </div>
+      <div class="col-md-6">
+        <label class="form-label">Código origem</label>
+        <input type="text" id="te-cod-origem" class="form-control" autocomplete="off"
+               placeholder="código ou nome (autocomplete)">
+        <input type="hidden" id="te-cod-origem-val">
+        <div id="te-prod-origem-info" class="form-text"></div>
+      </div>
+    </div>
+  </div></div>
+
+  <div id="te-alerta"></div>
+
+  <div class="card mb-3 d-none" id="te-painel"><div class="card-body">
+    <h6 class="text-muted">Situação do código origem (ao vivo)</h6>
+    <div class="row">
+      <div class="col-md-6">
+        <strong>A · Por Local</strong> &middot; <small>B · reservada</small>
+        <table class="table table-sm"><thead><tr>
+          <th>Local</th><th class="text-end">Qtd</th><th class="text-end">Reserv.</th>
+          <th class="text-end">Disp.</th></tr></thead>
+          <tbody id="te-tbl-local"></tbody></table>
+      </div>
+      <div class="col-md-6">
+        <strong>C · Por Lote</strong>
+        <table class="table table-sm"><thead><tr>
+          <th>Lote</th><th class="text-end">Qtd</th><th class="text-end">Reserv.</th>
+          <th class="text-end">Disp.</th></tr></thead>
+          <tbody id="te-tbl-lote"></tbody></table>
+      </div>
+    </div>
+  </div></div>
+
+  <div class="card mb-3 d-none" id="te-form"><div class="card-body">
+    <h6 id="te-form-titulo" class="text-muted"></h6>
+    <div class="row g-2 align-items-end" id="te-campos"></div>
+    <div class="mt-3">
+      <button id="te-btn-simular" class="btn btn-primary">
+        <i class="fas fa-flask"></i> Simular</button>
+    </div>
+  </div></div>
+
+  <div class="card mb-3 d-none border-success" id="te-preview"><div class="card-body">
+    <h6 class="text-success"><i class="fas fa-eye"></i> Preview da transferência</h6>
+    <div id="te-preview-body"></div>
+    <div class="mt-3">
+      <button id="te-btn-confirmar" class="btn btn-success">
+        <i class="fas fa-check"></i> Confirmar</button>
+      <button id="te-btn-cancelar" class="btn btn-outline-secondary">Cancelar</button>
+    </div>
+  </div></div>
+</div>
+<script src="{{ url_for('static', filename='js/estoque/transferir_estoque.js') }}"></script>
+{% endblock %}

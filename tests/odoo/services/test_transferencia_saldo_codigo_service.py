@@ -197,3 +197,93 @@ def test_registrar_movimentacao_local(service, app):
     assert saida.criado_por == 'rafael'
     assert fake_session.add.call_count == 2
     fake_session.commit.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# transferir_v2 — genérico (empresa/local/lote parametrizáveis) + dry-run
+# ---------------------------------------------------------------------------
+
+def test_transferir_v2_feliz_lf_locais_distintos(service, odoo_mock, adj_mock, lot_mock):
+    service.descobrir_destinos = MagicMock(return_value=[{'codigo': '4759198', 'nome': 'SOJA'}])
+    service.resolver_produto = MagicMock(side_effect=[
+        _info(27749, '4729198', 'AZEITE'), _info(27735, '4759198', 'SOJA')])
+    service._registrar_movimentacao_local = MagicMock()
+    lot_mock.buscar_por_nome.return_value = 56426
+    odoo_mock.read.return_value = [{'expiration_date': '2028-05-15 00:00:00'}]
+    lot_mock.criar_se_nao_existe.return_value = (58503, True)
+    adj_mock.ajustar_quant.side_effect = [
+        {'status': 'EXECUTADO', 'qty_antes': 290.0, 'qty_apos': 285.0},
+        {'status': 'EXECUTADO', 'qty_antes': 0.0, 'qty_apos': 5.0},
+    ]
+    r = service.transferir_v2(
+        company_id=5, cod_origem='4729198', location_id_origem=42,
+        lote_nome_origem='135/26', cod_destino='4759198', location_id_destino=53,
+        lote_nome_destino='135/26', qty=5.0, usuario='rafael', dry_run=False)
+    assert r['status'] == 'EXECUTADO'
+    assert r['origem_apos'] == 285.0 and r['destino_apos'] == 5.0
+    assert r['lote_criado'] is True
+    assert r['aviso_par'] is False
+    # company/local propagados ao ajustar_quant
+    red_kwargs = adj_mock.ajustar_quant.call_args_list[0].kwargs
+    assert red_kwargs['company_id'] == 5 and red_kwargs['location_id'] == 42
+    aum_kwargs = adj_mock.ajustar_quant.call_args_list[1].kwargs
+    assert aum_kwargs['company_id'] == 5 and aum_kwargs['location_id'] == 53
+    service._registrar_movimentacao_local.assert_called_once()
+
+
+def test_transferir_v2_aviso_par_nao_bloqueia(service, odoo_mock, adj_mock, lot_mock):
+    service.descobrir_destinos = MagicMock(return_value=[])  # nenhum par cadastrado
+    service.resolver_produto = MagicMock(side_effect=[
+        _info(27749, '4729198', 'AZEITE'), _info(27735, '9999', 'OUTRO')])
+    service._registrar_movimentacao_local = MagicMock()
+    lot_mock.buscar_por_nome.return_value = 56426
+    odoo_mock.read.return_value = [{'expiration_date': False}]
+    lot_mock.criar_se_nao_existe.return_value = (58503, False)
+    adj_mock.ajustar_quant.side_effect = [
+        {'status': 'EXECUTADO', 'qty_antes': 100.0, 'qty_apos': 90.0},
+        {'status': 'EXECUTADO', 'qty_antes': 0.0, 'qty_apos': 10.0},
+    ]
+    r = service.transferir_v2(
+        company_id=1, cod_origem='4729198', location_id_origem=8,
+        lote_nome_origem='135/26', cod_destino='9999', location_id_destino=8,
+        lote_nome_destino='135/26', qty=10.0, usuario='rafael', dry_run=False)
+    assert r['status'] == 'EXECUTADO'
+    assert r['aviso_par'] is True  # avisou, mas executou
+
+
+def test_transferir_v2_dry_run_nao_escreve_nem_cria_lote(service, odoo_mock, adj_mock, lot_mock):
+    service.descobrir_destinos = MagicMock(return_value=[{'codigo': '4759198', 'nome': 'SOJA'}])
+    service.resolver_produto = MagicMock(side_effect=[
+        _info(27749, '4729198', 'AZEITE'), _info(27735, '4759198', 'SOJA')])
+    service._registrar_movimentacao_local = MagicMock()
+    lot_mock.buscar_por_nome.side_effect = [56426, None]  # origem existe, destino NÃO
+    odoo_mock.read.return_value = [{'expiration_date': '2028-05-15 00:00:00'}]
+    adj_mock.ajustar_quant.return_value = {
+        'status': 'DRY_RUN_OK', 'qty_antes': 290.0, 'qty_apos': 285.0}
+    r = service.transferir_v2(
+        company_id=5, cod_origem='4729198', location_id_origem=42,
+        lote_nome_origem='135/26', cod_destino='4759198', location_id_destino=42,
+        lote_nome_destino='135/26', qty=5.0, usuario='rafael', dry_run=True)
+    assert r['status'] == 'DRY_RUN_OK'
+    assert r['origem_apos'] == 285.0
+    assert r['destino_antes'] == 0.0 and r['destino_apos'] == 5.0
+    assert r['lote_criado'] is True  # será criado no executar
+    lot_mock.criar_se_nao_existe.assert_not_called()   # NÃO cria em dry-run
+    service._registrar_movimentacao_local.assert_not_called()  # NÃO espelha em dry-run
+    # só 1 ajustar_quant (reduz origem dry); destino é preview manual (lote novo)
+    assert adj_mock.ajustar_quant.call_count == 1
+
+
+def test_transferir_v2_reducao_falha(service, odoo_mock, adj_mock, lot_mock):
+    service.descobrir_destinos = MagicMock(return_value=[{'codigo': '4759198', 'nome': 'SOJA'}])
+    service.resolver_produto = MagicMock(side_effect=[
+        _info(27749, '4729198', 'AZEITE'), _info(27735, '4759198', 'SOJA')])
+    lot_mock.buscar_por_nome.return_value = 56426
+    odoo_mock.read.return_value = [{'expiration_date': False}]
+    adj_mock.ajustar_quant.return_value = {'status': 'FALHA_RESERVADO', 'erro': 'reservado'}
+    r = service.transferir_v2(
+        company_id=1, cod_origem='4729198', location_id_origem=8,
+        lote_nome_origem='135/26', cod_destino='4759198', location_id_destino=8,
+        lote_nome_destino='135/26', qty=5.0, usuario='rafael', dry_run=False)
+    assert r['status'] == 'FALHA_REDUCAO'
+    assert adj_mock.ajustar_quant.call_count == 1
