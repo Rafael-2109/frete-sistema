@@ -980,6 +980,7 @@ class CarteiraAgrupada {
 
                 return {
                     separacao_lote_id: sep.lote_id,
+                    grupo_cliente: sep.grupo_cliente,  // 'atacadao' | 'sendas' | 'outros' (botao Agendar condicional)
                     status: sep.status,
                     valor_total: sep.valor,
                     peso_total: sep.peso,
@@ -1140,6 +1141,7 @@ class CarteiraAgrupada {
                     tipo: 'Separação',
                     status: sep.status || '',
                     loteId: sep.separacao_lote_id,
+                    grupoCliente: sep.grupo_cliente || 'outros',  // botao Agendar so' p/ atacadao/sendas
                     valor: sep.valor_total || 0,
                     peso: sep.peso_total || 0,
                     pallet: sep.pallet_total || 0,
@@ -1252,11 +1254,13 @@ class CarteiraAgrupada {
                                 <i class="fas fa-check"></i> Confirmar
                             </button>
                         ` : ''}
+                        ${(item.grupoCliente === 'atacadao' || item.grupoCliente === 'sendas') ? `
                         <button class="btn btn-outline-secondary btn-sm"
                                 onclick="carteiraAgrupada.agendarNoPortal('${item.loteId}', '${item.agendamento || ''}')"
-                                title="Agendar no portal">
+                                title="Agendar no portal (${item.grupoCliente})">
                             <i class="fas fa-calendar-plus"></i> Agendar
                         </button>
+                        ` : ''}
                         ${item.protocolo ? `
                             <button class="btn btn-outline-secondary btn-sm"
                                     onclick="carteiraAgrupada.verificarAgendamento('${item.loteId}', '${item.protocolo}')"

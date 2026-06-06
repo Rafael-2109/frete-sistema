@@ -112,6 +112,17 @@ class PortalSendas {
         // ✅ CORREÇÃO: Usar data da Separação ou deixar vazia
         const dataAgendamentoFormatada = dataAgendamento || '';
 
+        // 🆕 MATCH 100%: se todos os itens batem com a planilha E ha data definida,
+        // confirmar direto e exibir toast (deixa a tela livre, sem modal).
+        if (dadosCnpj.todos_tem_match_100 && dataAgendamentoFormatada) {
+            const itensMatch = this._montarItensMatch100(dadosCnpj, cnpj, loteId, dataAgendamentoFormatada);
+            if (itensMatch.length > 0) {
+                this._confirmarMatch100ComToast(itensMatch, loteId);
+                return;  // tela livre (sem modal)
+            }
+            // Caso raro (nenhum item montado): cai no modal abaixo.
+        }
+
         // Montar HTML do resultado
         let htmlResultado = `
             <div class="text-start">
@@ -433,6 +444,91 @@ class PortalSendas {
 
                 await this.confirmarAgendamentoSeparacao(resultado, loteId, dataAgendamentoFinal);
             }
+        });
+    }
+
+    /**
+     * 🆕 Monta itens confirmados para match 100% SEM depender do DOM.
+     * Replica a logica de "match exato" de confirmarAgendamentoSeparacao
+     * (quantidade = min(solicitado, saldo_disponivel)).
+     */
+    _montarItensMatch100(dadosCnpj, cnpj, loteId, dataAgendamento) {
+        const itens = [];
+        (dadosCnpj.itens || []).forEach(item => {
+            const solicitado = item.solicitado || {};
+            const encontrado = item.encontrado || {};
+            if (item.tipo_match === 'exato' && encontrado.codigo_pedido_sendas) {
+                const quantidadeAgendar = Math.min(
+                    parseFloat(solicitado.quantidade) || 0,
+                    parseFloat(encontrado.saldo_disponivel) || 0
+                );
+                if (quantidadeAgendar > 0) {
+                    itens.push({
+                        separacao_lote_id: loteId,
+                        tipo_origem: 'separacao',
+                        documento_origem: loteId,
+                        cnpj: cnpj,
+                        pedido_cliente: encontrado.codigo_pedido_sendas,
+                        cod_produto: encontrado.codigo_produto_sendas,
+                        nome_produto: encontrado.descricao,
+                        quantidade: quantidadeAgendar,
+                        data_agendamento: dataAgendamento,
+                        num_pedido: solicitado.num_pedido,
+                        pedido_original_separacao: solicitado.pedido_cliente,
+                        codigo_original_separacao: solicitado.cod_produto,
+                        observacao: 'Match exato com planilha (auto-confirmado 100%)'
+                    });
+                }
+            }
+        });
+        return itens;
+    }
+
+    /**
+     * 🆕 Confirma agendamento Sendas (match 100%) direto + toast, sem modal.
+     */
+    async _confirmarMatch100ComToast(itensConfirmados, loteId) {
+        try {
+            const response = await fetch('/portal/sendas/solicitar/separacao/confirmar', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': this.getCSRFToken()
+                },
+                body: JSON.stringify({
+                    itens_confirmados: itensConfirmados,
+                    separacao_lote_id: loteId
+                })
+            });
+            const resultado = await response.json();
+            if (resultado.sucesso) {
+                this._toastSucesso(`Agendamento Sendas confirmado! Protocolo: ${resultado.protocolo || '—'}`);
+            } else {
+                throw new Error(resultado.erro || 'Erro ao confirmar agendamento');
+            }
+        } catch (error) {
+            console.error('Erro no auto-confirm match 100% Sendas:', error);
+            Swal.fire({
+                icon: 'error',
+                title: 'Erro ao Confirmar',
+                text: error.message,
+                confirmButtonText: 'OK'
+            });
+        }
+    }
+
+    /**
+     * 🆕 Toast de sucesso no canto superior direito (tela livre).
+     */
+    _toastSucesso(titulo) {
+        Swal.fire({
+            toast: true,
+            position: 'top-end',
+            icon: 'success',
+            title: titulo,
+            timer: 4000,
+            showConfirmButton: false,
+            timerProgressBar: true
         });
     }
 

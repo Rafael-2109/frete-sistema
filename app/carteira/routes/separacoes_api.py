@@ -8,11 +8,26 @@ from app import db
 from app.separacao.models import Separacao
 from app.embarques.models import Embarque, EmbarqueItem
 from app.transportadoras.models import Transportadora
+from app.portal.utils.grupo_empresarial import GrupoEmpresarial
 import logging
 
 from . import carteira_bp
 
 logger = logging.getLogger(__name__)
+
+
+def _grupo_cliente_por_cnpj(cnpj):
+    """
+    Mapeia CNPJ -> grupo_cliente do template ('atacadao' | 'sendas' | 'outros').
+    Espelha app/carteira/services/agrupamento_service.py: Assai usa o portal Sendas.
+    Usado para exibir o botao "Agendar" apenas para Atacadao e Assai (Sendas).
+    """
+    grupo = GrupoEmpresarial.identificar_grupo(cnpj)
+    if grupo == 'atacadao':
+        return 'atacadao'
+    if grupo == 'assai':
+        return 'sendas'
+    return 'outros'
 
 
 @carteira_bp.route('/api/pedido/<num_pedido>/separacoes-completas', methods=['GET'])
@@ -261,6 +276,7 @@ def obter_separacoes_compactas_lote():
         # Filtrar apenas não faturadas (sincronizado_nf=False)
         separacoes = db.session.query(
             Separacao.num_pedido,
+            Separacao.cnpj_cpf,
             Separacao.separacao_lote_id,
             Separacao.expedicao,
             Separacao.protocolo,
@@ -326,6 +342,8 @@ def obter_separacoes_compactas_lote():
                 lote_data = {
                     'tipo': 'separacao',
                     'lote_id': lote_id,
+                    'cnpj': sep.cnpj_cpf,
+                    'grupo_cliente': _grupo_cliente_por_cnpj(sep.cnpj_cpf),
                     'protocolo': sep.protocolo,
                     'expedicao': sep.expedicao.strftime('%Y-%m-%d') if sep.expedicao else None,
                     'agendamento': sep.agendamento.strftime('%Y-%m-%d') if sep.agendamento else None,

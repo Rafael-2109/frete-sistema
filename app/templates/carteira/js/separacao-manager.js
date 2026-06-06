@@ -233,14 +233,25 @@ class SeparacaoManager {
                     btn.innerHTML = '<i class="fas fa-plus me-1"></i> Separação';
                 })
 
-                // 🆕 AGENDAMENTO AUTOMÁTICO: Verificar se há data de agendamento e pedir confirmação
-                if (dataExpedicao.agendamento && !dataExpedicao.protocolo && data.lote_id) {
+                // 🆕 AGENDAMENTO POS-SEPARACAO (apenas Atacadao e Sendas):
+                //   Pergunta rapida sim/nao para solicitar o agendamento no portal.
+                //   O portal especifico decide o resto: Sendas com match 100% e Atacadao
+                //   com todos os produtos em De-Para exibem TOAST (tela livre); caso
+                //   contrario exibem o modal correspondente.
+                const grupoClientePedido = document.querySelector(
+                    `.pedido-row[data-pedido="${numPedido}"]`
+                )?.dataset.grupoCliente || 'outros';
+                const grupoPermiteAgendamento = (grupoClientePedido === 'atacadao' || grupoClientePedido === 'sendas');
+
+                if (grupoPermiteAgendamento && dataExpedicao.agendamento && !dataExpedicao.protocolo && data.lote_id) {
                     // Aguardar um pouco para garantir que as atualizações foram aplicadas
                     setTimeout(async () => {
-                        const confirmarAgendamento = await this.confirmarAgendamentoAutomatico();
+                        const confirmarAgendamento = await this.confirmarAgendamentoAutomatico(
+                            grupoClientePedido, dataExpedicao.agendamento
+                        );
 
                         if (confirmarAgendamento) {
-                            console.log('✅ Usuário confirmou agendamento automático');
+                            console.log('✅ Usuário confirmou agendamento pos-separacao');
                             // Chamar função de agendamento do carteiraAgrupada se disponível
                             if (window.carteiraAgrupada && window.carteiraAgrupada.agendarNoPortal) {
                                 window.carteiraAgrupada.agendarNoPortal(data.lote_id, dataExpedicao.agendamento);
@@ -250,7 +261,7 @@ class SeparacaoManager {
                                 this.redirecionarParaPortalAgendamento(data.lote_id, dataExpedicao.agendamento);
                             }
                         } else {
-                            console.log('❌ Usuário recusou agendamento automático');
+                            console.log('❌ Usuário recusou agendamento pos-separacao');
                         }
                     }, 1500);
                 }
@@ -653,21 +664,29 @@ class SeparacaoManager {
      * 🆕 CONFIRMAR AGENDAMENTO AUTOMÁTICO
      * Solicita confirmação do usuário para agendar automaticamente no portal
      */
-    async confirmarAgendamentoAutomatico() {
+    async confirmarAgendamentoAutomatico(grupoCliente = '', dataAgendamento = '') {
+        const portalNome = grupoCliente === 'atacadao' ? 'Atacadão'
+            : grupoCliente === 'sendas' ? 'Sendas (Assaí)'
+            : 'portal';
+        const dataBR = dataAgendamento ? this.formatarDataBR(dataAgendamento) : '';
+        const texto = dataBR
+            ? `Solicitar agendamento no ${portalNome} para ${dataBR}?`
+            : `Solicitar agendamento no ${portalNome}?`;
+
         if (typeof Swal !== 'undefined') {
             const result = await Swal.fire({
-                title: 'Agendamento Automático',
-                text: 'Deseja realizar o agendamento no portal automaticamente?',
+                title: 'Agendar no portal',
+                text: texto,
                 icon: 'question',
                 showCancelButton: true,
                 confirmButtonText: 'Sim, agendar',
                 cancelButtonText: 'Não',
-                confirmButtonColor: window.Notifications?.colors?.neutral || '#6c757d',
+                confirmButtonColor: window.Notifications?.colors?.success || '#28a745',
                 cancelButtonColor: window.Notifications?.colors?.neutral || '#6c757d'
             });
             return result.isConfirmed;
         } else {
-            return confirm('Deseja realizar o agendamento no portal automaticamente?\n\n"OK" = Sim, agendar no portal\n"Cancelar" = Não agendar');
+            return confirm(`${texto}\n\n"OK" = Sim, agendar no portal\n"Cancelar" = Não agendar`);
         }
     }
 

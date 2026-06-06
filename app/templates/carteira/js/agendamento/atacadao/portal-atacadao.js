@@ -140,32 +140,52 @@ class PortalAtacadao {
             // Formatar data para exibição
             const dataFormatada = this.formatarData(dataAgendamento);
 
-            const confirmResult = await Swal.fire({
-                title: 'Confirmar Agendamento',
-                html: `
-                    <p><strong>Data:</strong> ${dataFormatada}</p>
-                    <p><strong>Produtos convertidos:</strong> ${preparacao.total_convertidos} de ${preparacao.total_itens}</p>
-                    <table class="table table-sm" style="font-size: 0.85em;">
-                        <thead>
-                            <tr>
-                                <th>Cód. Atacadão</th>
-                                <th>Descrição</th>
-                                <th>Qtd</th>
-                                <th>Pallets</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${produtosHtml}
-                        </tbody>
-                    </table>
-                `,
-                showCancelButton: true,
-                confirmButtonText: 'Confirmar e Agendar',
-                cancelButtonText: 'Cancelar',
-                width: '600px'
-            });
+            // 🆕 Se TODOS os produtos tem De-Para: confirmacao rapida (sem tabela).
+            //    Se houver produto sem De-Para: mantem o modal completo com a tabela.
+            let confirmou;
+            if (verificacao.sem_depara === 0) {
+                const confirmResult = await Swal.fire({
+                    title: 'Solicitar agendamento?',
+                    icon: 'question',
+                    html: `
+                        <p>Portal <strong>Atacadão</strong></p>
+                        <p><strong>Data:</strong> ${dataFormatada}</p>
+                        <p>${preparacao.total_convertidos} de ${preparacao.total_itens} itens com De-Para.</p>
+                    `,
+                    showCancelButton: true,
+                    confirmButtonText: 'Confirmar e Agendar',
+                    cancelButtonText: 'Cancelar'
+                });
+                confirmou = confirmResult.isConfirmed;
+            } else {
+                const confirmResult = await Swal.fire({
+                    title: 'Confirmar Agendamento',
+                    html: `
+                        <p><strong>Data:</strong> ${dataFormatada}</p>
+                        <p><strong>Produtos convertidos:</strong> ${preparacao.total_convertidos} de ${preparacao.total_itens}</p>
+                        <table class="table table-sm" style="font-size: 0.85em;">
+                            <thead>
+                                <tr>
+                                    <th>Cód. Atacadão</th>
+                                    <th>Descrição</th>
+                                    <th>Qtd</th>
+                                    <th>Pallets</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${produtosHtml}
+                            </tbody>
+                        </table>
+                    `,
+                    showCancelButton: true,
+                    confirmButtonText: 'Confirmar e Agendar',
+                    cancelButtonText: 'Cancelar',
+                    width: '600px'
+                });
+                confirmou = confirmResult.isConfirmed;
+            }
 
-            if (!confirmResult.isConfirmed) {
+            if (!confirmou) {
                 return false;
             }
 
@@ -203,15 +223,21 @@ class PortalAtacadao {
                     await this.gravarProtocolo(loteId, data.protocolo);
                 }
 
-                await Swal.fire({
-                    icon: 'success',
-                    title: 'Agendamento Realizado!',
-                    html: `
-                        <p><strong>Protocolo:</strong> ${data.protocolo || 'Aguardando confirmação'}</p>
-                        <p>${data.message}</p>
-                    `,
-                    confirmButtonText: 'OK'
-                });
+                // 🆕 Todos com De-Para: toast no canto superior (tela livre).
+                //    Caso contrario: mantem o modal de sucesso.
+                if (verificacao.sem_depara === 0) {
+                    this._toastSucesso(`Atacadão: agendamento solicitado. Protocolo: ${data.protocolo || 'aguardando confirmação'}`);
+                } else {
+                    await Swal.fire({
+                        icon: 'success',
+                        title: 'Agendamento Realizado!',
+                        html: `
+                            <p><strong>Protocolo:</strong> ${data.protocolo || 'Aguardando confirmação'}</p>
+                            <p>${data.message}</p>
+                        `,
+                        confirmButtonText: 'OK'
+                    });
+                }
 
                 // Recarregar modal de separações se estiver aberto
                 if (window.modalSeparacoes && document.getElementById('modal-pedido-numero')) {
@@ -783,6 +809,21 @@ class PortalAtacadao {
      */
     getCSRFToken() {
         return window.Security.getCSRFToken();
+    }
+
+    /**
+     * 🆕 Toast de sucesso no canto superior direito (tela livre).
+     */
+    _toastSucesso(titulo) {
+        Swal.fire({
+            toast: true,
+            position: 'top-end',
+            icon: 'success',
+            title: titulo,
+            timer: 4000,
+            showConfirmButton: false,
+            timerProgressBar: true
+        });
     }
 
     /**
