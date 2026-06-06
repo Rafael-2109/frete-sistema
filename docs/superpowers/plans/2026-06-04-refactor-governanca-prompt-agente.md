@@ -19,7 +19,7 @@ atualizado: 2026-06-04
 > 858→765 (−93L; T2.2 `1c60d0bfe` + correção `fee8f1f17`). **Lição (após ler as FONTES STUDY+QUALITY_REVIEW):**
 > a meta NÃO é tamanho (STUDY #7: Anthropic não segue "short prompts"; QUALITY_REVIEW: ROI de enxugar
 > BAIXO) — é **altitude** (procedimento→Camada 1) preservando forças (os `<why>` = A2 Top Strength 5/5).
-> **Decisão aberta:** expandir altitude p/ R0/routing (só se a altitude justificar, não o número)?
+> **Frente PARALELA escolhida (2026-06-05):** próxima sessão = **T4.3** (POC custom-string vs `preset:"claude_code"`+append, zona `client.py` isolada — escopo/premissa na linha T4.3 do rastreamento). FASE 5 roda em outra sessão simultânea (zona `scripts/audits/`+`CLAUDE.md`). **Decisão ainda aberta:** expandir altitude p/ R0/routing (só se a altitude justificar, não o número).
 > **T0.2 RESOLVIDO** (`dadf7f1ba`+`95421b1b6`): o custo SEMPRE esteve em `agent_sessions.total_cost_usd`
 > (coluna; 55/56 sessões/7d = $533,76); `agent_session_costs` (2ª via, breakdown de cache) ficava vazia
 > porque `record_cost` persistia via SAVEPOINT SEM commit no loop de streaming — movido p/
@@ -295,7 +295,7 @@ FASE 5 (governança) ───────┴──► transversal; T5.1/T5.2 id
 - [ ] T3.4 budget injeção medido — _SHA:_
 - [ ] T4.1 imperativos re-validados sob 4.8 — _SHA:_
 - [ ] T4.2 adaptive thinking — _SHA:_
-- [ ] T4.3 custom vs preset+append — _SHA:_
+- [ ] T4.3 custom vs preset+append — **🟢 PRÓXIMA SESSÃO PARALELA (decisão Rafael 2026-06-05; a FASE 5 roda em outra sessão simultânea).** Zona `client.py` / `feature_flags.py` **ISOLADA** — não toca `system_prompt`/`preset`/`CLAUDE.md` nem os arquivos da FASE 5. **Escopo:** POC determinístico comparando o modo atual (`USE_CUSTOM_SYSTEM_PROMPT=true` → string custom em `_build_full_system_prompt`, `client.py:1655-1674`) vs `preset:"claude_code" + append + excludeDynamicSections`. **Premissa a verificar 1º (R-EXEC-3):** o preset `claude_code` do SDK 0.2.89 ainda existe e o que ele injeta hoje (tom/tools/safety) — a string custom "apodrece" porque o preset evolui (a FASE 1 já provou drift). **Critério:** medir tamanho/tokens + cache-prefix + DIFF do que cada modo injeta; **SEM LLM eval** (prova determinística + spot-check). **Coordenação:** editar SÓ esta linha do rastreamento e rebase no push (a FASE 5 também edita este plano). _SHA:_
 - [ ] T5.1 gatilho de poda — _SHA:_
 - [ ] T5.2 doc auto-medida — _SHA:_
 - [ ] T5.3 checklist princípio/procedimento — _SHA:_
