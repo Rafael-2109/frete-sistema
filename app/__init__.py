@@ -1302,8 +1302,6 @@ def create_app(config_name=None):
 
     app.register_blueprint(tagplus_bp)  # Sem prefixo pois as rotas já definem seus paths
     app.register_blueprint(tagplus_webhook)  # Sem prefixo para manter URLs simples
-    from app.integracoes.tagplus.webhook_notificacao_routes import tagplus_notificacao
-    app.register_blueprint(tagplus_notificacao)  # webhook dedicado de notificação WhatsApp
     app.register_blueprint(tagplus_oauth_bp)  # Rotas OAuth2
 
     # 💬 Teams Integration - Bot API para Azure Function

@@ -1,1 +1,0 @@
-"""Services da integração TagPlus."""
