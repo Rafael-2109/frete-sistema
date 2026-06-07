@@ -104,8 +104,14 @@
     <div>{{ venda.valor_total|valor_br }}</div>
   </div></div>
   <div class="col-md-2"><div class="hora-kpi">
-    <div class="hora-kpi-label">Itens</div>
-    <div>{{ venda.itens|length }}</div>
+    {# Roadmap #1: badge de qtd de motos (e pecas, se houver) #}
+    <div class="hora-kpi-label">Motos</div>
+    <div>
+      <span class="badge bg-primary"><i class="fas fa-motorcycle"></i> {{ venda.itens|length }}</span>
+      {% if venda.itens_peca %}
+        <span class="badge bg-secondary" title="Peças"><i class="fas fa-cog"></i> {{ venda.itens_peca|length }}</span>
+      {% endif %}
+    </div>
   </div></div>
 </div>
 

@@ -2596,6 +2596,8 @@ def _query_vendas(
             .selectinload(HoraVendaItem.moto)
             .selectinload(HoraMoto.modelo),
         )
+        # Roadmap #1: badge de qtd de pecas na listagem — evita N+1.
+        opts.append(selectinload(HoraVenda.itens_peca))
 
     query = HoraVenda.query
     if opts:

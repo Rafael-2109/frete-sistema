@@ -134,6 +134,17 @@
           <td>{{ v.data_venda.strftime('%d/%m/%Y') }}</td>
           <td>{{ v.valor_total|valor_br }}</td>
           <td>
+            {# Roadmap #1: badge com qtd de motos (e pecas, se houver) do pedido #}
+            <div class="mb-1">
+              <span class="badge bg-primary" title="Motos no pedido">
+                <i class="fas fa-motorcycle"></i> {{ v.itens|length }} moto{{ 's' if v.itens|length != 1 else '' }}
+              </span>
+              {% if v.itens_peca %}
+                <span class="badge bg-secondary" title="Peças no pedido">
+                  <i class="fas fa-cog"></i> {{ v.itens_peca|length }} peça{{ 's' if v.itens_peca|length != 1 else '' }}
+                </span>
+              {% endif %}
+            </div>
             {% if v.itens %}
               <ul class="list-unstyled mb-0 small">
                 {% for it in v.itens %}
