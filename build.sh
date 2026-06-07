@@ -67,6 +67,19 @@ echo "Fase 3 loop corretivo: migration agent_memories (error_signature/harmful/h
 python scripts/migrations/2026_06_02_agent_memories_error_signature.py \
     || echo "⚠️ migration error_signature falhou — verificar (continuando deploy)..."
 
+# 5c. Otimizacao lista_pedidos (2026-06-07): desnormaliza equipe_vendas em separacao
+#     (coluna + backfill) e recria VIEW pedidos v8 + MV mv_pedidos SEM o LEFT JOIN
+#     carteira_principal (~710ms -> ~26ms/scan na Parte 1). ORDEM OBRIGATORIA: a coluna
+#     roda ANTES da VIEW — a v8 le s.equipe_vendas (guard aborta sem a coluna) e o model
+#     novo quebraria queries em separacao sem ela. Idempotentes (ADD COLUMN IF NOT EXISTS
+#     + DROP/CREATE VIEW) -> no-op apos consolidar. REMOVER deste arquivo apos o 1o deploy.
+echo "Otimizacao lista_pedidos (1/2): coluna separacao.equipe_vendas + backfill..."
+python scripts/migrations/add_equipe_vendas_separacao.py \
+    || echo "⚠️ migration equipe_vendas (coluna) falhou — verificar (continuando deploy)..."
+echo "Otimizacao lista_pedidos (2/2): VIEW pedidos v8 + MV sem JOIN carteira_principal..."
+python scripts/migrations/alterar_view_pedidos_v8.py \
+    || echo "⚠️ migration VIEW v8 falhou — verificar (continuando deploy)..."
+
 # ============================================================================
 # MIGRATIONS HISTORICAS — guardadas pela flag RUN_LEGACY_MIGRATIONS (default 0).
 #

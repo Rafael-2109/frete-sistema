@@ -109,6 +109,10 @@
       "description": "JSON: [{\"name\": \"VIP\", \"color\": 5}]"
     },
     {
+      "name": "equipe_vendas",
+      "type": "varchar(100)"
+    },
+    {
       "name": "tipo_envio",
       "type": "varchar(10)",
       "description": "total, parcial",

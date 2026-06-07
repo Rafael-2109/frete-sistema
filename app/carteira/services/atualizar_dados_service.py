@@ -39,7 +39,8 @@ class AtualizarDadosService:
         6. SubRota
         7. Observação
         8. Tags do Pedido (Odoo)
-        
+        9. Equipe de Vendas (Odoo)
+
         Returns:
             dict: Resumo da atualização
         """
@@ -156,6 +157,12 @@ class AtualizarDadosService:
                         if separacao.tags_pedido != item_produto.tags_pedido:
                             separacao.tags_pedido = item_produto.tags_pedido
                             campos_alterados.append('tags_pedido')
+
+                        # Equipe de Vendas (Odoo) — desnormalizado para eliminar
+                        # o LEFT JOIN caro com carteira_principal na VIEW pedidos
+                        if separacao.equipe_vendas != item_produto.equipe_vendas:
+                            separacao.equipe_vendas = item_produto.equipe_vendas
+                            campos_alterados.append('equipe_vendas')
 
                         if campos_alterados:
                             self.total_separacoes_atualizadas += 1

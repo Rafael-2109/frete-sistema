@@ -37,6 +37,12 @@ class Separacao(db.Model):
     # 🏷️ TAGS DO PEDIDO (ODOO) — sincronizado de CarteiraPrincipal
     tags_pedido = db.Column(db.Text, nullable=True)  # JSON: [{"name": "VIP", "color": 5}]
 
+    # 👥 EQUIPE DE VENDAS (ODOO) — desnormalizado de CarteiraPrincipal.equipe_vendas
+    # via AtualizarDadosService (sync pos-Odoo) e nos pontos de criacao de Separacao.
+    # Elimina o LEFT JOIN caro com carteira_principal na VIEW pedidos
+    # (equipe_vendas e constante por num_pedido). Mesmo padrao de tags_pedido.
+    equipe_vendas = db.Column(db.String(100), nullable=True)
+
     # 🎯 ETAPA 2: CAMPO TIPO DE ENVIO (ADICIONADO NA MIGRAÇÃO)
     tipo_envio = db.Column(db.String(10), default='total', nullable=True)  # total, parcial
     

@@ -147,6 +147,7 @@ def gerar_separacao_completa_pedido(num_pedido):
                 agendamento_confirmado=agendamento_confirmado,
                 pedido_cliente=item.pedido_cliente,
                 tags_pedido=item.tags_pedido,
+                equipe_vendas=item.equipe_vendas,
                 tipo_envio="total",  # SEMPRE total quando vem de gerar_separacao_completa
                 status='ABERTO',  # CORRIGIDO: Cria como ABERTO primeiro
                 sincronizado_nf=False,  # IMPORTANTE: Sempre criar com False (não NULL)
@@ -412,6 +413,7 @@ def salvar_separacao_generic():
                 observ_ped_1=truncar_observacao(item_carteira.observ_ped_1),
                 pedido_cliente=item_carteira.pedido_cliente,
                 tags_pedido=item_carteira.tags_pedido,
+                equipe_vendas=item_carteira.equipe_vendas,
                 rota=rota,
                 sub_rota=sub_rota,
                 status=status,
@@ -859,6 +861,7 @@ def gerar_separacao_customizada_pedido(num_pedido):
                 agendamento_confirmado=agendamento_confirmado,
                 pedido_cliente=item.pedido_cliente,
                 tags_pedido=item.tags_pedido,
+                equipe_vendas=item.equipe_vendas,
                 tipo_envio="total",  # mesma convencao do completa
                 status='ABERTO',
                 sincronizado_nf=False,

@@ -45,12 +45,35 @@
     // CORE: navegarComFiltros
     // ═══════════════════════════════════════════════════════════════
 
+    // Acumula os params entre navegacoes da MESMA pagina. Sem isso,
+    // navegarComFiltros partia sempre de window.location.search (a URL JA
+    // carregada). Quando o backend demora, uma 2a mudanca de filtro disparada
+    // antes do reload terminar NAO "via" a 1a e a descartava — race classico:
+    // ao escolher "De" e logo em seguida "Ate", apenas um sobrevivia.
+    // Memorizando os params, a 2a navegacao acumula sobre a 1a (vale para
+    // datas E qualquer outro filtro em sequencia rapida).
+    var _paramsPendentes = null;
+
+    function _mostrarCarregando() {
+        if (document.getElementById('pedidos-loading-overlay')) return;
+        var ov = document.createElement('div');
+        ov.id = 'pedidos-loading-overlay';
+        ov.className = 'pedidos-loading-overlay';
+        ov.setAttribute('aria-live', 'polite');
+        ov.innerHTML = '<div class="pedidos-loading-box">' +
+            '<i class="fas fa-spinner fa-spin"></i> Carregando…</div>';
+        document.body.appendChild(ov);
+    }
+
     /**
      * Constroi URL a partir dos params atuais + overrides, e navega.
      * @param {Object} overrides - chave:valor para set/delete (null = delete)
      */
     function navegarComFiltros(overrides) {
-        var params = new URLSearchParams(window.location.search);
+        // Parte dos params PENDENTES (navegacao anterior desta pagina ainda
+        // nao refletida na URL) ou, na 1a vez, da URL atual.
+        var params = _paramsPendentes || new URLSearchParams(window.location.search);
+        _paramsPendentes = params;
 
         Object.keys(overrides).forEach(function (key) {
             var val = overrides[key];
@@ -63,6 +86,8 @@
 
         // Reset paginacao ao mudar filtros
         params.delete('page');
+
+        _mostrarCarregando();
 
         var qs = params.toString();
         window.location.href = BASE_URL + (qs ? '?' + qs : '');

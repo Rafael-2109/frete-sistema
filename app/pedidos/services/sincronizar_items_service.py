@@ -389,6 +389,7 @@ class SincronizadorItemsService:
 
             # Campos de lote (copiados do exemplo)
             tags_pedido=separacao_exemplo.tags_pedido,
+            equipe_vendas=separacao_exemplo.equipe_vendas,
             agendamento_confirmado=separacao_exemplo.agendamento_confirmado,
             cotacao_id=separacao_exemplo.cotacao_id,
             data_embarque=separacao_exemplo.data_embarque,
