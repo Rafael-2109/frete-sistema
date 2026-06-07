@@ -38,3 +38,4 @@ atualizado: 2026-06-03
 - [Design — Capacitar `gestor-estoque-odoo` para remessa inter-company FB→LF (insumo direto, avulsa)](2026-06-02-capacitacao-gestor-remessa-fb-lf-design.md)
 - [consultando-venda-loja (design)](2026-06-02-skill-consultando-venda-loja-design.md) — skill READ de vendas Lojas HORA (Onda F)
 - [carregando-motos-assai (design)](2026-06-02-skill-carregando-motos-assai-design.md) — skill READ+WRITE de carregamento Motos Assai (Onda F)
+- [Text-to-SQL — Arquitetura (MASTER)](2026-06-07-text-to-sql-arquitetura-MASTER-design.md) — achados completos do pipeline SQL do agente + decomposicao em 4 subsistemas S0-S3 (sub-planos em plans/); tese: Opus autor unico, permissao≠geracao
