@@ -59,12 +59,24 @@ from typing import Any, Dict, Optional
 
 logger = logging.getLogger(__name__)
 
-# Timeout para o usuario responder (segundos)
-# SDK tem timeout de 60s no can_use_tool, usamos 55s para ter margem
-USER_RESPONSE_TIMEOUT = 55
+# Timeout para o usuario responder (segundos).
+# CORRECAO 2026-06-06: o SDK NAO impoe timeout no callback can_use_tool — ele e
+# awaitado sem fail_after (claude_agent_sdk/_internal/query.py:_handle_control_request);
+# so o cancelamento via control_cancel_request do CLI o interrompe. Os "60s" do
+# comentario antigo eram, na verdade, do _send_control_request (requests que o SDK
+# ENVIA: interrupt/set_model/initialize), NAO desta callback. Logo 55s era curto
+# demais (humano lendo pergunta multi-parte + clicando "Enviar" estoura) e gerava
+# "agente inerte". Estendido para 180s. SEGURO: o gerador SSE renova o deadline de
+# inatividade enquanto a thread esta viva (routes/chat.py emite 'processing'), entao
+# a espera longa NAO derruba o stream. Configuravel por env sem deploy.
+USER_RESPONSE_TIMEOUT = int(os.getenv("AGENT_ASK_USER_TIMEOUT_WEB", "180"))
 
-# TTL do registro Redis (deve ser > maior timeout possivel: TEAMS_ASK_USER_TIMEOUT=120s)
-_REDIS_TTL_SECONDS = 130
+# TTL do registro Redis (deve ser > maior timeout possivel entre web e Teams)
+_REDIS_TTL_SECONDS = max(
+    200,
+    USER_RESPONSE_TIMEOUT + 20,
+    int(os.getenv("TEAMS_ASK_USER_TIMEOUT", "180")) + 20,
+)
 
 # Prefixos Redis (namespaced para evitar colisao)
 _REDIS_KEY_PREFIX = "agent:pq:"

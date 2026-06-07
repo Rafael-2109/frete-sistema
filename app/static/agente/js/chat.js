@@ -1013,6 +1013,11 @@ async function sendMessage(event, { isAutoRetry = false } = {}) {
 
     // FEAT-026: Marca como gerando — counter-based para suportar streams concorrentes
     _streamStarted();
+    // Bug 2 (2026-06-06): se JA havia um stream ativo, este envio e' concorrente
+    // (msg "na fila"). Nesse caso NAO limpamos thinking/todos da resposta em
+    // andamento — isso interrompia visualmente o turno atual ("interrompe o
+    // thinking dele"). O backend serializa via pooled.lock e responde os dois.
+    const concurrentSend = _activeStreamCount > 1;
 
     // Adiciona mensagem do usuário
     addMessage(message, 'user');
@@ -1031,7 +1036,8 @@ async function sendMessage(event, { isAutoRetry = false } = {}) {
         // tasks do turno anterior persistiam visualmente quando o novo turno
         // criava tasks com IDs diferentes. Em auto-retry NAO zeramos: e o mesmo
         // turno tentando de novo, as tasks ja exibidas devem permanecer.
-        clearTodoList();
+        // Bug 2: tambem NAO zeramos em envio concorrente (turno anterior em curso).
+        if (!concurrentSend) clearTodoList();
     }
     messageInput.value = '';
     sendBtn.disabled = true;
@@ -1039,8 +1045,9 @@ async function sendMessage(event, { isAutoRetry = false } = {}) {
     // FEAT-026: Reseta altura do textarea
     messageInput.style.height = 'auto';
 
-    // Limpa thinking anterior
-    clearThinking();
+    // Limpa thinking anterior — mas NAO durante envio concorrente: preserva o
+    // "thinking" do turno em andamento (Bug 2, 2026-06-06).
+    if (!concurrentSend) clearThinking();
 
     // P1-1: Remove chips de sugestão anteriores
     document.querySelectorAll('.suggestion-chips').forEach(el => el.remove());
@@ -3024,6 +3031,20 @@ function renderAskUserQuestion(questions, askSessionId, state) {
     const answers = {};
     const selections = {};  // Para multi-select: { questionText: Set<label> }
 
+    // Auto-envio quando TODAS as perguntas single-select ja foram respondidas.
+    // CORRECAO 2026-06-06 (Bug "seleciono mas fica inerte"): antes so auto-enviava
+    // com 1 pergunta unica; com 2+ perguntas o usuario clicava a opcao e nada
+    // acontecia (precisava achar o botao "Enviar Respostas"). Multi-select continua
+    // exigindo envio explicito (nao da' p/ inferir "terminou de marcar varias").
+    const maybeAutoSubmit = () => {
+        if (questions.some(qq => qq.multiSelect)) return;
+        const allAnswered = questions.every(qq => {
+            const v = answers[qq.question];
+            return v !== undefined && v !== null && v !== '';
+        });
+        if (allAnswered) submitAskUserAnswers(container, askSessionId, answers);
+    };
+
     questions.forEach((q) => {
         const questionDiv = document.createElement('div');
         questionDiv.className = 'ask-user-question';
@@ -3074,10 +3095,9 @@ function renderAskUserQuestion(questions, askSessionId, state) {
                     optBtn.classList.add('selected');
                     answers[q.question] = opt.label;
 
-                    // Se é single-select E é a única pergunta, envia imediatamente
-                    if (questions.length === 1) {
-                        submitAskUserAnswers(container, askSessionId, answers);
-                    }
+                    // Envia assim que TODAS as perguntas single-select tiverem resposta
+                    // (cobre 1 ou N perguntas). Ver maybeAutoSubmit.
+                    maybeAutoSubmit();
                 }
             });
 
@@ -3132,8 +3152,9 @@ function renderAskUserQuestion(questions, askSessionId, state) {
                 otherBtn.querySelector('.option-desc').textContent = val;
                 inputWrapper.remove();
 
-                // Auto-envio se single-select com 1 pergunta
-                if (questions.length === 1 && !q.multiSelect) {
+                // Auto-envio quando todas as single-select estiverem respondidas
+                if (!questions.some(qq => qq.multiSelect)
+                        && questions.every(qq => answers[qq.question])) {
                     submitAskUserAnswers(container, askSessionId, answers);
                 } else {
                     showToast('✓ Resposta capturada', 2000);

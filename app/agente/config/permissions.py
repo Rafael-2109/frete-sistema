@@ -741,15 +741,21 @@ async def can_use_tool(
                 # Verifica se é contexto Teams com task ativa (Fase 2)
                 teams_task_id = get_teams_task_id(current_session_id)
                 if teams_task_id:
-                    # Fix: Limitar AskUserQuestion a 1 tentativa por sessão Teams.
-                    # Se já tentou antes (timeout ou sem resposta), negar imediatamente
-                    # para evitar loop infinito de Adaptive Cards.
+                    # Anti-flood: limita PERGUNTAS CONSECUTIVAS NAO RESPONDIDAS
+                    # (timeouts), nao o total de perguntas da sessao.
+                    # CORRECAO 2026-06-06: antes o contador subia a cada pergunta e
+                    # nunca resetava -> a 2a pergunta de uma sessao era bloqueada mesmo
+                    # com a 1a JA respondida (Teams "inerte" em fluxos multi-pergunta).
+                    # Agora o contador eh resetado apos cada resposta bem-sucedida
+                    # (ver reset abaixo), entao 'attempts' = timeouts consecutivos.
+                    _max_consec = int(os.getenv("TEAMS_ASK_MAX_CONSECUTIVE", "1"))
                     with _context_lock:
                         attempts = _teams_ask_attempts.get(current_session_id, 0)
-                    if attempts >= 1:
+                    if attempts >= _max_consec:
                         logger.warning(
-                            f"[PERMISSION] AskUserQuestion BLOQUEADO (tentativa #{attempts + 1}): "
-                            f"session={current_session_id[:8]}... Limite de 1 tentativa excedido."
+                            f"[PERMISSION] AskUserQuestion BLOQUEADO "
+                            f"({attempts} timeout(s) consecutivo(s) >= {_max_consec}): "
+                            f"session={current_session_id[:8]}..."
                         )
                         from ..sdk.pending_questions import cancel_pending
                         cancel_pending(current_session_id)
@@ -794,7 +800,8 @@ async def can_use_tool(
                     except Exception as e:
                         logger.error(f"[PERMISSION] Erro ao atualizar TeamsTask: {e}", exc_info=True)
 
-                    # Bloqueia até o usuário responder via card no Teams (timeout 120s)
+                    # Bloqueia até o usuário responder via card no Teams
+                    # (timeout = TEAMS_ASK_USER_TIMEOUT, default 180s — env-configuravel)
                     from app.agente.config.feature_flags import TEAMS_ASK_USER_TIMEOUT
                     answers = wait_for_answer(current_session_id, timeout=TEAMS_ASK_USER_TIMEOUT)
 
@@ -846,6 +853,14 @@ async def can_use_tool(
                                 "incluindo todas as alternativas possíveis na resposta."
                             )
                         )
+
+                    # Resposta recebida com sucesso: ZERA o contador de timeouts
+                    # consecutivos. Sem isso (bug ate 2026-06-06) a 2a pergunta da
+                    # sessao era bloqueada mesmo com a 1a JA respondida. Agora cada
+                    # resposta valida "limpa a ficha" e o anti-flood so dispara em
+                    # perguntas REALMENTE nao respondidas em sequencia.
+                    with _context_lock:
+                        _teams_ask_attempts[current_session_id] = 0
 
                     # Retorna com as respostas do usuário
                     updated = dict(tool_input)

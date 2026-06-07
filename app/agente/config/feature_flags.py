@@ -331,9 +331,10 @@ TEAMS_DEFAULT_MODEL = os.getenv("TEAMS_DEFAULT_MODEL", "claude-opus-4-8")
 TEAMS_ASYNC_MODE = os.getenv("TEAMS_ASYNC_MODE", "true").lower() == "true"
 
 # Timeout para AskUserQuestion no Teams (segundos)
-# O usuario tem este tempo para responder o Adaptive Card antes de timeout
-# Default 120s (2 minutos) — maior que web (55s) pois Teams e mais lento
-TEAMS_ASK_USER_TIMEOUT = int(os.getenv("TEAMS_ASK_USER_TIMEOUT", "120"))
+# O usuario tem este tempo para responder o Adaptive Card antes de timeout.
+# Default 180s (3 min) — humano precisa ler o card + render/poll do Teams; 120s
+# estourava em perguntas multi-parte (2026-06-06). Alinhado ao web (AGENT_ASK_USER_TIMEOUT_WEB).
+TEAMS_ASK_USER_TIMEOUT = int(os.getenv("TEAMS_ASK_USER_TIMEOUT", "180"))
 
 # Progressive streaming: flush texto parcial ao DB durante processamento
 # Quando true: polling retorna resposta_parcial enquanto status='processing'

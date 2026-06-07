@@ -155,6 +155,15 @@ class PooledClient:
 _registry: Dict[str, PooledClient] = {}
 _registry_lock = threading.Lock()
 
+# Locks de criação por sessão (asyncio): serializam o connect() concorrente.
+# Sem isso, 2 requests da MESMA sessão chegando DENTRO da janela do
+# `await client.connect()` (alguns segundos) ambas passavam pelo check inicial
+# "não existe", criavam clients separados, e a 2ª DESCONECTAVA a 1ª
+# ("Replacing connected client") — matando o stream do turno em andamento.
+# Sintoma: 2a mensagem enviada durante o "thinking" da 1a interrompia a 1a e
+# uma das duas não respondia (race fix 2026-06-06). Ligam ao _sdk_loop corrente.
+_creation_locks: Dict[str, "asyncio.Lock"] = {}
+
 # Daemon thread e event loop persistente
 _sdk_loop: Optional[asyncio.AbstractEventLoop] = None
 _sdk_loop_thread: Optional[threading.Thread] = None
@@ -274,6 +283,21 @@ def submit_coroutine(
 # Gerenciamento de clients
 # =============================================================================
 
+def _get_creation_lock(session_id: str) -> "asyncio.Lock":
+    """Retorna (criando se preciso) o asyncio.Lock de criação desta sessão.
+
+    DEVE ser chamado de dentro do _sdk_loop (o asyncio.Lock liga-se ao loop
+    corrente). O dict é protegido pelo _registry_lock (threading) por defesa,
+    embora todas as chamadas rodem na thread única do daemon.
+    """
+    with _registry_lock:
+        lock = _creation_locks.get(session_id)
+        if lock is None:
+            lock = asyncio.Lock()
+            _creation_locks[session_id] = lock
+        return lock
+
+
 async def get_or_create_client(
     session_id: str,
     options: Any,  # ClaudeAgentOptions
@@ -306,59 +330,89 @@ async def get_or_create_client(
         )
         return pooled
 
-    # Slow path: criar novo client
-    from claude_agent_sdk import ClaudeSDKClient
-
-    client = ClaudeSDKClient(options)
-
-    # Connect com streaming mode (None = interactive, sem prompt inicial)
-    await client.connect()
-
-    pooled = PooledClient(
-        client=client,
-        session_id=session_id,
-        user_id=user_id,
-        connected=True,
-    )
-
-    with _registry_lock:
-        # Se havia um client antigo desconectado, limpar
-        old = _registry.get(session_id)
-        _registry[session_id] = pooled
-
-    # Limpar client antigo FORA do lock (I/O assíncrono)
-    if old and old.connected:
-        logger.warning(
-            f"[SDK_POOL] Replacing connected client: session={session_id[:8]}... "
-            "(possível race condition)"
-        )
-        try:
-            await old.client.disconnect()
-        except Exception as e:
-            logger.warning(
-                f"[SDK_POOL] Erro ao desconectar client antigo: {e}, "
-                "tentando force kill"
+    # Serializa a criação POR SESSÃO: requests concorrentes da mesma sessão
+    # aguardam aqui em vez de cada uma criar+conectar um client (e a 2ª
+    # desconectar a 1ª). Quem chega depois reusa o client da 1ª e cai na fila
+    # do pooled.lock normalmente. Ver _creation_locks (race fix 2026-06-06).
+    #
+    # KILL-SWITCH: AGENT_POOL_CREATION_LOCK=false restaura o comportamento
+    # anterior (sem serialização) — rollback instantâneo sem deploy caso este
+    # fix cause qualquer regressão no client persistente. O lock NUNCA fica
+    # preso: o `async with` libera em retorno OU exceção (connect() que falha
+    # propaga normalmente ao caller, que já trata ProcessError/retry).
+    import contextlib
+    if os.getenv("AGENT_POOL_CREATION_LOCK", "true").lower() == "true":
+        creation_lock = _get_creation_lock(session_id)
+    else:
+        creation_lock = contextlib.nullcontext()  # async-safe desde py3.10
+    async with creation_lock:
+        # Re-check após adquirir o lock: outra request pode ter criado o
+        # client enquanto esperávamos (caminho feliz da serialização).
+        with _registry_lock:
+            pooled = _registry.get(session_id)
+        if pooled and pooled.connected:
+            pooled.last_used = time.time()
+            logger.debug(
+                f"[SDK_POOL] Reusing client (pós creation-lock): "
+                f"session={session_id[:8]}..."
             )
-            await _force_kill_subprocess(old.client)
+            return pooled
 
-    logger.info(
-        f"[SDK_POOL] Client criado e conectado: "
-        f"session={session_id[:8]}... user_id={user_id} "
-        f"total_clients={len(_registry)}"
-    )
+        # Slow path: criar novo client (exclusivo p/ esta sessão sob o lock)
+        from claude_agent_sdk import ClaudeSDKClient
 
-    # Sticky session L1: reivindica ownership Redis após criar o client.
-    # Se outro worker reivindicou no instante (race), nao bloqueia — o
-    # client deste worker continua valido. O proximo request da sessão
-    # vai bater no claim_ownership do chat.py:api_chat e disparar 409.
-    # Esse caso e raro (race em ~ms entre 2 workers).
-    try:
-        from .sticky_session import claim_ownership
-        claim_ownership(session_id)
-    except Exception as _sticky_err:
-        logger.debug(f"[SDK_POOL] sticky claim ignorado: {_sticky_err}")
+        client = ClaudeSDKClient(options)
 
-    return pooled
+        # Connect com streaming mode (None = interactive, sem prompt inicial)
+        await client.connect()
+
+        pooled = PooledClient(
+            client=client,
+            session_id=session_id,
+            user_id=user_id,
+            connected=True,
+        )
+
+        with _registry_lock:
+            # Se havia um client antigo desconectado, limpar
+            old = _registry.get(session_id)
+            _registry[session_id] = pooled
+
+        # Defesa em profundidade: sob o creation_lock, um 'old' AINDA conectado
+        # não deveria mais ocorrer. Mantido como rede de segurança (ex.: client
+        # órfão de reciclagem) — nunca desconecta o que acabamos de registrar.
+        if old and old.connected and old is not pooled:
+            logger.warning(
+                f"[SDK_POOL] Replacing connected client (inesperado sob lock): "
+                f"session={session_id[:8]}..."
+            )
+            try:
+                await old.client.disconnect()
+            except Exception as e:
+                logger.warning(
+                    f"[SDK_POOL] Erro ao desconectar client antigo: {e}, "
+                    "tentando force kill"
+                )
+                await _force_kill_subprocess(old.client)
+
+        logger.info(
+            f"[SDK_POOL] Client criado e conectado: "
+            f"session={session_id[:8]}... user_id={user_id} "
+            f"total_clients={len(_registry)}"
+        )
+
+        # Sticky session L1: reivindica ownership Redis após criar o client.
+        # Se outro worker reivindicou no instante (race), nao bloqueia — o
+        # client deste worker continua valido. O proximo request da sessão
+        # vai bater no claim_ownership do chat.py:api_chat e disparar 409.
+        # Esse caso e raro (race em ~ms entre 2 workers).
+        try:
+            from .sticky_session import claim_ownership
+            claim_ownership(session_id)
+        except Exception as _sticky_err:
+            logger.debug(f"[SDK_POOL] sticky claim ignorado: {_sticky_err}")
+
+        return pooled
 
 
 async def disconnect_client(session_id: str) -> bool:
@@ -374,6 +428,12 @@ async def disconnect_client(session_id: str) -> bool:
     """
     with _registry_lock:
         pooled = _registry.pop(session_id, None)
+        # Hygiene: descarta o creation-lock da sessão se ninguém o estiver
+        # segurando (evita crescimento do dict ao longo do processo). Se
+        # estiver locked (criação em voo), preserva para não reintroduzir race.
+        _clk = _creation_locks.get(session_id)
+        if _clk is not None and not _clk.locked():
+            _creation_locks.pop(session_id, None)
 
     if not pooled:
         return False
