@@ -101,6 +101,9 @@ class HoraModelo(db.Model):
     # (HoraTabelaPreco com vigencia continua sendo fallback legado).
     preco_a_vista = db.Column(db.Numeric(15, 2), nullable=True)
     preco_a_prazo = db.Column(db.Numeric(15, 2), nullable=True)
+    # Teto de desconto (R$) por moto deste modelo (roadmap #28; migration hora_49).
+    # NULL = sem teto. Desconto acima exige aprovacao (Fatia 2).
+    desconto_maximo = db.Column(db.Numeric(15, 2), nullable=True)
 
     # Classificacao fiscal/regulatoria (migration hora_41). Controla os
     # textos exibidos em `inf_contribuinte` na NF-e:

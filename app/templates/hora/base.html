@@ -38,7 +38,8 @@
         current_user.tem_perm_hora('lojas', 'ver') or
         current_user.tem_perm_hora('usuarios', 'ver') or
         current_user.tem_perm_hora('tagplus', 'ver') or
-        current_user.tem_perm_hora('pecas_cadastro', 'ver') %}
+        current_user.tem_perm_hora('pecas_cadastro', 'ver') or
+        current_user.tem_perm_hora('comissao', 'ver') %}
     {% if show_cadastros %}
     <div class="nav-item dropdown">
       <a id="menu-trigger-cadastros" class="nav-link dropdown-toggle {% if request.endpoint and (request.endpoint.startswith('hora.modelos') or request.endpoint.startswith('hora.lojas') or request.endpoint.startswith('hora.permissoes') or 'forma_map' in (request.endpoint or '')) %}active{% endif %}"
@@ -80,6 +81,11 @@
         {% if current_user.tem_perm_hora('tagplus', 'ver') %}
           <li><a class="dropdown-item" href="{{ url_for('hora.tagplus_forma_map_lista') }}">
             <i class="fas fa-money-bill-wave fa-fw"></i> Formas de pagamento
+          </a></li>
+        {% endif %}
+        {% if current_user.tem_perm_hora('comissao', 'ver') %}
+          <li><a id="menu-comissao" class="dropdown-item {% if request.endpoint and request.endpoint.startswith('hora.comissao') %}active{% endif %}" href="{{ url_for('hora.comissao_config') }}">
+            <i class="fas fa-hand-holding-usd fa-fw"></i> Comissão
           </a></li>
         {% endif %}
       </ul>

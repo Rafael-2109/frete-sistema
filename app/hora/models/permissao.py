@@ -39,6 +39,7 @@ MODULOS_HORA: list[tuple[str, str]] = [
     ('tagplus', 'Integracao TagPlus (NFe)'),
     ('pecas_cadastro', 'Cadastro de Pecas'),
     ('pecas_estoque', 'Estoque de Pecas'),
+    ('comissao', 'Comissao (config + aprovacao de desconto)'),
 ]
 
 # Modulos virtuais onde apenas a acao 'ver' tem semantica. As demais colunas
@@ -64,6 +65,8 @@ MODULOS_COM_APROVAR: set[str] = {
     'usuarios',
     'modelos',
     'vendas',
+    # comissao -> aprovacao de desconto acima do teto por modelo (#28, Fatia 2).
+    'comissao',
 }
 
 ACOES_HORA: list[tuple[str, str]] = [

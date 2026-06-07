@@ -1,0 +1,134 @@
+{% extends "hora/base.html" %}
+
+{% block hora_content %}
+{% set pode_editar = current_user.tem_perm_hora('comissao', 'editar') %}
+<h2 class="mb-3"><i class="fas fa-hand-holding-usd"></i> Comissão</h2>
+<p class="text-muted">Configuração de comissão de vendas (roadmap #28). O cálculo e a fila de aprovação de desconto serão habilitados nas próximas etapas.</p>
+
+{# 1) Comissao base por moto #}
+<div class="card mb-3">
+  <div class="card-header"><strong>Comissão base por moto</strong> <small class="text-muted">— valor único por moto vendida</small></div>
+  <div class="card-body">
+    {% if pode_editar %}
+    <form method="post" action="{{ url_for('hora.comissao_set_base') }}" class="row g-2 align-items-end">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="col-md-4">
+        <label class="form-label small mb-0">Comissão por moto (R$)</label>
+        <input type="text" name="comissao_base_moto" class="form-control"
+               value="{{ cfg.comissao_base_moto|valor_br(2) if cfg.comissao_base_moto is not none else '' }}"
+               inputmode="decimal" placeholder="0,00">
+      </div>
+      <div class="col-md-auto"><button class="btn btn-primary"><i class="fas fa-save"></i> Salvar</button></div>
+    </form>
+    {% else %}
+    <p class="mb-0">Comissão por moto: <strong>{{ cfg.comissao_base_moto|valor_br }}</strong></p>
+    {% endif %}
+  </div>
+</div>
+
+{# 2) Faixas de desconto -> reducao da comissao #}
+<div class="card mb-3">
+  <div class="card-header"><strong>Faixas de desconto → redução da comissão</strong>
+    <small class="text-muted">— desconto (R$) dado na moto reduz a comissão em R$</small>
+  </div>
+  <div class="card-body">
+    <table class="table table-sm align-middle">
+      <thead><tr><th>Desconto de (R$)</th><th>Desconto até (R$)</th><th>Reduz comissão (R$)</th><th></th></tr></thead>
+      <tbody>
+        {% for f in faixas %}
+        <tr>
+          <td>{{ f.desconto_min|valor_br }}</td>
+          <td>{{ f.desconto_max|valor_br if f.desconto_max is not none else '— (sem limite)' }}</td>
+          <td class="text-danger">− {{ f.reducao_comissao|valor_br }}</td>
+          <td class="text-end">
+            {% if pode_editar %}
+            <form method="post" action="{{ url_for('hora.comissao_remover_faixa', faixa_id=f.id) }}"
+                  class="d-inline" onsubmit="return confirm('Remover esta faixa?');">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button class="btn btn-sm btn-outline-danger" title="Remover"><i class="fas fa-times"></i></button>
+            </form>
+            {% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="4" class="text-muted">Nenhuma faixa cadastrada.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% if pode_editar %}
+    <form method="post" action="{{ url_for('hora.comissao_criar_faixa') }}" class="row g-2 align-items-end border-top pt-2">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="col-md-3"><label class="form-label small mb-0">Desconto de (R$)</label>
+        <input type="text" name="desconto_min" class="form-control form-control-sm" inputmode="decimal" value="0" required></div>
+      <div class="col-md-3"><label class="form-label small mb-0">Desconto até (R$)</label>
+        <input type="text" name="desconto_max" class="form-control form-control-sm" inputmode="decimal" placeholder="vazio = sem limite"></div>
+      <div class="col-md-3"><label class="form-label small mb-0">Reduz comissão (R$)</label>
+        <input type="text" name="reducao_comissao" class="form-control form-control-sm" inputmode="decimal" value="0" required></div>
+      <div class="col-md-auto"><button class="btn btn-sm btn-primary"><i class="fas fa-plus"></i> Adicionar faixa</button></div>
+    </form>
+    {% endif %}
+  </div>
+</div>
+
+{# 3) Comissao por peca #}
+<div class="card mb-3">
+  <div class="card-header"><strong>Comissão por peça</strong> <small class="text-muted">— valor por unidade vendida</small></div>
+  <div class="card-body">
+    <table class="table table-sm align-middle">
+      <thead><tr><th>Peça</th><th>Código</th><th style="max-width:200px;">Comissão (R$/un)</th></tr></thead>
+      <tbody>
+        {% for p in pecas %}
+        <tr>
+          <td>{{ p.descricao }}</td>
+          <td><code>{{ p.codigo_interno }}</code></td>
+          <td>
+            {% if pode_editar %}
+            <form method="post" action="{{ url_for('hora.comissao_set_peca', peca_id=p.id) }}" class="d-flex gap-1">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <input type="text" name="valor_comissao" class="form-control form-control-sm" inputmode="decimal"
+                     value="{{ p.valor_comissao|valor_br(2) if p.valor_comissao is not none else '0,00' }}">
+              <button class="btn btn-sm btn-outline-primary" title="Salvar"><i class="fas fa-save"></i></button>
+            </form>
+            {% else %}{{ p.valor_comissao|valor_br }}{% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="3" class="text-muted">Nenhuma peça cadastrada.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{# 4) Teto de desconto por modelo #}
+<div class="card mb-3">
+  <div class="card-header"><strong>Teto de desconto por modelo</strong>
+    <small class="text-muted">— desconto acima do teto exige aprovação (em breve)</small>
+  </div>
+  <div class="card-body">
+    <table class="table table-sm align-middle">
+      <thead><tr><th>Modelo</th><th style="max-width:220px;">Desconto máximo (R$)</th></tr></thead>
+      <tbody>
+        {% for m in modelos %}
+        <tr>
+          <td>{{ m.nome_modelo }}</td>
+          <td>
+            {% if pode_editar %}
+            <form method="post" action="{{ url_for('hora.comissao_set_modelo', modelo_id=m.id) }}" class="d-flex gap-1">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <input type="text" name="desconto_maximo" class="form-control form-control-sm" inputmode="decimal"
+                     placeholder="sem teto"
+                     value="{{ m.desconto_maximo|valor_br(2) if m.desconto_maximo is not none else '' }}">
+              <button class="btn btn-sm btn-outline-primary" title="Salvar"><i class="fas fa-save"></i></button>
+            </form>
+            {% else %}{{ m.desconto_maximo|valor_br if m.desconto_maximo is not none else '— (sem teto)' }}{% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="2" class="text-muted">Nenhum modelo cadastrado.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

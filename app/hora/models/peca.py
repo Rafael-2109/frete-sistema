@@ -59,6 +59,8 @@ class HoraPeca(db.Model):
     cfop_default = db.Column(db.String(5), nullable=False, default='5.102')
     unidade = db.Column(db.String(5), nullable=False, default='UN')
     preco_venda_padrao = db.Column(db.Numeric(15, 2), nullable=False, default=0)
+    # Comissao por unidade vendida desta peca (roadmap #28; migration hora_49).
+    valor_comissao = db.Column(db.Numeric(15, 2), nullable=False, default=0)
     foto_s3_key = db.Column(db.String(500), nullable=True)
     ativo = db.Column(db.Boolean, nullable=False, default=True, index=True)
 

@@ -34,6 +34,7 @@ from . import (  # noqa: E402, F401
     vendas,
     tagplus_routes,
     autocomplete,
+    comissao,
 )
 
 
