@@ -105,6 +105,7 @@ from app.hora.models.recibo import (
     RECIBO_STATUS_CANCELADO,
     RECIBO_STATUS_VALIDOS,
 )
+from app.hora.models.brinde import HoraVendaBrinde
 from app.hora.models.permissao import (
     HoraUserPermissao,
     MODULOS_HORA,
@@ -254,6 +255,7 @@ __all__ = [
     'RECIBO_STATUS_EMITIDO',
     'RECIBO_STATUS_CANCELADO',
     'RECIBO_STATUS_VALIDOS',
+    'HoraVendaBrinde',
     'HoraUserPermissao',
     'MODULOS_HORA',
     'ACOES_HORA',

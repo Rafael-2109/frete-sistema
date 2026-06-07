@@ -2090,6 +2090,65 @@ def remover_item_peca(venda_id: int, item_id: int, usuario: Optional[str] = None
 
 
 # --------------------------------------------------------------------------
+# Brindes (#36) — peca dada de brinde: custo na margem, NAO cobrado, NAO
+# abate estoque (custo = peca.preco_venda_padrao snapshot).
+# --------------------------------------------------------------------------
+
+def adicionar_brinde(venda_id: int, peca_id: int, qtd,
+                     usuario: Optional[str] = None):
+    """Adiciona um brinde (peca) ao pedido em COTACAO.
+
+    Custo = peca.preco_venda_padrao (snapshot). NAO entra no valor cobrado
+    (valor_total) e NAO abate estoque — apenas reduz a margem da venda
+    (venda_preview_service).
+    """
+    from app.hora.models import HoraVendaBrinde
+    venda = HoraVenda.query.get(venda_id)
+    if not venda:
+        raise ValueError(f'Venda {venda_id} nao encontrada')
+    _exigir_cotacao(venda, 'Adicionar brinde')
+    peca = HoraPeca.query.get(peca_id)
+    if not peca:
+        raise ValueError(f'Peca {peca_id} nao existe')
+    qtd_dec = Decimal(str(qtd or 0))
+    if qtd_dec <= 0:
+        raise ValueError('qtd deve ser positiva')
+
+    custo_uni = Decimal(str(peca.preco_venda_padrao or 0))
+    brinde = HoraVendaBrinde(
+        venda_id=venda.id, peca_id=peca.id, qtd=qtd_dec,
+        custo_unitario=custo_uni, custo_total=qtd_dec * custo_uni,
+        criado_por=(usuario or '').strip()[:100] or None,
+    )
+    db.session.add(brinde)
+    db.session.flush()
+    venda_audit.registrar_auditoria(
+        venda_id=venda.id, usuario=usuario or '', acao='ADICIONOU_BRINDE',
+        detalhe=f'peca={peca.codigo_interno} qtd={qtd_dec} custo={brinde.custo_total}',
+    )
+    db.session.commit()
+    return brinde
+
+
+def remover_brinde(venda_id: int, brinde_id: int, usuario: Optional[str] = None) -> None:
+    """Remove um brinde do pedido em COTACAO."""
+    from app.hora.models import HoraVendaBrinde
+    venda = HoraVenda.query.get(venda_id)
+    if not venda:
+        raise ValueError(f'Venda {venda_id} nao encontrada')
+    _exigir_cotacao(venda, 'Remover brinde')
+    brinde = HoraVendaBrinde.query.get(brinde_id)
+    if not brinde or brinde.venda_id != venda.id:
+        raise ValueError(f'Brinde {brinde_id} nao pertence ao pedido {venda_id}')
+    venda_audit.registrar_auditoria(
+        venda_id=venda.id, usuario=usuario or '', acao='REMOVEU_BRINDE',
+        detalhe=f'peca_id={brinde.peca_id} qtd={brinde.qtd}',
+    )
+    db.session.delete(brinde)
+    db.session.commit()
+
+
+# --------------------------------------------------------------------------
 # Descarte de NF de teste (pos janela 24h SEFAZ)
 # --------------------------------------------------------------------------
 

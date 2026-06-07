@@ -1315,3 +1315,49 @@ def recibo_cancelar(recibo_id: int):
     except recibo_service.ReciboError as exc:
         flash(str(exc), 'danger')
     return redirect(url_for('hora.vendas_detalhe', venda_id=recibo.venda_id))
+
+
+# ------------------------------------------------------------------------
+# Brindes (#36) — peca dada de brinde (custo na margem; nao cobrado; nao abate)
+# ------------------------------------------------------------------------
+
+@hora_bp.route('/vendas/<int:venda_id>/brindes/novo', methods=['POST'])
+@require_hora_perm('vendas', 'editar')
+def venda_adicionar_brinde(venda_id: int):
+    """Adiciona um brinde (peca) ao pedido em COTACAO."""
+    from app.hora.services import venda_service
+    venda = HoraVenda.query.get_or_404(venda_id)
+    if venda.loja_id and not usuario_tem_acesso_a_loja(venda.loja_id):
+        flash('Acesso negado: pedido de loja fora do seu escopo.', 'danger')
+        return redirect(url_for('hora.vendas_lista'))
+    try:
+        peca_id_str = (request.form.get('peca_id') or '').strip()
+        if not peca_id_str.isdigit():
+            raise ValueError('Selecione uma peca')
+        qtd_str = (request.form.get('qtd') or '1').strip().replace(',', '.')
+        venda_service.adicionar_brinde(
+            venda_id=venda_id, peca_id=int(peca_id_str),
+            qtd=Decimal(qtd_str), usuario=_operador_atual(),
+        )
+        flash('Brinde adicionado ao pedido.', 'success')
+    except (ValueError, InvalidOperation, venda_service.TransicaoInvalidaError) as exc:
+        flash(f'Erro ao adicionar brinde: {exc}', 'danger')
+    return redirect(url_for('hora.vendas_detalhe', venda_id=venda_id))
+
+
+@hora_bp.route('/vendas/<int:venda_id>/brindes/<int:brinde_id>/remover', methods=['POST'])
+@require_hora_perm('vendas', 'editar')
+def venda_remover_brinde(venda_id: int, brinde_id: int):
+    from app.hora.services import venda_service
+    venda = HoraVenda.query.get_or_404(venda_id)
+    if venda.loja_id and not usuario_tem_acesso_a_loja(venda.loja_id):
+        flash('Acesso negado: pedido de loja fora do seu escopo.', 'danger')
+        return redirect(url_for('hora.vendas_lista'))
+    try:
+        venda_service.remover_brinde(
+            venda_id=venda_id, brinde_id=brinde_id, usuario=_operador_atual(),
+        )
+        flash('Brinde removido.', 'success')
+    except (ValueError, venda_service.TransicaoInvalidaError) as exc:
+        flash(f'Erro: {exc}', 'danger')
+    return redirect(url_for('hora.vendas_detalhe', venda_id=venda_id))

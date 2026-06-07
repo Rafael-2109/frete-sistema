@@ -579,6 +579,82 @@
 <div class="alert alert-secondary"><i class="fas fa-ban"></i> Pedido CANCELADO — edição desabilitada.</div>
 {% endif %}
 
+{# ========================== Brindes (#36) ========================== #}
+{# Peca dada de brinde: entra no CUSTO (margem), nao no valor cobrado; nao abate estoque. #}
+<div class="card mb-3" id="secao-brindes">
+  <div class="card-header">
+    <strong><i class="fas fa-gift"></i> Brindes</strong>
+    <small class="text-muted">— peças dadas de brinde (entram no custo, não no valor cobrado; não abatem estoque)</small>
+  </div>
+  <div class="card-body">
+    {% if venda.brindes %}
+      <table class="table table-sm align-middle mb-2">
+        <thead><tr><th>Peça (brinde)</th><th class="text-end">Qtd</th><th class="text-end">Custo unit.</th><th class="text-end">Custo total</th><th></th></tr></thead>
+        <tbody>
+          {% for b in venda.brindes %}
+          <tr>
+            <td>{{ b.peca.descricao if b.peca else '—' }}{% if b.peca and b.peca.codigo_interno %} <span class="text-muted">({{ b.peca.codigo_interno }})</span>{% endif %}</td>
+            <td class="text-end">{{ b.qtd|numero_br }}</td>
+            <td class="text-end">{{ b.custo_unitario|valor_br }}</td>
+            <td class="text-end">{{ b.custo_total|valor_br }}</td>
+            <td class="text-end">
+              {% if is_cotacao and pode_editar %}
+              <form method="post" action="{{ url_for('hora.venda_remover_brinde', venda_id=venda.id, brinde_id=b.id) }}"
+                    class="d-inline" onsubmit="return confirm('Remover este brinde?');">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button class="btn btn-sm btn-outline-danger" title="Remover brinde"><i class="fas fa-times"></i></button>
+              </form>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+          <tr class="fw-bold">
+            <td colspan="3" class="text-end">Custo total de brindes</td>
+            <td class="text-end text-danger">{{ (venda.brindes|sum(attribute='custo_total'))|valor_br }}</td><td></td>
+          </tr>
+        </tbody>
+      </table>
+    {% else %}
+      <small class="text-muted">Nenhum brinde neste pedido.</small>
+    {% endif %}
+
+    {% if is_cotacao and pode_editar %}
+    <div class="border-top pt-2 mt-2">
+      <h6 class="mb-2"><i class="fas fa-plus-circle"></i> Adicionar brinde</h6>
+      <form method="post" action="{{ url_for('hora.venda_adicionar_brinde', venda_id=venda.id) }}"
+            class="row g-2 align-items-end">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="col-md-5">
+          <label class="form-label small mb-0">Peça</label>
+          <input type="text" id="venda-add-brinde-txt" class="form-control form-control-sm"
+                 data-hora-autocomplete="peca" data-hora-target-id="venda-add-brinde-id"
+                 placeholder="Buscar peça (min. 2 chars)" autocomplete="off" required>
+          <input type="hidden" name="peca_id" id="venda-add-brinde-id" required>
+        </div>
+        <div class="col-md-2">
+          <label class="form-label small mb-0">Qtd</label>
+          <input type="text" name="qtd" class="form-control form-control-sm" inputmode="decimal" value="1" required>
+        </div>
+        <div class="col-md-auto">
+          <button class="btn btn-sm btn-primary"><i class="fas fa-gift"></i> Adicionar brinde</button>
+        </div>
+      </form>
+      <small class="text-muted d-block mt-1">
+        <i class="fas fa-info-circle"></i> Custo = preço de venda da peça. Não é cobrado do cliente nem abate estoque.
+      </small>
+    </div>
+    {% endif %}
+
+    {# Valor total da venda (resumo) — roadmap #36 #}
+    <div class="border-top pt-2 mt-2 small d-flex gap-4 flex-wrap">
+      <span>Valor total da venda (cobrado): <strong>{{ venda.valor_total|valor_br }}</strong></span>
+      {% if venda.brindes %}
+        <span>Custo de brindes: <strong class="text-danger">{{ (venda.brindes|sum(attribute='custo_total'))|valor_br }}</strong></span>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
 <!-- ========================== Peças do pedido (XOR moto; tem qtd, sem chassi) ========================== -->
 <h5 class="mt-4 mb-2"><i class="fas fa-cogs"></i> Peças do pedido ({{ venda.itens_peca|length }})</h5>
 <div class="card mb-3">

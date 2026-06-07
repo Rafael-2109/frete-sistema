@@ -22,6 +22,10 @@ Acoes registradas:
   RESOLVEU_DIVERGENCIA   divergencia marcada como resolvida.
   DEFINIU_LOJA           CNPJ_DESCONHECIDO resolvido manualmente.
   ENVIOU_NF_EMAIL        NF (DANFE PDF) enviada por e-mail ao cliente (roadmap #4).
+  ADICIONOU_ITEM_PECA    peca adicionada ao pedido (so em COTACAO).
+  REMOVEU_ITEM_PECA      peca removida do pedido (so em COTACAO).
+  ADICIONOU_BRINDE       brinde (peca) adicionado ao pedido (roadmap #36).
+  REMOVEU_BRINDE         brinde removido do pedido (roadmap #36).
 """
 from __future__ import annotations
 
@@ -55,6 +59,13 @@ ACOES_VALIDAS = {
     'VOLTOU_PARA_COTACAO',
     # Roadmap #4: envio da NF (DANFE PDF) por e-mail ao cliente.
     'ENVIOU_NF_EMAIL',
+    # Pecas em pedido de venda (estavam em uso em venda_service mas faltavam
+    # aqui — registrar_auditoria levantava ValueError ao add/remover peca).
+    'ADICIONOU_ITEM_PECA',
+    'REMOVEU_ITEM_PECA',
+    # Roadmap #36: brindes (peca dada de brinde).
+    'ADICIONOU_BRINDE',
+    'REMOVEU_BRINDE',
 }
 
 

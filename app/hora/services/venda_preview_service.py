@@ -88,7 +88,13 @@ def montar_preview(venda: HoraVenda) -> dict:
     venda_total = venda.valor_total or ZERO
     frete = venda.valor_frete or ZERO
 
-    liquido = venda_total - frete - custo_total
+    # Brindes (#36): o custo entra na margem (reduz o liquido), mas NAO no valor
+    # cobrado (valor_total). Custo = snapshot de preco_venda_padrao da peca.
+    custo_brindes_total = sum(
+        (Decimal(str(b.custo_total or 0)) for b in (venda.brindes or [])), ZERO,
+    )
+
+    liquido = venda_total - frete - custo_total - custo_brindes_total
     margem_bruta = venda_total - liquido
 
     if venda_total > ZERO:
@@ -101,6 +107,7 @@ def montar_preview(venda: HoraVenda) -> dict:
         'venda_total': venda_total,
         'frete': frete,
         'custo_moto_total': custo_total,
+        'custo_brindes_total': custo_brindes_total,
         'liquido': liquido,
         'margem_bruta': margem_bruta,
         'margem_pct': margem_pct,
