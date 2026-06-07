@@ -1,0 +1,71 @@
+{% extends "hora/base.html" %}
+
+{% block hora_content %}
+{% set pode_aprovar = current_user.tem_perm_hora('comissao', 'aprovar') %}
+<h2 class="mb-3"><i class="fas fa-stamp"></i> Aprovações de desconto</h2>
+<p class="text-muted">Vendas com desconto acima do teto do modelo ficam aqui aguardando aprovação. Aprovar libera a confirmação da venda.</p>
+
+<div class="card mb-3">
+  <div class="card-header"><strong>Pendentes ({{ pendentes|length }})</strong></div>
+  <div class="card-body">
+    {% if pendentes %}
+    <table class="table table-sm align-middle">
+      <thead><tr><th>Pedido</th><th>Detalhe (item · desconto · teto)</th><th>Solicitado</th><th class="text-end">Ações</th></tr></thead>
+      <tbody>
+        {% for a in pendentes %}
+        <tr>
+          <td><a href="{{ url_for('hora.vendas_detalhe', venda_id=a.venda_id) }}">#{{ a.venda_id }}</a></td>
+          <td><small>{{ a.detalhe or '—' }}</small></td>
+          <td><small>{{ a.solicitado_em.strftime('%d/%m %H:%M') if a.solicitado_em else '—' }} · {{ a.solicitado_por or '—' }}</small></td>
+          <td class="text-end">
+            {% if pode_aprovar %}
+            <form method="post" action="{{ url_for('hora.comissao_aprovar_desconto', aprovacao_id=a.id) }}" class="d-inline"
+                  onsubmit="return confirm('Aprovar o desconto do pedido #{{ a.venda_id }}?');">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button class="btn btn-sm btn-success"><i class="fas fa-check"></i> Aprovar</button>
+            </form>
+            <form method="post" action="{{ url_for('hora.comissao_rejeitar_desconto', aprovacao_id=a.id) }}" class="d-inline"
+                  onsubmit="return confirm('Rejeitar o desconto do pedido #{{ a.venda_id }}?');">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <input type="hidden" name="motivo" value="">
+              <button class="btn btn-sm btn-outline-danger"><i class="fas fa-times"></i> Rejeitar</button>
+            </form>
+            {% else %}<span class="text-muted small">sem permissão para decidir</span>{% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+      <small class="text-muted">Nenhuma aprovação pendente.</small>
+    {% endif %}
+  </div>
+</div>
+
+<div class="card mb-3">
+  <div class="card-header"><strong>Histórico ({{ historico|length }})</strong></div>
+  <div class="card-body">
+    {% if historico %}
+    <table class="table table-sm align-middle">
+      <thead><tr><th>Pedido</th><th>Status</th><th>Detalhe</th><th>Decidido</th><th>Motivo</th></tr></thead>
+      <tbody>
+        {% for a in historico %}
+        <tr>
+          <td><a href="{{ url_for('hora.vendas_detalhe', venda_id=a.venda_id) }}">#{{ a.venda_id }}</a></td>
+          <td>
+            {% if a.status == 'APROVADO' %}<span class="badge bg-success">Aprovado</span>
+            {% else %}<span class="badge bg-danger">Rejeitado</span>{% endif %}
+          </td>
+          <td><small>{{ a.detalhe or '—' }}</small></td>
+          <td><small>{{ a.decidido_em.strftime('%d/%m %H:%M') if a.decidido_em else '—' }} · {{ a.decidido_por or '—' }}</small></td>
+          <td><small>{{ a.motivo_decisao or '—' }}</small></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+      <small class="text-muted">Sem histórico.</small>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

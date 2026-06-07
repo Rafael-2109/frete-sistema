@@ -97,3 +97,44 @@ def comissao_set_modelo(modelo_id: int):
     except ValueError as exc:
         flash(f'Erro: {exc}', 'danger')
     return redirect(url_for('hora.comissao_config'))
+
+
+# ------------------------------------------------------------------------
+# Aprovacao de desconto acima do teto (#28, Fatia 2) — fila + log
+# ------------------------------------------------------------------------
+
+@hora_bp.route('/comissao/aprovacoes')
+@require_hora_perm('comissao', 'ver')
+def comissao_aprovacoes():
+    from app.hora.services import aprovacao_desconto_service
+    from app.hora.models import APROVACAO_STATUS_PENDENTE
+    pendentes = aprovacao_desconto_service.listar(status=APROVACAO_STATUS_PENDENTE)
+    historico = [a for a in aprovacao_desconto_service.listar() if a.status != APROVACAO_STATUS_PENDENTE]
+    return render_template(
+        'hora/comissao_aprovacoes.html', pendentes=pendentes, historico=historico,
+    )
+
+
+@hora_bp.route('/comissao/aprovacao/<int:aprovacao_id>/aprovar', methods=['POST'])
+@require_hora_perm('comissao', 'aprovar')
+def comissao_aprovar_desconto(aprovacao_id: int):
+    from app.hora.services import aprovacao_desconto_service
+    try:
+        aprovacao_desconto_service.aprovar(aprovacao_id, usuario=_op())
+        flash('Desconto aprovado — a venda já pode ser confirmada.', 'success')
+    except ValueError as exc:
+        flash(f'Erro: {exc}', 'danger')
+    return redirect(url_for('hora.comissao_aprovacoes'))
+
+
+@hora_bp.route('/comissao/aprovacao/<int:aprovacao_id>/rejeitar', methods=['POST'])
+@require_hora_perm('comissao', 'aprovar')
+def comissao_rejeitar_desconto(aprovacao_id: int):
+    from app.hora.services import aprovacao_desconto_service
+    motivo = (request.form.get('motivo') or '').strip() or None
+    try:
+        aprovacao_desconto_service.rejeitar(aprovacao_id, usuario=_op(), motivo=motivo)
+        flash('Desconto rejeitado.', 'warning')
+    except ValueError as exc:
+        flash(f'Erro: {exc}', 'danger')
+    return redirect(url_for('hora.comissao_aprovacoes'))

@@ -84,8 +84,11 @@
           </a></li>
         {% endif %}
         {% if current_user.tem_perm_hora('comissao', 'ver') %}
-          <li><a id="menu-comissao" class="dropdown-item {% if request.endpoint and request.endpoint.startswith('hora.comissao') %}active{% endif %}" href="{{ url_for('hora.comissao_config') }}">
+          <li><a id="menu-comissao" class="dropdown-item {% if request.endpoint == 'hora.comissao_config' %}active{% endif %}" href="{{ url_for('hora.comissao_config') }}">
             <i class="fas fa-hand-holding-usd fa-fw"></i> Comissão
+          </a></li>
+          <li><a id="menu-comissao-aprovacoes" class="dropdown-item {% if request.endpoint == 'hora.comissao_aprovacoes' %}active{% endif %}" href="{{ url_for('hora.comissao_aprovacoes') }}">
+            <i class="fas fa-stamp fa-fw"></i> Aprovações de desconto
           </a></li>
         {% endif %}
       </ul>

@@ -1032,6 +1032,16 @@ def confirmar_venda(venda_id: int, usuario: Optional[str] = None) -> HoraVenda:
         # Nao bloqueamos aqui — alinhado com fluxo permissivo do import DANFE.
         pass
 
+    # #28 Fatia 2: desconto acima do teto do modelo BLOQUEIA a confirmacao ate
+    # aprovacao (perm comissao/aprovar). Cria a solicitacao PENDENTE e aborta.
+    from app.hora.services import aprovacao_desconto_service
+    pendencia = aprovacao_desconto_service.garantir_aprovacao_para_confirmar(venda, usuario)
+    if pendencia:
+        db.session.commit()  # persiste a solicitacao PENDENTE criada (flush -> commit)
+        raise TransicaoInvalidaError(
+            f'Desconto acima do teto — enviado para aprovacao do gerente: {pendencia}'
+        )
+
     venda.status = VENDA_STATUS_CONFIRMADO
     venda.confirmado_em = agora_utc_naive()
     venda.confirmado_por = usuario or 'desconhecido'
