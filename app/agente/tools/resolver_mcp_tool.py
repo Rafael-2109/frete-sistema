@@ -8,6 +8,19 @@ import logging
 logger = logging.getLogger('sistema_fretes')
 
 
+def _execute_with_context(func):
+    """Executa funcao garantindo Flask app context."""
+    try:
+        from flask import current_app
+        _ = current_app.name
+        return func()
+    except RuntimeError:
+        from app import create_app
+        app = create_app()
+        with app.app_context():
+            return func()
+
+
 def _resolver_produto(termo, limit=10):
     from app.resolvedores.produto import resolver_produto
     return resolver_produto(termo, limit=limit) or []
@@ -55,7 +68,7 @@ def _format_resultado(r: dict) -> str:
 
 
 try:
-    from claude_agent_sdk import ToolAnnotations  # noqa: F401
+    from claude_agent_sdk import ToolAnnotations
     from app.agente.tools._mcp_enhanced import enhanced_tool, create_enhanced_mcp_server
 
     @enhanced_tool(
@@ -63,10 +76,18 @@ try:
         "Resolve (confirma na FONTE REAL do banco) uma entidade do sistema: tipo=produto|transportadora|cliente + termo. "
         "Use ANTES de afirmar que uma entidade existe/é de tal tipo. 'encontrado=false' = confirmado inexistente.",
         {"tipo": str, "termo": str},
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
     )
     async def resolver_entidade(args):
         try:
-            r = _resolver_entidade(args.get("tipo", ""), args.get("termo", ""))
+            r = _execute_with_context(
+                lambda: _resolver_entidade(args.get("tipo", ""), args.get("termo", ""))
+            )
             return {"content": [{"type": "text", "text": _format_resultado(r)}], "structuredContent": r}
         except Exception as e:
             logger.error(f"[RESOLVER] erro: {e}")
