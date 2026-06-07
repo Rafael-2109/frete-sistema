@@ -1,0 +1,113 @@
+{
+  "name": "sql_evaluator_false_positives",
+  "description": "Falso positivo confirmado do Haiku evaluator do text_to_sql pipeline (T7).",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "sql_text",
+      "type": "text",
+      "nullable": false
+    },
+    {
+      "name": "rejection_reason",
+      "type": "text",
+      "nullable": false
+    },
+    {
+      "name": "rejection_category",
+      "type": "varchar(50)"
+    },
+    {
+      "name": "texto_embedado",
+      "type": "text",
+      "nullable": false
+    },
+    {
+      "name": "embedding",
+      "type": "vector"
+    },
+    {
+      "name": "model_used",
+      "type": "varchar(50)"
+    },
+    {
+      "name": "content_hash",
+      "type": "varchar(64)",
+      "nullable": false
+    },
+    {
+      "name": "improvement_key",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "status",
+      "type": "varchar(20)",
+      "nullable": false,
+      "default": "pending_review"
+    },
+    {
+      "name": "confirmed_by_user_id",
+      "type": "integer",
+      "description": "FK → usuarios.id"
+    },
+    {
+      "name": "confirmed_at",
+      "type": "timestamp",
+      "nullable": false
+    },
+    {
+      "name": "reviewed_by_user_id",
+      "type": "integer",
+      "description": "FK → usuarios.id"
+    },
+    {
+      "name": "reviewed_at",
+      "type": "timestamp"
+    },
+    {
+      "name": "times_referenced",
+      "type": "integer",
+      "nullable": false,
+      "default": 0
+    },
+    {
+      "name": "last_referenced_at",
+      "type": "timestamp"
+    },
+    {
+      "name": "created_at",
+      "type": "timestamp",
+      "description": "Data de criação",
+      "nullable": false
+    },
+    {
+      "name": "updated_at",
+      "type": "timestamp",
+      "description": "Última atualização",
+      "nullable": false
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "confirmed_by_user_id",
+      "references": "usuarios.id"
+    },
+    {
+      "column": "reviewed_by_user_id",
+      "references": "usuarios.id"
+    }
+  ],
+  "indices": [
+    {
+      "name": "idx_sql_eval_falses_content_hash_unique",
+      "columns": [
+        "content_hash"
+      ],
+      "unique": true
+    }
+  ]
+}

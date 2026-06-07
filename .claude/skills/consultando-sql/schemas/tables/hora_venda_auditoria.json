@@ -1,6 +1,6 @@
 {
   "name": "hora_venda_auditoria",
-  "description": "Tabela hora_venda_auditoria",
+  "description": "Auditoria append-only de transicoes e edicoes em HoraVenda.",
   "fields": [
     {
       "name": "id",

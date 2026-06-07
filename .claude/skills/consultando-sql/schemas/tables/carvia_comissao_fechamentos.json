@@ -1,6 +1,6 @@
 {
   "name": "carvia_comissao_fechamentos",
-  "description": "Tabela carvia_comissao_fechamentos",
+  "description": "Fechamento de comissao por periodo — agrupa N CTes CarVia",
   "fields": [
     {
       "name": "id",

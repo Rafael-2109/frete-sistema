@@ -1,6 +1,6 @@
 {
   "name": "carvia_subcontratos",
-  "description": "Tabela carvia_subcontratos",
+  "description": "Subcontratacao — 1 por transportadora por CarviaFrete.",
   "fields": [
     {
       "name": "id",

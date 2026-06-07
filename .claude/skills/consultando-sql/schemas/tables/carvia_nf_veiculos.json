@@ -1,6 +1,6 @@
 {
   "name": "carvia_nf_veiculos",
-  "description": "Tabela carvia_nf_veiculos",
+  "description": "Veiculo extraido da NF — 1 chassi por linha (motos)",
   "fields": [
     {
       "name": "id",

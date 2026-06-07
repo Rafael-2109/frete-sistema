@@ -1,6 +1,6 @@
 {
   "name": "carvia_nf_itens",
-  "description": "Tabela carvia_nf_itens",
+  "description": "Itens de produto da NF — extraidos do DANFE PDF ou XML NF-e",
   "fields": [
     {
       "name": "id",

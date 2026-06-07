@@ -1,6 +1,6 @@
 {
   "name": "inventario_snapshot_odoo",
-  "description": "Tabela inventario_snapshot_odoo",
+  "description": "Cache de estoque + apontamentos + compras do Odoo + MOV local (botão refresh).",
   "fields": [
     {
       "name": "id",

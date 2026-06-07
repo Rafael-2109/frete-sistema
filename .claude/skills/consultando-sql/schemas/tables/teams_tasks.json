@@ -1,6 +1,6 @@
 {
   "name": "teams_tasks",
-  "description": "Tarefas async do Teams bot (estado, streaming progressivo, AskUserQuestion via Adaptive Card).",
+  "description": "Tarefa assíncrona para processamento de mensagem do Teams.",
   "fields": [
     {
       "name": "id",
@@ -19,12 +19,14 @@
     },
     {
       "name": "user_id",
-      "type": "integer"
+      "type": "integer",
+      "description": "FK → usuarios.id"
     },
     {
       "name": "status",
       "type": "varchar(30)",
-      "nullable": false
+      "nullable": false,
+      "default": "pending"
     },
     {
       "name": "mensagem",
@@ -34,6 +36,10 @@
     {
       "name": "resposta",
       "type": "text"
+    },
+    {
+      "name": "resposta_card",
+      "type": "json"
     },
     {
       "name": "pending_questions",
@@ -46,42 +52,31 @@
     {
       "name": "created_at",
       "type": "timestamp",
+      "description": "Data de criação",
       "nullable": false
     },
     {
       "name": "updated_at",
       "type": "timestamp",
+      "description": "Última atualização",
       "nullable": false
     },
     {
       "name": "completed_at",
       "type": "timestamp"
-    },
+    }
+  ],
+  "foreign_keys": [
     {
-      "name": "resposta_card",
-      "type": "jsonb"
+      "column": "user_id",
+      "references": "usuarios.id"
     }
   ],
   "indices": [
     {
-      "name": "ix_teams_tasks_conv_status",
-      "columns": [
-        "conversation_id",
-        "status"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_teams_tasks_conversation_id",
       "columns": [
         "conversation_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_teams_tasks_created_at",
-      "columns": [
-        "created_at"
       ],
       "unique": false
     },

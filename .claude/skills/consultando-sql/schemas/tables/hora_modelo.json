@@ -1,6 +1,6 @@
 {
   "name": "hora_modelo",
-  "description": "Tabela hora_modelo",
+  "description": "Catálogo de modelos de moto elétrica comercializados pela HORA.",
   "fields": [
     {
       "name": "id",

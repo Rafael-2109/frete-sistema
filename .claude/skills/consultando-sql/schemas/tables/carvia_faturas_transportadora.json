@@ -1,6 +1,6 @@
 {
   "name": "carvia_faturas_transportadora",
-  "description": "Tabela carvia_faturas_transportadora",
+  "description": "Faturas recebidas dos subcontratados — agrupa N CTes de 1 transportadora",
   "fields": [
     {
       "name": "id",

@@ -1,6 +1,6 @@
 {
   "name": "hora_emprestimo_moto",
-  "description": "Tabela hora_emprestimo_moto",
+  "description": "1 emprestimo = 1 moto que sai/entra. Modelo de saida = modelo de",
   "fields": [
     {
       "name": "id",

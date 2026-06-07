@@ -1,6 +1,6 @@
 {
   "name": "carvia_conta_corrente_transportadoras",
-  "description": "Tabela carvia_conta_corrente_transportadoras",
+  "description": "Movimentacao de conta corrente de uma transportadora subcontratada.",
   "fields": [
     {
       "name": "id",
@@ -31,6 +31,7 @@
     {
       "name": "valor_diferenca",
       "type": "numeric(15,2)",
+      "description": "absoluto",
       "nullable": false
     },
     {

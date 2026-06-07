@@ -1,0 +1,112 @@
+{
+  "name": "whatsapp_tasks",
+  "description": "Tarefa async para mensagem WhatsApp recebida via plugin OpenClaw.",
+  "fields": [
+    {
+      "name": "id",
+      "type": "varchar(36)",
+      "description": "Primary key"
+    },
+    {
+      "name": "peer_jid",
+      "type": "varchar(120)",
+      "nullable": false
+    },
+    {
+      "name": "conversation_jid",
+      "type": "varchar(120)",
+      "nullable": false
+    },
+    {
+      "name": "is_group",
+      "type": "boolean",
+      "nullable": false,
+      "default": false
+    },
+    {
+      "name": "sender_name",
+      "type": "varchar(200)"
+    },
+    {
+      "name": "user_id",
+      "type": "integer",
+      "description": "FK → usuarios.id"
+    },
+    {
+      "name": "status",
+      "type": "varchar(30)",
+      "nullable": false,
+      "default": "pending"
+    },
+    {
+      "name": "mensagem",
+      "type": "text",
+      "nullable": false
+    },
+    {
+      "name": "resposta",
+      "type": "text"
+    },
+    {
+      "name": "pending_questions",
+      "type": "json"
+    },
+    {
+      "name": "pending_question_session_id",
+      "type": "varchar(255)"
+    },
+    {
+      "name": "openclaw_message_id",
+      "type": "varchar(120)"
+    },
+    {
+      "name": "openclaw_session_key",
+      "type": "varchar(255)"
+    },
+    {
+      "name": "created_at",
+      "type": "timestamp",
+      "description": "Data de criação",
+      "nullable": false
+    },
+    {
+      "name": "updated_at",
+      "type": "timestamp",
+      "description": "Última atualização",
+      "nullable": false
+    },
+    {
+      "name": "completed_at",
+      "type": "timestamp"
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "user_id",
+      "references": "usuarios.id"
+    }
+  ],
+  "indices": [
+    {
+      "name": "ix_whatsapp_tasks_conversation_jid",
+      "columns": [
+        "conversation_jid"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_whatsapp_tasks_peer_jid",
+      "columns": [
+        "peer_jid"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_whatsapp_tasks_status",
+      "columns": [
+        "status"
+      ],
+      "unique": false
+    }
+  ]
+}

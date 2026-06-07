@@ -1,6 +1,6 @@
 {
   "name": "requisicao_compras",
-  "description": "The base class of the :attr:`.SQLAlchemy.Model` declarative model class.",
+  "description": "Tabela requisicao_compras",
   "fields": [
     {
       "name": "id",

@@ -1,6 +1,6 @@
 {
   "name": "hora_venda_divergencia",
-  "description": "Tabela hora_venda_divergencia",
+  "description": "Divergencia derivada no import da NF de saida.",
   "fields": [
     {
       "name": "id",

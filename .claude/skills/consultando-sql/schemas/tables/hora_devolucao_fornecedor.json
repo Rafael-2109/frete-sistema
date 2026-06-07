@@ -1,6 +1,6 @@
 {
   "name": "hora_devolucao_fornecedor",
-  "description": "Tabela hora_devolucao_fornecedor",
+  "description": "Header de devolucao: loja que esta devolvendo, motivo e status.",
   "fields": [
     {
       "name": "id",

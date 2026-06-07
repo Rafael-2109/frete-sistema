@@ -1,6 +1,6 @@
 {
   "name": "hora_venda_brinde",
-  "description": "Tabela hora_venda_brinde",
+  "description": "Peca dada de brinde numa venda (custo na margem; nao cobrado; nao abate estoque).",
   "fields": [
     {
       "name": "id",

@@ -1,6 +1,6 @@
 {
   "name": "hora_nf_entrada",
-  "description": "Tabela hora_nf_entrada",
+  "description": "NF fiscal recebida da Motochefe (B2B / Laiouns / Q.P.A).",
   "fields": [
     {
       "name": "id",

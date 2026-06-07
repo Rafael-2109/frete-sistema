@@ -1,6 +1,6 @@
 {
   "name": "carvia_config",
-  "description": "Tabela carvia_config",
+  "description": "Parametros globais do modulo CarVia (chave-valor)",
   "fields": [
     {
       "name": "id",

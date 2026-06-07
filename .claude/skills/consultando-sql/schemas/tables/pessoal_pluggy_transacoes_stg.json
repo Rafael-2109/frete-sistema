@@ -1,6 +1,6 @@
 {
   "name": "pessoal_pluggy_transacoes_stg",
-  "description": "Tabela pessoal_pluggy_transacoes_stg",
+  "description": "Staging de transacoes Pluggy — fiel ao payload, sem adapter aplicado.",
   "fields": [
     {
       "name": "id",
@@ -69,15 +69,18 @@
     },
     {
       "name": "type",
-      "type": "varchar(10)"
+      "type": "varchar(10)",
+      "description": "CREDIT | DEBIT"
     },
     {
       "name": "status",
-      "type": "varchar(20)"
+      "type": "varchar(20)",
+      "description": "POSTED | PENDING"
     },
     {
       "name": "operation_type",
-      "type": "varchar(30)"
+      "type": "varchar(30)",
+      "description": "TED | PIX | BOLETO | ..."
     },
     {
       "name": "payment_data",

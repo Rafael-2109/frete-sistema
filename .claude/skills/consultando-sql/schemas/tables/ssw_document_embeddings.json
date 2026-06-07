@@ -1,0 +1,83 @@
+{
+  "name": "ssw_document_embeddings",
+  "description": "Embedding de chunks da documentacao SSW.",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "doc_path",
+      "type": "text",
+      "description": "Path relativo ao ssw/ (ex: comercial/110-cotacao.md)",
+      "nullable": false
+    },
+    {
+      "name": "chunk_index",
+      "type": "integer",
+      "description": "Indice do chunk no documento (0-based)",
+      "nullable": false
+    },
+    {
+      "name": "chunk_text",
+      "type": "text",
+      "description": "Conteudo textual do chunk",
+      "nullable": false
+    },
+    {
+      "name": "heading",
+      "type": "text",
+      "description": "Titulo da secao (ex: \"## Como Usar\")"
+    },
+    {
+      "name": "doc_title",
+      "type": "text",
+      "description": "Titulo do documento (primeiro # do arquivo)"
+    },
+    {
+      "name": "embedding",
+      "type": "vector"
+    },
+    {
+      "name": "char_count",
+      "type": "integer",
+      "description": "Tamanho do chunk em caracteres"
+    },
+    {
+      "name": "token_count",
+      "type": "integer",
+      "description": "Tokens estimados (~chars/4)"
+    },
+    {
+      "name": "model_used",
+      "type": "varchar(50)",
+      "description": "Modelo usado para embedding"
+    },
+    {
+      "name": "created_at",
+      "type": "timestamp",
+      "description": "Data de criação"
+    },
+    {
+      "name": "updated_at",
+      "type": "timestamp",
+      "description": "Última atualização"
+    }
+  ],
+  "unique_constraints": [
+    [
+      "doc_path",
+      "chunk_index"
+    ]
+  ],
+  "indices": [
+    {
+      "name": "idx_ssw_emb_doc_path",
+      "columns": [
+        "doc_path"
+      ],
+      "unique": false
+    }
+  ]
+}

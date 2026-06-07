@@ -1,6 +1,6 @@
 {
   "name": "carvia_categorias_moto",
-  "description": "Tabela carvia_categorias_moto",
+  "description": "Categorias/tipos de moto para precificacao por unidade (ex: Leve, Pesada, Scooter)",
   "fields": [
     {
       "name": "id",

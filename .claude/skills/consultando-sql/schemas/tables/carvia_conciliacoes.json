@@ -1,6 +1,6 @@
 {
   "name": "carvia_conciliacoes",
-  "description": "Tabela carvia_conciliacoes",
+  "description": "Junction N:N — vincula linha do extrato a documento financeiro",
   "fields": [
     {
       "name": "id",

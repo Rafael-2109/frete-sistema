@@ -1,0 +1,73 @@
+{
+  "name": "agent_memory_embeddings",
+  "description": "Embedding de memorias persistentes do agente.",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "memory_id",
+      "type": "integer",
+      "nullable": false
+    },
+    {
+      "name": "user_id",
+      "type": "integer",
+      "description": "Denormalizado para WHERE",
+      "nullable": false
+    },
+    {
+      "name": "path",
+      "type": "varchar(500)",
+      "description": "Denormalizado de agent_memories.path",
+      "nullable": false
+    },
+    {
+      "name": "texto_embedado",
+      "type": "text",
+      "nullable": false
+    },
+    {
+      "name": "embedding",
+      "type": "vector"
+    },
+    {
+      "name": "model_used",
+      "type": "varchar(50)"
+    },
+    {
+      "name": "content_hash",
+      "type": "varchar(32)",
+      "description": "MD5 para stale detection"
+    },
+    {
+      "name": "created_at",
+      "type": "timestamp",
+      "description": "Data de criação"
+    },
+    {
+      "name": "updated_at",
+      "type": "timestamp",
+      "description": "Última atualização"
+    }
+  ],
+  "indices": [
+    {
+      "name": "idx_ame_memory_id",
+      "columns": [
+        "memory_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_ame_user_id",
+      "columns": [
+        "user_id"
+      ],
+      "unique": false
+    }
+  ],
+  "admin_only": true
+}

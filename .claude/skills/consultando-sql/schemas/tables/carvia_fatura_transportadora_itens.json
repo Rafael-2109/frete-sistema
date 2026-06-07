@@ -1,6 +1,6 @@
 {
   "name": "carvia_fatura_transportadora_itens",
-  "description": "Tabela carvia_fatura_transportadora_itens",
+  "description": "Itens de detalhe por subcontrato de uma fatura transportadora",
   "fields": [
     {
       "name": "id",

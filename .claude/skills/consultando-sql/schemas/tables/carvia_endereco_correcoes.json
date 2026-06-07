@@ -1,6 +1,6 @@
 {
   "name": "carvia_endereco_correcoes",
-  "description": "Tabela carvia_endereco_correcoes",
+  "description": "Audit trail de correcoes de endereco em CarviaOperacao.",
   "fields": [
     {
       "name": "id",

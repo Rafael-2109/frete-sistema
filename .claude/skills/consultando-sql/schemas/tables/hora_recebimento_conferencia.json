@@ -1,6 +1,6 @@
 {
   "name": "hora_recebimento_conferencia",
-  "description": "Tabela hora_recebimento_conferencia",
+  "description": "Conferência unitária de um chassi durante o recebimento.",
   "fields": [
     {
       "name": "id",

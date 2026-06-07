@@ -1,6 +1,6 @@
 {
   "name": "hora_moto",
-  "description": "Tabela hora_moto",
+  "description": "Identidade imutável da moto física. Uma linha por chassi, insert-once.",
   "fields": [
     {
       "name": "numero_chassi",

@@ -30,7 +30,8 @@
     },
     {
       "name": "numero_cce",
-      "type": "varchar(50)"
+      "type": "varchar(50)",
+      "description": "Gerado pelo parser (ex: \"CCe-1-NF1729\")"
     },
     {
       "name": "tipo_correcao",
@@ -52,7 +53,8 @@
     },
     {
       "name": "dados_parsed",
-      "type": "json"
+      "type": "json",
+      "description": "dump completo do parser (chassis_detalhes, duplicatas, etc.)"
     },
     {
       "name": "pdf_s3_key",
@@ -94,7 +96,8 @@
     },
     {
       "name": "chassis_aplicados",
-      "type": "json"
+      "type": "json",
+      "description": "[[antigo, novo], ...]"
     },
     {
       "name": "observacao",

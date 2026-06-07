@@ -1,6 +1,6 @@
 {
   "name": "hora_modelo_pendente",
-  "description": "Tabela hora_modelo_pendente",
+  "description": "Fila de nomes nao reconhecidos aguardando decisao do operador.",
   "fields": [
     {
       "name": "id",

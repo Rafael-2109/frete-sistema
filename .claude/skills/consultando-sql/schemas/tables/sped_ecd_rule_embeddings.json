@@ -1,0 +1,120 @@
+{
+  "name": "sped_ecd_rule_embeddings",
+  "description": "Embedding de chunk normativo do Manual ECD Leiaute 9.",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "chunk_id",
+      "type": "varchar(120)",
+      "nullable": false
+    },
+    {
+      "name": "chunk_type",
+      "type": "varchar(20)",
+      "nullable": false
+    },
+    {
+      "name": "bloco",
+      "type": "varchar(2)"
+    },
+    {
+      "name": "registro",
+      "type": "varchar(8)"
+    },
+    {
+      "name": "regra_name",
+      "type": "varchar(120)"
+    },
+    {
+      "name": "severidade",
+      "type": "varchar(20)"
+    },
+    {
+      "name": "content",
+      "type": "text",
+      "nullable": false
+    },
+    {
+      "name": "content_hash",
+      "type": "varchar(64)",
+      "nullable": false
+    },
+    {
+      "name": "embedding",
+      "type": "vector",
+      "nullable": false
+    },
+    {
+      "name": "model",
+      "type": "varchar(40)",
+      "nullable": false,
+      "default": "voyage-4-lite"
+    },
+    {
+      "name": "source_file",
+      "type": "varchar(200)"
+    },
+    {
+      "name": "source_anchor",
+      "type": "varchar(120)"
+    },
+    {
+      "name": "created_at",
+      "type": "timestamp",
+      "description": "Data de criação"
+    },
+    {
+      "name": "updated_at",
+      "type": "timestamp",
+      "description": "Última atualização"
+    }
+  ],
+  "indices": [
+    {
+      "name": "ix_sped_ecd_rule_embeddings_bloco",
+      "columns": [
+        "bloco"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_sped_ecd_rule_embeddings_chunk_id",
+      "columns": [
+        "chunk_id"
+      ],
+      "unique": true
+    },
+    {
+      "name": "ix_sped_ecd_rule_embeddings_chunk_type",
+      "columns": [
+        "chunk_type"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_sped_ecd_rule_embeddings_content_hash",
+      "columns": [
+        "content_hash"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_sped_ecd_rule_embeddings_registro",
+      "columns": [
+        "registro"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_sped_ecd_rule_embeddings_regra_name",
+      "columns": [
+        "regra_name"
+      ],
+      "unique": false
+    }
+  ]
+}

@@ -1,6 +1,6 @@
 {
   "name": "carvia_admin_audit",
-  "description": "Tabela carvia_admin_audit",
+  "description": "Auditoria de acoes administrativas (hard delete, type change, re-link, field edit)",
   "fields": [
     {
       "name": "id",

@@ -1,6 +1,6 @@
 {
   "name": "hora_tagplus_peca_map",
-  "description": "Tabela hora_tagplus_peca_map",
+  "description": "Mapeamento opcional de peca para integracao TagPlus.",
   "fields": [
     {
       "name": "id",

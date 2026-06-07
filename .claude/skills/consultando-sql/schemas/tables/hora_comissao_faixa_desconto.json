@@ -1,6 +1,6 @@
 {
   "name": "hora_comissao_faixa_desconto",
-  "description": "Tabela hora_comissao_faixa_desconto",
+  "description": "Faixa de valor de desconto (R$) dado na moto -> reducao da comissao (R$).",
   "fields": [
     {
       "name": "id",
@@ -15,7 +15,8 @@
     },
     {
       "name": "desconto_max",
-      "type": "numeric(15,2)"
+      "type": "numeric(15,2)",
+      "description": "NULL = sem limite superior"
     },
     {
       "name": "reducao_comissao",

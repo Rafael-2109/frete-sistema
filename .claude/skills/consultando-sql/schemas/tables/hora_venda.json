@@ -1,6 +1,6 @@
 {
   "name": "hora_venda",
-  "description": "Tabela hora_venda",
+  "description": "Pedido de venda ao consumidor final. Header permite multi-item.",
   "fields": [
     {
       "name": "id",

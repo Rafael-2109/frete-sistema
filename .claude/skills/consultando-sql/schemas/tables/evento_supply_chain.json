@@ -10,11 +10,13 @@
     {
       "name": "tipo_evento",
       "type": "varchar(10)",
+      "description": "INSERT, UPDATE, DELETE",
       "nullable": false
     },
     {
       "name": "entidade",
       "type": "varchar(30)",
+      "description": "carteira, separacao, faturamento, movimentacao, producao, compra",
       "nullable": false
     },
     {
@@ -39,11 +41,13 @@
     },
     {
       "name": "quantidade_anterior",
-      "type": "numeric(15,3)"
+      "type": "numeric(15,3)",
+      "description": "OLD.qtd_* (NULL em INSERT)"
     },
     {
       "name": "quantidade_nova",
-      "type": "numeric(15,3)"
+      "type": "numeric(15,3)",
+      "description": "NEW.qtd_* (NULL em DELETE)"
     },
     {
       "name": "qtd_projetada_dia",
@@ -51,23 +55,28 @@
     },
     {
       "name": "dados_antes",
-      "type": "jsonb"
+      "type": "jsonb",
+      "description": "row_to_json(OLD) — NULL em INSERT"
     },
     {
       "name": "dados_depois",
-      "type": "jsonb"
+      "type": "jsonb",
+      "description": "row_to_json(NEW) — NULL em DELETE"
     },
     {
       "name": "campos_alterados",
-      "type": "array"
+      "type": "array",
+      "description": "Lista de campos que mudaram (so UPDATE)"
     },
     {
       "name": "origem",
-      "type": "varchar(50)"
+      "type": "varchar(50)",
+      "description": "SYNC_ODOO, USUARIO, SISTEMA, UPLOAD_EXCEL"
     },
     {
       "name": "session_id",
-      "type": "varchar(100)"
+      "type": "varchar(100)",
+      "description": "Correlaciona eventos de um mesmo sync"
     },
     {
       "name": "registrado_em",
@@ -76,7 +85,8 @@
     },
     {
       "name": "registrado_por",
-      "type": "varchar(100)"
+      "type": "varchar(100)",
+      "description": "Usuario ou 'SISTEMA' (string livre)"
     },
     {
       "name": "usuario_id",

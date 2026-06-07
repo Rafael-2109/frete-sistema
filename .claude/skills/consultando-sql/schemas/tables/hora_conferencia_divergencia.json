@@ -1,6 +1,6 @@
 {
   "name": "hora_conferencia_divergencia",
-  "description": "Tabela hora_conferencia_divergencia",
+  "description": "Divergência 1-N de uma conferência.",
   "fields": [
     {
       "name": "id",

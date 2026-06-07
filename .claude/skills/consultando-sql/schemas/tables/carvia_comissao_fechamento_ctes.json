@@ -1,6 +1,6 @@
 {
   "name": "carvia_comissao_fechamento_ctes",
-  "description": "Tabela carvia_comissao_fechamento_ctes",
+  "description": "Junction entre fechamento e CTes CarVia — com snapshots de valor",
   "fields": [
     {
       "name": "id",

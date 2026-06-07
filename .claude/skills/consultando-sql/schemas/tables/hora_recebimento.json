@@ -1,6 +1,6 @@
 {
   "name": "hora_recebimento",
-  "description": "Tabela hora_recebimento",
+  "description": "Uma NF chegou fisicamente em uma loja. Header da conferência.",
   "fields": [
     {
       "name": "id",

@@ -1,6 +1,6 @@
 {
   "name": "hora_nf_entrada_item",
-  "description": "Tabela hora_nf_entrada_item",
+  "description": "Linha fiscal: um chassi efetivamente faturado a um preço real.",
   "fields": [
     {
       "name": "id",

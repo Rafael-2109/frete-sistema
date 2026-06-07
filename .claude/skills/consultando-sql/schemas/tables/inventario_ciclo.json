@@ -1,6 +1,6 @@
 {
   "name": "inventario_ciclo",
-  "description": "Tabela inventario_ciclo",
+  "description": "Ciclo de inventário (ex.: INV-2026-05-16).",
   "fields": [
     {
       "name": "id",

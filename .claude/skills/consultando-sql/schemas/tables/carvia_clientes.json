@@ -1,6 +1,6 @@
 {
   "name": "carvia_clientes",
-  "description": "Tabela carvia_clientes",
+  "description": "Cliente CarVia — pessoa juridica que contrata frete",
   "fields": [
     {
       "name": "id",

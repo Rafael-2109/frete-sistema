@@ -1,6 +1,6 @@
 {
   "name": "hora_peca_faltando_foto",
-  "description": "Tabela hora_peca_faltando_foto",
+  "description": "N fotos por pendencia de peca faltando.",
   "fields": [
     {
       "name": "id",

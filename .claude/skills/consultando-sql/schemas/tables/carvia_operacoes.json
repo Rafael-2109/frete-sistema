@@ -1,6 +1,6 @@
 {
   "name": "carvia_operacoes",
-  "description": "Tabela carvia_operacoes",
+  "description": "Operacao principal — 1 CTe CarVia = N NFs do mesmo cliente/destino",
   "fields": [
     {
       "name": "id",
@@ -17,7 +17,8 @@
     },
     {
       "name": "ctrc_numero",
-      "type": "varchar(30)"
+      "type": "varchar(30)",
+      "description": "CTRC SSW/SEFAZ: CAR-{nCT}-{cDV}"
     },
     {
       "name": "cte_valor",
@@ -41,15 +42,18 @@
     },
     {
       "name": "icms_aliquota",
-      "type": "numeric(5,2)"
+      "type": "numeric(5,2)",
+      "description": "Aliquota ICMS do CTe original (ex: 12.00)"
     },
     {
       "name": "icms_valor",
-      "type": "numeric(15,2)"
+      "type": "numeric(15,2)",
+      "description": "Ex: vICMS do XML CTe"
     },
     {
       "name": "icms_base_calculo",
-      "type": "numeric(15,2)"
+      "type": "numeric(15,2)",
+      "description": "Ex: vBC do XML CTe"
     },
     {
       "name": "cnpj_cliente",
@@ -172,15 +176,18 @@
     },
     {
       "name": "condicao_pagamento",
-      "type": "varchar(20)"
+      "type": "varchar(20)",
+      "description": "A_VISTA | PRAZO"
     },
     {
       "name": "prazo_dias",
-      "type": "integer"
+      "type": "integer",
+      "description": "1-30 se PRAZO"
     },
     {
       "name": "responsavel_frete",
-      "type": "varchar(30)"
+      "type": "varchar(30)",
+      "description": "100_REMETENTE | 100_DESTINATARIO | 50_50 | PERSONALIZADO"
     },
     {
       "name": "percentual_remetente",

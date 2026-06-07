@@ -1,6 +1,6 @@
 {
   "name": "carvia_grupo_cliente_membros",
-  "description": "Tabela carvia_grupo_cliente_membros",
+  "description": "Membro (CNPJ) de um grupo de clientes",
   "fields": [
     {
       "name": "id",

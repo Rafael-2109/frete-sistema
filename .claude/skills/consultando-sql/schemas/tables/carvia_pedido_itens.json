@@ -1,6 +1,6 @@
 {
   "name": "carvia_pedido_itens",
-  "description": "Tabela carvia_pedido_itens",
+  "description": "Item de pedido CarVia — modelo/descricao + cor + qtd + valor",
   "fields": [
     {
       "name": "id",
@@ -41,7 +41,8 @@
     },
     {
       "name": "numero_nf",
-      "type": "varchar(20)"
+      "type": "varchar(20)",
+      "description": "Preenchido apos faturamento"
     }
   ],
   "foreign_keys": [

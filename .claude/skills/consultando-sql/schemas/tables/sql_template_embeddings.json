@@ -1,0 +1,76 @@
+{
+  "name": "sql_template_embeddings",
+  "description": "Embedding de templates SQL para few-shot retrieval.",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "question_text",
+      "type": "text",
+      "description": "Pergunta original em linguagem natural",
+      "nullable": false
+    },
+    {
+      "name": "sql_text",
+      "type": "text",
+      "description": "SQL que funcionou",
+      "nullable": false
+    },
+    {
+      "name": "tables_used",
+      "type": "text",
+      "description": "JSON: lista de tabelas usadas no SQL"
+    },
+    {
+      "name": "execution_count",
+      "type": "integer",
+      "nullable": false,
+      "default": 1
+    },
+    {
+      "name": "last_used_at",
+      "type": "timestamp"
+    },
+    {
+      "name": "texto_embedado",
+      "type": "text",
+      "description": "Texto usado para gerar embedding",
+      "nullable": false
+    },
+    {
+      "name": "embedding",
+      "type": "vector"
+    },
+    {
+      "name": "model_used",
+      "type": "varchar(50)"
+    },
+    {
+      "name": "content_hash",
+      "type": "varchar(32)",
+      "description": "MD5 do question_text para dedup"
+    },
+    {
+      "name": "created_at",
+      "type": "timestamp",
+      "description": "Data de criação"
+    },
+    {
+      "name": "updated_at",
+      "type": "timestamp",
+      "description": "Última atualização"
+    }
+  ],
+  "indices": [
+    {
+      "name": "idx_sqlt_content_hash_unique",
+      "columns": [
+        "content_hash"
+      ],
+      "unique": true
+    }
+  ]
+}

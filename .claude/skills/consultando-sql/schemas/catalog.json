@@ -103,7 +103,7 @@
     "vinculacao_carteira_separacao",
     "webhook_configs"
   ],
-  "total_tabelas": 297,
+  "total_tabelas": 316,
   "tabelas": [
     {
       "name": "agendamentos_entrega",
@@ -211,6 +211,15 @@
         "uuid",
         "user_id",
         "session_id"
+      ]
+    },
+    {
+      "name": "ajuste_estoque_inventario",
+      "description": "Tabela ajuste_estoque_inventario",
+      "key_fields": [
+        "ciclo",
+        "cod_produto",
+        "tipo_produto"
       ]
     },
     {
@@ -421,7 +430,7 @@
     },
     {
       "name": "assai_pedido_venda_loja",
-      "description": "Tabela assai_pedido_venda_loja",
+      "description": "Cabecalho por (pedido, loja). Contem os 4 campos de agendamento que",
       "key_fields": [
         "pedido_id",
         "loja_id",
@@ -484,7 +493,7 @@
     },
     {
       "name": "assai_separacao_saldo_modelo",
-      "description": "Tabela assai_separacao_saldo_modelo",
+      "description": "Placeholder de qtd planejada por modelo na separacao.",
       "key_fields": [
         "separacao_id",
         "modelo_id",
@@ -555,6 +564,15 @@
       ]
     },
     {
+      "name": "carrier_embeddings",
+      "description": "Embedding de transportadoras para matching semantico de nomes.",
+      "key_fields": [
+        "carrier_name",
+        "cnpj",
+        "aliases"
+      ]
+    },
+    {
       "name": "carteira_principal",
       "description": "Pedidos com saldo pendente. Fonte da verdade para demanda.",
       "key_fields": [
@@ -565,7 +583,7 @@
     },
     {
       "name": "carvia_admin_audit",
-      "description": "Tabela carvia_admin_audit",
+      "description": "Auditoria de acoes administrativas (hard delete, type change, re-link, field edit)",
       "key_fields": [
         "acao",
         "entidade_tipo",
@@ -574,7 +592,7 @@
     },
     {
       "name": "carvia_anexos",
-      "description": "Tabela carvia_anexos",
+      "description": "Anexos comprovatorios polimorficos (frete, subcontrato) via S3.",
       "key_fields": [
         "entidade_tipo",
         "entidade_id",
@@ -583,7 +601,7 @@
     },
     {
       "name": "carvia_aprovacoes_frete",
-      "description": "Tabela carvia_aprovacoes_frete",
+      "description": "Tratativa de aprovacao de divergencia em CarviaFrete.",
       "key_fields": [
         "frete_id",
         "status",
@@ -592,7 +610,7 @@
     },
     {
       "name": "carvia_categorias_moto",
-      "description": "Tabela carvia_categorias_moto",
+      "description": "Categorias/tipos de moto para precificacao por unidade (ex: Leve, Pesada, Scooter)",
       "key_fields": [
         "nome",
         "descricao",
@@ -601,7 +619,7 @@
     },
     {
       "name": "carvia_cidades_atendidas",
-      "description": "Tabela carvia_cidades_atendidas",
+      "description": "Cidades atendidas pelo frete CarVia — vincula a CarviaTabelaFrete via nome_tabela",
       "key_fields": [
         "codigo_ibge",
         "nome_cidade",
@@ -610,7 +628,7 @@
     },
     {
       "name": "carvia_cliente_enderecos",
-      "description": "Tabela carvia_cliente_enderecos",
+      "description": "Endereco CarVia — origem global (cliente_id=NULL) ou destino por cliente.",
       "key_fields": [
         "cliente_id",
         "cnpj",
@@ -619,7 +637,7 @@
     },
     {
       "name": "carvia_clientes",
-      "description": "Tabela carvia_clientes",
+      "description": "Cliente CarVia — pessoa juridica que contrata frete",
       "key_fields": [
         "nome_comercial",
         "observacoes",
@@ -628,7 +646,7 @@
     },
     {
       "name": "carvia_comissao_fechamento_ctes",
-      "description": "Tabela carvia_comissao_fechamento_ctes",
+      "description": "Junction entre fechamento e CTes CarVia — com snapshots de valor",
       "key_fields": [
         "fechamento_id",
         "operacao_id",
@@ -637,7 +655,7 @@
     },
     {
       "name": "carvia_comissao_fechamentos",
-      "description": "Tabela carvia_comissao_fechamentos",
+      "description": "Fechamento de comissao por periodo — agrupa N CTes CarVia",
       "key_fields": [
         "numero_fechamento",
         "vendedor_nome",
@@ -646,7 +664,7 @@
     },
     {
       "name": "carvia_conciliacoes",
-      "description": "Tabela carvia_conciliacoes",
+      "description": "Junction N:N — vincula linha do extrato a documento financeiro",
       "key_fields": [
         "extrato_linha_id",
         "tipo_documento",
@@ -655,7 +673,7 @@
     },
     {
       "name": "carvia_conferencia_historico",
-      "description": "Tabela carvia_conferencia_historico",
+      "description": "Historico append-only de mudancas em CarviaFrete.status_conferencia.",
       "key_fields": [
         "frete_id",
         "status_antes",
@@ -664,7 +682,7 @@
     },
     {
       "name": "carvia_config",
-      "description": "Tabela carvia_config",
+      "description": "Parametros globais do modulo CarVia (chave-valor)",
       "key_fields": [
         "chave",
         "valor",
@@ -673,7 +691,7 @@
     },
     {
       "name": "carvia_conta_corrente_transportadoras",
-      "description": "Tabela carvia_conta_corrente_transportadoras",
+      "description": "Movimentacao de conta corrente de uma transportadora subcontratada.",
       "key_fields": [
         "transportadora_id",
         "frete_id",
@@ -682,7 +700,7 @@
     },
     {
       "name": "carvia_conta_movimentacoes",
-      "description": "Tabela carvia_conta_movimentacoes",
+      "description": "Movimentacoes financeiras da conta CarVia — saldo calculado por SUM",
       "key_fields": [
         "tipo_doc",
         "doc_id",
@@ -691,7 +709,7 @@
     },
     {
       "name": "carvia_cotacao_motos",
-      "description": "Tabela carvia_cotacao_motos",
+      "description": "Itens de moto em uma cotacao — modelo + quantidade + peso cubado",
       "key_fields": [
         "cotacao_id",
         "modelo_moto_id",
@@ -700,7 +718,7 @@
     },
     {
       "name": "carvia_cotacoes",
-      "description": "Tabela carvia_cotacoes",
+      "description": "Cotacao comercial CarVia — fluxo proativo de frete",
       "key_fields": [
         "numero_cotacao",
         "cliente_id",
@@ -709,7 +727,7 @@
     },
     {
       "name": "carvia_cte_complementares",
-      "description": "Tabela carvia_cte_complementares",
+      "description": "CTe Complementar — emitido ao cliente para cobrar custos extras de entrega",
       "key_fields": [
         "numero_comp",
         "operacao_id",
@@ -718,7 +736,7 @@
     },
     {
       "name": "carvia_custo_entrega_anexos",
-      "description": "Tabela carvia_custo_entrega_anexos",
+      "description": "Anexos comprovatorios de custo de entrega (fotos, PDFs, comprovantes via S3)",
       "key_fields": [
         "custo_entrega_id",
         "nome_original",
@@ -727,7 +745,7 @@
     },
     {
       "name": "carvia_custos_entrega",
-      "description": "Tabela carvia_custos_entrega",
+      "description": "Custos de entrega que CarVia pagou/incorreu — repassaveis ao cliente via CTe Complementar.",
       "key_fields": [
         "numero_custo",
         "operacao_id",
@@ -736,7 +754,7 @@
     },
     {
       "name": "carvia_despesas",
-      "description": "Tabela carvia_despesas",
+      "description": "Despesas operacionais da empresa no modulo CarVia",
       "key_fields": [
         "tipo_despesa",
         "descricao",
@@ -745,7 +763,7 @@
     },
     {
       "name": "carvia_emissao_cte",
-      "description": "Tabela carvia_emissao_cte",
+      "description": "Controle de emissoes automaticas de CTe no SSW via Playwright.",
       "key_fields": [
         "nf_id",
         "operacao_id",
@@ -754,7 +772,7 @@
     },
     {
       "name": "carvia_emissao_cte_complementar",
-      "description": "Tabela carvia_emissao_cte_complementar",
+      "description": "Tracking de emissao automatica de CTe Complementar no SSW (opcao 222).",
       "key_fields": [
         "custo_entrega_id",
         "cte_complementar_id",
@@ -763,7 +781,7 @@
     },
     {
       "name": "carvia_empresas_cubagem",
-      "description": "Tabela carvia_empresas_cubagem",
+      "description": "Empresas que utilizam cubagem para calculo de peso",
       "key_fields": [
         "cnpj_empresa",
         "nome_empresa",
@@ -772,7 +790,7 @@
     },
     {
       "name": "carvia_endereco_correcoes",
-      "description": "Tabela carvia_endereco_correcoes",
+      "description": "Audit trail de correcoes de endereco em CarviaOperacao.",
       "key_fields": [
         "operacao_id",
         "campo",
@@ -781,7 +799,7 @@
     },
     {
       "name": "carvia_extrato_linhas",
-      "description": "Tabela carvia_extrato_linhas",
+      "description": "Linhas do extrato bancario CarVia — base para conciliacao.",
       "key_fields": [
         "fitid",
         "data",
@@ -790,7 +808,7 @@
     },
     {
       "name": "carvia_fatura_cliente_itens",
-      "description": "Tabela carvia_fatura_cliente_itens",
+      "description": "Itens de detalhe por CTe de uma fatura cliente SSW",
       "key_fields": [
         "fatura_cliente_id",
         "cte_numero",
@@ -799,7 +817,7 @@
     },
     {
       "name": "carvia_fatura_transportadora_itens",
-      "description": "Tabela carvia_fatura_transportadora_itens",
+      "description": "Itens de detalhe por subcontrato de uma fatura transportadora",
       "key_fields": [
         "fatura_transportadora_id",
         "subcontrato_id",
@@ -808,7 +826,7 @@
     },
     {
       "name": "carvia_faturas_cliente",
-      "description": "Tabela carvia_faturas_cliente",
+      "description": "Faturas CarVia emitidas ao cliente — agrupa N CTes CarVia",
       "key_fields": [
         "cnpj_cliente",
         "nome_cliente",
@@ -817,7 +835,7 @@
     },
     {
       "name": "carvia_faturas_transportadora",
-      "description": "Tabela carvia_faturas_transportadora",
+      "description": "Faturas recebidas dos subcontratados — agrupa N CTes de 1 transportadora",
       "key_fields": [
         "transportadora_id",
         "numero_fatura",
@@ -826,7 +844,7 @@
     },
     {
       "name": "carvia_fretes",
-      "description": "Tabela carvia_fretes",
+      "description": "Frete CarVia — 1 frete = 1 par (cnpj_emitente, cnpj_destino) + 1 Embarque.",
       "key_fields": [
         "embarque_id",
         "transportadora_id",
@@ -835,7 +853,7 @@
     },
     {
       "name": "carvia_grupo_cliente_membros",
-      "description": "Tabela carvia_grupo_cliente_membros",
+      "description": "Membro (CNPJ) de um grupo de clientes",
       "key_fields": [
         "grupo_id",
         "cnpj",
@@ -844,7 +862,7 @@
     },
     {
       "name": "carvia_grupos_cliente",
-      "description": "Tabela carvia_grupos_cliente",
+      "description": "Grupo de clientes para tabelas de preco diferenciadas",
       "key_fields": [
         "nome",
         "descricao",
@@ -853,7 +871,7 @@
     },
     {
       "name": "carvia_historico_match_extrato",
-      "description": "Tabela carvia_historico_match_extrato",
+      "description": "Log append-only de eventos de match aprendidos (descricao+CNPJ pagador).",
       "key_fields": [
         "descricao_linha_raw",
         "descricao_tokens",
@@ -862,7 +880,7 @@
     },
     {
       "name": "carvia_modelos_moto",
-      "description": "Tabela carvia_modelos_moto",
+      "description": "Modelos de moto para calculo automatico de peso cubado",
       "key_fields": [
         "nome",
         "regex_pattern",
@@ -871,7 +889,7 @@
     },
     {
       "name": "carvia_nf_itens",
-      "description": "Tabela carvia_nf_itens",
+      "description": "Itens de produto da NF — extraidos do DANFE PDF ou XML NF-e",
       "key_fields": [
         "nf_id",
         "codigo_produto",
@@ -880,7 +898,7 @@
     },
     {
       "name": "carvia_nf_veiculos",
-      "description": "Tabela carvia_nf_veiculos",
+      "description": "Veiculo extraido da NF — 1 chassi por linha (motos)",
       "key_fields": [
         "nf_id",
         "chassi",
@@ -889,7 +907,7 @@
     },
     {
       "name": "carvia_nf_vinculos_transferencia",
-      "description": "Tabela carvia_nf_vinculos_transferencia",
+      "description": "Vinculo NF Transferencia -> NF Venda para operacao triangular.",
       "key_fields": [
         "nf_transferencia_id",
         "nf_venda_id",
@@ -898,7 +916,7 @@
     },
     {
       "name": "carvia_nfs",
-      "description": "Tabela carvia_nfs",
+      "description": "NFs importadas (mercadoria) — PDF DANFE, XML NF-e ou entrada manual",
       "key_fields": [
         "numero_nf",
         "serie_nf",
@@ -907,7 +925,7 @@
     },
     {
       "name": "carvia_operacao_nfs",
-      "description": "Tabela carvia_operacao_nfs",
+      "description": "Junction N:N — Operacao <-> NFs",
       "key_fields": [
         "operacao_id",
         "nf_id"
@@ -915,7 +933,7 @@
     },
     {
       "name": "carvia_operacoes",
-      "description": "Tabela carvia_operacoes",
+      "description": "Operacao principal — 1 CTe CarVia = N NFs do mesmo cliente/destino",
       "key_fields": [
         "cte_numero",
         "cte_chave_acesso",
@@ -924,7 +942,7 @@
     },
     {
       "name": "carvia_pedido_itens",
-      "description": "Tabela carvia_pedido_itens",
+      "description": "Item de pedido CarVia — modelo/descricao + cor + qtd + valor",
       "key_fields": [
         "pedido_id",
         "modelo_moto_id",
@@ -933,7 +951,7 @@
     },
     {
       "name": "carvia_pedidos",
-      "description": "Tabela carvia_pedidos",
+      "description": "Pedido CarVia — vinculado a cotacao, split por filial SP/RJ",
       "key_fields": [
         "numero_pedido",
         "cotacao_id",
@@ -942,7 +960,7 @@
     },
     {
       "name": "carvia_precos_categoria_moto",
-      "description": "Tabela carvia_precos_categoria_moto",
+      "description": "Preco fixo por unidade para combinacao tabela_frete x categoria_moto",
       "key_fields": [
         "tabela_frete_id",
         "categoria_moto_id",
@@ -951,7 +969,7 @@
     },
     {
       "name": "carvia_previnculos_extrato_cotacao",
-      "description": "Tabela carvia_previnculos_extrato_cotacao",
+      "description": "Pre-vinculo soft entre linha de extrato e cotacao aprovada.",
       "key_fields": [
         "extrato_linha_id",
         "cotacao_id",
@@ -960,7 +978,7 @@
     },
     {
       "name": "carvia_receitas",
-      "description": "Tabela carvia_receitas",
+      "description": "Receitas operacionais diversas da empresa no modulo CarVia (espelho de despesas)",
       "key_fields": [
         "tipo_receita",
         "descricao",
@@ -969,7 +987,7 @@
     },
     {
       "name": "carvia_subcontratos",
-      "description": "Tabela carvia_subcontratos",
+      "description": "Subcontratacao — 1 por transportadora por CarviaFrete.",
       "key_fields": [
         "operacao_id",
         "transportadora_id",
@@ -978,7 +996,7 @@
     },
     {
       "name": "carvia_tabelas_frete",
-      "description": "Tabela carvia_tabelas_frete",
+      "description": "Tabela de frete CarVia (preco de VENDA) — sem transportadora",
       "key_fields": [
         "uf_origem",
         "uf_destino",
@@ -1246,6 +1264,15 @@
       ]
     },
     {
+      "name": "devolucao_reason_embeddings",
+      "description": "Embedding de motivos de devolucao para classificacao por similaridade.",
+      "key_fields": [
+        "nf_devolucao_linha_id",
+        "descricao_text",
+        "motivo_classificado"
+      ]
+    },
+    {
       "name": "divergencia_nf_po",
       "description": "Divergências encontradas NF × PO.",
       "key_fields": [
@@ -1363,6 +1390,15 @@
       ]
     },
     {
+      "name": "financial_entity_embeddings",
+      "description": "Embedding de entidades financeiras (fornecedores e clientes) para matching semantico.",
+      "key_fields": [
+        "entity_type",
+        "cnpj_raiz",
+        "cnpj_completo"
+      ]
+    },
+    {
       "name": "frete_devolucao",
       "description": "Fretes de devoluções.",
       "key_fields": [
@@ -1382,7 +1418,7 @@
     },
     {
       "name": "frota_despesas",
-      "description": "Tabela frota_despesas",
+      "description": "Despesa de um veiculo da frota propria.",
       "key_fields": [
         "frota_veiculo_id",
         "data_despesa",
@@ -1391,7 +1427,7 @@
     },
     {
       "name": "frota_veiculos",
-      "description": "Tabela frota_veiculos",
+      "description": "Cadastro de veiculos da frota propria.",
       "key_fields": [
         "placa",
         "marca",
@@ -1436,7 +1472,7 @@
     },
     {
       "name": "hora_aprovacao_desconto",
-      "description": "Tabela hora_aprovacao_desconto",
+      "description": "Solicitacao de aprovacao de desconto acima do teto do modelo (#28).",
       "key_fields": [
         "venda_id",
         "status",
@@ -1463,7 +1499,7 @@
     },
     {
       "name": "hora_comissao_config",
-      "description": "Tabela hora_comissao_config",
+      "description": "Configuracao global (singleton) de comissao. Use id=1.",
       "key_fields": [
         "comissao_base_moto",
         "atualizado_por"
@@ -1471,7 +1507,7 @@
     },
     {
       "name": "hora_comissao_faixa_desconto",
-      "description": "Tabela hora_comissao_faixa_desconto",
+      "description": "Faixa de valor de desconto (R$) dado na moto -> reducao da comissao (R$).",
       "key_fields": [
         "desconto_min",
         "desconto_max",
@@ -1480,7 +1516,7 @@
     },
     {
       "name": "hora_conferencia_auditoria",
-      "description": "Tabela hora_conferencia_auditoria",
+      "description": "Log append-only de toda acao feita em um recebimento.",
       "key_fields": [
         "recebimento_id",
         "conferencia_id",
@@ -1489,7 +1525,7 @@
     },
     {
       "name": "hora_conferencia_divergencia",
-      "description": "Tabela hora_conferencia_divergencia",
+      "description": "Divergência 1-N de uma conferência.",
       "key_fields": [
         "conferencia_id",
         "tipo",
@@ -1498,7 +1534,7 @@
     },
     {
       "name": "hora_danfe_parser_append",
-      "description": "Tabela hora_danfe_parser_append",
+      "description": "Append-prompt versionado para o parser de DANFE/extrator de chassi/motor.",
       "key_fields": [
         "versao",
         "texto_append",
@@ -1507,7 +1543,7 @@
     },
     {
       "name": "hora_devolucao_fornecedor",
-      "description": "Tabela hora_devolucao_fornecedor",
+      "description": "Header de devolucao: loja que esta devolvendo, motivo e status.",
       "key_fields": [
         "loja_id",
         "nf_entrada_id",
@@ -1516,7 +1552,7 @@
     },
     {
       "name": "hora_devolucao_fornecedor_item",
-      "description": "Tabela hora_devolucao_fornecedor_item",
+      "description": "Chassi incluido em uma devolucao. Unico por devolucao.",
       "key_fields": [
         "devolucao_id",
         "numero_chassi",
@@ -1525,7 +1561,7 @@
     },
     {
       "name": "hora_devolucao_venda",
-      "description": "Tabela hora_devolucao_venda",
+      "description": "Header de devolucao de venda: NF de venda origem, motivo e status.",
       "key_fields": [
         "venda_id",
         "loja_id",
@@ -1534,7 +1570,7 @@
     },
     {
       "name": "hora_devolucao_venda_item",
-      "description": "Tabela hora_devolucao_venda_item",
+      "description": "Chassi devolvido em uma devolucao de venda. Uma resolucao por item.",
       "key_fields": [
         "devolucao_id",
         "numero_chassi",
@@ -1543,7 +1579,7 @@
     },
     {
       "name": "hora_emprestimo_moto",
-      "description": "Tabela hora_emprestimo_moto",
+      "description": "1 emprestimo = 1 moto que sai/entra. Modelo de saida = modelo de",
       "key_fields": [
         "tipo",
         "status",
@@ -1552,7 +1588,7 @@
     },
     {
       "name": "hora_loja",
-      "description": "Tabela hora_loja",
+      "description": "Ponto de venda físico da HORA (Tatuapé, Bragança, Praia Grande, ...).",
       "key_fields": [
         "cnpj",
         "apelido",
@@ -1561,7 +1597,7 @@
     },
     {
       "name": "hora_modelo",
-      "description": "Tabela hora_modelo",
+      "description": "Catálogo de modelos de moto elétrica comercializados pela HORA.",
       "key_fields": [
         "nome_modelo",
         "potencia_motor",
@@ -1570,7 +1606,7 @@
     },
     {
       "name": "hora_modelo_alias",
-      "description": "Tabela hora_modelo_alias",
+      "description": "N nomes -> 1 modelo canonico.",
       "key_fields": [
         "modelo_id",
         "nome_alias",
@@ -1579,7 +1615,7 @@
     },
     {
       "name": "hora_modelo_pendente",
-      "description": "Tabela hora_modelo_pendente",
+      "description": "Fila de nomes nao reconhecidos aguardando decisao do operador.",
       "key_fields": [
         "nome_observado",
         "origem",
@@ -1588,7 +1624,7 @@
     },
     {
       "name": "hora_moto",
-      "description": "Tabela hora_moto",
+      "description": "Identidade imutável da moto física. Uma linha por chassi, insert-once.",
       "key_fields": [
         "modelo_id",
         "cor",
@@ -1597,7 +1633,7 @@
     },
     {
       "name": "hora_moto_evento",
-      "description": "Tabela hora_moto_evento",
+      "description": "Log append-only de transições de estado da moto.",
       "key_fields": [
         "numero_chassi",
         "tipo",
@@ -1606,7 +1642,7 @@
     },
     {
       "name": "hora_nf_entrada",
-      "description": "Tabela hora_nf_entrada",
+      "description": "NF fiscal recebida da Motochefe (B2B / Laiouns / Q.P.A).",
       "key_fields": [
         "chave_44",
         "numero_nf",
@@ -1615,7 +1651,7 @@
     },
     {
       "name": "hora_nf_entrada_item",
-      "description": "Tabela hora_nf_entrada_item",
+      "description": "Linha fiscal: um chassi efetivamente faturado a um preço real.",
       "key_fields": [
         "nf_id",
         "numero_chassi",
@@ -1624,7 +1660,7 @@
     },
     {
       "name": "hora_nf_entrada_item_peca",
-      "description": "Tabela hora_nf_entrada_item_peca",
+      "description": "Linha de peca em NF de entrada com conferencia embutida.",
       "key_fields": [
         "nf_id",
         "peca_id",
@@ -1633,7 +1669,7 @@
     },
     {
       "name": "hora_peca",
-      "description": "Tabela hora_peca",
+      "description": "Catalogo de pecas (capacete, retrovisor, bateria, ...).",
       "key_fields": [
         "codigo_interno",
         "descricao",
@@ -1642,7 +1678,7 @@
     },
     {
       "name": "hora_peca_faltando",
-      "description": "Tabela hora_peca_faltando",
+      "description": "Uma peca ausente em uma moto (N por moto).",
       "key_fields": [
         "numero_chassi",
         "descricao",
@@ -1651,7 +1687,7 @@
     },
     {
       "name": "hora_peca_faltando_foto",
-      "description": "Tabela hora_peca_faltando_foto",
+      "description": "N fotos por pendencia de peca faltando.",
       "key_fields": [
         "peca_faltando_id",
         "foto_s3_key",
@@ -1660,7 +1696,7 @@
     },
     {
       "name": "hora_peca_movimento",
-      "description": "Tabela hora_peca_movimento",
+      "description": "Movimento de peca (signed: + entrada, - saida).",
       "key_fields": [
         "peca_id",
         "loja_id",
@@ -1669,7 +1705,7 @@
     },
     {
       "name": "hora_pedido",
-      "description": "Tabela hora_pedido",
+      "description": "Pedido de compra emitido pela HORA para a Motochefe (fabricante).",
       "key_fields": [
         "numero_pedido",
         "cnpj_destino",
@@ -1678,7 +1714,7 @@
     },
     {
       "name": "hora_pedido_item",
-      "description": "Tabela hora_pedido_item",
+      "description": "Linha de pedido: uma moto solicitada/esperada, com chassi opcional.",
       "key_fields": [
         "pedido_id",
         "numero_chassi",
@@ -1687,7 +1723,7 @@
     },
     {
       "name": "hora_recebimento",
-      "description": "Tabela hora_recebimento",
+      "description": "Uma NF chegou fisicamente em uma loja. Header da conferência.",
       "key_fields": [
         "nf_id",
         "loja_id",
@@ -1696,7 +1732,7 @@
     },
     {
       "name": "hora_recebimento_conferencia",
-      "description": "Tabela hora_recebimento_conferencia",
+      "description": "Conferência unitária de um chassi durante o recebimento.",
       "key_fields": [
         "recebimento_id",
         "ordem",
@@ -1705,7 +1741,7 @@
     },
     {
       "name": "hora_recibo",
-      "description": "Tabela hora_recibo",
+      "description": "Recibo Simples de pecas/oficina de uma venda (nao-fiscal).",
       "key_fields": [
         "numero",
         "venda_id",
@@ -1714,7 +1750,7 @@
     },
     {
       "name": "hora_tabela_preco",
-      "description": "Tabela hora_tabela_preco",
+      "description": "Histórico de preço de tabela por modelo + período de vigência.",
       "key_fields": [
         "modelo_id",
         "preco_tabela",
@@ -1723,7 +1759,7 @@
     },
     {
       "name": "hora_tagplus_backfill_job",
-      "description": "Tabela hora_tagplus_backfill_job",
+      "description": "Job de backfill TagPlus enfileirado em RQ (queue `hora_backfill`).",
       "key_fields": [
         "tipo",
         "status",
@@ -1732,7 +1768,7 @@
     },
     {
       "name": "hora_tagplus_conta",
-      "description": "Tabela hora_tagplus_conta",
+      "description": "Conta TagPlus (singleton). Todas as lojas HORA faturam pelo mesmo CNPJ.",
       "key_fields": [
         "client_id",
         "client_secret_encrypted",
@@ -1741,7 +1777,7 @@
     },
     {
       "name": "hora_tagplus_departamento_map",
-      "description": "Tabela hora_tagplus_departamento_map",
+      "description": "De-para departamento.descricao TagPlus -> HoraLoja (loja fisica).",
       "key_fields": [
         "departamento_norm",
         "departamento_raw",
@@ -1750,7 +1786,7 @@
     },
     {
       "name": "hora_tagplus_forma_pagamento_map",
-      "description": "Tabela hora_tagplus_forma_pagamento_map",
+      "description": "De-para forma_pagamento HORA -> ID inteiro de forma no TagPlus.",
       "key_fields": [
         "forma_pagamento_hora",
         "tagplus_forma_id",
@@ -1759,7 +1795,7 @@
     },
     {
       "name": "hora_tagplus_nfe_emissao",
-      "description": "Tabela hora_tagplus_nfe_emissao",
+      "description": "Fila + historico de emissoes. Fonte de verdade do status de emissao.",
       "key_fields": [
         "venda_id",
         "conta_id",
@@ -1768,7 +1804,7 @@
     },
     {
       "name": "hora_tagplus_notificacao_whatsapp",
-      "description": "Tabela hora_tagplus_notificacao_whatsapp",
+      "description": "Dedupe/auditoria das notificações WhatsApp de NFe aprovada / pedido confirmado da HORA.",
       "key_fields": [
         "tipo",
         "ref_id",
@@ -1777,7 +1813,7 @@
     },
     {
       "name": "hora_tagplus_peca_map",
-      "description": "Tabela hora_tagplus_peca_map",
+      "description": "Mapeamento opcional de peca para integracao TagPlus.",
       "key_fields": [
         "peca_id",
         "tagplus_produto_id",
@@ -1786,7 +1822,7 @@
     },
     {
       "name": "hora_tagplus_produto_map",
-      "description": "Tabela hora_tagplus_produto_map",
+      "description": "De-para HoraModelo -> produto cadastrado no TagPlus.",
       "key_fields": [
         "modelo_id",
         "tagplus_produto_id",
@@ -1795,7 +1831,7 @@
     },
     {
       "name": "hora_tagplus_token",
-      "description": "Tabela hora_tagplus_token",
+      "description": "Tokens OAuth2 da conta. 1 linha por conta (UNIQUE).",
       "key_fields": [
         "conta_id",
         "access_token_encrypted",
@@ -1831,7 +1867,7 @@
     },
     {
       "name": "hora_user_permissao",
-      "description": "Tabela hora_user_permissao",
+      "description": "Permissao granular por usuario x modulo HORA.",
       "key_fields": [
         "user_id",
         "modulo",
@@ -1840,7 +1876,7 @@
     },
     {
       "name": "hora_venda",
-      "description": "Tabela hora_venda",
+      "description": "Pedido de venda ao consumidor final. Header permite multi-item.",
       "key_fields": [
         "loja_id",
         "cpf_cliente",
@@ -1849,7 +1885,7 @@
     },
     {
       "name": "hora_venda_auditoria",
-      "description": "Tabela hora_venda_auditoria",
+      "description": "Auditoria append-only de transicoes e edicoes em HoraVenda.",
       "key_fields": [
         "venda_id",
         "item_id",
@@ -1858,7 +1894,7 @@
     },
     {
       "name": "hora_venda_brinde",
-      "description": "Tabela hora_venda_brinde",
+      "description": "Peca dada de brinde numa venda (custo na margem; nao cobrado; nao abate estoque).",
       "key_fields": [
         "venda_id",
         "peca_id",
@@ -1867,7 +1903,7 @@
     },
     {
       "name": "hora_venda_divergencia",
-      "description": "Tabela hora_venda_divergencia",
+      "description": "Divergencia derivada no import da NF de saida.",
       "key_fields": [
         "venda_id",
         "numero_chassi",
@@ -1876,7 +1912,7 @@
     },
     {
       "name": "hora_venda_item",
-      "description": "Tabela hora_venda_item",
+      "description": "Linha de venda: um chassi vendido.",
       "key_fields": [
         "venda_id",
         "numero_chassi",
@@ -1885,7 +1921,7 @@
     },
     {
       "name": "hora_venda_item_peca",
-      "description": "Tabela hora_venda_item_peca",
+      "description": "Linha de peca em pedido de venda.",
       "key_fields": [
         "venda_id",
         "peca_id",
@@ -1894,7 +1930,7 @@
     },
     {
       "name": "hora_venda_pagamento",
-      "description": "Tabela hora_venda_pagamento",
+      "description": "Pagamento parcial de uma venda (1:N com HoraVenda).",
       "key_fields": [
         "venda_id",
         "forma_pagamento_hora",
@@ -1903,7 +1939,7 @@
     },
     {
       "name": "inventario_ajuste_manual",
-      "description": "Tabela inventario_ajuste_manual",
+      "description": "Ajustes manuais (Planilha2 — preenchido pelo time).",
       "key_fields": [
         "ciclo_id",
         "cod_produto",
@@ -1912,7 +1948,7 @@
     },
     {
       "name": "inventario_base",
-      "description": "Tabela inventario_base",
+      "description": "Snapshot físico FB/CD/LF (uma linha por cod + empresa).",
       "key_fields": [
         "ciclo_id",
         "cod_produto",
@@ -1921,7 +1957,7 @@
     },
     {
       "name": "inventario_ciclo",
-      "description": "Tabela inventario_ciclo",
+      "description": "Ciclo de inventário (ex.: INV-2026-05-16).",
       "key_fields": [
         "codigo",
         "data_snapshot",
@@ -1930,7 +1966,7 @@
     },
     {
       "name": "inventario_contagem",
-      "description": "Tabela inventario_contagem",
+      "description": "Contagem cíclica parcial sob demanda (granularidade quant).",
       "key_fields": [
         "codigo",
         "empresa",
@@ -1939,7 +1975,7 @@
     },
     {
       "name": "inventario_contagem_item",
-      "description": "Tabela inventario_contagem_item",
+      "description": "1 linha = 1 stock.quant (location_name + cod + lote) de uma contagem cíclica.",
       "key_fields": [
         "contagem_id",
         "location_name",
@@ -1948,7 +1984,7 @@
     },
     {
       "name": "inventario_snapshot_odoo",
-      "description": "Tabela inventario_snapshot_odoo",
+      "description": "Cache de estoque + apontamentos + compras do Odoo + MOV local (botão refresh).",
       "key_fields": [
         "ciclo_id",
         "cod_produto",
@@ -2197,6 +2233,15 @@
       ]
     },
     {
+      "name": "operacao_odoo_auditoria",
+      "description": "Tabela operacao_odoo_auditoria",
+      "key_fields": [
+        "external_id",
+        "tabela_origem",
+        "registro_id"
+      ]
+    },
+    {
       "name": "pallet_creditos",
       "description": "Creditos de pallets a receber. Saldo por responsavel: SUM(qtd_saldo) WHERE status IN (PENDENTE, PARCIAL). tipo_responsavel: TRANSPORTADORA ou CLIENTE. Campos: cnpj_responsavel, nome_responsavel, qtd_original, qtd_saldo, status, prazo_dias, data_vencimento, nf_remessa_id.",
       "key_fields": [
@@ -2251,8 +2296,17 @@
       ]
     },
     {
+      "name": "payment_category_embeddings",
+      "description": "Embedding de categorias de pagamento para classificacao semantica.",
+      "key_fields": [
+        "category_name",
+        "description",
+        "examples"
+      ]
+    },
+    {
       "name": "pedido_compras",
-      "description": "The base class of the :attr:`.SQLAlchemy.Model` declarative model class.",
+      "description": "Tabela pedido_compras",
       "key_fields": [
         "num_pedido",
         "company_id",
@@ -2315,7 +2369,7 @@
     },
     {
       "name": "pessoal_compensacoes",
-      "description": "Tabela pessoal_compensacoes",
+      "description": "Pareamento N:M entre uma transacao de SAIDA e uma ENTRADA.",
       "key_fields": [
         "saida_id",
         "entrada_id",
@@ -2341,7 +2395,7 @@
     },
     {
       "name": "pessoal_grupos_analise",
-      "description": "Tabela pessoal_grupos_analise",
+      "description": "Agrupamento customizado de categorias para analise cruzada.",
       "key_fields": [
         "nome",
         "descricao",
@@ -2382,7 +2436,7 @@
     },
     {
       "name": "pessoal_pluggy_accounts",
-      "description": "Tabela pessoal_pluggy_accounts",
+      "description": "Conta Pluggy dentro de um item (BANK conta corrente ou CREDIT cartao).",
       "key_fields": [
         "pluggy_item_pk",
         "pluggy_account_id",
@@ -2391,7 +2445,7 @@
     },
     {
       "name": "pessoal_pluggy_categorias_map",
-      "description": "Tabela pessoal_pluggy_categorias_map",
+      "description": "Mapeia categoryId hierarquico Pluggy para PessoalCategoria local.",
       "key_fields": [
         "pluggy_category_id",
         "pluggy_category_description",
@@ -2400,7 +2454,7 @@
     },
     {
       "name": "pessoal_pluggy_items",
-      "description": "Tabela pessoal_pluggy_items",
+      "description": "Conexao Pluggy (item) = 1 banco conectado via OAuth/Open Finance.",
       "key_fields": [
         "pluggy_item_id",
         "client_user_id",
@@ -2409,7 +2463,7 @@
     },
     {
       "name": "pessoal_pluggy_transacoes_stg",
-      "description": "Tabela pessoal_pluggy_transacoes_stg",
+      "description": "Staging de transacoes Pluggy — fiel ao payload, sem adapter aplicado.",
       "key_fields": [
         "pluggy_account_pk",
         "pluggy_transaction_id",
@@ -2418,7 +2472,7 @@
     },
     {
       "name": "pessoal_provisoes",
-      "description": "Tabela pessoal_provisoes",
+      "description": "Lancamento provisionado (forecast manual).",
       "key_fields": [
         "tipo",
         "data_prevista",
@@ -2544,11 +2598,20 @@
     },
     {
       "name": "previsao_demanda",
-      "description": "The base class of the :attr:`.SQLAlchemy.Model` declarative model class.",
+      "description": "Tabela previsao_demanda",
       "key_fields": [
         "data_mes",
         "data_ano",
         "nome_grupo"
+      ]
+    },
+    {
+      "name": "product_embeddings",
+      "description": "Embedding de produtos para matching semantico.",
+      "key_fields": [
+        "cod_produto",
+        "nome_produto",
+        "tipo_materia_prima"
       ]
     },
     {
@@ -2625,7 +2688,7 @@
     },
     {
       "name": "recursos_producao",
-      "description": "The base class of the :attr:`.SQLAlchemy.Model` declarative model class.",
+      "description": "Tabela recursos_producao",
       "key_fields": [
         "cod_produto",
         "nome_produto",
@@ -2679,11 +2742,20 @@
     },
     {
       "name": "requisicao_compras",
-      "description": "The base class of the :attr:`.SQLAlchemy.Model` declarative model class.",
+      "description": "Tabela requisicao_compras",
       "key_fields": [
         "num_requisicao",
         "company_id",
         "data_requisicao_criacao"
+      ]
+    },
+    {
+      "name": "route_template_embeddings",
+      "description": "Embedding de rotas e templates do sistema para busca semantica.",
+      "key_fields": [
+        "tipo",
+        "blueprint_name",
+        "function_name"
       ]
     },
     {
@@ -2696,12 +2768,93 @@
       ]
     },
     {
+      "name": "scheduler_health",
+      "description": "Registro de execucao de cada step do scheduler.",
+      "key_fields": [
+        "step_name",
+        "step_number",
+        "executado_em"
+      ]
+    },
+    {
+      "name": "seguranca_config",
+      "description": "Configuracao key/value do modulo de seguranca",
+      "key_fields": [
+        "chave",
+        "valor",
+        "descricao"
+      ]
+    },
+    {
+      "name": "seguranca_scores",
+      "description": "Historico de scores de seguranca para trends",
+      "key_fields": [
+        "user_id",
+        "score",
+        "componentes"
+      ]
+    },
+    {
+      "name": "seguranca_varreduras",
+      "description": "Historico de varreduras/scans de seguranca",
+      "key_fields": [
+        "tipo",
+        "status",
+        "iniciado_em"
+      ]
+    },
+    {
+      "name": "seguranca_vulnerabilidades",
+      "description": "Achados individuais de vulnerabilidade por colaborador",
+      "key_fields": [
+        "user_id",
+        "varredura_id",
+        "categoria"
+      ]
+    },
+    {
       "name": "separacao",
       "description": "Itens separados para expedição. Projeta saídas de estoque.",
       "key_fields": [
         "separacao_lote_id",
         "num_pedido",
         "data_pedido"
+      ]
+    },
+    {
+      "name": "sped_ecd_rule_embeddings",
+      "description": "Embedding de chunk normativo do Manual ECD Leiaute 9.",
+      "key_fields": [
+        "chunk_id",
+        "chunk_type",
+        "bloco"
+      ]
+    },
+    {
+      "name": "sql_evaluator_false_positives",
+      "description": "Falso positivo confirmado do Haiku evaluator do text_to_sql pipeline (T7).",
+      "key_fields": [
+        "sql_text",
+        "rejection_reason",
+        "rejection_category"
+      ]
+    },
+    {
+      "name": "sql_template_embeddings",
+      "description": "Embedding de templates SQL para few-shot retrieval.",
+      "key_fields": [
+        "question_text",
+        "sql_text",
+        "tables_used"
+      ]
+    },
+    {
+      "name": "ssw_document_embeddings",
+      "description": "Embedding de chunks da documentacao SSW.",
+      "key_fields": [
+        "doc_path",
+        "chunk_index",
+        "chunk_text"
       ]
     },
     {
@@ -2720,6 +2873,15 @@
         "transportadora_id",
         "uf_origem",
         "uf_destino"
+      ]
+    },
+    {
+      "name": "teams_tasks",
+      "description": "Tarefa assíncrona para processamento de mensagem do Teams.",
+      "key_fields": [
+        "conversation_id",
+        "user_name",
+        "user_id"
       ]
     },
     {
@@ -2766,6 +2928,15 @@
         "peso_maximo",
         "qtd_eixos"
       ]
+    },
+    {
+      "name": "whatsapp_tasks",
+      "description": "Tarefa async para mensagem WhatsApp recebida via plugin OpenClaw.",
+      "key_fields": [
+        "peer_jid",
+        "conversation_jid",
+        "is_group"
+      ]
     }
   ],
   "tabelas_admin": [
@@ -2775,6 +2946,16 @@
       "key_fields": [
         "user_id",
         "agente",
+        "path"
+      ],
+      "admin_only": true
+    },
+    {
+      "name": "agent_memory_embeddings",
+      "description": "Embedding de memorias persistentes do agente.",
+      "key_fields": [
+        "memory_id",
+        "user_id",
         "path"
       ],
       "admin_only": true
@@ -2820,6 +3001,16 @@
       "admin_only": true
     },
     {
+      "name": "session_turn_embeddings",
+      "description": "Embedding de turns (pares user+assistant) de sessoes do agente.",
+      "key_fields": [
+        "session_id",
+        "user_id",
+        "turn_index"
+      ],
+      "admin_only": true
+    },
+    {
       "name": "tagplus_oauth_token",
       "description": "Armazena tokens OAuth2 do TagPlus no BANCO DE DADOS (não em session)",
       "key_fields": [
@@ -2831,7 +3022,7 @@
     },
     {
       "name": "usuarios",
-      "description": "The base class of the :attr:`.SQLAlchemy.Model` declarative model class.",
+      "description": "Tabela usuarios",
       "key_fields": [
         "nome",
         "email",

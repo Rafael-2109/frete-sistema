@@ -1,6 +1,6 @@
 {
   "name": "carvia_cotacoes",
-  "description": "Tabela carvia_cotacoes",
+  "description": "Cotacao comercial CarVia — fluxo proativo de frete",
   "fields": [
     {
       "name": "id",
@@ -61,11 +61,13 @@
     {
       "name": "tipo_material",
       "type": "varchar(20)",
+      "description": "CARGA_GERAL | MOTO",
       "nullable": false
     },
     {
       "name": "tipo_carga",
-      "type": "varchar(20)"
+      "type": "varchar(20)",
+      "description": "DIRETA | FRACIONADA"
     },
     {
       "name": "peso",
@@ -77,15 +79,18 @@
     },
     {
       "name": "dimensao_c",
-      "type": "numeric(10,4)"
+      "type": "numeric(10,4)",
+      "description": "comprimento"
     },
     {
       "name": "dimensao_l",
-      "type": "numeric(10,4)"
+      "type": "numeric(10,4)",
+      "description": "largura"
     },
     {
       "name": "dimensao_a",
-      "type": "numeric(10,4)"
+      "type": "numeric(10,4)",
+      "description": "altura"
     },
     {
       "name": "peso_cubado",
@@ -155,7 +160,8 @@
     },
     {
       "name": "horario_agenda",
-      "type": "time"
+      "type": "time",
+      "description": "Horario do agendamento (HH:MM) — exclusivo CarVia (Nacom nao usa)"
     },
     {
       "name": "status",
@@ -183,15 +189,18 @@
     },
     {
       "name": "condicao_pagamento",
-      "type": "varchar(20)"
+      "type": "varchar(20)",
+      "description": "A_VISTA | PRAZO"
     },
     {
       "name": "prazo_dias",
-      "type": "integer"
+      "type": "integer",
+      "description": "1-30 se PRAZO"
     },
     {
       "name": "responsavel_frete",
-      "type": "varchar(30)"
+      "type": "varchar(30)",
+      "description": "100_REMETENTE | 100_DESTINATARIO | 50_50 | PERSONALIZADO"
     },
     {
       "name": "percentual_remetente",

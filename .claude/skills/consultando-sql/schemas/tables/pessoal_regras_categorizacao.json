@@ -15,6 +15,7 @@
     {
       "name": "tipo_regra",
       "type": "varchar(20)",
+      "description": "PADRAO | RELATIVO",
       "nullable": false
     },
     {
@@ -29,7 +30,8 @@
     },
     {
       "name": "categorias_restritas_ids",
-      "type": "text"
+      "type": "text",
+      "description": "JSON array de IDs"
     },
     {
       "name": "cpf_cnpj_padrao",
@@ -56,6 +58,7 @@
     {
       "name": "origem",
       "type": "varchar(30)",
+      "description": "semente | manual | aprendido",
       "default": "semente"
     },
     {

@@ -1,6 +1,6 @@
 {
   "name": "hora_comissao_config",
-  "description": "Tabela hora_comissao_config",
+  "description": "Configuracao global (singleton) de comissao. Use id=1.",
   "fields": [
     {
       "name": "id",

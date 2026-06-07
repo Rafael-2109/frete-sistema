@@ -1,6 +1,6 @@
 {
   "name": "hora_venda_item_peca",
-  "description": "Tabela hora_venda_item_peca",
+  "description": "Linha de peca em pedido de venda.",
   "fields": [
     {
       "name": "id",

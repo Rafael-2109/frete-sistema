@@ -31,11 +31,13 @@
     },
     {
       "name": "descricao",
-      "type": "varchar(500)"
+      "type": "varchar(500)",
+      "description": "2a linha (Des:, Rem:, etc.)"
     },
     {
       "name": "historico_completo",
-      "type": "varchar(1000)"
+      "type": "varchar(1000)",
+      "description": "concatenacao normalizada"
     },
     {
       "name": "documento",
@@ -44,11 +46,13 @@
     {
       "name": "valor",
       "type": "numeric(15,2)",
+      "description": "SEMPRE positivo",
       "nullable": false
     },
     {
       "name": "tipo",
       "type": "varchar(10)",
+      "description": "debito | credito",
       "nullable": false
     },
     {
@@ -122,6 +126,7 @@
     {
       "name": "status",
       "type": "varchar(20)",
+      "description": "PENDENTE | CATEGORIZADO | REVISADO",
       "default": "PENDENTE"
     },
     {
@@ -146,12 +151,14 @@
     {
       "name": "origem_import",
       "type": "varchar(20)",
+      "description": "csv | ofx | pluggy",
       "nullable": false,
       "default": "csv"
     },
     {
       "name": "operation_type",
-      "type": "varchar(30)"
+      "type": "varchar(30)",
+      "description": "TED | PIX | BOLETO | ..."
     },
     {
       "name": "merchant_nome",

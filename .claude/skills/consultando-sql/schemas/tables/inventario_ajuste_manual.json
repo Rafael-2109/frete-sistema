@@ -1,6 +1,6 @@
 {
   "name": "inventario_ajuste_manual",
-  "description": "Tabela inventario_ajuste_manual",
+  "description": "Ajustes manuais (Planilha2 — preenchido pelo time).",
   "fields": [
     {
       "name": "id",

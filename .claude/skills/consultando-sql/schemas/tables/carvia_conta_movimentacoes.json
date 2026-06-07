@@ -1,6 +1,6 @@
 {
   "name": "carvia_conta_movimentacoes",
-  "description": "Tabela carvia_conta_movimentacoes",
+  "description": "Movimentacoes financeiras da conta CarVia — saldo calculado por SUM",
   "fields": [
     {
       "name": "id",

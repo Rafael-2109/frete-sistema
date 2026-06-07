@@ -1,6 +1,6 @@
 {
   "name": "carvia_precos_categoria_moto",
-  "description": "Tabela carvia_precos_categoria_moto",
+  "description": "Preco fixo por unidade para combinacao tabela_frete x categoria_moto",
   "fields": [
     {
       "name": "id",

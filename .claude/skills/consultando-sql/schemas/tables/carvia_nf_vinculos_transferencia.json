@@ -1,6 +1,6 @@
 {
   "name": "carvia_nf_vinculos_transferencia",
-  "description": "Tabela carvia_nf_vinculos_transferencia",
+  "description": "Vinculo NF Transferencia -> NF Venda para operacao triangular.",
   "fields": [
     {
       "name": "id",

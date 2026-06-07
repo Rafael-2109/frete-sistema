@@ -1,6 +1,6 @@
 {
   "name": "pessoal_pluggy_items",
-  "description": "Tabela pessoal_pluggy_items",
+  "description": "Conexao Pluggy (item) = 1 banco conectado via OAuth/Open Finance.",
   "fields": [
     {
       "name": "id",

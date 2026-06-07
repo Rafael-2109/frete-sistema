@@ -1,6 +1,6 @@
 {
   "name": "carvia_empresas_cubagem",
-  "description": "Tabela carvia_empresas_cubagem",
+  "description": "Empresas que utilizam cubagem para calculo de peso",
   "fields": [
     {
       "name": "id",

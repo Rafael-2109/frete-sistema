@@ -1,6 +1,6 @@
 {
   "name": "hora_devolucao_venda",
-  "description": "Tabela hora_devolucao_venda",
+  "description": "Header de devolucao de venda: NF de venda origem, motivo e status.",
   "fields": [
     {
       "name": "id",

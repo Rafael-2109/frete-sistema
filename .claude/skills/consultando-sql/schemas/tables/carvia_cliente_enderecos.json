@@ -1,6 +1,6 @@
 {
   "name": "carvia_cliente_enderecos",
-  "description": "Tabela carvia_cliente_enderecos",
+  "description": "Endereco CarVia — origem global (cliente_id=NULL) ou destino por cliente.",
   "fields": [
     {
       "name": "id",
@@ -14,7 +14,8 @@
     },
     {
       "name": "cnpj",
-      "type": "varchar(20)"
+      "type": "varchar(20)",
+      "description": "NULL = provisorio"
     },
     {
       "name": "razao_social",

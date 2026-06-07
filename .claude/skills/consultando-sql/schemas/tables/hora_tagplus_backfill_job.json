@@ -1,6 +1,6 @@
 {
   "name": "hora_tagplus_backfill_job",
-  "description": "Tabela hora_tagplus_backfill_job",
+  "description": "Job de backfill TagPlus enfileirado em RQ (queue `hora_backfill`).",
   "fields": [
     {
       "name": "id",

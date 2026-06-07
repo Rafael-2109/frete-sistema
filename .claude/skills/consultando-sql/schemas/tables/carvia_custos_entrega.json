@@ -1,6 +1,6 @@
 {
   "name": "carvia_custos_entrega",
-  "description": "Tabela carvia_custos_entrega",
+  "description": "Custos de entrega que CarVia pagou/incorreu — repassaveis ao cliente via CTe Complementar.",
   "fields": [
     {
       "name": "id",

@@ -1,6 +1,6 @@
 {
   "name": "hora_pedido_item",
-  "description": "Tabela hora_pedido_item",
+  "description": "Linha de pedido: uma moto solicitada/esperada, com chassi opcional.",
   "fields": [
     {
       "name": "id",

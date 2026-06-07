@@ -1,0 +1,108 @@
+{
+  "name": "seguranca_vulnerabilidades",
+  "description": "Achados individuais de vulnerabilidade por colaborador",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "user_id",
+      "type": "integer",
+      "description": "FK → usuarios.id",
+      "nullable": false
+    },
+    {
+      "name": "varredura_id",
+      "type": "integer",
+      "description": "FK → seguranca_varreduras.id"
+    },
+    {
+      "name": "categoria",
+      "type": "varchar(30)",
+      "nullable": false
+    },
+    {
+      "name": "severidade",
+      "type": "varchar(10)",
+      "nullable": false
+    },
+    {
+      "name": "titulo",
+      "type": "varchar(200)",
+      "nullable": false
+    },
+    {
+      "name": "descricao",
+      "type": "text"
+    },
+    {
+      "name": "dados",
+      "type": "json",
+      "description": "JSONB com dados especificos do achado"
+    },
+    {
+      "name": "status",
+      "type": "varchar(20)",
+      "nullable": false,
+      "default": "ABERTA"
+    },
+    {
+      "name": "notificado",
+      "type": "boolean",
+      "default": false
+    },
+    {
+      "name": "notificado_em",
+      "type": "timestamp"
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação",
+      "nullable": false
+    },
+    {
+      "name": "atualizado_em",
+      "type": "timestamp",
+      "description": "Última atualização",
+      "nullable": false
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "user_id",
+      "references": "usuarios.id"
+    },
+    {
+      "column": "varredura_id",
+      "references": "seguranca_varreduras.id"
+    }
+  ],
+  "unique_constraints": [
+    [
+      "user_id",
+      "categoria",
+      "titulo"
+    ]
+  ],
+  "indices": [
+    {
+      "name": "ix_seguranca_vuln_cat_sev",
+      "columns": [
+        "categoria",
+        "severidade"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_seguranca_vuln_user_status",
+      "columns": [
+        "user_id",
+        "status"
+      ],
+      "unique": false
+    }
+  ]
+}

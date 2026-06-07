@@ -1,6 +1,6 @@
 {
   "name": "carvia_faturas_cliente",
-  "description": "Tabela carvia_faturas_cliente",
+  "description": "Faturas CarVia emitidas ao cliente — agrupa N CTes CarVia",
   "fields": [
     {
       "name": "id",
@@ -57,7 +57,8 @@
     },
     {
       "name": "aliquota_icms",
-      "type": "varchar(20)"
+      "type": "varchar(20)",
+      "description": "Ex: \"12.00%\""
     },
     {
       "name": "valor_pedagio",

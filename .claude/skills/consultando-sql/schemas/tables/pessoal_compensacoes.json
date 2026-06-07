@@ -1,6 +1,6 @@
 {
   "name": "pessoal_compensacoes",
-  "description": "Tabela pessoal_compensacoes",
+  "description": "Pareamento N:M entre uma transacao de SAIDA e uma ENTRADA.",
   "fields": [
     {
       "name": "id",
@@ -37,12 +37,14 @@
     {
       "name": "origem",
       "type": "varchar(10)",
+      "description": "auto | manual",
       "nullable": false,
       "default": "manual"
     },
     {
       "name": "status",
       "type": "varchar(10)",
+      "description": "ATIVA | REVERTIDA",
       "nullable": false,
       "default": "ATIVA"
     },

@@ -1,6 +1,6 @@
 {
   "name": "hora_peca",
-  "description": "Tabela hora_peca",
+  "description": "Catalogo de pecas (capacete, retrovisor, bateria, ...).",
   "fields": [
     {
       "name": "id",

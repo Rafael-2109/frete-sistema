@@ -1,6 +1,6 @@
 {
   "name": "carvia_grupos_cliente",
-  "description": "Tabela carvia_grupos_cliente",
+  "description": "Grupo de clientes para tabelas de preco diferenciadas",
   "fields": [
     {
       "name": "id",

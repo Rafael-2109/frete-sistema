@@ -1,6 +1,6 @@
 {
   "name": "carvia_previnculos_extrato_cotacao",
-  "description": "Tabela carvia_previnculos_extrato_cotacao",
+  "description": "Pre-vinculo soft entre linha de extrato e cotacao aprovada.",
   "fields": [
     {
       "name": "id",

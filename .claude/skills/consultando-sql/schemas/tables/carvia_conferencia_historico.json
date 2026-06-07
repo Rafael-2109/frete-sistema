@@ -1,6 +1,6 @@
 {
   "name": "carvia_conferencia_historico",
-  "description": "Tabela carvia_conferencia_historico",
+  "description": "Historico append-only de mudancas em CarviaFrete.status_conferencia.",
   "fields": [
     {
       "name": "id",

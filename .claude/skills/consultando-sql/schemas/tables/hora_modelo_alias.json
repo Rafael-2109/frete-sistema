@@ -1,6 +1,6 @@
 {
   "name": "hora_modelo_alias",
-  "description": "Tabela hora_modelo_alias",
+  "description": "N nomes -> 1 modelo canonico.",
   "fields": [
     {
       "name": "id",

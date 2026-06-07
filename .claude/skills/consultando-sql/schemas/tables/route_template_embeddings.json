@@ -1,0 +1,126 @@
+{
+  "name": "route_template_embeddings",
+  "description": "Embedding de rotas e templates do sistema para busca semantica.",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "tipo",
+      "type": "varchar(20)",
+      "description": "'rota_template', 'rota_api'",
+      "nullable": false
+    },
+    {
+      "name": "blueprint_name",
+      "type": "varchar(100)",
+      "nullable": false
+    },
+    {
+      "name": "function_name",
+      "type": "varchar(200)",
+      "nullable": false
+    },
+    {
+      "name": "url_path",
+      "type": "varchar(500)",
+      "nullable": false
+    },
+    {
+      "name": "http_methods",
+      "type": "varchar(50)",
+      "description": "\"GET,POST\"",
+      "nullable": false
+    },
+    {
+      "name": "template_path",
+      "type": "varchar(500)"
+    },
+    {
+      "name": "menu_path",
+      "type": "text",
+      "description": "\"Financeiro > Contas a Pagar\""
+    },
+    {
+      "name": "permission_decorator",
+      "type": "varchar(200)"
+    },
+    {
+      "name": "source_file",
+      "type": "varchar(500)",
+      "nullable": false
+    },
+    {
+      "name": "source_line",
+      "type": "integer"
+    },
+    {
+      "name": "docstring",
+      "type": "text"
+    },
+    {
+      "name": "ajax_endpoints",
+      "type": "text",
+      "description": "JSON: URLs AJAX consumidas pelo template"
+    },
+    {
+      "name": "texto_embedado",
+      "type": "text",
+      "nullable": false
+    },
+    {
+      "name": "embedding",
+      "type": "vector"
+    },
+    {
+      "name": "model_used",
+      "type": "varchar(50)"
+    },
+    {
+      "name": "content_hash",
+      "type": "varchar(32)",
+      "description": "MD5 para detectar mudancas"
+    },
+    {
+      "name": "created_at",
+      "type": "timestamp",
+      "description": "Data de criação"
+    },
+    {
+      "name": "updated_at",
+      "type": "timestamp",
+      "description": "Última atualização"
+    }
+  ],
+  "unique_constraints": [
+    [
+      "blueprint_name",
+      "function_name"
+    ]
+  ],
+  "indices": [
+    {
+      "name": "idx_rte_content_hash",
+      "columns": [
+        "content_hash"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_rte_template_path",
+      "columns": [
+        "template_path"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_rte_tipo",
+      "columns": [
+        "tipo"
+      ],
+      "unique": false
+    }
+  ]
+}

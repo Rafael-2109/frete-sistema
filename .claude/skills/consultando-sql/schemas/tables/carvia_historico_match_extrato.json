@@ -1,6 +1,6 @@
 {
   "name": "carvia_historico_match_extrato",
-  "description": "Tabela carvia_historico_match_extrato",
+  "description": "Log append-only de eventos de match aprendidos (descricao+CNPJ pagador).",
   "fields": [
     {
       "name": "id",

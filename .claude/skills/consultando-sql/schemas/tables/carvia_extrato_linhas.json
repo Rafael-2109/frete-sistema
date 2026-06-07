@@ -1,6 +1,6 @@
 {
   "name": "carvia_extrato_linhas",
-  "description": "Tabela carvia_extrato_linhas",
+  "description": "Linhas do extrato bancario CarVia — base para conciliacao.",
   "fields": [
     {
       "name": "id",
@@ -25,6 +25,7 @@
     {
       "name": "tipo",
       "type": "varchar(10)",
+      "description": "CREDITO | DEBITO",
       "nullable": false
     },
     {
@@ -96,11 +97,13 @@
     },
     {
       "name": "razao_social",
-      "type": "varchar(255)"
+      "type": "varchar(255)",
+      "description": "Contraparte (importado do CSV bancario)"
     },
     {
       "name": "observacao",
-      "type": "text"
+      "type": "text",
+      "description": "Notas livres do usuario"
     }
   ],
   "foreign_keys": [

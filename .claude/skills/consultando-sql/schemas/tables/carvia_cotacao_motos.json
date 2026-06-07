@@ -1,6 +1,6 @@
 {
   "name": "carvia_cotacao_motos",
-  "description": "Tabela carvia_cotacao_motos",
+  "description": "Itens de moto em uma cotacao — modelo + quantidade + peso cubado",
   "fields": [
     {
       "name": "id",

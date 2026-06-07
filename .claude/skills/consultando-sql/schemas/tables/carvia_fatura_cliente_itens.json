@@ -1,6 +1,6 @@
 {
   "name": "carvia_fatura_cliente_itens",
-  "description": "Tabela carvia_fatura_cliente_itens",
+  "description": "Itens de detalhe por CTe de uma fatura cliente SSW",
   "fields": [
     {
       "name": "id",

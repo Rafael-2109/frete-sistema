@@ -1,6 +1,6 @@
 {
   "name": "carvia_cte_complementares",
-  "description": "Tabela carvia_cte_complementares",
+  "description": "CTe Complementar — emitido ao cliente para cobrar custos extras de entrega",
   "fields": [
     {
       "name": "id",
@@ -38,7 +38,8 @@
     },
     {
       "name": "ctrc_numero",
-      "type": "varchar(30)"
+      "type": "varchar(30)",
+      "description": "CTRC SSW/SEFAZ: CAR-{nCT}-{cDV}"
     },
     {
       "name": "cte_valor",

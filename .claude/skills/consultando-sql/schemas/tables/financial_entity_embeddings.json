@@ -1,0 +1,85 @@
+{
+  "name": "financial_entity_embeddings",
+  "description": "Embedding de entidades financeiras (fornecedores e clientes) para matching semantico.",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "entity_type",
+      "type": "varchar(20)",
+      "description": "'supplier' ou 'customer'",
+      "nullable": false
+    },
+    {
+      "name": "cnpj_raiz",
+      "type": "varchar(8)",
+      "description": "8 digitos (grupo empresarial)",
+      "nullable": false
+    },
+    {
+      "name": "cnpj_completo",
+      "type": "varchar(20)",
+      "description": "Um CNPJ representativo"
+    },
+    {
+      "name": "nome",
+      "type": "text",
+      "description": "Nome canonico (longest raz_social)",
+      "nullable": false
+    },
+    {
+      "name": "nomes_alternativos",
+      "type": "text",
+      "description": "JSON: variacoes conhecidas"
+    },
+    {
+      "name": "texto_embedado",
+      "type": "text",
+      "description": "Texto usado para embedding",
+      "nullable": false
+    },
+    {
+      "name": "embedding",
+      "type": "vector"
+    },
+    {
+      "name": "model_used",
+      "type": "varchar(50)"
+    },
+    {
+      "name": "created_at",
+      "type": "timestamp",
+      "description": "Data de criação"
+    },
+    {
+      "name": "updated_at",
+      "type": "timestamp",
+      "description": "Última atualização"
+    }
+  ],
+  "unique_constraints": [
+    [
+      "entity_type",
+      "cnpj_raiz"
+    ]
+  ],
+  "indices": [
+    {
+      "name": "idx_fin_entity_cnpj_raiz",
+      "columns": [
+        "cnpj_raiz"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_fin_entity_type",
+      "columns": [
+        "entity_type"
+      ],
+      "unique": false
+    }
+  ]
+}

@@ -18,7 +18,8 @@
     },
     {
       "name": "papel",
-      "type": "varchar(50)"
+      "type": "varchar(50)",
+      "description": "pai | mae | filho | filha"
     },
     {
       "name": "ativo",

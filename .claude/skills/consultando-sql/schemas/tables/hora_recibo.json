@@ -1,6 +1,6 @@
 {
   "name": "hora_recibo",
-  "description": "Tabela hora_recibo",
+  "description": "Recibo Simples de pecas/oficina de uma venda (nao-fiscal).",
   "fields": [
     {
       "name": "id",

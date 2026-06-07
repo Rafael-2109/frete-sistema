@@ -1,6 +1,6 @@
 {
   "name": "hora_tagplus_notificacao_whatsapp",
-  "description": "Tabela hora_tagplus_notificacao_whatsapp",
+  "description": "Dedupe/auditoria das notificações WhatsApp de NFe aprovada / pedido confirmado da HORA.",
   "fields": [
     {
       "name": "id",
@@ -10,16 +10,19 @@
     {
       "name": "tipo",
       "type": "varchar(10)",
+      "description": "PEDIDO | NFE",
       "nullable": false
     },
     {
       "name": "ref_id",
       "type": "integer",
+      "description": "HoraVenda.id ou HoraTagPlusNfeEmissao.id",
       "nullable": false
     },
     {
       "name": "numero",
-      "type": "varchar(30)"
+      "type": "varchar(30)",
+      "description": "numero NFe (NFE) ou id pedido (PEDIDO)"
     },
     {
       "name": "cliente_nome",
@@ -45,11 +48,13 @@
     },
     {
       "name": "enviado_vendedor",
-      "type": "boolean"
+      "type": "boolean",
+      "description": "NULL = não havia vendedor a notificar"
     },
     {
       "name": "status",
       "type": "varchar(15)",
+      "description": "PENDENTE/PROCESSANDO/ENVIADO/PARCIAL/ERRO/IGNORADO",
       "nullable": false,
       "default": "PENDENTE"
     },

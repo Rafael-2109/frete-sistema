@@ -1,0 +1,51 @@
+{
+  "name": "seguranca_varreduras",
+  "description": "Historico de varreduras/scans de seguranca",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "tipo",
+      "type": "varchar(30)",
+      "nullable": false
+    },
+    {
+      "name": "status",
+      "type": "varchar(20)",
+      "nullable": false,
+      "default": "EM_EXECUCAO"
+    },
+    {
+      "name": "iniciado_em",
+      "type": "timestamp",
+      "nullable": false
+    },
+    {
+      "name": "concluido_em",
+      "type": "timestamp"
+    },
+    {
+      "name": "total_verificados",
+      "type": "integer",
+      "default": 0
+    },
+    {
+      "name": "total_vulnerabilidades",
+      "type": "integer",
+      "default": 0
+    },
+    {
+      "name": "detalhes",
+      "type": "json",
+      "description": "JSONB com detalhes extras"
+    },
+    {
+      "name": "disparado_por",
+      "type": "varchar(120)",
+      "description": "email do admin"
+    }
+  ]
+}

@@ -1,6 +1,6 @@
 {
   "name": "hora_loja",
-  "description": "Tabela hora_loja",
+  "description": "Ponto de venda físico da HORA (Tatuapé, Bragança, Praia Grande, ...).",
   "fields": [
     {
       "name": "id",

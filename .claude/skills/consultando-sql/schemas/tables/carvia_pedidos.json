@@ -1,6 +1,6 @@
 {
   "name": "carvia_pedidos",
-  "description": "Tabela carvia_pedidos",
+  "description": "Pedido CarVia — vinculado a cotacao, split por filial SP/RJ",
   "fields": [
     {
       "name": "id",
@@ -21,11 +21,13 @@
     {
       "name": "filial",
       "type": "varchar(5)",
+      "description": "SP | RJ",
       "nullable": false
     },
     {
       "name": "tipo_separacao",
       "type": "varchar(20)",
+      "description": "ESTOQUE | CROSSDOCK",
       "nullable": false
     },
     {

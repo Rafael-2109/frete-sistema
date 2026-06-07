@@ -1,6 +1,6 @@
 {
   "name": "hora_aprovacao_desconto",
-  "description": "Tabela hora_aprovacao_desconto",
+  "description": "Solicitacao de aprovacao de desconto acima do teto do modelo (#28).",
   "fields": [
     {
       "name": "id",

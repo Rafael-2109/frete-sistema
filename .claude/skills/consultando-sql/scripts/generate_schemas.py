@@ -342,6 +342,23 @@ def _fk_ref(fk) -> str:
     return f"{fk.column.table.name}.{fk.column.name}"
 
 
+# Tabelas que EXISTEM no banco PROD mas NAO tem modelo ORM no codigo (verificado
+# via MCP Render em 2026-06-07): o schema fica "congelado" no disco e o gerador
+# (que deriva do metadata ORM) nao as cobre. NUNCA apagar como "orfa" — sao vivas:
+#   claude_session_store          67.216 linhas (gerenciada pelo SDK Agent)
+#   carvia_sessoes_cotacao             2 linhas (sem modelo ORM atual)
+#   carvia_sessao_demandas             2 linhas (sem modelo ORM atual)
+#   carvia_aprovacoes_subcontrato      0 linhas (vazia, sem modelo)
+# teams_tasks NAO entra: tem modelo (app/teams/models.py) e passou a ser gerada
+# via auto-descoberta (_discover_model_modules).
+ORFAOS_VIVOS_PRESERVAR = {
+    'claude_session_store',
+    'carvia_sessoes_cotacao',
+    'carvia_sessao_demandas',
+    'carvia_aprovacoes_subcontrato',
+}
+
+
 def _find_orphan_schemas(tables_dir: str, generated_table_names) -> list:
     """Schemas em tables/<t>.json sem tabela correspondente no metadata gerado.
 
@@ -365,10 +382,12 @@ def _resolve_orphans_to_delete(orphan_files, import_complete: bool, do_prune: bo
     2. Mesmo com a flag, só remove com `import_complete` (zero ImportError).
        Import parcial NUNCA apaga: um models.py quebrado no meio de uma edição
        faria o hook apagar schemas válidos.
+    3. NUNCA remove tabela em ORFAOS_VIVOS_PRESERVAR: existe no banco PROD sem
+       modelo ORM (apagar tiraria do agente uma tabela real).
     """
     if not do_prune or not import_complete:
         return []
-    return list(orphan_files)
+    return [o for o in orphan_files if o not in ORFAOS_VIVOS_PRESERVAR]
 
 
 # =====================================================================
@@ -494,8 +513,17 @@ def extract_field_description(model_class, field_name: str) -> str:
 
 
 def extract_class_docstring(model_class) -> str:
-    """Extrai docstring da classe do modelo."""
-    doc = inspect.getdoc(model_class)
+    """Extrai docstring PROPRIA da classe do modelo.
+
+    Usa `__doc__` direto, NAO `inspect.getdoc` — este ultimo herda a docstring da
+    superclasse `db.Model` via MRO quando a classe nao tem docstring propria,
+    injetando "The base class of the :attr:`.SQLAlchemy.Model` declarative model
+    class." como "descricao" da tabela. Bug pre-existente exposto pela
+    auto-descoberta (2026-06-07): mais classes mapeadas -> mais tabelas sem
+    docstring caindo no lixo herdado. Com `__doc__`, classe sem docstring -> None
+    -> fallback "Tabela X" (correto).
+    """
+    doc = model_class.__doc__
     if doc:
         # Primeira linha significativa
         for line in doc.split('\n'):
@@ -671,6 +699,45 @@ def extract_relationships(metadata) -> list:
 # IMPORTAÇÃO DOS MODELOS
 # =====================================================================
 
+def _discover_model_modules():
+    """Descobre modulos de modelo varrendo app/, retornando nomes dotted.
+
+    Resolve a causa raiz da "nao-atualizacao" (ex: teams_tasks): a lista hardcoded
+    esquecia modulos novos. Candidato por NOME (models.py, models_*.py, *_models.py,
+    ou arquivo dentro de pacote models/) E confirmado por CONTEUDO (`__tablename__`
+    presente no arquivo). O filtro de conteudo elimina falsos positivos que casam o
+    nome mas NAO sao ORM (ex: utils/ml_models, agente/sdk/model_router,
+    financeiro/parsers/models, carteira/models_adapter_presep). Exclui __init__,
+    test_* e __pycache__. Unida, na chamada, a uma lista legada de garantia.
+    """
+    found = set()
+    app_dir = os.path.join(PROJECT_ROOT, 'app')
+    for root, dirs, files in os.walk(app_dir):
+        dirs[:] = [d for d in dirs if d != '__pycache__']
+        in_models_pkg = os.path.basename(root) == 'models'
+        for fn in files:
+            if not fn.endswith('.py') or fn.startswith('test_') or fn == '__init__.py':
+                continue
+            stem = fn[:-3]
+            name_match = (
+                stem == 'models'
+                or stem.startswith('models_')
+                or stem.endswith('_models')
+            )
+            if not (name_match or in_models_pkg):
+                continue
+            fpath = os.path.join(root, fn)
+            try:
+                with open(fpath, 'r', encoding='utf-8') as fh:
+                    if '__tablename__' not in fh.read():
+                        continue
+            except (OSError, UnicodeDecodeError):
+                continue
+            rel = os.path.relpath(fpath, PROJECT_ROOT)
+            found.add(rel[:-3].replace(os.sep, '.'))
+    return found
+
+
 def import_all_models():
     """Importa modelos SQLAlchemy. Retorna (metadata, model_map, import_errors).
 
@@ -689,8 +756,8 @@ def import_all_models():
         # Modelo -> tabela mapping
         model_map = {}  # table_name -> model_class
 
-        # Importar todos os módulos de modelos
-        model_modules = [
+        # Lista LEGADA de garantia (unida a auto-descoberta abaixo).
+        legacy_modules = [
             'app.agente.models',
             'app.auth.models',
             'app.bi.models',
@@ -746,6 +813,9 @@ def import_all_models():
             'app.veiculos.models',
             'app.vinculos.models',
         ]
+        # Uniao: auto-descoberta (pega modulos novos, ex: app.teams.models) +
+        # legado de garantia. sorted -> determinístico (compativel com S0).
+        model_modules = sorted(set(_discover_model_modules()) | set(legacy_modules))
 
         import_errors = []
         for module_name in model_modules:
@@ -932,15 +1002,23 @@ def generate_all(stats_only=False, check_only=False, prune_orphans=False):
             for n in deleted:
                 print(f"      - {n}")
         else:
-            print(f"\n⚠️  {len(orphans)} schema(s) órfão(s) no disco (NÃO removidos):")
-            for n in orphans:
-                print(f"      • {n}.json")
-            if prune_orphans and not import_complete:
-                print(f"   ⛔ --prune-orphans IGNORADO: import parcial "
-                      f"({len(import_errors)} módulo(s) com erro) — salvaguarda inviolável.")
-            else:
-                print("   ⚠️  Um órfão pode ser tabela VIVA cujo módulo não está na "
-                      "lista de import. REVISE antes de remover com --prune-orphans.")
+            preservados = [o for o in orphans if o in ORFAOS_VIVOS_PRESERVAR]
+            a_revisar = [o for o in orphans if o not in ORFAOS_VIVOS_PRESERVAR]
+            if preservados:
+                print(f"\nℹ️  {len(preservados)} schema(s) órfão(s) PRESERVADO(s) "
+                      f"(vivos no PROD sem modelo ORM — allow-list ORFAOS_VIVOS_PRESERVAR):")
+                for n in preservados:
+                    print(f"      • {n}.json")
+            if a_revisar:
+                print(f"\n⚠️  {len(a_revisar)} schema(s) órfão(s) no disco (NÃO removidos):")
+                for n in a_revisar:
+                    print(f"      • {n}.json")
+                if prune_orphans and not import_complete:
+                    print(f"   ⛔ --prune-orphans IGNORADO: import parcial "
+                          f"({len(import_errors)} módulo(s) com erro) — salvaguarda inviolável.")
+                else:
+                    print("   ⚠️  Um órfão pode ser tabela VIVA cujo módulo não está na "
+                          "lista de import. REVISE antes de remover com --prune-orphans.")
 
     # 4. Resumo final
     total_fields = sum(

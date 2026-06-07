@@ -1,6 +1,6 @@
 {
   "name": "assai_separacao_saldo_modelo",
-  "description": "Tabela assai_separacao_saldo_modelo",
+  "description": "Placeholder de qtd planejada por modelo na separacao.",
   "fields": [
     {
       "name": "id",

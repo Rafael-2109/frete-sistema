@@ -1,6 +1,6 @@
 {
   "name": "hora_conferencia_auditoria",
-  "description": "Tabela hora_conferencia_auditoria",
+  "description": "Log append-only de toda acao feita em um recebimento.",
   "fields": [
     {
       "name": "id",

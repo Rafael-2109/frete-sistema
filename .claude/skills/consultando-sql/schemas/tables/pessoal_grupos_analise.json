@@ -1,6 +1,6 @@
 {
   "name": "pessoal_grupos_analise",
-  "description": "Tabela pessoal_grupos_analise",
+  "description": "Agrupamento customizado de categorias para analise cruzada.",
   "fields": [
     {
       "name": "id",
@@ -18,7 +18,8 @@
     },
     {
       "name": "cor",
-      "type": "varchar(20)"
+      "type": "varchar(20)",
+      "description": "ex: '#3b82f6' (opcional, para grafico)"
     },
     {
       "name": "criado_em",

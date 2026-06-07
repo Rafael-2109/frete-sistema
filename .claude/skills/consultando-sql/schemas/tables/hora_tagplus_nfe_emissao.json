@@ -1,6 +1,6 @@
 {
   "name": "hora_tagplus_nfe_emissao",
-  "description": "Tabela hora_tagplus_nfe_emissao",
+  "description": "Fila + historico de emissoes. Fonte de verdade do status de emissao.",
   "fields": [
     {
       "name": "id",

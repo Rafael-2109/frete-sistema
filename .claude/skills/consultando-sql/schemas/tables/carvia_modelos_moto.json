@@ -1,6 +1,6 @@
 {
   "name": "carvia_modelos_moto",
-  "description": "Tabela carvia_modelos_moto",
+  "description": "Modelos de moto para calculo automatico de peso cubado",
   "fields": [
     {
       "name": "id",

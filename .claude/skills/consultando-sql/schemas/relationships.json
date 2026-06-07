@@ -1,6 +1,6 @@
 {
   "version": "2.0.0",
-  "total_relationships": 428,
+  "total_relationships": 429,
   "relationships": [
     {
       "from_table": "agendamentos_entrega",
@@ -2460,6 +2460,12 @@
       "from_table": "requisicao_compra_alocacao",
       "from_column": "requisicao_compra_id",
       "to_table": "requisicao_compras",
+      "to_column": "id"
+    },
+    {
+      "from_table": "seguranca_vulnerabilidades",
+      "from_column": "varredura_id",
+      "to_table": "seguranca_varreduras",
       "to_column": "id"
     },
     {

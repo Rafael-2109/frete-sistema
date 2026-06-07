@@ -1,0 +1,128 @@
+{
+  "name": "ajuste_estoque_inventario",
+  "description": "Tabela ajuste_estoque_inventario",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "ciclo",
+      "type": "varchar(40)",
+      "nullable": false
+    },
+    {
+      "name": "cod_produto",
+      "type": "varchar(30)",
+      "nullable": false
+    },
+    {
+      "name": "tipo_produto",
+      "type": "smallint",
+      "nullable": false
+    },
+    {
+      "name": "company_id",
+      "type": "integer",
+      "nullable": false
+    },
+    {
+      "name": "lote_inventariado",
+      "type": "varchar(60)"
+    },
+    {
+      "name": "lote_odoo",
+      "type": "varchar(60)"
+    },
+    {
+      "name": "lote_origem",
+      "type": "varchar(60)",
+      "description": "lote no Odoo de origem"
+    },
+    {
+      "name": "lote_destino",
+      "type": "varchar(60)",
+      "description": "lote alvo (ex: lote inv, MIGRACAO)"
+    },
+    {
+      "name": "qtd_inventario",
+      "type": "numeric(15,4)",
+      "nullable": false
+    },
+    {
+      "name": "qtd_odoo",
+      "type": "numeric(15,4)",
+      "nullable": false
+    },
+    {
+      "name": "qtd_ajuste",
+      "type": "numeric(15,4)",
+      "nullable": false
+    },
+    {
+      "name": "custo_medio",
+      "type": "numeric(15,4)"
+    },
+    {
+      "name": "acao_decidida",
+      "type": "varchar(30)",
+      "nullable": false
+    },
+    {
+      "name": "external_id_operacao",
+      "type": "varchar(64)"
+    },
+    {
+      "name": "canary_passou",
+      "type": "boolean",
+      "default": false
+    },
+    {
+      "name": "aprovado_em",
+      "type": "timestamp"
+    },
+    {
+      "name": "aprovado_por",
+      "type": "varchar(80)"
+    },
+    {
+      "name": "status",
+      "type": "varchar(20)",
+      "nullable": false,
+      "default": "PROPOSTO"
+    },
+    {
+      "name": "fase_pipeline",
+      "type": "varchar(20)",
+      "description": "F5a..F5e ou FINALIZADO"
+    },
+    {
+      "name": "picking_id_odoo",
+      "type": "integer"
+    },
+    {
+      "name": "invoice_id_odoo",
+      "type": "integer"
+    },
+    {
+      "name": "chave_nfe",
+      "type": "varchar(44)"
+    },
+    {
+      "name": "erro_msg",
+      "type": "text"
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação",
+      "nullable": false
+    },
+    {
+      "name": "criado_por",
+      "type": "varchar(80)",
+      "nullable": false
+    }
+  ]
+}

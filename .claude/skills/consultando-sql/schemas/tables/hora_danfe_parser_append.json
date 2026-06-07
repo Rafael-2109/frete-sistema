@@ -1,6 +1,6 @@
 {
   "name": "hora_danfe_parser_append",
-  "description": "Tabela hora_danfe_parser_append",
+  "description": "Append-prompt versionado para o parser de DANFE/extrator de chassi/motor.",
   "fields": [
     {
       "name": "id",

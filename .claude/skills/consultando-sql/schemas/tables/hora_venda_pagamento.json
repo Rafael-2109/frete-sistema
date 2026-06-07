@@ -1,6 +1,6 @@
 {
   "name": "hora_venda_pagamento",
-  "description": "Tabela hora_venda_pagamento",
+  "description": "Pagamento parcial de uma venda (1:N com HoraVenda).",
   "fields": [
     {
       "name": "id",

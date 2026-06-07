@@ -1,0 +1,58 @@
+{
+  "name": "seguranca_scores",
+  "description": "Historico de scores de seguranca para trends",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "user_id",
+      "type": "integer",
+      "description": "FK → usuarios.id"
+    },
+    {
+      "name": "score",
+      "type": "integer",
+      "description": "0-100 (100=melhor)",
+      "nullable": false
+    },
+    {
+      "name": "componentes",
+      "type": "json",
+      "description": "JSONB breakdown do score"
+    },
+    {
+      "name": "vulnerabilidades_abertas",
+      "type": "integer",
+      "default": 0
+    },
+    {
+      "name": "vulnerabilidades_criticas",
+      "type": "integer",
+      "default": 0
+    },
+    {
+      "name": "calculado_em",
+      "type": "timestamp",
+      "nullable": false
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "user_id",
+      "references": "usuarios.id"
+    }
+  ],
+  "indices": [
+    {
+      "name": "ix_seguranca_score_user_calc",
+      "columns": [
+        "user_id",
+        "calculado_em"
+      ],
+      "unique": false
+    }
+  ]
+}

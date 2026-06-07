@@ -1,6 +1,6 @@
 {
   "name": "hora_devolucao_fornecedor_item",
-  "description": "Tabela hora_devolucao_fornecedor_item",
+  "description": "Chassi incluido em uma devolucao. Unico por devolucao.",
   "fields": [
     {
       "name": "id",

@@ -1,6 +1,6 @@
 {
   "name": "carvia_emissao_cte_complementar",
-  "description": "Tabela carvia_emissao_cte_complementar",
+  "description": "Tracking de emissao automatica de CTe Complementar no SSW (opcao 222).",
   "fields": [
     {
       "name": "id",
@@ -27,11 +27,13 @@
     {
       "name": "ctrc_pai",
       "type": "varchar(30)",
+      "description": "CTRC do CTe original (ex: CAR-113-9)",
       "nullable": false
     },
     {
       "name": "motivo_ssw",
       "type": "varchar(5)",
+      "description": "C/D/E/R",
       "nullable": false
     },
     {
@@ -47,7 +49,8 @@
     },
     {
       "name": "icms_aliquota_usada",
-      "type": "numeric(5,2)"
+      "type": "numeric(5,2)",
+      "description": "Snapshot do ICMS usado no calculo"
     },
     {
       "name": "status",
@@ -57,7 +60,8 @@
     },
     {
       "name": "etapa",
-      "type": "varchar(30)"
+      "type": "varchar(30)",
+      "description": "PREENCHIMENTO | SEFAZ | CONSULTA_101"
     },
     {
       "name": "job_id",

@@ -1,6 +1,6 @@
 {
   "name": "hora_devolucao_venda_item",
-  "description": "Tabela hora_devolucao_venda_item",
+  "description": "Chassi devolvido em uma devolucao de venda. Uma resolucao por item.",
   "fields": [
     {
       "name": "id",

@@ -1,6 +1,6 @@
 {
   "name": "hora_pedido",
-  "description": "Tabela hora_pedido",
+  "description": "Pedido de compra emitido pela HORA para a Motochefe (fabricante).",
   "fields": [
     {
       "name": "id",

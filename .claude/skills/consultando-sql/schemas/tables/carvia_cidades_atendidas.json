@@ -1,6 +1,6 @@
 {
   "name": "carvia_cidades_atendidas",
-  "description": "Tabela carvia_cidades_atendidas",
+  "description": "Cidades atendidas pelo frete CarVia — vincula a CarviaTabelaFrete via nome_tabela",
   "fields": [
     {
       "name": "id",

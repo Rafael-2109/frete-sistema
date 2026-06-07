@@ -1,6 +1,6 @@
 {
   "name": "hora_tagplus_departamento_map",
-  "description": "Tabela hora_tagplus_departamento_map",
+  "description": "De-para departamento.descricao TagPlus -> HoraLoja (loja fisica).",
   "fields": [
     {
       "name": "id",

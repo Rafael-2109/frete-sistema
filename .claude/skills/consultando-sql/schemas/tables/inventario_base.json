@@ -1,6 +1,6 @@
 {
   "name": "inventario_base",
-  "description": "Tabela inventario_base",
+  "description": "Snapshot físico FB/CD/LF (uma linha por cod + empresa).",
   "fields": [
     {
       "name": "id",

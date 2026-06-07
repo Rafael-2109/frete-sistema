@@ -10,6 +10,7 @@
     {
       "name": "ano_mes",
       "type": "date",
+      "description": "Primeiro dia do mes (ex: 2026-04-01)",
       "nullable": false
     },
     {

@@ -1,6 +1,6 @@
 {
   "name": "hora_peca_movimento",
-  "description": "Tabela hora_peca_movimento",
+  "description": "Movimento de peca (signed: + entrada, - saida).",
   "fields": [
     {
       "name": "id",

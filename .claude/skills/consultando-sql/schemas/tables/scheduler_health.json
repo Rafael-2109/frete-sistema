@@ -1,0 +1,63 @@
+{
+  "name": "scheduler_health",
+  "description": "Registro de execucao de cada step do scheduler.",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "step_name",
+      "type": "varchar(100)",
+      "nullable": false
+    },
+    {
+      "name": "step_number",
+      "type": "integer",
+      "nullable": false
+    },
+    {
+      "name": "executado_em",
+      "type": "timestamp",
+      "nullable": false
+    },
+    {
+      "name": "status",
+      "type": "varchar(20)",
+      "description": "OK, ERRO, SKIP",
+      "nullable": false
+    },
+    {
+      "name": "duracao_ms",
+      "type": "integer",
+      "description": "Duracao em milissegundos"
+    },
+    {
+      "name": "erro",
+      "type": "text",
+      "description": "Mensagem de erro (se status=ERRO)"
+    },
+    {
+      "name": "detalhes",
+      "type": "text",
+      "description": "Info adicional (ex: \"42 registros sincronizados\")"
+    }
+  ],
+  "indices": [
+    {
+      "name": "idx_sh_executado_em",
+      "columns": [
+        "executado_em"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_sh_step_name",
+      "columns": [
+        "step_name"
+      ],
+      "unique": false
+    }
+  ]
+}

@@ -1,6 +1,6 @@
 {
   "name": "carvia_nfs",
-  "description": "Tabela carvia_nfs",
+  "description": "NFs importadas (mercadoria) — PDF DANFE, XML NF-e ou entrada manual",
   "fields": [
     {
       "name": "id",

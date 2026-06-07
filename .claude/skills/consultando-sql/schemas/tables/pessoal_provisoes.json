@@ -1,6 +1,6 @@
 {
   "name": "pessoal_provisoes",
-  "description": "Tabela pessoal_provisoes",
+  "description": "Lancamento provisionado (forecast manual).",
   "fields": [
     {
       "name": "id",
@@ -10,6 +10,7 @@
     {
       "name": "tipo",
       "type": "varchar(10)",
+      "description": "entrada | saida",
       "nullable": false
     },
     {
@@ -20,6 +21,7 @@
     {
       "name": "valor",
       "type": "numeric(15,2)",
+      "description": "sempre positivo",
       "nullable": false
     },
     {

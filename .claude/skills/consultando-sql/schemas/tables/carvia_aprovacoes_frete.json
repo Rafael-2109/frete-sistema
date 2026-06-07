@@ -1,6 +1,6 @@
 {
   "name": "carvia_aprovacoes_frete",
-  "description": "Tabela carvia_aprovacoes_frete",
+  "description": "Tratativa de aprovacao de divergencia em CarviaFrete.",
   "fields": [
     {
       "name": "id",

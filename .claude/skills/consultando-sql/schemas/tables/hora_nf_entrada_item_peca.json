@@ -1,6 +1,6 @@
 {
   "name": "hora_nf_entrada_item_peca",
-  "description": "Tabela hora_nf_entrada_item_peca",
+  "description": "Linha de peca em NF de entrada com conferencia embutida.",
   "fields": [
     {
       "name": "id",

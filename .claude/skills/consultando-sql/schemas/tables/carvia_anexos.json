@@ -1,6 +1,6 @@
 {
   "name": "carvia_anexos",
-  "description": "Tabela carvia_anexos",
+  "description": "Anexos comprovatorios polimorficos (frete, subcontrato) via S3.",
   "fields": [
     {
       "name": "id",

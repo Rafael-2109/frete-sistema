@@ -1,6 +1,6 @@
 {
   "name": "hora_tagplus_produto_map",
-  "description": "Tabela hora_tagplus_produto_map",
+  "description": "De-para HoraModelo -> produto cadastrado no TagPlus.",
   "fields": [
     {
       "name": "id",

@@ -1,6 +1,6 @@
 {
   "name": "carvia_custo_entrega_anexos",
-  "description": "Tabela carvia_custo_entrega_anexos",
+  "description": "Anexos comprovatorios de custo de entrega (fotos, PDFs, comprovantes via S3)",
   "fields": [
     {
       "name": "id",

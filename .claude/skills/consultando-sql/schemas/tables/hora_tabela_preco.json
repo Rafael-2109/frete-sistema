@@ -1,6 +1,6 @@
 {
   "name": "hora_tabela_preco",
-  "description": "Tabela hora_tabela_preco",
+  "description": "Histórico de preço de tabela por modelo + período de vigência.",
   "fields": [
     {
       "name": "id",

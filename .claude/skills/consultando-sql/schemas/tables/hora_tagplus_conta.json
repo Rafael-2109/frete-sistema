@@ -1,6 +1,6 @@
 {
   "name": "hora_tagplus_conta",
-  "description": "Tabela hora_tagplus_conta",
+  "description": "Conta TagPlus (singleton). Todas as lojas HORA faturam pelo mesmo CNPJ.",
   "fields": [
     {
       "name": "id",

@@ -1,6 +1,6 @@
 {
   "name": "carvia_receitas",
-  "description": "Tabela carvia_receitas",
+  "description": "Receitas operacionais diversas da empresa no modulo CarVia (espelho de despesas)",
   "fields": [
     {
       "name": "id",

@@ -19,7 +19,8 @@
     },
     {
       "name": "tipo_arquivo",
-      "type": "varchar(30)"
+      "type": "varchar(30)",
+      "description": "extrato_cc | fatura_cartao"
     },
     {
       "name": "periodo_inicio",
@@ -31,7 +32,8 @@
     },
     {
       "name": "situacao_fatura",
-      "type": "varchar(30)"
+      "type": "varchar(30)",
+      "description": "PAGO | ABERTA (so cartao)"
     },
     {
       "name": "data_pagamento",

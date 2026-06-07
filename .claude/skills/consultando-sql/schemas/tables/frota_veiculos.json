@@ -1,6 +1,6 @@
 {
   "name": "frota_veiculos",
-  "description": "Tabela frota_veiculos",
+  "description": "Cadastro de veiculos da frota propria.",
   "fields": [
     {
       "name": "id",

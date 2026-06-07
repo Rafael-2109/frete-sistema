@@ -1,6 +1,6 @@
 {
   "name": "hora_peca_faltando",
-  "description": "Tabela hora_peca_faltando",
+  "description": "Uma peca ausente em uma moto (N por moto).",
   "fields": [
     {
       "name": "id",

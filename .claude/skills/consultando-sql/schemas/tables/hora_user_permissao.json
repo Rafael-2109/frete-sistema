@@ -1,6 +1,6 @@
 {
   "name": "hora_user_permissao",
-  "description": "Tabela hora_user_permissao",
+  "description": "Permissao granular por usuario x modulo HORA.",
   "fields": [
     {
       "name": "id",

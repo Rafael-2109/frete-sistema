@@ -1,6 +1,6 @@
 {
   "name": "hora_venda_item",
-  "description": "Tabela hora_venda_item",
+  "description": "Linha de venda: um chassi vendido.",
   "fields": [
     {
       "name": "id",

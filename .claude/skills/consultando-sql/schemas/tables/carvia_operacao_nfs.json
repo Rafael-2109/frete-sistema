@@ -1,6 +1,6 @@
 {
   "name": "carvia_operacao_nfs",
-  "description": "Tabela carvia_operacao_nfs",
+  "description": "Junction N:N — Operacao <-> NFs",
   "fields": [
     {
       "name": "id",

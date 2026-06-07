@@ -1,6 +1,6 @@
 {
   "name": "hora_moto_evento",
-  "description": "Tabela hora_moto_evento",
+  "description": "Log append-only de transições de estado da moto.",
   "fields": [
     {
       "name": "id",

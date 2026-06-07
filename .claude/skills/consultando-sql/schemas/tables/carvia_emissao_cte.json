@@ -1,6 +1,6 @@
 {
   "name": "carvia_emissao_cte",
-  "description": "Tabela carvia_emissao_cte",
+  "description": "Controle de emissoes automaticas de CTe no SSW via Playwright.",
   "fields": [
     {
       "name": "id",

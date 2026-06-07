@@ -1,6 +1,6 @@
 {
   "name": "recursos_producao",
-  "description": "The base class of the :attr:`.SQLAlchemy.Model` declarative model class.",
+  "description": "Tabela recursos_producao",
   "fields": [
     {
       "name": "id",

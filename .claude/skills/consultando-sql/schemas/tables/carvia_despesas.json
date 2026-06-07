@@ -1,6 +1,6 @@
 {
   "name": "carvia_despesas",
-  "description": "Tabela carvia_despesas",
+  "description": "Despesas operacionais da empresa no modulo CarVia",
   "fields": [
     {
       "name": "id",

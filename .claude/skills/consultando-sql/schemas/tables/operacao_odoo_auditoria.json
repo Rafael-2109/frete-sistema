@@ -1,0 +1,145 @@
+{
+  "name": "operacao_odoo_auditoria",
+  "description": "Tabela operacao_odoo_auditoria",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "external_id",
+      "type": "varchar(64)",
+      "nullable": false
+    },
+    {
+      "name": "tabela_origem",
+      "type": "varchar(40)",
+      "nullable": false
+    },
+    {
+      "name": "registro_id",
+      "type": "integer",
+      "nullable": false
+    },
+    {
+      "name": "acao",
+      "type": "varchar(60)",
+      "nullable": false
+    },
+    {
+      "name": "modelo_odoo",
+      "type": "varchar(60)",
+      "nullable": false
+    },
+    {
+      "name": "metodo_odoo",
+      "type": "varchar(60)"
+    },
+    {
+      "name": "odoo_id",
+      "type": "integer"
+    },
+    {
+      "name": "etapa",
+      "type": "integer"
+    },
+    {
+      "name": "etapa_descricao",
+      "type": "varchar(80)"
+    },
+    {
+      "name": "status",
+      "type": "varchar(30)",
+      "nullable": false
+    },
+    {
+      "name": "payload_json",
+      "type": "json"
+    },
+    {
+      "name": "resposta_json",
+      "type": "json"
+    },
+    {
+      "name": "dados_antes_json",
+      "type": "json"
+    },
+    {
+      "name": "dados_depois_json",
+      "type": "json"
+    },
+    {
+      "name": "erro_msg",
+      "type": "text"
+    },
+    {
+      "name": "tempo_execucao_ms",
+      "type": "integer"
+    },
+    {
+      "name": "contexto_origem",
+      "type": "varchar(40)"
+    },
+    {
+      "name": "contexto_ref",
+      "type": "varchar(80)"
+    },
+    {
+      "name": "pipeline_etapa",
+      "type": "varchar(40)",
+      "description": "F5a..F5e — pos-G004/D003"
+    },
+    {
+      "name": "screenshot_s3_key",
+      "type": "varchar(255)"
+    },
+    {
+      "name": "executado_em",
+      "type": "timestamp",
+      "nullable": false
+    },
+    {
+      "name": "executado_por",
+      "type": "varchar(80)",
+      "nullable": false
+    },
+    {
+      "name": "session_id",
+      "type": "varchar(64)"
+    },
+    {
+      "name": "tool_use_id",
+      "type": "varchar(40)",
+      "description": "tool_use_id SDK Anthropic"
+    },
+    {
+      "name": "agent_type",
+      "type": "varchar(40)",
+      "description": "main|gestor-estoque-odoo|worker_rq|scheduler|cli"
+    }
+  ],
+  "indices": [
+    {
+      "name": "ix_operacao_odoo_auditoria_agent_type",
+      "columns": [
+        "agent_type"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_operacao_odoo_auditoria_session_id",
+      "columns": [
+        "session_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_operacao_odoo_auditoria_tool_use_id",
+      "columns": [
+        "tool_use_id"
+      ],
+      "unique": false
+    }
+  ]
+}

@@ -1,6 +1,6 @@
 {
   "name": "hora_tagplus_token",
-  "description": "Tabela hora_tagplus_token",
+  "description": "Tokens OAuth2 da conta. 1 linha por conta (UNIQUE).",
   "fields": [
     {
       "name": "id",

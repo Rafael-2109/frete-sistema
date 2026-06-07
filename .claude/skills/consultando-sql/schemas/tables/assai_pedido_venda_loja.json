@@ -1,6 +1,6 @@
 {
   "name": "assai_pedido_venda_loja",
-  "description": "Tabela assai_pedido_venda_loja",
+  "description": "Cabecalho por (pedido, loja). Contem os 4 campos de agendamento que",
   "fields": [
     {
       "name": "id",

@@ -1,6 +1,6 @@
 {
   "name": "usuarios",
-  "description": "The base class of the :attr:`.SQLAlchemy.Model` declarative model class.",
+  "description": "Tabela usuarios",
   "fields": [
     {
       "name": "id",

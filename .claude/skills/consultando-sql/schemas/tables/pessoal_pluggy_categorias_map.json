@@ -1,6 +1,6 @@
 {
   "name": "pessoal_pluggy_categorias_map",
-  "description": "Tabela pessoal_pluggy_categorias_map",
+  "description": "Mapeia categoryId hierarquico Pluggy para PessoalCategoria local.",
   "fields": [
     {
       "name": "id",

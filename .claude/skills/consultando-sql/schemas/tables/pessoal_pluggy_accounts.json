@@ -1,6 +1,6 @@
 {
   "name": "pessoal_pluggy_accounts",
-  "description": "Tabela pessoal_pluggy_accounts",
+  "description": "Conta Pluggy dentro de um item (BANK conta corrente ou CREDIT cartao).",
   "fields": [
     {
       "name": "id",
@@ -20,11 +20,13 @@
     {
       "name": "type",
       "type": "varchar(10)",
+      "description": "BANK | CREDIT",
       "nullable": false
     },
     {
       "name": "subtype",
-      "type": "varchar(30)"
+      "type": "varchar(30)",
+      "description": "CHECKING_ACCOUNT | SAVINGS_ACCOUNT | CREDIT_CARD"
     },
     {
       "name": "number",
@@ -57,11 +59,13 @@
     },
     {
       "name": "bank_data",
-      "type": "jsonb"
+      "type": "jsonb",
+      "description": "transferNumber, closingBalance"
     },
     {
       "name": "credit_data",
-      "type": "jsonb"
+      "type": "jsonb",
+      "description": "level, brand, dueDate, creditLimit, minimumPayment"
     },
     {
       "name": "payload_raw",

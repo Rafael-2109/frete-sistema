@@ -1,6 +1,6 @@
 {
   "name": "inventario_contagem",
-  "description": "Tabela inventario_contagem",
+  "description": "Contagem cíclica parcial sob demanda (granularidade quant).",
   "fields": [
     {
       "name": "id",
@@ -15,15 +15,18 @@
     {
       "name": "empresa",
       "type": "varchar(10)",
+      "description": "FB / CD / LF",
       "nullable": false
     },
     {
       "name": "filtro_locais",
-      "type": "json"
+      "type": "json",
+      "description": "[location_name] (None/[] = todos)"
     },
     {
       "name": "filtro_codigos",
-      "type": "json"
+      "type": "json",
+      "description": "[cod_produto] (None/[] = todos)"
     },
     {
       "name": "incluir_indisponivel",
@@ -34,11 +37,13 @@
     {
       "name": "data_base",
       "type": "timestamp",
+      "description": "T0 + corte Confronto",
       "nullable": false
     },
     {
       "name": "status",
       "type": "varchar(20)",
+      "description": "BASE_GERADA / CONTABILIZADA",
       "nullable": false,
       "default": "BASE_GERADA"
     },

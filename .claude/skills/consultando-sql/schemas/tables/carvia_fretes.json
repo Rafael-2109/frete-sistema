@@ -1,6 +1,6 @@
 {
   "name": "carvia_fretes",
-  "description": "Tabela carvia_fretes",
+  "description": "Frete CarVia — 1 frete = 1 par (cnpj_emitente, cnpj_destino) + 1 Embarque.",
   "fields": [
     {
       "name": "id",
@@ -49,6 +49,7 @@
     {
       "name": "tipo_carga",
       "type": "varchar(20)",
+      "description": "DIRETA | FRACIONADA",
       "nullable": false
     },
     {
@@ -235,15 +236,18 @@
     },
     {
       "name": "condicao_pagamento",
-      "type": "varchar(20)"
+      "type": "varchar(20)",
+      "description": "A_VISTA | PRAZO"
     },
     {
       "name": "prazo_dias",
-      "type": "integer"
+      "type": "integer",
+      "description": "1-30 se PRAZO"
     },
     {
       "name": "responsavel_frete",
-      "type": "varchar(30)"
+      "type": "varchar(30)",
+      "description": "100_REMETENTE | 100_DESTINATARIO | 50_50 | PERSONALIZADO"
     },
     {
       "name": "percentual_remetente",

@@ -1,0 +1,100 @@
+{
+  "name": "session_turn_embeddings",
+  "description": "Embedding de turns (pares user+assistant) de sessoes do agente.",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "session_id",
+      "type": "varchar(255)",
+      "description": "AgentSession.session_id (nosso UUID)",
+      "nullable": false
+    },
+    {
+      "name": "user_id",
+      "type": "integer",
+      "description": "Denormalizado para WHERE",
+      "nullable": false
+    },
+    {
+      "name": "turn_index",
+      "type": "integer",
+      "description": "Indice do par no session (0-based)",
+      "nullable": false
+    },
+    {
+      "name": "user_content",
+      "type": "text",
+      "description": "Mensagem do usuario",
+      "nullable": false
+    },
+    {
+      "name": "assistant_summary",
+      "type": "text",
+      "description": "Primeiros 500 chars da resposta"
+    },
+    {
+      "name": "texto_embedado",
+      "type": "text",
+      "description": "Combinado para embedding",
+      "nullable": false
+    },
+    {
+      "name": "embedding",
+      "type": "vector"
+    },
+    {
+      "name": "model_used",
+      "type": "varchar(50)"
+    },
+    {
+      "name": "content_hash",
+      "type": "varchar(32)",
+      "description": "MD5 para stale detection"
+    },
+    {
+      "name": "session_title",
+      "type": "varchar(200)"
+    },
+    {
+      "name": "session_created_at",
+      "type": "timestamp"
+    },
+    {
+      "name": "created_at",
+      "type": "timestamp",
+      "description": "Data de criação"
+    },
+    {
+      "name": "updated_at",
+      "type": "timestamp",
+      "description": "Última atualização"
+    }
+  ],
+  "unique_constraints": [
+    [
+      "session_id",
+      "turn_index"
+    ]
+  ],
+  "indices": [
+    {
+      "name": "idx_ste_session_id",
+      "columns": [
+        "session_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_ste_user_id",
+      "columns": [
+        "user_id"
+      ],
+      "unique": false
+    }
+  ],
+  "admin_only": true
+}

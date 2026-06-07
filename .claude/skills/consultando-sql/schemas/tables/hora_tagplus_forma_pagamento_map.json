@@ -1,6 +1,6 @@
 {
   "name": "hora_tagplus_forma_pagamento_map",
-  "description": "Tabela hora_tagplus_forma_pagamento_map",
+  "description": "De-para forma_pagamento HORA -> ID inteiro de forma no TagPlus.",
   "fields": [
     {
       "name": "id",
