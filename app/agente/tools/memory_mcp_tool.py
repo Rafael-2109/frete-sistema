@@ -3256,17 +3256,18 @@ try:
     @enhanced_tool(
         "register_improvement",
         "Registra sugestao de melhoria para o Claude Code (dev). "
-        "Use quando descobrir: bug em skill existente (skill_bug), "
-        "skill que falta (skill_suggestion), instrucao necessaria "
-        "(instruction_request), ou gotcha do sistema (gotcha_report). "
-        "Diferente de log_system_pitfall (armadilhas operacionais do ambiente) "
-        "— isto vai para o dialogo de melhoria Agent SDK <-> Claude Code.",
+        "Use ao descobrir OU SUSPEITAR de: bug em skill (skill_bug), skill que falta "
+        "(skill_suggestion), instrucao necessaria (instruction_request), gotcha do "
+        "sistema (gotcha_report) — ou QUALQUER atrito que afete sua capacidade de operar. "
+        "Casos SUTIS contam: registre mesmo sem reproducao nem fix (hipotese + sintoma "
+        "bastam). Nao espere o batch D8. Diferente de log_system_pitfall (armadilhas do "
+        "ambiente) — isto vai para o dialogo de melhoria Agent SDK <-> Claude Code.",
         {
             "category": Annotated[str, "Categoria: skill_bug, skill_suggestion, instruction_request, prompt_feedback, gotcha_report, memory_feedback"],
             "severity": Annotated[str, "Severidade: critical (erro/frustacao recorrente), warning (melhoria significativa), info (nice-to-have)"],
             "title": Annotated[str, "Titulo conciso da sugestao (max 100 chars)"],
-            "description": Annotated[str, "Descricao PRESCRITIVA: o que deve mudar e por que. Para skill_bug: nome da skill, o que fez errado, o que deveria fazer"],
-            "evidence": Annotated[str, "Evidencia da sessao: o que aconteceu, IDs envolvidos, valores, o que falhou"],
+            "description": Annotated[str, "Prescritiva quando souber o fix (o que deve mudar e por que; para skill_bug: nome da skill, o que fez errado, o que deveria fazer). Sem fix em maos? Hipotese + sintoma, etiquetada como hipotese"],
+            "evidence": Annotated[str, "Evidencia da sessao: o que aconteceu, IDs envolvidos, valores, o que falhou. O que tiver — ausencia NAO bloqueia o registro"],
         },
         annotations=ToolAnnotations(
             readOnlyHint=False,

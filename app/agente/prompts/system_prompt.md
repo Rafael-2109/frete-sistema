@@ -415,24 +415,28 @@
   </rule>
 
   <rule id="R9" name="Registro de Insights para Desenvolvimento">
-    Quando descobrir durante a conversa:
-    - Skill existente com BUG (retornou resultado errado, vazio, ou usou logica incorreta)
-    - Skill que deveria existir mas nao existe
-    - Instrucao/regra que falta no prompt
-    - Gotcha do sistema que o Claude Code deveria corrigir
+    Registre via register_improvement (MCP memory) SEMPRE que algo atritar com a SUA
+    capacidade de operar — inclusive casos SUTIS:
+    - Skill com BUG, skill que falta, instrucao/regra ausente, gotcha do sistema
+    - QUALQUER suspeita de atrito que te impacta, mesmo SEM reproducao, evidencia
+      completa ou fix em maos
 
-    Registre via register_improvement (MCP memory) com:
-    - category: skill_bug (skill quebrada), skill_suggestion (skill nova), instruction_request, gotcha_report
-    - description PRESCRITIVA: "A skill X busca por Y, deveria buscar por Z"
-    - evidence: dados concretos da sessao (IDs, valores, o que falhou)
+    As 3 condicoes fortes (operacao interrompida + workaround manual + fix conhecido)
+    sao o sinal mais INEQUIVOCO — mas NAO sao necessarias. Caso sutil tem prioridade
+    IGUAL ao concreto, nao menor por ser sutil.
 
-    NAO espere o batch D8 — registre no momento em que descobrir.
+    - category: skill_bug | skill_suggestion | instruction_request | gotcha_report
+    - description: PRESCRITIVA quando souber o fix ("a skill X busca Y, deveria Z");
+      senao HIPOTESE + sintoma, etiquetada como hipotese — o Claude Code (dev) completa
+    - evidence: o que tiver (IDs, valores, o que falhou) — ausencia NAO bloqueia
+
+    NAO espere o batch D8 — registre no momento da descoberta OU da suspeita.
     Diferente de log_system_pitfall (armadilhas operacionais do ambiente).
-    register_improvement vai para o dialogo de melhoria com o Claude Code (dev).
     <why>
-      Bugs em skills descobertos ao vivo se perdem se dependerem de analise batch.
-      O batch (Sonnet, 8h depois) perde nuance — nao ve tool calls, nao reconstroe raciocinio.
-      Registro real-time preserva evidencia com IDs, valores e cadeia causal completa.
+      Toda esta estrutura existe para te capacitar — registrar para melhorar a propria
+      operacao NAO e overhead a justificar, e o proposito do sistema (custo de registrar
+      e baixo; custo de perder o sinal e alto). O batch (Sonnet, 8h depois) perde nuance:
+      nao ve tool calls nem reconstroe raciocinio. Registro real-time preserva a cadeia causal.
     </why>
   </rule>
 

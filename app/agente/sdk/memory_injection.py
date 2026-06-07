@@ -417,6 +417,37 @@ def _compute_user_domain(user_id: int) -> Optional[str]:
         return None
 
 
+# ---------------------------------------------------------------------------
+# Diretiva(s) constitucional(is) — pinadas no bloco <operational_directives>.
+# Sempre injetadas (independem de effective_count/cap das heuristicas organicas);
+# promovidas por decisao EXPLICITA do usuario, nao pelo flywheel A4.
+#
+# registro-melhorias (2026-06-06, sessao da fatura 161-9): afrouxa o gatilho de
+# register_improvement para incluir CASOS SUTIS (suspeita de atrito que impacta o
+# agente, sem reproducao/evidencia/fix) com prioridade IGUAL ao concreto, e fixa o
+# principio de que auto-capacitar-se e o proposito do sistema — nao overhead.
+# Espelha a R9 do system_prompt.md (defense-in-depth: corpo do prompt + R0d).
+# ---------------------------------------------------------------------------
+_CONSTITUTIONAL_DIRECTIVES = [
+    {
+        'id': 'registro-melhorias',
+        'titulo': 'Registrar melhorias proativamente — inclusive casos sutis',
+        'when': (
+            'Suspeitar de bug em skill/service, gotcha do ambiente, lacuna de '
+            'instrucao/prompt, OU qualquer atrito que afete a SUA propria capacidade '
+            'de operar — mesmo sem reproducao, evidencia completa ou fix em maos.'
+        ),
+        'do': (
+            'Registrar via register_improvement no momento da descoberta OU da '
+            'suspeita (nao esperar o batch D8). Caso sutil = prioridade IGUAL ao '
+            'concreto. Sem fix em maos? Registrar hipotese + sintoma e deixar o '
+            'Claude Code (dev) completar o diagnostico. Auto-capacitar-se e o '
+            'proposito do sistema, nao overhead a justificar.'
+        ),
+    },
+]
+
+
 def _build_operational_directives(user_id: int) -> Optional[str]:
     """
     Constroi bloco <operational_directives> com heuristicas empresa nivel 5
@@ -479,8 +510,23 @@ def _build_operational_directives(user_id: int) -> Optional[str]:
 
         # Filtrar por nivel 5 no conteudo (mesmo pattern usado em Tier 1.6)
         directives = []
+
+        # Diretivas constitucionais pinadas: sempre primeiro, independem de
+        # effective_count/cap das organicas (promovidas por decisao do usuario).
+        for _cd in _CONSTITUTIONAL_DIRECTIVES:
+            directives.append('\n'.join([
+                f'  <directive id="{_cd["id"]}">',
+                f'    <titulo>{xml_escape(_cd["titulo"])}</titulo>',
+                f'    <when>{xml_escape(_cd["when"])}</when>',
+                f'    <do>{xml_escape(_cd["do"])}</do>',
+                '  </directive>',
+            ]))
+
+        # As organicas (top effective_count) preenchem ate MANDATORY_MAX_COUNT —
+        # a(s) constitucional(is) sao EXTRA, nao consomem slot das organicas.
+        organicas = 0
         for mem in candidates:
-            if len(directives) >= MANDATORY_MAX_COUNT:
+            if organicas >= MANDATORY_MAX_COUNT:
                 break
 
             content_lower = (mem.content or '').lower()
@@ -539,6 +585,7 @@ def _build_operational_directives(user_id: int) -> Optional[str]:
             d_parts.append(f'    <do>{xml_escape(presc)}</do>')
             d_parts.append('  </directive>')
             directives.append('\n'.join(d_parts))
+            organicas += 1
 
         if not directives:
             return None
