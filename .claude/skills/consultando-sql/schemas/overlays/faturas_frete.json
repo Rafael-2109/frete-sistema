@@ -1,0 +1,21 @@
+{
+  "table": "faturas_frete",
+  "version": "1.0.0",
+  "business_rules": [
+    "Uma fatura pode conter N CTes e N CNPJs — é a fatura enviada pela transportadora agrupando múltiplos fretes",
+    "status_conferencia: 'PENDENTE' (default), 'EM_CONFERENCIA', 'CONFERIDO' — indica se a fatura foi conferida contra os fretes do sistema",
+    "Junta a transportadoras por transportadora_id; junta a fretes via fretes.fatura_frete_id (FK inversa — fretes referencia faturas_frete)",
+    "numero_fatura é o número da fatura emitido pela transportadora (não PK do sistema); está indexado mas não é único",
+    "valor_total_fatura é o valor total declarado pela transportadora; para confrontar com o sistema, somar fretes.valor_considerado WHERE fatura_frete_id = id"
+  ],
+  "query_hints": [
+    {
+      "descricao": "Faturas pendentes de conferência por transportadora",
+      "sql": "SELECT ff.id, ff.numero_fatura, ff.data_emissao, ff.vencimento, ff.valor_total_fatura, tr.razao_social FROM faturas_frete ff JOIN transportadoras tr ON tr.id = ff.transportadora_id WHERE ff.status_conferencia = 'PENDENTE' ORDER BY ff.vencimento"
+    },
+    {
+      "descricao": "Fretes vinculados a uma fatura com valor para conferência",
+      "sql": "SELECT f.id, f.numeros_nfs, f.valor_cotado, f.valor_cte, f.valor_considerado, f.status FROM fretes f WHERE f.fatura_frete_id = :fatura_id ORDER BY f.id"
+    }
+  ]
+}

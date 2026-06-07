@@ -1,0 +1,25 @@
+{
+  "table": "match_nf_po_item",
+  "version": "1.0.0",
+  "business_rules": [
+    "status_match (enum): 'match' (OK, PO compativel encontrado) | 'sem_depara' (codigo do fornecedor sem De-Para cadastrado) | 'sem_po' (nenhum PO encontrado para o produto) | 'preco_diverge' (preco NF != preco PO, tolerancia 0%) | 'data_diverge' (data fora de ±5/15 dias corridos) | 'qtd_diverge' (qtd NF > qtd PO + 10%)",
+    "Apenas linhas com status_match='match' contribuem para o contador itens_match da cabecalho validacao_nf_po_dfe. Qualquer outro valor bloqueia a NF",
+    "validacao_id e FK obrigatoria para validacao_nf_po_dfe.id. Sempre filtrar pelo validacao_id para obter os itens de uma NF especifica",
+    "qtd_nf e preco_nf sao os valores JA CONVERTIDOS pelo De-Para (fator_conversao aplicado). NAO sao os valores brutos da NF",
+    "cod_produto_fornecedor e o codigo original na NF do fornecedor. cod_produto_interno e o codigo apos conversao pelo De-Para — usar cod_produto_interno para cruzar com dados internos"
+  ],
+  "query_hints": [
+    {
+      "descricao": "Itens bloqueados (sem match) de todas as NFs, com o motivo",
+      "sql": "SELECT m.validacao_id, v.numero_nf, v.razao_fornecedor, m.cod_produto_fornecedor, m.cod_produto_interno, m.nome_produto, m.status_match, m.motivo_bloqueio FROM match_nf_po_item m JOIN validacao_nf_po_dfe v ON m.validacao_id = v.id WHERE m.status_match != 'match' ORDER BY v.criado_em DESC, m.status_match"
+    },
+    {
+      "descricao": "Divergencias de preco: comparar preco_nf vs preco_po por produto",
+      "sql": "SELECT m.cod_produto_interno, m.nome_produto, m.preco_nf, m.preco_po, m.odoo_po_name, v.numero_nf, v.razao_fornecedor FROM match_nf_po_item m JOIN validacao_nf_po_dfe v ON m.validacao_id = v.id WHERE m.status_match = 'preco_diverge' ORDER BY v.criado_em DESC"
+    },
+    {
+      "descricao": "Resumo de itens por status_match para um DFE especifico",
+      "sql": "SELECT m.status_match, COUNT(*) AS qtd FROM match_nf_po_item m JOIN validacao_nf_po_dfe v ON m.validacao_id = v.id WHERE v.odoo_dfe_id = :odoo_dfe_id GROUP BY m.status_match"
+    }
+  ]
+}

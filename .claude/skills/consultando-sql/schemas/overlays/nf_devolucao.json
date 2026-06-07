@@ -1,0 +1,32 @@
+{
+  "table": "nf_devolucao",
+  "version": "1.0.0",
+  "business_rules": [
+    "status (ciclo da NFD): 'REGISTRADA' (default), 'VINCULADA_DFE', 'EM_TRATATIVA', 'AGUARDANDO_RECEBIMENTO', 'RECEBIDA', 'CONTADA', 'FINALIZADA', 'CANCELADA'",
+    "tipo_documento: 'NFD' (Nota Fiscal de Devolucao emitida pelo cliente, default) ou 'NF' (NF de venda nossa revertida/cancelada no Odoo)",
+    "status_odoo para NFD: 'Devolucao'; para NF revertida: 'Revertida'; para NF cancelada: 'Cancelada'",
+    "status_monitoramento (espelho do finalizacao da entrega): 'Cancelada', 'Devolvida', 'Troca de NF' — pode ser NULL",
+    "origem_registro: 'MONITORAMENTO' (registro manual na tela de monitoramento) ou 'ODOO' (importado via DFe do Odoo)",
+    "ativo=True para registros ativos; filtrar SEMPRE por ativo=TRUE em consultas de uso corrente. chave_nfd é unique (44 digitos).",
+    "e_pallet_devolucao=True indica devolucao de vasilhame/pallet (CFOPs 1920/2920/5920/6920) — tratada no modulo de pallet, NAO no modulo de devolucoes de produto",
+    "confianca_motivo (0.0 a 1.0) indica a confianca da extracao por IA do motivo da devolucao"
+  ],
+  "query_hints": [
+    {
+      "descricao": "NFDs ativas por status para visao geral do pipeline de devolucoes",
+      "sql": "SELECT status, COUNT(*) AS qtd, SUM(valor_total) AS valor_total FROM nf_devolucao WHERE ativo = TRUE AND tipo_documento = 'NFD' GROUP BY status ORDER BY qtd DESC"
+    },
+    {
+      "descricao": "NFDs pendentes de finalizacao (nao canceladas, nao finalizadas) por emitente",
+      "sql": "SELECT cnpj_emitente, nome_emitente, COUNT(*) AS qtd_nfds, SUM(valor_total) AS valor_total FROM nf_devolucao WHERE ativo = TRUE AND status NOT IN ('FINALIZADA', 'CANCELADA') AND tipo_documento = 'NFD' GROUP BY cnpj_emitente, nome_emitente ORDER BY valor_total DESC"
+    },
+    {
+      "descricao": "NFDs vinculadas a uma entrega monitorada especifica",
+      "sql": "SELECT id, numero_nfd, data_emissao, motivo, status, status_odoo, valor_total, cnpj_emitente FROM nf_devolucao WHERE entrega_monitorada_id = :entrega_id AND ativo = TRUE ORDER BY data_registro"
+    },
+    {
+      "descricao": "NFDs com nota de credito gerada no Odoo",
+      "sql": "SELECT id, numero_nfd, numero_nota_credito, odoo_nota_credito_id, cnpj_emitente, valor_total, status FROM nf_devolucao WHERE odoo_nota_credito_id IS NOT NULL AND ativo = TRUE ORDER BY data_registro DESC"
+    }
+  ]
+}

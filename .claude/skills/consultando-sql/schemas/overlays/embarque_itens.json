@@ -1,6 +1,20 @@
 {
   "table": "embarque_itens",
-  "version": "2.0.0",
+  "version": "2.1.0",
+  "query_hints": [
+    {
+      "descricao": "Itens de embarque pendentes de NF (nota_fiscal nula, status=ativo)",
+      "sql": "SELECT ei.embarque_id, ei.cliente, ei.pedido, ei.uf_destino, ei.cidade_destino, ei.peso, ei.valor, ei.pallets FROM embarque_itens ei WHERE ei.status = 'ativo' AND ei.nota_fiscal IS NULL ORDER BY ei.embarque_id DESC LIMIT 100"
+    },
+    {
+      "descricao": "Itens de embarque com erro de validacao (campo erro_validacao preenchido)",
+      "sql": "SELECT ei.embarque_id, ei.cliente, ei.cnpj_cliente, ei.pedido, ei.nota_fiscal, ei.erro_validacao, ei.uf_destino FROM embarque_itens ei WHERE ei.status = 'ativo' AND ei.erro_validacao IS NOT NULL ORDER BY ei.embarque_id DESC LIMIT 100"
+    },
+    {
+      "descricao": "Volume por UF de destino nos itens ativos de embarque",
+      "sql": "SELECT ei.uf_destino, COUNT(*) AS qtd_itens, SUM(ei.peso) AS peso_total_kg, SUM(ei.valor) AS valor_total, SUM(ei.pallets) AS pallets_total FROM embarque_itens ei INNER JOIN embarques e ON e.id = ei.embarque_id WHERE ei.status = 'ativo' AND e.status = 'ativo' GROUP BY ei.uf_destino ORDER BY valor_total DESC"
+    }
+  ],
   "source": {
     "primary": {
       "system": "Local",

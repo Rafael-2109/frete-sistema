@@ -1,0 +1,27 @@
+{
+  "table": "pedido_compras",
+  "version": "1.0.0",
+  "business_rules": [
+    "Chave de negocio unica: (num_pedido, cod_produto, company_id) — um pedido pode ter multiplos produtos; cada linha é um produto de um PO",
+    "status_odoo espelha o estado do purchase.order no Odoo: 'draft' (rascunho), 'sent' (enviado), 'to approve' (aguardando aprovacao), 'purchase' (aprovado/confirmado), 'done' (concluido/bloqueado), 'cancel' (cancelado)",
+    "Para pedidos ATIVOS (confirmados e nao concluidos) filtrar: status_odoo IN ('purchase', 'to approve'). Para historico incluir 'done'",
+    "odoo_id é o ID da LINHA (purchase.order.line); odoo_purchase_order_id é o ID do HEADER (purchase.order) — NAO confundir os dois",
+    "qtd_recebida espelha qty_received do Odoo; pedido atendido quando qtd_recebida >= qtd_produto_pedido",
+    "tipo_pedido vem do l10n_br_tipo_pedido do Odoo Brasil; valores incluem: 'compra', 'importacao', 'comp-importacao', 'industrializacao', 'serv-industrializacao', 'ent-bonificacao', 'devolucao', 'devolucao_compra'",
+    "nf_chave_acesso (44 digitos) é a chave de acesso da NFe recebida; vincula o PO à NF de entrada"
+  ],
+  "query_hints": [
+    {
+      "descricao": "Pedidos de compra ativos com saldo a receber por fornecedor",
+      "sql": "SELECT num_pedido, cnpj_fornecedor, raz_social, cod_produto, nome_produto, qtd_produto_pedido, qtd_recebida, (qtd_produto_pedido - qtd_recebida) AS saldo_pendente, data_pedido_previsao FROM pedido_compras WHERE status_odoo IN ('purchase', 'to approve') AND qtd_recebida < qtd_produto_pedido ORDER BY data_pedido_previsao"
+    },
+    {
+      "descricao": "Pedidos de compra por produto com lead time",
+      "sql": "SELECT num_pedido, cod_produto, nome_produto, data_pedido_criacao, data_pedido_previsao, lead_time_previsto, status_odoo, company_id FROM pedido_compras WHERE cod_produto = :cod_produto AND status_odoo IN ('purchase', 'to approve', 'done') ORDER BY data_pedido_criacao DESC"
+    },
+    {
+      "descricao": "Vincular pedido de compra a NF de entrada pela chave de acesso",
+      "sql": "SELECT num_pedido, cod_produto, nf_numero, nf_serie, nf_data_emissao, nf_valor_total, odoo_purchase_order_id FROM pedido_compras WHERE nf_chave_acesso = :chave_acesso"
+    }
+  ]
+}

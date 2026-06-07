@@ -1,0 +1,26 @@
+{
+  "table": "carvia_nfs",
+  "version": "1.0.0",
+  "business_rules": [
+    "status: ATIVA (valida) ou CANCELADA (soft-delete — registro permanece); filtrar sempre por status = 'ATIVA' para dados operacionais",
+    "tipo_fonte indica a origem do cadastro: PDF_DANFE (extraido de DANFE), XML_NFE (XML NF-e), MANUAL, FATURA_REFERENCIA (stub de referencia)",
+    "chave_acesso_nf e UNIQUE mas nullable — NFs manuais nao tem chave; busca preferencial por chave quando disponivel",
+    "modalidade_frete e o campo <modFrete> da NF-e SEFAZ: '0'=CIF, '1'=FOB, '2'=Terceiros, '3'=Proprio Remetente, '4'=Proprio Destinatario, '9'=Sem transporte — NAO usar para derivar tomador do CTe (SOT do tomador e cte_tomador em carvia_operacoes)",
+    "A ligacao NF <-> CTe CarVia e via tabela junction carvia_operacao_nfs (N:N); uma NF pode estar em multiplas operacoes",
+    "divergencia_cnpj_cotacao=TRUE indica NF com cnpj_destinatario diferente do endereco destino da cotacao vinculada — pendente de decisao operacional"
+  ],
+  "query_hints": [
+    {
+      "descricao": "NFs ativas por periodo e UF destinatario",
+      "sql": "SELECT numero_nf, data_emissao, nome_emitente, uf_destinatario, cidade_destinatario, valor_total, peso_bruto, quantidade_volumes FROM carvia_nfs WHERE data_emissao >= '2026-01-01' AND status = 'ATIVA' ORDER BY data_emissao DESC"
+    },
+    {
+      "descricao": "NFs de um emitente especifico (por CNPJ)",
+      "sql": "SELECT numero_nf, data_emissao, nome_destinatario, uf_destinatario, valor_total, peso_bruto, status FROM carvia_nfs WHERE cnpj_emitente = '12345678000100' AND status = 'ATIVA' ORDER BY data_emissao DESC"
+    },
+    {
+      "descricao": "NFs com divergencia de CNPJ pendente de resolucao",
+      "sql": "SELECT id, numero_nf, cnpj_emitente, cnpj_destinatario, nome_destinatario, criado_em FROM carvia_nfs WHERE divergencia_cnpj_cotacao = TRUE AND status = 'ATIVA'"
+    }
+  ]
+}

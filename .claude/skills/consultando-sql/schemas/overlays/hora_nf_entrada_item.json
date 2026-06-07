@@ -1,0 +1,21 @@
+{
+  "table": "hora_nf_entrada_item",
+  "version": "1.0.0",
+  "business_rules": [
+    "Linha fiscal: um chassi por linha, com seu preço real de compra (preco_real). UNIQUE(nf_id, numero_chassi).",
+    "desconsiderado=false é o filtro obrigatório para estoque e custo. desconsiderado=true significa que o item foi excluído da NF por operador (chassi declarado mas rejeitado). SEMPRE filtrar AND desconsiderado = false ao calcular estoque ou custo de compra.",
+    "numero_chassi é a chave de JOIN para hora_moto (identidade) e hora_moto_evento (estado). Usar numero_chassi como pivot para cruzar linha fiscal com estoque atual.",
+    "preco_real é o preço de custo pago pela HORA à Motochefe para este chassi específico. Usar para análise de margem (preco_real vs preco de venda em hora_venda_item).",
+    "Campos *_texto_original (modelo_texto_original, cor_texto_original, numero_motor_texto_original) guardam o texto bruto da NF antes da normalização — são de auditoria do parser, não usar em filtros de negócio."
+  ],
+  "query_hints": [
+    {
+      "descricao": "Chassis válidos de uma NF com preço de compra (excluindo desconsiderados)",
+      "sql": "SELECT hnei.numero_chassi, hnei.preco_real, hmod.nome_modelo, hm.cor FROM hora_nf_entrada_item hnei JOIN hora_moto hm ON hnei.numero_chassi = hm.numero_chassi JOIN hora_modelo hmod ON hm.modelo_id = hmod.id WHERE hnei.nf_id = :nf_id AND hnei.desconsiderado = false ORDER BY hnei.numero_chassi"
+    },
+    {
+      "descricao": "Custo médio de compra por modelo (últimas NFs não desconsideradas)",
+      "sql": "SELECT hmod.nome_modelo, COUNT(*) AS qtd_comprada, AVG(hnei.preco_real) AS preco_medio, MIN(hnei.preco_real) AS preco_min, MAX(hnei.preco_real) AS preco_max FROM hora_nf_entrada_item hnei JOIN hora_moto hm ON hnei.numero_chassi = hm.numero_chassi JOIN hora_modelo hmod ON hm.modelo_id = hmod.id WHERE hnei.desconsiderado = false GROUP BY hmod.nome_modelo ORDER BY qtd_comprada DESC"
+    }
+  ]
+}

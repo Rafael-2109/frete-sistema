@@ -1,6 +1,29 @@
 {
   "table": "fretes",
-  "version": "2.0.0",
+  "version": "2.1.0",
+  "business_rules": [
+    "4 tipos de valor: valor_cotado (calculado pela tabela de frete), valor_cte (cobrado pela transportadora no CTe), valor_considerado (validado internamente, inicia = valor_cotado), valor_pago (efetivamente pago)",
+    "Para CUSTO REAL de frete use valor_pago (NAO valor_cotado nem valor_cte)",
+    "Divergencia CTe vs cotado = ABS(valor_cte - valor_cotado); diferencas ate R$ 5,00 podem ser desconsideradas (flag considerar_diferenca)",
+    "status: PENDENTE, EM_TRATATIVA, APROVADO, REJEITADO, PAGO, CANCELADO, LANCADO_ODOO",
+    "tipo_carga: DIRETA (1 destino) ou FRACIONADA (multiplos destinos)",
+    "numeros_nfs e CSV (texto separado por virgula) com as NFs cobertas pelo frete",
+    "1 frete agrupa NFs por CNPJ dentro de 1 embarque (embarque_id)"
+  ],
+  "query_hints": [
+    {
+      "descricao": "Fretes com divergencia relevante CTe vs cotado (> R$ 5)",
+      "sql": "SELECT id, embarque_id, transportadora_id, valor_cotado, valor_cte, ABS(valor_cte - valor_cotado) AS divergencia FROM fretes WHERE valor_cte IS NOT NULL AND ABS(valor_cte - valor_cotado) > 5 ORDER BY divergencia DESC"
+    },
+    {
+      "descricao": "Fretes aprovados pendentes de lancamento no Odoo",
+      "sql": "SELECT id, embarque_id, transportadora_id, valor_considerado FROM fretes WHERE status = 'APROVADO' AND lancado_odoo_em IS NULL"
+    },
+    {
+      "descricao": "Custo real de frete por transportadora",
+      "sql": "SELECT transportadora_id, COUNT(*) AS qtd_fretes, SUM(valor_pago) AS total_pago FROM fretes WHERE valor_pago IS NOT NULL GROUP BY transportadora_id ORDER BY total_pago DESC"
+    }
+  ],
   "source": {
     "primary": {
       "system": "Local",

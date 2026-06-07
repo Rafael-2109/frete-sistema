@@ -1,0 +1,25 @@
+{
+  "table": "carvia_faturas_transportadora",
+  "version": "1.0.0",
+  "business_rules": [
+    "Fatura emitida pela transportadora subcontratada para a CarVia — agrupa N CTes de 1 transportadora; chave de negocio: (numero_fatura, transportadora_id) UNIQUE",
+    "2 status INDEPENDENTES: status_conferencia (PENDENTE, EM_CONFERENCIA, CONFERIDO, DIVERGENTE) valida o conteudo documental; status_pagamento (PENDENTE, PAGO) controla o fluxo financeiro — CONFERIDO nao implica PAGO",
+    "CONFERIDO em status_conferencia bloqueia edicao, desanexar subcontratos e editar valores; PAGO em status_pagamento bloqueia alteracoes financeiras; conciliado=TRUE quando total_conciliado >= valor_total",
+    "total_conciliado acumula os valores conciliados via extrato bancario; conciliado=TRUE sinaliza quitacao completa — ao conciliar 100%, status_pagamento automaticamente vira PAGO",
+    "Custos de Entrega (CarviaCustoEntrega) vinculam-se a esta fatura via FK fatura_transportadora_id; podem ser anexados mesmo apos CONFERIDO/PAGO (decisao 2026-05-20)"
+  ],
+  "query_hints": [
+    {
+      "descricao": "Faturas transportadora pendentes de conferencia",
+      "sql": "SELECT id, numero_fatura, data_emissao, valor_total, status_conferencia, status_pagamento, conciliado FROM carvia_faturas_transportadora WHERE status_conferencia = 'PENDENTE' ORDER BY data_emissao DESC"
+    },
+    {
+      "descricao": "Faturas conferidas ainda nao pagas (divergencia conferencia vs pagamento)",
+      "sql": "SELECT id, numero_fatura, transportadora_id, valor_total, total_conciliado, status_conferencia, status_pagamento, vencimento FROM carvia_faturas_transportadora WHERE status_conferencia = 'CONFERIDO' AND status_pagamento = 'PENDENTE' ORDER BY vencimento"
+    },
+    {
+      "descricao": "Detalhe de uma fatura especifica com status completo",
+      "sql": "SELECT id, numero_fatura, data_emissao, valor_total, status_conferencia, status_pagamento, conciliado FROM carvia_faturas_transportadora WHERE id = 42"
+    }
+  ]
+}

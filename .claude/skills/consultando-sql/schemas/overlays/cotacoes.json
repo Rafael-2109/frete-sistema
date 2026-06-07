@@ -1,0 +1,21 @@
+{
+  "table": "cotacoes",
+  "version": "1.0.0",
+  "business_rules": [
+    "status: 'Em Aberto' (default, cotação em andamento) ou 'Fechada' (convertida em embarque); status 'Cancelada' não foi encontrado em código — omitido por precaução",
+    "tipo_carga: 'DIRETA' ou 'FRACIONADA'; para DIRETA, parâmetros de tabela ficam na própria cotacao; para FRACIONADA, parâmetros ficam nos itens (cotacao_itens)",
+    "Junta a transportadoras por transportadora_id e a usuarios por usuario_id",
+    "Os campos de tabela de frete (valor_kg, percentual_gris, etc.) são snapshot copiado no momento da cotação — NÃO refletem tabelas_frete atuais",
+    "Para cotações ativas (não fechadas) filtrar status = 'Em Aberto'"
+  ],
+  "query_hints": [
+    {
+      "descricao": "Cotações em aberto com transportadora e usuário",
+      "sql": "SELECT c.id, c.data_criacao, c.tipo_carga, c.valor_total, c.peso_total, c.modalidade, c.nome_tabela, tr.razao_social FROM cotacoes c JOIN transportadoras tr ON tr.id = c.transportadora_id WHERE c.status = 'Em Aberto' ORDER BY c.data_criacao DESC"
+    },
+    {
+      "descricao": "Itens de uma cotação fracionada com dados do lote de separação",
+      "sql": "SELECT ci.separacao_lote_id, ci.cliente, ci.cnpj_cliente, ci.peso, ci.valor, ci.nome_tabela, ci.modalidade FROM cotacao_itens ci WHERE ci.cotacao_id = :cotacao_id ORDER BY ci.cliente"
+    }
+  ]
+}

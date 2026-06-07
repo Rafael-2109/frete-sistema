@@ -1,0 +1,21 @@
+{
+  "table": "carvia_modelos_moto",
+  "version": "1.0.0",
+  "business_rules": [
+    "Catalogo de modelos de moto com dimensoes fisicas (comprimento, largura, altura em metros) para calculo automatico de peso cubado no modulo CarVia",
+    "nome e UNIQUE; regex_pattern e usado pelo servico de reconhecimento automatico (moto_recognition) para identificar o modelo a partir do texto da NF ou descricao do item",
+    "cubagem_minima (default 300) e o piso minimo de peso cubado em kg para este modelo — o sistema usa MAX(cubagem_calculada, cubagem_minima)",
+    "ativo=FALSE desativa o modelo para novas cotacoes sem remover historico; filtrar sempre por ativo=TRUE para listagens operacionais",
+    "categoria_moto_id (FK carvia_categorias_moto) habilita precificacao por unidade via carvia_precos_categoria_moto; modelos sem categoria nao tem precificacao por unidade"
+  ],
+  "query_hints": [
+    {
+      "descricao": "Modelos ativos com dimensoes e categoria",
+      "sql": "SELECT id, nome, comprimento, largura, altura, cubagem_minima, categoria_moto_id, ativo FROM carvia_modelos_moto WHERE ativo = TRUE ORDER BY nome"
+    },
+    {
+      "descricao": "Modelos sem categoria (sem precificacao por unidade)",
+      "sql": "SELECT id, nome, comprimento, largura, altura FROM carvia_modelos_moto WHERE categoria_moto_id IS NULL AND ativo = TRUE"
+    }
+  ]
+}

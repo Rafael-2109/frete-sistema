@@ -370,6 +370,35 @@ def looks_like_raw_sql(text: str) -> bool:
 # SCHEMA PROVIDER (Arquitetura B — Catálogo + Retrieval)
 # =====================================================================
 
+def _merge_overlay_into_schema(schema: dict, overlay: dict | None) -> dict:
+    """Aplica um overlay (curadoria + linhagem) sobre um schema, em RUNTIME.
+
+    Subsistema S2 (ver MASTER text-to-sql) — invariante 4: a curadoria de
+    `business_rules`/`query_hints` vive SÓ no overlay (`schemas/overlays/<t>.json`)
+    e é mesclada AQUI ao servir o schema, nunca materializada no `tables/*.json`
+    gerado. A descrição de campo/tabela NÃO vem do overlay (mora na fonte/modelo,
+    extraída pelo gerador — decisão fechada 1).
+
+    Precedência:
+    - `lineage`: o overlay inteiro vira `schema['lineage']` quando traz proveniência
+      (`source`/`fields`) — preserva o comportamento histórico de linhagem.
+    - `business_rules`: do overlay SOMENTE se o schema ainda não tiver (as 9 core
+      mantêm as regras do schema.json — decisão 2: unificar depois).
+    - `query_hints`: do overlay, sem sobrescrever valor já presente.
+
+    Mutação in-place + retorno (conveniência). Overlay None/vazio: schema inalterado.
+    """
+    if not overlay:
+        return schema
+    if overlay.get('source') or overlay.get('fields'):
+        schema['lineage'] = overlay
+    if overlay.get('business_rules') and not schema.get('business_rules'):
+        schema['business_rules'] = overlay['business_rules']
+    if overlay.get('query_hints') and not schema.get('query_hints'):
+        schema['query_hints'] = overlay['query_hints']
+    return schema
+
+
 class SchemaProvider:
     """
     Provê schemas em 2 níveis:
@@ -420,15 +449,7 @@ class SchemaProvider:
             try:
                 with open(individual_path, 'r', encoding='utf-8') as f:
                     schema = json.load(f)
-                # Enriquecer com metadados core
-                core = self._core_metadata[table_name]
-                if core.get('business_rules'):
-                    schema['business_rules'] = core['business_rules']
-                if core.get('description') and not schema.get('description'):
-                    schema['description'] = core['description']
-                # Enriquecer com overlay de linhagem
-                if table_name in self._overlays:
-                    schema['lineage'] = self._overlays[table_name]
+                self._enrich_schema(schema, table_name)
                 self._table_cache[table_name] = schema
             except (FileNotFoundError, json.JSONDecodeError):
                 # Fallback: usar core puro se JSON individual não existe
@@ -448,6 +469,24 @@ class SchemaProvider:
             self.relationships = self._load_json(RELATIONSHIPS_PATH)
         except RuntimeError:
             self.relationships = {'relationships': []}
+
+    def _enrich_schema(self, schema: dict, table_name: str) -> dict:
+        """Enriquece um schema bruto (de tables/*.json) com metadados curados.
+
+        Unifica o pré-carregamento (__init__) e o cache-miss (get_table_schema)
+        para que o comportamento seja idêntico nos dois caminhos:
+        - 9 core: `business_rules`/`description` vêm do schema.json (decisão 2).
+        - todas: `lineage` + `business_rules`/`query_hints` vêm do overlay (S2),
+          sem sobrescrever as regras já vindas do schema.json das core.
+        """
+        core = self._core_metadata.get(table_name)
+        if core:
+            if core.get('business_rules'):
+                schema['business_rules'] = core['business_rules']
+            if core.get('description') and not schema.get('description'):
+                schema['description'] = core['description']
+        _merge_overlay_into_schema(schema, self._overlays.get(table_name))
+        return schema
 
     def _load_json(self, path: str) -> dict:
         """Carrega arquivo JSON."""
@@ -540,9 +579,7 @@ class SchemaProvider:
         try:
             with open(table_path, 'r', encoding='utf-8') as f:
                 schema = json.load(f)
-            # Enriquecer com overlay de linhagem se disponível
-            if table_name in self._overlays:
-                schema['lineage'] = self._overlays[table_name]
+            self._enrich_schema(schema, table_name)
             self._table_cache[table_name] = schema
             return schema
         except (FileNotFoundError, json.JSONDecodeError):

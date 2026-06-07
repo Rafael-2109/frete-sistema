@@ -1,6 +1,20 @@
 {
   "table": "separacao",
-  "version": "2.0.0",
+  "version": "2.1.0",
+  "query_hints": [
+    {
+      "descricao": "Separacoes pendentes de faturamento (sincronizado_nf=False) com saldo positivo",
+      "sql": "SELECT num_pedido, cod_produto, nome_produto, qtd_saldo, valor_saldo, nome_cidade, cod_uf, expedicao FROM separacao WHERE sincronizado_nf = False AND qtd_saldo > 0 ORDER BY expedicao ASC NULLS LAST LIMIT 500"
+    },
+    {
+      "descricao": "Volume de separacoes pendentes por rota e status",
+      "sql": "SELECT rota, status, COUNT(*) AS qtd_itens, SUM(qtd_saldo) AS qtd_total, SUM(valor_saldo) AS valor_total, SUM(peso) AS peso_total_kg FROM separacao WHERE sincronizado_nf = False AND qtd_saldo > 0 GROUP BY rota, status ORDER BY valor_total DESC"
+    },
+    {
+      "descricao": "Separacoes com agendamento confirmado e data de expedicao proxima",
+      "sql": "SELECT separacao_lote_id, num_pedido, raz_social_red, nome_cidade, cod_uf, agendamento, protocolo, qtd_saldo, peso FROM separacao WHERE sincronizado_nf = False AND agendamento_confirmado = True AND agendamento >= CURRENT_DATE ORDER BY agendamento ASC LIMIT 100"
+    }
+  ],
   "source": {
     "primary": {
       "system": "Local",

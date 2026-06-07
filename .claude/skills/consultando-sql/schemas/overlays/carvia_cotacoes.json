@@ -1,0 +1,26 @@
+{
+  "table": "carvia_cotacoes",
+  "version": "1.0.0",
+  "business_rules": [
+    "status: RASCUNHO, PENDENTE_ADMIN, ENVIADO, APROVADO, RECUSADO, CANCELADO — check constraint no banco; APROVADO = cotacao aceita pelo cliente, base para criacao do pedido e embarque",
+    "tipo_material distingue o tipo de carga: CARGA_GERAL (usa peso/peso_cubado do header) ou MOTO (peso vem da soma de carvia_cotacao_motos.peso_cubado_total — campo peso_cubado e NULL por design em MOTO)",
+    "numero_cotacao segue formato COT-{id} (gerado pos-flush); buscar por numero_cotacao ou id sao equivalentes",
+    "cotacao_manual=TRUE indica preco fora da tabela carvia (valor_manual prevalece) e requer aprovacao do admin (status transita para PENDENTE_ADMIN); dentro_tabela=FALSE indica rota sem cobertura na tabela",
+    "valor_final_aprovado e o preco negociado final; valor_tabela e o preco bruto calculado pela tabela; valor_descontado = valor_tabela * (1 - percentual_desconto/100)",
+    "entrega_uf/entrega_cidade sao o destino real de entrega (override por cotacao); endereco_destino_id e o endereco cadastrado do cliente — podem divergir"
+  ],
+  "query_hints": [
+    {
+      "descricao": "Cotacoes aprovadas por cliente e periodo",
+      "sql": "SELECT id, numero_cotacao, peso, peso_cubado, valor_tabela, valor_final_aprovado, valor_manual, cotacao_manual, status, entrega_cidade, entrega_uf FROM carvia_cotacoes WHERE numero_cotacao = 'COT-97'"
+    },
+    {
+      "descricao": "Cotacoes pendentes de aprovacao admin (fora da tabela)",
+      "sql": "SELECT id, numero_cotacao, cliente_id, tipo_material, entrega_uf, entrega_cidade, valor_manual, cotacao_manual, status FROM carvia_cotacoes WHERE status = 'PENDENTE_ADMIN' ORDER BY criado_em DESC"
+    },
+    {
+      "descricao": "Cotacoes de moto aprovadas por periodo",
+      "sql": "SELECT id, numero_cotacao, cliente_id, entrega_uf, entrega_cidade, valor_final_aprovado, data_cotacao FROM carvia_cotacoes WHERE tipo_material = 'MOTO' AND status = 'APROVADO' AND data_cotacao >= '2026-01-01' ORDER BY data_cotacao DESC"
+    }
+  ]
+}

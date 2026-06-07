@@ -1,6 +1,20 @@
 {
   "table": "movimentacao_estoque",
-  "version": "2.0.0",
+  "version": "2.1.0",
+  "query_hints": [
+    {
+      "descricao": "Estoque atual por produto (SUM positiva=entrada, negativa=saida), filtrar ativo=True",
+      "sql": "SELECT cod_produto, nome_produto, SUM(qtd_movimentacao)::numeric AS saldo_estoque FROM movimentacao_estoque WHERE ativo = True GROUP BY cod_produto, nome_produto HAVING SUM(qtd_movimentacao) > 0 ORDER BY saldo_estoque DESC LIMIT 100"
+    },
+    {
+      "descricao": "Entradas de estoque por produto nos ultimos 30 dias (tipo_movimentacao=ENTRADA)",
+      "sql": "SELECT cod_produto, nome_produto, SUM(qtd_movimentacao) AS total_entrada, COUNT(*) AS qtd_movimentos FROM movimentacao_estoque WHERE ativo = True AND tipo_movimentacao = 'ENTRADA' AND data_movimentacao >= CURRENT_DATE - INTERVAL '30 days' GROUP BY cod_produto, nome_produto ORDER BY total_entrada DESC LIMIT 50"
+    },
+    {
+      "descricao": "Consumo de producao por produto (tipo_movimentacao=CONSUMO) com rastreabilidade de lote",
+      "sql": "SELECT cod_produto, nome_produto, lote_nome, SUM(qtd_movimentacao) AS total_consumo, MIN(data_movimentacao) AS primeira_mov, MAX(data_movimentacao) AS ultima_mov FROM movimentacao_estoque WHERE ativo = True AND tipo_movimentacao = 'CONSUMO' AND data_movimentacao >= CURRENT_DATE - INTERVAL '90 days' GROUP BY cod_produto, nome_produto, lote_nome ORDER BY total_consumo ASC LIMIT 50"
+    }
+  ],
   "source": {
     "primary": {
       "system": "Multi-fonte",

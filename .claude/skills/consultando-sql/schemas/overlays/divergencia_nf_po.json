@@ -1,0 +1,25 @@
+{
+  "table": "divergencia_nf_po",
+  "version": "1.0.0",
+  "business_rules": [
+    "tipo_divergencia (enum): 'sem_depara' | 'sem_po' | 'preco' | 'quantidade' | 'data_entrega'. Indica a causa raiz do bloqueio da NF",
+    "status (enum): 'pendente' | 'aprovada' | 'rejeitada'. TODAS as divergencias devem estar resolvidas (nao 'pendente') para liberar o recebimento da NF",
+    "resolucao (valores): 'criar_depara' | 'aprovar_preco' | 'ajustar_po' | 'rejeitar'. Preenchido pelo usuario ao resolver. 'criar_depara' exige cadastro em produto_fornecedor_depara e reprocessamento",
+    "validacao_id e FK obrigatoria para validacao_nf_po_dfe.id. Para buscar divergencias de uma NF especifica, usar o JOIN em validacao_id ou filtrar diretamente por odoo_dfe_id",
+    "valor_nf e valor_po sao varchar (texto livre) — podem conter preco, qtd ou data formatados. Para calculos numericos usar diferenca_percentual (numeric)"
+  ],
+  "query_hints": [
+    {
+      "descricao": "Divergencias pendentes que bloqueiam recebimento, agrupadas por tipo",
+      "sql": "SELECT d.tipo_divergencia, COUNT(*) AS qtd, COUNT(DISTINCT d.validacao_id) AS nfs_afetadas FROM divergencia_nf_po d WHERE d.status = 'pendente' GROUP BY d.tipo_divergencia ORDER BY qtd DESC"
+    },
+    {
+      "descricao": "Divergencias de uma NF especifica com contexto do cabecalho",
+      "sql": "SELECT d.tipo_divergencia, d.campo_label, d.valor_nf, d.valor_po, d.diferenca_percentual, d.odoo_po_name, d.status, d.resolucao, d.resolvido_por FROM divergencia_nf_po d WHERE d.odoo_dfe_id = :odoo_dfe_id ORDER BY d.tipo_divergencia"
+    },
+    {
+      "descricao": "NFs bloqueadas com divergencias pendentes (JOIN para contexto do fornecedor)",
+      "sql": "SELECT v.numero_nf, v.razao_fornecedor, v.razao_empresa_compradora, COUNT(d.id) AS qtd_divergencias FROM divergencia_nf_po d JOIN validacao_nf_po_dfe v ON d.validacao_id = v.id WHERE d.status = 'pendente' GROUP BY v.id, v.numero_nf, v.razao_fornecedor, v.razao_empresa_compradora ORDER BY qtd_divergencias DESC"
+    }
+  ]
+}

@@ -1,0 +1,22 @@
+{
+  "table": "tabelas_frete",
+  "version": "1.0.0",
+  "business_rules": [
+    "Chave de negócio do JOIN com cidades_atendidas é (transportadora_id, nome_tabela) — não apenas transportadora_id; uma transportadora pode ter várias tabelas com nomes distintos",
+    "tipo_carga: 'DIRETA' (um destino) ou 'FRACIONADA' (múltiplos destinos); modalidade: 'VALOR', 'PESO', 'VAN' e outras — determinam a fórmula de cálculo do frete",
+    "icms_incluso=True significa ICMS já embutido nas tarifas; False significa aplicar grossing-up: valor_com_icms = valor_liquido / (1 - icms_rate)",
+    "icms_proprio: quando preenchido, substitui o ICMS da cidade destino (tabela cidades) no cálculo; se NULL, usa ICMS da cidade",
+    "gris_minimo e adv_minimo são pisos: usa o maior entre o valor calculado (percentual × valor_nf) e o mínimo cadastrado",
+    "Uma tabela sem vínculo em cidades_atendidas está 'órfã' e não será usada em cotações"
+  ],
+  "query_hints": [
+    {
+      "descricao": "Tabelas de frete de uma transportadora com seus parâmetros principais",
+      "sql": "SELECT tf.id, tf.nome_tabela, tf.uf_destino, tf.tipo_carga, tf.modalidade, tf.valor_kg, tf.frete_minimo_peso, tf.frete_minimo_valor, tf.percentual_gris, tf.gris_minimo, tf.pedagio_por_100kg, tf.valor_tas, tf.percentual_adv, tf.adv_minimo, tf.valor_despacho, tf.valor_cte, tf.icms_incluso, tf.icms_proprio FROM tabelas_frete tf WHERE tf.transportadora_id = :transportadora_id ORDER BY tf.uf_destino, tf.nome_tabela"
+    },
+    {
+      "descricao": "Cotação completa por cidade: tabelas + transportadora + cidades_atendidas + cidades (JOIN canônico)",
+      "sql": "SELECT tf.id, tf.nome_tabela, tf.uf_destino, tr.razao_social, tf.valor_kg, tf.frete_minimo_peso, tf.frete_minimo_valor, tf.percentual_gris, tf.gris_minimo, tf.pedagio_por_100kg, tf.valor_tas, tf.percentual_adv, tf.adv_minimo, tf.valor_despacho, tf.valor_cte, tf.icms_incluso, tf.icms_proprio, ca.lead_time FROM tabelas_frete tf JOIN transportadoras tr ON tr.id = tf.transportadora_id JOIN cidades_atendidas ca ON ca.transportadora_id = tf.transportadora_id AND ca.nome_tabela = tf.nome_tabela JOIN cidades c ON c.id = ca.cidade_id WHERE ca.uf = 'PR' AND c.nome ILIKE '%FRANCISCO BELTRAO%'"
+    }
+  ]
+}

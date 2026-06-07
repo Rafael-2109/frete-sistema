@@ -1,0 +1,25 @@
+{
+  "table": "recebimento_lf",
+  "version": "1.0.0",
+  "business_rules": [
+    "Contexto: La Famiglia (LF, company_id=5) envia insumos para industrializacao na Nacom Goya (FB, company_id=1). Ao retornar, FB recebe NF da LF. company_id nesta tabela e SEMPRE 1 (FB e quem recebe). NAO confundir com company_id=5 da LF",
+    "status (enum): 'pendente' | 'processando' | 'processado' | 'erro'. Fluxo: pendente -> processando -> processado (ou erro em falha). 'processado' = todos os 37 steps concluidos",
+    "fase_atual (enum 0-5+): 0=nao iniciado, 1=DFe, 2=PO, 3=Picking, 4=Invoice, 5=Finalizado. Pode ter fases adicionais (6=transferencia FB->CD, 7=recebimento CD via DFe). total_etapas=37 e o total esperado do fluxo completo",
+    "transfer_status (enum): NULL | 'sem_transferencia' | 'pendente' | 'processando' | 'concluido' | 'erro'. Rastreia a etapa de transferencia FB->CD (fases 6-7). NULL = produto nao requer transferencia para CD",
+    "odoo_dfe_id e odoo_lf_invoice_id sao AMBOS UNIQUE — garantem idempotencia: duas chamadas concorrentes nao criam duplicata. odoo_dfe_id pode ser NULL no fluxo antecipado (sem DFe inicial), nesse caso odoo_lf_invoice_id e a chave de idempotencia"
+  ],
+  "query_hints": [
+    {
+      "descricao": "Recebimentos LF em andamento ou com erro (nao finalizados)",
+      "sql": "SELECT id, numero_nf, chave_nfe, status, fase_atual, etapa_atual, total_etapas, tentativas, erro_mensagem, atualizado_em FROM recebimento_lf WHERE status IN ('pendente', 'processando', 'erro') ORDER BY atualizado_em DESC"
+    },
+    {
+      "descricao": "Recebimentos LF com transferencia para CD pendente ou com erro",
+      "sql": "SELECT id, numero_nf, status, fase_atual, transfer_status, transfer_erro_mensagem, odoo_transfer_out_picking_name, odoo_transfer_in_picking_name FROM recebimento_lf WHERE transfer_status IN ('pendente', 'processando', 'erro') ORDER BY atualizado_em DESC"
+    },
+    {
+      "descricao": "Recebimentos processados com links dos documentos Odoo gerados",
+      "sql": "SELECT id, numero_nf, odoo_po_name, odoo_picking_name, odoo_invoice_name, odoo_cd_po_name, processado_em, usuario FROM recebimento_lf WHERE status = 'processado' ORDER BY processado_em DESC LIMIT 50"
+    }
+  ]
+}

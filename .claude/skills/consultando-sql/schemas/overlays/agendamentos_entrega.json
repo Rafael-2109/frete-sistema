@@ -1,0 +1,25 @@
+{
+  "table": "agendamentos_entrega",
+  "version": "1.0.0",
+  "business_rules": [
+    "status: 'aguardando' (default para novos agendamentos — aguardando confirmacao do cliente) ou 'confirmado' (cliente confirmou a data)",
+    "Uma entrega pode ter multiplos agendamentos (reagendamentos). Para contar reagendamentos usar GROUP BY entrega_id HAVING COUNT(*) > 1",
+    "O agendamento ATIVO de uma entrega é o de maior criado_em (ultimo registro). Nao ha campo de 'ativo' — usar ORDER BY criado_em DESC LIMIT 1 por entrega_id",
+    "forma_agendamento indica o canal usado: 'Portal', 'Telefone', 'E-mail', 'WhatsApp' (valores definidos no form)",
+    "Para listar entregas sem agendamento confirmado: JOIN entregas_monitoradas WHERE agendamentos_entrega.status = 'aguardando' no ultimo agendamento"
+  ],
+  "query_hints": [
+    {
+      "descricao": "Entregas com agendamento pendente de confirmacao (status aguardando)",
+      "sql": "SELECT ae.entrega_id, ae.data_agendada, ae.hora_agendada, ae.forma_agendamento, ae.autor, ae.criado_em FROM agendamentos_entrega ae INNER JOIN (SELECT entrega_id, MAX(criado_em) AS ultimo FROM agendamentos_entrega GROUP BY entrega_id) ult ON ae.entrega_id = ult.entrega_id AND ae.criado_em = ult.ultimo WHERE ae.status = 'aguardando' ORDER BY ae.data_agendada"
+    },
+    {
+      "descricao": "Entregas com reagendamentos (mais de 1 agendamento)",
+      "sql": "SELECT entrega_id, COUNT(*) AS qtd_agendamentos, MIN(data_agendada) AS primeiro_agendamento, MAX(data_agendada) AS ultimo_agendamento FROM agendamentos_entrega GROUP BY entrega_id HAVING COUNT(*) > 1 ORDER BY qtd_agendamentos DESC"
+    },
+    {
+      "descricao": "Historico de agendamentos de uma entrega",
+      "sql": "SELECT id, data_agendada, hora_agendada, forma_agendamento, contato_agendamento, protocolo_agendamento, motivo, status, confirmado_por, criado_em FROM agendamentos_entrega WHERE entrega_id = :entrega_id ORDER BY criado_em"
+    }
+  ]
+}

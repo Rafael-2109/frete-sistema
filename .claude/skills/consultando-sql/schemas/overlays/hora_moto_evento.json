@@ -1,0 +1,27 @@
+{
+  "table": "hora_moto_evento",
+  "version": "1.0.0",
+  "business_rules": [
+    "Tabela append-only (log de transições). NUNCA fazer UPDATE/DELETE — toda mudança de estado vira INSERT.",
+    "Estado atual de cada moto = último evento por chassi (ORDER BY timestamp DESC, id DESC). Nunca há coluna de status em hora_moto.",
+    "Tipos válidos (fonte: moto_service.TIPOS_VALIDOS): RECEBIDA, CONFERIDA, TRANSFERIDA, EM_TRANSITO, CANCELADA, RESERVADA, VENDIDA, DEVOLVIDA, AVARIADA, FALTANDO_PECA, MOTO_FALTANDO, EMPRESTIMO_SAIDA, EMPRESTIMO_ENTRADA, RESSARCIMENTO_SAIDA, RESSARCIMENTO_ENTRADA, NF_EMITIDA, NF_CANCELADA.",
+    "EVENTOS_EM_ESTOQUE (disponível para venda): RECEBIDA, CONFERIDA, TRANSFERIDA, CANCELADA, AVARIADA, FALTANDO_PECA, EMPRESTIMO_ENTRADA, RESSARCIMENTO_SAIDA. CANCELADA aqui significa transferência cancelada — moto voltou à origem.",
+    "EVENTOS_FORA_ESTOQUE (tiram do estoque): RESERVADA, VENDIDA, DEVOLVIDA, NF_EMITIDA, NF_CANCELADA, EMPRESTIMO_SAIDA, RESSARCIMENTO_ENTRADA.",
+    "MOTO_FALTANDO: chassi declarado na NF mas que não chegou fisicamente. Categoria própria — não entra em EVENTOS_EM_ESTOQUE nem EVENTOS_FORA_ESTOQUE. EM_TRANSITO: moto em trânsito entre lojas (limbo), também categoria própria.",
+    "loja_id no evento indica a loja onde a moto está APÓS a transição (ex.: EM_TRANSITO tem loja_id=destino, TRANSFERIDA tem loja_id=destino). Filtrar estoque por loja = filtrar ue.loja_id na CTE do último evento."
+  ],
+  "query_hints": [
+    {
+      "descricao": "Estoque atual por chassi (padrão canônico — usar sempre para saber onde está cada moto). O filtro de tipo NÃO vai dentro da CTE; pega o último evento e DEPOIS filtra pelo tipo.",
+      "sql": "WITH ultimo_evento AS (\n  SELECT DISTINCT ON (numero_chassi) numero_chassi, id, tipo, loja_id, timestamp\n  FROM hora_moto_evento\n  ORDER BY numero_chassi, timestamp DESC, id DESC\n)\nSELECT\n  ue.numero_chassi,\n  hmod.nome_modelo,\n  hmoto.cor,\n  hmoto.ano_modelo,\n  hmoto.numero_motor,\n  ue.tipo AS status_atual,\n  hl.nome AS loja_atual,\n  hne.numero_nf,\n  hne.data_emissao,\n  hnei.preco_real,\n  hp.numero_pedido\nFROM ultimo_evento ue\nJOIN hora_moto hmoto ON ue.numero_chassi = hmoto.numero_chassi\nJOIN hora_modelo hmod ON hmoto.modelo_id = hmod.id\nLEFT JOIN hora_loja hl ON ue.loja_id = hl.id\nLEFT JOIN hora_nf_entrada_item hnei ON ue.numero_chassi = hnei.numero_chassi AND hnei.desconsiderado = false\nLEFT JOIN hora_nf_entrada hne ON hnei.nf_id = hne.id\nLEFT JOIN hora_pedido hp ON hne.pedido_id = hp.id\nWHERE ue.tipo IN ('RECEBIDA','CONFERIDA','TRANSFERIDA','CANCELADA','AVARIADA','FALTANDO_PECA','EMPRESTIMO_ENTRADA','RESSARCIMENTO_SAIDA')"
+    },
+    {
+      "descricao": "Histórico completo de eventos de um chassi específico (rastreamento individual)",
+      "sql": "SELECT hme.id, hme.tipo, hme.timestamp, hme.loja_id, hl.nome AS loja_nome, hme.operador, hme.detalhe, hme.origem_tabela, hme.origem_id FROM hora_moto_evento hme LEFT JOIN hora_loja hl ON hme.loja_id = hl.id WHERE hme.numero_chassi = :chassi ORDER BY hme.timestamp DESC, hme.id DESC"
+    },
+    {
+      "descricao": "Contagem de motos em estoque por loja e modelo (estoque atual agregado)",
+      "sql": "WITH ultimo_evento AS (\n  SELECT DISTINCT ON (numero_chassi) numero_chassi, tipo, loja_id\n  FROM hora_moto_evento\n  ORDER BY numero_chassi, timestamp DESC, id DESC\n)\nSELECT hl.nome AS loja, hmod.nome_modelo, COUNT(*) AS qtd\nFROM ultimo_evento ue\nJOIN hora_moto hm ON ue.numero_chassi = hm.numero_chassi\nJOIN hora_modelo hmod ON hm.modelo_id = hmod.id\nJOIN hora_loja hl ON ue.loja_id = hl.id\nWHERE ue.tipo IN ('RECEBIDA','CONFERIDA','TRANSFERIDA','CANCELADA','AVARIADA','FALTANDO_PECA','EMPRESTIMO_ENTRADA','RESSARCIMENTO_SAIDA')\nGROUP BY hl.nome, hmod.nome_modelo\nORDER BY hl.nome, hmod.nome_modelo"
+    }
+  ]
+}

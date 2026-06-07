@@ -1,6 +1,20 @@
 {
   "table": "programacao_producao",
-  "version": "2.0.0",
+  "version": "2.1.0",
+  "query_hints": [
+    {
+      "descricao": "Producao programada por produto para os proximos 30 dias",
+      "sql": "SELECT data_programacao, cod_produto, nome_produto, linha_producao, qtd_programada, cliente_produto FROM programacao_producao WHERE data_programacao >= CURRENT_DATE AND data_programacao <= CURRENT_DATE + INTERVAL '30 days' ORDER BY data_programacao ASC, linha_producao ASC LIMIT 200"
+    },
+    {
+      "descricao": "Total programado por produto e linha de producao no mes corrente",
+      "sql": "SELECT cod_produto, nome_produto, linha_producao, SUM(qtd_programada) AS total_programado, COUNT(*) AS qtd_registros FROM programacao_producao WHERE data_programacao >= DATE_TRUNC('month', CURRENT_DATE) AND data_programacao < DATE_TRUNC('month', CURRENT_DATE) + INTERVAL '1 month' GROUP BY cod_produto, nome_produto, linha_producao ORDER BY total_programado DESC"
+    },
+    {
+      "descricao": "Programacoes com ordem de producao definida (ordem_producao preenchida)",
+      "sql": "SELECT data_programacao, cod_produto, nome_produto, linha_producao, qtd_programada, ordem_producao, cliente_produto FROM programacao_producao WHERE ordem_producao IS NOT NULL AND data_programacao >= CURRENT_DATE - INTERVAL '7 days' ORDER BY data_programacao DESC LIMIT 100"
+    }
+  ],
   "source": {
     "primary": {
       "system": "Multi-fonte",

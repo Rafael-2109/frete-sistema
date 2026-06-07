@@ -1,0 +1,26 @@
+{
+  "table": "pedido_importacao_temp",
+  "version": "1.0.0",
+  "business_rules": [
+    "status ciclo completo: 'PROCESSADO' (PDF processado, aguardando lancamento) → 'LANCANDO' (em processo no Odoo) → 'LANCADO' (sucesso) ou 'ERRO' (falha); 'EXPIRADO' para registros vencidos (cleanup automatico)",
+    "chave_importacao é unique — usada como token de sessao; substitui session Flask para evitar perda de dados em operacoes longas",
+    "pode_inserir=True significa que todos os itens do documento têm De-Para (codigo rede → nosso codigo) mapeado",
+    "expira_em indica quando o registro sera elegivel para cleanup; registros com status LANCADO NAO sao removidos automaticamente",
+    "resultados_lancamento (JSON) armazena o retorno do lancamento no Odoo — IDs criados ou mensagem de erro",
+    "Tabela temporaria: nao usar para historico de pedidos enviados — usar registro_pedido_odoo para isso"
+  ],
+  "query_hints": [
+    {
+      "descricao": "Importacoes em andamento ou com erro (nao finalizadas)",
+      "sql": "SELECT id, chave_importacao, rede, tipo_documento, numero_documento, usuario, criado_em, status FROM pedido_importacao_temp WHERE status IN ('PROCESSADO', 'LANCANDO', 'ERRO') ORDER BY criado_em DESC"
+    },
+    {
+      "descricao": "Importacoes com divergencia de preco pendente de resolucao",
+      "sql": "SELECT id, chave_importacao, rede, numero_documento, usuario, criado_em FROM pedido_importacao_temp WHERE tem_divergencia = TRUE AND pode_inserir = FALSE AND status = 'PROCESSADO'"
+    },
+    {
+      "descricao": "Registros expirados elegíveis para limpeza",
+      "sql": "SELECT id, chave_importacao, rede, status, expira_em FROM pedido_importacao_temp WHERE expira_em < NOW() AND status IN ('PROCESSADO', 'ERRO')"
+    }
+  ]
+}

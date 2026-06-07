@@ -2306,7 +2306,7 @@
     },
     {
       "name": "pedido_compras",
-      "description": "Tabela pedido_compras",
+      "description": "Pedidos de compra a fornecedores sincronizados do Odoo (status_odoo: draft, sent, to approve, purchase, done, cancel).",
       "key_fields": [
         "num_pedido",
         "company_id",

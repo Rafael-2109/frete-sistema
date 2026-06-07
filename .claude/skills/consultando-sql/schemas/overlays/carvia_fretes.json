@@ -1,0 +1,26 @@
+{
+  "table": "carvia_fretes",
+  "version": "1.0.0",
+  "business_rules": [
+    "1 frete = 1 par (cnpj_emitente, cnpj_destino) dentro de 1 embarque; unique index parcial (embarque_id, cnpj_emitente, cnpj_destino) WHERE embarque_id IS NOT NULL",
+    "4 campos de valor com semantica distinta: valor_cotado (calculado pela tabela de frete, imutavel apos criacao), valor_cte (cobrado pelo subcontratado), valor_considerado (validado internamente), valor_pago (efetivamente pago); valor_venda e o que a CarVia cobra ao cliente",
+    "status: PENDENTE, CONFERIDO, FATURADO, CANCELADO — fluxo de conferencia do lado custo",
+    "status_conferencia (PENDENTE, APROVADO, DIVERGENTE) e independente de status; e o gate documental do CTe subcontratado; requer_aprovacao=TRUE quando ha CarviaAprovacaoFrete pendente",
+    "subcontrato_id e campo DEPRECATED (assume 1:1); caminho canonico e via carvia_subcontratos.frete_id (1:N suporta multi-leg); ao consultar subcontratos, prefira JOIN em carvia_subcontratos via frete_id",
+    "numeros_nfs e texto CSV com os numeros das NFs cobertas (ex: '1001,1002,1003'); nao ha FK direta para carvia_nfs"
+  ],
+  "query_hints": [
+    {
+      "descricao": "Fretes pendentes de conferencia (custo vs CTe)",
+      "sql": "SELECT id, embarque_id, numeros_nfs, peso_total, valor_cotado, valor_cte, status_conferencia FROM carvia_fretes WHERE status_conferencia = 'PENDENTE' AND status != 'CANCELADO' ORDER BY criado_em DESC"
+    },
+    {
+      "descricao": "Margem venda vs custo por frete (valor_venda - valor_cotado)",
+      "sql": "SELECT id, cnpj_emitente, cnpj_destino, uf_destino, valor_cotado, valor_venda, (valor_venda - valor_cotado) AS margem FROM carvia_fretes WHERE valor_venda IS NOT NULL AND status != 'CANCELADO' ORDER BY margem DESC"
+    },
+    {
+      "descricao": "Fretes com divergencia de conferencia (aprovado pelo operador)",
+      "sql": "SELECT id, embarque_id, numeros_nfs, valor_cotado, valor_considerado, valor_pago, status_conferencia, conferido_por, conferido_em FROM carvia_fretes WHERE id = 205"
+    }
+  ]
+}

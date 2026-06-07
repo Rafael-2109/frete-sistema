@@ -1,0 +1,27 @@
+{
+  "table": "conhecimento_transporte",
+  "version": "1.0.0",
+  "business_rules": [
+    "CT-es importados do Odoo (modelo l10n_br_ciel_it_account.dfe, is_cte=True); dfe_id e chave_acesso são únicos e indexados",
+    "odoo_status_codigo: '01'=Rascunho, '02'=Sincronizado, '03'=Ciência/Confirmado, '04'=PO, '05'=Rateio, '06'=Concluído, '07'=Rejeitado/Cancelado",
+    "tipo_cte: '0'=Normal, '1'=Complementar; CTes complementares referenciam o CTe original via cte_complementa_chave e cte_complementa_id",
+    "tomador_e_empresa=True indica que o tomador do serviço é a empresa Nacom (CNPJ começa com 61.724.241); filtrar por isso para encontrar CTes de frete a pagar",
+    "CTe cancelado: cancelado=True AND odoo_status_codigo='07'; ativo=False após cancelamento — para CTes válidos filtrar ativo=True AND cancelado=False",
+    "numeros_nfs é string CSV com NFs cobertas (ex: '141768,141769,141770') — para busca use LIKE ou split; vinculo com frete via frete_id",
+    "Junta a fretes por frete_id (FK direta) ou por fretes.frete_cte_id"
+  ],
+  "query_hints": [
+    {
+      "descricao": "CTes válidos (não cancelados) que são tomador da empresa, com vínculo ao frete",
+      "sql": "SELECT ct.numero_cte, ct.serie_cte, ct.data_emissao, ct.valor_total, ct.cnpj_emitente, ct.nome_emitente, ct.frete_id FROM conhecimento_transporte ct WHERE ct.tomador_e_empresa = TRUE AND ct.cancelado = FALSE AND ct.ativo = TRUE ORDER BY ct.data_emissao DESC"
+    },
+    {
+      "descricao": "CTes complementares (tipo_cte='1') com referência ao CTe original",
+      "sql": "SELECT ct.numero_cte, ct.valor_total, ct.cte_complementa_chave, ct.frete_id FROM conhecimento_transporte ct WHERE ct.tipo_cte = '1' AND ct.cancelado = FALSE ORDER BY ct.data_emissao DESC"
+    },
+    {
+      "descricao": "CTe vinculado a um frete com detalhes da transportadora",
+      "sql": "SELECT ct.numero_cte, ct.serie_cte, ct.data_emissao, ct.valor_total, ct.odoo_status_codigo, tr.razao_social FROM conhecimento_transporte ct JOIN fretes f ON f.id = ct.frete_id JOIN transportadoras tr ON tr.id = f.transportadora_id WHERE ct.frete_id = :frete_id"
+    }
+  ]
+}

@@ -1,0 +1,26 @@
+{
+  "table": "carvia_subcontratos",
+  "version": "1.0.0",
+  "business_rules": [
+    "Subcontratacao = a CarVia contrata uma terceira transportadora para executar o frete; distinto de carvia_operacoes que e o CTe emitido pela CarVia ao cliente",
+    "status: PENDENTE, COTADO, CONFIRMADO, FATURADO, CONFERIDO, CANCELADO — fluxo irreversivel; conferencia foi MIGRADA para carvia_fretes.status_conferencia em 2026-04-14 (campos de valor_pago, valor_considerado nao existem mais aqui)",
+    "valor_final e @property = valor_acertado se preenchido, senao valor_cotado; para queries SQL usar COALESCE(valor_acertado, valor_cotado) como valor efetivo do subcontrato",
+    "cte_numero segue formato Sub-### (auto-sequencial por sistema); cte_chave_acesso e UNIQUE nullable",
+    "operacao_id e nullable — subcontrato pode existir sem operacao CarVia quando originado do fluxo legado via embarque; frete_id (FK carvia_fretes) e o vinculo principal no fluxo atual",
+    "numero_sequencial_transportadora e auto-increment logico por transportadora_id (MAX+1 filtrado por transportadora); unique index parcial WHERE NOT NULL"
+  ],
+  "query_hints": [
+    {
+      "descricao": "Subcontratos pendentes de faturamento por transportadora",
+      "sql": "SELECT s.id, s.cte_numero, s.transportadora_id, s.valor_cotado, s.valor_acertado, COALESCE(s.valor_acertado, s.valor_cotado) AS valor_final, s.status FROM carvia_subcontratos s WHERE s.status IN ('COTADO', 'CONFIRMADO') AND s.fatura_transportadora_id IS NULL ORDER BY s.criado_em DESC"
+    },
+    {
+      "descricao": "Subcontratos de uma operacao (CTe CarVia) com valor efetivo",
+      "sql": "SELECT s.id, s.cte_numero, s.cte_data_emissao, COALESCE(s.valor_acertado, s.valor_cotado) AS valor_final, s.status FROM carvia_subcontratos s WHERE s.operacao_id = 205 AND s.status != 'CANCELADO'"
+    },
+    {
+      "descricao": "Subcontratos de um CarviaFrete (multi-leg via frete_id)",
+      "sql": "SELECT s.id, s.cte_numero, s.transportadora_id, COALESCE(s.valor_acertado, s.valor_cotado) AS valor_final, s.status FROM carvia_subcontratos s WHERE s.frete_id = 205 AND s.status != 'CANCELADO'"
+    }
+  ]
+}

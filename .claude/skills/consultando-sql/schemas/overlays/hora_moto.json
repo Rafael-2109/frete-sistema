@@ -1,0 +1,17 @@
+{
+  "table": "hora_moto",
+  "version": "1.0.0",
+  "business_rules": [
+    "Insert-once: uma linha por chassi físico, criada no primeiro recebimento. Nunca fazer UPDATE em hora_moto após o insert (invariante 3 do módulo).",
+    "numero_chassi é a chave universal do módulo HORA. É a chave de JOIN para todas as tabelas transacionais: hora_moto_evento, hora_nf_entrada_item, hora_venda_item, etc.",
+    "Status/localização/preço atual NÃO estão aqui. Vivem em hora_moto_evento (estado) e tabelas satélite. Para saber onde está a moto, consultar o último evento em hora_moto_evento.",
+    "Exceção controlada ao invariante: cor e modelo_id podem ser UPDATE-ados apenas em 2 cenários — (1) retroatividade de modelo sentinela DESCONHECIDO após resolução; (2) recebimento divergente quando conferência difere da NF (SOT = recebimento físico).",
+    "modelo_id aponta para hora_modelo.id (catálogo). numero_motor tem UNIQUE (uma peça de motor por moto), mas pode ser NULL."
+  ],
+  "query_hints": [
+    {
+      "descricao": "Buscar moto com modelo e último evento (ponto de entrada padrão para detalhe de chassi)",
+      "sql": "SELECT hm.numero_chassi, hmod.nome_modelo, hm.cor, hm.ano_modelo, hm.numero_motor, hm.criado_em, hme_last.tipo AS status_atual, hme_last.loja_id, hme_last.timestamp AS ultimo_evento_em FROM hora_moto hm JOIN hora_modelo hmod ON hm.modelo_id = hmod.id LEFT JOIN LATERAL (SELECT tipo, loja_id, timestamp FROM hora_moto_evento WHERE numero_chassi = hm.numero_chassi ORDER BY timestamp DESC, id DESC LIMIT 1) hme_last ON true WHERE hm.numero_chassi = :chassi"
+    }
+  ]
+}

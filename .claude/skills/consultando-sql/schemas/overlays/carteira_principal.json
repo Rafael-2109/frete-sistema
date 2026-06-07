@@ -1,6 +1,20 @@
 {
   "table": "carteira_principal",
-  "version": "1.0.0",
+  "version": "1.1.0",
+  "query_hints": [
+    {
+      "descricao": "Saldo pendente a faturar por cliente (carteira ativa)",
+      "sql": "SELECT raz_social_red, cod_uf, SUM(qtd_saldo_produto_pedido) AS qtd_pendente, SUM(qtd_saldo_produto_pedido * preco_produto_pedido) AS valor_pendente FROM carteira_principal WHERE ativo = True AND qtd_saldo_produto_pedido > 0 GROUP BY raz_social_red, cod_uf ORDER BY valor_pendente DESC LIMIT 50"
+    },
+    {
+      "descricao": "Pedidos pendentes por UF e produto (filtro ativo + saldo > 0)",
+      "sql": "SELECT cod_uf, materia_prima_produto, COUNT(DISTINCT num_pedido) AS qtd_pedidos, SUM(qtd_saldo_produto_pedido) AS qtd_saldo FROM carteira_principal WHERE ativo = True AND qtd_saldo_produto_pedido > 0 GROUP BY cod_uf, materia_prima_produto ORDER BY qtd_pedidos DESC"
+    },
+    {
+      "descricao": "Carteira com incoterm CIF vs FOB por vendedor",
+      "sql": "SELECT vendedor, incoterm, COUNT(DISTINCT num_pedido) AS pedidos, SUM(qtd_saldo_produto_pedido * preco_produto_pedido) AS valor_total FROM carteira_principal WHERE ativo = True AND qtd_saldo_produto_pedido > 0 GROUP BY vendedor, incoterm ORDER BY vendedor, incoterm"
+    }
+  ],
   "source": {
     "primary": {
       "system": "Odoo",

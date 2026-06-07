@@ -1,0 +1,17 @@
+{
+  "table": "hora_loja",
+  "version": "1.0.0",
+  "business_rules": [
+    "Cadastro dos pontos de venda físicos da HORA (ex.: Tatuapé, Bragança Paulista, Praia Grande). PJ distinta da Motochefe-distribuidora.",
+    "Para exibição em UI e listagens, preferir apelido (rótulo interno amigável) sobre razão social. Hierarquia: apelido > nome_fantasia > razao_social > nome.",
+    "cnpj é UNIQUE. Dados fiscais (razao_social, endereco, IE, situacao_cadastral) são autopreenchidos via ReceitaWS e gravados em campos estruturados — não usar o campo legado endereco (texto livre) em queries novas.",
+    "ativa=false indica loja encerrada; excluir de listagens de estoque ativo. Default=true.",
+    "geocoding_provider: valores observados no código — 'google', 'nominatim', 'manual'. latitude/longitude usados para renderizar mapa."
+  ],
+  "query_hints": [
+    {
+      "descricao": "Listar lojas ativas com apelido (uso padrão em dropdowns e listagens)",
+      "sql": "SELECT id, COALESCE(apelido, nome_fantasia, razao_social, nome) AS rotulo, cnpj, cidade, uf FROM hora_loja WHERE ativa = true ORDER BY rotulo"
+    }
+  ]
+}

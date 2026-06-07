@@ -1,0 +1,22 @@
+{
+  "table": "correcao_data_nf_credito",
+  "version": "1.0.0",
+  "business_rules": [
+    "status ciclo: 'pendente' (default — diagnosticado mas nao corrigido), 'corrigido' (correcao executada com sucesso), 'erro' (falha na correcao), 'ignorado' (decidido nao corrigir)",
+    "Problema original: script alterou account_move.date para invoice_date quando deveria manter a data de lancamento original. Esta tabela rastrea e corrige esse bug especifico",
+    "odoo_move_id tem UNIQUE constraint — cada NF do Odoo aparece no maximo uma vez nesta tabela",
+    "data_emissao = invoice_date no Odoo (NAO e alterado); data_lancamento_antes = account_move.date ANTES da correcao; data_correta = data que DEVERIA estar",
+    "data_lancamento_depois e data_lancamento_linhas_depois sao preenchidos APENAS apos correcao bem-sucedida",
+    "nome_documento segue padrao Odoo: ex 'RDVEND/2024/00621' (NF de credito de venda)"
+  ],
+  "query_hints": [
+    {
+      "descricao": "NFs pendentes de correcao de data",
+      "sql": "SELECT id, nome_documento, numero_nf, nome_parceiro, data_emissao, data_lancamento_antes, data_correta, diagnosticado_em FROM correcao_data_nf_credito WHERE status = 'pendente' ORDER BY data_emissao"
+    },
+    {
+      "descricao": "Resumo de correcoes por status",
+      "sql": "SELECT status, COUNT(*) AS qtd FROM correcao_data_nf_credito GROUP BY status ORDER BY qtd DESC"
+    }
+  ]
+}

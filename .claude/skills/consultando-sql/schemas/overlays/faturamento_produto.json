@@ -1,6 +1,20 @@
 {
   "table": "faturamento_produto",
-  "version": "1.0.0",
+  "version": "1.1.0",
+  "query_hints": [
+    {
+      "descricao": "Top 10 clientes por valor faturado (status_nf='Lancado' com cedilha, revertida=False)",
+      "sql": "SELECT nome_cliente, cnpj_cliente, COUNT(DISTINCT numero_nf) AS qtd_nfs, SUM(qtd_produto_faturado) AS qtd_total, ROUND(SUM(valor_produto_faturado)::numeric, 2) AS total_faturado FROM faturamento_produto WHERE status_nf = 'Lançado' AND revertida = False GROUP BY nome_cliente, cnpj_cliente ORDER BY total_faturado DESC LIMIT 10"
+    },
+    {
+      "descricao": "Faturamento por mes e UF (ultimos 6 meses)",
+      "sql": "SELECT TO_CHAR(data_fatura, 'YYYY-MM') AS mes, estado, ROUND(SUM(valor_produto_faturado)::numeric, 2) AS total_faturado, COUNT(DISTINCT numero_nf) AS qtd_nfs FROM faturamento_produto WHERE status_nf = 'Lançado' AND revertida = False AND data_fatura >= CURRENT_DATE - INTERVAL '6 months' GROUP BY TO_CHAR(data_fatura, 'YYYY-MM'), estado ORDER BY mes DESC, total_faturado DESC"
+    },
+    {
+      "descricao": "Vendas por produto nos ultimos 3 meses (padrao multi-CTE anti-cartesiano)",
+      "sql": "SELECT cod_produto, nome_produto, SUM(qtd_produto_faturado)::numeric AS vendido_3m, ROUND(SUM(valor_produto_faturado)::numeric, 2) AS valor_3m FROM faturamento_produto WHERE status_nf = 'Lançado' AND revertida = False AND data_fatura >= CURRENT_DATE - INTERVAL '3 months' GROUP BY cod_produto, nome_produto ORDER BY vendido_3m DESC LIMIT 50"
+    }
+  ],
   "source": {
     "primary": {
       "system": "Odoo",

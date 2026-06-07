@@ -33,9 +33,9 @@ SEED_TEMPLATES = [
         "question_text": "top 10 clientes por faturamento",
         "sql_text": """SELECT nome_cliente, cnpj_cliente,
             COUNT(DISTINCT numero_nf) AS qtd_nfs,
-            ROUND(SUM(valor_total_nf)::numeric, 2) AS total_faturado
+            ROUND(SUM(valor_produto_faturado)::numeric, 2) AS total_faturado
         FROM faturamento_produto
-        WHERE status_nf = 'Lancado' AND revertida = False
+        WHERE status_nf IN ('Lançado', 'Lancado') AND revertida = False
         GROUP BY nome_cliente, cnpj_cliente
         ORDER BY total_faturado DESC
         LIMIT 10""",
@@ -54,12 +54,12 @@ SEED_TEMPLATES = [
     {
         "question_text": "faturamento por mes",
         "sql_text": """SELECT
-            TO_CHAR(data_emissao, 'YYYY-MM') AS mes,
+            TO_CHAR(data_fatura, 'YYYY-MM') AS mes,
             COUNT(DISTINCT numero_nf) AS qtd_nfs,
-            ROUND(SUM(valor_total_nf)::numeric, 2) AS total_faturado
+            ROUND(SUM(valor_produto_faturado)::numeric, 2) AS total_faturado
         FROM faturamento_produto
-        WHERE status_nf = 'Lancado' AND revertida = False
-        GROUP BY TO_CHAR(data_emissao, 'YYYY-MM')
+        WHERE status_nf IN ('Lançado', 'Lancado') AND revertida = False
+        GROUP BY TO_CHAR(data_fatura, 'YYYY-MM')
         ORDER BY mes DESC
         LIMIT 24""",
         "tables_used": "faturamento_produto",
@@ -78,7 +78,7 @@ SEED_TEMPLATES = [
     },
     {
         "question_text": "contas a receber vencidas",
-        "sql_text": """SELECT numero_nf, nome_cliente, cnpj_raiz,
+        "sql_text": """SELECT titulo_nf, raz_social, cnpj,
             parcela, valor_titulo, vencimento,
             CURRENT_DATE - vencimento AS dias_atraso
         FROM contas_a_receber
@@ -93,18 +93,17 @@ SEED_TEMPLATES = [
             s.qtd_saldo, s.nome_cidade, s.cod_uf
         FROM separacao s
         WHERE s.sincronizado_nf = False AND s.qtd_saldo > 0
-        ORDER BY s.data_separacao
+        ORDER BY s.expedicao NULLS LAST, s.criado_em
         LIMIT 500""",
         "tables_used": "separacao",
     },
     {
         "question_text": "entregas pendentes de canhoto",
-        "sql_text": """SELECT em.numero_nf, em.nome_cliente,
+        "sql_text": """SELECT em.numero_nf, em.cliente,
             em.data_embarque, em.transportadora,
-            em.status_entrega
+            em.data_hora_entrega_realizada
         FROM entregas_monitoradas em
-        WHERE em.status_entrega NOT IN ('ENTREGUE', 'DEVOLVIDA')
-            AND em.data_embarque IS NOT NULL
+        WHERE em.entregue = True AND em.canhoto_arquivo IS NULL
         ORDER BY em.data_embarque
         LIMIT 200""",
         "tables_used": "entregas_monitoradas",
@@ -120,28 +119,33 @@ SEED_TEMPLATES = [
     },
     {
         "question_text": "fretes por transportadora",
-        "sql_text": """SELECT nome_transportadora, cnpj_transportadora,
-            COUNT(*) AS qtd_ctes,
-            ROUND(SUM(valor_frete)::numeric, 2) AS total_frete
-        FROM faturamento_produto
-        WHERE status_nf = 'Lancado' AND revertida = False
-            AND nome_transportadora IS NOT NULL
-        GROUP BY nome_transportadora, cnpj_transportadora
-        ORDER BY total_frete DESC
+        "sql_text": """SELECT t.razao_social,
+            COUNT(*) AS qtd_fretes,
+            ROUND(SUM(f.valor_pago)::numeric, 2) AS total_pago
+        FROM fretes f
+        JOIN transportadoras t ON t.id = f.transportadora_id
+        WHERE f.valor_pago IS NOT NULL
+        GROUP BY t.razao_social
+        ORDER BY total_pago DESC
         LIMIT 30""",
-        "tables_used": "faturamento_produto",
+        "tables_used": "fretes,transportadoras",
     },
     {
         "question_text": "producao programada vs realizada",
-        "sql_text": """SELECT cod_produto, nome_produto,
-            SUM(qtd_programada) AS programada,
-            SUM(qtd_produzida) AS produzida,
-            ROUND((SUM(qtd_produzida) / NULLIF(SUM(qtd_programada), 0) * 100)::numeric, 1) AS pct_cumprido
-        FROM programacao_producao
-        GROUP BY cod_produto, nome_produto
-        ORDER BY pct_cumprido ASC NULLS FIRST
+        "sql_text": """SELECT pp.cod_produto, pp.nome_produto,
+            SUM(pp.qtd_programada) AS programada,
+            COALESCE(MAX(prod.realizada), 0) AS realizada
+        FROM programacao_producao pp
+        LEFT JOIN (
+            SELECT cod_produto, SUM(qtd_movimentacao) AS realizada
+            FROM movimentacao_estoque
+            WHERE tipo_movimentacao = 'PRODUCAO' AND ativo = True
+            GROUP BY cod_produto
+        ) prod ON prod.cod_produto = pp.cod_produto
+        GROUP BY pp.cod_produto, pp.nome_produto
+        ORDER BY programada DESC
         LIMIT 50""",
-        "tables_used": "programacao_producao",
+        "tables_used": "programacao_producao,movimentacao_estoque",
     },
 ]
 

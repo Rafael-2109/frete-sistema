@@ -1,0 +1,20 @@
+{
+  "table": "carvia_operacao_nfs",
+  "version": "1.0.0",
+  "business_rules": [
+    "Tabela junction N:N entre carvia_operacoes e carvia_nfs — 1 CTe CarVia (operacao) pode cobrir multiplas NFs, e 1 NF pode estar em multiplas operacoes",
+    "Unique constraint (operacao_id, nf_id) — par operacao+NF nao se repete",
+    "nf_id tem ON DELETE CASCADE — ao cancelar/deletar uma NF, o vinculo e removido automaticamente; operacao_id NAO tem cascade (operacoes nao sao deletadas por design)",
+    "Para listar NFs de uma operacao: JOIN em carvia_nfs via nf_id; para listar operacoes de uma NF: JOIN em carvia_operacoes via operacao_id"
+  ],
+  "query_hints": [
+    {
+      "descricao": "NFs de uma operacao CarVia especifica",
+      "sql": "SELECT n.numero_nf, n.data_emissao, n.cnpj_emitente, n.nome_emitente, n.valor_total, n.peso_bruto FROM carvia_operacao_nfs j JOIN carvia_nfs n ON n.id = j.nf_id WHERE j.operacao_id = 205 AND n.status = 'ATIVA'"
+    },
+    {
+      "descricao": "Operacoes que cobrem uma NF especifica",
+      "sql": "SELECT o.cte_numero, o.status, o.cnpj_cliente, o.uf_destino FROM carvia_operacao_nfs j JOIN carvia_operacoes o ON o.id = j.operacao_id WHERE j.nf_id = 100 AND o.status != 'CANCELADO'"
+    }
+  ]
+}

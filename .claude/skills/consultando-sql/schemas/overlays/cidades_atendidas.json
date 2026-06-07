@@ -1,0 +1,21 @@
+{
+  "table": "cidades_atendidas",
+  "version": "1.0.0",
+  "business_rules": [
+    "Esta tabela é o vínculo entre tabela_frete e cidade: uma entrada aqui significa que a transportadora/tabela atende aquela cidade com aquele lead_time",
+    "JOIN com tabelas_frete exige DOIS campos: ca.transportadora_id = tf.transportadora_id AND ca.nome_tabela = tf.nome_tabela — nunca apenas transportadora_id",
+    "JOIN com cidades: ca.cidade_id = c.id (FK direto); campo uf em cidades_atendidas é redundante com cidades.uf mas útil para filtro direto sem JOIN",
+    "codigo_ibge na tabela é o código IBGE da cidade (7 dígitos), igual ao cidades.codigo_ibge — permite JOIN alternativo sem passar por cidade_id",
+    "lead_time em dias úteis para entrega naquela cidade pela transportadora/tabela"
+  ],
+  "query_hints": [
+    {
+      "descricao": "Transportadoras que atendem uma cidade específica com lead time",
+      "sql": "SELECT tr.razao_social, ca.nome_tabela, ca.lead_time FROM cidades_atendidas ca JOIN cidades c ON c.id = ca.cidade_id JOIN transportadoras tr ON tr.id = ca.transportadora_id WHERE ca.uf = 'SP' AND c.nome ILIKE '%CAMPINAS%' ORDER BY ca.lead_time"
+    },
+    {
+      "descricao": "Cidades atendidas por uma transportadora com lead time (JOIN canônico cotação)",
+      "sql": "SELECT c.nome, c.uf, ca.nome_tabela, ca.lead_time FROM cidades_atendidas ca JOIN cidades c ON c.id = ca.cidade_id WHERE ca.transportadora_id = :transportadora_id ORDER BY c.uf, c.nome"
+    }
+  ]
+}

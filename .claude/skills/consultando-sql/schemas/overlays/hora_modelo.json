@@ -1,0 +1,17 @@
+{
+  "table": "hora_modelo",
+  "version": "1.0.0",
+  "business_rules": [
+    "Catálogo de modelos de moto elétrica (ex.: BOB AM). nome_modelo é UNIQUE.",
+    "ativo=false indica modelo absorvido por outro (merge N→1). Quando merged_em_id IS NOT NULL, o modelo foi unificado no canônico apontado por merged_em_id. Filtrar ativo=true em listagens de seleção.",
+    "autopropelido=true: bicicleta elétrica (Resolução CONTRAN 996/2023 — dispensa CNH e licenciamento; garantia 6m+6m motor/bateria). autopropelido=false: ciclomotor (exige CNH e emplacamento; garantia 3m+9m; ATPV em até 15 dias úteis). Controla textos fiscais na NF-e.",
+    "preco_a_vista e preco_a_prazo são os preços de tabela atuais (fonte primária para Pedido de Venda). desconto_maximo (R$) é o teto de desconto por moto — acima exige aprovação. NULL = sem teto.",
+    "Para resolver aliases (nomes alternativos de modelo nas NFs), consultar hora_modelo_alias antes de criar pendência em hora_modelo_pendente."
+  ],
+  "query_hints": [
+    {
+      "descricao": "Modelos ativos com preço de tabela (uso em seleção de pedido de venda)",
+      "sql": "SELECT id, nome_modelo, potencia_motor, preco_a_vista, preco_a_prazo, desconto_maximo, autopropelido FROM hora_modelo WHERE ativo = true AND merged_em_id IS NULL ORDER BY nome_modelo"
+    }
+  ]
+}

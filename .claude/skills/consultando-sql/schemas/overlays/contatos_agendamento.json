@@ -1,0 +1,26 @@
+{
+  "table": "contatos_agendamento",
+  "version": "1.0.0",
+  "business_rules": [
+    "Chave de negocio: cnpj — lookup é sempre por cnpj do cliente (sem FK formal; relaciona com entregas_monitoradas.cnpj_cliente)",
+    "NAO ha unique constraint em cnpj — pode haver mais de um registro por CNPJ; em consultas usar LIMIT 1 ou agrupar",
+    "forma: 'Portal', 'Telefone', 'E-mail', 'WhatsApp' ou 'SEM AGENDAMENTO'. Se forma = 'SEM AGENDAMENTO' o cliente NAO exige agendamento previo",
+    "Para identificar clientes que precisam de agendamento: WHERE forma IS NOT NULL AND forma != 'SEM AGENDAMENTO'",
+    "nao_aceita_nf_pallet=True indica restricao do cliente: NAO emitir NF de pallet separada para este CNPJ",
+    "horario_recebimento_de / horario_recebimento_ate define a janela de entrega aceita pelo cliente (tipo TIME, ex: 08:00 / 17:00)"
+  ],
+  "query_hints": [
+    {
+      "descricao": "Clientes que precisam de agendamento previo com dados de contato",
+      "sql": "SELECT cnpj, forma, contato, horario_recebimento_de, horario_recebimento_ate, observacoes_recebimento FROM contatos_agendamento WHERE forma IS NOT NULL AND forma != 'SEM AGENDAMENTO' ORDER BY cnpj"
+    },
+    {
+      "descricao": "Clientes que nao aceitam NF de pallet",
+      "sql": "SELECT cnpj, forma, observacao FROM contatos_agendamento WHERE nao_aceita_nf_pallet = TRUE"
+    },
+    {
+      "descricao": "Contato de agendamento para um CNPJ especifico",
+      "sql": "SELECT cnpj, forma, contato, horario_recebimento_de, horario_recebimento_ate, observacoes_recebimento, nao_aceita_nf_pallet FROM contatos_agendamento WHERE cnpj = :cnpj LIMIT 1"
+    }
+  ]
+}

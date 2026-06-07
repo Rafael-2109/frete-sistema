@@ -1,0 +1,17 @@
+{
+  "table": "hora_pedido",
+  "version": "1.0.0",
+  "business_rules": [
+    "Pedido de compra emitido pela HORA para a Motochefe (fabricante). numero_pedido é UNIQUE.",
+    "status: ABERTO (aguardando NF), PARCIALMENTE_FATURADO (NF parcial recebida), FATURADO (NF completa), CANCELADO.",
+    "origem: 'XLSX' (import via planilha Excel — padrão), 'IMAGEM' (import via OCR), 'MANUAL' (criado direto na UI). CHECK constraint no banco.",
+    "cnpj_destino é tipicamente o CNPJ da MATRIZ HORA (compartilhado entre todas as lojas). A loja de destino física real está em loja_destino_id (FK → hora_loja). Para saber para qual loja vai o pedido, usar loja_destino_id, não cnpj_destino.",
+    "pedido_id aparece em hora_nf_entrada como FK: uma NF pode vir vinculada a um pedido (fluxo normal) ou órfã (pedido_id IS NULL — Motochefe emitiu sem pedido prévio, divergência estrutural)."
+  ],
+  "query_hints": [
+    {
+      "descricao": "Pedidos abertos com loja de destino (fila de acompanhamento)",
+      "sql": "SELECT hp.id, hp.numero_pedido, hp.data_pedido, hp.status, hp.origem, COALESCE(hl.apelido, hl.nome) AS loja_destino FROM hora_pedido hp LEFT JOIN hora_loja hl ON hp.loja_destino_id = hl.id WHERE hp.status IN ('ABERTO', 'PARCIALMENTE_FATURADO') ORDER BY hp.data_pedido DESC"
+    }
+  ]
+}

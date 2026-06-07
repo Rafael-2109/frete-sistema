@@ -1,0 +1,21 @@
+{
+  "table": "cidades",
+  "version": "1.0.0",
+  "business_rules": [
+    "Cadastro de cidades do Brasil com ICMS de destino usado no cálculo de frete; icms é alíquota percentual (ex: 12.0 = 12%)",
+    "substitui_icms_por_iss=True indica cidade que recolhe ISS no lugar de ICMS sobre o frete (serviço municipal)",
+    "codigo_ibge é a chave única de negócio (7 dígitos); permite JOIN com cidades_atendidas.codigo_ibge como alternativa a cidade_id",
+    "Busca por nome deve usar ILIKE pois nomes podem ter acentuação variada (ex: c.nome ILIKE '%FRANCISCO BELTRAO%')",
+    "icms_proprio em tabelas_frete tem prioridade sobre cidades.icms no cálculo de frete; se icms_proprio IS NOT NULL, cidades.icms é ignorado"
+  ],
+  "query_hints": [
+    {
+      "descricao": "Buscar cidade por nome e UF para obter ICMS e código IBGE",
+      "sql": "SELECT id, nome, uf, codigo_ibge, icms, substitui_icms_por_iss FROM cidades WHERE uf = 'PR' AND nome ILIKE '%FRANCISCO BELTRAO%'"
+    },
+    {
+      "descricao": "Cidades de uma UF com ICMS para cálculo de frete",
+      "sql": "SELECT id, nome, uf, codigo_ibge, icms FROM cidades WHERE uf = 'SP' ORDER BY nome"
+    }
+  ]
+}

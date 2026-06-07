@@ -1,6 +1,20 @@
 {
   "table": "saldo_standby",
-  "version": "2.0.0",
+  "version": "2.1.0",
+  "query_hints": [
+    {
+      "descricao": "Standbys ativos por tipo (ATIVO, BLOQ. COML., SALDO) com valor total",
+      "sql": "SELECT tipo_standby, status_standby, COUNT(*) AS qtd_itens, SUM(qtd_saldo) AS qtd_total, SUM(valor_saldo) AS valor_total FROM saldo_standby WHERE status_standby IN ('ATIVO', 'BLOQ. COML.', 'SALDO') GROUP BY tipo_standby, status_standby ORDER BY valor_total DESC"
+    },
+    {
+      "descricao": "Standbys de um cliente especifico (por CNPJ) com detalhes de pedido e produto",
+      "sql": "SELECT num_pedido, cod_produto, nome_cliente, qtd_saldo, valor_saldo, tipo_standby, status_standby, criado_em FROM saldo_standby WHERE cnpj_cliente = :cnpj AND status_standby IN ('ATIVO', 'BLOQ. COML.', 'SALDO') ORDER BY criado_em DESC"
+    },
+    {
+      "descricao": "Standbys resolvidos (CONFIRMADO) com data de resolucao recente",
+      "sql": "SELECT num_pedido, cod_produto, nome_cliente, qtd_saldo, valor_saldo, tipo_standby, resolucao_final, data_resolucao, resolvido_por FROM saldo_standby WHERE status_standby = 'CONFIRMADO' AND data_resolucao >= CURRENT_DATE - INTERVAL '30 days' ORDER BY data_resolucao DESC LIMIT 100"
+    }
+  ],
   "source": {
     "primary": {
       "system": "Local",

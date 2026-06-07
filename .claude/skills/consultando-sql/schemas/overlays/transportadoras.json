@@ -1,0 +1,25 @@
+{
+  "table": "transportadoras",
+  "version": "1.0.0",
+  "business_rules": [
+    "Filtrar ativo=True para cotações e embarques ativos; inativas ficam no cadastro histórico",
+    "freteiro=True indica autônomo/freteiro avulso (não empresa transportadora); motorista_proprio=True indica motorista da empresa (não terceirizado)",
+    "Transportadoras podem pertencer a um grupo (grupo_transportadora_id); membros do mesmo grupo podem emitir CTes cruzados entre si — o match de CTe usa prefixo CNPJ (8 dígitos) de todos os membros",
+    "Busca por nome: usar ILIKE com razão social (ex: razao_social ILIKE '%SATISFA%')",
+    "Campos aplica_*_pos_minimo controlam se encargos (GRIS, ADV, RCA, pedágio, despacho, CTe, TAS) são somados antes ou após comparação com frete mínimo — relevantes para cálculo, não para consultas analíticas"
+  ],
+  "query_hints": [
+    {
+      "descricao": "Buscar transportadora por nome (parcial, case-insensitive)",
+      "sql": "SELECT id, razao_social, cnpj FROM transportadoras WHERE razao_social ILIKE '%SATISFA%'"
+    },
+    {
+      "descricao": "Transportadoras ativas com condição de pagamento",
+      "sql": "SELECT id, razao_social, cnpj, condicao_pgto FROM transportadoras WHERE ativo = TRUE ORDER BY razao_social"
+    },
+    {
+      "descricao": "Transportadoras de um grupo empresarial",
+      "sql": "SELECT t.id, t.razao_social, t.cnpj, g.nome AS grupo FROM transportadoras t JOIN grupo_transportadora g ON g.id = t.grupo_transportadora_id WHERE t.grupo_transportadora_id IS NOT NULL ORDER BY g.nome, t.razao_social"
+    }
+  ]
+}

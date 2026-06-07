@@ -1,6 +1,29 @@
 {
   "table": "entregas_monitoradas",
-  "version": "2.0.0",
+  "version": "2.1.0",
+  "business_rules": [
+    "Atraso: status_finalizacao IS NULL AND data_entrega_prevista < CURRENT_DATE AND data_entrega_prevista IS NOT NULL",
+    "Em transito: data_embarque IS NOT NULL AND status_finalizacao IS NULL AND nf_cd = False",
+    "Lead time real: data_hora_entrega_realizada - data_embarque (em dias)",
+    "Taxa de sucesso: COUNT(*) FILTER (WHERE entregue = True) / COUNT(*)::float * 100",
+    "status_finalizacao NULL significa entrega em andamento (NULL = vivo, NAO = nao definido)",
+    "Status terminais: 'Entregue', 'Cancelada', 'Devolvida', 'Troca de NF', 'Sinistro'",
+    "FOB: entregue=True e status_finalizacao='Entregue' sao auto-setados; data_embarque = data de entrega"
+  ],
+  "query_hints": [
+    {
+      "descricao": "Entregas em atraso (status_finalizacao IS NULL e data_entrega_prevista no passado)",
+      "sql": "SELECT numero_nf, cliente, transportadora, municipio, uf, data_embarque, data_entrega_prevista, CURRENT_DATE - data_entrega_prevista AS dias_atraso, valor_nf FROM entregas_monitoradas WHERE status_finalizacao IS NULL AND data_entrega_prevista < CURRENT_DATE AND data_entrega_prevista IS NOT NULL ORDER BY dias_atraso DESC LIMIT 100"
+    },
+    {
+      "descricao": "Entregas em transito (embarque realizado, ainda nao finalizado, nao retornou ao CD)",
+      "sql": "SELECT numero_nf, cliente, cnpj_cliente, transportadora, municipio, uf, data_embarque, data_entrega_prevista, lead_time, valor_nf FROM entregas_monitoradas WHERE data_embarque IS NOT NULL AND status_finalizacao IS NULL AND nf_cd = False ORDER BY data_embarque ASC LIMIT 200"
+    },
+    {
+      "descricao": "Taxa de sucesso de entrega por transportadora no mes corrente",
+      "sql": "SELECT transportadora, COUNT(*) AS total_entregas, COUNT(*) FILTER (WHERE entregue = True) AS entregues, ROUND(COUNT(*) FILTER (WHERE entregue = True) * 100.0 / NULLIF(COUNT(*), 0), 1) AS taxa_sucesso_pct, AVG(data_hora_entrega_realizada::date - data_embarque) AS lead_time_medio_dias FROM entregas_monitoradas WHERE data_faturamento >= DATE_TRUNC('month', CURRENT_DATE) AND transportadora IS NOT NULL GROUP BY transportadora ORDER BY taxa_sucesso_pct ASC"
+    }
+  ],
   "source": {
     "primary": {
       "system": "Multi-fonte",

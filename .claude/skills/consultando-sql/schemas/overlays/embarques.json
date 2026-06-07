@@ -1,6 +1,20 @@
 {
   "table": "embarques",
-  "version": "2.0.0",
+  "version": "2.1.0",
+  "query_hints": [
+    {
+      "descricao": "Embarques ativos com totais de carga (status=ativo)",
+      "sql": "SELECT e.numero, e.data_prevista_embarque, e.data_embarque, e.tipo_carga, e.modalidade, e.valor_total, e.peso_total, e.pallet_total, e.criado_por FROM embarques e WHERE e.status = 'ativo' ORDER BY e.data_prevista_embarque ASC NULLS LAST LIMIT 50"
+    },
+    {
+      "descricao": "Embarques com seus itens (clientes e pedidos) — JOIN padrao",
+      "sql": "SELECT e.numero, e.data_prevista_embarque, e.status, ei.cliente, ei.pedido, ei.nota_fiscal, ei.peso, ei.valor, ei.uf_destino, ei.cidade_destino FROM embarques e INNER JOIN embarque_itens ei ON e.id = ei.embarque_id AND ei.status = 'ativo' WHERE e.status IN ('ativo', 'draft') ORDER BY e.numero DESC LIMIT 200"
+    },
+    {
+      "descricao": "Resumo de embarques por status e tipo_carga no mes corrente",
+      "sql": "SELECT status, tipo_carga, COUNT(*) AS qtd_embarques, ROUND(SUM(valor_total)::numeric, 2) AS valor_total, ROUND(SUM(peso_total)::numeric, 2) AS peso_total_kg FROM embarques WHERE criado_em >= DATE_TRUNC('month', CURRENT_DATE) GROUP BY status, tipo_carga ORDER BY status, tipo_carga"
+    }
+  ],
   "source": {
     "primary": {
       "system": "Local",

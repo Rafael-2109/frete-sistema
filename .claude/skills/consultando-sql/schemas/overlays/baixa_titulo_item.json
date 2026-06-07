@@ -1,0 +1,27 @@
+{
+  "table": "baixa_titulo_item",
+  "version": "1.0.0",
+  "business_rules": [
+    "status ciclo: 'PENDENTE' (default — importado do Excel), 'VALIDO' (titulo localizado no Odoo), 'INVALIDO' (titulo nao encontrado ou dados inconsistentes), 'PROCESSANDO' (baixa em andamento), 'SUCESSO' (baixa concluida no Odoo), 'ERRO' (falha na baixa)",
+    "ativo=False indica que o usuario desativou o item — nao deve ser processado mesmo que status='VALIDO'",
+    "lote_id (FK → baixa_titulo_lote) agrupa itens importados de um mesmo arquivo Excel",
+    "titulo_odoo_id é o ID da account.move.line no Odoo; move_odoo_id é o ID da account.move (NF)",
+    "Componentes de valor: valor_excel (valor principal), juros_excel, desconto_concedido_excel, acordo_comercial_excel, devolucao_excel — cada um pode gerar um pagamento separado no Odoo",
+    "payment_odoo_id é criado somente apos SUCESSO; partial_reconcile_id confirma a conciliacao efetiva no Odoo",
+    "saldo_antes / saldo_depois espelham amount_residual do titulo no Odoo antes e depois da baixa — util para auditoria"
+  ],
+  "query_hints": [
+    {
+      "descricao": "Itens ativos de um lote com resultado do processamento",
+      "sql": "SELECT id, nf_excel, parcela_excel, valor_excel, status, mensagem, payment_odoo_name, saldo_antes, saldo_depois FROM baixa_titulo_item WHERE lote_id = :lote_id AND ativo = TRUE ORDER BY linha_excel"
+    },
+    {
+      "descricao": "Itens com erro de baixa para reprocessar",
+      "sql": "SELECT bti.id, bti.lote_id, bti.nf_excel, bti.parcela_excel, bti.valor_excel, bti.mensagem FROM baixa_titulo_item bti WHERE bti.status = 'ERRO' AND bti.ativo = TRUE ORDER BY bti.criado_em DESC"
+    },
+    {
+      "descricao": "Resumo de processamento por lote",
+      "sql": "SELECT lote_id, COUNT(*) AS total, SUM(CASE WHEN status='SUCESSO' THEN 1 ELSE 0 END) AS sucesso, SUM(CASE WHEN status='ERRO' THEN 1 ELSE 0 END) AS erro, SUM(CASE WHEN status='INVALIDO' THEN 1 ELSE 0 END) AS invalido, SUM(valor_excel) AS valor_total FROM baixa_titulo_item WHERE ativo = TRUE GROUP BY lote_id ORDER BY lote_id DESC"
+    }
+  ]
+}

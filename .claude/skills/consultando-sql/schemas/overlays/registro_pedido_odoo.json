@@ -1,0 +1,26 @@
+{
+  "table": "registro_pedido_odoo",
+  "version": "1.0.0",
+  "business_rules": [
+    "status_odoo: 'PENDENTE' (default — PDF recebido, aguardando envio), 'SUCESSO' (sale.order criado no Odoo), 'ERRO' (falha no envio)",
+    "rede: 'ATACADAO', 'TENDA', 'ASSAI' — sempre uppercase",
+    "tipo_documento: 'PROPOSTA' ou 'PEDIDO' — distingue o tipo do PDF importado",
+    "Registro com divergente=True SÓ pode ser enviado ao Odoo se aprovado_por e justificativa_aprovacao estiverem preenchidos",
+    "Para verificar duplicidade de envio: filtrar por rede + numero_documento + cnpj_cliente WHERE status_odoo='SUCESSO'",
+    "odoo_order_name contém o número VCD... do pedido no Odoo; odoo_order_id é o ID interno do sale.order"
+  ],
+  "query_hints": [
+    {
+      "descricao": "Pedidos com erro de envio ao Odoo por rede",
+      "sql": "SELECT rede, COUNT(*) AS qtd_erros, MAX(criado_em) AS ultimo_erro FROM registro_pedido_odoo WHERE status_odoo = 'ERRO' GROUP BY rede ORDER BY qtd_erros DESC"
+    },
+    {
+      "descricao": "Pedidos divergentes aguardando aprovacao (divergente mas sem aprovacao)",
+      "sql": "SELECT id, rede, numero_documento, cnpj_cliente, inserido_por, criado_em FROM registro_pedido_odoo WHERE divergente = TRUE AND aprovado_por IS NULL AND status_odoo = 'PENDENTE'"
+    },
+    {
+      "descricao": "Historico de pedidos enviados com sucesso para um CNPJ",
+      "sql": "SELECT id, rede, tipo_documento, numero_documento, odoo_order_name, processado_em FROM registro_pedido_odoo WHERE cnpj_cliente = :cnpj AND status_odoo = 'SUCESSO' ORDER BY processado_em DESC"
+    }
+  ]
+}

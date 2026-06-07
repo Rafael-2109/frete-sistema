@@ -1,0 +1,17 @@
+{
+  "table": "hora_nf_entrada",
+  "version": "1.0.0",
+  "business_rules": [
+    "NF fiscal recebida da Motochefe (fabricante). chave_44 é UNIQUE (chave de acesso NF-e de 44 dígitos).",
+    "cnpj_destinatario na NF é tipicamente o CNPJ da MATRIZ HORA (compartilhado entre todas as lojas). A loja física de destino está em loja_destino_id (FK → hora_loja). Para filtrar por loja, usar loja_destino_id.",
+    "pedido_id NULL indica NF órfã — Motochefe emitiu sem pedido prévio (registra divergência estrutural no confronto).",
+    "qtd_declarada_itens: contagem de itens-produto com NCM de veículos (8711*) na NF. Comparada com len(itens) para detectar inconsistência interna (DANFE declara N unidades mas lista M chassis nos Dados Adicionais). Nullable para NFs importadas antes desta coluna existir.",
+    "Para listar chassis faturados nesta NF, fazer JOIN em hora_nf_entrada_item WHERE nf_id = hora_nf_entrada.id AND desconsiderado = false."
+  ],
+  "query_hints": [
+    {
+      "descricao": "NFs recebidas com loja de destino e pedido associado (listagem de entradas)",
+      "sql": "SELECT hne.id, hne.numero_nf, hne.serie_nf, hne.data_emissao, hne.valor_total, hne.cnpj_emitente, COALESCE(hl.apelido, hl.nome) AS loja_destino, hp.numero_pedido, hne.criado_em FROM hora_nf_entrada hne LEFT JOIN hora_loja hl ON hne.loja_destino_id = hl.id LEFT JOIN hora_pedido hp ON hne.pedido_id = hp.id ORDER BY hne.data_emissao DESC, hne.id DESC"
+    }
+  ]
+}

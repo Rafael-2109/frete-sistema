@@ -164,6 +164,7 @@ class RequisicaoCompras(db.Model):
 
 
 class PedidoCompras(db.Model):
+    """Pedidos de compra a fornecedores sincronizados do Odoo (status_odoo: draft, sent, to approve, purchase, done, cancel)."""
     __tablename__ = 'pedido_compras'
 
     id = db.Column(db.Integer, primary_key=True)

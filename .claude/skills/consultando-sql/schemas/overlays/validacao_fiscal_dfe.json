@@ -1,0 +1,24 @@
+{
+  "table": "validacao_fiscal_dfe",
+  "version": "1.0.0",
+  "business_rules": [
+    "status (enum): 'pendente' | 'validando' | 'aprovado' | 'bloqueado' | 'primeira_compra' | 'erro'. Apenas 'aprovado' (pode_prosseguir=true) libera a NF para a Fase 2 (validacao_nf_po_dfe). 'bloqueado' = tem divergencia_fiscal pendente. 'primeira_compra' = produto/fornecedor sem historico aguardando validacao manual do fiscal",
+    "odoo_dfe_id e UNIQUE — 1 linha por DFE do Odoo. Esta tabela e a porta de entrada do pipeline de recebimento (Fase 1)",
+    "linhas_aprovadas + linhas_divergentes + linhas_primeira_compra == total_linhas. Cada linha da NF-e e classificada em uma dessas tres categorias",
+    "Validacao fiscal (Fase 1) e anterior e independente da validacao NF x PO (Fase 2). Para saber se uma NF passou por ambas as fases, cruzar validacao_fiscal_dfe.status='aprovado' e validacao_nf_po_dfe.status IN ('aprovado','consolidado')"
+  ],
+  "query_hints": [
+    {
+      "descricao": "NFs bloqueadas ou com primeira compra pendente (Fase 1)",
+      "sql": "SELECT id, odoo_dfe_id, numero_nf, razao_fornecedor, razao_empresa_compradora, status, linhas_divergentes, linhas_primeira_compra, criado_em FROM validacao_fiscal_dfe WHERE status IN ('bloqueado', 'primeira_compra') ORDER BY criado_em DESC"
+    },
+    {
+      "descricao": "Resumo do funil de recebimento: status Fase 1 vs Fase 2 por fornecedor",
+      "sql": "SELECT f.razao_fornecedor, f.status AS status_fiscal, COUNT(f.id) AS qtd_nfs FROM validacao_fiscal_dfe f GROUP BY f.razao_fornecedor, f.status ORDER BY f.razao_fornecedor, qtd_nfs DESC"
+    },
+    {
+      "descricao": "NFs aprovadas na Fase 1 (fiscal) com situacao na Fase 2 (NF x PO)",
+      "sql": "SELECT f.numero_nf, f.razao_fornecedor, f.razao_empresa_compradora, p.status AS status_po_match FROM validacao_fiscal_dfe f LEFT JOIN validacao_nf_po_dfe p ON f.odoo_dfe_id = p.odoo_dfe_id WHERE f.status = 'aprovado' ORDER BY f.validado_em DESC"
+    }
+  ]
+}

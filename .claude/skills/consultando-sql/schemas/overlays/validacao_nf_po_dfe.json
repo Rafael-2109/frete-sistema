@@ -1,0 +1,30 @@
+{
+  "table": "validacao_nf_po_dfe",
+  "version": "1.0.0",
+  "business_rules": [
+    "status (enum): 'pendente' | 'validando' | 'aprovado' | 'bloqueado' | 'consolidado' | 'finalizado_odoo' | 'erro'. Somente 'aprovado' libera consolidacao de POs (itens_match == total_itens). 'finalizado_odoo' = DFE ja tem PO vinculado no Odoo, ignorado na validacao",
+    "situacao_dfe_odoo (SEFAZ): NULL ou 'AUTORIZADA' permitem lancamento; 'CANCELADA' ou 'INUTILIZADA' bloqueiam. NAO usar para validar se o processo local esta aprovado — usar o campo 'status'",
+    "cenario_consolidacao (enum): 'exact_1po' (match exato com 1 PO), 'split_1po' (split de 1 PO), 'n_pos' (N POs consolidados). Preenchido apenas apos consolidacao",
+    "odoo_dfe_id e UNIQUE — 1 linha por DFE do Odoo. Chave de negocio para busca e JOIN com match_nf_po_item e divergencia_nf_po",
+    "po_modificada_apos_validacao=true indica que alguma PO usada nesta validacao foi alterada apos a execucao — DFE deve ser revalidado antes de prosseguir",
+    "razao_fornecedor e o nome do fornecedor (NAO usar 'fornecedor_nome'). razao_empresa_compradora e o nome da empresa compradora (NAO usar 'empresa_nome')"
+  ],
+  "query_hints": [
+    {
+      "descricao": "NFs bloqueadas (divergencias pendentes) que precisam de resolucao manual",
+      "sql": "SELECT id, odoo_dfe_id, numero_nf, razao_fornecedor, razao_empresa_compradora, total_itens, itens_match, itens_sem_depara, itens_sem_po, itens_preco_diverge, itens_qtd_diverge FROM validacao_nf_po_dfe WHERE status = 'bloqueado' ORDER BY criado_em DESC"
+    },
+    {
+      "descricao": "NFs aprovadas aguardando consolidacao de POs",
+      "sql": "SELECT id, odoo_dfe_id, numero_nf, razao_fornecedor, valor_total_nf, validado_em FROM validacao_nf_po_dfe WHERE status = 'aprovado' ORDER BY validado_em ASC"
+    },
+    {
+      "descricao": "Itens do match de uma NF especifica (JOIN com match_nf_po_item)",
+      "sql": "SELECT m.cod_produto_interno, m.nome_produto_interno, m.qtd_nf, m.preco_nf, m.qtd_po, m.preco_po, m.status_match, m.motivo_bloqueio FROM match_nf_po_item m JOIN validacao_nf_po_dfe v ON m.validacao_id = v.id WHERE v.odoo_dfe_id = :odoo_dfe_id"
+    },
+    {
+      "descricao": "NFs com situacao SEFAZ invalida (CANCELADA ou INUTILIZADA)",
+      "sql": "SELECT id, odoo_dfe_id, numero_nf, cnpj_fornecedor, razao_fornecedor, situacao_dfe_odoo FROM validacao_nf_po_dfe WHERE situacao_dfe_odoo IN ('CANCELADA', 'INUTILIZADA') ORDER BY criado_em DESC"
+    }
+  ]
+}

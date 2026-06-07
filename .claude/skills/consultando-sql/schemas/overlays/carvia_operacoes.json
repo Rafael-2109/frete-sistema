@@ -1,0 +1,30 @@
+{
+  "table": "carvia_operacoes",
+  "version": "1.0.0",
+  "business_rules": [
+    "1 operacao = 1 CTe CarVia (emitido pela propria CarVia) cobrindo N NFs do mesmo cliente/destino; ligacao com as NFs e via tabela junction carvia_operacao_nfs",
+    "status: RASCUNHO (criado sem CTe), COTADO, CONFIRMADO, FATURADO (fatura_cliente_id NOT NULL), CANCELADO — fluxo irreversivel, exceto cancelamento",
+    "tipo_entrada distingue a origem: IMPORTADO (CTe XML carregado), MANUAL_SEM_CTE, MANUAL_FRETEIRO",
+    "peso_utilizado = MAX(peso_bruto, peso_cubado) — campo CALCULADO; apos alterar pesos deve ser recalculado (R3 CLAUDE.md)",
+    "cte_tomador e a fonte unica de incoterm/responsavel (extraido do XML CTe tag <ide>/<toma>); valores: REMETENTE, EXPEDIDOR, RECEBEDOR, DESTINATARIO, TERCEIRO — nao derivar de outros campos",
+    "cte_numero segue formato CTe-### (auto-sequencial); ctrc_numero e o numero SEFAZ/SSW no formato CAR-{nCT}-{cDV}"
+  ],
+  "query_hints": [
+    {
+      "descricao": "Operacoes ativas por status e periodo",
+      "sql": "SELECT id, cte_numero, ctrc_numero, cnpj_cliente, nome_cliente, uf_destino, cidade_destino, cte_valor, status, criado_em FROM carvia_operacoes WHERE status != 'CANCELADO' AND criado_em >= '2026-01-01' ORDER BY criado_em DESC"
+    },
+    {
+      "descricao": "Operacoes aguardando faturamento (confirmadas sem fatura)",
+      "sql": "SELECT id, cte_numero, cnpj_cliente, nome_cliente, cte_valor, status FROM carvia_operacoes WHERE status = 'CONFIRMADO' AND fatura_cliente_id IS NULL"
+    },
+    {
+      "descricao": "Volume e receita por destino (UF)",
+      "sql": "SELECT uf_destino, COUNT(*) AS qtd_operacoes, SUM(cte_valor) AS total_faturado FROM carvia_operacoes WHERE status NOT IN ('CANCELADO', 'RASCUNHO') GROUP BY uf_destino ORDER BY total_faturado DESC"
+    },
+    {
+      "descricao": "Operacoes e suas NFs via junction (listar NFs de uma operacao)",
+      "sql": "SELECT o.cte_numero, n.numero_nf, n.valor_total, n.peso_bruto FROM carvia_operacoes o JOIN carvia_operacao_nfs j ON j.operacao_id = o.id JOIN carvia_nfs n ON n.id = j.nf_id WHERE o.id = 205"
+    }
+  ]
+}
