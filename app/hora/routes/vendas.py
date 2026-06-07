@@ -1202,3 +1202,116 @@ def venda_remover_item_peca(venda_id: int, item_id: int):
     except ValueError as exc:
         flash(f'Erro: {exc}', 'danger')
     return redirect(url_for('hora.vendas_detalhe', venda_id=venda_id))
+
+
+# ------------------------------------------------------------------------
+# Recibo Simples de pecas/oficina (#1b) — documento NAO-fiscal
+# ------------------------------------------------------------------------
+
+def _recibo_com_acesso(recibo_id: int):
+    """Retorna (recibo, venda) se o usuario tem acesso a loja da venda; senao
+    (None, None). get_or_404 aborta se o recibo nao existe."""
+    from app.hora.models import HoraRecibo
+    recibo = HoraRecibo.query.get_or_404(recibo_id)
+    venda = HoraVenda.query.get(recibo.venda_id)
+    if venda and venda.loja_id and not usuario_tem_acesso_a_loja(venda.loja_id):
+        return None, None
+    return recibo, venda
+
+
+@hora_bp.route('/vendas/<int:venda_id>/recibo/gerar', methods=['POST'])
+@require_hora_perm('vendas', 'editar')
+def venda_recibo_gerar(venda_id: int):
+    """Gera Recibo Simples (PDF nao-fiscal) das pecas da venda."""
+    from app.hora.services import recibo_service
+    venda = HoraVenda.query.get_or_404(venda_id)
+    if venda.loja_id and not usuario_tem_acesso_a_loja(venda.loja_id):
+        flash('Acesso negado.', 'danger')
+        return redirect(url_for('hora.vendas_lista'))
+    try:
+        recibo = recibo_service.gerar_recibo(venda_id, usuario=_operador_atual())
+        flash(f'Recibo {recibo.numero_display} gerado.', 'success')
+    except recibo_service.ReciboError as exc:
+        flash(str(exc), 'danger')
+    except Exception as exc:  # noqa: BLE001
+        flash(f'Erro ao gerar recibo: {exc}', 'danger')
+    return redirect(url_for('hora.vendas_detalhe', venda_id=venda_id))
+
+
+@hora_bp.route('/recibos/<int:recibo_id>/pdf')
+@require_hora_perm('vendas', 'ver')
+def recibo_pdf(recibo_id: int):
+    """Baixa/visualiza o PDF do recibo (do S3; fallback re-render)."""
+    from app.hora.services import recibo_service
+    recibo, _venda = _recibo_com_acesso(recibo_id)
+    if recibo is None:
+        flash('Acesso negado.', 'danger')
+        return redirect(url_for('hora.vendas_lista'))
+    try:
+        pdf = recibo_service.baixar_pdf_bytes(recibo_id)
+    except recibo_service.ReciboError as exc:
+        flash(str(exc), 'danger')
+        return redirect(url_for('hora.vendas_detalhe', venda_id=recibo.venda_id))
+    return Response(
+        pdf, mimetype='application/pdf',
+        headers={'Content-Disposition': f'inline; filename="{recibo.numero_display}.pdf"'},
+    )
+
+
+@hora_bp.route('/recibos/<int:recibo_id>/enviar-email', methods=['POST'])
+@require_hora_perm('vendas', 'editar')
+def recibo_enviar_email(recibo_id: int):
+    from app.hora.services import recibo_service
+    recibo, _venda = _recibo_com_acesso(recibo_id)
+    if recibo is None:
+        flash('Acesso negado.', 'danger')
+        return redirect(url_for('hora.vendas_lista'))
+    destinatario = (request.form.get('email') or '').strip() or None
+    try:
+        res = recibo_service.enviar_recibo_email(
+            recibo_id, usuario=_operador_atual(), destinatario_override=destinatario,
+        )
+        flash(f'Recibo enviado por e-mail para {res["destinatario"]}.', 'success')
+    except recibo_service.ReciboError as exc:
+        flash(str(exc), 'danger')
+    except Exception as exc:  # noqa: BLE001
+        flash(f'Erro ao enviar recibo por e-mail: {exc}', 'danger')
+    return redirect(url_for('hora.vendas_detalhe', venda_id=recibo.venda_id))
+
+
+@hora_bp.route('/recibos/<int:recibo_id>/enviar-whatsapp', methods=['POST'])
+@require_hora_perm('vendas', 'editar')
+def recibo_enviar_whatsapp(recibo_id: int):
+    from app.hora.services import recibo_service
+    recibo, _venda = _recibo_com_acesso(recibo_id)
+    if recibo is None:
+        flash('Acesso negado.', 'danger')
+        return redirect(url_for('hora.vendas_lista'))
+    telefone = (request.form.get('telefone') or '').strip() or None
+    try:
+        res = recibo_service.enviar_recibo_whatsapp(
+            recibo_id, usuario=_operador_atual(), telefone_override=telefone,
+        )
+        flash(f'Recibo enviado por WhatsApp para {res["telefone"]}.', 'success')
+    except recibo_service.ReciboError as exc:
+        flash(str(exc), 'danger')
+    except Exception as exc:  # noqa: BLE001
+        flash(f'Erro ao enviar recibo por WhatsApp: {exc}', 'danger')
+    return redirect(url_for('hora.vendas_detalhe', venda_id=recibo.venda_id))
+
+
+@hora_bp.route('/recibos/<int:recibo_id>/cancelar', methods=['POST'])
+@require_hora_perm('vendas', 'apagar')
+def recibo_cancelar(recibo_id: int):
+    from app.hora.services import recibo_service
+    recibo, _venda = _recibo_com_acesso(recibo_id)
+    if recibo is None:
+        flash('Acesso negado.', 'danger')
+        return redirect(url_for('hora.vendas_lista'))
+    motivo = (request.form.get('motivo') or '').strip() or None
+    try:
+        recibo_service.cancelar_recibo(recibo_id, usuario=_operador_atual(), motivo=motivo)
+        flash(f'Recibo {recibo.numero_display} cancelado.', 'success')
+    except recibo_service.ReciboError as exc:
+        flash(str(exc), 'danger')
+    return redirect(url_for('hora.vendas_detalhe', venda_id=recibo.venda_id))

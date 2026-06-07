@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="utf-8">
+<style>
+  @page { size: A4; margin: 1.5cm; }
+  body { font-family: Arial, Helvetica, sans-serif; color: #222; font-size: 12px; }
+  .cabecalho { display: flex; justify-content: space-between; border-bottom: 2px solid #333; padding-bottom: 8px; margin-bottom: 14px; }
+  .titulo { font-size: 20px; font-weight: bold; }
+  .num { font-size: 14px; color: #555; }
+  .loja { font-size: 13px; font-weight: bold; }
+  .bloco { margin-bottom: 12px; }
+  .label { color: #777; font-size: 11px; }
+  table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+  th, td { border: 1px solid #ccc; padding: 6px 8px; text-align: left; }
+  th { background: #f2f2f2; }
+  td.num, th.num { text-align: right; }
+  .total { margin-top: 12px; text-align: right; font-size: 14px; font-weight: bold; }
+  .rodape { margin-top: 28px; color: #888; font-size: 10px; border-top: 1px solid #ddd; padding-top: 8px; }
+  .cancelado { color: #b02a37; font-weight: bold; border: 2px solid #b02a37; padding: 4px 8px; display: inline-block; }
+</style>
+</head>
+<body>
+  <div class="cabecalho">
+    <div>
+      <div class="titulo">RECIBO</div>
+      <div class="num">{{ recibo.numero_display }}</div>
+    </div>
+    <div style="text-align:right;">
+      <div class="loja">{{ venda.loja.rotulo_display if venda.loja else 'Motochefe SP' }}</div>
+      <div class="label">Emitido em {{ recibo.emitido_em.strftime('%d/%m/%Y %H:%M') if recibo.emitido_em else '—' }}</div>
+    </div>
+  </div>
+
+  {% if recibo.status == 'CANCELADO' %}
+    <div class="bloco"><span class="cancelado">RECIBO CANCELADO</span></div>
+  {% endif %}
+
+  <div class="bloco">
+    <span class="label">Cliente:</span> <strong>{{ venda.nome_cliente or '—' }}</strong>
+    {% if venda.cpf_cliente %} &nbsp; <span class="label">CPF/CNPJ:</span> {{ venda.cpf_cliente }}{% endif %}
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Item (peça/serviço)</th>
+        <th class="num">Qtd</th>
+        <th class="num">Valor unit.</th>
+        <th class="num">Valor</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for ip in itens_peca %}
+      <tr>
+        <td>{{ ip.peca.descricao if ip.peca else '—' }}{% if ip.peca and ip.peca.codigo_interno %} <span class="label">({{ ip.peca.codigo_interno }})</span>{% endif %}</td>
+        <td class="num">{{ ip.qtd|numero_br(0) if ip.qtd == ip.qtd|round(0) else ip.qtd|numero_br }}</td>
+        <td class="num">{{ ip.preco_unitario_referencia|valor_br }}</td>
+        <td class="num">{{ ip.preco_final|valor_br }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <div class="total">Total: {{ recibo.valor_total|valor_br }}</div>
+
+  <div class="rodape">
+    Documento <strong>NÃO-FISCAL</strong> — recibo simples de peças/serviços. Não substitui a Nota Fiscal.
+  </div>
+</body>
+</html>

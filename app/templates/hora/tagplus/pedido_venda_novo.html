@@ -651,6 +651,71 @@
   {% endif %}
 </div>
 
+{# Recibo Simples de pecas/oficina (#1b) — documento NAO-fiscal; coexiste com NFe #}
+{% if venda.itens_peca %}
+<div class="card mb-3" id="secao-recibos">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <strong><i class="fas fa-receipt"></i> Recibo Simples (peças) — não-fiscal</strong>
+    {% if pode_editar %}
+    <form method="post" action="{{ url_for('hora.venda_recibo_gerar', venda_id=venda.id) }}" class="d-inline"
+          onsubmit="return confirm('Gerar um novo Recibo Simples das peças desta venda?');">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button class="btn btn-sm btn-primary"><i class="fas fa-plus"></i> Gerar Recibo</button>
+    </form>
+    {% endif %}
+  </div>
+  <div class="card-body">
+    {% if venda.recibos %}
+      <div class="table-responsive">
+        <table class="table table-sm align-middle mb-0">
+          <thead><tr><th>Recibo</th><th>Valor</th><th>Status</th><th>Emitido</th><th class="text-end">Ações</th></tr></thead>
+          <tbody>
+            {% for r in venda.recibos|sort(attribute='numero', reverse=true) %}
+            <tr>
+              <td><strong>{{ r.numero_display }}</strong></td>
+              <td>{{ r.valor_total|valor_br }}</td>
+              <td>
+                {% if r.status == 'CANCELADO' %}<span class="badge bg-danger">Cancelado</span>
+                {% else %}<span class="badge bg-success">Emitido</span>{% endif %}
+              </td>
+              <td><small>{{ r.emitido_em.strftime('%d/%m/%Y %H:%M') if r.emitido_em else '—' }}</small></td>
+              <td class="text-end">
+                <a href="{{ url_for('hora.recibo_pdf', recibo_id=r.id) }}" target="_blank"
+                   class="btn btn-sm btn-outline-secondary" title="Baixar/visualizar PDF"><i class="fas fa-file-pdf"></i></a>
+                {% if r.status != 'CANCELADO' and pode_editar %}
+                  <form method="post" action="{{ url_for('hora.recibo_enviar_email', recibo_id=r.id) }}" class="d-inline"
+                        onsubmit="return confirm('Enviar o recibo por e-mail para {{ venda.email_cliente or '(sem e-mail)' }}?');">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button class="btn btn-sm btn-outline-success" title="Enviar por e-mail"
+                            {% if not venda.email_cliente %}disabled{% endif %}><i class="fas fa-envelope"></i></button>
+                  </form>
+                  <form method="post" action="{{ url_for('hora.recibo_enviar_whatsapp', recibo_id=r.id) }}" class="d-inline"
+                        onsubmit="return confirm('Enviar o recibo por WhatsApp para {{ venda.telefone_cliente or '(sem telefone)' }}?');">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button class="btn btn-sm btn-outline-success" title="Enviar por WhatsApp"
+                            {% if not venda.telefone_cliente %}disabled{% endif %}><i class="fab fa-whatsapp"></i></button>
+                  </form>
+                  {% if current_user.tem_perm_hora('vendas', 'apagar') %}
+                  <form method="post" action="{{ url_for('hora.recibo_cancelar', recibo_id=r.id) }}" class="d-inline"
+                        onsubmit="return confirm('Cancelar (anular) este recibo?');">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button class="btn btn-sm btn-outline-danger" title="Cancelar recibo"><i class="fas fa-ban"></i></button>
+                  </form>
+                  {% endif %}
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <small class="text-muted">Nenhum recibo gerado. Use "Gerar Recibo" para criar o comprovante não-fiscal das peças.</small>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
+
 {# Historico de auditoria #}
 {% if venda.auditoria %}
 <details class="mb-3">

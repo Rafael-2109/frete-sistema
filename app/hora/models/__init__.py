@@ -99,6 +99,12 @@ from app.hora.models.peca import (
     PECA_DIVERGENCIA_AVARIA,
     PECA_DIVERGENCIA_VALIDAS,
 )
+from app.hora.models.recibo import (
+    HoraRecibo,
+    RECIBO_STATUS_EMITIDO,
+    RECIBO_STATUS_CANCELADO,
+    RECIBO_STATUS_VALIDOS,
+)
 from app.hora.models.permissao import (
     HoraUserPermissao,
     MODULOS_HORA,
@@ -244,6 +250,10 @@ __all__ = [
     'PECA_DIVERGENCIA_SOBRA',
     'PECA_DIVERGENCIA_AVARIA',
     'PECA_DIVERGENCIA_VALIDAS',
+    'HoraRecibo',
+    'RECIBO_STATUS_EMITIDO',
+    'RECIBO_STATUS_CANCELADO',
+    'RECIBO_STATUS_VALIDOS',
     'HoraUserPermissao',
     'MODULOS_HORA',
     'ACOES_HORA',
