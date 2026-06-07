@@ -136,12 +136,12 @@ hints para auto-correcao) ou, se for usar Haiku, com TESTE (revalidacao determin
 
 ## Decomposicao S0-S3
 
-| # | Subsistema | Resolve | Depende de | Sub-plano |
-|---|---|---|---|---|
-| S0 | Gerador idempotente | N4 (poluicao git) | — | `docs/superpowers/plans/2026-06-07-text-to-sql-S0-gerador-idempotente.md` |
-| S1 | Progressive disclosure | N1, N2, F3(parcial) | S0 | `docs/superpowers/plans/2026-06-07-text-to-sql-S1-progressive-disclosure.md` |
-| S2 | Qualidade de schema | N3, F2(causa de fundo) | S0 | `docs/superpowers/plans/2026-06-07-text-to-sql-S2-qualidade-schema.md` |
-| S3 | Nucleo de geracao | F1-F7, separar permissao | S1 | `docs/superpowers/plans/2026-06-07-text-to-sql-S3-nucleo-geracao.md` |
+| # | Subsistema | Resolve | Depende de | Status | Sub-plano |
+|---|---|---|---|---|---|
+| S0 | Gerador idempotente | N4 (poluicao git) | — | ✅ PROD `2d92fee57` (+ S0b auto-descoberta) | `docs/superpowers/plans/2026-06-07-text-to-sql-S0-gerador-idempotente.md` |
+| S1 | Progressive disclosure | N1, N2, F3(parcial) | S0 ✅ | ⬜ **a fazer (proxima sessao)** | `docs/superpowers/plans/2026-06-07-text-to-sql-S1-progressive-disclosure.md` |
+| S2 | Qualidade de schema | N3, F2(causa de fundo) | S0 ✅ | ✅ PROD `dc1c8573e` | `docs/superpowers/plans/2026-06-07-text-to-sql-S2-qualidade-schema.md` |
+| S3 | Nucleo de geracao | F1-F7, separar permissao | S1 | ⬜ a fazer (apos S1) | `docs/superpowers/plans/2026-06-07-text-to-sql-S3-nucleo-geracao.md` |
 
 Dependencias: S0 destrava S1 e S2 (diffs limpos). S1 destrava S3 (Opus precisa do mapa
 para ser autor confiavel). S2 corre em paralelo desde S0 e alimenta S1/S3 (melhores
@@ -193,14 +193,16 @@ Gate binario e verificavel. Uma sessao so declara o subsistema COMPLETO quando T
 itens do seu gate passam com EVIDENCIA (comando/teste), nunca por afirmacao. O autor
 valida o gate antes de fechar.
 
-**Gate S0 — gerador idempotente**
-- [ ] Passo 0 (causa raiz da poluicao) reproduzido e registrado no rastreamento.
-- [ ] Rodar `generate_schemas.py` 2x sem mudar modelo → `git status --porcelain` dos
-      schemas VAZIO na 2a execucao.
-- [ ] Mudar 1 descricao de 1 modelo → regenerar → mudam SO os arquivos afetados (nao 303).
-- [ ] `catalog.json` e `relationships.json` ordenados por nome (estaveis entre execucoes).
-- [ ] Orfao apagado SO com import 100% completo — teste cobre import parcial = NAO apaga.
-- [ ] pytest de idempotencia verde.
+**Gate S0 — gerador idempotente** ✅ (S0 + S0b, PROD `2d92fee57`)
+- [x] Passo 0 (causa raiz) reproduzido: ordem de iteracao de `table.indexes` (`set`) → 163/304
+      tables mudavam entre execucoes (registrado no rastreamento).
+- [x] Rodar `generate_schemas.py` 2x sem mudar modelo → `--check` 0 drift (327 schemas, 0 escritos).
+- [x] Mudar 1 descricao de 1 modelo → regenerar → mudam SO os afetados (ex.: `pedido_compras`
+      + `catalog` na integracao S2, 2 escritos).
+- [x] `catalog.json` e `relationships.json` ordenados por nome (estaveis entre execucoes).
+- [x] Orfao apagado SO com import 100% completo + allow-list `ORFAOS_VIVOS_PRESERVAR` (S0b);
+      teste cobre import parcial = NAO apaga.
+- [x] pytest de idempotencia verde (27: 18 S0 + 9 S0b).
 
 **Gate S1 — progressive disclosure**
 - [ ] `buscar_tabelas(intencao)` retorna a tabela esperada no top-N para o golden set

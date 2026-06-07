@@ -173,3 +173,56 @@ o resultado das duas.
 - Registrar a tool no servidor MCP e na descoberta de tools do agente.
 - Sem DDL salvo se a indexacao de embeddings exigir tabela/coluna nova → entao migration
   dupla (Python + SQL) conforme regra do projeto.
+
+## Prompt de arranque da sessao (copiar na nova sessao)
+
+> Estado em 2026-06-07: **S0+S0b e S2 ja estao em PROD** (`dc1c8573e`). S1 e a proxima
+> sessao; S3 vem depois de S1. Cole o bloco abaixo numa nova sessao do Claude Code (dev).
+
+```text
+Vou executar o subsistema S1 — Progressive Disclosure do pipeline text-to-sql do Agente Web.
+
+LEIA ANTES (nesta ordem):
+1. docs/superpowers/specs/2026-06-07-text-to-sql-arquitetura-MASTER-design.md
+   (MASTER: achados, tese, 7 invariantes, gates, rastreamento append-only).
+2. docs/superpowers/plans/2026-06-07-text-to-sql-S1-progressive-disclosure.md
+   (o plano que vou executar — as 4 decisoes ja estao FECHADAS).
+
+JA ESTA EM PROD (NAO refazer):
+- S0+S0b (2d92fee57): generate_schemas.py idempotente (--check, write-if-changed, ordenacao
+  canonica) + auto-descoberta de modulos (_discover_model_modules) + allow-list
+  ORFAOS_VIVOS_PRESERVAR + fix getdoc. S1 ASSUME isso pronto.
+- S2 (dc1c8573e): overlay RUNTIME de business_rules/query_hints no SchemaProvider
+  (_merge_overlay_into_schema + _enrich_schema) + 46 overlays + descricao na fonte.
+  S1 CONSOME essas descricoes (melhoram o recall de buscar_tabelas).
+
+OBJETIVO S1: dar ao Opus descoberta em camadas (intencao -> buscar_tabelas -> consultar_schema
+-> SQL) para ele parar de adivinhar nome de tabela. Decisoes JA fechadas no plano: (1) busca
+semantica via embeddings com fallback textual + FRESHNESS (reindexar no mesmo gatilho do S0) +
+golden set de validacao; (2) key_fields = conjunto MINIMO p/ escolher a tabela (chaves de
+negocio + 1-3 filtros, teto ~5, sem id tecnico); (3) dominio derivado do app de origem do
+modelo (zero curadoria); (4) buscar_tabelas = tool propria. Refine so o design fino.
+
+COMO TRABALHAR (protocolo do MASTER):
+1. Worktree isolada de origin/main:
+   git worktree add .claude/worktrees/text-to-sql-S1 -b worktree-text-to-sql-S1 origin/main
+2. TDD com pytest DETERMINISTICO (invariante 6: SEM evals LLM caros; golden set = teste pytest).
+3. Preserve as 7 invariantes — em especial: rode generate_schemas.py --check apos mexer em
+   key_fields/dominio (idempotencia NAO pode regredir); tabela bloqueada por user_id NUNCA
+   pode vazar em buscar_tabelas (mesma matriz de permissao do executor).
+4. Feche o Gate S1 do MASTER com EVIDENCIA (comando/teste), nao por afirmacao.
+5. Registre a linha no rastreamento append-only do MASTER e PARE antes do push
+   (push = deploy PROD; aguardar OK do usuario).
+
+ARQUIVOS-ALVO: app/agente/tools/schema_mcp_tool.py (nova tool buscar_tabelas);
+generate_schemas.py (key_fields por relevancia + dominio); catalog.json (regenerado);
+app/agente/prompts/system_prompt.md (orientar o fluxo); registro de tools no MCP.
+
+GOTCHAS DE AMBIENTE:
+- Use o Python do .venv da raiz (/home/rafaelnascimento/projetos/frete_sistema/.venv/bin/python)
+  para pytest e gerador; a worktree nao tem .env proprio (testes determinist. nao precisam DB).
+- Hook pre-commit UI-lint chama `python` no PATH -> ative o .venv antes do commit
+  (o S1 nao toca UI; deve passar com 0 violacoes).
+- Se a indexacao de embeddings exigir tabela/coluna nova -> migration DUPLA (Python + SQL
+  idempotente). NUNCA use [skip render].
+```
