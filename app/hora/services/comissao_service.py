@@ -18,6 +18,7 @@ from typing import List, Optional
 from app import db
 from app.hora.models import (
     HoraComissaoConfig, HoraComissaoFaixaDesconto, HoraModelo, HoraPeca,
+    HoraVenda, VENDA_STATUS_FATURADO,
 )
 from app.utils.timezone import agora_utc_naive
 
@@ -113,6 +114,60 @@ def set_teto_modelo(modelo_id: int, desconto_maximo) -> HoraModelo:
         modelo.desconto_maximo = _to_dec(desconto_maximo)
     db.session.commit()
     return modelo
+
+
+def calcular_comissao_venda(venda) -> dict:
+    """Calcula a comissao de uma venda (#28, Fatia 3).
+
+    - Motos: por item, comissao_base_moto - reducao da faixa do desconto do item
+      (clamp >= 0). Soma de todos os itens-moto.
+    - Pecas: soma de peca.valor_comissao * qtd dos itens_peca.
+
+    Retorna {comissao_motos, comissao_pecas, total}. Brindes nao geram comissao.
+    """
+    base = Decimal(str(get_config().comissao_base_moto or 0))
+    comissao_motos = ZERO
+    for item in (venda.itens or []):
+        desconto = Decimal(str(item.desconto_aplicado or 0))
+        c = base - reducao_comissao_para_desconto(desconto)
+        comissao_motos += c if c > ZERO else ZERO
+    comissao_pecas = ZERO
+    for ip in (getattr(venda, 'itens_peca', None) or []):
+        peca = getattr(ip, 'peca', None)
+        if peca:
+            comissao_pecas += (
+                Decimal(str(peca.valor_comissao or 0)) * Decimal(str(ip.qtd or 0))
+            )
+    return {
+        'comissao_motos': comissao_motos,
+        'comissao_pecas': comissao_pecas,
+        'total': comissao_motos + comissao_pecas,
+    }
+
+
+def relatorio_comissao(data_inicio=None, data_fim=None) -> List[dict]:
+    """Relatorio de comissao por vendedor de vendas FATURADAS no periodo.
+
+    `data_inicio`/`data_fim` sao `date` (inclusivos). Comissao conta quando a
+    venda esta FATURADA (decisao do dono). Agrupa por HoraVenda.vendedor.
+    Retorna lista de dicts {vendedor, qtd_vendas, total} ordenada por total desc.
+    """
+    from datetime import datetime, time, timedelta
+    q = HoraVenda.query.filter(HoraVenda.status == VENDA_STATUS_FATURADO)
+    if data_inicio:
+        q = q.filter(HoraVenda.faturado_em >= datetime.combine(data_inicio, time.min))
+    if data_fim:
+        # inclusivo: < (data_fim + 1 dia)
+        q = q.filter(HoraVenda.faturado_em < datetime.combine(data_fim + timedelta(days=1), time.min))
+
+    por_vendedor: dict = {}
+    for v in q.all():
+        c = calcular_comissao_venda(v)
+        vend = (v.vendedor or '(sem vendedor)')
+        agg = por_vendedor.setdefault(vend, {'vendedor': vend, 'qtd_vendas': 0, 'total': ZERO})
+        agg['qtd_vendas'] += 1
+        agg['total'] += c['total']
+    return sorted(por_vendedor.values(), key=lambda x: x['total'], reverse=True)
 
 
 def reducao_comissao_para_desconto(desconto_rs) -> Decimal:

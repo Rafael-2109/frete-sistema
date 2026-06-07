@@ -90,6 +90,9 @@
           <li><a id="menu-comissao-aprovacoes" class="dropdown-item {% if request.endpoint == 'hora.comissao_aprovacoes' %}active{% endif %}" href="{{ url_for('hora.comissao_aprovacoes') }}">
             <i class="fas fa-stamp fa-fw"></i> Aprovações de desconto
           </a></li>
+          <li><a id="menu-comissao-relatorio" class="dropdown-item {% if request.endpoint == 'hora.comissao_relatorio' %}active{% endif %}" href="{{ url_for('hora.comissao_relatorio') }}">
+            <i class="fas fa-chart-line fa-fw"></i> Relatório de comissão
+          </a></li>
         {% endif %}
       </ul>
     </div>

@@ -1,0 +1,42 @@
+{% extends "hora/base.html" %}
+
+{% block hora_content %}
+<h2 class="mb-3"><i class="fas fa-chart-line"></i> Relatório de comissão</h2>
+<p class="text-muted">Comissão por vendedor de vendas <strong>faturadas</strong> no período. Comissão = base por moto − redução por faixa de desconto + comissão das peças.</p>
+
+<form method="get" action="{{ url_for('hora.comissao_relatorio') }}" class="row g-2 align-items-end mb-3">
+  <div class="col-auto">
+    <label class="form-label small mb-0">De</label>
+    <input type="date" name="data_inicio" class="form-control form-control-sm" value="{{ data_inicio }}">
+  </div>
+  <div class="col-auto">
+    <label class="form-label small mb-0">Até</label>
+    <input type="date" name="data_fim" class="form-control form-control-sm" value="{{ data_fim }}">
+  </div>
+  <div class="col-auto"><button class="btn btn-sm btn-primary"><i class="fas fa-filter"></i> Filtrar</button></div>
+</form>
+
+<div class="card">
+  <div class="card-body">
+    <table class="table table-sm align-middle">
+      <thead><tr><th>Vendedor</th><th class="text-end">Vendas faturadas</th><th class="text-end">Comissão</th></tr></thead>
+      <tbody>
+        {% for l in linhas %}
+        <tr>
+          <td>{{ l.vendedor }}</td>
+          <td class="text-end">{{ l.qtd_vendas }}</td>
+          <td class="text-end">{{ l.total|valor_br }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="3" class="text-muted">Nenhuma venda faturada no período.</td></tr>
+        {% endfor %}
+      </tbody>
+      {% if linhas %}
+      <tfoot>
+        <tr class="fw-bold"><td>Total</td><td class="text-end">{{ linhas|sum(attribute='qtd_vendas') }}</td><td class="text-end">{{ total_geral|valor_br }}</td></tr>
+      </tfoot>
+      {% endif %}
+    </table>
+  </div>
+</div>
+{% endblock %}

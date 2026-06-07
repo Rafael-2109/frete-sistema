@@ -138,3 +138,29 @@ def comissao_rejeitar_desconto(aprovacao_id: int):
     except ValueError as exc:
         flash(f'Erro: {exc}', 'danger')
     return redirect(url_for('hora.comissao_aprovacoes'))
+
+
+# ------------------------------------------------------------------------
+# Relatorio de comissao por vendedor (#28, Fatia 3) — vendas FATURADAS
+# ------------------------------------------------------------------------
+
+@hora_bp.route('/comissao/relatorio')
+@require_hora_perm('comissao', 'ver')
+def comissao_relatorio():
+    from datetime import date
+    from decimal import Decimal
+
+    def _parse(s):
+        try:
+            return date.fromisoformat(s) if s else None
+        except ValueError:
+            return None
+
+    di_raw = (request.args.get('data_inicio') or '').strip()
+    df_raw = (request.args.get('data_fim') or '').strip()
+    linhas = comissao_service.relatorio_comissao(_parse(di_raw), _parse(df_raw))
+    total_geral = sum((l['total'] for l in linhas), Decimal('0'))
+    return render_template(
+        'hora/comissao_relatorio.html',
+        linhas=linhas, data_inicio=di_raw, data_fim=df_raw, total_geral=total_geral,
+    )
