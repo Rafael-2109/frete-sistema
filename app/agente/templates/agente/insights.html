@@ -1777,20 +1777,31 @@ function renderRoutingTab(d) {
     hs.style.color = score >= 70 ? 'var(--semantic-success)' : score >= 40 ? 'var(--semantic-warning)' : 'var(--semantic-danger)';
   }
 
-  // Instrumentação
+  // Instrumentação (indicadores que CONTAM no health_score)
   const instDiv = document.getElementById('routingInstrumentacao');
   if (instDiv && d.instrumentacao) {
     const labels = {
       correction_count_ativo: 'correction_count',
-      resolves_to_ativo: 'resolves_to (KG)',
       effective_count_ativo: 'effective_count',
       usage_count_ativo: 'usage_count',
     };
-    instDiv.innerHTML = Object.entries(d.instrumentacao).map(([k, v]) => {
+    let html = Object.entries(d.instrumentacao).map(([k, v]) => {
       const icon = v ? '<i class="fas fa-check-circle" style="color:var(--semantic-success);"></i>' :
                        '<i class="fas fa-times-circle" style="color:var(--semantic-danger);"></i>';
       return `${icon} ${labels[k] || k}: <strong>${v ? 'Ativo' : 'Morto'}</strong><br>`;
     }).join('');
+    // Sinais experimentais — NÃO contam no score (ex.: resolves_to do KG, cujo produtor
+    // quase nunca dispara). Mostrado como "não instrumentado" em vez do alarme falso "Morto".
+    const exp = (d.instrumentacao_experimental && d.instrumentacao_experimental.resolves_to) || null;
+    if (exp) {
+      const ativo = exp.status === 'ativo';
+      const icon = ativo
+        ? '<i class="fas fa-check-circle" style="color:var(--semantic-success);"></i>'
+        : '<i class="fas fa-flask" style="color:var(--text-muted);"></i>';
+      const rotulo = ativo ? 'Ativo' : 'não instrumentado';
+      html += `${icon} resolves_to (KG) <span style="color:var(--text-muted); font-size:0.8em;">[experimental — não conta no score]</span>: <strong>${rotulo}</strong><br>`;
+    }
+    instDiv.innerHTML = html;
   }
 
   // Skills table

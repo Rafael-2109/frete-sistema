@@ -45,6 +45,29 @@ _DECISION_REJECTED = 'rejected'
 # propose_directive_from_plan
 # ---------------------------------------------------------------------------
 
+# Saudacoes/cortesia — detectam prompt trivial que NAO descreve uma tarefa.
+_SAUDACOES_CORTESIA = frozenset({
+    'bom', 'dia', 'boa', 'tarde', 'noite', 'ola', 'oi', 'oie', 'ei', 'opa',
+    'hello', 'hi', 'hey', 'obrigado', 'obrigada', 'obg', 'valeu', 'vlw', 'blz',
+    'beleza', 'ok', 'okay', 'tudo', 'bem', 'td', 'por', 'favor', 'pf', 'entao',
+})
+
+
+def _meta_tarefa_trivial(meta: str) -> bool:
+    """True se a 1a msg do usuario NAO descreve uma tarefa (saudacao/cortesia/curtissima).
+
+    Evita que uma sessao trivial validada pelo judge vire diretriz-empresa
+    ('Abordagem validada pelo judge: BOM DIA') — reward-hacking embrionario
+    (ver critica/A-flywheel.md secao C1). Conservador: so barra o claramente
+    nao-acionavel (sobra < 2 palavras de conteudo apos remover saudacoes/cortesia).
+    """
+    if not meta:
+        return False
+    norm = _re.sub(r'[^a-z0-9à-ÿ\s]', ' ', meta.strip().lower())
+    conteudo = [p for p in norm.split() if p and p not in _SAUDACOES_CORTESIA]
+    return len(conteudo) < 2
+
+
 def propose_directive_from_plan(
     plan_dict: Optional[dict],
     session_id: str,
@@ -93,9 +116,14 @@ def propose_directive_from_plan(
     ]
     subjects_clean = [s.strip() for s in subjects if s.strip()]
 
-    if not subjects_clean:
-        # Steps existem mas sem subjects úteis — gera título genérico
-        subjects_clean = [f'passo-{i + 1}' for i in range(len(steps))]
+    # Endurecimento (auditoria 2026-06-06): min 2 passos com subject real. 1 passo e acao
+    # unica hiper-especifica (ex: 'Cancelar payment 33439 no Odoo'), nao fluxo transferivel.
+    if len(subjects_clean) < 2:
+        logger.debug(
+            f"[directive_promotion] propose(plan): {len(subjects_clean)} subject(s) util(eis) "
+            f"< 2 — descartado (session={session_id!r})"
+        )
+        return None
 
     # Heurística determinística para campos da candidata
     titulo = _derivar_titulo(subjects_clean)
@@ -170,6 +198,16 @@ def propose_directive_from_judge_session(
         candidata {titulo, when, prescricao, source_session_id, status='candidata'} ou None.
     """
     if not judge_steps or not isinstance(judge_steps, list):
+        return None
+
+    # Endurecimento (auditoria 2026-06-06): prompt trivial (saudacao/cortesia) NAO vira
+    # diretriz-empresa — evita 'Abordagem validada pelo judge: BOM DIA' (reward-hacking:
+    # judge premia sessao trivial, critica/A-flywheel.md C1). meta vazio segue p/ fallback.
+    if user_meta and _meta_tarefa_trivial(user_meta):
+        logger.info(
+            f"[directive_promotion] propose(judge): meta trivial descartada "
+            f"session={session_id!r} meta={user_meta!r}"
+        )
         return None
 
     scores = []

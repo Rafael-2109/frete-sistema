@@ -1899,6 +1899,16 @@ Nunca invente informações."""
         except Exception as e:
             logger.warning(f"[AGENT_CLIENT] Erro MCP sessions: {e}")
 
+        # Resolver (resolução de entidades — 1 operação)
+        try:
+            from ..tools.resolver_mcp_tool import resolver_server
+            if _register_mcp("resolver", resolver_server):
+                logger.info("[AGENT_CLIENT] MCP 'resolver' registrada (1 operação)")
+        except ImportError:
+            logger.debug("[AGENT_CLIENT] MCP resolver não disponível")
+        except Exception as e:
+            logger.warning(f"[AGENT_CLIENT] Erro MCP resolver: {e}")
+
         # Render (logs e métricas — 3 operações)
         try:
             from ..tools.render_logs_tool import render_server
