@@ -61,6 +61,25 @@ FORBIDDEN_KEYWORDS = {
     'COPY', 'VACUUM', 'ANALYZE', 'CLUSTER', 'REINDEX',
 }
 
+# Keywords que continuam PROIBIDAS mesmo em ADMIN_MODE (politica 2026-06-06):
+# admin (USUARIOS_SQL_ADMIN) pode escrever DML (INSERT/UPDATE/DELETE) e SELECT,
+# mas NUNCA DDL/controle de transacao. Derivada de FORBIDDEN_KEYWORDS removendo
+# apenas os 3 verbos DML. Usada por SQLSafetyValidator.validate_admin().
+ADMIN_FORBIDDEN_KEYWORDS = FORBIDDEN_KEYWORDS - {'DELETE', 'UPDATE', 'INSERT'}
+
+
+def _is_dml_statement(sql: str) -> bool:
+    """True se o SQL e' uma escrita DML (INSERT/UPDATE/DELETE).
+
+    NAO inclui SELECT/WITH (leitura) nem DDL (DROP/ALTER/TRUNCATE/...).
+    Usado para o bypass do Evaluator Haiku em ADMIN_MODE (o admin confirma o
+    proprio SQL — o Haiku nao deve reprovar DML legitimo).
+    """
+    if not sql:
+        return False
+    head = sql.lstrip().upper()
+    return head.startswith(('INSERT', 'UPDATE', 'DELETE'))
+
 # Funcoes PostgreSQL perigosas
 FORBIDDEN_FUNCTIONS = {
     'pg_sleep', 'dblink', 'dblink_exec', 'dblink_connect',
@@ -725,6 +744,56 @@ class SQLSafetyValidator:
                 if i < len(parts) - 1 and re.search(r'\bLIMIT\s+\d+\s*$', part.strip()):
                     concerns.append(f"LIMIT sem parenteses antes de UNION na parte {i+1} — use (SELECT ... LIMIT N) UNION ALL (...)")
                     return False, concerns
+
+        return True, concerns
+
+    def validate_admin(self, sql: str) -> tuple:
+        """Validacao de seguranca para ADMIN_MODE (USUARIOS_SQL_ADMIN).
+
+        Libera escrita DML (INSERT/UPDATE/DELETE) e SELECT, mas mantem barreiras
+        DETERMINISTICAS (independentes do Evaluator Haiku):
+          - multiplos statements (defesa contra injection encadeada);
+          - DDL e controle de transacao (DROP/ALTER/TRUNCATE/CREATE/GRANT/...);
+          - SELECT INTO (criaria tabela);
+          - funcoes perigosas (pg_read_file, dblink, etc.).
+
+        Substitui o bypass cego anterior (admin -> safe sempre), que deixava DDL
+        passar porque a unica barreira era o prompt do Evaluator (nao-deterministico).
+
+        Returns:
+            (is_safe: bool, concerns: list[str])
+        """
+        concerns = []
+        sql_upper = sql.upper().strip()
+
+        if not sql_upper:
+            return False, ["SQL vazio"]
+
+        # 1. Multiplos statements (ponto-e-virgula fora de string)
+        sql_no_strings = re.sub(r"'[^']*'", "''", sql)
+        if ';' in sql_no_strings.rstrip(';'):
+            return False, ["Multiplos statements detectados (ponto-e-virgula)"]
+
+        # 2. Keywords DDL/controle proibidas mesmo em admin (DML permanece liberado)
+        tokens = set(re.findall(r'\b([A-Z_]+)\b', sql_upper))
+        forbidden_found = tokens.intersection(ADMIN_FORBIDDEN_KEYWORDS)
+        if forbidden_found:
+            return False, [
+                "Keywords proibidas mesmo em modo admin (DDL/controle de transacao): "
+                f"{', '.join(sorted(forbidden_found))}. Em modo admin sao permitidos "
+                "apenas SELECT, INSERT, UPDATE e DELETE."
+            ]
+
+        # 3. SELECT INTO (criaria tabela)
+        if re.search(r'\bSELECT\b.*\bINTO\b', sql_upper):
+            if re.search(r'\bINTO\s+\w+\b', sql_upper) and not re.search(r'\bINTO\s+(OUTFILE|DUMPFILE)\b', sql_upper):
+                return False, ["SELECT INTO detectado (criaria tabela)"]
+
+        # 4. Funcoes perigosas
+        sql_lower = sql.lower()
+        for func in FORBIDDEN_FUNCTIONS:
+            if re.search(rf'\b{func}\s*\(', sql_lower):
+                return False, [f"Funcao perigosa detectada: {func}"]
 
         return True, concerns
 
@@ -1487,21 +1556,32 @@ class SQLExecutor:
 
             result = db.session.execute(text(sql))
 
-            # Extrair nomes de colunas
-            columns = list(result.keys())
+            # DML sem RETURNING (INSERT/UPDATE/DELETE) e DDL NAO retornam linhas:
+            # o CursorResult fecha e .keys()/.fetchall() lancam ResourceClosedError
+            # ("This result object does not return rows"). Antes esse caso caia no
+            # except -> rollback, e a escrita do admin NUNCA persistia (causa raiz
+            # do "modo somente-leitura" relatado). Detectar via returns_rows.
+            if result.returns_rows:
+                # Extrair nomes de colunas
+                columns = list(result.keys())
 
-            # Converter rows para dicts
-            rows = []
-            for row in result.fetchall():
-                row_dict = {}
-                for i, col in enumerate(columns):
-                    val = row[i]
-                    if isinstance(val, Decimal):
-                        val = float(val)
-                    elif isinstance(val, (date, datetime)):
-                        val = val.isoformat()
-                    row_dict[col] = val
-                rows.append(row_dict)
+                # Converter rows para dicts
+                rows = []
+                for row in result.fetchall():
+                    row_dict = {}
+                    for i, col in enumerate(columns):
+                        val = row[i]
+                        if isinstance(val, Decimal):
+                            val = float(val)
+                        elif isinstance(val, (date, datetime)):
+                            val = val.isoformat()
+                        row_dict[col] = val
+                    rows.append(row_dict)
+            else:
+                # Escrita (DML) sem RETURNING — expor linhas afetadas ao agente.
+                affected = result.rowcount if (result.rowcount is not None and result.rowcount >= 0) else 0
+                columns = ["linhas_afetadas"]
+                rows = [{"linhas_afetadas": affected}]
 
             if read_write:
                 db.session.commit()
@@ -2098,17 +2178,30 @@ class TextToSQLPipeline:
                 except Exception as e:
                     logger.debug(f"[TEXT_TO_SQL] Sem session_context (ok): {e}")
 
+            # Bypass total do Evaluator para DML de admin (politica 2026-06-06):
+            # o admin (USUARIOS_SQL_ADMIN) confirma o proprio SQL antes de executar,
+            # entao o Haiku nao deve reprovar INSERT/UPDATE/DELETE legitimo. A barreira
+            # de DDL/multi-statement segue garantida deterministicamente na ETAPA 3
+            # (validate_admin). SELECT de admin mantem o caminho normal de validacao.
+            admin_dml_bypass = admin_mode and _is_dml_statement(sql)
+
             # Skip Haiku se determinismo aprovou (read-only nao-admin) OU SQL-first
-            # (o agente Opus ja' e' superior ao Haiku — nao degradar).
-            skip_haiku_evaluator = is_sql_first or det_result.get("skip_haiku", False)
+            # (o agente Opus ja' e' superior ao Haiku — nao degradar) OU DML de admin.
+            skip_haiku_evaluator = (
+                is_sql_first
+                or det_result.get("skip_haiku", False)
+                or admin_dml_bypass
+            )
             if skip_haiku_evaluator:
                 result["etapas"]["evaluator_skipped"] = (
-                    "sql_first" if is_sql_first else "deterministic_approved"
+                    "sql_first" if is_sql_first
+                    else "admin_dml_bypass" if admin_dml_bypass
+                    else "deterministic_approved"
                 )
                 evaluation = {
                     "approved": True,
                     "improved_sql": None,
-                    "reason": "deterministic_approved",
+                    "reason": "admin_dml_bypass" if admin_dml_bypass else "deterministic_approved",
                 }
 
             for eval_attempt in range(1, MAX_EVAL_RETRIES + 1):
@@ -2230,8 +2323,9 @@ class TextToSQLPipeline:
             # =====================================================
             # O evaluator pode não capturar o padrão "OR campo = inteiro" (defensivo do LLM).
             # Esta sanitização remove cláusulas OR redundantes com tipo incompatível.
-            # SQL-first NAO muta o SQL do agente (execucao literal).
-            if not is_sql_first:
+            # SQL-first e DML de admin NAO mutam o SQL (execucao literal — o admin
+            # confirmou exatamente este comando).
+            if not is_sql_first and not admin_dml_bypass:
                 sql = _sanitize_type_mismatches(sql)
                 result["sql"] = sql
 
@@ -2242,8 +2336,11 @@ class TextToSQLPipeline:
             # `WHERE id = 'UUID-string'` em campo bigint. Postgres aborta
             # com `InvalidTextRepresentation` ininteligivel para o usuario.
             # Capturamos ANTES de executar e retornamos aviso claro.
-            uuid_issues = _detect_uuid_in_numeric_field(
-                sql, self.schema_provider, tables_in_sql
+            # DML de admin (bypass total) pula a heuristica: o admin confirmou o
+            # comando literal — eventual erro de tipo o Postgres devolve claramente.
+            uuid_issues = (
+                [] if admin_dml_bypass
+                else _detect_uuid_in_numeric_field(sql, self.schema_provider, tables_in_sql)
             )
             if uuid_issues:
                 result["sucesso"] = False
@@ -2265,9 +2362,15 @@ class TextToSQLPipeline:
             # ETAPA 3: SAFETY — Validacao de seguranca
             # =====================================================
             if admin_mode:
-                # Admin mode: bypass completo do safety validator
-                is_safe, concerns = True, []
-                result["etapas"]["safety"] = {"safe": True, "concerns": ["ADMIN_MODE: bypass"]}
+                # Admin mode: libera DML (INSERT/UPDATE/DELETE) e SELECT, mas mantem
+                # barreira DETERMINISTICA de DDL/multi-statement/funcoes perigosas
+                # (validate_admin). Antes era bypass cego (safe sempre), deixando DDL
+                # passar quando o Evaluator Haiku — unica barreira — falhava.
+                is_safe, concerns = self.safety_validator.validate_admin(sql)
+                result["etapas"]["safety"] = {
+                    "safe": is_safe,
+                    "concerns": concerns if not is_safe else ["ADMIN_MODE: DML liberado, DDL bloqueado"],
+                }
             else:
                 # Se extra_blocked_tables fornecido, criar validator temporário
                 # com tabelas mescladas (thread-safe, não altera o singleton)
