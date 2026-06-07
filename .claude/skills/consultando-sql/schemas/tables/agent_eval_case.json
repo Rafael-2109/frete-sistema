@@ -78,16 +78,16 @@
   ],
   "indices": [
     {
-      "name": "ix_agent_eval_case_recorded_at",
+      "name": "ix_agent_eval_case_agent_name",
       "columns": [
-        "recorded_at"
+        "agent_name"
       ],
       "unique": false
     },
     {
-      "name": "ix_agent_eval_case_agent_name",
+      "name": "ix_agent_eval_case_recorded_at",
       "columns": [
-        "agent_name"
+        "recorded_at"
       ],
       "unique": false
     }

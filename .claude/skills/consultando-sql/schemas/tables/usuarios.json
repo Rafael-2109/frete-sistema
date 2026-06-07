@@ -121,6 +121,12 @@
       "type": "integer"
     },
     {
+      "name": "criterio_pedidos_hora",
+      "type": "varchar(10)",
+      "nullable": false,
+      "default": "loja"
+    },
+    {
       "name": "criado_em",
       "type": "timestamp",
       "description": "Data de criação"

@@ -103,16 +103,16 @@
       "unique": false
     },
     {
-      "name": "ix_hora_devolucao_venda_item_status_item",
+      "name": "ix_hora_devolucao_venda_item_numero_chassi",
       "columns": [
-        "status_item"
+        "numero_chassi"
       ],
       "unique": false
     },
     {
-      "name": "ix_hora_devolucao_venda_item_numero_chassi",
+      "name": "ix_hora_devolucao_venda_item_status_item",
       "columns": [
-        "numero_chassi"
+        "status_item"
       ],
       "unique": false
     }

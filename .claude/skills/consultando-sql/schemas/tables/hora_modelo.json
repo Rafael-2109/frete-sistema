@@ -36,6 +36,10 @@
       "type": "numeric(15,2)"
     },
     {
+      "name": "desconto_maximo",
+      "type": "numeric(15,2)"
+    },
+    {
       "name": "autopropelido",
       "type": "boolean",
       "nullable": false,
@@ -74,18 +78,18 @@
   ],
   "indices": [
     {
-      "name": "ix_hora_modelo_nome_modelo",
-      "columns": [
-        "nome_modelo"
-      ],
-      "unique": true
-    },
-    {
       "name": "ix_hora_modelo_merged_em_id",
       "columns": [
         "merged_em_id"
       ],
       "unique": false
+    },
+    {
+      "name": "ix_hora_modelo_nome_modelo",
+      "columns": [
+        "nome_modelo"
+      ],
+      "unique": true
     }
   ]
 }

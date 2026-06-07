@@ -79,9 +79,9 @@
   ],
   "indices": [
     {
-      "name": "ix_hora_devolucao_venda_venda_id",
+      "name": "ix_hora_devolucao_venda_loja_id",
       "columns": [
-        "venda_id"
+        "loja_id"
       ],
       "unique": false
     },
@@ -93,9 +93,9 @@
       "unique": false
     },
     {
-      "name": "ix_hora_devolucao_venda_loja_id",
+      "name": "ix_hora_devolucao_venda_venda_id",
       "columns": [
-        "loja_id"
+        "venda_id"
       ],
       "unique": false
     }

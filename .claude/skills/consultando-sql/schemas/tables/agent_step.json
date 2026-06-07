@@ -62,13 +62,6 @@
   ],
   "indices": [
     {
-      "name": "ix_agent_step_user_id",
-      "columns": [
-        "user_id"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_agent_step_created_at",
       "columns": [
         "created_at"
@@ -79,6 +72,13 @@
       "name": "ix_agent_step_session_id",
       "columns": [
         "session_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_agent_step_user_id",
+      "columns": [
+        "user_id"
       ],
       "unique": false
     }

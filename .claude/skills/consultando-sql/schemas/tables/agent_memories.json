@@ -150,17 +150,9 @@
   ],
   "indices": [
     {
-      "name": "ix_agent_memories_user_errsig",
+      "name": "ix_agent_memories_agente",
       "columns": [
-        "user_id",
-        "error_signature"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_agent_memories_user_id",
-      "columns": [
-        "user_id"
+        "agente"
       ],
       "unique": false
     },
@@ -172,9 +164,17 @@
       "unique": false
     },
     {
-      "name": "ix_agent_memories_agente",
+      "name": "ix_agent_memories_user_errsig",
       "columns": [
-        "agente"
+        "user_id",
+        "error_signature"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_agent_memories_user_id",
+      "columns": [
+        "user_id"
       ],
       "unique": false
     }

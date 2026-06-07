@@ -235,37 +235,24 @@
   ],
   "indices": [
     {
-      "name": "ix_nf_devolucao_ativo",
+      "name": "idx_nfd_cnpj_status",
       "columns": [
-        "ativo"
+        "cnpj_emitente",
+        "status"
       ],
       "unique": false
     },
     {
-      "name": "ix_nf_devolucao_e_pallet_devolucao",
+      "name": "idx_nfd_data_registro",
       "columns": [
-        "e_pallet_devolucao"
+        "data_registro"
       ],
       "unique": false
     },
     {
-      "name": "ix_nf_devolucao_cnpj_destinatario",
+      "name": "idx_nfd_nf_venda",
       "columns": [
-        "cnpj_destinatario"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_nf_devolucao_entrega_monitorada_id",
-      "columns": [
-        "entrega_monitorada_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_nf_devolucao_numero_nfd",
-      "columns": [
-        "numero_nfd"
+        "numero_nf_venda"
       ],
       "unique": false
     },
@@ -278,73 +265,9 @@
       "unique": false
     },
     {
-      "name": "ix_nf_devolucao_status",
-      "columns": [
-        "status"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_nf_devolucao_origem_registro",
-      "columns": [
-        "origem_registro"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_nfd_cnpj_status",
-      "columns": [
-        "cnpj_emitente",
-        "status"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_nf_devolucao_numero_nf_venda",
-      "columns": [
-        "numero_nf_venda"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_nfd_data_registro",
-      "columns": [
-        "data_registro"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_nf_devolucao_tipo_documento",
-      "columns": [
-        "tipo_documento"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_nfd_nf_venda",
-      "columns": [
-        "numero_nf_venda"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_nf_devolucao_odoo_dfe_id",
-      "columns": [
-        "odoo_dfe_id"
-      ],
-      "unique": true
-    },
-    {
       "name": "idx_nfd_odoo_dfe",
       "columns": [
         "odoo_dfe_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_nfd_tipo_documento",
-      "columns": [
-        "tipo_documento"
       ],
       "unique": false
     },
@@ -364,9 +287,16 @@
       "unique": false
     },
     {
-      "name": "ix_nf_devolucao_odoo_nf_venda_id",
+      "name": "idx_nfd_tipo_documento",
       "columns": [
-        "odoo_nf_venda_id"
+        "tipo_documento"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_nf_devolucao_ativo",
+      "columns": [
+        "ativo"
       ],
       "unique": false
     },
@@ -378,9 +308,9 @@
       "unique": true
     },
     {
-      "name": "ix_nf_devolucao_odoo_nota_credito_id",
+      "name": "ix_nf_devolucao_cnpj_destinatario",
       "columns": [
-        "odoo_nota_credito_id"
+        "cnpj_destinatario"
       ],
       "unique": false
     },
@@ -388,6 +318,76 @@
       "name": "ix_nf_devolucao_cnpj_emitente",
       "columns": [
         "cnpj_emitente"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_nf_devolucao_e_pallet_devolucao",
+      "columns": [
+        "e_pallet_devolucao"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_nf_devolucao_entrega_monitorada_id",
+      "columns": [
+        "entrega_monitorada_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_nf_devolucao_numero_nf_venda",
+      "columns": [
+        "numero_nf_venda"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_nf_devolucao_numero_nfd",
+      "columns": [
+        "numero_nfd"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_nf_devolucao_odoo_dfe_id",
+      "columns": [
+        "odoo_dfe_id"
+      ],
+      "unique": true
+    },
+    {
+      "name": "ix_nf_devolucao_odoo_nf_venda_id",
+      "columns": [
+        "odoo_nf_venda_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_nf_devolucao_odoo_nota_credito_id",
+      "columns": [
+        "odoo_nota_credito_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_nf_devolucao_origem_registro",
+      "columns": [
+        "origem_registro"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_nf_devolucao_status",
+      "columns": [
+        "status"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_nf_devolucao_tipo_documento",
+      "columns": [
+        "tipo_documento"
       ],
       "unique": false
     }

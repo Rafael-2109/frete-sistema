@@ -66,16 +66,16 @@
   ],
   "indices": [
     {
-      "name": "ix_agent_memory_entity_relations_target_entity_id",
+      "name": "ix_agent_memory_entity_relations_source_entity_id",
       "columns": [
-        "target_entity_id"
+        "source_entity_id"
       ],
       "unique": false
     },
     {
-      "name": "ix_agent_memory_entity_relations_source_entity_id",
+      "name": "ix_agent_memory_entity_relations_target_entity_id",
       "columns": [
-        "source_entity_id"
+        "target_entity_id"
       ],
       "unique": false
     }

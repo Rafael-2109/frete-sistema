@@ -127,16 +127,16 @@
       "unique": false
     },
     {
-      "name": "idx_pessoal_provisoes_tipo",
+      "name": "idx_pessoal_provisoes_status",
       "columns": [
-        "tipo"
+        "status"
       ],
       "unique": false
     },
     {
-      "name": "idx_pessoal_provisoes_status",
+      "name": "idx_pessoal_provisoes_tipo",
       "columns": [
-        "status"
+        "tipo"
       ],
       "unique": false
     }

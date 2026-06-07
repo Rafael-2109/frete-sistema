@@ -137,13 +137,6 @@
   ],
   "indices": [
     {
-      "name": "ix_assai_cce_nf_id",
-      "columns": [
-        "nf_id"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_assai_cce_chave_nfe",
       "columns": [
         "chave_nfe"
@@ -151,16 +144,23 @@
       "unique": false
     },
     {
-      "name": "ix_assai_cce_numero_nf_referenciada",
+      "name": "ix_assai_cce_divergencia_origem_id",
       "columns": [
-        "numero_nf_referenciada"
+        "divergencia_origem_id"
       ],
       "unique": false
     },
     {
-      "name": "ix_assai_cce_divergencia_origem_id",
+      "name": "ix_assai_cce_nf_id",
       "columns": [
-        "divergencia_origem_id"
+        "nf_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_assai_cce_numero_nf_referenciada",
+      "columns": [
+        "numero_nf_referenciada"
       ],
       "unique": false
     },

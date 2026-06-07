@@ -119,16 +119,16 @@
   ],
   "indices": [
     {
-      "name": "ix_saldo_standby_tipo_standby",
+      "name": "ix_saldo_standby_cnpj_cliente",
       "columns": [
-        "tipo_standby"
+        "cnpj_cliente"
       ],
       "unique": false
     },
     {
-      "name": "ix_saldo_standby_cnpj_cliente",
+      "name": "ix_saldo_standby_cod_produto",
       "columns": [
-        "cnpj_cliente"
+        "cod_produto"
       ],
       "unique": false
     },
@@ -154,9 +154,9 @@
       "unique": false
     },
     {
-      "name": "ix_saldo_standby_cod_produto",
+      "name": "ix_saldo_standby_tipo_standby",
       "columns": [
-        "cod_produto"
+        "tipo_standby"
       ],
       "unique": false
     }

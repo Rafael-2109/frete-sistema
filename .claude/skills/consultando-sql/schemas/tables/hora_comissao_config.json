@@ -1,0 +1,27 @@
+{
+  "name": "hora_comissao_config",
+  "description": "Tabela hora_comissao_config",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "comissao_base_moto",
+      "type": "numeric(15,2)",
+      "nullable": false,
+      "default": 0
+    },
+    {
+      "name": "atualizado_em",
+      "type": "timestamp",
+      "description": "Última atualização",
+      "nullable": false
+    },
+    {
+      "name": "atualizado_por",
+      "type": "varchar(100)"
+    }
+  ]
+}

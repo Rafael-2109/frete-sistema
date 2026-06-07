@@ -66,17 +66,17 @@
   ],
   "indices": [
     {
-      "name": "ix_hora_user_permissao_user_id",
-      "columns": [
-        "user_id"
-      ],
-      "unique": false
-    },
-    {
       "name": "idx_hora_user_perm_lookup",
       "columns": [
         "user_id",
         "modulo"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_hora_user_permissao_user_id",
+      "columns": [
+        "user_id"
       ],
       "unique": false
     }

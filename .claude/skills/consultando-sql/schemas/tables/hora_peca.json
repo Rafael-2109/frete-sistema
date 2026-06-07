@@ -40,6 +40,12 @@
       "default": 0
     },
     {
+      "name": "valor_comissao",
+      "type": "numeric(15,2)",
+      "nullable": false,
+      "default": 0
+    },
+    {
       "name": "foto_s3_key",
       "type": "varchar(500)"
     },
@@ -64,18 +70,18 @@
   ],
   "indices": [
     {
-      "name": "ix_hora_peca_codigo_interno",
-      "columns": [
-        "codigo_interno"
-      ],
-      "unique": true
-    },
-    {
       "name": "ix_hora_peca_ativo",
       "columns": [
         "ativo"
       ],
       "unique": false
+    },
+    {
+      "name": "ix_hora_peca_codigo_interno",
+      "columns": [
+        "codigo_interno"
+      ],
+      "unique": true
     }
   ]
 }

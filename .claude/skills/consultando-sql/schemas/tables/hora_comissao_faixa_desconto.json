@@ -1,0 +1,49 @@
+{
+  "name": "hora_comissao_faixa_desconto",
+  "description": "Tabela hora_comissao_faixa_desconto",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "desconto_min",
+      "type": "numeric(15,2)",
+      "nullable": false,
+      "default": 0
+    },
+    {
+      "name": "desconto_max",
+      "type": "numeric(15,2)"
+    },
+    {
+      "name": "reducao_comissao",
+      "type": "numeric(15,2)",
+      "nullable": false,
+      "default": 0
+    },
+    {
+      "name": "ativo",
+      "type": "boolean",
+      "description": "True = registro ativo",
+      "nullable": false,
+      "default": true
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação",
+      "nullable": false
+    }
+  ],
+  "indices": [
+    {
+      "name": "ix_hora_comissao_faixa_desconto_ativo",
+      "columns": [
+        "ativo"
+      ],
+      "unique": false
+    }
+  ]
+}

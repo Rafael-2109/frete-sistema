@@ -103,7 +103,7 @@
     "vinculacao_carteira_separacao",
     "webhook_configs"
   ],
-  "total_tabelas": 291,
+  "total_tabelas": 297,
   "tabelas": [
     {
       "name": "agendamentos_entrega",
@@ -1435,6 +1435,15 @@
       ]
     },
     {
+      "name": "hora_aprovacao_desconto",
+      "description": "Tabela hora_aprovacao_desconto",
+      "key_fields": [
+        "venda_id",
+        "status",
+        "detalhe"
+      ]
+    },
+    {
       "name": "hora_avaria",
       "description": "Tabela hora_avaria",
       "key_fields": [
@@ -1450,6 +1459,23 @@
         "avaria_id",
         "foto_s3_key",
         "legenda"
+      ]
+    },
+    {
+      "name": "hora_comissao_config",
+      "description": "Tabela hora_comissao_config",
+      "key_fields": [
+        "comissao_base_moto",
+        "atualizado_por"
+      ]
+    },
+    {
+      "name": "hora_comissao_faixa_desconto",
+      "description": "Tabela hora_comissao_faixa_desconto",
+      "key_fields": [
+        "desconto_min",
+        "desconto_max",
+        "reducao_comissao"
       ]
     },
     {
@@ -1678,6 +1704,15 @@
       ]
     },
     {
+      "name": "hora_recibo",
+      "description": "Tabela hora_recibo",
+      "key_fields": [
+        "numero",
+        "venda_id",
+        "valor_total"
+      ]
+    },
+    {
       "name": "hora_tabela_preco",
       "description": "Tabela hora_tabela_preco",
       "key_fields": [
@@ -1729,6 +1764,15 @@
         "venda_id",
         "conta_id",
         "status"
+      ]
+    },
+    {
+      "name": "hora_tagplus_notificacao_whatsapp",
+      "description": "Tabela hora_tagplus_notificacao_whatsapp",
+      "key_fields": [
+        "tipo",
+        "ref_id",
+        "numero"
       ]
     },
     {
@@ -1810,6 +1854,15 @@
         "venda_id",
         "item_id",
         "usuario"
+      ]
+    },
+    {
+      "name": "hora_venda_brinde",
+      "description": "Tabela hora_venda_brinde",
+      "key_fields": [
+        "venda_id",
+        "peca_id",
+        "qtd"
       ]
     },
     {

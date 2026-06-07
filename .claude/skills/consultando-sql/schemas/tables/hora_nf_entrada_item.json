@@ -56,6 +56,13 @@
   ],
   "indices": [
     {
+      "name": "ix_hora_nf_entrada_item_desconsiderado",
+      "columns": [
+        "desconsiderado"
+      ],
+      "unique": false
+    },
+    {
       "name": "ix_hora_nf_entrada_item_nf_id",
       "columns": [
         "nf_id"
@@ -66,13 +73,6 @@
       "name": "ix_hora_nf_entrada_item_numero_chassi",
       "columns": [
         "numero_chassi"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_hora_nf_entrada_item_desconsiderado",
-      "columns": [
-        "desconsiderado"
       ],
       "unique": false
     }

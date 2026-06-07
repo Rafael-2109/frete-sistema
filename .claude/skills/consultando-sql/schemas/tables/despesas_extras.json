@@ -158,9 +158,16 @@
   ],
   "indices": [
     {
-      "name": "ix_despesas_extras_transportadora_id",
+      "name": "ix_despesas_extras_chave_cte",
       "columns": [
-        "transportadora_id"
+        "chave_cte"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_despesas_extras_despesa_cte_id",
+      "columns": [
+        "despesa_cte_id"
       ],
       "unique": false
     },
@@ -172,16 +179,16 @@
       "unique": false
     },
     {
-      "name": "ix_despesas_extras_odoo_dfe_id",
+      "name": "ix_despesas_extras_nfd_id",
       "columns": [
-        "odoo_dfe_id"
+        "nfd_id"
       ],
       "unique": false
     },
     {
-      "name": "ix_despesas_extras_chave_cte",
+      "name": "ix_despesas_extras_odoo_dfe_id",
       "columns": [
-        "chave_cte"
+        "odoo_dfe_id"
       ],
       "unique": false
     },
@@ -193,16 +200,9 @@
       "unique": false
     },
     {
-      "name": "ix_despesas_extras_nfd_id",
+      "name": "ix_despesas_extras_transportadora_id",
       "columns": [
-        "nfd_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_despesas_extras_despesa_cte_id",
-      "columns": [
-        "despesa_cte_id"
+        "transportadora_id"
       ],
       "unique": false
     }

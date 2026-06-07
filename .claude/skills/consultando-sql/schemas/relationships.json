@@ -1,6 +1,6 @@
 {
   "version": "2.0.0",
-  "total_relationships": 425,
+  "total_relationships": 428,
   "relationships": [
     {
       "from_table": "agendamentos_entrega",
@@ -28,14 +28,14 @@
     },
     {
       "from_table": "anexo_ocorrencia",
-      "from_column": "ocorrencia_devolucao_id",
-      "to_table": "ocorrencia_devolucao",
+      "from_column": "contagem_devolucao_id",
+      "to_table": "contagem_devolucao",
       "to_column": "id"
     },
     {
       "from_table": "anexo_ocorrencia",
-      "from_column": "contagem_devolucao_id",
-      "to_table": "contagem_devolucao",
+      "from_column": "ocorrencia_devolucao_id",
+      "to_table": "ocorrencia_devolucao",
       "to_column": "id"
     },
     {
@@ -52,14 +52,14 @@
     },
     {
       "from_table": "assai_carregamento",
-      "from_column": "pedido_id",
-      "to_table": "assai_pedido_venda",
+      "from_column": "loja_id",
+      "to_table": "assai_loja",
       "to_column": "id"
     },
     {
       "from_table": "assai_carregamento",
-      "from_column": "loja_id",
-      "to_table": "assai_loja",
+      "from_column": "pedido_id",
+      "to_table": "assai_pedido_venda",
       "to_column": "id"
     },
     {
@@ -82,14 +82,14 @@
     },
     {
       "from_table": "assai_cce",
-      "from_column": "nf_id",
-      "to_table": "assai_nf_qpa",
+      "from_column": "divergencia_origem_id",
+      "to_table": "assai_divergencia",
       "to_column": "id"
     },
     {
       "from_table": "assai_cce",
-      "from_column": "divergencia_origem_id",
-      "to_table": "assai_divergencia",
+      "from_column": "nf_id",
+      "to_table": "assai_nf_qpa",
       "to_column": "id"
     },
     {
@@ -118,26 +118,20 @@
     },
     {
       "from_table": "assai_devolucao_item",
-      "from_column": "nf_qpa_item_id",
-      "to_table": "assai_nf_qpa_item",
+      "from_column": "evento_pendencia_id",
+      "to_table": "assai_moto_evento",
       "to_column": "id"
     },
     {
       "from_table": "assai_devolucao_item",
-      "from_column": "evento_pendencia_id",
-      "to_table": "assai_moto_evento",
+      "from_column": "nf_qpa_item_id",
+      "to_table": "assai_nf_qpa_item",
       "to_column": "id"
     },
     {
       "from_table": "assai_devolucao_nfd",
       "from_column": "nf_qpa_origem_id",
       "to_table": "assai_nf_qpa",
-      "to_column": "id"
-    },
-    {
-      "from_table": "assai_divergencia",
-      "from_column": "separacao_id",
-      "to_table": "assai_separacao",
       "to_column": "id"
     },
     {
@@ -150,6 +144,12 @@
       "from_table": "assai_divergencia",
       "from_column": "nf_id",
       "to_table": "assai_nf_qpa",
+      "to_column": "id"
+    },
+    {
+      "from_table": "assai_divergencia",
+      "from_column": "separacao_id",
+      "to_table": "assai_separacao",
       "to_column": "id"
     },
     {
@@ -166,14 +166,20 @@
     },
     {
       "from_table": "assai_nf_qpa",
+      "from_column": "loja_id",
+      "to_table": "assai_loja",
+      "to_column": "id"
+    },
+    {
+      "from_table": "assai_nf_qpa",
       "from_column": "separacao_id",
       "to_table": "assai_separacao",
       "to_column": "id"
     },
     {
-      "from_table": "assai_nf_qpa",
-      "from_column": "loja_id",
-      "to_table": "assai_loja",
+      "from_table": "assai_nf_qpa_item",
+      "from_column": "devolucao_item_id",
+      "to_table": "assai_devolucao_item",
       "to_column": "id"
     },
     {
@@ -186,12 +192,6 @@
       "from_table": "assai_nf_qpa_item",
       "from_column": "separacao_item_id",
       "to_table": "assai_separacao_item",
-      "to_column": "id"
-    },
-    {
-      "from_table": "assai_nf_qpa_item",
-      "from_column": "devolucao_item_id",
-      "to_table": "assai_devolucao_item",
       "to_column": "id"
     },
     {
@@ -220,6 +220,18 @@
     },
     {
       "from_table": "assai_pedido_venda_item",
+      "from_column": "loja_id",
+      "to_table": "assai_loja",
+      "to_column": "id"
+    },
+    {
+      "from_table": "assai_pedido_venda_item",
+      "from_column": "modelo_id",
+      "to_table": "assai_modelo",
+      "to_column": "id"
+    },
+    {
+      "from_table": "assai_pedido_venda_item",
       "from_column": "pedido_id",
       "to_table": "assai_pedido_venda",
       "to_column": "id"
@@ -231,27 +243,15 @@
       "to_column": "id"
     },
     {
-      "from_table": "assai_pedido_venda_item",
+      "from_table": "assai_pedido_venda_loja",
       "from_column": "loja_id",
       "to_table": "assai_loja",
-      "to_column": "id"
-    },
-    {
-      "from_table": "assai_pedido_venda_item",
-      "from_column": "modelo_id",
-      "to_table": "assai_modelo",
       "to_column": "id"
     },
     {
       "from_table": "assai_pedido_venda_loja",
       "from_column": "pedido_id",
       "to_table": "assai_pedido_venda",
-      "to_column": "id"
-    },
-    {
-      "from_table": "assai_pedido_venda_loja",
-      "from_column": "loja_id",
-      "to_table": "assai_loja",
       "to_column": "id"
     },
     {
@@ -262,14 +262,14 @@
     },
     {
       "from_table": "assai_recibo_item",
-      "from_column": "recibo_id",
-      "to_table": "assai_recibo_motochefe",
+      "from_column": "modelo_id",
+      "to_table": "assai_modelo",
       "to_column": "id"
     },
     {
       "from_table": "assai_recibo_item",
-      "from_column": "modelo_id",
-      "to_table": "assai_modelo",
+      "from_column": "recibo_id",
+      "to_table": "assai_recibo_motochefe",
       "to_column": "id"
     },
     {
@@ -280,20 +280,14 @@
     },
     {
       "from_table": "assai_separacao",
-      "from_column": "pedido_id",
-      "to_table": "assai_pedido_venda",
-      "to_column": "id"
-    },
-    {
-      "from_table": "assai_separacao",
       "from_column": "loja_id",
       "to_table": "assai_loja",
       "to_column": "id"
     },
     {
-      "from_table": "assai_separacao_item",
-      "from_column": "separacao_id",
-      "to_table": "assai_separacao",
+      "from_table": "assai_separacao",
+      "from_column": "pedido_id",
+      "to_table": "assai_pedido_venda",
       "to_column": "id"
     },
     {
@@ -303,7 +297,7 @@
       "to_column": "id"
     },
     {
-      "from_table": "assai_separacao_saldo_modelo",
+      "from_table": "assai_separacao_item",
       "from_column": "separacao_id",
       "to_table": "assai_separacao",
       "to_column": "id"
@@ -312,6 +306,12 @@
       "from_table": "assai_separacao_saldo_modelo",
       "from_column": "modelo_id",
       "to_table": "assai_modelo",
+      "to_column": "id"
+    },
+    {
+      "from_table": "assai_separacao_saldo_modelo",
+      "from_column": "separacao_id",
+      "to_table": "assai_separacao",
       "to_column": "id"
     },
     {
@@ -394,8 +394,8 @@
     },
     {
       "from_table": "carvia_conta_corrente_transportadoras",
-      "from_column": "transportadora_id",
-      "to_table": "transportadoras",
+      "from_column": "fatura_transportadora_id",
+      "to_table": "carvia_faturas_transportadora",
       "to_column": "id"
     },
     {
@@ -406,8 +406,14 @@
     },
     {
       "from_table": "carvia_conta_corrente_transportadoras",
-      "from_column": "fatura_transportadora_id",
-      "to_table": "carvia_faturas_transportadora",
+      "from_column": "transportadora_id",
+      "to_table": "transportadoras",
+      "to_column": "id"
+    },
+    {
+      "from_table": "carvia_cotacao_motos",
+      "from_column": "categoria_moto_id",
+      "to_table": "carvia_categorias_moto",
       "to_column": "id"
     },
     {
@@ -423,12 +429,6 @@
       "to_column": "id"
     },
     {
-      "from_table": "carvia_cotacao_motos",
-      "from_column": "categoria_moto_id",
-      "to_table": "carvia_categorias_moto",
-      "to_column": "id"
-    },
-    {
       "from_table": "carvia_cotacoes",
       "from_column": "cliente_id",
       "to_table": "carvia_clientes",
@@ -436,13 +436,13 @@
     },
     {
       "from_table": "carvia_cotacoes",
-      "from_column": "endereco_origem_id",
+      "from_column": "endereco_destino_id",
       "to_table": "carvia_cliente_enderecos",
       "to_column": "id"
     },
     {
       "from_table": "carvia_cotacoes",
-      "from_column": "endereco_destino_id",
+      "from_column": "endereco_origem_id",
       "to_table": "carvia_cliente_enderecos",
       "to_column": "id"
     },
@@ -460,12 +460,6 @@
     },
     {
       "from_table": "carvia_cte_complementares",
-      "from_column": "operacao_id",
-      "to_table": "carvia_operacoes",
-      "to_column": "id"
-    },
-    {
-      "from_table": "carvia_cte_complementares",
       "from_column": "fatura_cliente_id",
       "to_table": "carvia_faturas_cliente",
       "to_column": "id"
@@ -477,15 +471,15 @@
       "to_column": "id"
     },
     {
-      "from_table": "carvia_custo_entrega_anexos",
-      "from_column": "custo_entrega_id",
-      "to_table": "carvia_custos_entrega",
+      "from_table": "carvia_cte_complementares",
+      "from_column": "operacao_id",
+      "to_table": "carvia_operacoes",
       "to_column": "id"
     },
     {
-      "from_table": "carvia_custos_entrega",
-      "from_column": "operacao_id",
-      "to_table": "carvia_operacoes",
+      "from_table": "carvia_custo_entrega_anexos",
+      "from_column": "custo_entrega_id",
+      "to_table": "carvia_custos_entrega",
       "to_column": "id"
     },
     {
@@ -496,14 +490,20 @@
     },
     {
       "from_table": "carvia_custos_entrega",
-      "from_column": "transportadora_id",
-      "to_table": "transportadoras",
+      "from_column": "fatura_transportadora_id",
+      "to_table": "carvia_faturas_transportadora",
       "to_column": "id"
     },
     {
       "from_table": "carvia_custos_entrega",
       "from_column": "frete_id",
       "to_table": "carvia_fretes",
+      "to_column": "id"
+    },
+    {
+      "from_table": "carvia_custos_entrega",
+      "from_column": "operacao_id",
+      "to_table": "carvia_operacoes",
       "to_column": "id"
     },
     {
@@ -514,20 +514,20 @@
     },
     {
       "from_table": "carvia_custos_entrega",
-      "from_column": "fatura_transportadora_id",
-      "to_table": "carvia_faturas_transportadora",
-      "to_column": "id"
-    },
-    {
-      "from_table": "carvia_despesas",
-      "from_column": "operacao_id",
-      "to_table": "carvia_operacoes",
+      "from_column": "transportadora_id",
+      "to_table": "transportadoras",
       "to_column": "id"
     },
     {
       "from_table": "carvia_despesas",
       "from_column": "frete_id",
       "to_table": "carvia_fretes",
+      "to_column": "id"
+    },
+    {
+      "from_table": "carvia_despesas",
+      "from_column": "operacao_id",
+      "to_table": "carvia_operacoes",
       "to_column": "id"
     },
     {
@@ -544,14 +544,14 @@
     },
     {
       "from_table": "carvia_emissao_cte_complementar",
-      "from_column": "custo_entrega_id",
-      "to_table": "carvia_custos_entrega",
+      "from_column": "cte_complementar_id",
+      "to_table": "carvia_cte_complementares",
       "to_column": "id"
     },
     {
       "from_table": "carvia_emissao_cte_complementar",
-      "from_column": "cte_complementar_id",
-      "to_table": "carvia_cte_complementares",
+      "from_column": "custo_entrega_id",
+      "to_table": "carvia_custos_entrega",
       "to_column": "id"
     },
     {
@@ -574,14 +574,14 @@
     },
     {
       "from_table": "carvia_fatura_cliente_itens",
-      "from_column": "fatura_cliente_id",
-      "to_table": "carvia_faturas_cliente",
+      "from_column": "cte_complementar_id",
+      "to_table": "carvia_cte_complementares",
       "to_column": "id"
     },
     {
       "from_table": "carvia_fatura_cliente_itens",
-      "from_column": "operacao_id",
-      "to_table": "carvia_operacoes",
+      "from_column": "fatura_cliente_id",
+      "to_table": "carvia_faturas_cliente",
       "to_column": "id"
     },
     {
@@ -592,8 +592,8 @@
     },
     {
       "from_table": "carvia_fatura_cliente_itens",
-      "from_column": "cte_complementar_id",
-      "to_table": "carvia_cte_complementares",
+      "from_column": "operacao_id",
+      "to_table": "carvia_operacoes",
       "to_column": "id"
     },
     {
@@ -604,8 +604,8 @@
     },
     {
       "from_table": "carvia_fatura_transportadora_itens",
-      "from_column": "subcontrato_id",
-      "to_table": "carvia_subcontratos",
+      "from_column": "nf_id",
+      "to_table": "carvia_nfs",
       "to_column": "id"
     },
     {
@@ -616,8 +616,8 @@
     },
     {
       "from_table": "carvia_fatura_transportadora_itens",
-      "from_column": "nf_id",
-      "to_table": "carvia_nfs",
+      "from_column": "subcontrato_id",
+      "to_table": "carvia_subcontratos",
       "to_column": "id"
     },
     {
@@ -634,14 +634,8 @@
     },
     {
       "from_table": "carvia_fretes",
-      "from_column": "transportadora_id",
-      "to_table": "transportadoras",
-      "to_column": "id"
-    },
-    {
-      "from_table": "carvia_fretes",
-      "from_column": "subcontrato_id",
-      "to_table": "carvia_subcontratos",
+      "from_column": "fatura_cliente_id",
+      "to_table": "carvia_faturas_cliente",
       "to_column": "id"
     },
     {
@@ -658,8 +652,14 @@
     },
     {
       "from_table": "carvia_fretes",
-      "from_column": "fatura_cliente_id",
-      "to_table": "carvia_faturas_cliente",
+      "from_column": "subcontrato_id",
+      "to_table": "carvia_subcontratos",
+      "to_column": "id"
+    },
+    {
+      "from_table": "carvia_fretes",
+      "from_column": "transportadora_id",
+      "to_table": "transportadoras",
       "to_column": "id"
     },
     {
@@ -676,14 +676,14 @@
     },
     {
       "from_table": "carvia_nf_itens",
-      "from_column": "nf_id",
-      "to_table": "carvia_nfs",
+      "from_column": "modelo_moto_id",
+      "to_table": "carvia_modelos_moto",
       "to_column": "id"
     },
     {
       "from_table": "carvia_nf_itens",
-      "from_column": "modelo_moto_id",
-      "to_table": "carvia_modelos_moto",
+      "from_column": "nf_id",
+      "to_table": "carvia_nfs",
       "to_column": "id"
     },
     {
@@ -706,14 +706,14 @@
     },
     {
       "from_table": "carvia_operacao_nfs",
-      "from_column": "operacao_id",
-      "to_table": "carvia_operacoes",
+      "from_column": "nf_id",
+      "to_table": "carvia_nfs",
       "to_column": "id"
     },
     {
       "from_table": "carvia_operacao_nfs",
-      "from_column": "nf_id",
-      "to_table": "carvia_nfs",
+      "from_column": "operacao_id",
+      "to_table": "carvia_operacoes",
       "to_column": "id"
     },
     {
@@ -724,14 +724,14 @@
     },
     {
       "from_table": "carvia_pedido_itens",
-      "from_column": "pedido_id",
-      "to_table": "carvia_pedidos",
+      "from_column": "modelo_moto_id",
+      "to_table": "carvia_modelos_moto",
       "to_column": "id"
     },
     {
       "from_table": "carvia_pedido_itens",
-      "from_column": "modelo_moto_id",
-      "to_table": "carvia_modelos_moto",
+      "from_column": "pedido_id",
+      "to_table": "carvia_pedidos",
       "to_column": "id"
     },
     {
@@ -742,26 +742,14 @@
     },
     {
       "from_table": "carvia_precos_categoria_moto",
-      "from_column": "tabela_frete_id",
-      "to_table": "carvia_tabelas_frete",
-      "to_column": "id"
-    },
-    {
-      "from_table": "carvia_precos_categoria_moto",
       "from_column": "categoria_moto_id",
       "to_table": "carvia_categorias_moto",
       "to_column": "id"
     },
     {
-      "from_table": "carvia_previnculos_extrato_cotacao",
-      "from_column": "extrato_linha_id",
-      "to_table": "carvia_extrato_linhas",
-      "to_column": "id"
-    },
-    {
-      "from_table": "carvia_previnculos_extrato_cotacao",
-      "from_column": "cotacao_id",
-      "to_table": "carvia_cotacoes",
+      "from_table": "carvia_precos_categoria_moto",
+      "from_column": "tabela_frete_id",
+      "to_table": "carvia_tabelas_frete",
       "to_column": "id"
     },
     {
@@ -772,26 +760,26 @@
     },
     {
       "from_table": "carvia_previnculos_extrato_cotacao",
+      "from_column": "cotacao_id",
+      "to_table": "carvia_cotacoes",
+      "to_column": "id"
+    },
+    {
+      "from_table": "carvia_previnculos_extrato_cotacao",
+      "from_column": "extrato_linha_id",
+      "to_table": "carvia_extrato_linhas",
+      "to_column": "id"
+    },
+    {
+      "from_table": "carvia_previnculos_extrato_cotacao",
       "from_column": "fatura_cliente_id",
       "to_table": "carvia_faturas_cliente",
       "to_column": "id"
     },
     {
       "from_table": "carvia_subcontratos",
-      "from_column": "operacao_id",
-      "to_table": "carvia_operacoes",
-      "to_column": "id"
-    },
-    {
-      "from_table": "carvia_subcontratos",
-      "from_column": "transportadora_id",
-      "to_table": "transportadoras",
-      "to_column": "id"
-    },
-    {
-      "from_table": "carvia_subcontratos",
-      "from_column": "tabela_frete_id",
-      "to_table": "tabelas_frete",
+      "from_column": "fatura_transportadora_id",
+      "to_table": "carvia_faturas_transportadora",
       "to_column": "id"
     },
     {
@@ -802,8 +790,20 @@
     },
     {
       "from_table": "carvia_subcontratos",
-      "from_column": "fatura_transportadora_id",
-      "to_table": "carvia_faturas_transportadora",
+      "from_column": "operacao_id",
+      "to_table": "carvia_operacoes",
+      "to_column": "id"
+    },
+    {
+      "from_table": "carvia_subcontratos",
+      "from_column": "tabela_frete_id",
+      "to_table": "tabelas_frete",
+      "to_column": "id"
+    },
+    {
+      "from_table": "carvia_subcontratos",
+      "from_column": "transportadora_id",
+      "to_table": "transportadoras",
       "to_column": "id"
     },
     {
@@ -820,13 +820,19 @@
     },
     {
       "from_table": "chat_forwards",
-      "from_column": "original_message_id",
+      "from_column": "forwarded_message_id",
       "to_table": "chat_messages",
       "to_column": "id"
     },
     {
       "from_table": "chat_forwards",
-      "from_column": "forwarded_message_id",
+      "from_column": "original_message_id",
+      "to_table": "chat_messages",
+      "to_column": "id"
+    },
+    {
+      "from_table": "chat_members",
+      "from_column": "last_read_message_id",
       "to_table": "chat_messages",
       "to_column": "id"
     },
@@ -834,12 +840,6 @@
       "from_table": "chat_members",
       "from_column": "thread_id",
       "to_table": "chat_threads",
-      "to_column": "id"
-    },
-    {
-      "from_table": "chat_members",
-      "from_column": "last_read_message_id",
-      "to_table": "chat_messages",
       "to_column": "id"
     },
     {
@@ -850,14 +850,14 @@
     },
     {
       "from_table": "chat_messages",
-      "from_column": "thread_id",
-      "to_table": "chat_threads",
+      "from_column": "reply_to_message_id",
+      "to_table": "chat_messages",
       "to_column": "id"
     },
     {
       "from_table": "chat_messages",
-      "from_column": "reply_to_message_id",
-      "to_table": "chat_messages",
+      "from_column": "thread_id",
+      "to_table": "chat_threads",
       "to_column": "id"
     },
     {
@@ -886,12 +886,6 @@
     },
     {
       "from_table": "cnab_retorno_item",
-      "from_column": "lote_id",
-      "to_table": "cnab_retorno_lote",
-      "to_column": "id"
-    },
-    {
-      "from_table": "cnab_retorno_item",
       "from_column": "conta_a_receber_id",
       "to_table": "contas_a_receber",
       "to_column": "id"
@@ -900,6 +894,12 @@
       "from_table": "cnab_retorno_item",
       "from_column": "extrato_item_id",
       "to_table": "extrato_item",
+      "to_column": "id"
+    },
+    {
+      "from_table": "cnab_retorno_item",
+      "from_column": "lote_id",
+      "to_table": "cnab_retorno_lote",
       "to_column": "id"
     },
     {
@@ -916,14 +916,8 @@
     },
     {
       "from_table": "comissao_vendedor",
-      "from_column": "pedido_id",
-      "to_table": "pedido_venda_moto",
-      "to_column": "id"
-    },
-    {
-      "from_table": "comissao_vendedor",
-      "from_column": "vendedor_id",
-      "to_table": "vendedor_moto",
+      "from_column": "empresa_pagadora_id",
+      "to_table": "empresa_venda_moto",
       "to_column": "id"
     },
     {
@@ -934,8 +928,14 @@
     },
     {
       "from_table": "comissao_vendedor",
-      "from_column": "empresa_pagadora_id",
-      "to_table": "empresa_venda_moto",
+      "from_column": "pedido_id",
+      "to_table": "pedido_venda_moto",
+      "to_column": "id"
+    },
+    {
+      "from_table": "comissao_vendedor",
+      "from_column": "vendedor_id",
+      "to_table": "vendedor_moto",
       "to_column": "id"
     },
     {
@@ -952,8 +952,8 @@
     },
     {
       "from_table": "conta_corrente_transportadoras",
-      "from_column": "transportadora_id",
-      "to_table": "transportadoras",
+      "from_column": "compensacao_frete_id",
+      "to_table": "fretes",
       "to_column": "id"
     },
     {
@@ -964,8 +964,8 @@
     },
     {
       "from_table": "conta_corrente_transportadoras",
-      "from_column": "compensacao_frete_id",
-      "to_table": "fretes",
+      "from_column": "transportadora_id",
+      "to_table": "transportadoras",
       "to_column": "id"
     },
     {
@@ -976,19 +976,13 @@
     },
     {
       "from_table": "contas_a_receber",
-      "from_column": "confirmacao_tipo_id",
-      "to_table": "contas_a_receber_tipos",
-      "to_column": "id"
-    },
-    {
-      "from_table": "contas_a_receber",
-      "from_column": "forma_confirmacao_tipo_id",
-      "to_table": "contas_a_receber_tipos",
-      "to_column": "id"
-    },
-    {
-      "from_table": "contas_a_receber",
       "from_column": "acao_necessaria_tipo_id",
+      "to_table": "contas_a_receber_tipos",
+      "to_column": "id"
+    },
+    {
+      "from_table": "contas_a_receber",
+      "from_column": "confirmacao_tipo_id",
       "to_table": "contas_a_receber_tipos",
       "to_column": "id"
     },
@@ -999,6 +993,12 @@
       "to_column": "id"
     },
     {
+      "from_table": "contas_a_receber",
+      "from_column": "forma_confirmacao_tipo_id",
+      "to_table": "contas_a_receber_tipos",
+      "to_column": "id"
+    },
+    {
       "from_table": "contas_a_receber_abatimento",
       "from_column": "conta_a_receber_id",
       "to_table": "contas_a_receber",
@@ -1006,14 +1006,14 @@
     },
     {
       "from_table": "contas_a_receber_abatimento",
-      "from_column": "tipo_id",
-      "to_table": "contas_a_receber_tipos",
+      "from_column": "reconciliacao_odoo_id",
+      "to_table": "contas_a_receber_reconciliacao",
       "to_column": "id"
     },
     {
       "from_table": "contas_a_receber_abatimento",
-      "from_column": "reconciliacao_odoo_id",
-      "to_table": "contas_a_receber_reconciliacao",
+      "from_column": "tipo_id",
+      "to_table": "contas_a_receber_tipos",
       "to_column": "id"
     },
     {
@@ -1030,6 +1030,12 @@
     },
     {
       "from_table": "controle_portaria",
+      "from_column": "embarque_id",
+      "to_table": "embarques",
+      "to_column": "id"
+    },
+    {
+      "from_table": "controle_portaria",
       "from_column": "motorista_id",
       "to_table": "motoristas",
       "to_column": "id"
@@ -1038,12 +1044,6 @@
       "from_table": "controle_portaria",
       "from_column": "tipo_veiculo_id",
       "to_table": "veiculos",
-      "to_column": "id"
-    },
-    {
-      "from_table": "controle_portaria",
-      "from_column": "embarque_id",
-      "to_table": "embarques",
       "to_column": "id"
     },
     {
@@ -1078,14 +1078,14 @@
     },
     {
       "from_table": "descarte_devolucao",
-      "from_column": "ocorrencia_devolucao_id",
-      "to_table": "ocorrencia_devolucao",
+      "from_column": "despesa_extra_id",
+      "to_table": "despesas_extras",
       "to_column": "id"
     },
     {
       "from_table": "descarte_devolucao",
-      "from_column": "despesa_extra_id",
-      "to_table": "despesas_extras",
+      "from_column": "ocorrencia_devolucao_id",
+      "to_table": "ocorrencia_devolucao",
       "to_column": "id"
     },
     {
@@ -1108,8 +1108,8 @@
     },
     {
       "from_table": "despesas_extras",
-      "from_column": "frete_id",
-      "to_table": "fretes",
+      "from_column": "despesa_cte_id",
+      "to_table": "conhecimento_transporte",
       "to_column": "id"
     },
     {
@@ -1120,20 +1120,20 @@
     },
     {
       "from_table": "despesas_extras",
-      "from_column": "transportadora_id",
-      "to_table": "transportadoras",
-      "to_column": "id"
-    },
-    {
-      "from_table": "despesas_extras",
-      "from_column": "despesa_cte_id",
-      "to_table": "conhecimento_transporte",
+      "from_column": "frete_id",
+      "to_table": "fretes",
       "to_column": "id"
     },
     {
       "from_table": "despesas_extras",
       "from_column": "nfd_id",
       "to_table": "nf_devolucao",
+      "to_column": "id"
+    },
+    {
+      "from_table": "despesas_extras",
+      "from_column": "transportadora_id",
+      "to_table": "transportadoras",
       "to_column": "id"
     },
     {
@@ -1156,26 +1156,26 @@
     },
     {
       "from_table": "embarque_itens",
-      "from_column": "embarque_id",
-      "to_table": "embarques",
-      "to_column": "id"
-    },
-    {
-      "from_table": "embarque_itens",
       "from_column": "cotacao_id",
       "to_table": "cotacoes",
       "to_column": "id"
     },
     {
-      "from_table": "embarque_moto",
-      "from_column": "transportadora_id",
-      "to_table": "transportadora_moto",
+      "from_table": "embarque_itens",
+      "from_column": "embarque_id",
+      "to_table": "embarques",
       "to_column": "id"
     },
     {
       "from_table": "embarque_moto",
       "from_column": "empresa_pagadora_id",
       "to_table": "empresa_venda_moto",
+      "to_column": "id"
+    },
+    {
+      "from_table": "embarque_moto",
+      "from_column": "transportadora_id",
+      "to_table": "transportadora_moto",
       "to_column": "id"
     },
     {
@@ -1192,14 +1192,14 @@
     },
     {
       "from_table": "embarques",
-      "from_column": "transportadora_id",
-      "to_table": "transportadoras",
+      "from_column": "cotacao_id",
+      "to_table": "cotacoes",
       "to_column": "id"
     },
     {
       "from_table": "embarques",
-      "from_column": "cotacao_id",
-      "to_table": "cotacoes",
+      "from_column": "transportadora_id",
+      "to_table": "transportadoras",
       "to_column": "id"
     },
     {
@@ -1210,14 +1210,14 @@
     },
     {
       "from_table": "entregas_rastreadas",
-      "from_column": "rastreamento_id",
-      "to_table": "rastreamento_embarques",
+      "from_column": "embarque_item_id",
+      "to_table": "embarque_itens",
       "to_column": "id"
     },
     {
       "from_table": "entregas_rastreadas",
-      "from_column": "embarque_item_id",
-      "to_table": "embarque_itens",
+      "from_column": "rastreamento_id",
+      "to_table": "rastreamento_embarques",
       "to_column": "id"
     },
     {
@@ -1234,14 +1234,14 @@
     },
     {
       "from_table": "extrato_item",
-      "from_column": "titulo_receber_id",
-      "to_table": "contas_a_receber",
+      "from_column": "titulo_pagar_id",
+      "to_table": "contas_a_pagar",
       "to_column": "id"
     },
     {
       "from_table": "extrato_item",
-      "from_column": "titulo_pagar_id",
-      "to_table": "contas_a_pagar",
+      "from_column": "titulo_receber_id",
+      "to_table": "contas_a_receber",
       "to_column": "id"
     },
     {
@@ -1252,14 +1252,14 @@
     },
     {
       "from_table": "extrato_item_titulo",
-      "from_column": "titulo_receber_id",
-      "to_table": "contas_a_receber",
+      "from_column": "titulo_pagar_id",
+      "to_table": "contas_a_pagar",
       "to_column": "id"
     },
     {
       "from_table": "extrato_item_titulo",
-      "from_column": "titulo_pagar_id",
-      "to_table": "contas_a_pagar",
+      "from_column": "titulo_receber_id",
+      "to_table": "contas_a_receber",
       "to_column": "id"
     },
     {
@@ -1270,14 +1270,14 @@
     },
     {
       "from_table": "frete_devolucao",
-      "from_column": "ocorrencia_devolucao_id",
-      "to_table": "ocorrencia_devolucao",
+      "from_column": "despesa_extra_id",
+      "to_table": "despesas_extras",
       "to_column": "id"
     },
     {
       "from_table": "frete_devolucao",
-      "from_column": "despesa_extra_id",
-      "to_table": "despesas_extras",
+      "from_column": "ocorrencia_devolucao_id",
+      "to_table": "ocorrencia_devolucao",
       "to_column": "id"
     },
     {
@@ -1294,12 +1294,6 @@
     },
     {
       "from_table": "fretes",
-      "from_column": "transportadora_id",
-      "to_table": "transportadoras",
-      "to_column": "id"
-    },
-    {
-      "from_table": "fretes",
       "from_column": "fatura_frete_id",
       "to_table": "faturas_frete",
       "to_column": "id"
@@ -1308,6 +1302,12 @@
       "from_table": "fretes",
       "from_column": "frete_cte_id",
       "to_table": "conhecimento_transporte",
+      "to_column": "id"
+    },
+    {
+      "from_table": "fretes",
+      "from_column": "transportadora_id",
+      "to_table": "transportadoras",
       "to_column": "id"
     },
     {
@@ -1330,14 +1330,14 @@
     },
     {
       "from_table": "frota_veiculos",
-      "from_column": "veiculo_tipo_id",
-      "to_table": "veiculos",
+      "from_column": "transportadora_id",
+      "to_table": "transportadoras",
       "to_column": "id"
     },
     {
       "from_table": "frota_veiculos",
-      "from_column": "transportadora_id",
-      "to_table": "transportadoras",
+      "from_column": "veiculo_tipo_id",
+      "to_table": "veiculos",
       "to_column": "id"
     },
     {
@@ -1365,16 +1365,22 @@
       "to_column": "id"
     },
     {
-      "from_table": "hora_avaria",
-      "from_column": "numero_chassi",
-      "to_table": "hora_moto",
-      "to_column": "numero_chassi"
+      "from_table": "hora_aprovacao_desconto",
+      "from_column": "venda_id",
+      "to_table": "hora_venda",
+      "to_column": "id"
     },
     {
       "from_table": "hora_avaria",
       "from_column": "loja_id",
       "to_table": "hora_loja",
       "to_column": "id"
+    },
+    {
+      "from_table": "hora_avaria",
+      "from_column": "numero_chassi",
+      "to_table": "hora_moto",
+      "to_column": "numero_chassi"
     },
     {
       "from_table": "hora_avaria_foto",
@@ -1384,14 +1390,14 @@
     },
     {
       "from_table": "hora_conferencia_auditoria",
-      "from_column": "recebimento_id",
-      "to_table": "hora_recebimento",
+      "from_column": "conferencia_id",
+      "to_table": "hora_recebimento_conferencia",
       "to_column": "id"
     },
     {
       "from_table": "hora_conferencia_auditoria",
-      "from_column": "conferencia_id",
-      "to_table": "hora_recebimento_conferencia",
+      "from_column": "recebimento_id",
+      "to_table": "hora_recebimento",
       "to_column": "id"
     },
     {
@@ -1432,14 +1438,20 @@
     },
     {
       "from_table": "hora_devolucao_venda",
+      "from_column": "loja_id",
+      "to_table": "hora_loja",
+      "to_column": "id"
+    },
+    {
+      "from_table": "hora_devolucao_venda",
       "from_column": "venda_id",
       "to_table": "hora_venda",
       "to_column": "id"
     },
     {
-      "from_table": "hora_devolucao_venda",
-      "from_column": "loja_id",
-      "to_table": "hora_loja",
+      "from_table": "hora_devolucao_venda_item",
+      "from_column": "avaria_id",
+      "to_table": "hora_avaria",
       "to_column": "id"
     },
     {
@@ -1456,21 +1468,27 @@
     },
     {
       "from_table": "hora_devolucao_venda_item",
+      "from_column": "peca_faltando_id",
+      "to_table": "hora_peca_faltando",
+      "to_column": "id"
+    },
+    {
+      "from_table": "hora_devolucao_venda_item",
       "from_column": "venda_item_id",
       "to_table": "hora_venda_item",
       "to_column": "id"
     },
     {
-      "from_table": "hora_devolucao_venda_item",
-      "from_column": "avaria_id",
-      "to_table": "hora_avaria",
-      "to_column": "id"
+      "from_table": "hora_emprestimo_moto",
+      "from_column": "chassi_entrada",
+      "to_table": "hora_moto",
+      "to_column": "numero_chassi"
     },
     {
-      "from_table": "hora_devolucao_venda_item",
-      "from_column": "peca_faltando_id",
-      "to_table": "hora_peca_faltando",
-      "to_column": "id"
+      "from_table": "hora_emprestimo_moto",
+      "from_column": "chassi_saida",
+      "to_table": "hora_moto",
+      "to_column": "numero_chassi"
     },
     {
       "from_table": "hora_emprestimo_moto",
@@ -1483,18 +1501,6 @@
       "from_column": "modelo_id",
       "to_table": "hora_modelo",
       "to_column": "id"
-    },
-    {
-      "from_table": "hora_emprestimo_moto",
-      "from_column": "chassi_saida",
-      "to_table": "hora_moto",
-      "to_column": "numero_chassi"
-    },
-    {
-      "from_table": "hora_emprestimo_moto",
-      "from_column": "chassi_entrada",
-      "to_table": "hora_moto",
-      "to_column": "numero_chassi"
     },
     {
       "from_table": "hora_modelo",
@@ -1522,15 +1528,15 @@
     },
     {
       "from_table": "hora_moto_evento",
-      "from_column": "numero_chassi",
-      "to_table": "hora_moto",
-      "to_column": "numero_chassi"
-    },
-    {
-      "from_table": "hora_moto_evento",
       "from_column": "loja_id",
       "to_table": "hora_loja",
       "to_column": "id"
+    },
+    {
+      "from_table": "hora_moto_evento",
+      "from_column": "numero_chassi",
+      "to_table": "hora_moto",
+      "to_column": "numero_chassi"
     },
     {
       "from_table": "hora_nf_entrada",
@@ -1551,12 +1557,6 @@
       "to_column": "id"
     },
     {
-      "from_table": "hora_nf_entrada_item",
-      "from_column": "numero_chassi",
-      "to_table": "hora_moto",
-      "to_column": "numero_chassi"
-    },
-    {
       "from_table": "hora_nf_entrada_item_peca",
       "from_column": "nf_id",
       "to_table": "hora_nf_entrada",
@@ -1570,13 +1570,13 @@
     },
     {
       "from_table": "hora_peca_faltando",
-      "from_column": "numero_chassi",
+      "from_column": "chassi_doador",
       "to_table": "hora_moto",
       "to_column": "numero_chassi"
     },
     {
       "from_table": "hora_peca_faltando",
-      "from_column": "chassi_doador",
+      "from_column": "numero_chassi",
       "to_table": "hora_moto",
       "to_column": "numero_chassi"
     },
@@ -1594,14 +1594,14 @@
     },
     {
       "from_table": "hora_peca_movimento",
-      "from_column": "peca_id",
-      "to_table": "hora_peca",
+      "from_column": "loja_id",
+      "to_table": "hora_loja",
       "to_column": "id"
     },
     {
       "from_table": "hora_peca_movimento",
-      "from_column": "loja_id",
-      "to_table": "hora_loja",
+      "from_column": "peca_id",
+      "to_table": "hora_peca",
       "to_column": "id"
     },
     {
@@ -1612,8 +1612,8 @@
     },
     {
       "from_table": "hora_pedido_item",
-      "from_column": "pedido_id",
-      "to_table": "hora_pedido",
+      "from_column": "modelo_id",
+      "to_table": "hora_modelo",
       "to_column": "id"
     },
     {
@@ -1624,20 +1624,14 @@
     },
     {
       "from_table": "hora_pedido_item",
-      "from_column": "modelo_id",
-      "to_table": "hora_modelo",
-      "to_column": "id"
-    },
-    {
-      "from_table": "hora_pedido_item",
       "from_column": "peca_id",
       "to_table": "hora_peca",
       "to_column": "id"
     },
     {
-      "from_table": "hora_recebimento",
-      "from_column": "nf_id",
-      "to_table": "hora_nf_entrada",
+      "from_table": "hora_pedido_item",
+      "from_column": "pedido_id",
+      "to_table": "hora_pedido",
       "to_column": "id"
     },
     {
@@ -1647,9 +1641,15 @@
       "to_column": "id"
     },
     {
+      "from_table": "hora_recebimento",
+      "from_column": "nf_id",
+      "to_table": "hora_nf_entrada",
+      "to_column": "id"
+    },
+    {
       "from_table": "hora_recebimento_conferencia",
-      "from_column": "recebimento_id",
-      "to_table": "hora_recebimento",
+      "from_column": "modelo_id_conferido",
+      "to_table": "hora_modelo",
       "to_column": "id"
     },
     {
@@ -1660,14 +1660,20 @@
     },
     {
       "from_table": "hora_recebimento_conferencia",
-      "from_column": "modelo_id_conferido",
-      "to_table": "hora_modelo",
+      "from_column": "recebimento_id",
+      "to_table": "hora_recebimento",
       "to_column": "id"
     },
     {
       "from_table": "hora_recebimento_conferencia",
       "from_column": "substituida_por_id",
       "to_table": "hora_recebimento_conferencia",
+      "to_column": "id"
+    },
+    {
+      "from_table": "hora_recibo",
+      "from_column": "venda_id",
+      "to_table": "hora_venda",
       "to_column": "id"
     },
     {
@@ -1684,14 +1690,14 @@
     },
     {
       "from_table": "hora_tagplus_nfe_emissao",
-      "from_column": "venda_id",
-      "to_table": "hora_venda",
+      "from_column": "conta_id",
+      "to_table": "hora_tagplus_conta",
       "to_column": "id"
     },
     {
       "from_table": "hora_tagplus_nfe_emissao",
-      "from_column": "conta_id",
-      "to_table": "hora_tagplus_conta",
+      "from_column": "venda_id",
+      "to_table": "hora_venda",
       "to_column": "id"
     },
     {
@@ -1714,20 +1720,14 @@
     },
     {
       "from_table": "hora_transferencia",
-      "from_column": "loja_origem_id",
-      "to_table": "hora_loja",
-      "to_column": "id"
-    },
-    {
-      "from_table": "hora_transferencia",
       "from_column": "loja_destino_id",
       "to_table": "hora_loja",
       "to_column": "id"
     },
     {
-      "from_table": "hora_transferencia_auditoria",
-      "from_column": "transferencia_id",
-      "to_table": "hora_transferencia",
+      "from_table": "hora_transferencia",
+      "from_column": "loja_origem_id",
+      "to_table": "hora_loja",
       "to_column": "id"
     },
     {
@@ -1737,7 +1737,7 @@
       "to_column": "id"
     },
     {
-      "from_table": "hora_transferencia_item",
+      "from_table": "hora_transferencia_auditoria",
       "from_column": "transferencia_id",
       "to_table": "hora_transferencia",
       "to_column": "id"
@@ -1749,15 +1749,15 @@
       "to_column": "numero_chassi"
     },
     {
-      "from_table": "hora_venda",
-      "from_column": "loja_id",
-      "to_table": "hora_loja",
+      "from_table": "hora_transferencia_item",
+      "from_column": "transferencia_id",
+      "to_table": "hora_transferencia",
       "to_column": "id"
     },
     {
-      "from_table": "hora_venda_auditoria",
-      "from_column": "venda_id",
-      "to_table": "hora_venda",
+      "from_table": "hora_venda",
+      "from_column": "loja_id",
+      "to_table": "hora_loja",
       "to_column": "id"
     },
     {
@@ -1767,7 +1767,19 @@
       "to_column": "id"
     },
     {
-      "from_table": "hora_venda_divergencia",
+      "from_table": "hora_venda_auditoria",
+      "from_column": "venda_id",
+      "to_table": "hora_venda",
+      "to_column": "id"
+    },
+    {
+      "from_table": "hora_venda_brinde",
+      "from_column": "peca_id",
+      "to_table": "hora_peca",
+      "to_column": "id"
+    },
+    {
+      "from_table": "hora_venda_brinde",
       "from_column": "venda_id",
       "to_table": "hora_venda",
       "to_column": "id"
@@ -1779,7 +1791,7 @@
       "to_column": "numero_chassi"
     },
     {
-      "from_table": "hora_venda_item",
+      "from_table": "hora_venda_divergencia",
       "from_column": "venda_id",
       "to_table": "hora_venda",
       "to_column": "id"
@@ -1797,7 +1809,7 @@
       "to_column": "id"
     },
     {
-      "from_table": "hora_venda_item_peca",
+      "from_table": "hora_venda_item",
       "from_column": "venda_id",
       "to_table": "hora_venda",
       "to_column": "id"
@@ -1806,6 +1818,12 @@
       "from_table": "hora_venda_item_peca",
       "from_column": "peca_id",
       "to_table": "hora_peca",
+      "to_column": "id"
+    },
+    {
+      "from_table": "hora_venda_item_peca",
+      "from_column": "venda_id",
+      "to_table": "hora_venda",
       "to_column": "id"
     },
     {
@@ -1846,8 +1864,8 @@
     },
     {
       "from_table": "lancamento_frete_odoo_auditoria",
-      "from_column": "frete_id",
-      "to_table": "fretes",
+      "from_column": "cte_id",
+      "to_table": "conhecimento_transporte",
       "to_column": "id"
     },
     {
@@ -1858,8 +1876,8 @@
     },
     {
       "from_table": "lancamento_frete_odoo_auditoria",
-      "from_column": "cte_id",
-      "to_table": "conhecimento_transporte",
+      "from_column": "frete_id",
+      "to_table": "fretes",
       "to_column": "id"
     },
     {
@@ -1894,44 +1912,20 @@
     },
     {
       "from_table": "moto",
-      "from_column": "modelo_id",
-      "to_table": "modelo_moto",
+      "from_column": "empresa_pagadora_id",
+      "to_table": "empresa_venda_moto",
       "to_column": "id"
     },
     {
       "from_table": "moto",
-      "from_column": "empresa_pagadora_id",
-      "to_table": "empresa_venda_moto",
+      "from_column": "modelo_id",
+      "to_table": "modelo_moto",
       "to_column": "id"
     },
     {
       "from_table": "movimentacao_estoque",
       "from_column": "codigo_embarque",
       "to_table": "embarques",
-      "to_column": "id"
-    },
-    {
-      "from_table": "movimentacao_estoque",
-      "from_column": "pedido_compras_id",
-      "to_table": "pedido_compras",
-      "to_column": "id"
-    },
-    {
-      "from_table": "movimentacao_estoque",
-      "from_column": "recebimento_fisico_id",
-      "to_table": "recebimento_fisico",
-      "to_column": "id"
-    },
-    {
-      "from_table": "movimentacao_estoque",
-      "from_column": "recebimento_lote_id",
-      "to_table": "recebimento_lote",
-      "to_column": "id"
-    },
-    {
-      "from_table": "movimentacao_estoque",
-      "from_column": "producao_pai_id",
-      "to_table": "movimentacao_estoque",
       "to_column": "id"
     },
     {
@@ -1947,33 +1941,27 @@
       "to_column": "id"
     },
     {
-      "from_table": "movimentacao_financeira",
-      "from_column": "empresa_origem_id",
-      "to_table": "empresa_venda_moto",
+      "from_table": "movimentacao_estoque",
+      "from_column": "pedido_compras_id",
+      "to_table": "pedido_compras",
       "to_column": "id"
     },
     {
-      "from_table": "movimentacao_financeira",
-      "from_column": "empresa_destino_id",
-      "to_table": "empresa_venda_moto",
+      "from_table": "movimentacao_estoque",
+      "from_column": "producao_pai_id",
+      "to_table": "movimentacao_estoque",
       "to_column": "id"
     },
     {
-      "from_table": "movimentacao_financeira",
-      "from_column": "pedido_id",
-      "to_table": "pedido_venda_moto",
+      "from_table": "movimentacao_estoque",
+      "from_column": "recebimento_fisico_id",
+      "to_table": "recebimento_fisico",
       "to_column": "id"
     },
     {
-      "from_table": "movimentacao_financeira",
-      "from_column": "numero_chassi",
-      "to_table": "moto",
-      "to_column": "numero_chassi"
-    },
-    {
-      "from_table": "movimentacao_financeira",
-      "from_column": "titulo_financeiro_id",
-      "to_table": "titulo_financeiro",
+      "from_table": "movimentacao_estoque",
+      "from_column": "recebimento_lote_id",
+      "to_table": "recebimento_lote",
       "to_column": "id"
     },
     {
@@ -1984,20 +1972,50 @@
     },
     {
       "from_table": "movimentacao_financeira",
-      "from_column": "embarque_moto_id",
-      "to_table": "embarque_moto",
-      "to_column": "id"
-    },
-    {
-      "from_table": "movimentacao_financeira",
       "from_column": "despesa_mensal_id",
       "to_table": "despesa_mensal",
       "to_column": "id"
     },
     {
       "from_table": "movimentacao_financeira",
+      "from_column": "embarque_moto_id",
+      "to_table": "embarque_moto",
+      "to_column": "id"
+    },
+    {
+      "from_table": "movimentacao_financeira",
+      "from_column": "empresa_destino_id",
+      "to_table": "empresa_venda_moto",
+      "to_column": "id"
+    },
+    {
+      "from_table": "movimentacao_financeira",
+      "from_column": "empresa_origem_id",
+      "to_table": "empresa_venda_moto",
+      "to_column": "id"
+    },
+    {
+      "from_table": "movimentacao_financeira",
       "from_column": "movimentacao_origem_id",
       "to_table": "movimentacao_financeira",
+      "to_column": "id"
+    },
+    {
+      "from_table": "movimentacao_financeira",
+      "from_column": "numero_chassi",
+      "to_table": "moto",
+      "to_column": "numero_chassi"
+    },
+    {
+      "from_table": "movimentacao_financeira",
+      "from_column": "pedido_id",
+      "to_table": "pedido_venda_moto",
+      "to_column": "id"
+    },
+    {
+      "from_table": "movimentacao_financeira",
+      "from_column": "titulo_financeiro_id",
+      "to_table": "titulo_financeiro",
       "to_column": "id"
     },
     {
@@ -2014,14 +2032,14 @@
     },
     {
       "from_table": "nf_devolucao_nf_referenciada",
-      "from_column": "nf_devolucao_id",
-      "to_table": "nf_devolucao",
+      "from_column": "entrega_monitorada_id",
+      "to_table": "entregas_monitoradas",
       "to_column": "id"
     },
     {
       "from_table": "nf_devolucao_nf_referenciada",
-      "from_column": "entrega_monitorada_id",
-      "to_table": "entregas_monitoradas",
+      "from_column": "nf_devolucao_id",
+      "to_table": "nf_devolucao",
       "to_column": "id"
     },
     {
@@ -2032,20 +2050,14 @@
     },
     {
       "from_table": "ocorrencia_devolucao",
+      "from_column": "autorizado_por_id",
+      "to_table": "ocorrencia_autorizado_por",
+      "to_column": "id"
+    },
+    {
+      "from_table": "ocorrencia_devolucao",
       "from_column": "nf_devolucao_id",
       "to_table": "nf_devolucao",
-      "to_column": "id"
-    },
-    {
-      "from_table": "ocorrencia_devolucao",
-      "from_column": "transportadora_retorno_id",
-      "to_table": "transportadoras",
-      "to_column": "id"
-    },
-    {
-      "from_table": "ocorrencia_devolucao",
-      "from_column": "responsavel_id",
-      "to_table": "ocorrencia_responsavel",
       "to_column": "id"
     },
     {
@@ -2056,20 +2068,26 @@
     },
     {
       "from_table": "ocorrencia_devolucao",
-      "from_column": "autorizado_por_id",
-      "to_table": "ocorrencia_autorizado_por",
+      "from_column": "responsavel_id",
+      "to_table": "ocorrencia_responsavel",
       "to_column": "id"
     },
     {
-      "from_table": "ocorrencia_devolucao_categoria",
-      "from_column": "ocorrencia_devolucao_id",
-      "to_table": "ocorrencia_devolucao",
+      "from_table": "ocorrencia_devolucao",
+      "from_column": "transportadora_retorno_id",
+      "to_table": "transportadoras",
       "to_column": "id"
     },
     {
       "from_table": "ocorrencia_devolucao_categoria",
       "from_column": "categoria_id",
       "to_table": "ocorrencia_categoria",
+      "to_column": "id"
+    },
+    {
+      "from_table": "ocorrencia_devolucao_categoria",
+      "from_column": "ocorrencia_devolucao_id",
+      "to_table": "ocorrencia_devolucao",
       "to_column": "id"
     },
     {
@@ -2128,13 +2146,13 @@
     },
     {
       "from_table": "pallet_solucoes",
-      "from_column": "credito_id",
+      "from_column": "credito_destino_id",
       "to_table": "pallet_creditos",
       "to_column": "id"
     },
     {
       "from_table": "pallet_solucoes",
-      "from_column": "credito_destino_id",
+      "from_column": "credito_id",
       "to_table": "pallet_creditos",
       "to_column": "id"
     },
@@ -2152,8 +2170,8 @@
     },
     {
       "from_table": "pedido_venda_moto",
-      "from_column": "vendedor_id",
-      "to_table": "vendedor_moto",
+      "from_column": "empresa_venda_id",
+      "to_table": "empresa_venda_moto",
       "to_column": "id"
     },
     {
@@ -2170,14 +2188,14 @@
     },
     {
       "from_table": "pedido_venda_moto",
-      "from_column": "empresa_venda_id",
-      "to_table": "empresa_venda_moto",
+      "from_column": "vendedor_id",
+      "to_table": "vendedor_moto",
       "to_column": "id"
     },
     {
       "from_table": "pedido_venda_moto_item",
-      "from_column": "pedido_id",
-      "to_table": "pedido_venda_moto",
+      "from_column": "empresa_pagadora_montagem_id",
+      "to_table": "empresa_venda_moto",
       "to_column": "id"
     },
     {
@@ -2188,8 +2206,8 @@
     },
     {
       "from_table": "pedido_venda_moto_item",
-      "from_column": "empresa_pagadora_montagem_id",
-      "to_table": "empresa_venda_moto",
+      "from_column": "pedido_id",
+      "to_table": "pedido_venda_moto",
       "to_column": "id"
     },
     {
@@ -2212,13 +2230,13 @@
     },
     {
       "from_table": "pessoal_compensacoes",
-      "from_column": "saida_id",
+      "from_column": "entrada_id",
       "to_table": "pessoal_transacoes",
       "to_column": "id"
     },
     {
       "from_table": "pessoal_compensacoes",
-      "from_column": "entrada_id",
+      "from_column": "saida_id",
       "to_table": "pessoal_transacoes",
       "to_column": "id"
     },
@@ -2236,14 +2254,14 @@
     },
     {
       "from_table": "pessoal_grupos_analise_categorias",
-      "from_column": "grupo_id",
-      "to_table": "pessoal_grupos_analise",
+      "from_column": "categoria_id",
+      "to_table": "pessoal_categorias",
       "to_column": "id"
     },
     {
       "from_table": "pessoal_grupos_analise_categorias",
-      "from_column": "categoria_id",
-      "to_table": "pessoal_categorias",
+      "from_column": "grupo_id",
+      "to_table": "pessoal_grupos_analise",
       "to_column": "id"
     },
     {
@@ -2266,14 +2284,14 @@
     },
     {
       "from_table": "pessoal_pluggy_accounts",
-      "from_column": "pluggy_item_pk",
-      "to_table": "pessoal_pluggy_items",
+      "from_column": "conta_pessoal_id",
+      "to_table": "pessoal_contas",
       "to_column": "id"
     },
     {
       "from_table": "pessoal_pluggy_accounts",
-      "from_column": "conta_pessoal_id",
-      "to_table": "pessoal_contas",
+      "from_column": "pluggy_item_pk",
+      "to_table": "pessoal_pluggy_items",
       "to_column": "id"
     },
     {
@@ -2302,14 +2320,14 @@
     },
     {
       "from_table": "pessoal_provisoes",
-      "from_column": "membro_id",
-      "to_table": "pessoal_membros",
+      "from_column": "conta_id",
+      "to_table": "pessoal_contas",
       "to_column": "id"
     },
     {
       "from_table": "pessoal_provisoes",
-      "from_column": "conta_id",
-      "to_table": "pessoal_contas",
+      "from_column": "membro_id",
+      "to_table": "pessoal_membros",
       "to_column": "id"
     },
     {
@@ -2338,8 +2356,8 @@
     },
     {
       "from_table": "pessoal_transacoes",
-      "from_column": "importacao_id",
-      "to_table": "pessoal_importacoes",
+      "from_column": "categoria_id",
+      "to_table": "pessoal_categorias",
       "to_column": "id"
     },
     {
@@ -2350,20 +2368,20 @@
     },
     {
       "from_table": "pessoal_transacoes",
-      "from_column": "categoria_id",
-      "to_table": "pessoal_categorias",
-      "to_column": "id"
-    },
-    {
-      "from_table": "pessoal_transacoes",
-      "from_column": "regra_id",
-      "to_table": "pessoal_regras_categorizacao",
+      "from_column": "importacao_id",
+      "to_table": "pessoal_importacoes",
       "to_column": "id"
     },
     {
       "from_table": "pessoal_transacoes",
       "from_column": "membro_id",
       "to_table": "pessoal_membros",
+      "to_column": "id"
+    },
+    {
+      "from_table": "pessoal_transacoes",
+      "from_column": "regra_id",
+      "to_table": "pessoal_regras_categorizacao",
       "to_column": "id"
     },
     {
@@ -2434,14 +2452,14 @@
     },
     {
       "from_table": "requisicao_compra_alocacao",
-      "from_column": "requisicao_compra_id",
-      "to_table": "requisicao_compras",
+      "from_column": "pedido_compra_id",
+      "to_table": "pedido_compras",
       "to_column": "id"
     },
     {
       "from_table": "requisicao_compra_alocacao",
-      "from_column": "pedido_compra_id",
-      "to_table": "pedido_compras",
+      "from_column": "requisicao_compra_id",
+      "to_table": "requisicao_compras",
       "to_column": "id"
     },
     {
@@ -2482,32 +2500,32 @@
     },
     {
       "from_table": "titulo_a_pagar",
-      "from_column": "titulo_financeiro_id",
-      "to_table": "titulo_financeiro",
-      "to_column": "id"
-    },
-    {
-      "from_table": "titulo_a_pagar",
-      "from_column": "pedido_id",
-      "to_table": "pedido_venda_moto",
-      "to_column": "id"
-    },
-    {
-      "from_table": "titulo_a_pagar",
-      "from_column": "numero_chassi",
-      "to_table": "moto",
-      "to_column": "numero_chassi"
-    },
-    {
-      "from_table": "titulo_a_pagar",
       "from_column": "empresa_destino_id",
       "to_table": "empresa_venda_moto",
       "to_column": "id"
     },
     {
-      "from_table": "titulo_financeiro",
+      "from_table": "titulo_a_pagar",
+      "from_column": "numero_chassi",
+      "to_table": "moto",
+      "to_column": "numero_chassi"
+    },
+    {
+      "from_table": "titulo_a_pagar",
       "from_column": "pedido_id",
       "to_table": "pedido_venda_moto",
+      "to_column": "id"
+    },
+    {
+      "from_table": "titulo_a_pagar",
+      "from_column": "titulo_financeiro_id",
+      "to_table": "titulo_financeiro",
+      "to_column": "id"
+    },
+    {
+      "from_table": "titulo_financeiro",
+      "from_column": "empresa_recebedora_id",
+      "to_table": "empresa_venda_moto",
       "to_column": "id"
     },
     {
@@ -2518,8 +2536,8 @@
     },
     {
       "from_table": "titulo_financeiro",
-      "from_column": "empresa_recebedora_id",
-      "to_table": "empresa_venda_moto",
+      "from_column": "pedido_id",
+      "to_table": "pedido_venda_moto",
       "to_column": "id"
     },
     {
