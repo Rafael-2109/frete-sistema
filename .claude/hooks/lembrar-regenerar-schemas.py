@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """
-Hook PostToolUse: Auto-regenerar Schemas apos editar models.py
+Hook PostToolUse: Auto-regenerar Schemas apos editar modelos.
 
-Detecta edicoes em arquivos models.py e EXECUTA automaticamente
-o generate_schemas.py para manter os schemas JSON atualizados.
+Detecta edicoes em models.py, models/<x>.py e models_<x>.py e EXECUTA
+o generate_schemas.py (agora idempotente: so grava o que mudou, sem poluir
+o git). NUNCA apaga schemas orfaos automaticamente — apenas loga
+(remocao exige --prune-orphans manual; ver generate_schemas.py).
 
 Exit 0 sempre — falha na regeneracao nao deve bloquear o fluxo.
 """
@@ -12,6 +14,25 @@ import json
 import os
 import subprocess
 import sys
+
+
+def _is_model_file(file_path: str) -> bool:
+    """True se `file_path` for um arquivo de modelo SQLAlchemy.
+
+    Medido empiricamente sobre os 122 arquivos com __tablename__ em app/:
+    cobre models.py, models_*.py, *_models.py (email_models.py, frota_models.py)
+    e o diretorio models/. Tambem cobre model.py, model_*.py e o diretorio model/
+    (singular). Ampla de proposito: como o gerador agora e idempotente, um disparo
+    extra (falso-positivo) e inocuo (0 escritos, git limpo); perder um modelo real,
+    nao. Exclui test_*.py para reduzir ruido.
+    """
+    path_l = file_path.lower()
+    base = os.path.basename(path_l)
+    return (
+        path_l.endswith(".py")
+        and not base.startswith("test_")
+        and ("model" in base or "/models/" in path_l or "/model/" in path_l)
+    )
 
 
 def main():
@@ -29,7 +50,7 @@ def main():
             return
 
         file_path = tool_input.get("file_path", "")
-        if "/models/" not in file_path and not file_path.endswith("models.py"):
+        if not _is_model_file(file_path):
             return
 
         # Descobrir diretorio do projeto
@@ -69,7 +90,8 @@ def main():
 
         if result.returncode == 0:
             print(
-                f"Hook: schemas regenerados automaticamente apos editar {os.path.basename(file_path)}",
+                f"Hook: schemas regenerados (idempotente — so grava o que mudou) "
+                f"apos editar {os.path.basename(file_path)}",
                 file=sys.stderr,
             )
         else:

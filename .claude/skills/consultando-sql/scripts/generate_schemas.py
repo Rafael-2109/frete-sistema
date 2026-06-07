@@ -296,6 +296,82 @@ TABLE_DESCRIPTIONS = {
 
 
 # =====================================================================
+# SERIALIZAÇÃO CANÔNICA E ESCRITA IDEMPOTENTE (subsistema S0)
+# =====================================================================
+# Causa raiz da poluição de git (Passo 0 do MASTER text-to-sql): a serialização
+# iterava coleções que em SQLAlchemy são `set` — table.indexes, table.constraints
+# e col.foreign_keys — cuja ordem de iteração varia entre processos Python. Logo,
+# tables/*.json mudavam entre duas execuções SEM mudança de modelo, poluindo o git.
+# (catalog.json/relationships.json já eram estáveis por iterarem sorted(...).)
+# Correção: ordenar de forma canônica (nas funções de extração) + gravar só quando
+# o conteúdo muda (write-if-changed), com a MESMA serialização p/ gravar e comparar.
+
+def _dump_canonical(obj) -> str:
+    """Serialização JSON canônica e determinística (usada p/ gravar E p/ comparar).
+
+    NÃO usa sort_keys: preserva a ordem das colunas do modelo dentro de cada
+    tabela (decisão 3 do plano S0). Newline final fixo (git-friendly).
+    """
+    return json.dumps(obj, ensure_ascii=False, indent=2) + "\n"
+
+
+def _read_text(path: str):
+    """Lê o conteúdo de `path` (UTF-8) ou retorna None se não existir."""
+    try:
+        with open(path, 'r', encoding='utf-8') as f:
+            return f.read()
+    except FileNotFoundError:
+        return None
+
+
+def _write_if_changed(path: str, content_str: str) -> bool:
+    """Escreve `content_str` em `path` somente se diferir do conteúdo atual.
+
+    Retorna True se escreveu (arquivo novo ou alterado), False se já estava igual.
+    É o que mantém o git limpo entre execuções idempotentes.
+    """
+    if _read_text(path) == content_str:
+        return False
+    with open(path, 'w', encoding='utf-8') as f:
+        f.write(content_str)
+    return True
+
+
+def _fk_ref(fk) -> str:
+    """Chave canônica de uma ForeignKey: 'tabela.coluna' do alvo (ordena sets)."""
+    return f"{fk.column.table.name}.{fk.column.name}"
+
+
+def _find_orphan_schemas(tables_dir: str, generated_table_names) -> list:
+    """Schemas em tables/<t>.json sem tabela correspondente no metadata gerado.
+
+    ATENÇÃO: um órfão pode ser uma tabela VIVA cujo módulo de modelo não está na
+    lista de import (descoberto no Passo 0 do S0). Por isso a remoção NUNCA é
+    automática — ver _resolve_orphans_to_delete.
+    """
+    generated = set(generated_table_names)
+    try:
+        existing = {f[:-5] for f in os.listdir(tables_dir) if f.endswith('.json')}
+    except FileNotFoundError:
+        return []
+    return sorted(existing - generated)
+
+
+def _resolve_orphans_to_delete(orphan_files, import_complete: bool, do_prune: bool) -> list:
+    """Decide quais órfãos remover. Salvaguardas INVIOLÁVEIS (S0):
+
+    1. Só remove com `do_prune` (flag --prune-orphans explícita). O fluxo
+       automático/hook NUNCA apaga — apenas loga.
+    2. Mesmo com a flag, só remove com `import_complete` (zero ImportError).
+       Import parcial NUNCA apaga: um models.py quebrado no meio de uma edição
+       faria o hook apagar schemas válidos.
+    """
+    if not do_prune or not import_complete:
+        return []
+    return list(orphan_files)
+
+
+# =====================================================================
 # FUNÇÕES DE EXTRAÇÃO
 # =====================================================================
 
@@ -450,7 +526,7 @@ def extract_table_schema(table_name: str, table, model_class=None) -> dict:
         if not desc:
             # Gerar descrição automática
             if col.name.endswith('_id') and col.foreign_keys:
-                fk = list(col.foreign_keys)[0]
+                fk = sorted(col.foreign_keys, key=_fk_ref)[0]
                 desc = f"FK → {fk.column.table.name}.{fk.column.name}"
             elif col.name in ('created_at', 'criado_em'):
                 desc = "Data de criação"
@@ -475,8 +551,9 @@ def extract_table_schema(table_name: str, table, model_class=None) -> dict:
 
         fields.append(field)
 
-        # Foreign keys
-        for fk in col.foreign_keys:
+        # Foreign keys — ordenar a iteração do set p/ determinismo
+        # (a ordem ENTRE colunas é preservada pelo loop externo de table.columns).
+        for fk in sorted(col.foreign_keys, key=_fk_ref):
             foreign_keys.append({
                 'column': col.name,
                 'references': f"{fk.column.table.name}.{fk.column.name}"
@@ -497,6 +574,9 @@ def extract_table_schema(table_name: str, table, model_class=None) -> dict:
             cols = [c.name for c in constraint.columns]
             if len(cols) > 1:  # Só compostos
                 unique_constraints.append(cols)
+    # table.constraints é set -> ordenar a LISTA de constraints p/ determinismo
+    # (a ordem das colunas DENTRO de cada constraint é semântica e preservada).
+    unique_constraints.sort(key=lambda cols: tuple(cols))
 
     # Índices
     indices = []
@@ -508,6 +588,9 @@ def extract_table_schema(table_name: str, table, model_class=None) -> dict:
                 'columns': cols,
                 'unique': idx.unique
             })
+    # CAUSA RAIZ (Passo 0): table.indexes é set -> ordenar a LISTA de índices p/
+    # determinismo (a ordem das colunas DENTRO de cada índice é semântica).
+    indices.sort(key=lambda i: ((i.get('name') or ''), tuple(i['columns'])))
 
     schema = {
         'name': table_name,
@@ -577,6 +660,10 @@ def extract_relationships(metadata) -> list:
                         'to_column': fk.column.name,
                     })
 
+    # Ordenação canônica (defensiva — já itera sorted(tables); decisão 4 do S0).
+    relationships.sort(
+        key=lambda r: (r['from_table'], r['from_column'], r['to_table'], r['to_column'])
+    )
     return relationships
 
 
@@ -585,7 +672,11 @@ def extract_relationships(metadata) -> list:
 # =====================================================================
 
 def import_all_models():
-    """Importa todos os modelos SQLAlchemy e retorna metadata + model_map."""
+    """Importa modelos SQLAlchemy. Retorna (metadata, model_map, import_errors).
+
+    import_errors: lista de (modulo, erro). Quando NÃO vazia, o import ficou
+    PARCIAL e a remoção de órfãos é bloqueada (salvaguarda inviolável do S0).
+    """
 
     # Importar app para inicializar SQLAlchemy metadata
     os.environ.setdefault('FLASK_ENV', 'development')
@@ -656,6 +747,7 @@ def import_all_models():
             'app.vinculos.models',
         ]
 
+        import_errors = []
         for module_name in model_modules:
             try:
                 mod = importlib.import_module(module_name)
@@ -667,19 +759,20 @@ def import_all_models():
                         model_map[table_name] = obj
 
             except Exception as e:
+                import_errors.append((module_name, str(e)))
                 print(f"⚠️  Erro ao importar {module_name}: {e}")
 
-        return db.metadata, model_map
+        return db.metadata, model_map, import_errors
 
 
 # =====================================================================
 # GERAÇÃO DOS ARQUIVOS
 # =====================================================================
 
-def generate_all(stats_only=False):
-    """Gera todos os schemas."""
+def generate_all(stats_only=False, check_only=False, prune_orphans=False):
+    """Gera todos os schemas. Retorna código de saída (0=ok, 1=drift em --check)."""
     print("🔍 Importando modelos SQLAlchemy...")
-    metadata, model_map = import_all_models()
+    metadata, model_map, import_errors = import_all_models()
 
     all_tables = sorted(metadata.tables.keys())
     excluded = BLOCKED_TABLES | DEAD_TABLES | IRRELEVANT_TABLES
@@ -724,12 +817,16 @@ def generate_all(stats_only=False):
     # Garantir diretórios
     os.makedirs(TABLES_DIR, exist_ok=True)
 
-    # 1. Gerar schemas individuais por tabela (allowed + admin_only)
+    # Conteúdo canônico de cada destino: {path absoluto -> string JSON canônica}.
+    # Construído em memória primeiro para suportar tanto a escrita idempotente
+    # (write-if-changed) quanto o modo --check (comparar sem escrever).
+    outputs = {}
+    admin_only_set = set(admin_only_tables)
+
+    # 1. Schemas individuais por tabela (allowed + admin_only)
     # admin_only tem schema gerado mas so e usavel via admin_mode (USUARIOS_SQL_ADMIN).
     # Safety validator bloqueia uso por nao-admin via tabelas_bloqueadas.
     print(f"\n📝 Gerando schemas individuais...")
-    tables_generated = 0
-    admin_only_set = set(admin_only_tables)
     for table_name in list(allowed_tables) + admin_only_tables:
         table = metadata.tables[table_name]
         model_class = model_map.get(table_name)
@@ -739,13 +836,7 @@ def generate_all(stats_only=False):
             schema['admin_only'] = True
 
         output_path = os.path.join(TABLES_DIR, f"{table_name}.json")
-        with open(output_path, 'w', encoding='utf-8') as f:
-            json.dump(schema, f, ensure_ascii=False, indent=2)
-
-        tables_generated += 1
-
-    print(f"   ✅ {tables_generated} schemas gerados em schemas/tables/ "
-          f"({len(allowed_tables)} normais + {len(admin_only_tables)} admin-only)")
+        outputs[output_path] = _dump_canonical(schema)
 
     # 2. Gerar catálogo
     print(f"\n📝 Gerando catálogo...")
@@ -783,13 +874,14 @@ def generate_all(stats_only=False):
         entry['admin_only'] = True
         catalog['tabelas_admin'].append(entry)
 
-    catalog_path = os.path.join(SCHEMAS_DIR, 'catalog.json')
-    with open(catalog_path, 'w', encoding='utf-8') as f:
-        json.dump(catalog, f, ensure_ascii=False, indent=2)
+    # Ordenação canônica por nome (defensiva — decisão 4 do S0; catalog já
+    # iterava allowed_tables ordenado, mas garantimos estabilidade explícita).
+    catalog['tabelas'].sort(key=lambda e: e['name'])
+    catalog['tabelas_admin'].sort(key=lambda e: e['name'])
 
-    catalog_size = os.path.getsize(catalog_path)
-    print(f"   ✅ catalog.json gerado ({catalog_size:,} bytes, "
-          f"{len(catalog['tabelas'])} normais + {len(catalog['tabelas_admin'])} admin-only)")
+    catalog_path = os.path.join(SCHEMAS_DIR, 'catalog.json')
+    outputs[catalog_path] = _dump_canonical(catalog)
+    catalog_size = len(outputs[catalog_path].encode('utf-8'))
 
     # 3. Gerar relationships
     print(f"\n📝 Gerando mapa de relacionamentos...")
@@ -802,10 +894,53 @@ def generate_all(stats_only=False):
     }
 
     rel_path = os.path.join(SCHEMAS_DIR, 'relationships.json')
-    with open(rel_path, 'w', encoding='utf-8') as f:
-        json.dump(rel_data, f, ensure_ascii=False, indent=2)
+    outputs[rel_path] = _dump_canonical(rel_data)
 
-    print(f"   ✅ relationships.json gerado ({len(relationships)} FKs)")
+    # --- Modo --check: comparar com o disco SEM escrever (drift detector) ---
+    if check_only:
+        drift = [p for p in sorted(outputs) if _read_text(p) != outputs[p]]
+        if drift:
+            print(f"\n❌ DRIFT: {len(drift)} arquivo(s) de schema desatualizado(s):")
+            for p in drift:
+                print(f"   • {os.path.relpath(p, PROJECT_ROOT)}")
+            print("\n   Rode: python .claude/skills/consultando-sql/scripts/generate_schemas.py")
+            return 1
+        print(f"\n✅ --check: {len(outputs)} schemas atualizados (sem drift).")
+        return 0
+
+    # --- Escrita idempotente (write-if-changed): só grava o que mudou ---
+    written = 0
+    for path in sorted(outputs):
+        if _write_if_changed(path, outputs[path]):
+            written += 1
+    unchanged = len(outputs) - written
+
+    # --- Órfãos: schemas no disco sem tabela gerada ---
+    # Política (decisão do usuário 2026-06-07): o fluxo automático/hook NUNCA
+    # apaga — só LOGA. A remoção real exige --prune-orphans E import 100% completo
+    # (salvaguarda dupla). Motivo (Passo 0): um "órfão" pode ser uma tabela VIVA
+    # cujo módulo de modelo não está na lista de import.
+    generated_table_names = set(allowed_tables) | set(admin_only_tables)
+    orphans = _find_orphan_schemas(TABLES_DIR, generated_table_names)
+    import_complete = not import_errors
+    deleted = _resolve_orphans_to_delete(orphans, import_complete, prune_orphans)
+    for name in deleted:
+        os.remove(os.path.join(TABLES_DIR, f"{name}.json"))
+    if orphans:
+        if deleted:
+            print(f"\n🗑️  {len(deleted)} schema(s) órfão(s) removido(s) (--prune-orphans):")
+            for n in deleted:
+                print(f"      - {n}")
+        else:
+            print(f"\n⚠️  {len(orphans)} schema(s) órfão(s) no disco (NÃO removidos):")
+            for n in orphans:
+                print(f"      • {n}.json")
+            if prune_orphans and not import_complete:
+                print(f"   ⛔ --prune-orphans IGNORADO: import parcial "
+                      f"({len(import_errors)} módulo(s) com erro) — salvaguarda inviolável.")
+            else:
+                print("   ⚠️  Um órfão pode ser tabela VIVA cujo módulo não está na "
+                      "lista de import. REVISE antes de remover com --prune-orphans.")
 
     # 4. Resumo final
     total_fields = sum(
@@ -816,11 +951,12 @@ def generate_all(stats_only=False):
     print(f"   Tabelas: {len(allowed_tables)}")
     print(f"   Campos totais: {total_fields}")
     print(f"   Relacionamentos: {len(relationships)}")
-    print(f"   Arquivos gerados:")
+    print(f"   Arquivos: {len(outputs)} ({written} escritos, {unchanged} inalterados)")
     print(f"      schemas/catalog.json ({catalog_size:,} bytes)")
     print(f"      schemas/relationships.json")
-    print(f"      schemas/tables/*.json ({tables_generated} arquivos)")
+    print(f"      schemas/tables/*.json")
     print(f"{'='*60}")
+    return 0
 
 
 # =====================================================================
@@ -835,9 +971,22 @@ def main():
         '--stats', action='store_true',
         help='Apenas mostrar estatísticas, sem gerar arquivos'
     )
+    parser.add_argument(
+        '--check', action='store_true',
+        help='Não escreve; sai com código != 0 se algum schema estiver defasado (drift)'
+    )
+    parser.add_argument(
+        '--prune-orphans', action='store_true',
+        help='Remove schemas órfãos (sem tabela no metadata). Só age com import '
+             'sem erros; o fluxo normal apenas LOGA os órfãos.'
+    )
     args = parser.parse_args()
 
-    generate_all(stats_only=args.stats)
+    rc = generate_all(
+        stats_only=args.stats, check_only=args.check, prune_orphans=args.prune_orphans
+    )
+    if rc:
+        sys.exit(rc)
 
 
 if __name__ == '__main__':
