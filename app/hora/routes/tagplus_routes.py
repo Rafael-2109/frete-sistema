@@ -1178,6 +1178,15 @@ def tagplus_pedido_venda_criar():
     # consumidor_final: campo removido da UI em 2026-05-07. Payload TagPlus
     # agora envia sempre True (ver payload_builder.py). Nao lemos mais do form.
 
+    # Origem do lead (roadmap #6): SELECT obrigatorio no form manual. O texto
+    # livre (origem_lead_obs) so e exigido quando a escolha e "Outros" — essa
+    # regra (e a validacao do valor canonico) ficam no service.
+    origem_lead_raw = _g('origem_lead', 20)
+    origem_lead_obs_raw = _g('origem_lead_obs', 255) or None
+    if not origem_lead_raw:
+        flash('Origem obrigatoria — informe como o cliente conheceu a loja.', 'danger')
+        return redirect(url_for('hora.tagplus_pedido_venda_novo'))
+
     try:
         venda = venda_service.criar_venda_manual(
             # 18 chars acomoda mascara de CNPJ "00.000.000/0000-00".
@@ -1206,6 +1215,8 @@ def tagplus_pedido_venda_criar():
             pagamentos=pagamentos_in,
             valor_frete=valor_frete_raw,
             tipo_frete_calc=tipo_frete_calc_raw,
+            origem_lead=origem_lead_raw,
+            origem_lead_obs=origem_lead_obs_raw,
         )
     except ValueError as exc:
         flash(f'Erro ao criar pedido de venda: {exc}', 'danger')
@@ -1426,6 +1437,32 @@ def venda_nfe_cancelar(venda_id: int):
         flash(f'Bloqueado: {exc}', 'warning')
     except Exception as exc:
         flash(f'Erro: {exc}', 'danger')
+    return redirect(url_for('hora.venda_nfe_status', venda_id=venda_id))
+
+
+@hora_bp.route('/vendas/<int:venda_id>/nfe/enviar-email', methods=['POST'])
+@require_hora_perm('vendas', 'editar')
+def venda_nfe_enviar_email(venda_id: int):
+    """Envia a DANFE PDF da venda por e-mail ao cliente (roadmap #4).
+
+    Remetente fixo faturamento@motochefesp.com.br (env HORA_NF_EMAIL_FROM).
+    Destinatario = e-mail do cliente no pedido (override opcional via form).
+    Registra historico em hora_venda_auditoria (ENVIOU_NF_EMAIL).
+    """
+    from app.hora.services.nf_email_service import enviar_nf_por_email, NfEmailError
+
+    destinatario = (request.form.get('email') or '').strip() or None
+    try:
+        res = enviar_nf_por_email(
+            venda_id=venda_id,
+            usuario=_operador(),
+            destinatario_override=destinatario,
+        )
+        flash(f'NF enviada por e-mail para {res["destinatario"]}.', 'success')
+    except NfEmailError as exc:
+        flash(str(exc), 'danger')
+    except Exception as exc:  # noqa: BLE001 — best-effort; nao quebra a tela
+        flash(f'Erro ao enviar NF por e-mail: {exc}', 'danger')
     return redirect(url_for('hora.venda_nfe_status', venda_id=venda_id))
 
 

@@ -43,6 +43,8 @@ from app.hora.models import (
     VENDA_STATUS_COTACAO,
     VENDA_STATUS_FATURADO,
     VENDA_STATUS_INCOMPLETO,
+    VENDA_ORIGEM_LEAD_VALIDOS,
+    VENDA_ORIGEM_LEAD_OUTROS,
 )
 from app.hora.models.tagplus import (
     HoraTagPlusNfeEmissao,
@@ -632,6 +634,37 @@ def _avaliar_status_pagamento(
 # Fluxo de criacao manual: COTACAO/INCOMPLETO + lock pessimista + RESERVADA
 # --------------------------------------------------------------------------
 
+def _normalizar_origem_lead(origem_lead, origem_lead_obs):
+    """Normaliza/valida a origem do lead (roadmap #6 — como conheceu a loja).
+
+    Retorna `(origem_norm, obs_norm)`:
+    - origem_norm: None se vazio, senao um valor de VENDA_ORIGEM_LEAD_VALIDOS.
+    - obs_norm: texto livre (<=255) APENAS quando origem == OUTROS; caso
+      contrario None (o texto livre so se aplica a "Outros").
+
+    Levanta ValueError se a origem for invalida ou se OUTROS vier sem obs.
+    O service aceita origem vazia (None) para nao quebrar import DANFE /
+    backfill / vendas legadas — a obrigatoriedade do SELECT e do form manual
+    (rota + frontend).
+    """
+    origem = (origem_lead or '').strip().upper() or None
+    obs = (origem_lead_obs or '').strip() or None
+    if origem is None:
+        return None, None
+    if origem not in VENDA_ORIGEM_LEAD_VALIDOS:
+        raise ValueError(
+            f'origem_lead invalida: {origem_lead!r} '
+            f'(esperado um de {sorted(VENDA_ORIGEM_LEAD_VALIDOS)})'
+        )
+    if origem == VENDA_ORIGEM_LEAD_OUTROS:
+        if not obs:
+            raise ValueError(
+                'Informe a observacao da origem quando selecionar "Outros".'
+            )
+        return origem, obs[:255]
+    return origem, None
+
+
 def criar_venda_manual(
     cpf_cliente: str,
     nome_cliente: str,
@@ -660,6 +693,8 @@ def criar_venda_manual(
     valor_frete=None,
     tipo_frete_calc: Optional[str] = None,
     itens: Optional[List[dict]] = None,
+    origem_lead: Optional[str] = None,
+    origem_lead_obs: Optional[str] = None,
 ) -> HoraVenda:
     """Cria pedido de venda manual em status COTACAO ou INCOMPLETO.
 
@@ -831,6 +866,10 @@ def criar_venda_manual(
         pagamentos_norm, valor_total_dec,
     )
 
+    origem_lead_norm, origem_lead_obs_norm = _normalizar_origem_lead(
+        origem_lead, origem_lead_obs,
+    )
+
     venda = HoraVenda(
         loja_id=loja_id,
         cpf_cliente=cpf_norm,
@@ -871,6 +910,8 @@ def criar_venda_manual(
             else inferir_consumidor_final(cpf_norm)
         ),
         criado_por_id=criado_por_id,
+        origem_lead=origem_lead_norm,
+        origem_lead_obs=origem_lead_obs_norm,
     )
     db.session.add(venda)
     db.session.flush()
@@ -1169,6 +1210,8 @@ _CAMPOS_COTACAO_FULL = {
     'consumidor_final',
     # Frete CIF (migration hora_38) — UI mostra apenas com modalidade='0'.
     'valor_frete', 'tipo_frete_calc',
+    # Origem do lead (roadmap #6) — editavel enquanto em COTACAO/INCOMPLETO.
+    'origem_lead', 'origem_lead_obs',
 }
 _CAMPOS_EDITAVEIS_HEADER = {
     VENDA_STATUS_INCOMPLETO: _CAMPOS_COTACAO_FULL,
@@ -1313,6 +1356,8 @@ def _aplicar_header(
     consumidor_final = dados.get('consumidor_final')
     valor_frete = dados.get('valor_frete')
     tipo_frete_calc = dados.get('tipo_frete_calc')
+    origem_lead = dados.get('origem_lead')
+    origem_lead_obs = dados.get('origem_lead_obs')
 
     def _atualizar(campo: str, novo_valor):
         antes = getattr(venda, campo)
@@ -1423,6 +1468,18 @@ def _aplicar_header(
         )
         _atualizar('valor_frete', valor_dec_norm)
         _atualizar('tipo_frete_calc', tipo_norm)
+
+    # Origem do lead (roadmap #6): os 2 campos sao acoplados (OUTROS exige obs).
+    # Resolve juntos para validar a regra; usa o valor atual como fallback
+    # quando so um dos campos vem no form.
+    if origem_lead is not None or origem_lead_obs is not None:
+        origem_in = origem_lead if origem_lead is not None else venda.origem_lead
+        obs_in = (
+            origem_lead_obs if origem_lead_obs is not None else venda.origem_lead_obs
+        )
+        origem_norm, obs_norm = _normalizar_origem_lead(origem_in, obs_in)
+        _atualizar('origem_lead', origem_norm)
+        _atualizar('origem_lead_obs', obs_norm)
 
     return venda
 

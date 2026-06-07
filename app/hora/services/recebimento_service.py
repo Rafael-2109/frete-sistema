@@ -19,6 +19,7 @@ from sqlalchemy.orm import selectinload
 
 from app import db
 from app.utils.timezone import agora_utc_naive
+from app.utils.file_storage import FileStorage
 from app.hora.models import (
     HoraConferenciaDivergencia,
     HoraLoja,
@@ -32,6 +33,32 @@ from app.hora.models import (
 )
 from app.hora.services.moto_service import registrar_evento
 from app.hora.services import recebimento_audit
+
+
+# Extensoes de imagem aceitas para a foto do chassi (roadmap #8). Espelha
+# avaria_service.ALLOWED_FOTO_EXT / peca_service.ALLOWED_FOTO_EXT (mesmo padrao
+# do modulo — constante local por service para nao acoplar entre eles).
+ALLOWED_FOTO_EXT = {'jpg', 'jpeg', 'png', 'webp', 'heic', 'heif'}
+
+
+def upload_foto_chassi(file_obj, recebimento_id: int) -> Optional[str]:
+    """Sobe a foto do chassi conferido ao S3 e retorna a s3_key.
+
+    Usado quando o chassi e digitado manualmente, sem leitura por QR Code /
+    codigo de barras (roadmap #8). Retorna None se nao houver arquivo.
+    Levanta ValueError em extensao invalida ou falha de upload.
+    """
+    if not file_obj or not getattr(file_obj, 'filename', '').strip():
+        return None
+    storage = FileStorage()
+    s3_key = storage.save_file(
+        file=file_obj,
+        folder=f'hora/recebimentos/{recebimento_id}',
+        allowed_extensions=ALLOWED_FOTO_EXT,
+    )
+    if not s3_key:
+        raise ValueError('Falha ao salvar a foto do chassi no storage.')
+    return s3_key
 
 
 # MOTOR_DIFERENTE removido: nao existe base para conferir motor.
@@ -279,11 +306,17 @@ def registrar_conferencia_cega(
     foto_s3_key: Optional[str] = None,
     ordem: Optional[int] = None,
     operador: Optional[str] = None,
+    exigir_foto: bool = True,
 ) -> HoraRecebimentoConferencia:
     """Registra conferencia cega: chassi + modelo + cor + avaria.
 
     Backend compara com NF e deriva divergencias 1-N em
     hora_conferencia_divergencia.
+
+    `exigir_foto` (roadmap #8): quando True (default, conferencia MANUAL via
+    wizard), exige foto se o chassi nao foi lido por QR/codigo de barras.
+    A conferencia AUTOMATICA derivada da NF (criar_recebimento_automatico_da_nf)
+    passa False — nao ha operador nem foto fisica nesse fluxo.
     """
     rec = HoraRecebimento.query.get(recebimento_id)
     if not rec:
@@ -305,6 +338,17 @@ def registrar_conferencia_cega(
                    substituida=False)
         .first()
     )
+
+    # Roadmap #8: foto do chassi obrigatoria quando NAO houve leitura por
+    # QR Code / codigo de barras (chassi digitado manualmente). Vale para nova
+    # conferencia e para atualizacao; aceita foto ja salva na conferencia
+    # existente (nao re-exige a cada update).
+    foto_existente = conf.foto_s3_key if conf else None
+    if exigir_foto and not qr_code_lido and not (foto_s3_key or foto_existente):
+        raise ValueError(
+            'Foto do chassi obrigatoria quando o chassi nao e lido por '
+            'QR Code / codigo de barras.'
+        )
 
     is_new = conf is None
     if is_new:
@@ -1403,6 +1447,7 @@ def criar_recebimento_automatico_da_nf(
             qr_code_lido=False,
             ordem=ordem_conf,
             operador=operador,
+            exigir_foto=False,  # conferencia automatica da NF: sem operador/foto (roadmap #8)
         )
         conf_ids.append(conf.id)
 

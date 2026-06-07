@@ -1034,5 +1034,28 @@
     });
   }
 
+  // ---- Origem do lead (roadmap #6): "Outros" exibe/exige o campo "Qual?" ----
+  // Defensivo: so age se o select existir (criacao OU edicao). Usa o .row
+  // ancestral para achar o wrapper irmao — sem ids globais (sem colisao).
+  document.querySelectorAll('.js-origem-lead').forEach(function (sel) {
+    const row = sel.closest('.row');
+    const wrap = row ? row.querySelector('.js-origem-lead-obs-wrap') : null;
+    if (!wrap) return;
+    const obs = wrap.querySelector('.js-origem-lead-obs');
+    function syncOrigemLead() {
+      const isOutros = sel.value === 'OUTROS';
+      wrap.classList.toggle('d-none', !isOutros);
+      if (!obs) return;
+      if (isOutros) {
+        obs.setAttribute('required', 'required');
+      } else {
+        obs.removeAttribute('required');
+        obs.value = '';
+      }
+    }
+    sel.addEventListener('change', syncOrigemLead);
+    syncOrigemLead();  // estado inicial (edicao: reflete origem ja salva)
+  });
+
 })();
 </script>

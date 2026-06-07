@@ -24,9 +24,15 @@ import os
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from email.mime.application import MIMEApplication
 from email.utils import formataddr
-from typing import Optional, List
+from typing import Optional, List, Tuple
 from app.utils.logging_config import logger
+
+# Anexo = (nome_do_arquivo, conteudo_bytes). Subtipo MIME inferido como
+# 'octet-stream' generico (suficiente para PDF/DANFE; o filename carrega a
+# extensao real). Suportado apenas no backend SMTP por enquanto.
+Attachment = Tuple[str, bytes]
 
 
 class EmailConfig:
@@ -75,6 +81,9 @@ class EmailSender:
         reply_to: Optional[str] = None,
         cc: Optional[List[str]] = None,
         bcc: Optional[List[str]] = None,
+        attachments: Optional[List[Attachment]] = None,
+        from_email: Optional[str] = None,
+        from_name: Optional[str] = None,
     ) -> dict:
         """
         Envia email usando o backend configurado.
@@ -87,6 +96,10 @@ class EmailSender:
             reply_to: Email para resposta (opcional)
             cc: Lista de emails em copia (opcional)
             bcc: Lista de emails em copia oculta (opcional)
+            attachments: lista de (filename, bytes) — SUPORTADO SO no backend
+                SMTP por enquanto (SES/SendGrid retornam erro se usado).
+            from_email: sobrescreve o remetente (default: EMAIL_FROM do ambiente).
+            from_name: sobrescreve o nome do remetente (default: EMAIL_FROM_NAME).
 
         Returns:
             dict: {'success': bool, 'message_id': str, 'error': str}
@@ -102,11 +115,14 @@ class EmailSender:
             backend = self.config.BACKEND.lower()
 
             if backend == 'smtp':
-                return self._send_smtp(to, subject, body_html, body_text, reply_to, cc, bcc)
+                return self._send_smtp(to, subject, body_html, body_text, reply_to,
+                                       cc, bcc, attachments, from_email, from_name)
             elif backend == 'ses':
-                return self._send_ses(to, subject, body_html, body_text, reply_to, cc, bcc)
+                return self._send_ses(to, subject, body_html, body_text, reply_to,
+                                      cc, bcc, attachments, from_email, from_name)
             elif backend == 'sendgrid':
-                return self._send_sendgrid(to, subject, body_html, body_text, reply_to, cc, bcc)
+                return self._send_sendgrid(to, subject, body_html, body_text, reply_to,
+                                           cc, bcc, attachments, from_email, from_name)
             else:
                 return {
                     'success': False,
@@ -130,27 +146,42 @@ class EmailSender:
         reply_to: Optional[str],
         cc: Optional[List[str]],
         bcc: Optional[List[str]],
+        attachments: Optional[List[Attachment]] = None,
+        from_email: Optional[str] = None,
+        from_name: Optional[str] = None,
     ) -> dict:
-        """Envia email via SMTP padrao"""
+        """Envia email via SMTP padrao (com suporte a anexos)."""
 
-        msg = MIMEMultipart('alternative')
+        eff_from_email = from_email or self.config.FROM_EMAIL
+        eff_from_name = from_name or self.config.FROM_NAME
+
+        # Com anexos: container 'mixed' (corpo alternative + partes anexas).
+        # Sem anexos: 'alternative' (texto + html) como antes.
+        if attachments:
+            msg = MIMEMultipart('mixed')
+            corpo = MIMEMultipart('alternative')
+            if body_text:
+                corpo.attach(MIMEText(body_text, 'plain', 'utf-8'))
+            corpo.attach(MIMEText(body_html, 'html', 'utf-8'))
+            msg.attach(corpo)
+            for fname, conteudo in attachments:
+                parte = MIMEApplication(conteudo)
+                parte.add_header('Content-Disposition', 'attachment', filename=fname)
+                msg.attach(parte)
+        else:
+            msg = MIMEMultipart('alternative')
+            if body_text:
+                msg.attach(MIMEText(body_text, 'plain', 'utf-8'))
+            msg.attach(MIMEText(body_html, 'html', 'utf-8'))
+
         msg['Subject'] = subject
-        msg['From'] = formataddr((self.config.FROM_NAME, self.config.FROM_EMAIL))
+        msg['From'] = formataddr((eff_from_name, eff_from_email))
         msg['To'] = to
 
         if cc:
             msg['Cc'] = ', '.join(cc)
         if reply_to:
             msg['Reply-To'] = reply_to
-
-        # Corpo em texto plano
-        if body_text:
-            part_text = MIMEText(body_text, 'plain', 'utf-8')
-            msg.attach(part_text)
-
-        # Corpo em HTML
-        part_html = MIMEText(body_html, 'html', 'utf-8')
-        msg.attach(part_html)
 
         # Lista completa de destinatarios
         all_recipients = [to]
@@ -168,7 +199,7 @@ class EmailSender:
                     server.starttls()
 
             server.login(self.config.USERNAME, self.config.PASSWORD)
-            server.sendmail(self.config.FROM_EMAIL, all_recipients, msg.as_string())
+            server.sendmail(eff_from_email, all_recipients, msg.as_string())
             server.quit()
 
             logger.info(f"Email enviado com sucesso para {to}")
@@ -202,8 +233,17 @@ class EmailSender:
         reply_to: Optional[str],
         cc: Optional[List[str]],
         bcc: Optional[List[str]],
+        attachments: Optional[List[Attachment]] = None,
+        from_email: Optional[str] = None,
+        from_name: Optional[str] = None,
     ) -> dict:
         """Envia email via AWS SES"""
+        if attachments:
+            return {
+                'success': False,
+                'message_id': None,
+                'error': 'Anexos suportados apenas no backend SMTP atualmente.'
+            }
         try:
             import boto3
             from botocore.exceptions import ClientError
@@ -214,6 +254,8 @@ class EmailSender:
                 'error': 'boto3 nao instalado. Execute: pip install boto3'
             }
 
+        eff_from_email = from_email or self.config.FROM_EMAIL
+        eff_from_name = from_name or self.config.FROM_NAME
         ses_client = boto3.client('ses', region_name=self.config.AWS_REGION)
 
         destination = {'ToAddresses': [to]}
@@ -233,7 +275,7 @@ class EmailSender:
 
         try:
             response = ses_client.send_email(
-                Source=f'{self.config.FROM_NAME} <{self.config.FROM_EMAIL}>',
+                Source=f'{eff_from_name} <{eff_from_email}>',
                 Destination=destination,
                 Message=message,
                 ReplyToAddresses=[reply_to] if reply_to else []
@@ -264,8 +306,17 @@ class EmailSender:
         reply_to: Optional[str],
         cc: Optional[List[str]],
         bcc: Optional[List[str]],
+        attachments: Optional[List[Attachment]] = None,
+        from_email: Optional[str] = None,
+        from_name: Optional[str] = None,
     ) -> dict:
         """Envia email via SendGrid"""
+        if attachments:
+            return {
+                'success': False,
+                'message_id': None,
+                'error': 'Anexos suportados apenas no backend SMTP atualmente.'
+            }
         try:
             from sendgrid import SendGridAPIClient
             from sendgrid.helpers.mail import Mail, Email, To, Content, ReplyTo
@@ -277,7 +328,8 @@ class EmailSender:
             }
 
         message = Mail(
-            from_email=Email(self.config.FROM_EMAIL, self.config.FROM_NAME),
+            from_email=Email(from_email or self.config.FROM_EMAIL,
+                             from_name or self.config.FROM_NAME),
             to_emails=To(to),
             subject=subject,
             html_content=Content('text/html', body_html)

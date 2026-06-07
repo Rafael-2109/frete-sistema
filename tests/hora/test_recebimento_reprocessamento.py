@@ -85,6 +85,7 @@ def _conferir_chassi_e_finalizar(rec, modelo, chassi):
         modelo_id_conferido=modelo.id,
         cor_conferida='PRETA',
         avaria_fisica=False,
+        qr_code_lido=True,  # roadmap #8: conferencia por QR dispensa foto
         operador='tester',
     )
 

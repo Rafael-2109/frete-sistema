@@ -197,6 +197,17 @@
     </label>
   </div>
 
+  {# Roadmap #8: foto do chassi obrigatoria quando digitado manualmente #}
+  <div id="foto-chassi-wrap" class="mb-3 d-none">
+    <label class="form-label">
+      <i class="fas fa-camera"></i> Foto do chassi <span class="text-danger">*</span>
+    </label>
+    <input type="file" id="input-foto-chassi" class="form-control" accept="image/*" capture="environment">
+    <small class="text-muted">
+      Obrigatória porque o chassi não foi lido por QR Code / código de barras.
+    </small>
+  </div>
+
   <div id="match-preview" class="mb-3">
     <!-- preenchido via /validar-chassi; mostra se bate com NF ou divergencias detalhadas -->
   </div>
@@ -420,6 +431,9 @@
       alert('Chassi invalido.'); return;
     }
     state.chassi = chassi;
+    // Roadmap #8: foto obrigatoria so quando o chassi NAO foi lido por QR/codigo.
+    const fotoWrap = document.getElementById('foto-chassi-wrap');
+    if (fotoWrap) fotoWrap.classList.toggle('d-none', state.qrLido);
     try {
       const r = await fetch(URL_VALIDAR + '?chassi=' + encodeURIComponent(chassi));
       const data = await r.json();
@@ -461,9 +475,16 @@
       alert('Erro ao validar chassi: ' + e);
     }
   }
-  document.getElementById('btn-chassi-manual').addEventListener('click', handleChassiInformado);
+  document.getElementById('btn-chassi-manual').addEventListener('click', () => {
+    state.qrLido = false;  // caminho manual (roadmap #8 — foto sera obrigatoria)
+    handleChassiInformado();
+  });
   document.getElementById('input-chassi').addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') { e.preventDefault(); handleChassiInformado(); }
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      state.qrLido = false;  // caminho manual (roadmap #8)
+      handleChassiInformado();
+    }
   });
 
   // ---------- Passo B ----------
@@ -618,18 +639,30 @@
     if (btnConfirmar.disabled) return;  // guard double-submit
     btnConfirmar.disabled = true;
     btnConfirmar.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Confirmando...';
-    const body = new URLSearchParams();
+    // Roadmap #8: usa FormData (multipart) para acomodar a foto do chassi.
+    const body = new FormData();
     body.set('numero_chassi', state.chassi);
     if (state.modeloId) body.set('modelo_id', state.modeloId);
     if (state.cor) body.set('cor_conferida', state.cor);
     body.set('avaria_fisica', state.avaria ? '1' : '0');
     body.set('qr_code_lido', state.qrLido ? '1' : '0');
     body.set('ordem', ORDEM);
+    // Foto obrigatoria quando o chassi NAO foi lido por QR/codigo de barras.
+    const fotoInput = document.getElementById('input-foto-chassi');
+    const fotoFile = fotoInput && fotoInput.files && fotoInput.files[0];
+    if (!state.qrLido && !fotoFile) {
+      alert('Foto do chassi obrigatoria quando o chassi e digitado manualmente '
+            + '(sem leitura por QR Code / codigo de barras).');
+      btnConfirmar.disabled = false;
+      btnConfirmar.innerHTML = '<i class="fas fa-check"></i> Confirmar moto ' + ORDEM;
+      return;
+    }
+    if (fotoFile) body.set('foto', fotoFile);
     try {
+      // Sem header Content-Type: o browser define multipart/form-data + boundary.
       const r = await fetch(URL_CONFERIR, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: body.toString(),
+        body: body,
       });
       const data = await r.json();
       if (!data.ok) {

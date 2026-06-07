@@ -21,6 +21,7 @@ Acoes registradas:
                          (nao cancela na SEFAZ; status -> CANCELADO).
   RESOLVEU_DIVERGENCIA   divergencia marcada como resolvida.
   DEFINIU_LOJA           CNPJ_DESCONHECIDO resolvido manualmente.
+  ENVIOU_NF_EMAIL        NF (DANFE PDF) enviada por e-mail ao cliente (roadmap #4).
 """
 from __future__ import annotations
 
@@ -52,6 +53,8 @@ ACOES_VALIDAS = {
     # e a request quebra com ValueError. Bug introduzido com o workflow
     # do pedido (commit 8d77276f) e corrigido durante review desta sessao.
     'VOLTOU_PARA_COTACAO',
+    # Roadmap #4: envio da NF (DANFE PDF) por e-mail ao cliente.
+    'ENVIOU_NF_EMAIL',
 }
 
 

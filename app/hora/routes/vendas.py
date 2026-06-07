@@ -50,6 +50,9 @@ def _contexto_lookup_pedido_venda() -> dict:
     - vendedores_disponiveis: usuarios habilitados no modulo HORA.
     - lojas_disponiveis: lojas ativas exceto matriz (para o SELECT de nova venda).
     - lojas_ativas: lojas ativas filtradas por escopo (para troca de loja na venda).
+    - loja_default_id: loja vinculada ao usuario logado (pre-fill do SELECT de
+      nova venda — roadmap #32). None quando o usuario nao tem loja vinculada.
+      Usado apenas no modo criacao do template; a edicao usa `lojas_ativas`.
     """
     from app.hora.services.estoque_service import opcoes_filtro_estoque
     from app.hora.services import permissao_service, cadastro_service
@@ -74,12 +77,21 @@ def _contexto_lookup_pedido_venda() -> dict:
 
     lojas_ativas = _lojas_ativas_permitidas()
 
+    loja_default_id = getattr(current_user, 'loja_hora_id', None)
+
+    # Origem do lead (roadmap #6): opcoes do SELECT a partir da fonte unica
+    # de rotulos no model — [(value, label), ...].
+    from app.hora.models import VENDA_ORIGEM_LEAD_LABELS
+    origem_lead_opcoes = list(VENDA_ORIGEM_LEAD_LABELS.items())
+
     return dict(
         modelos=modelos,
         formas_pagamento=formas_pagamento,
         vendedores_disponiveis=vendedores_disponiveis,
         lojas_disponiveis=lojas_disponiveis,
         lojas_ativas=lojas_ativas,
+        loja_default_id=loja_default_id,
+        origem_lead_opcoes=origem_lead_opcoes,
     )
 
 
@@ -511,6 +523,7 @@ def vendas_salvar_pedido(venda_id: int):
         'endereco_bairro', 'endereco_cidade', 'endereco_uf',
         'modalidade_frete', 'numero_parcelas', 'intervalo_parcelas_dias',
         'valor_frete', 'tipo_frete_calc',
+        'origem_lead', 'origem_lead_obs',
     )}
 
     try:

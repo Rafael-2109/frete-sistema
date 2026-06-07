@@ -42,6 +42,33 @@ VENDA_STATUS_RESERVA_CHASSI = (
 )
 
 
+# --------------------------------------------------------------------------
+# Origem do lead (roadmap #6) — como o cliente conheceu a loja (marketing).
+# SELECT obrigatorio no form de criacao manual; o texto livre
+# (origem_lead_obs) so e exigido/persistido quando a escolha e OUTROS.
+# NAO confundir com HoraVenda.origem_criacao (fonte tecnica DANFE/MANUAL).
+# --------------------------------------------------------------------------
+VENDA_ORIGEM_LEAD_GOOGLE = 'GOOGLE'
+VENDA_ORIGEM_LEAD_INSTAGRAM = 'INSTAGRAM'
+VENDA_ORIGEM_LEAD_FACEBOOK = 'FACEBOOK'
+VENDA_ORIGEM_LEAD_OUTROS = 'OUTROS'
+
+VENDA_ORIGEM_LEAD_VALIDOS = (
+    VENDA_ORIGEM_LEAD_GOOGLE,
+    VENDA_ORIGEM_LEAD_INSTAGRAM,
+    VENDA_ORIGEM_LEAD_FACEBOOK,
+    VENDA_ORIGEM_LEAD_OUTROS,
+)
+
+# value -> rotulo amigavel para a UI.
+VENDA_ORIGEM_LEAD_LABELS = {
+    VENDA_ORIGEM_LEAD_GOOGLE: 'Google',
+    VENDA_ORIGEM_LEAD_INSTAGRAM: 'Instagram',
+    VENDA_ORIGEM_LEAD_FACEBOOK: 'Facebook',
+    VENDA_ORIGEM_LEAD_OUTROS: 'Outros',
+}
+
+
 class HoraVenda(db.Model):
     """Pedido de venda ao consumidor final. Header permite multi-item.
 
@@ -190,6 +217,15 @@ class HoraVenda(db.Model):
 
     # Discriminador da fonte: 'DANFE' (import legacy) | 'MANUAL' (novo fluxo).
     origem_criacao = db.Column(db.String(20), nullable=True, default='DANFE', index=True)
+
+    # ----- Origem do lead (roadmap #6) — marketing -----
+    # Como o cliente conheceu a loja. NAO confundir com origem_criacao acima
+    # (fonte tecnica do registro). Migration hora_46.
+    #   origem_lead     -> canal (VENDA_ORIGEM_LEAD_VALIDOS): GOOGLE / INSTAGRAM
+    #                      / FACEBOOK / OUTROS. NULL em vendas legadas / import DANFE.
+    #   origem_lead_obs -> texto livre; preenchido SO quando origem_lead='OUTROS'.
+    origem_lead = db.Column(db.String(20), nullable=True)
+    origem_lead_obs = db.Column(db.String(255), nullable=True)
 
     criado_em = db.Column(db.DateTime, nullable=False, default=agora_utc_naive)
     atualizado_em = db.Column(db.DateTime, nullable=True, onupdate=agora_utc_naive)

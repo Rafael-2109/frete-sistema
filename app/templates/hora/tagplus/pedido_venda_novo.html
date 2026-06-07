@@ -53,6 +53,18 @@
         <i class="fas fa-file-invoice-dollar"></i> NFe (TagPlus)
       </a>
     {% endif %}
+    {# Enviar NF por e-mail ao cliente (roadmap #4) — so apos faturamento #}
+    {% if is_faturado and tem_emissao and pode_editar %}
+      <form method="post" action="{{ url_for('hora.venda_nfe_enviar_email', venda_id=venda.id) }}" class="d-inline"
+            onsubmit="return confirm('Enviar a NF por e-mail para {{ venda.email_cliente or '(sem e-mail)' }}?');">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="btn btn-sm btn-outline-success"
+                title="{% if venda.email_cliente %}Enviar DANFE PDF para {{ venda.email_cliente }}{% else %}Preencha o e-mail do cliente no pedido para habilitar{% endif %}"
+                {% if not venda.email_cliente %}disabled{% endif %}>
+          <i class="fas fa-envelope"></i> Enviar NF Email
+        </button>
+      </form>
+    {% endif %}
     {# Reimportar do TagPlus: vendas com emissao TagPlus (tagplus_nfe_id).
        Util quando o backfill em lote falhou em algum campo e o operador quer
        re-rodar so esta NF apos o fix. #}
@@ -281,6 +293,21 @@
           <label class="form-label">E-mail</label>
           <input type="email" name="email_cliente" class="form-control" maxlength="120"
                  value="{{ venda.email_cliente or '' }}" {% if ro_oper %}readonly{% endif %}>
+        </div>
+        {# Origem do lead (roadmap #6) — editavel so em COTACAO/INCOMPLETO (ro_cliente) #}
+        <div class="col-md-3">
+          <label class="form-label">Origem (como conheceu)</label>
+          <select name="origem_lead" class="form-select js-origem-lead" {% if ro_cliente %}disabled{% endif %}>
+            <option value="">— selecione —</option>
+            {% for val, lab in origem_lead_opcoes %}
+              <option value="{{ val }}" {% if venda.origem_lead == val %}selected{% endif %}>{{ lab }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-3 js-origem-lead-obs-wrap {% if venda.origem_lead != 'OUTROS' %}d-none{% endif %}">
+          <label class="form-label">Qual?</label>
+          <input type="text" name="origem_lead_obs" class="form-control js-origem-lead-obs" maxlength="255"
+                 value="{{ venda.origem_lead_obs or '' }}" {% if ro_cliente %}disabled{% endif %}>
         </div>
         <div class="col-md-3">
           <label class="form-label">Vendedor</label>
@@ -708,9 +735,23 @@
           <input type="text" name="telefone" class="form-control" maxlength="20"
                  placeholder="(11) 99999-9999">
         </div>
-        <div class="col-md-8">
+        <div class="col-md-4">
           <label class="form-label">E-mail</label>
           <input type="email" name="email" class="form-control" maxlength="120">
+        </div>
+        {# Origem do lead (roadmap #6) — SELECT obrigatorio; "Outros" exige texto #}
+        <div class="col-md-4">
+          <label class="form-label">Origem (como conheceu) <span class="text-danger">*</span></label>
+          <select name="origem_lead" class="form-select js-origem-lead" required>
+            <option value="">— selecione —</option>
+            {% for val, lab in origem_lead_opcoes %}
+              <option value="{{ val }}">{{ lab }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-4 js-origem-lead-obs-wrap d-none">
+          <label class="form-label">Qual? <span class="text-danger">*</span></label>
+          <input type="text" name="origem_lead_obs" class="form-control js-origem-lead-obs" maxlength="255">
         </div>
       </div>
     </div>
@@ -777,14 +818,14 @@
             <select name="loja_id" id="f-loja" class="form-select" required>
               <option value="">— selecione a loja —</option>
               {% for l in lojas_disponiveis %}
-                <option value="{{ l.id }}">
+                <option value="{{ l.id }}" {% if loja_default_id and l.id == loja_default_id %}selected{% endif %}>
                   {{ l.apelido or l.nome_fantasia or l.razao_social or l.nome }}
                 </option>
               {% endfor %}
             </select>
             <small class="text-muted">
               <i class="fas fa-info-circle"></i>
-              Loja oficial da venda. O chassi pode estar fisicamente em outra loja.
+              Loja oficial da venda{% if loja_default_id %} (pré-selecionada a sua loja; troque se necessário){% endif %}. O chassi pode estar fisicamente em outra loja.
             </small>
           {% endif %}
         </div>

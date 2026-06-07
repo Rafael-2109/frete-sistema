@@ -317,6 +317,13 @@ def recebimentos_conferir(recebimento_id: int):
         ordem_raw = data.get('ordem') or ''
         ordem = int(ordem_raw) if str(ordem_raw).isdigit() else None
 
+        # Roadmap #8: foto do chassi (multipart) quando digitado manualmente
+        # (sem leitura por QR/codigo de barras). Sobe ao S3 antes de registrar;
+        # o service revalida a obrigatoriedade (qr_code_lido=False exige foto).
+        foto_s3_key = recebimento_service.upload_foto_chassi(
+            request.files.get('foto'), recebimento_id,
+        )
+
         conf = recebimento_service.registrar_conferencia_cega(
             recebimento_id=recebimento_id,
             numero_chassi=numero_chassi,
@@ -324,6 +331,7 @@ def recebimentos_conferir(recebimento_id: int):
             cor_conferida=cor,
             avaria_fisica=avaria,
             qr_code_lido=qr,
+            foto_s3_key=foto_s3_key,
             ordem=ordem,
             operador=_op_name(),
         )
