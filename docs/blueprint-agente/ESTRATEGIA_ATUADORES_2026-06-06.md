@@ -143,6 +143,7 @@ DoD: prompt injeta índice + ≤N itens recuperados por gatilho (I3), não 66 po
 
 1. **I2 grounding — 1º ALVO (erro dominante, 4/4 casos):** verificar a fonte (schema/rota/código/arquivo)
    ANTES de afirmar estrutura. Ataca a alucinação (549/630/692/801) — o maior valor provado.
+   **Plano TDD (cobertura ampla — regra constitucional L2 + tool `resolver`, 3 tasks):** `docs/superpowers/plans/2026-06-06-grounding-cobertura-ampla.md`. O plano `*-verificador-turno-principal.md` foi DESCARTADO (premissa "afirma sem verificar" refutada pela mineração PROD: nos casos reais ele verifica, mas com evidência insuficiente).
 2. **I4 enforcement WRITE Odoo:** segurança; usa R9 (ground-truth pronto).
 3. **I1 generalização (§3a/§3c):** recorrência determinística por error_signature força candidata D8 +
    gate de saída do D8 autônomo + default transversal no `exportar.py`. (O baseline já está feito.)
