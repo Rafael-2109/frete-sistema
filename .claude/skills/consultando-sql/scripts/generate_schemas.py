@@ -42,6 +42,7 @@ BLOCKED_TABLES = {
     # Agente (tabelas internas — não expor ao LLM SQL)
     'agent_sessions', 'agent_memories', 'agent_memory_versions',
     'agent_memory_embeddings', 'session_turn_embeddings',
+    'table_catalog_embeddings',  # S1: infra de busca semantica de tabela
     # Alembic
     'alembic_version',
     # Sessões web
@@ -636,30 +637,219 @@ def extract_table_schema(table_name: str, table, model_class=None) -> dict:
     return schema
 
 
+# =====================================================================
+# CATÁLOGO — key_fields por relevância + domínio (subsistema S1)
+# =====================================================================
+# Achado N2 (MASTER text-to-sql): a heurística antiga usava as 3 PRIMEIRAS
+# colunas como "chave" (quase sempre id + 2 FKs) — lixo semântico p/ ESCOLHER a
+# tabela. Esta versão seleciona o conjunto MÍNIMO útil: chaves de negócio
+# (num_pedido, cod_produto, cnpj...) + 1-3 filtros (status, 1 data, uf), sem id
+# técnico nem auditoria. Tudo determinístico (compatível com idempotência S0).
+
+# Campos nunca usados como key_field (técnicos / auditoria).
+KEY_FIELD_SKIP = {
+    'id', 'created_at', 'updated_at', 'criado_em', 'atualizado_em',
+    'ativo', 'created_by', 'updated_by', 'criado_por', 'atualizado_por',
+    'data_criacao', 'data_atualizacao', 'importado_em', 'importado_por',
+}
+
+# Chaves de negócio "fortes" — identificam a tabela de imediato. A ORDEM é a
+# prioridade de SELEÇÃO (não a ordem da coluna): garante que cod_produto entre
+# antes de uma chave secundária em tabelas com muitos ids (ex: separacao).
+_STRONG_KEYS_ORDER = [
+    'num_pedido', 'cod_produto', 'numero_nf', 'cnpj_cpf', 'cnpj_cliente',
+    'cnpj', 'separacao_lote_id', 'nota_fiscal', 'chave_nfe', 'codigo_ibge',
+]
+_STRONG_KEYS = set(_STRONG_KEYS_ORDER)
+
+_DIM_EXACT = {
+    'estado', 'cod_uf', 'uf', 'municipio', 'cidade', 'nome_cidade',
+    'vendedor', 'equipe_vendas', 'transportadora', 'cliente', 'nome_cliente',
+    'raz_social', 'raz_social_red',
+}
+
+
+def _is_id_like(n: str) -> bool:
+    """Identificador de negócio (não o id técnico surrogate).
+
+    NÃO usa sufixo '_pedido'/'_nf': os ids reais (num_pedido, numero_nf) já são
+    chaves "fortes"; o sufixo só causava falso positivo (data_pedido,
+    status_pedido viravam "id" e roubavam o lugar de filtros úteis).
+    """
+    return (
+        n.startswith(('num_', 'numero_', 'cod_', 'codigo_', 'cnpj', 'cpf'))
+        or (n.endswith('_id') and n != 'id')
+    )
+
+
+def _is_dim(n: str) -> bool:
+    """Dimensão/filtro comum (status, data, localização, cliente, tipo)."""
+    return (
+        'status' in n
+        or n in _DIM_EXACT
+        or n.startswith('tipo_')
+        or n.startswith('data_') or n.endswith('_data')
+        or 'expedicao' in n or 'vencimento' in n or 'agendamento' in n
+    )
+
+
+def _key_field_score(name: str) -> int:
+    """Score de relevância de um campo p/ ESCOLHER a tabela. -1 = excluir."""
+    n = name.lower()
+    if n in KEY_FIELD_SKIP or n.endswith('_por') or n.endswith('_by'):
+        return -1
+    if n in _STRONG_KEYS:
+        return 4
+    if _is_id_like(n):
+        return 3
+    if _is_dim(n):
+        return 2
+    return 1
+
+
+def _select_key_fields(table, teto: int = 5) -> list:
+    """Seleciona até `teto` campos-chave por relevância (determinístico).
+
+    Conjunto MÍNIMO p/ ESCOLHER a tabela (achado N2): chaves de negócio + 1-3
+    filtros, sem id técnico nem auditoria. Determinístico: chaves fortes pela
+    ordem canônica (_STRONG_KEYS_ORDER), demais ids/dims pela posição da coluna;
+    no máx 1 campo "data" p/ não redundar.
+    """
+    cols = [c.name for c in table.columns]
+    pos = {name: i for i, name in enumerate(cols)}
+
+    def _strong_rank(n):
+        return _STRONG_KEYS_ORDER.index(n) if n in _STRONG_KEYS_ORDER else 999
+
+    # PK surrogate 'id' já cai no score -1 (KEY_FIELD_SKIP). PKs compostas de FKs
+    # (tabelas de associação, ex: grupo_id + categoria_id) NÃO são excluídas —
+    # são justamente as chaves de negócio dessas tabelas.
+    strong = sorted(
+        [n for n in cols if _key_field_score(n) == 4],
+        key=lambda n: (_strong_rank(n), pos[n]),
+    )
+    other_ids = sorted(
+        [n for n in cols if _key_field_score(n) == 3],
+        key=lambda n: pos[n],
+    )
+    dims = sorted(
+        [n for n in cols if _key_field_score(n) == 2],
+        key=lambda n: pos[n],
+    )
+    rest = sorted(
+        [n for n in cols if _key_field_score(n) == 1],
+        key=lambda n: pos[n],
+    )
+
+    selecionados = []
+    # 1) até 3 chaves de negócio (fortes primeiro, depois outros ids)
+    for n in (strong + other_ids):
+        if len(selecionados) >= 3:
+            break
+        if n not in selecionados:
+            selecionados.append(n)
+    # 2) até 2 filtros/dimensões; no máx 1 campo "data" p/ não redundar
+    add_dim, data_usada = 0, False
+    for n in dims:
+        if add_dim >= 2 or len(selecionados) >= teto:
+            break
+        eh_data = n.startswith('data_') or n.endswith('_data')
+        if eh_data and data_usada:
+            continue
+        if n not in selecionados:
+            selecionados.append(n)
+            add_dim += 1
+            data_usada = data_usada or eh_data
+    # 3) fallback: garantir ao menos alguns campos quando não há id/dim
+    if len(selecionados) < 3:
+        for n in rest:
+            if len(selecionados) >= 3:
+                break
+            if n not in selecionados:
+                selecionados.append(n)
+
+    # 4) último recurso: tabela só com id + auditoria — evita key_fields vazio
+    #    (key_fields vazio é inútil p/ a busca de tabela por intenção).
+    if not selecionados:
+        for n in cols:
+            if n != 'id':
+                selecionados.append(n)
+            if len(selecionados) >= 3:
+                break
+
+    return selecionados[:teto]
+
+
+# =====================================================================
+# DOMÍNIO — derivado do app de origem do modelo (zero curadoria manual)
+# =====================================================================
+DOMINIO_LABELS = {
+    'carteira': 'Carteira', 'separacao': 'Separação', 'faturamento': 'Faturamento',
+    'embarques': 'Embarques', 'fretes': 'Fretes', 'financeiro': 'Financeiro',
+    'estoque': 'Estoque', 'monitoramento': 'Monitoramento', 'producao': 'Produção',
+    'manufatura': 'Manufatura', 'recebimento': 'Recebimento', 'devolucao': 'Devoluções',
+    'transportadoras': 'Transportadoras', 'veiculos': 'Veículos',
+    'localidades': 'Localidades', 'cotacao': 'Cotação', 'pallet': 'Pallets',
+    'portaria': 'Portaria', 'rastreamento': 'Rastreamento', 'pedidos': 'Pedidos',
+    'tabelas': 'Tabelas de Frete', 'cadastros_agendamento': 'Agendamento',
+    'comercial': 'Comercial', 'custeio': 'Custeio', 'bi': 'BI',
+    'notificacoes': 'Notificações', 'integracoes': 'Integrações',
+    'portal': 'Portal', 'vinculos': 'Vínculos', 'auth': 'Autenticação',
+    'permissions': 'Permissões', 'agente': 'Agente', 'motochefe': 'MotoChefe',
+    'hora': 'Lojas HORA', 'motos_assai': 'Motos Assaí',
+}
+
+# Fallback por prefixo de nome de tabela (tabelas sem model_class — ex: órfãos
+# vivos preservados, que não têm __module__).
+_DOMINIO_PREFIXO = {
+    'carvia_': 'CarVia', 'claude_': 'Agente', 'assai_': 'Motos Assaí',
+    'portal_': 'Portal', 'bi_': 'BI', 'agent_': 'Agente',
+}
+
+
+def _dominio_from_table_name(table_name: str) -> str:
+    n = (table_name or '').lower()
+    for prefixo, label in _DOMINIO_PREFIXO.items():
+        if n.startswith(prefixo):
+            return label
+    return 'Outros'
+
+
+def _dominio_from_module(module_name, table_name: str) -> str:
+    """Domínio (grupo navegável) derivado do app de origem do modelo.
+
+    Ex: 'app.carteira.models' -> 'Carteira'; 'app.pallet.models.credito' ->
+    'Pallets'. Sem model_class (módulo None) -> fallback por prefixo do nome.
+    Decisão 3 do plano S1: zero curadoria manual de tabela->domínio.
+    """
+    if module_name and module_name.startswith('app.'):
+        parts = module_name.split('.')
+        if len(parts) >= 2:
+            mod = parts[1]
+            return DOMINIO_LABELS.get(mod, mod.replace('_', ' ').title())
+    return _dominio_from_table_name(table_name)
+
+
 def generate_catalog_entry(table_name: str, table, model_class=None) -> dict:
-    """Gera entrada leve do catálogo: nome + descrição + 3 campos-chave."""
+    """Gera entrada leve do catálogo: nome + descrição + key_fields + domínio.
+
+    key_fields por relevância (N2) e domínio pelo app de origem (S1).
+    """
     description = TABLE_DESCRIPTIONS.get(table_name, "")
     if not description and model_class:
         description = extract_class_docstring(model_class)
     if not description:
         description = f"Tabela {table_name}"
 
-    # Selecionar 3 campos-chave (excluindo id, created_at, etc.)
-    skip_fields = {'id', 'created_at', 'updated_at', 'criado_em', 'atualizado_em', 'ativo'}
-    key_fields = []
-    for col in table.columns:
-        if col.name in skip_fields:
-            continue
-        if col.primary_key:
-            continue
-        key_fields.append(col.name)
-        if len(key_fields) >= 3:
-            break
+    key_fields = _select_key_fields(table)
+    module_name = getattr(model_class, '__module__', None) if model_class else None
+    dominio = _dominio_from_module(module_name, table_name)
 
     return {
         'name': table_name,
         'description': description,
         'key_fields': key_fields,
+        'dominio': dominio,
     }
 
 

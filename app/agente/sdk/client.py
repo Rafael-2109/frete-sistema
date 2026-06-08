@@ -1888,6 +1888,19 @@ Nunca invente informações."""
         except Exception as e:
             logger.warning(f"[AGENT_CLIENT] Erro MCP schema: {e}")
 
+        # Buscar Tabelas (S1 — descoberta de tabela por intencao; filtra por user_id)
+        try:
+            from ..tools.buscar_tabelas_tool import (
+                buscar_tabelas_server,
+                set_current_user_id as set_buscar_tabelas_user_id,
+            )
+            if _register_mcp("buscar_tabelas", buscar_tabelas_server, set_buscar_tabelas_user_id):
+                logger.info("[AGENT_CLIENT] MCP 'buscar_tabelas' registrada (S1 progressive disclosure)")
+        except ImportError:
+            logger.debug("[AGENT_CLIENT] MCP buscar_tabelas não disponível")
+        except Exception as e:
+            logger.warning(f"[AGENT_CLIENT] Erro MCP buscar_tabelas: {e}")
+
         # Sessions (busca em sessões anteriores — 4 operações)
         try:
             from ..tools.session_search_tool import sessions_server

@@ -87,6 +87,7 @@
     "session_turn_embeddings",
     "tabela_preco_crossdocking",
     "tabela_preco_equipe",
+    "table_catalog_embeddings",
     "tagplus_oauth_token",
     "tipo_carga",
     "titulo_a_pagar",
@@ -111,17 +112,19 @@
       "key_fields": [
         "entrega_id",
         "data_agendada",
-        "hora_agendada"
-      ]
+        "forma_agendamento"
+      ],
+      "dominio": "Monitoramento"
     },
     {
       "name": "agent_eval_case",
       "description": "A3-R3 (2026-06-01) — caso de eval persistido para CALIBRAÇÃO do judge.",
       "key_fields": [
-        "agent_name",
         "case_id",
-        "git_sha"
-      ]
+        "status",
+        "agent_name"
+      ],
+      "dominio": "Agente"
     },
     {
       "name": "agent_eval_scores",
@@ -130,16 +133,18 @@
         "agent_name",
         "score",
         "total"
-      ]
+      ],
+      "dominio": "Agente"
     },
     {
       "name": "agent_improvement_dialogue",
       "description": "Dialogo versionado de melhoria continua entre Agent SDK e Claude Code.",
       "key_fields": [
+        "status",
         "suggestion_key",
-        "version",
-        "author"
-      ]
+        "version"
+      ],
+      "dominio": "Agente"
     },
     {
       "name": "agent_intelligence_reports",
@@ -148,16 +153,18 @@
         "report_date",
         "health_score",
         "friction_score"
-      ]
+      ],
+      "dominio": "Agente"
     },
     {
       "name": "agent_invocation_metrics",
       "description": "A1 (2026-05-16) — telemetria per-invocacao de subagent.",
       "key_fields": [
         "agent_id",
-        "agent_type",
-        "session_id"
-      ]
+        "session_id",
+        "user_id"
+      ],
+      "dominio": "Agente"
     },
     {
       "name": "agent_memory_entities",
@@ -166,7 +173,8 @@
         "user_id",
         "entity_type",
         "entity_name"
-      ]
+      ],
+      "dominio": "Agente"
     },
     {
       "name": "agent_memory_entity_links",
@@ -175,7 +183,8 @@
         "entity_id",
         "memory_id",
         "relation_type"
-      ]
+      ],
+      "dominio": "Agente"
     },
     {
       "name": "agent_memory_entity_relations",
@@ -183,8 +192,9 @@
       "key_fields": [
         "source_entity_id",
         "target_entity_id",
-        "relation_type"
-      ]
+        "memory_id"
+      ],
+      "dominio": "Agente"
     },
     {
       "name": "agent_session_costs",
@@ -193,34 +203,40 @@
         "message_id",
         "session_id",
         "user_id"
-      ]
+      ],
+      "dominio": "Agente"
     },
     {
       "name": "agent_step",
       "description": "Onda 0 (2026-05-30) — Entidade de PASSO/TURNO do agente.",
       "key_fields": [
-        "step_uid",
         "session_id",
-        "user_id"
-      ]
+        "user_id",
+        "step_uid"
+      ],
+      "dominio": "Agente"
     },
     {
       "name": "agente_artifacts",
       "description": "Artifact (bundle.html auto-contido) gerado pelo agente via skill",
       "key_fields": [
-        "uuid",
         "user_id",
-        "session_id"
-      ]
+        "session_id",
+        "status"
+      ],
+      "dominio": "Agente"
     },
     {
       "name": "ajuste_estoque_inventario",
       "description": "Tabela ajuste_estoque_inventario",
       "key_fields": [
-        "ciclo",
         "cod_produto",
-        "tipo_produto"
-      ]
+        "chave_nfe",
+        "company_id",
+        "tipo_produto",
+        "status"
+      ],
+      "dominio": "Odoo"
     },
     {
       "name": "aprovacoes_frete",
@@ -228,17 +244,19 @@
       "key_fields": [
         "frete_id",
         "status",
-        "solicitado_por"
-      ]
+        "solicitado_em"
+      ],
+      "dominio": "Fretes"
     },
     {
       "name": "arquivo_entrega",
       "description": "Arquivos anexados a entregas.",
       "key_fields": [
         "entrega_id",
-        "nome_original",
-        "nome_arquivo"
-      ]
+        "tipo_storage",
+        "nome_original"
+      ],
+      "dominio": "Monitoramento"
     },
     {
       "name": "assai_carregamento",
@@ -246,44 +264,52 @@
       "key_fields": [
         "pedido_id",
         "loja_id",
-        "separacao_id"
-      ]
+        "separacao_id",
+        "status"
+      ],
+      "dominio": "Motos Assaí"
     },
     {
       "name": "assai_carregamento_item",
       "description": "Tabela assai_carregamento_item",
       "key_fields": [
         "carregamento_id",
-        "chassi",
-        "modelo_id"
-      ]
+        "modelo_id",
+        "escaneado_por_id"
+      ],
+      "dominio": "Motos Assaí"
     },
     {
       "name": "assai_cce",
       "description": "Tabela assai_cce",
       "key_fields": [
-        "protocolo_cce",
         "chave_nfe",
-        "numero_nf_referenciada"
-      ]
+        "numero_nf_referenciada",
+        "numero_cce",
+        "tipo_correcao",
+        "data_emissao_cce"
+      ],
+      "dominio": "Motos Assaí"
     },
     {
       "name": "assai_cd",
       "description": "Tabela assai_cd",
       "key_fields": [
-        "nome",
         "cnpj",
-        "endereco"
-      ]
+        "cidade",
+        "uf"
+      ],
+      "dominio": "Motos Assaí"
     },
     {
       "name": "assai_compra_motochefe",
       "description": "Tabela assai_compra_motochefe",
       "key_fields": [
-        "numero",
+        "criada_por_id",
         "data_emissao",
-        "motochefe_cnpj"
-      ]
+        "status"
+      ],
+      "dominio": "Motos Assaí"
     },
     {
       "name": "assai_compra_motochefe_pedido",
@@ -291,25 +317,28 @@
       "key_fields": [
         "compra_id",
         "pedido_id"
-      ]
+      ],
+      "dominio": "Motos Assaí"
     },
     {
       "name": "assai_devolucao_anexo",
       "description": "Tabela assai_devolucao_anexo",
       "key_fields": [
         "devolucao_id",
-        "tipo",
-        "nome_original"
-      ]
+        "criado_por_id",
+        "tipo"
+      ],
+      "dominio": "Motos Assaí"
     },
     {
       "name": "assai_devolucao_item",
       "description": "Tabela assai_devolucao_item",
       "key_fields": [
         "devolucao_id",
-        "chassi",
-        "nf_qpa_item_id"
-      ]
+        "nf_qpa_item_id",
+        "evento_pendencia_id"
+      ],
+      "dominio": "Motos Assaí"
     },
     {
       "name": "assai_devolucao_nfd",
@@ -317,35 +346,41 @@
       "key_fields": [
         "nf_qpa_origem_id",
         "numero_nfd",
+        "criado_por_id",
         "data_devolucao"
-      ]
+      ],
+      "dominio": "Motos Assaí"
     },
     {
       "name": "assai_divergencia",
       "description": "Tabela assai_divergencia",
       "key_fields": [
-        "tipo",
-        "chassi",
-        "separacao_id"
-      ]
+        "separacao_id",
+        "carregamento_id",
+        "nf_id",
+        "tipo_resolucao"
+      ],
+      "dominio": "Motos Assaí"
     },
     {
       "name": "assai_loja",
       "description": "Tabela assai_loja",
       "key_fields": [
-        "numero",
-        "nome",
-        "razao_social"
-      ]
+        "cnpj",
+        "cidade",
+        "uf"
+      ],
+      "dominio": "Motos Assaí"
     },
     {
       "name": "assai_modelo",
       "description": "Tabela assai_modelo",
       "key_fields": [
+        "codigo_qpa",
         "codigo",
-        "nome",
-        "descricao_qpa"
-      ]
+        "nome"
+      ],
+      "dominio": "Motos Assaí"
     },
     {
       "name": "assai_modelo_alias",
@@ -354,43 +389,51 @@
         "modelo_id",
         "alias",
         "tipo"
-      ]
+      ],
+      "dominio": "Motos Assaí"
     },
     {
       "name": "assai_moto",
       "description": "Tabela assai_moto",
       "key_fields": [
-        "chassi",
         "modelo_id",
+        "chassi",
         "cor"
-      ]
+      ],
+      "dominio": "Motos Assaí"
     },
     {
       "name": "assai_moto_evento",
       "description": "Tabela assai_moto_evento",
       "key_fields": [
+        "operador_id",
         "chassi",
-        "tipo",
-        "ocorrido_em"
-      ]
+        "tipo"
+      ],
+      "dominio": "Motos Assaí"
     },
     {
       "name": "assai_nf_qpa",
       "description": "Tabela assai_nf_qpa",
       "key_fields": [
         "separacao_id",
-        "chave_44",
-        "numero"
-      ]
+        "loja_id",
+        "importada_por_id",
+        "data_emissao",
+        "status_match"
+      ],
+      "dominio": "Motos Assaí"
     },
     {
       "name": "assai_nf_qpa_item",
       "description": "Tabela assai_nf_qpa_item",
       "key_fields": [
         "nf_id",
-        "chassi",
-        "modelo_extraido"
-      ]
+        "separacao_item_id",
+        "devolucao_item_id",
+        "tipo_divergencia"
+      ],
+      "dominio": "Motos Assaí"
     },
     {
       "name": "assai_nf_qpa_item_vinculo_historico",
@@ -398,8 +441,9 @@
       "key_fields": [
         "nf_qpa_item_id",
         "separacao_item_id",
-        "motivo"
-      ]
+        "registrado_por_id"
+      ],
+      "dominio": "Motos Assaí"
     },
     {
       "name": "assai_pedido_excel",
@@ -407,17 +451,19 @@
       "key_fields": [
         "pedido_id",
         "separacao_id",
-        "s3_key"
-      ]
+        "gerado_por_id"
+      ],
+      "dominio": "Motos Assaí"
     },
     {
       "name": "assai_pedido_venda",
       "description": "Tabela assai_pedido_venda",
       "key_fields": [
-        "numero",
+        "criado_por_id",
         "data_emissao",
-        "previsao_entrega"
-      ]
+        "status"
+      ],
+      "dominio": "Motos Assaí"
     },
     {
       "name": "assai_pedido_venda_item",
@@ -426,7 +472,8 @@
         "pedido_id",
         "pedido_loja_id",
         "loja_id"
-      ]
+      ],
+      "dominio": "Motos Assaí"
     },
     {
       "name": "assai_pedido_venda_loja",
@@ -434,35 +481,40 @@
       "key_fields": [
         "pedido_id",
         "loja_id",
-        "expedicao"
-      ]
+        "expedicao",
+        "agendamento"
+      ],
+      "dominio": "Motos Assaí"
     },
     {
       "name": "assai_pos_venda_ocorrencia",
       "description": "Tabela assai_pos_venda_ocorrencia",
       "key_fields": [
-        "chassi",
-        "categoria",
-        "descricao"
-      ]
+        "criado_por_id",
+        "atualizado_por_id",
+        "chassi"
+      ],
+      "dominio": "Motos Assaí"
     },
     {
       "name": "assai_pos_venda_ocorrencia_anexo",
       "description": "Tabela assai_pos_venda_ocorrencia_anexo",
       "key_fields": [
         "ocorrencia_id",
-        "tipo",
-        "nome_original"
-      ]
+        "criado_por_id",
+        "tipo"
+      ],
+      "dominio": "Motos Assaí"
     },
     {
       "name": "assai_recibo_item",
       "description": "Tabela assai_recibo_item",
       "key_fields": [
         "recibo_id",
-        "chassi",
-        "modelo_texto_recibo"
-      ]
+        "modelo_id",
+        "tipo_divergencia"
+      ],
+      "dominio": "Motos Assaí"
     },
     {
       "name": "assai_recibo_motochefe",
@@ -470,8 +522,11 @@
       "key_fields": [
         "compra_id",
         "numero_recibo",
-        "data_recibo"
-      ]
+        "criado_por_id",
+        "data_recibo",
+        "tipo_documento"
+      ],
+      "dominio": "Motos Assaí"
     },
     {
       "name": "assai_separacao",
@@ -479,17 +534,21 @@
       "key_fields": [
         "pedido_id",
         "loja_id",
-        "status"
-      ]
+        "fechada_por_id",
+        "status",
+        "expedicao"
+      ],
+      "dominio": "Motos Assaí"
     },
     {
       "name": "assai_separacao_item",
       "description": "Tabela assai_separacao_item",
       "key_fields": [
         "separacao_id",
-        "chassi",
-        "modelo_id"
-      ]
+        "modelo_id",
+        "registrada_por_id"
+      ],
+      "dominio": "Motos Assaí"
     },
     {
       "name": "assai_separacao_saldo_modelo",
@@ -498,16 +557,18 @@
         "separacao_id",
         "modelo_id",
         "qtd_planejada"
-      ]
+      ],
+      "dominio": "Motos Assaí"
     },
     {
       "name": "audit_log_custeio",
       "description": "Audit log dedicado do modulo Custeio (Sprint 3 - C16).",
       "key_fields": [
-        "timestamp",
-        "usuario",
-        "ip_address"
-      ]
+        "session_id",
+        "entidade_id",
+        "timestamp"
+      ],
+      "dominio": "Custeio"
     },
     {
       "name": "baixa_pagamento_item",
@@ -515,35 +576,45 @@
       "key_fields": [
         "lote_id",
         "statement_line_id",
-        "move_id_extrato"
-      ]
+        "cnpj_beneficiario",
+        "data_transacao",
+        "tipo_transacao"
+      ],
+      "dominio": "Financeiro"
     },
     {
       "name": "baixa_titulo_item",
       "description": "Itens individuais de baixa de título.",
       "key_fields": [
         "lote_id",
-        "linha_excel",
-        "nf_excel"
-      ]
+        "titulo_odoo_id",
+        "move_odoo_id",
+        "data_excel",
+        "status"
+      ],
+      "dominio": "Financeiro"
     },
     {
       "name": "cadastro_palletizacao",
       "description": "Cadastro de produtos com peso, pallet, conversões.",
       "key_fields": [
         "cod_produto",
-        "nome_produto",
-        "codigo_ean"
-      ]
+        "codigo_ean",
+        "tipo_embalagem",
+        "tipo_materia_prima"
+      ],
+      "dominio": "Produção"
     },
     {
       "name": "cadastro_primeira_compra",
       "description": "Cadastro de primeira compra.",
       "key_fields": [
-        "odoo_dfe_id",
-        "odoo_dfe_line_id",
-        "numero_nf"
-      ]
+        "cod_produto",
+        "numero_nf",
+        "chave_nfe",
+        "status"
+      ],
+      "dominio": "Recebimento"
     },
     {
       "name": "cadastro_rota",
@@ -552,7 +623,8 @@
         "cod_uf",
         "rota",
         "ativa"
-      ]
+      ],
+      "dominio": "Localidades"
     },
     {
       "name": "cadastro_sub_rota",
@@ -561,16 +633,18 @@
         "cod_uf",
         "nome_cidade",
         "sub_rota"
-      ]
+      ],
+      "dominio": "Localidades"
     },
     {
       "name": "carrier_embeddings",
       "description": "Embedding de transportadoras para matching semantico de nomes.",
       "key_fields": [
-        "carrier_name",
         "cnpj",
+        "carrier_name",
         "aliases"
-      ]
+      ],
+      "dominio": "Embeddings"
     },
     {
       "name": "carteira_principal",
@@ -578,26 +652,31 @@
       "key_fields": [
         "num_pedido",
         "cod_produto",
-        "pedido_cliente"
-      ]
+        "cnpj_cpf",
+        "data_pedido",
+        "status_pedido"
+      ],
+      "dominio": "Carteira"
     },
     {
       "name": "carvia_admin_audit",
       "description": "Auditoria de acoes administrativas (hard delete, type change, re-link, field edit)",
       "key_fields": [
+        "entidade_id",
         "acao",
-        "entidade_tipo",
-        "entidade_id"
-      ]
+        "entidade_tipo"
+      ],
+      "dominio": "Carvia"
     },
     {
       "name": "carvia_anexos",
       "description": "Anexos comprovatorios polimorficos (frete, subcontrato) via S3.",
       "key_fields": [
-        "entidade_tipo",
         "entidade_id",
+        "entidade_tipo",
         "nome_original"
-      ]
+      ],
+      "dominio": "Carvia"
     },
     {
       "name": "carvia_aprovacoes_frete",
@@ -605,8 +684,9 @@
       "key_fields": [
         "frete_id",
         "status",
-        "solicitado_por"
-      ]
+        "solicitado_em"
+      ],
+      "dominio": "Carvia"
     },
     {
       "name": "carvia_categorias_moto",
@@ -615,7 +695,8 @@
         "nome",
         "descricao",
         "ordem"
-      ]
+      ],
+      "dominio": "Carvia"
     },
     {
       "name": "carvia_cidades_atendidas",
@@ -624,25 +705,27 @@
         "codigo_ibge",
         "nome_cidade",
         "uf_origem"
-      ]
+      ],
+      "dominio": "Carvia"
     },
     {
       "name": "carvia_cliente_enderecos",
       "description": "Endereco CarVia — origem global (cliente_id=NULL) ou destino por cliente.",
       "key_fields": [
-        "cliente_id",
         "cnpj",
+        "cliente_id",
         "razao_social"
-      ]
+      ],
+      "dominio": "Carvia"
     },
     {
       "name": "carvia_clientes",
       "description": "Cliente CarVia — pessoa juridica que contrata frete",
       "key_fields": [
         "nome_comercial",
-        "observacoes",
-        "criado_por"
-      ]
+        "observacoes"
+      ],
+      "dominio": "Carvia"
     },
     {
       "name": "carvia_comissao_fechamento_ctes",
@@ -651,25 +734,29 @@
         "fechamento_id",
         "operacao_id",
         "cte_numero"
-      ]
+      ],
+      "dominio": "Carvia"
     },
     {
       "name": "carvia_comissao_fechamentos",
       "description": "Fechamento de comissao por periodo — agrupa N CTes CarVia",
       "key_fields": [
         "numero_fechamento",
-        "vendedor_nome",
-        "vendedor_email"
-      ]
+        "despesa_id",
+        "data_inicio",
+        "status"
+      ],
+      "dominio": "Carvia"
     },
     {
       "name": "carvia_conciliacoes",
       "description": "Junction N:N — vincula linha do extrato a documento financeiro",
       "key_fields": [
         "extrato_linha_id",
-        "tipo_documento",
-        "documento_id"
-      ]
+        "documento_id",
+        "tipo_documento"
+      ],
+      "dominio": "Carvia"
     },
     {
       "name": "carvia_conferencia_historico",
@@ -678,7 +765,8 @@
         "frete_id",
         "status_antes",
         "status_depois"
-      ]
+      ],
+      "dominio": "Carvia"
     },
     {
       "name": "carvia_config",
@@ -687,7 +775,8 @@
         "chave",
         "valor",
         "descricao"
-      ]
+      ],
+      "dominio": "Carvia"
     },
     {
       "name": "carvia_conta_corrente_transportadoras",
@@ -695,17 +784,21 @@
       "key_fields": [
         "transportadora_id",
         "frete_id",
-        "fatura_transportadora_id"
-      ]
+        "fatura_transportadora_id",
+        "tipo_movimentacao",
+        "status"
+      ],
+      "dominio": "Carvia"
     },
     {
       "name": "carvia_conta_movimentacoes",
       "description": "Movimentacoes financeiras da conta CarVia — saldo calculado por SUM",
       "key_fields": [
-        "tipo_doc",
         "doc_id",
+        "tipo_doc",
         "tipo_movimento"
-      ]
+      ],
+      "dominio": "Carvia"
     },
     {
       "name": "carvia_cotacao_motos",
@@ -714,7 +807,8 @@
         "cotacao_id",
         "modelo_moto_id",
         "categoria_moto_id"
-      ]
+      ],
+      "dominio": "Carvia"
     },
     {
       "name": "carvia_cotacoes",
@@ -722,17 +816,23 @@
       "key_fields": [
         "numero_cotacao",
         "cliente_id",
-        "endereco_origem_id"
-      ]
+        "endereco_origem_id",
+        "tipo_material",
+        "tipo_carga"
+      ],
+      "dominio": "Carvia"
     },
     {
       "name": "carvia_cte_complementares",
       "description": "CTe Complementar — emitido ao cliente para cobrar custos extras de entrega",
       "key_fields": [
+        "cnpj_cliente",
         "numero_comp",
         "operacao_id",
-        "fatura_cliente_id"
-      ]
+        "nome_cliente",
+        "status"
+      ],
+      "dominio": "Carvia"
     },
     {
       "name": "carvia_custo_entrega_anexos",
@@ -741,7 +841,8 @@
         "custo_entrega_id",
         "nome_original",
         "nome_arquivo"
-      ]
+      ],
+      "dominio": "Carvia"
     },
     {
       "name": "carvia_custos_entrega",
@@ -749,17 +850,22 @@
       "key_fields": [
         "numero_custo",
         "operacao_id",
-        "cte_complementar_id"
-      ]
+        "cte_complementar_id",
+        "tipo_custo",
+        "data_custo"
+      ],
+      "dominio": "Carvia"
     },
     {
       "name": "carvia_despesas",
       "description": "Despesas operacionais da empresa no modulo CarVia",
       "key_fields": [
+        "operacao_id",
+        "frete_id",
         "tipo_despesa",
-        "descricao",
-        "valor"
-      ]
+        "data_despesa"
+      ],
+      "dominio": "Carvia"
     },
     {
       "name": "carvia_emissao_cte",
@@ -767,8 +873,11 @@
       "key_fields": [
         "nf_id",
         "operacao_id",
-        "status"
-      ]
+        "job_id",
+        "status",
+        "data_vencimento"
+      ],
+      "dominio": "Carvia"
     },
     {
       "name": "carvia_emissao_cte_complementar",
@@ -776,8 +885,10 @@
       "key_fields": [
         "custo_entrega_id",
         "cte_complementar_id",
-        "operacao_id"
-      ]
+        "operacao_id",
+        "status"
+      ],
+      "dominio": "Carvia"
     },
     {
       "name": "carvia_empresas_cubagem",
@@ -786,34 +897,38 @@
         "cnpj_empresa",
         "nome_empresa",
         "considerar_cubagem"
-      ]
+      ],
+      "dominio": "Carvia"
     },
     {
       "name": "carvia_endereco_correcoes",
       "description": "Audit trail de correcoes de endereco em CarviaOperacao.",
       "key_fields": [
         "operacao_id",
-        "campo",
-        "valor_anterior"
-      ]
+        "numero_cce",
+        "campo"
+      ],
+      "dominio": "Carvia"
     },
     {
       "name": "carvia_extrato_linhas",
       "description": "Linhas do extrato bancario CarVia — base para conciliacao.",
       "key_fields": [
-        "fitid",
-        "data",
-        "valor"
-      ]
+        "linha_original_id",
+        "status_conciliacao",
+        "fitid"
+      ],
+      "dominio": "Carvia"
     },
     {
       "name": "carvia_fatura_cliente_itens",
       "description": "Itens de detalhe por CTe de uma fatura cliente SSW",
       "key_fields": [
         "fatura_cliente_id",
-        "cte_numero",
-        "cte_data_emissao"
-      ]
+        "operacao_id",
+        "nf_id"
+      ],
+      "dominio": "Carvia"
     },
     {
       "name": "carvia_fatura_transportadora_itens",
@@ -822,16 +937,19 @@
         "fatura_transportadora_id",
         "subcontrato_id",
         "operacao_id"
-      ]
+      ],
+      "dominio": "Carvia"
     },
     {
       "name": "carvia_faturas_cliente",
       "description": "Faturas CarVia emitidas ao cliente — agrupa N CTes CarVia",
       "key_fields": [
         "cnpj_cliente",
+        "numero_fatura",
         "nome_cliente",
-        "numero_fatura"
-      ]
+        "data_emissao"
+      ],
+      "dominio": "Carvia"
     },
     {
       "name": "carvia_faturas_transportadora",
@@ -839,8 +957,10 @@
       "key_fields": [
         "transportadora_id",
         "numero_fatura",
-        "data_emissao"
-      ]
+        "data_emissao",
+        "vencimento"
+      ],
+      "dominio": "Carvia"
     },
     {
       "name": "carvia_fretes",
@@ -848,44 +968,50 @@
       "key_fields": [
         "embarque_id",
         "transportadora_id",
-        "cnpj_emitente"
-      ]
+        "cnpj_emitente",
+        "tipo_carga",
+        "status"
+      ],
+      "dominio": "Carvia"
     },
     {
       "name": "carvia_grupo_cliente_membros",
       "description": "Membro (CNPJ) de um grupo de clientes",
       "key_fields": [
-        "grupo_id",
         "cnpj",
+        "grupo_id",
         "nome_empresa"
-      ]
+      ],
+      "dominio": "Carvia"
     },
     {
       "name": "carvia_grupos_cliente",
       "description": "Grupo de clientes para tabelas de preco diferenciadas",
       "key_fields": [
         "nome",
-        "descricao",
-        "criado_por"
-      ]
+        "descricao"
+      ],
+      "dominio": "Carvia"
     },
     {
       "name": "carvia_historico_match_extrato",
       "description": "Log append-only de eventos de match aprendidos (descricao+CNPJ pagador).",
       "key_fields": [
-        "descricao_linha_raw",
-        "descricao_tokens",
-        "cnpj_pagador"
-      ]
+        "cnpj_pagador",
+        "conciliacao_id",
+        "tipo_documento"
+      ],
+      "dominio": "Carvia"
     },
     {
       "name": "carvia_modelos_moto",
       "description": "Modelos de moto para calculo automatico de peso cubado",
       "key_fields": [
+        "categoria_moto_id",
         "nome",
-        "regex_pattern",
-        "comprimento"
-      ]
+        "regex_pattern"
+      ],
+      "dominio": "Carvia"
     },
     {
       "name": "carvia_nf_itens",
@@ -893,17 +1019,19 @@
       "key_fields": [
         "nf_id",
         "codigo_produto",
-        "descricao"
-      ]
+        "modelo_moto_id"
+      ],
+      "dominio": "Carvia"
     },
     {
       "name": "carvia_nf_veiculos",
       "description": "Veiculo extraido da NF — 1 chassi por linha (motos)",
       "key_fields": [
         "nf_id",
-        "chassi",
-        "modelo"
-      ]
+        "numero_motor",
+        "chassi"
+      ],
+      "dominio": "Carvia"
     },
     {
       "name": "carvia_nf_vinculos_transferencia",
@@ -912,16 +1040,20 @@
         "nf_transferencia_id",
         "nf_venda_id",
         "peso_bruto_venda_snapshot"
-      ]
+      ],
+      "dominio": "Carvia"
     },
     {
       "name": "carvia_nfs",
       "description": "NFs importadas (mercadoria) — PDF DANFE, XML NF-e ou entrada manual",
       "key_fields": [
         "numero_nf",
-        "serie_nf",
-        "chave_acesso_nf"
-      ]
+        "cnpj_emitente",
+        "cnpj_destinatario",
+        "data_emissao",
+        "tipo_fonte"
+      ],
+      "dominio": "Carvia"
     },
     {
       "name": "carvia_operacao_nfs",
@@ -929,25 +1061,29 @@
       "key_fields": [
         "operacao_id",
         "nf_id"
-      ]
+      ],
+      "dominio": "Carvia"
     },
     {
       "name": "carvia_operacoes",
       "description": "Operacao principal — 1 CTe CarVia = N NFs do mesmo cliente/destino",
       "key_fields": [
-        "cte_numero",
-        "cte_chave_acesso",
-        "ctrc_numero"
-      ]
+        "cnpj_cliente",
+        "fatura_cliente_id",
+        "nome_cliente",
+        "tipo_entrada"
+      ],
+      "dominio": "Carvia"
     },
     {
       "name": "carvia_pedido_itens",
       "description": "Item de pedido CarVia — modelo/descricao + cor + qtd + valor",
       "key_fields": [
+        "numero_nf",
         "pedido_id",
-        "modelo_moto_id",
-        "descricao"
-      ]
+        "modelo_moto_id"
+      ],
+      "dominio": "Carvia"
     },
     {
       "name": "carvia_pedidos",
@@ -955,8 +1091,10 @@
       "key_fields": [
         "numero_pedido",
         "cotacao_id",
-        "filial"
-      ]
+        "tipo_separacao",
+        "status"
+      ],
+      "dominio": "Carvia"
     },
     {
       "name": "carvia_precos_categoria_moto",
@@ -965,7 +1103,8 @@
         "tabela_frete_id",
         "categoria_moto_id",
         "valor_unitario"
-      ]
+      ],
+      "dominio": "Carvia"
     },
     {
       "name": "carvia_previnculos_extrato_cotacao",
@@ -973,17 +1112,20 @@
       "key_fields": [
         "extrato_linha_id",
         "cotacao_id",
-        "valor_alocado"
-      ]
+        "conciliacao_id",
+        "status"
+      ],
+      "dominio": "Carvia"
     },
     {
       "name": "carvia_receitas",
       "description": "Receitas operacionais diversas da empresa no modulo CarVia (espelho de despesas)",
       "key_fields": [
         "tipo_receita",
-        "descricao",
-        "valor"
-      ]
+        "data_receita",
+        "descricao"
+      ],
+      "dominio": "Carvia"
     },
     {
       "name": "carvia_subcontratos",
@@ -991,17 +1133,20 @@
       "key_fields": [
         "operacao_id",
         "transportadora_id",
-        "numero_sequencial_transportadora"
-      ]
+        "numero_sequencial_transportadora",
+        "status"
+      ],
+      "dominio": "Carvia"
     },
     {
       "name": "carvia_tabelas_frete",
       "description": "Tabela de frete CarVia (preco de VENDA) — sem transportadora",
       "key_fields": [
-        "uf_origem",
-        "uf_destino",
-        "nome_tabela"
-      ]
+        "grupo_cliente_id",
+        "tipo_carga",
+        "uf_origem"
+      ],
+      "dominio": "Carvia"
     },
     {
       "name": "chat_attachments",
@@ -1010,7 +1155,8 @@
         "message_id",
         "s3_key",
         "filename"
-      ]
+      ],
+      "dominio": "Chat"
     },
     {
       "name": "chat_forwards",
@@ -1019,7 +1165,8 @@
         "original_message_id",
         "forwarded_message_id",
         "forwarded_by_id"
-      ]
+      ],
+      "dominio": "Chat"
     },
     {
       "name": "chat_members",
@@ -1027,8 +1174,9 @@
       "key_fields": [
         "thread_id",
         "user_id",
-        "role"
-      ]
+        "adicionado_por_id"
+      ],
+      "dominio": "Chat"
     },
     {
       "name": "chat_mentions",
@@ -1036,16 +1184,18 @@
       "key_fields": [
         "message_id",
         "mentioned_user_id"
-      ]
+      ],
+      "dominio": "Chat"
     },
     {
       "name": "chat_messages",
       "description": "Tabela chat_messages",
       "key_fields": [
         "thread_id",
-        "sender_type",
-        "sender_user_id"
-      ]
+        "sender_user_id",
+        "reply_to_message_id"
+      ],
+      "dominio": "Chat"
     },
     {
       "name": "chat_reactions",
@@ -1054,61 +1204,73 @@
         "message_id",
         "user_id",
         "emoji"
-      ]
+      ],
+      "dominio": "Chat"
     },
     {
       "name": "chat_threads",
       "description": "Tabela chat_threads",
       "key_fields": [
-        "tipo",
-        "titulo",
-        "entity_type"
-      ]
+        "entity_id",
+        "criado_por_id",
+        "tipo"
+      ],
+      "dominio": "Chat"
     },
     {
       "name": "cidades",
       "description": "Cadastro de cidades do Brasil.",
       "key_fields": [
-        "nome",
+        "codigo_ibge",
         "uf",
-        "codigo_ibge"
-      ]
+        "nome"
+      ],
+      "dominio": "Localidades"
     },
     {
       "name": "cidades_atendidas",
       "description": "Cidades atendidas por transportadora com lead time.",
       "key_fields": [
-        "uf",
+        "codigo_ibge",
         "cidade_id",
-        "codigo_ibge"
-      ]
+        "transportadora_id",
+        "uf"
+      ],
+      "dominio": "Vínculos"
     },
     {
       "name": "cnab_retorno_item",
       "description": "Itens individuais de retorno CNAB.",
       "key_fields": [
         "lote_id",
+        "cnpj_pagador",
+        "codigo_ocorrencia",
         "tipo_registro",
-        "nosso_numero"
-      ]
+        "data_ocorrencia"
+      ],
+      "dominio": "Financeiro"
     },
     {
       "name": "comentarios_nf",
       "description": "Comentários em notas fiscais.",
       "key_fields": [
         "entrega_id",
-        "autor",
-        "texto"
-      ]
+        "resposta_a_id",
+        "autor"
+      ],
+      "dominio": "Monitoramento"
     },
     {
       "name": "comprovante_pagamento_boleto",
       "description": "Comprovantes de pagamento de boletos.",
       "key_fields": [
-        "tipo",
         "numero_agendamento",
-        "data_comprovante"
-      ]
+        "numero_documento",
+        "odoo_statement_line_id",
+        "data_comprovante",
+        "cliente"
+      ],
+      "dominio": "Financeiro"
     },
     {
       "name": "configuracao_rastreamento",
@@ -1117,16 +1279,20 @@
         "intervalo_ping_segundos",
         "intervalo_ping_parado_segundos",
         "velocidade_considerada_parado"
-      ]
+      ],
+      "dominio": "Rastreamento"
     },
     {
       "name": "conhecimento_transporte",
       "description": "CT-es (Conhecimento de Transporte Eletrônico).",
       "key_fields": [
         "dfe_id",
-        "odoo_ativo",
-        "odoo_name"
-      ]
+        "numero_cte",
+        "cnpj_emitente",
+        "odoo_status_codigo",
+        "odoo_status_descricao"
+      ],
+      "dominio": "Fretes"
     },
     {
       "name": "conta_corrente_transportadoras",
@@ -1134,26 +1300,35 @@
       "key_fields": [
         "transportadora_id",
         "frete_id",
-        "tipo_movimentacao"
-      ]
+        "compensacao_frete_id",
+        "tipo_movimentacao",
+        "status"
+      ],
+      "dominio": "Fretes"
     },
     {
       "name": "contas_a_pagar",
       "description": "Títulos a pagar para fornecedores.",
       "key_fields": [
-        "empresa",
-        "titulo_nf",
-        "parcela"
-      ]
+        "cnpj",
+        "odoo_line_id",
+        "odoo_move_id",
+        "raz_social",
+        "raz_social_red"
+      ],
+      "dominio": "Financeiro"
     },
     {
       "name": "contas_a_receber",
       "description": "Títulos a receber de clientes. Dados do Odoo enriquecidos.",
       "key_fields": [
-        "empresa",
-        "titulo_nf",
-        "parcela"
-      ]
+        "cnpj",
+        "odoo_line_id",
+        "confirmacao_tipo_id",
+        "raz_social",
+        "raz_social_red"
+      ],
+      "dominio": "Financeiro"
     },
     {
       "name": "contas_a_receber_reconciliacao",
@@ -1161,8 +1336,11 @@
       "key_fields": [
         "conta_a_receber_id",
         "odoo_id",
-        "amount"
-      ]
+        "payment_odoo_id",
+        "tipo_baixa",
+        "tipo_baixa_odoo"
+      ],
+      "dominio": "Financeiro"
     },
     {
       "name": "contas_a_receber_snapshot",
@@ -1171,7 +1349,8 @@
         "conta_a_receber_id",
         "campo",
         "valor_anterior"
-      ]
+      ],
+      "dominio": "Financeiro"
     },
     {
       "name": "contatos_agendamento",
@@ -1180,34 +1359,43 @@
         "cnpj",
         "forma",
         "contato"
-      ]
+      ],
+      "dominio": "Agendamento"
     },
     {
       "name": "controle_portaria",
       "description": "Controle de entrada/saida na portaria da fabrica. Veiculos na fabrica: data_saida IS NULL. Tempo carregamento: hora_saida - hora_entrada. Campos: placa, empresa, tipo_carga (Coleta, Devolucao, etc.), hora_chegada, hora_entrada, hora_saida, data_chegada, data_entrada, data_saida, embarque_id, motorista_id. NOTA: status e property calculada, NAO coluna.",
       "key_fields": [
         "motorista_id",
-        "placa",
-        "tipo_veiculo_id"
-      ]
+        "tipo_veiculo_id",
+        "embarque_id",
+        "tipo_carga",
+        "data_chegada"
+      ],
+      "dominio": "Portaria"
     },
     {
       "name": "correcao_data_nf_credito",
       "description": "Correções de data de NFs de crédito.",
       "key_fields": [
+        "numero_nf",
         "odoo_move_id",
-        "nome_documento",
-        "numero_nf"
-      ]
+        "odoo_partner_id",
+        "data_emissao",
+        "status"
+      ],
+      "dominio": "Financeiro"
     },
     {
       "name": "cotacao_itens",
       "description": "Itens de cotação de frete.",
       "key_fields": [
-        "cotacao_id",
+        "cnpj_cliente",
         "separacao_lote_id",
-        "pedido_id_old"
-      ]
+        "cotacao_id",
+        "cliente"
+      ],
+      "dominio": "Cotação"
     },
     {
       "name": "cotacoes",
@@ -1215,44 +1403,51 @@
       "key_fields": [
         "usuario_id",
         "transportadora_id",
-        "status"
-      ]
+        "status",
+        "data_fechamento"
+      ],
+      "dominio": "Cotação"
     },
     {
       "name": "cte_pendencia_cancelamento",
       "description": "Auditoria e pendencias do processamento automatico de cancelamento de CTe.",
       "key_fields": [
-        "chave_acesso",
         "cte_id",
-        "frete_id"
-      ]
+        "frete_id",
+        "email_message_id",
+        "status"
+      ],
+      "dominio": "Fretes"
     },
     {
       "name": "custo_considerado",
       "description": "Custos considerados para análise.",
       "key_fields": [
         "cod_produto",
-        "nome_produto",
-        "tipo_produto"
-      ]
+        "tipo_produto",
+        "tipo_custo_selecionado"
+      ],
+      "dominio": "Custeio"
     },
     {
       "name": "custo_frete",
       "description": "Custos de frete calculados.",
       "key_fields": [
-        "incoterm",
         "cod_uf",
+        "incoterm",
         "percentual_frete"
-      ]
+      ],
+      "dominio": "Custeio"
     },
     {
       "name": "depara_produto_cliente",
       "description": "De-Para de código produto ↔ cliente.",
       "key_fields": [
+        "codigo_cliente",
         "prefixo_cnpj",
-        "nome_grupo",
-        "codigo_cliente"
-      ]
+        "nome_grupo"
+      ],
+      "dominio": "Devoluções"
     },
     {
       "name": "despesas_extras",
@@ -1260,8 +1455,11 @@
       "key_fields": [
         "frete_id",
         "fatura_frete_id",
-        "transportadora_id"
-      ]
+        "transportadora_id",
+        "status",
+        "tipo_despesa"
+      ],
+      "dominio": "Fretes"
     },
     {
       "name": "devolucao_reason_embeddings",
@@ -1270,7 +1468,8 @@
         "nf_devolucao_linha_id",
         "descricao_text",
         "motivo_classificado"
-      ]
+      ],
+      "dominio": "Embeddings"
     },
     {
       "name": "divergencia_nf_po",
@@ -1278,62 +1477,80 @@
       "key_fields": [
         "validacao_id",
         "odoo_dfe_id",
-        "odoo_dfe_line_id"
-      ]
+        "odoo_dfe_line_id",
+        "tipo_divergencia",
+        "status"
+      ],
+      "dominio": "Recebimento"
     },
     {
       "name": "emails_anexados",
       "description": "Emails anexados a documentos.",
       "key_fields": [
         "despesa_extra_id",
-        "nome_arquivo",
-        "caminho_s3"
-      ]
+        "data_envio",
+        "nome_arquivo"
+      ],
+      "dominio": "Fretes"
     },
     {
       "name": "embarque_itens",
       "description": "Itens individuais dentro de um embarque. Campos: embarque_id, separacao_lote_id, cnpj_cliente, cliente, pedido, nota_fiscal, peso, valor, volumes, pallets, uf_destino, cidade_destino. Para co-passageiros: SELECT * FROM embarque_itens WHERE embarque_id = X.",
       "key_fields": [
-        "embarque_id",
+        "cnpj_cliente",
         "separacao_lote_id",
-        "cnpj_cliente"
-      ]
+        "nota_fiscal",
+        "cliente",
+        "protocolo_agendamento"
+      ],
+      "dominio": "Embarques"
     },
     {
       "name": "embarques",
       "description": "Embarques que agrupam separacoes para transporte. Campos: numero (unico), data_embarque, tipo_carga (DIRETA ou FRACIONADA), transportadora_id, peso_total, valor_total, pallet_total, status. Concentracao semanal: EXTRACT(DOW FROM data_embarque). Co-passageiros: JOIN embarque_itens WHERE embarque_id = X.",
       "key_fields": [
-        "numero",
+        "transportadora_id",
+        "cpf_motorista",
+        "cotacao_id",
         "data_prevista_embarque",
-        "data_embarque"
-      ]
+        "status"
+      ],
+      "dominio": "Embarques"
     },
     {
       "name": "entregas_monitoradas",
       "description": "Monitoramento de entregas com status e ocorrencias. Atraso: status_finalizacao IS NULL AND data_entrega_prevista < CURRENT_DATE. Em transito: data_embarque IS NOT NULL AND status_finalizacao IS NULL AND nf_cd=False. Lead time: data_hora_entrega_realizada - data_embarque. Taxa sucesso: COUNT(entregue=True)/COUNT(*). Campos: numero_nf, cnpj_cliente, transportadora, uf, municipio, valor_nf, separacao_lote_id.",
       "key_fields": [
         "numero_nf",
-        "origem",
-        "cliente"
-      ]
+        "cnpj_cliente",
+        "separacao_lote_id",
+        "cliente",
+        "transportadora"
+      ],
+      "dominio": "Monitoramento"
     },
     {
       "name": "entregas_rastreadas",
       "description": "Entregas com rastreamento ativo.",
       "key_fields": [
+        "numero_nf",
+        "cnpj_cliente",
         "rastreamento_id",
-        "embarque_item_id",
-        "numero_nf"
-      ]
+        "cliente",
+        "cidade"
+      ],
+      "dominio": "Rastreamento"
     },
     {
       "name": "evento_supply_chain",
       "description": "Tabela evento_supply_chain",
       "key_fields": [
-        "tipo_evento",
-        "entidade",
-        "entidade_id"
-      ]
+        "num_pedido",
+        "cod_produto",
+        "numero_nf",
+        "tipo_evento"
+      ],
+      "dominio": "Supply Chain"
     },
     {
       "name": "eventos_entrega",
@@ -1341,8 +1558,9 @@
       "key_fields": [
         "entrega_id",
         "data_hora_chegada",
-        "data_hora_saida"
-      ]
+        "tipo_evento"
+      ],
+      "dominio": "Monitoramento"
     },
     {
       "name": "extrato_item",
@@ -1350,8 +1568,11 @@
       "key_fields": [
         "lote_id",
         "statement_line_id",
-        "move_id"
-      ]
+        "move_id",
+        "data_transacao",
+        "tipo_transacao"
+      ],
+      "dominio": "Financeiro"
     },
     {
       "name": "extrato_item_titulo",
@@ -1359,17 +1580,23 @@
       "key_fields": [
         "extrato_item_id",
         "titulo_receber_id",
-        "titulo_pagar_id"
-      ]
+        "titulo_pagar_id",
+        "titulo_vencimento",
+        "status"
+      ],
+      "dominio": "Financeiro"
     },
     {
       "name": "faturamento_produto",
       "description": "NFs emitidas por produto. IMPORTANTE: campo origem = num_pedido (link direto pedido->NF). Comparativo mensal: SUM(valor_produto_faturado) GROUP BY DATE_TRUNC(month, data_fatura). Clientes novos: cnpj_cliente NOT IN subquery periodo anterior. Campos: numero_nf, cnpj_cliente, nome_cliente, cod_produto, nome_produto, qtd_faturada, valor_produto_faturado, data_fatura, origem.",
       "key_fields": [
+        "cod_produto",
         "numero_nf",
+        "cnpj_cliente",
         "data_fatura",
-        "cnpj_cliente"
-      ]
+        "nome_cliente"
+      ],
+      "dominio": "Faturamento"
     },
     {
       "name": "faturas_frete",
@@ -1377,26 +1604,32 @@
       "key_fields": [
         "transportadora_id",
         "numero_fatura",
-        "data_emissao"
-      ]
+        "data_emissao",
+        "vencimento"
+      ],
+      "dominio": "Fretes"
     },
     {
       "name": "fila_agendamento_sendas",
       "description": "Fila simples para acumular agendamentos Sendas e processar em lote",
       "key_fields": [
+        "num_pedido",
+        "cod_produto",
+        "cnpj",
         "tipo_origem",
-        "documento_origem",
-        "cnpj"
-      ]
+        "data_expedicao"
+      ],
+      "dominio": "Portal"
     },
     {
       "name": "financial_entity_embeddings",
       "description": "Embedding de entidades financeiras (fornecedores e clientes) para matching semantico.",
       "key_fields": [
-        "entity_type",
         "cnpj_raiz",
-        "cnpj_completo"
-      ]
+        "cnpj_completo",
+        "entity_type"
+      ],
+      "dominio": "Embeddings"
     },
     {
       "name": "frete_devolucao",
@@ -1404,35 +1637,45 @@
       "key_fields": [
         "ocorrencia_devolucao_id",
         "despesa_extra_id",
-        "transportadora_id"
-      ]
+        "transportadora_id",
+        "data_cotacao",
+        "status"
+      ],
+      "dominio": "Devoluções"
     },
     {
       "name": "fretes",
       "description": "Fretes contratados para embarques. 4 tipos de valor: valor_cotado (calculado pela tabela de frete), valor_cte (cobrado pela transportadora no CTe), valor_considerado (validado internamente), valor_pago (efetivamente pago). Para custo real use valor_pago. Divergencia: ABS(valor_cte - valor_cotado). numeros_nfs e campo CSV com NFs do frete. tipo_carga: DIRETA ou FRACIONADA. Pendentes Odoo: status=APROVADO AND lancado_odoo_em IS NULL.",
       "key_fields": [
-        "embarque_id",
         "cnpj_cliente",
-        "nome_cliente"
-      ]
+        "embarque_id",
+        "transportadora_id",
+        "nome_cliente",
+        "tipo_carga"
+      ],
+      "dominio": "Fretes"
     },
     {
       "name": "frota_despesas",
       "description": "Despesa de um veiculo da frota propria.",
       "key_fields": [
         "frota_veiculo_id",
+        "numero_documento",
+        "odoo_vendor_bill_id",
         "data_despesa",
-        "km_no_momento"
-      ]
+        "tipo_documento"
+      ],
+      "dominio": "Fretes"
     },
     {
       "name": "frota_veiculos",
       "description": "Cadastro de veiculos da frota propria.",
       "key_fields": [
-        "placa",
-        "marca",
-        "modelo"
-      ]
+        "veiculo_tipo_id",
+        "transportadora_id",
+        "placa"
+      ],
+      "dominio": "Fretes"
     },
     {
       "name": "grupo_empresarial",
@@ -1441,34 +1684,41 @@
         "nome_grupo",
         "prefixo_cnpj",
         "descricao"
-      ]
+      ],
+      "dominio": "Manufatura"
     },
     {
       "name": "grupo_transportadora",
       "description": "Grupo de transportadoras que operam com multiplos CNPJs.",
       "key_fields": [
         "nome",
-        "descricao",
-        "criado_por"
-      ]
+        "descricao"
+      ],
+      "dominio": "Transportadoras"
     },
     {
       "name": "historico_pedido_compras",
       "description": "Histórico COMPLETO (snapshot) de Pedidos de Compras",
       "key_fields": [
-        "pedido_compra_id",
-        "operacao",
-        "alterado_em"
-      ]
+        "num_pedido",
+        "cod_produto",
+        "numero_nf",
+        "raz_social",
+        "data_pedido_criacao"
+      ],
+      "dominio": "Manufatura"
     },
     {
       "name": "historico_requisicao_compras",
       "description": "Histórico COMPLETO (snapshot) de Requisições de Compras",
       "key_fields": [
+        "cod_produto",
         "requisicao_id",
-        "operacao",
-        "alterado_em"
-      ]
+        "num_requisicao",
+        "data_requisicao_criacao",
+        "status"
+      ],
+      "dominio": "Manufatura"
     },
     {
       "name": "hora_aprovacao_desconto",
@@ -1477,7 +1727,8 @@
         "venda_id",
         "status",
         "detalhe"
-      ]
+      ],
+      "dominio": "Lojas HORA"
     },
     {
       "name": "hora_avaria",
@@ -1485,8 +1736,9 @@
       "key_fields": [
         "numero_chassi",
         "loja_id",
-        "descricao"
-      ]
+        "status"
+      ],
+      "dominio": "Lojas HORA"
     },
     {
       "name": "hora_avaria_foto",
@@ -1495,15 +1747,16 @@
         "avaria_id",
         "foto_s3_key",
         "legenda"
-      ]
+      ],
+      "dominio": "Lojas HORA"
     },
     {
       "name": "hora_comissao_config",
       "description": "Configuracao global (singleton) de comissao. Use id=1.",
       "key_fields": [
-        "comissao_base_moto",
-        "atualizado_por"
-      ]
+        "comissao_base_moto"
+      ],
+      "dominio": "Lojas HORA"
     },
     {
       "name": "hora_comissao_faixa_desconto",
@@ -1512,7 +1765,8 @@
         "desconto_min",
         "desconto_max",
         "reducao_comissao"
-      ]
+      ],
+      "dominio": "Lojas HORA"
     },
     {
       "name": "hora_conferencia_auditoria",
@@ -1521,7 +1775,8 @@
         "recebimento_id",
         "conferencia_id",
         "usuario"
-      ]
+      ],
+      "dominio": "Lojas HORA"
     },
     {
       "name": "hora_conferencia_divergencia",
@@ -1530,7 +1785,8 @@
         "conferencia_id",
         "tipo",
         "detalhe"
-      ]
+      ],
+      "dominio": "Lojas HORA"
     },
     {
       "name": "hora_danfe_parser_append",
@@ -1539,7 +1795,8 @@
         "versao",
         "texto_append",
         "acrescimo_aplicado"
-      ]
+      ],
+      "dominio": "Lojas HORA"
     },
     {
       "name": "hora_devolucao_fornecedor",
@@ -1547,8 +1804,10 @@
       "key_fields": [
         "loja_id",
         "nf_entrada_id",
-        "motivo"
-      ]
+        "status",
+        "data_devolucao"
+      ],
+      "dominio": "Lojas HORA"
     },
     {
       "name": "hora_devolucao_fornecedor_item",
@@ -1556,8 +1815,9 @@
       "key_fields": [
         "devolucao_id",
         "numero_chassi",
-        "motivo_especifico"
-      ]
+        "recebimento_conferencia_id"
+      ],
+      "dominio": "Lojas HORA"
     },
     {
       "name": "hora_devolucao_venda",
@@ -1565,8 +1825,10 @@
       "key_fields": [
         "venda_id",
         "loja_id",
-        "motivo"
-      ]
+        "status",
+        "data_devolucao"
+      ],
+      "dominio": "Lojas HORA"
     },
     {
       "name": "hora_devolucao_venda_item",
@@ -1574,35 +1836,41 @@
       "key_fields": [
         "devolucao_id",
         "numero_chassi",
-        "venda_item_id"
-      ]
+        "venda_item_id",
+        "status_item"
+      ],
+      "dominio": "Lojas HORA"
     },
     {
       "name": "hora_emprestimo_moto",
       "description": "1 emprestimo = 1 moto que sai/entra. Modelo de saida = modelo de",
       "key_fields": [
-        "tipo",
+        "loja_hora_id",
+        "modelo_id",
         "status",
-        "loja_hora_id"
-      ]
+        "data_emprestimo"
+      ],
+      "dominio": "Lojas HORA"
     },
     {
       "name": "hora_loja",
       "description": "Ponto de venda físico da HORA (Tatuapé, Bragança, Praia Grande, ...).",
       "key_fields": [
         "cnpj",
-        "apelido",
-        "nome"
-      ]
+        "data_abertura",
+        "cidade"
+      ],
+      "dominio": "Lojas HORA"
     },
     {
       "name": "hora_modelo",
       "description": "Catálogo de modelos de moto elétrica comercializados pela HORA.",
       "key_fields": [
+        "merged_em_id",
         "nome_modelo",
-        "potencia_motor",
-        "descricao"
-      ]
+        "potencia_motor"
+      ],
+      "dominio": "Lojas HORA"
     },
     {
       "name": "hora_modelo_alias",
@@ -1611,43 +1879,50 @@
         "modelo_id",
         "nome_alias",
         "tipo"
-      ]
+      ],
+      "dominio": "Lojas HORA"
     },
     {
       "name": "hora_modelo_pendente",
       "description": "Fila de nomes nao reconhecidos aguardando decisao do operador.",
       "key_fields": [
-        "nome_observado",
-        "origem",
-        "origem_id"
-      ]
+        "origem_id",
+        "tagplus_produto_id",
+        "resolvido_modelo_id",
+        "status"
+      ],
+      "dominio": "Lojas HORA"
     },
     {
       "name": "hora_moto",
       "description": "Identidade imutável da moto física. Uma linha por chassi, insert-once.",
       "key_fields": [
+        "numero_chassi",
         "modelo_id",
-        "cor",
         "numero_motor"
-      ]
+      ],
+      "dominio": "Lojas HORA"
     },
     {
       "name": "hora_moto_evento",
       "description": "Log append-only de transições de estado da moto.",
       "key_fields": [
         "numero_chassi",
-        "tipo",
-        "origem_tabela"
-      ]
+        "origem_id",
+        "loja_id"
+      ],
+      "dominio": "Lojas HORA"
     },
     {
       "name": "hora_nf_entrada",
       "description": "NF fiscal recebida da Motochefe (B2B / Laiouns / Q.P.A).",
       "key_fields": [
-        "chave_44",
         "numero_nf",
-        "serie_nf"
-      ]
+        "cnpj_emitente",
+        "cnpj_destinatario",
+        "data_emissao"
+      ],
+      "dominio": "Lojas HORA"
     },
     {
       "name": "hora_nf_entrada_item",
@@ -1655,8 +1930,9 @@
       "key_fields": [
         "nf_id",
         "numero_chassi",
-        "preco_real"
-      ]
+        "numero_motor_texto_original"
+      ],
+      "dominio": "Lojas HORA"
     },
     {
       "name": "hora_nf_entrada_item_peca",
@@ -1665,7 +1941,8 @@
         "nf_id",
         "peca_id",
         "qtd_nf"
-      ]
+      ],
+      "dominio": "Lojas HORA"
     },
     {
       "name": "hora_peca",
@@ -1674,16 +1951,18 @@
         "codigo_interno",
         "descricao",
         "ncm"
-      ]
+      ],
+      "dominio": "Lojas HORA"
     },
     {
       "name": "hora_peca_faltando",
       "description": "Uma peca ausente em uma moto (N por moto).",
       "key_fields": [
         "numero_chassi",
-        "descricao",
-        "chassi_doador"
-      ]
+        "recebimento_conferencia_id",
+        "status"
+      ],
+      "dominio": "Lojas HORA"
     },
     {
       "name": "hora_peca_faltando_foto",
@@ -1692,7 +1971,8 @@
         "peca_faltando_id",
         "foto_s3_key",
         "legenda"
-      ]
+      ],
+      "dominio": "Lojas HORA"
     },
     {
       "name": "hora_peca_movimento",
@@ -1700,8 +1980,9 @@
       "key_fields": [
         "peca_id",
         "loja_id",
-        "tipo"
-      ]
+        "ref_id"
+      ],
+      "dominio": "Lojas HORA"
     },
     {
       "name": "hora_pedido",
@@ -1709,8 +1990,11 @@
       "key_fields": [
         "numero_pedido",
         "cnpj_destino",
-        "loja_destino_id"
-      ]
+        "loja_destino_id",
+        "data_pedido",
+        "status"
+      ],
+      "dominio": "Lojas HORA"
     },
     {
       "name": "hora_pedido_item",
@@ -1719,7 +2003,8 @@
         "pedido_id",
         "numero_chassi",
         "modelo_id"
-      ]
+      ],
+      "dominio": "Lojas HORA"
     },
     {
       "name": "hora_recebimento",
@@ -1727,26 +2012,31 @@
       "key_fields": [
         "nf_id",
         "loja_id",
-        "data_recebimento"
-      ]
+        "data_recebimento",
+        "status"
+      ],
+      "dominio": "Lojas HORA"
     },
     {
       "name": "hora_recebimento_conferencia",
       "description": "Conferência unitária de um chassi durante o recebimento.",
       "key_fields": [
         "recebimento_id",
-        "ordem",
-        "numero_chassi"
-      ]
+        "numero_chassi",
+        "substituida_por_id",
+        "tipo_divergencia"
+      ],
+      "dominio": "Lojas HORA"
     },
     {
       "name": "hora_recibo",
       "description": "Recibo Simples de pecas/oficina de uma venda (nao-fiscal).",
       "key_fields": [
-        "numero",
         "venda_id",
-        "valor_total"
-      ]
+        "status",
+        "numero"
+      ],
+      "dominio": "Lojas HORA"
     },
     {
       "name": "hora_tabela_preco",
@@ -1755,16 +2045,18 @@
         "modelo_id",
         "preco_tabela",
         "vigencia_inicio"
-      ]
+      ],
+      "dominio": "Lojas HORA"
     },
     {
       "name": "hora_tagplus_backfill_job",
       "description": "Job de backfill TagPlus enfileirado em RQ (queue `hora_backfill`).",
       "key_fields": [
-        "tipo",
+        "rq_job_id",
         "status",
-        "since"
-      ]
+        "tipo"
+      ],
+      "dominio": "Lojas HORA"
     },
     {
       "name": "hora_tagplus_conta",
@@ -1773,25 +2065,28 @@
         "client_id",
         "client_secret_encrypted",
         "webhook_secret"
-      ]
+      ],
+      "dominio": "Lojas HORA"
     },
     {
       "name": "hora_tagplus_departamento_map",
       "description": "De-para departamento.descricao TagPlus -> HoraLoja (loja fisica).",
       "key_fields": [
+        "loja_id",
         "departamento_norm",
-        "departamento_raw",
-        "loja_id"
-      ]
+        "departamento_raw"
+      ],
+      "dominio": "Lojas HORA"
     },
     {
       "name": "hora_tagplus_forma_pagamento_map",
       "description": "De-para forma_pagamento HORA -> ID inteiro de forma no TagPlus.",
       "key_fields": [
-        "forma_pagamento_hora",
         "tagplus_forma_id",
-        "descricao"
-      ]
+        "exige_aut_id",
+        "tipo_pagamento"
+      ],
+      "dominio": "Lojas HORA"
     },
     {
       "name": "hora_tagplus_nfe_emissao",
@@ -1799,17 +2094,20 @@
       "key_fields": [
         "venda_id",
         "conta_id",
+        "tagplus_nfe_id",
         "status"
-      ]
+      ],
+      "dominio": "Lojas HORA"
     },
     {
       "name": "hora_tagplus_notificacao_whatsapp",
       "description": "Dedupe/auditoria das notificações WhatsApp de NFe aprovada / pedido confirmado da HORA.",
       "key_fields": [
-        "tipo",
         "ref_id",
-        "numero"
-      ]
+        "status",
+        "tipo"
+      ],
+      "dominio": "Lojas HORA"
     },
     {
       "name": "hora_tagplus_peca_map",
@@ -1818,7 +2116,8 @@
         "peca_id",
         "tagplus_produto_id",
         "tagplus_codigo"
-      ]
+      ],
+      "dominio": "Lojas HORA"
     },
     {
       "name": "hora_tagplus_produto_map",
@@ -1827,7 +2126,8 @@
         "modelo_id",
         "tagplus_produto_id",
         "tagplus_codigo"
-      ]
+      ],
+      "dominio": "Lojas HORA"
     },
     {
       "name": "hora_tagplus_token",
@@ -1836,7 +2136,8 @@
         "conta_id",
         "access_token_encrypted",
         "refresh_token_encrypted"
-      ]
+      ],
+      "dominio": "Lojas HORA"
     },
     {
       "name": "hora_transferencia",
@@ -1845,7 +2146,8 @@
         "loja_origem_id",
         "loja_destino_id",
         "status"
-      ]
+      ],
+      "dominio": "Lojas HORA"
     },
     {
       "name": "hora_transferencia_auditoria",
@@ -1854,7 +2156,8 @@
         "transferencia_id",
         "item_id",
         "usuario"
-      ]
+      ],
+      "dominio": "Lojas HORA"
     },
     {
       "name": "hora_transferencia_item",
@@ -1863,16 +2166,18 @@
         "transferencia_id",
         "numero_chassi",
         "conferido_destino_em"
-      ]
+      ],
+      "dominio": "Lojas HORA"
     },
     {
       "name": "hora_user_permissao",
       "description": "Permissao granular por usuario x modulo HORA.",
       "key_fields": [
         "user_id",
-        "modulo",
-        "pode_ver"
-      ]
+        "atualizado_por_id",
+        "modulo"
+      ],
+      "dominio": "Lojas HORA"
     },
     {
       "name": "hora_venda",
@@ -1880,8 +2185,11 @@
       "key_fields": [
         "loja_id",
         "cpf_cliente",
-        "nome_cliente"
-      ]
+        "numero_parcelas",
+        "nome_cliente",
+        "data_venda"
+      ],
+      "dominio": "Lojas HORA"
     },
     {
       "name": "hora_venda_auditoria",
@@ -1890,7 +2198,8 @@
         "venda_id",
         "item_id",
         "usuario"
-      ]
+      ],
+      "dominio": "Lojas HORA"
     },
     {
       "name": "hora_venda_brinde",
@@ -1899,7 +2208,8 @@
         "venda_id",
         "peca_id",
         "qtd"
-      ]
+      ],
+      "dominio": "Lojas HORA"
     },
     {
       "name": "hora_venda_divergencia",
@@ -1908,7 +2218,8 @@
         "venda_id",
         "numero_chassi",
         "tipo"
-      ]
+      ],
+      "dominio": "Lojas HORA"
     },
     {
       "name": "hora_venda_item",
@@ -1917,7 +2228,8 @@
         "venda_id",
         "numero_chassi",
         "tabela_preco_id"
-      ]
+      ],
+      "dominio": "Lojas HORA"
     },
     {
       "name": "hora_venda_item_peca",
@@ -1926,70 +2238,78 @@
         "venda_id",
         "peca_id",
         "qtd"
-      ]
+      ],
+      "dominio": "Lojas HORA"
     },
     {
       "name": "hora_venda_pagamento",
       "description": "Pagamento parcial de uma venda (1:N com HoraVenda).",
       "key_fields": [
         "venda_id",
-        "forma_pagamento_hora",
-        "valor"
-      ]
+        "numero_parcelas",
+        "aut_id"
+      ],
+      "dominio": "Lojas HORA"
     },
     {
       "name": "inventario_ajuste_manual",
       "description": "Ajustes manuais (Planilha2 — preenchido pelo time).",
       "key_fields": [
-        "ciclo_id",
         "cod_produto",
-        "nome_produto"
-      ]
+        "ciclo_id",
+        "tipo_ajuste"
+      ],
+      "dominio": "Inventario"
     },
     {
       "name": "inventario_base",
       "description": "Snapshot físico FB/CD/LF (uma linha por cod + empresa).",
       "key_fields": [
-        "ciclo_id",
         "cod_produto",
+        "ciclo_id",
         "nome_produto"
-      ]
+      ],
+      "dominio": "Inventario"
     },
     {
       "name": "inventario_ciclo",
       "description": "Ciclo de inventário (ex.: INV-2026-05-16).",
       "key_fields": [
-        "codigo",
         "data_snapshot",
-        "descricao"
-      ]
+        "status",
+        "codigo"
+      ],
+      "dominio": "Inventario"
     },
     {
       "name": "inventario_contagem",
       "description": "Contagem cíclica parcial sob demanda (granularidade quant).",
       "key_fields": [
-        "codigo",
-        "empresa",
-        "filtro_locais"
-      ]
+        "data_base",
+        "status",
+        "codigo"
+      ],
+      "dominio": "Inventario"
     },
     {
       "name": "inventario_contagem_item",
       "description": "1 linha = 1 stock.quant (location_name + cod + lote) de uma contagem cíclica.",
       "key_fields": [
+        "cod_produto",
         "contagem_id",
-        "location_name",
         "location_id"
-      ]
+      ],
+      "dominio": "Inventario"
     },
     {
       "name": "inventario_snapshot_odoo",
       "description": "Cache de estoque + apontamentos + compras do Odoo + MOV local (botão refresh).",
       "key_fields": [
-        "ciclo_id",
         "cod_produto",
+        "ciclo_id",
         "nome_produto"
-      ]
+      ],
+      "dominio": "Inventario"
     },
     {
       "name": "lancamento_comprovante",
@@ -1997,8 +2317,11 @@
       "key_fields": [
         "comprovante_id",
         "odoo_move_line_id",
-        "odoo_move_id"
-      ]
+        "odoo_move_id",
+        "odoo_vencimento",
+        "status"
+      ],
+      "dominio": "Financeiro"
     },
     {
       "name": "lancamento_frete_odoo_auditoria",
@@ -2006,35 +2329,42 @@
       "key_fields": [
         "frete_id",
         "despesa_extra_id",
-        "cte_id"
-      ]
+        "cte_id",
+        "status"
+      ],
+      "dominio": "Fretes"
     },
     {
       "name": "lista_materiais",
       "description": "Estrutura de produtos (BOM - Bill of Materials)",
       "key_fields": [
         "cod_produto_produzido",
-        "nome_produto_produzido",
-        "cod_produto_componente"
-      ]
+        "cod_produto_componente",
+        "status"
+      ],
+      "dominio": "Manufatura"
     },
     {
       "name": "lista_materiais_historico",
       "description": "Histórico de todas as alterações em Lista de Materiais",
       "key_fields": [
         "lista_materiais_id",
-        "operacao",
-        "cod_produto_produzido"
-      ]
+        "cod_produto_produzido",
+        "cod_produto_componente",
+        "status_antes",
+        "status_depois"
+      ],
+      "dominio": "Manufatura"
     },
     {
       "name": "logs_entrega",
       "description": "Logs de entrega.",
       "key_fields": [
         "entrega_id",
-        "autor",
-        "data_hora"
-      ]
+        "data_hora",
+        "autor"
+      ],
+      "dominio": "Monitoramento"
     },
     {
       "name": "logs_rastreamento",
@@ -2043,7 +2373,8 @@
         "rastreamento_id",
         "evento",
         "detalhes"
-      ]
+      ],
+      "dominio": "Rastreamento"
     },
     {
       "name": "match_nf_po_alocacao",
@@ -2051,8 +2382,10 @@
       "key_fields": [
         "match_item_id",
         "odoo_po_id",
-        "odoo_po_name"
-      ]
+        "odoo_po_line_id",
+        "data_po"
+      ],
+      "dominio": "Recebimento"
     },
     {
       "name": "match_nf_po_item",
@@ -2060,35 +2393,45 @@
       "key_fields": [
         "validacao_id",
         "odoo_dfe_line_id",
-        "cod_produto_fornecedor"
-      ]
+        "cod_produto_fornecedor",
+        "data_nf",
+        "status_match"
+      ],
+      "dominio": "Recebimento"
     },
     {
       "name": "motoristas",
       "description": "Cadastro de motoristas.",
       "key_fields": [
+        "cpf",
         "nome_completo",
-        "rg",
-        "cpf"
-      ]
+        "rg"
+      ],
+      "dominio": "Portaria"
     },
     {
       "name": "movimentacao_estoque",
       "description": "Movimentos de estoque: entradas, saidas, ajustes, producao. Historico: ORDER BY data_movimentacao DESC. Origem do estoque: GROUP BY tipo_movimentacao. Estoque parado: MAX(data_movimentacao WHERE tipo=SAIDA) < 30 dias + saldo > 0. Giro: saidas_periodo / saldo_medio.",
       "key_fields": [
+        "num_pedido",
         "cod_produto",
-        "nome_produto",
-        "data_movimentacao"
-      ]
+        "numero_nf",
+        "data_movimentacao",
+        "tipo_movimentacao"
+      ],
+      "dominio": "Estoque"
     },
     {
       "name": "mv_pedidos",
       "description": "Materialized View mv_pedidos — snapshot pre-computado da VIEW pedidos.",
       "key_fields": [
-        "separacao_lote_id",
         "num_pedido",
-        "cnpj_cpf"
-      ]
+        "cnpj_cpf",
+        "separacao_lote_id",
+        "expedicao",
+        "agendamento"
+      ],
+      "dominio": "Pedidos"
     },
     {
       "name": "ncm_ibscbs_validado",
@@ -2097,7 +2440,8 @@
         "ncm_prefixo",
         "descricao_ncm",
         "aliquota_ibs_uf"
-      ]
+      ],
+      "dominio": "Recebimento"
     },
     {
       "name": "nf_devolucao",
@@ -2105,8 +2449,11 @@
       "key_fields": [
         "entrega_monitorada_id",
         "numero_nfd",
-        "data_registro"
-      ]
+        "numero_nf_venda",
+        "data_registro",
+        "odoo_status_codigo"
+      ],
+      "dominio": "Devoluções"
     },
     {
       "name": "nf_devolucao_linha",
@@ -2114,71 +2461,81 @@
       "key_fields": [
         "nf_devolucao_id",
         "codigo_produto_cliente",
-        "descricao_produto_cliente"
-      ]
+        "codigo_produto_interno"
+      ],
+      "dominio": "Devoluções"
     },
     {
       "name": "nf_devolucao_nf_referenciada",
       "description": "NFs referenciadas em devoluções.",
       "key_fields": [
-        "nf_devolucao_id",
         "numero_nf",
-        "serie_nf"
-      ]
+        "nf_devolucao_id",
+        "entrega_monitorada_id",
+        "data_emissao_nf"
+      ],
+      "dominio": "Devoluções"
     },
     {
       "name": "nf_pendente_tagplus",
       "description": "NFs pendentes no TagPlus.",
       "key_fields": [
+        "cod_produto",
         "numero_nf",
         "cnpj_cliente",
-        "nome_cliente"
-      ]
+        "nome_cliente",
+        "nome_cidade"
+      ],
+      "dominio": "Integrações"
     },
     {
       "name": "nf_transferencia_desconsiderada",
       "description": "Flag persistente: NF a EXCLUIR do calculo em_transito_*.",
       "key_fields": [
         "account_move_id_origem",
-        "motivo",
-        "criado_por"
-      ]
+        "motivo"
+      ],
+      "dominio": "Recebimento"
     },
     {
       "name": "nf_transferencia_produto_snapshot",
       "description": "Linhas de produto da NF inter-company (1 NF tem N linhas).",
       "key_fields": [
-        "nf_snapshot_id",
         "cod_produto",
+        "nf_snapshot_id",
         "nome_produto"
-      ]
+      ],
+      "dominio": "Recebimento"
     },
     {
       "name": "nf_transferencia_snapshot",
       "description": "Snapshot de NF inter-company (FB <-> CD <-> LF) com cross-ref destino.",
       "key_fields": [
-        "refresh_em",
-        "refreshed_por",
-        "chave_nfe"
-      ]
+        "numero_nf",
+        "chave_nfe",
+        "partner_origem_id",
+        "data_emissao",
+        "status_consolidado"
+      ],
+      "dominio": "Recebimento"
     },
     {
       "name": "ocorrencia_autorizado_por",
       "description": "Tabela lookup de autorizadores de ocorrencia (CRUD via modal)",
       "key_fields": [
         "codigo",
-        "descricao",
-        "criado_por"
-      ]
+        "descricao"
+      ],
+      "dominio": "Devoluções"
     },
     {
       "name": "ocorrencia_categoria",
       "description": "Tabela lookup de categorias de ocorrencia (CRUD via modal)",
       "key_fields": [
         "codigo",
-        "descricao",
-        "criado_por"
-      ]
+        "descricao"
+      ],
+      "dominio": "Devoluções"
     },
     {
       "name": "ocorrencia_devolucao",
@@ -2186,8 +2543,11 @@
       "key_fields": [
         "nf_devolucao_id",
         "numero_ocorrencia",
-        "destino"
-      ]
+        "transportadora_retorno_id",
+        "data_previsao_retorno",
+        "status"
+      ],
+      "dominio": "Devoluções"
     },
     {
       "name": "ocorrencia_devolucao_categoria",
@@ -2195,7 +2555,8 @@
       "key_fields": [
         "ocorrencia_devolucao_id",
         "categoria_id"
-      ]
+      ],
+      "dominio": "Devoluções"
     },
     {
       "name": "ocorrencia_devolucao_subcategoria",
@@ -2203,88 +2564,106 @@
       "key_fields": [
         "ocorrencia_devolucao_id",
         "subcategoria_id"
-      ]
+      ],
+      "dominio": "Devoluções"
     },
     {
       "name": "ocorrencia_origem",
       "description": "Tabela lookup de origens de ocorrencia (CRUD via modal)",
       "key_fields": [
         "codigo",
-        "descricao",
-        "criado_por"
-      ]
+        "descricao"
+      ],
+      "dominio": "Devoluções"
     },
     {
       "name": "ocorrencia_responsavel",
       "description": "Tabela lookup de responsaveis de ocorrencia (CRUD via modal)",
       "key_fields": [
+        "categoria_id",
         "codigo",
-        "descricao",
-        "categoria_id"
-      ]
+        "descricao"
+      ],
+      "dominio": "Devoluções"
     },
     {
       "name": "ocorrencia_subcategoria",
       "description": "Tabela lookup de subcategorias de ocorrencia (CRUD via modal)",
       "key_fields": [
+        "categoria_id",
         "codigo",
-        "descricao",
-        "categoria_id"
-      ]
+        "descricao"
+      ],
+      "dominio": "Devoluções"
     },
     {
       "name": "operacao_odoo_auditoria",
       "description": "Tabela operacao_odoo_auditoria",
       "key_fields": [
         "external_id",
-        "tabela_origem",
-        "registro_id"
-      ]
+        "registro_id",
+        "odoo_id",
+        "status"
+      ],
+      "dominio": "Odoo"
     },
     {
       "name": "pallet_creditos",
       "description": "Creditos de pallets a receber. Saldo por responsavel: SUM(qtd_saldo) WHERE status IN (PENDENTE, PARCIAL). tipo_responsavel: TRANSPORTADORA ou CLIENTE. Campos: cnpj_responsavel, nome_responsavel, qtd_original, qtd_saldo, status, prazo_dias, data_vencimento, nf_remessa_id.",
       "key_fields": [
         "nf_remessa_id",
-        "qtd_original",
-        "qtd_saldo"
-      ]
+        "cnpj_responsavel",
+        "movimentacao_estoque_id",
+        "tipo_responsavel",
+        "data_vencimento"
+      ],
+      "dominio": "Pallets"
     },
     {
       "name": "pallet_documentos",
       "description": "Documentos que enriquecem o crédito de pallet.",
       "key_fields": [
         "credito_id",
-        "tipo",
-        "numero_documento"
-      ]
+        "numero_documento",
+        "cnpj_emissor",
+        "data_emissao"
+      ],
+      "dominio": "Pallets"
     },
     {
       "name": "pallet_nf_remessa",
       "description": "NF de remessa de pallet emitida.",
       "key_fields": [
         "numero_nf",
-        "serie",
-        "chave_nfe"
-      ]
+        "chave_nfe",
+        "odoo_account_move_id",
+        "data_emissao",
+        "tipo_destinatario"
+      ],
+      "dominio": "Pallets"
     },
     {
       "name": "pallet_nf_solucoes",
       "description": "Solução documental de NF de remessa.",
       "key_fields": [
         "nf_remessa_id",
-        "tipo",
-        "quantidade"
-      ]
+        "numero_nf_solucao",
+        "odoo_account_move_id",
+        "data_nf_solucao",
+        "odoo_status"
+      ],
+      "dominio": "Pallets"
     },
     {
       "name": "pallet_solucoes",
       "description": "Registro de resolução de crédito de pallet.",
       "key_fields": [
         "credito_id",
-        "tipo",
-        "quantidade"
-      ]
+        "cnpj_comprador",
+        "cnpj_entregador",
+        "data_confirmacao"
+      ],
+      "dominio": "Pallets"
     },
     {
       "name": "parametro_custeio",
@@ -2293,7 +2672,8 @@
         "chave",
         "valor",
         "descricao"
-      ]
+      ],
+      "dominio": "Custeio"
     },
     {
       "name": "payment_category_embeddings",
@@ -2302,43 +2682,53 @@
         "category_name",
         "description",
         "examples"
-      ]
+      ],
+      "dominio": "Embeddings"
     },
     {
       "name": "pedido_compras",
       "description": "Pedidos de compra a fornecedores sincronizados do Odoo (status_odoo: draft, sent, to approve, purchase, done, cancel).",
       "key_fields": [
         "num_pedido",
-        "company_id",
-        "num_requisicao"
-      ]
+        "cod_produto",
+        "numero_nf",
+        "raz_social",
+        "data_pedido_criacao"
+      ],
+      "dominio": "Manufatura"
     },
     {
       "name": "pedido_importacao_temp",
       "description": "Pedidos temporários para importação.",
       "key_fields": [
-        "chave_importacao",
+        "numero_documento",
+        "numero_pedido_cliente",
         "status",
-        "rede"
-      ]
+        "tipo_documento"
+      ],
+      "dominio": "Pedidos"
     },
     {
       "name": "pendencia_fiscal_ibscbs",
       "description": "Pendências fiscais IBSCBS.",
       "key_fields": [
+        "numero_documento",
+        "odoo_dfe_id",
+        "cte_id",
         "tipo_documento",
-        "chave_acesso",
-        "numero_documento"
-      ]
+        "data_emissao"
+      ],
+      "dominio": "Recebimento"
     },
     {
       "name": "perfil_fiscal_produto_fornecedor",
       "description": "Perfil fiscal produto × fornecedor.",
       "key_fields": [
-        "cnpj_empresa_compradora",
         "cod_produto",
+        "cnpj_empresa_compradora",
         "cnpj_fornecedor"
-      ]
+      ],
+      "dominio": "Recebimento"
     },
     {
       "name": "permissao_cadastro_devolucao",
@@ -2347,7 +2737,8 @@
         "usuario_id",
         "tipo_cadastro",
         "pode_criar"
-      ]
+      ],
+      "dominio": "Devoluções"
     },
     {
       "name": "permissao_comercial",
@@ -2356,7 +2747,8 @@
         "usuario_id",
         "tipo",
         "valor"
-      ]
+      ],
+      "dominio": "Comercial"
     },
     {
       "name": "pessoal_categorias",
@@ -2365,7 +2757,8 @@
         "nome",
         "grupo",
         "icone"
-      ]
+      ],
+      "dominio": "Pessoal"
     },
     {
       "name": "pessoal_compensacoes",
@@ -2373,17 +2766,19 @@
       "key_fields": [
         "saida_id",
         "entrada_id",
-        "valor_compensado"
-      ]
+        "status"
+      ],
+      "dominio": "Pessoal"
     },
     {
       "name": "pessoal_contas",
       "description": "Tabela pessoal_contas",
       "key_fields": [
-        "nome",
-        "tipo",
-        "banco"
-      ]
+        "numero_conta",
+        "membro_id",
+        "pluggy_account_id"
+      ],
+      "dominio": "Pessoal"
     },
     {
       "name": "pessoal_exclusoes_empresa",
@@ -2391,7 +2786,8 @@
       "key_fields": [
         "padrao",
         "descricao"
-      ]
+      ],
+      "dominio": "Pessoal"
     },
     {
       "name": "pessoal_grupos_analise",
@@ -2400,21 +2796,28 @@
         "nome",
         "descricao",
         "cor"
-      ]
+      ],
+      "dominio": "Pessoal"
     },
     {
       "name": "pessoal_grupos_analise_categorias",
       "description": "Tabela pessoal_grupos_analise_categorias",
-      "key_fields": []
+      "key_fields": [
+        "grupo_id",
+        "categoria_id"
+      ],
+      "dominio": "Outros"
     },
     {
       "name": "pessoal_importacoes",
       "description": "Tabela pessoal_importacoes",
       "key_fields": [
         "conta_id",
-        "nome_arquivo",
-        "tipo_arquivo"
-      ]
+        "transacao_pagamento_id",
+        "tipo_arquivo",
+        "data_pagamento"
+      ],
+      "dominio": "Pessoal"
     },
     {
       "name": "pessoal_membros",
@@ -2423,34 +2826,38 @@
         "nome",
         "nome_completo",
         "papel"
-      ]
+      ],
+      "dominio": "Pessoal"
     },
     {
       "name": "pessoal_orcamentos",
       "description": "Tabela pessoal_orcamentos",
       "key_fields": [
-        "ano_mes",
         "categoria_id",
+        "ano_mes",
         "valor_limite"
-      ]
+      ],
+      "dominio": "Pessoal"
     },
     {
       "name": "pessoal_pluggy_accounts",
       "description": "Conta Pluggy dentro de um item (BANK conta corrente ou CREDIT cartao).",
       "key_fields": [
-        "pluggy_item_pk",
         "pluggy_account_id",
-        "type"
-      ]
+        "conta_pessoal_id",
+        "bank_data"
+      ],
+      "dominio": "Pessoal"
     },
     {
       "name": "pessoal_pluggy_categorias_map",
       "description": "Mapeia categoryId hierarquico Pluggy para PessoalCategoria local.",
       "key_fields": [
         "pluggy_category_id",
-        "pluggy_category_description",
-        "pluggy_category_translated"
-      ]
+        "pluggy_parent_id",
+        "pessoal_categoria_id"
+      ],
+      "dominio": "Pessoal"
     },
     {
       "name": "pessoal_pluggy_items",
@@ -2458,35 +2865,46 @@
       "key_fields": [
         "pluggy_item_id",
         "client_user_id",
-        "connector_id"
-      ]
+        "connector_id",
+        "status",
+        "execution_status"
+      ],
+      "dominio": "Pessoal"
     },
     {
       "name": "pessoal_pluggy_transacoes_stg",
       "description": "Staging de transacoes Pluggy — fiel ao payload, sem adapter aplicado.",
       "key_fields": [
-        "pluggy_account_pk",
         "pluggy_transaction_id",
-        "date"
-      ]
+        "category_id",
+        "provider_id",
+        "status",
+        "payment_data"
+      ],
+      "dominio": "Pessoal"
     },
     {
       "name": "pessoal_provisoes",
       "description": "Lancamento provisionado (forecast manual).",
       "key_fields": [
-        "tipo",
+        "categoria_id",
+        "membro_id",
+        "conta_id",
         "data_prevista",
-        "valor"
-      ]
+        "status"
+      ],
+      "dominio": "Pessoal"
     },
     {
       "name": "pessoal_regras_categorizacao",
       "description": "Tabela pessoal_regras_categorizacao",
       "key_fields": [
-        "padrao_historico",
-        "tipo_regra",
-        "categoria_id"
-      ]
+        "categoria_id",
+        "membro_id",
+        "cpf_cnpj_padrao",
+        "tipo_regra"
+      ],
+      "dominio": "Pessoal"
     },
     {
       "name": "pessoal_transacoes",
@@ -2494,17 +2912,20 @@
       "key_fields": [
         "importacao_id",
         "conta_id",
-        "data"
-      ]
+        "categoria_id",
+        "status"
+      ],
+      "dominio": "Pessoal"
     },
     {
       "name": "picking_recebimento",
       "description": "Pickings de recebimento (Odoo).",
       "key_fields": [
         "odoo_picking_id",
-        "odoo_picking_name",
-        "state"
-      ]
+        "odoo_partner_id",
+        "odoo_purchase_order_id"
+      ],
+      "dominio": "Recebimento"
     },
     {
       "name": "picking_recebimento_move_line",
@@ -2513,7 +2934,8 @@
         "picking_recebimento_id",
         "produto_id",
         "odoo_move_line_id"
-      ]
+      ],
+      "dominio": "Recebimento"
     },
     {
       "name": "picking_recebimento_produto",
@@ -2522,7 +2944,8 @@
         "picking_recebimento_id",
         "odoo_move_id",
         "odoo_product_id"
-      ]
+      ],
+      "dominio": "Recebimento"
     },
     {
       "name": "picking_recebimento_quality_check",
@@ -2531,7 +2954,8 @@
         "picking_recebimento_id",
         "odoo_check_id",
         "odoo_point_id"
-      ]
+      ],
+      "dominio": "Recebimento"
     },
     {
       "name": "pings_gps",
@@ -2540,25 +2964,30 @@
         "rastreamento_id",
         "latitude",
         "longitude"
-      ]
+      ],
+      "dominio": "Rastreamento"
     },
     {
       "name": "portal_atacadao_produto_depara",
       "description": "Tabela DE-PARA para mapear códigos de produtos",
       "key_fields": [
+        "cnpj_cliente",
         "codigo_nosso",
-        "descricao_nosso",
         "codigo_atacadao"
-      ]
+      ],
+      "dominio": "Portal"
     },
     {
       "name": "portal_integracoes",
       "description": "Tabela principal de integrações com portais",
       "key_fields": [
-        "portal",
         "lote_id",
-        "tipo_lote"
-      ]
+        "job_id",
+        "navegador_sessao_id",
+        "tipo_lote",
+        "status"
+      ],
+      "dominio": "Portal"
     },
     {
       "name": "portal_logs",
@@ -2567,97 +2996,113 @@
         "integracao_id",
         "acao",
         "sucesso"
-      ]
+      ],
+      "dominio": "Portal"
     },
     {
       "name": "portal_sendas_filial_depara",
       "description": "Tabela DE-PARA para mapear CNPJs e códigos de filiais do Sendas",
       "key_fields": [
         "cnpj",
-        "filial",
-        "numero"
-      ]
+        "cidade",
+        "uf"
+      ],
+      "dominio": "Portal"
     },
     {
       "name": "portal_sendas_planilha_modelo",
       "description": "Armazena os dados da planilha modelo baixada do portal Sendas",
       "key_fields": [
-        "razao_social_fornecedor",
-        "nome_fantasia_fornecedor",
-        "unidade_destino"
-      ]
+        "codigo_pedido_cliente",
+        "codigo_produto_cliente",
+        "codigo_produto_sku_fornecedor",
+        "data_importacao"
+      ],
+      "dominio": "Portal"
     },
     {
       "name": "portal_sendas_produto_depara",
       "description": "Tabela DE-PARA para mapear códigos de produtos",
       "key_fields": [
+        "cnpj_cliente",
         "codigo_nosso",
-        "descricao_nosso",
         "codigo_sendas"
-      ]
+      ],
+      "dominio": "Portal"
     },
     {
       "name": "previsao_demanda",
       "description": "Tabela previsao_demanda",
       "key_fields": [
+        "cod_produto",
         "data_mes",
-        "data_ano",
         "nome_grupo"
-      ]
+      ],
+      "dominio": "Manufatura"
     },
     {
       "name": "product_embeddings",
       "description": "Embedding de produtos para matching semantico.",
       "key_fields": [
         "cod_produto",
-        "nome_produto",
-        "tipo_materia_prima"
-      ]
+        "tipo_materia_prima",
+        "nome_produto"
+      ],
+      "dominio": "Embeddings"
     },
     {
       "name": "produto_fornecedor_depara",
       "description": "De-Para produto × fornecedor.",
       "key_fields": [
         "cnpj_fornecedor",
-        "razao_fornecedor",
-        "cod_produto_fornecedor"
-      ]
+        "cod_produto_fornecedor",
+        "cod_produto_interno"
+      ],
+      "dominio": "Recebimento"
     },
     {
       "name": "programacao_producao",
       "description": "Produção programada por data e linha.",
       "key_fields": [
-        "data_programacao",
         "cod_produto",
+        "data_programacao",
         "nome_produto"
-      ]
+      ],
+      "dominio": "Produção"
     },
     {
       "name": "rastreamento_embarques",
       "description": "Rastreamento GPS de embarques.",
       "key_fields": [
         "embarque_id",
-        "token_acesso",
-        "token_expiracao"
-      ]
+        "status",
+        "data_expurgo_lgpd"
+      ],
+      "dominio": "Rastreamento"
     },
     {
       "name": "recebimento_fisico",
       "description": "Recebimentos físicos de materiais.",
       "key_fields": [
+        "numero_nf",
         "odoo_picking_id",
-        "odoo_picking_name",
-        "odoo_purchase_order_id"
-      ]
+        "odoo_purchase_order_id",
+        "status",
+        "odoo_status"
+      ],
+      "dominio": "Recebimento"
     },
     {
       "name": "recebimento_lf",
       "description": "Registro principal de Recebimento LF (Retorno de Industrializacao).",
       "key_fields": [
-        "odoo_dfe_id",
         "numero_nf",
-        "chave_nfe"
-      ]
+        "chave_nfe",
+        "odoo_dfe_id",
+        "status",
+        "transfer_status"
+      ],
+      "dominio": "Recebimento"
     },
     {
       "name": "recebimento_lf_lote",
@@ -2665,8 +3110,10 @@
       "key_fields": [
         "recebimento_lf_id",
         "odoo_product_id",
-        "odoo_product_name"
-      ]
+        "odoo_dfe_line_id",
+        "data_validade"
+      ],
+      "dominio": "Recebimento"
     },
     {
       "name": "recebimento_lote",
@@ -2674,8 +3121,10 @@
       "key_fields": [
         "recebimento_id",
         "odoo_product_id",
-        "odoo_product_name"
-      ]
+        "odoo_move_line_id",
+        "data_validade"
+      ],
+      "dominio": "Recebimento"
     },
     {
       "name": "recebimento_quality_check",
@@ -2684,7 +3133,8 @@
         "recebimento_id",
         "odoo_check_id",
         "odoo_point_id"
-      ]
+      ],
+      "dominio": "Recebimento"
     },
     {
       "name": "recursos_producao",
@@ -2693,61 +3143,73 @@
         "cod_produto",
         "nome_produto",
         "linha_producao"
-      ]
+      ],
+      "dominio": "Manufatura"
     },
     {
       "name": "regiao_tabela_rede",
       "description": "Regiões por tabela de rede.",
       "key_fields": [
-        "rede",
         "uf",
+        "rede",
         "regiao"
-      ]
+      ],
+      "dominio": "Pedidos"
     },
     {
       "name": "registro_pedido_odoo",
       "description": "Registro de pedidos enviados ao Odoo.",
       "key_fields": [
-        "rede",
+        "cnpj_cliente",
+        "numero_documento",
+        "odoo_order_id",
         "tipo_documento",
-        "numero_documento"
-      ]
+        "nome_cliente"
+      ],
+      "dominio": "Pedidos"
     },
     {
       "name": "remessa_vortx_cache",
       "description": "Cache local para state machine de injecao de remessa VORTX no Odoo.",
       "key_fields": [
-        "etapa",
-        "tentativas",
-        "ultimo_erro"
-      ]
+        "odoo_escritural_id",
+        "odoo_remessa_id",
+        "criado_por_id",
+        "tipo_cobranca_id_odoo"
+      ],
+      "dominio": "Financeiro"
     },
     {
       "name": "remessa_vortx_conversao",
       "description": "Auditoria de operacoes de conversao e validacao de arquivos CNAB 400 externos.",
       "key_fields": [
+        "criado_por_id",
         "tipo",
-        "nome_arquivo_original",
-        "arquivo_original"
-      ]
+        "nome_arquivo_original"
+      ],
+      "dominio": "Financeiro"
     },
     {
       "name": "requisicao_compra_alocacao",
       "description": "Tabela intermediária N:N entre Requisições de Compra e Pedidos de Compra",
       "key_fields": [
+        "cod_produto",
         "requisicao_compra_id",
-        "pedido_compra_id",
-        "odoo_allocation_id"
-      ]
+        "pedido_compra_id"
+      ],
+      "dominio": "Manufatura"
     },
     {
       "name": "requisicao_compras",
       "description": "Tabela requisicao_compras",
       "key_fields": [
+        "cod_produto",
         "num_requisicao",
         "company_id",
-        "data_requisicao_criacao"
-      ]
+        "data_requisicao_criacao",
+        "status"
+      ],
+      "dominio": "Manufatura"
     },
     {
       "name": "route_template_embeddings",
@@ -2756,25 +3218,30 @@
         "tipo",
         "blueprint_name",
         "function_name"
-      ]
+      ],
+      "dominio": "Embeddings"
     },
     {
       "name": "saldo_standby",
       "description": "Pedidos em espera: saldo, comercial ou PCP.",
       "key_fields": [
-        "origem_separacao_lote_id",
         "num_pedido",
-        "cod_produto"
-      ]
+        "cod_produto",
+        "cnpj_cliente",
+        "nome_cliente",
+        "data_pedido"
+      ],
+      "dominio": "Carteira"
     },
     {
       "name": "scheduler_health",
       "description": "Registro de execucao de cada step do scheduler.",
       "key_fields": [
+        "status",
         "step_name",
-        "step_number",
-        "executado_em"
-      ]
+        "step_number"
+      ],
+      "dominio": "Scheduler"
     },
     {
       "name": "seguranca_config",
@@ -2783,7 +3250,8 @@
         "chave",
         "valor",
         "descricao"
-      ]
+      ],
+      "dominio": "Seguranca"
     },
     {
       "name": "seguranca_scores",
@@ -2792,16 +3260,18 @@
         "user_id",
         "score",
         "componentes"
-      ]
+      ],
+      "dominio": "Seguranca"
     },
     {
       "name": "seguranca_varreduras",
       "description": "Historico de varreduras/scans de seguranca",
       "key_fields": [
-        "tipo",
         "status",
+        "tipo",
         "iniciado_em"
-      ]
+      ],
+      "dominio": "Seguranca"
     },
     {
       "name": "seguranca_vulnerabilidades",
@@ -2809,17 +3279,21 @@
       "key_fields": [
         "user_id",
         "varredura_id",
-        "categoria"
-      ]
+        "status"
+      ],
+      "dominio": "Seguranca"
     },
     {
       "name": "separacao",
       "description": "Itens separados para expedição. Projeta saídas de estoque.",
       "key_fields": [
-        "separacao_lote_id",
         "num_pedido",
-        "data_pedido"
-      ]
+        "cod_produto",
+        "numero_nf",
+        "data_pedido",
+        "raz_social_red"
+      ],
+      "dominio": "Separação"
     },
     {
       "name": "sped_ecd_rule_embeddings",
@@ -2828,16 +3302,18 @@
         "chunk_id",
         "chunk_type",
         "bloco"
-      ]
+      ],
+      "dominio": "Embeddings"
     },
     {
       "name": "sql_evaluator_false_positives",
       "description": "Falso positivo confirmado do Haiku evaluator do text_to_sql pipeline (T7).",
       "key_fields": [
-        "sql_text",
-        "rejection_reason",
-        "rejection_category"
-      ]
+        "confirmed_by_user_id",
+        "reviewed_by_user_id",
+        "status"
+      ],
+      "dominio": "Embeddings"
     },
     {
       "name": "sql_template_embeddings",
@@ -2846,7 +3322,8 @@
         "question_text",
         "sql_text",
         "tables_used"
-      ]
+      ],
+      "dominio": "Embeddings"
     },
     {
       "name": "ssw_document_embeddings",
@@ -2855,43 +3332,51 @@
         "doc_path",
         "chunk_index",
         "chunk_text"
-      ]
+      ],
+      "dominio": "Embeddings"
     },
     {
       "name": "tabela_rede_precos",
       "description": "Tabela de preços por rede.",
       "key_fields": [
+        "cod_produto",
         "rede",
-        "regiao",
-        "cod_produto"
-      ]
+        "regiao"
+      ],
+      "dominio": "Pedidos"
     },
     {
       "name": "tabelas_frete",
       "description": "Tabelas de preço de frete.",
       "key_fields": [
         "transportadora_id",
-        "uf_origem",
-        "uf_destino"
-      ]
+        "tipo_carga",
+        "uf_origem"
+      ],
+      "dominio": "Tabelas de Frete"
     },
     {
       "name": "teams_tasks",
       "description": "Tarefa assíncrona para processamento de mensagem do Teams.",
       "key_fields": [
         "conversation_id",
-        "user_name",
-        "user_id"
-      ]
+        "user_id",
+        "pending_question_session_id",
+        "status"
+      ],
+      "dominio": "Teams"
     },
     {
       "name": "transportadoras",
       "description": "Cadastro de transportadoras com dados logísticos e financeiros.",
       "key_fields": [
         "cnpj",
-        "razao_social",
-        "cidade"
-      ]
+        "grupo_transportadora_id",
+        "cpf_cnpj_favorecido",
+        "cidade",
+        "uf"
+      ],
+      "dominio": "Transportadoras"
     },
     {
       "name": "unificacao_codigos",
@@ -2899,44 +3384,53 @@
       "key_fields": [
         "codigo_origem",
         "codigo_destino",
-        "observacao"
-      ]
+        "data_ativacao"
+      ],
+      "dominio": "Estoque"
     },
     {
       "name": "validacao_fiscal_dfe",
       "description": "Validação fiscal de DFe (NF-e entrada).",
       "key_fields": [
-        "odoo_dfe_id",
         "numero_nf",
-        "chave_nfe"
-      ]
+        "chave_nfe",
+        "odoo_dfe_id",
+        "status"
+      ],
+      "dominio": "Recebimento"
     },
     {
       "name": "validacao_nf_po_dfe",
       "description": "Match de NF de compra × PO no Odoo.",
       "key_fields": [
-        "odoo_dfe_id",
         "numero_nf",
-        "serie_nf"
-      ]
+        "chave_nfe",
+        "odoo_dfe_id",
+        "data_nf",
+        "status"
+      ],
+      "dominio": "Recebimento"
     },
     {
       "name": "veiculos",
       "description": "Frota de veículos por transportadora.",
       "key_fields": [
+        "tipo_veiculo",
         "nome",
-        "peso_maximo",
-        "qtd_eixos"
-      ]
+        "peso_maximo"
+      ],
+      "dominio": "Veículos"
     },
     {
       "name": "whatsapp_tasks",
       "description": "Tarefa async para mensagem WhatsApp recebida via plugin OpenClaw.",
       "key_fields": [
-        "peer_jid",
-        "conversation_jid",
-        "is_group"
-      ]
+        "user_id",
+        "pending_question_session_id",
+        "openclaw_message_id",
+        "status"
+      ],
+      "dominio": "Whatsapp"
     }
   ],
   "tabelas_admin": [
@@ -2945,9 +3439,10 @@
       "description": "Memória persistente do agente por usuário.",
       "key_fields": [
         "user_id",
-        "agente",
-        "path"
+        "directive_status",
+        "agente"
       ],
+      "dominio": "Agente",
       "admin_only": true
     },
     {
@@ -2958,6 +3453,7 @@
         "user_id",
         "path"
       ],
+      "dominio": "Embeddings",
       "admin_only": true
     },
     {
@@ -2968,6 +3464,7 @@
         "content",
         "version"
       ],
+      "dominio": "Agente",
       "admin_only": true
     },
     {
@@ -2978,6 +3475,7 @@
         "user_id",
         "agente"
       ],
+      "dominio": "Agente",
       "admin_only": true
     },
     {
@@ -2988,6 +3486,7 @@
         "nome_exibicao",
         "descricao"
       ],
+      "dominio": "Permissões",
       "admin_only": true
     },
     {
@@ -2998,6 +3497,7 @@
         "usuario",
         "cookies_criptografados"
       ],
+      "dominio": "Portal",
       "admin_only": true
     },
     {
@@ -3008,6 +3508,18 @@
         "user_id",
         "turn_index"
       ],
+      "dominio": "Embeddings",
+      "admin_only": true
+    },
+    {
+      "name": "table_catalog_embeddings",
+      "description": "Embedding do CATALOGO DE TABELAS p/ busca semantica por intencao (S1).",
+      "key_fields": [
+        "table_name",
+        "dominio",
+        "descricao"
+      ],
+      "dominio": "Embeddings",
       "admin_only": true
     },
     {
@@ -3018,16 +3530,18 @@
         "access_token",
         "refresh_token"
       ],
+      "dominio": "Integrações",
       "admin_only": true
     },
     {
       "name": "usuarios",
       "description": "Tabela usuarios",
       "key_fields": [
-        "nome",
-        "email",
-        "senha_hash"
+        "loja_hora_id",
+        "status",
+        "nome"
       ],
+      "dominio": "Autenticação",
       "admin_only": true
     }
   ]

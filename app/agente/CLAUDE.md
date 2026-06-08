@@ -196,10 +196,11 @@ app/agente/                          # Root — 6 arquivos
 │   ├── artifact.html                # Pagina render bundle artifact (sandboxed iframe)
 │   ├── chat.html                    # Interface de chat web
 │   └── insights.html                # Dashboard de insights
-├── tools/                           # MCP tools (NAO callables) — 13 arquivos
+├── tools/                           # MCP tools (NAO callables) — 14 arquivos
 │   ├── __init__.py
 │   ├── _mcp_enhanced.py             # Wrapper Enhanced (outputSchema + structuredContent)
 │   ├── artifact_tool.py             # build_artifact MCP tool (Enhanced v1.0)
+│   ├── buscar_tabelas_tool.py       # buscar_tabelas: descoberta de tabela por intencao (S1, Enhanced v1.0)
 │   ├── memory_mcp_tool.py           # 12 operacoes de memoria (Enhanced v2.1.0)
 │   ├── ontology_query_tool.py       # Query da ontologia/knowledge graph (MCP tool)
 │   ├── playwright_mcp_tool.py       # Browser automation (13 tools, SSW + Atacadao)
@@ -265,9 +266,9 @@ STRING custom (option `system_prompt`) — 3 arquivos concatenados em _build_ful
 | Componente | Linhas | Bytes | Tokens (est.) |
 |------------|-------:|------:|--------------:|
 | `preset_operacional.md` | 117 | 5079 | ~1.5K tok |
-| `system_prompt.md` | 778 | 47576 | ~13.6K tok |
+| `system_prompt.md` | 781 | 47915 | ~13.7K tok |
 | `empresa_briefing.md` | 81 | 5084 | ~1.5K tok |
-| **TOTAL estatico** | **976** | **57739** | **~16.5K tok** |
+| **TOTAL estatico** | **979** | **58078** | **~16.6K tok** |
 
 > Medido por `scripts/audits/prompt_size_audit.py` (tokens = bytes/3.5, estimativa pt-BR+XML). NUNCA editar a mao — rode `--update-claude-md`.
 <!-- prompt-size:end -->
@@ -556,6 +557,18 @@ Validacao: `_resolve_user_id(args)` — requer `get_debug_mode() == True`. Todo 
 **Admin (debug mode)**: `search_sessions`, `list_recent_sessions` e `semantic_search_sessions`
 aceitam `target_user_id=N` para busca cross-user. `channel='teams'|'web'` filtra por canal.
 Pattern: `_resolve_user_id(args)` espelha `memory_mcp_tool.py`.
+
+### MCP Tools de descoberta de schema (progressive disclosure — S1)
+| Tool | O que faz |
+|------|-----------|
+| `buscar_tabelas` (`buscar_tabelas_tool.py`) | Descobre TABELAS por intencao em linguagem natural — 1a camada: o Opus descreve a intencao e recebe candidatas (nome/dominio/descricao/key_fields) SEM adivinhar o nome. Busca **semantica primaria** (`table_catalog_embeddings`, modelo `voyage-4-large`) **+ textual** (append/fallback); respeita a MESMA matriz de permissao do executor (user_id) |
+| `consultar_schema` (`schema_mcp_tool.py`) | Schema detalhado de UMA tabela (campos/tipos/FKs/regras) — 2a camada |
+| `consultar_valores_campo` | Valores distintos de um campo categorico |
+
+Fluxo: **intencao → `buscar_tabelas` → `consultar_schema(tabela)` → SQL** (`mcp__sql`).
+Semantica do catalogo reindexada no scheduler diario (`reindexacao_embeddings.py`, 11o
+modulo) por `content_hash`; modelo isolado em `VOYAGE_TABLE_CATALOG_MODEL` (nao afeta o
+default global). Pacote text-to-sql S1 — ver `docs/superpowers/specs/2026-06-07-text-to-sql-arquitetura-MASTER-design.md`.
 
 ### Debug Mode — Injecao de Contexto (client.py)
 

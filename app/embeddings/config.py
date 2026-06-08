@@ -23,6 +23,14 @@ VOYAGE_FINANCE_MODEL = os.environ.get("VOYAGE_FINANCE_MODEL", "voyage-finance-2"
 # Modelo para reranking
 VOYAGE_RERANK_MODEL = os.environ.get("VOYAGE_RERANK_MODEL", "rerank-2.5-lite")
 
+# Modelo dedicado ao CATALOGO DE TABELAS (busca semantica de tabela por intencao,
+# S1). voyage-4-large: A/B real (15 intencoes coloquiais PT) deu top-3 93% vs 73%
+# do lite — melhor qualidade multilingue p/ casar linguagem do usuario com a
+# descricao tecnica. ISOLADO do default global (nao afeta os outros 12 indexers);
+# 1024D = drop-in na tabela table_catalog_embeddings. Trocar exige reindexar (o
+# indexer re-embeda linhas cujo model_used != este).
+VOYAGE_TABLE_CATALOG_MODEL = os.environ.get("VOYAGE_TABLE_CATALOG_MODEL", "voyage-4-large")
+
 # Dimensoes do embedding (default 1024 para voyage-4-lite)
 # Suporta Matryoshka: 256, 512, 1024, 2048
 VOYAGE_EMBEDDING_DIMENSIONS = int(os.environ.get("VOYAGE_EMBEDDING_DIMENSIONS", "1024"))
@@ -71,6 +79,9 @@ THRESHOLD_ROUTE_TEMPLATE = float(os.environ.get("THRESHOLD_ROUTE_TEMPLATE", "0.4
 # Regras normativas do Manual ECD Leiaute 9: ~450 chunks (apos splits P1-1).
 # Precisao alta (lookup de regra especifica REGRA_X).
 THRESHOLD_SPED_RULES = float(os.environ.get("THRESHOLD_SPED_RULES", "0.45"))
+# Catalogo de tabelas: busca de tabela por intencao (S1). Ampla -> threshold baixo
+# (a fusao com a busca textual usa RANK, nao corte por score).
+THRESHOLD_TABLE_CATALOG = float(os.environ.get("THRESHOLD_TABLE_CATALOG", "0.30"))
 
 # Reranking dedicado para SPED rules (independente de RERANKING_ENABLED global).
 # Usado pelo subagente auditor-sped-ecd — offline, custo trivial (~$0.001/query),
@@ -149,6 +160,12 @@ CARRIER_SEMANTIC_SEARCH = os.environ.get("CARRIER_SEMANTIC_SEARCH", "true").lowe
 # Habilita busca semantica de rotas e templates do sistema
 # Consumers: route_template_search.py, agente web (MCP tool futuro)
 ROUTE_TEMPLATE_SEMANTIC_SEARCH = os.environ.get("ROUTE_TEMPLATE_SEMANTIC_SEARCH", "true").lower() == "true"
+
+# Habilita busca semantica do CATALOGO DE TABELAS (camada semantica do S1).
+# Consumers: buscar_tabelas_tool.py (fundida com a busca textual deterministica),
+# reindexacao_embeddings.py (11o modulo). Default True: a tool tem fallback
+# textual, entao ligar e seguro (preferir flags ligadas).
+TABLE_CATALOG_SEMANTIC = os.environ.get("TABLE_CATALOG_SEMANTIC", "true").lower() == "true"
 
 # Knowledge Graph de memórias do agente (T3-3)
 # Quando True: extrai entidades de memórias e cria links no knowledge graph.

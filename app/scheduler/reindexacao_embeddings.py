@@ -78,7 +78,7 @@ def executar_reindexacao_no_contexto():
     logger.info("   REINDEXACAO DE EMBEDDINGS")
     logger.info("   Inicio: %s", agora_utc_naive().strftime('%d/%m/%Y %H:%M:%S'))
 
-    total_steps = 10
+    total_steps = 11
 
     # ── 1. Products (com aliases de_para) ──
     try:
@@ -332,6 +332,36 @@ def executar_reindexacao_no_contexto():
     except Exception as e:
         logger.error("      Erro em ssw_documents: %s", e, exc_info=True)
         resultados['ssw_documents'] = {'error': str(e)}
+
+    _cleanup_db()
+
+    # ── 11. Table Catalog (catalogo de tabelas p/ buscar_tabelas — S1) ──
+    # Freshness do indice semantico de tabelas (decisao 1a do plano S1): reindex
+    # diario; content_hash so re-embeda tabela cuja descricao/key_fields/dominio
+    # mudou. A busca textual da tool ja cobre tabelas novas na hora.
+    try:
+        from app.embeddings.config import TABLE_CATALOG_SEMANTIC
+        if TABLE_CATALOG_SEMANTIC:
+            logger.info("   [11/%d] Reindexando catalogo de tabelas...", total_steps)
+            from app.embeddings.indexers.table_catalog_indexer import (
+                collect_table_catalog, index_table_catalog
+            )
+
+            entries = collect_table_catalog()
+            if entries:
+                stats = index_table_catalog(entries)
+                resultados['table_catalog'] = stats
+                logger.info("      Table Catalog: %d novos, %d skipped",
+                            stats.get('embedded', 0), stats.get('skipped', 0))
+            else:
+                resultados['table_catalog'] = {'embedded': 0, 'skipped': 0}
+                logger.info("      Nenhuma tabela no catalogo")
+        else:
+            logger.info("   [11/%d] Table Catalog desabilitado (TABLE_CATALOG_SEMANTIC=false)", total_steps)
+            resultados['table_catalog'] = {'skipped_flag': True}
+    except Exception as e:
+        logger.error("      Erro em table_catalog: %s", e, exc_info=True)
+        resultados['table_catalog'] = {'error': str(e)}
 
     # ── Resumo ──
     elapsed = time.time() - inicio
