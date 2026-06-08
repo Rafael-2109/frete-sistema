@@ -11,9 +11,44 @@
       <h2 class="mb-0"><i class="fas fa-brain"></i> Gestao de Memorias</h2>
       <p class="text-muted mb-0">O que o agente aprendeu — conflitos, regras duras e tier frio. Edite, resolva ou arquive.</p>
     </div>
-    <button class="btn btn-outline-primary btn-sm" onclick="loadMemories()" title="Atualizar">
-      <i class="fas fa-sync-alt"></i> Atualizar
-    </button>
+    <div class="d-flex gap-2">
+      <button class="btn btn-outline-warning btn-sm" id="tab-approvals"
+              onclick="loadApprovals()">
+        <i class="fas fa-inbox"></i> Pendentes de Aprovacao
+        <span class="badge bg-warning ms-1" id="approvals-count">0</span>
+      </button>
+      <button class="btn btn-outline-primary btn-sm" onclick="loadMemories()" title="Atualizar">
+        <i class="fas fa-sync-alt"></i> Atualizar
+      </button>
+    </div>
+  </div>
+
+  <!-- Painel Inbox de Aprovacao -->
+  <div id="approvals-panel" class="d-none mb-3">
+    <div class="card">
+      <div class="card-header d-flex justify-content-between align-items-center py-2">
+        <span><i class="fas fa-inbox"></i> Inbox de Aprovacao — Memory shadow + Improvement Dialogue proposed</span>
+        <button type="button" class="btn-close btn-sm" onclick="fecharApprovals()" aria-label="Fechar"></button>
+      </div>
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-sm align-middle mb-0">
+            <thead>
+              <tr>
+                <th>Tipo</th>
+                <th>Titulo</th>
+                <th>Escopo / Cat.</th>
+                <th>Conteudo</th>
+                <th class="text-end">Acoes</th>
+              </tr>
+            </thead>
+            <tbody id="approvals-tbody">
+              <tr><td colspan="5" class="text-muted text-center py-3">Clique em "Pendentes de Aprovacao" para carregar.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- KPIs -->
@@ -282,6 +317,67 @@ async function deletar(id) {
   const d = await r.json();
   if (!d.success) { alert('Erro: ' + (d.error || '')); return; }
   loadMemories();
+}
+
+// ── inbox de aprovacao ────────────────────────────────────────────────────
+function fecharApprovals() {
+  document.getElementById('approvals-panel').classList.add('d-none');
+}
+
+async function loadApprovals() {
+  const panel = document.getElementById('approvals-panel');
+  panel.classList.remove('d-none');
+  const tbody = document.getElementById('approvals-tbody');
+  tbody.innerHTML = '<tr><td colspan="5" class="text-muted text-center py-3">Carregando…</td></tr>';
+  try {
+    const r = await fetch('/agente/api/memories/approvals', { headers: _csrf() });
+    if (!r.ok) { tbody.innerHTML = `<tr><td colspan="5" class="text-danger text-center py-3">Erro HTTP ${r.status}</td></tr>`; return; }
+    const data = await r.json();
+    if (!data.success) { tbody.innerHTML = `<tr><td colspan="5" class="text-danger text-center py-3">Erro: ${escapeHtml(data.error || '')}</td></tr>`; return; }
+    const items = data.items || [];
+    document.getElementById('approvals-count').textContent = items.length;
+    if (!items.length) {
+      tbody.innerHTML = '<tr><td colspan="5" class="text-muted text-center py-3">Nenhum item pendente.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = items.map(function(it) {
+      const kindBadge = it.kind === 'memory'
+        ? '<span class="badge bg-secondary">memory</span>'
+        : '<span class="badge bg-info">dialogue</span>';
+      const approveBtn = it.can_approve
+        ? `<button class="btn btn-success btn-sm me-1" onclick="decideApproval('${escapeHtml(it.kind)}',${Number(it.id)},'approve')"><i class="fas fa-check"></i> Aprovar</button>`
+        : '';
+      const rejectBtn = `<button class="btn btn-outline-danger btn-sm" onclick="decideApproval('${escapeHtml(it.kind)}',${Number(it.id)},'reject')"><i class="fas fa-times"></i> Rejeitar</button>`;
+      return `<tr>
+        <td>${kindBadge}</td>
+        <td><small>${escapeHtml(it.title || '')}</small></td>
+        <td><small class="text-muted">${escapeHtml(it.scope || it.category || '')}</small></td>
+        <td><small>${escapeHtml(truncate(it.content || '', 160))}</small></td>
+        <td class="text-end text-nowrap">${approveBtn}${rejectBtn}</td>
+      </tr>`;
+    }).join('');
+  } catch (e) {
+    tbody.innerHTML = '<tr><td colspan="5" class="text-danger text-center py-3">Falha ao carregar inbox.</td></tr>';
+    console.error('[APPROVALS]', e);
+  }
+}
+
+async function decideApproval(kind, id, action) {
+  if (!confirm('Confirmar ' + action + ' do item ' + kind + ':' + id + '?')) return;
+  try {
+    const r = await fetch(`/agente/api/memories/approvals/${kind}/${id}/${action}`, {
+      method: 'PUT', headers: _csrf()
+    });
+    const data = await r.json();
+    if (data.success) {
+      loadApprovals();
+    } else {
+      alert('Operacao falhou: ' + (data.error || 'erro desconhecido'));
+    }
+  } catch (e) {
+    alert('Falha na requisicao.');
+    console.error('[APPROVALS]', e);
+  }
 }
 
 // ── init ──────────────────────────────────────────────────────────────────
