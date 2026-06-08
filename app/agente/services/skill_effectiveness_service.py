@@ -346,3 +346,89 @@ def apply_decision(decision: Dict[str, Any], window: SkillWindow,
     if ramo == "ajuste_codigo":
         return _apply_ajuste_codigo(decision, window, session_id)
     return ""
+
+
+# ---------------------------------------------------------------------------
+# Task 7: evaluate_session — orquestracao + idempotencia
+# ---------------------------------------------------------------------------
+def _window_evidence(w: SkillWindow) -> Dict[str, Any]:
+    def _c(m): return {"role": m.get("role"), "content": str(m.get("content") or "")[:500]}
+    return {
+        "skill": w.skill_name,
+        "anterior": _c(w.msg_anterior) if w.msg_anterior else None,
+        "proximas_user": [_c(m) for m in w.proximas_user],
+    }
+
+
+def _safe_persist(row, result) -> None:
+    from app import db
+    from sqlalchemy.exc import IntegrityError
+    try:
+        db.session.add(row)
+        db.session.commit()
+        result["avaliadas"] += 1
+        if row.ramo:
+            result["ramos"][row.ramo] = result["ramos"].get(row.ramo, 0) + 1
+    except IntegrityError:
+        db.session.rollback()  # corrida: ancora ja gravada por outra execucao
+
+
+def _evaluate_inner(session_id: str, user_id: int) -> Dict[str, Any]:
+    from app.agente.models import AgentSession, AgentSkillEffectiveness
+    from app.agente.config import feature_flags as ff
+    from app.utils.json_helpers import sanitize_for_json
+    result = {"avaliadas": 0, "ramos": {}}
+
+    sess = AgentSession.query.filter_by(session_id=session_id).first()
+    if not sess:
+        return result
+    windows = build_skill_windows(sess.get_messages() or [])
+    sonnet_budget = getattr(ff, "AGENT_SKILL_EVAL_MAX_SONNET", 3)
+
+    for w in windows:
+        if not w.janela_fechada:
+            continue
+        if AgentSkillEffectiveness.query.filter_by(
+                session_id=session_id, anchor_msg_id=w.anchor_msg_id).first():
+            continue
+        row = AgentSkillEffectiveness(
+            user_id=user_id, session_id=session_id, skill_name=w.skill_name,
+            anchor_msg_id=w.anchor_msg_id, stage_reached=0, resolveu=True,
+            evidencia_json=sanitize_for_json(_window_evidence(w)),
+        )
+        if not stage0_has_signal(w):
+            _safe_persist(row, result)
+            continue
+        s1 = stage1_haiku(w)
+        row.stage_reached = 1
+        row.resolveu = bool(s1.get("resolveu", True))
+        if not s1.get("suspeita_ajuste"):
+            _safe_persist(row, result)
+            continue
+        if not getattr(ff, "AGENT_SKILL_EVAL_SONNET", True) or sonnet_budget <= 0:
+            _safe_persist(row, result)
+            continue
+        sonnet_budget -= 1
+        s2 = stage2_sonnet(w)
+        row.stage_reached = 2
+        row.ramo = s2.get("ramo", "nada")
+        row.confidence = s2.get("confianca", 0.0)
+        row.resolveu = (s2.get("ramo") == "nada")
+        try:
+            row.action_ref = apply_decision(s2, w, user_id, session_id) or None
+        except Exception as e:
+            logger.warning(f"[SKILL_EVAL] apply falhou: {e}")
+        _safe_persist(row, result)
+    return result
+
+
+def evaluate_session(session_id: str, user_id: int, app=None) -> Dict[str, Any]:
+    """Entry point. Best-effort. `app` fornecido => abre app_context (job RQ)."""
+    try:
+        if app is not None:
+            with app.app_context():
+                return _evaluate_inner(session_id, user_id)
+        return _evaluate_inner(session_id, user_id)
+    except Exception as e:
+        logger.warning(f"[SKILL_EVAL] evaluate_session falhou (ignorado): {e}")
+        return {"avaliadas": 0, "ramos": {}}

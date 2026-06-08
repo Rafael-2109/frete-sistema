@@ -185,3 +185,60 @@ def test_apply_low_confidence_user_downgrades(db, monkeypatch):
                 "confianca": 0.3}  # < 0.7 -> vira ajuste_codigo
     ref = svc.apply_decision(decision, _win(["x"]), user_id=1, session_id="s3")
     assert ref.startswith("dialogue:")
+
+
+# ---------------------------------------------------------------------------
+# Task 7: evaluate_session — orquestracao + idempotencia
+# ---------------------------------------------------------------------------
+import uuid as _uuid
+
+
+def _make_session(db, session_id, user_id, messages):
+    from app.agente.models import AgentSession
+    # Usa session_id unico por run para evitar colisao com runs anteriores
+    # (o servico faz commit que persiste o AgentSession no banco real)
+    s = AgentSession(session_id=session_id, user_id=user_id, data={"messages": messages})
+    db.session.add(s)
+    db.session.commit()  # commit real necessario: _safe_persist tambem commita
+    return s
+
+
+def test_evaluate_session_idempotent(db, monkeypatch):
+    import app.agente.services.skill_effectiveness_service as svc
+    from app.agente.models import AgentSkillEffectiveness, AgentSession
+    sid = f"sess-idem-{_uuid.uuid4().hex[:8]}"
+    msgs = [
+        {"id": "u0", "role": "user", "content": "frete sp"},
+        {"id": "a0", "role": "assistant", "content": "ok", "tools_used": ["Skill:cotando-frete"]},
+        {"id": "u1", "role": "user", "content": "perfeito"},
+        {"id": "a1", "role": "assistant", "content": "de nada"},
+        {"id": "u2", "role": "user", "content": "valeu"},
+    ]
+    s = _make_session(db, sid, 1, msgs)
+    monkeypatch.setattr(svc, "stage0_has_signal", lambda w: False)  # resolve no estagio 0
+    svc.evaluate_session(sid, 1)
+    svc.evaluate_session(sid, 1)  # 2a vez nao duplica
+    n = AgentSkillEffectiveness.query.filter_by(session_id=sid).count()
+    # Cleanup
+    AgentSkillEffectiveness.query.filter_by(session_id=sid).delete()
+    AgentSession.query.filter_by(session_id=sid).delete()
+    db.session.commit()
+    assert n == 1
+
+
+def test_evaluate_session_skips_open_window(db, monkeypatch):
+    import app.agente.services.skill_effectiveness_service as svc
+    from app.agente.models import AgentSkillEffectiveness, AgentSession
+    sid = f"sess-open-{_uuid.uuid4().hex[:8]}"
+    msgs = [
+        {"id": "u0", "role": "user", "content": "x"},
+        {"id": "a0", "role": "assistant", "content": "y", "tools_used": ["Skill:cotando-frete"]},
+        {"id": "u1", "role": "user", "content": "z"},  # janela aberta (1 user)
+    ]
+    s = _make_session(db, sid, 1, msgs)
+    svc.evaluate_session(sid, 1)
+    n = AgentSkillEffectiveness.query.filter_by(session_id=sid).count()
+    # Cleanup
+    AgentSession.query.filter_by(session_id=sid).delete()
+    db.session.commit()
+    assert n == 0
