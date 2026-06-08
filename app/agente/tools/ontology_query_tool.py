@@ -193,6 +193,17 @@ def query_ontology_entities(
             "entity_type=%s, name_like=%s, key=%s): %s",
             user_id, entity_type, name_like, key, e,
         )
+        # Best-effort rollback: se a sessao chegou aqui com uma transacao
+        # invalida (ex: PendingRollbackError vindo de um statement anterior
+        # que falhou), o erro re-aparece em TODA operacao subsequente na
+        # mesma sessao ("Can't reconnect until invalid transaction is rolled
+        # back"). Esta tool e READ-ONLY, entao limpar o estado da sessao e'
+        # seguro e permite que o resto do request se recupere. PYTHON-FLASK-XA.
+        try:
+            from app import db
+            db.session.rollback()
+        except Exception:
+            pass
         return []
 
 
