@@ -67,3 +67,67 @@ def build_skill_windows(messages: List[Dict[str, Any]]) -> List[SkillWindow]:
             janela_fechada=len(prox_user) >= 2,
         ))
     return windows
+
+
+# ---------------------------------------------------------------------------
+# Task 4: Estagio 0 — sinal custo-zero
+# ---------------------------------------------------------------------------
+import re
+
+# Pedido explicito de ajuste/correcao relacionado a skill
+_ADJUST_MARKERS = [
+    r"\bajusta\b", r"\bajustar\b", r"\bcorrig", r"\bnao funcion", r"\bnao resolv",
+    r"\bde novo\b", r"\bcontinua (errad|sem)\b", r"\bnao era isso\b", r"\btentou de novo\b",
+]
+
+
+def _texts(msgs: List[Dict[str, Any]]) -> str:
+    return " \n ".join(str(m.get("content") or "") for m in msgs).lower()
+
+
+def _has_bash(msgs: List[Dict[str, Any]]) -> bool:
+    for m in msgs:
+        tu = m.get("tools_used")
+        if isinstance(tu, list) and any(t == "Bash" or str(t).startswith("Bash") for t in tu):
+            return True
+    return False
+
+
+def stage0_has_signal(window: SkillWindow) -> bool:
+    """Custo-zero: ha sinal de que a skill pode nao ter resolvido?
+
+    Sinais: (1) frustracao detectada nas proximas msgs do usuario;
+    (2) marcador explicito de pedido de ajuste/correcao;
+    (3) o agente recorreu a Bash (script ad-hoc) logo apos a skill.
+    """
+    try:
+        from app.agente.services.sentiment_detector import detect_frustration
+    except Exception:
+        detect_frustration = None
+
+    user_msgs = window.proximas_user or []
+    blob = _texts(user_msgs)
+
+    # (2) marcadores de ajuste
+    for pat in _ADJUST_MARKERS:
+        if re.search(pat, blob):
+            return True
+
+    # (1) frustracao (usa a 1a proxima msg do usuario como atual)
+    if detect_frustration and user_msgs:
+        try:
+            is_frustrated, _score = detect_frustration(
+                str(user_msgs[0].get("content") or ""),
+                previous_messages=None,
+                had_error=_has_bash(window.proximas_assistant),
+            )
+            if is_frustrated:
+                return True
+        except Exception as e:
+            logger.debug(f"[SKILL_EVAL] sentiment falhou (ignorado): {e}")
+
+    # (3) script ad-hoc no mesmo turno apos a skill
+    if _has_bash(window.proximas_assistant):
+        return True
+
+    return False

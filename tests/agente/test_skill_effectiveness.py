@@ -86,3 +86,35 @@ def test_build_skill_windows_open_window():
     ]
     wins = build_skill_windows(msgs)
     assert wins[0].janela_fechada is False
+
+
+# ---------------------------------------------------------------------------
+# Task 4: Estagio 0 — sinal custo-zero
+# ---------------------------------------------------------------------------
+from app.agente.services.skill_effectiveness_service import SkillWindow, stage0_has_signal
+
+
+def _win(prox_user_texts, prox_asst=None):
+    return SkillWindow(
+        skill_name="cotando-frete", anchor_msg_id="a0",
+        msg_anterior={"id": "u0", "role": "user", "content": "frete sp"},
+        resposta_invocacao={"id": "a0", "role": "assistant", "content": "cotando"},
+        proximas_user=[{"id": f"u{i}", "role": "user", "content": t} for i, t in enumerate(prox_user_texts, 1)],
+        proximas_assistant=prox_asst or [],
+        janela_fechada=True,
+    )
+
+
+def test_stage0_no_signal():
+    assert stage0_has_signal(_win(["perfeito, obrigado", "valeu"])) is False
+
+
+def test_stage0_signal_frustration():
+    assert stage0_has_signal(_win(["nao era isso", "ta errado"])) is True
+
+
+def test_stage0_signal_adhoc_bash():
+    w = _win(["e a outra rota?"],
+             prox_asst=[{"id": "a1", "role": "assistant", "content": "rodando",
+                         "tools_used": ["Bash"]}])
+    assert stage0_has_signal(w) is True
