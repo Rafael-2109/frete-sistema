@@ -4,7 +4,7 @@ camada: L2
 sot_de: —
 hub: .claude/references/INDEX.md
 superseded_by: —
-atualizado: 2026-06-02
+atualizado: 2026-06-08
 -->
 # Regras de Negocio: CarteiraPrincipal e Separacao
 
@@ -81,21 +81,21 @@ atualizado: 2026-06-02
 
 ### Event Listeners da Separacao (app/separacao/models.py)
 
-#### 1. setar_falta_pagamento_inicial (BEFORE_INSERT, linhas 215-247)
+#### 1. setar_falta_pagamento_inicial (BEFORE_INSERT, linhas 221-254)
 - **Trigger**: Apenas no INSERT (criacao)
 - **Regra**: Se CarteiraPrincipal.cond_pgto_pedido contiver 'ANTECIPADO', seta falta_pagamento=True
 - **NAO roda em UPDATEs** (preserva escolha manual do usuario)
 
-#### 2. atualizar_status_automatico (BEFORE_INSERT + BEFORE_UPDATE, linhas 251-297)
+#### 2. atualizar_status_automatico (BEFORE_INSERT + BEFORE_UPDATE, linhas 257-304)
 - **Trigger**: Toda insercao e atualizacao
 - **Regras**: Ver "Prioridades de Status" acima
 
-#### 3. log_reversao_status (AFTER_UPDATE, linhas 300-329)
+#### 3. log_reversao_status (AFTER_UPDATE, linhas 306-336)
 - **Trigger**: Apos atualizacao
 - **Proposito**: Registra reversoes de status para auditoria
 - **Reversoes monitoradas**: EMBARCADO->COTADO, COTADO->ABERTO, FATURADO->ABERTO, etc.
 
-#### 4. recalcular_totais_embarque (AFTER_UPDATE + AFTER_DELETE, linhas 333-443)
+#### 4. recalcular_totais_embarque (AFTER_UPDATE + AFTER_DELETE, linhas 339-455)
 - **Trigger**: Apos atualizar ou deletar Separacao
 - **Proposito**: Recalcula EmbarqueItem.peso/.valor/.pallets e Embarque.peso_total/.valor_total/.pallet_total
 - **Condicao**: Somente se separacao_lote_id esta vinculada a EmbarqueItem ativo
@@ -159,7 +159,7 @@ Estimativa baseada em pallets padrao (1 produto por pallet).
 | `EmbarqueItem` | `pallets` | Soma de `Separacao.pallet` do lote |
 | `Embarque` | `pallet_total` | Soma de `EmbarqueItem.pallets` |
 
-Listener: `app/separacao/models.py:333-443` (`recalcular_totais_embarque`) sincroniza automaticamente.
+Listener: `app/separacao/models.py:339-455` (`recalcular_totais_embarque`) sincroniza automaticamente.
 
 ### GRUPO 2: PALLETS FISICOS (Controle Real - Gestao de Ativos PBR)
 

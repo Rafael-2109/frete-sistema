@@ -4,13 +4,13 @@ camada: L1
 sot_de: —
 hub: .claude/references/INDEX.md
 superseded_by: —
-atualizado: 2026-06-02
+atualizado: 2026-06-08
 -->
 # Indice de Referencias
 
 > **Papel:** Indice de Referencias.
 
-**Ultima atualizacao**: 2026-06-01 (mapeamento Skill->References ampliado: `escriturando-odoo`, `auditando-cadastro-fiscal-odoo`, `faturando-odoo`)
+**Ultima atualizacao**: 2026-06-08 (mapeamento Skill->References ampliado: `consultando-venda-loja`, `carregando-motos-assai`, `padronizando-docs` — 3 skills novas de 2026-06-02; inventario 51 -> 54)
 
 ---
 
@@ -156,6 +156,9 @@ atualizado: 2026-06-02
 | `acompanhando-saida-assai` | `app/motos_assai/CLAUDE.md` |
 | `conferindo-recibo-assai` | `app/motos_assai/CLAUDE.md` |
 | `registrando-evento-moto-assai` | `app/motos_assai/CLAUDE.md` |
+| `carregando-motos-assai` | `app/motos_assai/CLAUDE.md` |
+| `consultando-venda-loja` (Lojas HORA) | `app/hora/CLAUDE.md` |
+| `padronizando-docs` | `ARQUITETURA_DE_ARTEFATOS.md`, `scripts/audits/doc_audit.py` |
 | `parseando-sped-ecd` | `app/relatorios_fiscais/CLAUDE.md`, `app/relatorios_fiscais/SPED_ECD_PLANO.md` |
 | `auditando-sped-vs-manual` | `app/relatorios_fiscais/manual_ecd/` (Leiaute 9 oficial), `app/relatorios_fiscais/CLAUDE.md` |
 | `auditando-sped-contabil` | `app/relatorios_fiscais/CLAUDE.md` |

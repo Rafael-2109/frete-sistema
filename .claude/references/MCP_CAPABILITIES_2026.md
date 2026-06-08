@@ -4,7 +4,7 @@ camada: L2
 sot_de: —
 hub: .claude/references/INDEX.md
 superseded_by: —
-atualizado: 2026-06-02
+atualizado: 2026-06-08
 -->
 # MCP Capabilities — Estado do Sistema (Mai/2026)
 
@@ -26,7 +26,7 @@ atualizado: 2026-06-02
 - [Features Futuras para Acompanhar](#features-futuras-para-acompanhar)
 - [Fontes](#fontes)
 
-**Atualizado**: 2026-05-25
+**Atualizado**: 2026-06-08
 
 ---
 
@@ -34,7 +34,7 @@ atualizado: 2026-06-02
 
 | Package | Versao | Nota |
 |---|---|---|
-| `claude-agent-sdk` | 0.2.87 | CLI 2.1.150 (bundled). Atualizado de 0.2.82 em 2026-05-25 (5 bumps CLI: 2.1.146→2.1.147→2.1.148→2.1.149→2.1.150 + adocao tardia das Task* tools introduzidas pela breaking 0.2.82 `TodoWrite -> TaskCreate/TaskUpdate/TaskGet/TaskList`). Diff GitHub `v0.2.82...v0.2.87`: 19 commits, 10 arquivos, ZERO `src/` Python. Sem impacto pratico (agente ja nao usava TodoWrite). 0.1.77: `skills` option em `ClaudeAgentOptions`. Historico completo (0.1.49->0.2.87) em `app/agente/SDK_CHANGELOG.md` |
+| `claude-agent-sdk` | 0.2.89 | CLI 2.1.162 (bundled). Atualizado de 0.2.87 em 2026-06-03 (0.2.88/CLI 2.1.161 -> 0.2.89/CLI 2.1.162). ZERO breaking no SDK Python: 0.2.89 e so bump do CLI bundled; 0.2.88 traz 1 bug fix `session_store` asyncio->anyio (so afeta runtime **trio**, que NAO usamos). Ganho real = CLI bundled (2.1.156 fix Opus 4.8 thinking blocks; 2.1.161 fix subagente background corrompendo stdout `claude -p`). 0.1.77: `skills` option em `ClaudeAgentOptions`. Historico completo (0.1.49->0.2.89) em `app/agente/SDK_CHANGELOG.md` |
 | `anthropic` | 0.98.1 | Atualizado de 0.84.0 em 2026-05-09 |
 | `mcp` | >=1.26.0 | MCP Python SDK (spec 2025-11-25). Pin atual em requirements.txt |
 
