@@ -416,6 +416,56 @@ def api_admin_memories():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+# ============================================================================
+# Inbox de Aprovacao unificada (Task 11/12) — memory shadow + dialogue proposed
+# ============================================================================
+
+@agente_bp.route('/api/memories/approvals', methods=['GET'])
+@login_required
+def api_list_approvals():
+    """Inbox de Aprovacao: memory shadow + dialogue proposed (admin-only).
+
+    GET /agente/api/memories/approvals
+
+    Response: {"success": true, "items": [...]}
+    """
+    guard = _require_admin_json()
+    if guard:
+        return guard
+    from app.agente.services.approval_inbox_service import list_pending_approvals
+    return jsonify({'success': True, 'items': list_pending_approvals()})
+
+
+@agente_bp.route('/api/memories/approvals/<kind>/<int:item_id>/approve', methods=['PUT'])
+@login_required
+def api_approve_item(kind: str, item_id: int):
+    """Aprova item da inbox (admin-only). memory shadow -> 'ativa'.
+
+    PUT /agente/api/memories/approvals/<kind>/<item_id>/approve
+    """
+    guard = _require_admin_json()
+    if guard:
+        return guard
+    from app.agente.services.approval_inbox_service import approve_item
+    ok = approve_item(kind, item_id, reviewer_user_id=current_user.id)
+    return jsonify({'success': ok}), (200 if ok else 400)
+
+
+@agente_bp.route('/api/memories/approvals/<kind>/<int:item_id>/reject', methods=['PUT'])
+@login_required
+def api_reject_item(kind: str, item_id: int):
+    """Rejeita item da inbox (admin-only). memory -> 'despromovida'; dialogue -> 'rejected'.
+
+    PUT /agente/api/memories/approvals/<kind>/<item_id>/reject
+    """
+    guard = _require_admin_json()
+    if guard:
+        return guard
+    from app.agente.services.approval_inbox_service import reject_item
+    ok = reject_item(kind, item_id, reviewer_user_id=current_user.id)
+    return jsonify({'success': ok}), (200 if ok else 400)
+
+
 @agente_bp.route('/api/memories/<int:memory_id>/resolve-conflict', methods=['PUT'])
 @login_required
 def api_resolve_memory_conflict(memory_id: int):

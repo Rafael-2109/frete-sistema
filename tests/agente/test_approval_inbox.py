@@ -4,8 +4,12 @@ TDD — Inbox de Aprovacao unificada (Task 11: service, Task 12: rotas).
 
 GOTCHA: db.session.commit() no service escapa do savepoint da fixture db.
 Usar UUIDs/paths unicos por run + cleanup explicito ao final de cada teste.
+
+Padrao para rotas: patch('flask_login.utils._get_user') com MagicMock admin/normal
+(ver tests/agente/routes/test_memorias_routes.py).
 """
 import uuid as _uuid
+from unittest.mock import MagicMock, patch
 
 
 # ---------------------------------------------------------------------------
@@ -34,7 +38,7 @@ def test_list_pending_includes_shadow_and_proposed(db):
         kinds = {it["kind"] for it in items}
         assert "memory" in kinds and "dialogue" in kinds
     finally:
-        # Cleanup — commita após assertions para nao poluir banco
+        # Cleanup — commita apos assertions para nao poluir banco
         AgentMemory.query.filter_by(path=_path).delete()
         AgentImprovementDialogue.query.filter_by(id=d.id).delete()
         db.session.commit()
@@ -85,18 +89,38 @@ def test_reject_dialogue(db):
 
 # ---------------------------------------------------------------------------
 # Task 12: Inbox — rotas
+# Padrao: patch('flask_login.utils._get_user') com MagicMock admin/normal
+# (ver tests/agente/routes/test_memorias_routes.py).
 # ---------------------------------------------------------------------------
 
-def test_route_list_approvals(client, db, monkeypatch):
-    """GET /agente/api/memories/approvals deve retornar items (admin mock)."""
-    import app.agente.routes.memories as mem_routes
-    # _require_admin_json retorna None quando admin
-    monkeypatch.setattr(mem_routes, "_require_admin_json", lambda: None)
+def _admin_user():
+    u = MagicMock()
+    u.is_authenticated = True
+    u.perfil = 'administrador'
+    u.id = 1
+    u.nome = 'Admin Teste'
+    u.email = 'admin@test.com'
+    return u
+
+
+def _normal_user():
+    u = MagicMock()
+    u.is_authenticated = True
+    u.perfil = 'vendedor'
+    u.id = 2
+    u.nome = 'Vendedor'
+    u.email = 'v@test.com'
+    return u
+
+
+def test_route_list_approvals(client, monkeypatch):
+    """GET /agente/api/memories/approvals deve retornar items (admin)."""
     monkeypatch.setattr(
         "app.agente.services.approval_inbox_service.list_pending_approvals",
         lambda: [{"kind": "memory", "id": 1, "title": "x"}]
     )
-    resp = client.get("/agente/api/memories/approvals")
+    with patch('flask_login.utils._get_user', return_value=_admin_user()):
+        resp = client.get("/agente/api/memories/approvals")
     assert resp.status_code == 200
     data = resp.get_json()
     assert data["success"] is True
@@ -105,42 +129,32 @@ def test_route_list_approvals(client, db, monkeypatch):
 
 def test_route_approve_memory(client, monkeypatch):
     """PUT /agente/api/memories/approvals/memory/5/approve deve chamar approve_item."""
-    import app.agente.routes.memories as mem_routes
-    monkeypatch.setattr(mem_routes, "_require_admin_json", lambda: None)
     called = {}
     monkeypatch.setattr(
         "app.agente.services.approval_inbox_service.approve_item",
         lambda kind, iid, reviewer_user_id: called.setdefault("a", (kind, iid)) or True
     )
-    resp = client.put("/agente/api/memories/approvals/memory/5/approve")
+    with patch('flask_login.utils._get_user', return_value=_admin_user()):
+        resp = client.put("/agente/api/memories/approvals/memory/5/approve")
     assert resp.status_code == 200
     assert called["a"] == ("memory", 5)
 
 
 def test_route_reject_item(client, monkeypatch):
     """PUT /agente/api/memories/approvals/dialogue/7/reject deve chamar reject_item."""
-    import app.agente.routes.memories as mem_routes
-    monkeypatch.setattr(mem_routes, "_require_admin_json", lambda: None)
     called = {}
     monkeypatch.setattr(
         "app.agente.services.approval_inbox_service.reject_item",
         lambda kind, iid, reviewer_user_id: called.setdefault("r", (kind, iid)) or True
     )
-    resp = client.put("/agente/api/memories/approvals/dialogue/7/reject")
+    with patch('flask_login.utils._get_user', return_value=_admin_user()):
+        resp = client.put("/agente/api/memories/approvals/dialogue/7/reject")
     assert resp.status_code == 200
     assert called["r"] == ("dialogue", 7)
 
 
-def test_route_approve_non_admin_denied(client, monkeypatch):
-    """Sem _require_admin_json patchado, usuario nao-admin deve receber 403."""
-    from flask import jsonify
-    # Simula o comportamento real do helper quando nao-admin:
-    # retorna (Response, 403). O route faz "if guard: return guard".
-    import app.agente.routes.memories as mem_routes
-
-    def _fake_require_admin():
-        return (jsonify({'success': False, 'error': 'Acesso restrito a administradores'}), 403)
-
-    monkeypatch.setattr(mem_routes, "_require_admin_json", _fake_require_admin)
-    resp = client.get("/agente/api/memories/approvals")
+def test_route_approvals_non_admin_denied(client):
+    """Usuario nao-admin deve receber 403 na inbox."""
+    with patch('flask_login.utils._get_user', return_value=_normal_user()):
+        resp = client.get("/agente/api/memories/approvals")
     assert resp.status_code == 403
