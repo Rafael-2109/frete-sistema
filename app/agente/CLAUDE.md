@@ -73,9 +73,9 @@ atualizado: 2026-06-06
 
 ## Contexto
 
-Encapsula o Claude Agent SDK (chat web SSE + Teams bot async); ~51K LOC em 97 arquivos. O rastreador VIVO da evolucao (flywheel/blueprint Ondas 0-4) e `docs/blueprint-agente/EXECUCAO.md`; o historico do SDK (0.1.49 -> 0.2.89) fica em `SDK_CHANGELOG.md`. Regra inviolavel: antes de mexer em qualquer item do flywheel (judge/verify/triage/eval-gate A3/promocao A4), ler a spec do eixo + a critica (licao anti-drift).
+Encapsula o Claude Agent SDK (chat web SSE + Teams bot async); ~53.5K LOC em 104 arquivos. O rastreador VIVO da evolucao (flywheel/blueprint Ondas 0-4) e `docs/blueprint-agente/EXECUCAO.md`; o historico do SDK (0.1.49 -> 0.2.89) fica em `SDK_CHANGELOG.md`. Regra inviolavel: antes de mexer em qualquer item do flywheel (judge/verify/triage/eval-gate A3/promocao A4), ler a spec do eixo + a critica (licao anti-drift).
 
-**LOC**: ~51K | **Arquivos**: 99 | **Atualizado**: 07/06/2026
+**LOC**: ~53.5K | **Arquivos**: 104 | **Atualizado**: 08/06/2026
 
 Wrapper do Claude Agent SDK: chat web (SSE) + Teams bot (async).
 

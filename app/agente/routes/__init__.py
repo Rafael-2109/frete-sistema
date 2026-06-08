@@ -38,6 +38,7 @@ from app.agente.routes import admin_learning  # noqa: F401, E402
 from app.agente.routes import admin_subagents  # noqa: F401 — registra rotas admin de subagentes
 from app.agente.routes import admin_session_store  # noqa: F401 — R6 observability dashboard SessionStore v0.1.64
 from app.agente.routes import admin_metrics  # noqa: F401 — A3 dashboard de metricas per-subagent (T1+T2+T3)
+from app.agente.routes import admin_teams  # noqa: F401 — F2 dashboard de observabilidade do canal Teams
 from . import subagents  # noqa: F401 — rota user-facing para UI #6
 from app.agente.routes import files  # noqa: F401, E402
 from app.agente.routes import health  # noqa: F401, E402
