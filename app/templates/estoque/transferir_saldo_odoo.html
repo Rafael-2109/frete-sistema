@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+{% block title %}Transferência de Saldo entre Códigos{% endblock %}
+{% block content %}
+<div class="container-fluid py-3">
+  <h4><i class="fas fa-right-left text-warning"></i> Transferência de Saldo entre Códigos (CD/Estoque)</h4>
+  <p class="text-muted">Move saldo de um código para o código par (Unificação), mantendo o mesmo lote, em CD/Estoque (Odoo).</p>
+
+  <div class="card mb-3">
+    <div class="card-body">
+      <div class="row g-2 align-items-end">
+        <div class="col-md-4">
+          <label class="form-label">Código (origem)</label>
+          <input type="number" id="inp-codigo" class="form-control" value="{{ codigo }}" placeholder="Ex: 4729198">
+        </div>
+        <div class="col-md-2">
+          <button id="btn-buscar" class="btn btn-primary"><i class="fas fa-search"></i> Buscar</button>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">Transferir para (destino)</label>
+          <select id="sel-destino" class="form-select" disabled></select>
+        </div>
+      </div>
+      <div id="info-produto" class="mt-2 text-muted small"></div>
+    </div>
+  </div>
+
+  <div id="alerta"></div>
+
+  <table class="table table-sm table-hover d-none" id="tbl-lotes">
+    <thead><tr>
+      <th>Lote</th><th class="text-end">Saldo</th><th class="text-end">Reservado</th>
+      <th class="text-end">Disponível</th><th style="width:160px">Qtd a transferir</th><th></th>
+    </tr></thead>
+    <tbody></tbody>
+  </table>
+</div>
+
+<script>
+const CSRF = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+
+function alerta(msg, tipo) {
+  document.getElementById('alerta').innerHTML =
+    `<div class="alert alert-${tipo} alert-dismissible fade show">${msg}` +
+    `<button class="btn-close" data-bs-dismiss="alert"></button></div>`;
+}
+
+async function buscar() {
+  const codigo = document.getElementById('inp-codigo').value.trim();
+  if (!codigo) { alerta('Informe o código', 'warning'); return; }
+  const tbl = document.getElementById('tbl-lotes');
+  const tbody = tbl.querySelector('tbody');
+  tbody.innerHTML = '<tr><td colspan="6">Consultando Odoo...</td></tr>';
+  tbl.classList.remove('d-none');
+  const resp = await fetch(`/estoque/transferencia-saldo/api/lotes?codigo=${encodeURIComponent(codigo)}`);
+  const data = await resp.json();
+  if (!data.success) { alerta(data.message, 'danger'); tbl.classList.add('d-none'); return; }
+
+  document.getElementById('info-produto').textContent =
+    `${data.produto.cod} — ${data.produto.name} (uom: ${data.produto.uom})`;
+
+  const sel = document.getElementById('sel-destino');
+  sel.innerHTML = '';
+  if (!data.destinos.length) {
+    sel.innerHTML = '<option value="">(sem par cadastrado)</option>'; sel.disabled = true;
+    alerta('Código sem par ativo em Unificação de Códigos.', 'warning');
+  } else {
+    data.destinos.forEach(d => sel.add(new Option(`${d.codigo} — ${d.nome || ''}`, d.codigo)));
+    sel.disabled = false;
+  }
+
+  tbody.innerHTML = '';
+  data.lotes.forEach(l => {
+    const tr = document.createElement('tr');
+    const nome = l.lote_nome || '(sem lote)';
+    const disabled = (l.disponivel <= 0 || sel.disabled) ? 'disabled' : '';
+    tr.innerHTML =
+      `<td>${nome}${l.is_migracao ? ' <span class="badge bg-secondary">MIGRAÇÃO</span>' : ''}</td>` +
+      `<td class="text-end">${l.quantidade}</td><td class="text-end">${l.reservado}</td>` +
+      `<td class="text-end fw-bold">${l.disponivel}</td>` +
+      `<td><input type="number" class="form-control form-control-sm qtd" min="0" max="${l.disponivel}" step="0.001" ${disabled}></td>` +
+      `<td><button class="btn btn-sm btn-success btn-transf" data-lote="${l.lote_nome ?? ''}" ${disabled}>Transferir</button></td>`;
+    tbody.appendChild(tr);
+  });
+}
+
+async function transferir(btn) {
+  const tr = btn.closest('tr');
+  const qtd = parseFloat(tr.querySelector('.qtd').value);
+  const max = parseFloat(tr.querySelector('.qtd').max);
+  const codDestino = document.getElementById('sel-destino').value;
+  if (!qtd || qtd <= 0) { alerta('Informe a quantidade', 'warning'); return; }
+  if (qtd > max) { alerta(`Máximo disponível: ${max}`, 'warning'); return; }
+  if (!codDestino) { alerta('Selecione o código destino', 'warning'); return; }
+  btn.disabled = true; btn.textContent = '...';
+  const resp = await fetch('/estoque/transferencia-saldo/api/executar', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF},
+    body: JSON.stringify({
+      cod_origem: document.getElementById('inp-codigo').value.trim(),
+      cod_destino: codDestino,
+      lote_nome: btn.dataset.lote || null,
+      qty: qtd,
+    }),
+  });
+  const data = await resp.json();
+  alerta(data.message, data.success ? 'success' : 'danger');
+  if (data.success) buscar(); else { btn.disabled = false; btn.textContent = 'Transferir'; }
+}
+
+document.getElementById('btn-buscar').addEventListener('click', buscar);
+document.getElementById('inp-codigo').addEventListener('keydown', e => { if (e.key === 'Enter') buscar(); });
+document.getElementById('tbl-lotes').addEventListener('click', e => {
+  if (e.target.classList.contains('btn-transf')) transferir(e.target);
+});
+if (document.getElementById('inp-codigo').value.trim()) buscar();
+</script>
+{% endblock %}
