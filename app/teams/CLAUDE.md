@@ -208,6 +208,8 @@ NUNCA usar `create_app()` na thread. Reutilizar `current_app._get_current_object
 | `TEAMS_PROGRESSIVE_STREAMING` | `true` | Flush parcial ao DB |
 | `TEAMS_STREAM_FLUSH_INTERVAL` | `4.0` | Intervalo flush (seg) |
 | `USE_PERSISTENT_SDK_CLIENT` | `true` | v3 pool persistente (ATIVO) vs v2 efemero (desligado 2026-03-27) |
+| `AGENT_VINCULACAO_FASTPATH` | `true` | FASE 3 reducao custo: vincular/desvincular NF×PO (Gabriella) sem subagente gestor-recebimento. Roteamento deterministico (regex N0 + Haiku N1) em `services.py` ANTES do baseline/LLM: `if _vinc -> elif _fp(baseline) -> else LLM`. Ver `app/agente/sdk/vinculacao_fastpath.py` |
+| `AGENT_BASELINE_FASTPATH` | `true` | "atualizar baseline" (Marcus) resolvido sem LLM. Ver `app/agente/sdk/baseline_fastpath.py` |
 
 ---
 

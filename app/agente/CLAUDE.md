@@ -31,6 +31,7 @@ atualizado: 2026-06-08
 | Preciso de... | Vou para |
 |---|---|
 | Detalhe de **Artifacts**, **Telemetria de subagent**, **Memoria compartilhada**, **Avaliador de skill** ou o **inventario de eventos SSE** | [`SUBSISTEMAS.md`](SUBSISTEMAS.md) |
+| **Fast-paths deterministicos** (reducao de custo: tarefa rotineira+estruturada resolvida SEM LLM/subagente — `baseline_fastpath.py` p/ baseline do Marcus, `vinculacao_fastpath.py` p/ vincular/desvincular NF×PO da Gabriella). Mecanica: detector regex N0 → executor deterministico; fallback Haiku N1 / LLM N2. Flags `AGENT_BASELINE_FASTPATH`, `AGENT_VINCULACAO_FASTPATH` | planos `docs/superpowers/plans/2026-06-06-reducao-custo-agente-fast-path.md` (F1/F2) e `2026-06-08-fastpath-vinculacao-nf-po.md` (F3) |
 | **Historico do SDK** — features por versao, breaking changes, bug fixes (0.1.49 → 0.2.89) | `SDK_CHANGELOG.md` |
 | **Estado VIVO da evolucao** — flywheel Ondas 0-4, gates, log append-only | `docs/blueprint-agente/EXECUCAO.md` |
 | **Design dos 5 eixos** do flywheel (visao + grafo de dependencias) | `docs/blueprint-agente/BLUEPRINT_MESTRE.md` |
@@ -116,10 +117,11 @@ app/agente/                          # Root — 7 arquivos
 │   ├── preset_operacional.md        # Preset customizado (substitui claude_code preset)
 │   ├── prompt_inventario.md         # Prompt operacional inventario 2026-05 (NACOM/LF)
 │   └── system_prompt.md             # System prompt do agente (usuarios finais)
-├── sdk/                             # Integracao com Claude Agent SDK — 23 arquivos
+├── sdk/                             # Integracao com Claude Agent SDK — 24 arquivos
 │   ├── __init__.py
 │   ├── _sanitization.py             # Helpers de sanitizacao PII cross-modulo
 │   ├── baseline_fastpath.py         # Fast-path deterministico do baseline (Marcus user_id=18, sem loop LLM)
+│   ├── vinculacao_fastpath.py       # Fast-path deterministico vinculacao NF×PO (Gabriella; N0 regex + N1 Haiku; sem subagente gestor-recebimento)
 │   ├── client.py                    # Client principal (streaming, build_options, parse)
 │   ├── client_pool.py               # Pool de clients reutilizaveis
 │   ├── context_enrichment.py        # Enriquecimento de contexto per-request (blueprint agente)
