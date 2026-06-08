@@ -2396,3 +2396,30 @@ class AgentStep(db.Model):
             return step
         except Exception:
             return None
+
+
+class AgentSkillEffectiveness(db.Model):
+    """Avaliacao de efetividade de UMA invocacao de skill (1 linha por ancora)."""
+    __tablename__ = 'agent_skill_effectiveness'
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=False, index=True)
+    session_id = db.Column(db.String(64), nullable=False, index=True)
+    skill_name = db.Column(db.String(80), nullable=False, index=True)
+    anchor_msg_id = db.Column(db.String(64), nullable=False)
+    stage_reached = db.Column(db.SmallInteger, default=0)   # 0/1/2
+    resolveu = db.Column(db.Boolean, nullable=True)
+    ramo = db.Column(db.String(20), nullable=True)          # lembrete_usuario|lembrete_todos|ajuste_codigo|nada
+    confidence = db.Column(db.Float, nullable=True)
+    action_ref = db.Column(db.String(120), nullable=True)   # memory:<id> | dialogue:<id> | approval:<id>
+    error_signature = db.Column(db.String(64), nullable=True)
+    evidencia_json = db.Column(db.JSON, default=dict)
+    created_at = db.Column(db.DateTime, default=lambda: agora_utc_naive())
+
+    __table_args__ = (
+        db.UniqueConstraint('session_id', 'anchor_msg_id', name='uq_skill_eff_session_anchor'),
+        db.Index('ix_skill_eff_skill_resolveu', 'skill_name', 'resolveu'),
+    )
+
+    def __repr__(self):
+        return f'<AgentSkillEffectiveness {self.skill_name} sess={self.session_id[:8]} ramo={self.ramo}>'
