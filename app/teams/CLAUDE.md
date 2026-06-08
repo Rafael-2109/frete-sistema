@@ -157,15 +157,20 @@ Solucao: verifica status task ANTES. Se ja `processing`, trata como sucesso.
 superado — a afinidade per-process do SDK passou a ser tratada por outra via
 (split Caddy: `/agente*` -> gunicorn-agente com 1 worker).
 
-**CUIDADO (achado avaliacao 360 — A1/CONF-2)**: as rotas `/api/teams/*` NAO
-estao no split do Caddy (`Caddyfile` so roteia `/agente*` e `/agente-lojas*`
-para :5001). O Teams cai no `handle{}` -> `gunicorn-sistema` (**4 workers**,
-:5002). Logo o pool persistente e' **process-local em multi-worker**: uma 2a
-mensagem da mesma conversa pode cair em outro worker (cenario DC-7). Mitigado
-na pratica por: estado em `TeamsTask` (DB, worker-agnostico) + orphan-kill
-(`_cleanup_orphan_claude_processes`). Hardening proposto (nao implementado):
-rotear `/api/teams/*` -> :5001. Ver `docs/RELATORIO_AVALIACAO_360_AGENTE_2026-05-29.md` CONF-2.
-— FONTE: `services.py:738,1300` (submit_coroutine), `feature_flags.py:422`
+**RESOLVIDO (achado avaliacao 360 — A1/CONF-2)**: as rotas `/api/teams/*` agora
+SAO roteadas para :5001 no split do Caddy (matcher `@teams`, junto de `/agente*`).
+Antes caiam no `handle{}` default -> `gunicorn-sistema` (**4 workers**, :5002),
+tornando o pool persistente **process-local em multi-worker**: uma 2a mensagem da
+mesma conversa podia cair em outro worker (cenario DC-7). Com o roteamento para
+:5001 (**1 worker**), todas as requests Teams caem no mesmo processo -> pool
+sempre consistente. Defesa em profundidade preservada: estado em `TeamsTask`
+(DB, worker-agnostico) + orphan-kill (`_cleanup_orphan_claude_processes`).
+Trade-off aceito: o Teams divide o worker unico de :5001 com o chat web SSE —
+mitigado porque o processamento pesado roda em thread de background non-daemon
+(nao nos 8 worker-threads do gunicorn) e as requests Teams sao curtas (cria/poll
+TeamsTask). Ver `docs/RELATORIO_AVALIACAO_360_AGENTE_2026-05-29.md` CONF-2.
+— FONTE: `Caddyfile` (matcher `@teams`), `services.py:738,1300` (submit_coroutine),
+`feature_flags.py:422`
 
 ### Auto-cadastro de usuarios
 Email deterministico: `teams_{md5[:12]}@teams.nacomgoya.local`, senha aleatoria, perfil='logistica'.

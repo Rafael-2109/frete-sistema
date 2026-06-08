@@ -4,6 +4,7 @@
 # Roteia requests no container Render Pro Plus 8GB/4CPU:
 #   - /agente/*       -> gunicorn-agente   :5001  (workers=1, threads=8)
 #   - /agente-lojas/* -> gunicorn-agente   :5001  (mesmo agente)
+#   - /api/teams/*    -> gunicorn-agente   :5001  (afinidade pool SDK persistente — DC-7)
 #   - /static/*       -> serve do disco
 #   - resto           -> gunicorn-sistema  :5002  (workers=4, threads=2)
 #
@@ -51,6 +52,34 @@
     # do nginx. Timeouts longos (1800s) para SSE de 29min.
     @agente path /agente /agente/* /agente-lojas /agente-lojas/*
     handle @agente {
+        reverse_proxy 127.0.0.1:5001 {
+            flush_interval -1
+            transport http {
+                read_timeout 30m
+                write_timeout 30m
+                dial_timeout 30s
+                keepalive 75s
+                keepalive_idle_conns 32
+            }
+            header_up Host {host}
+            header_up X-Real-IP {remote_host}
+            header_up X-Forwarded-For {remote_host}
+            header_up X-Forwarded-Proto {scheme}
+        }
+    }
+
+    # ===============================================================
+    # /api/teams* -> gunicorn-agente (MESMO processo do /agente*)
+    # ===============================================================
+    # Motivo (DC-7): o pool SDK persistente (v3, USE_PERSISTENT_SDK_CLIENT)
+    # e' process-local. No handle{} default o Teams cairia em
+    # gunicorn-sistema (4 workers) e uma 2a msg da mesma conversa poderia
+    # cair em worker != do pool. Roteando para :5001 (1 worker), todas as
+    # requests Teams caem no mesmo processo -> pool consistente. As requests
+    # Teams sao curtas (cria/poll TeamsTask); o processamento pesado roda em
+    # thread de background non-daemon, nao nos worker-threads do gunicorn.
+    @teams path /api/teams /api/teams/*
+    handle @teams {
         reverse_proxy 127.0.0.1:5001 {
             flush_interval -1
             transport http {

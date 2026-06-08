@@ -6,6 +6,7 @@
 #   nginx :10000 (publico Render)
 #     /agente/*       -> gunicorn-agente   :5001  (workers=1 threads=8)
 #     /agente-lojas/* -> gunicorn-agente   :5001  (mesmo)
+#     /api/teams/*    -> gunicorn-agente   :5001  (afinidade pool SDK — DC-7)
 #     /static/*       -> serve do disco
 #     resto           -> gunicorn-sistema  :5002  (workers=4 threads=2)
 #
