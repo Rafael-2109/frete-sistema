@@ -51,3 +51,38 @@ def test_skill_effectiveness_unique_anchor(db):
     with pytest.raises(IntegrityError):
         db.session.flush()
     db.session.rollback()
+
+
+# ---------------------------------------------------------------------------
+# Task 3: Montagem da janela ancorada
+# ---------------------------------------------------------------------------
+def test_build_skill_windows_anchors_and_window():
+    from app.agente.services.skill_effectiveness_service import build_skill_windows
+    msgs = [
+        {"id": "u0", "role": "user", "content": "qual frete pra SP?"},
+        {"id": "a0", "role": "assistant", "content": "vou cotar", "tools_used": ["Skill:cotando-frete"]},
+        {"id": "u1", "role": "user", "content": "nao era isso, ta errado"},
+        {"id": "a1", "role": "assistant", "content": "desculpe, corrigindo"},
+        {"id": "u2", "role": "user", "content": "agora sim"},
+        {"id": "a2", "role": "assistant", "content": "otimo"},
+    ]
+    wins = build_skill_windows(msgs)
+    assert len(wins) == 1
+    w = wins[0]
+    assert w.skill_name == "cotando-frete"
+    assert w.anchor_msg_id == "a0"
+    assert w.msg_anterior["id"] == "u0"
+    assert [m["id"] for m in w.proximas_user] == ["u1", "u2"]
+    assert [m["id"] for m in w.proximas_assistant] == ["a1", "a2"]
+    assert w.janela_fechada is True
+
+
+def test_build_skill_windows_open_window():
+    from app.agente.services.skill_effectiveness_service import build_skill_windows
+    msgs = [
+        {"id": "u0", "role": "user", "content": "x"},
+        {"id": "a0", "role": "assistant", "content": "y", "tools_used": ["Skill:cotando-frete"]},
+        {"id": "u1", "role": "user", "content": "z"},  # so 1 proxima user -> aberta
+    ]
+    wins = build_skill_windows(msgs)
+    assert wins[0].janela_fechada is False
