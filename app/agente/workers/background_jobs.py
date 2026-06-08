@@ -244,3 +244,36 @@ def try_enqueue_extract_personal_insights(
     except Exception as e:
         logger.warning(f"[RQ] enqueue personal falhou (fallback inline): {e}")
         return False
+
+
+def skill_effectiveness_job(session_id: str, user_id: int) -> bool:
+    """Job RQ: avalia efetividade das skills invocadas na sessao."""
+    try:
+        from app import create_app
+        from app.agente.services.skill_effectiveness_service import evaluate_session
+        app = create_app()
+        evaluate_session(session_id=session_id, user_id=user_id, app=app)
+        return True
+    except Exception as e:
+        logger.error(f"[RQ_JOB skill_eval] session={session_id[:8]}... erro: {e}", exc_info=True)
+        return False
+
+
+def try_enqueue_skill_effectiveness(session_id: str, user_id: int) -> bool:
+    """Enfileira avaliacao de efetividade de skill. Retorna True se enfileirou, False = caller faz fallback."""
+    if not _is_rq_enabled():
+        return False
+    q = _get_queue()
+    if q is None:
+        return False
+    try:
+        q.enqueue(
+            skill_effectiveness_job,
+            session_id, user_id,
+            job_timeout=180,
+            description=f"skill_eval {session_id[:8]}",
+        )
+        return True
+    except Exception as e:
+        logger.warning(f"[RQ] enqueue skill_eval falhou (fallback inline): {e}")
+        return False
