@@ -131,3 +131,107 @@ def stage0_has_signal(window: SkillWindow) -> bool:
         return True
 
     return False
+
+
+# ---------------------------------------------------------------------------
+# Task 5: Estagios 1 e 2 — Haiku e Sonnet
+# ---------------------------------------------------------------------------
+HAIKU_MODEL = "claude-haiku-4-5-20251001"
+SONNET_MODEL = "claude-sonnet-4-6"
+_VALID_RAMOS = ("lembrete_usuario", "lembrete_todos", "ajuste_codigo", "nada")
+
+_STAGE1_SYSTEM = (
+    "Voce avalia se uma SKILL resolveu o pedido do usuario, olhando a janela de "
+    "conversa logo apos a invocacao. Responda SO JSON: "
+    '{"resolveu": bool, "suspeita_ajuste": bool, "motivo": "curto", "sinais": ["..."]}. '
+    "suspeita_ajuste=true se o usuario pediu correcao/ajuste, reclamou, repetiu o pedido, "
+    "ou o agente recorreu a script ad-hoc para o mesmo assunto. Seja conservador."
+)
+
+_STAGE2_SYSTEM = (
+    "Voce e um avaliador de solucoes, chamado pela suspeita de necessidade de ajuste numa "
+    "skill. Decida o RAMO da solucao. SEPARACAO DE COMPETENCIAS (inviolavel): para "
+    "'ajuste_codigo' voce DESCREVE o problema e a evidencia e PEDE ajuda — NUNCA prescreve "
+    "a solucao de codigo (isso e trabalho do Claude Code). Responda SO JSON: "
+    '{"ramo": "lembrete_usuario|lembrete_todos|ajuste_codigo|nada", "titulo": "...", '
+    '"conteudo_lembrete": "texto do lembrete (so ramos lembrete_*)", '
+    '"problema": "descricao do problema (so ajuste_codigo)", '
+    '"evidencia": "trechos que sustentam (so ajuste_codigo)", '
+    '"categoria_codigo": "skill_bug|skill_suggestion|instruction_request|prompt_feedback", '
+    '"justificativa": "...", "confianca": 0.0}. '
+    "lembrete_usuario = orientacao especifica para ESTE usuario ao usar a skill. "
+    "lembrete_todos = vale para todos (empresa). ajuste_codigo = a skill/codigo precisa mudar."
+)
+
+
+def _call_anthropic(model: str, system: str, user: str, max_tokens: int = 600) -> str:
+    """Chamada sincrona ao Claude (mesmo padrao de step_judge._call_haiku_judge)."""
+    import anthropic
+    client = anthropic.Anthropic()
+    resp = client.messages.create(
+        model=model, max_tokens=max_tokens,
+        system=[{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}],
+        messages=[{"role": "user", "content": user}],
+    )
+    for block in resp.content:
+        if getattr(block, "type", None) == "text":
+            return block.text
+    return ""
+
+
+def _format_window(window: SkillWindow, skill_description: str = "") -> str:
+    def _fmt(m): return f"[{m.get('role')}] {str(m.get('content') or '')[:1500]}"
+    parts = [f"SKILL: {window.skill_name}"]
+    if skill_description:
+        parts.append(f"DESCRICAO DA SKILL: {skill_description[:500]}")
+    if window.msg_anterior:
+        parts.append("PERGUNTA ANTERIOR:\n" + _fmt(window.msg_anterior))
+    parts.append("RESPOSTA QUE INVOCOU A SKILL:\n" + _fmt(window.resposta_invocacao))
+    if window.proximas_user:
+        parts.append("PROXIMAS MSGS DO USUARIO:\n" + "\n".join(_fmt(m) for m in window.proximas_user))
+    if window.proximas_assistant:
+        parts.append("PROXIMAS RESPOSTAS DO AGENTE:\n" + "\n".join(_fmt(m) for m in window.proximas_assistant))
+    return "\n\n".join(parts)
+
+
+def _parse_json(raw: str) -> Dict[str, Any]:
+    try:
+        from app.agente.services._utils import parse_llm_json_response
+        data = parse_llm_json_response(raw)
+        return data if isinstance(data, dict) else {}
+    except Exception:
+        return {}
+
+
+def stage1_haiku(window: SkillWindow) -> Dict[str, Any]:
+    raw = _call_anthropic(HAIKU_MODEL, _STAGE1_SYSTEM, _format_window(window), max_tokens=300)
+    data = _parse_json(raw)
+    return {
+        "resolveu": bool(data.get("resolveu", True)),
+        "suspeita_ajuste": bool(data.get("suspeita_ajuste", False)),
+        "motivo": str(data.get("motivo", "")),
+        "sinais": data.get("sinais", []) if isinstance(data.get("sinais"), list) else [],
+    }
+
+
+def stage2_sonnet(window: SkillWindow, skill_description: str = "") -> Dict[str, Any]:
+    raw = _call_anthropic(SONNET_MODEL, _STAGE2_SYSTEM,
+                          _format_window(window, skill_description), max_tokens=800)
+    data = _parse_json(raw)
+    ramo = data.get("ramo", "nada")
+    if ramo not in _VALID_RAMOS:
+        ramo = "nada"
+    try:
+        conf = float(data.get("confianca", 0.0) or 0.0)
+    except (TypeError, ValueError):
+        conf = 0.0
+    return {
+        "ramo": ramo,
+        "titulo": str(data.get("titulo", ""))[:200],
+        "conteudo_lembrete": str(data.get("conteudo_lembrete", "")),
+        "problema": str(data.get("problema", "")),
+        "evidencia": str(data.get("evidencia", "")),
+        "categoria_codigo": str(data.get("categoria_codigo", "skill_bug")),
+        "justificativa": str(data.get("justificativa", "")),
+        "confianca": conf,
+    }

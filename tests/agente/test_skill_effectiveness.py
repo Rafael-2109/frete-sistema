@@ -118,3 +118,31 @@ def test_stage0_signal_adhoc_bash():
              prox_asst=[{"id": "a1", "role": "assistant", "content": "rodando",
                          "tools_used": ["Bash"]}])
     assert stage0_has_signal(w) is True
+
+
+# ---------------------------------------------------------------------------
+# Task 5: Estagios 1 e 2 — Haiku e Sonnet
+# ---------------------------------------------------------------------------
+def test_stage1_haiku_parses(monkeypatch):
+    import app.agente.services.skill_effectiveness_service as svc
+    monkeypatch.setattr(svc, "_call_anthropic",
+        lambda *a, **k: '{"resolveu": false, "suspeita_ajuste": true, "motivo": "x", "sinais": ["ajuste"]}')
+    out = svc.stage1_haiku(_win(["ajusta isso"]))
+    assert out["suspeita_ajuste"] is True
+    assert out["resolveu"] is False
+
+
+def test_stage2_sonnet_routes_branch(monkeypatch):
+    import app.agente.services.skill_effectiveness_service as svc
+    monkeypatch.setattr(svc, "_call_anthropic",
+        lambda *a, **k: '{"ramo": "lembrete_usuario", "titulo": "T", '
+                        '"conteudo_lembrete": "sempre confirmar UF", "confianca": 0.9}')
+    out = svc.stage2_sonnet(_win(["nao era isso"]))
+    assert out["ramo"] == "lembrete_usuario"
+    assert out["confianca"] == 0.9
+
+
+def test_stage2_invalid_branch_falls_to_nada(monkeypatch):
+    import app.agente.services.skill_effectiveness_service as svc
+    monkeypatch.setattr(svc, "_call_anthropic", lambda *a, **k: '{"ramo": "xpto"}')
+    assert svc.stage2_sonnet(_win(["x"]))["ramo"] == "nada"
