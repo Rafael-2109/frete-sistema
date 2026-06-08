@@ -158,3 +158,15 @@ def test_route_approvals_non_admin_denied(client):
     with patch('flask_login.utils._get_user', return_value=_normal_user()):
         resp = client.get("/agente/api/memories/approvals")
     assert resp.status_code == 403
+
+
+# ---------------------------------------------------------------------------
+# Task 14: Ajuste do improvement_suggester (D8) — separacao de competencias
+# ---------------------------------------------------------------------------
+
+def test_d8_prompt_separates_competencies():
+    """O system prompt do batch D8 deve instruir separacao de competencias:
+    descrever o problema, nao prescrever a solucao."""
+    import app.agente.services.improvement_suggester as m
+    blob = " ".join(str(v) for v in vars(m).values() if isinstance(v, str)).lower()
+    assert ("pedido de ajuda" in blob) or ("nao prescrev" in blob) or ("descreva o problema" in blob)

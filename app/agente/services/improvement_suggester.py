@@ -96,7 +96,11 @@ REGRA ANTI-DUPLICATA:
 - VERIFICAR <inventario_skills> E <sugestoes_existentes> ANTES de categorizar como skill_suggestion.
   Se a funcionalidade JA EXISTE no inventario, usar instruction_request (agente nao soube usar).
 
-RESPONDA APENAS o JSON array, sem markdown, sem comentarios."""
+RESPONDA APENAS o JSON array, sem markdown, sem comentarios.
+
+SEPARACAO DE COMPETENCIAS: descreva o PROBLEMA observado e a EVIDENCIA e faca um PEDIDO
+DE AJUDA acionavel. NAO prescreva a solucao de codigo nem passos de implementacao — isso
+e trabalho do Claude Code. O campo 'description' deve conter o problema, nao a correcao."""
 
 
 # Prompt para avaliacao de respostas do Claude Code
