@@ -1001,10 +1001,19 @@ def _load_user_memories_for_context(user_id: int, prompt: str = None, model_name
                             ) / len(filtered)
 
                             memory_ids = [r['memory_id'] for r in filtered]
+                            from sqlalchemy import or_ as sql_or
                             mem_objects = AgentMemory.query.filter(
                                 AgentMemory.id.in_(memory_ids),
                                 AgentMemory.is_directory == False,  # noqa: E712
                                 AgentMemory.is_cold == False,  # noqa: E712 — v2: excluir cold
+                                # Nao injetar diretiva nao-promovida (shadow/candidata/
+                                # despromovida) — so NULL/ativa (mesmo criterio do
+                                # _build_operational_directives, linha 504-505). Filtro
+                                # na FONTE preserva o slot do top-10 para memoria legitima.
+                                sql_or(
+                                    AgentMemory.directive_status.is_(None),
+                                    AgentMemory.directive_status == 'ativa',
+                                ),
                             ).all()
 
                             # Mapear similarity por memory_id
@@ -1114,6 +1123,19 @@ def _load_user_memories_for_context(user_id: int, prompt: str = None, model_name
                 additional_memories = fallback_query.order_by(
                     AgentMemory.updated_at.desc()
                 ).limit(15).all()
+
+            # ── Defesa em profundidade: nunca injetar diretiva nao-promovida ──
+            # Os tiers de descoberta KG (1072) e fallback (1105) materializam por id
+            # SEM filtrar directive_status. 'shadow'/'candidata'/'despromovida' nao podem
+            # entrar no contexto por NENHUMA via — so legado (NULL) ou 'ativa' (mesmo
+            # criterio do _build_operational_directives:504-505). Guard unico = robusto
+            # contra tiers futuros. protected_memories sao paths fixos de identidade
+            # (Tier 0/1), fora do escopo deste filtro.
+            if additional_memories:
+                additional_memories = [
+                    m for m in additional_memories
+                    if getattr(m, 'directive_status', None) in (None, 'ativa')
+                ]
 
             # ── Montar resultado: Tier 0 + protegidas + relevantes ──
             all_memories = protected_memories + additional_memories
