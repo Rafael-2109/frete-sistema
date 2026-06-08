@@ -1821,6 +1821,37 @@ verificada nesta sessao, o codigo e literal.
 
 ---
 
+## Achados do code review final (pos-execucao, 2026-06-07)
+
+Implementacao executada (subagent-driven, 16 commits + 1 fix). Code review final (Opus)
+sobre `origin/main..HEAD`. Estado: **32 testes verdes**, flags default OFF.
+
+**Corrigido:**
+- **#2/#5 PII masking** — `_format_window` (input do LLM) e `_window_evidence` (persistido +
+  exibido na inbox) agora aplicam `app/agente/utils/pii_masker.mask_pii` (CNPJ/CPF/email).
+  Era deviacao do edge-case da spec. Commit `24b936d53` + 2 testes.
+
+**Debitos / pre-requisitos de ATIVACAO (nao bloqueiam merge flag-off):**
+- **#1 Teams = web-only (PRE-REQ p/ cobrir Teams).** `build_skill_windows` casa `"Skill:<nome>"`
+  em `tools_used`, forma gravada SO na web (`chat.py:866`). O Teams grava o bare `"Skill"`
+  (`teams/services.py:1294`), entao o gatilho (compartilhado via `run_post_session_processing`)
+  roda mas produz zero janelas no Teams (best-effort segura — sem crash). Para cobrir Teams:
+  enriquecer o tool_name no branch `tool_call` de `teams/services.py` (espelhar `chat.py:866`,
+  nome em `metadata['input']['skill']`) — **export critico Teams: exige teste no Teams bot**
+  (nao feito nesta sessao). Decidir na ativacao: enriquecer OU assumir web-only.
+- **#4 error_signature NAO populado** — coluna existe (modelo+migration+badge inbox) mas
+  `_evaluate_inner` nunca seta. NULL na Fase 1 (dedup do lembrete por `path` unico basta).
+  Reservado p/ enriquecimento futuro (dedup por assunto cross-skill via `gerar_error_signature`).
+- **#3 stage-2 side-effects sob double-trigger concorrente** — `apply_decision` commita antes do
+  `_safe_persist`; `_apply_ajuste_codigo` (create_suggestion) nao e idempotente. Trigger e unico
+  (RQ OU inline), entao prob. baixa. Aceito como debito.
+- **Debito de teste** — testes de `evaluate_session`/inbox commitam no banco dev (a fixture `db`
+  nao contem o `commit()` do service); mitigado com session_id/path unicos + cleanup.
+- **UI (Task 13)** — sem teste automatizado; requer validacao manual (abrir `/agente/memorias`,
+  aba "Pendentes de Aprovacao", aprovar shadow -> `ativa`, rejeitar dialogue -> `rejected`).
+
+---
+
 ## Execution handoff
 
 Plan completo e salvo em
