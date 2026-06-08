@@ -1,6 +1,5 @@
 # tests/agente/test_skill_effectiveness.py
 import importlib
-import os
 
 import pytest
 
