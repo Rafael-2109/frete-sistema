@@ -1,6 +1,6 @@
 # Agente Services — Guia de Desenvolvimento
 
-**LOC**: ~12.8K | **Arquivos**: 20 | **Atualizado**: 2026-06-06
+**LOC**: ~13.0K | **Arquivos**: 22 | **Atualizado**: 2026-06-07
 
 Hub de analise, otimizacao e aprendizado de sessoes em 3 camadas (P0 core, P1 UX, P2 analytics).
 
@@ -28,7 +28,9 @@ app/agente/services/
   ├── tool_skill_mapper.py            #   383 LOC — Mapeamento Tool → Categoria → Dominio (lookup)
   ├── recommendations_engine.py       #   279 LOC — Recomendacoes rule-based para dashboard
   ├── suggestion_generator.py         #   223 LOC — Sugestoes pos-resposta via Sonnet (P1-1)
-  └── sentiment_detector.py           #   260 LOC — Deteccao LOCAL de frustracao, zero API (P1-2)
+  ├── sentiment_detector.py           #   260 LOC — Deteccao LOCAL de frustracao, zero API (P1-2)
+  ├── skill_effectiveness_service.py  # Avaliador de efetividade de skill pos-sessao (Fase 1): janela+funil estagio0/Haiku/Sonnet+aplicacao+idempotencia
+  └── approval_inbox_service.py       # Inbox de Aprovacao: AgentMemory shadow + ImprovementDialogue proposed (conserta directive_promotion shadow->ativa)
 ```
 
 ## Regras Criticas
@@ -141,6 +143,19 @@ Tabela: `agent_improvement_dialogue`. Custo: ~$0.005/batch.
 - Real-time: MCP tool `register_improvement` (memory server) — agente registra durante conversa (R9 system_prompt)
 POST endpoint: `/api/improvement-dialogue`. GET: `/api/improvement-dialogue/pending`.
 — FONTE: `improvement_suggester.py:1-25`, `sincronizacao_incremental_definitiva.py` (step 25), `memory_mcp_tool.py`
+
+### skill_effectiveness_service + approval_inbox_service (Fase 1 — 2026-06-07)
+Avaliador pos-sessao de efetividade de skill (detalhe completo em `app/agente/CLAUDE.md`).
+Funil estagio0 custo-zero (sentiment+regex+Bash) -> Haiku -> Sonnet sobre a janela ancorada
+na invocacao. 3 ramos: `lembrete_usuario` (AgentMemory mandatory, AUTO) / `lembrete_todos`
+(shadow -> Inbox) / `ajuste_codigo` (`AgentImprovementDialogue` proposed).
+**Separacao de competencias (inviolavel)**: NUNCA prescreve solucao no `ajuste_codigo`
+(so problema + evidencia; Claude Code resolve) — vale tb p/ `improvement_suggester` (D8).
+PII via `pii_masker.mask_pii` antes do LLM e antes de persistir `evidencia_json`.
+`approval_inbox_service` conserta o gap do `directive_promotion` (shadow sem UI): aba
+"Pendentes de Aprovacao" em `/agente/memorias` faz `shadow -> ativa`.
+**Teams web-only**: `build_skill_windows` casa `"Skill:<nome>"` (so a web grava — `chat.py:866`).
+Flag `AGENT_SKILL_EVAL` (R2). — FONTE: `skill_effectiveness_service.py`, `approval_inbox_service.py`
 
 ---
 

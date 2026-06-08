@@ -67,6 +67,7 @@ atualizado: 2026-06-06
   - [Busca inclui user_id=0](#busca-inclui-user_id0)
   - [Extracao pos-sessao](#extracao-pos-sessao)
   - [Role Awareness](#role-awareness)
+- [Avaliador de Efetividade de Skill + Inbox de Aprovacao (Fase 1)](#avaliador-de-efetividade-de-skill--inbox-de-aprovacao-fase-1)
 - [Versao SDK atual](#versao-sdk-atual)
 - [Export critico: Teams](#export-critico-teams)
 
@@ -74,7 +75,7 @@ atualizado: 2026-06-06
 
 Encapsula o Claude Agent SDK (chat web SSE + Teams bot async); ~51K LOC em 97 arquivos. O rastreador VIVO da evolucao (flywheel/blueprint Ondas 0-4) e `docs/blueprint-agente/EXECUCAO.md`; o historico do SDK (0.1.49 -> 0.2.89) fica em `SDK_CHANGELOG.md`. Regra inviolavel: antes de mexer em qualquer item do flywheel (judge/verify/triage/eval-gate A3/promocao A4), ler a spec do eixo + a critica (licao anti-drift).
 
-**LOC**: ~51K | **Arquivos**: 97 | **Atualizado**: 06/06/2026
+**LOC**: ~51K | **Arquivos**: 99 | **Atualizado**: 07/06/2026
 
 Wrapper do Claude Agent SDK: chat web (SSE) + Teams bot (async).
 
@@ -808,6 +809,59 @@ Apos baseline numerico estavel: prosseguir para **Fase B (Quality)**.
 - system_prompt.md secao `<role_awareness>` instrui agente a salvar PROATIVAMENTE
 - Paths empresa: termos/, regras/, usuarios/, correcoes/
 - Complementar a extracao pos-sessao (rede de seguranca)
+
+---
+
+## Avaliador de Efetividade de Skill + Inbox de Aprovacao (Fase 1)
+
+Avalia pos-sessao se as skills invocadas resolveram o problema; quando nao, cria lembrete
+por-usuario (auto) OU propoe lembrete-todos / ajuste de codigo (via Inbox). **EM PROD desde
+2026-06-07** (flag `AGENT_SKILL_EVAL=true` no web `sistema-fretes`). Spec/plano:
+`docs/superpowers/specs/2026-06-07-aprendizado-efetividade-skills-design.md` +
+`docs/superpowers/plans/2026-06-07-aprendizado-efetividade-skills-fase1.md`.
+
+**Fluxo**: `run_post_session_processing` -> `_maybe_trigger_skill_eval` (flag-gated) -> RQ
+`agent_background` -> `skill_effectiveness_job` -> `evaluate_session`: `build_skill_windows`
+(msg anterior + 2 prox user + 2 prox assistant; so janela fechada) -> funil estagio0 custo-zero
+(sentiment+regex+Bash) -> Haiku -> Sonnet (cap `MAX_SONNET`) -> `apply_decision` -> grava
+`AgentSkillEffectiveness` (idempotente por `session_id`+`anchor_msg_id`). Entrega do lembrete:
+`_keep_stream_open` (PreToolUse) injeta `additionalContext` SO quando a skill e reinvocada
+(cache 30min; shadow NAO injeta).
+
+### Componentes
+
+| Camada | Arquivo |
+|---|---|
+| Modelo + migration | `models.py:AgentSkillEffectiveness` · `scripts/migrations/2026_06_07_agent_skill_effectiveness.{py,sql}` |
+| Service nucleo | `services/skill_effectiveness_service.py` (janela/estagios/aplicacao/orquestracao) |
+| Service inbox | `services/approval_inbox_service.py` (list/approve/reject) |
+| Gatilho | `routes/_helpers.py:_maybe_trigger_skill_eval` (em `run_post_session_processing`) |
+| Worker | `workers/background_jobs.py:skill_effectiveness_job` (+`try_enqueue_skill_effectiveness`, fila `agent_background`) |
+| Injecao | `sdk/hooks.py:_keep_stream_open` (elif `tool_name=='Skill'`) + `sdk/memory_injection.py:get_skill_reminders_for_session` |
+| Inbox rotas+UI | `routes/memories.py` (`/api/memories/approvals*`, admin) · `templates/agente/memorias.html` (aba "Pendentes de Aprovacao") |
+| D8 | `services/improvement_suggester.py` (clausula separacao de competencias) |
+
+### Feature flags (`config/feature_flags.py`)
+
+`AGENT_SKILL_EVAL` (OFF -> ON PROD 2026-06-07) · `AGENT_SKILL_EVAL_SONNET` (true) ·
+`AGENT_SKILL_EVAL_APPLY_USER` (true = lembrete_usuario auto; false = shadow -> Inbox) ·
+`AGENT_SKILL_EVAL_CONF_MIN` (0.7) · `AGENT_SKILL_EVAL_MAX_SONNET` (3).
+
+### Gotchas
+
+- **Separacao de competencias (inviolavel)**: o avaliador (Haiku/Sonnet) DESCREVE o problema +
+  evidencia e PEDE ajuda; ramo `ajuste_codigo` NUNCA prescreve solucao
+  (`implementation_notes`/`affected_files` ficam None — quem resolve codigo e o Claude Code).
+  Vale tambem p/ o D8 (`improvement_suggester`).
+- **Conserta gap pre-existente**: `directive_promotion` criava `directive_status='shadow'` sem
+  UI de ativacao; a Inbox e a UNICA via `shadow -> ativa` (aprovar) / `despromovida` (rejeitar).
+- **Teams web-only (DEBITO)**: `build_skill_windows` casa `"Skill:<nome>"`, forma gravada SO na
+  web (`chat.py:866`); Teams grava o bare `"Skill"` (`teams/services.py:1294`) -> zero janelas
+  no Teams (best-effort, sem crash). Cobrir Teams = enriquecer o tool_name la (export critico).
+- **PII**: `_format_window` (input do LLM) e `_window_evidence` (persistido + exibido na inbox)
+  aplicam `utils/pii_masker.mask_pii` (CNPJ/CPF/email).
+- **Teste**: a fixture `db` (conftest:50) NAO contem o `commit()` do service -> testes usam
+  `session_id` unico + cleanup explicito (resíduo no banco dev se faltar).
 
 ---
 
