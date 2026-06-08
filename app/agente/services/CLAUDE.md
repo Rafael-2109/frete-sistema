@@ -1,8 +1,20 @@
+<!-- doc:meta
+tipo: explanation
+camada: L2
+sot_de: —
+hub: app/agente/CLAUDE.md
+superseded_by: —
+atualizado: 2026-06-07
+-->
 # Agente Services — Guia de Desenvolvimento
+
+> **Papel:** guia dev dos services de inteligencia do Agente Web (analise, otimizacao e aprendizado de sessoes). Companheiro do guia do modulo: [`CLAUDE.md`](../CLAUDE.md). Abra antes de editar `app/agente/services/`.
 
 **LOC**: ~13.0K | **Arquivos**: 22 | **Atualizado**: 2026-06-07
 
-Hub de analise, otimizacao e aprendizado de sessoes em 3 camadas (P0 core, P1 UX, P2 analytics).
+## Contexto
+
+Hub de analise, otimizacao e aprendizado de sessoes em 3 camadas (P0 core, P1 UX, P2 analytics). Todos rodam best-effort (R1) sob feature flag (R2). O **protocolo de memoria** que estes services alimentam/consomem (ciclo de vida, decay, paths, criterios de qualidade) e canonico em `.claude/references/MEMORY_PROTOCOL.md`.
 
 ---
 
