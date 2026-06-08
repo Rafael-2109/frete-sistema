@@ -27,6 +27,7 @@ from app.embeddings.config import (
     VOYAGE_DEFAULT_MODEL,
     VOYAGE_FINANCE_MODEL,
     VOYAGE_RERANK_MODEL,
+    VOYAGE_TABLE_CATALOG_MODEL,
     VOYAGE_EMBEDDING_DIMENSIONS,
     EMBEDDING_BATCH_SIZE,
     SEARCH_DEFAULT_LIMIT,
@@ -1032,6 +1033,111 @@ class EmbeddingService:
                 "similarity": round(similarity, 4),
             })
 
+        return results
+
+    # ================================================================
+    # BUSCA SEMANTICA — CATALOGO DE TABELAS (S1 progressive disclosure)
+    # ================================================================
+    def search_table_catalog(
+        self,
+        query: str,
+        limit: int = 10,
+        min_similarity: float = 0.0,
+    ) -> List[Dict[str, Any]]:
+        """Busca semantica de TABELAS por intencao (camada semantica do S1).
+
+        Retorna candidatas {table_name, dominio, descricao, key_fields,
+        similarity}. [] se embeddings off/indisponiveis (a tool buscar_tabelas
+        cai para a busca textual deterministica). A VISIBILIDADE por usuario
+        (tabelas bloqueadas/pessoal/admin) e aplicada na tool, NAO aqui.
+        """
+        if not EMBEDDINGS_ENABLED:
+            return []
+
+        # Mesmo modelo do indexer do catalogo (voyage-4-large) — query e documentos
+        # PRECISAM estar no mesmo espaco vetorial.
+        query_embedding = self._safe_embed_query(query, model=VOYAGE_TABLE_CATALOG_MODEL)
+        if query_embedding is None:
+            return []
+
+        if self._is_pgvector_available():
+            return self._search_pgvector_table_catalog(query_embedding, limit, min_similarity)
+        return self._search_fallback_table_catalog(query_embedding, limit, min_similarity)
+
+    def _search_pgvector_table_catalog(
+        self,
+        query_embedding: List[float],
+        limit: int,
+        min_similarity: float,
+    ) -> List[Dict[str, Any]]:
+        """Busca tabelas via pgvector (operador de cosseno <=>)."""
+        embedding_str = "[" + ",".join(str(x) for x in query_embedding) + "]"
+
+        sql = text("""
+            SELECT
+                table_name,
+                dominio,
+                descricao,
+                key_fields,
+                1 - (embedding <=> CAST(:query_embedding AS vector)) AS similarity
+            FROM table_catalog_embeddings
+            WHERE embedding IS NOT NULL
+            ORDER BY embedding <=> CAST(:query_embedding AS vector)
+            LIMIT :limit
+        """)
+
+        result = db.session.execute(sql, {
+            "query_embedding": embedding_str,
+            "limit": limit,
+        })
+
+        results = []
+        for row in result.fetchall():
+            similarity = float(row.similarity)
+            if similarity >= min_similarity:
+                results.append({
+                    "table_name": row.table_name,
+                    "dominio": row.dominio,
+                    "descricao": row.descricao,
+                    "key_fields": row.key_fields,
+                    "similarity": round(similarity, 4),
+                })
+        return results[:limit]
+
+    def _search_fallback_table_catalog(
+        self,
+        query_embedding: List[float],
+        limit: int,
+        min_similarity: float,
+    ) -> List[Dict[str, Any]]:
+        """Busca tabelas sem pgvector (cosine em Python — embedding em Text)."""
+        from app.embeddings.models import TableCatalogEmbedding
+
+        docs = TableCatalogEmbedding.query.filter(
+            TableCatalogEmbedding.embedding.isnot(None)
+        ).limit(1000).all()
+
+        scored = []
+        for doc in docs:
+            try:
+                doc_embedding = json.loads(doc.embedding)
+            except (json.JSONDecodeError, TypeError):
+                continue
+            similarity = self._cosine_similarity(query_embedding, doc_embedding)
+            if similarity >= min_similarity:
+                scored.append((doc, similarity))
+
+        scored.sort(key=lambda x: x[1], reverse=True)
+
+        results = []
+        for doc, similarity in scored[:limit]:
+            results.append({
+                "table_name": doc.table_name,
+                "dominio": doc.dominio,
+                "descricao": doc.descricao,
+                "key_fields": doc.key_fields,
+                "similarity": round(similarity, 4),
+            })
         return results
 
     # ================================================================

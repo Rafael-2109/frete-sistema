@@ -14,6 +14,13 @@ atualizado: 2026-06-07
 > schema detalhado — para que ele escreva SQL sobre as tabelas certas sem adivinhar.
 > Faz parte do pacote `2026-06-07-text-to-sql-arquitetura-MASTER` (ler o MASTER antes).
 > Depende de S0 (gerador idempotente).
+>
+> **STATUS: EXECUTADO em 2026-06-07** (worktree `worktree-text-to-sql-S1`; detalhe e
+> evidencia no rastreamento append-only do MASTER). Refinamentos da execucao vs as 4
+> decisoes fechadas: (1) a fusao virou **semantica primaria + append textual** — a RRF
+> inicial DILUIA a semantica (provado por A/B real); (2) freshness = textual fresca +
+> reindex diario por `content_hash` (o gatilho do S0 nao toca banco, premissa revista);
+> (4) modelo dedicado **voyage-4-large** no catalogo (A/B: top-3 coloquial 73%->93%).
 
 ## Indice
 

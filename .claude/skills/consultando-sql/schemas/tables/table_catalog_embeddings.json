@@ -1,0 +1,59 @@
+{
+  "name": "table_catalog_embeddings",
+  "description": "Embedding do CATALOGO DE TABELAS p/ busca semantica por intencao (S1).",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "table_name",
+      "type": "varchar(120)",
+      "nullable": false
+    },
+    {
+      "name": "dominio",
+      "type": "varchar(80)"
+    },
+    {
+      "name": "descricao",
+      "type": "text"
+    },
+    {
+      "name": "key_fields",
+      "type": "text",
+      "description": "CSV dos campos-chave"
+    },
+    {
+      "name": "texto_embedado",
+      "type": "text",
+      "description": "Texto usado p/ gerar embedding",
+      "nullable": false
+    },
+    {
+      "name": "embedding",
+      "type": "vector"
+    },
+    {
+      "name": "model_used",
+      "type": "varchar(50)"
+    },
+    {
+      "name": "content_hash",
+      "type": "varchar(32)",
+      "description": "MD5 do texto_embedado (detecta mudanca)"
+    },
+    {
+      "name": "created_at",
+      "type": "timestamp",
+      "description": "Data de criação"
+    },
+    {
+      "name": "updated_at",
+      "type": "timestamp",
+      "description": "Última atualização"
+    }
+  ],
+  "admin_only": true
+}

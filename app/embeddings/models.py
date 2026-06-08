@@ -661,3 +661,46 @@ class SpedEcdRuleEmbedding(db.Model):
 
     def __repr__(self):
         return f"<SpedEcdRuleEmbedding {self.chunk_id} {self.chunk_type}>"
+
+
+class TableCatalogEmbedding(db.Model):
+    """Embedding do CATALOGO DE TABELAS p/ busca semantica por intencao (S1).
+
+    Uma linha por tabela do catalog.json (nome + dominio + descricao +
+    key_fields embedados). Alimenta a tool buscar_tabelas (camada semantica),
+    FUNDIDA com a busca textual deterministica. Chave natural = table_name
+    (upsert por table_name). Freshness: reindexado no scheduler diario
+    (content_hash detecta mudanca de descricao/key_fields). Ver
+    app/embeddings/indexers/table_catalog_indexer.py + MASTER text-to-sql S1.
+    """
+    __tablename__ = 'table_catalog_embeddings'
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    # Identificacao (chave natural = nome da tabela; 1 linha por tabela)
+    table_name = db.Column(db.String(120), nullable=False, unique=True)
+    dominio = db.Column(db.String(80), nullable=True)
+    descricao = db.Column(db.Text, nullable=True)
+    key_fields = db.Column(db.Text, nullable=True)       # CSV dos campos-chave
+
+    # Embedding
+    texto_embedado = db.Column(db.Text, nullable=False)  # Texto usado p/ gerar embedding
+    embedding = db.Column(EMBEDDING_VECTOR_TYPE, nullable=True)
+    model_used = db.Column(db.String(50), nullable=True)
+    content_hash = db.Column(db.String(32), nullable=True)  # MD5 do texto_embedado (detecta mudanca)
+
+    # Timestamps
+    created_at = db.Column(db.DateTime, default=lambda: agora_utc_naive())
+    updated_at = db.Column(db.DateTime, default=lambda: agora_utc_naive(), onupdate=lambda: agora_utc_naive())
+
+    def __repr__(self):
+        return f'<TableCatalogEmbedding {self.table_name}>'
+
+    def to_dict(self):
+        """Serializa para resposta (sem embedding)."""
+        return {
+            'table_name': self.table_name,
+            'dominio': self.dominio,
+            'descricao': self.descricao,
+            'key_fields': self.key_fields,
+        }

@@ -523,14 +523,16 @@ class SchemaProvider:
         """
         lines = []
         lines.append("=== CATALOGO DE TABELAS DO BANCO ===")
-        lines.append("Formato: tabela | descricao | campos-chave")
+        lines.append("Formato: tabela [dominio] | descricao | campos-chave")
         lines.append("")
 
         for entry in self.catalog.get('tabelas', []):
             name = entry['name']
             desc = entry.get('description', '')
-            keys = ', '.join(entry.get('key_fields', [])[:3])
-            lines.append(f"  {name} | {desc} | [{keys}]")
+            dominio = entry.get('dominio', '')
+            keys = ', '.join(entry.get('key_fields', []))
+            dom_str = f" [{dominio}]" if dominio else ""
+            lines.append(f"  {name}{dom_str} | {desc} | [{keys}]")
 
         # Admin mode: incluir tabelas admin no catalogo visivel ao LLM.
         # Sem isso, o LLM nao sabe que essas tabelas existem e recusa a pergunta.
@@ -539,8 +541,10 @@ class SchemaProvider:
             for entry in self.catalog.get('tabelas_admin', []):
                 name = entry['name']
                 desc = entry.get('description', '')
-                keys = ', '.join(entry.get('key_fields', [])[:3])
-                lines.append(f"  {name} | [ADMIN] {desc} | [{keys}]")
+                dominio = entry.get('dominio', '')
+                keys = ', '.join(entry.get('key_fields', []))
+                dom_str = f" [{dominio}]" if dominio else ""
+                lines.append(f"  {name}{dom_str} | [ADMIN] {desc} | [{keys}]")
                 admin_count += 1
 
         lines.append("")
