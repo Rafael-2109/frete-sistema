@@ -1958,6 +1958,9 @@ class TextToSQLPipeline:
         """
         try:
             tbls = extract_tables_from_sql(sql)
+            # admin_mode=False de proposito: aqui so' lemos `issues` (existencia de
+            # campo no schema), que INDEPENDE de permissao. admin_mode so' afetaria
+            # `skip_haiku`, que nao usamos. Template e' revalidado igual p/ todos.
             det = SQLDeterministicValidator(self.schema_provider).validate(
                 sql, tbls, admin_mode=False
             )
