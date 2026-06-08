@@ -184,6 +184,23 @@ def _session_meets_extraction_threshold(session, msg_threshold: int) -> bool:
     return cost >= POST_SESSION_COST_THRESHOLD
 
 
+def _maybe_trigger_skill_eval(session_id: str, user_id: int) -> None:
+    """Best-effort: enfileira avaliacao de efetividade de skill (Fase 1).
+
+    Nunca propaga excecao — se quebrar, nao afeta pos-processamento web nem Teams.
+    """
+    try:
+        from app.agente.config.feature_flags import AGENT_SKILL_EVAL
+        if not AGENT_SKILL_EVAL:
+            return
+        from app.agente.workers.background_jobs import try_enqueue_skill_effectiveness
+        if not try_enqueue_skill_effectiveness(session_id, user_id):
+            from app.agente.services.skill_effectiveness_service import evaluate_session
+            evaluate_session(session_id=session_id, user_id=user_id)  # app_context ja ativo
+    except Exception as e:
+        logger.warning(f"[POST_SESSION] skill effectiveness (ignorado): {e}")
+
+
 def run_post_session_processing(
     app,
     session,
@@ -441,6 +458,11 @@ def run_post_session_processing(
             )
     except Exception as emb_err:
         logger.debug(f"[POST_SESSION] Embedding turn falhou (ignorado): {emb_err}")
+
+    # =================================================================
+    # Fase 1: Avaliacao de efetividade de skill (best-effort)
+    # =================================================================
+    _maybe_trigger_skill_eval(session_id, user_id)
 
     # Nota: Improvement Dialogue (D8) roda via APScheduler batch (modulo 25, 07:00 e 10:00)
     # + crontab local (11:03 diario, Claude Code CLI com feature-dev).
