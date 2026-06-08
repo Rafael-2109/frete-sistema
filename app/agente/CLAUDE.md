@@ -868,9 +868,11 @@ por-usuario (auto) OU propoe lembrete-todos / ajuste de codigo (via Inbox). **EM
   Vale tambem p/ o D8 (`improvement_suggester`).
 - **Conserta gap pre-existente**: `directive_promotion` criava `directive_status='shadow'` sem
   UI de ativacao; a Inbox e a UNICA via `shadow -> ativa` (aprovar) / `despromovida` (rejeitar).
-- **Teams web-only (DEBITO)**: `build_skill_windows` casa `"Skill:<nome>"`, forma gravada SO na
-  web (`chat.py:866`); Teams grava o bare `"Skill"` (`teams/services.py:1294`) -> zero janelas
-  no Teams (best-effort, sem crash). Cobrir Teams = enriquecer o tool_name la (export critico).
+- **Teams: cobertura LIGADA (debito RESOLVIDO 2026-06-08)**: `build_skill_windows` casa
+  `"Skill:<nome>"`; o Teams agora enriquece o tool_name no loop de streaming via
+  `_enrich_tool_name` (`teams/services.py`, espelha `chat.py:861-870`) -> grava `"Skill:<nome>"`
+  em `tools_used` -> o avaliador encontra janelas no canal Teams. Antes gravava o bare `"Skill"`
+  (zero janelas). Cobertura: `tests/teams/test_enrich_tool_name.py`.
 - **PII**: `_format_window` (input do LLM) e `_window_evidence` (persistido + exibido na inbox)
   aplicam `utils/pii_masker.mask_pii` (CNPJ/CPF/email).
 - **Teste**: a fixture `db` (conftest:50) NAO contem o `commit()` do service -> testes usam

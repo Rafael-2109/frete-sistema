@@ -197,6 +197,35 @@ CORRETO:
 PERGUNTA DO USUÁRIO:
 """
 
+
+def _enrich_tool_name(tool_name: Any, tool_input: Any) -> str:
+    """Enriquece o nome de Skill/Agent com o alvo invocado (espelha o canal
+    web em ``chat.py:861-870``).
+
+    Por que: o avaliador de efetividade de skill (``build_skill_windows`` ->
+    ``_skill_from_tools``) casa ``"Skill:<nome>"`` em ``msg["tools_used"]``. O
+    Teams gravava o bare ``"Skill"`` (sem o nome) -> zero janelas de avaliacao no
+    canal Teams (debito documentado em ``app/agente/CLAUDE.md``). Enriquecer aqui
+    liga o avaliador no Teams sem tocar o canal web.
+
+    Tools comuns (Read, Bash, mcp__*) passam inalteradas.
+    """
+    if not isinstance(tool_name, str):
+        tool_name = str(tool_name)
+    if not isinstance(tool_input, dict):
+        return tool_name
+    if tool_name == 'Skill':
+        skill = (tool_input.get('skill') or '').strip()
+        return f"Skill:{skill}" if skill else tool_name
+    if tool_name == 'Agent':
+        agent_type = (tool_input.get('subagent_type') or '').strip()
+        if agent_type:
+            return f"Agent:{agent_type}"
+        desc = (tool_input.get('description') or '')[:50].strip()
+        return f"Agent:{desc}" if desc else tool_name
+    return tool_name
+
+
 # TTL de sessão do Teams: após N horas de inatividade, cria nova sessão.
 # Fase 2 (2026-04-21): extraido para env var (default 2h). Reduz cache
 # creation em sessoes longas abandonadas e retomadas horas depois.
@@ -1291,13 +1320,19 @@ def _obter_resposta_agente_streaming(
 
                 elif event.type == 'tool_call':
                     # GAP 1: Rastrear tools usadas
-                    tool_name = event.content if isinstance(event.content, str) else str(event.content)
+                    raw_tool_name = event.content if isinstance(event.content, str) else str(event.content)
+                    # F5: enriquecer Skill/Agent com o alvo invocado (espelha o
+                    # canal web em chat.py:861) para o avaliador de efetividade de
+                    # skill encontrar janelas no Teams (build_skill_windows casa
+                    # 'Skill:<nome>'). Tools comuns passam inalteradas.
+                    _tool_input = (event.metadata or {}).get('input') if getattr(event, 'metadata', None) else None
+                    tool_name = _enrich_tool_name(raw_tool_name, _tool_input)
                     if tool_name and tool_name not in tools_used:
                         tools_used.append(tool_name)
 
                     # A1: Status visual durante tool calls (quando texto ainda não gerado)
                     if TEAMS_TOOL_STATUS_FEEDBACK and not full_text:
-                        tool_label = _tool_display_name(tool_name)
+                        tool_label = _tool_display_name(raw_tool_name)
                         _safe_flush(f"_{tool_label}_")
                         tool_status_shown = True
                         logger.debug(
