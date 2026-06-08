@@ -3,6 +3,9 @@
 Zero-DB / mock. O detector é regex puro; o parser Haiku e o orquestrador são
 testados com mock da chamada Anthropic e dos colaboradores do módulo.
 """
+from unittest.mock import patch
+
+import app.agente.sdk.vinculacao_fastpath as fp
 from app.agente.sdk.vinculacao_fastpath import should_intercept_vinculacao as det
 
 
@@ -33,3 +36,52 @@ def test_pergunta_diagnostica_nao_casa():
 
 def test_vazio_nao_casa():
     assert det("") is None and det(None) is None
+
+
+# ───────────────────────── N1: parser Haiku (fallback) ─────────────────────────
+def test_parse_haiku_extrai_json():
+    with patch.object(fp, "_call_haiku",
+                      return_value='{"acao":"vincular","nf":"6935","po":"C2620094"}'):
+        r = fp.parse_vinculacao_haiku("pode vincular a 6935 com o C2620094?")
+    assert r == {"acao": "vincular", "nf": "6935", "po": "C2620094"}
+
+
+def test_parse_haiku_acao_nula_retorna_none():
+    with patch.object(fp, "_call_haiku", return_value='{"acao":null}'):
+        assert fp.parse_vinculacao_haiku("bom dia, tudo certo com a nota?") is None
+
+
+def test_parse_haiku_so_chama_se_keyword_recebimento():
+    # sem keyword (nota/nf/pedido/vincul) nao gasta Haiku
+    with patch.object(fp, "_call_haiku") as mock:
+        assert fp.parse_vinculacao_haiku("qual o estoque de palmito?") is None
+        mock.assert_not_called()
+
+
+# ─────────────────────────── orquestrador (N0->N1) ───────────────────────────
+def test_orquestrador_caminho_feliz():
+    with patch.object(fp, "should_intercept_vinculacao",
+                      return_value={"acao": "vincular", "nf": "6935", "po": "C2620094"}), \
+         patch.object(fp, "executar_vinculacao_por_nf",
+                      return_value={"ok": True, "status": "consolidado", "nf": "6935",
+                                    "po": "C2620094", "resumo": {"cenario": "exact_1po"}}):
+        r = fp.executar_vinculacao_fastpath("vincular pedido C2620094 na nota 6935",
+                                            session_id="s", user_id=69)
+    assert r["ok"] is True and "6935" in r["resposta"] and "C2620094" in r["resposta"]
+
+
+def test_orquestrador_anomalia_cai_no_llm():
+    with patch.object(fp, "should_intercept_vinculacao",
+                      return_value={"acao": "vincular", "nf": "1", "po": "C1"}), \
+         patch.object(fp, "executar_vinculacao_por_nf",
+                      return_value={"ok": False, "anomalia": {"tipo": "status_nao_aprovado"}}):
+        r = fp.executar_vinculacao_fastpath("vincular pedido C1 na nota 1",
+                                            session_id="s", user_id=69)
+    assert r["ok"] is False  # caller cai no gestor-recebimento (N2)
+
+
+def test_orquestrador_sem_match_e_sem_haiku_retorna_none():
+    with patch.object(fp, "should_intercept_vinculacao", return_value=None), \
+         patch.object(fp, "parse_vinculacao_haiku", return_value=None):
+        r = fp.executar_vinculacao_fastpath("bom dia", session_id="s", user_id=69)
+    assert r is None  # nada a interceptar -> fluxo LLM normal
