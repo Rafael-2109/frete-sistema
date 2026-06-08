@@ -148,6 +148,35 @@ def test_stage2_invalid_branch_falls_to_nada(monkeypatch):
     assert svc.stage2_sonnet(_win(["x"]))["ramo"] == "nada"
 
 
+def test_format_window_masks_pii():
+    """PII (CNPJ/email) deve ser mascarada antes de ir ao LLM (spec edge-case)."""
+    import app.agente.services.skill_effectiveness_service as svc
+    w = svc.SkillWindow(
+        skill_name="cotando-frete", anchor_msg_id="a0",
+        msg_anterior={"role": "user", "content": "cliente 12.345.678/0001-90 quer frete"},
+        resposta_invocacao={"role": "assistant", "content": "ok"},
+        proximas_user=[{"role": "user", "content": "email joao@cliente.com.br"}],
+        proximas_assistant=[], janela_fechada=True,
+    )
+    out = svc._format_window(w)
+    assert "12.345.678" not in out            # raiz do CNPJ mascarada
+    assert "joao@cliente.com.br" not in out   # email mascarado
+    assert "0001-90" in out                   # mask conservador preserva filial/DV
+
+
+def test_window_evidence_masks_pii():
+    """evidencia_json persistida (exibida na inbox) tambem deve mascarar PII."""
+    import app.agente.services.skill_effectiveness_service as svc
+    w = svc.SkillWindow(
+        skill_name="cotando-frete", anchor_msg_id="a0",
+        msg_anterior={"role": "user", "content": "CNPJ 12.345.678/0001-90"},
+        resposta_invocacao={"role": "assistant", "content": "ok"},
+        proximas_user=[], proximas_assistant=[], janela_fechada=True,
+    )
+    ev = svc._window_evidence(w)
+    assert "12.345.678" not in ev["anterior"]["content"]
+
+
 # ---------------------------------------------------------------------------
 # Task 6: Aplicacao dos ramos
 # ---------------------------------------------------------------------------

@@ -180,7 +180,9 @@ def _call_anthropic(model: str, system: str, user: str, max_tokens: int = 600) -
 
 
 def _format_window(window: SkillWindow, skill_description: str = "") -> str:
-    def _fmt(m): return f"[{m.get('role')}] {str(m.get('content') or '')[:1500]}"
+    # PII masking antes de enviar ao LLM (CNPJ/CPF/email) — spec edge-case.
+    from app.agente.utils.pii_masker import mask_pii
+    def _fmt(m): return f"[{m.get('role')}] {mask_pii(str(m.get('content') or ''))[:1500]}"
     parts = [f"SKILL: {window.skill_name}"]
     if skill_description:
         parts.append(f"DESCRICAO DA SKILL: {skill_description[:500]}")
@@ -352,7 +354,9 @@ def apply_decision(decision: Dict[str, Any], window: SkillWindow,
 # Task 7: evaluate_session — orquestracao + idempotencia
 # ---------------------------------------------------------------------------
 def _window_evidence(w: SkillWindow) -> Dict[str, Any]:
-    def _c(m): return {"role": m.get("role"), "content": str(m.get("content") or "")[:500]}
+    # PII masking antes de persistir (evidencia_json e exibida na inbox admin) — spec edge-case.
+    from app.agente.utils.pii_masker import mask_pii
+    def _c(m): return {"role": m.get("role"), "content": mask_pii(str(m.get("content") or ""))[:500]}
     return {
         "skill": w.skill_name,
         "anterior": _c(w.msg_anterior) if w.msg_anterior else None,
