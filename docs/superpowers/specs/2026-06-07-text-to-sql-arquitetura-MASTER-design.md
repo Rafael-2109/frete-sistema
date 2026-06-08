@@ -269,11 +269,17 @@ valida o gate antes de fechar.
 - [ ] **S3-B**: remover o Generator (tool exige `sql=`; NL retorna erro pedindo SQL) APOS a
       auditoria `entry_kind` provar NL→~0 em PROD; aposentar a flag `SQL_AGENT_SQL_FIRST`.
 
-**Gate GLOBAL — pacote completo**
-- [ ] Ordem respeitada: S0 e S1 concluidos antes de S3; S2 entregue.
-- [ ] As 7 invariantes inegociaveis verificadas (nenhuma regressao).
-- [ ] Rastreamento append-only atualizado por cada sessao.
-- [ ] Suite pytest do pipeline SQL inteira verde (zero regressao).
+**Gate GLOBAL — pacote completo** — 🟡 S3-A entregue; package FECHA com S3-B
+- [x] Ordem respeitada: S0 e S1 concluidos (PROD) antes de S3; S2 entregue (PROD).
+- [x] As 7 invariantes inegociaveis verificadas (nenhuma regressao) — S3-A 2026-06-08:
+      (1) permissao!=geracao `TestPermissionVsGeneration`; (2) sem Haiku as cegas (guard-rail
+      deterministico, NAO Evaluator cego); (3) determinismo gerador `--check` 0 drift (329);
+      (4)/(5) S0/S2 intocados; (6) so pytest deterministico; (7) sem DDL em S3-A.
+- [x] Rastreamento append-only atualizado (correcao S1->PROD + linha S3-A).
+- [x] Suite pytest do pipeline SQL verde (zero regressao): 246 SQL/S3/consultando_sql/tools
+      + 263 sdk + 10 Teams + 99 embeddings + 9 capability.
+- [ ] **Falta S3-B p/ fechar o package**: remover o Generator apos a auditoria `entry_kind`
+      (`[SQL_AUDIT]` nos logs PROD) provar NL->~0; aposentar `SQL_AGENT_SQL_FIRST`.
 
 ## Sub-planos
 

@@ -309,6 +309,20 @@ class TestEntryKindAudit:
         assert res["etapas"].get("entry_kind") == "nl"
 
 
+class TestEntryKindLoggedForAudit:
+    """G5/decisao #1: o entry_kind tem de ser COLETAVEL em PROD (log agregavel),
+    nao so' no dict de retorno — e' o dado que decide se o Generator pode sair (S3-B)."""
+
+    def test_entry_kind_emitido_em_log(self, pipeline, monkeypatch, caplog):
+        import logging as _logging
+        monkeypatch.setattr(pipeline.generator, "generate", _boom_generator)
+        monkeypatch.setattr(pipeline.executor, "execute", lambda sql, read_write=False: ([], []))
+        with caplog.at_level(_logging.INFO, logger="text_to_sql"):
+            pipeline.run("x", sql_literal="SELECT cod_produto FROM carteira_principal")
+        msgs = " ".join(r.getMessage() for r in caplog.records)
+        assert "entry_kind=sql_explicit" in msgs
+
+
 # =====================================================================
 # G6 — SQL-first default 'on' no codigo (decisao #5; pos-S1)
 # =====================================================================

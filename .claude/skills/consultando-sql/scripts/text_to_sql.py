@@ -2058,6 +2058,12 @@ class TextToSQLPipeline:
                     # SHADOW: so' observa (cai no fluxo normal — Generator)
                     self._log_sql_first_shadow(sql_first_literal, admin_mode, result)
             result["etapas"]["entry_kind"] = entry_kind
+            # Auditoria coletavel em PROD (decisao #1: medir NL-vs-SQL ANTES de
+            # remover o Generator em S3-B). Linha parseavel nos logs do Render.
+            logger.info(
+                "[SQL_AUDIT] entry_kind=%s admin=%s sql_first_mode=%s",
+                entry_kind, admin_mode, sql_first_mode,
+            )
 
             # =====================================================
             # ETAPA 0: TEMPLATE RETRIEVAL — Buscar queries similares
