@@ -52,6 +52,7 @@ from app.recebimento.models import ( # noqa: E402
 from app.recebimento.services.depara_service import DeparaService # noqa: E402
 from app.recebimento.services.validacao_nf_po_service import ValidacaoNfPoService # noqa: E402
 from app.recebimento.services.odoo_po_service import OdooPoService # noqa: E402
+from app.recebimento.services.vinculacao_rapida_service import montar_pos_para_consolidar # noqa: E402
 from sqlalchemy import or_, case, func # noqa: E402
 from app.utils.timezone import agora_utc_naive # noqa: E402
 
@@ -1312,46 +1313,15 @@ def consolidar_pos(validacao_id):
                 'requer_revalidacao': True
             }), 409
 
-        # Buscar matches para montar lista de POs
-        matches = db.session.query(MatchNfPoItem).filter_by(
-            validacao_id=validacao_id,
-            status_match='match'
-        ).all()
+        # Montagem de POs (DRY — compartilhada com o fast-path determinístico,
+        # vinculacao_rapida_service.montar_pos_para_consolidar)
+        pos_para_consolidar = montar_pos_para_consolidar(validacao_id)
 
-        if not matches:
+        if not pos_para_consolidar:
             return jsonify({
                 'sucesso': False,
                 'erro': 'Nenhum match encontrado para consolidar'
             }), 400
-
-        # Agrupar por PO
-        pos_dict = {}
-        for m in matches:
-            if not m.odoo_po_id:
-                continue
-
-            if m.odoo_po_id not in pos_dict:
-                pos_dict[m.odoo_po_id] = {
-                    'po_id': m.odoo_po_id,
-                    'po_name': m.odoo_po_name,
-                    'linhas': [],
-                    'valor_total': 0
-                }
-
-            pos_dict[m.odoo_po_id]['linhas'].append({
-                'po_line_id': m.odoo_po_line_id,
-                'qtd_nf': m.qtd_nf,
-                'qtd_po': m.qtd_po,
-                'preco': m.preco_nf
-            })
-            pos_dict[m.odoo_po_id]['valor_total'] += (m.qtd_nf or 0) * (m.preco_nf or 0)
-
-        # Ordenar por valor (maior primeiro)
-        pos_para_consolidar = sorted(
-            pos_dict.values(),
-            key=lambda x: x['valor_total'],
-            reverse=True
-        )
 
         # Extrair quantidades customizadas (Fase 4 - edicao de qtd)
         quantidades_customizadas = data.get('quantidades')
