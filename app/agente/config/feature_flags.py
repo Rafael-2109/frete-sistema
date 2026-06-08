@@ -1070,6 +1070,21 @@ AGENT_DIRECTIVE_MIN_QUALITY = float(os.getenv("AGENT_DIRECTIVE_MIN_QUALITY", "0.
 _SQL_FIRST_VALID = {"off", "shadow", "admin", "on"}
 
 
+# ====================================================================
+# Aprendizado por efetividade de skill (Fase 1)
+# ====================================================================
+# Liga o gatilho + job de avaliacao pos-sessao. Default OFF (1 ciclo de smoke antes).
+AGENT_SKILL_EVAL = os.getenv("AGENT_SKILL_EVAL", "false").lower() == "true"
+# Permite escalonar ao Sonnet (estagio 2). Se OFF, para no Haiku (modo observacao).
+AGENT_SKILL_EVAL_SONNET = os.getenv("AGENT_SKILL_EVAL_SONNET", "true").lower() == "true"
+# Ramo lembrete_usuario aplica auto. Se OFF, vira shadow (vai p/ inbox tambem).
+AGENT_SKILL_EVAL_APPLY_USER = os.getenv("AGENT_SKILL_EVAL_APPLY_USER", "true").lower() == "true"
+# Limiar de confidence (0-1) do Sonnet p/ auto-aplicar lembrete_usuario.
+AGENT_SKILL_EVAL_CONF_MIN = float(os.getenv("AGENT_SKILL_EVAL_CONF_MIN", "0.7"))
+# Cap de escalonamentos a Sonnet por sessao (anti-explosao de custo).
+AGENT_SKILL_EVAL_MAX_SONNET = int(os.getenv("AGENT_SKILL_EVAL_MAX_SONNET", "3"))
+
+
 def resolve_sql_first_mode(is_admin: bool) -> str:
     """Resolve o modo SQL-first EFETIVO para este request (Fix B canary).
 

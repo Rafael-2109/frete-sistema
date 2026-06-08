@@ -39,3 +39,4 @@ atualizado: 2026-06-03
 - [consultando-venda-loja (design)](2026-06-02-skill-consultando-venda-loja-design.md) — skill READ de vendas Lojas HORA (Onda F)
 - [carregando-motos-assai (design)](2026-06-02-skill-carregando-motos-assai-design.md) — skill READ+WRITE de carregamento Motos Assai (Onda F)
 - [Text-to-SQL — Arquitetura (MASTER)](2026-06-07-text-to-sql-arquitetura-MASTER-design.md) — achados completos do pipeline SQL do agente + decomposicao em 4 subsistemas S0-S3 (sub-planos em plans/); tese: Opus autor unico, permissao≠geracao
+- [Aprendizado automatico por efetividade (skills + scripts ad-hoc)](2026-06-07-aprendizado-efetividade-skills-design.md) — avalia no fim da sessao se a skill resolveu (funil estagio0->Haiku->Sonnet); ramos lembrete-usuario (auto) / lembrete-todos + codigo (inbox unificada); conserta directive_promotion shadow sem UI; Fase 2 = scripts ad-hoc via cluster semantico
