@@ -273,8 +273,8 @@
                     </p>
                     {% endif %}
                     {# I2: alerta de divergencia entre valor_total e a soma dos CTes ativos #}
-                    {% set _soma_ops = operacoes|selectattr('cte_valor')|rejectattr('status', 'equalto', 'CANCELADO')|map(attribute='cte_valor')|sum %}
-                    {% set _soma_comp = ctes_complementares|selectattr('cte_valor')|rejectattr('status', 'equalto', 'CANCELADO')|map(attribute='cte_valor')|sum %}
+                    {% set _soma_ops = operacoes|selectattr('cte_valor')|rejectattr('status', 'equalto', 'CANCELADO')|map(attribute='cte_valor')|sum|float %}
+                    {% set _soma_comp = ctes_complementares|selectattr('cte_valor')|rejectattr('status', 'equalto', 'CANCELADO')|map(attribute='cte_valor')|sum|float %}
                     {% if (fatura.valor_total|float - (_soma_ops + _soma_comp))|abs > 1.0 %}
                     <div class="alert alert-warning py-1 px-2 small mt-2 mb-0" role="alert">
                         <i class="fas fa-triangle-exclamation"></i>
