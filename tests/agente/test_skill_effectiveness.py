@@ -242,3 +242,38 @@ def test_evaluate_session_skips_open_window(db, monkeypatch):
     AgentSession.query.filter_by(session_id=sid).delete()
     db.session.commit()
     assert n == 0
+
+
+# ── Task 10: Injecao cirurgica do lembrete ──────────────────────────────────
+
+def test_get_skill_reminders_only_active(db, monkeypatch):
+    import uuid as _uid
+    monkeypatch.setattr("app.agente.config.feature_flags.AGENT_SKILL_EVAL", True, raising=False)
+    from app.agente.models import AgentMemory
+    from app.agente.sdk.memory_injection import (
+        get_skill_reminders_for_session, invalidate_skill_reminders_cache)
+    # Use unique session to avoid cache collision with other tests
+    sess_id = f"sess-rem-{_uid.uuid4().hex[:8]}"
+    _paths = [
+        "/memories/lembretes_skill/cotando-frete-t10.xml",
+        "/memories/lembretes_skill/outra-t10.xml",
+    ]
+    # Cleanup qualquer resto de run anterior
+    AgentMemory.query.filter(
+        AgentMemory.user_id == 1,
+        AgentMemory.path.in_(_paths),
+    ).delete(synchronize_session=False)
+    db.session.commit()
+    AgentMemory.create_file(1, _paths[0], "<x>ativo</x>")
+    shadow = AgentMemory.create_file(1, _paths[1], "<x>shadow</x>")
+    shadow.directive_status = "shadow"
+    db.session.commit()
+    invalidate_skill_reminders_cache()
+    rem = get_skill_reminders_for_session(1, sess_id)
+    # Cleanup
+    AgentMemory.query.filter(
+        AgentMemory.user_id == 1,
+        AgentMemory.path.in_(_paths),
+    ).delete(synchronize_session=False)
+    db.session.commit()
+    assert "cotando-frete-t10" in rem and "outra-t10" not in rem  # shadow nao injeta

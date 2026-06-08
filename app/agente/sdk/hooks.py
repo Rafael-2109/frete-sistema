@@ -158,6 +158,26 @@ def build_hooks(
                 "Campos comuns errados: qtd_saldo vs qtd_saldo_produto_pedido, "
                 "codigo_produto vs cod_produto."
             )
+        elif tool_name == 'Skill':
+            # Task 10 (Fase 1 Skill Effectiveness): injetar lembrete aprendido para a skill.
+            # Best-effort: NUNCA quebra a tool. Flag-gated por AGENT_SKILL_EVAL.
+            try:
+                from ..config.feature_flags import AGENT_SKILL_EVAL
+                if AGENT_SKILL_EVAL:
+                    tinput = hook_input.get('tool_input', {})
+                    skill = tinput.get('skill', '') if isinstance(tinput, dict) else ''
+                    if skill:
+                        from ..config.permissions import get_current_session_id
+                        from .memory_injection import get_skill_reminders_for_session
+                        sid = get_current_session_id() or ''
+                        rem = get_skill_reminders_for_session(user_id, sid).get(skill)
+                        if rem:
+                            additional = (
+                                f"LEMBRETE para a skill '{skill}' (aprendido de interacoes "
+                                f"anteriores deste usuario):\n{rem}"
+                            )
+            except Exception as e:
+                logger.debug(f"[SKILL_EVAL] inject reminder falhou (ignorado): {e}")
 
         # B3: Pre-mortem seletivo para acoes irreversiveis
         # Dynamis/energeia: antes de atualizar (energeia), mapear modos de falha (dynamis)

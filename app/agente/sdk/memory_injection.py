@@ -1405,3 +1405,82 @@ def _load_user_memories_for_context(user_id: int, prompt: str = None, model_name
     except Exception as e:
         logger.warning(f"[MEMORY_INJECT] Erro ao carregar memórias (ignorado): {e}")
         return None, []
+
+
+# ======================================================================
+# Task 10 (Fase 1 Skill Effectiveness): Cache de lembretes de skill
+# ======================================================================
+# Lembretes ativos do usuario: AgentMemory com path LIKE '/memories/lembretes_skill/%'
+# e directive_status NULL ou 'ativa' (shadow NAO injeta — mesmo criterio de Tier 0c).
+# Cache por session_id, TTL 30min, cap 500 entradas (anti-leak).
+# Invalidado por invalidate_skill_reminders_cache() que e chamado por
+# _invalidate_caches() em skill_effectiveness_service.apply_decision.
+
+_SKILL_REMINDERS_CACHE: dict = {}           # {session_id: ({skill: conteudo}, timestamp)}
+_SKILL_REMINDERS_TTL = 1800                 # 30 minutos
+_SKILL_REMINDERS_LOCK = threading.Lock()
+
+
+def invalidate_skill_reminders_cache() -> None:
+    """Limpa cache de lembretes de skill (chamado apos criar/atualizar lembrete)."""
+    with _SKILL_REMINDERS_LOCK:
+        _SKILL_REMINDERS_CACHE.clear()
+    logger.debug("[memory_injection] skill reminders cache cleared")
+
+
+def get_skill_reminders_for_session(user_id: int, session_id: str) -> dict:
+    """{skill_name: conteudo} dos lembretes ATIVOS (directive_status NULL/'ativa') do usuario.
+
+    Cache por session_id (TTL 30min). Flag-gated por AGENT_SKILL_EVAL.
+    Shadow NAO injeta (mesmo criterio do Tier 0c operational_directives).
+    """
+    import time as _t
+    try:
+        from ..config.feature_flags import AGENT_SKILL_EVAL
+        if not AGENT_SKILL_EVAL:
+            return {}
+    except Exception:
+        return {}
+
+    now = _t.time()
+    with _SKILL_REMINDERS_LOCK:
+        hit = _SKILL_REMINDERS_CACHE.get(session_id)
+        if hit and (now - hit[1]) < _SKILL_REMINDERS_TTL:
+            return hit[0]
+
+    out: dict = {}
+    try:
+        from contextlib import nullcontext
+        try:
+            from flask import current_app as _app_probe
+            _ = _app_probe.name
+            _ctx = nullcontext()
+        except RuntimeError:
+            from app import create_app as _ca
+            _ctx = _ca().app_context()
+
+        with _ctx:
+            from app import db
+            from ..models import AgentMemory
+            rows = AgentMemory.query.filter(
+                AgentMemory.user_id == user_id,
+                AgentMemory.path.like('/memories/lembretes_skill/%'),
+                db.or_(
+                    AgentMemory.directive_status.is_(None),
+                    AgentMemory.directive_status == 'ativa',
+                ),
+            ).all()
+            for m in rows:
+                skill = m.path.rsplit('/', 1)[-1].replace('.xml', '')
+                if skill:
+                    out[skill] = m.content or ""
+    except Exception as e:
+        logger.debug(f"[SKILL_EVAL] skill reminders load falhou (ignorado): {e}")
+
+    with _SKILL_REMINDERS_LOCK:
+        # Cap: evitar leak se muitas sessoes nao sao limpas
+        if len(_SKILL_REMINDERS_CACHE) > 500:
+            _SKILL_REMINDERS_CACHE.clear()
+        _SKILL_REMINDERS_CACHE[session_id] = (out, now)
+
+    return out
