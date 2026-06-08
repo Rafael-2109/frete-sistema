@@ -409,6 +409,65 @@ def api_chat():
                 },
             )
 
+        # FASE 3 fast-path (plano 2026-06-08): vincular/desvincular pedido X na
+        # nota Y (Gabriella) resolvido por roteamento DETERMINISTICO (regex N0 +
+        # Haiku N1) reusando as funcoes de recebimento, SEM subagente. ANTES do
+        # baseline. Anomalia (status!=aprovado/PO diverge/NF ambigua) ou None cai
+        # no baseline/LLM abaixo (N2). Espelha a mecanica do baseline fast-path.
+        try:
+            from app.agente.config.feature_flags import AGENT_VINCULACAO_FASTPATH
+            if AGENT_VINCULACAO_FASTPATH and message:
+                from app.agente.sdk.vinculacao_fastpath import executar_vinculacao_fastpath
+                _vinc = executar_vinculacao_fastpath(message, session_id=session_id, user_id=user_id)
+                if _vinc and _vinc.get("ok"):
+                    from app.agente.routes._helpers import _sse_event as _sse_event_local
+                    _vinc_text = _vinc["resposta"]
+
+                    def _vinc_fastpath_stream():
+                        try:
+                            yield _sse_event_local('start', {'session_id': session_id})
+                            yield _sse_event_local('text', {
+                                'content': _vinc_text, 'session_id': session_id,
+                            })
+                            yield _sse_event_local('done', {
+                                'session_id': session_id,
+                                'total_cost_usd': 0.0,
+                                'input_tokens': 0, 'output_tokens': 0,
+                                'via_vinculacao_fastpath': True,
+                            })
+                            # Persiste so se a sessao ja existe (espelha baseline fast-path).
+                            try:
+                                from app.agente.models import AgentSession as _AS
+                                from app import db as _db
+                                _sess = _AS.query.filter_by(session_id=session_id).first()
+                                if _sess:
+                                    _sess.add_user_message(message)
+                                    _sess.add_assistant_message(
+                                        content=_vinc_text,
+                                        input_tokens=0, output_tokens=0, tools_used=None,
+                                    )
+                                    _db.session.commit()
+                            except Exception as _persist_err:
+                                logger.warning(
+                                    f"[AGENTE] vinculacao fast-path persist falhou: {_persist_err}"
+                                )
+                        finally:
+                            # Fix Sentry PYTHON-FLASK-KP: gunicorn rejeita yield None.
+                            yield ''
+
+                    logger.info(f"[AGENTE] vinculacao fast-path (sem subagente) user={user_id}")
+                    return Response(
+                        stream_with_context(_vinc_fastpath_stream()),
+                        mimetype='text/event-stream',
+                        headers={
+                            'Cache-Control': 'no-cache',
+                            'X-Accel-Buffering': 'no',
+                            'Connection': 'keep-alive',
+                        },
+                    )
+        except Exception as _ve:
+            logger.warning(f"[AGENTE] fast-path vinculacao ignorado (-> LLM): {_ve}")
+
         # FASE 1 fast-path (plano docs/superpowers/plans/2026-06-06-reducao-custo-
         # agente-fast-path): "atualizar baseline" trivial e resolvido SEM LLM.
         # Roda o determinismo na VIEW (como o repeat short-circuit acima roda

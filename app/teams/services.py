@@ -441,6 +441,26 @@ def processar_mensagem_bot(
             pass
 
     try:
+        # FASE 3 fast-path (plano 2026-06-08): vincular/desvincular pedido X na
+        # nota Y (Gabriella) resolvido por roteamento DETERMINISTICO (regex N0 +
+        # Haiku N1) reusando validar_dfe/consolidar_pos/reverter_consolidacao,
+        # SEM o subagente gestor-recebimento (Opus xhigh). ANTES do baseline.
+        # Anomalia (status!=aprovado, PO diverge, NF ambigua) ou None -> baseline/
+        # LLM abaixo (N2). Ver R-EXEC-6 e sdk/vinculacao_fastpath.py.
+        _vinc_resposta = None
+        try:
+            from app.agente.config.feature_flags import AGENT_VINCULACAO_FASTPATH
+            from app.agente.sdk.vinculacao_fastpath import executar_vinculacao_fastpath
+            if AGENT_VINCULACAO_FASTPATH:
+                _vinc = executar_vinculacao_fastpath(
+                    mensagem, session_id=teams_session_id, user_id=teams_user_id,
+                )
+                if _vinc and _vinc.get("ok"):
+                    _vinc_resposta = _vinc["resposta"]
+                    logger.info(f"[TEAMS-BOT] vinculacao fast-path (sem subagente) user={teams_user_id}")
+        except Exception as _ve:
+            logger.warning(f"[TEAMS-BOT] fast-path vinculacao ignorado (-> LLM): {_ve}")
+
         # FASE 1 fast-path (plano docs/superpowers/plans/2026-06-06-reducao-custo-
         # agente-fast-path): "atualizar baseline" trivial e resolvido DETERMINISTI-
         # CAMENTE, sem LLM. SO o caminho feliz e interceptado; qualquer variacao
@@ -464,7 +484,14 @@ def processar_mensagem_bot(
         except Exception as _fp_err:
             logger.warning(f"[TEAMS-BOT] fast-path baseline ignorado (-> LLM): {_fp_err}")
 
-        if _fp_resposta is not None:
+        if _vinc_resposta is not None:
+            # FASE 3: pula o LLM E o subagente; REUSA a persistencia/cleanup abaixo
+            # (StreamResult sintetico: 0 tokens, mantem o sdk_session_id atual).
+            selected_model = 'fastpath-vinculacao'
+            _sync_result = _error_stream_result(
+                resposta_texto=_vinc_resposta, sdk_session_id=sdk_session_id,
+            )
+        elif _fp_resposta is not None:
             # Pula o LLM e REUSA a persistencia/post-session/cleanup abaixo
             # (StreamResult sintetico: 0 tokens, mantem o sdk_session_id atual).
             selected_model = 'fastpath-baseline'

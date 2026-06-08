@@ -374,6 +374,17 @@ AGENT_BASELINE_FASTPATH = os.getenv(
     "AGENT_BASELINE_FASTPATH", "true"
 ).lower() == "true"
 
+# FASE 3 do mesmo plano (2026-06-08): "vincular/desvincular pedido X na nota Y"
+# (Gabriella, Teams) resolvido por roteamento DETERMINISTICO (regex N0 + Haiku N1)
+# reusando validar_dfe/consolidar_pos/reverter_consolidacao — SEM o subagente
+# gestor-recebimento (Opus xhigh). Anomalia (status!=aprovado, PO diverge, NF
+# ambigua) ou falha cai no fluxo LLM normal (N2). Impl: app/agente/sdk/
+# vinculacao_fastpath.py + app/recebimento/services/vinculacao_rapida_service.py.
+# Rollback total: AGENT_VINCULACAO_FASTPATH=false.
+AGENT_VINCULACAO_FASTPATH = os.getenv(
+    "AGENT_VINCULACAO_FASTPATH", "true"
+).lower() == "true"
+
 # ====================================================================
 # Session Lifecycle (Fase 2, 2026-04-21)
 # ====================================================================
