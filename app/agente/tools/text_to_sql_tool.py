@@ -22,7 +22,7 @@ import json
 import logging
 import threading
 from contextvars import ContextVar
-from typing import Annotated, Any
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -138,6 +138,24 @@ def _get_pipeline():
     return _get_pipeline._instance
 
 
+def _resolve_tool_input(args: dict) -> tuple:
+    """Contrato S3 da tool: `sql=` (literal) tem precedencia sobre `pergunta=` (NL).
+
+    O agente (Opus) e' o autor do SQL: quando manda `sql=`, executamos LITERAL (sem
+    a heuristica fragil looks_like_raw_sql — mata F5). So' quando NAO ha SQL e' que
+    a entrada e' tratada como linguagem natural (fallback Generator, em deprecacao).
+
+    Returns:
+        (pergunta, sql_literal). sql_literal=None quando a entrada e' NL.
+    """
+    sql = (args.get("sql") or "").strip()
+    pergunta = (args.get("pergunta") or "").strip()
+    if sql:
+        # pergunta=sql preserva logs/telemetria coerentes; sql_literal aciona o caminho literal
+        return (sql, sql)
+    return (pergunta, None)
+
+
 def _execute_in_app_context(
     pipeline,
     pergunta: str,
@@ -147,6 +165,7 @@ def _execute_in_app_context(
     admin_mode: bool = False,
     session_id: str = None,
     sql_first_mode: str = "off",
+    sql_literal: str = None,
 ) -> dict:
     """
     Executa pipeline garantindo Flask app context.
@@ -174,6 +193,7 @@ def _execute_in_app_context(
         'admin_mode': admin_mode,
         'session_id': session_id,
         'sql_first_mode': sql_first_mode,
+        'sql_literal': sql_literal,
     }
     try:
         from flask import current_app
@@ -384,28 +404,58 @@ SQL_OUTPUT_SCHEMA: dict[str, Any] = {
 # (Task 4 — Fix B). A clausula SQL-FIRST e' factual ("quando habilitado") para
 # nao induzir o agente a despejar CTE complexa enquanto o canary esta OFF.
 CONSULTAR_SQL_DESCRIPTION = (
-    "Converte uma pergunta em linguagem natural para SQL PostgreSQL e executa "
-    "no banco de dados do sistema de frete. Retorna dados formatados em tabela "
-    "e dados estruturados (columns, rows, row_count) para processamento programático. "
-    "Use para consultas analíticas: rankings, agregações, distribuições, "
-    "comparações, totais por período, etc. "
-    "Exemplos: 'Top 10 clientes por valor', 'Pedidos pendentes por estado', "
-    "'Valor médio de frete por transportadora'. "
-    "MODO LEITURA (default): aceita SELECT, validado em 3 camadas de segurança "
-    "(keywords destrutivas, tabelas bloqueadas, transação SET READ ONLY). "
-    "MODO ADMIN: quando o prompt contém <sql_admin_context>, esta MESMA tool "
-    "também aceita INSERT, UPDATE e DELETE diretamente (a 'pergunta' pode ser "
-    "o próprio comando SQL). NESTE MODO, NÃO use Bash+Python+SQLAlchemy para "
-    "modificar dados — chame consultar_sql direto. SEMPRE mostre o SQL gerado "
-    "ao usuário e obtenha confirmação ANTES de executar operações de escrita. "
-    "SQL-FIRST: para consultas complexas (CTE, múltiplos JOINs), descubra os campos "
-    "reais com mcp__schema e escreva o SQL correto; quando o modo SQL-first está "
-    "habilitado, a tool executa o SQL LITERAL (sem reescrever) e, se um campo não "
+    "Executa SQL PostgreSQL no banco do sistema de frete e retorna dados em tabela "
+    "+ estruturados (columns, rows, row_count). Use para consultas analíticas: "
+    "rankings, agregações, distribuições, comparações, totais por período. "
+    "SQL-FIRST (preferido): VOCÊ é o autor do SQL. Descubra a tabela com "
+    "mcp__buscar_tabelas (intenção→tabela) e os campos com mcp__schema, depois passe "
+    "o SQL pronto em 'sql='. A tool executa LITERAL (sem reescrever); se um campo não "
     "existir, devolve os campos REAIS da tabela para você corrigir e chamar de novo. "
-    "FIDELIDADE: apresente valores EXATOS do resultado — não arredonde, não invente dados, "
-    "não adicione métricas não solicitadas. Se resultado vazio, informe claramente. "
-    "Se campo 'aviso' presente, mencione que houve correção automática."
+    "FALLBACK: 'pergunta=' (linguagem natural) só quando não souber escrever o SQL. "
+    "MODO LEITURA (default): apenas SELECT, validado em 3 camadas (keywords "
+    "destrutivas, tabelas bloqueadas, transação SET READ ONLY). "
+    "MODO ADMIN (<sql_admin_context> no prompt): a MESMA tool também aceita INSERT/"
+    "UPDATE/DELETE em 'sql='. NÃO use Bash+SQLAlchemy para modificar dados — chame "
+    "consultar_sql. SEMPRE mostre o SQL e obtenha confirmação ANTES de escrever. "
+    "A diferença admin↔comum é só de PERMISSÃO (DML/tabelas), nunca da forma de gerar SQL. "
+    "FIDELIDADE: valores EXATOS — não arredonde, não invente, não adicione métricas. "
+    "Resultado vazio: informe. Campo 'aviso' presente: mencione a correção."
 )
+
+
+# =====================================================================
+# INPUT SCHEMA DA TOOL (constante testavel — contrato sql=/pergunta=)
+# =====================================================================
+# JSON-schema COMPLETO (nao dict-simples) de proposito: o wrapper @enhanced_tool
+# marca TODO param de dict-simples como `required`. Aqui o contrato e' "UM ou
+# outro" (sql= literal OU pergunta= NL), entao `required` fica VAZIO e a propria
+# tool valida que ao menos um veio preenchido (`_resolve_tool_input` + guard de vazio).
+CONSULTAR_SQL_INPUT_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "pergunta": {
+            "type": "string",
+            "description": (
+                "Pergunta em linguagem natural sobre dados do sistema de frete. "
+                "Use APENAS quando NAO souber escrever o SQL (fallback). "
+                "Prefira o parametro 'sql' (voce ja' sabe SQL). "
+                "Exemplos: 'Top 10 clientes por valor de frete em marco', "
+                "'Pedidos pendentes por estado'."
+            ),
+        },
+        "sql": {
+            "type": "string",
+            "description": (
+                "PREFERIDO: SQL PostgreSQL pronto que voce escreveu (SELECT, ou "
+                "INSERT/UPDATE/DELETE em MODO ADMIN). Descubra os campos reais antes "
+                "via mcp__buscar_tabelas (intencao->tabela) e mcp__schema (campos da "
+                "tabela). Executado LITERAL (sem reescrita); se um campo nao existir, "
+                "a tool devolve os campos REAIS para voce corrigir e chamar de novo."
+            ),
+        },
+    },
+    "required": [],
+}
 
 
 # =====================================================================
@@ -419,18 +469,7 @@ try:
     @enhanced_tool(
         "consultar_sql",
         CONSULTAR_SQL_DESCRIPTION,
-        {
-            "pergunta": Annotated[
-                str,
-                "Pergunta em linguagem natural sobre dados do sistema de frete. "
-                "Use termos do dominio: clientes, pedidos, embarques, NFs, faturamento, "
-                "transportadoras, separacoes, devolucoes. "
-                "Exemplos: 'Top 10 clientes por valor de frete em marco', "
-                "'Pedidos pendentes por estado', 'Valor medio de frete por transportadora'. "
-                "Em MODO ADMIN tambem aceita SQL DML direto: "
-                "'UPDATE cadastro_palletizacao SET tipo_materia_prima = ... WHERE ...'."
-            ],
-        },
+        CONSULTAR_SQL_INPUT_SCHEMA,
         annotations=ToolAnnotations(
             # readOnlyHint=False: tool aceita escrita em MODO ADMIN (admins em USUARIOS_SQL_ADMIN).
             # Para usuarios comuns, SQLSafetyValidator bloqueia DML — gate real e por user_id.
@@ -457,11 +496,12 @@ try:
         Returns:
             MCP tool response com TextContent (legível) + structuredContent (tipado)
         """
-        pergunta = args.get("pergunta", "").strip()
+        # Contrato S3: sql= (literal) tem precedencia sobre pergunta= (NL).
+        pergunta, sql_literal = _resolve_tool_input(args)
 
         if not pergunta:
             return {
-                "content": [{"type": "text", "text": "Pergunta vazia. Forneca uma pergunta em linguagem natural."}],
+                "content": [{"type": "text", "text": "Pergunta vazia. Forneca uma pergunta em linguagem natural OU um SQL em 'sql='."}],
                 "is_error": True,
             }
 
@@ -527,6 +567,7 @@ try:
                 admin_mode=admin_mode or debug_active,
                 session_id=session_id,
                 sql_first_mode=sql_first_mode,
+                sql_literal=sql_literal,
             )
 
             # Formatar resultado legível (TextContent — backward compat)

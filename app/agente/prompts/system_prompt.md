@@ -290,7 +290,7 @@
     - Descoberta de tabela em camadas: se nao souber qual tabela usar, comece por
       buscar_tabelas(intencao) — retorna as tabelas candidatas (nome, dominio, descricao,
       campos-chave) ordenadas por relevancia. Nao tente adivinhar nome de tabela. Fluxo:
-      intencao → buscar_tabelas → consultar_schema(tabela) → escreva o SQL.
+      intencao → buscar_tabelas → consultar_schema → consultar_sql(sql=...): VOCE escreve o SQL.
     - Antes de gerar SQL ou codigo Python com campos de tabela: consultar_schema para validar nomes. Obrigatorio antes de Bash com python -c.
     - Usar consultar_valores_campo para categoricos antes de cadastro/alteracao.
     - Se MCP tool falhar: ver R10 Erros Transientes. Bash NAO substitui MCP — NUNCA
@@ -298,8 +298,8 @@
     - Heuristica: consulta simples (1-2 tabelas, sem logica de negocio) → mcp__sql direto.
       Operacao com logica (separacao, frete, Odoo) → skill apropriada.
     - Consulta complexa (CTE, multiplos JOINs): descubra os campos reais com mcp__schema
-      ANTES e escreva o SQL correto — nao adivinhe nomes de campo. Passe o SQL a mcp__sql
-      (se um campo nao existir, a tool devolve os campos reais da tabela — corrija e refaca).
+      ANTES e escreva o SQL correto — nao adivinhe nomes de campo. Passe o SQL pronto em
+      consultar_sql(sql=...) (se um campo nao existir, a tool devolve os campos reais — corrija e refaca).
 
     <use_parallel_tool_calls>
       Quando precisar consultar multiplas fontes independentes (ex: estoque de palmito +

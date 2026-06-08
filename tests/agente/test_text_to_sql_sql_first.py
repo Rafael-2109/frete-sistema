@@ -309,11 +309,12 @@ class TestResolveSqlFirstMode:
         from app.agente.config.feature_flags import resolve_sql_first_mode
         return resolve_sql_first_mode
 
-    def test_default_off_when_unset(self, monkeypatch):
+    def test_default_on_when_unset(self, monkeypatch):
+        # S3 decisao #5: default do codigo passou a ser "on" (SQL-first padrao pos-S1).
         monkeypatch.delenv("SQL_AGENT_SQL_FIRST", raising=False)
         r = self._r()
-        assert r(True) == "off"
-        assert r(False) == "off"
+        assert r(True) == "on"
+        assert r(False) == "on"
 
     def test_off_explicit(self, monkeypatch):
         monkeypatch.setenv("SQL_AGENT_SQL_FIRST", "off")

@@ -139,9 +139,9 @@ hints para auto-correcao) ou, se for usar Haiku, com TESTE (revalidacao determin
 | # | Subsistema | Resolve | Depende de | Status | Sub-plano |
 |---|---|---|---|---|---|
 | S0 | Gerador idempotente | N4 (poluicao git) | — | ✅ PROD `2d92fee57` (+ S0b auto-descoberta) | `docs/superpowers/plans/2026-06-07-text-to-sql-S0-gerador-idempotente.md` |
-| S1 | Progressive disclosure | N1, N2, F3(parcial) | S0 ✅ | ✅ worktree `worktree-text-to-sql-S1` (NAO pushado — aguarda OK) | `docs/superpowers/plans/2026-06-07-text-to-sql-S1-progressive-disclosure.md` |
+| S1 | Progressive disclosure | N1, N2, F3(parcial) | S0 ✅ | ✅ PROD `5aec0b3ae`/merge `8f863ee30` (migration aplicada + 327 embeddings `voyage-4-large` @ 2026-06-08) | `docs/superpowers/plans/2026-06-07-text-to-sql-S1-progressive-disclosure.md` |
 | S2 | Qualidade de schema | N3, F2(causa de fundo) | S0 ✅ | ✅ PROD `dc1c8573e` | `docs/superpowers/plans/2026-06-07-text-to-sql-S2-qualidade-schema.md` |
-| S3 | Nucleo de geracao | F1-F7, separar permissao | S1 | ⬜ a fazer (apos S1) | `docs/superpowers/plans/2026-06-07-text-to-sql-S3-nucleo-geracao.md` |
+| S3 | Nucleo de geracao | F1-F7, separar permissao | S1 ✅ | 🟡 **S3-A** worktree `worktree-text-to-sql-S3` (contrato sql=+F1+F4+entry_kind+default on; NAO pushado) · **S3-B** (remover Generator) ⬜ apos medir auditoria | `docs/superpowers/plans/2026-06-07-text-to-sql-S3-nucleo-geracao.md` |
 
 Dependencias: S0 destrava S1 e S2 (diffs limpos). S1 destrava S3 (Opus precisa do mapa
 para ser autor confiavel). S2 corre em paralelo desde S0 e alimenta S1/S3 (melhores
@@ -204,7 +204,7 @@ valida o gate antes de fechar.
       teste cobre import parcial = NAO apaga.
 - [x] pytest de idempotencia verde (27: 18 S0 + 9 S0b).
 
-**Gate S1 — progressive disclosure** ✅ (2026-06-07, worktree `worktree-text-to-sql-S1`, NAO pushado)
+**Gate S1 — progressive disclosure** ✅ (2026-06-07, PROD `5aec0b3ae`/merge `8f863ee30`; migration aplicada, 327 embeddings `voyage-4-large` @ 2026-06-08T00:23)
 - [x] `buscar_tabelas(intencao)` retorna a tabela esperada no top-N para o golden set.
       → precisao@3 = **100%** (20/20) no golden set justo (gate acordado = top-3 >=90%);
       flagship top-1 (carteira/faturamento/separacao). `TestGoldenSetGate`
@@ -242,16 +242,32 @@ valida o gate antes de fechar.
       materializa — `TestGeradorNaoMaterializaCuradoria`); `--check` 0 drift apos regeneracao.
 - [x] pytest verde. → suite `consultando_sql` + nao-regressao do pipeline SQL/agente.
 
-**Gate S3 — nucleo de geracao**
-- [ ] Caminho literal: SQL valido executa SEM reescrita por LLM; campo inexistente →
-      devolve schema real + hints (teste).
-- [ ] admin e comum usam a MESMA via de geracao; diferenca SO em permissao — teste afirma
+**Gate S3 — nucleo de geracao** — 🟡 **S3-A** entregue (worktree, NAO pushado); **S3-B** (remover Generator) ⬜ apos medir auditoria
+- [x] Caminho literal: SQL valido executa SEM reescrita por LLM; campo inexistente →
+      devolve schema real + hints (teste). → `TestExplicitSqlContract` + `TestSqlFirstSchemaFeedback`
+      (`test_text_to_sql_s3.py` + `test_text_to_sql_sql_first.py`).
+- [x] admin e comum usam a MESMA via de geracao; diferenca SO em permissao — teste afirma
       que comum continua barrado em tabela bloqueada e em DML (nao-regressao do Safety).
-- [ ] Contrato `sql=`/`pergunta=` na tool; `looks_like_raw_sql` fora do caminho feliz.
-- [ ] Fixes F1 (truncamento), F2 (skip_haiku), F4 (template stale) com teste cada.
-- [ ] Auditoria/shadow instrumentada medindo NL vs SQL (dado coletavel ANTES de remover o
-      Generator).
-- [ ] pytest verde.
+      → `TestPermissionVsGeneration` (mesma via literal; rw=[False,True]; tabela bloqueada e DML barram).
+- [x] Contrato `sql=`/`pergunta=` na tool; `looks_like_raw_sql` fora do caminho feliz.
+      → param `sql=` na enhanced_tool + `_resolve_tool_input` + `run(sql_literal=...)` (bypassa
+      heuristica); `TestResolveToolInput` + `TestToolForwardsSqlLiteral`.
+- [x] F1 (truncamento): `max_tokens` 500 → `TEXT_TO_SQL_GEN_MAX_TOKENS` (default 2000),
+      lido fresh. → `TestGeneratorMaxTokens`.
+- [x] F4 (template stale): template ≥0.92 revalidado contra schema; campo inexistente →
+      descarta direct-hit (`template_stale_discarded`) e cai no fluxo. → `TestTemplateFieldsValidation`.
+- [x] F2 (skip_haiku): resolvido pela TESE, nao por Haiku-as-cegas (invariante #2). O
+      guard-rail DETERMINISTICO (bloqueio de campo inexistente + feedback) e' o caminho
+      DEFAULT com SQL-first on; o skip_haiku legado do Generator e' vestigial e some com
+      o Generator em S3-B. NAO foi adicionado Evaluator cego (regrediria IMP-2026-05-13-003,
+      falso-positivo de data). → `TestSqlFirstSchemaFeedback`.
+- [x] Auditoria instrumentada medindo NL vs SQL (`entry_kind`: sql_explicit | sql_heuristic |
+      nl) + `_log_sql_first_shadow` (would_block). Dado coletavel ANTES de remover o Generator.
+      → `TestEntryKindAudit`.
+- [x] SQL-first default 'on' no codigo (decisao #5; env PROD inalterada). → `TestResolveSqlFirstDefaultOn`.
+- [x] pytest verde. → **215 passed** (sql_first 50 + admin_dml 12 + S3 25 + consultando_sql 128); zero regressao.
+- [ ] **S3-B**: remover o Generator (tool exige `sql=`; NL retorna erro pedindo SQL) APOS a
+      auditoria `entry_kind` provar NL→~0 em PROD; aposentar a flag `SQL_AGENT_SQL_FIRST`.
 
 **Gate GLOBAL — pacote completo**
 - [ ] Ordem respeitada: S0 e S1 concluidos antes de S3; S2 entregue.
@@ -278,3 +294,5 @@ valida o gate antes de fechar.
 | 2026-06-07 | S1 ✅ | Progressive disclosure (worktree `worktree-text-to-sql-S1`, NAO pushado). **Gerador**: `_select_key_fields` (chaves de negocio + ate 2 filtros, teto 5, sem id/auditoria, deterministico — resolve N2) + `_dominio_from_module` (app de origem -> label; resolve grupo). `generate_catalog_entry` agora emite `key_fields`+`dominio`; `get_catalog_text` exibe ambos. `table_catalog_embeddings` -> BLOCKED_TABLES (infra). **Tabela pgvector** `table_catalog_embeddings` (`TableCatalogEmbedding`, upsert por `table_name`) + migration DUPLA (`scripts/migrations/2026_06_07_table_catalog_embeddings.{py,sql}`). **Indexer** `table_catalog_indexer.py` (content_hash) + `EmbeddingService.search_table_catalog` (pgvector+fallback) + 11o step no scheduler (`reindexacao_embeddings.py`) + flag `TABLE_CATALOG_SEMANTIC`/`THRESHOLD_TABLE_CATALOG`. **Tool** `buscar_tabelas_tool.py` (busca HIBRIDA textual∪semantica via RRF; permissao = mesma matriz do executor) registrada em `client.py` (`mcp__buscar_tabelas__*`). system_prompt: fluxo intencao→buscar_tabelas→consultar_schema→SQL | (1) busca **hibrida** (decisao do usuario): textual deterministica e a base do gate; semantica e enhancement de recall. (2) **Freshness**: premissa do plano ("mesmo gatilho do S0") era inviavel (S0=hook dev sem banco; embeddings=banco PROD) -> resolvida por textual-fresca + reindex diario com content_hash. (3) **Gate** acordado top-3 >=90%; golden set JUSTO (vocabulario da tabela), casos puramente semanticos delegados aos embeddings. (4) ranking textual = (cobertura, name_extra, desc_cov, peso): name_extra distingue tabela-base (contas_a_receber) de derivadas; desc_cov favorece a tabela cuja descricao fala da intencao (carteira em "pedidos pendentes"). (5) matching por raiz comum >=5 (plural/conjugacao). Migration NAO rodada (DDL bloqueado pelo classificador local; valida em PROD/local com OK) | Gate S1 VERDE c/ evidencia: golden top-3 = 100% (20/20); flagship top-1; key_fields/dominio testados; freshness (textual fresca + 11o step content_hash); tool registrada; **196 passed** (consultando_sql+agente+embeddings+pipeline); `--check` 0 drift (328 schemas). AGUARDANDO validacao + push do usuario (push = deploy PROD; migration a rodar) |
 | 2026-06-07 | S1 (prova semantica + fix fusao) | A pedido do usuario, PROVEI o valor da semantica com Voyage REAL (A/B, cosine em memoria = fallback real do sistema): em 15 intencoes COLOQUIAIS (vocabulario do usuario != nome/descricao da tabela) top-8 textual=60% vs semantica=86% (top-1 20%->60%, 3x). A PROVA expos um DEFEITO no meu design: a fusao RRF inicial DILUIA a semantica (top-8 73% < semantica pura 86%) — a cauda textual (tabelas de token comum) contaminava o topo. CORRIGIDO: `_fundir` (RRF, pesos iguais) -> `_combinar` (SEMANTICA PRIMARIA + textual append), fiel a decisao 1 do plano. Output expoe agora `origem` (semantica/textual) + `similaridade` (transparencia). 2 testes novos (semantica primaria; textual append). | Estrategia validada em AMBOS conjuntos: COLOQUIAL top-8 86% (vs RRF 73%, textual 60%) + GOLDEN top-8 100%. Gate determin. INTACTO: embeddings off -> textual pura -> golden 100% (a fusao so muda o caminho PROD com Voyage). Peso do RRF era irrelevante (0.2..1.0 davam o mesmo) -> append e mais simples E melhor. THRESHOLD_TABLE_CATALOG=0.30 (sims coloquiais reais ~0.3-0.5, voyage-4-lite). | Confirmado no CODIGO DE PRODUCAO (B.buscar real c/ Voyage): "clientes que compraram no mes passado"->faturamento_produto #1 (sim .50); "a fabrica cumpriu o planejado"->programacao_producao #1; "mercadoria parada no deposito"->movimentacao_estoque #1 — todos a textual perdia. 118 pytest verdes. NAO commitado/pushado |
 | 2026-06-07 | S1 (modelo voyage-4-large no catalogo) | Usuario perguntou se outra versao do Voyage ajudaria. A/B REAL de modelos (15 coloquiais/15 golden, doc confirmou voyage-4-* existem, 1024D): voyage-4-lite top-3 coloquial 73% -> voyage-4 80% -> **voyage-4-large 93%** (golden 100%). Reranking (rerank-2.5-lite sobre pool lite+textual) NAO ajudou (=73%/86% do lite — limitado ao recall do pool + tier lite nao supera cosine no PT coloquial). ADOTADO voyage-4-large ISOLADO p/ o catalogo: nova config `VOYAGE_TABLE_CATALOG_MODEL` (default voyage-4-large) usada no indexer (embed model= + grava model_used + filtra `existing` por model_used p/ RE-EMBEDAR ao trocar modelo — espacos vetoriais incompativeis) e em `search_table_catalog` (query no mesmo espaco). | Decisao do usuario (trade-off custo/qualidade): large vale o +20pp top-3 coloquial; catalogo pequeno (~310 tabelas, indexacao 1x/dia trivial; 1 embedding/busca). Default global `VOYAGE_DEFAULT_MODEL`=voyage-4-lite INALTERADO -> os outros 12 dominios NAO reindexam. Rerank DESCARTADO (sem ganho aqui; reavaliar com rerank-2.5 full se necessario). 1024D = drop-in (sem nova migration). | 53 pytest verdes (3 novos travam o isolamento modelo-dedicado por source-check; default global continua lite). voyage-4-large validado no A/B real (embedou 309 tabelas + queries). NAO commitado/pushado |
+| 2026-06-08 | S1 — CORRECAO DE STATUS (auditoria) | Auditoria do estado real (git+PROD) reconcilia o MASTER: S1 NAO esta "em worktree nao pushado" — esta EM PROD. `main`: `5aec0b3ae` (feat S1) + merge `8f863ee30` + `3f9fb8bd7`. Fixes tardios CONFIRMADOS em main: `_combinar` (semantica primaria) + `VOYAGE_TABLE_CATALOG_MODEL=voyage-4-large`. PROD (MCP Render): `table_catalog_embeddings` = **327 rows, 327 com embedding, voyage-4-large, @2026-06-08T00:23** — migration aplicada + reindex efetivado (nota "0 rows @03:14" era snapshot transitorio). | Sem decisao nova — so reconciliacao. Linha S1 + Gate S1 atualizados worktree/nao-pushado -> PROD. | S0/S1/S2 = TODOS em PROD. S3 era o unico pendente. |
+| 2026-06-08 | S3-A 🟡 | Nucleo de geracao — fatia segura (worktree `worktree-text-to-sql-S3`, NAO pushado). TDD RED→GREEN. **G1 contrato `sql=`**: param `sql` na enhanced_tool + `_resolve_tool_input` (sql> pergunta) + `run(sql_literal=...)` que FORCA literal sem a heuristica looks_like_raw_sql (mata F5). **G2/F1**: `max_tokens` 500 -> `TEXT_TO_SQL_GEN_MAX_TOKENS` (default 2000, fresh). **G3/F4**: `_sql_fields_valid` revalida template ≥0.92; stale -> `template_stale_discarded` + cai no Generator. **G5**: `entry_kind` (sql_explicit\|sql_heuristic\|nl) p/ auditoria. **G6/decisao #5**: default do codigo `SQL_AGENT_SQL_FIRST` off->on (env PROD inalterada). **G7**: tool desc reescrita (contrato sql=, "permissao!=geracao") + system_prompt (`consultar_sql(sql=...)`, net-zero vs baseline). | **F2 (skip_haiku) — decisao do implementador**: a linha do Design "Evaluator sempre ativo no fallback" colide com a invariante #2 ("sem Haiku as cegas") e regrediria IMP-2026-05-13-003 (falso-positivo de data). Resolvido pela TESE: o guard-rail DETERMINISTICO (bloqueio de campo + feedback) e' o caminho default com SQL-first on; o skip_haiku legado e' vestigial e some com o Generator em S3-B. NAO adicionei Evaluator cego. **Generator NAO removido** (decisao #1: medir `entry_kind` em PROD antes) = S3-B. | Gate S3 = S3-A VERDE c/ evidencia: **215 passed** (sql_first 50 + admin_dml 12 + S3 25 + consultando_sql 128), 0 regressao; prompt net-zero (781L); 25 testes novos em `test_text_to_sql_s3.py`. AGUARDANDO validacao + push do usuario (push = deploy PROD). S3-B (remover Generator) pendente de medicao. |

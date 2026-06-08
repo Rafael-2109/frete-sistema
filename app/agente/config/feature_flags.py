@@ -1057,12 +1057,14 @@ AGENT_DIRECTIVE_MIN_QUALITY = float(os.getenv("AGENT_DIRECTIVE_MIN_QUALITY", "0.
 # SQL. Quando ele envia SQL pronto, executar LITERAL (skip Generator Haiku que
 # adivinha/trunca/reescreve); o validador deterministico vira guard-rail.
 #
-# Flag UNICA multivalor, default 'off' (zero regressao). Canary por estagios:
-#   'off'    -> 100% comportamento atual (Generator NL->SQL para todos)
+# Flag UNICA multivalor. S3 decisao #5 (pos-S1): default do CODIGO = 'on' (SQL-first
+# e' o padrao). A env var em PROD tem precedencia (nao foi alterada por esta mudanca).
+# Estagios:
+#   'off'    -> comportamento legado (Generator NL->SQL para todos) — KILL-SWITCH
 #   'shadow' -> TODOS observam (log + etapa would_block), sem mudar comportamento
 #   'admin'  -> admins (USUARIOS_SQL_ADMIN) recebem SQL-first real; demais ficam
 #               em 'shadow' (continuam observando, sem mudanca de comportamento)
-#   'on'     -> SQL-first real para TODOS (estagio final 'geral')
+#   'on'     -> SQL-first real para TODOS (DEFAULT pos-S1)
 #
 # Lido FRESH em resolve_sql_first_mode() (nao constante de import) para o canary
 # poder avancar via env var sem rebuild. O escopo por admin e' resolvido aqui (no
@@ -1099,7 +1101,9 @@ def resolve_sql_first_mode(is_admin: bool) -> str:
         "shadow" -> pipeline observa/loga, sem mudar comportamento
         "on"     -> pipeline executa SQL literal (SQL-first ativo)
     """
-    raw = os.getenv("SQL_AGENT_SQL_FIRST", "off").strip().lower()
+    # S3 decisao #5 (pos-S1): default do codigo = "on" (SQL-first e' o padrao).
+    # Kill-switch: SQL_AGENT_SQL_FIRST=off restaura o legado (Generator).
+    raw = os.getenv("SQL_AGENT_SQL_FIRST", "on").strip().lower()
     if raw not in _SQL_FIRST_VALID:
         return "off"
     if raw == "admin":

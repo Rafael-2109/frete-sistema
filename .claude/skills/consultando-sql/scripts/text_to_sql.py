@@ -899,8 +899,11 @@ PERGUNTA: {question}
 
 SQL:"""
 
+        # F1 (S3): max_tokens=500 truncava CTE/multi-JOIN longo (sessao #787).
+        # Lido FRESH (env) p/ ajuste sem rebuild; default 2000 cobre o caso #787.
         response = _call_api_with_retry(
-            client, HAIKU_MODEL, 500,
+            client, HAIKU_MODEL,
+            int(os.getenv("TEXT_TO_SQL_GEN_MAX_TOKENS", "2000")),
             messages=[{"role": "user", "content": prompt}],
             fallback_model=SONNET_MODEL,
             temperature=float(os.getenv("TEXT_TO_SQL_GEN_TEMP", "0")),
@@ -1945,6 +1948,28 @@ class TextToSQLPipeline:
         except Exception as e:
             logger.debug(f"[SQL_FIRST] shadow log falhou (ok): {e}")
 
+    def _sql_fields_valid(self, sql: str) -> bool:
+        """F4 (S3): True se o SQL NAO referencia campo inexistente (vs schema atual).
+
+        Reusa o validador deterministico (regex + schema JSON, sem LLM) so' para o
+        sinal de campo_inexistente — usado p/ revalidar template >=0.92 antes de
+        executa-lo direto (template salvo pode estar STALE). Best-effort: qualquer
+        falha do probe -> considera valido (NAO bloqueia por erro de infrastrutura).
+        """
+        try:
+            tbls = extract_tables_from_sql(sql)
+            det = SQLDeterministicValidator(self.schema_provider).validate(
+                sql, tbls, admin_mode=False
+            )
+            campo = [
+                i for i in det.get("issues", [])
+                if str(i).startswith("campo_inexistente:")
+            ]
+            return not campo
+        except Exception as e:
+            logger.debug(f"[TEXT_TO_SQL] _sql_fields_valid falhou (ok): {e}")
+            return True
+
     def run(
         self,
         question: str,
@@ -1954,6 +1979,7 @@ class TextToSQLPipeline:
         admin_mode: bool = False,
         session_id: str = None,
         sql_first_mode: str = "off",
+        sql_literal: str = None,
     ) -> dict:
         """
         Executa pipeline completo.
@@ -2013,13 +2039,25 @@ class TextToSQLPipeline:
             sql_first_mode = (sql_first_mode or "off").lower()
             is_sql_first = False
             sql_first_literal = ""
-            if sql_first_mode in ("on", "shadow") and looks_like_raw_sql(question):
+            # G5 (S3): entry_kind audita NL-vs-SQL na entrada (decisao #1 — medir
+            # antes de remover o Generator). sql_explicit > sql_heuristic > nl.
+            entry_kind = "nl"
+            if sql_literal is not None and str(sql_literal).strip():
+                # CONTRATO EXPLICITO (S3): o agente mandou sql= -> literal SEM a
+                # heuristica looks_like_raw_sql (mata F5). O guard-rail e' o
+                # validador deterministico (ETAPA 1c) + Safety + Executor.
+                sql_first_literal = normalize_sql_candidate(sql_literal)
+                is_sql_first = True
+                entry_kind = "sql_explicit"
+            elif sql_first_mode in ("on", "shadow") and looks_like_raw_sql(question):
                 sql_first_literal = normalize_sql_candidate(question)
                 if sql_first_mode == "on":
                     is_sql_first = True
+                    entry_kind = "sql_heuristic"
                 else:
                     # SHADOW: so' observa (cai no fluxo normal — Generator)
                     self._log_sql_first_shadow(sql_first_literal, admin_mode, result)
+            result["etapas"]["entry_kind"] = entry_kind
 
             # =====================================================
             # ETAPA 0: TEMPLATE RETRIEVAL — Buscar queries similares
@@ -2045,9 +2083,21 @@ class TextToSQLPipeline:
                         )
 
                         if best["similarity"] >= 0.92:
-                            # Match alto: usar SQL do template direto
-                            template_match = best
-                            result["etapas"]["template_direct_hit"] = True
+                            # F4 (S3): revalidar o template contra o schema ATUAL
+                            # antes de usar direto. Template salvo pode estar STALE
+                            # (campo renomeado/removido) -> executaria SQL invalida.
+                            if self._sql_fields_valid(best["sql_text"]):
+                                # Match alto + schema valido: usar SQL do template direto
+                                template_match = best
+                                result["etapas"]["template_direct_hit"] = True
+                            else:
+                                # Stale: descartar direct-hit, rebaixar p/ few-shot
+                                few_shot_examples = templates[:2]
+                                result["etapas"]["template_stale_discarded"] = True
+                                logger.info(
+                                    "[TEXT_TO_SQL] Template >=0.92 descartado "
+                                    "(stale: campo inexistente vs schema atual)"
+                                )
                         elif best["similarity"] >= 0.80:
                             # Match medio: injetar como few-shot
                             few_shot_examples = templates[:2]
