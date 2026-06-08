@@ -4,7 +4,7 @@ camada: L1
 sot_de: —
 hub: CLAUDE.md
 superseded_by: —
-atualizado: 2026-06-07
+atualizado: 2026-06-08
 -->
 # Agente Logistico Web — Guia de Desenvolvimento
 
@@ -69,14 +69,15 @@ Encapsula o Claude Agent SDK: chat web (SSE) + Teams bot (async); ~53.5K LOC em 
 ## Estrutura
 
 ```
-app/agente/                          # Root — 6 arquivos
+app/agente/                          # Root — 7 arquivos
 ├── __init__.py                      # Blueprint import de routes/ + init_app()
 ├── CLAUDE.md                        # Este arquivo (guia dev)
+├── SUBSISTEMAS.md                   # Detalhe de Artifacts/telemetria subagent/memoria compartilhada/avaliador skill + inventario SSE (ver Mapa de Navegacao)
 ├── SDK_CHANGELOG.md                 # Historico SDK 0.1.49 -> 0.2.89 (features, breaking, fixes) — inclui revisao retroativa do 0.2.82 (2 breakings omitidas)
 ├── ROLLBACK_SESSION_STORE.md        # Procedimento rollback PostgresSessionStore (Fase B)
 ├── historia.md                      # Referencia historica (legado, 76K)
 ├── models.py                        # SQLAlchemy models (AgentSession, AgentMemory, etc.)
-├── routes/                          # Flask routes modularizadas — 20 arquivos
+├── routes/                          # Flask routes modularizadas — 21 arquivos
 │   ├── __init__.py                  # agente_bp + imports sub-modulos + re-exports Teams
 │   ├── _constants.py                # Constantes (timeouts, thresholds, upload)
 │   ├── _helpers.py                  # Helpers compartilhados (Teams + cross-module)
@@ -85,6 +86,7 @@ app/agente/                          # Root — 6 arquivos
 │   ├── admin_learning.py            # Admin: session messages, generate/save correction
 │   ├── admin_metrics.py             # Dashboard admin telemetria subagent (Fase A — 10 endpoints)
 │   ├── admin_session_store.py       # Admin: PostgresSessionStore introspection (Fase B)
+│   ├── admin_teams.py               # Dashboard observabilidade canal Teams (F2 — admin, 7 APIs)
 │   ├── admin_subagents.py           # Admin forense: list/messages + smoketest (SDK 0.1.60 fase 2)
 │   ├── subagents.py                 # API UI-inline: summary/messages lazy-fetch
 │   ├── artifacts.py                 # 5 rotas: 3 publicas (page/bundle/status) + API list/by-uuid/url
@@ -114,9 +116,10 @@ app/agente/                          # Root — 6 arquivos
 │   ├── preset_operacional.md        # Preset customizado (substitui claude_code preset)
 │   ├── prompt_inventario.md         # Prompt operacional inventario 2026-05 (NACOM/LF)
 │   └── system_prompt.md             # System prompt do agente (usuarios finais)
-├── sdk/                             # Integracao com Claude Agent SDK — 22 arquivos
+├── sdk/                             # Integracao com Claude Agent SDK — 23 arquivos
 │   ├── __init__.py
 │   ├── _sanitization.py             # Helpers de sanitizacao PII cross-modulo
+│   ├── baseline_fastpath.py         # Fast-path deterministico do baseline (Marcus user_id=18, sem loop LLM)
 │   ├── client.py                    # Client principal (streaming, build_options, parse)
 │   ├── client_pool.py               # Pool de clients reutilizaveis
 │   ├── context_enrichment.py        # Enriquecimento de contexto per-request (blueprint agente)
@@ -137,10 +140,11 @@ app/agente/                          # Root — 6 arquivos
 │   ├── stream_parser.py             # Dataclasses + classificacao de erros de tool
 │   ├── subagent_reader.py           # Wrapper list_subagents + get_subagent_messages (SDK 0.1.60)
 │   └── verifiers.py                 # Verificadores B2 (verify shadow do super-loop)
-├── services/                        # Servicos de inteligencia — 20 arquivos (ver services/CLAUDE.md)
+├── services/                        # Servicos de inteligencia — 23 arquivos (ver services/CLAUDE.md)
 │   ├── __init__.py
 │   ├── CLAUDE.md                    # Sub-guia com regras R1-R5 dos services
 │   ├── _utils.py                    # Helpers compartilhados (parse_llm_json_response)
+│   ├── approval_inbox_service.py    # Inbox de aprovacao (AgentMemory shadow + ImprovementDialogue proposed)
 │   ├── artifact_service.py          # Service de artifacts (rate limit, spec validation, S3)
 │   ├── directive_promotion_service.py # Promocao automatica de diretriz (A4 flywheel Distill→Deploy)
 │   ├── eval_gate_service.py         # Gate de avaliacao offline (A3 golden dataset / eval-gate)
@@ -156,16 +160,20 @@ app/agente/                          # Root — 6 arquivos
 │   ├── recommendations_engine.py    # Motor de recomendacoes
 │   ├── sentiment_detector.py        # Deteccao de sentimento
 │   ├── session_summarizer.py        # Resumo automatico de sessoes
+│   ├── skill_effectiveness_service.py # Avaliador de efetividade de skill pos-sessao (Fase 1, flag AGENT_SKILL_EVAL)
 │   ├── sql_evaluator_falses_service.py # Detector de falsos negativos em SQL evaluator
 │   ├── suggestion_generator.py      # Gerador de sugestoes proativas
+│   ├── teams_observability_service.py # KPIs observabilidade canal Teams (teams_tasks + agent_step, read-only)
 │   └── tool_skill_mapper.py         # Mapeamento tool → skill
-├── templates/agente/                # Templates Jinja2 — 5 arquivos
+├── templates/agente/                # Templates Jinja2 — 7 arquivos
 │   ├── admin_metrics.html           # Dashboard telemetria subagent (Chart.js 3.9.1, admin)
 │   ├── admin_session_store.html     # Dashboard admin SessionStore (R6 observability)
+│   ├── admin_teams.html             # Dashboard observabilidade canal Teams (F2, admin)
 │   ├── artifact.html                # Pagina render bundle artifact (sandboxed iframe)
 │   ├── chat.html                    # Interface de chat web
-│   └── insights.html                # Dashboard de insights
-├── tools/                           # MCP tools (NAO callables) — 14 arquivos
+│   ├── insights.html                # Dashboard de insights
+│   └── memorias.html                # Tela admin de gestao de memorias (/agente/memorias)
+├── tools/                           # MCP tools (NAO callables) — 15 arquivos
 │   ├── __init__.py
 │   ├── _mcp_enhanced.py             # Wrapper Enhanced (outputSchema + structuredContent)
 │   ├── artifact_tool.py             # build_artifact MCP tool (Enhanced v1.0)
@@ -173,6 +181,7 @@ app/agente/                          # Root — 6 arquivos
 │   ├── memory_mcp_tool.py           # 12 operacoes de memoria (Enhanced v2.1.0)
 │   ├── ontology_query_tool.py       # Query da ontologia/knowledge graph (MCP tool)
 │   ├── playwright_mcp_tool.py       # Browser automation (13 tools, SSW + Atacadao)
+│   ├── resolver_mcp_tool.py         # Resolvedores deterministicos (app.resolvedores) — fonte-que-prova entidade
 │   ├── render_logs_tool.py          # Consulta logs Render
 │   ├── routes_search_tool.py        # Busca em rotas Flask
 │   ├── schema_mcp_tool.py           # Consulta schemas de tabelas
@@ -495,7 +504,7 @@ Screenshots Playwright (`playwright-screenshots/{YYYY-MM}/`) e archive de sessoe
 |---------|--------|
 | `historia.md` (76K) | Apenas referencia historica |
 
-### Services (22 arquivos, ~13.0K LOC)
+### Services (23 arquivos, ~13.8K LOC)
 Guia completo de regras (R1-R5), gotchas e interdependencias: [`services/CLAUDE.md`](./services/CLAUDE.md).
 Todos controlados por feature flags em `config/feature_flags.py`.
 

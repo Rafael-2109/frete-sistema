@@ -4,7 +4,7 @@ camada: L2
 sot_de: —
 hub: app/agente/CLAUDE.md
 superseded_by: —
-atualizado: 2026-06-07
+atualizado: 2026-06-08
 -->
 # Agente Services — Guia de Desenvolvimento
 
@@ -41,6 +41,7 @@ app/agente/services/
   ├── recommendations_engine.py       #   279 LOC — Recomendacoes rule-based para dashboard
   ├── suggestion_generator.py         #   223 LOC — Sugestoes pos-resposta via Sonnet (P1-1)
   ├── sentiment_detector.py           #   260 LOC — Deteccao LOCAL de frustracao, zero API (P1-2)
+  ├── teams_observability_service.py  #   346 LOC — KPIs canal Teams (teams_tasks + agent_step), read-only (F2)
   ├── skill_effectiveness_service.py  # Avaliador de efetividade de skill pos-sessao (Fase 1): janela+funil estagio0/Haiku/Sonnet+aplicacao+idempotencia
   └── approval_inbox_service.py       # Inbox de Aprovacao: AgentMemory shadow + ImprovementDialogue proposed (conserta directive_promotion shadow->ativa)
 ```

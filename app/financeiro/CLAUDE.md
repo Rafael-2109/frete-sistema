@@ -4,7 +4,7 @@ camada: L1
 sot_de: —
 hub: CLAUDE.md
 superseded_by: —
-atualizado: 2026-06-03
+atualizado: 2026-06-08
 -->
 # Financeiro — Guia de Desenvolvimento
 
@@ -62,9 +62,9 @@ atualizado: 2026-06-03
 
 ## Contexto
 
-80 arquivos, ~46.1K LOC. Tem o maior `models.py` do projeto (40+ models, ~2.8K linhas). Gotchas completos (80+) em `app/financeiro/GOTCHAS.md`; campos de tabela nos schemas JSON. Processamento pesado via workers RQ (Redis).
+80 arquivos, ~46.2K LOC. Tem o maior `models.py` do projeto (40+ models, ~2.8K linhas). Gotchas completos (80+) em `app/financeiro/GOTCHAS.md`; campos de tabela nos schemas JSON. Processamento pesado via workers RQ (Redis).
 
-**80 arquivos** | **~46.1K LOC** | **Atualizado**: 01/06/2026
+**80 arquivos** | **~46.2K LOC** | **Atualizado**: 08/06/2026
 
 Contas a receber/pagar, extratos bancarios, conciliacao Odoo, CNAB 400, comprovantes e baixas.
 

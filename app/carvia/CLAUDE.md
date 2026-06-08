@@ -4,7 +4,7 @@ camada: L1
 sot_de: —
 hub: CLAUDE.md
 superseded_by: —
-atualizado: 2026-06-03
+atualizado: 2026-06-08
 -->
 # CarVia — Guia de Desenvolvimento
 
@@ -38,9 +38,9 @@ atualizado: 2026-06-03
 
 ## Contexto
 
-107 arquivos, ~67.2K LOC, 109 templates. Importa NF PDFs/XMLs + CTe XMLs, faz match NF-CTe, subcontrata com cotacao via tabelas existentes, gera faturas de cliente e transportadora e emite CTe direto no SSW via Playwright. Detalhe por topico nos sub-docs (CONFERENCIA, FINANCEIRO, IMPORTACAO, etc.) — prefira ler o sub-doc a reconstruir o contexto a partir do codigo.
+107 arquivos, ~67.4K LOC, 109 templates. Importa NF PDFs/XMLs + CTe XMLs, faz match NF-CTe, subcontrata com cotacao via tabelas existentes, gera faturas de cliente e transportadora e emite CTe direto no SSW via Playwright. Detalhe por topico nos sub-docs (CONFERENCIA, FINANCEIRO, IMPORTACAO, etc.) — prefira ler o sub-doc a reconstruir o contexto a partir do codigo.
 
-**107 arquivos** | **~67.2K LOC** | **109 templates** | **Atualizado**: 2026-06-01
+**107 arquivos** | **~67.4K LOC** | **109 templates** | **Atualizado**: 2026-06-08
 
 Gestao de frete subcontratado: importar NF PDFs/XMLs + CTe XMLs, matchear NF-CTe, subcontratar transportadoras com cotacao via tabelas existentes, gerar faturas cliente e transportadora. Tambem emite CTe diretamente no SSW via Playwright.
 

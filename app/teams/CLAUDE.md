@@ -4,7 +4,7 @@ camada: L1
 sot_de: —
 hub: CLAUDE.md
 superseded_by: —
-atualizado: 2026-06-03
+atualizado: 2026-06-08
 -->
 # Teams Bot — Guia de Desenvolvimento
 
@@ -38,9 +38,9 @@ atualizado: 2026-06-03
 
 ## Contexto
 
-~2.5K LOC, 4 arquivos. Threads non-daemon (concluem durante reciclagem do gunicorn) + retry de SSL + persistencia de transcript. Regras criticas: `daemon=False` obrigatorio em `process_teams_task_async()` e `_commit_with_retry()` sempre (nunca commit direto — Render derruba SSL em idle).
+~2.6K LOC, 4 arquivos. Threads non-daemon (concluem durante reciclagem do gunicorn) + retry de SSL + persistencia de transcript. Regras criticas: `daemon=False` obrigatorio em `process_teams_task_async()` e `_commit_with_retry()` sempre (nunca commit direto — Render derruba SSL em idle).
 
-**LOC**: ~2.5K | **Arquivos**: 4 | **Atualizado**: 01/06/2026
+**LOC**: ~2.6K | **Arquivos**: 4 | **Atualizado**: 08/06/2026
 
 Bot assincrono Microsoft Teams via Azure Function bridge. Non-daemon threads + SSL retry + transcript persistence.
 
@@ -53,7 +53,7 @@ app/teams/
   ├── __init__.py      # 5 LOC — Blueprint /api/teams
   ├── models.py        # 81 LOC — TeamsTask (lifecycle 6 estados)
   ├── bot_routes.py    # 482 LOC — 5 endpoints + auth HMAC
-  └── services.py      # 1,997 LOC — Core: user/session/response/async processing
+  └── services.py      # 2,063 LOC — Core: user/session/response/async processing
 ```
 
 ## Regras Criticas
