@@ -146,3 +146,42 @@ def test_stage2_invalid_branch_falls_to_nada(monkeypatch):
     import app.agente.services.skill_effectiveness_service as svc
     monkeypatch.setattr(svc, "_call_anthropic", lambda *a, **k: '{"ramo": "xpto"}')
     assert svc.stage2_sonnet(_win(["x"]))["ramo"] == "nada"
+
+
+# ---------------------------------------------------------------------------
+# Task 6: Aplicacao dos ramos
+# ---------------------------------------------------------------------------
+def test_apply_lembrete_usuario_creates_mandatory_memory(db, monkeypatch):
+    import app.agente.services.skill_effectiveness_service as svc
+    from app.agente.models import AgentMemory
+    monkeypatch.setattr(svc, "_invalidate_caches", lambda uid: None)
+    decision = {"ramo": "lembrete_usuario", "titulo": "Confirmar UF",
+                "conteudo_lembrete": "sempre confirmar UF antes de cotar", "confianca": 0.9}
+    ref = svc.apply_decision(decision, _win(["nao era isso"]), user_id=1, session_id="s1")
+    assert ref.startswith("memory:")
+    mem = AgentMemory.query.filter_by(user_id=1,
+        path="/memories/lembretes_skill/cotando-frete.xml").first()
+    assert mem is not None and mem.priority == "mandatory" and mem.category == "permanent"
+
+
+def test_apply_ajuste_codigo_has_no_solution(db):
+    import app.agente.services.skill_effectiveness_service as svc
+    from app.agente.models import AgentImprovementDialogue
+    decision = {"ramo": "ajuste_codigo", "titulo": "skill falha em AM",
+                "problema": "nao trata UF AM", "evidencia": "usuario repetiu 2x",
+                "categoria_codigo": "skill_bug", "confianca": 0.8}
+    ref = svc.apply_decision(decision, _win(["ajusta"]), user_id=1, session_id="s2")
+    assert ref.startswith("dialogue:")
+    d = AgentImprovementDialogue.query.get(int(ref.split(":")[1]))
+    assert d.description == "nao trata UF AM"
+    assert d.implementation_notes is None  # avaliador NAO prescreve solucao
+
+
+def test_apply_low_confidence_user_downgrades(db, monkeypatch):
+    import app.agente.services.skill_effectiveness_service as svc
+    from app.agente.config import feature_flags as ff
+    monkeypatch.setattr(ff, "AGENT_SKILL_EVAL_CONF_MIN", 0.7, raising=False)
+    decision = {"ramo": "lembrete_usuario", "titulo": "t", "problema": "p",
+                "confianca": 0.3}  # < 0.7 -> vira ajuste_codigo
+    ref = svc.apply_decision(decision, _win(["x"]), user_id=1, session_id="s3")
+    assert ref.startswith("dialogue:")

@@ -235,3 +235,114 @@ def stage2_sonnet(window: SkillWindow, skill_description: str = "") -> Dict[str,
         "justificativa": str(data.get("justificativa", "")),
         "confianca": conf,
     }
+
+
+# ---------------------------------------------------------------------------
+# Task 6: Aplicacao dos ramos
+# ---------------------------------------------------------------------------
+def _xml_escape(s: Optional[str]) -> str:
+    return (s or "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
+def _render_reminder_xml(skill: str, decision: Dict[str, Any]) -> str:
+    titulo = _xml_escape(decision.get("titulo", ""))
+    corpo = _xml_escape(decision.get("conteudo_lembrete", "") or decision.get("titulo", ""))
+    return (f'<skill_reminder skill="{_xml_escape(skill)}">\n'
+            f'  <titulo>{titulo}</titulo>\n'
+            f'  <orientacao>{corpo}</orientacao>\n'
+            f'</skill_reminder>')
+
+
+def _slug(s: str) -> str:
+    return re.sub(r'[^a-z0-9]+', '-', (s or '').lower()).strip('-') or 'skill'
+
+
+def _invalidate_caches(user_id: int) -> None:
+    try:
+        from app.agente.sdk.memory_injection import invalidate_injection_cache_for_user
+        invalidate_injection_cache_for_user(user_id)
+    except Exception as e:
+        logger.debug(f"[SKILL_EVAL] invalidate_injection_cache_for_user falhou: {e}")
+    try:
+        from app.agente.sdk.memory_injection import invalidate_skill_reminders_cache
+        invalidate_skill_reminders_cache()
+    except Exception as e:
+        # invalidate_skill_reminders_cache criada na Task 10/G4 — tolerante a ImportError
+        logger.debug(f"[SKILL_EVAL] invalidate_skill_reminders_cache nao disponivel ainda: {e}")
+
+
+def _apply_lembrete_usuario(decision, window, user_id, shadow=False) -> str:
+    from app import db
+    from app.agente.models import AgentMemory
+    path = f"/memories/lembretes_skill/{window.skill_name}.xml"
+    content = _render_reminder_xml(window.skill_name, decision)
+    mem = AgentMemory.query.filter_by(user_id=user_id, path=path).first()
+    if mem:
+        mem.content = content
+    else:
+        mem = AgentMemory.create_file(user_id, path, content)
+    mem.priority = "mandatory"
+    mem.category = "permanent"
+    mem.importance_score = 0.9
+    mem.directive_status = "shadow" if shadow else None
+    db.session.commit()
+    _invalidate_caches(user_id)
+    return f"memory:{mem.id}"
+
+
+def _apply_lembrete_todos(decision, window) -> str:
+    from app import db
+    from app.agente.models import AgentMemory
+    path = f"/memories/empresa/lembretes_skill/{_slug(window.skill_name)}.xml"
+    existing = AgentMemory.query.filter_by(user_id=0, path=path).first()
+    if existing:
+        return f"approval:{existing.id}"
+    mem = AgentMemory(
+        user_id=0, path=path, content=_render_reminder_xml(window.skill_name, decision),
+        is_directory=False, importance_score=0.7,
+        escopo="empresa", directive_status="shadow", priority="mandatory",
+        created_by=None,
+    )
+    db.session.add(mem)
+    db.session.commit()
+    return f"approval:{mem.id}"
+
+
+def _apply_ajuste_codigo(decision, window, session_id) -> str:
+    from app import db
+    from app.agente.models import AgentImprovementDialogue
+    # Separacao de competencias: so descreve problema+evidencia, NAO prescreve solucao.
+    # affected_files e implementation_notes ficam None (avaliador nao prescreve).
+    sug = AgentImprovementDialogue.create_suggestion(
+        category=decision.get("categoria_codigo", "skill_bug"),
+        severity="info",
+        title=(decision.get("titulo") or f"skill {window.skill_name}")[:200],
+        description=decision.get("problema", ""),          # SO problema (sem solucao)
+        evidence={"skill": window.skill_name,
+                  "evidencia": decision.get("evidencia", ""),
+                  "justificativa": decision.get("justificativa", "")},
+        session_ids=[session_id],
+    )
+    db.session.commit()
+    return f"dialogue:{sug.id}"
+
+
+def apply_decision(decision: Dict[str, Any], window: SkillWindow,
+                   user_id: int, session_id: str) -> str:
+    """Aplica o ramo decidido. Retorna action_ref ('' se nada)."""
+    from app.agente.config import feature_flags as ff
+    ramo = decision.get("ramo", "nada")
+    conf = decision.get("confianca", 0.0) or 0.0
+
+    # lembrete_usuario de baixa confianca -> rebaixa p/ inbox (ajuste_codigo)
+    if ramo == "lembrete_usuario" and conf < ff.AGENT_SKILL_EVAL_CONF_MIN:
+        ramo = "ajuste_codigo"
+
+    if ramo == "lembrete_usuario":
+        apply_user = getattr(ff, "AGENT_SKILL_EVAL_APPLY_USER", True)
+        return _apply_lembrete_usuario(decision, window, user_id, shadow=not apply_user)
+    if ramo == "lembrete_todos":
+        return _apply_lembrete_todos(decision, window)
+    if ramo == "ajuste_codigo":
+        return _apply_ajuste_codigo(decision, window, session_id)
+    return ""
