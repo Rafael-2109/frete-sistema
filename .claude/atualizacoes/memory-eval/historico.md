@@ -5,6 +5,12 @@
 
 ---
 
+## Follow-ups Pendentes
+
+- **[reavaliar em 2026-06-15 — #3 metrica cega]** A metrica `effective_count` (similaridade resposta↔memoria) e estruturalmente cega para memoria always-on de governanca (ex.: `heuristicas/.../protocolo-ativo.xml`, usage 172 / efic 0.052 — injetada via builder de diretrizes 504-505 por ter `directive_status NULL`). **NAO "deixar de medir"**: Rafael (2026-06-08) identificou que excluir da metrica sem mudar a injecao indistinta perde visibilidade sobre ruido real. Reavaliar SOMENTE apos #1 (judge como medidor / holdout-ablacao) estar de pe. Decidir entao: segmentar relatorio vs holdout A/B com judge calibrado.
+
+---
+
 ## Atualizacoes
 
 - [2026-06-08-1](atualizacao-2026-06-08-1.md) — Health **85/100 (-1)** — recua marginalmente apos duas leituras em 86 (05-05, 06-01); queda tecnica, nao estrutural. 529 memorias (+36, +7.3%), 781 sessoes (+57, pico 54/sem), 32 usuarios (+1). **Eficacia segue saturada 0.895 (100%, 30 pts)**. **Marco: dimensao Correcoes deixou de ser ruido** — `correction_count` agora incrementa (avg geral 0.055; `structural/pessoal` 0.165; u18 com 8); health 85 mais confiavel que os 86 inflados. **Cold sobe a 12.48%** (66/529, acima do threshold 10% — 1a vez desde 05-18, +50% vs 44) puxa dimensao a 93.8% (18.8 pts). Stale 60d 69 (13.04%, 15.4 pts). **KG 2o ciclo de queda**: coverage 44.6%->42.9% (-1.7pp, 5.7/15 pts); 3874 entidades (+273), **1590 orfas (41%)**; 227 linkadas; 7310 relacoes. **Zero-efficacy explode 12->21 (+75%)** por novo cluster `heuristicas/abordagem-validada-pelo-judge-*` (bom-dia/ola/mach, criadas 06-06, recuperadas mas nunca efetivas). Empresa 226 (+15), **113 nunca revisadas (50%)** (8o ciclo). **Schema novo**: categoria `cold` materializada (15 mem) — cold-tiering comecou a operar. `_archived_presigned-url-s3` (u23) agora **3x arquivada** e ainda em uso. 8 recomendacoes (R1 deletar _archived 3x, R2 cluster judge zero-efficacy, R3 50% empresa sem revisao, R4 KG orfas, R6 NOVA conter cold).
