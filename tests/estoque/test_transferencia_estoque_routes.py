@@ -65,6 +65,32 @@ def test_dados_codigo_agrupa_por_local_e_lote(client):
     lotes = {l['lote']: l for l in d['por_lote']}
     assert lotes['MIGRAÇÃO']['is_migracao'] is True
     assert d['reservada_total'] == 200.0
+    # por_local_lote: granularidade combinada (1 célula por location×lot)
+    ll = {(c['location_name'], c['lote']): c for c in d['por_local_lote']}
+    assert len(d['por_local_lote']) == 3
+    assert ll[('CD/Estoque', '139/26')]['qty'] == 800.0
+    assert ll[('CD/Estoque', '139/26')]['disponivel'] == 600.0
+    assert ll[('CD/Estoque', '140/26')]['qty'] == 400.0
+    assert ll[('CD/Indisponivel', 'MIGRAÇÃO')]['is_indisp'] is True
+    assert ll[('CD/Indisponivel', 'MIGRAÇÃO')]['is_migracao'] is True
+
+
+def test_simular_modo1_local_destino_vazio_erro_amigavel(client):
+    """Local destino vazio (autocomplete não selecionou) → mensagem clara, sem crash int('')."""
+    payload = {'modo': '1', 'empresa': 'FB', 'cod_origem': '4729098',
+               'lote_nome': '139/26', 'location_id_origem': 8,
+               'location_id_destino': '', 'qty': 100}
+    with patch('flask_login.utils._get_user', return_value=_admin()), \
+         patch('app.estoque.transferencia_estoque_routes.get_odoo_connection', return_value=MagicMock()), \
+         patch('app.estoque.transferencia_estoque_routes.resolver_produto',
+               return_value={'pid': 100, 'tracking': 'lot', 'name': 'AZEITE'}), \
+         patch('app.estoque.transferencia_estoque_routes.StockLotService') as LotCls:
+        LotCls.return_value.buscar_por_nome.return_value = 56426
+        resp = client.post('/estoque/transferencia-estoque/api/simular', json=payload)
+    assert resp.status_code == 200
+    d = resp.get_json()
+    assert d['success'] is False
+    assert 'local destino' in d['message'].lower()
 
 
 def test_autocomplete_produto_filtra_min_chars(client):

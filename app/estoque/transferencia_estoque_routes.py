@@ -68,7 +68,7 @@ def api_te_dados_codigo():
                             'message': 'Sem saldo para este codigo/empresa'})
         produto = {'cod': quants[0]['cod'], 'name': quants[0]['product_name'],
                    'tracking': quants[0]['tracking']}
-        por_local, por_lote, reservada_total = {}, {}, 0.0
+        por_local, por_lote, por_local_lote, reservada_total = {}, {}, {}, 0.0
         for q in quants:
             reservada_total += q['reserved_quantity']
             lk = q['location_id']
@@ -86,12 +86,23 @@ def api_te_dados_codigo():
                 'is_migracao': 'MIGRA' in lote.upper()})
             lt['qty'] += q['quantity']; lt['reservada'] += q['reserved_quantity']
             lt['disponivel'] += q['available']
+            # Combinação local × lote (granularidade real do quant) — filtro cruzado + card
+            llk = (lk, q['lot_id'])
+            ll = por_local_lote.setdefault(llk, {
+                'location_id': lk, 'location_name': q['location_name'],
+                'lot_id': q['lot_id'], 'lote': lote,
+                'qty': 0.0, 'reservada': 0.0, 'disponivel': 0.0,
+                'is_indisp': lk in _LOCAIS_INDISP,
+                'is_migracao': 'MIGRA' in lote.upper()})
+            ll['qty'] += q['quantity']; ll['reservada'] += q['reserved_quantity']
+            ll['disponivel'] += q['available']
         ks = ('qty', 'reservada', 'disponivel')
         _round = lambda d: {**d, **{k: round(d[k], 6) for k in ks}}
         return jsonify({
             'success': True, 'produto': produto,
             'por_local': [_round(v) for v in por_local.values()],
             'por_lote': [_round(v) for v in por_lote.values()],
+            'por_local_lote': [_round(v) for v in por_local_lote.values()],
             'reservada_total': round(reservada_total, 6)})
     except Exception as e:  # noqa: BLE001
         logger.error(f'api_te_dados_codigo erro: {e}')
@@ -192,6 +203,21 @@ def _fmt_v2(r):
         'resultado': r}
 
 
+def _loc_id(data, chave, label):
+    """Converte um id de location para int, com erro de uso amigável.
+
+    Evita `invalid literal for int() with base 10: ''` quando o campo vem vazio
+    (ex.: autocomplete de local não selecionou item da lista).
+    """
+    v = data.get(chave)
+    if v is None or str(v).strip() == '':
+        raise ValueError(f'Selecione o {label} na lista')
+    try:
+        return int(v)
+    except (TypeError, ValueError):
+        raise ValueError(f'{label.capitalize()} inválido')
+
+
 def _despachar_transferencia(data, dry_run, usuario):
     """Dispatcher dos 3 modos. Levanta ValueError em erro de uso/dado."""
     modo = str(data.get('modo'))
@@ -215,15 +241,16 @@ def _despachar_transferencia(data, dry_run, usuario):
         svc = StockInternalTransferService(odoo=odoo, lot_svc=lot_svc)
         r = svc.transferir_entre_locations(
             product_id=prod['pid'], company_id=company_id, lot_id=lot_id, qty=qty,
-            location_id_origem=int(data['location_id_origem']),
-            location_id_destino=int(data['location_id_destino']), dry_run=dry_run)
+            location_id_origem=_loc_id(data, 'location_id_origem', 'local origem'),
+            location_id_destino=_loc_id(data, 'location_id_destino', 'local destino'),
+            dry_run=dry_run)
         return _fmt_atomo12(r, cod_origem, lote, lote)
 
     if modo == '2':  # lote -> lote (mesmo código, mesmo local)
         prod = resolver_produto(odoo, cod_origem)
         if not prod:
             raise ValueError(f'Codigo {cod_origem} nao encontrado')
-        loc_id = int(data['location_id'])
+        loc_id = _loc_id(data, 'location_id', 'local')
         lote_o = (data.get('lote_nome_origem') or '').strip() or None
         lote_d = (data.get('lote_nome_destino') or '').strip()
         if not lote_d:
@@ -262,10 +289,10 @@ def _despachar_transferencia(data, dry_run, usuario):
         svc3 = TransferenciaSaldoCodigoService(odoo=odoo, lot_svc=lot_svc)
         r = svc3.transferir_v2(
             company_id=company_id, cod_origem=cod_origem,
-            location_id_origem=int(data['location_id_origem']),
+            location_id_origem=_loc_id(data, 'location_id_origem', 'local origem'),
             lote_nome_origem=(data.get('lote_nome_origem') or '').strip() or None,
             cod_destino=cod_destino,
-            location_id_destino=int(data['location_id_destino']),
+            location_id_destino=_loc_id(data, 'location_id_destino', 'local destino'),
             lote_nome_destino=(data.get('lote_nome_destino') or '').strip() or None,
             qty=qty, usuario=usuario, dry_run=dry_run)
         return _fmt_v2(r)

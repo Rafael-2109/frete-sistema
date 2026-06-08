@@ -35,23 +35,11 @@
   <div id="te-alerta"></div>
 
   <div class="card mb-3 d-none" id="te-painel"><div class="card-body">
-    <h6 class="text-muted">Situação do código origem (ao vivo)</h6>
-    <div class="row">
-      <div class="col-md-6">
-        <strong>A · Por Local</strong> &middot; <small>B · reservada</small>
-        <table class="table table-sm"><thead><tr>
-          <th>Local</th><th class="text-end">Qtd</th><th class="text-end">Reserv.</th>
-          <th class="text-end">Disp.</th></tr></thead>
-          <tbody id="te-tbl-local"></tbody></table>
-      </div>
-      <div class="col-md-6">
-        <strong>C · Por Lote</strong>
-        <table class="table table-sm"><thead><tr>
-          <th>Lote</th><th class="text-end">Qtd</th><th class="text-end">Reserv.</th>
-          <th class="text-end">Disp.</th></tr></thead>
-          <tbody id="te-tbl-lote"></tbody></table>
-      </div>
+    <div class="d-flex justify-content-between align-items-center mb-2">
+      <h6 class="text-muted mb-0">Situação do código origem — Saldo por Local × Lote (ao vivo)</h6>
+      <small class="text-muted">Reservada total: <b id="te-reservada-total">-</b></small>
     </div>
+    <div class="row" id="te-detalhe"></div>
   </div></div>
 
   <div class="card mb-3 d-none" id="te-form"><div class="card-body">

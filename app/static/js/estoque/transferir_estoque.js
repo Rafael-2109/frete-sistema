@@ -56,14 +56,17 @@
     if (!dados.success) { alerta(dados.message, 'danger'); $('te-painel').classList.add('d-none'); return; }
     if (!dados.produto) { alerta(dados.message || 'Sem saldo', 'warning'); $('te-painel').classList.add('d-none'); renderForm(); return; }
     $('te-prod-origem-info').textContent = `${dados.produto.cod} — ${dados.produto.name} (tracking: ${dados.produto.tracking})`;
-    $('te-tbl-local').innerHTML = dados.por_local.map((l) =>
-      `<tr><td>${l.location_name}${l.is_indisp ? ' <span class="badge bg-secondary">Indisp.</span>' : ''}</td>` +
-      `<td class="text-end">${num(l.qty)}</td><td class="text-end">${num(l.reservada)}</td>` +
-      `<td class="text-end fw-bold">${num(l.disponivel)}</td></tr>`).join('');
-    $('te-tbl-lote').innerHTML = dados.por_lote.map((l) =>
-      `<tr><td>${l.lote}${l.is_migracao ? ' <span class="badge bg-secondary">MIGRAÇÃO</span>' : ''}</td>` +
-      `<td class="text-end">${num(l.qty)}</td><td class="text-end">${num(l.reservada)}</td>` +
-      `<td class="text-end fw-bold">${num(l.disponivel)}</td></tr>`).join('');
+    if ($('te-reservada-total')) $('te-reservada-total').textContent = num(dados.reservada_total);
+    // Saldo por Local × Lote em grid de 2 colunas (col-md-6)
+    const celulas = dados.por_local_lote || [];
+    $('te-detalhe').innerHTML = celulas.length ? celulas.map((r) =>
+      `<div class="col-md-6 mb-2"><div class="border rounded p-2 h-100 small">` +
+        `<div class="d-flex justify-content-between">` +
+          `<span><strong>${r.location_name}</strong>${r.is_indisp ? ' <span class="badge bg-secondary">Indisp.</span>' : ''}</span>` +
+          `<span class="text-muted">${r.lote}${r.is_migracao ? ' <span class="badge bg-secondary">MIGRAÇÃO</span>' : ''}</span></div>` +
+        `<div class="mt-1">Qtd <b>${num(r.qty)}</b> · Reserv. ${num(r.reservada)} · ` +
+          `Disp. <b class="text-success">${num(r.disponivel)}</b></div>` +
+      `</div></div>`).join('') : '<div class="col-12 text-muted">Sem saldo.</div>';
     $('te-painel').classList.remove('d-none');
     renderForm();
   }
@@ -76,6 +79,48 @@
     return (dados?.por_lote || []).map((l) =>
       `<option value="${l.lote === '(sem lote)' ? '' : l.lote}">${l.lote} (disp ${num(l.disponivel)})</option>`).join('');
   }
+
+  /* ---------- Modo 1: opções cruzadas (local × lote) ---------- */
+  function pll() { return dados?.por_local_lote || []; }
+  function optLocaisFiltrado(loteDisplay) {
+    const by = new Map();
+    pll().filter((r) => !loteDisplay || r.lote === loteDisplay).forEach((r) => {
+      const cur = by.get(r.location_id) ||
+        { location_id: r.location_id, location_name: r.location_name, disponivel: 0 };
+      cur.disponivel += r.disponivel; by.set(r.location_id, cur);
+    });
+    return [...by.values()].map((l) =>
+      `<option value="${l.location_id}">${l.location_name} (disp ${num(l.disponivel)})</option>`).join('');
+  }
+  function optLotesFiltrado(locId) {
+    const by = new Map();
+    pll().filter((r) => !locId || String(r.location_id) === String(locId)).forEach((r) => {
+      const cur = by.get(r.lote) || { lote: r.lote, disponivel: 0 };
+      cur.disponivel += r.disponivel; by.set(r.lote, cur);
+    });
+    return [...by.values()].map((l) =>
+      `<option value="${l.lote === '(sem lote)' ? '' : l.lote}" data-lote="${l.lote}">` +
+      `${l.lote} (disp ${num(l.disponivel)})</option>`).join('');
+  }
+  function setSelectOptions(sel, html, prevValue) {
+    sel.innerHTML = html;
+    if (prevValue !== undefined && prevValue !== null &&
+        [...sel.options].some((o) => o.value === prevValue)) sel.value = prevValue;
+  }
+  function loteDisplaySel() {
+    const sel = $('m-lote');
+    if (!sel || sel.selectedIndex < 0) return '';
+    const opt = sel.options[sel.selectedIndex];
+    return opt ? (opt.getAttribute('data-lote') || opt.value || '(sem lote)') : '';
+  }
+  // Repopula o "outro" select sem disparar change (evita loop). origem = 'lote'|'local'.
+  function refiltrarModo1(origem) {
+    const loteSel = $('m-lote'); const locSel = $('m-loc-o');
+    if (!loteSel || !locSel) return;
+    if (origem === 'lote') setSelectOptions(locSel, optLocaisFiltrado(loteDisplaySel()), locSel.value);
+    else setSelectOptions(loteSel, optLotesFiltrado(locSel.value), loteSel.value);
+  }
+
   function inputLocalDestino(id) {
     return `<input type="text" id="${id}" class="form-control" autocomplete="off" placeholder="local destino">` +
            `<input type="hidden" id="${id}-val">`;
@@ -88,10 +133,22 @@
     if (modo === '1') {
       $('te-form-titulo').textContent = 'Modo 1 · Local → Local (mesmo código e lote)';
       C.innerHTML =
-        `<div class="col-md-3"><label class="form-label">Lote</label><select id="m-lote" class="form-select"><option value="">(sem lote)</option>${optLotes()}</select></div>` +
-        `<div class="col-md-3"><label class="form-label">Local origem</label><select id="m-loc-o" class="form-select">${optLocais()}</select></div>` +
+        `<div class="col-md-3"><label class="form-label">Lote</label><select id="m-lote" class="form-select"></select></div>` +
+        `<div class="col-md-3"><label class="form-label">Local origem</label><select id="m-loc-o" class="form-select"></select></div>` +
         `<div class="col-md-3"><label class="form-label">Local destino</label>${inputLocalDestino('m-loc-d')}</div>` +
         `<div class="col-md-3"><label class="form-label">Qtd</label><input type="number" id="m-qty" class="form-control" min="0" step="0.001"></div>`;
+      // Popula selects e aplica filtro cruzado inicial (locais do lote pré-selecionado)
+      $('m-lote').innerHTML = optLotesFiltrado(null);
+      $('m-loc-o').innerHTML = optLocaisFiltrado(null);
+      refiltrarModo1('lote');
+      // Filtro cruzado bidirecional: Lote considera o Local e vice-versa
+      $('m-lote').addEventListener('change', () => refiltrarModo1('lote'));
+      $('m-loc-o').addEventListener('change', () => refiltrarModo1('local'));
+      // FIX: autocomplete do Local destino (estava ausente → location_id_destino vazio → int(''))
+      const empresa1 = $('te-empresa').value;
+      autocomplete($('m-loc-d'),
+        (q) => `${BASE}/api/autocomplete/local?q=${encodeURIComponent(q)}&empresa=${empresa1}`,
+        (it) => { $('m-loc-d').value = it.complete_name; $('m-loc-d-val').value = it.location_id; });
     } else if (modo === '2') {
       $('te-form-titulo').textContent = 'Modo 2 · Lote → Lote (mesmo código e local)';
       C.innerHTML =
@@ -153,6 +210,13 @@
   async function simular() {
     ultimoPayload = montarPayload();
     if (!ultimoPayload.qty || ultimoPayload.qty <= 0) { alerta('Informe a quantidade', 'warning'); return; }
+    const modoS = $('te-modo').value;
+    if (modoS === '1' || modoS === '3') {
+      if (!ultimoPayload.location_id_origem) { alerta('Selecione o local origem', 'warning'); return; }
+      if (!ultimoPayload.location_id_destino) {
+        alerta('Selecione o local destino na lista (autocomplete)', 'warning'); return;
+      }
+    }
     $('te-btn-simular').disabled = true;
     const d = await chamar('simular', ultimoPayload);
     $('te-btn-simular').disabled = false;
