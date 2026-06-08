@@ -1,0 +1,113 @@
+{
+  "name": "agent_skill_effectiveness",
+  "description": "Avaliacao de efetividade de UMA invocacao de skill (1 linha por ancora).",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "user_id",
+      "type": "integer",
+      "description": "FK → usuarios.id",
+      "nullable": false
+    },
+    {
+      "name": "session_id",
+      "type": "varchar(64)",
+      "nullable": false
+    },
+    {
+      "name": "skill_name",
+      "type": "varchar(80)",
+      "nullable": false
+    },
+    {
+      "name": "anchor_msg_id",
+      "type": "varchar(64)",
+      "nullable": false
+    },
+    {
+      "name": "stage_reached",
+      "type": "smallint",
+      "description": "0/1/2",
+      "default": 0
+    },
+    {
+      "name": "resolveu",
+      "type": "boolean"
+    },
+    {
+      "name": "ramo",
+      "type": "varchar(20)",
+      "description": "lembrete_usuario|lembrete_todos|ajuste_codigo|nada"
+    },
+    {
+      "name": "confidence",
+      "type": "float"
+    },
+    {
+      "name": "action_ref",
+      "type": "varchar(120)",
+      "description": "memory:<id> | dialogue:<id> | approval:<id>"
+    },
+    {
+      "name": "error_signature",
+      "type": "varchar(64)"
+    },
+    {
+      "name": "evidencia_json",
+      "type": "json"
+    },
+    {
+      "name": "created_at",
+      "type": "timestamp",
+      "description": "Data de criação"
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "user_id",
+      "references": "usuarios.id"
+    }
+  ],
+  "unique_constraints": [
+    [
+      "session_id",
+      "anchor_msg_id"
+    ]
+  ],
+  "indices": [
+    {
+      "name": "ix_agent_skill_effectiveness_session_id",
+      "columns": [
+        "session_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_agent_skill_effectiveness_skill_name",
+      "columns": [
+        "skill_name"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_agent_skill_effectiveness_user_id",
+      "columns": [
+        "user_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_skill_eff_skill_resolveu",
+      "columns": [
+        "skill_name",
+        "resolveu"
+      ],
+      "unique": false
+    }
+  ],
+  "admin_only": true
+}

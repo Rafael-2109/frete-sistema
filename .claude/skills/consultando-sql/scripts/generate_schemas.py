@@ -43,6 +43,7 @@ BLOCKED_TABLES = {
     'agent_sessions', 'agent_memories', 'agent_memory_versions',
     'agent_memory_embeddings', 'session_turn_embeddings',
     'table_catalog_embeddings',  # S1: infra de busca semantica de tabela
+    'agent_skill_effectiveness',  # infra do agente (efetividade de skills)
     # Alembic
     'alembic_version',
     # Sessões web

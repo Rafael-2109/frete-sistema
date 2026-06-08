@@ -13,6 +13,7 @@
     "agent_memory_embeddings",
     "agent_memory_versions",
     "agent_sessions",
+    "agent_skill_effectiveness",
     "alembic_version",
     "alerta_notificacoes",
     "alertas_separacao_cotada",
@@ -3474,6 +3475,17 @@
         "session_id",
         "user_id",
         "agente"
+      ],
+      "dominio": "Agente",
+      "admin_only": true
+    },
+    {
+      "name": "agent_skill_effectiveness",
+      "description": "Avaliacao de efetividade de UMA invocacao de skill (1 linha por ancora).",
+      "key_fields": [
+        "user_id",
+        "session_id",
+        "anchor_msg_id"
       ],
       "dominio": "Agente",
       "admin_only": true
