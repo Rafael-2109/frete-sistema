@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+{% set active_page = "manufatura" %}
+
+{% block title %}Relatórios Semanais - Manufatura{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4 py-4 premium-page mfg-module">
+
+    <div class="page-header reveal">
+        <h1>
+            <i class="fas fa-file-excel me-3"></i>
+            Relatórios Semanais
+        </h1>
+        <p>Consumo de componentes, estoques e tempo de estoque — gerados em um clique</p>
+    </div>
+
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            <div class="card shadow-sm">
+                <div class="card-body p-4">
+
+                    <p class="text-muted">
+                        Gera 3 planilhas Excel num único arquivo <strong>.zip</strong>:
+                    </p>
+                    <ul class="mb-4">
+                        <li>
+                            <strong>Consumo de Componentes</strong> — consumo médio mensal
+                            (pedidos dos últimos 12 meses explodidos no BOM). Abas:
+                            Insumos (código 1) e Embalagens (código 2).
+                        </li>
+                        <li>
+                            <strong>Estoques</strong> — saldo por produto. Abas: Insumos
+                            (código 1 sem matéria-prima), Embalagens (código 2) e
+                            Produto Acabado (código 4).
+                        </li>
+                        <li>
+                            <strong>Tempo de Estoque</strong> — cobertura em dias dos
+                            componentes, nas variantes S/ PA e C/ PA (considerando o
+                            estoque de produto acabado).
+                        </li>
+                    </ul>
+
+                    <div class="alert alert-info" role="alert">
+                        <i class="fas fa-clock me-2"></i>
+                        A geração explode a estrutura de todos os pedidos e pode levar
+                        alguns minutos. Mantenha esta aba aberta até o download começar.
+                    </div>
+
+                    <button id="btnGerar" class="btn btn-primary btn-lg">
+                        <span id="spinner" class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true"></span>
+                        <i id="btnIcon" class="fas fa-file-archive me-2"></i>
+                        <span id="btnLabel">Gerar 3 relatórios (.zip)</span>
+                    </button>
+
+                    <div id="msg" class="mt-3"></div>
+
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+    const btn = document.getElementById('btnGerar');
+    const spinner = document.getElementById('spinner');
+    const btnIcon = document.getElementById('btnIcon');
+    const btnLabel = document.getElementById('btnLabel');
+    const msg = document.getElementById('msg');
+    const urlGerar = "{{ url_for('relatorios_semanais.gerar') }}";
+
+    function setLoading(loading) {
+        btn.disabled = loading;
+        spinner.classList.toggle('d-none', !loading);
+        btnIcon.classList.toggle('d-none', loading);
+        btnLabel.textContent = loading
+            ? 'Gerando... (pode levar alguns minutos)'
+            : 'Gerar 3 relatórios (.zip)';
+    }
+
+    btn.addEventListener('click', async function () {
+        setLoading(true);
+        msg.innerHTML = '';
+        try {
+            const resp = await fetch(urlGerar, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+            if (!resp.ok) {
+                let erro = 'Erro ao gerar os relatórios.';
+                try { const j = await resp.json(); erro = j.erro || erro; } catch (e) { /* resposta não-JSON */ }
+                throw new Error(erro);
+            }
+            const blob = await resp.blob();
+            const cd = resp.headers.get('Content-Disposition') || '';
+            const m = cd.match(/filename=([^;]+)/);
+            const filename = m ? m[1].trim() : 'relatorios_semanais_manufatura.zip';
+
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            // Safari cancela o download se o blob URL for revogado de imediato; adia.
+            setTimeout(function () { URL.revokeObjectURL(url); }, 60000);
+
+            msg.innerHTML = '<div class="alert alert-success mb-0">'
+                + '<i class="fas fa-check-circle me-2"></i>Relatórios gerados e download iniciado.</div>';
+        } catch (e) {
+            // Mensagem de erro vem do servidor: inserir como TEXTO (nunca innerHTML) p/ evitar XSS.
+            const alerta = document.createElement('div');
+            alerta.className = 'alert alert-danger mb-0';
+            alerta.innerHTML = '<i class="fas fa-exclamation-triangle me-2"></i>';
+            alerta.appendChild(document.createTextNode(e.message || 'Erro ao gerar os relatórios.'));
+            msg.innerHTML = '';
+            msg.appendChild(alerta);
+        } finally {
+            setLoading(false);
+        }
+    });
+})();
+</script>
+{% endblock %}
