@@ -1,22 +1,30 @@
--- Migration: VIEW pedidos v8 + MV mv_pedidos — REMOVE o LEFT JOIN com carteira_principal
--- ⚠️ SUPERSEDED por alterar_view_pedidos_v9_dedup_carvia.sql (2026-06-08).
---    NAO aplicar esta v8: as Partes 2A/2B (CarVia) duplicam linhas por lote
---    (LEFT JOIN cadastro_sub_rota por substring, sem GROUP BY) -> o CREATE UNIQUE
---    INDEX idx_mv_pedidos_lote FALHA e trava o REFRESH CONCURRENTLY. Use a v9.
--- Data: 2026-06-07
+-- Migration: VIEW pedidos v9 + MV mv_pedidos — v8 + DEDUP CarVia (LATERAL LIMIT 1)
+-- Data: 2026-06-08
 -- Descricao:
---   v8 = v7 (alterar_view_pedidos_union_carvia_v7.sql) com UMA mudanca estrutural:
---   a Parte 1 (Nacom) deixa de fazer LEFT JOIN carteira_principal so para trazer
---   equipe_vendas. Agora usa min(s.equipe_vendas) — coluna desnormalizada em
---   separacao (migration add_equipe_vendas_separacao). Partes 2A/2B (CarVia) intactas.
+--   v9 = v8 com a correcao do BUG que travava o REFRESH MATERIALIZED VIEW
+--   CONCURRENTLY mv_pedidos desde ~13/04/2026 (warning "nao-critico" no scheduler).
 --
---   GANHO MEDIDO (EXPLAIN ANALYZE producao): Parte 1 de ~710ms -> ~26ms/scan
---   (o JOIN respondia por 97% dos buffers: 68.913 index probes em carteira_principal).
+--   CAUSA RAIZ: nas Partes 2A/2B (CarVia) o LEFT JOIN cadastro_sub_rota casava por
+--   substring (LIKE '%nome_cidade%') e, SEM GROUP BY, multiplicava linhas com o
+--   MESMO separacao_lote_id (ex.: 'Itu' casava 'TaquarITUba'; 'Uru' casava 'BaURU').
+--   Isso viola a UNIQUE idx_mv_pedidos_lote (obrigatoria p/ REFRESH CONCURRENTLY),
+--   abortando o refresh a cada ciclo -> MV congelada (~1.484 lotes faltando).
 --
---   A MV mv_pedidos recebe a MESMA troca (acelera o REFRESH CONCURRENTLY do scheduler).
+--   FIX: cada LEFT JOIN cadastro_rota/cadastro_sub_rota vira LEFT JOIN LATERAL
+--   (... LIMIT 1), garantindo 1 linha por lote. O desempate da sub_rota prioriza
+--   match exato e depois nome mais longo (escolhe 'Taquarituba', nao 'Itu') —
+--   tambem melhora a QUALIDADE da atribuicao. VIEW e MV ficam consistentes
+--   (ambas usam lower(f_unaccent(...))).
 --
--- PRE-REQUISITO: rodar add_equipe_vendas_separacao (coluna + backfill) ANTES desta.
--- Idempotente (DROP + CREATE). Executar no Render Shell.
+--   Mantem as melhorias da v8: Parte 1 (Nacom) usa min(s.equipe_vendas) em vez de
+--   LEFT JOIN carteira_principal (ganho ~710ms -> ~26ms/scan; equipe_vendas validado
+--   identico ao JOIN antigo, zero regressao).
+--
+-- PRE-REQUISITO: add_equipe_vendas_separacao (coluna + backfill) — JA aplicado em prod.
+-- Idempotente (DROP + CREATE) e ATOMICO (BEGIN/COMMIT: a troca de VIEW+MV nunca
+-- deixa a MV inexistente p/ outras conexoes). Executar no Render Shell ou via psql.
+
+BEGIN;
 
 DROP VIEW IF EXISTS pedidos;
 
@@ -155,12 +163,26 @@ SELECT
     NULL::text AS tags_pedido
 FROM carvia_cotacoes cot
 JOIN carvia_cliente_enderecos dest ON dest.id = cot.endereco_destino_id
-LEFT JOIN cadastro_rota cr ON cr.cod_uf = dest.fisico_uf AND cr.ativa = TRUE
-LEFT JOIN cadastro_sub_rota csr ON csr.cod_uf = dest.fisico_uf
-    -- v5: f_unaccent + lower (antes era apenas UPPER, nao tratava acento)
-    AND lower(f_unaccent(dest.fisico_cidade))
-          LIKE '%' || lower(f_unaccent(csr.nome_cidade)) || '%'
-    AND csr.ativa = TRUE
+-- v9: LATERAL LIMIT 1 — garante 1 linha por lote (corrige duplicacao que
+--     travava REFRESH CONCURRENTLY pela unique idx_mv_pedidos_lote)
+LEFT JOIN LATERAL (
+    SELECT cr.rota
+    FROM cadastro_rota cr
+    WHERE cr.cod_uf = dest.fisico_uf AND cr.ativa = TRUE
+    ORDER BY cr.id
+    LIMIT 1
+) cr ON TRUE
+LEFT JOIN LATERAL (
+    -- prioriza match exato, depois nome mais longo (evita 'Itu' casar 'Taquarituba')
+    SELECT csr.sub_rota
+    FROM cadastro_sub_rota csr
+    WHERE csr.cod_uf = dest.fisico_uf AND csr.ativa = TRUE
+      AND lower(f_unaccent(dest.fisico_cidade))
+            LIKE '%' || lower(f_unaccent(csr.nome_cidade)) || '%'
+    ORDER BY (lower(f_unaccent(csr.nome_cidade)) = lower(f_unaccent(dest.fisico_cidade))) DESC,
+             length(csr.nome_cidade) DESC, csr.id
+    LIMIT 1
+) csr ON TRUE
 WHERE cot.status = 'APROVADO'
   AND (
     COALESCE(cot.valor_mercadoria::double precision, 0) - COALESCE((
@@ -245,12 +267,25 @@ SELECT
 FROM carvia_pedidos ped
 JOIN carvia_cotacoes cot ON ped.cotacao_id = cot.id
 JOIN carvia_cliente_enderecos dest ON dest.id = cot.endereco_destino_id
-LEFT JOIN cadastro_rota cr ON cr.cod_uf = dest.fisico_uf AND cr.ativa = TRUE
-LEFT JOIN cadastro_sub_rota csr ON csr.cod_uf = dest.fisico_uf
-    -- v5: f_unaccent + lower (antes era apenas UPPER, nao tratava acento)
-    AND lower(f_unaccent(dest.fisico_cidade))
-          LIKE '%' || lower(f_unaccent(csr.nome_cidade)) || '%'
-    AND csr.ativa = TRUE
+-- v9: LATERAL LIMIT 1 — garante 1 linha por lote (corrige duplicacao)
+LEFT JOIN LATERAL (
+    SELECT cr.rota
+    FROM cadastro_rota cr
+    WHERE cr.cod_uf = dest.fisico_uf AND cr.ativa = TRUE
+    ORDER BY cr.id
+    LIMIT 1
+) cr ON TRUE
+LEFT JOIN LATERAL (
+    -- prioriza match exato, depois nome mais longo (evita 'Itu' casar 'Taquarituba')
+    SELECT csr.sub_rota
+    FROM cadastro_sub_rota csr
+    WHERE csr.cod_uf = dest.fisico_uf AND csr.ativa = TRUE
+      AND lower(f_unaccent(dest.fisico_cidade))
+            LIKE '%' || lower(f_unaccent(csr.nome_cidade)) || '%'
+    ORDER BY (lower(f_unaccent(csr.nome_cidade)) = lower(f_unaccent(dest.fisico_cidade))) DESC,
+             length(csr.nome_cidade) DESC, csr.id
+    LIMIT 1
+) csr ON TRUE
 WHERE ped.status NOT IN ('CANCELADO')
   AND cot.status = 'APROVADO';
 
@@ -385,10 +420,26 @@ SELECT
     NULL::text AS tags_pedido
 FROM carvia_cotacoes cot
 JOIN carvia_cliente_enderecos dest ON dest.id = cot.endereco_destino_id
-LEFT JOIN cadastro_rota cr ON cr.cod_uf = dest.fisico_uf AND cr.ativa = TRUE
-LEFT JOIN cadastro_sub_rota csr ON csr.cod_uf = dest.fisico_uf
-    AND UPPER(dest.fisico_cidade) LIKE '%' || UPPER(csr.nome_cidade) || '%'
-    AND csr.ativa = TRUE
+-- v9: LATERAL LIMIT 1 — garante 1 linha por lote (corrige duplicacao que
+--     travava REFRESH CONCURRENTLY pela unique idx_mv_pedidos_lote)
+LEFT JOIN LATERAL (
+    SELECT cr.rota
+    FROM cadastro_rota cr
+    WHERE cr.cod_uf = dest.fisico_uf AND cr.ativa = TRUE
+    ORDER BY cr.id
+    LIMIT 1
+) cr ON TRUE
+LEFT JOIN LATERAL (
+    -- prioriza match exato, depois nome mais longo (evita 'Itu' casar 'Taquarituba')
+    SELECT csr.sub_rota
+    FROM cadastro_sub_rota csr
+    WHERE csr.cod_uf = dest.fisico_uf AND csr.ativa = TRUE
+      AND lower(f_unaccent(dest.fisico_cidade))
+            LIKE '%' || lower(f_unaccent(csr.nome_cidade)) || '%'
+    ORDER BY (lower(f_unaccent(csr.nome_cidade)) = lower(f_unaccent(dest.fisico_cidade))) DESC,
+             length(csr.nome_cidade) DESC, csr.id
+    LIMIT 1
+) csr ON TRUE
 WHERE cot.status = 'APROVADO'
   AND (
     COALESCE(cot.valor_mercadoria::double precision, 0) - COALESCE((
@@ -469,10 +520,25 @@ SELECT
 FROM carvia_pedidos ped
 JOIN carvia_cotacoes cot ON ped.cotacao_id = cot.id
 JOIN carvia_cliente_enderecos dest ON dest.id = cot.endereco_destino_id
-LEFT JOIN cadastro_rota cr ON cr.cod_uf = dest.fisico_uf AND cr.ativa = TRUE
-LEFT JOIN cadastro_sub_rota csr ON csr.cod_uf = dest.fisico_uf
-    AND UPPER(dest.fisico_cidade) LIKE '%' || UPPER(csr.nome_cidade) || '%'
-    AND csr.ativa = TRUE
+-- v9: LATERAL LIMIT 1 — garante 1 linha por lote (corrige duplicacao)
+LEFT JOIN LATERAL (
+    SELECT cr.rota
+    FROM cadastro_rota cr
+    WHERE cr.cod_uf = dest.fisico_uf AND cr.ativa = TRUE
+    ORDER BY cr.id
+    LIMIT 1
+) cr ON TRUE
+LEFT JOIN LATERAL (
+    -- prioriza match exato, depois nome mais longo (evita 'Itu' casar 'Taquarituba')
+    SELECT csr.sub_rota
+    FROM cadastro_sub_rota csr
+    WHERE csr.cod_uf = dest.fisico_uf AND csr.ativa = TRUE
+      AND lower(f_unaccent(dest.fisico_cidade))
+            LIKE '%' || lower(f_unaccent(csr.nome_cidade)) || '%'
+    ORDER BY (lower(f_unaccent(csr.nome_cidade)) = lower(f_unaccent(dest.fisico_cidade))) DESC,
+             length(csr.nome_cidade) DESC, csr.id
+    LIMIT 1
+) csr ON TRUE
 WHERE ped.status NOT IN ('CANCELADO')
   AND cot.status = 'APROVADO';
 
@@ -508,3 +574,5 @@ CREATE INDEX IF NOT EXISTS idx_mv_pedidos_cnpj
 CREATE INDEX IF NOT EXISTS idx_mv_pedidos_nf_null
     ON mv_pedidos (nf, nf_cd, data_embarque)
     WHERE (nf IS NULL OR nf = '') AND nf_cd = false;
+
+COMMIT;

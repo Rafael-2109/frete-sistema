@@ -1,6 +1,12 @@
 """
 Migration: VIEW pedidos v8 + MV mv_pedidos — remove o LEFT JOIN carteira_principal
 
+⚠️  SUPERSEDED por alterar_view_pedidos_v9_dedup_carvia.py (2026-06-08).
+    NAO aplicar esta v8: as Partes 2A/2B (CarVia) duplicam linhas por lote
+    (LEFT JOIN cadastro_sub_rota por substring, sem GROUP BY), o que faz o
+    CREATE UNIQUE INDEX idx_mv_pedidos_lote FALHAR e trava o REFRESH CONCURRENTLY.
+    A v9 corrige isso (LATERAL LIMIT 1) mantendo todas as melhorias da v8.
+
 Data: 2026-06-07
 Descricao:
     Recria a VIEW pedidos (v8) e a MV mv_pedidos eliminando o LEFT JOIN com

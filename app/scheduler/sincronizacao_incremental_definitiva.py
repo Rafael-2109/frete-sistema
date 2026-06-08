@@ -1881,7 +1881,13 @@ def executar_sincronizacao():
             db.session.commit()
             logger.info("   mv_pedidos refreshed OK")
         except Exception as e:
-            logger.warning(f"⚠️ Refresh mv_pedidos falhou (nao-critico): {e}")
+            # NAO e' "nao-critico": se o REFRESH falha, a MV CONGELA e a lista de
+            # pedidos / contadores (counter_service usa PedidoMV) passam a servir
+            # dados DESATUALIZADOS ate alguem resolver. Causa tipica: duplicata de
+            # separacao_lote_id violando a UNIQUE idx_mv_pedidos_lote (ver migration
+            # alterar_view_pedidos_v9_dedup_carvia — substring LIKE nas Partes CarVia).
+            logger.error(f"❌ Refresh mv_pedidos FALHOU — MV ficara DESATUALIZADA "
+                         f"(lista de pedidos servira dados defasados): {e}")
             try:
                 db.session.rollback()
             except Exception:
