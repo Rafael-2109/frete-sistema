@@ -204,6 +204,10 @@ class RelatoriosSemanaisService:
         estoque = colapsar_por_unificacao(
             RelatoriosSemanaisService._estoque_por_produto(), mapa_unif
         )
+        # Estoque negativo (oversold / dado inconsistente) é tratado como 0 em
+        # TODOS os relatórios (decisão do produto). Piso aplicado APÓS a
+        # consolidação por unificação para não mascarar déficit dentro do grupo.
+        estoque = {cod: max(0.0, saldo) for cod, saldo in estoque.items()}
         cadastro = RelatoriosSemanaisService._cadastro_map()
         produzidos = {
             mapa_unif.get(c, c) for c in RelatoriosSemanaisService._produzidos_com_bom()

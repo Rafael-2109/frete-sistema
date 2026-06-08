@@ -36,6 +36,24 @@ def test_gerar_zip_retorna_3_planilhas_validas(db):
 
 
 @pytest.mark.integration
+def test_estoque_nunca_negativo_nos_relatorios(db):
+    import pandas as pd
+
+    from app.manufatura.services.relatorios_semanais_service import (
+        RelatoriosSemanaisService,
+    )
+
+    planilhas = RelatoriosSemanaisService.gerar_planilhas()
+    for nome, conteudo in planilhas.items():
+        xls = pd.ExcelFile(io.BytesIO(conteudo))
+        for aba in xls.sheet_names:
+            df = xls.parse(aba)
+            if "estoque" in df.columns:
+                negativos = df.loc[df["estoque"] < 0, "estoque"].tolist()
+                assert not negativos, f"{nome}/{aba} tem estoque negativo: {negativos[:5]}"
+
+
+@pytest.mark.integration
 def test_rotas_registradas_no_blueprint(app):
     from flask import url_for
 
