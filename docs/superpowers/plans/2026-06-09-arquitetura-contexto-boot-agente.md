@@ -15,11 +15,15 @@ atualizado: 2026-06-09
 > EM ABERTO e o escopo delas PERMANECE LA. Este plano governa o contexto COMPLETO
 > (CLAUDE.md, listing de skills, hook dinamico, memorias) sem absorver tasks daquele.
 
-> 🔵 **PROXIMA SESSAO — RETOMAR AQUI:** FASES 0-4 CONCLUIDAS (2026-06-09 — ver
-> Rastreamento). Antes da F5: PUSH da F4 + validar comportamento do hook em PROD
-> (mini-set + dump de boot novo: ordem dos blocos, pendencias por ultimo, payload
-> ≤15KB, sem stale_empresa/intelligence_report). Depois F5 (memorias — migration
-> de proveniencia + intent), F6 (governanca), F7 (opt-ins).
+> 🔵 **PROXIMA SESSAO — RETOMAR AQUI:** FASES 0-4 CONCLUIDAS + F4 VALIDADA EM
+> PROD (2026-06-09 — ver Rastreamento; backlog 63KB resolvido: 13KB/-79%).
+> Proxima: **F5** — COMECAR pela investigacao do `semantic=0` do user 74
+> (embeddings ausentes? cobertura? — informa o design da 5.4) e medicao de
+> precision@k baseline (20 turnos reais) ANTES de codar; depois 5.1 migration →
+> 5.2 proveniencia → 5.3 exposicao cross-user-safe → 5.4 intent → 5.5-5.7.
+> Aproveitar p/ consolidar `system-pitfalls` duplicado (backlog — dado, nao
+> codigo). Item 12 do mini-set (dump de boot manual) fica a criterio do Rafael.
+> Depois F6 (governanca), F7 (opt-ins).
 
 ## Indice
 
