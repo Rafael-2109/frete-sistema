@@ -325,8 +325,9 @@ Licoes vigentes:
 - **Novos checks (deste padrao)**: (1) consistencia de subagentes
   (`.claude/agents/*.md` ↔ system_prompt `<subagents>` ↔ CLAUDE.md SUBAGENTES);
   (2) orcamento do listing de skills (soma das descriptions ≤8K chars);
-  (3) orcamento do hook por bloco (`tests/agente/sdk/test_hook_budget.py` — a criar na
-  FASE 4 do plano); (4) invariante de nao-orfandade da deny-list (skill excluida ↔
+  (3) orcamento do hook por bloco (`tests/agente/sdk/test_hook_budget.py` — criado na
+  FASE 4, 2026-06-09: ordem-alvo + caps Tier 2 + overflow + teto 15KB);
+  (4) invariante de nao-orfandade da deny-list (skill excluida ↔
   declarada em agents/*.md); (5) checklist de admissao por camada (este doc).
 - **Dependencia declarada**: o fluxo R-EXEC-5 vive em `app/agente/CLAUDE.md` — adicionar
   la o ponteiro para este checklist (acao da FASE 6 do plano; sem isso o check (5) nao

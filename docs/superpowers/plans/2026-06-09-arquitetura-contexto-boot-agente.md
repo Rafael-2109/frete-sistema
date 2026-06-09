@@ -15,9 +15,11 @@ atualizado: 2026-06-09
 > EM ABERTO e o escopo delas PERMANECE LA. Este plano governa o contexto COMPLETO
 > (CLAUDE.md, listing de skills, hook dinamico, memorias) sem absorver tasks daquele.
 
-> 🔵 **PROXIMA SESSAO — RETOMAR AQUI:** FASES 0-3 CONCLUIDAS (2026-06-09 — ver
-> Rastreamento). Antes da F4: PUSH + rodar o mini-set pos-deploy (tabela abaixo) no
-> agente web. Depois F4 (hook: orcamento+ordenacao), F5 (memorias — migration).
+> 🔵 **PROXIMA SESSAO — RETOMAR AQUI:** FASES 0-4 CONCLUIDAS (2026-06-09 — ver
+> Rastreamento). Antes da F5: PUSH da F4 + validar comportamento do hook em PROD
+> (mini-set + dump de boot novo: ordem dos blocos, pendencias por ultimo, payload
+> ≤15KB, sem stale_empresa/intelligence_report). Depois F5 (memorias — migration
+> de proveniencia + intent), F6 (governanca), F7 (opt-ins).
 
 ## Indice
 
@@ -335,3 +337,43 @@ Padrao em si (PAD-CTX publicado): RP-1, R-2(criterio), A5(roteamento), C1(fonte 
   processando) — reverificar `agente_artifacts`. Itens 8 (anexo .xlsx/.ret na skill
   unificada) e 12 (dump de boot novo) PENDENTES de validacao manual do Rafael.
   Gotcha de medicao: timestamps de agent_sessions sao BRT-naive vs NOW() UTC.
+- 2026-06-09 — **FASE 4 CONCLUIDA** (TDD: 29 testes novos escritos ANTES — red
+  confirmado — em `tests/agente/sdk/test_hook_budget.py` +
+  `tests/agente/test_intersession_briefing_boot.py`):
+  4.1 `stale_empresa` E `intelligence_report` REMOVIDOS do briefing de boot
+  (funcoes deletadas; info on-demand via tela admin + rotas D7) — DESVIO
+  declarado: a tarefa citava so stale+improvement, mas o PAD-CTX lista
+  intelligence_report nos "excluidos do boot operacional" (padrao > plano);
+  `improvement_responses` gated por flag NOVA `AGENT_IMPROVEMENT_INJECT_BOOT`
+  default off (`AGENT_IMPROVEMENT_DIALOGUE` segue governando SO o dialogo D8).
+  4.2 `debug_mode_context` 9→4 linhas e `sql_admin_context` 12→6 (conteudo
+  essencial preservado: target_user_id/auditoria; DML so via MCP + confirmacao R3).
+  4.3 `TIER2_MEMORY_CHAR_CAP=300` (destilado meta WHEN/DO + ponteiro
+  `view_memories(path)` via `_distill_tier2_content`) + `TIER2_MAX_MEMORIES=4`
+  + `_fit_hook_budget` (teto `HOOK_CONTEXT_TARGET_CHARS=15000`; ordem de corte
+  tier2 → directives organicas [constitucional fica] → routing; NUNCA
+  user_rules/tier1/briefing/sessions/pendencias). Budget por modelo mantido
+  como teto ADICIONAL — Opus deixa de ser unlimited na pratica (ataca o
+  backlog "fallback injeta ~63KB/turno"; teste reproduz o cenario: 15 mems
+  empresa de 4KB → payload ≤15KB e ≤4 injetadas). user_rules: cap vigente intocado.
+  4.4 ORDEM-ALVO completa: `_build_session_window` retorna `(sessions,
+  pendencias)`; `_load_user_memories_for_context` retorna `(main, tail, ids)`
+  — main = user_rules→user_memories→directives→briefing→routing; tail =
+  recent_sessions→pendencias; cache de sessao virou 5-tuple;
+  `_build_routing_context` NAO embute mais directives (split
+  `_build_operational_directives_parts` const/organicas; wrapper publico
+  preservado p/ testes); montagem final em `hooks.py` via funcao pura
+  `_compose_hook_context` com pendencias por ULTIMO (debug/sql_admin antes
+  do tail). R0b do system_prompt segue valido (bloco continua existindo).
+  4.5 `get_skill_bug_responses_for_skill` (intersession_briefing) consumida
+  por `_build_skill_pretool_context` no PreToolUse Skill (junto ao lembrete
+  AGENT_SKILL_EVAL, mas SEM gate de flag — query leve best-effort); match por
+  `evidence_json['skill']` OU mencao em title/description (responses do
+  register_improvement real-time nao gravam o campo skill).
+  4.6 `test_hook_budget.py` cobre ordem, caps, overflow, teto 15KB e ausencia
+  de skill_hints/world_model. Aceite: 29 novos verdes + suite `tests/agente`
+  1336 passed (1 flake pre-existente `test_client_pool::test_pool_status_healthy`
+  — passa isolado; teardown async do pool, area nao tocada). PAD-CTX: check (3)
+  marcado como criado. PENDENTE pos-deploy: mini-set + dump de boot novo
+  (ordem real dos blocos, payload, sem stale/intelligence) + golden dataset
+  para validacao plena do 4.4 (F6).

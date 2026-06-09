@@ -27,9 +27,7 @@ def api_get_briefing():
             {"type": "last_intent", "content": "..."},
             {"type": "odoo_errors", "total": 3, "top": "..."},
             {"type": "import_failures", "count": 2},
-            {"type": "memory_alerts", "details": "..."},
-            {"type": "stale_memories", "count": 5},
-            {"type": "intelligence", "content": "..."}
+            {"type": "memory_alerts", "details": "..."}
         ]
     }
     """
@@ -90,9 +88,10 @@ def api_get_briefing():
                 'count': int(import_match.group(1)),
             })
 
-        # memory_alerts, stale_memories, intelligence — omitidos do card do usuario
-        # Sao informacoes internas da IA sem valor acionavel para operadores.
-        # Permanecem no XML injetado no prompt do agente (intersession_briefing.py).
+        # memory_alerts — omitido do card do usuario (informacao interna da IA
+        # sem valor acionavel para operadores; permanece no XML do prompt).
+        # stale_memories e intelligence sairam do briefing de boot (F4.1
+        # PAD-CTX) — acessiveis na tela admin /agente/memorias e rotas D7.
 
         return jsonify({
             'success': True,

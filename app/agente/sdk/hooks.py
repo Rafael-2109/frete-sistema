@@ -84,6 +84,75 @@ def _load_enforce_directives(user_id: int):
     return directives
 
 
+def _compose_hook_context(
+    *,
+    resume_fallback: str = '',
+    session_context: str = '',
+    main_context: str = '',
+    correction_hint: str = '',
+    debug_context: str = '',
+    sql_admin_context: str = '',
+    skill_hints: str = '',
+    world_model: str = '',
+    tail_context: str = '',
+) -> str:
+    """PURO/testavel — montagem do additionalContext na ORDEM-ALVO do PAD-CTX
+    (F4.4, tabela "Hook dinamico — layout, orcamento e ordem"):
+
+    resume_fallback(1) -> session_context(2) -> main_context(3-9: user_rules,
+    user_memories, directives, briefing, routing) -> correction_hint(10) ->
+    debug/sql_admin(11) -> [skill_hints/world_model: flag-gated, OFF por
+    default — decisao R-1] -> tail_context(12-13: recent_sessions +
+    pendencias_acumuladas por ULTIMO, coladas a mensagem do usuario).
+    """
+    return (
+        resume_fallback + session_context + main_context + correction_hint
+        + debug_context + sql_admin_context + skill_hints + world_model
+        + tail_context
+    )
+
+
+def _build_skill_pretool_context(user_id: int, skill: str) -> Optional[str]:
+    """Contexto pre-execucao da Skill tool (PreToolUse) — 2 fontes best-effort:
+
+    1. Lembrete aprendido do usuario (Task 10 Fase 1 Skill Effectiveness),
+       flag-gated por AGENT_SKILL_EVAL.
+    2. F4.5 PAD-CTX — excecao condicional: improvement_response de skill_bug
+       ATIVO volta ao contexto SOMENTE no turno que USA a skill afetada
+       (fora do boot — relocada do intersession_briefing na F4.1). Sem gate
+       de flag: query leve, so dispara com a Skill tool e response existente.
+    """
+    parts = []
+    try:
+        from ..config.feature_flags import AGENT_SKILL_EVAL
+        if AGENT_SKILL_EVAL:
+            from ..config.permissions import get_current_session_id
+            from .memory_injection import get_skill_reminders_for_session
+            sid = get_current_session_id() or ''
+            rem = get_skill_reminders_for_session(user_id, sid).get(skill)
+            if rem:
+                parts.append(
+                    f"LEMBRETE para a skill '{skill}' (aprendido de interacoes "
+                    f"anteriores deste usuario):\n{rem}"
+                )
+    except Exception as e:
+        logger.debug(f"[SKILL_EVAL] inject reminder falhou (ignorado): {e}")
+
+    try:
+        from ..services.intersession_briefing import get_skill_bug_responses_for_skill
+        bug_responses = get_skill_bug_responses_for_skill(skill)
+        if bug_responses:
+            parts.append(
+                f"AVISO skill_bug para '{skill}' (resposta do Claude Code ao "
+                f"dialogo de melhoria — avalie nesta execucao se o problema "
+                f"foi resolvido):\n{bug_responses}"
+            )
+    except Exception as e:
+        logger.debug(f"[SKILL_BUG] inject response falhou (ignorado): {e}")
+
+    return "\n".join(parts) if parts else None
+
+
 def build_hooks(
     user_id: int,
     user_name: str,
@@ -159,25 +228,16 @@ def build_hooks(
                 "codigo_produto vs cod_produto."
             )
         elif tool_name == 'Skill':
-            # Task 10 (Fase 1 Skill Effectiveness): injetar lembrete aprendido para a skill.
-            # Best-effort: NUNCA quebra a tool. Flag-gated por AGENT_SKILL_EVAL.
+            # Lembrete aprendido (Task 10, flag AGENT_SKILL_EVAL) + aviso de
+            # skill_bug respondido (F4.5 PAD-CTX — excecao condicional).
+            # Best-effort: NUNCA quebra a tool.
             try:
-                from ..config.feature_flags import AGENT_SKILL_EVAL
-                if AGENT_SKILL_EVAL:
-                    tinput = hook_input.get('tool_input', {})
-                    skill = tinput.get('skill', '') if isinstance(tinput, dict) else ''
-                    if skill:
-                        from ..config.permissions import get_current_session_id
-                        from .memory_injection import get_skill_reminders_for_session
-                        sid = get_current_session_id() or ''
-                        rem = get_skill_reminders_for_session(user_id, sid).get(skill)
-                        if rem:
-                            additional = (
-                                f"LEMBRETE para a skill '{skill}' (aprendido de interacoes "
-                                f"anteriores deste usuario):\n{rem}"
-                            )
+                tinput = hook_input.get('tool_input', {})
+                skill = tinput.get('skill', '') if isinstance(tinput, dict) else ''
+                if skill:
+                    additional = _build_skill_pretool_context(user_id, skill)
             except Exception as e:
-                logger.debug(f"[SKILL_EVAL] inject reminder falhou (ignorado): {e}")
+                logger.debug(f"[SKILL_CTX] pretool context falhou (ignorado): {e}")
 
         # B3: Pre-mortem seletivo para acoes irreversiveis
         # Dynamis/energeia: antes de atualizar (energeia), mapear modos de falha (dynamis)
@@ -1285,14 +1345,20 @@ def build_hooks(
             )
 
             additional_context = None
+            tail_context = None
             if USE_AUTO_MEMORY_INJECTION and user_id:
                 try:
                     # Fix DC-3: Ler model de self.settings (sempre atual)
                     # em vez de options_dict (closure capturada no connect,
                     # fica stale após set_model() no path persistente).
-                    additional_context, injected_mem_ids = _load_user_memories_for_context(
-                        user_id, prompt=prompt,
-                        model_name=get_model_name(),
+                    # F4.4 PAD-CTX: payload em 2 partes — main (user_rules,
+                    # memorias, directives, briefing, routing) + tail
+                    # (recent_sessions + pendencias, por ULTIMO na montagem).
+                    additional_context, tail_context, injected_mem_ids = (
+                        _load_user_memories_for_context(
+                            user_id, prompt=prompt,
+                            model_name=get_model_name(),
+                        )
                     )
                     # Salvar IDs injetados para effectiveness tracking posterior
                     set_injected_ids(injected_mem_ids)
@@ -1332,16 +1398,14 @@ def build_hooks(
             try:
                 from ..config.permissions import get_debug_mode
                 if get_debug_mode():
+                    # F4.2 PAD-CTX (R-8): comprimido 9->4 linhas (condicional admin)
                     debug_context = (
                         "\n<debug_mode_context>"
-                        "MODO DEBUG ATIVO. Capacidades extras disponiveis:\n"
-                        "- Memory tools: use target_user_id=N para acessar memorias de outro usuario\n"
-                        "- Session tools: use target_user_id=N + channel='teams'|'web' para buscar sessoes de outro usuario\n"
-                        "- list_session_users: lista usuarios com sessoes (para descobrir target_user_id)\n"
-                        "- SQL tool: tabelas internas desbloqueadas (agent_sessions, agent_memories, usuarios)\n"
-                        "- Para encontrar user_id: list_session_users ou SQL 'SELECT id, nome, email FROM usuarios'\n"
-                        "- Todo acesso cross-user e logado para auditoria.\n"
-                        "Fluxo recomendado: list_session_users → search_sessions(target_user_id=N) → apresentar."
+                        "MODO DEBUG ATIVO: memory/session tools aceitam target_user_id=N "
+                        "(descobrir via list_session_users ou SQL em usuarios); channel='teams'|'web' filtra sessoes.\n"
+                        "SQL: tabelas internas desbloqueadas (agent_sessions, agent_memories, usuarios). "
+                        "Todo acesso cross-user e logado.\n"
+                        "Fluxo: list_session_users → search_sessions(target_user_id=N) → apresentar."
                         "</debug_mode_context>"
                     )
                     logger.info(
@@ -1358,19 +1422,16 @@ def build_hooks(
             try:
                 from app.pessoal import USUARIOS_SQL_ADMIN as _SQL_ADMIN
                 if user_id and user_id in _SQL_ADMIN:
+                    # F4.2 PAD-CTX (R-8): comprimido 12->6 linhas (condicional admin)
                     sql_admin_context = (
                         "\n<sql_admin_context>"
-                        "MODO SQL ADMIN: voce tem acesso TOTAL ao banco via mcp__sql__consultar_sql.\n"
-                        "- Todas as tabelas desbloqueadas (incluindo agent_sessions, pessoal_*, bi_*).\n"
-                        "- INSERT, UPDATE, DELETE permitidos DIRETAMENTE pela tool mcp__sql__consultar_sql.\n"
-                        "  A tool NAO e read-only neste modo — o backend detecta seu user_id e ativa admin_mode automaticamente.\n"
-                        "- PROIBIDO usar Bash + Python/SQLAlchemy/psycopg para escrever no banco. Use SEMPRE mcp__sql__consultar_sql,\n"
-                        "  passando o proprio comando SQL como 'pergunta' (ex.: 'UPDATE pedidos SET status = ... WHERE ...').\n"
-                        "  Bash+Python para DML gera scripts descartaveis sem auditoria — a tool MCP registra tudo.\n"
-                        "- CUIDADO: operacoes de escrita afetam producao. SEMPRE mostre o SQL gerado ao usuario\n"
-                        "  e obtenha confirmacao explicita ANTES de executar (regra R3).\n"
-                        "- Fluxo correto: (1) gere o SQL, (2) apresente ao usuario, (3) aguarde confirmacao,\n"
-                        "  (4) execute via mcp__sql__consultar_sql, (5) confirme resultado com SELECT validador."
+                        "MODO SQL ADMIN: acesso TOTAL ao banco via mcp__sql__consultar_sql "
+                        "(todas as tabelas, incluindo agent_*, pessoal_*, bi_*).\n"
+                        "INSERT/UPDATE/DELETE permitidos pela propria tool (backend ativa admin_mode "
+                        "pelo seu user_id) — passe o comando SQL como 'pergunta'.\n"
+                        "PROIBIDO Bash+Python/SQLAlchemy/psycopg para DML: sem auditoria; a tool MCP registra tudo.\n"
+                        "Escrita afeta PRODUCAO: mostre o SQL, obtenha confirmacao explicita ANTES de executar (R3), "
+                        "e valide o resultado com SELECT apos."
                         "</sql_admin_context>"
                     )
                     logger.info(
@@ -1467,8 +1528,20 @@ def build_hooks(
             except Exception as _d5_err:
                 logger.debug(f"[HOOK:UserPromptSubmit] D5 world_model falhou (best-effort): {_d5_err}")
 
-            if session_context or additional_context or correction_hint or debug_context or sql_admin_context or resume_fallback_context or skill_hints_context or world_model_context:
-                full_context = resume_fallback_context + session_context + (additional_context or "") + correction_hint + debug_context + sql_admin_context + skill_hints_context + world_model_context
+            if session_context or additional_context or tail_context or correction_hint or debug_context or sql_admin_context or resume_fallback_context or skill_hints_context or world_model_context:
+                # F4.4 PAD-CTX: montagem na ORDEM-ALVO (funcao pura testavel) —
+                # tail (recent_sessions + pendencias) por ULTIMO, colado a mensagem.
+                full_context = _compose_hook_context(
+                    resume_fallback=resume_fallback_context,
+                    session_context=session_context,
+                    main_context=additional_context or "",
+                    correction_hint=correction_hint,
+                    debug_context=debug_context,
+                    sql_admin_context=sql_admin_context,
+                    skill_hints=skill_hints_context,
+                    world_model=world_model_context,
+                    tail_context=tail_context or "",
+                )
                 # B2: Log de context budget por categoria
                 memory_tokens_est = len(full_context) // 4
                 logger.info(
@@ -1476,6 +1549,7 @@ def build_hooks(
                     f"user_id={user_id or 'None'} | "
                     f"session_ctx_chars={len(session_context)} | "
                     f"memory_chars={len(additional_context or '')} | "
+                    f"tail_chars={len(tail_context or '')} | "
                     f"skill_hints_chars={len(skill_hints_context)} | "
                     f"world_model_chars={len(world_model_context)} | "
                     f"total_tokens_est={memory_tokens_est} | "

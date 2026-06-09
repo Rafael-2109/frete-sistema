@@ -23,13 +23,27 @@ logger = logging.getLogger('sistema_fretes')
 
 
 # ======================================================================
+# F4 PAD-CTX (2026-06-09): orcamento por bloco do hook dinamico
+# ======================================================================
+# Tabela canonica: ARQUITETURA_CONTEXTO_AGENTE.md secao "Hook dinamico —
+# layout, orcamento e ordem". Enforcement no _load_user_memories_for_context
+# (cap por memoria/bloco no Tier 2 + ordem de corte no overflow via
+# _fit_hook_budget). Motivacao: fallback de recencia injetava ~63KB/turno
+# com budget=unlimited no Opus (backlog do plano 2026-06-09).
+HOOK_CONTEXT_TARGET_CHARS = 15_000  # teto total main+tail (<=15KB/turno)
+TIER2_MEMORY_CHAR_CAP = 300         # teto por memoria Tier 2 (destilado + ponteiro)
+TIER2_MAX_MEMORIES = 4              # bloco Tier 2 = 4 x ~300c (tabela PAD-CTX item 6)
+
+
+# ======================================================================
 # Fase 5 (2026-04-21): Cache de injecao de memoria por sessao
 # ======================================================================
-# Estrutura: {session_id: (rendered_context, mem_ids, timestamp, user_id)}
+# Estrutura: {session_id: (main_context, tail_context, mem_ids, timestamp, user_id)}
+# (F4.4: payload dividido em main [blocos 3-9] + tail [recent_sessions+pendencias])
 # TTL: 30 minutos OU invalidacao manual via mutacao de memoria.
 # Memoria Invalidacao: _INVALIDATED_USERS set — consumido e limpo na proxima
 # consulta do user. Permite invalidacao cross-session sem iterar cache inteiro.
-_SESSION_INJECTION_CACHE: dict[str, tuple[Optional[str], list[int], float, int]] = {}
+_SESSION_INJECTION_CACHE: dict[str, tuple[Optional[str], Optional[str], list[int], float, int]] = {}
 _INVALIDATED_USERS: set[int] = set()
 _INJECTION_CACHE_TTL_SEC = 1800  # 30 minutos
 _INJECTION_CACHE_LOCK = threading.Lock()
@@ -52,7 +66,7 @@ def invalidate_injection_cache_for_user(user_id: int) -> None:
     with _INJECTION_CACHE_LOCK:
         sids_to_evict = [
             sid for sid, entry in _SESSION_INJECTION_CACHE.items()
-            if entry[3] == user_id  # entry = (rendered, ids, ts, cached_uid)
+            if entry[4] == user_id  # entry = (main, tail, ids, ts, cached_uid)
         ]
         for sid in sids_to_evict:
             del _SESSION_INJECTION_CACHE[sid]
@@ -64,9 +78,11 @@ def invalidate_injection_cache_for_user(user_id: int) -> None:
     )
 
 
-def _cache_get(session_id: str, user_id: int) -> Optional[tuple[Optional[str], list[int]]]:
+def _cache_get(
+    session_id: str, user_id: int
+) -> Optional[tuple[Optional[str], Optional[str], list[int]]]:
     """
-    Retorna (context, mem_ids) do cache se valido, ou None.
+    Retorna (main_context, tail_context, mem_ids) do cache se valido, ou None.
 
     Valido = TTL nao expirou AND user_id do cache bate com o atual.
     Invalidacao por mutacao e tratada em `invalidate_injection_cache_for_user`
@@ -78,7 +94,7 @@ def _cache_get(session_id: str, user_id: int) -> Optional[tuple[Optional[str], l
         entry = _SESSION_INJECTION_CACHE.get(session_id)
         if entry is None:
             return None
-        rendered, ids, ts, cached_uid = entry
+        main, tail, ids, ts, cached_uid = entry
         if cached_uid != user_id:
             # Session trocou de user (edge case) — invalidar
             del _SESSION_INJECTION_CACHE[session_id]
@@ -86,13 +102,14 @@ def _cache_get(session_id: str, user_id: int) -> Optional[tuple[Optional[str], l
         if _time_module.time() - ts > _INJECTION_CACHE_TTL_SEC:
             del _SESSION_INJECTION_CACHE[session_id]
             return None
-        return rendered, list(ids)
+        return main, tail, list(ids)
 
 
 def _cache_put(
     session_id: str,
     user_id: int,
-    rendered: Optional[str],
+    main: Optional[str],
+    tail: Optional[str],
     mem_ids: list[int],
 ) -> None:
     """Armazena context no cache. Evicta entries mais antigas se overflow."""
@@ -103,11 +120,12 @@ def _cache_put(
         if len(_SESSION_INJECTION_CACHE) >= _INJECTION_CACHE_MAX_SIZE:
             oldest_sid = min(
                 _SESSION_INJECTION_CACHE.keys(),
-                key=lambda k: _SESSION_INJECTION_CACHE[k][2],
+                key=lambda k: _SESSION_INJECTION_CACHE[k][3],
             )
             del _SESSION_INJECTION_CACHE[oldest_sid]
         _SESSION_INJECTION_CACHE[session_id] = (
-            rendered,
+            main,
+            tail,
             list(mem_ids),
             _time_module.time(),
             user_id,
@@ -139,19 +157,23 @@ def _is_nivel_5(content_lower: str) -> bool:
     return bool(re.search(r'nivel\s*[=:"\s>]+[5-9]', content_lower))
 
 
-def _build_session_window(user_id: int) -> Optional[str]:
+def _build_session_window(user_id: int) -> tuple[Optional[str], Optional[str]]:
     """
     Memory v2 — Rolling Window: últimas 5 sessões do banco.
 
     Query direta em agent_sessions.summary (JSONB) — sem XML intermediário.
     Cada sessão formatada como ~150 chars.
 
+    F4.4a PAD-CTX (item D3): pendencias_acumuladas saem como bloco SEPARADO —
+    o caller as posiciona por ULTIMO no payload (coladas a mensagem do usuario,
+    mitigando lost-in-the-middle).
+
     Pendências têm lifecycle:
     - TTL automático: pendências de sessões mais antigas que PENDENCIA_TTL_DAYS são ignoradas
     - Resolução manual: pendências em /memories/system/resolved_pendencias.json são filtradas
 
     Returns:
-        XML compacto com resumos das últimas 5 sessões ou None.
+        Tupla (sessions_block, pendencias_block) — cada um XML compacto ou None.
     """
     try:
         from ..models import AgentSession
@@ -169,7 +191,7 @@ def _build_session_window(user_id: int) -> Optional[str]:
         ).limit(5).all()
 
         if not sessions:
-            return None
+            return None, None
 
         parts = ['<recent_sessions count="' + str(len(sessions)) + '">']
         pendencias_all = []
@@ -202,7 +224,11 @@ def _build_session_window(user_id: int) -> Optional[str]:
                         elif isinstance(p, str):
                             pendencias_all.append(p)
 
-        # Pendências acumuladas (dedupadas + filtro de resolvidas)
+        parts.append('</recent_sessions>')
+        sessions_block = '\n'.join(parts)
+
+        # Pendências acumuladas (dedupadas + filtro de resolvidas) — bloco separado
+        pendencias_block = None
         if pendencias_all:
             unique_pend = list(dict.fromkeys(pendencias_all))[:5]  # Max 5, preserva ordem
 
@@ -212,23 +238,23 @@ def _build_session_window(user_id: int) -> Optional[str]:
                 unique_pend = [p for p in unique_pend if _normalize_pendencia(p) not in resolved]
 
             if unique_pend:
-                parts.append('<pendencias_acumuladas>')
-                parts.append('  <instruction>Para cada item: '
-                             '1) Verifique se ja foi resolvido (consulte dados, verifique status). '
-                             '2) Se resolvido: chame resolve_pendencia com o texto EXATO do item. '
-                             '3) Se pode resolver agora: resolva e chame resolve_pendencia. '
-                             '4) Se nao pode resolver: pergunte ao usuario como proceder.</instruction>')
+                pend_parts = ['<pendencias_acumuladas>']
+                pend_parts.append('  <instruction>Para cada item: '
+                                  '1) Verifique se ja foi resolvido (consulte dados, verifique status). '
+                                  '2) Se resolvido: chame resolve_pendencia com o texto EXATO do item. '
+                                  '3) Se pode resolver agora: resolva e chame resolve_pendencia. '
+                                  '4) Se nao pode resolver: pergunte ao usuario como proceder.</instruction>')
                 for p in unique_pend:
                     # G4: p e texto simples de summary JSONB — xml_escape
-                    parts.append(f'  <item>{xml_escape(p)}</item>')
-                parts.append('</pendencias_acumuladas>')
+                    pend_parts.append(f'  <item>{xml_escape(p)}</item>')
+                pend_parts.append('</pendencias_acumuladas>')
+                pendencias_block = '\n'.join(pend_parts)
 
-        parts.append('</recent_sessions>')
-        return '\n'.join(parts)
+        return sessions_block, pendencias_block
 
     except Exception as e:
         logger.debug(f"[MEMORY_INJECT] Session window falhou (ignorado): {e}")
-        return None
+        return None, None
 
 
 def _load_resolved_pendencias(user_id: int) -> set:
@@ -293,6 +319,96 @@ def _memory_open_tag(mem, tier: str = None) -> str:
         if meta.get('nivel') is not None:
             attrs.append(f'nivel="{xml_escape(str(meta["nivel"]))}"')
     return '<memory ' + ' '.join(attrs) + '>'
+
+
+def _distill_tier2_content(mem, content: str) -> str:
+    """F4.3 PAD-CTX: teto ~300c por memoria Tier 2.
+
+    Memoria curta (<= TIER2_MEMORY_CHAR_CAP) entra integral, sem ponteiro.
+    Memoria longa e DESTILADA: preferir meta canonico (titulo + WHEN/DO —
+    2026-06-08) sobre o content bruto; truncar ao cap e anexar ponteiro
+    `view_memories(path)` para a integra. Memoria de 27 linhas nao entra
+    inteira no boot (PAD-CTX secao Memorias).
+
+    Args:
+        mem: AgentMemory (ou objeto com .path e .meta opcional)
+        content: conteudo JA sanitizado (sanitize_memory_content no caller)
+    """
+    if len(content) <= TIER2_MEMORY_CHAR_CAP:
+        return content
+
+    distilled = None
+    meta = getattr(mem, 'meta', None)
+    if isinstance(meta, dict) and ((meta.get('when') or meta.get('do'))):
+        bits = []
+        if (meta.get('titulo') or '').strip():
+            bits.append(str(meta['titulo']).strip())
+        if (meta.get('when') or '').strip():
+            bits.append('WHEN: ' + str(meta['when']).strip())
+        if (meta.get('do') or '').strip():
+            bits.append('DO: ' + str(meta['do']).strip())
+        if bits:
+            # meta vem do JSONB (fora do caminho sanitizado do content)
+            distilled = sanitize_memory_content(
+                '\n'.join(bits), source=f"mem_id={getattr(mem, 'id', '?')} meta-distill"
+            )
+
+    if not distilled:
+        distilled = content
+
+    if len(distilled) > TIER2_MEMORY_CHAR_CAP:
+        distilled = distilled[:TIER2_MEMORY_CHAR_CAP - 3] + '...'
+
+    pointer = f'\n[integra] view_memories("{xml_escape(mem.path)}")'
+    return distilled + pointer
+
+
+def _fit_hook_budget(
+    parts: dict, target: int = HOOK_CONTEXT_TARGET_CHARS
+) -> tuple[dict, list[str]]:
+    """F4.3 PAD-CTX: ordem de corte no overflow do hook dinamico.
+
+    Corta na ordem: Tier 2 RAG -> directives ORGANICAS (constitucional fica) ->
+    routing_context. NUNCA corta os blocos fixos (user_rules, tier1/1.5/1.6,
+    briefing, recent_sessions, pendencias) — representados por 'fixed_chars'.
+    Se apos os 3 cortes ainda estourar, retorna assim mesmo (nao ha mais o
+    que cortar sem violar os intocaveis).
+
+    Args:
+        parts: {'fixed_chars': int, 'tier2': str, 'directives_full': str,
+                'directives_const': str, 'routing': str}
+        target: teto em chars (default HOOK_CONTEXT_TARGET_CHARS)
+
+    Returns:
+        ({'tier2': str, 'directives': str, 'routing': str}, lista de cortes)
+    """
+    fixed = int(parts.get('fixed_chars') or 0)
+    resolved = {
+        'tier2': parts.get('tier2') or '',
+        'directives': parts.get('directives_full') or '',
+        'routing': parts.get('routing') or '',
+    }
+    cortes: list[str] = []
+
+    def _total() -> int:
+        return fixed + len(resolved['tier2']) + len(resolved['directives']) + len(resolved['routing'])
+
+    if _total() <= target:
+        return resolved, cortes
+
+    resolved['tier2'] = ''
+    cortes.append('tier2')
+    if _total() <= target:
+        return resolved, cortes
+
+    resolved['directives'] = parts.get('directives_const') or ''
+    cortes.append('directives_organicas')
+    if _total() <= target:
+        return resolved, cortes
+
+    resolved['routing'] = ''
+    cortes.append('routing')
+    return resolved, cortes
 
 
 # =====================================================================
@@ -471,6 +587,24 @@ _CONSTITUTIONAL_DIRECTIVES = [
 ]
 
 
+def _render_operational_directives(directives: list[str]) -> Optional[str]:
+    """Envelopa itens <directive> ja renderizados no bloco <operational_directives>.
+
+    F4.3 PAD-CTX: separado do builder para a politica de overflow poder
+    re-renderizar o bloco SO com a(s) constitucional(is) sem re-query.
+    """
+    if not directives:
+        return None
+    parts = [
+        '<operational_directives priority="critical">',
+        '  <!-- Diretivas obrigatorias de operacao. Verifique WHEN antes de responder -->',
+        '  <!-- e aplique DO silenciosamente se aplicavel. Violar = erro grave. -->',
+    ]
+    parts.extend(directives)
+    parts.append('</operational_directives>')
+    return '\n'.join(parts)
+
+
 def _build_operational_directives(user_id: int) -> Optional[str]:
     """
     Constroi bloco <operational_directives> com heuristicas empresa nivel 5
@@ -478,13 +612,35 @@ def _build_operational_directives(user_id: int) -> Optional[str]:
     passivo" para "diretriz operacional obrigatoria" — o system_prompt.md
     instrui o agente a tratar este bloco como regra, nao como referencia.
 
+    Wrapper de compatibilidade sobre _build_operational_directives_parts
+    (F4.3 separa constitucional/organicas p/ a politica de overflow).
+    """
+    const_items, org_items = _build_operational_directives_parts(user_id)
+    result = _render_operational_directives(const_items + org_items)
+    if result:
+        logger.info(
+            f"[OPERATIONAL_DIRECTIVES] user_id={user_id} "
+            f"directives={len(const_items) + len(org_items)} chars={len(result)}"
+        )
+    return result
+
+
+def _build_operational_directives_parts(user_id: int) -> tuple[list[str], list[str]]:
+    """
+    Itens <directive> renderizados, separados em (constitucionais, organicas).
+
+    Constitucionais: pinadas em _CONSTITUTIONAL_DIRECTIVES (promovidas por
+    decisao explicita do usuario; NUNCA cortadas pela politica de overflow).
+    Organicas: heuristicas/protocolos empresa nivel 5 top effective_count
+    (cap MANDATORY_MAX_COUNT; cortaveis no overflow — F4.3 PAD-CTX).
+
     Inspirado na arquitetura do Claude Code: CLAUDE.md e carregado no
     system_prompt como instrucao de alta prioridade, nao como user memory.
     Nao da para colocar memorias dinamicas no system_prompt sem invalidar
     cache, entao imitamos o efeito via framing explicito + instrucao no
     system_prompt ensinando o agente a obedecer.
 
-    Zero LLM. Zero schema change. Determinist1co.
+    Zero LLM. Zero schema change. Deterministico.
 
     v2.2 (2026-04-12) — substitui proposta de judge LLM da v1 do plano.
 
@@ -493,7 +649,8 @@ def _build_operational_directives(user_id: int) -> Optional[str]:
             interface consistente com _build_routing_context)
 
     Returns:
-        String XML para injecao ou None se sem conteudo.
+        Tupla (constitucionais, organicas) — listas de strings XML (vazias
+        se flag off ou erro).
     """
     try:
         from ..models import AgentMemory
@@ -505,7 +662,7 @@ def _build_operational_directives(user_id: int) -> Optional[str]:
         import re as _re
 
         if not USE_OPERATIONAL_DIRECTIVES:
-            return None
+            return [], []
 
         # Buscar heuristicas empresa de alta importancia (nivel 5)
         # Ordenar por effective_count desc (mais aplicadas primeiro)
@@ -532,12 +689,13 @@ def _build_operational_directives(user_id: int) -> Optional[str]:
         ).limit(MANDATORY_MAX_COUNT * 3).all()
 
         # Filtrar por nivel 5 no conteudo (mesmo pattern usado em Tier 1.6)
-        directives = []
+        const_items: list[str] = []
+        org_items: list[str] = []
 
         # Diretivas constitucionais pinadas: sempre primeiro, independem de
         # effective_count/cap das organicas (promovidas por decisao do usuario).
         for _cd in _CONSTITUTIONAL_DIRECTIVES:
-            directives.append('\n'.join([
+            const_items.append('\n'.join([
                 f'  <directive id="{_cd["id"]}">',
                 f'    <titulo>{xml_escape(_cd["titulo"])}</titulo>',
                 f'    <when>{xml_escape(_cd["when"])}</when>',
@@ -619,30 +777,14 @@ def _build_operational_directives(user_id: int) -> Optional[str]:
                 d_parts.append(f'    <when>{xml_escape(when_text)}</when>')
             d_parts.append(f'    <do>{xml_escape(presc)}</do>')
             d_parts.append('  </directive>')
-            directives.append('\n'.join(d_parts))
+            org_items.append('\n'.join(d_parts))
             organicas += 1
 
-        if not directives:
-            return None
-
-        parts = [
-            '<operational_directives priority="critical">',
-            '  <!-- Diretivas obrigatorias de operacao. Verifique WHEN antes de responder -->',
-            '  <!-- e aplique DO silenciosamente se aplicavel. Violar = erro grave. -->',
-        ]
-        parts.extend(directives)
-        parts.append('</operational_directives>')
-
-        result = '\n'.join(parts)
-        logger.info(
-            f"[OPERATIONAL_DIRECTIVES] user_id={user_id} "
-            f"directives={len(directives)} chars={len(result)}"
-        )
-        return result
+        return const_items, org_items
 
     except Exception as e:
         logger.debug(f"[OPERATIONAL_DIRECTIVES] Build failed: {e}")
-        return None
+        return [], []
 
 
 def _build_routing_context(user_id: int) -> Optional[str]:
@@ -650,8 +792,11 @@ def _build_routing_context(user_id: int) -> Optional[str]:
     Constrói contexto de despacho para routing do agente principal.
     Zero-LLM: SQL queries apenas. Max ~500 chars.
 
+    F4.4 PAD-CTX: operational_directives NAO vem mais embutido aqui — o caller
+    (_load_user_memories_for_context) monta directives (item 7) e routing
+    (item 9) como blocos separados na ordem-alvo, com o briefing entre eles.
+
     Conteúdo:
-    - Operational directives (v2.2: heuristicas nivel 5 promovidas a regra)
     - Domínio predominante do usuário
     - Top 3 armadilhas ativas do domínio (ou gerais se domínio indeterminado)
     - Skills sugeridas para o domínio
@@ -664,13 +809,6 @@ def _build_routing_context(user_id: int) -> Optional[str]:
         import re
 
         domain = _compute_user_domain(user_id)
-
-        # v2.2: operational_directives vem ANTES do routing_context
-        # como bloco separado de prioridade critica
-        sections = []
-        directives_block = _build_operational_directives(user_id)
-        if directives_block:
-            sections.append(directives_block)
 
         parts = ['<routing_context priority="advisory">']
 
@@ -755,17 +893,13 @@ def _build_routing_context(user_id: int) -> Optional[str]:
         parts.append('</routing_context>')
 
         # routing_context so entra se tem conteudo util (> tags vazias)
-        if len(parts) > 2:
-            sections.append('\n'.join(parts))
-
-        if not sections:
+        if len(parts) <= 2:
             return None
 
-        # Juntar operational_directives + routing_context (separados por linha em branco)
-        result = '\n\n'.join(sections)
+        result = '\n'.join(parts)
         logger.debug(
             f"[ROUTING_CONTEXT] user_id={user_id} domain={domain} "
-            f"sections={len(sections)} chars={len(result)}"
+            f"chars={len(result)}"
         )
         return result
 
@@ -804,31 +938,33 @@ def _composite_score(decay: float, importance: float,
     return 0.3 * decay + 0.3 * importance + 0.4 * similarity
 
 
-def _load_user_memories_for_context(user_id: int, prompt: str = None, model_name: str = None) -> tuple[Optional[str], list[int]]:
+def _load_user_memories_for_context(
+    user_id: int, prompt: str = None, model_name: str = None
+) -> tuple[Optional[str], Optional[str], list[int]]:
     """
     Carrega memórias do usuário e formata como contexto para injeção.
 
     Memory System v2 — Arquitetura em 4 tiers:
-    - Tier 0 (SEMPRE): Rolling window de sessões + briefing inter-sessão + routing context
     - Tier 1 (SEMPRE): user.xml e preferences.xml — garante identidade/preferências
     - Tier 1.5 (SEMPRE): Perfil empresa do usuário — contexto de routing
     - Tier 2 (semântica): memórias relevantes ao prompt, excluindo Tier 1
     - Tier 2b (KG): complementar via Knowledge Graph
     - Fallback: memórias mais recentes se semântica não retornar nada
+    + blocos de contexto operacional: directives, briefing, routing, session window
 
-    v2 changes:
-    - Tier 0: session window + routing context (operational context removido — P9)
-    - Two-pass budget selection by composite score (1D)
-    - Category-aware decay rates
-    - Exclude cold memories from retrieval
-    - Per-tier char logging
-    - Increment usage_count on injection
+    F4 PAD-CTX (2026-06-09) — ordem-alvo + orcamento por bloco:
+    - Retorno em DUAS partes: MAIN (itens 3-9 da tabela: user_rules ->
+      user_memories -> operational_directives -> briefing -> routing_context)
+      e TAIL (itens 12-13: recent_sessions -> pendencias_acumuladas, que o
+      hook posiciona por ULTIMO, apos debug/sql_admin).
+    - Tier 2: cap TIER2_MAX_MEMORIES x ~TIER2_MEMORY_CHAR_CAP (destilado
+      meta WHEN/DO + ponteiro view_memories — _distill_tier2_content).
+    - Overflow: _fit_hook_budget corta tier2 -> directives organicas ->
+      routing (NUNCA user_rules/pendencias/sessions/tier1).
 
-    Budget adaptativo (T2-2):
-    - Opus: sem limite (1M context) — injetar todas as memórias retornadas
-    - Sonnet: 6000 chars (~1500 tokens)
-    - Haiku: 3000 chars (~750 tokens)
-    - Ajustado pelo tamanho do prompt (prompts longos = budget menor)
+    Budget adaptativo (T2-2) permanece como teto ADICIONAL do Tier 2:
+    - Opus: sem limite por modelo (o cap de bloco F4 e quem limita)
+    - Sonnet: 6000 chars | Haiku: 3000 chars (ajustado pelo tamanho do prompt)
 
     Args:
         user_id: ID do usuário no banco
@@ -836,10 +972,10 @@ def _load_user_memories_for_context(user_id: int, prompt: str = None, model_name
         model_name: Nome do modelo (para budget adaptativo, ex: "claude-opus-4-8")
 
     Returns:
-        Tupla (texto XML formatado ou None, lista de IDs de memórias injetadas)
+        Tupla (main_context ou None, tail_context ou None, IDs injetados)
     """
     if not user_id:
-        return None, []
+        return None, None, []
 
     # ─── Fase 5: Cache check por sessao ────────────────────────────
     # Se estamos em uma sessao conhecida, tenta servir do cache antes de
@@ -850,12 +986,13 @@ def _load_user_memories_for_context(user_id: int, prompt: str = None, model_name
         if _cached_session_id:
             _cache_hit = _cache_get(_cached_session_id, user_id)
             if _cache_hit is not None:
-                rendered, mem_ids = _cache_hit
+                main_c, tail_c, mem_ids = _cache_hit
                 logger.info(
                     f"[memory_injection] CACHE HIT session={_cached_session_id[:12]}... "
-                    f"user={user_id} chars={len(rendered or '')} ids={len(mem_ids)}"
+                    f"user={user_id} chars={len(main_c or '') + len(tail_c or '')} "
+                    f"ids={len(mem_ids)}"
                 )
-                return rendered, mem_ids
+                return main_c, tail_c, mem_ids
     except Exception as _cache_err:
         logger.debug(f"[memory_injection] cache check falhou (ignorado): {_cache_err}")
         _cached_session_id = None
@@ -875,16 +1012,13 @@ def _load_user_memories_for_context(user_id: int, prompt: str = None, model_name
             from ..models import AgentMemory
             from ..config.feature_flags import MEMORY_INJECTION_MIN_SIMILARITY
 
-            # ── Tier 0: Rolling window de sessões (Memory v2) ──
-            tier0_parts = []
-            tier0_chars = 0
-
             # ── L1: User Rules (SEMPRE, priority=mandatory) — NOVO CANAL ──
             # Fase 3.4A: regras duras vao para o TOPO ABSOLUTO do contexto (antes de
-            # <user_memories>), nao mais anexadas ao tier0 (que ia para o FIM, apos o
-            # footer). A Fase 0 (AgingBench) mostrou que a regra no topo rende muito mais
-            # (P3=89% vs P1=0%). rules_block_top != None => injetar no topo na montagem final.
+            # <user_memories>). A Fase 0 (AgingBench) mostrou que a regra no topo rende
+            # muito mais (P3=89% vs P1=0%). Com USE_USER_RULES_TOP=False (legado),
+            # as regras vao para a CAUDA do main (apos routing_context).
             rules_block_top = None
+            rules_block_tail_legacy = None
             # F1.1 PAD-CTX (bug N-1): IDs das regras L1 efetivamente injetadas —
             # unidos ao protected_ids adiante para o Tier 2 NAO re-injetar a mesma
             # memoria (dupla injecao user_rules + user_memories no mesmo payload).
@@ -896,12 +1030,10 @@ def _load_user_memories_for_context(user_id: int, prompt: str = None, model_name
                     rules_block = _build_user_rules(user_id)
                     if rules_block:
                         l1_rule_ids = _get_user_rule_ids(user_id)
-                        # Nao consome budget — sempre incluido
-                        tier0_chars += len(rules_block)
                         if USE_USER_RULES_TOP:
                             rules_block_top = rules_block  # TOPO (maior atencao) na montagem final
                         else:
-                            tier0_parts.append(rules_block)  # legado: cauda do prompt
+                            rules_block_tail_legacy = rules_block  # legado: cauda do main
                         logger.info(
                             f"[MEMORY_INJECT] L1 user_rules injected "
                             f"({'top' if USE_USER_RULES_TOP else 'tail'}): {len(rules_block)} chars"
@@ -909,29 +1041,39 @@ def _load_user_memories_for_context(user_id: int, prompt: str = None, model_name
             except Exception as l1_err:
                 logger.debug(f"[MEMORY_INJECT] L1 rules falhou (ignorado): {l1_err}")
 
-            session_window = _build_session_window(user_id)
-            if session_window:
-                tier0_parts.append(session_window)
-                tier0_chars += len(session_window)
+            # ── Itens 12-13 (TAIL): rolling window + pendencias (F4.4a) ──
+            session_window, pendencias_block = _build_session_window(user_id)
 
-            # ── Tier 0b: Briefing inter-sessão (Memory v2 — 3A) ──
+            # ── Item 8: Briefing inter-sessão (Memory v2 — 3A) ──
+            briefing = None
             try:
                 from ..config.feature_flags import USE_INTERSESSION_BRIEFING
                 if USE_INTERSESSION_BRIEFING:
                     from ..services.intersession_briefing import build_intersession_briefing
                     briefing = build_intersession_briefing(user_id)
-                    if briefing:
-                        tier0_parts.append(briefing)
-                        tier0_chars += len(briefing)
             except Exception as brief_err:
                 logger.debug(f"[MEMORY_INJECT] Briefing inter-sessão falhou (ignorado): {brief_err}")
 
-            # ── Tier 0c: Routing context (domínio + armadilhas) ──
+            # ── Item 7: Operational directives (const + organicas — F4.3) ──
+            directives_full = None
+            directives_const = None
+            try:
+                const_items, org_items = _build_operational_directives_parts(user_id)
+                directives_full = _render_operational_directives(const_items + org_items)
+                directives_const = _render_operational_directives(const_items)
+                if directives_full:
+                    logger.info(
+                        f"[OPERATIONAL_DIRECTIVES] user_id={user_id} "
+                        f"directives={len(const_items) + len(org_items)} "
+                        f"chars={len(directives_full)}"
+                    )
+            except Exception as dir_err:
+                logger.debug(f"[MEMORY_INJECT] Directives falhou (ignorado): {dir_err}")
+
+            # ── Item 9: Routing context (domínio + armadilhas) ──
+            routing_ctx = None
             try:
                 routing_ctx = _build_routing_context(user_id)
-                if routing_ctx:
-                    tier0_parts.append(routing_ctx)
-                    tier0_chars += len(routing_ctx)
             except Exception as route_err:
                 logger.debug(f"[MEMORY_INJECT] Routing context falhou (ignorado): {route_err}")
 
@@ -1188,19 +1330,24 @@ def _load_user_memories_for_context(user_id: int, prompt: str = None, model_name
                     if getattr(m, 'directive_status', None) in (None, 'ativa')
                 ]
 
-            # ── Montar resultado: Tier 0 + protegidas + relevantes ──
+            # ── Montar resultado: blocos operacionais + protegidas + relevantes ──
             all_memories = protected_memories + additional_memories
 
-            if not all_memories and not tier0_parts:
-                return None, []
+            _has_operational_blocks = bool(
+                session_window or pendencias_block or briefing
+                or directives_full or routing_ctx
+                or rules_block_top or rules_block_tail_legacy
+            )
+            if not all_memories and not _has_operational_blocks:
+                return None, None, []
 
             # ── QW-4 + T2-2 + v2: Budget adaptativo com two-pass selection ──
-            # Budget base por modelo
-            # Opus: sem limite (1M context) — injetar todas as memórias retornadas
+            # Budget base por modelo (teto ADICIONAL ao cap de bloco F4)
+            # Opus: sem limite por modelo — o cap TIER2_MAX_MEMORIES x 300c limita
             # Sonnet/Haiku: budget para manter conciso
             _model = (model_name or "").lower()
             if "opus" in _model:
-                base_budget = None  # sem limite — 1M context
+                base_budget = None  # sem limite por modelo — cap de bloco F4 aplica
             elif "haiku" in _model:
                 base_budget = 3000
             else:
@@ -1212,7 +1359,7 @@ def _load_user_memories_for_context(user_id: int, prompt: str = None, model_name
                 prompt_factor = max(0.5, 1.0 - prompt_len / 10000)
                 budget = int(base_budget * prompt_factor)
             else:
-                budget = None  # Opus: sem budget
+                budget = None  # Opus: sem budget por modelo
 
             # ── PASS 1: Calcular tamanhos de todos os candidatos ──
             header = (
@@ -1221,11 +1368,6 @@ def _load_user_memories_for_context(user_id: int, prompt: str = None, model_name
             )
             footer = "</user_memories>"
             overhead = len(header) + len(footer)
-
-            # Tier 0: sempre incluído (fora do budget de memórias)
-            tier0_text = ""
-            if tier0_parts:
-                tier0_text = "\n".join(tier0_parts) + "\n"
 
             # Tier 1: protegidas sempre incluídas
             tier1_texts = []
@@ -1316,6 +1458,9 @@ def _load_user_memories_for_context(user_id: int, prompt: str = None, model_name
                 content = sanitize_memory_content(
                     content, source=f"mem_id={mem.id} tier=2 path={mem.path}"
                 )
+                # F4.3 PAD-CTX: teto ~300c por memoria Tier 2 (destilado meta
+                # WHEN/DO + ponteiro view_memories para a integra)
+                content = _distill_tier2_content(mem, content)
                 mem_text = f'{_memory_open_tag(mem)}\n{content}\n</memory>\n'
                 # Usar composite score original do PASS 1 (inclui similarity)
                 # Fallback: decay + importance (sem similarity) para memórias de fallback
@@ -1335,12 +1480,15 @@ def _load_user_memories_for_context(user_id: int, prompt: str = None, model_name
                 tier2_candidates.append((mem, mem_text, len(mem_text), composite))
 
             # ── PASS 2: Selecionar por composite score dentro do budget ──
+            # F4.3 PAD-CTX: cap de QUANTIDADE do bloco Tier 2 (TIER2_MAX_MEMORIES)
+            # alem do budget por modelo — tabela do PAD-CTX: 4 x ~300c.
             tier2_candidates.sort(key=lambda x: x[3], reverse=True)
             selected_tier2 = []
             tier2_chars = 0
             tier2b_chars = 0
             for mem, mem_text, mem_len, _ in tier2_candidates:
-                # Opus (budget_remaining=None): incluir todas as memórias sem corte
+                if len(selected_tier2) >= TIER2_MAX_MEMORIES:
+                    break
                 if budget_remaining is not None and tier2_chars + tier2b_chars + mem_len > budget_remaining:
                     continue  # v2: SKIP em vez de BREAK — permite menor caber depois
                 selected_tier2.append((mem, mem_text))
@@ -1350,42 +1498,85 @@ def _load_user_memories_for_context(user_id: int, prompt: str = None, model_name
                 else:
                     tier2b_chars += mem_len
 
-            # ── Montar resultado final ──
-            # Memórias estáveis primeiro (maior atenção), operacional ao final
-            selected_parts = []
+            # ── F4.3: politica de overflow (ordem de corte da tabela PAD-CTX) ──
+            # Blocos fixos (incortaveis): user_rules, tier1/1.5/1.6, briefing,
+            # recent_sessions, pendencias. Cortaveis, na ordem: tier2 ->
+            # directives organicas (constitucional fica) -> routing_context.
+            fixed_chars = (
+                len(rules_block_top or '') + len(rules_block_tail_legacy or '')
+                + overhead + tier1_chars + tier15_chars + tier16_chars
+                + len(briefing or '') + len(session_window or '')
+                + len(pendencias_block or '')
+            )
+            fitted, overflow_cortes = _fit_hook_budget({
+                'fixed_chars': fixed_chars,
+                'tier2': ''.join(t for _, t in selected_tier2),
+                'directives_full': directives_full or '',
+                'directives_const': directives_const or '',
+                'routing': routing_ctx or '',
+            })
+            if 'tier2' in overflow_cortes:
+                selected_tier2 = []
+                tier2_chars = 0
+                tier2b_chars = 0
+            directives_block = fitted['directives'] or None
+            routing_block = fitted['routing'] or None
+            if overflow_cortes:
+                logger.info(
+                    f"[MEMORY_INJECT] F4 overflow policy: cortes={overflow_cortes} "
+                    f"user_id={user_id} target={HOOK_CONTEXT_TARGET_CHARS}"
+                )
+
+            # ── Montar resultado final (ordem-alvo PAD-CTX, F4.4) ──
+            # MAIN: user_rules(3) -> user_memories(4-6) -> directives(7) ->
+            # briefing(8) -> routing(9). TAIL: recent_sessions(12) -> pendencias(13).
+            main_parts = []
             # Fase 3.4A: regras duras (<user_rules>) no TOPO ABSOLUTO — antes do <user_memories>.
             if rules_block_top:
-                selected_parts.append(rules_block_top + "\n")
-            selected_parts.append(header)
+                main_parts.append(rules_block_top + "\n")
+            main_parts.append(header)
             injected_mems = []
 
             for mem, mem_text in tier1_texts:
-                selected_parts.append(mem_text)
+                main_parts.append(mem_text)
                 injected_mems.append(mem)
 
             for mem, mem_text in tier15_texts:
-                selected_parts.append(mem_text)
+                main_parts.append(mem_text)
                 injected_mems.append(mem)
 
             for mem, mem_text in tier16_texts:
-                selected_parts.append(mem_text)
+                main_parts.append(mem_text)
                 injected_mems.append(mem)
 
             for mem, mem_text in selected_tier2:
-                selected_parts.append(mem_text)
+                main_parts.append(mem_text)
                 injected_mems.append(mem)
 
-            selected_parts.append(footer)
-            # Contexto operacional (tier0) APÓS memórias estáveis — menor prioridade de atenção
-            if tier0_text:
-                selected_parts.append(tier0_text)
-            result = "".join(selected_parts)
+            main_parts.append(footer + "\n")
+            if directives_block:
+                main_parts.append(directives_block + "\n")
+            if briefing:
+                main_parts.append(briefing + "\n")
+            if routing_block:
+                main_parts.append(routing_block + "\n")
+            if rules_block_tail_legacy:
+                # legado USE_USER_RULES_TOP=False: regras na cauda do main
+                main_parts.append(rules_block_tail_legacy + "\n")
+            main_result = "".join(main_parts)
 
-            total_chars = len(result)
+            tail_parts = []
+            if session_window:
+                tail_parts.append(session_window + "\n")
+            if pendencias_block:
+                tail_parts.append(pendencias_block + "\n")
+            tail_result = "".join(tail_parts) if tail_parts else None
+
+            total_chars = len(main_result) + len(tail_result or '')
             injected_count = len(injected_mems)
 
-            if injected_count == 0 and not tier0_text and not rules_block_top:
-                return None, []  # Nenhuma memória coube no budget
+            if injected_count == 0 and not _has_operational_blocks:
+                return None, None, []  # Nenhuma memória coube no budget
 
             # ── v2: Atualizar last_accessed_at + usage_count para memórias injetadas ──
             injected_ids = [m.id for m in injected_mems]
@@ -1433,10 +1624,12 @@ def _load_user_memories_for_context(user_id: int, prompt: str = None, model_name
                 f"model={_model or 'unknown'} | "
                 f"avg_similarity={avg_similarity:.2f} | "
                 f"avg_composite={avg_composite:.2f} | "
-                f"tier0_chars={tier0_chars} | "
+                f"main_chars={len(main_result)} | "
+                f"tail_chars={len(tail_result or '')} | "
                 f"tier1_chars={tier1_chars} | "
                 f"tier2_chars={tier2_chars} | "
                 f"tier2b_chars={tier2b_chars} | "
+                f"overflow_cortes={overflow_cortes or '[]'} | "
                 f"budget_remaining={max(0, budget_remaining - tier2_chars - tier2b_chars) if budget_remaining is not None else 'unlimited'} | "
                 f"min_similarity_threshold={MEMORY_INJECTION_MIN_SIMILARITY} | "
                 f"prompt_preview={prompt[:50] if prompt else 'None'}"
@@ -1451,7 +1644,7 @@ def _load_user_memories_for_context(user_id: int, prompt: str = None, model_name
                     f"tier2={tier2_paths}"
                 )
 
-            return result, injected_ids
+            return main_result, tail_result, injected_ids
 
         if ctx is None:
             result = _load()
@@ -1464,11 +1657,12 @@ def _load_user_memories_for_context(user_id: int, prompt: str = None, model_name
         # Invalidado automaticamente em save/update/delete_memory (user marcado).
         try:
             if _cached_session_id and result is not None:
-                rendered, mem_ids = result
-                _cache_put(_cached_session_id, user_id, rendered, mem_ids or [])
+                main_c, tail_c, mem_ids = result
+                _cache_put(_cached_session_id, user_id, main_c, tail_c, mem_ids or [])
                 logger.info(
                     f"[memory_injection] CACHE MISS -> PUT session={_cached_session_id[:12]}... "
-                    f"user={user_id} chars={len(rendered or '')} ids={len(mem_ids or [])}"
+                    f"user={user_id} chars={len(main_c or '') + len(tail_c or '')} "
+                    f"ids={len(mem_ids or [])}"
                 )
         except Exception as _put_err:
             logger.debug(f"[memory_injection] cache put falhou: {_put_err}")
@@ -1477,7 +1671,7 @@ def _load_user_memories_for_context(user_id: int, prompt: str = None, model_name
 
     except Exception as e:
         logger.warning(f"[MEMORY_INJECT] Erro ao carregar memórias (ignorado): {e}")
-        return None, []
+        return None, None, []
 
 
 # ======================================================================

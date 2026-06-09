@@ -102,7 +102,7 @@ def test_user_rules_no_topo_antes_de_user_memories(app, cleanup_memories, monkey
     cleanup_ids, user_id = cleanup_memories
     _seed_regra_e_preferencia(cleanup_ids, user_id)
 
-    result, _ids = _load_user_memories_for_context(user_id=user_id)
+    result, _tail, _ids = _load_user_memories_for_context(user_id=user_id)
     assert result is not None
     assert '<user_rules' in result
     assert '<user_memories>' in result
@@ -116,7 +116,7 @@ def test_user_rules_legado_na_cauda_quando_flag_off(app, cleanup_memories, monke
     cleanup_ids, user_id = cleanup_memories
     _seed_regra_e_preferencia(cleanup_ids, user_id)
 
-    result, _ids = _load_user_memories_for_context(user_id=user_id)
+    result, _tail, _ids = _load_user_memories_for_context(user_id=user_id)
     assert result is not None
     assert '<user_rules' in result
     # legado: regras vem DEPOIS do fechamento de <user_memories>

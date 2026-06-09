@@ -496,6 +496,13 @@ USE_DEBUG_MODE = os.getenv("AGENT_DEBUG_MODE", "true").lower() == "true"
 # Default false: ativacao gradual apos testes.
 USE_IMPROVEMENT_DIALOGUE = os.getenv("AGENT_IMPROVEMENT_DIALOGUE", "false").lower() == "true"
 
+# F4.1 PAD-CTX (2026-06-09): controle SEPARADO para a INJECAO de
+# improvement_responses no briefing de boot (AGENT_IMPROVEMENT_DIALOGUE segue
+# governando apenas o DIALOGO D8). Default OFF — responses chegam ao agente
+# via excecao condicional por skill (F4.5, PreToolUse Skill) ou tela admin.
+# Lida via os.getenv no intersession_briefing (runtime, testavel via setenv).
+AGENT_IMPROVEMENT_INJECT_BOOT = os.getenv("AGENT_IMPROVEMENT_INJECT_BOOT", "false").lower() == "true"
+
 # Minimo de mensagens na sessao para gerar sugestoes de melhoria
 IMPROVEMENT_DIALOGUE_MIN_MESSAGES = int(os.getenv("AGENT_IMPROVEMENT_MIN_MESSAGES", "3"))
 

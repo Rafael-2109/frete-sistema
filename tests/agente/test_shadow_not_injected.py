@@ -99,7 +99,7 @@ def test_shadow_excluded_from_semantic_tier(app, mems):
                return_value=fake_semantic), \
          patch('app.agente.services.knowledge_graph_service.query_graph_memories',
                return_value=[]):
-        _, injected_ids = memory_injection._load_user_memories_for_context(
+        _, _, injected_ids = memory_injection._load_user_memories_for_context(
             user_id=user_id, prompt='bom dia', model_name='claude-opus-4-8',
         )
 
@@ -125,7 +125,7 @@ def test_shadow_excluded_from_kg_tier(app, mems):
                return_value=[]), \
          patch('app.agente.services.knowledge_graph_service.query_graph_memories',
                return_value=fake_kg):
-        _, injected_ids = memory_injection._load_user_memories_for_context(
+        _, _, injected_ids = memory_injection._load_user_memories_for_context(
             user_id=user_id, prompt='ola', model_name='claude-opus-4-8',
         )
 

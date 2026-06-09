@@ -7,6 +7,15 @@ Gera bloco XML compacto (~400 chars) com eventos ocorridos entre sessões:
 - Estado de memórias (conflitos, cold candidates)
 - Commits recentes no repositório (git log)
 
+F4.1 PAD-CTX (2026-06-09): blocos NAO-operacionais relocados para consulta
+on-demand — `stale_empresa` e `intelligence_report` sairam do boot (info
+acessivel via tela admin /agente/memorias e rotas D7); `improvement_responses`
+so entra com AGENT_IMPROVEMENT_INJECT_BOOT=true (default off — a flag
+AGENT_IMPROVEMENT_DIALOGUE segue governando apenas o DIALOGO D8). Excecao
+condicional F4.5: `get_skill_bug_responses_for_skill` devolve a response de
+skill_bug ao contexto SOMENTE no turno que usa a skill afetada (consumida
+pelo PreToolUse da Skill tool em sdk/hooks.py).
+
 Sem nova tabela — queries diretas em tabelas existentes.
 Best-effort: falhas são logadas silenciosamente.
 
@@ -69,18 +78,19 @@ def build_intersession_briefing(user_id: int) -> Optional[str]:
             if recent_commits:
                 parts.append(recent_commits)
 
-        # 6. Memórias empresa sem revisão há 60+ dias
-        stale_alert = _check_stale_empresa_memories()
-        if stale_alert:
-            parts.append(stale_alert)
+        # F4.1 PAD-CTX: stale_empresa (item 6) e intelligence_report (item 7)
+        # RELOCADOS para consulta on-demand (tela admin /agente/memorias + rotas
+        # D7) — fora do boot operacional.
 
-        # 7. Relatorio de inteligencia D7 (recomendacoes do cron semanal)
-        intelligence_alert = _check_intelligence_report()
-        if intelligence_alert:
-            parts.append(intelligence_alert)
-
-        # 8. Respostas do Claude Code ao dialogo de melhoria (D8)
-        use_improvement = os.getenv('AGENT_IMPROVEMENT_DIALOGUE', 'false').lower() == 'true'
+        # 6. Respostas do Claude Code ao dialogo de melhoria (D8).
+        # F4.1: a INJECAO no boot tem controle proprio (default OFF) — a flag
+        # AGENT_IMPROVEMENT_DIALOGUE governa apenas o DIALOGO (batch D8 +
+        # register_improvement). Excecao por skill (F4.5): ver
+        # get_skill_bug_responses_for_skill (consumida no PreToolUse Skill).
+        use_improvement = (
+            os.getenv('AGENT_IMPROVEMENT_DIALOGUE', 'false').lower() == 'true'
+            and os.getenv('AGENT_IMPROVEMENT_INJECT_BOOT', 'false').lower() == 'true'
+        )
         if use_improvement:
             improvement_responses = _check_improvement_responses()
             if improvement_responses:
@@ -381,40 +391,6 @@ def _check_recent_commits(since) -> Optional[str]:
         return None
 
 
-def _check_stale_empresa_memories() -> Optional[str]:
-    """
-    Verifica memorias empresa MADURAS sem revisao ha 60+ dias.
-
-    Memorias com reviewed_at=NULL, criadas ha mais de 60 dias E com
-    usage_count>=5 sao candidatas a revisao. Filtro `usage_count>=5`
-    adicionado em 2026-05-11 — evita alertar sobre memorias jovens ou
-    sem oportunidade real de uso ainda. Threshold subiu para count > 20
-    pos-backfill conservador (memorias com volume+eficacia comprovados
-    foram auto-revisadas via SQL idempotente).
-    """
-    try:
-        from ..models import AgentMemory
-        from datetime import timedelta
-
-        now = agora_utc_naive()
-        cutoff = now - timedelta(days=60)
-
-        stale = AgentMemory.query.filter(
-            AgentMemory.user_id == 0,
-            AgentMemory.is_directory == False,  # noqa: E712
-            AgentMemory.reviewed_at.is_(None),
-            AgentMemory.created_at < cutoff,
-            AgentMemory.usage_count >= 5,  # so alerta memorias com uso real
-        ).count()
-
-        if stale > 20:
-            return f'<stale_empresa count="{stale}">Memorias empresa maduras sem revisao ha 60+ dias.</stale_empresa>'
-        return None
-    except Exception as e:
-        logger.debug(f"[BRIEFING] Stale empresa check falhou (ignorado): {e}")
-        return None
-
-
 def _extract_modules_from_commit(commit_hash: str, project_dir: str) -> str:
     """
     Extrai módulos afetados por um commit (primeiro dir em app/).
@@ -450,76 +426,39 @@ def _extract_modules_from_commit(commit_hash: str, project_dir: str) -> str:
         return ''
 
 
-def _check_intelligence_report() -> Optional[str]:
-    """
-    Verifica se ha relatorio de inteligencia D7 recente (< 14 dias).
-
-    Extrai top 3 recomendacoes prescritivas do report_json e injeta
-    como XML no briefing. Zero custo LLM — query SQL direta.
-
-    Returns:
-        XML tag com recomendacoes ou None se nao houver relatorio recente.
-    """
-    try:
-        from ..models import AgentIntelligenceReport
-
-        report = AgentIntelligenceReport.get_latest()
-        if not report or not report.report_date:
-            return None
-
-        now = agora_utc_naive()
-        report_age = (now.date() - report.report_date).days
-        if report_age > 14:
-            return None
-
-        report_data = report.report_json
-        if not isinstance(report_data, dict):
-            return None
-
-        recs = report_data.get('recommendations', [])
-        if not recs or not isinstance(recs, list):
-            return None
-
-        # Top 3 recomendacoes, priorizando critical > warning > info
-        severity_order = {'critical': 0, 'warning': 1, 'info': 2, 'success': 3}
-        sorted_recs = sorted(
-            recs,
-            key=lambda r: severity_order.get(r.get('severity', 'info'), 99)
-        )
-        top_recs = sorted_recs[:3]
-
-        # Formatar como XML compacto
-        def _xml_esc(text: str) -> str:
-            """Escapa texto para XML (& < > ")."""
-            return (
-                text.replace('&', '&amp;')
-                .replace('<', '&lt;')
-                .replace('>', '&gt;')
-                .replace('"', '&quot;')
-            )
-
-        rec_parts = []
-        for rec in top_recs:
-            severity = _xml_esc(str(rec.get('severity', 'info')))
-            safe_title = _xml_esc(str(rec.get('title', '?')))
-            action = rec.get('suggested_action', '')
-            safe_action = _xml_esc(str(action)) if action else ''
-            rec_parts.append(
-                f'<rec severity="{severity}">{safe_title}'
-                f'{" — " + safe_action if safe_action else ""}</rec>'
-            )
-
-        score = float(report.health_score or 0)
-        return (
-            f'<intelligence_report date="{report.report_date}" '
-            f'score="{score:.0f}" age_days="{report_age}">'
-            + ''.join(rec_parts)
-            + '</intelligence_report>'
-        )
-
-    except Exception as e:
-        logger.debug(f"[BRIEFING] Intelligence report check falhou (ignorado): {e}")
+def _format_improvement_responses(responses, note: str) -> Optional[str]:
+    """Formata respostas do dialogo de melhoria como XML compacto (max 5)."""
+    if not responses:
         return None
+
+    def _xml_esc(text: str) -> str:
+        """Escapa texto para XML."""
+        return (
+            text.replace('&', '&amp;')
+            .replace('<', '&lt;')
+            .replace('>', '&gt;')
+            .replace('"', '&quot;')
+        )
+
+    parts = []
+    for r in responses[:5]:  # max 5 para nao poluir contexto
+        safe_title = _xml_esc(str(r.title))
+        notes = r.implementation_notes or r.description
+        safe_notes = _xml_esc(str(notes)[:200])
+        implemented = 'auto' if r.auto_implemented else 'manual'
+
+        parts.append(
+            f'<response key="{r.suggestion_key}" '
+            f'category="{r.category}" impl="{implemented}">'
+            f'{safe_title} — {safe_notes}</response>'
+        )
+
+    return (
+        f'<improvement_responses count="{len(responses)}" '
+        f'note="{note}">'
+        + ''.join(parts)
+        + '</improvement_responses>'
+    )
 
 
 def _check_improvement_responses() -> Optional[str]:
@@ -528,6 +467,7 @@ def _check_improvement_responses() -> Optional[str]:
 
     Busca respostas nao verificadas (status='responded', ultimos 14 dias)
     e formata como XML para injecao no briefing do agente.
+    F4.1: so entra no boot com AGENT_IMPROVEMENT_INJECT_BOOT=true (caller).
 
     Zero custo LLM — query SQL direta.
 
@@ -538,39 +478,67 @@ def _check_improvement_responses() -> Optional[str]:
         from ..models import AgentImprovementDialogue
 
         responses = AgentImprovementDialogue.get_unverified_responses()
-        if not responses:
-            return None
-
-        def _xml_esc(text: str) -> str:
-            """Escapa texto para XML."""
-            return (
-                text.replace('&', '&amp;')
-                .replace('<', '&lt;')
-                .replace('>', '&gt;')
-                .replace('"', '&quot;')
-            )
-
-        parts = []
-        for r in responses[:5]:  # max 5 para nao poluir contexto
-            safe_title = _xml_esc(str(r.title))
-            notes = r.implementation_notes or r.description
-            safe_notes = _xml_esc(str(notes)[:200])
-            implemented = 'auto' if r.auto_implemented else 'manual'
-
-            parts.append(
-                f'<response key="{r.suggestion_key}" '
-                f'category="{r.category}" impl="{implemented}">'
-                f'{safe_title} — {safe_notes}</response>'
-            )
-
-        return (
-            f'<improvement_responses count="{len(responses)}" '
-            f'note="Respostas do Claude Code ao dialogo de melhoria. '
-            f'Avalie se as mudancas resolveram os problemas reportados.">'
-            + ''.join(parts)
-            + '</improvement_responses>'
+        return _format_improvement_responses(
+            responses,
+            note=('Respostas do Claude Code ao dialogo de melhoria. '
+                  'Avalie se as mudancas resolveram os problemas reportados.'),
         )
 
     except Exception as e:
         logger.debug(f"[BRIEFING] Improvement responses check falhou (ignorado): {e}")
+        return None
+
+
+def get_skill_bug_responses_for_skill(skill_name: str) -> Optional[str]:
+    """
+    F4.5 PAD-CTX — excecao condicional ao corte de improvement_responses do
+    boot: response de skill_bug ATIVA (status='responded', <=14d) volta ao
+    contexto SOMENTE no turno que USA a skill afetada.
+
+    Consumida pelo PreToolUse da Skill tool (sdk/hooks.py:
+    _build_skill_pretool_context). Match da skill: evidence_json['skill']
+    (gravado pelo skill_effectiveness_service) OU mencao do nome da skill em
+    title/description (register_improvement real-time nao grava o campo).
+
+    Roda fora de request Flask (loop do SDK) — probe + create_app, mesmo
+    pattern de get_skill_reminders_for_session.
+
+    Returns:
+        XML <improvement_responses> filtrado ou None.
+    """
+    if not skill_name:
+        return None
+    try:
+        from contextlib import nullcontext
+        try:
+            from flask import current_app as _app_probe
+            _ = _app_probe.name
+            _ctx = nullcontext()
+        except RuntimeError:
+            from app import create_app as _ca
+            _ctx = _ca().app_context()
+
+        with _ctx:
+            from ..models import AgentImprovementDialogue
+
+            responses = AgentImprovementDialogue.get_unverified_responses()
+            skill_lower = skill_name.lower()
+            matched = []
+            for r in responses or []:
+                if r.category != 'skill_bug':
+                    continue
+                ev = r.evidence_json if isinstance(r.evidence_json, dict) else {}
+                ev_skill = str(ev.get('skill') or '').lower()
+                if ev_skill == skill_lower or skill_lower in f"{r.title}\n{r.description}".lower():
+                    matched.append(r)
+
+            return _format_improvement_responses(
+                matched,
+                note=(f'Respostas do Claude Code a bugs reportados na skill '
+                      f'{skill_name}. Avalie nesta execucao se o problema foi '
+                      f'resolvido.'),
+            )
+
+    except Exception as e:
+        logger.debug(f"[BRIEFING] skill_bug responses check falhou (ignorado): {e}")
         return None
