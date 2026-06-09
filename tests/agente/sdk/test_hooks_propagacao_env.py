@@ -69,12 +69,15 @@ async def test_bash_command_prefixado_quando_flag_on(hook_keep_stream_open, monk
     assert 'export AGENT_TYPE=' in cmd
     assert 'export AGENT_USER_NAME=' in cmd
     assert 'rafael' in cmd
+    # BUG #1: silenciamento de boot sempre presente em Bash
+    assert 'export NACOM_QUIET_BOOT=1' in cmd
     assert cmd.endswith('python script.py --confirmar')
 
 
 @pytest.mark.asyncio
-async def test_flag_off_nao_propaga(hook_keep_stream_open, monkeypatch):
-    """Sem AGENT_ODOO_AUDIT_HOOK, Bash NAO recebe export."""
+async def test_flag_off_so_silencia_boot_sem_audit(hook_keep_stream_open, monkeypatch):
+    """Sem AGENT_ODOO_AUDIT_HOOK, Bash AINDA recebe NACOM_QUIET_BOOT=1 (silencia
+    logs de boot — BUG #1), mas NAO as vars de audit (AGENT_SESSION_ID etc.)."""
     monkeypatch.setenv('AGENT_ODOO_AUDIT_HOOK', 'false')
     from importlib import reload
     from app.agente.config import feature_flags
@@ -94,7 +97,12 @@ async def test_flag_off_nao_propaga(hook_keep_stream_open, monkeypatch):
     out = await hook_keep_stream_open(hook_input, None, {})
 
     hso = out.get('hookSpecificOutput', {}) if out else {}
-    assert 'updatedInput' not in hso or hso.get('updatedInput') is None
+    updated = hso.get('updatedInput')
+    assert updated is not None, 'Bash deve ser mutado p/ silenciar boot mesmo com audit OFF'
+    cmd = updated['command']
+    assert 'export NACOM_QUIET_BOOT=1' in cmd
+    assert 'export AGENT_SESSION_ID=' not in cmd, 'audit vars NAO entram com flag OFF'
+    assert cmd.endswith('ls -la')
 
 
 @pytest.mark.asyncio

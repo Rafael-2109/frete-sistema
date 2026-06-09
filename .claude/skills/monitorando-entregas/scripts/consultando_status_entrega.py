@@ -209,7 +209,7 @@ def consultar_entregas(
             }
 
 
-def main():
+def build_parser():
     parser = argparse.ArgumentParser(description='Consulta status de entregas monitoradas')
 
     # Filtros de busca
@@ -232,8 +232,20 @@ def main():
     # Opções de saída
     parser.add_argument('--limite', type=int, default=50, help='Máximo de registros (default: 50)')
     parser.add_argument('--formato', choices=['json', 'tabela'], default='json', help='Formato de saída')
+    parser.add_argument('--json', action='store_true',
+                        help='Alias de --formato json (convencao majoritaria das skills)')
+    return parser
 
-    args = parser.parse_args()
+
+def _aplicar_alias_json(args):
+    """--json (booleano) tem precedencia e forca formato='json' (retrocompativel)."""
+    if getattr(args, 'json', False):
+        args.formato = 'json'
+    return args
+
+
+def main():
+    args = _aplicar_alias_json(build_parser().parse_args())
 
     resultado = consultar_entregas(
         numero_nf=args.nf,

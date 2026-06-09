@@ -4,6 +4,10 @@ import os
 import logging
 import warnings
 
+# Log de boot silenciavel (BUG #1): diagnosticos de boot vao para stderr e sao
+# suprimidos quando NACOM_QUIET_BOOT=1 (setado pelo agente em comandos Bash).
+from app.utils.boot_log import boot_log  # noqa: E402
+
 # Silenciar warning SAWarning de FK cyclic conhecido (assai/carvia/fretes)
 # Aparece em todo boot e nao indica erro real
 warnings.filterwarnings(
@@ -129,9 +133,9 @@ if _sentry_dsn:
                 _sentry_integrations.append(
                     AnthropicIntegration(include_prompts=True)
                 )
-                print("  📊 Sentry AI Monitoring ativo (AnthropicIntegration)", file=sys.stderr)
+                boot_log("  📊 Sentry AI Monitoring ativo (AnthropicIntegration)")
             except ImportError:
-                print("  ⚠️ AnthropicIntegration indisponivel (sentry-sdk ou anthropic desatualizado)", file=sys.stderr)
+                boot_log("  ⚠️ AnthropicIntegration indisponivel (sentry-sdk ou anthropic desatualizado)", force=True)
 
         sentry_sdk.init(
             dsn=_sentry_dsn,
@@ -155,9 +159,9 @@ if _sentry_dsn:
             # Stack traces em mensagens para melhor debugging
             attach_stacktrace=True,
         )
-        print(f"✅ Sentry inicializado (env={os.getenv('ENVIRONMENT', 'development')})", file=sys.stderr)
+        boot_log(f"✅ Sentry inicializado (env={os.getenv('ENVIRONMENT', 'development')})")
     except Exception as e:
-        print(f"⚠️ Erro ao inicializar Sentry: {e}", file=sys.stderr)
+        boot_log(f"⚠️ Erro ao inicializar Sentry: {e}", force=True)
 
 # 🔥 IMPORTAÇÃO CRÍTICA: Registrar tipos PostgreSQL ANTES de TUDO
 # Isso garante que os tipos sejam registrados antes de qualquer conexão
@@ -167,7 +171,7 @@ if "postgres" in os.getenv("DATABASE_URL", ""):
 
         registrar_tipos_postgresql_producao()
     except Exception as e:
-        print(f"⚠️ Erro ao importar módulo de tipos PostgreSQL: {e}", file=sys.stderr)
+        boot_log(f"⚠️ Erro ao importar módulo de tipos PostgreSQL: {e}", force=True)
 
 # 🔧 IMPORTANTE: Registrar tipos PostgreSQL ANTES de criar SQLAlchemy
 # Isso garante que todas as conexões usem os tipos corretos
@@ -196,18 +200,18 @@ try:
     DATEARRAY = extensions.new_array_type((1182,), "DATEARRAY", DATE)
     extensions.register_type(DATEARRAY)
 
-    print("✅ Tipos PostgreSQL registrados ANTES do SQLAlchemy (solução definitiva)", file=sys.stderr)
+    boot_log("✅ Tipos PostgreSQL registrados ANTES do SQLAlchemy (solução definitiva)")
 
     # Importar também o módulo de configuração se existir
     try:
         from app.utils.pg_types_config import registrar_tipos_postgresql #type: ignore
 
-        print("✅ Módulo pg_types_config também importado", file=sys.stderr)
+        boot_log("✅ Módulo pg_types_config também importado")
     except Exception:
         pass
 
 except Exception as e:
-    print(f"⚠️ Erro ao registrar tipos PostgreSQL: {e}", file=sys.stderr)
+    boot_log(f"⚠️ Erro ao registrar tipos PostgreSQL: {e}", force=True)
 
 # 🔧 Inicializações globais
 db = SQLAlchemy()
@@ -250,10 +254,10 @@ def register_pg_types_on_connect(dbapi_conn, connection_record):
             DATEARRAY = extensions.new_array_type((1182,), "DATEARRAY", DATE)
             extensions.register_type(DATEARRAY, dbapi_conn)
 
-        print(f"✅ [POOL] Tipos PostgreSQL registrados na conexão {id(dbapi_conn)}", file=sys.stderr)
+        boot_log(f"✅ [POOL] Tipos PostgreSQL registrados na conexão {id(dbapi_conn)}")
 
     except Exception as e:
-        print(f"⚠️ [POOL] Erro ao registrar tipos na conexão: {e}", file=sys.stderr)
+        boot_log(f"⚠️ [POOL] Erro ao registrar tipos na conexão: {e}", force=True)
 
 
 def formatar_data_segura(data, formato="%d/%m/%Y"):
@@ -1355,7 +1359,7 @@ def create_app(config_name=None):
                     # Tentar criar tabelas com encoding correto
                     with engine.connect() as conn:
                         db.metadata.create_all(conn, tables=_tables_to_create)
-                        print("✅ Tabelas criadas com encoding UTF-8", file=sys.stderr)
+                        boot_log("✅ Tabelas criadas com encoding UTF-8")
                 else:
                     # Para bancos locais (SQLite) — excluir MVs
                     _skip_tables = {'mv_pedidos', 'mv_comercial_equipes', 'mv_comercial_vendedores'}

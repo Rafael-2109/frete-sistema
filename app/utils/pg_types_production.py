@@ -3,7 +3,8 @@ Módulo para garantir registro correto de tipos PostgreSQL em produção
 Este módulo é carregado ANTES de qualquer conexão com o banco
 """
 import os
-import sys
+
+from app.utils.boot_log import boot_log
 
 def registrar_tipos_postgresql_producao():
     """
@@ -35,13 +36,11 @@ def registrar_tipos_postgresql_producao():
         DATEARRAY = extensions.new_array_type((1182,), "DATEARRAY", DATE)
         extensions.register_type(DATEARRAY)
         
-        import sys as _sys
-        print("✅ [PRODUÇÃO] Tipos PostgreSQL registrados globalmente com sucesso!", file=_sys.stderr)
+        boot_log("✅ [PRODUÇÃO] Tipos PostgreSQL registrados globalmente com sucesso!")
         return True
 
     except Exception as e:
-        import sys as _sys
-        print(f"⚠️ [PRODUÇÃO] Erro ao registrar tipos PostgreSQL: {e}", file=_sys.stderr)
+        boot_log(f"⚠️ [PRODUÇÃO] Erro ao registrar tipos PostgreSQL: {e}", force=True)
         return False
 
 # Registrar imediatamente ao importar o módulo

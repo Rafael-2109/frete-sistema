@@ -43,7 +43,7 @@ def _strs_from_csv(s):
     return [x.strip() for x in s.split(',') if x.strip()] if s else None
 
 
-def main() -> int:
+def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(description=(__doc__ or '').split('\n')[0])
     ap.add_argument(
         '--modo', choices=['quants', 'move-lines', 'pickings'], default='quants',
@@ -75,8 +75,21 @@ def main() -> int:
     # Comum
     ap.add_argument('--limit', type=int, default=20000)
     ap.add_argument('--formato', choices=['json', 'tabela'], default='tabela')
+    ap.add_argument('--json', action='store_true',
+                    help='Alias de --formato json (convencao majoritaria das skills)')
     adicionar_args_padrao(ap)  # --quiet + --forcar-concorrencia (v7)
-    args = ap.parse_args()
+    return ap
+
+
+def _aplicar_alias_json(args):
+    """--json (booleano) tem precedencia e forca formato='json' (retrocompativel)."""
+    if getattr(args, 'json', False):
+        args.formato = 'json'
+    return args
+
+
+def main() -> int:
+    args = _aplicar_alias_json(build_parser().parse_args())
 
     app = setup_cli_completo(__file__, args.quiet, args.forcar_concorrencia)
     with app.app_context():

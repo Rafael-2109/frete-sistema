@@ -198,33 +198,39 @@ def build_hooks(
                 )
                 additional = f"{additional}\n{pre_mortem}" if additional else pre_mortem
 
-        # Audit Hook deterministico (2026-05-28): propaga session_id ao subprocess Bash
-        # via env vars no proprio command (race-free vs os.environ multi-worker).
-        # Habilitado por AGENT_ODOO_AUDIT_HOOK=true. Ver app/utils/odoo_audit_helpers.py.
+        # Prefixo de ENV no subprocess Bash (race-free vs os.environ multi-worker —
+        # usa updatedInput, isolado por tool call). DOIS propositos:
+        #  1) NACOM_QUIET_BOOT=1 (BUG #1, 2026-06-08): silencia os logs de boot do
+        #     `import app` nos scripts CLI de skill -> stdout/stderr limpos no agente.
+        #     SEMPRE aplicado (independente de flags).
+        #  2) AGENT_SESSION_ID/... (audit hook 2026-05-28): propaga session_id p/
+        #     correlacao em operacao_odoo_auditoria. Condicional a AGENT_ODOO_AUDIT_HOOK.
+        #     Ver app/utils/odoo_audit_helpers.py.
         updated_input = None
         if tool_name == 'Bash':
             try:
-                from ..config.feature_flags import USE_ODOO_AUDIT_HOOK
-                if USE_ODOO_AUDIT_HOOK:
-                    import shlex
-                    from ..config.permissions import get_current_session_id
-                    tool_input_data = hook_input.get('tool_input', {})
-                    if isinstance(tool_input_data, dict):
-                        command_orig = tool_input_data.get('command', '')
-                        if command_orig and isinstance(command_orig, str):
+                import shlex
+                tool_input_data = hook_input.get('tool_input', {})
+                if isinstance(tool_input_data, dict):
+                    command_orig = tool_input_data.get('command', '')
+                    if command_orig and isinstance(command_orig, str):
+                        prefix = 'export NACOM_QUIET_BOOT=1; '
+                        from ..config.feature_flags import USE_ODOO_AUDIT_HOOK
+                        if USE_ODOO_AUDIT_HOOK:
+                            from ..config.permissions import get_current_session_id
                             current_sid = get_current_session_id() or 'noctx'
                             tool_use_id = hook_input.get('tool_use_id', '') or 'notui'
                             agent_type_atual = hook_input.get('agent_type', '') or 'main'
-                            prefix = (
+                            prefix += (
                                 f'export AGENT_SESSION_ID={shlex.quote(current_sid)}; '
                                 f'export AGENT_TOOL_USE_ID={shlex.quote(tool_use_id)}; '
                                 f'export AGENT_TYPE={shlex.quote(agent_type_atual)}; '
                                 f'export AGENT_USER_NAME={shlex.quote(user_name or str(user_id))}; '
                             )
-                            updated_input = {**tool_input_data, 'command': prefix + command_orig}
+                        updated_input = {**tool_input_data, 'command': prefix + command_orig}
             except Exception as e:
                 # Hook NUNCA quebra tool — log e segue.
-                logger.debug(f'[odoo_audit_propagacao] {e}')
+                logger.debug(f'[bash_prefix_propagacao] {e}')
 
         if additional or updated_input:
             output = {

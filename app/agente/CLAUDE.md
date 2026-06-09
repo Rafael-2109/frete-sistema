@@ -415,16 +415,16 @@ Manter o padrao existente em `models.py`: SEMPRE `flag_modified(session, 'data')
 
 ### R9: Audit Hook Deterministico Odoo — propagacao via PreToolUse (2026-05-28)
 
-Quando flag `AGENT_ODOO_AUDIT_HOOK=true`:
-- `sdk/hooks.py:_keep_stream_open` (PreToolUse) intercepta tool `Bash` e prefixa `command` com `export AGENT_SESSION_ID=<ctx> AGENT_TOOL_USE_ID=<tuid> AGENT_TYPE=<atype> AGENT_USER_NAME=<uname>` antes do command original.
-- Subprocess Bash herda as ENV vars → script Python da skill chama `OdooConnection.execute_kw` → hook em `app/utils/odoo_audit_helpers.py` registra em `operacao_odoo_auditoria` correlacionando com sessao.
+`sdk/hooks.py:_keep_stream_open` (PreToolUse) prefixa o `command` de tool `Bash` com env exports. DOIS propositos:
+- **`export NACOM_QUIET_BOOT=1` — SEMPRE** (independente de flags; BUG #1 2026-06-08): silencia os logs de boot do `import app` nos scripts CLI de skill (helper `app/utils/boot_log.py`) → stdout/stderr limpos para o agente parsear o resultado.
+- **vars de auditoria — quando `AGENT_ODOO_AUDIT_HOOK=true`**: prefixa `export AGENT_SESSION_ID=<ctx> AGENT_TOOL_USE_ID=<tuid> AGENT_TYPE=<atype> AGENT_USER_NAME=<uname>`. Subprocess Bash herda as ENV vars → script Python da skill chama `OdooConnection.execute_kw` → hook em `app/utils/odoo_audit_helpers.py` registra em `operacao_odoo_auditoria` correlacionando com sessao.
 
 **Race-free**: usa `hookSpecificOutput.updatedInput` (SDK 0.1.29+, dict[str, Any]) — isolado por tool call, nao depende de `os.environ` global (que quebraria multi-worker gunicorn).
 
 **Cuidados**:
 - Hook NUNCA quebra a tool (try/except + log debug)
 - shlex.quote escapa valores (defesa contra injection)
-- Quando flag OFF, hook nao muta command (zero overhead)
+- Quando `AGENT_ODOO_AUDIT_HOOK` OFF, o hook ainda prefixa `NACOM_QUIET_BOOT=1` (silenciar boot), mas NAO as vars de auditoria
 - ContextVar `_current_session_id` em `permissions.py:46` e a fonte de `AGENT_SESSION_ID`
 
 Ver `app/odoo/CLAUDE.md` secao P8 para detalhes do hook lado Odoo.

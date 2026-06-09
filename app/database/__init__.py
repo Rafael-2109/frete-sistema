@@ -4,6 +4,8 @@ Registra tipos PostgreSQL ANTES de qualquer uso
 """
 import os
 
+from app.utils.boot_log import boot_log
+
 # REGISTRAR TIPOS POSTGRESQL IMEDIATAMENTE
 if 'postgres' in os.getenv('DATABASE_URL', ''):
     try:
@@ -33,10 +35,10 @@ if 'postgres' in os.getenv('DATABASE_URL', ''):
         extensions.register_type(TIMESTAMPTZ, None)
         extensions.register_type(DATEARRAY, None)
         
-        print("✅ [DATABASE] Tipos PostgreSQL registrados no módulo database")
-        
+        boot_log("✅ [DATABASE] Tipos PostgreSQL registrados no módulo database")
+
     except Exception as e:
-        print(f"⚠️ [DATABASE] Erro ao registrar tipos PostgreSQL: {e}")
+        boot_log(f"⚠️ [DATABASE] Erro ao registrar tipos PostgreSQL: {e}", force=True)
 
 # Importar db após registrar tipos
 from app import db

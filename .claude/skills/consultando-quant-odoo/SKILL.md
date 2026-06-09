@@ -139,6 +139,16 @@ python "$SK" --modo move-lines --quant-ids 261590,261594,261598
 python "$SK" --modo move-lines --quant-ids 229937 --states done
 ```
 
+## Saída — `--formato` / `--json`
+
+Default = **tabela** (legível). Para JSON estruturado use **`--formato json`** OU o alias **`--json`** (booleano, alinhado à convenção majoritária dos scripts de skill). `--json` tem precedência sobre `--formato`.
+
+```bash
+python "$SK" --cods 4856125 --excluir-indisp --agregar --json          # JSON (alias)
+python "$SK" --cods 4856125 --excluir-indisp --agregar --formato json  # JSON (equivalente)
+python "$SK" --cods 4856125 --excluir-indisp --agregar                 # tabela (default)
+```
+
 ## Catálogo de átomos
 
 | Átomo | Status | Notas |

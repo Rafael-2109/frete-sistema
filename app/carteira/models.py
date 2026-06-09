@@ -1,5 +1,6 @@
 
 from app import db
+from app.utils.boot_log import boot_log
 from app.utils.timezone import agora_utc_naive
 from sqlalchemy import Index, func
 import logging
@@ -652,9 +653,7 @@ try:
     PreSeparacaoItem = PreSeparacaoItemAdapter
     PreSeparacaoItem.query = PreSeparacaoItemAdapter.query_adapter()
     
-    import sys as _sys
-    print("⚠️ ADAPTER ATIVO: PreSeparacaoItem está usando Separacao com status='PREVISAO'", file=_sys.stderr)
+    boot_log("⚠️ ADAPTER ATIVO: PreSeparacaoItem está usando Separacao com status='PREVISAO'")
 except ImportError as e:
-    import sys as _sys
-    print(f"⚠️ Adapter não pôde ser carregado: {e}", file=_sys.stderr)
+    boot_log(f"⚠️ Adapter não pôde ser carregado: {e}", force=True)
     # Mantém a classe original se o adapter não estiver disponível

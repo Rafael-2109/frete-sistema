@@ -6,6 +6,8 @@ Resolve o erro "Unknown PG numeric type: 1082" de forma simples e eficiente
 import psycopg2
 from psycopg2 import extensions
 
+from app.utils.boot_log import boot_log
+
 def registrar_tipos_postgresql():
     """
     Registra tipos PostgreSQL de forma limpa e eficiente
@@ -42,13 +44,11 @@ def registrar_tipos_postgresql():
         TIMESTAMPTZARRAY = extensions.new_array_type((1185,), "TIMESTAMPTZARRAY", TIMESTAMPTZ)
         extensions.register_type(TIMESTAMPTZARRAY)
         
-        import sys as _sys
-        print("✅ Tipos PostgreSQL registrados com sucesso (solução definitiva)", file=_sys.stderr)
+        boot_log("✅ Tipos PostgreSQL registrados com sucesso (solução definitiva)")
         return True
 
     except Exception as e:
-        import sys as _sys
-        print(f"⚠️ Erro ao registrar tipos PostgreSQL: {e}", file=_sys.stderr)
+        boot_log(f"⚠️ Erro ao registrar tipos PostgreSQL: {e}", force=True)
         return False
 
 # Registrar ao importar o módulo
