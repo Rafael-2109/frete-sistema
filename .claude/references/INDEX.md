@@ -44,6 +44,7 @@ atualizado: 2026-06-08
 | **Regras output agente (I1, I5, I6)** | [REGRAS_OUTPUT.md](REGRAS_OUTPUT.md) |
 | **Padroes backend (helpers compartilhados — `sanitize_for_json`, etc.)** | [PADROES_BACKEND.md](PADROES_BACKEND.md) |
 | **Arquitetura de Artefatos (padrao PAD-A — docs + scripts)** | [ARQUITETURA_DE_ARTEFATOS.md](ARQUITETURA_DE_ARTEFATOS.md) |
+| **Arquitetura de Contexto do Agente Web (padrao PAD-CTX — o que mora em cada camada do boot)** | [ARQUITETURA_CONTEXTO_AGENTE.md](ARQUITETURA_CONTEXTO_AGENTE.md) |
 | **Glossario — terminologia canonica (PAD-A)** | [GLOSSARIO.md](GLOSSARIO.md) |
 | **Best Practices Anthropic 2026 (caching, structured output, pgvector)** | [BEST_PRACTICES_2026.md](BEST_PRACTICES_2026.md) |
 | **Estudo System Prompts 2026 (pesquisa + pre-mortem + red team + gaps)** | [STUDY_PROMPT_ENGINEERING_2026.md](STUDY_PROMPT_ENGINEERING_2026.md) |
