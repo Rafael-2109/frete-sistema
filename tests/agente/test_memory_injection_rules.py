@@ -183,3 +183,47 @@ def test_build_user_rules_orders_by_correction_count_desc(app, cleanup_memories)
     result = _build_user_rules(user_id=user_id)
     assert result is not None
     assert result.index('REGRA ALTA') < result.index('REGRA BAIXA')
+
+
+# ---------------------------------------------------------------------------
+# F1.1 PAD-CTX (bug N-1) — _get_user_rule_ids: IDs do canal L1 para dedup
+# contra re-injecao das mesmas memorias no Tier 2 RAG.
+# ---------------------------------------------------------------------------
+from app.agente.sdk.memory_injection_rules import _get_user_rule_ids  # noqa: E402
+
+
+def test_get_user_rule_ids_empty_when_no_rules(app, cleanup_memories):
+    """Sem regras mandatory, retorna set vazio (nunca None)."""
+    _, user_id = cleanup_memories
+    result = _get_user_rule_ids(user_id=user_id)
+    assert result == set()
+
+
+def test_get_user_rule_ids_returns_only_mandatory(app, cleanup_memories):
+    """Retorna IDs apenas das memorias priority='mandatory' (exclui contextual)."""
+    cleanup_ids, user_id = cleanup_memories
+    mandatory = AgentMemory.create_file(user_id, '/memories/test_rule_ids_m.xml', 'NUNCA fazer Z')
+    mandatory.priority = 'mandatory'
+    contextual = AgentMemory.create_file(user_id, '/memories/test_rule_ids_c.xml', 'fato contextual')
+    contextual.priority = 'contextual'
+    db.session.commit()
+    cleanup_ids.extend([mandatory.id, contextual.id])
+
+    result = _get_user_rule_ids(user_id=user_id)
+    assert mandatory.id in result
+    assert contextual.id not in result
+
+
+def test_get_user_rule_ids_matches_build_user_rules(app, cleanup_memories):
+    """Toda regra renderizada por _build_user_rules tem seu ID em _get_user_rule_ids
+    (mesma query canonica — garante que o dedup do Tier 2 cobre o que foi injetado)."""
+    cleanup_ids, user_id = cleanup_memories
+    mem = AgentMemory.create_file(user_id, '/memories/test_rule_ids_match.xml', 'SEMPRE conferir W')
+    mem.priority = 'mandatory'
+    db.session.commit()
+    cleanup_ids.append(mem.id)
+
+    block = _build_user_rules(user_id=user_id)
+    ids = _get_user_rule_ids(user_id=user_id)
+    assert block is not None and 'SEMPRE conferir W' in block
+    assert mem.id in ids

@@ -13,6 +13,7 @@ skills:
   - planejando-pre-etapa-odoo
   - consultando-quant-odoo
   - auditando-cadastro-fiscal-odoo
+  - faturando-odoo
   - consultando-sql
   - resolvendo-entidades
 ---

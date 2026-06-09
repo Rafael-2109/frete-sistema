@@ -13,6 +13,54 @@ from ._sanitization import xml_escape, sanitize_memory_content
 logger = logging.getLogger('sistema_fretes')
 
 
+def _query_user_rules(user_id: int):
+    """
+    Query CANONICA das regras do canal L1 (priority='mandatory').
+
+    Fonte unica compartilhada por _build_user_rules (renderiza o bloco XML) e
+    _get_user_rule_ids (dedup do Tier 2) — manter UMA query garante que o
+    conjunto excluido do RAG e exatamente o conjunto injetado como regra.
+
+    Ordena por correction_count DESC (regras mais reincidentes primeiro) +
+    cap MANDATORY_RULES_MAX_COUNT: adesao a instrucoes despenca >100-150
+    regras (IFScale arXiv:2507.11538) — manter o canal duro pequeno e curado.
+    """
+    from ..models import AgentMemory
+    from ..config.feature_flags import MANDATORY_RULES_MAX_COUNT
+    return AgentMemory.query.filter(
+        AgentMemory.user_id.in_([user_id, 0]),
+        AgentMemory.is_directory == False,  # noqa: E712
+        AgentMemory.is_cold == False,  # noqa: E712
+        AgentMemory.priority == 'mandatory',
+    ).order_by(
+        AgentMemory.correction_count.desc(),
+        AgentMemory.user_id.asc(),
+        AgentMemory.path.asc(),
+    ).limit(MANDATORY_RULES_MAX_COUNT).all()
+
+
+def _get_user_rule_ids(user_id: int) -> set:
+    """
+    IDs das memorias que entram no canal L1 <user_rules>.
+
+    F1.1 PAD-CTX (bug N-1 do estudo 2026-06-09): essas memorias eram re-injetadas
+    no Tier 2 RAG quando tinham similarity alta — a mesma regra aparecia DUAS
+    vezes no payload (em <user_rules> E em <user_memories>). O caller une este
+    set ao protected_ids para excluir do Tier 2 o que ja foi injetado como regra.
+
+    Nota: inclui tambem regras com content vazio (que _build_user_rules pula na
+    renderizacao) — exclusao a mais e inofensiva, regra vazia nao tem valor no RAG.
+
+    Returns:
+        set de IDs (vazio em qualquer falha — nunca None).
+    """
+    try:
+        return {r.id for r in _query_user_rules(user_id)}
+    except Exception as e:
+        logger.debug(f"[MEMORY_INJECT_RULES] _get_user_rule_ids failed (ignored): {e}")
+        return set()
+
+
 def _build_user_rules(user_id: int) -> Optional[str]:
     """
     Constroi bloco <user_rules priority="mandatory"> com memorias do usuario
@@ -24,22 +72,8 @@ def _build_user_rules(user_id: int) -> Optional[str]:
     Returns:
         String XML ou None se nenhuma regra ativa.
     """
-    from ..models import AgentMemory
     try:
-        from ..config.feature_flags import MANDATORY_RULES_MAX_COUNT
-        # Ordena por correction_count DESC (regras mais reincidentes primeiro) +
-        # cap MANDATORY_RULES_MAX_COUNT: adesao a instrucoes despenca >100-150
-        # regras (IFScale arXiv:2507.11538) — manter o canal duro pequeno e curado.
-        rules = AgentMemory.query.filter(
-            AgentMemory.user_id.in_([user_id, 0]),
-            AgentMemory.is_directory == False,  # noqa: E712
-            AgentMemory.is_cold == False,  # noqa: E712
-            AgentMemory.priority == 'mandatory',
-        ).order_by(
-            AgentMemory.correction_count.desc(),
-            AgentMemory.user_id.asc(),
-            AgentMemory.path.asc(),
-        ).limit(MANDATORY_RULES_MAX_COUNT).all()
+        rules = _query_user_rules(user_id)
 
         if not rules:
             return None

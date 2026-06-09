@@ -234,3 +234,16 @@ Padrao em si (PAD-CTX publicado): RP-1, R-2(criterio), A5(roteamento), C1(fonte 
   (NAO `sdk/`; PAD-CTX e plano corrigidos). Aceite: 26 testes verdes
   (test_skills_whitelist_consolidation + test_context_enrichment, incl.
   test_flags_off_por_default).
+- 2026-06-09 — **FASE 1 CONCLUIDA**: 1.1 dedup N-1 via TDD — desvio de implementacao
+  registrado: em vez de mudar a assinatura de `_build_user_rules` (10 testes a quebrar),
+  extraida query canonica `_query_user_rules` + nova `_get_user_rule_ids`; uniao em
+  `protected_ids` condicionada a regras efetivamente injetadas (3 testes novos, 12/12).
+  1.2 `gestor-estoque-odoo` no `<subagents>` (+4L; baseline 788L/986L atualizado +
+  bloco auto-medido do CLAUDE.md do modulo). 1.3 `--check-consistency` no
+  prompt_size_audit.py (3 projecoes + nao-orfandade da deny-list com excecoes
+  declaradas: HORA→allow-list lojas, DEV_RESERVED→por design, consultando-sql sem
+  SKILL.md) + hook pre-commit estendido (vigia agents/, whitelists, CLAUDE.md raiz).
+  1.4 ponteiro INDEX.md no topo do INDICE do CLAUDE.md. 1.5 VERIFICADA SEM EDICAO —
+  R11.1/R11.2 ja conformes (politica 1 linha + ponteiro GOTCHAS.md). 1.6
+  `faturando-odoo` declarada no gestor-estoque-odoo.md (orfa resolvida). Aceite:
+  17 testes verdes + check-consistency OK + check-delta OK.

@@ -885,12 +885,17 @@ def _load_user_memories_for_context(user_id: int, prompt: str = None, model_name
             # footer). A Fase 0 (AgingBench) mostrou que a regra no topo rende muito mais
             # (P3=89% vs P1=0%). rules_block_top != None => injetar no topo na montagem final.
             rules_block_top = None
+            # F1.1 PAD-CTX (bug N-1): IDs das regras L1 efetivamente injetadas —
+            # unidos ao protected_ids adiante para o Tier 2 NAO re-injetar a mesma
+            # memoria (dupla injecao user_rules + user_memories no mesmo payload).
+            l1_rule_ids: set = set()
             try:
                 from ..config.feature_flags import USE_USER_RULES_CHANNEL, USE_USER_RULES_TOP
                 if USE_USER_RULES_CHANNEL:
-                    from .memory_injection_rules import _build_user_rules
+                    from .memory_injection_rules import _build_user_rules, _get_user_rule_ids
                     rules_block = _build_user_rules(user_id)
                     if rules_block:
+                        l1_rule_ids = _get_user_rule_ids(user_id)
                         # Nao consome budget — sempre incluido
                         tier0_chars += len(rules_block)
                         if USE_USER_RULES_TOP:
@@ -946,6 +951,9 @@ def _load_user_memories_for_context(user_id: int, prompt: str = None, model_name
             ).all()
 
             protected_ids = {m.id for m in protected_memories}
+            # F1.1 PAD-CTX (bug N-1): regras ja injetadas no canal L1 <user_rules>
+            # nao podem reentrar via Tier 2 semantico/fallback.
+            protected_ids |= l1_rule_ids
 
             # ── Tier 1.5: Perfil empresa do usuário (always-inject para routing) ──
             # Se existe um perfil empresa para este user_id, injetá-lo

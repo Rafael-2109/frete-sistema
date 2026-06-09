@@ -92,6 +92,7 @@ Gotchas rapidos:
 
 ## INDICE DE REFERENCIAS
 
+> **Lista COMPLETA de references** (este indice e um subconjunto quick-reference): `.claude/references/INDEX.md`
 > Indice unico consultado por AMBOS os contextos.
 > Entradas dev-only (CSS, Best Practices, MCP Capabilities, CLAUDE.md de modulo) estao em `~/.claude/CLAUDE.md`.
 

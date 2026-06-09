@@ -20,6 +20,7 @@ Uso:
   python scripts/audits/prompt_size_audit.py --md             # bloco markdown
   python scripts/audits/prompt_size_audit.py --check N        # exit 1 se TOTAL de linhas > N (teto absoluto)
   python scripts/audits/prompt_size_audit.py --check-delta    # GATILHO: exit 1 se prompt CRESCEU vs baseline
+  python scripts/audits/prompt_size_audit.py --check-consistency  # F1.3 PAD-CTX: subagentes nas 3 projecoes + deny-list sem orfas
   python scripts/audits/prompt_size_audit.py --update-baseline    # grava o estado atual como novo marco
   python scripts/audits/prompt_size_audit.py --update-claude-md   # reescreve o bloco de tamanho no CLAUDE.md
 
@@ -105,6 +106,160 @@ def comparar_delta(atual, baseline, chaves_criticas=CHAVES_CRITICAS):
     if at > bt:
         msgs.append(f"total estatico cresceu {bt}->{at} linhas (+{at - bt})")
     return (len(msgs) == 0, msgs)
+
+
+# ----------------------------------------------- consistencia (F1.3 PAD-CTX)
+# Subagentes existem em 3 projecoes: .claude/agents/*.md (fonte canonica — e' o
+# que o SDK carrega), system_prompt <subagents> (politica de delegacao) e
+# CLAUDE.md raiz tabela SUBAGENTES (mapa). Divergencia silenciosa = agente
+# invisivel ao routing (caso real: gestor-estoque-odoo, bug N-6 do estudo
+# 2026-06-09). Tambem vigia a NAO-ORFANDADE da deny-list de skills: skill
+# excluida do listing do principal precisa de dono (subagente que a declara),
+# senao fica inacessivel em TODAS as superficies (caso real: faturando-odoo).
+# Padrao: .claude/references/ARQUITETURA_CONTEXTO_AGENTE.md (PAD-CTX).
+
+AGENTS_DIR = ROOT / ".claude/agents"
+CLAUDE_MD_RAIZ = ROOT / "CLAUDE.md"
+WHITELIST_PRINCIPAL = ROOT / "app/agente/config/skills_whitelist.py"
+WHITELIST_LOJAS = ROOT / "app/agente_lojas/config/skills_whitelist.py"
+
+# Agentes intencionalmente FORA do <subagents> do system_prompt (motivo declarado).
+EXCECOES_SYSTEM_PROMPT = {
+    "desenvolvedor-integracao-odoo": "dev-only (Claude Code; CLAUDE.md o lista marcado dev-only)",
+    "orientador-loja": "superficie isolada agente_lojas (/agente-lojas)",
+    "auditor-sped-ecd": "fluxo dev SPED ECD (nao operacional do agente web)",
+}
+# Agentes intencionalmente FORA da tabela SUBAGENTES do CLAUDE.md raiz.
+EXCECOES_CLAUDE_MD = {
+    "orientador-loja": "superficie isolada agente_lojas",
+    "auditor-sped-ecd": "fluxo dev SPED ECD",
+}
+# Skills declaraveis em agents SEM SKILL.md proprio (design intencional).
+SKILLS_SEM_SKILL_MD = {
+    "consultando-sql",  # descoberta via filesystem (schemas/); decisao 2026 — nao criar SKILL.md
+}
+
+
+def _carregar_modulo_isolado(path):
+    """Carrega um .py SEM importar o pacote `app` (evita boot do Flask).
+    So' serve para modulos auto-contidos como as skills_whitelist."""
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(Path(path).stem + "_isolado", path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def _agents_no_filesystem():
+    return {p.stem: p for p in sorted(AGENTS_DIR.glob("*.md"))}
+
+
+def _skills_declaradas_em_agents():
+    """nome_agente -> set(skills) do frontmatter `skills:` de .claude/agents/*.md."""
+    import re
+    out = {}
+    for nome, p in _agents_no_filesystem().items():
+        txt = p.read_text(encoding="utf-8")
+        skills = set()
+        m = re.search(r"^skills:\s*\n((?:\s+-\s+\S+\s*\n)+)", txt, re.MULTILINE)
+        if m:
+            skills = {
+                ln.strip().lstrip("-").strip()
+                for ln in m.group(1).strip().splitlines()
+            }
+        out[nome] = skills
+    return out
+
+
+def _agents_no_system_prompt():
+    import re
+    txt = (ROOT / "app/agente/prompts/system_prompt.md").read_text(encoding="utf-8")
+    return set(re.findall(r'<agent name="([^"]+)"', txt))
+
+
+def _agents_no_claude_md():
+    import re
+    txt = CLAUDE_MD_RAIZ.read_text(encoding="utf-8")
+    partes = txt.split("## SUBAGENTES", 1)
+    if len(partes) < 2:
+        return set()
+    corpo = partes[1].split("\n## ", 1)[0]
+    return set(re.findall(r"^\| `([a-z0-9-]+)` \|", corpo, re.MULTILINE))
+
+
+def check_consistencia():
+    """Retorna (erros, avisos). Erros = divergencias que quebram routing/acesso."""
+    erros, avisos = [], []
+
+    fs = set(_agents_no_filesystem())
+    sp = _agents_no_system_prompt()
+    cm = _agents_no_claude_md()
+
+    # 1. Projecao cita agente inexistente no filesystem -> ERRO
+    for nome in sorted(sp - fs):
+        erros.append(
+            f"system_prompt <subagents> cita '{nome}' sem .claude/agents/{nome}.md"
+        )
+    for nome in sorted(cm - fs):
+        erros.append(
+            f"CLAUDE.md SUBAGENTES cita '{nome}' sem .claude/agents/{nome}.md"
+        )
+
+    # 2. Agente do filesystem ausente das projecoes (sem excecao declarada) -> ERRO
+    for nome in sorted(fs - sp):
+        if nome not in EXCECOES_SYSTEM_PROMPT:
+            erros.append(
+                f"agente '{nome}' existe em .claude/agents/ mas FALTA no <subagents> "
+                f"do system_prompt (adicione, ou declare em EXCECOES_SYSTEM_PROMPT com motivo)"
+            )
+    for nome in sorted(fs - cm):
+        if nome not in EXCECOES_CLAUDE_MD:
+            erros.append(
+                f"agente '{nome}' existe em .claude/agents/ mas FALTA na tabela "
+                f"SUBAGENTES do CLAUDE.md raiz (adicione, ou declare em EXCECOES_CLAUDE_MD)"
+            )
+
+    # 3. Nao-orfandade da deny-list: skill excluida do principal precisa de dono.
+    try:
+        wl = _carregar_modulo_isolado(WHITELIST_PRINCIPAL)
+        declaradas = set()
+        for skills in _skills_declaradas_em_agents().values():
+            declaradas |= skills
+        hora = set(getattr(wl, "SKILLS_DOMINIO_HORA", set()))
+        dev_reserved = set(getattr(wl, "SKILLS_DEV_RESERVED", set()))
+        lojas_permitidas = set()
+        if WHITELIST_LOJAS.exists():
+            lojas = _carregar_modulo_isolado(WHITELIST_LOJAS)
+            lojas_permitidas = set(getattr(lojas, "SKILLS_PERMITIDAS", set()))
+
+        for skill in sorted(wl.SKILLS_DELEGADAS_SUBAGENTE):
+            if skill in dev_reserved:
+                continue  # reservada a superficies dev/admin por design (PAD-CTX F2)
+            if skill in hora:
+                if skill not in lojas_permitidas:
+                    erros.append(
+                        f"skill '{skill}' (grupo HORA da deny-list) nao esta na "
+                        f"allow-list do agente_lojas — orfa nas duas superficies"
+                    )
+                continue
+            if skill not in declaradas:
+                erros.append(
+                    f"skill '{skill}' esta na deny-list (fora do listing do principal) "
+                    f"mas NAO e' declarada em nenhum .claude/agents/*.md — orfa, sem dono"
+                )
+
+        # Aviso: skill declarada em agent sem diretorio correspondente
+        skills_fs = {p.parent.name for p in (ROOT / ".claude/skills").glob("*/SKILL.md")}
+        for agente, skills in sorted(_skills_declaradas_em_agents().items()):
+            for skill in sorted(skills - skills_fs - SKILLS_SEM_SKILL_MD):
+                avisos.append(
+                    f"agente '{agente}' declara skill '{skill}' sem "
+                    f".claude/skills/{skill}/SKILL.md"
+                )
+    except Exception as e:  # noqa: BLE001 — check nao pode derrubar o commit por bug proprio
+        avisos.append(f"nao-orfandade da deny-list nao verificada (erro: {e})")
+
+    return erros, avisos
 
 
 # --------------------------------------------------------------------- markdown
@@ -223,6 +378,22 @@ def main():
         print("  git add scripts/audits/prompt_size_baseline.json app/agente/CLAUDE.md", file=sys.stderr)
         print("\nBypass emergencial: git commit --no-verify", file=sys.stderr)
         return 1
+
+    if "--check-consistency" in argv:
+        erros, avisos = check_consistencia()
+        for a in avisos:
+            print(f"AVISO: {a}", file=sys.stderr)
+        if erros:
+            print("CONSISTENCIA DE SUBAGENTES/SKILLS (PAD-CTX) — violacoes:", file=sys.stderr)
+            for e in erros:
+                print(f"  - {e}", file=sys.stderr)
+            print("\nFonte canonica = .claude/agents/*.md; system_prompt e CLAUDE.md sao "
+                  "projecoes.\nPadrao: .claude/references/ARQUITETURA_CONTEXTO_AGENTE.md",
+                  file=sys.stderr)
+            return 1
+        print(f"OK: subagentes consistentes nas 3 projecoes ({len(_agents_no_system_prompt())} "
+              f"no system_prompt) e deny-list sem skills orfas.")
+        return 0
 
     if "--check" in argv:
         try:

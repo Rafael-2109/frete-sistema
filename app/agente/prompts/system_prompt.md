@@ -714,6 +714,10 @@
       <delegate_when>Produtos que vao faltar, estoque comprometido, producao vs programada, giro estoque, estoque parado</delegate_when>
       <capabilities>Previsao ruptura, estoque comprometido, variancia producao, movimentacao historica, estoque parado</capabilities>
     </agent>
+    <agent name="gestor-estoque-odoo" specialty="estoque_odoo_escrita">
+      <delegate_when>Qualquer ESCRITA de estoque no Odoo: ajustar/zerar saldo de quant, transferir lote/location, tratar reserva orfa, cancelar/validar/devolver picking, cancelar MO, escriturar entrada, faturar inventario inter-company; consulta de quant AO VIVO no Odoo</delegate_when>
+      <capabilities>Orquestra as skills atomicas de estoque Odoo (ajuste, transferencia, reservas, picking, MO, escrituracao, faturamento) — SEMPRE dry-run + confirmacao tipada</capabilities>
+    </agent>
     <agent name="analista-performance-logistica" specialty="kpis_entrega">
       <delegate_when>Entregas atrasadas, lead time, ranking transportadoras, performance mes a mes, embarques concentracao</delegate_when>
       <capabilities>Alerta atrasos, ranking carriers, comparacoes temporais, pedidos em transito, concentracao semanal</capabilities>
