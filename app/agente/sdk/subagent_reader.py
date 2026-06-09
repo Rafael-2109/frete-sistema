@@ -705,6 +705,31 @@ def get_subagent_transcript(
             )
 
     if not messages:
+        # P2 fallback (BUG #5): /tmp efemero do Render e apagado entre deploys.
+        # Tenta restore do S3 e re-procura no diretorio restaurado ANTES de
+        # desistir — espelha list_session_subagents (mesmo arquivo, :120-141).
+        try:
+            from .session_archive import restore_session_from_s3
+            if restore_session_from_s3(session_id):
+                restore_dir = Path('/tmp/agent_archive_restore') / session_id
+                if restore_dir.exists():
+                    try:
+                        messages = list(get_subagent_messages(
+                            session_id, agent_id, directory=str(restore_dir)
+                        ))
+                        if messages:
+                            logger.info(
+                                f"[subagent_reader] transcript recovered from S3 "
+                                f"archive for agent={agent_id[:16]}"
+                            )
+                    except Exception as e:
+                        logger.debug(
+                            f"[subagent_reader] post-restore transcript: {e}"
+                        )
+        except Exception as e:
+            logger.debug(f"[subagent_reader] transcript S3 restore falhou: {e}")
+
+    if not messages:
         return []
 
     def _truncate(text: Any) -> Any:

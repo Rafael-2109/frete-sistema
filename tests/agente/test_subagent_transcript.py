@@ -3,6 +3,9 @@
 Spec: docs/superpowers/specs/2026-05-14-subagent-ui-enrichment-design.md (5.1)
 """
 import json
+import shutil
+from pathlib import Path
+
 import pytest
 from unittest.mock import MagicMock
 
@@ -160,3 +163,55 @@ def test_transcript_to_dict_serializavel():
     json.dumps(d)
     assert d['sequence'] == 1
     assert d['kind'] == 'user_prompt'
+
+
+# ── BUG #5: transcript recupera do S3 quando /tmp efemero foi apagado ──────────
+
+def test_transcript_recupera_do_s3_quando_tmp_vazio(monkeypatch):
+    """O /tmp do Render e apagado entre deploys. get_subagent_transcript deve
+    tentar restore_session_from_s3() e re-buscar no diretorio restaurado ANTES
+    de retornar [] — espelhando list_session_subagents."""
+    sid = 'a' * 32
+    aid = 'b' * 32
+    restore_dir = Path('/tmp/agent_archive_restore') / sid
+    shutil.rmtree(restore_dir, ignore_errors=True)
+
+    # Candidates vazios; mensagens SO quando buscadas no diretorio restaurado.
+    def fake_get_messages(s, a, **kw):
+        if 'agent_archive_restore' in str(kw.get('directory') or ''):
+            return _fake_messages_for_test()
+        return []
+    monkeypatch.setattr(
+        'app.agente.sdk.subagent_reader.get_subagent_messages', fake_get_messages
+    )
+
+    # restore_session_from_s3 -> True e materializa o diretorio esperado.
+    def fake_restore(s):
+        (Path('/tmp/agent_archive_restore') / s).mkdir(parents=True, exist_ok=True)
+        return True
+    monkeypatch.setattr(
+        'app.agente.sdk.session_archive.restore_session_from_s3', fake_restore
+    )
+
+    try:
+        entries = get_subagent_transcript(sid, aid, include_pii=True)
+        assert len(entries) >= 1, 'deveria recuperar transcript do S3'
+        assert any(
+            isinstance(e.content, str) and 'VCD123' in e.content for e in entries
+        )
+    finally:
+        shutil.rmtree(restore_dir, ignore_errors=True)
+
+
+def test_transcript_sem_s3_continua_retornando_vazio(monkeypatch):
+    """Quando restore falha (USE_S3=false/sem archive), mantem o contrato []."""
+    monkeypatch.setattr(
+        'app.agente.sdk.subagent_reader.get_subagent_messages',
+        lambda s, a, **kw: []
+    )
+    monkeypatch.setattr(
+        'app.agente.sdk.session_archive.restore_session_from_s3',
+        lambda s: False
+    )
+    entries = get_subagent_transcript('c' * 32, 'd' * 32)
+    assert entries == []

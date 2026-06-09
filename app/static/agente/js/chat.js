@@ -1328,15 +1328,32 @@ function renderSubagentLineStart(data) {
     //     "executando..." e ao abrir modal mostra "Visualizacao indisponivel".
     // Decisao: renderizar linha inline APENAS para subagents reais.
     const taskType = data.task_type || data.agent_type || '';
-    if (taskType && taskType !== 'local_agent') {
+    // Bug #4 (2026-06-08): aceitar OS DOIS caminhos de task_started do MESMO
+    // subagent (mesmo task_id):
+    //   - Caminho 1 (SDK TaskStartedMessage): task_type='local_agent', SEM
+    //     agent_type real -> badge nasce generico ("local agent").
+    //   - Caminho 2 (pubsub do hook SubagentStart, hooks.py): task_type='subagent'
+    //     COM agent_type real (ex: 'analista-carteira').
+    // Antes, o filtro `taskType !== 'local_agent'` descartava o Caminho 2 e o
+    // nome real se perdia. Agora rejeitamos APENAS 'local_bash' (Bash interno
+    // dispatched como Task — sem JSONL proprio / sem hook SubagentStop).
+    if (taskType === 'local_bash') {
         return;
     }
 
     // data: {task_id, task_type, description} ou {agent_id, agent_type}
     const agentId = data.agent_id || data.task_id;
+    if (!agentId) return;
     const agentType = data.agent_type || data.task_type || data.description || 'subagente';
 
-    if (!agentId || subagentLines.has(agentId)) return;  // idempotente
+    // Idempotente COM upgrade de badge: se a linha ja existe (criada pelo Caminho
+    // 1 com label generico) e o Caminho 2 chega depois com o nome real, promove
+    // o badge — nunca faz downgrade (real -> generico).
+    const existing = subagentLines.get(agentId);
+    if (existing) {
+        _maybeUpgradeSubagentBadge(existing, agentType);
+        return;
+    }
 
     const messagesContainer = document.getElementById('messages') ||
                               document.querySelector('.messages-container') ||
@@ -1367,6 +1384,30 @@ function renderSubagentLineStart(data) {
     line.addEventListener('click', () => openOrToggleSubagent(agentId));
     messagesContainer.appendChild(line);
     subagentLines.set(agentId, line);
+}
+
+// Bug #4: labels genericos que NAO identificam o subagent real. Usado para
+// decidir quando promover o badge ao receber o nome real (agent_type) do pubsub.
+function _isGenericAgentLabel(label) {
+    return ['', 'subagente', 'subagent', 'local_agent', 'local agent',
+            'local_bash', 'task'].includes(String(label || '').trim().toLowerCase());
+}
+
+function _maybeUpgradeSubagentBadge(line, agentType) {
+    if (_isGenericAgentLabel(agentType)) return;       // novo label nao e melhor
+    const badge = line.querySelector('.subagent-badge');
+    if (!badge) return;
+    if (!_isGenericAgentLabel(badge.textContent)) return;  // ja tem nome real
+    badge.textContent = agentType;
+    // Persiste no dataset.summary para sobreviver a toggleExpand / summary tardio.
+    try {
+        const prior = JSON.parse(line.dataset.summary || '{}');
+        line.dataset.summary = JSON.stringify({ ...prior, agent_type: agentType });
+    } catch (_) {
+        line.dataset.summary = JSON.stringify({
+            agent_id: line.dataset.agentId, agent_type: agentType,
+        });
+    }
 }
 
 function renderSubagentLineProgress(data) {
@@ -1773,8 +1814,20 @@ function _setSubagentModalEmpty(message, showRestoreBtn) {
         timeline.innerHTML = `
             <div class="subagent-modal-empty">
                 <div>${_subagentEscapeHtml(message)}</div>
-                ${showRestoreBtn ? '<button type="button" disabled title="Restore S3 (em breve)">Tentar restaurar do arquivo</button>' : ''}
+                ${showRestoreBtn ? '<button type="button" data-action="restore-from-s3" title="Buscar o transcript no arquivo (S3)">Tentar restaurar do arquivo</button>' : ''}
             </div>`;
+        // BUG #5: o /tmp do Render e efemero entre deploys. Reabrir o modal
+        // re-chama /transcript, que agora tenta restore_session_from_s3()
+        // (subagent_reader) antes de 404 — recuperando o transcript do S3.
+        const restoreBtn = timeline.querySelector('[data-action="restore-from-s3"]');
+        if (restoreBtn) {
+            restoreBtn.addEventListener('click', () => {
+                if (!_currentModalAgentId) return;
+                restoreBtn.disabled = true;
+                restoreBtn.textContent = 'Restaurando do arquivo…';
+                openSubagentModal(_currentModalAgentId);
+            });
+        }
     }
 }
 
