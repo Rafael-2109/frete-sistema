@@ -374,7 +374,11 @@ _DOMAIN_SKILLS = {
     'odoo_financeiro': ['executando-odoo-financeiro', 'rastreando-odoo', 'razao-geral-odoo'],
     'frete': ['cotando-frete', 'gerindo-carvia'],
     'ssw': ['acessando-ssw', 'operando-ssw', 'gestor-ssw'],
-    'admin': ['gerindo-agente', 'diagnosticando-banco', 'consultando-sentry'],
+    # F0.3 PAD-CTX (2026-06-09): entry 'admin' REMOVIDA — mapeava 3 skills dev-only
+    # (gerindo-agente, diagnosticando-banco, consultando-sentry) com 0-2 usos em 90d
+    # (finding A5), todas fora do listing do principal a partir da F2. Dominio 'admin'
+    # segue valido para deteccao de armadilhas (_DOMAIN_PATH_SEGMENTS), apenas sem
+    # preferred_skills. Derivacao por uso real: F7.5 do plano (backlog).
 }
 
 # Mapeamento domínio → segmentos de path reais usados pelo pattern_analyzer

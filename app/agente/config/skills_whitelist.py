@@ -45,6 +45,9 @@ SKILLS_DOMINIO_HORA: Set[str] = {
     'acompanhando-pedido',
     'conferindo-recebimento',
     'consultando-pecas-faltando',
+    # F0.2 PAD-CTX (2026-06-09): estava ausente por omissao desde 2026-06-02 —
+    # vazava ao listing do principal (bug N-2 do estudo de contexto).
+    'consultando-venda-loja',
 }
 
 # ---------------------------------------------------------------------------
@@ -58,6 +61,9 @@ SKILLS_DOMINIO_ASSAI: Set[str] = {
     'acompanhando-saida-assai',
     'conferindo-recibo-assai',
     'registrando-evento-moto-assai',
+    # F0.2 PAD-CTX (2026-06-09): estava ausente por omissao desde 2026-06-02 —
+    # vazava ao listing do principal (bug N-2 do estudo de contexto).
+    'carregando-motos-assai',
 }
 
 # ---------------------------------------------------------------------------

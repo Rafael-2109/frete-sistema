@@ -157,7 +157,7 @@ validado com golden dataset (15 casos atuais + judge; ampliacao na F6).
 | # | Acao | Onde | Item |
 |---|------|------|------|
 | 5.1 | Migration (DDL .py + .sql): `agent_memories` + `source_session_id TEXT`, `last_confirmed TIMESTAMP`, `confidence TEXT` | `scripts/migrations/` | RP-2, A6 |
-| 5.2 | Popular `source_session_id` no save_memory — callsite NOVO em `memory_mcp_tool.py:~2028-2035` (logica principal de create/update; os usos existentes de `get_current_session_id()` nas linhas 2106/2307/3468 sao SO do KG). Importar de `permissions.py:78` (ha ContextVar local homonimo em `memory_mcp_tool.py:78` — nao confundir). Daemons pos-sessao (pattern_analyzer, session_summarizer): aceitar `session_id` por parametro opcional; sem ele, NULL | `memory_mcp_tool.py` | RP-2 |
+| 5.2 | Popular `source_session_id` no save_memory — callsite NOVO em `memory_mcp_tool.py:~2028-2035` (logica principal de create/update; os usos existentes de `get_current_session_id()` nas linhas 2106/2307/3468 sao SO do KG). Importar de `app/agente/config/permissions.py:78` (ha ContextVar local homonimo em `memory_mcp_tool.py:78` — nao confundir). Daemons pos-sessao (pattern_analyzer, session_summarizer): aceitar `session_id` por parametro opcional; sem ele, NULL | `memory_mcp_tool.py` | RP-2 |
 | 5.3 | Expor proveniencia na injecao COM protecao cross-user (PAD-CTX): memoria pessoal → `session="..."`; memoria EMPRESA → apenas `created_by` + `date` (UUID de sessao alheia nao vaza; `search_sessions` e per-user e cross-user exige debug_mode). Instrucao de navegacao condicional no R0/MEMORY_PROTOCOL.md | `memory_injection.py` + `system_prompt.md` R0 + `MEMORY_PROTOCOL.md` | RP-2 |
 | 5.4 | RAG por INTENT DO TURNO: embedding da mensagem atual como query do Tier 2 (substitui dominio historico); fallback de recencia so com teto 4×300c | `memory_injection.py` (Tier 2) | C5, RP-2 |
 | 5.5 | Few-shot episodico condicional: turno sobre fatura CarVia → injetar caso 161-9 como exemplo (cosine >0,75) | `memory_injection.py` | RP-2, A4 |
@@ -226,3 +226,11 @@ Padrao em si (PAD-CTX publicado): RP-1, R-2(criterio), A5(roteamento), C1(fonte 
 - 2026-06-09 (mesma sessao, decisoes do Rafael) — F0.1 EXECUTADA (env vars `false` no
   Render); F2.2 DECIDIDA (opcao a: deny-list); D2 RESOLVIDO (cross-user admin ja coberto
   por debug_mode; sem carve-out). Entregaveis commitados (sem push — deploy so no push).
+- 2026-06-09 — **FASE 0 CONCLUIDA**: 0.2 (2 skills nos grupos de dominio na deny-list),
+  0.3 (entry 'admin' REMOVIDA de `_DOMAIN_SKILLS` — dominio segue valido p/ armadilhas),
+  0.4 (changelog de 3.847 chars do ROUTING_SKILLS.md:32 movido p/ comentario HTML ao fim;
+  grep confirmou zero consumidores programaticos), `.env` local alinhado (flags `false`).
+  Correcao de docs: caminho do ContextVar e `app/agente/config/permissions.py:78`
+  (NAO `sdk/`; PAD-CTX e plano corrigidos). Aceite: 26 testes verdes
+  (test_skills_whitelist_consolidation + test_context_enrichment, incl.
+  test_flags_off_por_default).

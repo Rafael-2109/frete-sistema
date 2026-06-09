@@ -186,7 +186,7 @@ nada; seguir a convencao de nomes existente `SKILLS_<ESCOPO>_<QUALIFICADOR>`):
   saem do listing web — uso em 90 dias: 0 a 2 invocacoes, todas admin.
 - `gerindo-agente`: DECIDIDO 2026-06-09 (Rafael) — sai do listing (admin mantem a tela
   `/agente/memorias` e o Claude Code dev). Alternativa registrada no plano, SE surgir
-  demanda via chat: gate por perfil em `can_use_tool` (`app/agente/sdk/permissions.py`
+  demanda via chat: gate por perfil em `can_use_tool` (`app/agente/config/permissions.py`
   — viavel via ContextVar de user_id), liberando `Skill:gerindo-agente` so para
   administrador.
 - Skills user-scope (`~/.claude/skills/`: prd-generator, ralph-wiggum, skill-creator,
@@ -240,7 +240,7 @@ armadilha DETERMINISTICA (candidata a promocao para codigo — nao e memoria).
 
 **Proveniencia** `[ALVO — implementacao na FASE 5 do plano; campo ainda nao existe]`:
 `source_session_id` na tabela `agent_memories`, populado no `save_memory` via
-`get_current_session_id()` (ContextVar em `app/agente/sdk/permissions.py:78`; memorias
+`get_current_session_id()` (ContextVar em `app/agente/config/permissions.py:78`; memorias
 criadas por daemons pos-sessao podem ficar NULL). Exposicao na injecao COM protecao
 cross-user:
 - Memoria PESSOAL (escopo do proprio usuario): `<memory session="..." date="...">` —
