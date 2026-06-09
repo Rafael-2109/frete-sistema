@@ -392,3 +392,18 @@ Padrao em si (PAD-CTX publicado): RP-1, R-2(criterio), A5(roteamento), C1(fonte 
   CLI** — fim REAL do truncamento silencioso (a F2 havia fechado so na medicao
   parcial). Atencao: o deploy do push `c104a52fc` NAO contem este fix — exige
   novo push.
+- 2026-06-09 — **VALIDACAO POS-DEPLOY F4 EM PROD** (deploy `dep-d8k9t5647okc73bi6qug`,
+  commit `ae601defb` = F4 + fix listing, live 23:22 UTC): log real
+  `[MEMORY_INJECT] user_id=74` (o caso EXATO do backlog 63KB: semantic=0 +
+  fallback=True) mostrou `total_chars=13071` ≤ 15.000 (**-79%** vs ~63KB),
+  `total_injected=5` com `skipped_budget=11/15` (cap TIER2_MAX_MEMORIES=4
+  cortando o fallback guloso), `main_chars=10117`/`tail_chars=2954` (split
+  main/tail ativo — campos so existem na F4), `overflow_cortes=[]` (caps
+  bastaram). Roteamento sem regressao: PRE-faturamento ("tem pedido do
+  Atacadao?" → carteira 100 pedidos) e POS ("entregas pendentes" → NFs/
+  embarques/previsoes). Warning "Skill listing over budget" nao aparece nos
+  app logs do Render (stderr de debug do CLI nao chega la — verificacao por
+  log INCONCLUSIVA em PROD; garantia = formula validada que reproduziu o
+  8.448 exato, agora 7.929). PENDENTES: semantic=0 p/ user 74 persiste
+  (investigacao F5.4 — embeddings ausentes?); dump de boot completo (ordem
+  visual dos blocos) segue como item 12 manual.
