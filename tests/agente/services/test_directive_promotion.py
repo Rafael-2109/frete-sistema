@@ -393,7 +393,6 @@ class TestPersistDirectiveReal:
         from app.agente.services.directive_promotion_service import _persist_directive
         from app.agente.models import AgentMemory
         from app.agente.sdk.memory_injection import _is_nivel_5
-        import re
 
         cand = {
             'titulo': f'Fluxo: consultar saldo [2 passos] {uuid.uuid4().hex[:6]}',
@@ -410,9 +409,11 @@ class TestPersistDirectiveReal:
         assert mem.directive_status == 'shadow'
         assert mem.path.startswith('/memories/empresa/heuristicas/')
         assert mem.importance_score >= 0.7
-        # selecionável + renderável pelo builder:
+        # selecionável + renderável pelo builder (formato canonico 2026-06-08:
+        # sentinela DO: + meta estruturado, em vez de XML inline):
         assert _is_nivel_5((mem.content or '').lower())
-        assert re.search(r'<prescricao>(.+?)</prescricao>', mem.content, re.DOTALL)
+        assert 'DO:' in mem.content
+        assert mem.meta is not None and mem.meta.get('do')
 
     def test_idempotente_nao_duplica(self, app_ctx_persist, rollback_persist):
         """Segunda chamada com mesmo título retorna mesmo id, sem duplicar."""

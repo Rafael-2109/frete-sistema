@@ -23,6 +23,7 @@ Hub de analise, otimizacao e aprendizado de sessoes em 3 camadas (P0 core, P1 UX
 ```
 app/agente/services/
   ├── _utils.py                       #    57 LOC — Helpers compartilhados (parse_llm_json_response)
+  ├── memory_format.py                #   Serializador canonico de memorias — PURO (sem DB): parse 5 formatos legados + render sentinela/embed + meta JSONB
   ├── pattern_analyzer.py             # 2,432 LOC — Patterns prescritivos + perfil + extracao (P1-3)
   ├── insights_service.py             # 1,897 LOC — Dashboard admin: metricas + health_score (P2)
   ├── knowledge_graph_service.py      # 1,160 LOC — KG 3 layers: regex/Voyage/Sonnet (T3-3)
@@ -78,6 +79,23 @@ Economia: 50-90% tokens input. Sem cache = custo duplicado em chamadas consecuti
 ---
 
 ## Gotchas
+
+### memory_format: formato canonico de memorias (meta JSONB + sentinela) — 2026-06-08
+Memorias ESTRUTURADAS (heuristica/armadilha/protocolo/correcao — ver `is_structured_path`)
+tem `meta` JSONB como FONTE DE VERDADE (kind/dominio/nivel/criterios/titulo/when/do) e
+`content` DERIVADO via `render_content` (sentinela `[kind:dominio] titulo\nWHEN:\nDO:\nMETA: nivel=N`).
+- Geradores (`_save_conhecimentos_v3`, `_persist_directive`, `save_memory` tool, `_save_empresa_memory`)
+  usam `build_meta`+`render_content` — o LLM NUNCA escreve o content final (mata code-fence/grudado).
+- Consumidores (`_build_operational_directives`, `_build_routing_context`) preferem meta via
+  **`getattr(mem,'meta',None)`** (robusto a legado/mock SimpleNamespace — `mem.meta` direto quebra testes).
+- `normalize_for_storage` so re-renderiza o content quando `parse=='full'` (zero perda; partial/raw preserva).
+- `parse_memory` tolera os 5+ formatos legados (bracket, `<heuristica>`, `<conhecimento>`, code-fence,
+  `<correcao>/<regra>/<admin_correction>`, `<memoria><tema>`). 92% cobertura validada contra PROD.
+- `list_memories` virou INDICE navegavel (`_build_memory_index`): agrupa por kind/dominio, exclui frias,
+  filtros, SEM o conteudo (resolve o estouro de tokens do antigo dump).
+- DEPLOY: a coluna `meta` (migration `2026_06_08_agent_memories_meta_jsonb.{py,sql}`) DEVE existir em PROD
+  ANTES do deploy do codigo (gravar `mem.meta` quebra sem a coluna). Backfill: `backfill_memoria_meta.py`.
+— FONTE: `memory_format.py`, `tools/memory_mcp_tool.py:_build_memory_index`, `sdk/memory_injection.py`
 
 ### pattern_analyzer: prescritivo vs descritivo
 Output DEVE ser PRESCRITIVO ("Quando cliente X pedir Y, faca Z") — NAO descritivo ("Usuario frequentemente pede Y").

@@ -364,7 +364,7 @@ def _tem_falha_odoo(session_id: str) -> bool:
 
 
 # ---------------------------------------------------------------------------
-# _slug_titulo + _formatar_xml_diretriz + _persist_directive
+# _slug_titulo + _persist_directive
 # ---------------------------------------------------------------------------
 
 def _slug_titulo(titulo: str) -> str:
@@ -372,39 +372,6 @@ def _slug_titulo(titulo: str) -> str:
     base = (titulo or 'diretriz').lower().strip()
     base = _re.sub(r'[^a-z0-9]+', '-', base).strip('-')
     return (base or 'diretriz')[:80]
-
-
-def _formatar_xml_diretriz(candidata: dict) -> str:
-    """
-    Formata a candidata como XML heurística empresa (formato canônico A4).
-
-    Usa _xml_escape de pattern_analyzer — mesmo helper de escape das heurísticas
-    orgânicas extraídas por extrair_conhecimento_sessao().
-
-    Formato XML processado pelo builder via regex XML-first
-    (<titulo>/<when>/<prescricao>). Diverge do formato orgânico compacto
-    WHEN:/DO: do pattern_analyzer, mas é compatível com
-    _build_operational_directives (que aceita AMBOS: regex XML-first e
-    fallback WHEN:/DO:).
-
-    O content resultante:
-    - Passa _is_nivel_5() via '<nivel>5</nivel>'
-    - Tem <prescricao> não-vazia para ser renderável pelo builder
-    """
-    from .pattern_analyzer import _xml_escape  # mesmo helper das heurísticas orgânicas
-    titulo = _xml_escape(candidata.get('titulo', ''))
-    when = _xml_escape(candidata.get('when', ''))
-    presc = _xml_escape(candidata.get('prescricao', ''))
-    origem = _xml_escape(candidata.get('source_session_id', ''))
-    return (
-        '<heuristica>\n'
-        '  <nivel>5</nivel>\n'
-        f'  <titulo>{titulo}</titulo>\n'
-        f'  <when>{when}</when>\n'
-        f'  <prescricao>{presc}</prescricao>\n'
-        f'  <origem>promovida automaticamente da sessão {origem}</origem>\n'
-        '</heuristica>'
-    )
 
 
 def _persist_directive(candidata: dict) -> int:
@@ -441,10 +408,22 @@ def _persist_directive(candidata: dict) -> int:
         )
         return existente.id
 
+    # Formato canonico (2026-06-08): meta estruturado + content sentinela derivado
+    # (mesmo formato que pattern_analyzer._save_conhecimentos_v3). Selecionavel pelo
+    # builder via fallback WHEN:/DO:. Ver app/agente/services/memory_format.py.
+    from app.agente.services.memory_format import build_meta, render_content
+    meta = build_meta(
+        tipo='heuristica', nivel=5,
+        titulo=candidata.get('titulo', ''),
+        when=candidata.get('when', ''),
+        prescricao=candidata.get('prescricao', ''),
+        origem=f"promovida automaticamente da sessao {candidata.get('source_session_id', '')}",
+    )
     mem = AgentMemory(
         user_id=0,
         path=path,
-        content=_formatar_xml_diretriz(candidata),
+        content=render_content(meta),
+        meta=meta,
         is_directory=False,
         importance_score=0.7,
         escopo='empresa',

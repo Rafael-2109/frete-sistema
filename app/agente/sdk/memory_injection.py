@@ -276,6 +276,25 @@ def _calculate_category_decay(category: str, hours_since: float) -> float:
     return rate ** hours_since
 
 
+def _memory_open_tag(mem, tier: str = None) -> str:
+    """Tag de abertura <memory> enriquecida com atributos do meta canonico
+    (kind/dominio/nivel) quando disponivel — apresentacao XML estruturada para o
+    Claude. getattr: robusto a objetos sem coluna meta (legado / mock de teste).
+    """
+    attrs = [f'path="{xml_escape(mem.path)}"']
+    if tier:
+        attrs.append(f'tier="{tier}"')
+    meta = getattr(mem, 'meta', None)
+    if isinstance(meta, dict):
+        if meta.get('kind'):
+            attrs.append(f'kind="{xml_escape(str(meta["kind"]))}"')
+        if meta.get('dominio'):
+            attrs.append(f'dominio="{xml_escape(str(meta["dominio"]))}"')
+        if meta.get('nivel') is not None:
+            attrs.append(f'nivel="{xml_escape(str(meta["nivel"]))}"')
+    return '<memory ' + ' '.join(attrs) + '>'
+
+
 # =====================================================================
 # USER.XML POINTER — Camada 2 da Mudanca 4 (v2.2, 2026-04-12)
 # =====================================================================
@@ -529,43 +548,55 @@ def _build_operational_directives(user_id: int) -> Optional[str]:
             if organicas >= MANDATORY_MAX_COUNT:
                 break
 
-            content_lower = (mem.content or '').lower()
-            # Detecta nivel 5-9 — formato unificado via _is_nivel_5() para
-            # garantir consistencia com Tier 1.6 (memory_injection.py:685)
-            if not _is_nivel_5(content_lower):
-                continue
+            # Formato canonico (2026-06-08): preferir meta estruturado (queryavel,
+            # sem regex fragil). Fallback para parse do content nos formatos legados.
+            # getattr: robusto a objetos sem coluna meta (mocks de teste / legado).
+            meta = getattr(mem, 'meta', None)
+            meta = meta if isinstance(meta, dict) else None
+            if meta and (meta.get('do') or '').strip() and meta.get('nivel') is not None:
+                if meta['nivel'] < 5:
+                    continue
+                titulo = (meta.get('titulo') or '').strip()
+                when_text = (meta.get('when') or '').strip()
+                presc = (meta.get('do') or '').strip()
+            else:
+                content_lower = (mem.content or '').lower()
+                # Detecta nivel 5-9 — formato unificado via _is_nivel_5() para
+                # garantir consistencia com Tier 1.6 (memory_injection.py:685)
+                if not _is_nivel_5(content_lower):
+                    continue
 
-            content = mem.content or ''
+                content = mem.content or ''
 
-            # Extrair titulo, when, prescricao — suporta 2 formatos
-            titulo_match = _re.search(r'<titulo>(.*?)</titulo>', content, _re.DOTALL)
-            presc_match = _re.search(r'<prescricao>(.*?)</prescricao>', content, _re.DOTALL)
-            when_match = _re.search(r'<when>(.*?)</when>', content, _re.DOTALL)
+                # Extrair titulo, when, prescricao — suporta 2 formatos
+                titulo_match = _re.search(r'<titulo>(.*?)</titulo>', content, _re.DOTALL)
+                presc_match = _re.search(r'<prescricao>(.*?)</prescricao>', content, _re.DOTALL)
+                when_match = _re.search(r'<when>(.*?)</when>', content, _re.DOTALL)
 
-            titulo = titulo_match.group(1).strip() if titulo_match else ''
-            presc = presc_match.group(1).strip() if presc_match else ''
-            when_text = when_match.group(1).strip() if when_match else ''
+                titulo = titulo_match.group(1).strip() if titulo_match else ''
+                presc = presc_match.group(1).strip() if presc_match else ''
+                when_text = when_match.group(1).strip() if when_match else ''
 
-            # Fallback: formato compacto WHEN:/DO: em texto
-            if not presc:
-                lines = content.strip().split('\n')
-                if not titulo and lines:
-                    # Primeira linha significativa como titulo
+                # Fallback: formato compacto WHEN:/DO: em texto
+                if not presc:
+                    lines = content.strip().split('\n')
+                    if not titulo and lines:
+                        # Primeira linha significativa como titulo
+                        for line in lines:
+                            stripped = line.strip()
+                            if stripped and not stripped.startswith(('```', '[', '<')):
+                                titulo = stripped
+                                break
                     for line in lines:
                         stripped = line.strip()
-                        if stripped and not stripped.startswith(('```', '[', '<')):
-                            titulo = stripped
-                            break
-                for line in lines:
-                    stripped = line.strip()
-                    if stripped.startswith('WHEN:') and not when_text:
-                        when_text = stripped[5:].strip()
-                    elif stripped.startswith('DO:') and not presc:
-                        presc = stripped[3:].strip()
+                        if stripped.startswith('WHEN:') and not when_text:
+                            when_text = stripped[5:].strip()
+                        elif stripped.startswith('DO:') and not presc:
+                            presc = stripped[3:].strip()
 
-            # Precisa de prescricao para ser uma diretiva acionavel
-            if not presc:
-                continue
+                # Precisa de prescricao para ser uma diretiva acionavel
+                if not presc:
+                    continue
 
             # Truncar para caber dentro do budget
             if len(titulo) > 100:
@@ -675,24 +706,32 @@ def _build_routing_context(user_id: int) -> Optional[str]:
         if armadilhas:
             parts.append('  <active_traps>')
             for arm in armadilhas:
-                content = arm.content or ''
-                # Suporta formato XML legado (<titulo>/<prescricao>) e novo (WHEN/DO)
-                title_match = re.search(r'<titulo>(.*?)</titulo>', content, re.DOTALL)
-                if title_match:
-                    # Formato XML legado
-                    title = title_match.group(1).strip()
-                    presc_match = re.search(r'<prescricao>(.*?)</prescricao>', content, re.DOTALL)
-                    prescricao = presc_match.group(1).strip() if presc_match else ''
+                # Formato canonico (2026-06-08): preferir meta estruturado;
+                # fallback para parse do content nos formatos legados.
+                a_meta = getattr(arm, 'meta', None)
+                a_meta = a_meta if isinstance(a_meta, dict) else None
+                if a_meta and (a_meta.get('titulo') or a_meta.get('do')):
+                    title = (a_meta.get('titulo') or '').strip() or arm.path.split('/')[-1].replace('.xml', '')
+                    prescricao = (a_meta.get('do') or '').strip()
                 else:
-                    # Formato compacto WHEN/DO
-                    lines = content.strip().split('\n')
-                    title = lines[0].strip() if lines else arm.path.split('/')[-1].replace('.xml', '')
-                    # Extrair DO: line
-                    prescricao = ''
-                    for line in lines:
-                        if line.strip().startswith('DO:'):
-                            prescricao = line.strip()[3:].strip()
-                            break
+                    content = arm.content or ''
+                    # Suporta formato XML legado (<titulo>/<prescricao>) e novo (WHEN/DO)
+                    title_match = re.search(r'<titulo>(.*?)</titulo>', content, re.DOTALL)
+                    if title_match:
+                        # Formato XML legado
+                        title = title_match.group(1).strip()
+                        presc_match = re.search(r'<prescricao>(.*?)</prescricao>', content, re.DOTALL)
+                        prescricao = presc_match.group(1).strip() if presc_match else ''
+                    else:
+                        # Formato compacto WHEN/DO
+                        lines = content.strip().split('\n')
+                        title = lines[0].strip() if lines else arm.path.split('/')[-1].replace('.xml', '')
+                        # Extrair DO: line
+                        prescricao = ''
+                        for line in lines:
+                            if line.strip().startswith('DO:'):
+                                prescricao = line.strip()[3:].strip()
+                                break
 
                 if len(title) > 80:
                     title = title[:77] + '...'
@@ -1208,7 +1247,7 @@ def _load_user_memories_for_context(user_id: int, prompt: str = None, model_name
                 content = sanitize_memory_content(
                     content, source=f"mem_id={mem.id} path={mem.path}"
                 )
-                mem_text = f'<memory path="{xml_escape(mem.path)}">\n{content}\n</memory>\n'
+                mem_text = f'{_memory_open_tag(mem)}\n{content}\n</memory>\n'
                 tier1_texts.append((mem, mem_text))
                 tier1_chars += len(mem_text)
 
@@ -1228,7 +1267,7 @@ def _load_user_memories_for_context(user_id: int, prompt: str = None, model_name
                     content, source=f"mem_id={mem.id} tier=routing path={mem.path}"
                 )
                 mem_text = (
-                    f'<memory path="{xml_escape(mem.path)}" tier="routing">\n'
+                    f'{_memory_open_tag(mem, "routing")}\n'
                     f'{content}\n</memory>\n'
                 )
                 tier15_texts.append((mem, mem_text))
@@ -1246,7 +1285,7 @@ def _load_user_memories_for_context(user_id: int, prompt: str = None, model_name
                     content, source=f"mem_id={mem.id} tier=heuristica path={mem.path}"
                 )
                 mem_text = (
-                    f'<memory path="{xml_escape(mem.path)}" tier="heuristica">\n'
+                    f'{_memory_open_tag(mem, "heuristica")}\n'
                     f'{content}\n</memory>\n'
                 )
                 tier16_texts.append((mem, mem_text))
@@ -1265,7 +1304,7 @@ def _load_user_memories_for_context(user_id: int, prompt: str = None, model_name
                 content = sanitize_memory_content(
                     content, source=f"mem_id={mem.id} tier=2 path={mem.path}"
                 )
-                mem_text = f'<memory path="{xml_escape(mem.path)}">\n{content}\n</memory>\n'
+                mem_text = f'{_memory_open_tag(mem)}\n{content}\n</memory>\n'
                 # Usar composite score original do PASS 1 (inclui similarity)
                 # Fallback: decay + importance (sem similarity) para memórias de fallback
                 if mem.id in _pass1_scores:

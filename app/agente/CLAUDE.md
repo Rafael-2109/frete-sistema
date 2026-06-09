@@ -514,10 +514,10 @@ Todos controlados por feature flags em `config/feature_flags.py`.
 | Tool | O que faz |
 |------|-----------|
 | `view_memories` | Le memoria por path |
-| `save_memory` | Cria/atualiza memoria |
+| `save_memory` | Cria/atualiza memoria (popula `meta` JSONB + normaliza content p/ paths estruturados) |
 | `update_memory` | Atualiza conteudo existente |
 | `delete_memory` | Remove memoria |
-| `list_memories` | Lista todas as memorias |
+| `list_memories` | INDICE navegavel (agrupa por kind/dominio + contagens + paths, SEM conteudo; filtros kind/dominio/escopo/prefix/query/limit; exclui frias). NAO eh mais dump |
 | `clear_memories` | Limpa TODAS (destrutivo) |
 | `search_cold_memories` | Busca no tier frio |
 | `view_memory_history` | Consulta historico de versoes de uma memoria |

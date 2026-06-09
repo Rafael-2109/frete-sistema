@@ -14,6 +14,7 @@ from typing import List, Dict, Any, Optional, Tuple
 import uuid
 
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.dialects.postgresql import JSONB
 
 from app import db
 from app.utils.timezone import agora_utc_naive
@@ -596,6 +597,15 @@ class AgentMemory(db.Model):
 
     # Ciclo de revisao (v5): ultima vez que conteudo foi validado
     reviewed_at = db.Column(db.DateTime, nullable=True)
+
+    # ── Formato canonico (2026-06-08): campos discriminantes estruturados ──
+    # Fonte de verdade QUERYAVEL (indice GIN jsonb_path_ops) dos campos de uma
+    # memoria estruturada (kind/dominio/nivel/criterios/titulo/when/do/...). O
+    # campo `content` (Text) passa a ser DERIVADO via render_content(meta).
+    # Serializacao/parse: app/agente/services/memory_format.py. NULL = memoria
+    # legada nao migrada OU memoria nao-estruturada (user.xml, preferences.xml).
+    # R7: ao MUTAR meta in-place usar flag_modified; geradores ATRIBUEM dict novo.
+    meta = db.Column(JSONB, nullable=True)
 
     # Timestamps
     created_at = db.Column(db.DateTime, default=lambda: agora_utc_naive())

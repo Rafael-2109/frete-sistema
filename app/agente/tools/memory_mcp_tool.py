@@ -233,6 +233,102 @@ def _validate_path(path: str) -> str:
     return path
 
 
+def _build_memory_index(
+    user_id: int, *, kind: str = None, dominio: str = None, escopo: str = None,
+    prefix: str = None, query: str = None, incluir_frias: bool = False, limit: int = 50,
+):
+    """Constroi o INDICE navegavel de memorias (progressive disclosure).
+
+    Agrupa por tipo/dominio (via meta-ou-path), conta, e lista paths SEM o conteudo.
+    Exclui tier frio/arquivadas por default. Assume app context (testavel isolado).
+
+    Returns:
+        (texto_legivel, structured_dict)
+    """
+    from ..models import AgentMemory
+    from ..services.memory_format import fields_for_index
+
+    if escopo == "empresa":
+        user_ids = [0]
+    elif escopo == "pessoal":
+        user_ids = [user_id]
+    else:
+        user_ids = [user_id, 0]
+
+    q = AgentMemory.query.filter(
+        AgentMemory.user_id.in_(user_ids),
+        AgentMemory.is_directory == False,  # noqa: E712
+    )
+    if not incluir_frias:
+        q = q.filter(AgentMemory.is_cold == False)  # noqa: E712
+    if prefix:
+        q = q.filter(AgentMemory.path.like(f"{prefix}%"))
+
+    rows = q.order_by(AgentMemory.path).all()
+
+    entries = []
+    for mem in rows:
+        # Arquivadas (_archived_*) so com incluir_frias (filtro em Python p/ evitar
+        # o wildcard '_' do LIKE)
+        if not incluir_frias and "_archived_" in mem.path:
+            continue
+        info = fields_for_index(getattr(mem, "meta", None), mem.path)
+        if kind and (info["kind"] or "").lower() != kind:
+            continue
+        if dominio and (info["dominio"] or "").lower() != dominio:
+            continue
+        if query and query not in (info["titulo"] or "").lower() \
+                and query not in mem.path.lower():
+            continue
+        entries.append({
+            "path": mem.path,
+            "kind": info["kind"],
+            "dominio": info["dominio"],
+            "nivel": info["nivel"],
+            "titulo": info["titulo"],
+            "escopo": "empresa" if mem.user_id == 0 else "pessoal",
+        })
+
+    total = len(entries)
+    por_kind: dict = {}
+    por_dominio: dict = {}
+    for e in entries:
+        por_kind[e["kind"]] = por_kind.get(e["kind"], 0) + 1
+        if e["dominio"]:
+            por_dominio[e["dominio"]] = por_dominio.get(e["dominio"], 0) + 1
+
+    shown = entries[:limit]
+
+    if total == 0:
+        return "Nenhuma memoria encontrada para os filtros.", {
+            "total": 0, "mostrados": 0, "por_kind": {}, "por_dominio": {}, "memories": [],
+        }
+
+    linhas = [f"Indice de memorias ({total} no total; mostrando {len(shown)}):"]
+    linhas.append("Por tipo: " + ", ".join(f"{k}={v}" for k, v in sorted(por_kind.items())))
+    if por_dominio:
+        linhas.append("Por dominio: " + ", ".join(
+            f"{d}={v}" for d, v in sorted(por_dominio.items(), key=lambda x: -x[1])
+        ))
+    linhas.append("")
+    for e in shown:
+        tag = f"[{e['kind']}" + (f":{e['dominio']}" if e["dominio"] else "") + "]"
+        linhas.append(f"- {e['path']} {tag} {e['titulo']}".rstrip())
+    if total > len(shown):
+        linhas.append(
+            f"... +{total - len(shown)} (refine com filtros/limit; "
+            f"view_memories(path) para o conteudo)"
+        )
+
+    return "\n".join(linhas), {
+        "total": total,
+        "mostrados": len(shown),
+        "por_kind": por_kind,
+        "por_dominio": por_dominio,
+        "memories": shown,
+    }
+
+
 # =====================================================================
 # EXCEÇÕES DE DOMÍNIO
 # =====================================================================
@@ -636,7 +732,7 @@ def _generate_memory_context(
 # =====================================================================
 
 def _embed_memory_best_effort(
-    user_id: int, path: str, content: str,
+    user_id: int, path: str, content: str, meta: dict = None,
 ) -> tuple[list[tuple[str, str]], list[tuple[str, str, str]]]:
     """
     Gera embedding de uma memória para busca semântica.
@@ -682,11 +778,23 @@ def _embed_memory_best_effort(
                 user_id, path, content
             )
 
+        # Texto base p/ RETRIEVAL: render_embed(meta) limpo (sem tags/entidades)
+        # quando ha meta estruturado; senao o content cru (legado).
+        retrieval_text = content
+        if isinstance(meta, dict):
+            try:
+                from ..services.memory_format import render_embed
+                _emb = render_embed(meta)
+                if _emb:
+                    retrieval_text = _emb
+            except Exception:
+                pass
+
         # Build texto embedado (com ou sem contexto) — para RETRIEVAL
         if context_prefix:
-            texto_embedado = f"{context_prefix}\n\n[{path}]: {content}"
+            texto_embedado = f"{context_prefix}\n\n[{path}]: {retrieval_text}"
         else:
-            texto_embedado = f"[{path}]: {content}"
+            texto_embedado = f"[{path}]: {retrieval_text}"
 
         # Build texto limpo — para DEDUP
         # Strip XML tags + decode entities → texto puro para embedding de dedup.
@@ -1528,19 +1636,26 @@ MEMORY_DELETE_OUTPUT_SCHEMA: dict = {
 MEMORY_LIST_OUTPUT_SCHEMA: dict = {
     "type": "object",
     "properties": {
-        "count": {"type": "integer"},
+        "total": {"type": "integer"},
+        "mostrados": {"type": "integer"},
+        "por_kind": {"type": "object", "additionalProperties": {"type": "integer"}},
+        "por_dominio": {"type": "object", "additionalProperties": {"type": "integer"}},
         "memories": {
             "type": "array",
             "items": {
                 "type": "object",
                 "properties": {
                     "path": {"type": "string"},
-                    "preview": {"type": "string"},
+                    "kind": {"type": "string"},
+                    "dominio": {"type": ["string", "null"]},
+                    "nivel": {"type": ["integer", "null"]},
+                    "titulo": {"type": "string"},
+                    "escopo": {"type": "string"},
                 },
             },
         },
     },
-    "required": ["count", "memories"],
+    "required": ["total", "memories"],
 }
 
 MEMORY_CLEAR_OUTPUT_SCHEMA: dict = {
@@ -1792,6 +1907,12 @@ try:
             content = _sanitize_content(content)
             user_id = _resolve_user_id(args)
 
+            # Formato canonico (2026-06-08): deriva meta estruturado e normaliza o
+            # content p/ sentinela quando o path for estruturado e o parse completo.
+            # Memorias nao-estruturadas (user.xml, preferences) ficam meta=None.
+            from ..services.memory_format import normalize_for_storage
+            content, meta = normalize_for_storage(content, path)
+
             # Validar priority
             valid_priorities = {'mandatory', 'advisory', 'contextual'}
             if priority not in valid_priorities:
@@ -1832,6 +1953,7 @@ try:
                             changed_by='claude'
                         )
                     existing.content = content
+                    existing.meta = meta
                     existing.is_directory = False
                     existing.importance_score = importance
                     existing.category = category
@@ -1866,6 +1988,7 @@ try:
                         )
 
                     mem = AgentMemory.create_file(actual_user_id, path, content)
+                    mem.meta = meta
                     mem.importance_score = importance
                     mem.category = category
                     mem.priority = priority
@@ -1965,7 +2088,7 @@ try:
                         from app.embeddings.config import MEMORY_SEMANTIC_SEARCH
                         if MEMORY_SEMANTIC_SEARCH:
                             _entities, _relations = _embed_memory_best_effort(
-                                actual_user_id, path, content
+                                actual_user_id, path, content, meta=meta
                             )
                     except Exception as emb_err:
                         logger.warning(f"[MEMORY_MCP] Embedding falhou (ignorado): {emb_err}")
@@ -2349,10 +2472,26 @@ try:
 
     @enhanced_tool(
         "list_memories",
-        "Lista todos os arquivos de memória persistente do usuário. "
-        "Use no INÍCIO de cada sessão para verificar o que há salvo. "
-        "Retorna paths e preview do conteúdo de cada memória.",
-        {},
+        "Retorna um INDICE navegavel das memorias persistentes (agrupado por tipo e "
+        "dominio, com contagens e paths — SEM o conteudo). As memorias relevantes ja "
+        "sao injetadas automaticamente no contexto; use esta tool SOMENTE se precisar "
+        "navegar alem do que ja foi injetado. Para ler o conteudo de uma memoria, use "
+        "view_memories(path). Filtros opcionais: kind (heuristica|armadilha|protocolo|"
+        "correcao), dominio, escopo (pessoal|empresa), prefix (path), query (texto), "
+        "limit (default 50).",
+        {
+            "type": "object",
+            "properties": {
+                "kind": {"type": "string", "description": "Filtra por tipo: heuristica|armadilha|protocolo|correcao"},
+                "dominio": {"type": "string", "description": "Filtra por dominio (ex: recebimento, financeiro)"},
+                "escopo": {"type": "string", "enum": ["pessoal", "empresa"], "description": "pessoal (suas) ou empresa (compartilhadas)"},
+                "prefix": {"type": "string", "description": "Filtra paths que comecam com este prefixo"},
+                "query": {"type": "string", "description": "Texto a buscar no titulo/path"},
+                "limit": {"type": "integer", "description": "Max de paths listados (default 50, max 200)"},
+                "incluir_frias": {"type": "boolean", "description": "Inclui memorias em tier frio/arquivadas (default false)"},
+                "target_user_id": {"type": "integer", "description": "Cross-user (requer debug mode)"},
+            },
+        },
         annotations=ToolAnnotations(
             readOnlyHint=True,
             destructiveHint=False,
@@ -2363,50 +2502,43 @@ try:
     )
     async def list_memories(args: dict[str, Any]) -> dict[str, Any]:
         """
-        Lista todas as memórias do usuário.
+        Indice navegavel das memorias (progressive disclosure).
 
-        Args:
-            args: {"target_user_id": int (opcional, requer debug mode)}
-
-        Returns:
-            MCP tool response com listagem
+        Retorna um MAPA por tipo/dominio + contagens + paths (sem o conteudo, que
+        e obtido via view_memories). Exclui tier frio/arquivadas por default.
+        Resolve o estouro de tokens do antigo dump de TODAS as memorias.
         """
         try:
             user_id = _resolve_user_id(args)
+            f_kind = (args.get("kind") or "").strip().lower() or None
+            f_dominio = (args.get("dominio") or "").strip().lower() or None
+            f_escopo = (args.get("escopo") or "").strip().lower() or None
+            f_prefix = (args.get("prefix") or "").strip() or None
+            f_query = (args.get("query") or "").strip().lower() or None
+            incluir_frias = bool(args.get("incluir_frias", False))
+            try:
+                limit = int(args.get("limit", 50))
+            except (TypeError, ValueError):
+                limit = 50
+            limit = max(1, min(limit, 200))
 
-            def _list():
-                from ..models import AgentMemory
-
-                # Incluir memórias pessoais (user_id) E empresa (user_id=0)
-                memories = AgentMemory.query.filter(
-                    AgentMemory.user_id.in_([user_id, 0]),
-                    AgentMemory.is_directory == False,  # noqa: E712
-                ).order_by(AgentMemory.path).all()
-
-                if not memories:
-                    return "Nenhuma memória salva.", {"count": 0, "memories": []}
-
-                lines = [f"Memórias do usuário ({len(memories)} arquivos):\n"]
-                structured_memories = []
-                for mem in memories:
-                    content_preview = (mem.content or "")[:80]
-                    if len(mem.content or "") > 80:
-                        content_preview += "..."
-                    lines.append(f"- {mem.path}: {content_preview}")
-                    structured_memories.append({"path": mem.path, "preview": content_preview})
-
-                text = "\n".join(lines)
-                return text, {"count": len(memories), "memories": structured_memories}
-
-            result_text, structured = _execute_with_context(_list)
-            logger.info(f"[MEMORY_MCP] list_memories: user={user_id}")
+            result_text, structured = _execute_with_context(
+                lambda: _build_memory_index(
+                    user_id, kind=f_kind, dominio=f_dominio, escopo=f_escopo,
+                    prefix=f_prefix, query=f_query, incluir_frias=incluir_frias, limit=limit,
+                )
+            )
+            logger.info(
+                f"[MEMORY_MCP] list_memories(indice): user={user_id} "
+                f"total={structured.get('total')}"
+            )
             return {
                 "content": [{"type": "text", "text": result_text}],
                 "structuredContent": structured,
             }
 
         except Exception as e:
-            error_msg = f"Erro ao listar memórias: {str(e)}"
+            error_msg = f"Erro ao listar memorias: {str(e)}"
             logger.error(f"[MEMORY_MCP] {error_msg}")
             return {"content": [{"type": "text", "text": error_msg}], "is_error": True}
 

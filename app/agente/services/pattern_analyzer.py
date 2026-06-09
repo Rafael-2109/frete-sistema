@@ -1145,9 +1145,15 @@ def _save_empresa_memory(
     path: str,
     content: str,
     created_by: int,
+    meta: Optional[dict] = None,
 ) -> bool:
     """
     Salva memoria empresa (user_id=0) com escopo e auditoria.
+
+    Args:
+        meta: dict canonico (memory_format.build_meta). Se None e o path for
+            estruturado, deriva via normalize_for_storage (parse best-effort do
+            content). Memorias nao-estruturadas ficam meta=NULL.
 
     Returns:
         True se criou/atualizou, False se erro
@@ -1156,12 +1162,18 @@ def _save_empresa_memory(
         from ..models import AgentMemory
         from app import db
         from app.utils.timezone import agora_utc_naive
+        from .memory_format import normalize_for_storage
+
+        # meta explicito (gerador estruturado) tem precedencia; senao deriva.
+        if meta is None:
+            content, meta = normalize_for_storage(content, path)
 
         existing = AgentMemory.get_by_path(0, path)
         if existing:
             # Atualizar se conteudo mudou
             if existing.content != content:
                 existing.content = content
+                existing.meta = meta
                 existing.updated_at = agora_utc_naive()
                 existing.created_by = created_by
         else:
@@ -1182,6 +1194,7 @@ def _save_empresa_memory(
                 pass  # Se dedup falhar, continuar salvando
 
             mem = AgentMemory.create_file(0, path, content)
+            mem.meta = meta
             mem.escopo = 'empresa'
             mem.created_by = created_by
             # Calcular importance pelo conteúdo (mesma lógica de save_memory)
@@ -1202,7 +1215,7 @@ def _save_empresa_memory(
 
             if MEMORY_SEMANTIC_SEARCH:
                 from ..tools.memory_mcp_tool import _embed_memory_best_effort
-                haiku_entities, haiku_relations = _embed_memory_best_effort(0, path, content)
+                haiku_entities, haiku_relations = _embed_memory_best_effort(0, path, content, meta=meta)
 
             if MEMORY_KNOWLEDGE_GRAPH:
                 from ..services.knowledge_graph_service import extract_and_link_entities
@@ -1323,24 +1336,21 @@ def _save_conhecimentos_v3(
             counts['filtered'] += 1
             continue
 
-        # ── Construir formato compacto WHEN/DO/WHY ──
-        # ~70% menos tokens que XML verbose, 100% da informacao acionavel
-        nivel_str = str(int(nivel)) if isinstance(nivel, (int, float)) and nivel >= 3 else "3"
-        criterios_str = ",".join(str(c) for c in criterios) if criterios else ""
-        content = (
-            f'[{_xml_escape(tipo)}:{_xml_escape(dominio)}] '
-            f'{_xml_escape(titulo)}\n'
-            f'WHEN: {_xml_escape(descricao)}\n'
-            f'DO: {_xml_escape(prescricao)}'
+        # ── Formato canonico (2026-06-08): meta = fonte de verdade estruturada,
+        # content = sentinela derivado via render_content. O LLM nao escreve o
+        # content final (mata code-fence/grudado). Ver services/memory_format.py.
+        from .memory_format import build_meta, render_content
+        meta = build_meta(
+            tipo=tipo, dominio=dominio, nivel=nivel, criterios=criterios,
+            titulo=titulo, descricao=descricao, prescricao=prescricao,
         )
-        if criterios_str:
-            content += f'\nMETA: nivel={nivel_str} criterios={criterios_str}'
+        content = render_content(meta)
 
         # ── Tentar enriquecer memoria existente antes de criar nova ──
         enriched = _try_enrich_existing(path, content, created_by, descricao)
         if enriched:
             counts['enriched'] += 1
-        elif _save_empresa_memory(path, content, created_by):
+        elif _save_empresa_memory(path, content, created_by, meta=meta):
             counts['saved'] += 1
         # Se dedup bloqueou, nenhum contador incrementa (esperado)
 
@@ -1618,7 +1628,18 @@ def _try_enrich_existing(
             )
             return False
 
-        existing.content = enriched
+        # Re-deriva meta do conteudo fundido. Merge (Sonnet) = bloco unico ->
+        # normaliza p/ sentinela (mata code-fence/XML). Append legado (separador
+        # <!-- Enriquecido -->) = 2 blocos concatenados -> NAO re-renderiza, pois
+        # _parse_bracket sobrescreveria o DO: do 1o bloco com o do 2o (perda de
+        # dado). Preserva o content concatenado + meta best-effort.
+        from .memory_format import normalize_for_storage, parse_memory
+        if '<!-- Enriquecido em' in enriched:
+            content_norm, meta_norm = enriched, parse_memory(enriched)
+        else:
+            content_norm, meta_norm = normalize_for_storage(enriched, path)
+        existing.content = content_norm
+        existing.meta = meta_norm
         existing.updated_at = agora_utc_naive()
         existing.created_by = created_by
         db.session.commit()
@@ -2255,7 +2276,12 @@ def _save_personal_insight(
             existing = AgentMemory.get_by_path(user_id, path)
             if existing:
                 return False  # Ja existe — dedup por path
-            mem = AgentMemory.create_file(user_id, path, content)
+            # Formato canonico (2026-06-08): /corrections/ e estruturado ->
+            # popula meta + normaliza content (sentinela). Ver memory_format.py.
+            from .memory_format import normalize_for_storage
+            _content_norm, _meta = normalize_for_storage(content, path)
+            mem = AgentMemory.create_file(user_id, path, _content_norm)
+            mem.meta = _meta
             mem.category = 'structural'
             mem.importance_score = 0.7
             # Fase 3: assinatura de intencao normalizada (casa reincidencia entre sessoes).
