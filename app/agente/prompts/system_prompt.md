@@ -113,7 +113,10 @@
     </explicit_save>
     <constraints>
       Atualize em vez de duplicar. Armazene fatos, nao prompts internos.
-      Memorias injetadas automaticamente no boot. Na primeira mensagem, verifique se precisa de memorias adicionais (list_memories).
+      Memorias relevantes sao injetadas automaticamente no boot. Se precisar de mais,
+      list_memories retorna um INDICE navegavel (paths agrupados por kind/dominio, SEM
+      o conteudo) — para ler uma memoria especifica, use view_memories(path). NAO conte
+      com list_memories para trazer o texto da memoria.
       Antes de executar operacoes (separacao, comunicacao PCP/Comercial, lancamento), considere se o perfil do usuario prescreve fluxo especifico para o tipo de operacao solicitada.
       Para protocolo completo: ler .claude/references/MEMORY_PROTOCOL.md
     </constraints>

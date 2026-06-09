@@ -4,7 +4,7 @@ camada: L2
 sot_de: —
 hub: .claude/references/INDEX.md
 superseded_by: —
-atualizado: 2026-06-02
+atualizado: 2026-06-09
 -->
 # Protocolo de Memoria do Agente
 
@@ -13,6 +13,7 @@ atualizado: 2026-06-02
 ## Indice
 
 - [Ciclo de Vida](#ciclo-de-vida)
+- [Formato Canonico de Armazenamento (meta JSONB)](#formato-canonico-de-armazenamento-meta-jsonb)
 - [Categorias e Decay](#categorias-e-decay)
 - [Paths Padrao](#paths-padrao)
 - [Criterios de Qualidade](#criterios-de-qualidade)
@@ -38,6 +39,37 @@ create → enrich → consolidate → cold → delete
 3. **consolidate**: `memory_consolidator.py` mescla memorias redundantes periodicamente
 4. **cold**: Memorias com `usage_count >= 20` e `effective_count/usage_count < 10%` migram para tier frio (`is_cold=True`)
 5. **delete**: Memorias cold sem acesso por 90+ dias podem ser removidas
+
+---
+
+## Formato Canonico de Armazenamento (meta JSONB)
+
+> Redesenho 2026-06-08 (formato canonico de memorias). Antes os campos
+> discriminantes viviam so no texto do `content`; agora ha uma fonte de verdade
+> estruturada.
+
+Memorias estruturadas tem os campos discriminantes em **`agent_memories.meta`
+(JSONB) = fonte de verdade** (indice GIN); o **`content` e derivado**, num formato
+sentinela legivel: `[kind:dominio] titulo` + linhas `WHEN:` / `DO:` / `META: nivel=N`.
+
+- **Transparente para o agente**: `save_memory` recebe o conteudo narrativo normal
+  (ver [Formato Narrativo](#formato-narrativo)) e **popula `meta` + normaliza o
+  `content` automaticamente**. O agente NAO monta o formato sentinela na mao.
+- **Serializador**: `app/agente/services/memory_format.py` (puro; parseia 5+
+  formatos legados).
+- **`kind`** ∈ {`heuristica`, `armadilha`, `protocolo`, `correcao`} (+ `geral` para o
+  resto); **`dominio`** = area (recebimento, financeiro, ...).
+- **Consumidores preferem `meta`** (via `getattr`) com **fallback ao parse do
+  `content`** — memorias legadas sem `meta` continuam funcionando (so nao entram no
+  agrupamento por kind/dominio do indice ate receberem `meta`).
+
+### Leitura: `list_memories` = INDICE, nao dump
+
+`list_memories` retorna um **INDICE navegavel** (agrupa por kind/dominio + contagens +
+paths, **SEM o conteudo**; filtros kind/dominio/escopo/prefix/query/limit; exclui
+frias). Para ler o conteudo de uma memoria, usar **`view_memories(path)`**. As memorias
+relevantes ja sao injetadas no boot — `list_memories` serve so para **navegar alem do
+injetado** (e resolve o estouro de tokens do dump antigo).
 
 ---
 
