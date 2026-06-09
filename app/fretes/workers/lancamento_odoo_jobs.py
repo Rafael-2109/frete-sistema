@@ -62,6 +62,56 @@ def _get_redis_connection():
         return None
 
 
+# ========================================
+# LOCK DE RE-ENTRADA (anti duplo-clique)
+# ========================================
+# TTL do lock: cobre o timeout do job (600s) + margem para o polling da Etapa 6
+# (action_gerar_po_dfe pode aguardar ate 600s). Se o worker morrer sem liberar,
+# o lock expira sozinho e o lancamento pode ser retomado.
+LANCAMENTO_LOCK_TTL = 900
+
+
+def _adquirir_lock_lancamento(tipo: str, entidade_id: int) -> bool:
+    """
+    Adquire lock distribuido para impedir lancamento concorrente da MESMA
+    entidade (frete/despesa) no Odoo.
+
+    Protege contra duplo-clique no botao de lancamento: a Etapa 6
+    (`action_gerar_po_dfe`) demora 60-90s+, e duas execucoes paralelas do mesmo
+    item chamam a Etapa 6 antes de qualquer uma ter criado o PO — gerando POs +
+    invoices duplicados. Espelha o padrao de
+    `app/recebimento/workers/recebimento_lf_jobs.py:_adquirir_lock`.
+
+    Args:
+        tipo: 'frete' ou 'despesa'
+        entidade_id: ID do frete ou da despesa
+
+    Returns:
+        True se o lock foi adquirido (pode prosseguir), False se ja existe outro
+        job processando a mesma entidade. Fail-open: se o Redis estiver
+        indisponivel, retorna True (nao bloqueia o lancamento).
+    """
+    try:
+        redis_conn = _get_redis_connection()
+        if not redis_conn:
+            return True  # Sem Redis → fail-open
+        lock_key = f'lancamento_{tipo}_lock:{entidade_id}'
+        return bool(redis_conn.set(lock_key, '1', nx=True, ex=LANCAMENTO_LOCK_TTL))
+    except Exception as e:
+        logger.warning(f"⚠️ [Lock] Falha ao adquirir lock {tipo}#{entidade_id}: {e}")
+        return True  # Se Redis falhar, permite prosseguir (fail-open)
+
+
+def _liberar_lock_lancamento(tipo: str, entidade_id: int):
+    """Libera o lock de lancamento apos o processamento (ou abort)."""
+    try:
+        redis_conn = _get_redis_connection()
+        if redis_conn:
+            redis_conn.delete(f'lancamento_{tipo}_lock:{entidade_id}')
+    except Exception as e:
+        logger.warning(f"⚠️ [Lock] Falha ao liberar lock {tipo}#{entidade_id}: {e}")
+
+
 def _atualizar_progresso_lote(fatura_id: int, progresso: dict):
     """
     Atualiza progresso do lote no Redis para acompanhamento em tempo real.
@@ -200,6 +250,20 @@ def lancar_frete_job(
         'skipped': False,
         'tempo_segundos': 0
     }
+
+    # ========================================
+    # LOCK DE RE-ENTRADA (anti duplo-clique → POs/invoices duplicados)
+    # ========================================
+    if not _adquirir_lock_lancamento('frete', frete_id):
+        resultado['skipped'] = True
+        resultado['error'] = (
+            f"Frete #{frete_id} já está sendo lançado por outro job (lock ativo). "
+            "Aguarde a conclusão do lançamento em andamento."
+        )
+        resultado['error_type'] = 'LANCAMENTO_EM_ANDAMENTO'
+        resultado['message'] = resultado['error']
+        logger.warning(f"🔒 [Job Frete] {resultado['error']}")
+        return resultado
 
     try:
         with _app_context_safe():
@@ -371,6 +435,8 @@ def lancar_frete_job(
         logger.error(f"💥 [Job Frete] Erro inesperado frete #{frete_id}: {e}")
         logger.error(traceback.format_exc())
         return resultado
+    finally:
+        _liberar_lock_lancamento('frete', frete_id)
 
 
 def lancar_despesa_job(
@@ -407,6 +473,20 @@ def lancar_despesa_job(
         'skipped': False,
         'tempo_segundos': 0
     }
+
+    # ========================================
+    # LOCK DE RE-ENTRADA (anti duplo-clique → POs/invoices duplicados)
+    # ========================================
+    if not _adquirir_lock_lancamento('despesa', despesa_id):
+        resultado['skipped'] = True
+        resultado['error'] = (
+            f"Despesa #{despesa_id} já está sendo lançada por outro job (lock ativo). "
+            "Aguarde a conclusão do lançamento em andamento."
+        )
+        resultado['error_type'] = 'LANCAMENTO_EM_ANDAMENTO'
+        resultado['message'] = resultado['error']
+        logger.warning(f"🔒 [Job Despesa] {resultado['error']}")
+        return resultado
 
     try:
         with _app_context_safe():
@@ -521,6 +601,8 @@ def lancar_despesa_job(
         logger.error(f"💥 [Job Despesa] Erro inesperado despesa #{despesa_id}: {e}")
         logger.error(traceback.format_exc())
         return resultado
+    finally:
+        _liberar_lock_lancamento('despesa', despesa_id)
 
 
 def lancar_lote_job(

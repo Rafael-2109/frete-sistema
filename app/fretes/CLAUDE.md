@@ -22,7 +22,7 @@ atualizado: 2026-06-03
   - [R4: Etapas 12 e 14 sao OPCIONAIS — erros ignorados](#r4-etapas-12-e-14-sao-opcionais-erros-ignorados)
   - [R5: CNPJ tomador → company mapeado](#r5-cnpj-tomador-company-mapeado)
   - [R6: Tolerancia R$ 5,00 e bloqueio de fatura](#r6-tolerancia-r-500-e-bloqueio-de-fatura)
-  - [R7: Sem Redis lock no lancamento individual](#r7-sem-redis-lock-no-lancamento-individual)
+  - [R7: Lock Redis de re-entrada no lancamento (anti duplo-clique)](#r7-lock-redis-de-re-entrada-no-lancamento-anti-duplo-clique)
   - [R8: Dois vinculos CTe ↔ Frete podem divergir](#r8-dois-vinculos-cte-frete-podem-divergir)
 - [Models](#models)
 - [Origem do Frete — 2 caminhos](#origem-do-frete-2-caminhos)
@@ -148,8 +148,12 @@ frete_cte_id_atual = frete.frete_cte_id
 ### R6: Tolerancia R$ 5,00 e bloqueio de fatura
 Diferenca > R$ 5,00 entre `valor_considerado` ↔ `valor_pago` ou `valor_cotado` → `Frete.status = 'EM_TRATATIVA'`. Constante `FRETE_STATUS_BLOQUEANTES = ('EM_TRATATIVA', 'REJEITADO')` em `models.py:10` impede conferencia de fatura. Flag `considerar_diferenca` permite lancar conta corrente sem aprovacao.
 
-### R7: Sem Redis lock no lancamento individual
-Diferente de outros modulos, `lancar_frete_odoo()` NAO tem lock distribuido. Protecao apenas via `_verificar_lancamento_existente()` + estado do DFe no Odoo. Lote (`lancar_lote_job`) tambem sem lock — confiar no estado do DFe.
+### R7: Lock Redis de re-entrada no lancamento (anti duplo-clique)
+Os jobs `lancar_frete_job` e `lancar_despesa_job` (`workers/lancamento_odoo_jobs.py`) adquirem um lock Redis (`SET nx ex=900`) por entidade ANTES de processar: chaves `lancamento_frete_lock:{frete_id}` e `lancamento_despesa_lock:{despesa_id}`. Helpers `_adquirir_lock_lancamento(tipo, id)` / `_liberar_lock_lancamento(tipo, id)` (liberado no `finally`), espelhando `recebimento_lf_jobs.py`.
+
+**Motivo** (IMP-2026-06-08-001): a Etapa 6 (`action_gerar_po_dfe`) demora 60-90s+; sem lock, duplo-clique disparava duas execucoes paralelas do mesmo item que chamavam a Etapa 6 antes de qualquer uma criar o PO → **POs + invoices duplicados** (caso real CTe 135210: PO C2620079+C2620082, invoices COM2/2026/06/0090+0091). Se o lock ja esta retido, o job aborta com `error_type='LANCAMENTO_EM_ANDAMENTO'` e `skipped=True`.
+
+**Fail-open**: se o Redis estiver indisponivel, `_adquirir_lock_lancamento` retorna True (nao bloqueia o lancamento). TTL 900s cobre o timeout do job (600s) + polling da Etapa 6; se o worker morrer, o lock expira sozinho. Camada complementar (nao substituida): `_verificar_lancamento_existente()` + estado do DFe no Odoo. Lote (`lancar_lote_job`) so enfileira jobs individuais — herda o lock de cada um, sem lock proprio.
 
 ### R8: Dois vinculos CTe ↔ Frete podem divergir
 - `Frete.frete_cte_id` (FK direta para `ConhecimentoTransporte`)
