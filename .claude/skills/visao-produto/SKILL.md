@@ -2,7 +2,7 @@
 name: visao-produto
 description: >-
   Visao 360 de UM produto: cadastro, estoque, custo, faturamento, carteira e
-  producao em consulta cross-domain unificada. "tudo sobre palmito", "visao 360
+  producao. "tudo sobre palmito", "visao 360
   do produto X", "programado vs produzido", "cumpriram a programacao?", "dados
   completos do produto". So estoque sem visao completa -> gerindo-expedicao. So
   faturamento/vendas -> consultando-sql.

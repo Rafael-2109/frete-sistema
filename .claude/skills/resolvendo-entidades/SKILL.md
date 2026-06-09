@@ -1,8 +1,8 @@
 ---
 name: resolvendo-entidades
 description: >-
-  Resolve termos humanos para IDs do sistema antes de qualquer skill com
-  parametro de cliente, produto, pedido, cidade ou transportadora. Frases:
+  Resolve termos humanos para IDs ANTES de skill com parametro de
+  cliente, produto, pedido, cidade ou transportadora. Frases:
   "pedidos do Atacadao", "consulta palmito", "separacoes de Manaus", "frete pela
   TAC", "pedidos do cliente X". Anti: usuario fornece ID exato (CNPJ completo,
   cod_produto, VCD*/VFB*, transportadora_id) -> nao usar.

@@ -3,8 +3,8 @@ name: executando-odoo-financeiro
 description: >-
   Executa operacoes financeiras WRITE no Odoo: pagamento, reconciliacao de
   extrato, baixa de titulo. Gatilhos: "crie pagamento para NF 12345",
-  "reconcilie extrato", "baixe titulo no Odoo", "pagamento com juros", "marque
-  como pago no Odoo". Anti: so consultar/rastrear -> rastreando-odoo;
+  "reconcilie extrato", "baixe titulo/marque como pago no Odoo", "pagamento
+  com juros". Anti: so consultar/rastrear -> rastreando-odoo;
   transferencia interna NACOM GOYA (61.724.241) ->
   conciliando-transferencias-internas; lancamento fiscal CTe -> integracao-odoo.
 allowed-tools: Read, Bash, Glob, Grep

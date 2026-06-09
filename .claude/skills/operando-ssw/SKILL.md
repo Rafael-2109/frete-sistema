@@ -3,8 +3,8 @@ name: operando-ssw
 description: >-
   Operacoes de ESCRITA no SSW via Playwright (cadastros, CT-e, CSVs 402/408,
   fatura 437, POP-A10). dry-run obrigatorio na 1a execucao. Gatilhos: "cadastre
-  unidade", "emitir CT-e", "cancelar CT-e", "CT-e complementar", "importar CSV
-  408", "gerar fatura SSW", "nova rota completa", "vincular transportadora".
+  unidade", "emitir/cancelar CT-e", "CT-e complementar", "importar CSV 408",
+  "gerar fatura SSW", "nova rota completa", "vincular transportadora".
   Anti-gatilhos: consultar/navegar SSW sem alterar -> acessando-ssw; cotacao
   frete interna Nacom -> cotando-frete.
 allowed-tools: Read, Bash, Glob, Grep

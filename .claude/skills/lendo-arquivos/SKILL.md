@@ -1,12 +1,11 @@
 ---
 name: lendo-arquivos
 description: >-
-  Le arquivo ENVIADO pelo usuario e retorna JSON fiel: Excel/CSV (ler.py) e
-  Word .docx, CNAB .ret/.rem/.cnab, OFX (ler_doc.py). Gatilhos: "analise essa
-  planilha", "le esse retorno bancario", "confere essa remessa", "o que tem
-  nesse OFX/Word". NAO usar para: criar/exportar arquivo -> exportando-arquivos;
+  Le arquivo ENVIADO pelo usuario e retorna JSON fiel: Excel/CSV, Word .docx,
+  CNAB .ret/.rem/.cnab, OFX. Gatilhos: "analise essa planilha", "le esse
+  retorno bancario", "confere essa remessa", "o que tem nesse OFX/Word".
+  NAO usar para: criar/exportar arquivo -> exportando-arquivos;
   PDF/imagem -> nativos (sem skill); dados do sistema -> consultando-sql.
-  (Consolidou lendo-documentos em 2026-06-09.)
 allowed-tools: Read, Bash, Glob, Grep
 ---
 

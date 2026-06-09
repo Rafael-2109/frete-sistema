@@ -1,11 +1,10 @@
 ---
 name: gerando-baseline-conciliacao
 description: >-
-  Gera Excel com 4 abas canonicas de extratos pendentes (baseline de conciliacao
-  financeira Nacom Goya). Gatilhos: "atualizar baseline", "foto das
-  conciliacoes", "extratos pendentes por mes", "gerar baseline", "relatorio de
-  extratos pendentes" (Marcus user_id=18 ou financeiro). Anti: conciliar linha
-  -> executando-odoo-financeiro; transferencia interna ->
+  Gera Excel com 4 abas canonicas de extratos pendentes (baseline de
+  conciliacao Nacom Goya). Gatilhos: "gerar/atualizar baseline", "foto das
+  conciliacoes", "extratos pendentes por mes" (Marcus user_id=18 ou financeiro).
+  Anti: conciliar linha -> executando-odoo-financeiro; transferencia interna ->
   conciliando-transferencias-internas; rastrear pagamento -> rastreando-odoo.
 allowed-tools: Read, Bash, Glob, Grep
 ---

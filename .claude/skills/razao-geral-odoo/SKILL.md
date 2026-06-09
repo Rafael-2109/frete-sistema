@@ -3,8 +3,8 @@ name: razao-geral-odoo
 description: >-
   Exporta Razao Geral e balancete do Odoo (account.move.line em massa) para
   Excel com saldo acumulado. Use quando: "exporte o razao geral", "gere
-  balancete", "relatorio contabil Odoo", "movimentos account.move.line em
-  massa", "saldo acumulado por conta". Doc individual ou fluxo NF/PO ->
+  balancete", "relatorio contabil Odoo", "saldo acumulado por conta".
+  Doc individual ou fluxo NF/PO ->
   rastreando-odoo; pagamento/reconciliacao -> executando-odoo-financeiro; banco
   local -> consultando-sql.
 allowed-tools: Read, Bash, Glob, Grep

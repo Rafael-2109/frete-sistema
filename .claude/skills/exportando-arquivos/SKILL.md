@@ -1,8 +1,8 @@
 ---
 name: exportando-arquivos
 description: >-
-  Gera arquivos Excel/CSV/JSON para download; usar em vez de Write para
-  downloads. Gatilhos: "exporte para Excel", "gere planilha", "relatorio em
+  Gera arquivos Excel/CSV/JSON para download (usar em vez de Write).
+  Gatilhos: "exporte para Excel", "gere planilha", "relatorio em
   CSV", "quero baixar esses dados", "salve screenshot para download".
   Anti-gatilhos: LER upload do usuario -> lendo-arquivos; exportar razao geral
   Odoo -> razao-geral-odoo.

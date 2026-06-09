@@ -377,3 +377,18 @@ Padrao em si (PAD-CTX publicado): RP-1, R-2(criterio), A5(roteamento), C1(fonte 
   marcado como criado. PENDENTE pos-deploy: mini-set + dump de boot novo
   (ordem real dos blocos, payload, sem stale/intelligence) + golden dataset
   para validacao plena do 4.4 (F6).
+- 2026-06-09 — **CORRECAO F2.5 (fórmula real do CLI)**: log debug do CLI pre-push
+  acusou "Skill listing over budget: 21 skills, 8448 chars > 8000" enquanto o
+  `skills_listing_audit.py` dava OK em 7.946 — o audit somava SO descriptions.
+  Formula REAL extraida do binario CLI 2.1.170: entrada = `- {name}: {desc}` →
+  `len(name)+4+len(desc)`; total += N-1 newlines; budget = 200K tok × 4 × 1% =
+  8.000; escapes: env `SLASH_COMMAND_TOOL_CHAR_BUDGET` / setting
+  `skillListingBudgetFraction` (registrados no PAD-CTX como escape consciente —
+  o padrao e caber no default). Audit CORRIGIDO para a formula real (validada:
+  reproduziu 8.448 exato) + guard de `whenToUse` (CLI concatena na description;
+  nenhuma skill usa hoje). PODA fina em 16 descriptions (gatilhos/anti-gatilhos
+  preservados; fundidos semi-duplicados; removidos detalhes internos ler.py/
+  ler_doc.py e nota de consolidacao): 8.448 → **7.929 ≤ 8.000 na medicao do
+  CLI** — fim REAL do truncamento silencioso (a F2 havia fechado so na medicao
+  parcial). Atencao: o deploy do push `c104a52fc` NAO contem este fix — exige
+  novo push.

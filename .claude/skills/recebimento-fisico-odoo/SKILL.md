@@ -1,7 +1,7 @@
 ---
 name: recebimento-fisico-odoo
 description: >-
-  Skill para operar o Recebimento Fisico (Fase 4) no Odoo: picking, lotes,
+  Opera o Recebimento Fisico (Fase 4) no Odoo: picking, lotes,
   quality checks e worker RQ assincrono. Usar quando: "erro ao validar picking",
   "lote nao criou", "quality check falhou", "picking nao foi para done", "quais
   passos o worker executa?", "lote duplicado". Fase 2 (match NF x PO) ->

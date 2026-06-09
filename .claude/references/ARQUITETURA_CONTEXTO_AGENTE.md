@@ -170,8 +170,13 @@ crescer, promover o conteudo dev-only a um doc versionado proprio e apontar o
 
 ## Skills — template de description e curadoria
 
-Template do frontmatter (alvo ≤450 chars por skill; orcamento real do CLI ≈8K chars para
-o listing inteiro — estourar = truncamento silencioso exatamente das clausulas finais):
+Template do frontmatter (alvo ≤450 chars por skill; orcamento real do CLI = 8.000 chars
+para o listing inteiro — estourar = truncamento silencioso exatamente das clausulas
+finais). FORMULA DO CLI (extraida do binario 2.1.170, 2026-06-09 — o audit antigo somava
+so descriptions e dava falso-OK): entrada por skill = `- {name}: {description}` →
+`len(name)+4+len(desc)`, total += N-1 newlines; budget = contexto(200K) × 4 bytes/token
+× fraction(0.01); escapes conscientes: env `SLASH_COMMAND_TOOL_CHAR_BUDGET` (absoluto)
+ou setting `skillListingBudgetFraction` — o padrao e CABER no default, nao subir o teto:
 
 ```text
 [1 frase de proposito ≤150c] + [3-5 gatilhos positivos ≤200c] +

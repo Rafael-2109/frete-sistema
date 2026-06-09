@@ -1,9 +1,9 @@
 ---
 name: acessando-ssw
 description: >-
-  Base de conhecimento SSW. Usar quando alguem perguntar SOBRE o SSW — como
-  funciona opcao 004, opcao 436, guia passo-a-passo, fluxo CT-e/MDF-e/CTRC,
-  romaneio, faturamento SSW. Gatilhos: "o que faz opcao 436?", "como emitir CT-e
+  Base de conhecimento SSW — perguntas SOBRE o SSW (opcoes, guias,
+  fluxos CT-e/MDF-e/CTRC, romaneio, faturamento SSW).
+  Gatilhos: "o que faz opcao 436?", "como emitir CT-e
   no SSW?", "POP de cancelamento CTRC", "CarVia usa o modulo X?". Anti:
   escrita/cadastro SSW -> operando-ssw; cotacao frete Nacom -> cotando-frete.
 allowed-tools: Read, Bash, Glob, Grep

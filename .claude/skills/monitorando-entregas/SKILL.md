@@ -1,8 +1,8 @@
 ---
 name: monitorando-entregas
 description: >-
-  Skill pos-faturamento para consultar status de entregas, canhotos, devolucoes
-  e datas de embarque. Gatilhos: "NF 12345 foi entregue?", "que dia embarcou?",
+  Pos-faturamento: status de entregas, canhotos, devolucoes e datas
+  de embarque. Gatilhos: "NF 12345 foi entregue?", "que dia embarcou?",
   "tem canhoto?", "houve devolucao?", "entregas pendentes", "NFs no CD". Anti:
   pedido nao faturado -> gerindo-expedicao; rastrear NF/PO Odoo ->
   rastreando-odoo.
