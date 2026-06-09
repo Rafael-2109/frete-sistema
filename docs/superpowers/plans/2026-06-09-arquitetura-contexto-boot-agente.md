@@ -15,9 +15,9 @@ atualizado: 2026-06-09
 > EM ABERTO e o escopo delas PERMANECE LA. Este plano governa o contexto COMPLETO
 > (CLAUDE.md, listing de skills, hook dinamico, memorias) sem absorver tasks daquele.
 
-> 🔵 **PROXIMA SESSAO — RETOMAR AQUI:** FASES 0, 1 e 2 CONCLUIDAS (2026-06-09, mesma
-> sessao do estudo — ver Rastreamento). Comecar pela FASE 3 (CLAUDE.md alvo +
-> compressoes B1, gated por mini-set). F4 depois (hook), F5 (memorias) exige migration.
+> 🔵 **PROXIMA SESSAO — RETOMAR AQUI:** FASES 0-3 CONCLUIDAS (2026-06-09 — ver
+> Rastreamento). Antes da F4: PUSH + rodar o mini-set pos-deploy (tabela abaixo) no
+> agente web. Depois F4 (hook: orcamento+ordenacao), F5 (memorias — migration).
 
 ## Indice
 
@@ -191,6 +191,26 @@ turnos reais); zero duplicata; mini-set sem regressao. **Superficies:** principa
 | 7.4 | ✅ RESOLVIDO 2026-06-09 (Rafael): a necessidade real e admin consultar sessoes de outros usuarios — JA coberta por debug_mode (`target_user_id`, acesso logado). Sem carve-out de revelacao de prompt; friccao aceita | D2 | sem acao |
 | 7.5 | `preferred_skills` derivado de dados reais (`agent_step.tools_used` por dominio) — completa N-8 | N-8(completo) | requer ≥30d de agent_step |
 
+## Mini-set de validacao pos-deploy (F0-F3)
+
+Rodar NO AGENTE WEB apos o push/deploy das fases (validacao comportamental que o
+ambiente dev nao cobre). Criterio: roteamento correto + comportamento inalterado.
+
+| # | Pergunta | Esperado |
+|---|----------|----------|
+| 1 | "tem pedido do Atacadao?" | gerindo-expedicao (PRE-faturamento) |
+| 2 | "NF 12345 foi entregue?" | monitorando-entregas (POS) |
+| 3 | "quanto tem de palmito?" | fast-path consultar-estoque/gerindo-expedicao |
+| 4 | "crie separacao do VCD123 pra amanha" | criar-separacao + confirmacao R3 (nunca direto) |
+| 5 | "atualizar baseline" | gerando-baseline-conciliacao (boundary — fast-path R7 removido) |
+| 6 | "quantos pedidos abertos hoje?" | `mcp__sql__consultar_sql` (NUNCA tentar `query_render_postgres` — bug B2) |
+| 7 | "rastreie NF 139310" | rastreando-odoo |
+| 8 | anexo .xlsx "analise essa planilha" E anexo .ret "le esse retorno" | lendo-arquivos UNIFICADA roteia os dois |
+| 9 | "monte um dashboard interativo de fretes" | gerando-artifact + marker [ARTIFACT:uuid] na resposta |
+| 10 | "o que faz a opcao 436 do SSW?" | acessando-ssw |
+| 11 | "zera o saldo do lote X no Odoo" | delega gestor-estoque-odoo (novo no `<subagents>`) |
+| 12 | dump de boot novo | sem skill_hints/world_model; sem memoria mandatory duplicada; listing 21 skills sem truncar |
+
 ## Backlog explicito
 
 - N-8(completo): derivacao de preferred_skills por uso real → F7.5.
@@ -268,3 +288,23 @@ Padrao em si (PAD-CTX publicado): RP-1, R-2(criterio), A5(roteamento), C1(fonte 
   prd-generator/ralph-wiggum/skill-creator/resolvendo-problemas sao user-scope
   (~/.claude/skills) e nunca carregam em prod — nenhuma deny-list necessaria
   (red-team V4).
+- 2026-06-09 — **FASE 3 CONCLUIDA**: (a) CLAUDE.md raiz por superficie — Contexto e
+  DADOS reescritos (bug B2: agente web NAO tem `query_render_postgres`; fonte web =
+  mcp__sql + skills), TECH STACK -5 linhas dev-only, FORMATACAO Jinja2 e Design System
+  e linha PAD-A e 3 refs de criacao de subagents MOVIDAS para `~/.claude/CLAUDE.md`
+  (TECH STACK COMPLEMENTO + DESIGN SYSTEM + REGRAS DEV 4-5 + REFERENCIAS DEV-ONLY),
+  `gestor-estoque-odoo` comprimido 1.139→~230c (detalhe → app/odoo/estoque/CLAUDE.md),
+  "NAO ESTENDER" marcado (dev). **OVERRIDE de B2 com evidencia**: regra AMBIENTE
+  VIRTUAL FICA — o runtime do Render cria `.venv` na raiz e as skills do agente web
+  usam `source .venv/bin/activate` em PROD (B2/A4 erraram ao marcar dev-only).
+  (b) Compressoes B1 no system_prompt v4.3.3→4.4.0: metadata 1 linha (-6L),
+  role_definition /tmp dedup preset (-1L), R5 parallel 7→4L, R7 fast-path baseline
+  REMOVIDO (dono = boundary baseline_financeiro, fecha R-CROSS-1/R-2) + artifact
+  comprimido, R10 frases-modelo Odoo/SSW MOVIDAS p/ REGRAS_OUTPUT.md I5 (+ ponteiro),
+  routing_confidence template comprimido, delegation_pattern em bullets. system_prompt
+  788→763L (-25L); total estatico 986→961L (~16,3K tok); baseline TRAVADO no valor
+  novo (crescimento futuro bloqueia no pre-commit). Lint pegou 2 hedges ("alguns"/
+  "varios") nas frases movidas + 1 PRE-existente no I7 — corrigidos. Aceite: 23 testes
+  verdes, check-delta/consistency/listing OK, doc_audit 0 bloqueantes. Validacao
+  comportamental: mini-set de 12 itens documentado acima — PENDENTE pos-deploy
+  (ambiente dev nao roda o agente web).

@@ -43,6 +43,14 @@ Traduza para linguagem clara:
 | P7 | "ultima prioridade" |
 | Incoterm RED | "frete por nossa conta" |
 
+**Frases-modelo para sistema indisponivel** (movidas do R10 do system_prompt — F3 PAD-CTX 2026-06-09):
+- Odoo fora do ar (protecao automatica ativa): "O Odoo esta fora do ar agora. Quando o
+  sistema de protecao detecta instabilidade, ele bloqueia consultas por seguranca. Posso
+  esperar 1-2 minutos e tentar de novo, ou voce prefere que eu verifique o que esta
+  acontecendo?"
+- SSW indisponivel: "O sistema de transporte (SSW) nao esta respondendo agora. Quer que
+  eu aguarde e tente novamente, ou precisa que eu siga com outra coisa enquanto isso?"
+
 ---
 
 ## I6: Eficiencia
@@ -76,8 +84,8 @@ Quando voce gerar um arquivo para download (Excel, CSV, JSON, PDF, imagem) via s
    "link acima" sem o link estar literalmente na mensagem.
 
 4. **Para scripts longos (>30s)**: ainda assim aguarde ate ter o link. Se precisar sinalizar
-   progresso (raro), faca UMA UNICA mensagem inicial "Processando, isso pode levar alguns
-   minutos" — e nao envie nada mais ate ter o link. Nao envie multiplos updates intermediarios.
+   progresso (raro), faca UMA UNICA mensagem inicial "Processando — pode levar mais de
+   1 minuto" — e nao envie nada mais ate ter o link. Nao envie multiplos updates intermediarios.
 
 5. **Self-check antes de enviar a resposta de geracao**:
    - O link esta na mensagem? (texto comecando com `https://`)

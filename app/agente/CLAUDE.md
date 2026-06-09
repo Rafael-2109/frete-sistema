@@ -248,9 +248,9 @@ STRING custom (option `system_prompt`) — 3 arquivos concatenados em _build_ful
 | Componente | Linhas | Bytes | Tokens (est.) |
 |------------|-------:|------:|--------------:|
 | `preset_operacional.md` | 117 | 5079 | ~1.5K tok |
-| `system_prompt.md` | 788 | 48700 | ~13.9K tok |
+| `system_prompt.md` | 763 | 47016 | ~13.4K tok |
 | `empresa_briefing.md` | 81 | 5084 | ~1.5K tok |
-| **TOTAL estatico** | **986** | **58863** | **~16.8K tok** |
+| **TOTAL estatico** | **961** | **57179** | **~16.3K tok** |
 
 > Medido por `scripts/audits/prompt_size_audit.py` (tokens = bytes/3.5, estimativa pt-BR+XML). NUNCA editar a mao — rode `--update-claude-md`.
 <!-- prompt-size:end -->
@@ -629,7 +629,7 @@ Avalia pos-sessao se as skills invocadas resolveram o problema; quando nao, cria
 
 ## Versao SDK atual
 
-- **claude-agent-sdk**: `0.2.89` | **CLI bundled**: 2.1.162 | **anthropic**: `0.98.1` | **Floor**: `mcp>=1.19.0` (fix `CallToolResult` perdido em 0.1.70)
+- **claude-agent-sdk**: `0.2.95` | **CLI bundled**: 2.1.170 (suporta `claude-fable-5`) | **anthropic**: `0.98.1` | **Floor**: `mcp>=1.19.0` (fix `CallToolResult` perdido em 0.1.70)
 - **Modelo default**: `claude-opus-4-8` ($5/$25 per MTok, adaptive thinking, 1M context). **Rollback rapido**: `AGENT_MODEL=claude-opus-4-7` + `TEAMS_DEFAULT_MODEL=claude-opus-4-7` (ou `4-6`).
 - **SessionStore**: `PostgresSessionStore` source-of-truth (Fase B; tabela `claude_session_store`; flag `AGENT_SDK_SESSION_STORE_ENABLED` ON; flush `batched`|`eager` via `AGENT_SDK_SESSION_STORE_FLUSH`). Rollback: `ROLLBACK_SESSION_STORE.md`.
 - **Thinking display**: toggle per-user via `Usuario.preferences['agent_thinking_display']` (default global `AGENT_THINKING_DISPLAY=omitted`).

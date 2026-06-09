@@ -12,7 +12,7 @@ atualizado: 2026-06-08
 
 ## Contexto
 
-Ponto de entrada do repositorio. Conteudo dev-only (Quick Start, CSS, migrations, CLAUDE.md de modulo) vive em `~/.claude/CLAUDE.md`. A fonte de dados de producao e o MCP do Render (ver `.claude/references/INFRAESTRUTURA.md`); campos de tabela vem dos schemas JSON; antes de qualquer skill ou operacao Odoo, ler `.claude/references/ROUTING_SKILLS.md`.
+Ponto de entrada do repositorio. Conteudo dev-only (Quick Start, CSS, migrations, CLAUDE.md de modulo) vive em `~/.claude/CLAUDE.md`. Fonte de dados por superficie: agente web = `mcp__sql__consultar_sql` + skills; Claude Code dev = MCP do Render (ver `.claude/references/INFRAESTRUTURA.md`). Campos de tabela vem dos schemas JSON; antes de qualquer skill ou operacao Odoo, ler `.claude/references/ROUTING_SKILLS.md`.
 
 **Ultima Atualizacao**: 08/06/2026
 
@@ -31,45 +31,32 @@ Ponto de entrada do repositorio. Conteudo dev-only (Quick Start, CSS, migrations
 | **Infra (Render, Oregon)** | Web `sistema-fretes` (Pro Plus) · Worker `sistema-fretes-worker-atacadao` (Standard, RQ) · Postgres 18 `sistema-fretes-db` (Basic 4GB) · Redis 8.1 `sistema-fretes-redis` (Starter, `allkeys_lru`) |
 | **Backend** | Python 3.12 · **Flask 3.1.2** · Flask-SQLAlchemy 3.1 · Flask-Login 0.6 · Flask-Migrate 4.1 · Flask-WTF 1.2 · SQLAlchemy 2.0 · Gunicorn 25 + gevent · psycopg2 + asyncpg (pool async SessionStore) · Pydantic 2.12 · FastAPI 0.129 (endpoints isolados) |
 | **Workers / Async** | RQ 2.6 · Redis 7.2 (client) · APScheduler · 3 perfis de worker (light-reserved / full / general — anti-starvation) |
-| **AI / Agente** | Anthropic SDK 0.98.1 · Claude Agent SDK 0.2.89 (CLI 2.1.162) · MCP 1.26 · Voyage AI + pgvector (embeddings) |
-| **Frontend** | **HTML5 + Jinja2** (templates) · **Bootstrap 5.3.3** (CSS self-hosted via `@layer bootstrap`, JS bundle CDN) · **jQuery 3.6** + jQuery Mask 1.14 (legado) · **HTMX 1.9.11** · Vanilla JS · CSS `@layer` proprio (tokens → base → components → modules → utilities) · **FontAwesome 6.4.0** (CDN) |
-| **Artifacts (chat web)** | React 18 + TS + Tailwind + Parcel via Node 20 (NVM lazy install no worker) · bundle.html servido em iframe sandboxed |
-| **Mobile App (GPS)** | Capacitor 6 (Android/iOS) — modulo rastreamento de motoristas |
+| **AI / Agente** | Anthropic SDK 0.98.1 · Claude Agent SDK 0.2.95 (CLI bundled 2.1.170) · MCP 1.26 · Voyage AI + pgvector (embeddings) |
 | **Browser Automation** | Playwright 1.58 (Chromium — SSW, Atacadao Hodie Booking) · Selenium 4.40 (legado) |
 | **Storage** | AWS S3 via boto3 1.42 — screenshots, archives sessao, artifacts, anexos devolucao |
 | **Observability** | Sentry SDK 2.54 (errors + APM) · structlog · colorlog |
-| **Data / Files** | pandas 3.0 · openpyxl · xlsxwriter · pdfplumber + pypdf · weasyprint · python-docx · tesserocr (OCR PT) |
 | **Integracoes externas** | Odoo XML-RPC (ERP CIEL IT) · Microsoft Teams Bot Framework · WhatsApp via OpenClaw (Baileys) · Pluggy Open Finance (Bradesco) |
-| **Build / Deploy** | `build.sh` + `start_render.sh` (web) · `start_worker_render.sh` (worker) · auto-deploy via `main` branch GitHub |
+
+> Linhas dev-only do stack (Frontend/Jinja2, Artifacts React, Mobile App GPS, libs Data/Files, Build/Deploy): `~/.claude/CLAUDE.md` secao TECH STACK COMPLEMENTO.
 
 ---
 
 ## DADOS:
 
-### OBRIGATÓRIO
-1. **FONTE PARA CONSULTA**: Utilize exclusivamente o MCP do Render, orientações em: `.claude/references/INFRAESTRUTURA.md`
-2. **NÃO UTILIZAR**: Dados locais = Dados teste.
-3. **CROSS-VERIFICACAO ODOO**: Se o usuario pedir para verificar no Odoo, seguir roteamento em `.claude/references/odoo/ROUTING_ODOO.md`. Se encontrar inconsistencias em dados locais/Render originados do Odoo, TAMBEM verificar direto no Odoo.
+### OBRIGATÓRIO (por superficie)
+1. **AGENTE WEB**: dados de negocio via `mcp__sql__consultar_sql` + skills (o banco da
+   aplicacao JA E producao); logs/erros/status de servicos via `mcp__render__consultar_*`.
+2. **CLAUDE CODE (dev)**: dados de PRODUCAO exclusivamente via MCP do Render —
+   orientacoes em `.claude/references/INFRAESTRUTURA.md`. Dados locais = dados de teste.
+3. **CROSS-VERIFICACAO ODOO (ambos)**: Se o usuario pedir para verificar no Odoo, seguir roteamento em `.claude/references/odoo/ROUTING_ODOO.md`. Se encontrar inconsistencias em dados locais/Render originados do Odoo, TAMBEM verificar direto no Odoo.
 
 
 ## REGRAS UNIVERSAIS
 
 ### SEMPRE:
-1. **AMBIENTE VIRTUAL**: `source .venv/bin/activate` quando executar scripts Python
-2. **FONTE DE DADOS/DADOS DE PRODUÇÃO**: ANTES de consultar dados reais, metricas, logs ou deploys: LER `.claude/references/INFRAESTRUTURA.md`
+1. **AMBIENTE VIRTUAL**: `source .venv/bin/activate` quando executar scripts Python (vale para AMBAS as superficies — o runtime do Render cria `.venv` na raiz)
+2. **FONTE DE DADOS (dev)**: ANTES de consultar dados reais, metricas, logs ou deploys via MCP Render: LER `.claude/references/INFRAESTRUTURA.md`
 3. **TIMEZONE**: ANTES de escrever qualquer codigo com datas/timestamps: LER `.claude/references/REGRAS_TIMEZONE.md`.
-
----
-
-## FORMATACAO NUMERICA BRASILEIRA
-
-Filtros em `app/utils/template_filters.py`:
-```jinja
-{{ valor|valor_br }}        {# R$ 1.234,56 #}
-{{ valor|valor_br(4) }}     {# R$ 1.234,5678 #}
-{{ qtd|numero_br }}         {# 1.234,567 #}
-{{ qtd|numero_br(0) }}      {# 1.234 #}
-```
 
 ---
 
@@ -81,7 +68,6 @@ References contem APENAS regras de negocio, NAO campos.
 **ANTES de usar CarteiraPrincipal/Separacao**: LER `.claude/references/modelos/REGRAS_CARTEIRA_SEPARACAO.md`
 **ANTES de usar Embarque/Faturamento/etc.**: LER `.claude/references/modelos/REGRAS_MODELOS.md`
 **ANTES de executar qualquer skill ou operacao Odoo**: LER `.claude/references/ROUTING_SKILLS.md`
-**ANTES de criar/editar doc ou script**: LER `.claude/references/ARQUITETURA_DE_ARTEFATOS.md` (padrao PAD-A) ou usar skill `padronizando-docs`.
 
 Gotchas rapidos:
 - CarteiraPrincipal: `qtd_saldo_produto_pedido` (NAO `qtd_saldo`)
@@ -148,20 +134,9 @@ Gotchas rapidos:
 | Indice completo | `.claude/references/INDEX.md` |
 | Documentacao tecnica (arvore docs/) | `docs/INDEX.md` |
 
-### Design System (UI/CSS)
+### Design System (UI/CSS) — dev-only
 
-| Preciso de... | Documento |
-|---------------|-----------|
-| Badges, botoes, tabelas (qual classe usar, como criar nova) | `.claude/references/design/GUIA_COMPONENTES_UI.md` |
-| Arquitetura CSS (@layer, tokens, components/modules) | `app/static/css/README.md` |
-| Auditar codigo existente | `python scripts/audits/ui_audit.py` |
-| Detectar regressao antes de commit em CSS/templates | `python scripts/audits/ui_audit_regression.py` |
-| **Lint policy bloqueador** (regras P1-P9) | `python scripts/audits/ui_policy_lint.py --enforce-new` (pre-commit) ou `--report-only` (auditoria) |
-| Pre-commit hook UI lint (instalar) | `ln -sf ../../scripts/hooks/pre-commit-ui-lint.sh .git/hooks/pre-commit && chmod +x .git/hooks/pre-commit` |
-| Analise dimensional (WCAG, headers, etc) | `python scripts/audits/ui_dimension_analysis.py` → `relatorios/ui_dimension_analysis_<data>.md` |
-| Detectar regressao VISUAL (pixel diff) antes de commit | `tests/visual/` (capture + compare via Playwright/PIL) |
-| Visual regression — credenciais bot | `scripts/seed/create_visual_test_user.py` (cria/atualiza `claude-visual@bot.nacom.com.br`, salva senha so em `.env` — NUNCA commitar) |
-| Catalogo de inconsistencias (badges duplicados, tabelas, vars BS) | `relatorios/ui_audit_FINDINGS_<data>.md` |
+> Tabela completa (GUIA_COMPONENTES_UI, ui_audit, lint policy, visual regression): `~/.claude/CLAUDE.md` secao DESIGN SYSTEM.
 
 ---
 
@@ -188,7 +163,7 @@ Gotchas rapidos:
 | Pallet | `app/pallet/routes/`, `app/pallet/services/`, `app/templates/pallet/` |
 | Producao | `app/producao/routes.py`, `app/producao/models.py` |
 | Pedidos | `app/pedidos/routes/`, `app/pedidos/services/`, `app/pedidos/workers/` |
-| **NAO ESTENDER** | `app/carteira/main_routes.py` — apenas dashboard `index()` (Fase 3 limpa). Novas rotas: usar `app/carteira/routes/` |
+| **NAO ESTENDER (dev)** | `app/carteira/main_routes.py` — apenas dashboard `index()` (Fase 3 limpa). Novas rotas: usar `app/carteira/routes/` |
 
 > Para lista completa de modulos e rotas: `.claude/references/INDEX.md`
 
@@ -209,17 +184,14 @@ Gotchas rapidos:
 | `gestor-recebimento` | Pipeline recebimento 4 fases, DFEs bloqueados, troubleshooting |
 | `gestor-devolucoes` | Devolucoes NFD, De-Para AI, descarte vs retorno |
 | `gestor-estoque-producao` | Ruptura, estoque comprometido, producao vs programada (READ-ONLY) |
-| `gestor-estoque-odoo` | Operacoes de **escrita** de estoque no Odoo + consulta AO VIVO: skills atomicas `ajustando-quant-odoo` (✅ MATURADA), `transferindo-interno-odoo` (🟡 min viavel — lote↔lote mesma loc OU loc↔loc mesmo lote intra-empresa OU MIGRACAO↔Indisponivel via MODO C; delegacao a ajustar_quant 2x com delta_esperado propagado; G021/G022/G027/G031 codificados), `operando-reservas-odoo` (🟡 min viavel — cirurgia/cancelamento de MLs orfas), `operando-picking-odoo` (🟡 min viavel — cancelar/validar/devolver picking generico; **invariante G019/G020 codificada** — ONDA 0.4 ✅ fechada), `operando-mo-odoo` (🟡 min viavel NOVA 2026-05-24 v5 — cancelar MO single ou batch; guard G-MO-01 furo contabil + idempotencia action_cancel validada), `consultando-quant-odoo` (🟡 READ-only ao vivo, auditoria pos-WRITE), `escriturando-odoo` (🟡 ABRANGENTE 10 atomos LIVE v19+, ENTRADA DFe/NF), `faturando-odoo` (🟡 ATOMICA 5 atomos LIVE v24+, SAIDA account.move; pipeline A-F via orchestrator C3 `inventario_pipeline`). SEMPRE --dry-run+confirmacao. Ver `app/odoo/estoque/CLAUDE.md` e `ROADMAP_SKILLS.md` |
+| `gestor-estoque-odoo` | Operacoes de **escrita** de estoque no Odoo + consulta AO VIVO (quants, transferencias, reservas, pickings, MOs, escrituracao entrada, faturamento saida) — SEMPRE dry-run + confirmacao. Status/versao das skills atomicas: `app/odoo/estoque/CLAUDE.md` + `ROADMAP_SKILLS.md` |
 | `analista-performance-logistica` | KPIs entrega, ranking transportadoras, atrasos (read-only) |
 | `gestor-motos-assai` | Pipeline B2B Q.P.A. Sendas/Assaí (estoque, recibo, separação, NF) |
 
 ### Confiabilidade de Output (OBRIGATORIO)
 
 > Ref completa: `.claude/references/SUBAGENT_RELIABILITY.md`
-> **Manual para criar/editar subagents**: `.claude/references/AGENT_DESIGN_GUIDE.md`
-> **Blocos reusaveis** (pre-mortem, self-critique, output format): `.claude/references/AGENT_TEMPLATES.md`
-> **Boilerplate Odoo** (REGRA ZERO, scripts, conexao): `.claude/references/odoo/AGENT_BOILERPLATE.md`
-> **Avaliacao offline** (golden dataset): `.claude/evals/subagents/README.md`
+> Criar/editar subagents (manual, templates, boilerplate Odoo, evals — dev-only): `~/.claude/CLAUDE.md` secao REFERENCIAS DEV-ONLY.
 
 Subagentes retornam resumo compactado (10:1 a 50:1). **Nao existe validacao automatica.**
 

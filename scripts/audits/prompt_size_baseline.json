@@ -6,9 +6,9 @@
       "tokens": 1451
     },
     "system_prompt.md": {
-      "linhas": 788,
-      "bytes": 48700,
-      "tokens": 13914
+      "linhas": 763,
+      "bytes": 47016,
+      "tokens": 13433
     },
     "empresa_briefing.md": {
       "linhas": 81,
@@ -17,8 +17,8 @@
     }
   },
   "total": {
-    "linhas": 986,
-    "bytes": 58863,
-    "tokens": 16818
+    "linhas": 961,
+    "bytes": 57179,
+    "tokens": 16336
   }
 }
