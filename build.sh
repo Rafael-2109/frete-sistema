@@ -67,18 +67,11 @@ echo "Fase 3 loop corretivo: migration agent_memories (error_signature/harmful/h
 python scripts/migrations/2026_06_02_agent_memories_error_signature.py \
     || echo "⚠️ migration error_signature falhou — verificar (continuando deploy)..."
 
-# 5c. Formato canonico de memorias (2026-06-08): coluna meta JSONB + indice GIN
-#     em agent_memories + backfill. ONE-SHOT — REMOVER do build apos este deploy
-#     aplicar em PROD (migration idempotente IF NOT EXISTS, mas o backfill varre
-#     agent_memories a cada deploy). CRITICO: o codigo novo grava mem.meta; a
-#     coluna precisa existir ANTES do start (por isso roda no build, antes do
-#     gunicorn). Ordem: migration (cria coluna) -> backfill (popula meta).
-echo "Memorias: coluna meta JSONB + indice GIN (formato canonico)..."
-python scripts/migrations/2026_06_08_agent_memories_meta_jsonb.py \
-    || echo "⚠️ migration meta_jsonb falhou — verificar (continuando deploy)..."
-echo "Memorias: backfill meta (parse formatos legados -> meta + content sentinela)..."
-python scripts/migrations/backfill_memoria_meta.py --apply \
-    || echo "⚠️ backfill meta falhou — verificar (continuando deploy)..."
+# Formato canonico de memorias (2026-06-08): coluna meta JSONB + indice GIN +
+# backfill REMOVIDOS do build apos aplicacao em PROD (deploy ad3c78027). Scripts
+# permanecem versionados — re-rodar manual via Render Shell se necessario:
+#   python scripts/migrations/2026_06_08_agent_memories_meta_jsonb.py
+#   python scripts/migrations/backfill_memoria_meta.py --apply
 
 # ============================================================================
 # MIGRATIONS HISTORICAS — guardadas pela flag RUN_LEGACY_MIGRATIONS (default 0).
