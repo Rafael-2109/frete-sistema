@@ -217,6 +217,15 @@ ambiente dev nao cobre). Criterio: roteamento correto + comportamento inalterado
   trava no campo `account.full.reconcile`; o agente contornou via Odoo direto.
   Corrigir o script E investigar a NAO-adesao a R9 (agente nao registrou via
   register_improvement apesar de bug + workaround = sinal forte da diretiva).
+- **Fallback de recencia injeta ~63KB/turno** (logs [MEMORY_INJECT] do mini-set,
+  user_id=74/bot): semantic=0 + fallback=True em TODOS os turnos → 15 memorias
+  empresa por RECENCIA (irrelevantes ao prompt) + tier2b ~51KB + budget=unlimited
+  (Opus). Confirma C5/RP-2 em grau PIOR que o dump do estudo; F4.3 (teto por bloco)
+  e F5.4 (intent + teto no fallback) atacam exatamente isso — considerar PRIORIZAR.
+  Investigar tambem por que semantic=0 p/ user 74 (embeddings ausentes?).
+- **system-pitfalls duplicado**: `/memories/empresa/armadilhas/system-pitfalls.xml`
+  E `.json` injetados JUNTOS todo turno (mesmo conteudo, 2 formatos) — consolidar
+  em 1 registro (dado, nao codigo).
 - N-8(completo): derivacao de preferred_skills por uso real → F7.5.
 - A3 destilacao de erros → F5.7 (gated por volume de dados).
 - Compressoes B1 vetadas pelo mini-set (se houver): registrar aqui com motivo, nao
