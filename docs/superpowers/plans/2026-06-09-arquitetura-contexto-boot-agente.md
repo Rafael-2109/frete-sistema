@@ -213,6 +213,10 @@ ambiente dev nao cobre). Criterio: roteamento correto + comportamento inalterado
 
 ## Backlog explicito
 
+- **skill_bug rastreando-odoo** (descoberto no mini-set item 7, 2026-06-09): o script
+  trava no campo `account.full.reconcile`; o agente contornou via Odoo direto.
+  Corrigir o script E investigar a NAO-adesao a R9 (agente nao registrou via
+  register_improvement apesar de bug + workaround = sinal forte da diretiva).
 - N-8(completo): derivacao de preferred_skills por uso real → F7.5.
 - A3 destilacao de erros → F5.7 (gated por volume de dados).
 - Compressoes B1 vetadas pelo mini-set (se houver): registrar aqui com motivo, nao
@@ -308,3 +312,17 @@ Padrao em si (PAD-CTX publicado): RP-1, R-2(criterio), A5(roteamento), C1(fonte 
   verdes, check-delta/consistency/listing OK, doc_audit 0 bloqueantes. Validacao
   comportamental: mini-set de 12 itens documentado acima — PENDENTE pos-deploy
   (ambiente dev nao roda o agente web).
+- 2026-06-09 — **PUSH + DEPLOY + MINI-SET**: push `3173bab60..4e7574133` (7 commits);
+  deploy `dep-d8k8cl5dt1ts73atk4m0` live em 7min. Mini-set executado via Playwright
+  no agente web PROD: itens 1-6, 10, 11 ✅ (roteamento PRE/POS correto, fast-path
+  estoque com projecao, separacao validou pedido inexistente SEM criar, baseline
+  canonico via boundary SEM o fast-path removido, SQL direto sem query_render_postgres
+  — bug B2 confirmado corrigido, SSW doc completa, estoque Odoo AO VIVO com zero
+  execucao e pedido de confirmacao via caminho gestor-estoque-odoo). Item 7 🟡:
+  roteamento rastreando-odoo correto MAS bug real do script descoberto
+  (`account.full.reconcile`) + agente contornou SEM registrar R9 — ambos no backlog.
+  Item 9 🟡 parcial: fluxo gerando-artifact iniciou correto (consultas paralelas);
+  conclusao do build nao confirmada na janela de captura (sessao 24836bfe ainda
+  processando) — reverificar `agente_artifacts`. Itens 8 (anexo .xlsx/.ret na skill
+  unificada) e 12 (dump de boot novo) PENDENTES de validacao manual do Rafael.
+  Gotcha de medicao: timestamps de agent_sessions sao BRT-naive vs NOW() UTC.
