@@ -1,20 +1,12 @@
 ---
 name: rastreando-odoo
 description: >-
-  Esta skill deve ser usada quando o usuario pede "rastreie NF 12345",
-  "fluxo da nota", "rastreie PO00789", "documentos do Atacadao",
-  "auditoria financeira", "conciliacoes bancarias", ou precisa rastrear
-  fluxos documentais completos no Odoo (NF, PO, SO, pagamentos, extratos).
-  Nao usar para criar pagamento ou reconciliar extrato (usar
-  executando-odoo-financeiro), exportar razao geral (usar razao-geral-odoo),
-  ou criar nova integracao (usar integracao-odoo).
-  - Rastrear por CNPJ/chave NF-e: "rastreie 18467441000123", "rastreie 3525..."
-  - Ver titulos e conciliacoes: "pagamentos da NF 12345", "titulos do PO00789"
-  - Verificar devolucoes: "devolucao da NF 54321", "nota de credito"
-  - Auditoria faturas/extrato: "auditoria faturas novembro", "extrato bancario 2024"
-  - Mapeamento de vinculos: "extratos sem vinculo", "titulos soltos"
-  - Vincular extrato via Excel: "processar planilha de vinculacao"
-  Nao usar para explorar modelo desconhecido ou criar lancamentos fiscais.
+  Rastreia fluxos documentais completos no Odoo (NF, PO, SO, pagamentos,
+  extratos) — read-only. Gatilhos: "rastreie NF 12345", "fluxo da nota",
+  "rastreie PO00789", "documentos do Atacadao", "rastreie CNPJ 18467441000123",
+  "pagamentos da NF 12345", "auditoria faturas novembro". Anti: criar
+  pagamento/reconciliar extrato -> executando-odoo-financeiro; exportar razao
+  geral -> razao-geral-odoo; split/consolidar PO -> conciliando-odoo-po.
 allowed-tools: Read, Bash, Glob, Grep
 ---
 

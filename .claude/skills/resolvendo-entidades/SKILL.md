@@ -1,15 +1,11 @@
 ---
 name: resolvendo-entidades
 description: >-
-  Esta skill deve ser usada SEMPRE ANTES de invocar skills que aceitam
-  parametro de cliente, produto, pedido, cidade ou transportadora quando o
-  usuario fornece nome generico em vez de identificador exato. Resolve
-  "Atacadao" para CNPJs, "palmito" para cod_produto, "VCD123" para num_pedido,
-  "Manaus" para codigo IBGE e UF, "TAC" ou "Transmerc" para transportadora_id.
-  Nao usar quando o usuario fornece identificador exato (CNPJ completo,
-  cod_produto numerico, num_pedido com prefixo VCD/VFB, transportadora_id).
-
-  NAO USAR quando usuario fornece ID exato (CNPJ completo, cod_produto, num_pedido, transportadora_id).
+  Resolve termos humanos para IDs do sistema antes de qualquer skill com
+  parametro de cliente, produto, pedido, cidade ou transportadora. Frases:
+  "pedidos do Atacadao", "consulta palmito", "separacoes de Manaus", "frete pela
+  TAC", "pedidos do cliente X". Anti: usuario fornece ID exato (CNPJ completo,
+  cod_produto, VCD*/VFB*, transportadora_id) -> nao usar.
 allowed-tools: Read, Bash, Glob, Grep
 ---
 

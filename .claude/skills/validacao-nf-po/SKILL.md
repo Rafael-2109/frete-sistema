@@ -1,18 +1,12 @@
 ---
 name: validacao-nf-po
 description: >-
-  Esta skill deve ser usada quando o usuario precisa depurar ou operar a
-  Validacao NF x PO (Fase 2 do Recebimento): "erro ao validar DFE",
-  "DFE nao encontrado", "alterar tolerancia", "modal POs nao abre",
-  "como converte UM", "novo tipo de bloqueio", "campos da validacao",
-  ou implementar nova regra de divergencia. Cobre: match NF vs PO,
-  De-Para fornecedor, tolerancias (preco 0%, qtd 10%), status DFE,
-  job de validacao (4 etapas), preview POs candidatos, divergencias.
-  Nao usar para split/consolidacao PO Fase 3 (conciliando-odoo-po),
-  recebimento fisico Fase 4 (recebimento-fisico-odoo),
-  rastrear fluxo documental (rastreando-odoo),
-  operacoes financeiras (executando-odoo-financeiro),
-  explorar campos Odoo (descobrindo-odoo-estrutura).
+  Skill da Fase 2 do Recebimento: match NF-e (DFE) x Pedidos de Compra (POs),
+  tolerancias, divergencias e bloqueios. Gatilhos: "erro ao validar DFE", "DFE
+  nao encontrado", "alterar tolerancia de preco/qtd", "modal POs nao abre",
+  "como converte UM fornecedor", "novo tipo de bloqueio na validacao". Fase 3
+  split/consolida PO -> conciliando-odoo-po. Fase 4 recebimento fisico/lotes ->
+  recebimento-fisico-odoo.
 allowed-tools: Read, Write, Edit, Bash, Glob, Grep
 ---
 

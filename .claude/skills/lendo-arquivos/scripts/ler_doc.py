@@ -3,7 +3,7 @@
 """
 Leitura de Documentos — Word, CNAB (.ret/.rem/.cnab), OFX
 
-Skill: lendo-documentos (complementa lendo-arquivos para Excel/CSV)
+Skill: lendo-arquivos (formatos documentais — consolidada de lendo-documentos em 2026-06-09)
 
 Formatos:
 - .docx: paragraphs + tables via python-docx

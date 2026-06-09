@@ -1,22 +1,11 @@
 ---
 name: descobrindo-odoo-estrutura
 description: >-
-  Esta skill deve ser usada como recurso complementar quando nenhuma skill Odoo
-  especializada cobre o modelo: "quais campos tem stock.picking?",
-  "campo de CNPJ no res.partner", "mostra todos os campos do registro 12345",
-  ou precisa explorar estrutura de modelo Odoo desconhecido.
-  Nao usar para rastrear documentos (usar rastreando-odoo), criar integracoes
-  (usar integracao-odoo), operar financeiro (usar executando-odoo-financeiro),
-  ou IDs fixos ja documentados (ler IDS_FIXOS.md via Read).
-
-  NAO USAR QUANDO:
-  - Rastrear fluxo de NF/PO/SO → usar **rastreando-odoo**
-  - Criar pagamento/reconciliar extrato → usar **executando-odoo-financeiro**
-  - Split/consolidar PO → usar **conciliando-odoo-po**
-  - Validar match NF x PO → usar **validacao-nf-po**
-  - Recebimento fisico (lotes/quality check) → usar **recebimento-fisico-odoo**
-  - Exportar razao geral → usar **razao-geral-odoo**
-  - Criar nova integracao → usar **integracao-odoo**
+  Ultimo recurso para explorar estrutura de modelo Odoo desconhecido. "quais
+  campos tem stock.picking?", "campo de CNPJ no res.partner", "mostra todos os
+  campos do registro 12345", "qual o tipo do campo sale_ok?". Rastrear NF/PO/SO
+  -> rastreando-odoo. Criar integracao -> integracao-odoo. Financeiro/extratos
+  -> executando-odoo-financeiro.
 allowed-tools: Read, Bash, Glob, Grep
 ---
 

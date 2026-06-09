@@ -2,7 +2,7 @@
 tipo: reference
 camada: L2
 sot_de: —
-hub: .claude/skills/lendo-documentos/SKILL.md
+hub: .claude/skills/lendo-arquivos/SKILL.md
 superseded_by: —
 atualizado: 2026-06-02
 -->

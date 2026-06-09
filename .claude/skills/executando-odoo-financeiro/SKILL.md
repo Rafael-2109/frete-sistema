@@ -1,23 +1,12 @@
 ---
 name: executando-odoo-financeiro
 description: >-
-  Esta skill deve ser usada quando o usuario precisa EXECUTAR operacoes
-  financeiras no Odoo: "crie pagamento para NF 12345", "reconcilie extrato",
-  "baixe titulo no Odoo", "pagamento com juros", "extrato is_reconciled=False",
-  ou criar comprovantes de pagamento e lancamento.
-  Nao usar para rastrear documento ou auditoria (usar rastreando-odoo),
-  exportar razao geral (usar razao-geral-odoo), ou consultar saldo ou titulo
-  sem executar operacao (usar consultando-sql).
-  - Baixar titulo a receber: "marque como pago no Odoo"
-
-  NAO USAR QUANDO:
-  - Apenas consultar/rastrear documentos sem modificar, usar **rastreando-odoo**
-  - Explorar campos de modelo Odoo desconhecido, usar **descobrindo-odoo-estrutura**
-  - Criar lancamentos fiscais (CTe, despesas extras), usar **integracao-odoo**
-  - Split/consolidar PO, usar **conciliando-odoo-po**
-  - Validar match NF x PO, usar **validacao-nf-po**
-  - Exportar razao geral, usar **razao-geral-odoo**
-  - Transferencia interna entre bancos NACOM GOYA (extrato com NACOM GOYA/61.724.241), usar **conciliando-transferencias-internas**
+  Executa operacoes financeiras WRITE no Odoo: pagamento, reconciliacao de
+  extrato, baixa de titulo. Gatilhos: "crie pagamento para NF 12345",
+  "reconcilie extrato", "baixe titulo no Odoo", "pagamento com juros", "marque
+  como pago no Odoo". Anti: so consultar/rastrear -> rastreando-odoo;
+  transferencia interna NACOM GOYA (61.724.241) ->
+  conciliando-transferencias-internas; lancamento fiscal CTe -> integracao-odoo.
 allowed-tools: Read, Bash, Glob, Grep
 ---
 

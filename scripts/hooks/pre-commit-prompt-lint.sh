@@ -31,8 +31,14 @@ if echo "$STAGED" | grep -qE '^(\.claude/agents/.*\.md|app/agente/config/skills_
     TOCOU_CONSISTENCIA=1
 fi
 
-if [ "$TOCOU_PROMPT" -eq 0 ] && [ "$TOCOU_CONSISTENCIA" -eq 0 ]; then
-    exit 0  # commit nao toca prompt nem projecoes de subagentes -> nada a checar
+# F2.5 PAD-CTX: orcamento do listing de skills (soma das descriptions <= 8K).
+TOCOU_LISTING=0
+if echo "$STAGED" | grep -qE '^(\.claude/skills/[^/]+/SKILL\.md|app/agente/config/skills_whitelist\.py)$'; then
+    TOCOU_LISTING=1
+fi
+
+if [ "$TOCOU_PROMPT" -eq 0 ] && [ "$TOCOU_CONSISTENCIA" -eq 0 ] && [ "$TOCOU_LISTING" -eq 0 ]; then
+    exit 0  # commit nao toca prompt, projecoes de subagentes nem listing -> nada a checar
 fi
 
 if [ -f ".venv/bin/activate" ]; then
@@ -46,4 +52,8 @@ fi
 
 if [ "$TOCOU_CONSISTENCIA" -eq 1 ]; then
     python3 scripts/audits/prompt_size_audit.py --check-consistency
+fi
+
+if [ "$TOCOU_LISTING" -eq 1 ]; then
+    python3 scripts/audits/skills_listing_audit.py --check
 fi

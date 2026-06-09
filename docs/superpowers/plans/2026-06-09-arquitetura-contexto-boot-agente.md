@@ -15,9 +15,9 @@ atualizado: 2026-06-09
 > EM ABERTO e o escopo delas PERMANECE LA. Este plano governa o contexto COMPLETO
 > (CLAUDE.md, listing de skills, hook dinamico, memorias) sem absorver tasks daquele.
 
-> 🔵 **PROXIMA SESSAO — RETOMAR AQUI:** F0.1 EXECUTADA pelo Rafael (env vars `false` no
-> Render, 2026-06-09). Comecar por F0.2-F0.4 + FASE 1. Decisoes ja tomadas: F2.2 =
-> deny-list; D2 = resolvido sem carve-out (ver F7.4).
+> 🔵 **PROXIMA SESSAO — RETOMAR AQUI:** FASES 0, 1 e 2 CONCLUIDAS (2026-06-09, mesma
+> sessao do estudo — ver Rastreamento). Comecar pela FASE 3 (CLAUDE.md alvo +
+> compressoes B1, gated por mini-set). F4 depois (hook), F5 (memorias) exige migration.
 
 ## Indice
 
@@ -247,3 +247,24 @@ Padrao em si (PAD-CTX publicado): RP-1, R-2(criterio), A5(roteamento), C1(fonte 
   R11.1/R11.2 ja conformes (politica 1 linha + ponteiro GOTCHAS.md). 1.6
   `faturando-odoo` declarada no gestor-estoque-odoo.md (orfa resolvida). Aceite:
   17 testes verdes + check-consistency OK + check-delta OK.
+- 2026-06-09 — **FASE 2 CONCLUIDA**: 2.1+2.2 grupo `SKILLS_DEV_RESERVED` na deny-list
+  (consultando-sentry, diagnosticando-banco, padronizando-docs, gerindo-agente —
+  decisao Rafael; admin mantem tela /agente/memorias) + 2 testes estruturais novos.
+  2.3 UNIFICACAO lendo-arquivos+lendo-documentos: ler_doc.py/references/evals movidos
+  para lendo-arquivos (mesma profundidade de sys.path), SKILL.md unificado com
+  roteamento por extensao, SCRIPTS.md fundido (TOC), diretorio lendo-documentos
+  REMOVIDO; consumidores atualizados (tool_skill_mapper com entry historica,
+  ROUTING_SKILLS linhas 48-49/236, auditor-financeiro.md frontmatter+corpo, teste
+  de path, comentario chat.py). Sem alias (SDK nao suporta) — nota de consolidacao
+  na description. 2.4 VINTE descriptions reescritas no template (workflow 20 agentes
+  + revisao); REFINAMENTO DO PADRAO descoberto na aplicacao: linha "Routing completo:
+  ROUTING_SKILLS.md" repetida por skill custava ~1,1K chars (redundancia R-2 contra o
+  proprio padrao) — removida do template (dono = system_prompt routing_strategy);
+  PAD-CTX atualizado (alvo ≤450c/skill). 2.5 `skills_listing_audit.py` criado
+  (--check: total ≤8K, aviso >500c/skill) + ligado ao pre-commit (gatilho SKILL.md/
+  whitelist). RESULTADO: listing 28→21 skills, 25,6K→7.946 chars (-69%) — DENTRO do
+  orcamento do CLI, fim do truncamento silencioso. Aceite: 43 testes verdes,
+  check-consistency OK, listing audit OK, doc_audit 0 bloqueantes. Nota R2.2 NO-OP:
+  prd-generator/ralph-wiggum/skill-creator/resolvendo-problemas sao user-scope
+  (~/.claude/skills) e nunca carregam em prod — nenhuma deny-list necessaria
+  (red-team V4).

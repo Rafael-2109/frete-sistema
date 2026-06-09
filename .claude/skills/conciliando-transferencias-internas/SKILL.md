@@ -1,18 +1,11 @@
 ---
 name: conciliando-transferencias-internas
 description: >-
-  Esta skill deve ser usada quando o usuario precisa conciliar transferencias
-  internas entre contas bancarias da NACOM GOYA no Odoo: "concilie transferencias
-  internas", "transferencias entre bancos pendentes", "extrato NACOM GOYA nao
-  conciliado", "criar is_internal_transfer", "conciliar pagamento da transferencia
-  interna", ou reconciliar extratos de pagamento/recebimento de movimentacoes
-  entre contas proprias.
-
-  NAO USAR QUANDO:
-  - Reconciliar extrato com titulo de cliente/fornecedor, usar **executando-odoo-financeiro**
-  - Apenas consultar/rastrear documentos, usar **rastreando-odoo**
-  - Split/consolidar PO, usar **conciliando-odoo-po**
-  - Explorar modelo Odoo desconhecido, usar **descobrindo-odoo-estrutura**
+  Concilia transferencias internas entre contas bancarias da NACOM GOYA
+  (61.724.241) no Odoo. Use quando: "transferencias entre bancos pendentes",
+  "extrato NACOM GOYA nao conciliado", "criar is_internal_transfer", "conciliar
+  pagamento da transferencia interna". Extrato x titulo de terceiro ->
+  executando-odoo-financeiro.
 allowed-tools: Read, Bash, Glob, Grep
 ---
 

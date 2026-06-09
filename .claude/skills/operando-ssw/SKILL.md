@@ -1,29 +1,12 @@
 ---
 name: operando-ssw
 description: >-
-  Operacoes de ESCRITA no SSW via Playwright. Usar quando o usuario pede:
-  "cadastre unidade CGR", "importar cidades da rota", "cadastrar CNPJ
-  como fornecedor", "registrar transportadora", "criar comissao 408",
-  "cotar frete na 002", "simular frete SSW", "cotacao SSW", "gerar CSV
-  408 por cidade", "importar precos por cidade", "importar comissao por
-  cidade no SSW", "importar CSV 408", "exportar cidades todas UFs",
-  "CSV 402 completo", "exportar comissao cidade todas unidades",
-  "baixar CSV 408", "merge CSVs", "consolidar CSVs exportados",
-  "POP-A10", "nova rota completa", "vincular unidade a transportadora",
-  "emitir CT-e", "emitir CTE", "gerar CT-e fracionado", "enviar SEFAZ",
-  "consultar CTRC", "consultar CT-e", "status do CT-e", "baixar DACTE",
-  "baixar XML CT-e", "cancelar CT-e", "gerar fatura SSW", "faturar CTRC",
-  "fatura 437", "opcao 437", "emitir CT-e com medidas moto",
-  "emitir CT-e com dimensoes", "cubagem moto",
-  "emitir CT-e complementar", "CTE complementar", "opcao 222",
-  "complementar valor frete", "complementar ICMS", "ajustar CTe",
-  "complementar CTRC", "grossing up complementar".
-  Requer --dry-run obrigatorio na primeira execucao e confirmacao do
-  usuario antes da execucao real (exceto consultar_ctrc_101.py que e read-only).
-  NAO USAR QUANDO:
-  - Consultar/navegar SSW sem alterar, usar acessando-ssw
-  - Cotacao de frete INTERNA Nacom, usar cotando-frete
-  - Navegar SSW sem operacao especifica, usar browser tools
+  Operacoes de ESCRITA no SSW via Playwright (cadastros, CT-e, CSVs 402/408,
+  fatura 437, POP-A10). dry-run obrigatorio na 1a execucao. Gatilhos: "cadastre
+  unidade", "emitir CT-e", "cancelar CT-e", "CT-e complementar", "importar CSV
+  408", "gerar fatura SSW", "nova rota completa", "vincular transportadora".
+  Anti-gatilhos: consultar/navegar SSW sem alterar -> acessando-ssw; cotacao
+  frete interna Nacom -> cotando-frete.
 allowed-tools: Read, Bash, Glob, Grep
 ---
 

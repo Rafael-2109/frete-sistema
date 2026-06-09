@@ -99,12 +99,34 @@ SKILLS_SPED_RESERVED: FrozenSet[str] = frozenset({
 })
 
 # ---------------------------------------------------------------------------
+# Skills reservadas a superficies DEV/ADMIN — fora do listing do agente web.
+# F2.1+F2.2 PAD-CTX (decisao Rafael 2026-06-09). Evidencia (finding A5, 90 dias):
+# diagnosticando-banco=0 usos, padronizando-docs=0, gerindo-agente=1 (admin),
+# consultando-sentry=2 (admins). Nenhum uso por usuario final.
+# Acesso preservado: Claude Code (dev) invoca normalmente; admin mantem a tela
+# /agente/memorias (gestao de memorias) e os dashboards /agente/admin/*.
+# Sem dono em .claude/agents/*.md POR DESIGN — o check de nao-orfandade
+# (prompt_size_audit.py --check-consistency) isenta este grupo.
+# Alternativa registrada (se surgir demanda via chat): gate por perfil em
+# can_use_tool (config/permissions.py) liberando Skill:gerindo-agente so p/ admin.
+# ---------------------------------------------------------------------------
+SKILLS_DEV_RESERVED: FrozenSet[str] = frozenset({
+    "consultando-sentry",
+    "diagnosticando-banco",
+    "padronizando-docs",
+    "gerindo-agente",
+})
+
+# ---------------------------------------------------------------------------
 # Uniao de TUDO que SAI do listing do principal — fonte unica de verdade.
 # `_discover_skills_from_project` (sdk/client.py) exclui este conjunto.
+# (Nome historico: alem de skills delegadas a subagentes, contem tambem o grupo
+#  DEV_RESERVED — reservado a superficies dev/admin, sem subagente dono.)
 # ---------------------------------------------------------------------------
 SKILLS_DELEGADAS_SUBAGENTE: FrozenSet[str] = frozenset(
     SKILLS_DOMINIO_HORA
     | SKILLS_DOMINIO_ASSAI
     | SKILLS_ODOO_ESTOQUE_SUBAGENTE
     | SKILLS_SPED_RESERVED
+    | SKILLS_DEV_RESERVED
 )

@@ -56,3 +56,37 @@ def test_agent_settings_sped_skills_reserved_retrocompat():
         f"Quebra de retrocompat: AgentSettings.SPED_SKILLS_RESERVED mudou. "
         f"Esperado: {EXPECTED_SPED_SKILLS}, encontrado: {AgentSettings.SPED_SKILLS_RESERVED}"
     )
+
+
+# ---------------------------------------------------------------------------
+# F2.1+F2.2 PAD-CTX (2026-06-09) — grupo DEV_RESERVED fora do listing web
+# ---------------------------------------------------------------------------
+
+def test_skills_dev_reserved_exists_and_in_union():
+    """Grupo dev-reserved existe, e frozenset e esta na uniao de exclusao."""
+    from app.agente.config.skills_whitelist import (
+        SKILLS_DEV_RESERVED,
+        SKILLS_DELEGADAS_SUBAGENTE,
+    )
+    assert isinstance(SKILLS_DEV_RESERVED, frozenset)
+    assert SKILLS_DEV_RESERVED == {
+        'consultando-sentry', 'diagnosticando-banco',
+        'padronizando-docs', 'gerindo-agente',
+    }
+    assert SKILLS_DEV_RESERVED <= SKILLS_DELEGADAS_SUBAGENTE, (
+        "grupo DEV_RESERVED fora da uniao SKILLS_DELEGADAS_SUBAGENTE — "
+        "fora da uniao a deny-list nao exclui nada (V3 red-team do estudo PAD-CTX)"
+    )
+
+
+def test_dev_reserved_skills_excluded_from_discover():
+    """Skills dev-reserved NAO aparecem no listing descoberto do principal."""
+    from app.agente.config.skills_whitelist import SKILLS_DEV_RESERVED
+    from app.agente.sdk.client import _discover_skills_from_project
+    skills = _discover_skills_from_project()
+    assert isinstance(skills, list)
+    for dev_skill in SKILLS_DEV_RESERVED:
+        assert dev_skill not in skills, (
+            f"skill dev-only '{dev_skill}' vazou ao listing do agente web "
+            f"(decisao Rafael 2026-06-09: 0-2 usos em 90d, todos admin)"
+        )

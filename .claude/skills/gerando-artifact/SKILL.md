@@ -1,18 +1,12 @@
 ---
 name: gerando-artifact
 description: >-
-  Esta skill deve ser usada quando o usuario pede ao agente para "montar um
-  dashboard interativo", "criar uma visualizacao", "fazer uma tela
-  interativa", "gerar um painel visual", "monte uma interface", ou
-  qualquer pedido que requer UI multi-componente com state, routing, ou
-  componentes shadcn/ui. Gera bundle.html auto-contido (React 18 + TS +
-  Tailwind + shadcn/ui) servido como artifact no chat web do agente via
-  modal. Nao usar para resposta em texto simples (responder direto),
-  tabelas simples (markdown tabela), graficos pontuais (chart inline em
-  resposta), ou consultas analiticas (usar consultando-sql). Nao usar para
-  Teams (sem render de artifact integrado). Triggers em portugues:
-  "monte um dashboard de...", "crie uma visualizacao de...", "tela
-  interativa", "painel interativo", "interface web para visualizar...".
+  Gera bundle.html (React 18+TS+Tailwind+shadcn/ui) renderizado em modal no chat
+  web do agente -- exclusivo canal /agente/chat. Usar quando: "monte um
+  dashboard de fretes", "crie visualizacao interativa do estoque", "tela com
+  filtros para P1-P7", "painel interativo multi-componente". Nao usar: Teams
+  (sem render) -> responder texto+link; tabela simples -> markdown; exportar
+  Excel -> exportando-arquivos.
 allowed-tools: Bash, Read, Write, Edit
 ---
 

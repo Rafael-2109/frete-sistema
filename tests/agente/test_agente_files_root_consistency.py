@@ -19,7 +19,7 @@ PATHS = {
     'constants': os.path.join(ROOT, 'app/agente/routes/_constants.py'),
     'exportar': os.path.join(ROOT, '.claude/skills/exportando-arquivos/scripts/exportar.py'),
     'ler': os.path.join(ROOT, '.claude/skills/lendo-arquivos/scripts/ler.py'),
-    'ler_doc': os.path.join(ROOT, '.claude/skills/lendo-documentos/scripts/ler_doc.py'),
+    'ler_doc': os.path.join(ROOT, '.claude/skills/lendo-arquivos/scripts/ler_doc.py'),
 }
 
 

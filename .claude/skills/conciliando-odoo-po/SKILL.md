@@ -1,18 +1,12 @@
 ---
 name: conciliando-odoo-po
 description: >-
-  Esta skill deve ser usada quando o usuario precisa executar operacoes de
-  split e consolidacao de pedidos de compra no Odoo para conciliar com nota
-  fiscal: consolidar POs de uma NF, executar split de pedido, criar PO
-  Conciliador, reverter consolidacao, ajustar quantidades de linhas de PO,
-  vincular PO a NF, desvincular PO, trocar PO vinculado, remover PO da nota
-  e vincular outro, ou substituir PO. Tambem usar para depurar erros nestas
-  operacoes (AttributeError, PO criado sem linhas corretas, fornecedor nao
-  encontrado) ou explicar conceitualmente como split/consolidacao funciona.
-  NAO usar para: consultas read-only de documentos (usar rastreando-odoo),
-  match NF x PO antes da consolidacao (usar validacao-nf-po), pagamentos
-  financeiros (usar executando-odoo-financeiro), ou explorar campos de
-  modelo Odoo desconhecido (usar descobrindo-odoo-estrutura).
+  Executa operacoes WRITE de split e consolidacao de POs no Odoo para conciliar
+  com NF: "consolida POs da NF 12345", "executa split do pedido", "cria PO
+  Conciliador", "reverte consolidacao", "vincula PO a NF", "troca PO vinculado".
+  Tambem depura erros (AttributeError, fornecedor nao encontrado) ou explica
+  conceitualmente o fluxo. Match NF×PO -> validacao-nf-po; read-only ->
+  rastreando-odoo; pagamentos -> executando-odoo-financeiro.
 allowed-tools: Read, Bash, Glob, Grep
 ---
 

@@ -2266,7 +2266,7 @@ def _file_to_content_block(file_path: str) -> Optional[dict]:
 
     # PDF: document block nativo (Claude SDK 0.1.55+)
     # Limite: ~7MB de arquivo = ~9.3MB base64 — cabe no max_buffer_size=10MB do SDK
-    # (sdk/client.py:561). PDF maior cai para skill lendo-documentos ou metadata.
+    # (sdk/client.py:561). PDF maior cai para skill lendo-arquivos (ler_doc.py) ou metadata.
     _MAX_PDF_NATIVE_SIZE = 7 * 1024 * 1024
     if ext == 'pdf':
         try:

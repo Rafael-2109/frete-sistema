@@ -1,17 +1,11 @@
 ---
 name: visao-produto
 description: >-
-  Esta skill deve ser usada quando o usuario pede "tudo sobre palmito",
-  "visao 360 do produto X", "cumpriram a programacao?", "programado vs
-  produzido", ou precisa de dados cross-domain de produto (cadastro, estoque,
-  custo, faturamento, carteira e producao em consulta unificada).
-  Nao usar para apenas estoque sem visao completa (usar gerindo-expedicao),
-  apenas cotacao de frete (usar cotando-frete), ou consultas analiticas
-  agregadas de varios produtos (usar consultando-sql).
-
-  NAO USAR QUANDO:
-  - Apenas estoque sem visao completa: usar gerindo-expedicao
-  - Apenas faturamento/vendas: usar consultando-sql
+  Visao 360 de UM produto: cadastro, estoque, custo, faturamento, carteira e
+  producao em consulta cross-domain unificada. "tudo sobre palmito", "visao 360
+  do produto X", "programado vs produzido", "cumpriram a programacao?", "dados
+  completos do produto". So estoque sem visao completa -> gerindo-expedicao. So
+  faturamento/vendas -> consultando-sql.
 allowed-tools: Read, Bash, Glob, Grep
 ---
 

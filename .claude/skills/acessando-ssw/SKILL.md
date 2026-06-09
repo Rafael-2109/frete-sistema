@@ -1,17 +1,11 @@
 ---
 name: acessando-ssw
 description: >-
-  Base de conhecimento do sistema SSW. Use esta skill sempre que alguem
-  perguntar qualquer coisa sobre o SSW — como fazer algo no SSW, o que uma
-  opcao numerada faz (opcao 004, opcao 436, etc.), guias passo-a-passo (POPs),
-  fluxos de documentos fiscais de transporte (CT-e, MDF-e, CTRC), romaneio,
-  faturamento, contas a pagar, transferencias entre filiais, ou se a CarVia
-  usa determinado recurso do SSW. Se a pergunta menciona SSW ou envolve
-  entender/navegar processos do SSW, use esta skill.
-
-  Nao usar para: cotacao de frete interna Nacom → cotando-frete; rastreamento
-  de entregas pos-NF → monitorando-entregas; operacoes Odoo → especialista-odoo;
-  consultas SQL → consultando-sql; cadastros/escrita no SSW → operando-ssw.
+  Base de conhecimento SSW. Usar quando alguem perguntar SOBRE o SSW — como
+  funciona opcao 004, opcao 436, guia passo-a-passo, fluxo CT-e/MDF-e/CTRC,
+  romaneio, faturamento SSW. Gatilhos: "o que faz opcao 436?", "como emitir CT-e
+  no SSW?", "POP de cancelamento CTRC", "CarVia usa o modulo X?". Anti:
+  escrita/cadastro SSW -> operando-ssw; cotacao frete Nacom -> cotando-frete.
 allowed-tools: Read, Bash, Glob, Grep
 ---
 

@@ -1,21 +1,11 @@
 ---
 name: cotando-frete
 description: >-
-  Esta skill deve ser usada quando o usuario pergunta "qual preco para Manaus?",
-  "quanto sai 5000kg para AM?", "frete para SP 3 toneladas", "como funciona
-  o calculo de frete?", "frete do pedido VCD123", "qual transportadora mais
-  barata para RJ?", ou precisa de cotacao, tabelas de preco e lead times.
-  Nao usar para documentacao SSW CarVia (usar acessando-ssw), monitorar
-  entrega (usar monitorando-entregas), ou frete real vs teorico (ler
-  FRETE_REAL_VS_TEORICO.md via Read).
-  - Lead time: "prazo de entrega para Manaus?" (lead_time vem nos vinculos)
-  - Frete real: "quanto gastei de frete com Atacadao?", "divergencia CTe", "fretes pendentes Odoo"
-  - Despesas frete: "custo real do pedido com despesas extras"
-  NAO USAR QUANDO:
-  - Criar embarque/separacao → usar **gerindo-expedicao**
-  - Status de entrega pos-faturamento → usar **monitorando-entregas**
-  - Consultas analiticas SQL → usar **consultando-sql**
-  - Rastrear NF/PO no Odoo → usar **rastreando-odoo**
+  Cotacao de frete Nacom: tabelas, calculos, lead time e frete real gasto.
+  Frases: "quanto sai 5000kg para Manaus?", "qual transportadora mais barata
+  para RJ?", "lead time para AM", "frete real do pedido VCD123", "divergencia
+  CTe vs cotacao", "fretes pendentes Odoo". Anti: entrega pos-NF ->
+  monitorando-entregas; criar separacao -> gerindo-expedicao.
 allowed-tools: Read, Bash, Glob, Grep
 ---
 

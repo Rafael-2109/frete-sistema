@@ -1,22 +1,11 @@
 ---
 name: recebimento-fisico-odoo
 description: >-
-  Esta skill deve ser usada quando o usuario precisa debugar ou operar o
-  Recebimento Fisico (Fase 4): "erro ao validar picking", "lote nao criou",
-  "quality check falhou", "picking nao foi para done", ou precisa modificar
-  logica do worker de processamento assincrono via Redis Queue.
-  Nao usar para match NF x PO na Fase 2 (usar validacao-nf-po), consolidacao
-  de PO na Fase 3 (usar conciliando-odoo-po), ou rastrear picking especifico
-  (usar rastreando-odoo).
-  - Entender fluxo: "como funciona o recebimento?", "quais passos o worker executa?"
-  - Problema com lotes: "lote duplicado", "quantidade errada", "move.line nao criou"
-
-  NAO USAR QUANDO:
-  - Rastrear documentos fiscais (NF, PO, SO): usar **rastreando-odoo**
-  - Descobrir campos de modelo Odoo desconhecido: usar **descobrindo-odoo-estrutura**
-  - Criar pagamentos ou reconciliar extratos: usar **executando-odoo-financeiro**
-  - Depurar match NF x PO (Fase 2): usar **validacao-nf-po**
-  - Conciliar POs por split/consolidacao (Fase 3): usar **conciliando-odoo-po**
+  Skill para operar o Recebimento Fisico (Fase 4) no Odoo: picking, lotes,
+  quality checks e worker RQ assincrono. Usar quando: "erro ao validar picking",
+  "lote nao criou", "quality check falhou", "picking nao foi para done", "quais
+  passos o worker executa?", "lote duplicado". Fase 2 (match NF x PO) ->
+  validacao-nf-po; Fase 3 (split/consolidar PO) -> conciliando-odoo-po.
 allowed-tools: Read, Write, Edit, Bash, Glob, Grep
 ---
 

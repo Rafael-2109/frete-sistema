@@ -170,14 +170,18 @@ crescer, promover o conteudo dev-only a um doc versionado proprio e apontar o
 
 ## Skills — template de description e curadoria
 
-Template do frontmatter (alvo ≤500 chars por skill; orcamento real do CLI ≈8K chars para
+Template do frontmatter (alvo ≤450 chars por skill; orcamento real do CLI ≈8K chars para
 o listing inteiro — estourar = truncamento silencioso exatamente das clausulas finais):
 
 ```text
 [1 frase de proposito ≤150c] + [3-5 gatilhos positivos ≤200c] +
-[max 3 anti-gatilhos criticos com a skill correta ≤150c]
-Routing completo: .claude/references/ROUTING_SKILLS.md
+[max 3 anti-gatilhos criticos com a skill correta ≤100c]
 ```
+
+NAO repetir o ponteiro "Routing completo: ROUTING_SKILLS.md" em cada description —
+o dono desse ponteiro e o system_prompt (`routing_strategy`) + CLAUDE.md INDICE;
+repetir N vezes custou ~1,1K chars do orcamento na 1a aplicacao do template
+(refinamento F2.4, 2026-06-09 — a propria regra de redundancia deste padrao).
 
 Curadoria por superficie (deny-list em `app/agente/config/skills_whitelist.py`; todo
 grupo novo DEVE entrar na uniao `SKILLS_DELEGADAS_SUBAGENTE` — fora da uniao nao exclui

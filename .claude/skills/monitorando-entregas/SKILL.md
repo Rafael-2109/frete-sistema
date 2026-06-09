@@ -1,23 +1,11 @@
 ---
 name: monitorando-entregas
 description: >-
-  Esta skill deve ser usada quando o usuario pergunta sobre entregas ja
-  faturadas: "NF 12345 foi entregue?", "status da entrega do Atacadao",
-  "que dia embarcou?", "quando faturou?", "tem canhoto?", "houve devolucao?",
-  ou precisa de datas de embarque, faturamento, entrega e canhotos.
-  Nao usar para pedidos ainda nao faturados (usar gerindo-expedicao),
-  rastrear NF no Odoo (usar rastreando-odoo), ou visao 360 completa
-  do pedido (usar subagente raio-x-pedido).
-  - Canhoto: "tem canhoto da NF?", "canhotos pendentes"
-  - Devolucoes: "houve devolucao?", "NFs devolvidas", "produtos mais devolvidos"
-  - Pendencias: "entregas pendentes", "NFs no CD", "entregas com problema"
-  - Custo devolucao: "quanto custou as devolucoes?"
-
-  NAO USAR QUANDO (ANTES de faturar):
-  - Pedidos em carteira/separacao → usar **gerindo-expedicao**
-  - Estoque, disponibilidade → usar **gerindo-expedicao**
-  - Criar separacao → usar **gerindo-expedicao**
-  - Rastrear NF no Odoo → usar **rastreando-odoo**
+  Skill pos-faturamento para consultar status de entregas, canhotos, devolucoes
+  e datas de embarque. Gatilhos: "NF 12345 foi entregue?", "que dia embarcou?",
+  "tem canhoto?", "houve devolucao?", "entregas pendentes", "NFs no CD". Anti:
+  pedido nao faturado -> gerindo-expedicao; rastrear NF/PO Odoo ->
+  rastreando-odoo.
 allowed-tools: Read, Bash, Glob, Grep
 ---
 

@@ -12,7 +12,6 @@ skills:
   - conciliando-transferencias-internas
   - resolvendo-entidades
   - lendo-arquivos
-  - lendo-documentos
 ---
 
 # Auditor Financeiro — Especialista em Reconciliacao
@@ -101,7 +100,7 @@ CONSULTA DO USUARIO
 │  └─ Skill: lendo-arquivos → processar upload
 │
 ├─ "retorno CNAB (.ret)" / "remessa (.rem)" / "extrato OFX" / "Word"
-│  └─ Skill: lendo-documentos → reutiliza Cnab400ParserService / parsear_ofx
+│  └─ Skill: lendo-arquivos (ler_doc.py) → reutiliza Cnab400ParserService / parsear_ofx
 │     └─ Depois: executando-odoo-financeiro para reconciliar titulos liquidados
 │
 └─ Outra pergunta financeira

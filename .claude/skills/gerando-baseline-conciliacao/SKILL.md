@@ -1,21 +1,12 @@
 ---
 name: gerando-baseline-conciliacao
 description: >-
-  Esta skill deve ser usada quando o usuario Marcus (user_id=18, Controller
-  Financeiro) ou outro usuario financeiro pedir "atualizar baseline", "baseline
-  de conciliacao", "foto das conciliacoes", "foto atual das conciliacoes",
-  "extratos pendentes por mes", "gerar baseline" ou "relatorio de extratos
-  pendentes". Gera Excel com 4 abas canonicas (Pendentes Mes x Journal,
-  Pendentes, Conciliacoes Dia Anterior, Resumo) usando dados diretos do Odoo
-  account.bank.statement.line com is_reconciled=False.
-
-  NAO USAR QUANDO:
-  - Conciliacao de linhas individuais no Odoo, usar **executando-odoo-financeiro**
-  - Transferencias internas entre bancos NACOM GOYA, usar **conciliando-transferencias-internas**
-  - Rastrear extrato ou pagamento individual, usar **rastreando-odoo**
-  - Exportar razao geral contabil, usar **razao-geral-odoo**
-  - Baseline de CarVia (frete), usar **gerindo-carvia**
-  - Cotacao de frete, usar **cotando-frete**
+  Gera Excel com 4 abas canonicas de extratos pendentes (baseline de conciliacao
+  financeira Nacom Goya). Gatilhos: "atualizar baseline", "foto das
+  conciliacoes", "extratos pendentes por mes", "gerar baseline", "relatorio de
+  extratos pendentes" (Marcus user_id=18 ou financeiro). Anti: conciliar linha
+  -> executando-odoo-financeiro; transferencia interna ->
+  conciliando-transferencias-internas; rastrear pagamento -> rastreando-odoo.
 allowed-tools: Read, Bash, Glob, Grep
 ---
 

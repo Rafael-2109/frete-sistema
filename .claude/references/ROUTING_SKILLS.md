@@ -45,8 +45,7 @@ atualizado: 2026-06-08
 | DESENVOLVIMENTO FRONTEND | Criar tela, dashboard, CSS, template | -> `frontend-design` |
 | COTACAO DE FRETE | "qual preco", "quanto custa frete", "tabelas para", "cotacao" | -> `cotando-frete` |
 | VISAO 360 PRODUTO | "resumo do produto", "producao vs programado", "visao completa do produto" | -> `visao-produto` |
-| EXPORTAR/IMPORTAR DADOS | Gerar Excel, CSV, processar planilha | -> `exportando-arquivos` / `lendo-arquivos` |
-| LER DOCUMENTOS (Word, bancarios, OFX) | Analisar `.docx`, `.ret`, `.rem`, `.cnab`, `.ofx` | -> `lendo-documentos` |
+| EXPORTAR/IMPORTAR DADOS | Gerar Excel/CSV -> `exportando-arquivos`; LER upload do usuario (planilha `.xlsx`/`.xls`/`.csv` E documento `.docx`/`.ret`/`.rem`/`.cnab`/`.ofx`) | -> `lendo-arquivos` |
 | SAUDE DO BANCO | "health check", "indices nao usados", "queries lentas", "cache hit rate", "vacuum" | -> `diagnosticando-banco` |
 | SSW consulta (sistema transportadora) | "como fazer no SSW", "opcao NNN", "passo a passo", "MDF-e", "CTe no SSW", "CarVia faz X?" | -> `acessando-ssw` |
 | SSW escrita (cadastrar/criar no SSW) | "cadastre unidade CGR", "cadastrar cidades MS", "criar unidade parceira no SSW" | -> `operando-ssw` |
@@ -233,7 +232,7 @@ Cada skill tem `SKILL.md` em `.claude/skills/<nome>/`. `consultando-sql` e invoc
 `consultando-sentry` (MCP-first, 20 tools, Seer AI)
 
 ### Utilitarios compartilhados (12)
-`exportando-arquivos`, `lendo-arquivos`, `lendo-documentos`, `consultando-sql`,
+`exportando-arquivos`, `lendo-arquivos` (planilhas + documentos; consolidou `lendo-documentos` 2026-06-09), `consultando-sql`,
 `cotando-frete`, `visao-produto`, `resolvendo-entidades`, `gerindo-expedicao`,
 `monitorando-entregas`, `diagnosticando-banco`,
 `gerando-artifact` (chat web APENAS — bundle.html via React+Tailwind+Parcel, renderizado em modal sandboxed),

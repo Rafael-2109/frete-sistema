@@ -1,23 +1,11 @@
 ---
 name: gerindo-carvia
 description: >-
-  Esta skill deve ser usada quando o usuario pergunta sobre operacoes CarVia
-  (frete subcontratado): "operacoes da CarVia", "subcontratos pendentes",
-  "faturas CarVia do Atacadao", "cotar frete subcontratado para SP",
-  "conferencia de fatura transportadora", "resumo CarVia", ou qualquer
-  consulta de operacoes, subcontratos, cotacao e faturas do modulo CarVia.
-  Nao usar para cotacao de frete Nacom (industria embarca = usar cotando-frete),
-  documentacao/processos SSW (usar acessando-ssw), ou criar embarque Nacom
-  (usar gerindo-expedicao).
-  - Resumo: "como esta a CarVia?", "resumo das operacoes"
-  - Cotacao subcontratada: "cotar frete para SP via Braspress"
-  - Faturas: "faturas pendentes", "conferencia da fatura X"
-
-  NAO USAR QUANDO:
-  - Cotacao frete Nacom (industria, outbound) = usar **cotando-frete**
-  - Documentacao SSW CarVia = usar **acessando-ssw**
-  - Status entrega pos-faturamento Nacom = usar **monitorando-entregas**
-  - Criar embarque/separacao Nacom = usar **gerindo-expedicao**
+  Operacoes, subcontratos, cotacao e faturas do modulo CarVia (frete
+  subcontratado). Gatilhos: "operacoes da CarVia", "subcontratos pendentes",
+  "faturas CarVia do Atacadao", "cotar frete para SP via Braspress", "resumo
+  CarVia". Anti: cotacao frete Nacom (industria) -> cotando-frete; documentacao
+  SSW -> acessando-ssw; embarque/separacao Nacom -> gerindo-expedicao.
 allowed-tools: Read, Bash, Glob, Grep
 ---
 
