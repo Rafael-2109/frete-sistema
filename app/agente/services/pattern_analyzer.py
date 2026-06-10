@@ -1146,6 +1146,7 @@ def _save_empresa_memory(
     content: str,
     created_by: int,
     meta: Optional[dict] = None,
+    session_id: Optional[str] = None,
 ) -> bool:
     """
     Salva memoria empresa (user_id=0) com escopo e auditoria.
@@ -1154,6 +1155,8 @@ def _save_empresa_memory(
         meta: dict canonico (memory_format.build_meta). Se None e o path for
             estruturado, deriva via normalize_for_storage (parse best-effort do
             content). Memorias nao-estruturadas ficam meta=NULL.
+        session_id: sessao de ORIGEM (F5.2 PAD-CTX proveniencia), propagada
+            pelo daemon pos-sessao. Sem ela, source_session_id fica NULL.
 
     Returns:
         True se criou/atualizou, False se erro
@@ -1176,6 +1179,8 @@ def _save_empresa_memory(
                 existing.meta = meta
                 existing.updated_at = agora_utc_naive()
                 existing.created_by = created_by
+                # F5.2: update renova frescor; origem (source_session_id) imutavel
+                existing.last_confirmed = agora_utc_naive()
         else:
             # Verificar duplicata semantica ANTES de criar
             # created_by (NÃO 0) para cross-namespace dedup:
@@ -1197,6 +1202,9 @@ def _save_empresa_memory(
             mem.meta = meta
             mem.escopo = 'empresa'
             mem.created_by = created_by
+            # F5.2 proveniencia: sessao de origem (NULL se daemon sem sessao)
+            mem.source_session_id = session_id
+            mem.last_confirmed = agora_utc_naive()
             # Calcular importance pelo conteúdo (mesma lógica de save_memory)
             # em vez de hardcodar — threshold de imunidade é >= 0.7
             try:
@@ -1244,6 +1252,7 @@ def _save_empresa_memory(
 def _save_extracted_knowledge(
     knowledge: dict,
     created_by: int,
+    session_id: Optional[str] = None,
 ) -> dict:
     """
     Salva conhecimento extraido como memorias empresa (user_id=0).
@@ -1255,6 +1264,7 @@ def _save_extracted_knowledge(
     Args:
         knowledge: Dict com "conhecimentos" (novo) ou campos legados
         created_by: ID do usuario que originou o conhecimento
+        session_id: sessao de ORIGEM (F5.2 proveniencia) — opcional
 
     Returns:
         Dict com contadores {saved, filtered, enriched}
@@ -1264,16 +1274,19 @@ def _save_extracted_knowledge(
     # ── Novo formato CAPDo v3.0 ──
     conhecimentos = knowledge.get('conhecimentos', [])
     if conhecimentos:
-        return _save_conhecimentos_v3(conhecimentos, created_by, counts)
+        return _save_conhecimentos_v3(conhecimentos, created_by, counts,
+                                      session_id=session_id)
 
     # ── Fallback: formato legado (backward-compatible) ──
-    return _save_conhecimentos_legado(knowledge, created_by, counts)
+    return _save_conhecimentos_legado(knowledge, created_by, counts,
+                                      session_id=session_id)
 
 
 def _save_conhecimentos_v3(
     conhecimentos: list[dict],
     created_by: int,
     counts: dict,
+    session_id: Optional[str] = None,
 ) -> dict:
     """Salva conhecimentos no novo formato com titulo + tipo + nivel + criterios.
 
@@ -1350,7 +1363,8 @@ def _save_conhecimentos_v3(
         enriched = _try_enrich_existing(path, content, created_by, descricao)
         if enriched:
             counts['enriched'] += 1
-        elif _save_empresa_memory(path, content, created_by, meta=meta):
+        elif _save_empresa_memory(path, content, created_by, meta=meta,
+                                  session_id=session_id):
             counts['saved'] += 1
         # Se dedup bloqueou, nenhum contador incrementa (esperado)
 
@@ -1361,6 +1375,7 @@ def _save_conhecimentos_legado(
     knowledge: dict,
     created_by: int,
     counts: dict,
+    session_id: Optional[str] = None,
 ) -> dict:
     """Fallback: converte formato legado para novo formato e salva.
 
@@ -1423,7 +1438,8 @@ def _save_conhecimentos_legado(
         })
 
     if conhecimentos_convertidos:
-        return _save_conhecimentos_v3(conhecimentos_convertidos, created_by, counts)
+        return _save_conhecimentos_v3(conhecimentos_convertidos, created_by, counts,
+                                      session_id=session_id)
 
     return counts
 
@@ -1836,6 +1852,7 @@ def extrair_conhecimento_sessao(
             counts = _save_extracted_knowledge(
                 knowledge=knowledge,
                 created_by=user_id,
+                session_id=session_id,
             )
 
         logger.info(

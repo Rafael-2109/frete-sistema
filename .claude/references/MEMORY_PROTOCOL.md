@@ -4,7 +4,7 @@ camada: L2
 sot_de: —
 hub: .claude/references/INDEX.md
 superseded_by: —
-atualizado: 2026-06-09
+atualizado: 2026-06-10
 -->
 # Protocolo de Memoria do Agente
 
@@ -14,10 +14,12 @@ atualizado: 2026-06-09
 
 - [Ciclo de Vida](#ciclo-de-vida)
 - [Formato Canonico de Armazenamento (meta JSONB)](#formato-canonico-de-armazenamento-meta-jsonb)
+- [Proveniencia e Frescor (F5 PAD-CTX)](#proveniencia-e-frescor-f5-pad-ctx)
 - [Categorias e Decay](#categorias-e-decay)
 - [Paths Padrao](#paths-padrao)
 - [Criterios de Qualidade](#criterios-de-qualidade)
 - [Protecoes](#protecoes)
+- [Promocao Memoria -> Codigo](#promocao-memoria---codigo)
 - [Triggers de Salvamento](#triggers-de-salvamento)
   - [Automatico (silencioso)](#automatico-silencioso)
   - [Explicito (com confirmacao)](#explicito-com-confirmacao)
@@ -70,6 +72,31 @@ paths, **SEM o conteudo**; filtros kind/dominio/escopo/prefix/query/limit; exclu
 frias). Para ler o conteudo de uma memoria, usar **`view_memories(path)`**. As memorias
 relevantes ja sao injetadas no boot — `list_memories` serve so para **navegar alem do
 injetado** (e resolve o estouro de tokens do dump antigo).
+
+---
+
+## Proveniencia e Frescor (F5 PAD-CTX)
+
+> Contrato canonico: `.claude/references/ARQUITETURA_CONTEXTO_AGENTE.md` §Memorias.
+> Migration: `scripts/migrations/2026_06_09_agent_memories_proveniencia.{py,sql}`.
+
+3 colunas em `agent_memories`:
+
+| Coluna | Semantica | Quem popula |
+|--------|-----------|-------------|
+| `source_session_id` | Sessao que ORIGINOU a memoria — **imutavel** (update NAO reescreve) | `save_memory` (ContextVar `permissions.py`), `session_summarizer`, `pattern_analyzer.extrair_conhecimento_sessao` (param opcional; daemons sem sessao deixam NULL) |
+| `last_confirmed` | Ultima (re)confirmacao do conteudo — create E updates renovam | `save_memory`/`update_memory` (`_touch_last_confirmed`), `_save_empresa_memory` |
+| `confidence` | Confianca declarada (NULL = nao avaliada) | Reservada (consumo F5.5+/F6) |
+
+**Exposicao na injecao e cross-user-safe** (`_memory_open_tag` em
+`memory_injection.py`):
+- Memoria PESSOAL: `<memory ... session="..." date="DD/MM/AAAA">` — o agente pode
+  navegar ate o transcript de origem via `search_sessions`.
+- Memoria EMPRESA (user_id=0): APENAS `created_by="<user_id>"` + `date=` — o UUID de
+  sessao alheia NUNCA vaza (`search_sessions` e per-user; cross-user exige debug_mode).
+
+**Regra de conflito**: correcao nova do usuario SEMPRE prevalece sobre memoria
+antiga (mesmo com `last_confirmed` recente).
 
 ---
 
@@ -129,6 +156,29 @@ NAO salvar: resultados pontuais, status temporarios, informacao disponivel no si
 - Memorias `category='permanent'` com `importance >= 0.7` protegidas de consolidacao
 - Extracao pos-sessao: dedup via busca semantica (threshold 0.80) antes de salvar
   - FONTE: `pattern_analyzer.py:_find_similar_empresa_memory()`
+
+---
+
+## Promocao Memoria -> Codigo
+
+> Criterios canonicos no PAD-CTX (`ARQUITETURA_CONTEXTO_AGENTE.md` §Memorias).
+
+Armadilha DETERMINISTICA nao e memoria — e candidata a virar guard de codigo.
+Promover quando atender **TODOS os 4 criterios**:
+
+1. Comportamento deterministico (sempre falha do mesmo jeito);
+2. Ponto unico de falha conhecido (arquivo/funcao identificavel);
+3. Check binario implementavel (guard objetivo, sem julgamento);
+4. Reincidencia registrada (2+ ocorrencias).
+
+**Fluxo**: `register_improvement(category=skill_bug)` → dev implementa o guard →
+memoria marcada como **promovida** e SAI da injecao (`is_cold=true` +
+`meta.promovida_para` apontando o artefato de codigo — mantem o historico
+buscavel via `search_cold_memories` sem gastar contexto).
+
+Ja promovidas (2026-06-09): TMPDIR divergente (`routes/_constants.py`
+AGENTE_FILES_ROOT) · verificacao de arquivo existente (`routes/files.py`; check
+de tamanho>0 na skill `exportando-arquivos`).
 
 ---
 

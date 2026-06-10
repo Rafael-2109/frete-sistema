@@ -96,6 +96,16 @@ def build_intersession_briefing(user_id: int) -> Optional[str]:
             if improvement_responses:
                 parts.append(improvement_responses)
 
+        # 7. F5.7 PAD-CTX: top-3 erros recorrentes de skill (gate interno de
+        # >=30d de historico em agent_skill_effectiveness — dormante antes).
+        use_recurring = os.getenv(
+            'AGENT_RECURRING_ERRORS_BOOT', 'true'
+        ).lower() == 'true'
+        if use_recurring:
+            recurring = _check_recurring_errors()
+            if recurring:
+                parts.append(recurring)
+
         if not parts:
             return None
 
@@ -458,6 +468,79 @@ def _format_improvement_responses(responses, note: str) -> Optional[str]:
         f'note="{note}">'
         + ''.join(parts)
         + '</improvement_responses>'
+    )
+
+
+def _check_recurring_errors() -> Optional[str]:
+    """
+    F5.7 PAD-CTX (item A3) — destila "top 3 erros recorrentes" de skills no boot.
+
+    GATE DE VOLUME: so ativa quando agent_skill_effectiveness tiver >=30 dias
+    de historico (MIN(created_at) <= now-30d). Antes disso o bloco fica
+    DORMANTE (retorna None) — evita destilar ruido de amostra pequena.
+
+    Quando ativo: top 3 skills por falhas (resolveu=false) nos ultimos 30 dias,
+    exigindo recorrencia (>=2 falhas). Zero custo LLM — query SQL direta.
+
+    Returns:
+        XML <erros_recorrentes> compacto ou None (sem dados / gate fechado).
+    """
+    try:
+        from datetime import timedelta
+
+        from sqlalchemy import func
+
+        from app import db
+        from app.utils.timezone import agora_utc_naive
+        from ..models import AgentSkillEffectiveness
+
+        now = agora_utc_naive()
+        primeiro = db.session.query(
+            func.min(AgentSkillEffectiveness.created_at)
+        ).scalar()
+        if primeiro is None or primeiro > now - timedelta(days=30):
+            return None  # gate fechado: <30d de historico
+
+        janela = now - timedelta(days=30)
+        rows = (
+            db.session.query(
+                AgentSkillEffectiveness.skill_name,
+                func.count().label('falhas'),
+            )
+            .filter(
+                AgentSkillEffectiveness.resolveu.is_(False),
+                AgentSkillEffectiveness.created_at >= janela,
+            )
+            .group_by(AgentSkillEffectiveness.skill_name)
+            .having(func.count() >= 2)  # recorrente = 2+ falhas
+            .order_by(func.count().desc())
+            .limit(3)
+            .all()
+        )
+        if not rows:
+            return None
+
+        linhas = ''.join(
+            f'\n  <skill name="{_xml_escape_attr(r.skill_name)}" falhas="{r.falhas}"/>'
+            for r in rows
+        )
+        return (
+            '<erros_recorrentes window="30d" '
+            'note="Skills com falhas recorrentes — redobre validacao ao usa-las.">'
+            f'{linhas}\n</erros_recorrentes>'
+        )
+
+    except Exception as e:
+        logger.debug(f"[BRIEFING] Recurring errors check falhou (ignorado): {e}")
+        return None
+
+
+def _xml_escape_attr(text: str) -> str:
+    """Escape minimo para valor de atributo XML."""
+    return (
+        str(text)
+        .replace('&', '&amp;').replace('<', '&lt;')
+        .replace('>', '&gt;').replace('"', '&quot;')
     )
 
 

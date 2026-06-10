@@ -835,17 +835,21 @@ class EmbeddingService:
         # Incluir user_id=0 (memorias empresa) para memoria compartilhada (PRD v2.1)
         user_ids = [user_id, 0] if user_id != 0 else [0]
 
+        # F5.4 PAD-CTX: excluir memorias frias (is_cold) — _archived_* mantinham
+        # embedding ativo e consumiam slots do top-K (gap diagnosticado em PROD).
         sql = text("""
             SELECT
-                id,
-                memory_id,
-                path,
-                texto_embedado,
-                1 - (embedding <=> CAST(:query_embedding AS vector)) AS similarity
-            FROM agent_memory_embeddings
-            WHERE user_id = ANY(:user_ids)
-              AND embedding IS NOT NULL
-            ORDER BY embedding <=> CAST(:query_embedding AS vector)
+                e.id,
+                e.memory_id,
+                e.path,
+                e.texto_embedado,
+                1 - (e.embedding <=> CAST(:query_embedding AS vector)) AS similarity
+            FROM agent_memory_embeddings e
+            JOIN agent_memories m ON m.id = e.memory_id
+            WHERE e.user_id = ANY(:user_ids)
+              AND e.embedding IS NOT NULL
+              AND m.is_cold = false
+            ORDER BY e.embedding <=> CAST(:query_embedding AS vector)
             LIMIT :limit
         """)
 
@@ -877,13 +881,18 @@ class EmbeddingService:
     ) -> List[Dict[str, Any]]:
         """Busca memorias fallback sem pgvector."""
         from app.embeddings.models import AgentMemoryEmbedding
+        from app.agente.models import AgentMemory
 
         # Incluir user_id=0 (memorias empresa) para memoria compartilhada (PRD v2.1)
         user_ids = [user_id, 0] if user_id != 0 else [0]
 
-        docs = AgentMemoryEmbedding.query.filter(
+        # F5.4 PAD-CTX: excluir memorias frias (mesmo criterio do path pgvector)
+        docs = AgentMemoryEmbedding.query.join(
+            AgentMemory, AgentMemory.id == AgentMemoryEmbedding.memory_id
+        ).filter(
             AgentMemoryEmbedding.user_id.in_(user_ids),
             AgentMemoryEmbedding.embedding.isnot(None),
+            AgentMemory.is_cold.is_(False),
         ).limit(500).all()
 
         scored = []

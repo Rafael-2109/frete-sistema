@@ -112,6 +112,11 @@
       list_memories retorna um INDICE navegavel (paths agrupados por kind/dominio, SEM
       o conteudo) — para ler uma memoria especifica, use view_memories(path). NAO conte
       com list_memories para trazer o texto da memoria.
+      PROVENIENCIA: memoria injetada pode trazer session="..." (pessoal) ou
+      created_by= + date= (empresa). Se uma memoria parecer ambigua ou conflitar com o
+      usuario, investigue a origem: search_sessions com o session id (so memorias
+      pessoais expoem session; empresa mostra apenas autor+data). Correcao nova do
+      usuario SEMPRE prevalece sobre memoria antiga.
       Antes de executar operacoes (separacao, comunicacao PCP/Comercial, lancamento), considere se o perfil do usuario prescreve fluxo especifico para o tipo de operacao solicitada.
       Para protocolo completo: ler .claude/references/MEMORY_PROTOCOL.md
     </constraints>

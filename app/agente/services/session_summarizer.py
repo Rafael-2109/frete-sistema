@@ -26,6 +26,10 @@ logger = logging.getLogger(__name__)
 
 SONNET_MODEL = "claude-sonnet-4-6"
 
+# Path da memoria de resumo de sessao (sobrescrita a cada sumarizacao).
+# Module-level p/ testes isolarem o path (F5 PAD-CTX proveniencia).
+_SUMMARY_MEMORY_PATH = "/memories/context/session_summary.xml"
+
 # JSON Schema para output_config.format (anthropic SDK 0.85+ — structured outputs).
 # Nao usa minLength/maxLength/minItems pois nao sao suportados pelo schema validator.
 # Schema reflete a estrutura definida no SUMMARY_SYSTEM_PROMPT.
@@ -375,7 +379,7 @@ def _save_summary_to_memory(
     """
     from ..models import AgentMemory
 
-    path = "/memories/context/session_summary.xml"
+    path = _SUMMARY_MEMORY_PATH
 
     # Guard defensivo: summary DEVE ser dict (callers já validam, mas defesa em profundidade)
     if not isinstance(summary, dict):
@@ -458,8 +462,13 @@ def _save_summary_to_memory(
         existing = AgentMemory.get_by_path(user_id, path)
         if existing:
             existing.content = content
+            mem = existing
         else:
-            AgentMemory.create_file(user_id, path, content)
+            mem = AgentMemory.create_file(user_id, path, content)
+
+        # F5.2 proveniencia: o conteudo e SEMPRE da sessao recem-sumarizada
+        # (memoria sobrescrita a cada sessao) — origem acompanha o conteudo.
+        mem.source_session_id = session_id
 
         logger.debug(f"[SUMMARIZER] Memory salva em {path}")
     except Exception as e:

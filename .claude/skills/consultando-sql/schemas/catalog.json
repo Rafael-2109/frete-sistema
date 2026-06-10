@@ -3440,8 +3440,8 @@
       "description": "Memória persistente do agente por usuário.",
       "key_fields": [
         "user_id",
-        "directive_status",
-        "agente"
+        "source_session_id",
+        "directive_status"
       ],
       "dominio": "Agente",
       "admin_only": true

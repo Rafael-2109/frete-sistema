@@ -4,7 +4,7 @@ camada: L2
 sot_de: arquitetura de contexto do Agente Web (PAD-CTX)
 hub: .claude/references/INDEX.md
 superseded_by: —
-atualizado: 2026-06-09
+atualizado: 2026-06-10
 -->
 # Arquitetura de Contexto do Agente Web (PAD-CTX)
 
@@ -247,11 +247,12 @@ perfil (Tier 1) · heuristica/armadilha empresa (Tier 2 RAG por intent) · episo
 (few-shot por topico, ex.: caso fatura 161-9 quando o turno tratar de fatura CarVia) ·
 armadilha DETERMINISTICA (candidata a promocao para codigo — nao e memoria).
 
-**Proveniencia** `[ALVO — implementacao na FASE 5 do plano; campo ainda nao existe]`:
-`source_session_id` na tabela `agent_memories`, populado no `save_memory` via
-`get_current_session_id()` (ContextVar em `app/agente/config/permissions.py:78`; memorias
-criadas por daemons pos-sessao podem ficar NULL). Exposicao na injecao COM protecao
-cross-user:
+**Proveniencia** `[IMPLEMENTADO — F5 2026-06-09; migration
+2026_06_09_agent_memories_proveniencia]`: `source_session_id` na tabela
+`agent_memories`, populado no `save_memory` via `get_current_session_id()`
+(ContextVar em `app/agente/config/permissions.py:78`; memorias criadas por
+daemons pos-sessao recebem por parametro opcional — sem ele, NULL). Exposicao
+na injecao COM protecao cross-user (`_memory_open_tag`):
 - Memoria PESSOAL (escopo do proprio usuario): `<memory session="..." date="...">` —
   navegavel via `mcp__sessions__search_sessions`.
 - Memoria EMPRESA (compartilhada): expor APENAS `created_by` + `date` (a sessao de origem
@@ -260,8 +261,10 @@ cross-user:
 Objetivo: blindar contra memoria mal interpretada — o agente acessa o raw da sessao de
 origem quando autorizado, e tira a propria conclusao.
 
-**Frescor/confianca** `[ALVO — FASE 5]`: `last_confirmed` + `confidence` como metadados
-queryaveis; correcao nova SEMPRE prevalece sobre memoria antiga em conflito.
+**Frescor/confianca** `[IMPLEMENTADO — F5 2026-06-09]`: `last_confirmed` (create e
+updates renovam; origem imutavel) + `confidence` (reservada, NULL = nao avaliada)
+como metadados queryaveis; correcao nova SEMPRE prevalece sobre memoria antiga em
+conflito.
 
 **Teto por memoria injetada:** ~300 chars no Tier 2 (WHEN/DO destilado + ponteiro
 `view_memories(path)` para o restante). Memoria de 27 linhas nao entra inteira no boot.
@@ -269,9 +272,12 @@ queryaveis; correcao nova SEMPRE prevalece sobre memoria antiga em conflito.
 **Promocao memoria→codigo** (criterios — todos os 4): (1) comportamento deterministico,
 (2) ponto unico de falha conhecido, (3) check binario implementavel, (4) reincidencia
 registrada. Fluxo: `register_improvement(category=skill_bug)` → dev implementa guard →
-memoria marcada como promovida (sai da injecao). Exemplos ja promovidos: TMPDIR
-divergente (`_constants.py` AGENTE_FILES_ROOT), verificacao de arquivo existente
-(`files.py`; check de tamanho>0 pendente na skill `exportando-arquivos`).
+memoria marcada como promovida (mecanismo F5.6: `is_cold=true` + `meta.promovida_para`
+apontando o artefato — sai da injecao e da busca semantica, historico segue via
+`search_cold_memories`; data-fix `2026_06_09_f5_memorias_datafix.py`). Exemplos ja
+promovidos: TMPDIR divergente (`_constants.py` AGENTE_FILES_ROOT), verificacao de
+arquivo existente (`files.py`; check de tamanho>0 JA implementado na skill
+`exportando-arquivos` — `_verificar_entrega`, guard P7 #787).
 
 ## Caminhos de descoberta
 

@@ -15,15 +15,17 @@ atualizado: 2026-06-09
 > EM ABERTO e o escopo delas PERMANECE LA. Este plano governa o contexto COMPLETO
 > (CLAUDE.md, listing de skills, hook dinamico, memorias) sem absorver tasks daquele.
 
-> 🔵 **PROXIMA SESSAO — RETOMAR AQUI:** FASES 0-4 CONCLUIDAS + F4 VALIDADA EM
-> PROD (2026-06-09 — ver Rastreamento; backlog 63KB resolvido: 13KB/-79%).
-> Proxima: **F5** — COMECAR pela investigacao do `semantic=0` do user 74
-> (embeddings ausentes? cobertura? — informa o design da 5.4) e medicao de
-> precision@k baseline (20 turnos reais) ANTES de codar; depois 5.1 migration →
-> 5.2 proveniencia → 5.3 exposicao cross-user-safe → 5.4 intent → 5.5-5.7.
-> Aproveitar p/ consolidar `system-pitfalls` duplicado (backlog — dado, nao
-> codigo). Item 12 do mini-set (dump de boot manual) fica a criterio do Rafael.
-> Depois F6 (governanca), F7 (opt-ins).
+> 🔵 **PROXIMA SESSAO — RETOMAR AQUI:** FASES 0-5 CONCLUIDAS (2026-06-10 — ver
+> Rastreamento). F5 fechada com diagnostico + precision@k baseline (relatorio:
+> `relatorios/estudo_contexto_boot_2026-06-09/precision_at_k_baseline_2026-06-10.md`).
+> PENDENTES DE ACAO DO RAFAEL (pre/pos deploy F5): (a) rodar migration
+> `2026_06_09_agent_memories_proveniencia` em PROD ANTES do deploy; (b) rodar
+> data-fix `2026_06_09_f5_memorias_datafix.py --confirmar` em PROD; (c) env
+> `AGENT_MEMORY_MIN_SIMILARITY` 0.55→0.45 no Render (ou remover); (d) DECIDIR
+> migracao voyage-4-large (+50% precisao, ver relatorio §Recomendacoes).
+> Depois F6 (governanca — golden dataset 50+, ablacao por bloco do hook; dado
+> novo: blocos fixos grandes [user 18: rules 6,2K + tier1 7,6K] estouram o teto
+> 15K e cortam TODO o adaptativo — considerar cap em tier1/user_rules), F7.
 
 ## Indice
 
@@ -411,3 +413,51 @@ Padrao em si (PAD-CTX publicado): RP-1, R-2(criterio), A5(roteamento), C1(fonte 
   8.448 exato, agora 7.929). PENDENTES: semantic=0 p/ user 74 persiste
   (investigacao F5.4 — embeddings ausentes?); dump de boot completo (ordem
   visual dos blocos) segue como item 12 manual.
+- 2026-06-10 — **FASE 5 CONCLUIDA** (diagnostico ANTES de codar, conforme ponteiro):
+  **(diag-1) Causa raiz do semantic=0 NAO era embeddings** (cobertura 199/200
+  empresa, 3/3 user 74): env PROD `AGENT_MEMORY_MIN_SIMILARITY=0.55` esta ACIMA
+  de quase toda a distribuicao do voyage-4-lite (medicao empirica: 70 scores
+  contra o indice PROD, 1 unico >=0.55) → semantic=0 em 100% dos turnos de TODOS
+  os usuarios; fallback de recencia rodava sempre. `.env` local tem flag morta
+  `AGENT_MEMORY_SEMANTIC_SEARCH` (nenhum codigo le; o nome real e
+  `MEMORY_SEMANTIC_SEARCH`, default true).
+  **(diag-2) precision@k baseline** (20 turnos reais, 9 usuarios, 20 judges
+  Sonnet via workflow; relatorio
+  `relatorios/estudo_contexto_boot_2026-06-09/precision_at_k_baseline_2026-06-10.md`):
+  fallback PROD = **0.013** (1 util/80); lite@0.45 = 0.558 (15/20); + A/B
+  voyage-4-large no MESMO corpus (361 memorias, re-embed local read-only):
+  large@0.45 = **0.842**, large@0.40 = 0.673 com 18/20 — large rankeia ~+50%
+  melhor; escala de similarity NAO transfere entre modelos. 2/20 turnos
+  irrecuperaveis por embedding (anafora; pergunta factual de skill).
+  **Implementacao via TDD** (27 testes novos; suite tests/agente 1365+ verde;
+  1 falha de residuo KG dos proprios testes corrigida — fixture neutraliza
+  embed/KG via monkeypatch + 50 entidades orfas limpas do banco local):
+  5.1 migration `2026_06_09_agent_memories_proveniencia.{py,sql}` (3 colunas +
+  indice; aplicada LOCAL; schema JSON regenerado — incluiu o `meta` de 06-08
+  que faltava). 5.2 helpers `_apply_provenance_on_create`/`_touch_last_confirmed`
+  em memory_mcp_tool (create/update + update_memory) + session_summarizer
+  (`_SUMMARY_MEMORY_PATH` extraida; origem acompanha o resumo) + cadeia
+  pattern_analyzer (4 funcoes com `session_id=None` opcional). 5.3
+  `_memory_open_tag` cross-user-safe (pessoal: session=+date=; empresa:
+  created_by=+date=; UUID alheio nunca vaza) + R0 instrucao de navegacao (+5L;
+  baseline re-travado 768L/966L) + MEMORY_PROTOCOL.md §Proveniencia. 5.4
+  REINTERPRETADA pelo diagnostico: a query semantica JA ERA o prompt do turno
+  (plano estava desatualizado) e o teto do fallback JA veio da F4.3 — entregue:
+  filtro `is_cold` no SQL da busca (pgvector + fallback python; `_archived_*`
+  poluiam 3/10 do top-10) + calibracao de threshold (acao de env = Rafael).
+  5.5 few-shot episodico com DESVIO DECLARADO (cosine 0.75 do plano e
+  inatingivel na distribuicao real; default `AGENT_FEWSHOT_MIN_SIMILARITY=0.55`
+  + `_is_episodic_memory` + cap 1200c em `_render_tier2_candidate`). 5.6
+  MEMORY_PROTOCOL.md §Promocao (4 criterios; mecanismo is_cold +
+  meta.promovida_para; check tamanho>0 em exportando-arquivos JA EXISTIA —
+  guard `_verificar_entrega` P7 #787) + data-fix
+  `2026_06_09_f5_memorias_datafix.py` (2 promovidas + system-pitfalls.json →
+  cold; dry-run default; PENDENTE rodar em PROD). 5.7 `_check_recurring_errors`
+  no briefing (top-3 skills 2+ falhas/30d; gate >=30d de historico — DORMANTE
+  ate ~08/07; flag `AGENT_RECURRING_ERRORS_BOOT` default true). Backlog
+  system-pitfalls consolidado via data-fix (o .json e fonte do tool
+  log_system_pitfall, lido por get_by_path que ignora is_cold; o .xml segue
+  como formato injetado). DADO NOVO p/ F6: blocos fixos grandes estouram o
+  teto 15K e cortam TODO o adaptativo (user 18: rules 6,2K + tier1 7,6K →
+  overflow_cortes=['tier2','directives_organicas','routing']) — candidato a
+  cap de tier1/user_rules na F6.

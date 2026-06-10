@@ -122,6 +122,22 @@
       "type": "timestamp"
     },
     {
+      "name": "source_session_id",
+      "type": "text"
+    },
+    {
+      "name": "last_confirmed",
+      "type": "timestamp"
+    },
+    {
+      "name": "confidence",
+      "type": "text"
+    },
+    {
+      "name": "meta",
+      "type": "jsonb"
+    },
+    {
       "name": "created_at",
       "type": "timestamp",
       "description": "Data de criação"
@@ -160,6 +176,13 @@
       "name": "ix_agent_memories_category",
       "columns": [
         "category"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_agent_memories_source_session_id",
+      "columns": [
+        "source_session_id"
       ],
       "unique": false
     },

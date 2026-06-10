@@ -13,6 +13,7 @@ Reduz consultas redundantes em sessoes de multi-turno repetitivas
 """
 
 import logging
+import os
 import threading
 import time as _time_module
 from typing import Optional
@@ -33,6 +34,14 @@ logger = logging.getLogger('sistema_fretes')
 HOOK_CONTEXT_TARGET_CHARS = 15_000  # teto total main+tail (<=15KB/turno)
 TIER2_MEMORY_CHAR_CAP = 300         # teto por memoria Tier 2 (destilado + ponteiro)
 TIER2_MAX_MEMORIES = 4              # bloco Tier 2 = 4 x ~300c (tabela PAD-CTX item 6)
+
+# F5.5 PAD-CTX: few-shot episodico condicional. Threshold calibrado na
+# distribuicao REAL do voyage-4-lite query->doc (PROD 2026-06-09: 0.24-0.55;
+# o cosine 0.75 do plano nunca dispararia). 0.55 = match excepcional.
+FEWSHOT_MIN_SIMILARITY = float(
+    os.getenv('AGENT_FEWSHOT_MIN_SIMILARITY', '0.55')
+)
+FEWSHOT_CONTENT_CAP = 1_200         # exemplo entra (quase) completo, com teto
 
 
 # ======================================================================
@@ -306,6 +315,12 @@ def _memory_open_tag(mem, tier: str = None) -> str:
     """Tag de abertura <memory> enriquecida com atributos do meta canonico
     (kind/dominio/nivel) quando disponivel — apresentacao XML estruturada para o
     Claude. getattr: robusto a objetos sem coluna meta (legado / mock de teste).
+
+    F5.3 PAD-CTX (proveniencia cross-user-safe — ARQUITETURA_CONTEXTO_AGENTE.md
+    §Memorias): memoria PESSOAL expoe session= (navegavel via search_sessions) +
+    date=; memoria EMPRESA (user_id=0) expoe APENAS created_by= + date= — o UUID
+    de sessao alheia NUNCA vaza (search_sessions e per-user; cross-user e gated
+    por debug_mode).
     """
     attrs = [f'path="{xml_escape(mem.path)}"']
     if tier:
@@ -318,7 +333,51 @@ def _memory_open_tag(mem, tier: str = None) -> str:
             attrs.append(f'dominio="{xml_escape(str(meta["dominio"]))}"')
         if meta.get('nivel') is not None:
             attrs.append(f'nivel="{xml_escape(str(meta["nivel"]))}"')
+    updated = getattr(mem, 'updated_at', None)
+    if updated is not None:
+        try:
+            attrs.append(f'date="{updated.strftime("%d/%m/%Y")}"')
+        except (AttributeError, ValueError):
+            pass
+    if getattr(mem, 'user_id', None) == 0:
+        created_by = getattr(mem, 'created_by', None)
+        if created_by:
+            attrs.append(f'created_by="{xml_escape(str(created_by))}"')
+    else:
+        source_sid = getattr(mem, 'source_session_id', None)
+        if source_sid:
+            attrs.append(f'session="{xml_escape(str(source_sid))}"')
     return '<memory ' + ' '.join(attrs) + '>'
+
+
+def _is_episodic_memory(mem) -> bool:
+    """F5.5 PAD-CTX: memoria EPISODICA = caso/correcao concreta (candidata a
+    few-shot). Criterio: kind canonico 'correcao' OU path em /corrections/ ou
+    /casos/."""
+    meta = getattr(mem, 'meta', None)
+    if isinstance(meta, dict) and meta.get('kind') == 'correcao':
+        return True
+    path = getattr(mem, 'path', '') or ''
+    return '/corrections/' in path or '/casos/' in path
+
+
+def _render_tier2_candidate(mem, content: str, similarity: float = 0.0) -> str:
+    """F5.5 PAD-CTX: renderiza candidato Tier 2 — destilado 300c por padrao,
+    OU exemplo few-shot (quase) completo quando o match e EXCEPCIONAL
+    (similarity >= FEWSHOT_MIN_SIMILARITY) com memoria EPISODICA.
+
+    Threshold calibrado na distribuicao REAL do voyage-4-lite query->doc
+    (PROD 2026-06-09: scores vivem em 0.24-0.55; o 0.75 planejado nunca
+    dispararia). Exemplo tem cap proprio (FEWSHOT_CONTENT_CAP) — exemplo
+    trabalhado > resumo, mas nao sem teto.
+    """
+    if similarity >= FEWSHOT_MIN_SIMILARITY and _is_episodic_memory(mem):
+        if len(content) > FEWSHOT_CONTENT_CAP:
+            pointer = f'\n[integra] view_memories("{xml_escape(mem.path)}")'
+            content = content[:FEWSHOT_CONTENT_CAP].rstrip() + '…' + pointer
+        return f'{_memory_open_tag(mem, "exemplo")}\n{content}\n</memory>\n'
+    content = _distill_tier2_content(mem, content)
+    return f'{_memory_open_tag(mem)}\n{content}\n</memory>\n'
 
 
 def _distill_tier2_content(mem, content: str) -> str:
@@ -1163,6 +1222,7 @@ def _load_user_memories_for_context(
             # ── Tier 2: Busca semântica com composite scoring (QW-1 + v2 category decay) ──
             additional_memories = []
             _pass1_scores = {}  # mem.id → composite score original (com similarity)
+            _pass1_similarity = {}  # F5.5: mem.id → similarity CRUA (gate few-shot)
             semantic_count = 0
             avg_similarity = 0.0
             avg_composite = 0.0
@@ -1241,6 +1301,8 @@ def _load_user_memories_for_context(
 
                             # Preservar composite scores originais (com similarity) para PASS 2
                             _pass1_scores = {s[0].id: s[1] for s in scored}
+                            # F5.5: similarity crua para o gate de few-shot episodico
+                            _pass1_similarity = {s[0].id: s[2] for s in scored}
                             additional_memories = [s[0] for s in scored]
                             if scored:
                                 avg_composite = sum(s[1] for s in scored) / len(scored)
@@ -1458,10 +1520,11 @@ def _load_user_memories_for_context(
                 content = sanitize_memory_content(
                     content, source=f"mem_id={mem.id} tier=2 path={mem.path}"
                 )
-                # F4.3 PAD-CTX: teto ~300c por memoria Tier 2 (destilado meta
-                # WHEN/DO + ponteiro view_memories para a integra)
-                content = _distill_tier2_content(mem, content)
-                mem_text = f'{_memory_open_tag(mem)}\n{content}\n</memory>\n'
+                # F4.3 (destilado 300c) OU F5.5 (few-shot episodico completo
+                # quando match excepcional) — decisao em _render_tier2_candidate
+                mem_text = _render_tier2_candidate(
+                    mem, content, similarity=_pass1_similarity.get(mem.id, 0.0)
+                )
                 # Usar composite score original do PASS 1 (inclui similarity)
                 # Fallback: decay + importance (sem similarity) para memórias de fallback
                 if mem.id in _pass1_scores:

@@ -173,3 +173,87 @@ class TestPreToolSkillContext:
              patch('app.agente.config.feature_flags.AGENT_SKILL_EVAL', True):
             out = _build_skill_pretool_context(user_id=5, skill='qualquer')
         assert out is None
+
+
+# =====================================================================
+# F5.7 PAD-CTX — Destilacao "top 3 erros recorrentes" no boot (gated >=30d)
+# =====================================================================
+
+@pytest.fixture
+def skill_eff_rows(app_ctx):
+    """Cria avaliacoes de efetividade de skill com datas controladas."""
+    from app.agente.models import AgentSkillEffectiveness
+    created = []
+
+    def _mk(skill_name, resolveu, created_at, user_id=1):
+        row = AgentSkillEffectiveness(
+            user_id=user_id,
+            session_id=f'tst-{uuid.uuid4().hex[:12]}',
+            skill_name=skill_name,
+            anchor_msg_id=uuid.uuid4().hex[:16],
+            stage_reached=2,
+            resolveu=resolveu,
+            created_at=created_at,
+        )
+        db.session.add(row)
+        db.session.commit()
+        created.append(row.id)
+        return row
+
+    yield _mk
+    for rid in created:
+        obj = db.session.get(AgentSkillEffectiveness, rid)
+        if obj:
+            db.session.delete(obj)
+    db.session.commit()
+
+
+class TestRecurringErrorsGate:
+    def test_gate_fechado_sem_30_dias_de_dados(self, app_ctx, skill_eff_rows):
+        """Janela de dados < 30d -> bloco dormante (None), mesmo com falhas."""
+        from datetime import timedelta
+        from app.utils.timezone import agora_utc_naive
+        recente = agora_utc_naive() - timedelta(days=5)
+        skill_eff_rows('skill-x', False, recente)
+        skill_eff_rows('skill-x', False, recente)
+        assert ib._check_recurring_errors() is None
+
+    def test_gate_aberto_destila_top3_recorrentes(self, app_ctx, skill_eff_rows):
+        """>=30d de historico: top 3 skills por falhas (resolveu=false) nos
+        ultimos 30d; falha unica (nao recorrente) NAO entra."""
+        from datetime import timedelta
+        from app.utils.timezone import agora_utc_naive
+        now = agora_utc_naive()
+        antigo = now - timedelta(days=40)   # abre o gate (janela >= 30d)
+        recente = now - timedelta(days=3)
+
+        skill_eff_rows('skill-old', True, antigo)
+        # 3 falhas skill-a, 2 falhas skill-b, 1 falha skill-c (nao recorrente)
+        for _ in range(3):
+            skill_eff_rows('skill-a', False, recente)
+        for _ in range(2):
+            skill_eff_rows('skill-b', False, recente)
+        skill_eff_rows('skill-c', False, recente)
+        # resolvida nao conta como erro
+        skill_eff_rows('skill-d', True, recente)
+
+        out = ib._check_recurring_errors()
+        assert out is not None
+        assert '<erros_recorrentes' in out
+        assert 'skill-a' in out and 'skill-b' in out
+        assert 'skill-c' not in out
+        assert 'skill-d' not in out
+        # ordenacao: skill-a (3) antes de skill-b (2)
+        assert out.index('skill-a') < out.index('skill-b')
+
+    def test_briefing_integra_bloco_quando_disponivel(self, app_ctx, monkeypatch):
+        fake = '<erros_recorrentes window="30d">fake</erros_recorrentes>'
+        with patch.object(ib, '_check_recurring_errors', return_value=fake):
+            out = ib.build_intersession_briefing(user_id=999999) or ''
+        assert '<erros_recorrentes' in out
+
+    def test_flag_off_nao_consulta(self, app_ctx, monkeypatch):
+        monkeypatch.setenv('AGENT_RECURRING_ERRORS_BOOT', 'false')
+        with patch.object(ib, '_check_recurring_errors') as mock_check:
+            ib.build_intersession_briefing(user_id=999999)
+        mock_check.assert_not_called()

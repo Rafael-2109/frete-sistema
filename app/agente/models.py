@@ -598,6 +598,18 @@ class AgentMemory(db.Model):
     # Ciclo de revisao (v5): ultima vez que conteudo foi validado
     reviewed_at = db.Column(db.DateTime, nullable=True)
 
+    # ── F5 PAD-CTX (2026-06-09): proveniencia + frescor ──
+    # source_session_id: sessao que ORIGINOU a memoria (imutavel; NULL = legado
+    # ou daemon sem sessao). Exposicao na injecao e cross-user-safe (PAD-CTX
+    # §Memorias): pessoal -> session=; empresa -> apenas created_by + date
+    # (UUID de sessao alheia nao vaza). Text: session_ids do Teams tem 150+ chars.
+    source_session_id = db.Column(db.Text, nullable=True, index=True)
+    # last_confirmed: ultima (re)confirmacao do conteudo — create e updates
+    # renovam. Correcao nova SEMPRE prevalece sobre memoria antiga em conflito.
+    last_confirmed = db.Column(db.DateTime, nullable=True)
+    # confidence: confianca declarada (NULL = nao avaliada; consumo F5.5+/F6).
+    confidence = db.Column(db.Text, nullable=True)
+
     # ── Formato canonico (2026-06-08): campos discriminantes estruturados ──
     # Fonte de verdade QUERYAVEL (indice GIN jsonb_path_ops) dos campos de uma
     # memoria estruturada (kind/dominio/nivel/criterios/titulo/when/do/...). O

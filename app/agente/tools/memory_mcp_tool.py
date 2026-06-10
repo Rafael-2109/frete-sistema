@@ -1202,6 +1202,32 @@ def _regenerate_pitfalls_xml(user_id: int, pitfalls: list) -> None:
         logger.debug(f"[MEMORY_MCP] Erro ao regenerar pitfalls XML (ignorado): {e}")
 
 
+def _apply_provenance_on_create(mem) -> None:
+    """F5.2 PAD-CTX: popula proveniencia no CREATE de memoria.
+
+    source_session_id = sessao de ORIGEM via ContextVar canonico de
+    `app/agente/config/permissions.py` (NULL quando o create roda fora de
+    sessao — daemons sem session_id). last_confirmed inicia no create
+    (criado = confirmado agora).
+    """
+    from app.agente.config.permissions import get_current_session_id
+    from app.utils.timezone import agora_utc_naive
+
+    mem.source_session_id = get_current_session_id()
+    mem.last_confirmed = agora_utc_naive()
+
+
+def _touch_last_confirmed(mem) -> None:
+    """F5.2 PAD-CTX: update renova o frescor (last_confirmed).
+
+    A origem (source_session_id) e IMUTAVEL — update por outra sessao NAO
+    reescreve a proveniencia.
+    """
+    from app.utils.timezone import agora_utc_naive
+
+    mem.last_confirmed = agora_utc_naive()
+
+
 def _check_memory_duplicate(user_id: int, content: str, current_path: str = '') -> Optional[str]:
     """
     Verifica se ja existe memoria semanticamente similar para o usuario.
@@ -1965,6 +1991,8 @@ try:
                     existing.escopo = escopo
                     if created_by_id:
                         existing.created_by = created_by_id
+                    # F5.2: update renova frescor; origem imutavel
+                    _touch_last_confirmed(existing)
                     action = "atualizado"
                 else:
                     # Dedup gate ANTES do commit (Bug 1+2 fix):
@@ -1997,6 +2025,8 @@ try:
                     mem.escopo = escopo
                     if created_by_id:
                         mem.created_by = created_by_id
+                    # F5.2: proveniencia (sessao de origem + frescor inicial)
+                    _apply_provenance_on_create(mem)
                     action = "criado"
 
                 db.session.commit()
@@ -2260,6 +2290,8 @@ try:
                     )
 
                 memory.content = content.replace(old_str, new_str)
+                # F5.2: update renova frescor; origem imutavel
+                _touch_last_confirmed(memory)
                 db.session.commit()
 
             _execute_with_context(_update)
