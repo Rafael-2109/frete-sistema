@@ -78,6 +78,34 @@ transfere entre modelos** (mesma licao do bug do 0.55).
   (precision 0.013) sugere no futuro desligar a parte EMPRESA do fallback; nao
   mudado agora (exigiria nova validacao comportamental).
 
+## A/B do DEDUP (doc->doc) — medicao 2026-06-10 (pos-migracao do retrieval)
+
+Pergunta do Rafael: migrar TUDO p/ large (incluindo dedup)? Metodo: dedup_texto
+REAL (`_canonicalize_for_dedup(content)`) das 358 memorias ativas, embedado nos
+2 modelos; 54.461 pares na visibilidade do dedup (user_i==user_j ou empresa).
+
+| Metrica | Valor |
+|---|---|
+| Spearman lite~large (todos os pares) | 0.9155 |
+| Quantile-equating: lite>=0.85 -> large | >=0.8506 (78 pares identicos em contagem) |
+| Quantile-equating: lite>=0.80 -> large | >=0.7906 · lite>=0.70 -> >=0.6758 |
+| Overlap top-50 pares | **34/50 (68%)** |
+| Pares lite>=0.85 no large | min 0.8116 / mediana 0.8641 — **sobrepoe** o p99.9 dos nao-bloqueados (0.8317) |
+
+**Veredito: dedup PERMANECE no lite.** Escala doc-doc dos 2 modelos e quase
+identica nos extremos (deslocamento ~0, diferente do query->doc), mas ha ~30%
+de discordancia nos pares de FRONTEIRA sem ground truth de quem acerta — migrar
+mudaria o comportamento do gate binario sem ganho demonstrado (a vantagem
+medida do large e em RANKING de relevancia, tarefa que o dedup nao faz).
+Reabrir SE: construir conjunto rotulado (78 pares >=0.85 + amostra 0.75-0.85)
+e o large separar melhor.
+
+**Achado colateral**: 78 pares de quase-duplicatas RESIDENTES no estore
+(co-existem acima do gate 0.85 — salvos antes do dedup ou por caminhos sem
+gate). Candidatos ao memory_consolidator. Top exemplos: cnab/dac (0.91),
+vinculacao-nf-po "limpeza-em-tres-tabelas" ~ "update-em-dois-sistemas" (0.89).
+Artefatos: `/tmp/f5_dedup/` (contents, script dedup_ab.py, resumo).
+
 ## Fontes
 
 - FONTE: logs Render `[MEMORY_INJECT]`/`[MEMORY_INJECT_PATHS]` srv-d13m38vfte5s738t6p60 (2026-06-09).

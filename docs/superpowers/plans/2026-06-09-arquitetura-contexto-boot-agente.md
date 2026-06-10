@@ -491,3 +491,13 @@ Padrao em si (PAD-CTX publicado): RP-1, R-2(criterio), A5(roteamento), C1(fonte 
   CLAUDE.md do agente corrigido (achado do proprio agente no dump).
   PENDENTE (curadoria, decisao agente/Rafael): user_rule "sessao N" do user 1
   e heuristica generica de roteamento — candidata a empresa/heuristicas.
+- 2026-06-10 (cont.) — **A/B DO DEDUP MEDIDO** (pergunta do Rafael "migrar tudo p/
+  large?"): dedup_texto real de 358 memorias, 54.461 pares doc-doc nos 2 modelos.
+  Spearman 0.9155; equating quase 1:1 (0.85->0.8506); MAS overlap top-50 = 34/50 e
+  as classes se SOBREPOEM na fronteira (min bloqueado 0.8116 < p99.9 nao-bloqueado
+  0.8317 no large) — ~30% de discordancia sem ground truth. **VEREDITO: dedup
+  permanece no lite** (gate binario != ranking; ganho zero demonstrado). Reabrir SE
+  conjunto rotulado mostrar separacao melhor no large. ACHADO: 78 pares de
+  quase-duplicatas RESIDENTES no estore (>=0.85 co-existindo) — candidatos ao
+  memory_consolidator. Detalhe no relatorio precision_at_k_baseline (secao A/B
+  DEDUP). Reindex large das 549 RODADO em PROD pelo Rafael; env removida.
