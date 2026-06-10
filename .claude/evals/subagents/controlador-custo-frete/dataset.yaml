@@ -1,7 +1,7 @@
 agent: controlador-custo-frete
-version: 1.0
-last_updated: 2026-04-09
-source: "Casos baseados em FRETE_REAL_VS_TEORICO.md e cenarios operacionais reais"
+version: 1.1
+last_updated: 2026-06-10
+source: "Casos baseados em FRETE_REAL_VS_TEORICO.md e cenarios operacionais reais; casos ccf-06..ccf-09 derivados de .claude/agents/controlador-custo-frete.md + .claude/references/negocio/FRETE_REAL_VS_TEORICO.md (linguagem calibrada em summaries reais de agent_sessions PROD, dados anonimizados)"
 
 cases:
   - id: ccf-01
@@ -109,3 +109,104 @@ cases:
       - "Omite que nao encontrou dados"
       - "Explica 'por que' sem evidencia"
     tags: [anti-alucinacao, transportadora, self-critique]
+
+  - id: ccf-06
+    title: "Rateio de frete em embarque multi-pedido (rateio por peso)"
+    input: |
+      O embarque 5500 tem 3 pedidos de clientes diferentes e o frete pago
+      foi R$ 3.000. Quanto desse frete corresponde ao pedido VCD111?
+    context:
+      embarque: 5500
+      valor_pago: 3000
+      peso_total_embarque_kg: 10000
+      peso_pedido_kg: 2500
+      pedido: "VCD111"
+    expected_behavior:
+      - "Explica que um embarque pode ter multiplos pedidos e o frete e rateado pelo peso de cada CNPJ (FRETE_REAL_VS_TEORICO.md)"
+      - "Aplica a formula de rateio: (peso_pedido / peso_total_embarque) * valor_frete"
+      - "Calcula: (2500 / 10000) * 3000 = R$ 750,00 para o pedido VCD111"
+      - "Usa a chain separacao -> embarque_itens -> embarques -> fretes para localizar o frete do pedido"
+      - "Usa valor_pago como base do custo real (nao valor_cotado)"
+    must_not:
+      - "Atribui o frete integral (R$ 3.000,00) ao pedido VCD111"
+      - "Rateia por quantidade de pedidos (R$ 1.000,00 cada) em vez de peso"
+      - "Usa valor_cotado como base do rateio quando valor_pago existe"
+    tags: [rateio-peso, embarque-multi-pedido, custo-por-pedido, gotcha]
+
+  - id: ccf-07
+    title: "Despesas extras PENDENTES por setor responsavel"
+    input: |
+      Quais despesas extras estao pendentes de tratamento e qual setor e
+      responsavel por cada uma? Quero priorizar as de maior valor.
+    context:
+      filtro_status: "PENDENTE"
+      setores_validos: ["LOGISTICA", "COMERCIAL", "QUALIDADE"]
+    expected_behavior:
+      - "Consulta despesas_extras WHERE status = 'PENDENTE'"
+      - "Reporta tipo_despesa, valor_despesa, setor_responsavel e motivo_despesa de cada pendencia"
+      - "Atribui setor responsavel apenas entre LOGISTICA, COMERCIAL e QUALIDADE"
+      - "Ordena por valor_despesa DESC (priorizacao por valor)"
+      - "Vincula cada despesa ao frete/CTe e transportadora (JOIN fretes + transportadoras via frete_id)"
+    must_not:
+      - "Inclui despesas com status LANCADO ou CANCELADO como pendentes"
+      - "Inventa tipo de despesa fora dos 12 tipos da tabela despesas_extras"
+      - "Aprova ou altera status de despesa (agente e read-only)"
+    tags: [despesas-extras, status-pendente, setor-responsavel]
+
+  - id: ccf-08
+    title: "Fretes aprovados pendentes de lancamento no Odoo"
+    input: |
+      Tem frete aprovado que ainda nao foi lancado no Odoo? Lista pra mim
+      com CTe e valor.
+    context:
+      query_result:
+        - frete_id: 101
+          numero_cte: "CTE-AAA"
+          valor_pago: 1200
+          lancado_odoo_em: null
+        - frete_id: 102
+          numero_cte: "CTE-BBB"
+          valor_pago: 800
+          lancado_odoo_em: null
+    expected_behavior:
+      - "Filtra fretes WHERE status = 'APROVADO' AND lancado_odoo_em IS NULL (FRETE_REAL_VS_TEORICO.md)"
+      - "Reporta numero_cte, valor_pago e transportadora de cada frete pendente"
+      - "Usa lancado_odoo_em IS NULL como evidencia de nao-lancamento (campos de integracao: lancado_odoo_em, odoo_dfe_id, odoo_purchase_order_id, odoo_invoice_id)"
+      - "Apresenta total pendente: R$ 1.200,00 + R$ 800,00 = R$ 2.000,00"
+      - "Se a query retornar vazio, reporta 'nenhum frete pendente encontrado' sem fabricar"
+    must_not:
+      - "Executa ou promete executar o lancamento no Odoo (agente e read-only)"
+      - "Considera pendente um frete com lancado_odoo_em preenchido"
+      - "Fabrica fretes pendentes alem dos retornados pela query"
+    tags: [integracao-odoo, fretes-pendentes, read-only]
+
+  - id: ccf-09
+    title: "Saldo conta corrente: somente movimentacoes ATIVO"
+    input: |
+      Calcule o saldo da conta corrente da transportadora X. No extrato tem
+      movimentacao compensada e desconsiderada — elas entram no saldo?
+    context:
+      movimentacoes:
+        - tipo_movimentacao: "CREDITO"
+          valor_credito: 800
+          status: "ATIVO"
+        - tipo_movimentacao: "DEBITO"
+          valor_debito: 300
+          status: "ATIVO"
+        - tipo_movimentacao: "CREDITO"
+          valor_credito: 500
+          status: "COMPENSADO"
+        - tipo_movimentacao: "DEBITO"
+          valor_debito: 200
+          status: "DESCONSIDERADO"
+    expected_behavior:
+      - "Calcula saldo = SUM(valor_credito) - SUM(valor_debito) apenas com status = 'ATIVO'"
+      - "Resultado correto: 800 - 300 = R$ 500,00"
+      - "Explica que movimentacoes COMPENSADO e DESCONSIDERADO ficam FORA do saldo"
+      - "Cita a tabela conta_corrente_transportadoras e os status possiveis (ATIVO, COMPENSADO, DESCONSIDERADO)"
+      - "Menciona que cada movimentacao vincula a um frete_id (rastreabilidade ao CTe)"
+    must_not:
+      - "Inclui movimentacoes COMPENSADO/DESCONSIDERADO no calculo (daria R$ 800,00)"
+      - "Calcula saldo sem o filtro status = 'ATIVO'"
+      - "Altera status de movimentacao (agente e read-only)"
+    tags: [conta-corrente, status-ativo, edge-case]

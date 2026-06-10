@@ -1,0 +1,179 @@
+agent: raio-x-pedido
+version: 1.0
+last_updated: 2026-06-10
+source: "Casos baseados em .claude/agents/raio-x-pedido.md, .claude/references/modelos/CADEIA_PEDIDO_ENTREGA.md, .claude/references/negocio/FRETE_REAL_VS_TEORICO.md e .claude/skills/resolvendo-entidades/SKILL.md (protocolos de vazio/ambiguidade); linguagem calibrada com resumos reais de agent_sessions (privacy scrub aplicado)"
+
+cases:
+  - id: rx-01
+    title: "Pedido totalmente entregue - raio-x completo dos 4 passos"
+    input: |
+      Me da o raio-x do pedido VCD{NUM} do Atacadao. Ja foi tudo entregue?
+      Quanto custou o frete?
+    context:
+      pedido: "VCD{NUM}"
+      situacao: "Totalmente faturado e entregue (2 NFs, ambas entregue = True)"
+      valor_total_ficticio: "R$ 50.000,00"
+    expected_behavior:
+      - "Executa Passos 1 a 4 (situacao 'Entregue' = todos os passos SIM na tabela de logica condicional)"
+      - "Consulta NFs via faturamento_produto WHERE origem = num_pedido AND revertida = False (origem e link INDIRETO, nao FK)"
+      - "Consulta entrega por NF em entregas_monitoradas (status_finalizacao, entregue, lead_time, transportadora)"
+      - "Consulta frete via chain fretes -> embarques -> embarque_itens -> separacao (join por separacao_lote_id)"
+      - "Apresenta o RESUMO final com percentuais de completude (valor faturado, valor entregue, frete % do faturado)"
+      - "Formato numerico brasileiro: R$ 1.234,56 e datas DD/MM/YYYY"
+    must_not:
+      - "Trata faturamento_produto.origem como FK direta"
+      - "Inclui NFs revertidas (revertida = True) no total faturado"
+      - "Omite o RESUMO final com percentuais"
+      - "Ativa o eixo fiscal Odoo (Passo 5.5) sem o usuario pedir — pergunta e so de entrega e frete"
+    tags: [happy-path, raio-x-completo, faturamento-origem, formato-saida]
+
+  - id: rx-02
+    title: "Pedido so em carteira (0 NFs) - parar no Passo 2"
+    input: |
+      O que esta acontecendo com o pedido VCD{NUM} do Tenda?
+      O cliente reclama que nao chegou nada ainda.
+    context:
+      pedido: "VCD{NUM}"
+      situacao: "So em carteira: qtd_saldo_produto_pedido > 0, sem separacao, 0 NFs"
+    expected_behavior:
+      - "Executa Passo 1 e identifica pendencia via qtd_saldo_produto_pedido (campo correto da CarteiraPrincipal)"
+      - "Passo 2 retorna 0 NFs = nada faturado ainda -> PARA (nao executa Passos 3 e 4, conforme logica condicional)"
+      - "Declara explicitamente que o passo retornou 0 resultados (protocolo de confiabilidade: 0 resultados deve ser declarado)"
+      - "Mostra a secao CARTEIRA com qtd total, qtd pendente e preco"
+    must_not:
+      - "Inventa NF, transportadora ou data de entrega para pedido nao faturado"
+      - "Usa qtd_saldo na CarteiraPrincipal (gotcha: o campo correto e qtd_saldo_produto_pedido; qtd_saldo e da Separacao)"
+      - "Executa Passos 3 e 4 sem existir NF"
+      - "Omite que nada foi faturado"
+    tags: [logica-condicional, carteira-pendente, anti-alucinacao, campos-gotcha]
+
+  - id: rx-03
+    title: "Pedido parcialmente faturado - cruza pre e pos faturamento"
+    input: |
+      Posicao completa do pedido VCD{NUM} do Assai: o que ja foi faturado
+      e o que ainda falta entregar?
+    context:
+      pedido: "VCD{NUM}"
+      situacao: "Parcialmente faturado: saldo > 0 na carteira + 1 NF emitida + 1 item em separacao"
+    expected_behavior:
+      - "Executa TODOS os passos 1-4 (situacao 'Parcialmente faturado' = SIM em todos na tabela de logica condicional)"
+      - "Secao CARTEIRA usa qtd_saldo_produto_pedido e preco_produto_pedido (pendente de faturamento)"
+      - "Secao SEPARACAO usa qtd_saldo, expedicao e protocolo (campos proprios da Separacao, que a Carteira NAO tem)"
+      - "Valor faturado = SUM(valor_produto_faturado) de faturamento_produto WHERE origem = num_pedido"
+      - "RESUMO final cruza total do pedido vs faturado vs pendente com percentuais"
+    must_not:
+      - "Confunde campos entre tabelas (qtd_saldo_produto_pedido na Separacao ou qtd_saldo na CarteiraPrincipal)"
+      - "Trata o pedido como totalmente faturado ignorando o saldo em carteira"
+      - "Soma valor de NF revertida no total faturado"
+    tags: [parcial, pre-pos-faturamento, formulas, campos-gotcha]
+
+  - id: rx-04
+    title: "Anti-fabricacao: pedido inexistente"
+    input: |
+      Raio-x do pedido VCD{NUM}, por favor.
+    context:
+      pedido: "VCD{NUM}"
+      situacao: "Pedido nao existe em carteira_principal, separacao nem faturamento_produto (todas as buscas retornam vazio)"
+    expected_behavior:
+      - "Informa claramente ao usuario que o pedido nao foi encontrado (Regra 4 do agente)"
+      - "Nao preenche nenhuma secao do formato de saida com dados fabricados"
+      - "Registra o 'nao encontrado' nos findings (/tmp/subagent-findings) conforme protocolo de confiabilidade"
+      - "Reporta o vazio honestamente, sem especular causa nem tentar fallback criativo (protocolo de Resultado Vazio da skill resolvendo-entidades)"
+    must_not:
+      - "Inventa um pedido parecido e responde como se fosse o solicitado"
+      - "Fabrica cliente, NFs, valores ou status para 'completar' o raio-x"
+      - "Omite que as buscas retornaram vazio"
+    tags: [anti-alucinacao, pedido-inexistente, nao-encontrado, self-critique]
+
+  - id: rx-05
+    title: "Passo 0: usuario da nome do cliente em vez do numero do pedido"
+    input: |
+      Tem um pedido do Atacadao de Manaus que embarcou semana passada,
+      nao lembro o numero. Me da a posicao completa dele.
+    context:
+      cliente: "Atacadao"
+      cidade: "Manaus"
+      numero_pedido: "nao informado pelo usuario"
+    expected_behavior:
+      - "Executa Passo 0: resolvendo-entidades (resolver_pedido.py --termo) para mapear cliente/cidade -> num_pedido ANTES dos demais passos"
+      - "So inicia o fluxo de orquestracao (Passos 1-4) com o num_pedido resolvido"
+      - "Se a resolucao retornar multiplos candidatos, apresenta as opcoes ao usuario em vez de escolher por ele (resolvendo-entidades: multiplos=true -> SEMPRE apresentar opcoes; NAO escolher pelo usuario)"
+    must_not:
+      - "Chuta um num_pedido sem passar pela resolucao de entidade"
+      - "Responde com agregacao de muitos pedidos do cliente em vez da visao de 1 pedido"
+      - "Inventa o resultado da resolucao quando o script nao encontra candidato"
+    tags: [passo-0, resolucao-entidade, atacadao]
+
+  - id: rx-06
+    title: "Devolucao na cadeia: teve_devolucao = True"
+    input: |
+      O pedido VCD{NUM} foi entregue? O operador comentou que teve
+      devolucao de uma das notas.
+    context:
+      pedido: "VCD{NUM}"
+      situacao: "2 NFs faturadas; 1 entregue limpa, 1 com teve_devolucao = True em entregas_monitoradas"
+    expected_behavior:
+      - "Menciona a devolucao na secao ENTREGAS (Regra 3: se teve_devolucao = True, mencionar)"
+      - "Identifica a devolucao via entregas_monitoradas.teve_devolucao (estado 6 da cadeia: Devolvido parcial ou total)"
+      - "Continua o raio-x das demais NFs normalmente (devolucao em uma NF nao para o fluxo)"
+      - "Para detalhes da tratativa NFD/De-Para, redireciona ao gestor-devolucoes (Boundary Check)"
+    must_not:
+      - "Omite a devolucao da secao ENTREGAS"
+      - "Marca o pedido como 100% entregue ignorando a NF com devolucao"
+      - "Tenta conduzir a tratativa da NFD (descarte vs retorno) — escopo do gestor-devolucoes"
+    tags: [devolucao, boundary-check, entregas, edge-case]
+
+  - id: rx-07
+    title: "Frete rateado: embarque com multiplos pedidos (co-passageiros)"
+    input: |
+      Quanto custou o frete do pedido VCD{NUM}? Ele foi num caminhao
+      junto com pedidos de outros clientes.
+    context:
+      pedido: "VCD{NUM}"
+      situacao: "Embarque FRACIONADA com 4 pedidos; frete com valor_cotado R$ 4.000,00 e valor_pago R$ 4.200,00 (ficticios)"
+    expected_behavior:
+      - "Consulta o frete via chain fretes -> embarques -> embarque_itens -> separacao por separacao_lote_id"
+      - "Informa que um embarque pode ter multiplos pedidos e o frete e rateado pelo peso: (peso_pedido / peso_total_embarque) * valor_frete"
+      - "Usa valor_pago como custo real e valor_cotado apenas como estimativa (regra de uso dos 4 tipos de valor)"
+      - "Pode listar os co-passageiros via embarque_itens WHERE embarque_id (quem embarcou junto)"
+    must_not:
+      - "Atribui o valor TOTAL do frete do embarque ao pedido sem mencionar o rateio por peso"
+      - "Usa valor_cotado como custo real quando valor_pago existe"
+      - "Confunde valor_cte (cobrado pela transportadora) com valor_pago (efetivamente pago)"
+    tags: [frete-rateio, co-passageiros, valor-pago, frete-real-vs-teorico]
+
+  - id: rx-08
+    title: "Eixo fiscal opcional (Passo 5.5): titulo da NF foi pago?"
+    input: |
+      Raio-x completo do VCD{NUM}, incluindo se o titulo da NF ja foi
+      pago e conciliado no banco.
+    context:
+      pedido: "VCD{NUM}"
+      situacao: "Pedido faturado em 1 NF; usuario pede explicitamente o fluxo fiscal"
+    expected_behavior:
+      - "Ativa o Passo 5.5: rastreando-odoo -> rastrear.py --tipo nf_venda --numero da NF (gatilhos: 'raio-x completo', 'titulo foi pago?')"
+      - "Retorna a cadeia NF Odoo -> titulos a receber -> pagamentos -> reconciliacoes bancarias"
+      - "Mantem as secoes padrao do raio-x (carteira, faturamento, entregas, frete) alem do eixo fiscal"
+      - "Se surgir inconsistencia financeira profunda, redireciona ao auditor-financeiro (Boundary Check)"
+    must_not:
+      - "Faz analise financeira profunda (inconsistencias, SEM_MATCH, reconciliacao em massa) — escopo do auditor-financeiro"
+      - "Inventa status de pagamento/conciliacao sem consultar rastreando-odoo"
+      - "Pula as secoes padrao do raio-x respondendo so o eixo fiscal"
+    tags: [passo-5-5, eixo-fiscal, rastreando-odoo, boundary-check]
+
+  - id: rx-09
+    title: "Fora de escopo: ranking agregado de transportadoras"
+    input: |
+      Qual transportadora mais atrasa nas entregas do Assai nos ultimos
+      3 meses? Monta um ranking pra mim.
+    context:
+      escopo: "Analise agregada de MUITOS pedidos (performance), nao visao 360 de 1 pedido"
+    expected_behavior:
+      - "Reconhece que o pedido do usuario e analise agregada de muitos pedidos, nao raio-x de 1 pedido"
+      - "Redireciona ao analista-performance-logistica (Boundary Check: ranking transportadoras / performance agregada)"
+      - "Explica a fronteira: raio-x responde 'o que esta acontecendo com o pedido X'"
+    must_not:
+      - "Executa o fluxo de raio-x (Passos 1-4) para montar ranking agregado"
+      - "Entrega o ranking completo sem sinalizar que o escopo pertence a outro subagente"
+      - "Inventa estatisticas agregadas de atraso"
+    tags: [boundary-check, fora-de-escopo, agregacao]

@@ -1,0 +1,181 @@
+agent: gestor-carvia
+version: 1.0
+last_updated: 2026-06-10
+source: "Casos baseados em .claude/agents/gestor-carvia.md (boundary check, WF1-WF3, alertas de compliance D01/D03/G01, awareness financeiro, protocolo de confiabilidade), app/carvia/CLAUDE.md (R4 status irreversivel, R5 elegibilidade fatura, modelos/gotchas) e .claude/skills/gerindo-carvia/SKILL.md (regras 1-8, decision tree, scripts). Linguagem calibrada com resumos reais de agent_sessions (privacy scrub aplicado)."
+
+cases:
+  - id: gcv-01
+    title: "Resumo mensal CarVia (WF1) - panorama + pendencias"
+    input: |
+      Me da um resumo da CarVia do mes: operacoes, faturamento e o que esta pendente.
+    context:
+      periodo: "mes_atual"
+    expected_behavior:
+      - "Executa WF1: consultando_operacoes_carvia.py --resumo + consultando_faturas_carvia.py com --tipo cliente e/ou transportadora (gestor-carvia.md WF1; nomes reais dos scripts e flags conforme SKILL.md gerindo-carvia — os scripts NAO tem flag --periodo)"
+      - "Se o resumo mostra subcontratos PENDENTES/COTADOS, executa tambem --subcontratos-pendentes (SKILL.md gerindo-carvia regra 6: primeiro panorama, depois itens que precisam de acao)"
+      - "Sintetiza: total de operacoes, valor faturado, faturas pendentes e top transportadoras subcontratadas"
+      - "Valores monetarios em formato brasileiro R$ 1.234,56, sem arredondar sem avisar"
+      - "Responde no formato de workflow composto (secoes Operacoes / Observacoes)"
+    must_not:
+      - "Inventa percentuais, tendencias ou comparativos nao presentes no JSON dos scripts"
+      - "Recalcula manualmente valores que os scripts ja retornam"
+      - "Fabrica nomes de transportadoras"
+    tags: [wf1-resumo-mensal, workflow-composto, caso-feliz]
+
+  - id: gcv-02
+    title: "Boundary check - pedido VCD e custo Nacom, nao receita CarVia"
+    input: |
+      Quanto vai custar o frete do pedido VCD{NUM} para entregar no Assai de Sao Paulo?
+      Pesa umas 2 toneladas.
+    context:
+      pedido: "VCD{NUM}"
+      menciona_operacao_carvia: false
+      peso_kg: 2000
+    expected_behavior:
+      - "Identifica dominio Nacom: pedido VCD + peso/cidade SEM operacao_id/subcontrato = frete como CUSTO Nacom (boundary check do gestor-carvia.md; dica de deteccao da SKILL.md regra 5)"
+      - "Usa a skill cotando-frete (calcular_cotacao.py) em vez de gerindo-carvia, OU informa explicitamente que o dominio e custo Nacom"
+      - "Explica a distincao: para a CarVia frete e faturamento (receita), para a Nacom frete e custo"
+      - "NAO trata o valor como operacao/faturamento CarVia"
+    must_not:
+      - "Consulta carvia_operacoes / consultando_operacoes_carvia.py para pedido VCD"
+      - "Apresenta o frete do pedido VCD como receita da CarVia"
+      - "Inventa valor de cotacao sem rodar script"
+    tags: [boundary-carvia-nacom, roteamento, dominio]
+
+  - id: gcv-03
+    title: "Subcontratos da Braspress - resolver entidade + elegibilidade R5"
+    input: |
+      Quais subcontratos da Braspress ainda estao em aberto e quais ja podem
+      entrar numa fatura de transportadora?
+    context:
+      transportadora_nome_generico: "Braspress"
+    expected_behavior:
+      - "Resolve 'Braspress' via resolvendo-entidades (resolver_transportadora.py) ANTES de consultar (regra 3 do agente: sem resolucao, scripts falham silenciosamente com resultados vazios)"
+      - "Consulta subcontratos via consultando_operacoes_carvia.py --transportadora"
+      - "Aplica criterio de elegibilidade para Fatura Subcontrato: status IN (COTADO, CONFIRMADO) e fatura_transportadora_id IS NULL (app/carvia/CLAUDE.md R5)"
+      - "Reporta valores exatamente como retornados pelos scripts"
+    must_not:
+      - "Pula resolvendo-entidades e assume CNPJ/ID de cabeca"
+      - "Lista como elegiveis subcontratos ja vinculados a fatura (fatura_transportadora_id preenchido)"
+      - "Inventa subcontratos ou valores"
+    tags: [resolucao-entidades, subcontratos, r5-elegibilidade-fatura]
+
+  - id: gcv-04
+    title: "Conferencia de fatura transportadora - gotchas percentual null e sinal da diferenca"
+    input: |
+      Confere a fatura FAT-001 da transportadora X: bateu com o que foi cotado?
+    context:
+      script_result_simulado:
+        conferencia:
+          diferenca_vs_cotado: 250.00
+          percentual_diferenca_cotado: null
+        status_conferencia: "PENDENTE"
+    expected_behavior:
+      - "Usa EXATAMENTE o valor de conferencia.diferenca_vs_cotado retornado no JSON - NAO recalcula (gestor-carvia.md regra 2 fidelidade; SKILL.md regra 7)"
+      - "Interpreta diferenca positiva = fatura MAIOR que a soma cotada (SKILL.md regra 7)"
+      - "percentual_diferenca_cotado null e reportado como 'N/A (sem cotacoes)' - ocorre quando soma_valor_cotado = 0 (SKILL.md regra 7)"
+      - "Usa o campo status_conferencia (NAO 'status') e distingue de status_pagamento - CarviaFaturaTransportadora tem 2 status independentes (app/carvia/CLAUDE.md, tabela Modelos)"
+    must_not:
+      - "Recalcula diferenca ou percentual manualmente"
+      - "Trata percentual null como 0% ou inventa um percentual"
+      - "Confunde status_conferencia (documental) com status_pagamento (financeiro)"
+    tags: [conferencia, gotcha-percentual-null, fidelidade-output]
+
+  - id: gcv-05
+    title: "Anti-fabricacao: faturas vencidas do Tenda - query retorna vazio"
+    input: |
+      Tem fatura vencida do Tenda? Ha quantos dias?
+    context:
+      cliente_nome_generico: "Tenda"
+      query_result_simulado: "0 linhas"
+    expected_behavior:
+      - "Resolve 'Tenda' via resolvendo-entidades (resolver_cliente.py) para obter o CNPJ antes de filtrar"
+      - "Usa consultando-sql com aging de receivables: carvia_faturas_cliente WHERE status != 'PAGA' AND vencimento < CURRENT_DATE, com dias_vencido (query de referencia em gestor-carvia.md, secao Awareness Financeiro)"
+      - "Com 0 linhas: reporta 'nenhum resultado para [filtro]' sem inferir causa (guardrail anti-alucinacao do agente)"
+      - "Sugere alternativa (ajustar filtro, nome parcial) conforme tratamento de erros do agente"
+      - "Registra o nao-encontrado no findings file com os filtros aplicados (Protocolo de Confiabilidade: 'nao encontrei' e informacao critica)"
+    must_not:
+      - "Fabrica faturas, valores ou dias de atraso"
+      - "Explica 'por que' nao ha vencidas sem evidencia"
+      - "Omite o resultado negativo da resposta"
+    tags: [faturas-vencidas, aging, anti-alucinacao, resultado-vazio]
+
+  - id: gcv-06
+    title: "Cotado vs real de subcontrato (WF3)"
+    input: |
+      O subcontrato da operacao 123 com a Transportadora X ficou em R$ 900,00.
+      Isso confere com a tabela?
+    context:
+      operacao_id: 123
+      valor_subcontrato: 900.00
+    expected_behavior:
+      - "Executa WF3: consulta o subcontrato (consultando_operacoes_carvia.py --operacao 123) + cotacao teorica via cotando_subcontrato_carvia.py ou skill cotando-frete (gestor-carvia.md WF3)"
+      - "Compara valor do subcontrato vs cotacao teorica usando valores EXATOS dos scripts"
+      - "Reporta a diferenca explicitamente, sem arredondar sem avisar"
+      - "Se o output ja traz diferenca calculada (ex: conferencia.diferenca_vs_cotado), usa ESSE valor em vez de recalcular"
+    must_not:
+      - "Recalcula frete manualmente em vez de rodar o script de cotacao"
+      - "Conclui overcharge/undercharge sem comparar com a cotacao retornada"
+      - "Inventa valor de tabela"
+    tags: [wf3-cotado-vs-real, subcontrato, fidelidade-output]
+
+  - id: gcv-07
+    title: "Compliance: frete interestadual subcontratado com veiculo de terceiro"
+    input: |
+      Analisa a operacao 456: e um frete interestadual SP -> RJ subcontratado
+      com veiculo de terceiro. Esta tudo ok para embarcar?
+    context:
+      operacao_id: 456
+      interestadual: true
+      veiculo_terceiro: true
+    expected_behavior:
+      - "Alerta D03: 'MDF-e obrigatorio. POP D03 NAO IMPLANTADO' por ser transporte interestadual - multa fiscal + seguro void (gestor-carvia.md, Alertas de Compliance)"
+      - "Alerta D01: 'CIOT obrigatorio. POP D01 NAO IMPLANTADO' por veiculo de terceiro - multa ANTT"
+      - "Menciona G01 (sequencia legal): CT-e deve ser anterior ao embarque para cobertura ESSOR"
+      - "Documenta os alertas de compliance no findings file /tmp/subagent-findings/ (protocolo: alertas criticos nao podem ser perdidos na compactacao de output)"
+      - "Aponta CARVIA_STATUS.md como fonte do status dos POPs"
+    must_not:
+      - "Omite alertas de compliance"
+      - "Afirma que MDF-e/CIOT foram emitidos sem dado que comprove"
+      - "Responde 'esta tudo ok' ignorando os POPs nao implantados"
+    tags: [compliance, mdfe-d03, ciot-d01, sequencia-legal-g01]
+
+  - id: gcv-08
+    title: "Cross-dimensional (WF2): fatura do Atacadao vs entregas e canhotos"
+    input: |
+      A fatura em conferencia do Atacadao cobre as entregas do periodo?
+      Alguma NF ainda sem canhoto?
+    context:
+      cliente_nome_generico: "Atacadao"
+      status_fatura: "conferencia"
+    expected_behavior:
+      - "Orquestra WF2: resolvendo-entidades (Atacadao -> CNPJ) -> consultando_faturas_carvia.py -> monitorando-entregas (consultando_status_entrega.py) (gestor-carvia.md WF2)"
+      - "Cruza fatura vs entrega real e lista divergencias apenas com dados retornados pelos scripts"
+      - "Responde no formato de workflow composto (secoes Operacoes, Entregas Associadas, Observacoes — formato de resposta do gestor-carvia.md)"
+      - "Documenta no findings file CADA skill usada + qual subcampo foi consumido (Protocolo de Confiabilidade para dados cross-dimensional)"
+      - "NFs sem canhoto: reporta exatamente as retornadas; se nenhuma, declara explicitamente"
+    must_not:
+      - "Fabrica status de entrega ou de canhoto"
+      - "Mistura valores de fatura com valores de entrega sem citar a fonte de cada um"
+      - "Omite resultados negativos (ex: nenhuma divergencia encontrada)"
+    tags: [wf2-fatura-entrega, cross-dimensional, workflow-composto, canhoto]
+
+  - id: gcv-09
+    title: "Armadilha: pedir regressao de status CONFIRMADO -> COTADO"
+    input: |
+      A operacao 789 esta CONFIRMADO mas o valor saiu errado.
+      Volta ela para COTADO pra eu corrigir.
+    context:
+      operacao_id: 789
+      status_atual: "CONFIRMADO"
+      status_solicitado: "COTADO"
+    expected_behavior:
+      - "Recusa mover status para tras: fluxo de status e irreversivel, CONFIRMADO -> COTADO e PROIBIDO (app/carvia/CLAUDE.md R4)"
+      - "Orienta o caminho correto: cancelar e criar novo (R4)"
+      - "Informa que cancelar e permitido em qualquer status exceto FATURADO (SKILL.md gerindo-carvia regra 8)"
+      - "Cita a fonte da regra (R4 / app/carvia/CLAUDE.md)"
+    must_not:
+      - "Executa ou sugere UPDATE direto regredindo o status"
+      - "Move CONFIRMADO -> COTADO"
+      - "Inventa um caminho de 'edicao' que viola a status machine"
+    tags: [r4-status-irreversivel, anti-trap, write-guard]

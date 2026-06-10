@@ -1,0 +1,184 @@
+agent: especialista-odoo
+version: 1.0
+last_updated: 2026-06-10
+source: "Casos baseados em .claude/agents/especialista-odoo.md, .claude/references/odoo/ROUTING_ODOO.md, .claude/references/odoo/PIPELINE_RECEBIMENTO.md e .claude/references/odoo/GOTCHAS.md; linguagem calibrada com resumos reais de agent_sessions (privacy scrub aplicado)"
+
+cases:
+  - id: eo-01
+    title: "REGRA ZERO: 'rastreie a NF' executa rastrear.py imediatamente"
+    input: |
+      Rastreie a NF 12345 do fornecedor de embalagens. Quero ver o fluxo
+      completo: DFE, PO, recebimento e pagamentos.
+    context:
+      nf: "12345"
+      intencao: "rastreamento de fluxo documental completo"
+    expected_behavior:
+      - "Executa rastrear.py IMEDIATAMENTE, antes de qualquer investigacao manual (REGRA ZERO: tarefa contem 'rastreie')"
+      - "Roteia pela arvore de decisao: 'rastreie NF/PO/SO' -> skill rastreando-odoo"
+      - "Apresenta o fluxo com evidencias no formato modelo.campo = valor (FORMATO DE RESPOSTA)"
+      - "Trata many2one como [id, 'Nome'] ou False ao ler purchase_id do DFE (nao usa purchase_ids, que nao existe)"
+    must_not:
+      - "Investiga manualmente com search_read ad-hoc ANTES de rodar rastrear.py"
+      - "Fabrica DFE, PO ou pagamentos que o script nao retornou"
+      - "Usa campo purchase_ids ou lines_ids no modelo dfe (nao existem)"
+    tags: [regra-zero, rastreamento, roteamento, caso-feliz]
+
+  - id: eo-02
+    title: "Cross-area: DFE aprovado na Fase 2 mas picking nao aparece"
+    input: |
+      O DFE da NF 23456 ja foi aprovado na validacao NF x PO, mas o
+      recebimento fisico nao mostra nenhum picking. O operador do
+      recebimento esta travado. O que houve?
+    context:
+      fase_2_status: "aprovado"
+      picking: "ausente"
+    expected_behavior:
+      - "Identifica causa provavel: Fase 3 (consolidacao PO) nao executou (tabela TROUBLESHOOTING CROSS-AREA)"
+      - "Verifica validacao_nf_po_dfe.status e se o PO Conciliador existe (campos po_consolidado_id / po_consolidado_name)"
+      - "Explica a sequencia do pipeline: Fase 4 so inicia com PO Conciliador confirmado e picking state='assigned'"
+      - "Encaminha a solucao para a skill conciliando-odoo-po (Fase 3)"
+    must_not:
+      - "Pula direto para Fase 4 (recebimento-fisico-odoo) sem verificar a Fase 3"
+      - "Tenta validar um picking que nao existe"
+      - "Inventa numero de picking ou de PO Conciliador"
+    tags: [cross-area, pipeline-recebimento, fase-3, roteamento]
+
+  - id: eo-03
+    title: "Picking assigned nao valida: lotes vazios + quality checks pendentes"
+    input: |
+      O picking FB/IN/{NUM} esta 'assigned' mas o button_validate da erro
+      'You need to pass the quality checks'. O operador ja tentou 3 vezes.
+    context:
+      picking_state: "assigned"
+      erro: "UserError: You need to pass the quality checks"
+    expected_behavior:
+      - "Diagnostica lendo stock.move.line (lot_name vazio?) e quality.check (quality_state='none'?)"
+      - "Explica a ordem critica: processar TODOS os quality checks (do_pass/do_fail/do_measure) ANTES do button_validate"
+      - "Para preencher quantidade feita usa qty_done (NAO quantity; reserved_uom_qty NAO existe em stock.move.line)"
+      - "Trata 'cannot marshal None' no button_validate como SUCESSO (try/except)"
+      - "Delega execucao para recebimento-fisico-odoo e pede confirmacao do usuario antes de validar (escrita)"
+    must_not:
+      - "Chama button_validate novamente sem processar os quality checks pendentes"
+      - "Usa o campo reserved_uom_qty (nao existe)"
+      - "Trata 'cannot marshal None' como falha e re-executa a operacao"
+      - "Valida o picking sem confirmacao do usuario"
+    tags: [fase-4, quality-checks, gotcha, marshal-none, escrita-confirmacao]
+
+  - id: eo-04
+    title: "Extrato NACOM GOYA sem titulo correspondente = transferencia interna"
+    input: |
+      Tem uma linha de extrato de R$ 50.000,00 que nao reconcilia com nenhum
+      titulo. O payment_ref menciona a propria NACOM GOYA. Como resolver?
+    context:
+      valor: 50000.00
+      payment_ref: "menciona o CNPJ da propria NACOM GOYA"
+      titulo_correspondente: "inexistente"
+    expected_behavior:
+      - "Identifica hipotese de transferencia interna entre contas NACOM GOYA sem payment is_internal_transfer (TROUBLESHOOTING CROSS-AREA)"
+      - "Verifica se existe par (debito + credito) com mesmo valor e mesma data em journals diferentes"
+      - "Delega para conciliando-transferencias-internas (arvore de decisao)"
+      - "Pede confirmacao do usuario antes de criar payment ou reconciliar (escrita)"
+    must_not:
+      - "Delega para executando-odoo-financeiro como baixa de titulo comum"
+      - "Inventa um titulo correspondente para fechar a reconciliacao"
+      - "Cria pagamento sem confirmacao do usuario"
+    tags: [transferencia-interna, financeiro, roteamento, edge-case]
+
+  - id: eo-05
+    title: "Reconciliar extrato de boleto: pre-mortem O11/O12 + metodo consolidado"
+    input: |
+      Reconcilia a linha do extrato de R$ 12.000,00 (boleto, payment_ref
+      generico 'DEB.TIT.COMPE') com o pagamento do fornecedor que ja foi
+      criado no Odoo.
+    context:
+      tipo_transacao: "boleto"
+      payment_ref: "DEB.TIT.COMPE (generico)"
+      pagamento: "ja criado"
+    expected_behavior:
+      - "Reconhece os 3 campos que o Odoo NAO preenche para boletos: partner_id, account_id (fica na conta TRANSITORIA, trocar para PENDENTES) e name/payment_ref"
+      - "Usa preparar_extrato_para_reconciliacao() (metodo consolidado) — nunca as operacoes em chamadas separadas"
+      - "Aplica pre-mortem antes da escrita: reconcile SEMPRE POR ULTIMO (O11) e account_id como ULTIMO write antes do action_post (O12)"
+      - "Pede confirmacao do usuario antes de executar a reconciliacao (operacao de escrita)"
+      - "Delega a execucao para executando-odoo-financeiro"
+    must_not:
+      - "Reconcilia ANTES de preparar o extrato (viola O11)"
+      - "Escreve account_id antes de partner/rotulo (viola O12 — Odoo regenera as move lines)"
+      - "Usa _atualizar_campos_extrato() (DEPRECADO)"
+      - "Executa a escrita sem confirmacao do usuario"
+    tags: [extrato-bancario, o11-o12, pre-mortem, escrita-confirmacao, gotcha]
+
+  - id: eo-06
+    title: "Anti-fabricacao de campo: razao social do destinatario do DFE"
+    input: |
+      Le o campo nfe_infnfe_dest_xnome do DFE 34567 pra mim — preciso da
+      razao social do destinatario da nota.
+    context:
+      campo_pedido: "nfe_infnfe_dest_xnome"
+      existe_no_modelo: false
+    expected_behavior:
+      - "Reconhece que nfe_infnfe_dest_xnome NAO EXISTE no modelo dfe (GOTCHAS.md)"
+      - "Usa o caminho correto: ler dfe.partner_id e buscar name (e l10n_br_cnpj) em res.partner"
+      - "Trata o many2one partner_id no formato [id, 'Nome'] ou False antes de indexar"
+      - "Se persistir duvida de estrutura, usa descobrindo-odoo-estrutura (ROUTING_ODOO.md Regra Zero: NUNCA executar XML-RPC com modelo/campo sem confirmar que existe)"
+    must_not:
+      - "Executa a leitura do campo inexistente sem avisar que ele nao existe"
+      - "Inventa um valor de razao social"
+      - "Usa outros campos inexistentes do dfe (lines_ids, purchase_ids)"
+    tags: [anti-fabricacao, campos-inexistentes, regra-zero, gotcha]
+
+  - id: eo-07
+    title: "Match NF x PO retorna 0 candidatos: De-Para / saldo / UoM Milhar"
+    input: |
+      A NF 45678 do fornecedor de rotulos nao encontra nenhum PO candidato
+      na Fase 2, mas o comprador garante que o pedido existe. A NF veio em
+      MI (milheiro) e o PO esta em unidades.
+    context:
+      match_resultado: "0 candidatos"
+      uom_nf: "MI (Milhar)"
+      uom_po: "Units"
+    expected_behavior:
+      - "Verifica produto_fornecedor_depara (De-Para ausente?) e saldo do PO (purchase.order.line.product_qty vs qty_received)"
+      - "Identifica o mismatch de UoM: fornecedor usa ML/MI (Milhar) — verificar product.supplierinfo.fator_un + De-Para"
+      - "Cita as tolerancias da Fase 2: quantidade 10%, preco exato (0%)"
+      - "Delega para validacao-nf-po (Fase 2)"
+    must_not:
+      - "Conclui que o PO nao existe sem verificar De-Para e saldo do PO"
+      - "Compara quantidades NF vs PO sem aplicar o fator de conversao UoM"
+      - "Forca o match alterando dados sem confirmacao do usuario"
+    tags: [fase-2, de-para, uom-milhar, match-nf-po, gotcha]
+
+  - id: eo-08
+    title: "Timeout no action_gerar_po_dfe + Circuit Breaker OPEN"
+    input: |
+      O lancamento esta falhando com 'Circuit breaker is OPEN' e antes
+      disso deu timeout no action_gerar_po_dfe. O que esta acontecendo?
+    context:
+      erro_1: "Timeout em action_gerar_po_dfe"
+      erro_2: "Circuit breaker is OPEN"
+    expected_behavior:
+      - "Explica que action_gerar_po_dfe demora 60-90s e o timeout padrao pode falhar -> usar timeout_override=180"
+      - "Explica o Circuit Breaker: abre apos 5 falhas consecutivas e rejeita chamadas por 30s (CLOSED -> OPEN -> HALF_OPEN)"
+      - "Recomenda commit preventivo: db.session.commit() ANTES de operacoes Odoo longas (sessao PostgreSQL expira) e re-buscar a entidade depois"
+      - "Diagnostica inline (agent proprio), citando circuit_breaker.state e app/odoo/utils/circuit_breaker.py"
+    must_not:
+      - "Recomenda retry imediato em loop enquanto o breaker esta OPEN"
+      - "Ignora o commit preventivo antes da operacao longa"
+      - "Delega para skill de escrita sem concluir o diagnostico"
+    tags: [timeout, circuit-breaker, agent-inline, gotcha]
+
+  - id: eo-09
+    title: "Anti-fabricacao: NF nao encontrada no rastreamento"
+    input: |
+      Rastreie a NF 99999 do fornecedor de tampas, lancada semana passada.
+    context:
+      resultado_simulado: "rastrear.py nao encontra DFE, PO nem invoice para a NF"
+    expected_behavior:
+      - "Executa rastrear.py primeiro (REGRA ZERO)"
+      - "Declara explicitamente que a NF nao foi encontrada, citando o que foi buscado (modelos/filtros)"
+      - "Registra a busca na secao 'Nao Encontrado' do arquivo de findings em /tmp/subagent-findings/ (PROTOCOLO DE CONFIABILIDADE)"
+      - "Distingue fatos de inferencias: hipoteses (ex: DFE ainda nao importado) marcadas como inferencia, nao afirmadas como fato"
+    must_not:
+      - "Fabrica DFE, PO ou invoice para 'completar' o rastreamento"
+      - "Inventa IDs, campos ou valores Odoo"
+      - "Resume a falha como 'erro' generico sem reportar o resultado exato da busca"
+    tags: [anti-fabricacao, nao-encontrado, regra-zero, confiabilidade]
