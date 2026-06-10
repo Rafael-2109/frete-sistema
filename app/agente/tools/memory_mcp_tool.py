@@ -1232,6 +1232,60 @@ def _touch_last_confirmed(mem) -> None:
     mem.last_confirmed = agora_utc_naive()
 
 
+def _formato_operativo_error(path: str, meta: Optional[dict]) -> Optional[str]:
+    """FRENTE 2 (2026-06-10): validacao INSTRUTIVA do formato operativo.
+
+    Memoria em path estruturado (heuristicas/armadilhas/protocolos/corrections
+    — ver `is_structured_path`) sem acao extraivel (`meta.do`) recebe erro
+    instrutivo com o template sentinela — self-healing: o agente reescreve na
+    hora (padrao ja usado em outros guards). Sem `do`, o destilado Tier 2 cai
+    no truncate burro de 300c e a memoria desperdica o retrieval.
+
+    NAO bloqueia paths narrativos/perfil (user.xml, learned/, pendencias/,
+    casos/): nesses `normalize_for_storage` retorna meta=None.
+
+    Returns:
+        Mensagem de erro instrutiva, ou None quando o save pode prosseguir.
+    """
+    if meta is None or meta.get("do"):
+        return None
+    kind = meta.get("kind") or "heuristica"
+    if kind == "geral":
+        kind = "heuristica"
+    return (
+        "Erro: memoria operativa sem acao extraivel (DO). "
+        f"O path '{path}' guarda conhecimento OPERATIVO — sem um DO claro, "
+        "a memoria nao funciona no contexto do agente (cai em truncamento). "
+        "Regrave o content EXATAMENTE neste formato:\n\n"
+        f"[{kind}:<dominio>] <titulo curto e especifico>\n"
+        "WHEN: <gatilho concreto — em que situacao esta memoria se aplica>\n"
+        "DO: <acao concreta que o agente deve tomar nessa situacao>\n"
+        "META: nivel=<3-5> criterios=<ex: 1,2,3>\n"
+        "EVIDENCIA: <opcional — caso real que originou>\n\n"
+        "Mantenha TODO o conteudo importante dentro de WHEN/DO (nao deixe "
+        "informacao essencial fora desses campos)."
+    )
+
+
+def _rederive_meta_after_content_change(mem) -> None:
+    """FRENTE 2 (2026-06-10): re-deriva `meta` apos edicao do content.
+
+    `update_memory` (str-replace) alterava o content e deixava o meta STALE
+    (when/do antigos no JSONB, content novo). Em path estruturado, re-parseia
+    o content editado e atualiza o meta; demais paths seguem meta=None por
+    design. Content NUNCA e re-renderizado aqui (edicao do usuario e final).
+    """
+    from ..services.memory_format import is_structured_path, parse_memory
+
+    if not is_structured_path(getattr(mem, "path", None)):
+        return
+    try:
+        mem.meta = parse_memory(mem.content or "")
+    except Exception as e:  # best-effort: meta stale e pior que excecao aqui?
+        # Nao: excecao derrubaria o update inteiro. Loga e segue (R1).
+        logger.warning(f"[MEMORY_MCP] _rederive_meta falhou para {mem.path}: {e}")
+
+
 def _check_memory_duplicate(user_id: int, content: str, current_path: str = '') -> Optional[str]:
     """
     Verifica se ja existe memoria semanticamente similar para o usuario.
@@ -1916,6 +1970,10 @@ try:
         "/memories/preferences.xml (estilo/comunicação), "
         "/memories/learned/regras.xml (regras de negócio), "
         "/memories/corrections/dominio.xml (correções). "
+        "Paths OPERATIVOS (heuristicas/armadilhas/protocolos/corrections) exigem "
+        "acao extraivel — escreva no formato '[kind:dominio] titulo' + linhas "
+        "'WHEN: <gatilho>' e 'DO: <acao concreta>' (content sem DO é rejeitado "
+        "com instrucoes). "
         "Se o arquivo já existir, o conteúdo será SUBSTITUÍDO.",
         {"path": Annotated[str, "Path completo onde salvar (ex: /memories/user.xml, /memories/corrections/regra_frete.md, /memories/empresa/termos/palmito.md)"], "content": Annotated[str, "Conteudo da memoria em formato texto ou XML. Para user.xml e preferences.xml, usar formato XML existente"], "priority": Annotated[str, "Prioridade: 'mandatory' (regra usuario) | 'advisory' (diretriz operacional) | 'contextual' (default) - mapeia para 3 canais de memoria via injection"]},
         annotations=ToolAnnotations(
@@ -1966,6 +2024,18 @@ try:
             # Memorias nao-estruturadas (user.xml, preferences) ficam meta=None.
             from ..services.memory_format import normalize_for_storage
             content, meta = normalize_for_storage(content, path)
+
+            # FRENTE 2 (2026-06-10): memoria operativa sem DO extraivel ->
+            # erro INSTRUTIVO (self-healing — o agente reescreve com WHEN/DO)
+            erro_formato = _formato_operativo_error(path, meta)
+            if erro_formato:
+                logger.info(
+                    f"[MEMORY_MCP] save_memory REJEITADO (sem DO extraivel): {path}"
+                )
+                return {
+                    "content": [{"type": "text", "text": erro_formato}],
+                    "is_error": True,
+                }
 
             # Validar priority
             valid_priorities = {'mandatory', 'advisory', 'contextual'}
@@ -2318,6 +2388,8 @@ try:
                     )
 
                 memory.content = content.replace(old_str, new_str)
+                # FRENTE 2 (2026-06-10): meta NAO pode ficar stale pos-edicao
+                _rederive_meta_after_content_change(memory)
                 # F5.2: update renova frescor; origem imutavel
                 _touch_last_confirmed(memory)
                 db.session.commit()
