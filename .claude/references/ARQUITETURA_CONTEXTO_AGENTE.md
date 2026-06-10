@@ -222,7 +222,7 @@ Orcamento-alvo total: ≤15KB/turno (tipico ~7KB; baseline pre-padrao ~34KB). Or
 | 4 | user_memories: perfil (user/preferences/expertise) | **ENFORCED 1500c + 1200c + 1200c** (`TIER1_PATH_CAPS`, destilado + ponteiro — F6 2026-06-10; desvio declarado vs design 600/400/400: pre-medicao — resumo+contextualizacao reais do user.xml medem 1.0-1.9K e o cap preserva o pointer-mode curado) | sempre |
 | 5 | user_memories: perfis empresa (Tier 1.5) | 400c/perfil | se existir |
 | 6 | user_memories: Tier 2 RAG por INTENT DO TURNO | 4 × 300c | similaridade > threshold |
-| 7 | operational_directives | constitucional + 2 por dominio | sempre |
+| 7 | operational_directives | **ENFORCED: so constitucional(is)** (F6 2026-06-10, decisao Rafael "granularidade por necessidade" + ablacao 0/20 do bloco fixo de 4,3K) — organicas nivel 5 chegam por INTENT via Tier 2 RAG (item 6; ja indexadas; 72% util na ablacao). Kill-switch `AGENT_DIRECTIVES_INTENT_ONLY=false` | sempre |
 | 8 | intersession_briefing (so partes operacionais) | ~0,4KB | se houver eventos |
 | 9 | routing_context (active_traps corrigidas) | ~0,2KB | condicional |
 | 10 | system_hint / correction_hint | ~0,2KB | condicional (regex) |

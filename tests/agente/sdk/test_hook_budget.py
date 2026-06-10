@@ -314,6 +314,68 @@ _NO_SEMANTIC = [
 
 
 # =====================================================================
+# F6 — Directives organicas por INTENT (decisao Rafael 2026-06-10):
+# ablacao mediu 0/20 de utilidade turn-level para o bloco fixo de 4,3K;
+# organicas saem do sempre-on e chegam via Tier 2 RAG (72% util) quando
+# o turno e relevante. Constitucional FICA fixa. Elimina por construcao
+# a dupla injecao directive×tier2 (mesma memoria nos dois canais).
+# =====================================================================
+
+class TestDirectivesIntentOnly:
+    def _call(self, user_id, prompt='qual o status?', model='claude-opus-4-8'):
+        return memory_injection._load_user_memories_for_context(
+            user_id=user_id, prompt=prompt, model_name=model,
+        )
+
+    def _mk_organica(self, created):
+        return _mk_mem(
+            0, f'/memories/empresa/heuristicas/organica-{uuid.uuid4().hex[:8]}.xml',
+            'conteudo da organica de teste intent-only',
+            created,
+            importance_score=0.9, effective_count=500,
+            meta={'titulo': 'Organica Teste', 'when': 'sempre que testar',
+                  'do': 'aplicar organica de teste', 'nivel': 5, 'kind': 'heuristica'},
+        )
+
+    def test_organicas_fora_do_bloco_e_constitucional_fica(self, app_ctx, f4_mems):
+        created, user_id = f4_mems
+        _mk_mem(user_id, '/memories/user.xml', '<resumo>ok</resumo>', created)
+        self._mk_organica(created)
+        with _NO_SEMANTIC[0], _NO_SEMANTIC[1], _NO_SEMANTIC[2]:
+            main, _tail, _ids = self._call(user_id)
+        assert '<operational_directives' in main, "bloco (constitucional) deve existir"
+        assert 'registro-melhorias' in main, "constitucional NUNCA sai"
+        bloco = main.split('<operational_directives')[1].split('</operational_directives>')[0]
+        assert 'aplicar organica de teste' not in bloco, (
+            "organica nivel 5 NAO entra mais no bloco fixo (intent-only)"
+        )
+
+    def test_organica_chega_via_tier2_quando_relevante(self, app_ctx, f4_mems):
+        """O canal da organica passa a ser o Tier 2 (semantica/fallback) —
+        aqui o fallback de recencia a pesca (memoria empresa mais recente)."""
+        created, user_id = f4_mems
+        _mk_mem(user_id, '/memories/user.xml', '<resumo>ok</resumo>', created)
+        org = self._mk_organica(created)
+        with _NO_SEMANTIC[0], _NO_SEMANTIC[1], _NO_SEMANTIC[2]:
+            main, _tail, ids = self._call(user_id)
+        assert org.id in ids, "organica deve ser alcancavel via Tier 2"
+        # memoria curta entra integral (content, nao meta) no destilado tier2
+        assert 'conteudo da organica de teste intent-only' in main
+
+    def test_flag_off_restaura_bloco_completo(self, app_ctx, f4_mems):
+        created, user_id = f4_mems
+        _mk_mem(user_id, '/memories/user.xml', '<resumo>ok</resumo>', created)
+        self._mk_organica(created)
+        with patch('app.agente.config.feature_flags.AGENT_DIRECTIVES_INTENT_ONLY', False), \
+             _NO_SEMANTIC[0], _NO_SEMANTIC[1], _NO_SEMANTIC[2]:
+            main, _tail, _ids = self._call(user_id)
+        bloco = main.split('<operational_directives')[1].split('</operational_directives>')[0]
+        assert 'aplicar organica de teste' in bloco, (
+            "flag off = organicas voltam ao bloco (legado)"
+        )
+
+
+# =====================================================================
 # F6 — Cap de blocos FIXOS (tier1 + user_rules): destilar/ponteirar,
 # NUNCA cortar (intocaveis PAD-CTX). Evidencia tripla PROD (users 1/18/82):
 # rules 6.2K + tier1 7.6-9.1K estouravam sozinhos o teto 15K e a politica

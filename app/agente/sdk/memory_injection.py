@@ -793,7 +793,9 @@ def _build_operational_directives(user_id: int) -> Optional[str]:
     return result
 
 
-def _build_operational_directives_parts(user_id: int) -> tuple[list[str], list[str]]:
+def _build_operational_directives_parts(
+    user_id: int, include_organicas: bool = True
+) -> tuple[list[str], list[str]]:
     """
     Itens <directive> renderizados, separados em (constitucionais, organicas).
 
@@ -801,6 +803,12 @@ def _build_operational_directives_parts(user_id: int) -> tuple[list[str], list[s
     decisao explicita do usuario; NUNCA cortadas pela politica de overflow).
     Organicas: heuristicas/protocolos empresa nivel 5 top effective_count
     (cap MANDATORY_MAX_COUNT; cortaveis no overflow — F4.3 PAD-CTX).
+
+    F6 intent-only (2026-06-10): com `include_organicas=False` a query das
+    organicas nem roda — elas chegam por INTENT via Tier 2 RAG (ja indexadas
+    como memorias empresa). Ablacao: bloco fixo de organicas = 0/20 de
+    utilidade turn-level vs Tier 2 = 72%. Decisao Rafael: granularidade
+    por necessidade.
 
     Inspirado na arquitetura do Claude Code: CLAUDE.md e carregado no
     system_prompt como instrucao de alta prioridade, nao como user memory.
@@ -832,6 +840,21 @@ def _build_operational_directives_parts(user_id: int) -> tuple[list[str], list[s
         if not USE_OPERATIONAL_DIRECTIVES:
             return [], []
 
+        # Diretivas constitucionais pinadas: sempre presentes, independem
+        # das organicas (F6: com intent-only, so elas compoem o bloco).
+        const_items: list[str] = []
+        for _cd in _CONSTITUTIONAL_DIRECTIVES:
+            const_items.append('\n'.join([
+                f'  <directive id="{_cd["id"]}">',
+                f'    <titulo>{xml_escape(_cd["titulo"])}</titulo>',
+                f'    <when>{xml_escape(_cd["when"])}</when>',
+                f'    <do>{xml_escape(_cd["do"])}</do>',
+                '  </directive>',
+            ]))
+
+        if not include_organicas:
+            return const_items, []
+
         # Buscar heuristicas empresa de alta importancia (nivel 5)
         # Ordenar por effective_count desc (mais aplicadas primeiro)
         # Aceita tanto /heuristicas/ (confianca estabelecida) quanto /protocolos/
@@ -857,19 +880,7 @@ def _build_operational_directives_parts(user_id: int) -> tuple[list[str], list[s
         ).limit(MANDATORY_MAX_COUNT * 3).all()
 
         # Filtrar por nivel 5 no conteudo (mesmo pattern usado em Tier 1.6)
-        const_items: list[str] = []
         org_items: list[str] = []
-
-        # Diretivas constitucionais pinadas: sempre primeiro, independem de
-        # effective_count/cap das organicas (promovidas por decisao do usuario).
-        for _cd in _CONSTITUTIONAL_DIRECTIVES:
-            const_items.append('\n'.join([
-                f'  <directive id="{_cd["id"]}">',
-                f'    <titulo>{xml_escape(_cd["titulo"])}</titulo>',
-                f'    <when>{xml_escape(_cd["when"])}</when>',
-                f'    <do>{xml_escape(_cd["do"])}</do>',
-                '  </directive>',
-            ]))
 
         # As organicas (top effective_count) preenchem ate MANDATORY_MAX_COUNT —
         # a(s) constitucional(is) sao EXTRA, nao consomem slot das organicas.
@@ -1223,10 +1234,15 @@ def _load_user_memories_for_context(
                 logger.debug(f"[MEMORY_INJECT] Briefing inter-sessão falhou (ignorado): {brief_err}")
 
             # ── Item 7: Operational directives (const + organicas — F4.3) ──
+            # F6 intent-only: organicas chegam via Tier 2 RAG; bloco fixo
+            # fica so com a(s) constitucional(is).
             directives_full = None
             directives_const = None
             try:
-                const_items, org_items = _build_operational_directives_parts(user_id)
+                from ..config.feature_flags import AGENT_DIRECTIVES_INTENT_ONLY
+                const_items, org_items = _build_operational_directives_parts(
+                    user_id, include_organicas=not AGENT_DIRECTIVES_INTENT_ONLY
+                )
                 directives_full = _render_operational_directives(const_items + org_items)
                 directives_const = _render_operational_directives(const_items)
                 if directives_full:

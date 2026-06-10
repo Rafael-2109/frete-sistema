@@ -121,6 +121,7 @@ Gotchas rapidos:
 | Preciso de... | Documento |
 |---------------|-----------|
 | Timezone (convencao Brasil naive) | `.claude/references/REGRAS_TIMEZONE.md` |
+| **Contexto do Agente Web (PAD-CTX)** — ANTES de adicionar/mover conteudo em preset, system_prompt, CLAUDE.md, listing de skills, hook ou memorias | `.claude/references/ARQUITETURA_CONTEXTO_AGENTE.md` (criterios de admissao por camada + orcamento por bloco + intocaveis) |
 | Routing de skills | `.claude/references/ROUTING_SKILLS.md` |
 | Infraestrutura Render | `.claude/references/INFRAESTRUTURA.md` |
 | Confiabilidade de subagentes | `.claude/references/SUBAGENT_RELIABILITY.md` (M1.1: SDK 0.1.60+ via `subagent_reader.get_subagent_findings` primario, `/tmp/` fallback) |

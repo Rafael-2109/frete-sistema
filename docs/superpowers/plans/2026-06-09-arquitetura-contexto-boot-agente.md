@@ -32,16 +32,18 @@ atualizado: 2026-06-09
 > overflow_cortes=[] + tier2=2,3K injetado + semantic=17 fallback=False;
 > ver entrada "F6 aceite PROD" no Rastreamento). Cap extra de sessoes
 > (SESSION_RESUMO_CHAR_CAP=240) entregue na validacao (b4b37129e).
-> CURADORIA executada: regra 802 → empresa/heuristicas (PROD); CNPJ af-01
-> scrubado (663857f7c); dry-run consolidacao dos quase-duplicados (94 pares)
-> AGUARDANDO REVISAO do Rafael antes de aplicar.
-> Proxima: (1) decisao sobre operational_directives (0/20 na ablacao; 4,3K/
-> turno — swap da ordem de corte tier2<->organicas OU injecao por intent;
-> mexe na politica de overflow do PAD-CTX = decisao Rafael); (2) amostra de
-> logs dos users 1/18/82 pos-663857f7c (mesmo mecanismo ja provado no 55);
-> (3) aceite formal F5: re-medir precision@k apos dias de trafego; 5.7
-> acorda ~08/07 (gate 30d); F7 por ultimo (F7.5 com evidencia nova da
-> ablacao: preferred_skills por dominio historico = 2 riscos).
+> CURADORIA COMPLETA (autorizada e APLICADA): regra 802 → empresa/heuristicas;
+> CNPJ af-01 scrubado; consolidacao de quase-duplicatas APLICADA em PROD
+> (24 absorvidas frias, 17 canonicos, 4 clusters resolvidos por agente —
+> ver entrada "F6 fechamento"). DIRECTIVES POR INTENT decidido pelo Rafael
+> e IMPLEMENTADO (`AGENT_DIRECTIVES_INTENT_ONLY` default true; organicas
+> via Tier 2; constitucional fixa; -3,4K/turno tipico).
+> Proxima: (1) pos-deploy do intent-only — validar bloco directives so
+> constitucional + organicas via tier2 nos logs; (2) amostra de logs dos
+> users 1/18/82 (mesmo mecanismo ja provado no 55); (3) aceite formal F5:
+> re-medir precision@k apos dias de trafego (inclui re-medir a ablacao —
+> payloads/scripts reexecutaveis); 5.7 acorda ~08/07 (gate 30d); F7 por
+> ultimo (F7.5 preferred_skills com evidencia nova: 2 riscos na ablacao).
 
 ## Indice
 
@@ -611,3 +613,24 @@ Padrao em si (PAD-CTX publicado): RP-1, R-2(criterio), A5(roteamento), C1(fonte 
   >=0.85 sao duplicatas reais — consolidacao certa e semantica, nao por
   threshold. Payload de aplicacao no dir da sessao (f6_consolidacao_apply.json).
   **AGUARDANDO decisao do Rafael**: aplicar 27 / so 3 puras / revisar com-merge.
+- 2026-06-10 (F6 fechamento) — **CONSOLIDACAO APLICADA EM PROD + DIRECTIVES POR
+  INTENT (decisao Rafael)**: (a) consolidacao: 12 pares isolados aplicados
+  direto; os 15 pares restantes formavam CADEIAS (4 clusters — julgamento
+  par-a-par nao aplica em cadeia: o merge do par A se perderia quando o par B
+  esfria o canonico) → 1 agente por cluster redigiu consolidacao UNICA
+  (cluster CarVia dividido em 2 subgrupos; 866 perfil e 625 TDE corretamente
+  FORA). Total: 24 absorvidas frias com meta.consolidada_em, 15 versoes de
+  backup em agent_memory_versions, 17 canonicos (15 com merge), estore
+  482→460 ativas. Backups JSON no dir da sessao (f6_consolidacao_backup*.json);
+  embeddings dos afetados deletados (reindex diario recria). (b) DIRECTIVES:
+  Rafael decidiu por "granularidade da injecao diante de cada necessidade" →
+  `AGENT_DIRECTIVES_INTENT_ONLY` default true: organicas SAEM do bloco fixo
+  (4,3K/turno, 0/20 na ablacao) e chegam por intent via Tier 2 RAG (72% util;
+  ja indexadas como memorias empresa); constitucional FICA. BONUS: elimina
+  por construcao a dupla injecao directive×tier2 (mesma memoria podia entrar
+  nos 2 canais — gap descoberto no desenho). TDD 3 testes novos; 353 verdes
+  no pipeline de injecao. Payload tipico cai ~3,4K/turno. PENDENTE pos-deploy:
+  validar logs (bloco directives so com constitucional; organicas aparecendo
+  em tier2 quando relevantes). GAP de visibilidade fechado (provocacao A do
+  Rafael): CLAUDE.md raiz agora aponta o PAD-CTX no indice compartilhado.
+  NOTA: migration agente_fable5 (sessao paralela) aplicada no banco LOCAL.

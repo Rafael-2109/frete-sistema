@@ -219,6 +219,16 @@ USER_XML_POINTER_THRESHOLD = int(os.getenv("AGENT_USER_XML_POINTER_THRESHOLD", "
 # INCONDICIONAL — nao volta com a flag off; o conteudo segue integro no Tier 1.
 AGENT_FIXED_BLOCKS_CAP = os.getenv("AGENT_FIXED_BLOCKS_CAP", "true").lower() == "true"
 
+# F6 PAD-CTX (2026-06-10, decisao Rafael "granularidade por necessidade"):
+# directives ORGANICAS (heuristicas/protocolos nivel 5 por effective_count)
+# saem do bloco fixo <operational_directives> e chegam por INTENT via Tier 2
+# RAG (ja indexadas; retrieval large = 72% util/turno na ablacao, vs 0/20 do
+# bloco fixo de 4,3K que ainda espremia o adaptativo nos casos pesados).
+# Constitucional FICA fixa. Tambem elimina por construcao a dupla injecao
+# directive×tier2 (mesma memoria podia entrar nos 2 canais no mesmo payload).
+# Kill-switch: AGENT_DIRECTIVES_INTENT_ONLY=false restaura o bloco completo.
+AGENT_DIRECTIVES_INTENT_ONLY = os.getenv("AGENT_DIRECTIVES_INTENT_ONLY", "true").lower() == "true"
+
 # Operational Directives (v2.2, 2026-04-12) — Mudanca 1
 # Promove heuristicas empresa nivel 5 (importance >= 0.7) de contexto
 # passivo (<user_memories>) para diretriz operacional obrigatoria
