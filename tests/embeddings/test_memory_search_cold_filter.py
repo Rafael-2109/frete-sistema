@@ -59,6 +59,9 @@ def par_quente_fria(app):
     fria.is_cold = True
     db.session.flush()
 
+    # model_used DEVE ser o modelo de memorias vigente — a busca filtra
+    # model_used = VOYAGE_MEMORY_MODEL (migracao 2026-06-10)
+    from app.embeddings.config import VOYAGE_MEMORY_MODEL
     for mem in (quente, fria):
         db.session.add(AgentMemoryEmbedding(
             memory_id=mem.id,
@@ -66,7 +69,7 @@ def par_quente_fria(app):
             path=mem.path,
             texto_embedado=f"[{mem.path}]: {mem.content}",
             embedding=vec,
-            model_used="pytest-fake",
+            model_used=VOYAGE_MEMORY_MODEL,
         ))
     db.session.commit()
 

@@ -287,7 +287,7 @@ STRING custom (option `system_prompt`) — 3 arquivos concatenados em _build_ful
 
 ### Arquivos envolvidos
 - `prompts/preset_operacional.md` — preset customizado (tamanho no bloco auto-medido — `prompt_size_audit.py`)
-- `prompts/system_prompt.md` — system prompt operacional (v4.3.3, estatico — sem vars dinamicas)
+- `prompts/system_prompt.md` — system prompt operacional (v4.4.0, estatico — sem vars dinamicas)
 - `sdk/client.py` — `_format_system_prompt()` (guard cache), `_user_prompt_submit_hook()` (session_context)
 - `config/feature_flags.py` — `USE_CUSTOM_SYSTEM_PROMPT`, `USE_PROMPT_CACHE_OPTIMIZATION`
 - `config/settings.py` — `operational_preset_path`

@@ -806,7 +806,10 @@ class EmbeddingService:
 
         min_similarity = min_similarity or THRESHOLD_MEMORY
 
-        query_embedding = self._safe_embed_query(query)
+        # Migracao 2026-06-10: retrieval de memorias usa VOYAGE_MEMORY_MODEL
+        # (query DEVE casar com o modelo da coluna `embedding`).
+        from app.embeddings.config import VOYAGE_MEMORY_MODEL
+        query_embedding = self._safe_embed_query(query, model=VOYAGE_MEMORY_MODEL)
         if query_embedding is None:
             return []
 
@@ -837,6 +840,10 @@ class EmbeddingService:
 
         # F5.4 PAD-CTX: excluir memorias frias (is_cold) — _archived_* mantinham
         # embedding ativo e consumiam slots do top-K (gap diagnosticado em PROD).
+        # Migracao 2026-06-10: filtrar model_used — a query e embedada com
+        # VOYAGE_MEMORY_MODEL; doc de outro modelo = cosine sem significado
+        # (protege a janela deploy->reindex e trocas futuras de modelo).
+        from app.embeddings.config import VOYAGE_MEMORY_MODEL
         sql = text("""
             SELECT
                 e.id,
@@ -848,6 +855,7 @@ class EmbeddingService:
             JOIN agent_memories m ON m.id = e.memory_id
             WHERE e.user_id = ANY(:user_ids)
               AND e.embedding IS NOT NULL
+              AND e.model_used = :model_used
               AND m.is_cold = false
             ORDER BY e.embedding <=> CAST(:query_embedding AS vector)
             LIMIT :limit
@@ -856,6 +864,7 @@ class EmbeddingService:
         result = db.session.execute(sql, {
             "query_embedding": embedding_str,
             "user_ids": user_ids,
+            "model_used": VOYAGE_MEMORY_MODEL,
             "limit": limit * 2,
         })
 
@@ -881,17 +890,20 @@ class EmbeddingService:
     ) -> List[Dict[str, Any]]:
         """Busca memorias fallback sem pgvector."""
         from app.embeddings.models import AgentMemoryEmbedding
+        from app.embeddings.config import VOYAGE_MEMORY_MODEL
         from app.agente.models import AgentMemory
 
         # Incluir user_id=0 (memorias empresa) para memoria compartilhada (PRD v2.1)
         user_ids = [user_id, 0] if user_id != 0 else [0]
 
         # F5.4 PAD-CTX: excluir memorias frias (mesmo criterio do path pgvector)
+        # + filtro model_used (migracao 2026-06-10 — nunca casar cross-model)
         docs = AgentMemoryEmbedding.query.join(
             AgentMemory, AgentMemory.id == AgentMemoryEmbedding.memory_id
         ).filter(
             AgentMemoryEmbedding.user_id.in_(user_ids),
             AgentMemoryEmbedding.embedding.isnot(None),
+            AgentMemoryEmbedding.model_used == VOYAGE_MEMORY_MODEL,
             AgentMemory.is_cold.is_(False),
         ).limit(500).all()
 

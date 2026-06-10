@@ -237,6 +237,43 @@ def copiar_imagem(caminho_origem, nome_arquivo=None):
     return filepath, filename
 
 
+def copiar_texto(caminho_origem, nome_arquivo=None):
+    """
+    Copia um arquivo de TEXTO ja escrito (.md/.txt) para a pasta de downloads.
+
+    Caso real (2026-06-10): agente precisava entregar dump .md e a skill so
+    gerava Excel/CSV/JSON — workaround manual arriscava TMPDIR divergente.
+    Mesma mecanica do copiar_imagem: a skill e quem conhece o diretorio
+    SERVIDO e aplica o guard de entrega (P7 #787).
+
+    Args:
+        caminho_origem: Caminho do arquivo de texto existente
+        nome_arquivo: Nome para o arquivo (opcional, usa nome original)
+
+    Returns:
+        Caminho do arquivo copiado e nome do arquivo
+    """
+    import shutil
+
+    if not os.path.exists(caminho_origem):
+        raise FileNotFoundError(f"Arquivo nao encontrado: {caminho_origem}")
+
+    ext = caminho_origem.rsplit('.', 1)[-1].lower() if '.' in caminho_origem else ''
+    if ext not in ('md', 'txt'):
+        raise ValueError(f"Formato de texto nao suportado: {ext} (aceitos: md, txt)")
+
+    if not nome_arquivo:
+        nome_arquivo = os.path.basename(caminho_origem).rsplit('.', 1)[0]
+
+    file_id = str(uuid.uuid4())[:8]
+    filename = f"{file_id}_{nome_arquivo}.{ext}"
+    filepath = os.path.join(get_upload_folder(), filename)
+
+    shutil.copy2(caminho_origem, filepath)
+
+    return filepath, filename
+
+
 def main():
     parser = argparse.ArgumentParser(
         description='Gera arquivo para download (Excel, CSV, JSON ou Imagem)',
@@ -249,8 +286,8 @@ Exemplos:
         """
     )
 
-    parser.add_argument('--formato', required=True, choices=['excel', 'csv', 'json', 'imagem'],
-                        help='Formato do arquivo (excel, csv, json, imagem)')
+    parser.add_argument('--formato', required=True, choices=['excel', 'csv', 'json', 'imagem', 'md'],
+                        help='Formato do arquivo (excel, csv, json, imagem, md)')
     parser.add_argument('--nome', required=True,
                         help='Nome do arquivo (sem extensao)')
     parser.add_argument('--titulo', default=None,
@@ -259,6 +296,8 @@ Exemplos:
                         help='Colunas a incluir (JSON array)')
     parser.add_argument('--imagem', default=None,
                         help='Caminho da imagem a exportar (apenas formato imagem)')
+    parser.add_argument('--arquivo', default=None,
+                        help='Caminho do arquivo .md/.txt ja escrito (apenas formato md)')
 
     args = parser.parse_args()
 
@@ -316,6 +355,52 @@ Exemplos:
                 f"Para EXIBIR a imagem inline:\n"
                 f"![{args.nome}]({url_completa})\n\n"
                 f"Para link de DOWNLOAD:\n"
+                f"📥 **[Clique aqui para baixar]({url_completa}?download=1)**"
+            )
+
+            print(json.dumps(resultado, ensure_ascii=False, indent=2, default=decimal_default))
+            return
+
+        # Formato md: copia arquivo de texto JA ESCRITO (nao usa stdin)
+        if args.formato == 'md':
+            if not args.arquivo:
+                resultado['erro'] = 'Parametro --arquivo obrigatorio para formato md'
+                resultado['mensagem'] = 'Use: python exportar.py --formato md --arquivo /tmp/doc.md --nome relatorio'
+                print(json.dumps(resultado, ensure_ascii=False, indent=2))
+                return
+
+            filepath, filename = copiar_texto(args.arquivo, args.nome)
+
+            # Guard de ENTREGA (P7 #787): arquivo copiado existe e e nao-vazio?
+            ok_entrega, motivo_entrega = _verificar_entrega(filepath)
+            if not ok_entrega:
+                resultado['erro'] = f'Falha na verificacao de entrega: {motivo_entrega}'
+                resultado['mensagem'] = (
+                    'O arquivo nao foi copiado corretamente (ausente ou vazio). '
+                    'NAO informe link ao usuario.'
+                )
+                print(json.dumps(resultado, ensure_ascii=False, indent=2))
+                return
+
+            extensao = filepath.rsplit('.', 1)[-1].lower()
+            tamanho = os.path.getsize(filepath)
+            url_relativa = f"/agente/api/files/default/{filename}"
+            url_completa = f"{RENDER_DOMAIN}{url_relativa}"
+
+            resultado['sucesso'] = True
+            resultado['arquivo'] = {
+                'nome': filename,
+                'nome_original': f"{args.nome}.{extensao}",
+                'url': url_relativa,
+                'url_completa': url_completa,
+                'tamanho': tamanho,
+                'tamanho_formatado': f"{tamanho / 1024:.1f} KB" if tamanho < 1024*1024 else f"{tamanho / (1024*1024):.1f} MB",
+                'formato': extensao,
+                'caminho_local': filepath
+            }
+            resultado['mensagem'] = f"Arquivo {extensao.upper()} exportado com sucesso!"
+            resultado['instrucao_agente'] = (
+                f"Informe ao usuario que o documento esta disponivel para download:\n"
                 f"📥 **[Clique aqui para baixar]({url_completa}?download=1)**"
             )
 

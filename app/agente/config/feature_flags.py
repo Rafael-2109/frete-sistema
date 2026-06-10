@@ -184,8 +184,13 @@ USE_AUTO_MEMORY_INJECTION = os.getenv("AGENT_AUTO_MEMORY_INJECTION", "true").low
 # Threshold minimo de similaridade para injecao de memorias semanticas
 # Memorias com score abaixo deste valor NAO sao injetadas (Tier 2)
 # Memorias protegidas (user.xml, preferences.xml) sao SEMPRE injetadas (Tier 1)
-# Ajustar em producao sem deploy: AGENT_MEMORY_MIN_SIMILARITY=0.50
-MEMORY_INJECTION_MIN_SIMILARITY = float(os.getenv("AGENT_MEMORY_MIN_SIMILARITY", "0.45"))
+# Ajustar em producao sem deploy: env AGENT_MEMORY_MIN_SIMILARITY
+# CALIBRADO POR MEDICAO (2026-06-10, voyage-4-large): 0.40 = cobertura 18/20
+# turnos com precision@4 0.673. ESCALA NAO TRANSFERE entre modelos de
+# embedding — recalibrar com o harness do relatorio
+# precision_at_k_baseline_2026-06-10.md ao trocar VOYAGE_MEMORY_MODEL
+# (o 0.55 herdado matou o retrieval por semanas; nao repetir).
+MEMORY_INJECTION_MIN_SIMILARITY = float(os.getenv("AGENT_MEMORY_MIN_SIMILARITY", "0.40"))
 
 # User.xml Pointer (v2.2, 2026-04-12) — Camada 2 da Mudanca 4
 # Quando user.xml > THRESHOLD e modelo tem budget finito (Sonnet/Haiku),

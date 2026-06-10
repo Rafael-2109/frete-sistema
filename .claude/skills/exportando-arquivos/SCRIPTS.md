@@ -25,7 +25,7 @@ source .venv/bin/activate
 
 ## 1. exportar.py
 
-**Proposito:** Gera arquivos para download (Excel, CSV, JSON ou Imagem). Recebe dados via stdin (JSON) para formatos tabulares, ou caminho de imagem via parametro. Salva em `/tmp/agente_files/default/` e retorna URL acessivel via HTTP.
+**Proposito:** Gera arquivos para download (Excel, CSV, JSON, Imagem ou MD/TXT). Recebe dados via stdin (JSON) para formatos tabulares, caminho de imagem via parametro, ou caminho de arquivo de texto ja escrito (formato md). Salva em `/tmp/agente_files/default/` e retorna URL acessivel via HTTP.
 
 ```bash
 # Para Excel/CSV/JSON (dados via stdin):
@@ -38,11 +38,12 @@ python .claude/skills/exportando-arquivos/scripts/exportar.py --formato imagem -
 
 | Parametro | Descricao | Exemplo |
 |-----------|-----------|---------|
-| `--formato` | Formato do arquivo: `excel`, `csv`, `json` ou `imagem` (OBRIGATORIO) | `--formato excel` |
+| `--formato` | Formato do arquivo: `excel`, `csv`, `json`, `imagem` ou `md` (OBRIGATORIO) | `--formato excel` |
 | `--nome` | Nome do arquivo sem extensao (OBRIGATORIO) | `--nome relatorio_vendas` |
 | `--titulo` | Titulo da planilha (apenas Excel) | `--titulo "Vendas Jan/2026"` |
 | `--colunas` | Colunas a incluir (JSON array, opcional) | `--colunas '["nome","valor"]'` |
 | `--imagem` | Caminho da imagem a exportar (apenas formato imagem) | `--imagem /tmp/grafico.png` |
+| `--arquivo` | Caminho do .md/.txt JA ESCRITO a entregar (apenas formato md) | `--arquivo /tmp/relatorio.md` |
 
 **Modos de operacao:**
 
@@ -50,6 +51,7 @@ python .claude/skills/exportando-arquivos/scripts/exportar.py --formato imagem -
 |------|---------|---------|-----------|
 | Excel | `--formato excel` | stdin JSON | Gera .xlsx com formatacao (cabecalho azul, moeda BR, largura auto) |
 | CSV | `--formato csv` | stdin JSON | Gera .csv com separador ponto-e-virgula (`;`) e encoding utf-8-sig |
+| MD/TXT | `--formato md` | `--arquivo` (.md/.txt ja escrito) | Copia para o diretorio SERVIDO com guard de entrega + URL verificada (caso real 2026-06-10: dump .md exigia workaround manual com risco de TMPDIR) |
 | JSON | `--formato json` | stdin JSON | Gera .json formatado com indent=2 |
 | Imagem | `--formato imagem` | `--imagem` path | Copia imagem (png/jpg/gif) para pasta de downloads |
 

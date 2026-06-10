@@ -461,3 +461,33 @@ Padrao em si (PAD-CTX publicado): RP-1, R-2(criterio), A5(roteamento), C1(fonte 
   teto 15K e cortam TODO o adaptativo (user 18: rules 6,2K + tier1 7,6K →
   overflow_cortes=['tier2','directives_organicas','routing']) — candidato a
   cap de tier1/user_rules na F6.
+- 2026-06-10 — **POS-F5: acoes PROD do Rafael EXECUTADAS + migracao voyage-4-large
+  IMPLEMENTADA**: (a) migration proveniencia RODADA em PROD; (b) env
+  `AGENT_MEMORY_MIN_SIMILARITY` ajustada no Render; (c) data-fix APLICADO em PROD
+  (ids 433 system-pitfalls.json, 868 tmpdir, 871 arquivo-vazio → cold/promovidas).
+  (d) MIGRACAO LARGE (decisao Rafael, base no relatorio precision@k):
+  `VOYAGE_MEMORY_MODEL` (default voyage-4-large) governa SO o retrieval de
+  memorias — query da busca + coluna `embedding` + memory_indexer; DEDUP
+  permanece no DEFAULT lite (thresholds 0.85/0.80 nao medidos no large);
+  busca filtra `model_used = VOYAGE_MEMORY_MODEL` (janela deploy→reindex nunca
+  compara cross-model); fallback do dedup (101 linhas dedup_embedding NULL em
+  PROD) re-embeda a query no modelo da coluna; threshold default 0.45→0.40
+  (calibrado p/ large: cobertura 18/20, precision 0.673). `.env` LOCAL tinha o
+  MESMO 0.55 assassino — removido. Reindex: script
+  `2026_06_10_reindex_memorias_voyage4large.py` (--confirmar; re-embeda
+  texto_embedado EXISTENTE, 549 linhas em PROD, dedup/content_hash intactos) —
+  RODAR NO RENDER SHELL APOS O DEPLOY. ATENCAO: env de PROD deve ficar SEM
+  AGENT_MEMORY_MIN_SIMILARITY (ou =0.40) apos o deploy large.
+  **Item 12 do mini-set FECHADO**: dump de boot real (capturado pelo Rafael
+  08:12) valida o contrato F4 em PROD — sem skill_hints/world_model; ordem
+  main/tail exata com pendencias por ULTIMO; tier2/routing cortados no turno
+  por overflow de blocos fixos do user 1 (rules+tier1 grandes — mesmo padrao
+  user 18, refor a o cap de tier1 na F6). Listing nao aparece no dump (vive na
+  description da tool Skill).
+  **Skill exportando-arquivos ganhou formato `md`** (caso real da conversa
+  10/06: dump .md exigiu workaround manual com risco TMPDIR): `copiar_texto`
+  + `--formato md --arquivo <path>` com guard de entrega P7; SKILL.md/
+  SCRIPTS.md atualizados; listing 7.971≤8.000. Drift v4.3.3→v4.4.0 no
+  CLAUDE.md do agente corrigido (achado do proprio agente no dump).
+  PENDENTE (curadoria, decisao agente/Rafael): user_rule "sessao N" do user 1
+  e heuristica generica de roteamento — candidata a empresa/heuristicas.

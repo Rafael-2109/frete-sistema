@@ -125,7 +125,8 @@ def _index_memories_impl(memories: List[Dict], reindex: bool = False) -> Dict:
     """Implementacao real da indexacao de memorias. REQUER app context ativo."""
     from app import db
     from app.embeddings.service import EmbeddingService
-    from app.embeddings.config import VOYAGE_DEFAULT_MODEL
+    # Migracao 2026-06-10: retrieval de memorias usa VOYAGE_MEMORY_MODEL
+    from app.embeddings.config import VOYAGE_MEMORY_MODEL
     from sqlalchemy import text
 
     stats = {
@@ -178,7 +179,9 @@ def _index_memories_impl(memories: List[Dict], reindex: bool = False) -> Dict:
         print(f"  Batch {num_batch}/{total_batches} ({len(batch)} memorias)...", end=" ")
 
         try:
-            embeddings = svc.embed_texts(texts, input_type="document")
+            embeddings = svc.embed_texts(
+                texts, input_type="document", model=VOYAGE_MEMORY_MODEL
+            )
 
             for mem, embedding in zip(batch, embeddings):
                 embedding_str = json.dumps(embedding)
@@ -209,7 +212,7 @@ def _index_memories_impl(memories: List[Dict], reindex: bool = False) -> Dict:
                     "path": mem['path'],
                     "texto_embedado": mem['texto_embedado'],
                     "embedding": embedding_str,
-                    "model_used": VOYAGE_DEFAULT_MODEL,
+                    "model_used": VOYAGE_MEMORY_MODEL,
                     "content_hash": mem['content_hash'],
                 })
 

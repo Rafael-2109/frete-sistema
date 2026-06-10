@@ -17,6 +17,16 @@ VOYAGE_API_KEY = os.environ.get("VOYAGE_API_KEY", "")
 # Modelo default para embeddings de texto geral
 VOYAGE_DEFAULT_MODEL = os.environ.get("VOYAGE_DEFAULT_MODEL", "voyage-4-lite")
 
+# Modelo do RETRIEVAL de memorias do agente (coluna `embedding` de
+# agent_memory_embeddings + query da busca). Migrado lite -> large em
+# 2026-06-10 por medicao A/B (precision@4 0.842 vs 0.558 @0.45 no mesmo
+# corpus — relatorios/estudo_contexto_boot_2026-06-09/
+# precision_at_k_baseline_2026-06-10.md). O DEDUP (dedup_embedding,
+# thresholds 0.85/0.80) permanece no VOYAGE_DEFAULT_MODEL — nao foi medido
+# no large. A busca filtra model_used = VOYAGE_MEMORY_MODEL (transicao
+# deploy->reindex nunca compara cross-model).
+VOYAGE_MEMORY_MODEL = os.environ.get("VOYAGE_MEMORY_MODEL", "voyage-4-large")
+
 # Modelo para embeddings financeiros
 VOYAGE_FINANCE_MODEL = os.environ.get("VOYAGE_FINANCE_MODEL", "voyage-finance-2")
 

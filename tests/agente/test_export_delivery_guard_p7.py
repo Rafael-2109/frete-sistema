@@ -88,3 +88,45 @@ class TestMainDeliveryGuardWiring:
         out = self._run_main(exportar, monkeypatch, capsys, str(cheio), cheio.name)
         assert out["sucesso"] is True
         assert out["arquivo"]["nome"] == cheio.name
+
+
+# =====================================================================
+# Formato md/txt (2026-06-10) — copiar_texto + guard de entrega
+# =====================================================================
+# Caso real (conversa Rafael 10/06): agente precisou entregar dump .md e a
+# skill so gerava Excel/CSV/JSON — workaround manual com risco de TMPDIR.
+# O formato 'md' copia um arquivo de texto JA ESCRITO para o diretorio
+# servido, com o MESMO guard de entrega dos demais formatos.
+
+class TestCopiarTexto:
+    def test_copia_md_para_diretorio_servido(self, exportar, monkeypatch, tmp_path):
+        servido = tmp_path / "servido"
+        servido.mkdir()
+        monkeypatch.setattr(exportar, "get_upload_folder", lambda: str(servido))
+        origem = tmp_path / "relatorio.md"
+        origem.write_text("# Dump\nconteudo", encoding="utf-8")
+
+        filepath, filename = exportar.copiar_texto(str(origem), "relatorio")
+        assert filepath.startswith(str(servido))
+        assert filename.endswith(".md")
+        ok, _ = exportar._verificar_entrega(filepath)
+        assert ok
+
+    def test_txt_tambem_suportado(self, exportar, monkeypatch, tmp_path):
+        servido = tmp_path / "servido"
+        servido.mkdir()
+        monkeypatch.setattr(exportar, "get_upload_folder", lambda: str(servido))
+        origem = tmp_path / "notas.txt"
+        origem.write_text("texto", encoding="utf-8")
+        _, filename = exportar.copiar_texto(str(origem), None)
+        assert filename.endswith(".txt")
+
+    def test_extensao_nao_textual_rejeitada(self, exportar, tmp_path):
+        origem = tmp_path / "binario.bin"
+        origem.write_bytes(b"\x00\x01")
+        with pytest.raises(ValueError):
+            exportar.copiar_texto(str(origem), "x")
+
+    def test_origem_inexistente_rejeitada(self, exportar):
+        with pytest.raises(FileNotFoundError):
+            exportar.copiar_texto("/tmp/nao-existe-xyz.md", "x")

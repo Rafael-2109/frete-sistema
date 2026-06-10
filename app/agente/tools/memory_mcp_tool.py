@@ -763,7 +763,6 @@ def _embed_memory_best_effort(
     try:
         from app.embeddings.config import (
             MEMORY_SEMANTIC_SEARCH,
-            VOYAGE_DEFAULT_MODEL,
             MEMORY_CONTEXTUAL_EMBEDDING,
         )
         if not MEMORY_SEMANTIC_SEARCH:
@@ -826,12 +825,17 @@ def _embed_memory_best_effort(
             if existing and existing[0] == c_hash:
                 return  # Conteúdo não mudou
 
-            # Gerar embeddings: retrieval (contextual) + dedup (texto limpo)
+            # Gerar embeddings: retrieval (contextual, VOYAGE_MEMORY_MODEL —
+            # migracao large 2026-06-10) + dedup (texto limpo, modelo DEFAULT —
+            # thresholds 0.85/0.80 calibrados no lite, NAO medidos no large).
+            from app.embeddings.config import VOYAGE_MEMORY_MODEL
             svc = EmbeddingService()
             try:
-                embeddings = svc.embed_texts(
-                    [texto_embedado, dedup_texto], input_type="document"
+                emb_retrieval = svc.embed_texts(
+                    [texto_embedado], input_type="document",
+                    model=VOYAGE_MEMORY_MODEL,
                 )
+                emb_dedup = svc.embed_texts([dedup_texto], input_type="document")
             except Exception as e:
                 from app.embeddings.client import EmbeddingUnavailableError
                 if isinstance(e, EmbeddingUnavailableError):
@@ -839,11 +843,11 @@ def _embed_memory_best_effort(
                     return
                 raise
 
-            if not embeddings or len(embeddings) < 2:
+            if not emb_retrieval or not emb_dedup:
                 return
 
-            embedding_str = json.dumps(embeddings[0])
-            dedup_embedding_str = json.dumps(embeddings[1])
+            embedding_str = json.dumps(emb_retrieval[0])
+            dedup_embedding_str = json.dumps(emb_dedup[0])
 
             # Upsert (inclui dedup_embedding)
             db.session.execute(text("""
@@ -872,7 +876,7 @@ def _embed_memory_best_effort(
                 "texto_embedado": texto_embedado,
                 "embedding": embedding_str,
                 "dedup_embedding": dedup_embedding_str,
-                "model_used": VOYAGE_DEFAULT_MODEL,
+                "model_used": VOYAGE_MEMORY_MODEL,
                 "content_hash": c_hash,
                 "updated_at": agora_utc_naive(),
             })
@@ -1342,7 +1346,29 @@ def _dedup_embedding_search(
             return row.path
 
     # Fallback: registros sem dedup_embedding (pré-migration)
-    # Usa embedding contextualizado com threshold mais baixo
+    # Usa embedding contextualizado com threshold mais baixo.
+    # Migracao 2026-06-10: a coluna `embedding` esta em VOYAGE_MEMORY_MODEL —
+    # a query do fallback PRECISA ser re-embedada no mesmo modelo (a query
+    # principal acima e do modelo DEFAULT, casando com dedup_embedding).
+    from app.embeddings.config import VOYAGE_MEMORY_MODEL, VOYAGE_DEFAULT_MODEL
+    if VOYAGE_MEMORY_MODEL != VOYAGE_DEFAULT_MODEL:
+        try:
+            fallback_query_embedding = svc.embed_texts(
+                [clean_content], input_type="document",
+                model=VOYAGE_MEMORY_MODEL,
+            )[0]
+        except Exception as fb_err:
+            logger.debug(
+                f"[dedup_search] embed fallback ({VOYAGE_MEMORY_MODEL}) "
+                f"indisponivel, pulando fallback: {fb_err}"
+            )
+            return None
+        fallback_embedding_str = (
+            "[" + ",".join(str(x) for x in fallback_query_embedding) + "]"
+        )
+    else:
+        fallback_embedding_str = embedding_str
+
     result_fallback = db.session.execute(text("""
         SELECT
             path,
@@ -1350,13 +1376,15 @@ def _dedup_embedding_search(
         FROM agent_memory_embeddings
         WHERE user_id = ANY(:user_ids)
           AND embedding IS NOT NULL
+          AND model_used = :model_used
           AND dedup_embedding IS NULL
           AND path != :current_path
         ORDER BY embedding <=> CAST(:query AS vector)
         LIMIT 3
     """), {
-        "query": embedding_str,
+        "query": fallback_embedding_str,
         "user_ids": user_ids,
+        "model_used": VOYAGE_MEMORY_MODEL,
         "current_path": current_path or '',
     })
 
