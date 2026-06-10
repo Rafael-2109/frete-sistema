@@ -112,8 +112,8 @@ CREATE INDEX IF NOT EXISTS ix_teams_vinculo_codigos_hash ON teams_vinculo_codigo
 Rodar local: `python scripts/migrations/2026_06_10_teams_identidade.py` (autorizado sem pedir —
 memória `feedback_migrations_local_autorizadas`).
 
-- [ ] DDL .sql + .py escritos e rodados localmente; colunas existem (verificar via psql/inspector)
-- [ ] Commit
+- [x] DDL .sql + .py escritos e rodados localmente; colunas existem (verificar via psql/inspector)
+- [x] Commit
 
 ### Task A2: Modelo Usuario + TeamsVinculoCodigo
 
@@ -146,8 +146,8 @@ class TeamsVinculoCodigo(db.Model):
 
 Testes (red→green): `find_by_teams_aad_id` acha ativo / ignora inativo / None sem match.
 
-- [ ] Test red → implementação → green
-- [ ] Commit
+- [x] Test red → implementação → green
+- [x] Commit
 
 ### Task A3: Hierarquia de resolução em `_get_or_create_teams_user`
 
@@ -187,9 +187,9 @@ do passo 3 intacto (zero regressão para quem já existe).
 `bot_routes.bot_message`: extrair `usuario_email = str(dados.get("usuario_email", "")).strip()`
 e repassar tudo. `TeamsTask` NÃO ganha colunas novas — propagação via args da thread.
 
-- [ ] Tests red (aad match / email match grava vínculo / fallback nome) → green
-- [ ] Baseline `tests/teams/` verde
-- [ ] Commit
+- [x] Tests red (aad match / email match grava vínculo / fallback nome) → green
+- [x] Baseline `tests/teams/` verde
+- [x] Commit
 
 ### Task A4: Function envia e-mail + conversation_type + aad
 
@@ -217,8 +217,8 @@ conversation_type = (
 `TeamsInfo` vem de `botbuilder-core` (já em requirements). Falha de Graph NUNCA bloqueia a
 mensagem (try/except + log).
 
-- [ ] Código + revisão manual (function não tem suite pytest; validação real no deploy Fase C)
-- [ ] Commit
+- [x] Código + revisão manual (function não tem suite pytest; validação real no deploy Fase C)
+- [x] Commit
 
 ### Task A5: Fast-paths no path ASYNC + fast-path `vincular CODIGO`
 
@@ -264,9 +264,9 @@ chamar LLM. Tests: código válido vincula+marca used / expirado / já usado / r
 "vincular o pedido 123 na nota" (palavra a mais → NÃO intercepta — proteger do fast-path
 NF×PO existente!).
 
-- [ ] Tests red → green (incluir caso anti-colisão com vinculação NF×PO)
-- [ ] Bloco async com baseline+vinculação+vincular (ordem: vincular → vinculação NF×PO → baseline)
-- [ ] Commit
+- [x] Tests red → green (incluir caso anti-colisão com vinculação NF×PO)
+- [x] Bloco async com baseline+vinculação+vincular (ordem: vincular → vinculação NF×PO → baseline)
+- [x] Commit
 
 ### Task A6: Tela web de vinculação
 
@@ -284,9 +284,9 @@ renderiza código + instrução ("No Teams, envie: vincular ABC123 para o bot Ag
 UI: ler `.claude/references/design/GUIA_COMPONENTES_UI.md` ANTES de escrever o template
 (regra dev). Sem `<style>` inline.
 
-- [ ] Test red (rota exige login; POST gera código e invalida anterior) → green
-- [ ] Link no menu (base.html) verificado
-- [ ] Commit
+- [x] Test red (rota exige login; POST gera código e invalida anterior) → green
+- [x] Link no menu (base.html) verificado
+- [x] Commit
 
 ### Task A7: Merge de usuários fantasma
 
@@ -314,9 +314,9 @@ explícitos OU `--auto` (casa todos fantasmas com usuarios reais por teams_user_
 Cuidado: colisão UNIQUE (ex. tabela com UQ(user_id, chave)) → capturar IntegrityError por tabela,
 logar e continuar (relatório final lista pendências).
 
-- [ ] Test red (FK discovery + reapontamento em tabelas sintéticas) → green
-- [ ] Dry-run local OK
-- [ ] Commit
+- [x] Test red (FK discovery + reapontamento em tabelas sintéticas) → green
+- [x] Dry-run local OK
+- [x] Commit
 - **PROD (após deploy)**: rodar com Rafael ciente (não é automático)
 
 ---
@@ -338,8 +338,8 @@ logar e continuar (relatório final lista pendências).
 
 Web NÃO muda (author=None → dict idêntico ao atual; testes existentes garantem).
 
-- [ ] Tests red (grupo prefixa; personal não prefixa; author persistido; fallback XML com autor) → green
-- [ ] Commit
+- [x] Tests red (grupo prefixa; personal não prefixa; author persistido; fallback XML com autor) → green
+- [x] Commit
 
 ### Task B2: Corrigir closure congelada dos hooks (registry por sessão)
 
@@ -378,9 +378,9 @@ defense-in-depth). Decisão Rafael: memórias injetadas = do falante do turno.
 **Testar no Teams E no web** (regra módulo agente). Rodar suites:
 `tests/teams/ tests/agente/sdk/ tests/agente/routes/` antes do commit.
 
-- [ ] Tests red (set/get/clear; hook usa turno; fallback closure) → green
-- [ ] Suites teams+agente verdes
-- [ ] Commit
+- [x] Tests red (set/get/clear; hook usa turno; fallback closure) → green
+- [x] Suites teams+agente verdes
+- [x] Commit
 
 ---
 
@@ -398,7 +398,7 @@ ALTER TABLE teams_tasks ADD COLUMN IF NOT EXISTS delivered_via VARCHAR(12);
 Modelo `app/teams/models.py`: + `conversation_reference = db.Column(db.JSON)`,
 `delivered_via = db.Column(db.String(12))`.
 
-- [ ] Migration rodada local; modelo atualizado; commit
+- [x] Migration rodada local; modelo atualizado; commit
 
 ### Task C2: Function envia conversation_reference + mensagem fim-de-polling
 
@@ -413,8 +413,8 @@ Modelo `app/teams/models.py`: + `conversation_reference = db.Column(db.JSON)`,
 `serialize()` é o método msrest do Model (dict JSON-safe). Tratar None (payload antigo durante
 janela de deploy: backend tolera ausência).
 
-- [ ] Backend test: task persiste reference (tests/teams/test_proactive.py) → green
-- [ ] Commit
+- [x] Backend test: task persiste reference (tests/teams/test_proactive.py) → green
+- [x] Commit
 
 ### Task C3: Claim atômico de entrega + endpoint /api/notify + caller backend
 
@@ -457,8 +457,8 @@ if not claimed and task.delivered_via == 'proactive':
 ```
 Function side: polling que recebe `already_delivered` encerra silenciosamente (return).
 
-- [ ] Tests red (claim único; rollback de claim em falha de POST; notify só se elapsed>270s) → green
-- [ ] Commit
+- [x] Tests red (claim único; rollback de claim em falha de POST; notify só se elapsed>270s) → green
+- [x] Commit
 
 ### Task C4: Heartbeat + thresholds
 
@@ -473,8 +473,8 @@ Function side: polling que recebe `already_delivered` encerra silenciosamente (r
 - Modify: `app/teams/CLAUDE.md` (R6/R7/lifecycle: documentar novos thresholds)
 - Test: `tests/teams/test_cleanup_thresholds.py`
 
-- [ ] Tests red (cleanup respeita 15/30/15; heartbeat renova updated_at; cancelamento limpo) → green
-- [ ] Commit
+- [x] Tests red (cleanup respeita 15/30/15; heartbeat renova updated_at; cancelamento limpo) → green
+- [x] Commit
 
 ### Task C5: Deploy function + env Render + validação real
 
@@ -499,7 +499,7 @@ Function side: polling que recebe `already_delivered` encerra silenciosamente (r
   instrução real — function splita em blocos de 3500)
 - Test: ajustar `tests/teams/` que cubram _sanitizar_texto (se existirem) + caso novo 10K chars
 
-- [ ] Tests green; commit
+- [x] Tests green; commit
 
 ### Task D2: Fila concatena em vez de sobrescrever
 
@@ -509,7 +509,7 @@ Function side: polling que recebe `already_delivered` encerra silenciosamente (r
 - Modify: `app/teams/CLAUDE.md` R8
 - Test: `tests/teams/test_fila_concatena.py`
 
-- [ ] Test red → green; commit
+- [x] Test red → green; commit
 
 ### Task D3: Rollback defensivo + remover /bot/execute e card morto
 
@@ -521,7 +521,7 @@ Function side: polling que recebe `already_delivered` encerra silenciosamente (r
 - Modify: `app/teams/CLAUDE.md` (tabela de endpoints)
 - Test: ajustar referência a /bot/execute se existir em testes
 
-- [ ] Suite teams verde; commit
+- [x] Suite teams verde; commit
 
 ### Task D4: Comando "nova conversa" (reset de contexto)
 
@@ -533,7 +533,7 @@ Function side: polling que recebe `already_delivered` encerra silenciosamente (r
   Interceptar ANTES de `_get_or_create_teams_session` (senão a própria msg renova o TTL).
 - Test: `tests/teams/test_reset_conversa.py`
 
-- [ ] Test red → green; commit
+- [x] Test red → green; commit
 
 ### Task D5 (PR separado): Upload de arquivos no Teams
 
