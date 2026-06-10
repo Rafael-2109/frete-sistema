@@ -928,6 +928,37 @@ ESTOQUE_RESTRICAO_ALLOWED_USER_IDS: set[int] = _parse_allowed_user_ids_csv(
 )
 
 
+# =============================================================================
+# Fable 5 — modelo opt-in por usuario (2026-06-10)
+# =============================================================================
+# `claude-fable-5` e' o modelo mais capaz da Anthropic, porem o mais CARO (pricing
+# acima do Opus-tier + tokenizer ~30% mais tokens). Por isso a opcao so' e' exposta
+# na UI (e aceita no backend) para user_ids autorizados — espelha o padrao de
+# ESTOQUE_RESTRICAO_ALLOWED_USER_IDS. Pre-req: CLI bundled >= 2.1.170 (SDK 0.2.95),
+# que reconhece o model id `claude-fable-5`.
+#
+# Whitelist: AGENT_FABLE5_ALLOWED_USER_IDS=1,55 (CSV de user_ids). Default "1"
+# (so Rafael). Ajustar via env var no Render SEM deploy.
+FABLE5_MODEL_ID = "claude-fable-5"
+FABLE5_ALLOWED_USER_IDS: set[int] = _parse_allowed_user_ids_csv(
+    os.getenv("AGENT_FABLE5_ALLOWED_USER_IDS", "1")
+)
+
+
+def is_fable5_allowed(user_id) -> bool:
+    """True se o user_id pode usar o modelo Fable 5 (gate por allowlist CSV).
+
+    Aceita int | None | str-numerica. None/invalido -> False (fail-closed:
+    Fable 5 e' caro, nao liberar por engano).
+    """
+    if user_id is None:
+        return False
+    try:
+        return int(user_id) in FABLE5_ALLOWED_USER_IDS
+    except (TypeError, ValueError):
+        return False
+
+
 # ====================================================================
 # Audit Hook deterministico Odoo (2026-05-28)
 # ====================================================================

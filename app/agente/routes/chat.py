@@ -55,7 +55,9 @@ logger = logging.getLogger('sistema_fretes')
 @login_required
 def pagina_chat():
     """Página de chat com o agente."""
-    return render_template('agente/chat.html')
+    from app.agente.config.feature_flags import is_fable5_allowed
+    pode_usar_fable5 = is_fable5_allowed(getattr(current_user, 'id', None))
+    return render_template('agente/chat.html', pode_usar_fable5=pode_usar_fable5)
 
 
 # =============================================================================
@@ -108,6 +110,19 @@ def api_chat():
         session_id = data.get('session_id')  # Nosso session_id (não do SDK)
         model = data.get('model')
         effort_level = data.get('effort_level', 'off')
+
+        # Gate Fable 5 (defense-in-depth, 2026-06-10): a UI só expõe a opção
+        # `claude-fable-5` para user_ids autorizados (is_fable5_allowed), mas
+        # validamos no backend para barrar bypass do front. Não-autorizado →
+        # fallback silencioso p/ Opus (não quebra UX; Fable 5 é caro). Caso normal
+        # (autorizado ou modelo != fable) passa intacto.
+        from app.agente.config.feature_flags import FABLE5_MODEL_ID, is_fable5_allowed
+        if model == FABLE5_MODEL_ID and not is_fable5_allowed(getattr(current_user, 'id', None)):
+            logger.warning(
+                f"[AGENTE] Fable 5 negado para user_id="
+                f"{getattr(current_user, 'id', None)} (não autorizado) → fallback Opus"
+            )
+            model = 'claude-opus-4-8'
 
         # Sticky session check (mitiga Anthropic Issue #61862)
         # Se a sessão já tem dono em OUTRO worker, retornar 409 com hint —

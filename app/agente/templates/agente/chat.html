@@ -41,6 +41,7 @@
                         <option value="claude-haiku-4-5-20251001">⚡ Haiku</option>
                         <option value="claude-sonnet-4-6" selected>⚡⚡ Sonnet</option>
                         <option value="claude-opus-4-8">🧠 Opus</option>
+                        {% if pode_usar_fable5 %}<option value="claude-fable-5">✦ Fable 5</option>{% endif %}
                     </select>
                     <div class="control-tooltip">
                         <strong>Escolha o Modelo</strong>
@@ -532,6 +533,7 @@
                 <option value="claude-haiku-4-5-20251001">Haiku — Rapido</option>
                 <option value="claude-sonnet-4-6" selected>Sonnet — Equilibrado</option>
                 <option value="claude-opus-4-8">Opus — Potente</option>
+                {% if pode_usar_fable5 %}<option value="claude-fable-5">Fable 5 — Maxima</option>{% endif %}
             </select>
         </div>
 

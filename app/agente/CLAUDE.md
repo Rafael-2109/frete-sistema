@@ -632,6 +632,7 @@ Avalia pos-sessao se as skills invocadas resolveram o problema; quando nao, cria
 
 - **claude-agent-sdk**: `0.2.95` | **CLI bundled**: 2.1.170 (suporta `claude-fable-5`) | **anthropic**: `0.98.1` | **Floor**: `mcp>=1.19.0` (fix `CallToolResult` perdido em 0.1.70)
 - **Modelo default**: `claude-opus-4-8` ($5/$25 per MTok, adaptive thinking, 1M context). **Rollback rapido**: `AGENT_MODEL=claude-opus-4-7` + `TEAMS_DEFAULT_MODEL=claude-opus-4-7` (ou `4-6`).
+- **Fable 5 (opt-in por usuario, 2026-06-10)**: `claude-fable-5` (modelo mais capaz, mais CARO + tokenizer ~30% mais tokens) e' exposto na UI (`chat.html`, var `pode_usar_fable5`) e aceito no backend (`chat.py` gate defense-in-depth → fallback Opus se nao-autorizado) SO' para user_ids em `AGENT_FABLE5_ALLOWED_USER_IDS` (CSV, default `"1"`). Helper: `feature_flags.is_fable5_allowed()`. Compativel sem mudar `client.py` (thinking adaptive/omit OK; sem `budget_tokens`/sampling; smart-router so' rebaixa `opus`, nao toca `fable`). Pre-req: CLI bundled >= 2.1.170.
 - **SessionStore**: `PostgresSessionStore` source-of-truth (Fase B; tabela `claude_session_store`; flag `AGENT_SDK_SESSION_STORE_ENABLED` ON; flush `batched`|`eager` via `AGENT_SDK_SESSION_STORE_FLUSH`). Rollback: `ROLLBACK_SESSION_STORE.md`.
 - **Thinking display**: toggle per-user via `Usuario.preferences['agent_thinking_display']` (default global `AGENT_THINKING_DISPLAY=omitted`).
 
