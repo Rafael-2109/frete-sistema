@@ -1,9 +1,41 @@
-# Agente Web — SDK Changelog (0.1.49 → 0.2.89)
+# Agente Web — SDK Changelog (0.1.49 → 0.2.95)
 
 > Historico de adocoes, breaking changes, bug fixes e features NAO adotadas do
 > Claude Agent SDK + Anthropic SDK Python. Extraido de `CLAUDE.md` para reducao de ruido.
 >
-> **Atualizado**: 2026-06-03 (SDK 0.2.89 + CLI bundled 2.1.162 — upgrade so do CLI)
+> **Atualizado**: 2026-06-09 (SDK 0.2.95 + CLI bundled 2.1.170 — upgrade so do CLI; habilita `claude-fable-5`)
+
+---
+
+## SDK 0.2.89 → 0.2.95 (2026-06-09) — CLI bundled 2.1.162 → 2.1.170
+
+**Versao**: `claude-agent-sdk==0.2.95` (CLI bundled 2.1.170) + `anthropic==0.98.1`
+**Bumps intermediarios**: 0.2.90 (CLI 2.1.163), 0.2.91 (2.1.165), 0.2.92 (2.1.166), 0.2.93 (2.1.167), 0.2.94 (2.1.169)
+
+### Mudancas no SDK Python (zero!)
+
+Fonte primaria verificada: `CHANGELOG.md` oficial do repo (releases 0.2.90-0.2.95).
+
+- **0.2.90-95**: TODAS sao SO bump do CLI bundled. Nada no codigo Python.
+  - 0.2.91: trocou suite de teste `pytest-asyncio` → plugin pytest do `anyio` (roda cada
+    teste async sob asyncio E trio). Mudanca interna de teste, **sem impacto runtime**.
+
+**Breaking changes no SDK Python: NENHUMA.** `ClaudeAgentOptions` (campos `model`/`effort`/
+`cli_path` intactos), hooks, `can_use_tool`, `skills=`, `strict_mcp_config` inalterados.
+Validado neste upgrade: os 17 simbolos do bloco `from claude_agent_sdk import (...)` de
+`client.py:25-46` + condicionais `MirrorErrorMessage`/`project_key_for_directory` importam;
+`app.agente.sdk.client` importa limpo no 0.2.95.
+
+### O ganho real: CLI bundled 2.1.162 → 2.1.170 (habilita Fable 5)
+
+Mesma mecanica de sempre — o SDK resolve o CLI **bundled com prioridade absoluta**
+(`_find_bundled_cli` ANTES de `shutil.which`), e o Render NAO instala o CLI via npm → producao
+roda o `_bundled/claude` do wheel. `pip install claude-agent-sdk==0.2.95` troca o binario
+bundled de 2.1.162 → 2.1.170 (confirmado em `_cli_version.py`).
+
+**Motivacao deste bump**: o CLI 2.1.170 reconhece o modelo **`claude-fable-5`** (alias `fable`)
+na flag `--model` — pre-requisito para expor Fable 5 como opcao de modelo no agente. O CLI 2.1.162
+anterior nao tinha esse model id. (Validado: `_bundled/claude --help` lista `claude-fable-5`.)
 
 ---
 
