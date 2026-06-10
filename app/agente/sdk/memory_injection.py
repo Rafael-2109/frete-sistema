@@ -51,6 +51,12 @@ TIER2_MAX_MEMORIES = 4              # bloco Tier 2 = 4 x ~300c (tabela PAD-CTX i
 # de design eram pre-medicao; enforcement usa a distribuicao real.
 # Kill-switch: AGENT_FIXED_BLOCKS_CAP=false (feature_flags.py).
 USER_RULE_CHAR_CAP = 350
+# Validacao PROD pos-deploy F6 (user 18, 15:53Z): recent_sessions media ~2,9K
+# (5 resumos sem teto) vs ~1,2KB da tabela PAD-CTX — o proprio docstring de
+# _build_session_window promete "~150 chars" por sessao sem enforcar. Era o
+# 2o hog que ainda empurrava o tier2 pra fora no overflow. Resumo truncado;
+# integra navegavel via search_sessions (sem ponteiro — a data ancora).
+SESSION_RESUMO_CHAR_CAP = 240
 TIER1_PATH_CAPS = {
     '/memories/user.xml': 1500,
     '/memories/preferences.xml': 1200,
@@ -239,6 +245,16 @@ def _build_session_window(user_id: int) -> tuple[Optional[str], Optional[str]]:
             # Extrair campos do summary JSONB
             if isinstance(summary, dict):
                 resumo = summary.get('resumo_geral', '')
+                # F6: enforcar o contrato "~150 chars/sessao" do docstring
+                # (cap 240c; bloco-alvo ~1,2KB na tabela PAD-CTX). Sem isso
+                # resumos gordos levavam recent_sessions a ~3K e empurravam
+                # o tier2 pra fora no overflow (validacao PROD user 18).
+                try:
+                    from ..config.feature_flags import AGENT_FIXED_BLOCKS_CAP
+                    if AGENT_FIXED_BLOCKS_CAP and len(resumo) > SESSION_RESUMO_CHAR_CAP:
+                        resumo = resumo[:SESSION_RESUMO_CHAR_CAP - 3] + '...'
+                except Exception:
+                    pass
                 pendencias = summary.get('tarefas_pendentes', [])
                 alertas = summary.get('alertas', [])
                 data = sess.updated_at.strftime('%d/%m') if sess.updated_at else '?'

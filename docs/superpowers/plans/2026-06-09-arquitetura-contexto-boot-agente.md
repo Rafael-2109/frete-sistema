@@ -569,3 +569,15 @@ Padrao em si (PAD-CTX publicado): RP-1, R-2(criterio), A5(roteamento), C1(fonte 
   anti-spoofing); fix = sanitize do conteudo BRUTO antes do cap (TDD; suite
   verde). F6 COMPLETA exceto: validacao pos-deploy em PROD (logs
   [MEMORY_INJECT] users 1/18/82 + mini-set) e fila de curadoria (requer ok).
+- 2026-06-10 (F6 validacao PROD) — **CAP VALIDADO EM TRAFEGO REAL + 2o hog
+  fechado**: deploy dep-d8kocrmk1jcs739ngjm0 live 15:49Z; turno real do user 18
+  as 15:53Z mostrou o cap funcionando (tier1 7,6K→4,0K: user.xml 2906→1464,
+  prefs 2541→1235, expertise 1349→1124; rules 6137→3451 com preferences FORA
+  do canal; total 13.582 ≤15K; routing SOBREVIVEU). MAS tier2 ainda caiu no
+  turno: hogs restantes = recent_sessions ~2,9K (docstring promete ~150c/
+  sessao e tabela ~1,2KB — nada enforcava) + operational_directives 4,3K
+  (0/20 na ablacao). FECHADO o primeiro: SESSION_RESUMO_CHAR_CAP=240 (TDD,
+  3 testes; flag-gated no mesmo kill-switch). O segundo (directives por
+  intent OU swap da ordem de corte tier2<->organicas — a ordem atual corta
+  o bloco de 72% de utilidade antes do de 0%) = DECISAO Rafael (proposta
+  registrada; mexe na politica de overflow do PAD-CTX).

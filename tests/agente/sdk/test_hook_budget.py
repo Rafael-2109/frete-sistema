@@ -174,6 +174,52 @@ def _mock_sessions(fakes):
     return patch('app.agente.models.AgentSession.query', mock_query)
 
 
+class TestSessionWindowResumoCap:
+    """F6 (validacao PROD): recent_sessions media ~4K no tail (user 18) vs
+    ~1,2KB da tabela PAD-CTX — o docstring de _build_session_window promete
+    '~150 chars' por sessao mas nada enforca. Cap por resumo (incortavel:
+    destila, nao remove; integra navegavel via search_sessions)."""
+
+    def test_resumo_gordo_e_truncado_por_sessao(self, app_ctx):
+        fakes = [
+            SimpleNamespace(
+                summary={'resumo_geral': f'sessao {i} ' + 'r' * 1000,
+                         'tarefas_pendentes': [], 'alertas': []},
+                updated_at=agora_utc_naive(),
+            ) for i in range(5)
+        ]
+        with _mock_sessions(fakes), \
+             patch.object(memory_injection, '_load_resolved_pendencias', return_value=set()):
+            sessions_block, _ = memory_injection._build_session_window(user_id=5)
+        assert sessions_block is not None
+        assert len(sessions_block) <= 5 * (memory_injection.SESSION_RESUMO_CHAR_CAP + 120), (
+            f"recent_sessions estourou: {len(sessions_block)}c"
+        )
+        assert 'r' * (memory_injection.SESSION_RESUMO_CHAR_CAP + 10) not in sessions_block
+
+    def test_resumo_curto_passa_intacto(self, app_ctx):
+        fakes = [SimpleNamespace(
+            summary={'resumo_geral': 'resolveu fretes do dia',
+                     'tarefas_pendentes': [], 'alertas': []},
+            updated_at=agora_utc_naive(),
+        )]
+        with _mock_sessions(fakes), \
+             patch.object(memory_injection, '_load_resolved_pendencias', return_value=set()):
+            sessions_block, _ = memory_injection._build_session_window(user_id=5)
+        assert 'resolveu fretes do dia' in sessions_block
+
+    def test_flag_off_resumo_integral(self, app_ctx):
+        fakes = [SimpleNamespace(
+            summary={'resumo_geral': 'g' * 1000, 'tarefas_pendentes': [], 'alertas': []},
+            updated_at=agora_utc_naive(),
+        )]
+        with _mock_sessions(fakes), \
+             patch.object(memory_injection, '_load_resolved_pendencias', return_value=set()), \
+             patch('app.agente.config.feature_flags.AGENT_FIXED_BLOCKS_CAP', False):
+            sessions_block, _ = memory_injection._build_session_window(user_id=5)
+        assert 'g' * 1000 in sessions_block, "flag off = resumo integral (legado)"
+
+
 class TestSessionWindowSplit:
     def test_pendencias_externalizadas(self, app_ctx):
         fake = SimpleNamespace(

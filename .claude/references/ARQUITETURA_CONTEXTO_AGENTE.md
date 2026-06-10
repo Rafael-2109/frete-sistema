@@ -227,7 +227,7 @@ Orcamento-alvo total: ≤15KB/turno (tipico ~7KB; baseline pre-padrao ~34KB). Or
 | 9 | routing_context (active_traps corrigidas) | ~0,2KB | condicional |
 | 10 | system_hint / correction_hint | ~0,2KB | condicional (regex) |
 | 11 | debug_mode / sql_admin | 1-3 linhas cada | SO admin (ja condicional) |
-| 12 | recent_sessions (5 resumos) | ~1,2KB | sempre |
+| 12 | recent_sessions (5 resumos) | ~1,2KB — **ENFORCED 240c/resumo** (`SESSION_RESUMO_CHAR_CAP`, F6 pos-validacao PROD: resumos sem teto chegavam a ~3K e empurravam o tier2 no overflow) | sempre |
 | 13 | pendencias_acumuladas | 5 × 100c | ULTIMO — colado a mensagem |
 
 **Overflow (prioridade de corte quando estourar o teto):** cortar primeiro Tier 2 RAG
