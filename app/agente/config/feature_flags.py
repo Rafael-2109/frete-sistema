@@ -206,6 +206,19 @@ MEMORY_INJECTION_MIN_SIMILARITY = float(os.getenv("AGENT_MEMORY_MIN_SIMILARITY",
 USE_USER_XML_POINTER = os.getenv("AGENT_USER_XML_POINTER", "false").lower() == "true"
 USER_XML_POINTER_THRESHOLD = int(os.getenv("AGENT_USER_XML_POINTER_THRESHOLD", "3000"))
 
+# F6 PAD-CTX (2026-06-10): cap de blocos FIXOS do hook (tier1 + user_rules).
+# Evidencia tripla PROD (users 1/18/82): user_rules 6.2K + tier1 7.6-9.1K
+# estouravam sozinhos o teto de 15K e a politica de overflow F4 cortava TODO
+# o adaptativo (tier2/directives organicas/routing) — os usuarios mais ativos
+# eram os que nada recebiam do retrieval semantico. Solucao: destilar/ponteirar
+# (como o Tier 2 faz com 300c), NUNCA cortar — intocaveis preservados.
+# Caps em memory_injection.py (TIER1_PATH_CAPS, USER_RULE_CHAR_CAP), calibrados
+# em dados PROD 2026-06-10. Kill-switch: AGENT_FIXED_BLOCKS_CAP=false restaura
+# os blocos fixos INTEGRAIS (sem destilado/ponteiro). NOTA (review F6): a
+# exclusao dos paths Tier 1 do canal <user_rules> (fix da dupla injecao) e
+# INCONDICIONAL — nao volta com a flag off; o conteudo segue integro no Tier 1.
+AGENT_FIXED_BLOCKS_CAP = os.getenv("AGENT_FIXED_BLOCKS_CAP", "true").lower() == "true"
+
 # Operational Directives (v2.2, 2026-04-12) — Mudanca 1
 # Promove heuristicas empresa nivel 5 (importance >= 0.7) de contexto
 # passivo (<user_memories>) para diretriz operacional obrigatoria

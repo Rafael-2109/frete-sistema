@@ -218,8 +218,8 @@ Orcamento-alvo total: ≤15KB/turno (tipico ~7KB; baseline pre-padrao ~34KB). Or
 |-------|-------|-----------|----------|
 | 1 | resume_fallback | ~0,1KB | so 1a msg pos-falha de resume |
 | 2 | session_context (data/usuario/permissoes) | ~0,1KB | sempre |
-| 3 | user_rules (mandatory) | cap 12 regras (correction_count DESC — mecanismo vigente `MANDATORY_RULES_MAX_COUNT`); meta de curadoria: ≤200c/regra | se existir |
-| 4 | user_memories: perfil (user/preferences/expertise) | 600c + 400c + 400c | sempre |
+| 3 | user_rules (mandatory) | cap 12 regras (correction_count DESC — `MANDATORY_RULES_MAX_COUNT`) + **ENFORCED 350c/regra** (`USER_RULE_CHAR_CAP`, destilado preserva DO integral + ponteiro — F6 2026-06-10); meta de curadoria: ≤200c/regra; paths Tier 1 EXCLUIDOS do canal (dupla injecao) | se existir |
+| 4 | user_memories: perfil (user/preferences/expertise) | **ENFORCED 1500c + 1200c + 1200c** (`TIER1_PATH_CAPS`, destilado + ponteiro — F6 2026-06-10; desvio declarado vs design 600/400/400: pre-medicao — resumo+contextualizacao reais do user.xml medem 1.0-1.9K e o cap preserva o pointer-mode curado) | sempre |
 | 5 | user_memories: perfis empresa (Tier 1.5) | 400c/perfil | se existir |
 | 6 | user_memories: Tier 2 RAG por INTENT DO TURNO | 4 × 300c | similaridade > threshold |
 | 7 | operational_directives | constitucional + 2 por dominio | sempre |
@@ -234,6 +234,16 @@ Orcamento-alvo total: ≤15KB/turno (tipico ~7KB; baseline pre-padrao ~34KB). Or
 (item 6), depois directives organicas (item 7, mantendo a constitucional), depois
 routing_context (9). NUNCA cortar: session_context, user_rules, pendencias,
 recent_sessions.
+
+**Cap de blocos fixos (F6, 2026-06-10)**: os blocos INCORTAVEIS (itens 3-4) tem
+enforcement proprio — destilar/ponteirar (como o Tier 2 com 300c), nunca cortar.
+Evidencia tripla PROD (users 1/18/82): rules 6,2K + tier1 7,6-9,1K estouravam sozinhos
+o teto 15K e a politica de overflow zerava TODO o adaptativo — os usuarios mais ativos
+eram os que nada recebiam do retrieval. Implementacao: `TIER1_PATH_CAPS` +
+`USER_RULE_CHAR_CAP` + `_distill_fixed_block`/`_distill_rule_content`
+(`memory_injection.py`); kill-switch `AGENT_FIXED_BLOCKS_CAP=false`. Fix junto: paths
+Tier 1 com priority=mandatory entravam 2x no payload (user_rules + Tier 1) — excluidos
+do canal L1 (`_query_user_rules`).
 
 Excluidos do boot operacional (acessiveis via skill `gerindo-agente`/tela admin):
 `skill_hints`, `world_model` (removidos — decisao R-1), `stale_empresa`,
@@ -333,16 +343,19 @@ Licoes vigentes:
 - **Existente**: pre-commit `pre-commit-prompt-lint.sh` → `prompt_size_audit.py
   --check-delta` (baseline de linhas/tokens do prompt estatico). Crescimento legitimo =
   `--update-baseline` + justificativa.
-- **Novos checks (deste padrao)**: (1) consistencia de subagentes
-  (`.claude/agents/*.md` ↔ system_prompt `<subagents>` ↔ CLAUDE.md SUBAGENTES);
-  (2) orcamento do listing de skills (soma das descriptions ≤8K chars);
-  (3) orcamento do hook por bloco (`tests/agente/sdk/test_hook_budget.py` — criado na
-  FASE 4, 2026-06-09: ordem-alvo + caps Tier 2 + overflow + teto 15KB);
-  (4) invariante de nao-orfandade da deny-list (skill excluida ↔
-  declarada em agents/*.md); (5) checklist de admissao por camada (este doc).
-- **Dependencia declarada**: o fluxo R-EXEC-5 vive em `app/agente/CLAUDE.md` — adicionar
-  la o ponteiro para este checklist (acao da FASE 6 do plano; sem isso o check (5) nao
-  entra no fluxo).
+- **Os 5 checks deste padrao — TODOS registrados no fluxo (F6, 2026-06-10), via
+  `pre-commit-prompt-lint.sh`**: (1) consistencia de subagentes
+  (`.claude/agents/*.md` ↔ system_prompt `<subagents>` ↔ CLAUDE.md SUBAGENTES) —
+  `prompt_size_audit.py --check-consistency`;
+  (2) orcamento do listing de skills (soma das descriptions ≤8K chars) —
+  `skills_listing_audit.py --check`;
+  (3) orcamento do hook por bloco (`tests/agente/sdk/test_hook_budget.py` — F4: ordem-alvo
+  + caps Tier 2 + overflow + teto 15KB; F6: caps tier1/user_rules) — roda no pre-commit
+  quando o pipeline de injecao (`memory_injection*.py`/`hooks.py`) e tocado;
+  (4) invariante de nao-orfandade da deny-list (skill excluida ↔ declarada em
+  agents/*.md) — mesmo `--check-consistency`;
+  (5) checklist de admissao por camada (este doc) — apontado pelo item 4 do R-EXEC-5
+  em `app/agente/CLAUDE.md` (dependencia declarada CUMPRIDA na F6).
 - **Plano de implementacao**: ver
   `docs/superpowers/plans/2026-06-09-arquitetura-contexto-boot-agente.md`.
 

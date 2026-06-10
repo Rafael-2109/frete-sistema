@@ -267,6 +267,281 @@ _NO_SEMANTIC = [
 ]
 
 
+# =====================================================================
+# F6 — Cap de blocos FIXOS (tier1 + user_rules): destilar/ponteirar,
+# NUNCA cortar (intocaveis PAD-CTX). Evidencia tripla PROD (users 1/18/82):
+# rules 6.2K + tier1 7.6-9.1K estouravam sozinhos o teto 15K e a politica
+# de overflow zerava TODO o adaptativo (tier2/organicas/routing).
+# =====================================================================
+
+class TestDistillFixedBlock:
+    def test_conteudo_curto_passa_intacto(self):
+        mem = SimpleNamespace(id=10, path='/memories/preferences.xml', meta=None)
+        out = memory_injection._distill_fixed_block(mem, 'curto', 1200)
+        assert out == 'curto'
+        assert 'view_memories' not in out
+
+    def test_conteudo_longo_trunca_em_fronteira_de_linha_com_ponteiro(self):
+        mem = SimpleNamespace(id=11, path='/memories/preferences.xml', meta=None)
+        lines = '\n'.join(
+            f'[preferencia] item {i} ' + 'x' * 80 for i in range(40)
+        )
+        out = memory_injection._distill_fixed_block(mem, lines, 1200)
+        assert len(out) <= 1200 + 120, f"destilado estourou: {len(out)} chars"
+        assert 'view_memories' in out, "bloco fixo destilado DEVE apontar para a integra"
+        assert '/memories/preferences.xml' in out
+        # truncamento preferencial em fronteira de linha: nao termina no meio
+        # de um item (a ultima linha antes do ponteiro e um item completo)
+        body = out.split('\n[integra]')[0]
+        # invariante real da fronteira de linha: a ULTIMA linha do corpo e um
+        # item COMPLETO (review F6: endswith('x'*10) passava com corte no meio)
+        import re as _re
+        last_line = body.rstrip('…').rstrip().splitlines()[-1].strip()
+        assert _re.fullmatch(r'\[preferencia\] item \d+ x{80}', last_line), (
+            f"corte caiu no meio de item: {last_line!r}"
+        )
+
+
+class TestDistillRuleContent:
+    def test_regra_curta_passa_intacta(self):
+        mem = SimpleNamespace(id=20, path='/memories/corrections/r.xml', meta=None)
+        content = 'WHEN: pedido aberto DO: usar consultar_sql'
+        out = memory_injection._distill_rule_content(mem, content)
+        assert out == content
+
+    def test_regra_longa_com_meta_preserva_do_integral(self):
+        """DO e o nucleo operativo da regra — NUNCA pode ser o primeiro a cair."""
+        mem = SimpleNamespace(
+            id=21, path='/memories/corrections/juros.xml',
+            meta={
+                'titulo': 'T' * 200,
+                'when': 'W' * 200,
+                'do': 'Nunca aplicar juros padrao sem confirmar com o usuario',
+                'kind': 'correcao', 'nivel': 5,
+            },
+        )
+        content = 'Z' * 800  # content bruto gordo — base deve ser o meta
+        out = memory_injection._distill_rule_content(mem, content)
+        assert 'Nunca aplicar juros padrao sem confirmar com o usuario' in out, (
+            "DO do meta deve sobreviver INTEGRAL ao destilado"
+        )
+        assert 'ZZZZ' not in out
+        assert 'view_memories' in out
+        assert len(out) <= memory_injection.USER_RULE_CHAR_CAP + 120
+
+    def test_regra_longa_sem_meta_trunca_com_ponteiro(self):
+        mem = SimpleNamespace(id=22, path='/memories/corrections/semmeta.xml', meta=None)
+        content = 'Y' * 900
+        out = memory_injection._distill_rule_content(mem, content)
+        assert len(out) <= memory_injection.USER_RULE_CHAR_CAP + 120
+        assert 'view_memories' in out
+        assert '/memories/corrections/semmeta.xml' in out
+
+
+class TestUserRulesCapEDedupTier1(object):
+    """Canal L1 <user_rules>: cap por regra + exclusao dos paths Tier 1."""
+
+    def test_paths_tier1_ficam_fora_do_canal_l1(self, app_ctx, f4_mems):
+        """Bug PROD (user 18): preferences.xml com priority=mandatory entrava
+        2x no payload — no <user_rules> E no Tier 1. Paths protegidos vivem
+        SO no Tier 1 (canal canonico de perfil)."""
+        from app.agente.sdk.memory_injection_rules import (
+            _build_user_rules, _get_user_rule_ids,
+        )
+        created, user_id = f4_mems
+        prefs = _mk_mem(user_id, '/memories/preferences.xml',
+                        '[preferencia] excel sempre', created, priority='mandatory')
+        _mk_mem(user_id, '/memories/corrections/regra-real.xml',
+                'WHEN: sempre DO: regra dura legitima', created, priority='mandatory')
+
+        block = _build_user_rules(user_id)
+        assert block and 'regra dura legitima' in block
+        assert '/memories/preferences.xml' not in block, (
+            "path Tier 1 NAO pode entrar no <user_rules> (dupla injecao)"
+        )
+        assert prefs.id not in _get_user_rule_ids(user_id)
+
+    def test_regra_gorda_e_destilada_no_bloco(self, app_ctx, f4_mems):
+        created, user_id = f4_mems
+        _mk_mem(user_id, '/memories/corrections/gorda.xml',
+                'K' * 2000, created, priority='mandatory')
+        from app.agente.sdk.memory_injection_rules import _build_user_rules
+        block = _build_user_rules(user_id)
+        assert block is not None
+        assert 'KKKK' in block, "regra destilada mantem o INICIO do conteudo"
+        assert len(block) < 1200, (
+            f"regra de 2000c deveria sair destilada (~cap {memory_injection.USER_RULE_CHAR_CAP}c); "
+            f"bloco veio com {len(block)}c"
+        )
+        assert 'view_memories' in block
+
+    def test_flag_off_preserva_comportamento_legado(self, app_ctx, f4_mems):
+        created, user_id = f4_mems
+        _mk_mem(user_id, '/memories/corrections/gorda-legacy.xml',
+                'L' * 2000, created, priority='mandatory')
+        from app.agente.sdk.memory_injection_rules import _build_user_rules
+        with patch('app.agente.config.feature_flags.AGENT_FIXED_BLOCKS_CAP', False):
+            block = _build_user_rules(user_id)
+        assert block is not None
+        assert 'L' * 2000 in block, "flag off = regra integral (legado)"
+
+    def test_dedup_tier1_e_incondicional_a_flag(self, app_ctx, f4_mems):
+        """Review F6: a exclusao dos paths Tier 1 do canal L1 e BUG FIX —
+        NAO volta com o kill-switch (a dupla injecao nao pode retornar)."""
+        from app.agente.sdk.memory_injection_rules import _build_user_rules
+        created, user_id = f4_mems
+        _mk_mem(user_id, '/memories/preferences.xml',
+                '[preferencia] dup-check', created, priority='mandatory')
+        _mk_mem(user_id, '/memories/corrections/regra-flagoff.xml',
+                'WHEN: x DO: y', created, priority='mandatory')
+        with patch('app.agente.config.feature_flags.AGENT_FIXED_BLOCKS_CAP', False):
+            block = _build_user_rules(user_id)
+        assert block and '/memories/preferences.xml' not in block
+
+    def test_regra_empresa_com_path_protegido_fica_no_canal_l1(self, app_ctx, f4_mems):
+        """Edge do review F6: row EMPRESA (user_id=0) com path protegido NAO e
+        injetada pelo Tier 1 (query e user-scoped) — exclui-la do canal L1
+        tambem a faria sumir dos DOIS canais. A exclusao vale SO para rows do
+        proprio usuario (as que o Tier 1 de fato injeta)."""
+        from app.agente.sdk.memory_injection_rules import _build_user_rules
+        created, user_id = f4_mems
+        _mk_mem(0, '/memories/preferences.xml',
+                '[empresa] regra global dura', created, priority='mandatory')
+        block = _build_user_rules(user_id)
+        assert block and 'regra global dura' in block, (
+            "regra empresa com path protegido sumiu dos dois canais"
+        )
+
+
+class TestTier1Cap:
+    def _call(self, user_id, prompt='qual o status?', model='claude-opus-4-8'):
+        return memory_injection._load_user_memories_for_context(
+            user_id=user_id, prompt=prompt, model_name=model,
+        )
+
+    def test_user_xml_grande_vira_pointer_mode_mesmo_no_opus(self, app_ctx, f4_mems):
+        """O pointer-mode legado (USE_USER_XML_POINTER) so disparava com budget
+        finito — NUNCA no Opus (budget=None), exatamente o modelo dos users
+        afetados. O cap F6 e incondicional ao modelo."""
+        created, user_id = f4_mems
+        content = (
+            '<user_profile>\n<resumo>perfil compacto do usuario</resumo>\n'
+            '<contextualizacao>como tratar este usuario</contextualizacao>\n'
+            + '<atividades>' + 'a' * 3500 + '</atividades>\n</user_profile>'
+        )
+        _mk_mem(user_id, '/memories/user.xml', content, created)
+        with _NO_SEMANTIC[0], _NO_SEMANTIC[1], _NO_SEMANTIC[2]:
+            main, _tail, _ids = self._call(user_id, model='claude-opus-4-8')
+        assert main is not None
+        assert 'aaaa' not in main, "user.xml gordo nao entra integral no Opus"
+        assert 'perfil compacto do usuario' in main, "resumo sobrevive no pointer-mode"
+        assert '/memories/user.xml' in main, "ponteiro para a integra presente"
+
+    def test_preferences_e_expertise_grandes_destiladas(self, app_ctx, f4_mems):
+        import re
+        created, user_id = f4_mems
+        _mk_mem(user_id, '/memories/user.xml', '<resumo>ok</resumo>', created)
+        _mk_mem(user_id, '/memories/preferences.xml',
+                '\n'.join('[preferencia] p%d ' % i + 'b' * 90 for i in range(40)),
+                created)
+        _mk_mem(user_id, '/memories/user_expertise.xml',
+                '\n'.join('[expertise] e%d ' % i + 'c' * 90 for i in range(40)),
+                created)
+        with _NO_SEMANTIC[0], _NO_SEMANTIC[1], _NO_SEMANTIC[2]:
+            main, _tail, _ids = self._call(user_id, model='claude-opus-4-8')
+        for path, cap in (
+            ('/memories/preferences.xml', memory_injection.TIER1_PATH_CAPS['/memories/preferences.xml']),
+            ('/memories/user_expertise.xml', memory_injection.TIER1_PATH_CAPS['/memories/user_expertise.xml']),
+        ):
+            seg = re.search(
+                r'<memory path="%s".*?</memory>' % re.escape(path), main, re.DOTALL
+            )
+            assert seg, f"{path} deve continuar SEMPRE injetado (incortavel)"
+            assert len(seg.group(0)) <= cap + 300, (
+                f"{path} estourou o cap: {len(seg.group(0))}c"
+            )
+            assert 'view_memories' in seg.group(0), f"{path} destilado sem ponteiro"
+
+    def test_pointer_mode_wrapper_nao_e_neutralizado_pelo_sanitize(self, app_ctx, f4_mems):
+        """Bug achado na ablacao F6: <user_profile_partial> esta na blocklist
+        anti-spoofing — sanitize DEPOIS do pointer neutralizava o wrapper
+        LEGITIMO gerado pelo proprio pipeline. Ordem correta: sanitize no
+        conteudo BRUTO (user-controlled), cap/pointer por cima."""
+        created, user_id = f4_mems
+        content = (
+            '<user_profile>\n<resumo>resumo legitimo</resumo>\n'
+            '<contextualizacao>ctx</contextualizacao>\n'
+            + 'z' * 3000 + '\n</user_profile>'
+        )
+        _mk_mem(user_id, '/memories/user.xml', content, created)
+        with _NO_SEMANTIC[0], _NO_SEMANTIC[1], _NO_SEMANTIC[2]:
+            main, _tail, _ids = self._call(user_id, model='claude-opus-4-8')
+        assert '<user_profile_partial' in main, (
+            "wrapper do pointer-mode deve chegar INTACTO ao payload"
+        )
+        assert '&lt;user_profile_partial' not in main, (
+            "sanitize neutralizou o wrapper legitimo do pipeline"
+        )
+
+    def test_flag_off_tier1_integral(self, app_ctx, f4_mems):
+        """Review F6: kill-switch precisa de cobertura no tier1 (bloco fixo
+        MAIOR). Flag off = conteudo INTEGRAL, sem destilado nem ponteiro."""
+        created, user_id = f4_mems
+        fat_prefs = '\n'.join(
+            '[preferencia] p%d ' % i + 'b' * 90 for i in range(40)
+        )
+        _mk_mem(user_id, '/memories/user.xml', '<resumo>ok</resumo>', created)
+        _mk_mem(user_id, '/memories/preferences.xml', fat_prefs, created)
+        with patch('app.agente.config.feature_flags.AGENT_FIXED_BLOCKS_CAP', False), \
+             _NO_SEMANTIC[0], _NO_SEMANTIC[1], _NO_SEMANTIC[2]:
+            main, _tail, _ids = self._call(user_id, model='claude-opus-4-8')
+        assert fat_prefs in main, (
+            "flag off deve injetar preferences.xml INTEGRAL (rollback legado)"
+        )
+
+    def test_cenario_user18_adaptativo_sobrevive(self, app_ctx, f4_mems):
+        """O caso da evidencia tripla: blocos fixos gordos NAO podem mais matar
+        o adaptativo. Antes do cap: fixed ~15K sozinho -> overflow cortava
+        tier2/organicas/routing -> usuario mais ativo = zero retrieval."""
+        created, user_id = f4_mems
+        # tier1 nos tamanhos REAIS de PROD (hibrido user 83 + user 18)
+        _mk_mem(user_id, '/memories/user.xml',
+                '<user_profile>\n<resumo>' + 'r' * 600 + '</resumo>\n'
+                '<contextualizacao>' + 'k' * 1100 + '</contextualizacao>\n'
+                '<atividades>' + 'a' * 2300 + '</atividades>\n</user_profile>',
+                created)
+        _mk_mem(user_id, '/memories/preferences.xml',
+                '\n'.join('[preferencia] p%d ' % i + 'b' * 80 for i in range(28)),
+                created, priority='mandatory')  # PROD: prefs do user 18 e mandatory
+        _mk_mem(user_id, '/memories/user_expertise.xml',
+                '\n'.join('[expertise] e%d ' % i + 'c' * 80 for i in range(30)),
+                created)
+        # 6 regras mandatory gordas (como o user 18 real: 380-560c)
+        for i in range(6):
+            _mk_mem(user_id, f'/memories/corrections/regra-{i}-{uuid.uuid4().hex[:6]}.xml',
+                    f'WHEN: situacao {i} ' + 'w' * 200 + f' DO: acao {i} ' + 'd' * 200,
+                    created, priority='mandatory')
+        # 15 memorias empresa gordas (fallback de recencia as pega)
+        empresa_ids = []
+        for i in range(15):
+            m = _mk_mem(0, f'/memories/empresa/heuristicas/f6-{uuid.uuid4().hex[:8]}.xml',
+                        f'<titulo>f6 {i}</titulo>' + 'Z' * 3000, created)
+            empresa_ids.append(m.id)
+
+        with _NO_SEMANTIC[0], _NO_SEMANTIC[1], _NO_SEMANTIC[2]:
+            main, tail, ids = self._call(user_id, model='claude-opus-4-8')
+
+        total = len(main or '') + len(tail or '')
+        assert total <= memory_injection.HOOK_CONTEXT_TARGET_CHARS, (
+            f"payload {total}c estourou o teto 15K mesmo com caps F6"
+        )
+        sobreviventes = [i for i in ids if i in empresa_ids]
+        assert sobreviventes, (
+            "adaptativo (Tier 2) foi cortado: blocos fixos continuam estourando "
+            "o orcamento — o cap F6 nao esta limitando tier1/user_rules"
+        )
+
+
 class TestLoadUserMemoriesOrdemEBudget:
     def _call(self, user_id, prompt='qual o status?', model='claude-opus-4-8'):
         return memory_injection._load_user_memories_for_context(

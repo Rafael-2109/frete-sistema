@@ -35,6 +35,32 @@ HOOK_CONTEXT_TARGET_CHARS = 15_000  # teto total main+tail (<=15KB/turno)
 TIER2_MEMORY_CHAR_CAP = 300         # teto por memoria Tier 2 (destilado + ponteiro)
 TIER2_MAX_MEMORIES = 4              # bloco Tier 2 = 4 x ~300c (tabela PAD-CTX item 6)
 
+# F6 PAD-CTX (2026-06-10): cap de blocos FIXOS (tier1 + user_rules) —
+# destilar/ponteirar como o Tier 2, NUNCA cortar (intocaveis preservados:
+# os blocos continuam presentes, reduzidos ao nucleo + ponteiro view_memories).
+# Calibrado em dados PROD 2026-06-10 (query agent_memories):
+# - tier1 real: 6.6-9.1K/usuario ativo (pior: user 83 = 9.1K). resumo+
+#   contextualizacao do user.xml medem 1.0-1.9K → cap 1500 preserva o
+#   pointer-mode curado (_build_user_profile_pointer) na maioria dos casos.
+# - preferences/expertise: listas de itens [preferencia]/[expertise] 2.4-2.9K;
+#   primeiros ~1.2K = top itens (truncamento em fronteira de linha).
+# - regras mandatory reais: 380-560c (meta when/do = nucleo); cap 350 com
+#   destilado que preserva DO INTEGRAL (_distill_rule_content).
+# Worst case fixo pos-cap ≈ 8.5K << 15K (adaptativo sobrevive). Desvio
+# declarado vs orcamento de design da tabela PAD-CTX (600/400/400): valores
+# de design eram pre-medicao; enforcement usa a distribuicao real.
+# Kill-switch: AGENT_FIXED_BLOCKS_CAP=false (feature_flags.py).
+USER_RULE_CHAR_CAP = 350
+TIER1_PATH_CAPS = {
+    '/memories/user.xml': 1500,
+    '/memories/preferences.xml': 1200,
+    '/memories/user_expertise.xml': 1200,
+}
+# Paths Tier 1 (sempre injetados como perfil). Fonte unica: usada na query do
+# Tier 1 E na exclusao do canal L1 <user_rules> (bug dupla injecao — PROD
+# user 18: preferences.xml priority=mandatory entrava nos DOIS canais).
+TIER1_PROTECTED_PATHS = list(TIER1_PATH_CAPS)
+
 # F5.5 PAD-CTX: few-shot episodico condicional. Threshold calibrado na
 # distribuicao REAL do voyage-4-lite query->doc (PROD 2026-06-09: 0.24-0.55;
 # o cosine 0.75 do plano nunca dispararia). 0.55 = match excepcional.
@@ -420,6 +446,73 @@ def _distill_tier2_content(mem, content: str) -> str:
 
     pointer = f'\n[integra] view_memories("{xml_escape(mem.path)}")'
     return distilled + pointer
+
+
+def _distill_fixed_block(mem, content: str, cap: int) -> str:
+    """F6 PAD-CTX: destila bloco FIXO (tier1) que excede o cap.
+
+    Trunca em fronteira de linha (preferences/expertise sao listas de itens
+    [preferencia]/[expertise] — corte no meio de item degrada o sinal) e
+    anexa ponteiro view_memories para a integra. O bloco NUNCA e removido
+    (incortavel) — apenas reduzido ao topo + ponteiro.
+
+    Args:
+        mem: AgentMemory (ou objeto com .path)
+        content: conteudo JA sanitizado pelo caller
+        cap: teto em chars para o corpo destilado
+    """
+    if len(content) <= cap:
+        return content
+    cut = content[:cap]
+    nl = cut.rfind('\n')
+    if nl > cap // 2:
+        cut = cut[:nl]
+    pointer = f'\n[integra] view_memories("{xml_escape(mem.path)}")'
+    return cut.rstrip() + '…' + pointer
+
+
+def _distill_rule_content(mem, content: str, cap: int = USER_RULE_CHAR_CAP) -> str:
+    """F6 PAD-CTX: destila regra mandatory (<user_rules>) que excede o cap.
+
+    Diferente do Tier 2, a regra e PRESCRITIVA — o nucleo operativo e o DO.
+    Alocacao do orcamento em ordem de prioridade: DO INTEGRAL primeiro,
+    depois WHEN, depois titulo (ordem de exibicao titulo/WHEN/DO mantida).
+    Sem meta when/do (regra legada): truncar + ponteiro. A regra continua
+    SEMPRE presente no bloco (intocavel) + ponteiro para a integra.
+
+    Args:
+        mem: AgentMemory (ou objeto com .path e .meta opcional)
+        content: conteudo JA sanitizado pelo caller
+        cap: teto em chars (default USER_RULE_CHAR_CAP)
+    """
+    if len(content) <= cap:
+        return content
+    pointer = f'\n[integra] view_memories("{xml_escape(mem.path)}")'
+    meta = getattr(mem, 'meta', None)
+    if isinstance(meta, dict) and (meta.get('do') or '').strip():
+        do_text = 'DO: ' + str(meta['do']).strip()
+        if len(do_text) > cap:
+            do_text = do_text[:cap - 3] + '...'
+        parts = [do_text]
+        remaining = cap - len(do_text)
+        when_raw = (meta.get('when') or '').strip()
+        if when_raw and remaining > 40:
+            when_text = 'WHEN: ' + when_raw
+            if len(when_text) > remaining:
+                when_text = when_text[:remaining - 3] + '...'
+            parts.insert(0, when_text)
+            remaining -= len(when_text)
+        titulo = (meta.get('titulo') or '').strip()
+        if titulo and remaining > 40:
+            if len(titulo) > remaining:
+                titulo = titulo[:remaining - 3] + '...'
+            parts.insert(0, titulo)
+        # meta vem do JSONB (fora do caminho sanitizado do content)
+        distilled = sanitize_memory_content(
+            '\n'.join(parts), source=f"mem_id={getattr(mem, 'id', '?')} rule-distill"
+        )
+        return distilled + pointer
+    return content[:cap - 3].rstrip() + '...' + pointer
 
 
 def _fit_hook_budget(
@@ -1140,14 +1233,11 @@ def _load_user_memories_for_context(
             # user_expertise.xml (2026-05-11): consolida expertise do usuario
             # (substitui /learned/expertise_*.xml que ficavam orfaos). Mesma
             # mecanica de preferences.xml — singleton, sempre injetado.
-            PROTECTED_PATHS = [
-                "/memories/user.xml",
-                "/memories/preferences.xml",
-                "/memories/user_expertise.xml",
-            ]
+            # F6: lista promovida a constante TIER1_PROTECTED_PATHS (fonte
+            # unica — tambem exclui esses paths do canal L1 <user_rules>).
             protected_memories = AgentMemory.query.filter(
                 AgentMemory.user_id == user_id,
-                AgentMemory.path.in_(PROTECTED_PATHS),
+                AgentMemory.path.in_(TIER1_PROTECTED_PATHS),
                 AgentMemory.is_directory == False,  # noqa: E712
             ).all()
 
@@ -1432,37 +1522,63 @@ def _load_user_memories_for_context(
             overhead = len(header) + len(footer)
 
             # Tier 1: protegidas sempre incluídas
+            from ..config.feature_flags import (
+                AGENT_FIXED_BLOCKS_CAP,
+                USE_USER_XML_POINTER,
+                USER_XML_POINTER_THRESHOLD,
+            )
             tier1_texts = []
             tier1_chars = 0
             for mem in protected_memories:
                 content = (mem.content or "").strip()
                 if not content:
                     continue
-                # P1-3 Camada 2: user.xml > threshold em budget finito → ponteiro
-                # Evidencia: 5/12 users excedem 67% do budget Sonnet so com Tier 1.
-                # Gabriella e Marcus (10K+ bytes) ficam com Tier 2 zerado sistematicamente.
-                # Camada 1 (guidance no gerador) resolvera em 1-4 semanas via re-geracao.
-                from ..config.feature_flags import (
-                    USE_USER_XML_POINTER,
-                    USER_XML_POINTER_THRESHOLD,
+                # G4: neutralizar tags de controle injetadas em memoria
+                # (preserva XML legitimo tipo <resumo>, <contextualizacao>).
+                # ANTES do cap F6: o pointer/destilado gera wrappers LEGITIMOS
+                # do pipeline (<user_profile_partial>, ponteiro [integra]) que
+                # estao na blocklist anti-spoofing — sanitizar depois os
+                # neutralizava (bug achado na ablacao F6). Conteudo user-
+                # controlled e sanitizado aqui; estrutura gerada pelo pipeline
+                # nao passa mais pelo sanitize.
+                content = sanitize_memory_content(
+                    content, source=f"mem_id={mem.id} path={mem.path}"
                 )
-                if (
+                tier1_cap = TIER1_PATH_CAPS.get(mem.path)
+                if AGENT_FIXED_BLOCKS_CAP and tier1_cap and len(content) > tier1_cap:
+                    # F6 PAD-CTX: cap INCONDICIONAL ao modelo. O pointer legado
+                    # (P1-3 Camada 2, elif abaixo) so disparava com budget
+                    # finito — NUNCA no Opus (budget=None), exatamente o modelo
+                    # dos users da evidencia tripla (1/18/82). user.xml prefere
+                    # o pointer-mode CURADO (resumo+contextualizacao); cai para
+                    # truncamento em linha quando nem o curado cabe no cap.
+                    original_len = len(content)
+                    if mem.path == "/memories/user.xml":
+                        pointered = _build_user_profile_pointer(content)
+                        content = (
+                            pointered if len(pointered) <= tier1_cap
+                            else _distill_fixed_block(mem, content, tier1_cap)
+                        )
+                    else:
+                        content = _distill_fixed_block(mem, content, tier1_cap)
+                    logger.info(
+                        f"[MEMORY_INJECT] F6 tier1 cap: path={mem.path} "
+                        f"user_id={user_id} orig={original_len} new={len(content)}"
+                    )
+                elif (
                     USE_USER_XML_POINTER
                     and mem.path == "/memories/user.xml"
                     and budget is not None
                     and len(content) > USER_XML_POINTER_THRESHOLD
                 ):
+                    # P1-3 Camada 2 (LEGADO — ativo so com AGENT_FIXED_BLOCKS_CAP
+                    # off): user.xml > threshold em budget finito → ponteiro.
                     original_len = len(content)
                     content = _build_user_profile_pointer(content)
                     logger.debug(
                         f"[MEMORY_INJECT] user.xml pointer aplicado: "
                         f"user_id={user_id} orig={original_len} new={len(content)}"
                     )
-                # G4: neutralizar tags de controle injetadas em memoria
-                # (preserva XML legitimo tipo <resumo>, <contextualizacao>)
-                content = sanitize_memory_content(
-                    content, source=f"mem_id={mem.id} path={mem.path}"
-                )
                 mem_text = f'{_memory_open_tag(mem)}\n{content}\n</memory>\n'
                 tier1_texts.append((mem, mem_text))
                 tier1_chars += len(mem_text)
