@@ -392,6 +392,25 @@ def _memory_open_tag(mem, tier: str = None) -> str:
     return '<memory ' + ' '.join(attrs) + '>'
 
 
+def _build_similarity_maps(filtered: list) -> tuple:
+    """Dois mapas memory_id -> score com escalas DISTINTAS (A/B 2026-06-10):
+
+    - ``sim_map``: prefere ``rerank_score`` (GAP 10) — para ORDENACAO
+      (composite). Rerank medido vencedor: precision@4 0.388 -> 0.463.
+    - ``cosine_map``: similarity cosine CRUA — para GATES calibrados na
+      distribuicao cosine (ex. FEWSHOT_MIN_SIMILARITY=0.55). A escala do
+      rerank-2.5-lite NAO e comparavel: 60% dos top-4 rerank passam 0.55
+      vs 27% no cosine — alimentar gate com rerank dispara few-shot 2.2x
+      mais que o calibrado.
+    """
+    sim_map = {
+        r['memory_id']: r.get('rerank_score', r.get('similarity', 0))
+        for r in filtered
+    }
+    cosine_map = {r['memory_id']: r.get('similarity', 0) for r in filtered}
+    return sim_map, cosine_map
+
+
 def _is_episodic_memory(mem) -> bool:
     """F5.5 PAD-CTX: memoria EPISODICA = caso/correcao concreta (candidata a
     few-shot). Criterio: kind canonico 'correcao' OU path em /corrections/ ou
@@ -1391,12 +1410,10 @@ def _load_user_memories_for_context(
                                 ),
                             ).all()
 
-                            # Mapear similarity por memory_id
-                            # GAP 10: Preferir rerank_score (Voyage) quando disponível
-                            sim_map = {
-                                r['memory_id']: r.get('rerank_score', r.get('similarity', 0))
-                                for r in filtered
-                            }
+                            # Duas escalas: sim_map (rerank, ordenacao) e
+                            # cosine_map (gates calibrados em cosine) — ver
+                            # docstring de _build_similarity_maps.
+                            sim_map, cosine_map = _build_similarity_maps(filtered)
 
                             # v2: Composite score com category-aware decay
                             now = agora_utc_naive()
@@ -1423,8 +1440,12 @@ def _load_user_memories_for_context(
 
                             # Preservar composite scores originais (com similarity) para PASS 2
                             _pass1_scores = {s[0].id: s[1] for s in scored}
-                            # F5.5: similarity crua para o gate de few-shot episodico
-                            _pass1_similarity = {s[0].id: s[2] for s in scored}
+                            # F5.5: similarity COSINE crua para o gate de few-shot
+                            # (NUNCA rerank_score — escala diferente, ver
+                            # _build_similarity_maps)
+                            _pass1_similarity = {
+                                s[0].id: cosine_map.get(s[0].id, 0.0) for s in scored
+                            }
                             additional_memories = [s[0] for s in scored]
                             if scored:
                                 avg_composite = sum(s[1] for s in scored) / len(scored)

@@ -88,12 +88,15 @@ def buscar_memorias_semantica(
         # T3-2: Reranking seletivo
         if MEMORY_RERANKING_ENABLED and len(results) > 1:
             try:
+                import time
                 documents = [r['texto_embedado'] for r in results]
+                t0 = time.monotonic()
                 reranked = svc.rerank(
                     query=query,
                     documents=documents,
                     top_k=limite,
                 )
+                rerank_ms = (time.monotonic() - t0) * 1000
 
                 if reranked:
                     # Reconstruir resultados na nova ordem
@@ -106,9 +109,12 @@ def buscar_memorias_semantica(
                             result["rerank_score"] = item["relevance_score"]
                             reranked_results.append(result)
 
-                    logger.debug(
-                        f"[memory_search] Reranked {len(results)} → {len(reranked_results)} "
-                        f"memorias para user_id={user_id}"
+                    # INFO (nao debug): validacao do rerank em PROD e via logs
+                    # (A/B 2026-06-10 — latencia mediana 441ms, max 693ms)
+                    logger.info(
+                        f"[memory_search] rerank: {len(results)} candidatos -> "
+                        f"{len(reranked_results)} em {rerank_ms:.0f}ms "
+                        f"user_id={user_id}"
                     )
                     return reranked_results[:limite]
 

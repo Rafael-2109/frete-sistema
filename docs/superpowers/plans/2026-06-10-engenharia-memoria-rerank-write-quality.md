@@ -15,13 +15,14 @@ atualizado: 2026-06-10
 > das 2 frentes. Metodo INVIOLAVEL (licao F5/F6): medir ANTES de codar →
 > TDD red-first → validar com o harness → aceite em PROD com logs.
 
-> 🔵 **PROXIMA SESSAO — COMECAR AQUI:** nenhuma frente iniciada. Ordem
-> recomendada: **FRENTE 1 (reranker)** primeiro — ganho mensuravel com o
-> harness precision@k JA EXISTENTE e padrao interno ja provado (SPED rules);
-> depois FRENTE 2 (write-quality), cujo efeito compoe com o rerank.
+> 🔵 **PROXIMA SESSAO — COMECAR AQUI:** FRENTE 1 CONCLUIDA 2026-06-10 (rerank
+> medido vencedor, flag fica ON; ver `rerank_ab_2026-06-10.md` + Rastreamento).
+> Em andamento: **FRENTE 2 (write-quality)** — comecar pelo 2.1 (classificacao
+> das sem-meta.do por origem) e validar em PROD o log `[memory_search] rerank`
+> (latencia — item 1.5, pos-deploy).
 > PRE-REQUISITO de leitura: entradas F5/F6 do Rastreamento do plano PAD-CTX +
 > `relatorios/estudo_contexto_boot_2026-06-09/precision_at_k_baseline_2026-06-10.md`
-> + `ablacao_por_bloco_2026-06-10.md`.
+> + `ablacao_por_bloco_2026-06-10.md` + `rerank_ab_2026-06-10.md`.
 
 ## Evidencia (verificada 2026-06-10 — nao re-descobrir)
 
@@ -36,6 +37,12 @@ atualizado: 2026-06-10
   NAO tem rerank; o `rerank_score` lido em
   `app/agente/sdk/memory_injection.py` (`r.get('rerank_score', similarity)`)
   e placeholder que nunca e populado.
+  **⚠ CORRECAO (2026-06-10, execucao F1): os 2 ultimos pontos estavam ERRADOS.**
+  `buscar_memorias_semantica` JA tinha rerank completo (over-fetch 40 +
+  rerank-2.5-lite + fallback) com `MEMORY_RERANKING_ENABLED` default `true`
+  desde 2026-03-03, e o `rerank_score` JA era populado/consumido. O log era
+  `debug` (invisivel em PROD) — dai a impressao de inexistente. Detalhe:
+  `relatorios/estudo_contexto_boot_2026-06-09/rerank_ab_2026-06-10.md`.
 - **Escrita sem formato operativo**: 359 memorias de conhecimento ativas em
   PROD (excluidos perfis/context/system); **146 (40%) sem `meta.do`**, das
   quais **109 sao longas (>300c)** → caem no truncate burro do destilado
@@ -88,3 +95,18 @@ precisa (content intacto).
 
 - 2026-06-10 — Plano criado (sessao F6). Evidencias verificadas no codigo e
   em PROD na mesma sessao. Nenhuma frente iniciada.
+- 2026-06-10 (noite) — **FRENTE 1 CONCLUIDA.** Premissa corrigida (rerank ja
+  rodava em PROD desde marco sem medida — ver ⚠ na Evidencia). A/B executado
+  (dataset 20 turnos regenerado, mesmos 9 usuarios; 19 judges Sonnet, 92
+  memorias): **rerank 0.463 vs cosine 0.388 precision@4 (+19%), cobertura
+  igual 19/20, 4 turnos melhores / 0 piores** → decisao por medida: flag
+  `MEMORY_RERANKING_ENABLED` PERMANECE ON. Latencia rerank 292-693ms
+  (mediana 441ms) — ok pre-stream. Achado colateral corrigido com TDD: gate
+  few-shot F5.5 recebia rerank_score (escala incomparavel: 60% vs 27%
+  passam 0.55) → `_build_similarity_maps` separa sim_map/cosine_map
+  (`memory_injection.py` + `tests/agente/sdk/test_rerank_scale_gates.py`,
+  6 testes). Observabilidade 1.5: log rerank debug→INFO com latencia
+  (`memory_search.py`). Suite sdk+embeddings: 342 passed. Relatorio:
+  `relatorios/estudo_contexto_boot_2026-06-09/rerank_ab_2026-06-10.md`.
+  PENDENTE 1.5: validar latencia no log `[memory_search] rerank` em PROD
+  pos-deploy.
