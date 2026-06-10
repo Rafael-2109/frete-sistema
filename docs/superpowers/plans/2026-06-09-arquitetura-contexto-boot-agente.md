@@ -21,14 +21,20 @@ atualizado: 2026-06-09
 > injetavel, threshold 0.40 ativo nos logs — ver Rastreamento). Relatorio:
 > `relatorios/estudo_contexto_boot_2026-06-09/precision_at_k_baseline_2026-06-10.md`
 > (inclui A/B dedup: PERMANECE no lite — decisao medida).
-> Proxima: **F6 (governanca) COMECANDO pelo cap de tier1/user_rules** — evidencia
-> TRIPLA (users 1, 18 e 82): blocos fixos grandes estouram o teto 15K e cortam
-> TODO o adaptativo (tier2/organicas/routing). Depois: golden dataset 15→50+,
-> 5 checks PAD-CTX no R-EXEC-5, ablacao por bloco. Fila de curadoria (rapida,
-> requer ok do Rafael): 78 quase-duplicatas residentes → memory_consolidator;
-> user_rule "sessao N" (user 1) → empresa/heuristicas. Aceite formal F5:
-> re-medir precision@k "depois" com o harness (~30min) apos dias de trafego.
-> 5.7 acorda sozinho ~08/07 (gate 30d). F7 por ultimo.
+> **F6 EXECUTADA 2026-06-10** (ver as 3 entradas F6 no Rastreamento): cap
+> tier1/user_rules LIVE no codigo (TDD, 16 testes novos, suite verde, review
+> adversarial 14 agentes com 3 findings corrigidos + bug do sanitize×pointer);
+> 5 checks PAD-CTX registrados no pre-commit/R-EXEC-5; golden dataset 15→54
+> (6 agentes R5, dado-apenas, A3 segue aposentado); ablacao por bloco medida
+> (relatorio `ablacao_por_bloco_2026-06-10.md`: tier1 destilado 95% util,
+> directives 0/20, routing com 2 riscos → evidencia p/ C5/F7.5).
+> Proxima: (1) **pos-deploy** — validar logs [MEMORY_INJECT] PROD (users
+> 1/18/82: overflow_cortes=[] e tier2>0) + mini-set; (2) fila de curadoria
+> (REQUER OK do Rafael): 78 quase-duplicatas → memory_consolidator; user_rule
+> "sessao N" (user 1) → empresa/heuristicas; CNPJ no caso af-01 pre-existente.
+> Aceite formal F5: re-medir precision@k "depois" com o harness (~30min) apos
+> dias de trafego. 5.7 acorda sozinho ~08/07 (gate 30d). F7 por ultimo
+> (ablacao deu evidencia nova p/ F7.5 preferred_skills).
 
 ## Indice
 
@@ -504,3 +510,62 @@ Padrao em si (PAD-CTX publicado): RP-1, R-2(criterio), A5(roteamento), C1(fonte 
   quase-duplicatas RESIDENTES no estore (>=0.85 co-existindo) — candidatos ao
   memory_consolidator. Detalhe no relatorio precision_at_k_baseline (secao A/B
   DEDUP). Reindex large das 549 RODADO em PROD pelo Rafael; env removida.
+- 2026-06-10 (F6 inicio) — **CAP DE TIER1/USER_RULES NO HOOK (prioridade da F6)
+  IMPLEMENTADO via TDD** (14 testes novos; test_hook_budget.py 31 verdes; suite
+  tests/agente completa verde). Medicao PROD pre-design (query agent_memories):
+  tier1 real 6,6-9,1K/usuario ativo; resumo+contextualizacao do user.xml 1,0-1,9K;
+  preferences/expertise = listas de itens 2,4-2,9K; regras mandatory 380-560c.
+  BUG EXTRA descoberto na medicao: preferences.xml do user 18 tem priority=
+  mandatory → entrava 2x no payload (canal L1 <user_rules> E Tier 1). E o pointer
+  legado USE_USER_XML_POINTER so disparava com budget finito — NUNCA no Opus
+  (budget=None), o modelo exato dos users afetados. Design: destilar/ponteirar
+  (nunca cortar — intocaveis): `TIER1_PATH_CAPS` (user.xml 1500 via pointer-mode
+  curado com fallback truncamento em linha / preferences 1200 / expertise 1200) +
+  `USER_RULE_CHAR_CAP` 350 (`_distill_rule_content` preserva DO INTEGRAL > WHEN >
+  titulo + ponteiro) + exclusao dos paths Tier 1 do canal L1 (so rows do PROPRIO
+  usuario; rows empresa ficam — Tier 1 e user-scoped e nao as injeta). DESVIO
+  DECLARADO vs tabela de design (600/400/400): valores eram pre-medicao; tabela
+  PAD-CTX atualizada com os ENFORCED. Kill-switch `AGENT_FIXED_BLOCKS_CAP`
+  (default true; exclusao da dupla injecao e incondicional — bug fix). RED
+  reproduziu a evidencia tripla (cenario user-18-like: 17.943c, overflow cortava
+  tier2+organicas+routing); GREEN: ≤15K e adaptativo sobrevive. PROJECAO PROD
+  pos-cap (SQL, blocos fixos rules+tier1): user 18 12.391→6.746 · user 1
+  10.623→5.580 · user 83 9.678→4.260 · user 55 9.194→4.260 · user 82 8.976→4.260
+  · user 17 8.213→5.140 — todos os fixos ≤6,8K, sobra ≥8K p/ adaptativo no teto
+  15K. REVIEW ADVERSARIAL (workflow 14 agentes, 10 findings → 3 confirmados →
+  TODOS corrigidos): edge empresa na exclusao L1; teste flag-off cobria so rules
+  (adicionado p/ tier1); assert de fronteira de linha fraco (endurecido); nota de
+  rollback na flag. GOVERNANCA F6 JUNTO: 5 checks PAD-CTX registrados no
+  pre-commit (`pre-commit-prompt-lint.sh`: (1)+(4) --check-consistency, (2)
+  listing, (3) NOVO — test_hook_budget.py roda quando memory_injection*/hooks.py
+  tocados, (5) checklist de admissao = item 4 NOVO do R-EXEC-5 em
+  app/agente/CLAUDE.md). PENDENTE pos-deploy: validar logs [MEMORY_INJECT] PROD
+  (users 1/18/82: overflow_cortes=[] e tier2>0) + mini-set.
+- 2026-06-10 (F6 cont.) — **GOLDEN DATASET 15→54 NOS 6 AGENTES DO R5** (workflow
+  3 fases draft→verify-adversarial→apply, 18 agentes): analista-carteira 5→9,
+  auditor-financeiro 5→9, controlador-custo-frete 5→9, especialista-odoo 0→9,
+  raio-x-pedido 0→9, gestor-carvia 0→9 (54 casos nos 6; 74 no total com os 20
+  de gestor-motos-assai). Casos ancorados nas references reais (grounding
+  verificado caso-a-caso na fase verify; privacy scrub VCD{NUM}/sem CNPJ novo)
+  + linguagem calibrada em sessoes PROD. **DADO-APENAS — A3 segue aposentado**
+  (veto a evals LLM agendados respeitado): nenhuma flag/scheduler/eval_runner
+  tocado; baseline pass-rate do criterio R5 fica para medicao on-demand SO com
+  ok explicito do Rafael. NOTA curadoria: af-01 (caso PRE-existente) contem
+  CNPJ 33652456000178 — avaliar scrub retroativo.
+- 2026-06-10 (F6 cont.) — **ABLACAO POR BLOCO EXECUTADA** (relatorio
+  `relatorios/estudo_contexto_boot_2026-06-09/ablacao_por_bloco_2026-06-10.md`):
+  payload POS-F6 reconstruido p/ os MESMOS 20 turnos reais do precision@k
+  (script read-only PROD + helpers reais de destilacao) + 20 judges Sonnet
+  ceticos, veredito por bloco. Resultado (% muda_resposta): tier1 destilado 95%
+  (cap F6 preservou o valor com ~metade do tamanho) · recent_sessions 75% ·
+  tier2 large@0.40 72% (retrieval consertado entrega) · user_rules 50% ·
+  pendencias 29% · tier15 25% · routing 20% **com 2 RISCOS** (preferred_skills
+  por dominio historico induz skill errada — evidencia nova p/ C5/F7.5) ·
+  **operational_directives 0/20** (4,3KB/turno; organicas nao tocaram nenhum
+  turno; constitucional fora do criterio turn-level — candidato a injecao por
+  intent, DECISAO FUTURA gated por validacao no golden dataset). BONUS: a
+  ablacao achou e consertou bug real do cap — sanitize DEPOIS do pointer
+  neutralizava o wrapper legitimo <user_profile_partial> (blocklist
+  anti-spoofing); fix = sanitize do conteudo BRUTO antes do cap (TDD; suite
+  verde). F6 COMPLETA exceto: validacao pos-deploy em PROD (logs
+  [MEMORY_INJECT] users 1/18/82 + mini-set) e fila de curadoria (requer ok).
