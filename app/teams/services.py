@@ -95,20 +95,28 @@ def _error_stream_result(
     )
 
 
-def _get_or_create_teams_user(usuario: str) -> Optional[int]:
+def _get_or_create_teams_user(
+    usuario: str,
+    aad_id: Optional[str] = None,
+    email: Optional[str] = None,
+) -> Optional[int]:
     """
-    Obtém ou auto-cadastra usuário do Teams como Usuario real no banco.
+    Resolve o usuário do Teams para um Usuario real no banco (hierarquia Fase A).
 
-    Cria um usuário "oculto" com email determinístico @teams.nacomgoya.local
-    e senha aleatória. Isso permite que a FK de AgentMemory/AgentSession
-    funcione corretamente, habilitando memórias persistentes no Teams.
-
-    O usuário é criado com status='ativo' e perfil='logistica'.
-    Não consegue fazer login no sistema web (não sabe a senha).
-    Facilmente identificável pelo email @teams.nacomgoya.local.
+    Hierarquia de resolução (plano 2026-06-10-teams-melhorias):
+    1. ``aad_id`` vinculado (``Usuario.find_by_teams_aad_id``) — vínculo
+       confirmado por código de pareamento, e-mail ou admin. Fonte mais forte.
+    2. Auto-match por e-mail corporativo (case-insensitive) — conveniência de
+       1ª linha; grava o vínculo (``teams_vinculo_origem='email'``) se o
+       usuário ainda não tem ``teams_user_id`` (nunca sobrescreve vínculo).
+    3. Fallback legacy: auto-cadastro de usuário "fantasma" com e-mail
+       determinístico ``teams_{md5(nome)}@teams.nacomgoya.local``
+       (comportamento original — preservado para quem não vinculou).
 
     Args:
         usuario: Nome do usuário do Teams (ex: "Rafael Nascimento")
+        aad_id: Azure AD object ID (activity.from_property.aad_object_id)
+        email: e-mail corporativo via TeamsInfo.get_member (pode faltar)
 
     Returns:
         int: user_id real na tabela usuarios, ou None se falhar
@@ -117,10 +125,33 @@ def _get_or_create_teams_user(usuario: str) -> Optional[int]:
         return None
 
     try:
+        from sqlalchemy import func as sa_func
         from app.auth.models import Usuario
         from app import db
 
-        # Gera email determinístico baseado no nome normalizado
+        # 1) Vínculo confirmado por AAD object ID
+        vinculado = Usuario.find_by_teams_aad_id(aad_id)
+        if vinculado:
+            return vinculado.id
+
+        # 2) Auto-match por e-mail corporativo (o mesmo que aparece no "Contato")
+        if email and email.strip():
+            por_email = Usuario.query.filter(
+                sa_func.lower(Usuario.email) == email.strip().lower(),
+                Usuario.status == 'ativo',
+            ).first()
+            if por_email:
+                if aad_id and not por_email.teams_user_id:
+                    por_email.teams_user_id = str(aad_id)
+                    por_email.teams_vinculo_origem = 'email'
+                    db.session.commit()
+                    logger.info(
+                        f"[TEAMS-BOT] Vínculo automático por e-mail: "
+                        f"user_id={por_email.id} email={email} aad={str(aad_id)[:12]}..."
+                    )
+                return por_email.id
+
+        # 3) Fallback legacy: fantasma com email determinístico pelo nome
         normalized = usuario.lower().strip()
         hash_hex = hashlib.md5(normalized.encode('utf-8')).hexdigest()[:12]
         teams_email = f"teams_{hash_hex}@teams.nacomgoya.local"
@@ -1500,6 +1531,9 @@ def process_teams_task_async(
     usuario: str,
     conversation_id: str,
     teams_user_id: Optional[int],
+    usuario_aad_id: str = "",
+    usuario_email: str = "",
+    conversation_type: str = "personal",
 ) -> None:
     """
     Processa uma TeamsTask em thread non-daemon (background).
@@ -1524,6 +1558,9 @@ def process_teams_task_async(
         usuario: Nome do usuário
         conversation_id: ID da conversa do Teams
         teams_user_id: ID real do usuário na tabela usuarios
+        usuario_aad_id: AAD object ID do falante (Fase A — fast-path vincular)
+        usuario_email: e-mail corporativo do falante (Fase A)
+        conversation_type: 'personal' | 'groupChat' | 'channel' (Fase B)
     """
     with app.app_context():
         from app.teams.models import TeamsTask

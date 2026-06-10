@@ -24,6 +24,11 @@ class Usuario(db.Model, UserMixin):
     # Migration: 2026_05_09_whatsapp_module. Default FALSE — telefone cadastrado para
     # contato generico nao habilita bot automaticamente. Ver Usuario.find_by_whatsapp_jid.
     whatsapp_autorizado = db.Column(db.Boolean, nullable=False, default=False, server_default='false')
+    # Vinculo Microsoft Teams (AAD object ID). Preenchido por codigo de pareamento
+    # (fast-path "vincular ABC123"), auto-match por email corporativo ou admin.
+    # Migration: 2026_06_10_teams_identidade. Ver Usuario.find_by_teams_aad_id.
+    teams_user_id = db.Column(db.String(64), nullable=True)
+    teams_vinculo_origem = db.Column(db.String(20), nullable=True)  # 'codigo'|'email'|'admin'
     vendedor_vinculado = db.Column(db.String(100), nullable=True)  # Nome do vendedor no faturamento (para perfil vendedor)
 
     # Sistemas permitidos (novo - para separar logística de motochefe)
@@ -166,7 +171,22 @@ class Usuario(db.Model, UserMixin):
             .filter(cls.status == 'ativo')
             .first()
         )
-    
+
+    @classmethod
+    def find_by_teams_aad_id(cls, aad_id):
+        """Resolve AAD object ID do Teams para Usuario ativo (espelha find_by_whatsapp_jid).
+
+        Args:
+            aad_id: Azure AD object ID vindo do bot (activity.from_property.aad_object_id)
+
+        Returns:
+            Usuario | None
+        """
+        if not aad_id:
+            return None
+        return cls.query.filter_by(teams_user_id=str(aad_id), status='ativo').first()
+
+
     def bloquear(self, motivo=None):
         """Bloqueia o usuário"""
         self.status = 'bloqueado'
@@ -429,3 +449,26 @@ class Usuario(db.Model, UserMixin):
         elif modulo == 'monitoramento':
             return self.pode_acessar_monitoramento_geral() or self.pode_acessar_monitoramento_vendedor()
         return self.perfil == 'administrador'
+
+
+class TeamsVinculoCodigo(db.Model):
+    """Codigo de pareamento Teams <-> Web (uso unico, TTL 10 min).
+
+    Fluxo: usuario logado no web gera codigo (tela /auth/vincular-teams) ->
+    envia "vincular ABC123" ao bot no Teams -> fast-path valida o hash e grava
+    Usuario.teams_user_id (AAD object ID). Prova posse das DUAS contas —
+    independe de e-mail correto no cadastro.
+
+    Migration: 2026_06_10_teams_identidade.
+    """
+    __tablename__ = 'teams_vinculo_codigos'
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=False)
+    codigo_hash = db.Column(db.String(64), nullable=False, index=True)  # sha256 hex
+    expires_at = db.Column(db.DateTime, nullable=False)
+    used_at = db.Column(db.DateTime, nullable=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=agora_utc_naive)
+
+    def __repr__(self):
+        return f"<TeamsVinculoCodigo user_id={self.user_id} used={self.used_at is not None}>"

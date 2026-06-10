@@ -86,7 +86,9 @@ def bot_message():
         mensagem = str(dados.get("mensagem", "")).strip()
         usuario = str(dados.get("usuario", "Usuario")).strip()
         usuario_id = str(dados.get("usuario_id", "")).strip()
+        usuario_email = str(dados.get("usuario_email", "")).strip()
         conversation_id = str(dados.get("conversation_id", "")).strip()
+        conversation_type = str(dados.get("conversation_type", "personal")).strip() or "personal"
 
         if not mensagem:
             return jsonify({"error": "Campo 'mensagem' e obrigatorio"}), 400
@@ -103,9 +105,16 @@ def bot_message():
         from app.agente.config.feature_flags import TEAMS_ASYNC_MODE
 
         if TEAMS_ASYNC_MODE:
-            return _handle_async_message(mensagem, usuario, conversation_id)
+            return _handle_async_message(
+                mensagem, usuario, conversation_id,
+                usuario_aad_id=usuario_id, usuario_email=usuario_email,
+                conversation_type=conversation_type,
+            )
         else:
-            return _handle_sync_message(mensagem, usuario, conversation_id)
+            return _handle_sync_message(
+                mensagem, usuario, conversation_id,
+                usuario_aad_id=usuario_id, usuario_email=usuario_email,
+            )
 
     except ValueError as e:
         logger.warning(f"[TEAMS-BOT] Validacao: {e}")
@@ -120,11 +129,23 @@ def bot_message():
         return jsonify({"error": "Erro interno ao processar mensagem"}), 500
 
 
-def _handle_async_message(mensagem: str, usuario: str, conversation_id: str):
+def _handle_async_message(
+    mensagem: str,
+    usuario: str,
+    conversation_id: str,
+    usuario_aad_id: str = "",
+    usuario_email: str = "",
+    conversation_type: str = "personal",
+):
     """
     Cria TeamsTask e inicia thread non-daemon para processamento.
 
     Retorna imediatamente com task_id para polling.
+
+    Args extras (Fase A identidade + Fase B falante do turno):
+        usuario_aad_id: AAD object ID do Teams (resolucao de identidade)
+        usuario_email: e-mail corporativo via TeamsInfo.get_member (auto-match)
+        conversation_type: 'personal' | 'groupChat' | 'channel'
     """
     from app.teams.models import TeamsTask
     from app.teams.services import (
@@ -168,7 +189,9 @@ def _handle_async_message(mensagem: str, usuario: str, conversation_id: str):
                 )
             else:
                 # Criar nova task queued
-                teams_user_id = _get_or_create_teams_user(usuario)
+                teams_user_id = _get_or_create_teams_user(
+                    usuario, aad_id=usuario_aad_id, email=usuario_email,
+                )
                 queued_task = TeamsTask(
                     conversation_id=conversation_id,
                     user_name=usuario,
@@ -190,8 +213,10 @@ def _handle_async_message(mensagem: str, usuario: str, conversation_id: str):
                 "task_id": task_id,
             })
 
-    # Obter user_id real
-    teams_user_id = _get_or_create_teams_user(usuario)
+    # Obter user_id real (hierarquia: AAD vinculado -> email -> fantasma legacy)
+    teams_user_id = _get_or_create_teams_user(
+        usuario, aad_id=usuario_aad_id, email=usuario_email,
+    )
 
     # Criar task
     task = TeamsTask(
@@ -215,6 +240,11 @@ def _handle_async_message(mensagem: str, usuario: str, conversation_id: str):
     t = threading.Thread(
         target=process_teams_task_async,
         args=(app, task_id, mensagem, usuario, conversation_id, teams_user_id),
+        kwargs={
+            'usuario_aad_id': usuario_aad_id,
+            'usuario_email': usuario_email,
+            'conversation_type': conversation_type,
+        },
         daemon=False,
         name=f"teams-task-{task_id[:8]}",
     )
@@ -226,7 +256,13 @@ def _handle_async_message(mensagem: str, usuario: str, conversation_id: str):
     })
 
 
-def _handle_sync_message(mensagem: str, usuario: str, conversation_id: str):
+def _handle_sync_message(
+    mensagem: str,
+    usuario: str,
+    conversation_id: str,
+    usuario_aad_id: str = "",
+    usuario_email: str = "",
+):
     """
     Fluxo sincrono legado: processa e retorna na mesma request.
     """
@@ -235,7 +271,9 @@ def _handle_sync_message(mensagem: str, usuario: str, conversation_id: str):
     # Configurar user_id nos ContextVars de MCP tools (Memory + Session)
     # Espelha o path async (services.py:218-231) — sem isso, tools falham
     # com RuntimeError("user_id não definido"). Fixes PYTHON-FLASK-24.
-    teams_user_id = _get_or_create_teams_user(usuario)
+    teams_user_id = _get_or_create_teams_user(
+        usuario, aad_id=usuario_aad_id, email=usuario_email,
+    )
     if teams_user_id:
         try:
             from app.agente.tools.memory_mcp_tool import set_current_user_id as set_memory_user_id
