@@ -61,6 +61,13 @@ class TeamsTask(db.Model):
     resposta_card = db.Column(db.JSON, nullable=True)
     pending_questions = db.Column(db.JSON, nullable=True)
     pending_question_session_id = db.Column(db.String(255), nullable=True)
+    # Fase C (proactive delivery): ConversationReference serializado do Bot
+    # Framework — permite entregar via continue_conversation depois que o
+    # polling da Azure Function morre (5 min). delivered_via = claim atomico
+    # anti-duplicata: 'polling' | 'proactive' (NULL = ainda nao entregue).
+    # Migration: 2026_06_10_teams_proactive.
+    conversation_reference = db.Column(db.JSON, nullable=True)
+    delivered_via = db.Column(db.String(12), nullable=True)
     created_at = db.Column(
         db.DateTime,
         nullable=False,
