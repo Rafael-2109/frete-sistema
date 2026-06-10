@@ -31,6 +31,7 @@ from botbuilder.core import (
     CardFactory,
     MessageFactory,
 )
+from botbuilder.core.teams import TeamsInfo
 from botbuilder.schema import Activity, ActivityTypes
 
 # Timezone Brasil (UTC-3) — implementação local para não depender do pacote Flask (app/)
@@ -63,6 +64,47 @@ POLL_MAX_ATTEMPTS = int(os.environ.get("POLL_MAX_ATTEMPTS", "200"))  # 200 × 1.
 
 # Split config
 MAX_MESSAGE_LENGTH = int(os.environ.get("MAX_MESSAGE_LENGTH", "3500"))
+
+# Cache de e-mail por membro (from_property.id -> email). Evita chamar
+# TeamsInfo.get_member a cada mensagem; a function recicla com frequencia,
+# entao um dict module-level sem TTL e suficiente.
+_member_email_cache: dict = {}
+
+
+async def _get_user_email(turn_context: TurnContext) -> str:
+    """Obtem o e-mail corporativo do falante via TeamsInfo (cacheado).
+
+    Falha NUNCA bloqueia a mensagem — retorna "" e o backend cai no
+    fallback de identidade (fantasma legacy). Fase A identidade unificada.
+    """
+    member_id = (
+        turn_context.activity.from_property.id
+        if turn_context.activity.from_property else ""
+    )
+    if not member_id:
+        return ""
+    if member_id in _member_email_cache:
+        return _member_email_cache[member_id]
+    try:
+        member = await TeamsInfo.get_member(turn_context, member_id)
+        email = (
+            getattr(member, "email", None)
+            or getattr(member, "user_principal_name", None)
+            or ""
+        )
+    except Exception as e:
+        logger.warning(f"[BOT] TeamsInfo.get_member falhou (segue sem email): {e}")
+        email = ""
+    _member_email_cache[member_id] = email
+    return email
+
+
+def _get_conversation_type(turn_context: TurnContext) -> str:
+    """Retorna 'personal' | 'groupChat' | 'channel' (Fase B falante do turno)."""
+    conv = turn_context.activity.conversation
+    if conv and getattr(conv, "conversation_type", None):
+        return conv.conversation_type
+    return "personal"
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -1567,6 +1609,11 @@ class FreteBot(ActivityHandler):
             Activity(type=ActivityTypes.typing)
         )
 
+        # Identidade unificada (Fase A): e-mail corporativo p/ auto-match no
+        # backend + tipo de conversa p/ etiqueta de falante em grupos (Fase B).
+        user_email = await _get_user_email(turn_context)
+        conversation_type = _get_conversation_type(turn_context)
+
         # 2. Chama o backend (reutiliza session HTTP compartilhada)
         http_session = await self._get_session()
 
@@ -1577,7 +1624,9 @@ class FreteBot(ActivityHandler):
                     "mensagem": text,
                     "usuario": user_name,
                     "usuario_id": str(user_id),
+                    "usuario_email": user_email,
                     "conversation_id": conversation_id,
+                    "conversation_type": conversation_type,
                 },
                 session=http_session,
             )
@@ -1839,6 +1888,10 @@ class FreteBot(ActivityHandler):
             # Typing + dispatch como mensagem normal via /bot/message
             await turn_context.send_activity(Activity(type=ActivityTypes.typing))
 
+            # Fase A/B: mesmos campos de identidade do on_message_activity
+            user_email = await _get_user_email(turn_context)
+            conversation_type = _get_conversation_type(turn_context)
+
             try:
                 result = await call_backend(
                     endpoint="/api/teams/bot/message",
@@ -1846,7 +1899,9 @@ class FreteBot(ActivityHandler):
                         "mensagem": synth_msg,
                         "usuario": user_name,
                         "usuario_id": str(user_id_from),
+                        "usuario_email": user_email,
                         "conversation_id": conversation_id,
+                        "conversation_type": conversation_type,
                     },
                     session=http_session,
                 )
