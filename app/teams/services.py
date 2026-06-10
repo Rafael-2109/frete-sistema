@@ -220,7 +220,21 @@ def merge_usuario_teams(fantasma_id: int, real_id: int, dry_run: bool = True) ->
           AND ccu.table_name = 'usuarios' AND ccu.column_name = 'id'
     """)).fetchall()
 
-    for table_name, column_name in fks:
+    # Complemento: tabelas do dominio do agente SEM FK formal (agent_sessions,
+    # agent_step, agent_session_costs, etc. — user_id e' Integer sem ForeignKey
+    # no modelo). Escopo restrito por prefixo para nao reapontar user_id de
+    # outros dominios (ex.: ids de usuario Odoo).
+    sem_fk = db.session.execute(sql_text("""
+        SELECT c.table_name, c.column_name
+        FROM information_schema.columns c
+        WHERE c.column_name IN ('user_id', 'created_by')
+          AND (c.table_name LIKE 'agent%' OR c.table_name LIKE 'teams%'
+               OR c.table_name LIKE 'claude%')
+    """)).fetchall()
+
+    alvos = sorted({(t, c) for t, c in list(fks) + list(sem_fk)})
+
+    for table_name, column_name in alvos:
         chave = f"{table_name}.{column_name}"
         try:
             if dry_run:
