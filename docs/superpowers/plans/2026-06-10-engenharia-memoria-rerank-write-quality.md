@@ -15,15 +15,13 @@ atualizado: 2026-06-10
 > das 2 frentes. Metodo INVIOLAVEL (licao F5/F6): medir ANTES de codar →
 > TDD red-first → validar com o harness → aceite em PROD com logs.
 
-> 🔵 **PROXIMA SESSAO — COMECAR AQUI:** FRENTE 1 CONCLUIDA (rerank medido
-> vencedor, flag ON, latencia validada em PROD 320ms). FRENTE 2 com codigo
-> COMPLETO (parser+validacao+backfill script) — **PENDE SO a aplicacao do
-> backfill em PROD, que exige autorizacao explicita do Rafael** (escrita
-> direta DATABASE_URL_PROD — regra da memoria do projeto):
-> `DATABASE_URL="$DATABASE_URL_PROD" python scripts/migrations/2026_06_10_backfill_meta_when_do.py --confirmar`
-> (dry-run ja revisado: parser=102, haiku~58 com 11 nao-operativas recusadas).
-> Depois: validar 2.5 (% meta.do >= 90% das operativas) + re-rodar ablacao.
-> PRE-REQUISITO de leitura: Rastreamento abaixo + `rerank_ab_2026-06-10.md`.
+> 🔵 **PLANO CONCLUIDO 2026-06-10** (ambas as frentes; backfill PROD aplicado
+> com autorizacao do Rafael; 2.5 validado: operativas com meta.do = 94,9%).
+> Item REMANESCENTE (de baixa urgencia, junto com o aceite formal F5):
+> re-rodar a ablacao por bloco apos dias de trafego — destilados Tier 2
+> agora saem como WHEN/DO (verificado mecanicamente em 2026-06-10); a
+> utilidade POR TURNO deve ser re-medida com trafego novo, nao com a mesma
+> amostra. PRE-REQUISITO de leitura: Rastreamento + `rerank_ab_2026-06-10.md`.
 
 ## Evidencia (verificada 2026-06-10 — nao re-descobrir)
 
@@ -141,3 +139,13 @@ precisa (content intacto).
     regra da memoria do projeto confirma). Comando no ponteiro 🔵.
   - 2.5 PENDENTE (depende do backfill aplicado): % meta.do >= 90% das
     operativas + re-rodar ablacao (destilados WHEN/DO em vez de truncate).
+- 2026-06-10 (noite, fim) — **BACKFILL APLICADO EM PROD** (autorizacao
+  explicita do Rafael): parser=102 + haiku=37 = 139/144 memorias ganharam
+  meta (4 nao-operativas recusadas pelo Haiku, 5 sem ganho). **2.5
+  VALIDADO**: operativas com meta.do = **258/272 (94,9%)** ✅ alvo >=90%;
+  conhecimento com when-ou-do = 351/356 (98,6%); longas >300c com
+  when-ou-do = 238/243 (97,9%). Destilado Tier 2 verificado com memorias
+  reais pos-backfill (ids 916/99/188): saida `titulo + WHEN/DO + ponteiro`
+  em vez de truncate cru de XML. Re-ablacao por turno: adiada para depois
+  de dias de trafego (mesma janela do aceite formal F5) — re-medir com a
+  mesma amostra mediria o dataset, nao o sistema. **PLANO CONCLUIDO.**
