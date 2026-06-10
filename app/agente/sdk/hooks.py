@@ -161,6 +161,7 @@ def build_hooks(
     get_model_name: callable,
     set_injected_ids: callable,
     resume_state: dict = None,
+    our_session_id: str = None,
 ) -> dict:
     """Factory que cria hooks para ClaudeAgentOptions.
 
@@ -174,6 +175,11 @@ def build_hooks(
         resume_state: Dict mutavel compartilhado com o stream.
             Chaves: 'failed' (bool), 'fallback' (str XML com mensagens JSONB).
             Quando resume falha, stream seta failed=True. Hook injeta fallback.
+        our_session_id: Nosso UUID de sessao (pool key). Fase B teams-melhorias:
+            o client do pool e reusado SEM reaplicar hooks, entao user_id/
+            user_name da closure congelam no falante que CONECTOU. Os hooks
+            resolvem o falante ATUAL via turn_context_registry (fallback =
+            closure; web 1:1 inalterado).
 
     Returns:
         Dict formatado para options_dict["hooks"]
@@ -190,6 +196,11 @@ def build_hooks(
     from .stream_parser import _classify_tool_error
     from .memory_injection import _load_user_memories_for_context
     from ._sanitization import xml_escape
+    from .turn_context_registry import resolve_turn_user
+
+    def _turn_user():
+        """Falante do turno ATUAL (registry) com fallback para a closure."""
+        return resolve_turn_user(our_session_id, user_id, user_name)
 
     async def _keep_stream_open(hook_input: PreToolUseHookInput, signal, context: HookContext):
         """Hook OBRIGATÓRIO: mantém stream aberto para can_use_tool funcionar.
@@ -235,7 +246,7 @@ def build_hooks(
                 tinput = hook_input.get('tool_input', {})
                 skill = tinput.get('skill', '') if isinstance(tinput, dict) else ''
                 if skill:
-                    additional = _build_skill_pretool_context(user_id, skill)
+                    additional = _build_skill_pretool_context(_turn_user()[0], skill)
             except Exception as e:
                 logger.debug(f"[SKILL_CTX] pretool context falhou (ignorado): {e}")
 
@@ -285,7 +296,7 @@ def build_hooks(
                                 f'export AGENT_SESSION_ID={shlex.quote(current_sid)}; '
                                 f'export AGENT_TOOL_USE_ID={shlex.quote(tool_use_id)}; '
                                 f'export AGENT_TYPE={shlex.quote(agent_type_atual)}; '
-                                f'export AGENT_USER_NAME={shlex.quote(user_name or str(user_id))}; '
+                                f'export AGENT_USER_NAME={shlex.quote(_turn_user()[1] or str(_turn_user()[0]))}; '
                             )
                         updated_input = {**tool_input_data, 'command': prefix + command_orig}
             except Exception as e:
@@ -319,7 +330,7 @@ def build_hooks(
             from ..config.feature_flags import USE_MANDATORY_HARD_ENFORCE
             if not USE_MANDATORY_HARD_ENFORCE:
                 return {"continue_": True}
-            directives = _load_enforce_directives(user_id)
+            directives = _load_enforce_directives(_turn_user()[0])
             hit = _enforce_decision(directives, str(hook_input.get('tool_input', '')))
             if hit:
                 token, rule_path = hit
@@ -1328,6 +1339,12 @@ def build_hooks(
 
             prompt = hook_input.get('prompt', '')
 
+            # Fase B teams-melhorias: resolver o FALANTE do turno ATUAL.
+            # A closure (user_id/user_name) congela no falante que CONECTOU o
+            # client do pool — em grupos do Teams, injetaria memorias/gates do
+            # falante errado. Decisao Rafael: memorias = do falante do turno.
+            turn_user_id, turn_user_name = _turn_user()
+
             if USE_EXPANDED_HOOKS:
                 logger.info(
                     f"[HOOK:UserPromptSubmit] Prompt recebido: "
@@ -1339,14 +1356,14 @@ def build_hooks(
             # ============================================================
             # Log de diagnóstico — confirma propagação de user_id (Teams + Web)
             logger.info(
-                f"[HOOK:UserPromptSubmit] user_id={user_id or 'None'} | "
+                f"[HOOK:UserPromptSubmit] user_id={turn_user_id or 'None'} | "
                 f"auto_memory={'ON' if USE_AUTO_MEMORY_INJECTION else 'OFF'} | "
                 f"prompt_len={len(prompt)} chars"
             )
 
             additional_context = None
             tail_context = None
-            if USE_AUTO_MEMORY_INJECTION and user_id:
+            if USE_AUTO_MEMORY_INJECTION and turn_user_id:
                 try:
                     # Fix DC-3: Ler model de self.settings (sempre atual)
                     # em vez de options_dict (closure capturada no connect,
@@ -1356,7 +1373,7 @@ def build_hooks(
                     # (recent_sessions + pendencias, por ULTIMO na montagem).
                     additional_context, tail_context, injected_mem_ids = (
                         _load_user_memories_for_context(
-                            user_id, prompt=prompt,
+                            turn_user_id, prompt=prompt,
                             model_name=get_model_name(),
                         )
                     )
@@ -1387,7 +1404,7 @@ def build_hooks(
                         "</system_hint>"
                     )
                     logger.info(
-                        f"[REFLECTION] Correção detectada user_id={user_id} "
+                        f"[REFLECTION] Correção detectada user_id={turn_user_id} "
                         f"prompt_preview={prompt[:60]}"
                     )
 
@@ -1410,7 +1427,7 @@ def build_hooks(
                     )
                     logger.info(
                         f"[HOOK:UserPromptSubmit] Debug mode context injected "
-                        f"for user_id={user_id}"
+                        f"for user_id={turn_user_id}"
                     )
             except Exception as debug_err:
                 logger.debug(f"[HOOK:UserPromptSubmit] Debug mode check failed: {debug_err}")
@@ -1421,7 +1438,7 @@ def build_hooks(
             sql_admin_context = ""
             try:
                 from app.pessoal import USUARIOS_SQL_ADMIN as _SQL_ADMIN
-                if user_id and user_id in _SQL_ADMIN:
+                if turn_user_id and turn_user_id in _SQL_ADMIN:
                     # F4.2 PAD-CTX (R-8): comprimido 12->6 linhas (condicional admin)
                     sql_admin_context = (
                         "\n<sql_admin_context>"
@@ -1436,7 +1453,7 @@ def build_hooks(
                     )
                     logger.info(
                         f"[HOOK:UserPromptSubmit] SQL admin context injected "
-                        f"for user_id={user_id}"
+                        f"for user_id={turn_user_id}"
                     )
             except Exception as admin_err:
                 logger.debug(f"[HOOK:UserPromptSubmit] SQL admin check failed: {admin_err}")
@@ -1452,13 +1469,13 @@ def build_hooks(
                     USE_PROMPT_CACHE_OPTIMIZATION,
                     USE_CUSTOM_SYSTEM_PROMPT,
                 )
-                if USE_PROMPT_CACHE_OPTIMIZATION and USE_CUSTOM_SYSTEM_PROMPT and user_id:
+                if USE_PROMPT_CACHE_OPTIMIZATION and USE_CUSTOM_SYSTEM_PROMPT and turn_user_id:
                     data_hora = agora_utc_naive().strftime("%d/%m/%Y %H:%M")
 
                     pessoal_grant = ""
                     try:
                         from app.pessoal import USUARIOS_PESSOAL, USUARIOS_SQL_ADMIN
-                        if user_id in USUARIOS_SQL_ADMIN or user_id in USUARIOS_PESSOAL:
+                        if turn_user_id in USUARIOS_SQL_ADMIN or turn_user_id in USUARIOS_PESSOAL:
                             pessoal_grant = (
                                 "\n  <pessoal_access>CONCEDIDO: tabelas pessoal_* "
                                 "acessiveis para este usuario.</pessoal_access>"
@@ -1472,7 +1489,7 @@ def build_hooks(
                     session_context = (
                         "<session_context>"
                         f"\n  <data_atual>{data_hora}</data_atual>"
-                        f"\n  <usuario>{xml_escape(user_name)} (ID: {user_id})</usuario>"
+                        f"\n  <usuario>{xml_escape(turn_user_name)} (ID: {turn_user_id})</usuario>"
                         f"{pessoal_grant}"
                         "\n</session_context>\n"
                     )
@@ -1520,9 +1537,9 @@ def build_hooks(
             world_model_context = ""
             try:
                 from ..config.feature_flags import USE_AGENT_WORLD_MODEL_INJECT
-                if USE_AGENT_WORLD_MODEL_INJECT and user_id and prompt:
+                if USE_AGENT_WORLD_MODEL_INJECT and turn_user_id and prompt:
                     from .context_enrichment import build_world_model_block
-                    _world_model = build_world_model_block(user_id=user_id, query=prompt)
+                    _world_model = build_world_model_block(user_id=turn_user_id, query=prompt)
                     if _world_model:
                         world_model_context = "\n" + _world_model
             except Exception as _d5_err:
@@ -1546,7 +1563,7 @@ def build_hooks(
                 memory_tokens_est = len(full_context) // 4
                 logger.info(
                     f"[CONTEXT_BUDGET] "
-                    f"user_id={user_id or 'None'} | "
+                    f"user_id={turn_user_id or 'None'} | "
                     f"session_ctx_chars={len(session_context)} | "
                     f"memory_chars={len(additional_context or '')} | "
                     f"tail_chars={len(tail_context or '')} | "

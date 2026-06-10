@@ -1468,6 +1468,12 @@ Nunca invente informações."""
         # Reset contador de falhas por turno (cada turno começa limpo)
         self._tool_failure_counts.clear()
 
+        # Fase B teams-melhorias: registra o FALANTE deste turno. Os hooks do
+        # client pooled (criados em turno anterior, possivelmente de OUTRO
+        # falante em grupos do Teams) resolvem via registry em vez da closure.
+        from .turn_context_registry import set_turn_user
+        set_turn_user(our_session_id, user_id, user_name)
+
         # ClaudeSDKClient persistente via client_pool.
         async for event in self._stream_response_persistent(
             prompt=prompt,
@@ -1835,6 +1841,10 @@ Nunca invente informações."""
                 get_model_name=lambda: str(self.settings.model),
                 set_injected_ids=lambda ids: setattr(self, '_last_injected_memory_ids', ids),
                 resume_state=resume_state,
+                # Fase B teams-melhorias: hooks resolvem o FALANTE do turno via
+                # turn_context_registry (client do pool reusado nao reaplica
+                # hooks — closure congelava user_name/user_id no 1o falante).
+                our_session_id=our_session_id,
             )
             hooks_list = list(options_dict["hooks"].keys())
             logger.debug(

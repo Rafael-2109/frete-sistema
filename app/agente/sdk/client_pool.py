@@ -438,6 +438,14 @@ async def disconnect_client(session_id: str) -> bool:
     if not pooled:
         return False
 
+    # Fase B teams-melhorias: descarta o registro de falante do turno da sessão
+    # (higiene — evita crescimento do dict ao longo do processo).
+    try:
+        from .turn_context_registry import clear_turn_user
+        clear_turn_user(session_id)
+    except Exception:
+        pass
+
     # Libera ownership Redis (sticky session L1) — outros workers podem
     # reivindicar agora que esse worker não tem mais o client SDK ativo.
     try:
