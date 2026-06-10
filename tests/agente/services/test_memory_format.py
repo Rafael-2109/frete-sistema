@@ -465,3 +465,139 @@ def test_fields_for_index_path_sem_subpasta_dominio():
     assert f["kind"] == "heuristica"
     assert f["dominio"] is None
     assert f["titulo"] == "abordagem validada"
+
+
+# ===========================================================================
+# FRENTE 2 (plano 2026-06-10-engenharia-memoria-rerank-write-quality) —
+# parser de <armadilha>/<protocolo> (gap diagnosticado em PROD 2026-06-10:
+# 80/144 memorias sem meta.do TINHAM when/do no content; o agente grava
+# esses formatos via save_memory e o parse caia em raw/wrapper, descartando
+# WHEN/DO existentes). Fixtures REAIS de PROD (ids 910, 914, 916, 917, 926).
+# ===========================================================================
+
+# id=917 — <armadilha tipo="fiscal"> com <when>/<do> e <meta .../> self-closing
+ARMADILHA_WHEN_DO = (
+    '```xml\n<armadilha tipo="fiscal">\n'
+    "  <titulo>l10n_br_tipo_produto ausente bloqueia NF-e inter-company</titulo>\n"
+    "  <when>\n    Em transferências inter-company com emissão de NF-e (ex: remessa p/ industrialização CFOP 5901),\n"
+    "    o campo l10n_br_tipo_produto é pré-condição dura para transmissão SEFAZ.\n  </when>\n"
+    "  <do>\n    QUANDO o agente identificar operação inter-company com emissão de NF-e, DEVE verificar\n"
+    "    l10n_br_tipo_produto no cadastro ANTES de executar qualquer picking.\n  </do>\n"
+    '  <meta nivel="4" criterios="1,2,3,4"/>\n'
+    "</armadilha>\n```"
+)
+
+# id=916 — <armadilha id="..."> com titulo dentro de <tag>[armadilha:financeiro] ...</tag>
+ARMADILHA_TAG_BRACKET = (
+    '```xml\n<armadilha id="financeiro_reclassificacao_lote_morte">\n'
+    "  <tag>[armadilha:financeiro] job reclassificacao lote morre apos poucos lotes sem retomada automatica</tag>\n"
+    "  <when>\n    Job de reclassificação contábil em lote morre silenciosamente após primeiros lotes.\n  </when>\n"
+    "  <do>\n    (1) ANTES de escrever, congelar lista exata de IDs-alvo em arquivo em disco;\n"
+    "    (2) Executar em lotes de ~200 com checkpoint idempotente.\n  </do>\n"
+    "</armadilha>\n```"
+)
+
+# id=914 — wrapper <memoria> com <armadilha> interna (contexto+prescricoes)
+MEMORIA_COM_ARMADILHA_INTERNA = (
+    '```xml\n<memoria>\n<armadilha id="financeiro_devolucao_cpv" nivel="5" criterios="1,2,3,4">\n'
+    "<titulo>Devoluções CD/OUT contaminam escopo de reclassificação CPV</titulo>\n"
+    "<contexto>\nAo reconstruir lançamentos de saída de venda, devoluções contaminam o escopo.\n</contexto>\n"
+    '<prescricoes>\n<regra id="1">QUANDO filtrar lançamentos de baixa de estoque para CPV, SEMPRE incluir debit>0.</regra>\n'
+    '<regra id="2">QUANDO montar escopo CD/OUT, SEMPRE excluir pickings com origin contendo Devolução.</regra>\n'
+    "</prescricoes>\n</armadilha>\n</memoria>\n```"
+)
+
+# id=926 — <protocolo:financeiro> pseudo-namespace com <when>/<do>
+PROTOCOLO_PSEUDO_NS = (
+    "```xml\n<protocolo:financeiro>\n"
+    "<titulo>contaminacao de job parcial exige auditoria antes de retomada</titulo>\n"
+    "<when>\nQuando um job de reclassificacao contabil morre apos processar fracao do escopo,\n"
+    "a retomada nao deve simplesmente reclassificar o restante.\n</when>\n"
+    "<do>\nAntes de retomar, o agente DEVE:\n(1) MEDIR o que ja foi movido para a conta destino;\n"
+    "(2) COMPARAR contra o predicado validado.\n</do>\n"
+    '<meta nivel="3" criterios="1,2,3,4"/>\n'
+    "</protocolo:financeiro>\n```"
+)
+
+# id=910 — <heuristica tipo="cadeia-rastreamento"> (tipo exotico NAO pode virar kind=geral)
+HEURISTICA_TIPO_EXOTICO = (
+    '```xml\n<heuristica dominio="odoo" tipo="cadeia-rastreamento">\n'
+    "<titulo>Cadeia entry ESTOQUE (CPV/baixa) ate l10n_br_tipo_pedido</titulo>\n"
+    "<contexto>Para descobrir tipo_pedido de baixa de Produto Acabado no diario ESTOQUE.</contexto>\n"
+    "<regra>\nl10n_br_tipo_pedido NAO existe em account.move tipo entry.\n</regra>\n"
+    "</heuristica>\n```"
+)
+
+
+def test_parse_armadilha_when_do_extrai_full():
+    m = parse_memory(ARMADILHA_WHEN_DO)
+    assert m["kind"] == "armadilha"
+    assert m["titulo"].startswith("l10n_br_tipo_produto ausente")
+    assert m["when"].startswith("Em transferências inter-company")
+    assert m["do"].startswith("QUANDO o agente identificar")
+    assert m["nivel"] == 4          # <meta nivel="4" .../> self-closing
+    assert m["criterios"] == [1, 2, 3, 4]
+    assert m["parse"] == "full"
+
+
+def test_parse_armadilha_titulo_via_tag_bracket():
+    m = parse_memory(ARMADILHA_TAG_BRACKET)
+    assert m["kind"] == "armadilha"
+    assert m["dominio"] == "financeiro"   # do header [armadilha:financeiro] em <tag>
+    assert m["titulo"].startswith("job reclassificacao lote morre")
+    assert m["when"].startswith("Job de reclassificação")
+    assert m["do"].startswith("(1) ANTES de escrever")
+    assert m["parse"] == "full"
+
+
+def test_parse_memoria_wrapper_delega_para_armadilha_interna():
+    m = parse_memory(MEMORIA_COM_ARMADILHA_INTERNA)
+    assert m["kind"] == "armadilha"
+    assert m["nivel"] == 5
+    assert m["criterios"] == [1, 2, 3, 4]
+    assert m["titulo"].startswith("Devoluções CD/OUT contaminam")
+    assert m["when"].startswith("Ao reconstruir lançamentos")   # <contexto> -> when
+    assert "debit>0" in m["do"]                                  # <prescricoes>/<regra> -> do
+    assert m["parse"] == "full"
+
+
+def test_parse_protocolo_pseudo_namespace():
+    m = parse_memory(PROTOCOLO_PSEUDO_NS)
+    assert m["kind"] == "protocolo"
+    assert m["dominio"] == "financeiro"   # do pseudo-ns <protocolo:financeiro>
+    assert m["titulo"].startswith("contaminacao de job parcial")
+    assert m["when"].startswith("Quando um job de reclassificacao")
+    assert m["do"].startswith("Antes de retomar")
+    assert m["nivel"] == 3
+    assert m["parse"] == "full"
+
+
+def test_parse_heuristica_tipo_exotico_mantem_kind_heuristica():
+    m = parse_memory(HEURISTICA_TIPO_EXOTICO)
+    # tipo="cadeia-rastreamento" e lixo de atributo — mas a TAG e <heuristica>:
+    # kind NAO pode degradar para 'geral' (degradava antes da FRENTE 2)
+    assert m["kind"] == "heuristica"
+    assert m["dominio"] == "odoo"
+    assert m["titulo"].startswith("Cadeia entry ESTOQUE")
+
+
+# id=344 (PROD) — XML inteiro ESCAPADO (&lt;conhecimento ...&gt;): o detector
+# literal nao ve a tag; parse deve tentar unescape e re-parsear
+CONHECIMENTO_ESCAPADO = (
+    "```xml\n&lt;conhecimento tipo=\"protocolo\" nivel=\"5\" dominio=\"recebimento\"&gt;\n"
+    "&lt;titulo&gt;validacao de picking bloqueada por qty done zero&lt;/titulo&gt;\n"
+    "&lt;descricao&gt;Picking com qty_done=0 e QC fail bloqueia a validacao.&lt;/descricao&gt;\n"
+    "&lt;prescricao&gt;Preencher qty_done antes de validar e reabrir o QC.&lt;/prescricao&gt;\n"
+    "&lt;/conhecimento&gt;\n```"
+)
+
+
+def test_parse_xml_escapado_faz_unescape_e_extrai():
+    m = parse_memory(CONHECIMENTO_ESCAPADO)
+    assert m["kind"] == "protocolo"
+    assert m["dominio"] == "recebimento"
+    assert m["nivel"] == 5
+    assert m["titulo"].startswith("validacao de picking")
+    assert m["when"].startswith("Picking com qty_done=0")
+    assert m["do"].startswith("Preencher qty_done")
+    assert m["parse"] == "full"

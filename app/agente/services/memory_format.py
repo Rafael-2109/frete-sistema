@@ -256,8 +256,12 @@ def parse_memory(content: Optional[str]) -> Dict[str, Any]:
 
     low = inner.lower()
 
-    # 2) Wrapper <memoria> sem <heuristica>/<conhecimento> internos (formato antigo)
-    if "<memoria" in low and "<heuristica" not in low and "<conhecimento" not in low:
+    # 2) Wrapper <memoria> sem blocos canonicos/operativos internos (formato
+    #    antigo). Com <armadilha>/<protocolo> interno, o passo 4.5 extrai o
+    #    bloco operativo direto (FRENTE 2 2026-06-10 — id PROD 914).
+    if ("<memoria" in low and "<heuristica" not in low
+            and "<conhecimento" not in low
+            and "<armadilha" not in low and "<protocolo" not in low):
         return _parse_memoria_wrapper(inner)
 
     # 3) <conhecimento ...> (pega o PRIMEIRO bloco quando duplicado por enrich)
@@ -267,6 +271,13 @@ def parse_memory(content: Optional[str]) -> Dict[str, Any]:
     # 4) <heuristica ...> (xml-attr, xml-simple, ou codefence com id=/contexto/regras)
     if "<heuristica" in low:
         return _parse_xml_heuristica(inner)
+
+    # 4.5) <armadilha ...> / <protocolo ...> — inclui pseudo-namespace
+    #      <protocolo:dominio> (FRENTE 2 2026-06-10: 80/144 memorias sem
+    #      meta.do em PROD TINHAM when/do nestes formatos e caiam em raw)
+    operativo = _parse_xml_operativo(inner)
+    if operativo is not None:
+        return operativo
 
     # 5) Formatos legados tag-simples (correcao/admin/correction/regra/termo/usuario)
     legado = _parse_xml_legado(inner)
@@ -278,6 +289,13 @@ def parse_memory(content: Optional[str]) -> Dict[str, Any]:
         return _parse_bracket(inner)
     if inner.startswith("TIPO:") or "\nWHEN:" in inner or inner.startswith("WHEN:"):
         return _parse_bracket(inner)
+
+    # 6.5) XML inteiro ESCAPADO (&lt;conhecimento ...&gt; — FRENTE 2, id PROD
+    #      344): unescape e re-parseia UMA vez (guard: so se surgir tag literal)
+    if "&lt;" in inner:
+        unescaped = _clean(inner)
+        if unescaped != inner and "<" in unescaped:
+            return parse_memory(unescaped)
 
     # 7) Raw: formato nao reconhecido — preserva tudo, deriva titulo
     return _assemble({
@@ -349,10 +367,91 @@ def _parse_xml_heuristica(xml: str) -> Dict[str, Any]:
         )
 
     kind = _norm_kind(_attr(attrs, "tipo") or "heuristica")
+    if kind == "geral":
+        # tipo-lixo (ex: tipo="cadeia-rastreamento") nao degrada o kind:
+        # a TAG <heuristica> prevalece (FRENTE 2 2026-06-10 — id PROD 910)
+        kind = "heuristica"
     return _assemble({
         "kind": kind, "titulo": titulo, "dominio": dominio, "nivel": nivel,
         "criterios": criterios, "when": when or None, "do": do or None,
         "evidencia": evidencia, "origem": origem, "body": body,
+    })
+
+
+_OPERATIVO_TAG_RE = re.compile(r"<(armadilha|protocolo)([:\w.-]*)", re.IGNORECASE)
+
+
+def _parse_xml_operativo(xml: str) -> Optional[Dict[str, Any]]:
+    """Parser de <armadilha ...> / <protocolo ...> (FRENTE 2 2026-06-10).
+
+    Formatos REAIS de PROD que o agente grava via save_memory:
+    - <armadilha tipo="fiscal"><titulo/><when/><do/><meta nivel=... criterios=.../>
+    - <armadilha id="dominio_slug"><tag>[armadilha:dominio] titulo</tag><when/><do/>
+    - <memoria><armadilha nivel=5 criterios=...><contexto/><prescricoes><regra/>...
+    - <protocolo:financeiro> (pseudo-namespace carrega o dominio)
+
+    None se nenhuma tag operativa presente.
+    """
+    m = _OPERATIVO_TAG_RE.search(xml)
+    if not m:
+        return None
+    base_kind = m.group(1).lower()                 # armadilha | protocolo
+    suffix = m.group(2) or ""                      # ':financeiro' (pseudo-ns) ou ''
+    tag_full = re.escape(m.group(1) + suffix)
+
+    block_match = re.search(
+        rf"<{tag_full}\b.*?</{tag_full}>", xml, re.DOTALL | re.IGNORECASE
+    )
+    block = block_match.group(0) if block_match else xml
+    attrs = _open_tag_attrs(block, tag_full)
+
+    dominio = _clean(_attr(attrs, "dominio")) or None
+    if dominio is None and suffix.startswith(":"):
+        dominio = _clean(suffix[1:]) or None
+
+    titulo = _clean(_tag_content(block, "titulo") or _tag_content(block, "tema"))
+
+    # <tag>[armadilha:dominio] titulo</tag> — header bracket dentro de <tag>
+    if not titulo or dominio is None:
+        tag_header = _tag_content(block, "tag")
+        if tag_header.strip().startswith("["):
+            base = _parse_bracket(tag_header.strip())
+            titulo = titulo or base.get("titulo") or ""
+            dominio = dominio or base.get("dominio")
+
+    when = _clean(
+        _tag_content(block, "when")
+        or _tag_content(block, "contexto")
+        or _tag_content(block, "descricao")
+    )
+    do = _clean(
+        _tag_content(block, "do")
+        or _tag_content(block, "prescricao")
+        or _strip_tags(_tag_content(block, "prescricoes"))
+        or _tag_content(block, "acao")
+    )
+
+    # nivel/criterios: atributos da raiz, tags, ou <meta nivel=... criterios=.../>
+    meta_attrs = _open_tag_attrs(block, "meta")
+    nivel = _norm_nivel(
+        _attr(attrs, "nivel") or _tag_content(block, "nivel") or _attr(meta_attrs, "nivel")
+    )
+    criterios = _norm_criterios(
+        _attr(attrs, "criterios")
+        or _tag_content(block, "criterios")
+        or _attr(meta_attrs, "criterios")
+    )
+
+    evidencia = _clean(_tag_content(block, "evidencia")) or None
+    origem = _clean(_tag_content(block, "origem")) or None
+
+    if not titulo:
+        titulo = _titulo_from_text(when or do or block)
+
+    return _assemble({
+        "kind": base_kind, "titulo": titulo, "dominio": dominio, "nivel": nivel,
+        "criterios": criterios, "when": when or None, "do": do or None,
+        "evidencia": evidencia, "origem": origem,
     })
 
 

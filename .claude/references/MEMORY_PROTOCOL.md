@@ -57,8 +57,14 @@ sentinela legivel: `[kind:dominio] titulo` + linhas `WHEN:` / `DO:` / `META: niv
 - **Transparente para o agente**: `save_memory` recebe o conteudo narrativo normal
   (ver [Formato Narrativo](#formato-narrativo)) e **popula `meta` + normaliza o
   `content` automaticamente**. O agente NAO monta o formato sentinela na mao.
+- **Validacao instrutiva (FRENTE 2, 2026-06-10)**: em path OPERATIVO
+  (heuristicas/armadilhas/protocolos/corrections), content sem **acao extraivel
+  (DO)** e REJEITADO com instrucoes — regravar com `WHEN:` (gatilho) e `DO:`
+  (acao concreta). Sem DO, o destilado Tier 2 cai em truncamento e a memoria
+  desperdica o retrieval.
 - **Serializador**: `app/agente/services/memory_format.py` (puro; parseia 5+
-  formatos legados).
+  formatos legados, incluindo `<armadilha>`/`<protocolo>`/pseudo-namespace/
+  XML escapado — FRENTE 2).
 - **`kind`** ∈ {`heuristica`, `armadilha`, `protocolo`, `correcao`} (+ `geral` para o
   resto); **`dominio`** = area (recebimento, financeiro, ...).
 - **Consumidores preferem `meta`** (via `getattr`) com **fallback ao parse do
