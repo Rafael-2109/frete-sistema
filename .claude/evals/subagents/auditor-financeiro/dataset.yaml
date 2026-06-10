@@ -8,12 +8,12 @@ cases:
     title: "SEM_MATCH com CNPJ formatado (armadilha O5)"
     input: |
       Titulo de R$ 5.000 em 15/03 nao bateu com extrato do mesmo valor e data.
-      Por que? CNPJ do titulo: 33652456000178.
+      Por que? CNPJ do titulo: 12345678000190.
     context:
       valor: 5000
       data: "15/03/2026"
-      cnpj_titulo_raiz: "33652456"
-      cnpj_extrato_format_esperado: "33.652.456"
+      cnpj_titulo_raiz: "12345678"
+      cnpj_extrato_format_esperado: "12.345.678"
     expected_behavior:
       - "Identifica armadilha O5 (CNPJ formatado no Odoo com pontos)"
       - "Sugere buscar raiz 8 digitos com formato com pontos"
