@@ -35,6 +35,7 @@ class Usuario(db.Model, UserMixin):
     sistema_remessa_vortx = db.Column(db.Boolean, default=False, nullable=False)  # Acesso a geracao de remessa VORTX
     sistema_lojas = db.Column(db.Boolean, default=False, nullable=False)  # Acesso ao modulo Lojas HORA
     sistema_motos_assai = db.Column(db.Boolean, default=False, nullable=False)  # Acesso ao módulo Motos Assaí
+    agente_fable5 = db.Column(db.Boolean, nullable=False, default=False, server_default='false')  # Opt-in modelo Fable 5 (caro)
     # Segregacao por loja HORA: NULL = acesso a todas; <id> = restrito a 1 loja.
     # Nao usa FK explicita (manter app/auth independente de app/hora).
     loja_hora_id = db.Column(db.Integer, nullable=True)

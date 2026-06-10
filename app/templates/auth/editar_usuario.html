@@ -190,6 +190,15 @@
                                         do OpenClaw e na <code>dmAllowlist</code> do plugin <code>nacom-bridge</code>.
                                     </small>
                                 </div>
+                                <div class="form-check mt-2">
+                                    {{ form.agente_fable5(class="form-check-input", id="agenteFable5") }}
+                                    {{ form.agente_fable5.label(class="form-check-label", for="agenteFable5") }}
+                                    <small class="text-muted d-block">
+                                        Libera o modelo <code>claude-fable-5</code> no seletor do Agente Web.
+                                        Modelo mais capaz da Anthropic — custo significativamente maior que Opus.
+                                        Exige CLI bundled &ge; 2.1.170 (SDK 0.2.95).
+                                    </small>
+                                </div>
                             </div>
                         </div>
                     </div>

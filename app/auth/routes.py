@@ -325,6 +325,7 @@ def editar_usuario(user_id):
         usuario.acesso_comissao_carvia = form.acesso_comissao_carvia.data
         usuario.sistema_remessa_vortx = form.sistema_remessa_vortx.data
         usuario.whatsapp_autorizado = form.whatsapp_autorizado.data
+        usuario.agente_fable5 = form.agente_fable5.data
 
         db.session.commit()
         flash(f'Usuário {usuario.nome} atualizado com sucesso!', 'success')
@@ -349,6 +350,7 @@ def editar_usuario(user_id):
     form.acesso_comissao_carvia.data = usuario.acesso_comissao_carvia
     form.sistema_remessa_vortx.data = usuario.sistema_remessa_vortx
     form.whatsapp_autorizado.data = usuario.whatsapp_autorizado
+    form.agente_fable5.data = usuario.agente_fable5
 
     return render_template('auth/editar_usuario.html', form=form, usuario=usuario)
 

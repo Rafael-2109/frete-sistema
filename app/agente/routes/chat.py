@@ -56,7 +56,10 @@ logger = logging.getLogger('sistema_fretes')
 def pagina_chat():
     """Página de chat com o agente."""
     from app.agente.config.feature_flags import is_fable5_allowed
-    pode_usar_fable5 = is_fable5_allowed(getattr(current_user, 'id', None))
+    pode_usar_fable5 = (
+        getattr(current_user, 'agente_fable5', False)
+        or is_fable5_allowed(getattr(current_user, 'id', None))
+    )
     return render_template('agente/chat.html', pode_usar_fable5=pode_usar_fable5)
 
 
@@ -117,7 +120,11 @@ def api_chat():
         # fallback silencioso p/ Opus (não quebra UX; Fable 5 é caro). Caso normal
         # (autorizado ou modelo != fable) passa intacto.
         from app.agente.config.feature_flags import FABLE5_MODEL_ID, is_fable5_allowed
-        if model == FABLE5_MODEL_ID and not is_fable5_allowed(getattr(current_user, 'id', None)):
+        _fable5_allowed = (
+            getattr(current_user, 'agente_fable5', False)
+            or is_fable5_allowed(getattr(current_user, 'id', None))
+        )
+        if model == FABLE5_MODEL_ID and not _fable5_allowed:
             logger.warning(
                 f"[AGENTE] Fable 5 negado para user_id="
                 f"{getattr(current_user, 'id', None)} (não autorizado) → fallback Opus"
