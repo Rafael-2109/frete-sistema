@@ -176,12 +176,15 @@ class AgentSession(db.Model):
         self._ensure_data_structure()
         return self.data.get('messages', [])
 
-    def add_user_message(self, content: str) -> Dict[str, Any]:
+    def add_user_message(self, content: str, author: Optional[str] = None) -> Dict[str, Any]:
         """
         Adiciona mensagem do usuário.
 
         Args:
             content: Conteúdo da mensagem
+            author: Nome do falante (Fase B teams-melhorias — conversas de GRUPO
+                no Teams têm vários falantes na mesma sessão). None (default) =
+                dict idêntico ao formato anterior (web 1:1 inalterado).
 
         Returns:
             Mensagem criada
@@ -194,6 +197,8 @@ class AgentSession(db.Model):
             'content': content,
             'timestamp': agora_utc_naive().isoformat() + 'Z',
         }
+        if author:
+            message['author'] = author
 
         self.data['messages'].append(message)
         self.last_message = content

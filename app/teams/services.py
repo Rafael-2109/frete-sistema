@@ -349,6 +349,55 @@ PERGUNTA DO USUÁRIO:
 """
 
 
+def _montar_prompt_teams(mensagem: str, usuario: str, conversation_type: str = "personal") -> str:
+    """Monta o prompt do turno: contexto Teams + etiqueta de falante (grupos).
+
+    Fase B (falante do turno): em conversa de GRUPO ('groupChat'/'channel'),
+    prefixa ``[Mensagem de: <nome>]`` para o agente saber QUEM está falando —
+    a sessão é por conversa, com vários falantes. Em 'personal' não polui.
+    """
+    contexto = _get_teams_context()
+    if conversation_type in ("groupChat", "channel") and usuario:
+        return f"{contexto}[Mensagem de: {usuario}]\n{mensagem}"
+    return contexto + mensagem
+
+
+def _construir_fallback_xml(session) -> Optional[str]:
+    """Constrói o fallback XML de resume (últimas 10 msgs do JSONB).
+
+    Usado pelos paths sync e streaming (era duplicado inline nos dois).
+    O hook UserPromptSubmit injeta como additionalContext quando o resume do
+    SDK falha. Fase B: inclui ``author`` quando presente (grupos).
+    """
+    if not session:
+        return None
+    try:
+        messages = session.get_messages() or []
+        if not messages or len(messages) <= 1:
+            return None
+        recent = messages[-10:]
+        parts = ['<conversation_history_fallback reason="resume_failed">']
+        for msg in recent:
+            role = msg.get('role', 'unknown')
+            content = (msg.get('content', '') or '')[:2000]
+            if not content:
+                continue
+            author = msg.get('author')
+            if author:
+                parts.append(f'<msg role="{role}" author="{author}">{content}</msg>')
+            else:
+                parts.append(f'<msg role="{role}">{content}</msg>')
+        parts.append('</conversation_history_fallback>')
+        xml = '\n'.join(parts)
+        logger.debug(
+            f"[TEAMS-BOT] Fallback XML preparado: {len(messages)} msgs, {len(xml)} chars"
+        )
+        return xml
+    except Exception as fb_err:
+        logger.debug(f"[TEAMS-BOT] Fallback XML falhou (ignorado): {fb_err}")
+        return None
+
+
 def _enrich_tool_name(tool_name: Any, tool_input: Any) -> str:
     """Enriquece o nome de Skill/Agent com o alvo invocado (espelha o canal
     web em ``chat.py:861-870``).
@@ -673,7 +722,7 @@ def processar_mensagem_bot(
         # Salvar mensagens e atualizar sdk_session_id
         if session:
             try:
-                session.add_user_message(mensagem)
+                session.add_user_message(mensagem, author=usuario)
                 if resposta_texto:
                     # Fase 4 (2026-04-21): persiste cache tokens por msg
                     session.add_assistant_message(
@@ -703,7 +752,7 @@ def processar_mensagem_bot(
                         session_id=teams_session_id
                     ).first()
                     if session:
-                        session.add_user_message(mensagem)
+                        session.add_user_message(mensagem, author=usuario)
                         if resposta_texto:
                             session.add_assistant_message(
                                 content=resposta_texto,
@@ -929,6 +978,7 @@ def _obter_resposta_agente(
     can_use_tool=None,
     session=None,
     model: str = None,
+    conversation_type: str = "personal",
 ) -> StreamResult:
     """
     Obtem resposta do Agente Claude SDK (path sync, non-streaming).
@@ -940,6 +990,7 @@ def _obter_resposta_agente(
         user_id: ID real do usuario na tabela usuarios (para memorias)
         can_use_tool: Callback de permissão (para AskUserQuestion no Teams)
         session: AgentSession para backup/restore de transcript (Bug Teams #1)
+        conversation_type: 'personal' | 'groupChat' | 'channel' (Fase B)
 
     Returns:
         StreamResult (dataclass imutavel) com campos nomeados.
@@ -960,33 +1011,12 @@ def _obter_resposta_agente(
     # session_persistence. Se uma session Teams pre-existente nao foi migrada
     # (migration script pode ter pulado linhas), o SDK materialize retorna None
     # e subprocess spawna sem --resume — contexto perdido silenciosamente.
-    # Construimos XML com ultimas 10 msgs do JSONB `data['messages']` para o
-    # hook UserPromptSubmit (client.py) injetar como `additionalContext` quando
-    # resume falhar. Espelha pattern de chat.py:341-360 no path web.
-    resume_messages_fallback = None
-    if session:
-        try:
-            messages = session.get_messages() or []
-            if messages and len(messages) > 1:
-                recent = messages[-10:]
-                parts = ['<conversation_history_fallback reason="resume_failed">']
-                for msg in recent:
-                    role = msg.get('role', 'unknown')
-                    content = (msg.get('content', '') or '')[:2000]
-                    if content:
-                        parts.append(f'<msg role="{role}">{content}</msg>')
-                parts.append('</conversation_history_fallback>')
-                resume_messages_fallback = '\n'.join(parts)
-                logger.debug(
-                    f"[TEAMS-BOT] Fallback XML preparado: "
-                    f"{len(messages)} msgs, {len(resume_messages_fallback)} chars"
-                )
-        except Exception as fb_err:
-            logger.debug(f"[TEAMS-BOT] Fallback XML falhou (ignorado): {fb_err}")
+    # XML com ultimas 10 msgs do JSONB para o hook UserPromptSubmit injetar
+    # como `additionalContext` quando resume falhar (helper compartilhado).
+    resume_messages_fallback = _construir_fallback_xml(session)
 
-    # Contexto especial para Teams: data atual + instruções anti-verbosidade
-    contexto_teams = _get_teams_context()
-    prompt_completo = contexto_teams + mensagem
+    # Contexto Teams + etiqueta de falante quando grupo (Fase B)
+    prompt_completo = _montar_prompt_teams(mensagem, usuario, conversation_type)
 
     # Modelo: usar override se fornecido, senão padrão
     if not model:
@@ -1310,6 +1340,7 @@ def _obter_resposta_agente_streaming(
     session=None,
     app=None,
     model: str = None,
+    conversation_type: str = "personal",
 ) -> StreamResult:
     """
     Obtem resposta do Agente Claude SDK com flush parcial progressivo ao DB.
@@ -1327,6 +1358,7 @@ def _obter_resposta_agente_streaming(
         user_id: ID real do usuario na tabela usuarios (para memorias)
         can_use_tool: Callback de permissao (para AskUserQuestion no Teams)
         session: AgentSession para backup/restore de transcript (Bug Teams #1)
+        conversation_type: 'personal' | 'groupChat' | 'channel' (Fase B)
 
     Returns:
         Tuple[resposta_texto, new_sdk_session_id, input_tokens, output_tokens, tools_used, cost_usd]
@@ -1351,31 +1383,11 @@ def _obter_resposta_agente_streaming(
 
     # FIX P1 (FaseB.1 review): fallback XML defense in depth — se session
     # Teams pre-existente nao foi migrada, hook UserPromptSubmit injeta
-    # contexto das ultimas 10 msgs via `additionalContext`.
-    resume_messages_fallback = None
-    if session:
-        try:
-            messages = session.get_messages() or []
-            if messages and len(messages) > 1:
-                recent = messages[-10:]
-                parts = ['<conversation_history_fallback reason="resume_failed">']
-                for msg in recent:
-                    role = msg.get('role', 'unknown')
-                    content = (msg.get('content', '') or '')[:2000]
-                    if content:
-                        parts.append(f'<msg role="{role}">{content}</msg>')
-                parts.append('</conversation_history_fallback>')
-                resume_messages_fallback = '\n'.join(parts)
-                logger.debug(
-                    f"[TEAMS-STREAM] Fallback XML preparado: "
-                    f"{len(messages)} msgs, {len(resume_messages_fallback)} chars"
-                )
-        except Exception as fb_err:
-            logger.debug(f"[TEAMS-STREAM] Fallback XML falhou (ignorado): {fb_err}")
+    # contexto das ultimas 10 msgs via `additionalContext` (helper compartilhado).
+    resume_messages_fallback = _construir_fallback_xml(session)
 
-    # Contexto especial para Teams
-    contexto_teams = _get_teams_context()
-    prompt_completo = contexto_teams + mensagem
+    # Contexto Teams + etiqueta de falante quando grupo (Fase B)
+    prompt_completo = _montar_prompt_teams(mensagem, usuario, conversation_type)
 
     # Pool key para path persistente (ClaudeSDKClient por sessão)
     our_session_id = session.session_id if session else None
@@ -1889,6 +1901,7 @@ def process_teams_task_async(
                             session=session,
                             app=app,
                             model=selected_model,
+                            conversation_type=conversation_type,
                         )
                     else:
                         agent_result = _obter_resposta_agente(
@@ -1899,6 +1912,7 @@ def process_teams_task_async(
                             can_use_tool=agent_can_use_tool,
                             session=session,
                             model=selected_model,
+                            conversation_type=conversation_type,
                         )
                     resposta_texto = agent_result.resposta_texto
                     new_sdk_session_id = agent_result.sdk_session_id
@@ -1955,7 +1969,8 @@ def process_teams_task_async(
                     if agent_result is None:
                         agent_result = _error_stream_result(resposta_texto=resposta_texto)
 
-                    session.add_user_message(mensagem)
+                    # Fase B: registra o FALANTE (grupos tem varios na mesma sessao)
+                    session.add_user_message(mensagem, author=usuario)
                     if resposta_texto:
                         session.add_assistant_message(
                             content=resposta_texto,
@@ -2265,7 +2280,11 @@ def _process_queued_task(app, conversation_id: str, finished_task_id: str) -> No
             queued_task.status = 'processing'
             _commit_with_retry("[TEAMS-QUEUE-RETRY]")
 
-        # Processar na mesma thread (non-daemon), mesma sessao
+        # Processar na mesma thread (non-daemon), mesma sessao.
+        # Fase B: TeamsTask nao guarda conversation_type — heuristica pelo
+        # formato do conversation_id ('19:...' = groupChat/channel; pessoal
+        # comeca com 'a:'). Mantem a etiqueta de falante em msgs enfileiradas.
+        _conv_type = 'groupChat' if (conversation_id or '').startswith('19:') else 'personal'
         process_teams_task_async(
             app=app,
             task_id=queued_task.id,
@@ -2273,6 +2292,7 @@ def _process_queued_task(app, conversation_id: str, finished_task_id: str) -> No
             usuario=queued_task.user_name,
             conversation_id=conversation_id,
             teams_user_id=queued_task.user_id,
+            conversation_type=_conv_type,
         )
 
     except Exception as e:
