@@ -28,13 +28,20 @@ atualizado: 2026-06-09
 > (6 agentes R5, dado-apenas, A3 segue aposentado); ablacao por bloco medida
 > (relatorio `ablacao_por_bloco_2026-06-10.md`: tier1 destilado 95% util,
 > directives 0/20, routing com 2 riscos → evidencia p/ C5/F7.5).
-> Proxima: (1) **pos-deploy** — validar logs [MEMORY_INJECT] PROD (users
-> 1/18/82: overflow_cortes=[] e tier2>0) + mini-set; (2) fila de curadoria
-> (REQUER OK do Rafael): 78 quase-duplicatas → memory_consolidator; user_rule
-> "sessao N" (user 1) → empresa/heuristicas; CNPJ no caso af-01 pre-existente.
-> Aceite formal F5: re-medir precision@k "depois" com o harness (~30min) apos
-> dias de trafego. 5.7 acorda sozinho ~08/07 (gate 30d). F7 por ultimo
-> (ablacao deu evidencia nova p/ F7.5 preferred_skills).
+> **ACEITE PROD FECHADO** (16:41-18:03Z, trafego real — user 55:
+> overflow_cortes=[] + tier2=2,3K injetado + semantic=17 fallback=False;
+> ver entrada "F6 aceite PROD" no Rastreamento). Cap extra de sessoes
+> (SESSION_RESUMO_CHAR_CAP=240) entregue na validacao (b4b37129e).
+> CURADORIA executada: regra 802 → empresa/heuristicas (PROD); CNPJ af-01
+> scrubado (663857f7c); dry-run consolidacao dos quase-duplicados (94 pares)
+> AGUARDANDO REVISAO do Rafael antes de aplicar.
+> Proxima: (1) decisao sobre operational_directives (0/20 na ablacao; 4,3K/
+> turno — swap da ordem de corte tier2<->organicas OU injecao por intent;
+> mexe na politica de overflow do PAD-CTX = decisao Rafael); (2) amostra de
+> logs dos users 1/18/82 pos-663857f7c (mesmo mecanismo ja provado no 55);
+> (3) aceite formal F5: re-medir precision@k apos dias de trafego; 5.7
+> acorda ~08/07 (gate 30d); F7 por ultimo (F7.5 com evidencia nova da
+> ablacao: preferred_skills por dominio historico = 2 riscos).
 
 ## Indice
 
@@ -581,3 +588,26 @@ Padrao em si (PAD-CTX publicado): RP-1, R-2(criterio), A5(roteamento), C1(fonte 
   intent OU swap da ordem de corte tier2<->organicas — a ordem atual corta
   o bloco de 72% de utilidade antes do de 0%) = DECISAO Rafael (proposta
   registrada; mexe na politica de overflow do PAD-CTX).
+- 2026-06-10 (F6 aceite PROD) — **VALIDACAO FIM-A-FIM CONFIRMADA em trafego real**
+  (deploy 663857f7c live 16:07Z, inclui cap de sessoes): user 55 (Teams, 16:41 e
+  17:23 — tier1 era 9,2K, mesmo perfil do problema): F6 tier1 cap ativo (user.xml
+  3649→1409, prefs 2396→1212, expertise 1897→1150), semantic=17-18 com
+  fallback=False (retrieval large vivo), **tier2_chars=2310 INJETADO**,
+  **overflow_cortes=[]**, total 13,5-13,8K ≤15K, tail 1,4-1,9K (cap de sessoes
+  agindo — antes ~4K). user 78 (18:03): total 8,9K, overflow_cortes=[], tier2b
+  injetado. Criterio de aceite (overflow_cortes=[] + tier2>0) FECHADO. Falta so
+  amostra dos users 1/18/82 pos-cap-de-sessoes (mesmo mecanismo ja provado).
+  CURADORIA executada (autorizacao Rafael): regra 802 "sessao N" user 1 →
+  /memories/empresa/heuristicas/ (UPDATE PROD verificado; embedding deletado p/
+  reindex diario recriar como empresa); CNPJ af-01 scrubado (663857f7c); dry-run
+  de consolidacao dos quase-duplicados em andamento (94 pares no estado atual;
+  relatorio para revisao ANTES de aplicar).
+- 2026-06-10 (F6 curadoria, dry-run) — **DRY-RUN DE CONSOLIDACAO PRONTO**
+  (relatorio `relatorios/estudo_contexto_boot_2026-06-09/dryrun_consolidacao_duplicatas_2026-06-10.md`):
+  pares regenerados frescos de PROD (482 ativas → 94 pares >=0.85; metodo
+  identico ao A/B), 94 agentes Sonnet 1/par com conteudo integral. Veredito:
+  **27 consolidar** (24 com conteudo_merge redigido, 3 absorcao pura) /
+  17 perfil-vivo / 50 complementares. Confirma o A/B: so ~29% dos pares
+  >=0.85 sao duplicatas reais — consolidacao certa e semantica, nao por
+  threshold. Payload de aplicacao no dir da sessao (f6_consolidacao_apply.json).
+  **AGUARDANDO decisao do Rafael**: aplicar 27 / so 3 puras / revisar com-merge.
