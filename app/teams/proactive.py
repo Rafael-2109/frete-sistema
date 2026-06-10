@@ -30,9 +30,16 @@ POLLING_WINDOW_SECONDS = 270
 _NOTIFY_TIMEOUT = 30  # POST a function (continue_conversation e rapido)
 
 
+# URL estavel da Azure Function (mesma do teams-manifest/manifest.json).
+# Default no codigo elimina passo de env no go-live; override via env se mudar.
+_DEFAULT_FUNCTION_URL = (
+    "https://frete-bot-func-d4awggfge3awcqap.brazilsouth-01.azurewebsites.net"
+)
+
+
 def _function_url() -> str:
-    """URL base da Azure Function (env; vazio = proactive desabilitado)."""
-    return (os.environ.get("TEAMS_FUNCTION_URL", "") or "").rstrip("/")
+    """URL base da Azure Function (env TEAMS_FUNCTION_URL sobrepoe o default)."""
+    return (os.environ.get("TEAMS_FUNCTION_URL", _DEFAULT_FUNCTION_URL) or "").rstrip("/")
 
 
 def notify_function_delivery(task_id: str, min_elapsed: int = POLLING_WINDOW_SECONDS) -> dict:
