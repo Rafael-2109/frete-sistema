@@ -413,6 +413,15 @@ AGENT_VINCULACAO_FASTPATH = os.getenv(
     "AGENT_VINCULACAO_FASTPATH", "true"
 ).lower() == "true"
 
+# Fase A teams-melhorias (2026-06-10): fast-path 'vincular CODIGO' — pareamento
+# de identidade Teams <-> Web por codigo de uso unico (TTL 10 min) gerado na
+# tela /auth/vincular-teams. Meta-comando: intercepta ANTES de criar sessao e
+# NAO chama LLM. Impl: app/agente/sdk/vincular_teams_fastpath.py (Teams only).
+# Rollback total: AGENT_TEAMS_VINCULO_FASTPATH=false.
+AGENT_TEAMS_VINCULO_FASTPATH = os.getenv(
+    "AGENT_TEAMS_VINCULO_FASTPATH", "true"
+).lower() == "true"
+
 # ====================================================================
 # Session Lifecycle (Fase 2, 2026-04-21)
 # ====================================================================

@@ -190,6 +190,112 @@ def _get_or_create_teams_user(
         return None
 
 
+def merge_usuario_teams(fantasma_id: int, real_id: int, dry_run: bool = True) -> dict:
+    """Reaponta TODAS as FKs de `usuarios(id)` do usuário fantasma para o real.
+
+    Descobre as FKs dinamicamente via information_schema (cobre agent_sessions,
+    agent_memories, agent_step, teams_tasks, agent_invocation_metrics, etc. sem
+    lista hardcoded). Colisões UNIQUE são capturadas POR TABELA (loga e segue).
+
+    Args:
+        fantasma_id: id do usuário @teams.nacomgoya.local
+        real_id: id do usuário web verdadeiro
+        dry_run: True = apenas conta linhas afetadas, sem UPDATE
+
+    Returns:
+        {"tabelas": {tabela.coluna: linhas}, "erros": [str], "dry_run": bool}
+    """
+    from sqlalchemy import text as sql_text
+    from app import db
+
+    resultado = {"tabelas": {}, "erros": [], "dry_run": dry_run}
+    fks = db.session.execute(sql_text("""
+        SELECT tc.table_name, kcu.column_name
+        FROM information_schema.table_constraints tc
+        JOIN information_schema.key_column_usage kcu
+            ON tc.constraint_name = kcu.constraint_name
+        JOIN information_schema.constraint_column_usage ccu
+            ON tc.constraint_name = ccu.constraint_name
+        WHERE tc.constraint_type = 'FOREIGN KEY'
+          AND ccu.table_name = 'usuarios' AND ccu.column_name = 'id'
+    """)).fetchall()
+
+    for table_name, column_name in fks:
+        chave = f"{table_name}.{column_name}"
+        try:
+            if dry_run:
+                count = db.session.execute(sql_text(
+                    f'SELECT COUNT(*) FROM "{table_name}" WHERE "{column_name}" = :fid'
+                ), {'fid': fantasma_id}).scalar() or 0
+            else:
+                count = db.session.execute(sql_text(
+                    f'UPDATE "{table_name}" SET "{column_name}" = :rid '
+                    f'WHERE "{column_name}" = :fid'
+                ), {'rid': real_id, 'fid': fantasma_id}).rowcount
+                db.session.commit()
+            if count:
+                resultado["tabelas"][chave] = count
+        except Exception as tbl_err:
+            db.session.rollback()
+            resultado["erros"].append(f"{chave}: {tbl_err}")
+            logger.warning(f"[TEAMS-MERGE] {chave} falhou (segue): {tbl_err}")
+
+    if not dry_run:
+        try:
+            from app.auth.models import Usuario
+            fantasma = db.session.get(Usuario, fantasma_id)
+            if fantasma:
+                fantasma.status = 'bloqueado'
+                fantasma.observacoes = (
+                    f"{fantasma.observacoes or ''} | MERGED -> user {real_id} "
+                    f"em {agora_utc_naive().strftime('%d/%m/%Y %H:%M')}"
+                ).strip(' |')
+                db.session.commit()
+        except Exception as blk_err:
+            db.session.rollback()
+            resultado["erros"].append(f"bloqueio fantasma: {blk_err}")
+
+    return resultado
+
+
+def _merge_usuario_fantasma(nome: Optional[str], real_id: int) -> str:
+    """Localiza o usuário fantasma pelo nome (e-mail MD5 determinístico) e migra
+    o histórico para o usuário real. Best-effort — chamado pelo fast-path
+    'vincular CODIGO' logo após gravar o vínculo (Task A5/A7).
+
+    Returns:
+        Resumo curto para a resposta ao usuário ("" se nada a migrar).
+    """
+    if not nome or not str(nome).strip():
+        return ""
+    try:
+        from app.auth.models import Usuario
+
+        normalized = str(nome).lower().strip()
+        hash_hex = hashlib.md5(normalized.encode('utf-8')).hexdigest()[:12]
+        teams_email = f"teams_{hash_hex}@teams.nacomgoya.local"
+        fantasma = Usuario.query.filter_by(email=teams_email).first()
+        if not fantasma or fantasma.id == real_id:
+            return ""
+
+        resultado = merge_usuario_teams(fantasma.id, real_id, dry_run=False)
+        sessoes = resultado["tabelas"].get("agent_sessions.user_id", 0)
+        memorias = resultado["tabelas"].get("agent_memories.user_id", 0)
+        logger.info(
+            f"[TEAMS-MERGE] Fantasma {fantasma.id} -> real {real_id}: "
+            f"{resultado['tabelas']} erros={len(resultado['erros'])}"
+        )
+        if sessoes or memorias:
+            return (
+                f"Migrei seu histórico do Teams ({sessoes} conversas, "
+                f"{memorias} memórias)."
+            )
+        return ""
+    except Exception as e:
+        logger.warning(f"[TEAMS-MERGE] Merge best-effort falhou (ignorado): {e}")
+        return ""
+
+
 def _get_teams_context() -> str:
     """
     Gera contexto específico para Teams com data atual e instruções anti-verbosidade.
@@ -1592,6 +1698,44 @@ def process_teams_task_async(
                 f"user={usuario} msg={mensagem[:80]}..."
             )
 
+            # ── Fase A: fast-path 'vincular CODIGO' (meta-comando de pareamento).
+            # ANTES de criar sessão: não polui o contexto da conversa nem chama
+            # LLM. executar_* NUNCA levanta; o try cobre import/flag.
+            try:
+                from app.agente.config.feature_flags import AGENT_TEAMS_VINCULO_FASTPATH
+                from app.agente.sdk.vincular_teams_fastpath import (
+                    should_intercept_vincular, executar_vincular_fastpath,
+                )
+                if AGENT_TEAMS_VINCULO_FASTPATH and should_intercept_vincular(mensagem):
+                    _v = executar_vincular_fastpath(
+                        mensagem,
+                        aad_id=usuario_aad_id,
+                        email=usuario_email,
+                        nome=usuario,
+                        fallback_user_id=teams_user_id,
+                    )
+                    if _v.get("ok") and _v.get("resposta"):
+                        task.status = 'completed'
+                        task.resposta = _sanitizar_texto(_v["resposta"])
+                        task.completed_at = agora_utc_naive()
+                        if not _commit_with_retry("[TEAMS-VINCULO]"):
+                            task = db.session.get(TeamsTask, task_id)
+                            if task:
+                                task.status = 'completed'
+                                task.resposta = _sanitizar_texto(_v["resposta"])
+                                task.completed_at = agora_utc_naive()
+                                db.session.commit()
+                        logger.info(
+                            f"[TEAMS-VINCULO] fast-path respondido sem LLM: "
+                            f"task={task_id[:8]}..."
+                        )
+                        _process_queued_task(app, conversation_id, task_id)
+                        return
+            except Exception as _vt_err:
+                logger.warning(
+                    f"[TEAMS-ASYNC] fast-path vincular ignorado (-> fluxo normal): {_vt_err}"
+                )
+
             # Obter/criar sessão
             session = _get_or_create_teams_session(
                 conversation_id, usuario, user_id=teams_user_id
@@ -1644,12 +1788,71 @@ def process_teams_task_async(
             cache_read_tokens = 0
             cache_creation_tokens = 0
 
-            # C1: Smart model routing
-            selected_model = _select_model_for_message(mensagem)
-            logger.info(
-                f"[TEAMS-ASYNC] Model routing: {selected_model} "
-                f"para msg ({len(mensagem.split())} palavras)"
-            )
+            # ── Fast-paths determinísticos (Fase A — corrige gap: antes só
+            # existiam no path SYNC processar_mensagem_bot, morto desde que
+            # TEAMS_ASYNC_MODE=true virou default). Ordem: vinculação NF×PO
+            # (Gabriella) -> baseline (Marcus). Resposta de fast-path REUSA a
+            # persistência abaixo (add_user/assistant_message + task completed)
+            # via agent_result sintético com 0 tokens.
+            agent_result: Optional[StreamResult] = None
+            selected_model = None
+            try:
+                from app.agente.config.feature_flags import AGENT_VINCULACAO_FASTPATH
+                from app.agente.sdk.vinculacao_fastpath import executar_vinculacao_fastpath
+                if AGENT_VINCULACAO_FASTPATH:
+                    _vinc = executar_vinculacao_fastpath(
+                        mensagem, session_id=teams_session_id, user_id=teams_user_id,
+                    )
+                    if _vinc and _vinc.get("ok"):
+                        agent_result = _error_stream_result(
+                            resposta_texto=_vinc["resposta"],
+                            sdk_session_id=sdk_session_id,
+                        )
+                        selected_model = 'fastpath-vinculacao'
+                        logger.info(
+                            f"[TEAMS-ASYNC] vinculacao fast-path (sem subagente) "
+                            f"user={teams_user_id}"
+                        )
+            except Exception as _ve:
+                logger.warning(f"[TEAMS-ASYNC] fast-path vinculacao ignorado (-> LLM): {_ve}")
+
+            if agent_result is None:
+                try:
+                    from app.agente.config.feature_flags import AGENT_BASELINE_FASTPATH
+                    from app.agente.sdk.baseline_fastpath import (
+                        should_intercept_baseline, executar_baseline_fastpath,
+                    )
+                    if AGENT_BASELINE_FASTPATH and should_intercept_baseline(mensagem):
+                        _fp = executar_baseline_fastpath(
+                            session_id=teams_session_id, user_id=teams_user_id,
+                        )
+                        if _fp.get("ok"):
+                            agent_result = _error_stream_result(
+                                resposta_texto=_fp["resposta"],
+                                sdk_session_id=sdk_session_id,
+                            )
+                            selected_model = 'fastpath-baseline'
+                            logger.info(
+                                f"[TEAMS-ASYNC] baseline fast-path (sem LLM) "
+                                f"user={teams_user_id}"
+                            )
+                        else:
+                            logger.info("[TEAMS-ASYNC] baseline fast-path falhou -> fluxo LLM")
+                except Exception as _fp_err:
+                    logger.warning(f"[TEAMS-ASYNC] fast-path baseline ignorado (-> LLM): {_fp_err}")
+
+            if agent_result is not None:
+                # Fast-path resolveu: pula o retry loop do LLM
+                resposta_texto = agent_result.resposta_texto
+                new_sdk_session_id = agent_result.sdk_session_id
+                max_retries = 0
+            else:
+                # C1: Smart model routing
+                selected_model = _select_model_for_message(mensagem)
+                logger.info(
+                    f"[TEAMS-ASYNC] Model routing: {selected_model} "
+                    f"para msg ({len(mensagem.split())} palavras)"
+                )
 
             # Prefixos de erro retornados por _obter_resposta_agente_*
             # NÃO devem ser aceitos como resposta válida pelo retry loop.
@@ -1658,7 +1861,7 @@ def process_teams_task_async(
             # Inicializado como None — agent_result e reatribuido em cada tentativa.
             # Retry loop preserva `agent_result` da ultima tentativa bem-sucedida
             # OU mantem erro da ultima tentativa se todas falharam.
-            agent_result: Optional[StreamResult] = None
+            # (max_retries=0 quando fast-path já produziu agent_result acima.)
             for attempt in range(max_retries):
                 try:
                     if TEAMS_PROGRESSIVE_STREAMING:
