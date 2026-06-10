@@ -15,17 +15,20 @@ atualizado: 2026-06-09
 > EM ABERTO e o escopo delas PERMANECE LA. Este plano governa o contexto COMPLETO
 > (CLAUDE.md, listing de skills, hook dinamico, memorias) sem absorver tasks daquele.
 
-> 🔵 **PROXIMA SESSAO — RETOMAR AQUI:** FASES 0-5 CONCLUIDAS (2026-06-10 — ver
-> Rastreamento). F5 fechada com diagnostico + precision@k baseline (relatorio:
-> `relatorios/estudo_contexto_boot_2026-06-09/precision_at_k_baseline_2026-06-10.md`).
-> PENDENTES DE ACAO DO RAFAEL (pre/pos deploy F5): (a) rodar migration
-> `2026_06_09_agent_memories_proveniencia` em PROD ANTES do deploy; (b) rodar
-> data-fix `2026_06_09_f5_memorias_datafix.py --confirmar` em PROD; (c) env
-> `AGENT_MEMORY_MIN_SIMILARITY` 0.55→0.45 no Render (ou remover); (d) DECIDIR
-> migracao voyage-4-large (+50% precisao, ver relatorio §Recomendacoes).
-> Depois F6 (governanca — golden dataset 50+, ablacao por bloco do hook; dado
-> novo: blocos fixos grandes [user 18: rules 6,2K + tier1 7,6K] estouram o teto
-> 15K e cortam TODO o adaptativo — considerar cap em tier1/user_rules), F7.
+> 🔵 **PROXIMA SESSAO — RETOMAR AQUI:** FASES 0-5 CONCLUIDAS + MIGRACAO
+> voyage-4-large LIVE E VALIDADA EM PROD (2026-06-10: deploy 87bcf8c7f + reindex
+> das 549 + env removida; validacao fim-a-fim: query real → top-1 0.5831
+> injetavel, threshold 0.40 ativo nos logs — ver Rastreamento). Relatorio:
+> `relatorios/estudo_contexto_boot_2026-06-09/precision_at_k_baseline_2026-06-10.md`
+> (inclui A/B dedup: PERMANECE no lite — decisao medida).
+> Proxima: **F6 (governanca) COMECANDO pelo cap de tier1/user_rules** — evidencia
+> TRIPLA (users 1, 18 e 82): blocos fixos grandes estouram o teto 15K e cortam
+> TODO o adaptativo (tier2/organicas/routing). Depois: golden dataset 15→50+,
+> 5 checks PAD-CTX no R-EXEC-5, ablacao por bloco. Fila de curadoria (rapida,
+> requer ok do Rafael): 78 quase-duplicatas residentes → memory_consolidator;
+> user_rule "sessao N" (user 1) → empresa/heuristicas. Aceite formal F5:
+> re-medir precision@k "depois" com o harness (~30min) apos dias de trafego.
+> 5.7 acorda sozinho ~08/07 (gate 30d). F7 por ultimo.
 
 ## Indice
 
