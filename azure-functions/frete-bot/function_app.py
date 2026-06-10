@@ -66,3 +66,69 @@ async def messages(req: func.HttpRequest) -> func.HttpResponse:
             status_code=500,
             mimetype="application/json",
         )
+
+
+@app.route(
+    route="api/notify",
+    methods=["POST"],
+    auth_level=func.AuthLevel.ANONYMOUS,
+)
+async def notify(req: func.HttpRequest) -> func.HttpResponse:
+    """
+    Entrega proativa (Fase C teams-melhorias): o BACKEND chama este endpoint
+    quando uma TeamsTask completa depois que o polling morreu (5 min). A
+    function reconstrói o ConversationReference e envia a resposta via
+    adapter.continue_conversation (BOT_APP.deliver_proactive).
+
+    Auth: X-API-Key deve bater com BACKEND_API_KEY (mesma chave da ponte,
+    direção inversa). Validação JWT do Bot Framework não se aplica aqui —
+    a chamada vem do backend Render, não do Bot Framework Service.
+    """
+    import hmac
+    import os
+
+    backend_key = os.environ.get("BACKEND_API_KEY", "")
+    api_key = req.headers.get("X-API-Key", "")
+    if not backend_key or not api_key or not hmac.compare_digest(api_key, backend_key):
+        logger.warning("[FUNC] /api/notify com API key invalida")
+        return func.HttpResponse(
+            body=json.dumps({"error": "API key invalida"}),
+            status_code=401,
+            mimetype="application/json",
+        )
+
+    if BOT_APP is None:
+        logger.error("[FUNC] BOT_APP nao foi inicializado")
+        return func.HttpResponse(
+            body=json.dumps({"error": "Bot nao inicializado"}),
+            status_code=500,
+            mimetype="application/json",
+        )
+
+    try:
+        payload = req.get_json()
+        if not payload or not payload.get("conversation_reference"):
+            return func.HttpResponse(
+                body=json.dumps({"error": "conversation_reference obrigatorio"}),
+                status_code=400,
+                mimetype="application/json",
+            )
+
+        logger.info(
+            f"[FUNC] POST /api/notify recebido: task={str(payload.get('task_id', ''))[:8]}..."
+        )
+        await BOT_APP.deliver_proactive(payload)
+        return func.HttpResponse(
+            body=json.dumps({"status": "ok"}),
+            status_code=200,
+            mimetype="application/json",
+        )
+
+    except Exception as e:
+        # Propaga 500 — backend faz rollback do claim e pode re-entregar
+        logger.exception(f"[FUNC] Erro no endpoint /api/notify: {e}")
+        return func.HttpResponse(
+            body=json.dumps({"error": str(e)}),
+            status_code=500,
+            mimetype="application/json",
+        )

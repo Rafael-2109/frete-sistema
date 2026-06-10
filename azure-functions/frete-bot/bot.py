@@ -32,7 +32,7 @@ from botbuilder.core import (
     MessageFactory,
 )
 from botbuilder.core.teams import TeamsInfo
-from botbuilder.schema import Activity, ActivityTypes
+from botbuilder.schema import Activity, ActivityTypes, ConversationReference
 
 # Timezone Brasil (UTC-3) — implementação local para não depender do pacote Flask (app/)
 _BRASIL_TZ = timezone(timedelta(hours=-3))
@@ -1471,6 +1471,20 @@ async def _poll_and_respond(
                     pass
                 continue
 
+            elif status == "already_delivered":
+                # Fase C: a resposta JA foi entregue via proactive (backend
+                # ganhou o claim). Encerra o polling silenciosamente.
+                logger.info(
+                    f"[BOT] Task ja entregue via proactive — encerrando polling: "
+                    f"task={task_id[:8]}..."
+                )
+                if progressive_activity_id:
+                    try:
+                        await turn_context.delete_activity(progressive_activity_id)
+                    except Exception:
+                        pass
+                return
+
             elif status == "busy":
                 # Não deveria chegar aqui (busy é tratado no bot_message)
                 resposta = result.get("resposta", "Sistema ocupado.")
@@ -1513,26 +1527,26 @@ async def _poll_and_respond(
                 )
                 return
 
-    # Timeout de polling (5 min)
+    # Fim da janela de polling (5 min). Fase C: a tarefa CONTINUA no backend —
+    # a resposta chegara via entrega proativa (/api/notify + continue_conversation).
     if progressive_activity_id:
         try:
             update = Activity(
                 id=progressive_activity_id,
                 type=ActivityTypes.message,
-                text=last_partial_text + "\n\n_Tempo limite excedido._",
+                text=last_partial_text + "\n\n_Continuo trabalhando nisso..._",
             )
             await turn_context.update_activity(update)
         except Exception:
             pass
 
     await turn_context.send_activity(
-        "Tempo limite excedido aguardando resposta. "
-        "O processamento pode ter sido mais complexo do que o esperado. "
-        "Tente novamente."
+        "Ainda estou trabalhando nisso — pode levar mais alguns minutos. "
+        "Te aviso aqui assim que terminar."
     )
-    logger.warning(
-        f"[BOT] Polling timeout: task={task_id[:8]}... "
-        f"max_attempts={POLL_MAX_ATTEMPTS}"
+    logger.info(
+        f"[BOT] Polling encerrado (task segue no backend; entrega via proactive): "
+        f"task={task_id[:8]}... max_attempts={POLL_MAX_ATTEMPTS}"
     )
 
 
@@ -1614,6 +1628,16 @@ class FreteBot(ActivityHandler):
         user_email = await _get_user_email(turn_context)
         conversation_type = _get_conversation_type(turn_context)
 
+        # Fase C (proactive): reference serializado permite o backend entregar
+        # via continue_conversation depois que este polling morrer (5 min).
+        conv_reference = None
+        try:
+            conv_reference = TurnContext.get_conversation_reference(
+                turn_context.activity
+            ).serialize()
+        except Exception as ref_err:
+            logger.warning(f"[BOT] conversation_reference falhou (segue sem): {ref_err}")
+
         # 2. Chama o backend (reutiliza session HTTP compartilhada)
         http_session = await self._get_session()
 
@@ -1627,6 +1651,7 @@ class FreteBot(ActivityHandler):
                     "usuario_email": user_email,
                     "conversation_id": conversation_id,
                     "conversation_type": conversation_type,
+                    "conversation_reference": conv_reference,
                 },
                 session=http_session,
             )
@@ -2109,6 +2134,48 @@ class BotApp:
         )
 
         return response
+
+    async def deliver_proactive(self, payload: dict) -> None:
+        """Entrega resposta via proactive messaging (Fase C teams-melhorias).
+
+        Chamado pelo endpoint POST /api/notify quando o backend completa uma
+        task DEPOIS que o polling morreu (5 min). Reconstrói o
+        ConversationReference gravado na TeamsTask e envia a resposta com os
+        MESMOS builders do polling (_send_split_response + render_resposta_card).
+
+        Args:
+            payload: {task_id, status, resposta, resposta_card,
+                      conversation_reference}
+
+        Raises:
+            Exception: propagada ao endpoint (backend faz rollback do claim
+            e o polling/retry pode entregar).
+        """
+        reference = ConversationReference().deserialize(
+            payload["conversation_reference"]
+        )
+        resposta = payload.get("resposta") or "Sem resposta do sistema."
+        resposta_card = payload.get("resposta_card")
+        task_id = str(payload.get("task_id", ""))[:8]
+
+        async def _deliver(turn_context: TurnContext):
+            await _send_split_response(turn_context, resposta)
+            if resposta_card:
+                card = render_resposta_card(resposta_card)
+                if card:
+                    await turn_context.send_activity(
+                        MessageFactory.attachment(CardFactory.adaptive_card(card))
+                    )
+
+        await self.adapter.continue_conversation(
+            reference,
+            _deliver,
+            bot_id=MICROSOFT_APP_ID,
+        )
+        logger.info(
+            f"[BOT] Entrega proativa concluida: task={task_id}... "
+            f"({len(resposta)} chars, card={'sim' if resposta_card else 'nao'})"
+        )
 
 
 # Instancia singleton

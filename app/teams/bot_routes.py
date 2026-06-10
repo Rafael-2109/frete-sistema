@@ -89,6 +89,9 @@ def bot_message():
         usuario_email = str(dados.get("usuario_email", "")).strip()
         conversation_id = str(dados.get("conversation_id", "")).strip()
         conversation_type = str(dados.get("conversation_type", "personal")).strip() or "personal"
+        # Fase C (proactive): ConversationReference serializado do Bot Framework.
+        # Tolerante a ausencia (payload antigo durante janela de deploy).
+        conversation_reference = dados.get("conversation_reference") or None
 
         if not mensagem:
             return jsonify({"error": "Campo 'mensagem' e obrigatorio"}), 400
@@ -109,6 +112,7 @@ def bot_message():
                 mensagem, usuario, conversation_id,
                 usuario_aad_id=usuario_id, usuario_email=usuario_email,
                 conversation_type=conversation_type,
+                conversation_reference=conversation_reference,
             )
         else:
             return _handle_sync_message(
@@ -136,17 +140,26 @@ def _handle_async_message(
     usuario_aad_id: str = "",
     usuario_email: str = "",
     conversation_type: str = "personal",
+    conversation_reference: "dict | None" = None,
 ):
     """
     Cria TeamsTask e inicia thread non-daemon para processamento.
 
     Retorna imediatamente com task_id para polling.
 
-    Args extras (Fase A identidade + Fase B falante do turno):
+    Args extras (Fase A identidade + Fase B falante + Fase C proactive):
         usuario_aad_id: AAD object ID do Teams (resolucao de identidade)
         usuario_email: e-mail corporativo via TeamsInfo.get_member (auto-match)
         conversation_type: 'personal' | 'groupChat' | 'channel'
+        conversation_reference: ConversationReference serializado (entrega
+            proativa pos-polling — ver app/teams/proactive.py)
     """
+    from app.utils.json_helpers import sanitize_for_json
+
+    # JSONB safety: dict vem de fonte externa (Bot Framework serialize)
+    conversation_reference = (
+        sanitize_for_json(conversation_reference) if conversation_reference else None
+    )
     from app.teams.models import TeamsTask
     from app.teams.services import (
         _get_or_create_teams_user, process_teams_task_async,
@@ -198,6 +211,7 @@ def _handle_async_message(
                     user_id=teams_user_id,
                     status='queued',
                     mensagem=mensagem,
+                    conversation_reference=conversation_reference,
                 )
                 db.session.add(queued_task)
                 db.session.commit()
@@ -225,6 +239,7 @@ def _handle_async_message(
         user_id=teams_user_id,
         status='pending',
         mensagem=mensagem,
+        conversation_reference=conversation_reference,
     )
     db.session.add(task)
     db.session.commit()
@@ -310,10 +325,32 @@ def bot_task_status(task_id: str):
     - timeout: {"status": "timeout"}
     """
     from app.teams.models import TeamsTask
+    from app import db
 
     task = TeamsTask.query.get(task_id)
     if not task:
         return jsonify({"error": "Task nao encontrada"}), 404
+
+    # Fase C (proactive): claim atomico de entrega em status FINAL. Se a
+    # entrega proativa ja ocorreu (delivered_via='proactive'), o polling NAO
+    # deve reenviar — responde already_delivered e a function encerra.
+    if task.status in ('completed', 'error'):
+        try:
+            from sqlalchemy import text as sql_text
+            claimed = db.session.execute(sql_text(
+                "UPDATE teams_tasks SET delivered_via = 'polling' "
+                "WHERE id = :id AND delivered_via IS NULL"
+            ), {'id': task_id}).rowcount
+            db.session.commit()
+            if not claimed:
+                db.session.refresh(task)
+                if task.delivered_via == 'proactive':
+                    return jsonify({"status": "already_delivered"})
+                # delivered_via == 'polling' (claim de poll anterior do MESMO
+                # polling): segue entregando normalmente (idempotente).
+        except Exception as claim_err:
+            logger.warning(f"[TEAMS-BOT] Claim de entrega falhou (segue): {claim_err}")
+            db.session.rollback()
 
     result = {"status": task.status}
 

@@ -1395,7 +1395,9 @@ def _obter_resposta_agente_streaming(
     # Timeout por inatividade: mata quando não há atividade real.
     # Cada chunk/tool_call recebido renova o deadline.
     # Sem teto absoluto — operações longas (subagentes Odoo, bulk) são legítimas.
-    INACTIVITY_TIMEOUT = 300   # 5 min sem atividade = timeout (alinhado com web 2026-05-25)
+    # Fase C: configurável via env (botão de rollback sem deploy).
+    import os as _os
+    INACTIVITY_TIMEOUT = int(_os.environ.get("TEAMS_INACTIVITY_TIMEOUT", "300"))
 
     try:
         async def _stream_with_flush():
@@ -1595,8 +1597,45 @@ def _obter_resposta_agente_streaming(
 
         # Deadline renewal integrado em _stream_with_flush (per-chunk timeout).
         # Wrapper direto sem asyncio.wait_for externo.
+        # Fase C: heartbeat de 60s renova teams_tasks.updated_at enquanto a
+        # coroutine esta viva — desacopla "thread viva" de "texto novo". Sem
+        # isso, um tool call longo sem flush deixava updated_at parado e o
+        # cleanup lazy (15 min) podia matar task legitima. Cancel no finally
+        # cobre TODOS os exits, inclusive CancelledError (R7).
+        def _heartbeat_update():
+            from sqlalchemy import text as _hb_sql
+            from app import db as _hb_db
+            try:
+                _hb_db.session.execute(_hb_sql(
+                    "UPDATE teams_tasks SET updated_at = :now "
+                    "WHERE id = :id AND status = 'processing'"
+                ), {'now': agora_utc_naive(), 'id': task_id})
+                _hb_db.session.commit()
+            except Exception as hb_err:
+                # Best-effort: heartbeat NUNCA derruba o stream (mesmo padrao
+                # de sessao do _flush_partial_to_db — scoped session da thread
+                # do event loop, sem remove() por operacao).
+                logger.debug(f"[TEAMS-HEARTBEAT] Ignorado: {hb_err}")
+                try:
+                    _hb_db.session.rollback()
+                except Exception:
+                    pass
+
+        async def _heartbeat_loop():
+            while True:
+                await asyncio.sleep(60)
+                if app:
+                    with app.app_context():
+                        _heartbeat_update()
+                else:
+                    _heartbeat_update()
+
         async def _stream_with_timeout():
-            return await _stream_with_flush()
+            heartbeat_task = asyncio.create_task(_heartbeat_loop())
+            try:
+                return await _stream_with_flush()
+            finally:
+                heartbeat_task.cancel()
 
         # ClaudeSDKClient persistente (v3) — daemon thread pool.
         # v2 (asyncio.run) desligado em 2026-03-27.
@@ -2172,6 +2211,17 @@ def process_teams_task_async(
                 f"card={pending_card.get('template') if pending_card else 'none'}"
             )
 
+            # Fase C (proactive): se o polling da function provavelmente ja
+            # morreu (task antiga), entrega a resposta via continue_conversation.
+            # Best-effort + claim atomico anti-duplicata (ver proactive.py).
+            try:
+                from app.teams.proactive import notify_function_delivery
+                notify_function_delivery(task_id)
+            except Exception as proactive_err:
+                logger.warning(
+                    f"[TEAMS-ASYNC] Proactive delivery falhou (ignorado): {proactive_err}"
+                )
+
             # Verificar fila de mensagens pendentes para esta conversa
             _process_queued_task(app, conversation_id, task_id)
 
@@ -2195,6 +2245,13 @@ def process_teams_task_async(
             except Exception:
                 logger.error("[TEAMS-ASYNC] Erro ao marcar task como error", exc_info=True)
                 db.session.rollback()
+
+            # Fase C (proactive): entrega o ERRO tambem se o polling ja morreu
+            try:
+                from app.teams.proactive import notify_function_delivery
+                notify_function_delivery(task_id)
+            except Exception:
+                pass
 
             # Mesmo com erro, processar mensagem queued (usuario ja enviou)
             _process_queued_task(app, conversation_id, task_id)
@@ -2306,8 +2363,11 @@ def cleanup_stale_teams_tasks() -> int:
     """
     Marca tasks stale como timeout.
 
-    - pending/processing/awaiting_user_input: > 5 min sem update
-    - queued: > 10 min sem update (threshold maior porque aguarda task ativa)
+    Thresholds (Fase C — eram 5/5/10 min; com o heartbeat de 60s renovando
+    updated_at, um gap de 15 min significa thread realmente morta):
+    - pending/processing: > 15 min sem update
+    - awaiting_user_input: > 30 min sem update (usuario pode demorar no card)
+    - queued: > 15 min sem update
 
     Chamado no início de cada bot_message() (lazy cleanup, sem cron extra).
 
@@ -2326,18 +2386,25 @@ def cleanup_stale_teams_tasks() -> int:
         except Exception:
             pass
 
-        threshold = agora_utc_naive() - timedelta(minutes=5)
-        queued_threshold = agora_utc_naive() - timedelta(minutes=10)
+        # Fase C: thresholds maiores (eram 5/5/10). O heartbeat de 60s renova
+        # updated_at de tasks processing — gap de 15 min = thread morta de fato.
+        # awaiting_user_input ganha 30 min (usuario pode demorar no card).
+        processing_threshold = agora_utc_naive() - timedelta(minutes=15)
+        awaiting_threshold = agora_utc_naive() - timedelta(minutes=30)
+        queued_threshold = agora_utc_naive() - timedelta(minutes=15)
 
         # P2-C: Usar updated_at ao invés de created_at para evitar matar tasks legítimas.
-        # Uma task criada há 5+ min pode ter mudado para awaiting_user_input há 30s.
+        # Uma task criada há 15+ min pode ter mudado para awaiting_user_input há 30s.
         # Com created_at, seria marcada como timeout enquanto o usuário ainda responde.
-        # Tasks queued usam threshold maior (10 min) porque aguardam task ativa terminar.
         stale_tasks = TeamsTask.query.filter(
             db.or_(
                 db.and_(
-                    TeamsTask.status.in_(['pending', 'processing', 'awaiting_user_input']),
-                    TeamsTask.updated_at < threshold,
+                    TeamsTask.status.in_(['pending', 'processing']),
+                    TeamsTask.updated_at < processing_threshold,
+                ),
+                db.and_(
+                    TeamsTask.status == 'awaiting_user_input',
+                    TeamsTask.updated_at < awaiting_threshold,
                 ),
                 db.and_(
                     TeamsTask.status == 'queued',

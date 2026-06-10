@@ -29,7 +29,8 @@ atualizado: 2026-06-08
   - [Bug Teams #1: Transcript persistence](#bug-teams-1-transcript-persistence)
   - [Bug Teams #2: Race condition `/bot/answer`](#bug-teams-2-race-condition-botanswer)
   - [Dispatch v2 vs v3](#dispatch-v2-vs-v3)
-  - [Auto-cadastro de usuarios](#auto-cadastro-de-usuarios)
+  - [Identidade unificada (Fase A) — hierarquia de resolucao](#identidade-unificada-fase-a-2026-06-10--hierarquia-de-resolucao)
+  - [Falante do turno em grupos (Fase B)](#falante-do-turno-em-grupos-fase-b-2026-06-10)
   - [session_id vs sdk_session_id](#session_id-vs-sdk_session_id)
   - [DC-8: Subprocess zombie apos CancelledError](#dc-8-subprocess-zombie-apos-cancellederror)
   - [Fix 3: App instance do gunicorn](#fix-3-app-instance-do-gunicorn)
@@ -38,9 +39,9 @@ atualizado: 2026-06-08
 
 ## Contexto
 
-~2.6K LOC, 4 arquivos. Threads non-daemon (concluem durante reciclagem do gunicorn) + retry de SSL + persistencia de transcript. Regras criticas: `daemon=False` obrigatorio em `process_teams_task_async()` e `_commit_with_retry()` sempre (nunca commit direto — Render derruba SSL em idle).
+~3.2K LOC, 5 arquivos. Threads non-daemon (concluem durante reciclagem do gunicorn) + retry de SSL + persistencia de transcript + entrega proativa. Regras criticas: `daemon=False` obrigatorio em `process_teams_task_async()` e `_commit_with_retry()` sempre (nunca commit direto — Render derruba SSL em idle).
 
-**LOC**: ~2.6K | **Arquivos**: 4 | **Atualizado**: 08/06/2026
+**LOC**: ~3.2K | **Arquivos**: 5 | **Atualizado**: 10/06/2026
 
 Bot assincrono Microsoft Teams via Azure Function bridge. Non-daemon threads + SSL retry + transcript persistence.
 
@@ -51,9 +52,10 @@ Bot assincrono Microsoft Teams via Azure Function bridge. Non-daemon threads + S
 ```
 app/teams/
   ├── __init__.py      # 5 LOC — Blueprint /api/teams
-  ├── models.py        # 81 LOC — TeamsTask (lifecycle 6 estados)
-  ├── bot_routes.py    # 482 LOC — 5 endpoints + auth HMAC
-  └── services.py      # 2,063 LOC — Core: user/session/response/async processing
+  ├── models.py        # ~90 LOC — TeamsTask (lifecycle 6 estados + delivered_via/conversation_reference)
+  ├── bot_routes.py    # ~560 LOC — endpoints + auth HMAC + claim de entrega
+  ├── proactive.py     # ~130 LOC — entrega proativa (POST /api/notify na function)
+  └── services.py      # ~2.4K LOC — Core: user/session/response/async/fast-paths/merge
 ```
 
 ## Regras Criticas
@@ -108,8 +110,14 @@ pending → processing → completed|error|awaiting_user_input|timeout
 ```
 - `queued → processing` (automaticamente quando task anterior completa ou falha)
 - `awaiting_user_input → processing` (apos resposta via `/bot/answer`)
-- Timeout: `updated_at` > 5 min idle → `timeout` (lazy cleanup em `bot_message`)
-- Timeout queued: `updated_at` > 10 min → `timeout`
+- Timeout (Fase C 2026-06-10): `updated_at` > 15 min (pending/processing), > 30 min
+  (awaiting_user_input), > 15 min (queued) → `timeout` (lazy cleanup em `bot_message`).
+  Heartbeat de 60s renova `updated_at` enquanto a coroutine de stream vive
+  (`_stream_with_timeout` — gap de 15 min = thread morta DE FATO).
+- Entrega (Fase C): `delivered_via` = claim atomico `'polling'|'proactive'` (NULL =
+  nao entregue). `/bot/status` clama polling; `proactive.notify_function_delivery`
+  clama proactive (rollback se o POST falhar). Quem ganha entrega; o perdedor ve
+  `already_delivered` e desiste.
 - Limite: max 1 task `queued` por `conversation_id` (nova msg substitui anterior)
 
 ### R8: Fila de mensagens — max 1 por conversa
@@ -124,11 +132,12 @@ na MESMA THREAD (recursao via `process_teams_task_async`). Azure Function inicia
 
 | Endpoint | Metodo | Auth | Funcao |
 |----------|--------|------|--------|
-| `/bot/message` | POST | HMAC | Cria task async, retorna `task_id` |
-| `/bot/status/<id>` | GET | HMAC | Polling: status + resposta parcial/final |
+| `/bot/message` | POST | HMAC | Cria task async, retorna `task_id`; payload tem `usuario_id` (AAD), `usuario_email`, `conversation_type`, `conversation_reference` (Fases A/B/C) |
+| `/bot/status/<id>` | GET | HMAC | Polling: status + resposta parcial/final + claim `delivered_via='polling'`; responde `already_delivered` se proactive ja entregou |
 | `/bot/answer` | POST | HMAC | Responde AskUserQuestion (idempotente) |
 | `/bot/execute` | POST | HMAC | TODO — nao implementado |
 | `/bot/health` | GET | — | Diagnostico: threads ativas + orphan processes |
+| `{function}/api/notify` | POST | X-API-Key | NA AZURE FUNCTION: backend entrega resposta via `continue_conversation` quando o polling (5 min) ja morreu — `app/teams/proactive.py` |
 
 ---
 
@@ -172,10 +181,28 @@ TeamsTask). Ver `docs/RELATORIO_AVALIACAO_360_AGENTE_2026-05-29.md` CONF-2.
 — FONTE: `Caddyfile` (matcher `@teams`), `services.py:738,1300` (submit_coroutine),
 `feature_flags.py:422`
 
-### Auto-cadastro de usuarios
-Email deterministico: `teams_{md5[:12]}@teams.nacomgoya.local`, senha aleatoria, perfil='logistica'.
-Permite FK em AgentSession/AgentMemory sem login web.
-— FONTE: `services.py:24-85`
+### Identidade unificada (Fase A 2026-06-10) — hierarquia de resolucao
+`_get_or_create_teams_user(usuario, aad_id, email)`:
+1. **AAD object ID vinculado** (`Usuario.find_by_teams_aad_id`) — vinculo por codigo
+   de pareamento (tela `/auth/vincular-teams` + fast-path `vincular ABC123`,
+   `app/agente/sdk/vincular_teams_fastpath.py`), por email ou por admin.
+2. **Auto-match por e-mail corporativo** (TeamsInfo.get_member na function) —
+   grava vinculo `origem='email'` se o usuario ainda nao tem `teams_user_id`.
+3. **Fallback legacy (fantasma)**: email deterministico
+   `teams_{md5[:12]}@teams.nacomgoya.local`, senha aleatoria, perfil='logistica'.
+Merge de fantasma -> usuario real: `merge_usuario_teams` (FK discovery dual:
+information_schema + tabelas agent%/teams%/claude% SEM FK formal) + script
+`scripts/migrations/2026_06_10_merge_usuarios_teams.py` (--dry-run default).
+— FONTE: `services.py:_get_or_create_teams_user`, `app/auth/models.py:find_by_teams_aad_id`
+
+### Falante do turno em grupos (Fase B 2026-06-10)
+Em `groupChat`/`channel`, o prompt ganha `[Mensagem de: <nome>]`
+(`_montar_prompt_teams`) e `add_user_message(author=)` persiste o falante
+(fallback XML de resume inclui `author=`). Hooks do SDK resolvem o falante do
+turno via `app/agente/sdk/turn_context_registry.py` (client do pool reusado NAO
+reaplica hooks — a closure congelava memorias/gates no 1o falante). Msgs
+enfileiradas derivam o tipo pela heuristica `conversation_id.startswith('19:')`.
+— FONTE: `services.py:_montar_prompt_teams`, `app/agente/sdk/hooks.py:_turn_user`
 
 ### session_id vs sdk_session_id
 | ID | Escopo | Persistencia | Uso |
@@ -203,13 +230,15 @@ NUNCA usar `create_app()` na thread. Reutilizar `current_app._get_current_object
 |------|---------|---------|
 | `TEAMS_DEFAULT_MODEL` | `claude-opus-4-8` | Modelo LLM (rollback: `claude-opus-4-7`) |
 | `TEAMS_ASYNC_MODE` | `true` | Async (thread) vs sync |
-| `TEAMS_ASK_USER_TIMEOUT` | `120` | Timeout Adaptive Card (seg) |
-| `INACTIVITY_TIMEOUT` | `300` | Sem chunk por 5 min = timeout (DC-9, sem teto absoluto) — era 240s ate 2026-05-25 |
+| `TEAMS_ASK_USER_TIMEOUT` | `180` | Timeout Adaptive Card (seg) — doc dizia 120; default real e 180 (`feature_flags.py`) |
+| `TEAMS_INACTIVITY_TIMEOUT` | `300` | Sem chunk por 5 min = timeout (DC-9, sem teto absoluto); env configuravel desde Fase C — era constante hardcoded |
 | `TEAMS_PROGRESSIVE_STREAMING` | `true` | Flush parcial ao DB |
 | `TEAMS_STREAM_FLUSH_INTERVAL` | `4.0` | Intervalo flush (seg) |
 | `USE_PERSISTENT_SDK_CLIENT` | `true` | v3 pool persistente (ATIVO) vs v2 efemero (desligado 2026-03-27) |
 | `AGENT_VINCULACAO_FASTPATH` | `true` | FASE 3 reducao custo: vincular/desvincular NF×PO (Gabriella) sem subagente gestor-recebimento. Roteamento deterministico (regex N0 + Haiku N1) em `services.py` ANTES do baseline/LLM: `if _vinc -> elif _fp(baseline) -> else LLM`. Ver `app/agente/sdk/vinculacao_fastpath.py` |
-| `AGENT_BASELINE_FASTPATH` | `true` | "atualizar baseline" (Marcus) resolvido sem LLM. Ver `app/agente/sdk/baseline_fastpath.py` |
+| `AGENT_BASELINE_FASTPATH` | `true` | "atualizar baseline" (Marcus) resolvido sem LLM. Ver `app/agente/sdk/baseline_fastpath.py`. Fase A 2026-06-10: fast-paths agora interceptam tambem no path ASYNC (`process_teams_task_async`) — antes so existiam no sync morto |
+| `AGENT_TEAMS_VINCULO_FASTPATH` | `true` | Fase A: fast-path `vincular ABC123` (pareamento de identidade, meta-comando sem LLM/sessao). Ver `app/agente/sdk/vincular_teams_fastpath.py` |
+| `TEAMS_PROACTIVE_DELIVERY` | `true` | Fase C: entrega proativa pos-polling via `{TEAMS_FUNCTION_URL}/api/notify` + `continue_conversation`. Requer env `TEAMS_FUNCTION_URL`. Ver `app/teams/proactive.py` |
 
 ---
 

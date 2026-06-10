@@ -1,12 +1,12 @@
 {
   "app/agente": {
-    "py": 104,
-    "loc": 53570,
+    "py": 108,
+    "loc": 55777,
     "tpl": 0
   },
   "app/agente/services": {
-    "py": 23,
-    "loc": 13793,
+    "py": 24,
+    "loc": 14498,
     "tpl": 0
   },
   "app/agente_lojas": {
@@ -16,7 +16,7 @@
   },
   "app/carteira": {
     "py": 50,
-    "loc": 18546,
+    "loc": 18545,
     "tpl": 13
   },
   "app/carvia": {
@@ -41,7 +41,7 @@
   },
   "app/fretes": {
     "py": 20,
-    "loc": 19396,
+    "loc": 19478,
     "tpl": 43
   },
   "app/hora": {
@@ -75,8 +75,8 @@
     "tpl": 8
   },
   "app/teams": {
-    "py": 4,
-    "loc": 2631,
+    "py": 5,
+    "loc": 3207,
     "tpl": 0
   },
   "app/whatsapp": {

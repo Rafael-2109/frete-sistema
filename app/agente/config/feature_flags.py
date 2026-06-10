@@ -422,6 +422,16 @@ AGENT_TEAMS_VINCULO_FASTPATH = os.getenv(
     "AGENT_TEAMS_VINCULO_FASTPATH", "true"
 ).lower() == "true"
 
+# Fase C teams-melhorias (2026-06-10): entrega PROATIVA de respostas do Teams.
+# Quando a task completa apos o polling da Azure Function morrer (5 min), o
+# backend POSTa em {TEAMS_FUNCTION_URL}/api/notify e a function entrega via
+# continue_conversation. Requer env TEAMS_FUNCTION_URL configurada (sem ela,
+# no-op com log). Claim atomico em teams_tasks.delivered_via evita duplicata.
+# Impl: app/teams/proactive.py. Rollback total: TEAMS_PROACTIVE_DELIVERY=false.
+TEAMS_PROACTIVE_DELIVERY = os.getenv(
+    "TEAMS_PROACTIVE_DELIVERY", "true"
+).lower() == "true"
+
 # ====================================================================
 # Session Lifecycle (Fase 2, 2026-04-21)
 # ====================================================================
