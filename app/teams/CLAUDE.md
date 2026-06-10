@@ -135,7 +135,6 @@ na MESMA THREAD (recursao via `process_teams_task_async`). Azure Function inicia
 | `/bot/message` | POST | HMAC | Cria task async, retorna `task_id`; payload tem `usuario_id` (AAD), `usuario_email`, `conversation_type`, `conversation_reference` (Fases A/B/C) |
 | `/bot/status/<id>` | GET | HMAC | Polling: status + resposta parcial/final + claim `delivered_via='polling'`; responde `already_delivered` se proactive ja entregou |
 | `/bot/answer` | POST | HMAC | Responde AskUserQuestion (idempotente) |
-| `/bot/execute` | POST | HMAC | TODO — nao implementado |
 | `/bot/health` | GET | — | Diagnostico: threads ativas + orphan processes |
 | `{function}/api/notify` | POST | X-API-Key | NA AZURE FUNCTION: backend entrega resposta via `continue_conversation` quando o polling (5 min) ja morreu — `app/teams/proactive.py` |
 

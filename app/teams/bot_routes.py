@@ -5,7 +5,6 @@ Endpoints:
 - POST /api/teams/bot/message  - Recebe mensagem do bot e inicia processamento async
 - GET  /api/teams/bot/status/<task_id> - Polling de status de uma task
 - POST /api/teams/bot/answer   - Recebe resposta de Adaptive Card (AskUserQuestion)
-- POST /api/teams/bot/execute  - Executa tarefa confirmada pelo usuario
 - GET  /api/teams/bot/health   - Health check
 """
 
@@ -190,15 +189,18 @@ def _handle_async_message(
             ).first()
 
             if existing_queued:
-                # Substituir mensagem pendente (mais recente prevalece)
-                existing_queued.mensagem = mensagem
+                # Fase D (2026-06-10): CONCATENA em vez de sobrescrever — antes
+                # a 1a mensagem pendente sumia silenciosamente. Cap de 10000
+                # chars (mesmo limite do endpoint).
+                combinada = f"{existing_queued.mensagem}\n\n{mensagem}"[:10000]
+                existing_queued.mensagem = combinada
                 existing_queued.user_name = usuario
                 existing_queued.updated_at = agora_utc_naive()
                 db.session.commit()
                 task_id = existing_queued.id
                 logger.info(
-                    f"[TEAMS-BOT] Mensagem queued ATUALIZADA: task={task_id[:8]}... "
-                    f"msg={mensagem[:80]}..."
+                    f"[TEAMS-BOT] Mensagem queued CONCATENADA: task={task_id[:8]}... "
+                    f"total_len={len(combinada)}"
                 )
             else:
                 # Criar nova task queued
@@ -327,6 +329,14 @@ def bot_task_status(task_id: str):
     from app.teams.models import TeamsTask
     from app import db
 
+    # Fase D (achado 2c avaliacao 360): rollback defensivo — threads gthread sao
+    # reusadas entre requests; sessao suja de request anterior quebra a query
+    # com PendingRollbackError. /bot/status e o endpoint MAIS chamado (polling).
+    try:
+        db.session.rollback()
+    except Exception:
+        pass
+
     task = TeamsTask.query.get(task_id)
     if not task:
         return jsonify({"error": "Task nao encontrada"}), 404
@@ -413,6 +423,13 @@ def bot_answer():
         from app.agente.sdk.pending_questions import submit_answer
         from app import db
 
+        # Fase D (achado 2c avaliacao 360): rollback defensivo (sessao suja de
+        # request anterior na mesma thread gthread).
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+
         task = TeamsTask.query.get(task_id)
         if not task:
             return jsonify({"error": "Task nao encontrada"}), 404
@@ -472,47 +489,6 @@ def bot_answer():
     except Exception as e:
         logger.error(f"[TEAMS-BOT] Erro ao processar resposta: {e}", exc_info=True)
         return jsonify({"error": "Erro interno ao processar resposta"}), 500
-
-
-@teams_bp.route('/bot/execute', methods=['POST'])
-@csrf.exempt
-@require_bot_api_key
-def bot_execute():
-    """
-    Executa uma tarefa confirmada pelo usuario.
-
-    Input JSON:
-    {
-        "task_id": "uuid-da-tarefa"
-    }
-
-    Output JSON:
-    {
-        "resposta": "resultado da execucao"
-    }
-    """
-    logger.info("[TEAMS-BOT] POST /bot/execute recebido")
-
-    try:
-        dados = request.get_json(silent=True) or {}
-        task_id = str(dados.get("task_id", "")).strip()
-
-        if not task_id:
-            return jsonify({"error": "Campo 'task_id' e obrigatorio"}), 400
-
-        logger.info(f"[TEAMS-BOT] Executando tarefa: {task_id}")
-
-        # TODO: Implementar busca e execucao de tarefas pendentes.
-        return jsonify({
-            "resposta": (
-                f"Tarefa {task_id} recebida para execucao. "
-                "Esta funcionalidade sera implementada em breve."
-            )
-        })
-
-    except Exception as e:
-        logger.error(f"[TEAMS-BOT] Erro ao executar: {e}", exc_info=True)
-        return jsonify({"error": "Erro interno ao executar tarefa"}), 500
 
 
 @teams_bp.route('/bot/health', methods=['GET'])

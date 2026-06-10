@@ -111,73 +111,6 @@ def _get_conversation_type(turn_context: TurnContext) -> str:
 # ADAPTIVE CARDS
 # ═══════════════════════════════════════════════════════════════
 
-def build_confirmation_card(task_id: str, descricao: str, usuario: str) -> dict:
-    """
-    Adaptive Card v1.4 com botoes Confirmar/Cancelar.
-
-    Usa Action.Submit que envia activity.value com dados do botao.
-    Tratado em on_message_activity checando activity.value.
-    """
-    agora = agora_utc_naive().strftime("%d/%m/%Y %H:%M")
-
-    return {
-        "type": "AdaptiveCard",
-        "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
-        "version": "1.4",
-        "msteams": {"width": "Full"},
-        "body": [
-            {
-                "type": "TextBlock",
-                "text": "Confirmacao Necessaria",
-                "weight": "Bolder",
-                "size": "Medium",
-                "color": "Warning",
-            },
-            {
-                "type": "TextBlock",
-                "text": "O agente precisa da sua aprovacao para executar a operacao abaixo:",
-                "wrap": True,
-                "size": "Small",
-                "color": "Light",
-            },
-            {
-                "type": "TextBlock",
-                "text": descricao,
-                "wrap": True,
-                "spacing": "Medium",
-            },
-            {
-                "type": "TextBlock",
-                "text": f"{usuario} - {agora}",
-                "size": "Small",
-                "color": "Light",
-                "spacing": "Medium",
-                "horizontalAlignment": "Right",
-            },
-        ],
-        "actions": [
-            {
-                "type": "Action.Submit",
-                "title": "Confirmar",
-                "style": "positive",
-                "data": {
-                    "action": "confirm",
-                    "task_id": task_id,
-                },
-            },
-            {
-                "type": "Action.Submit",
-                "title": "Cancelar",
-                "style": "destructive",
-                "data": {
-                    "action": "cancel",
-                    "task_id": task_id,
-                },
-            },
-        ],
-    }
-
-
 def build_error_card(mensagem: str) -> dict:
     """Adaptive Card para exibir erros."""
     return {
@@ -1719,30 +1652,21 @@ class FreteBot(ActivityHandler):
             return
 
         # Modo sincrono / fallback: resposta direta
-        if result.get("requer_confirmacao"):
-            card = build_confirmation_card(
-                task_id=result.get("task_id", ""),
-                descricao=result.get("descricao", ""),
-                usuario=user_name,
-            )
-            await turn_context.send_activity(
-                MessageFactory.attachment(
-                    CardFactory.adaptive_card(card)
-                )
-            )
-        else:
-            resposta = result.get("resposta", "Sem resposta do sistema.")
-            await _send_split_response(turn_context, resposta)
+        # (Fase D 2026-06-10: ramo requer_confirmacao removido — o backend
+        # nunca emitiu essa chave; /bot/execute e build_confirmation_card
+        # eram codigo morto dos dois lados.)
+        resposta = result.get("resposta", "Sem resposta do sistema.")
+        await _send_split_response(turn_context, resposta)
 
     async def _handle_card_response(self, turn_context: TurnContext):
         """
         Trata clique em botoes do Adaptive Card.
 
         Suporta:
-        - action: "confirm" → confirmar ação pendente
         - action: "cancel" → cancelar ação
         - action: "ask_user_answer" → resposta do AskUserQuestion
         - action: "ask_user_cancel" → cancelar AskUserQuestion
+        - demais actions → card action estruturada (encaminhada ao agente)
         """
         value = turn_context.activity.value or {}
         action = value.get("action", "")
@@ -1765,40 +1689,7 @@ class FreteBot(ActivityHandler):
         # Session HTTP compartilhada
         http_session = await self._get_session()
 
-        if action == "confirm" and task_id:
-            # Typing enquanto executa
-            await turn_context.send_activity(
-                Activity(type=ActivityTypes.typing)
-            )
-
-            try:
-                result = await call_backend(
-                    endpoint="/api/teams/bot/execute",
-                    payload={
-                        "task_id": task_id,
-                        "conversation_id": conversation_id,
-                    },
-                    session=http_session,
-                )
-                resposta = result.get(
-                    "resposta", "Operacao executada com sucesso."
-                )
-                await turn_context.send_activity(resposta)
-            except Exception as e:
-                logger.error(
-                    f"[BOT] Erro ao executar tarefa: {e}", exc_info=True
-                )
-                await turn_context.send_activity(
-                    MessageFactory.attachment(
-                        CardFactory.adaptive_card(
-                            build_error_card(
-                                f"Erro ao executar operacao: {str(e)[:200]}"
-                            )
-                        )
-                    )
-                )
-
-        elif action == "cancel":
+        if action == "cancel":
             await turn_context.send_activity(
                 "Operacao cancelada pelo usuario."
             )

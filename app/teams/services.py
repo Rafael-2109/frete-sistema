@@ -331,7 +331,8 @@ REGRAS OBRIGATÓRIAS:
    Execute as consultas SILENCIOSAMENTE e retorne APENAS o resultado
 3. SEM MARKDOWN COMPLEXO - NÃO use tabelas (| col |), headers (##), code blocks
    Use apenas: texto simples, listas com "- item", negrito com *texto*
-4. TAMANHO IDEAL - Até 3000 caracteres (respostas longas serão divididas automaticamente)
+4. TAMANHO IDEAL - Até 3000 caracteres. Se precisar de mais, pode: respostas
+   longas são divididas em múltiplas mensagens automaticamente (limite ~24000)
 5. PERGUNTAS INTERATIVAS - Se precisar de mais informações do usuário, use AskUserQuestion normalmente. O sistema apresentará as opções via Adaptive Card no Teams.
 
 PROIBIDO:
@@ -347,6 +348,57 @@ CORRETO:
 
 PERGUNTA DO USUÁRIO:
 """
+
+
+_RESET_CONVERSA_RE = re.compile(
+    r'^\s*(nova|resetar|reiniciar)\s+(conversa|sess[aã]o)\s*[.!]?\s*$',
+    re.IGNORECASE,
+)
+
+
+def _should_reset_conversa(mensagem: Optional[str]) -> bool:
+    """True se a mensagem é EXATAMENTE um pedido de reset de contexto (Fase D).
+
+    Conservador: qualquer palavra a mais ("nova conversa sobre X") NÃO intercepta.
+    """
+    if not mensagem or not str(mensagem).strip():
+        return False
+    return bool(_RESET_CONVERSA_RE.match(str(mensagem).strip()))
+
+
+def _executar_reset_conversa(conversation_id: str) -> dict:
+    """Expira a sessão ativa da conversa SEM esperar o TTL de 2h (Fase D).
+
+    Empurra updated_at da AgentSession mais recente da conversa para o passado
+    (> TTL) — a próxima mensagem cria sessão nova via _get_or_create_teams_session.
+    NUNCA levanta.
+    """
+    try:
+        from sqlalchemy import text as sql_text
+        from app import db
+
+        base_session_id = f"teams_{conversation_id}"
+        if len(base_session_id) > 250:
+            conv_hash = hashlib.md5(conversation_id.encode()).hexdigest()[:20]
+            base_session_id = f"teams_{conv_hash}"
+
+        db.session.execute(sql_text(
+            "UPDATE agent_sessions SET updated_at = updated_at - interval '1 day' "
+            "WHERE session_id LIKE :pattern"
+        ), {'pattern': f'{base_session_id}%'})
+        db.session.commit()
+        return {
+            "ok": True,
+            "resposta": "Contexto reiniciado — sua próxima mensagem começa uma conversa nova.",
+        }
+    except Exception as e:
+        logger.warning(f"[TEAMS-RESET] Falhou (ignorado): {e}")
+        try:
+            from app import db
+            db.session.rollback()
+        except Exception:
+            pass
+        return {"ok": False, "resposta": None}
 
 
 def _montar_prompt_teams(mensagem: str, usuario: str, conversation_type: str = "personal") -> str:
@@ -1209,19 +1261,19 @@ def _sanitizar_texto(texto: str) -> str:
     # Remove multiplas quebras de linha consecutivas
     texto = re.sub(r'\n{3,}', '\n\n', texto)
 
-    # Limita tamanho (Teams suporta ~28KB, mas cards ficam legíveis até ~4000)
-    if len(texto) > 3800:
-        # Tenta cortar em quebra de parágrafo para manter legibilidade
-        corte = texto[:3700].rfind('\n\n')
-        if corte > 2000:
+    # Teto DEFENSIVO (Fase D 2026-06-10): era 3800 e cortava respostas que a
+    # function JA sabe dividir (_send_split_response, blocos de 3.5K). Teams
+    # aceita ~28KB por mensagem; 24K da margem e a function splita em ~7 msgs.
+    if len(texto) > 24000:
+        corte = texto[:23800].rfind('\n\n')
+        if corte > 16000:
             texto = texto[:corte] + '\n\n_(resposta truncada)_'
         else:
-            # Fallback: cortar na última quebra de linha
-            corte = texto[:3700].rfind('\n')
-            if corte > 2000:
+            corte = texto[:23800].rfind('\n')
+            if corte > 16000:
                 texto = texto[:corte] + '\n\n_(resposta truncada)_'
             else:
-                texto = texto[:3700] + '\n\n_(resposta truncada)_'
+                texto = texto[:23800] + '\n\n_(resposta truncada)_'
 
     return texto.strip()
 
@@ -1799,6 +1851,31 @@ def process_teams_task_async(
             except Exception as _vt_err:
                 logger.warning(
                     f"[TEAMS-ASYNC] fast-path vincular ignorado (-> fluxo normal): {_vt_err}"
+                )
+
+            # ── Fase D: fast-path 'nova conversa' (reset de contexto sem
+            # esperar o TTL de 2h). ANTES de _get_or_create_teams_session —
+            # senao a propria mensagem renovaria o TTL da sessao antiga.
+            try:
+                if _should_reset_conversa(mensagem):
+                    _r = _executar_reset_conversa(conversation_id)
+                    if _r.get("ok") and _r.get("resposta"):
+                        task.status = 'completed'
+                        task.resposta = _sanitizar_texto(_r["resposta"])
+                        task.completed_at = agora_utc_naive()
+                        if not _commit_with_retry("[TEAMS-RESET]"):
+                            task = db.session.get(TeamsTask, task_id)
+                            if task:
+                                task.status = 'completed'
+                                task.resposta = _sanitizar_texto(_r["resposta"])
+                                task.completed_at = agora_utc_naive()
+                                db.session.commit()
+                        logger.info(f"[TEAMS-RESET] Contexto reiniciado: conv={conversation_id[:30]}...")
+                        _process_queued_task(app, conversation_id, task_id)
+                        return
+            except Exception as _rs_err:
+                logger.warning(
+                    f"[TEAMS-ASYNC] fast-path reset ignorado (-> fluxo normal): {_rs_err}"
                 )
 
             # Obter/criar sessão
