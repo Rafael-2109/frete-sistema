@@ -67,7 +67,7 @@ zxcvbn>=4.4.28              # Password strength estimation (seguranca module)
 # AI & CLAUDE INTEGRATION
 # ==========================================
 anthropic==0.98.1           # API direta Anthropic. Detalhes: ver app/agente/SDK_CHANGELOG.md (Anthropic 0.85→0.98.1)
-claude-agent-sdk==0.2.89    # Claude Agent SDK oficial. Detalhes: ver app/agente/SDK_CHANGELOG.md (0.1.67→0.2.89)
+claude-agent-sdk==0.2.95    # Claude Agent SDK oficial (CLI bundled 2.1.170, suporta claude-fable-5). Detalhes: ver app/agente/SDK_CHANGELOG.md (0.1.67→0.2.95; 0.2.90-95 = so bumps de CLI bundled, zero breaking)
 asyncpg==0.30.0             # Driver async Postgres para SessionStore adapter (paralelo ao psycopg2/SQLAlchemy sync usado no resto do app). Pool separado, lazy per-worker, max_size=3.
 mcp>=1.26.0                 # Model Context Protocol (latest stable)
 pydantic==2.12.5           # Data validation
