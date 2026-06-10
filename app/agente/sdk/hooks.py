@@ -112,6 +112,30 @@ def _compose_hook_context(
     )
 
 
+def _build_resume_fallback_notice(reason: str) -> str:
+    """PURO/testavel — notice que antecede o historico injetado no 1o turno.
+
+    'rotated': sessao ROTACIONADA por idle (controle de custo) — o usuario ve
+    a MESMA conversa na UI e espera continuidade total (caso conversa-nacom
+    2026-06-10). 'resume_failed' (default): resume do SDK falhou (R-CLI-CRASH).
+    """
+    if reason == 'rotated':
+        return (
+            "IMPORTANTE: Esta conversa CONTINUA uma sessão anterior do mesmo "
+            "usuário (rotacionada por inatividade, por controle de custo). "
+            "O usuário vê a conversa antiga na tela e espera continuidade "
+            "total — NÃO trate como assunto novo. Abaixo: resumo e últimas "
+            "mensagens da sessão original. Se algo essencial não estiver "
+            "aqui, pergunte objetivamente em vez de presumir."
+        )
+    return (
+        "IMPORTANTE: A sessão anterior não pôde ser restaurada via resume. "
+        "Abaixo está o histórico recente da conversa extraído do banco de dados. "
+        "Use este contexto para continuar a conversa de forma coerente. "
+        "O usuário pode não saber que o contexto foi perdido."
+    )
+
+
 def _build_skill_pretool_context(user_id: int, skill: str) -> Optional[str]:
     """Contexto pre-execucao da Skill tool (PreToolUse) — 2 fontes best-effort:
 
@@ -1480,20 +1504,20 @@ def build_hooks(
                 logger.debug(f"[HOOK:UserPromptSubmit] Session context falhou: {sc_err}")
 
             # Resume fallback: injetar mensagens JSONB quando resume falhou
+            # OU quando a sessao foi rotacionada por idle (reason='rotated' —
+            # continuidade de contexto, caso conversa-nacom 2026-06-10)
             resume_fallback_context = ""
             if resume_state.get('failed') and resume_state.get('fallback'):
+                _reason = resume_state.get('reason') or 'resume_failed'
                 resume_fallback_context = (
                     "\n<resume_fallback_notice>"
-                    "IMPORTANTE: A sessão anterior não pôde ser restaurada via resume. "
-                    "Abaixo está o histórico recente da conversa extraído do banco de dados. "
-                    "Use este contexto para continuar a conversa de forma coerente. "
-                    "O usuário pode não saber que o contexto foi perdido."
-                    "</resume_fallback_notice>\n"
+                    + _build_resume_fallback_notice(_reason)
+                    + "</resume_fallback_notice>\n"
                     + resume_state['fallback'] + "\n"
                 )
                 logger.info(
-                    f"[HOOK:UserPromptSubmit] Resume fallback injetado: "
-                    f"{len(resume_fallback_context)} chars"
+                    f"[HOOK:UserPromptSubmit] Resume fallback injetado "
+                    f"(reason={_reason}): {len(resume_fallback_context)} chars"
                 )
                 # Limpar para não reinjetar nos próximos turnos
                 resume_state['failed'] = False

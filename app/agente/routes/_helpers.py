@@ -62,6 +62,90 @@ def should_rotate_session(session, idle_hours: int) -> bool:
         return False
 
 
+def get_transcript_size_kb(*session_ids) -> int | None:
+    """Tamanho (KB) do transcript SDK no claude_session_store.
+
+    Estimador do custo de retomada SEM rotacao: o resume re-escreve o
+    transcript inteiro como cache_creation (1.25x input). Aceita multiplos
+    ids (nosso UUID + sdk_session_id — na Fase B costumam coincidir) e soma
+    o maior match. None = sem transcript no store (ou erro).
+    """
+    ids = [s for s in session_ids if s]
+    if not ids:
+        return None
+    try:
+        from sqlalchemy import text as _sql_text
+        from app import db
+        row = db.session.execute(_sql_text(
+            "SELECT COALESCE(SUM(octet_length(entry::text)), 0) "
+            "FROM claude_session_store WHERE session_id = ANY(:ids)"
+        ), {"ids": ids}).scalar()
+        total = int(row or 0)
+        return (total // 1024) if total > 0 else None
+    except Exception as exc:
+        logger.debug(f"[get_transcript_size_kb] fallback None: {exc}")
+        return None
+
+
+def build_rotation_continuity_xml(
+    summary: dict | None,
+    messages: list,
+    idle_hours: float | None,
+    tail_chars: int,
+    per_msg_chars: int,
+) -> str | None:
+    """Bloco de continuidade injetado no 1o turno da sessao ROTACIONADA.
+
+    Caso real (conversa-nacom 2026-06-10): a idle rotation criava sessao nova
+    sem transferir NADA — agente "zerado" com a UI prometendo continuidade, e
+    o briefing ainda induzia o assunto ERRADO (resumo da ultima sessao global).
+
+    Conteudo: resumo M1 da sessao de ORIGEM + cauda das ULTIMAS mensagens
+    (acumula do fim para o inicio ate `tail_chars`; cada mensagem capada a
+    `per_msg_chars`). Tudo XML-escapado. None quando nao ha nada a levar.
+    """
+    from xml.sax.saxutils import escape as _xml_escape
+
+    resumo_txt = ""
+    if isinstance(summary, dict) and summary:
+        bits = []
+        for k, v in summary.items():
+            if isinstance(v, str) and v.strip():
+                bits.append(f"{k}: {v.strip()}")
+            elif isinstance(v, list) and v:
+                bits.append(f"{k}: " + "; ".join(str(i) for i in v[:10]))
+        resumo_txt = "\n".join(bits)[:2000]
+
+    # Cauda: do FIM para o inicio (as ultimas mensagens sao as que importam)
+    tail_parts: list[str] = []
+    acumulado = 0
+    for msg in reversed(messages or []):
+        content = (msg.get('content') or '').strip()
+        if not content:
+            continue
+        content = content[:per_msg_chars]
+        if acumulado + len(content) > tail_chars and tail_parts:
+            break
+        role = _xml_escape(str(msg.get('role', 'unknown')))
+        tail_parts.append(f'<msg role="{role}">{_xml_escape(content)}</msg>')
+        acumulado += len(content)
+    tail_parts.reverse()
+
+    if not resumo_txt and not tail_parts:
+        return None
+
+    idle_attr = f' idle_horas="{idle_hours:.1f}"' if idle_hours is not None else ''
+    parts = [f'<sessao_anterior_rotacionada motivo="idle_timeout"{idle_attr}>']
+    if resumo_txt:
+        parts.append(f'<resumo>{_xml_escape(resumo_txt)}</resumo>')
+    if tail_parts:
+        parts.append('<ultimas_mensagens>')
+        parts.extend(tail_parts)
+        parts.append('</ultimas_mensagens>')
+    parts.append('</sessao_anterior_rotacionada>')
+    return '\n'.join(parts)
+
+
 def detect_recent_repeat(
     session,
     new_message: str,

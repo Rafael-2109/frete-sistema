@@ -1440,6 +1440,7 @@ Nunca invente informações."""
         output_format: Optional[Dict[str, Any]] = None,
         debug_mode: bool = False,
         resume_messages_fallback: Optional[str] = None,
+        resume_fallback_reason: Optional[str] = None,
         thinking_display: Optional[str] = None,
     ) -> AsyncGenerator[StreamEvent, None]:
         """
@@ -1483,6 +1484,7 @@ Nunca invente informações."""
             output_format=output_format,
             debug_mode=debug_mode,
             resume_messages_fallback=resume_messages_fallback,
+            resume_fallback_reason=resume_fallback_reason,
             thinking_display=thinking_display,
         ):
             yield event
@@ -2027,6 +2029,7 @@ Nunca invente informações."""
         output_format: Optional[Dict[str, Any]] = None,
         debug_mode: bool = False,
         resume_messages_fallback: Optional[str] = None,
+        resume_fallback_reason: Optional[str] = None,
         thinking_display: Optional[str] = None,
     ) -> AsyncGenerator[StreamEvent, None]:
         """
@@ -2075,9 +2078,16 @@ Nunca invente informações."""
         # ─── Estado compartilhado: resume fallback ───
         # Dict mutável: se resume falhar, stream seta failed=True.
         # Hook UserPromptSubmit injeta fallback no additionalContext.
+        # reason='rotated' (sessao rotacionada por idle): injecao FORCADA no
+        # 1o turno — nao ha resume a falhar, a sessao e nova e o contexto da
+        # origem vem neste fallback (caso conversa-nacom 2026-06-10).
+        _forced = bool(
+            resume_fallback_reason == 'rotated' and resume_messages_fallback
+        )
         resume_state = {
-            'failed': False,
+            'failed': _forced,
             'fallback': resume_messages_fallback,
+            'reason': resume_fallback_reason or 'resume_failed',
         }
 
         # ─── Construir options ───

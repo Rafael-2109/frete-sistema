@@ -349,14 +349,35 @@ def api_chat():
                     # contexto ja expirou em cache Anthropic — rotacionar e
                     # processar normalmente. Short-circuit em sessao stale
                     # ressuscitaria `updated_at` e defeat-aria o TTL.
+                    # ADAPTATIVO (2026-06-10, caso conversa-nacom): transcript
+                    # PEQUENO retoma SEM rotacao (resume real do SDK — cache
+                    # write pequeno, pago 1x); grande rotaciona levando
+                    # continuidade (resumo+cauda, montado no stream).
                     if should_rotate_session(_existing, WEB_SESSION_IDLE_HOURS):
-                        rotated_from_session_id = session_id
-                        session_id = str(_uuid_fase2.uuid4())
-                        logger.info(
-                            f"[AGENTE] Sessao idle >= {WEB_SESSION_IDLE_HOURS}h, "
-                            f"rotacionada: {rotated_from_session_id[:12]}... -> "
-                            f"{session_id[:12]}..."
+                        from app.agente.config.feature_flags import (
+                            AGENT_ROTATION_RESUME_MAX_KB,
                         )
+                        from app.agente.routes._helpers import get_transcript_size_kb
+                        _kb = get_transcript_size_kb(
+                            session_id, _existing.get_sdk_session_id()
+                        )
+                        if (_kb is not None and AGENT_ROTATION_RESUME_MAX_KB > 0
+                                and _kb <= AGENT_ROTATION_RESUME_MAX_KB):
+                            logger.info(
+                                f"[AGENTE] Sessao idle >= {WEB_SESSION_IDLE_HOURS}h "
+                                f"mas transcript {_kb}KB <= "
+                                f"{AGENT_ROTATION_RESUME_MAX_KB}KB — retomada SEM "
+                                f"rotacao: {session_id[:12]}..."
+                            )
+                        else:
+                            rotated_from_session_id = session_id
+                            session_id = str(_uuid_fase2.uuid4())
+                            logger.info(
+                                f"[AGENTE] Sessao idle >= {WEB_SESSION_IDLE_HOURS}h "
+                                f"(transcript={_kb}KB), rotacionada: "
+                                f"{rotated_from_session_id[:12]}... -> "
+                                f"{session_id[:12]}..."
+                            )
                     else:
                         # (2) Repeat detection: mesma sessao, msg identica < 10min
                         repeat_info = detect_recent_repeat(
@@ -617,16 +638,21 @@ async def _async_stream_sdk_client(
     debug_mode: bool = False,
     output_format: dict = None,
     thinking_display: str = None,
+    rotated_from_session_id: str = None,
 ):
     """
     Orquestra streaming via ClaudeSDKClient persistente (v3).
 
     Restaura sdk_session_id do banco para resume + transcript.
     Constroi opcoes, hooks e contexto de memoria antes de chamar stream_response().
+    Quando a sessao foi ROTACIONADA por idle (rotated_from_session_id), monta o
+    bloco de continuidade da sessao de ORIGEM (resumo M1 + cauda generosa) e o
+    injeta via resume fallback forcado (caso conversa-nacom 2026-06-10).
     """
     # Buscar sdk_session_id do banco para resume + restaurar transcript
     sdk_session_id_for_resume = None
     resume_messages_fallback = None  # Fallback: mensagens JSONB se resume falhar
+    resume_fallback_reason = None
     if app and our_session_id:
         try:
             with app.app_context():
@@ -672,6 +698,49 @@ async def _async_stream_sdk_client(
                             logger.debug(f"[AGENTE] Fallback JSONB falhou (ignorado): {fb_err}")
         except Exception as e:
             logger.warning(f"[AGENTE] Erro ao buscar sdk_session_id do DB: {e}")
+
+    # Sessao ROTACIONADA por idle: a sessao atual e NOVA (sem resume nem
+    # fallback proprio) — montar continuidade da sessao de ORIGEM: resumo M1
+    # + cauda generosa das ultimas mensagens (caso conversa-nacom 2026-06-10).
+    if app and rotated_from_session_id and not resume_messages_fallback:
+        try:
+            with app.app_context():
+                from app.agente.models import AgentSession
+                from app.agente.routes._helpers import build_rotation_continuity_xml
+                from app.agente.config.feature_flags import (
+                    AGENT_ROTATION_TAIL_CHARS, AGENT_ROTATION_TAIL_MSG_CHARS,
+                )
+                origem = AgentSession.query.filter_by(
+                    session_id=rotated_from_session_id
+                ).first()
+                if origem:
+                    idle_h = None
+                    try:
+                        from app.utils.timezone import agora_utc_naive
+                        if origem.updated_at:
+                            idle_h = (
+                                agora_utc_naive() - origem.updated_at
+                            ).total_seconds() / 3600
+                    except Exception:
+                        pass
+                    xml = build_rotation_continuity_xml(
+                        summary=origem.get_summary(),
+                        messages=origem.get_messages(),
+                        idle_hours=idle_h,
+                        tail_chars=AGENT_ROTATION_TAIL_CHARS,
+                        per_msg_chars=AGENT_ROTATION_TAIL_MSG_CHARS,
+                    )
+                    if xml:
+                        resume_messages_fallback = xml
+                        resume_fallback_reason = 'rotated'
+                        logger.info(
+                            f"[AGENTE] Continuidade de rotacao montada: origem="
+                            f"{rotated_from_session_id[:12]}... {len(xml)} chars"
+                        )
+        except Exception as rot_err:
+            logger.warning(
+                f"[AGENTE] Continuidade de rotacao falhou (ignorado): {rot_err}"
+            )
 
     # Definir user_id no contexto para as MCP Memory Tools
     try:
@@ -725,6 +794,7 @@ async def _async_stream_sdk_client(
             debug_mode=debug_mode,
             output_format=output_format,
             resume_messages_fallback=resume_messages_fallback,
+            resume_fallback_reason=resume_fallback_reason,
             thinking_display=thinking_display,
         ):
             should_continue = _process_stream_event(event)
@@ -1243,6 +1313,7 @@ def _stream_chat_response(
                 debug_mode=debug_mode,
                 output_format=output_format,
                 thinking_display=thinking_display,
+                rotated_from_session_id=rotated_from_session_id,
             )
 
             # =============================================================
