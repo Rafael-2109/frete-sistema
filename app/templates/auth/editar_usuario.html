@@ -36,7 +36,23 @@
                                     <p><strong>Último Login:</strong> 
                                         {{ usuario.ultimo_login | formatar_data_hora_brasil if usuario.ultimo_login else 'Nunca' }}
                                     </p>
-                                    <p><strong>Vendedor Vinculado:</strong> 
+                                    <p><strong>Teams:</strong>
+                                        {% if usuario.teams_user_id %}
+                                            <span class="badge bg-success">Vinculado ({{ usuario.teams_vinculo_origem or '?' }})</span>
+                                        {% else %}
+                                            <span class="badge bg-secondary">Não vinculado</span>
+                                        {% endif %}
+                                    </p>
+                                    {% if usuario.teams_user_id %}
+                                    <form method="POST" action="{{ url_for('auth.desvincular_teams', user_id=usuario.id) }}" class="mb-2">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                        <button type="submit" class="btn btn-sm btn-outline-danger"
+                                                onclick="return confirm('Remover o vínculo Teams deste usuário?');">
+                                            <i class="fab fa-microsoft"></i> Desvincular Teams
+                                        </button>
+                                    </form>
+                                    {% endif %}
+                                    <p><strong>Vendedor Vinculado:</strong>
                                         {{ usuario.vendedor_vinculado or '-' }}
                                     </p>
                                 </div>

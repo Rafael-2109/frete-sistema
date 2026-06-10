@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, redirect, url_for, flash, session, abort
+from flask import Blueprint, render_template, redirect, url_for, flash, session, abort, request
 from flask_login import login_user, logout_user, login_required, current_user
 from datetime import datetime
 import logging
@@ -381,3 +381,79 @@ def obter_lista_vendedores():
     except Exception as e:
         print(f"Erro ao obter lista de vendedores: {e}")
         return []
+
+
+# ════════════════════════════════════════════════════════════════
+# Vinculacao Microsoft Teams (Fase A — plano teams-melhorias 2026-06-10)
+# ════════════════════════════════════════════════════════════════
+
+# Alfabeto sem caracteres ambiguos (sem I/O/0/1). Primeiro char SEMPRE letra:
+# o fast-path 'vincular CODIGO' rejeita digitos puros para nao colidir com
+# numeros de pedido (ver app/agente/sdk/vincular_teams_fastpath.py).
+_TEAMS_CODIGO_LETRAS = 'ABCDEFGHJKLMNPQRSTUVWXYZ'
+_TEAMS_CODIGO_ALFABETO = _TEAMS_CODIGO_LETRAS + '23456789'
+TEAMS_CODIGO_TTL_MINUTOS = 10
+
+
+@auth_bp.route('/vincular-teams', methods=['GET', 'POST'])
+@login_required
+def vincular_teams():
+    """Tela de pareamento Teams <-> Web: gera codigo de uso unico (TTL 10 min).
+
+    O usuario logado gera o codigo aqui e envia "vincular ABC123" ao bot no
+    Teams. O fast-path valida o hash e grava Usuario.teams_user_id (AAD) —
+    prova de posse das DUAS contas, independe de e-mail correto no cadastro.
+    """
+    import hashlib
+    import secrets
+    from datetime import timedelta
+    from app.auth.models import TeamsVinculoCodigo
+
+    # Guard explicito (login_required vira no-op com LOGIN_DISABLED em testes)
+    if not current_user.is_authenticated:
+        return redirect(url_for('auth.login'))
+
+    codigo_gerado = None
+    if request.method == 'POST':
+        # Invalida codigos anteriores nao usados deste usuario (1 ativo por vez)
+        TeamsVinculoCodigo.query.filter(
+            TeamsVinculoCodigo.user_id == current_user.id,
+            TeamsVinculoCodigo.used_at.is_(None),
+        ).delete(synchronize_session=False)
+
+        codigo_gerado = secrets.choice(_TEAMS_CODIGO_LETRAS) + ''.join(
+            secrets.choice(_TEAMS_CODIGO_ALFABETO) for _ in range(5)
+        )
+        vc = TeamsVinculoCodigo(
+            user_id=current_user.id,
+            codigo_hash=hashlib.sha256(codigo_gerado.encode()).hexdigest(),
+            expires_at=agora_utc_naive() + timedelta(minutes=TEAMS_CODIGO_TTL_MINUTOS),
+        )
+        db.session.add(vc)
+        db.session.commit()
+        logger.info(f"[TEAMS-VINCULO] Codigo gerado para user_id={current_user.id}")
+
+    return render_template(
+        'auth/vincular_teams.html',
+        codigo=codigo_gerado,
+        ttl_minutos=TEAMS_CODIGO_TTL_MINUTOS,
+        usuario=current_user,
+    )
+
+
+@auth_bp.route('/usuarios/<int:user_id>/desvincular-teams', methods=['POST'])
+@login_required
+def desvincular_teams(user_id):
+    """Remove o vinculo Teams de um usuario (admin — tela editar usuario)."""
+    if not current_user.is_authenticated or not current_user.pode_aprovar_usuarios():
+        flash('Acesso negado.', 'danger')
+        return redirect(url_for('main.dashboard'))
+
+    usuario = db.session.get(Usuario, user_id)
+    if not usuario:
+        abort(404)
+    usuario.teams_user_id = None
+    usuario.teams_vinculo_origem = None
+    db.session.commit()
+    flash(f'Vinculo Teams de {usuario.nome} removido.', 'success')
+    return redirect(url_for('auth.editar_usuario', user_id=user_id))

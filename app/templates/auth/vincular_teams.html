@@ -1,0 +1,49 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container mt-4" style="max-width: 640px;">
+    <div class="card">
+        <div class="card-header">
+            <h4 class="card-title mb-0">
+                <i class="fab fa-microsoft"></i> Vincular Microsoft Teams
+            </h4>
+        </div>
+        <div class="card-body">
+            {% if usuario.teams_user_id %}
+            <div class="alert alert-success">
+                <i class="fas fa-check-circle"></i>
+                Sua conta já está vinculada ao Teams
+                (origem: {{ usuario.teams_vinculo_origem or 'desconhecida' }}).
+                Gerar um novo código substituirá o vínculo atual.
+            </div>
+            {% endif %}
+
+            <p>
+                Vincule sua conta do Microsoft Teams para que o Agente Logístico
+                reconheça você com suas memórias e permissões do sistema web.
+            </p>
+            <ol class="mb-4">
+                <li>Clique em <strong>Gerar código</strong> abaixo.</li>
+                <li>Abra a conversa com o bot <strong>Agente Logístico</strong> no Teams.</li>
+                <li>Envie a mensagem: <code>vincular SEUCODIGO</code></li>
+            </ol>
+
+            {% if codigo %}
+            <div class="alert alert-info text-center">
+                <p class="mb-1">Envie esta mensagem no Teams (válido por {{ ttl_minutos }} minutos, uso único):</p>
+                <p class="fs-3 mb-0"><code>vincular {{ codigo }}</code></p>
+            </div>
+            {% endif %}
+
+            <form method="POST">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-key"></i>
+                    {% if codigo %}Gerar novo código{% else %}Gerar código{% endif %}
+                </button>
+                <a href="{{ url_for('main.dashboard') }}" class="btn btn-secondary">Voltar</a>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
