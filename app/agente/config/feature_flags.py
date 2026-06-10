@@ -448,6 +448,16 @@ TEAMS_SESSION_TTL_HOURS = int(os.getenv("TEAMS_SESSION_TTL_HOURS", "2"))
 # Disabled (valor 0): comportamento legado (sessao persiste indefinidamente).
 WEB_SESSION_IDLE_HOURS = int(os.getenv("AGENT_WEB_SESSION_IDLE_HOURS", "2"))
 
+# Retomada ADAPTATIVA de sessao idle (caso conversa-nacom 2026-06-10):
+# transcript <= MAX_KB -> NAO rotaciona (resume real do SDK; cache write
+# pequeno pago 1x — p50 dos transcripts PROD = 182KB). Acima -> rotaciona,
+# mas leva <sessao_anterior_rotacionada> com resumo M1 + cauda das ultimas
+# mensagens (TAIL_CHARS total; TAIL_MSG_CHARS por mensagem).
+# ROTATION_RESUME_MAX_KB=0 desliga a retomada sem rotacao (sempre rotaciona).
+AGENT_ROTATION_RESUME_MAX_KB = int(os.getenv("AGENT_ROTATION_RESUME_MAX_KB", "250"))
+AGENT_ROTATION_TAIL_CHARS = int(os.getenv("AGENT_ROTATION_TAIL_CHARS", "12000"))
+AGENT_ROTATION_TAIL_MSG_CHARS = int(os.getenv("AGENT_ROTATION_TAIL_MSG_CHARS", "3000"))
+
 # Feedback visual de tool calls: mostra "Consultando dados..." durante execução de tools
 # Desativar se causar flickering ou problemas visuais no Teams
 TEAMS_TOOL_STATUS_FEEDBACK = os.getenv("TEAMS_TOOL_STATUS_FEEDBACK", "true").lower() == "true"
