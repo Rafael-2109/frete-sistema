@@ -111,3 +111,77 @@ def test_restore_returns_false_when_no_archive(app):
 
         db.session.delete(sess)
         db.session.commit()
+
+
+# ─── Resolucao de UUID (_resolve_our_session_uuid) ──────────────────
+# Regressao do bug `.astext` (2026-06-11): a coluna AgentSession.data e
+# declarada como db.JSON GENERICO (models.py:65). O comparator generico do
+# SQLAlchemy NAO tem `.astext` (so' o dialeto postgresql tem) — usar `.astext`
+# levantava AttributeError ("Neither 'BinaryExpression' object nor 'Comparator'
+# object has an attribute 'astext'"), capturado pelo except -> retornava None.
+# Como o hook _stop_hook SEMPRE passa o SDK ID efemero, o Caso 2 (via JSONB) e'
+# o caminho principal — e estava 100% quebrado, gerando archives orfaos no S3.
+
+def test_resolve_uuid_via_sdk_session_id(app):
+    """Caso 2: input e o SDK ID efemero -> resolve nosso UUID via data->>'sdk_session_id'.
+
+    Este e o caminho PRINCIPAL (hook _stop_hook sempre passa o SDK ID).
+    RED com o bug `.astext`: a query estoura e a funcao retorna None.
+    """
+    from app.agente.sdk.session_archive import _resolve_our_session_uuid
+    from app.agente.models import AgentSession
+    from app import db
+
+    with app.app_context():
+        AgentSession.query.filter_by(session_id='uuid-archive-test-1').delete()
+        db.session.commit()
+        sess = AgentSession(
+            session_id='uuid-archive-test-1', user_id=1, title='t',
+            data={'sdk_session_id': 'sdk-ephemeral-abc-123'},
+        )
+        db.session.add(sess)
+        db.session.commit()
+        try:
+            assert _resolve_our_session_uuid('sdk-ephemeral-abc-123') == 'uuid-archive-test-1'
+        finally:
+            db.session.delete(sess)
+            db.session.commit()
+
+
+def test_resolve_uuid_via_our_session_id(app):
+    """Caso 1: input ja e nosso UUID -> retorna ele mesmo (fast path, sem JSONB)."""
+    from app.agente.sdk.session_archive import _resolve_our_session_uuid
+    from app.agente.models import AgentSession
+    from app import db
+
+    with app.app_context():
+        AgentSession.query.filter_by(session_id='uuid-archive-test-2').delete()
+        db.session.commit()
+        sess = AgentSession(
+            session_id='uuid-archive-test-2', user_id=1, title='t',
+            data={'sdk_session_id': 'sdk-xyz'},
+        )
+        db.session.add(sess)
+        db.session.commit()
+        try:
+            assert _resolve_our_session_uuid('uuid-archive-test-2') == 'uuid-archive-test-2'
+        finally:
+            db.session.delete(sess)
+            db.session.commit()
+
+
+def test_resolve_uuid_returns_none_when_not_found(app):
+    """Input inexistente (nem nosso UUID nem SDK ID conhecido) -> None."""
+    from app.agente.sdk.session_archive import _resolve_our_session_uuid
+
+    with app.app_context():
+        assert _resolve_our_session_uuid('inexistente-jamais-existiu-999') is None
+
+
+def test_resolve_uuid_empty_input_returns_none(app):
+    """Input vazio -> None (guard logo no inicio)."""
+    from app.agente.sdk.session_archive import _resolve_our_session_uuid
+
+    with app.app_context():
+        assert _resolve_our_session_uuid('') is None
+        assert _resolve_our_session_uuid(None) is None

@@ -107,12 +107,24 @@ def _resolve_our_session_uuid(session_id_or_sdk_id: str) -> Optional[str]:
         ).first()
         if sess is not None:
             return sess.session_id
-        # Caso 2: e SDK ID — busca via JSONB sdk_session_id
-        sess = AgentSession.query.filter(
-            AgentSession.data['sdk_session_id'].astext == session_id_or_sdk_id
+        # Caso 2: e SDK ID — busca via JSONB sdk_session_id.
+        # NAO usar AgentSession.data['sdk_session_id'].astext: a coluna `data` e
+        # declarada como db.JSON GENERICO (models.py:65), cujo comparator NAO
+        # expoe `.astext` (so' o dialeto postgresql tem) -> AttributeError
+        # capturado pelo except -> archive orfao no S3 (bug 2026-06-11).
+        # SQL raw com `->>` e' o mesmo padrao do UPSERT abaixo e funciona com a
+        # coluna fisica jsonb.
+        from app import db
+        from sqlalchemy import text as _sql_text
+        row = db.session.execute(
+            _sql_text(
+                "SELECT session_id FROM agent_sessions "
+                "WHERE data->>'sdk_session_id' = :sid LIMIT 1"
+            ),
+            {'sid': session_id_or_sdk_id},
         ).first()
-        if sess is not None:
-            return sess.session_id
+        if row is not None:
+            return row[0]
     except Exception as e:
         logger.warning(f"[session_archive] lookup UUID falhou: {e}")
     return None
