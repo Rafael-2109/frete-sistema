@@ -1735,7 +1735,30 @@ def _obter_resposta_agente_streaming(
                 except Exception:
                     pass
 
+        # Fase E2: blocos proativos pos-polling — depois que o polling da
+        # function morre (~8,5 min), cada tick do heartbeat verifica se ha
+        # delta novo de resposta e o entrega como mensagem nova no Teams
+        # (notify_function_partial decide: flag, elapsed, delta minimo).
+        # Roda em EXECUTOR: requests e sincrono (timeout 30s) e bloquearia o
+        # event loop COMPARTILHADO do pool — congelaria todos os streams.
+        def _proactive_partial_check():
+            try:
+                from app.teams.proactive import notify_function_partial
+                from app import db as _pp_db
+                if app:
+                    with app.app_context():
+                        notify_function_partial(task_id)
+                        # Sessao scoped da thread do executor (reusada por
+                        # outros usos) — remove() devolve a conexao ao pool.
+                        _pp_db.session.remove()
+                else:
+                    notify_function_partial(task_id)
+            except Exception as pp_err:
+                # Best-effort: bloco parcial NUNCA derruba o stream
+                logger.debug(f"[TEAMS-PARTIAL] Check ignorado: {pp_err}")
+
         async def _heartbeat_loop():
+            loop = asyncio.get_running_loop()
             while True:
                 await asyncio.sleep(60)
                 if app:
@@ -1743,6 +1766,7 @@ def _obter_resposta_agente_streaming(
                         _heartbeat_update()
                 else:
                     _heartbeat_update()
+                await loop.run_in_executor(None, _proactive_partial_check)
 
         async def _stream_with_timeout():
             heartbeat_task = asyncio.create_task(_heartbeat_loop())

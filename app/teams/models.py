@@ -68,6 +68,16 @@ class TeamsTask(db.Model):
     # Migration: 2026_06_10_teams_proactive.
     conversation_reference = db.Column(db.JSON, nullable=True)
     delivered_via = db.Column(db.String(12), nullable=True)
+    # Fase E2 (blocos proativos pos-polling): offset de chars da resposta ja
+    # entregues via blocos (mensagens novas no Teams depois que o polling da
+    # function morreu). A entrega FINAL envia apenas resposta[offset:] — evita
+    # repetir o que os blocos ja entregaram. 0 = nenhum bloco enviado
+    # (comportamento anterior: resposta completa). So avanca APOS POST 200 na
+    # function (falha de POST NAO avanca — duplicar bloco raro > perder texto).
+    # Migration: 2026_06_11_teams_proactive_partial.
+    proactive_partial_chars = db.Column(
+        db.Integer, nullable=False, default=0, server_default='0'
+    )
     created_at = db.Column(
         db.DateTime,
         nullable=False,

@@ -4,7 +4,7 @@ camada: L1
 sot_de: —
 hub: CLAUDE.md
 superseded_by: —
-atualizado: 2026-06-08
+atualizado: 2026-06-11
 -->
 # Teams Bot — Guia de Desenvolvimento
 
@@ -31,6 +31,7 @@ atualizado: 2026-06-08
   - [Dispatch v2 vs v3](#dispatch-v2-vs-v3)
   - [Identidade unificada (Fase A) — hierarquia de resolucao](#identidade-unificada-fase-a-2026-06-10--hierarquia-de-resolucao)
   - [Falante do turno em grupos (Fase B)](#falante-do-turno-em-grupos-fase-b-2026-06-10)
+  - [Entrega continua (Fase E2)](#entrega-continua-fase-e2-2026-06-11)
   - [session_id vs sdk_session_id](#session_id-vs-sdk_session_id)
   - [DC-8: Subprocess zombie apos CancelledError](#dc-8-subprocess-zombie-apos-cancellederror)
   - [Fix 3: App instance do gunicorn](#fix-3-app-instance-do-gunicorn)
@@ -41,7 +42,7 @@ atualizado: 2026-06-08
 
 ~3.2K LOC, 5 arquivos. Threads non-daemon (concluem durante reciclagem do gunicorn) + retry de SSL + persistencia de transcript + entrega proativa. Regras criticas: `daemon=False` obrigatorio em `process_teams_task_async()` e `_commit_with_retry()` sempre (nunca commit direto — Render derruba SSL em idle).
 
-**LOC**: ~3.2K | **Arquivos**: 5 | **Atualizado**: 10/06/2026
+**LOC**: ~3.5K | **Arquivos**: 5 | **Atualizado**: 11/06/2026
 
 Bot assincrono Microsoft Teams via Azure Function bridge. Non-daemon threads + SSL retry + transcript persistence.
 
@@ -52,10 +53,10 @@ Bot assincrono Microsoft Teams via Azure Function bridge. Non-daemon threads + S
 ```
 app/teams/
   ├── __init__.py      # 5 LOC — Blueprint /api/teams
-  ├── models.py        # ~90 LOC — TeamsTask (lifecycle 6 estados + delivered_via/conversation_reference)
+  ├── models.py        # ~100 LOC — TeamsTask (lifecycle 6 estados + delivered_via/conversation_reference/proactive_partial_chars)
   ├── bot_routes.py    # ~560 LOC — endpoints + auth HMAC + claim de entrega
-  ├── proactive.py     # ~130 LOC — entrega proativa (POST /api/notify na function)
-  └── services.py      # ~2.4K LOC — Core: user/session/response/async/fast-paths/merge
+  ├── proactive.py     # ~270 LOC — entrega proativa final + blocos parciais (POST /api/notify na function)
+  └── services.py      # ~2.6K LOC — Core: user/session/response/async/fast-paths/merge
 ```
 
 ## Regras Criticas
@@ -118,6 +119,15 @@ pending → processing → completed|error|awaiting_user_input|timeout
   nao entregue). `/bot/status` clama polling; `proactive.notify_function_delivery`
   clama proactive (rollback se o POST falhar). Quem ganha entrega; o perdedor ve
   `already_delivered` e desiste.
+- Entrega continua (Fase E2 2026-06-11): polling da function dura 8,5 min
+  (E1: `POLL_MAX_ATTEMPTS=340` x 1.5s) com progressive update in-place; DEPOIS
+  disso o heartbeat (60s) entrega blocos de texto novos como MENSAGENS NOVAS
+  via `proactive.notify_function_partial` (tipo='partial', SEM claim).
+  `proactive_partial_chars` = offset de chars ja entregues via blocos; a final
+  envia so `resposta[offset:]` (status `error` IGNORA offset — texto de erro
+  substitui o parcial, nao o continua). Offset avanca SO apos POST 200 (CAS) —
+  falha de POST reenvia o bloco (duplicar raro > perder texto). Ver gotcha
+  "Entrega continua (Fase E2)".
 - Limite: max 1 task `queued` por `conversation_id` (nova msg substitui anterior)
 
 ### R8: Fila de mensagens — max 1 por conversa
@@ -136,7 +146,7 @@ na MESMA THREAD (recursao via `process_teams_task_async`). Azure Function inicia
 | `/bot/status/<id>` | GET | HMAC | Polling: status + resposta parcial/final + claim `delivered_via='polling'`; responde `already_delivered` se proactive ja entregou |
 | `/bot/answer` | POST | HMAC | Responde AskUserQuestion (idempotente) |
 | `/bot/health` | GET | — | Diagnostico: threads ativas + orphan processes |
-| `{function}/api/notify` | POST | X-API-Key | NA AZURE FUNCTION: backend entrega resposta via `continue_conversation` quando o polling (5 min) ja morreu — `app/teams/proactive.py` |
+| `{function}/api/notify` | POST | X-API-Key | NA AZURE FUNCTION: backend entrega via `continue_conversation` quando o polling (8,5 min) ja morreu — `tipo='final'` (resposta/delta restante + card) ou `tipo='partial'` (bloco de texto novo, Fase E2) — `app/teams/proactive.py` |
 
 ---
 
@@ -203,6 +213,28 @@ reaplica hooks — a closure congelava memorias/gates no 1o falante). Msgs
 enfileiradas derivam o tipo pela heuristica `conversation_id.startswith('19:')`.
 — FONTE: `services.py:_montar_prompt_teams`, `app/agente/sdk/hooks.py:_turn_user`
 
+### Entrega continua (Fase E2 2026-06-11)
+Pos-polling (8,5 min), o heartbeat de 60s chama `notify_function_partial` em
+`run_in_executor` — NUNCA inline no event loop: `requests.post` (timeout 30s) e
+sincrono e o loop do pool e COMPARTILHADO entre todos os streams (bloquear =
+congelar tudo). A sessao scoped da thread do executor leva `db.session.remove()`
+apos o uso (thread reusada).
+Invariantes do offset `proactive_partial_chars`:
+1. So avanca APOS POST 200 (CAS sobre o valor lido) — falha de POST reenvia o
+   bloco no proximo tick; duplicar bloco raro > perder texto.
+2. O alinhamento offset↔texto depende da sanitizacao parcial ser PREFIXO da
+   final: `_sanitizar_texto_parcial` faz `strip()` (remove o rabo volatil de
+   `\n`) e as demais transformacoes sao locais — NAO adicionar transformacao
+   nao-prefix-estavel (ex: substituicao global retroativa) sem repensar E2.
+3. `PARTIAL_MIN_DELTA_CHARS=200` tambem filtra o status transitorio de tool
+   (`_Consultando..._`) que o flush grava em `resposta` antes do 1o texto real.
+4. Status `error` IGNORA o offset (texto de erro SUBSTITUI o parcial).
+Limitacao aceita (plano FASE E): o 1o bloco pos-polling repete o texto que a
+msg progressiva ja mostrou (offset comeca em 0; mesma duplicacao que a final
+da Fase C ja tinha). Refinamento possivel: function informar chars entregues
+progressivamente ao fim do polling.
+— FONTE: `proactive.py:notify_function_partial`, `services.py:_heartbeat_loop`
+
 ### session_id vs sdk_session_id
 | ID | Escopo | Persistencia | Uso |
 |----|--------|-------------|-----|
@@ -237,7 +269,7 @@ NUNCA usar `create_app()` na thread. Reutilizar `current_app._get_current_object
 | `AGENT_VINCULACAO_FASTPATH` | `true` | FASE 3 reducao custo: vincular/desvincular NF×PO (Gabriella) sem subagente gestor-recebimento. Roteamento deterministico (regex N0 + Haiku N1) em `services.py` ANTES do baseline/LLM: `if _vinc -> elif _fp(baseline) -> else LLM`. Ver `app/agente/sdk/vinculacao_fastpath.py` |
 | `AGENT_BASELINE_FASTPATH` | `true` | "atualizar baseline" (Marcus) resolvido sem LLM. Ver `app/agente/sdk/baseline_fastpath.py`. Fase A 2026-06-10: fast-paths agora interceptam tambem no path ASYNC (`process_teams_task_async`) — antes so existiam no sync morto |
 | `AGENT_TEAMS_VINCULO_FASTPATH` | `true` | Fase A: fast-path `vincular ABC123` (pareamento de identidade, meta-comando sem LLM/sessao). Ver `app/agente/sdk/vincular_teams_fastpath.py` |
-| `TEAMS_PROACTIVE_DELIVERY` | `true` | Fase C: entrega proativa pos-polling via `{TEAMS_FUNCTION_URL}/api/notify` + `continue_conversation`. Requer env `TEAMS_FUNCTION_URL`. Ver `app/teams/proactive.py` |
+| `TEAMS_PROACTIVE_DELIVERY` | `true` | Fases C/E2: entrega proativa pos-polling (final + blocos parciais a cada 60s) via `{TEAMS_FUNCTION_URL}/api/notify` + `continue_conversation`. URL tem default no codigo (`proactive.py`); env `TEAMS_FUNCTION_URL` sobrepoe. Desligar tambem desliga os blocos parciais |
 
 ---
 

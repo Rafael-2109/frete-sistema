@@ -610,10 +610,12 @@ Function side: polling que recebe `already_delivered` encerra silenciosamente (r
 3. Smoke real: tarefa ~12 min — tempo real até 8,5 min + blocos proativos depois +
    entrega final só do delta restante.
 
-- [ ] E1 implementada (default 340) + redeploy function
-- [ ] E2: migration + backend (blocos no heartbeat + offset) + function (tipo partial) + tests
+- [x] E1 implementada (default 340) — redeploy junto da E3
+- [x] E2: migration (2026_06_11_teams_proactive_partial) + backend (blocos no heartbeat
+  via executor + offset CAS pós-POST-200) + function (tipo partial) + tests (11 novos,
+  19 total em test_proactive.py)
 - [ ] E3: deploy coordenado + smoke real >10 min
-- [ ] Atualizar `app/teams/CLAUDE.md` (lifecycle/flags) + esta seção (checkboxes)
+- [x] Atualizar `app/teams/CLAUDE.md` (lifecycle/flags/gotcha "Entrega continua") + esta seção
 
 ---
 

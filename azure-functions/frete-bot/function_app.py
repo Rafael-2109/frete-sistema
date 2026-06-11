@@ -75,9 +75,11 @@ async def messages(req: func.HttpRequest) -> func.HttpResponse:
 )
 async def notify(req: func.HttpRequest) -> func.HttpResponse:
     """
-    Entrega proativa (Fase C teams-melhorias): o BACKEND chama este endpoint
-    quando uma TeamsTask completa depois que o polling morreu (5 min). A
-    function reconstrói o ConversationReference e envia a resposta via
+    Entrega proativa (Fases C e E2 teams-melhorias): o BACKEND chama este
+    endpoint depois que o polling morreu (8,5 min) — `tipo='final'` quando a
+    TeamsTask completa (resposta final/delta restante + card) e
+    `tipo='partial'` (Fase E2) para blocos de texto novos enquanto a task
+    ainda processa. A function reconstrói o ConversationReference e envia via
     adapter.continue_conversation (BOT_APP.deliver_proactive).
 
     Auth: X-API-Key deve bater com BACKEND_API_KEY (mesma chave da ponte,

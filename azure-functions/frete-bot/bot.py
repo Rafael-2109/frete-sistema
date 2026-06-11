@@ -60,7 +60,9 @@ REQUEST_TIMEOUT = int(os.environ.get("REQUEST_TIMEOUT", "300"))
 # Polling config
 POLL_INTERVAL_PROCESSING = float(os.environ.get("POLL_INTERVAL_PROCESSING", "1.5"))
 POLL_INTERVAL_AWAITING = float(os.environ.get("POLL_INTERVAL_AWAITING", "5"))
-POLL_MAX_ATTEMPTS = int(os.environ.get("POLL_MAX_ATTEMPTS", "200"))  # 200 × 1.5s = 5 min
+# Fase E1 (2026-06-11): 340 × 1.5s = 510s = 8,5 min de streaming em tempo real.
+# Teto da execução é functionTimeout=10min (host.json) — sobra ~1,5 min de margem.
+POLL_MAX_ATTEMPTS = int(os.environ.get("POLL_MAX_ATTEMPTS", "340"))
 
 # Split config
 MAX_MESSAGE_LENGTH = int(os.environ.get("MAX_MESSAGE_LENGTH", "3500"))
@@ -1238,9 +1240,11 @@ async def _poll_and_respond(
                         )
 
                 if progressive_activity_id and processing_time < 120:
-                    # Só tenta update_activity se processamento foi rápido (<2 min).
-                    # Teams rejeita updates em mensagens com mais de ~2-3 min de idade,
-                    # causando perda silenciosa da resposta.
+                    # Cutoff conservador SO para a entrega FINAL via update_activity
+                    # (fallback abaixo envia como msg nova — sem perda). Empiricamente
+                    # (teste real 2026-06-10, 11 min) o update in-place da msg
+                    # progressiva funcionou por 6+ min — por isso o progressive
+                    # update (acima) NAO tem cutoff e roda ate o fim do polling.
                     try:
                         update = Activity(
                             id=progressive_activity_id,
@@ -1460,8 +1464,9 @@ async def _poll_and_respond(
                 )
                 return
 
-    # Fim da janela de polling (5 min). Fase C: a tarefa CONTINUA no backend —
-    # a resposta chegara via entrega proativa (/api/notify + continue_conversation).
+    # Fim da janela de polling (8,5 min). Fase C/E: a tarefa CONTINUA no backend —
+    # blocos parciais e a resposta final chegarao via entrega proativa
+    # (/api/notify + continue_conversation).
     if progressive_activity_id:
         try:
             update = Activity(
@@ -1562,7 +1567,7 @@ class FreteBot(ActivityHandler):
         conversation_type = _get_conversation_type(turn_context)
 
         # Fase C (proactive): reference serializado permite o backend entregar
-        # via continue_conversation depois que este polling morrer (5 min).
+        # via continue_conversation depois que este polling morrer (8,5 min).
         conv_reference = None
         try:
             conv_reference = TurnContext.get_conversation_reference(
@@ -2027,27 +2032,55 @@ class BotApp:
         return response
 
     async def deliver_proactive(self, payload: dict) -> None:
-        """Entrega resposta via proactive messaging (Fase C teams-melhorias).
+        """Entrega resposta via proactive messaging (Fases C e E2 teams-melhorias).
 
-        Chamado pelo endpoint POST /api/notify quando o backend completa uma
-        task DEPOIS que o polling morreu (5 min). Reconstrói o
-        ConversationReference gravado na TeamsTask e envia a resposta com os
-        MESMOS builders do polling (_send_split_response + render_resposta_card).
+        Chamado pelo endpoint POST /api/notify DEPOIS que o polling morreu
+        (8,5 min). Dois tipos (campo `tipo`, default 'final'):
+        - 'partial' (Fase E2): bloco de texto novo (`texto_delta`) enquanto a
+          task ainda processa — vira mensagem NOVA no chat (proactive não
+          edita mensagem existente), sem card.
+        - 'final' (Fase C): resposta final (delta restante) com os MESMOS
+          builders do polling (_send_split_response + render_resposta_card).
 
         Args:
-            payload: {task_id, status, resposta, resposta_card,
-                      conversation_reference}
+            payload: final  -> {tipo, task_id, status, resposta, resposta_card,
+                                conversation_reference}
+                     partial -> {tipo, task_id, texto_delta,
+                                 conversation_reference}
 
         Raises:
-            Exception: propagada ao endpoint (backend faz rollback do claim
-            e o polling/retry pode entregar).
+            Exception: propagada ao endpoint (no final, o backend faz rollback
+            do claim; no partial, o offset não avança e o bloco é reenviado).
         """
         reference = ConversationReference().deserialize(
             payload["conversation_reference"]
         )
+        task_id = str(payload.get("task_id", ""))[:8]
+
+        if payload.get("tipo") == "partial":
+            texto_delta = payload.get("texto_delta") or ""
+            if not texto_delta.strip():
+                logger.warning(
+                    f"[BOT] Bloco parcial vazio ignorado: task={task_id}..."
+                )
+                return
+
+            async def _deliver_partial(turn_context: TurnContext):
+                await _send_split_response(turn_context, texto_delta)
+
+            await self.adapter.continue_conversation(
+                reference,
+                _deliver_partial,
+                bot_id=MICROSOFT_APP_ID,
+            )
+            logger.info(
+                f"[BOT] Bloco parcial proativo entregue: task={task_id}... "
+                f"({len(texto_delta)} chars)"
+            )
+            return
+
         resposta = payload.get("resposta") or "Sem resposta do sistema."
         resposta_card = payload.get("resposta_card")
-        task_id = str(payload.get("task_id", ""))[:8]
 
         async def _deliver(turn_context: TurnContext):
             await _send_split_response(turn_context, resposta)
