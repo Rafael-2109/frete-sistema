@@ -19,7 +19,6 @@ from contextlib import ExitStack
 
 from app import db
 from app.agente.models import AgentMemory, AgentMemoryVersion
-from app.auth.models import Usuario
 
 
 # Conteudos com vocabulario disjunto: overlap real < 0.75 apos clean_for_comparison
@@ -51,23 +50,6 @@ MERGED_RETRY_CONTENT = (
 
 
 # ─── fixtures ────────────────────────────────────────────────────────────────
-
-@pytest.fixture(scope='module')
-def test_user(app):
-    """Cria usuario de teste (module scope)."""
-    with app.app_context():
-        user = Usuario.query.get(99997)
-        if not user:
-            user = Usuario(
-                id=99997,
-                email='test-enrich-versioning@test.local',
-                nome='Test Versioning',
-                senha_hash='dummy_hash_for_test',
-            )
-            db.session.add(user)
-            db.session.commit()
-        return user
-
 
 @pytest.fixture
 def cleanup_memories(db):
@@ -137,7 +119,7 @@ def _call_enrich(mem, path, new_content, descricao, merge_flag=True, merge_resul
 
 # ─── cenario 1: merge OK → content atualizado + versao criada ───────────────
 
-def test_merge_ok_creates_version_and_updates_content(app, db, test_user, cleanup_memories):
+def test_merge_ok_creates_version_and_updates_content(app, db, cleanup_memories):
     """
     Cenario 1: merge bem-sucedido.
     Espera: content atualizado + AgentMemoryVersion com conteudo antigo e changed_by='sonnet'.
@@ -164,7 +146,7 @@ def test_merge_ok_creates_version_and_updates_content(app, db, test_user, cleanu
 
 # ─── cenario 2: verificacao detecta perda → retry → retry OK ───────────────
 
-def test_merge_retry_when_facts_lost(app, db, test_user, cleanup_memories):
+def test_merge_retry_when_facts_lost(app, db, cleanup_memories):
     """
     Cenario 2: 1a verificacao detecta perda -> retry do merge ->
     2a verificacao OK -> merged do retry aceito.
@@ -213,7 +195,7 @@ def test_merge_retry_when_facts_lost(app, db, test_user, cleanup_memories):
 
 # ─── cenario 3: verificacao falha 2x → None → append preserva ambos ────────
 
-def test_merge_falls_back_to_append_when_verification_fails_twice(app, db, test_user, cleanup_memories):
+def test_merge_falls_back_to_append_when_verification_fails_twice(app, db, cleanup_memories):
     """
     Cenario 3: 2a verificacao tambem detecta perda ->
     _merge_memories_via_sonnet retorna None -> fallback append preserva ambos.
@@ -243,7 +225,7 @@ def test_merge_falls_back_to_append_when_verification_fails_twice(app, db, test_
 
 # ─── cenario 4: USE_MERGE_ENRICHMENT=False → append direto + versao ────────
 
-def test_append_direct_also_creates_version(app, db, test_user, cleanup_memories):
+def test_append_direct_also_creates_version(app, db, cleanup_memories):
     """
     Cenario 4: USE_MERGE_ENRICHMENT=False (append direto) -> versao criada.
     """
@@ -267,7 +249,7 @@ def test_append_direct_also_creates_version(app, db, test_user, cleanup_memories
 
 # ─── cenario 5: exception na verificacao → merged aceito (best-effort) ──────
 
-def test_verification_exception_accepts_merged(app, db, test_user, cleanup_memories):
+def test_verification_exception_accepts_merged(app, db, cleanup_memories):
     """
     Cenario 5: API da verificacao lanca exception -> merged aceito mesmo assim.
     Verificacao e best-effort: nao pode derrubar o pipeline.
@@ -279,7 +261,7 @@ def test_verification_exception_accepts_merged(app, db, test_user, cleanup_memor
 
         call_count = {'n': 0}
 
-        def side_effect(**kw):
+        def side_effect(**_):
             call_count['n'] += 1
             if call_count['n'] == 1:
                 return _make_api_response(MERGED_CONTENT)

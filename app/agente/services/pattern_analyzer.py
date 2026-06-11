@@ -1517,7 +1517,7 @@ def _merge_memories_via_sonnet(old_content: str, new_content: str) -> Optional[s
         None faz o caller cair no APPEND legado, que concatena os dois conteudos
         integralmente — fallback seguro por construcao (zero perda de informacao).
 
-    Custo: ~$0.002 por merge (~2K input, ~500 output Sonnet).
+    Custo: ~$0.002 (sem perda) a ~$0.008 (retry com re-verificacao).
     """
     try:
         # Import lazy dentro da funcao — sem risco de circular (memory_consolidator
@@ -1527,22 +1527,24 @@ def _merge_memories_via_sonnet(old_content: str, new_content: str) -> Optional[s
             VERIFICATION_MAX_TOKENS,
         )
 
+        merge_system_prompt = (
+            "Voce recebe duas versoes de uma memoria organizacional sobre o MESMO tema. "
+            "Produza UMA UNICA versao que:\n"
+            "1. Preserve TODA informacao unica de ambas (fatos, prescricoes, exemplos)\n"
+            "2. Elimine repeticoes e redundancias\n"
+            "3. Mantenha estrutura XML valida\n"
+            "4. Fique com no maximo 2000 caracteres\n"
+            "5. Mantenha tom prescritivo (QUANDO X, FACA Y)\n\n"
+            "Retorne APENAS o XML final, sem explicacoes."
+        )
+
         client = anthropic.Anthropic()
         response = client.messages.create(
             model=SONNET_MODEL,
             max_tokens=1500,
             system=[{
                 "type": "text",
-                "text": (
-                    "Voce recebe duas versoes de uma memoria organizacional sobre o MESMO tema. "
-                    "Produza UMA UNICA versao que:\n"
-                    "1. Preserve TODA informacao unica de ambas (fatos, prescricoes, exemplos)\n"
-                    "2. Elimine repeticoes e redundancias\n"
-                    "3. Mantenha estrutura XML valida\n"
-                    "4. Fique com no maximo 2000 caracteres\n"
-                    "5. Mantenha tom prescritivo (QUANDO X, FACA Y)\n\n"
-                    "Retorne APENAS o XML final, sem explicacoes."
-                ),
+                "text": merge_system_prompt,
                 "cache_control": {"type": "ephemeral"},
             }],
             messages=[{
@@ -1581,8 +1583,8 @@ def _merge_memories_via_sonnet(old_content: str, new_content: str) -> Optional[s
                     "role": "user",
                     "content": (
                         f"NOTAS ORIGINAIS:\n"
-                        f"VERSAO A:\n{old_content}\n\n"
-                        f"VERSAO B:\n{new_content}\n\n"
+                        f"VERSAO A:\n{old_content[:2000]}\n\n"
+                        f"VERSAO B:\n{new_content[:2000]}\n\n"
                         f"VERSAO FUNDIDA:\n{merged}\n\n"
                         f"FATOS PERDIDOS (ou \"TODOS_PRESERVADOS\"):"
                     ),
@@ -1591,7 +1593,7 @@ def _merge_memories_via_sonnet(old_content: str, new_content: str) -> Optional[s
             verify_text = verify_response.content[0].text.strip()
 
             if "TODOS_PRESERVADOS" not in verify_text.upper():
-                # Fatos perdidos detectados — retry unico com instrucao explícita
+                # Fatos perdidos detectados — retry unico com instrucao explicita
                 logger.warning(
                     f"[KNOWLEDGE_EXTRACTION] Fatos perdidos no merge, tentando retry: "
                     f"{verify_text[:200]}"
@@ -1600,7 +1602,7 @@ def _merge_memories_via_sonnet(old_content: str, new_content: str) -> Optional[s
                     f"VERSAO EXISTENTE:\n{old_content[:2000]}\n\n"
                     f"NOVO CONTEUDO:\n{new_content[:2000]}\n\n"
                     f"ATENCAO: o merge anterior perdeu estes fatos — "
-                    f"INCLUA-OS obrigatoramente:\n{verify_text}\n\n"
+                    f"INCLUA-OS obrigatoriamente:\n{verify_text}\n\n"
                     f"Produza a versao fundida corrigida (maximo 2500 caracteres):"
                 )
                 retry_response = client.messages.create(
@@ -1608,16 +1610,7 @@ def _merge_memories_via_sonnet(old_content: str, new_content: str) -> Optional[s
                     max_tokens=1500,
                     system=[{
                         "type": "text",
-                        "text": (
-                            "Voce recebe duas versoes de uma memoria organizacional sobre o MESMO tema. "
-                            "Produza UMA UNICA versao que:\n"
-                            "1. Preserve TODA informacao unica de ambas (fatos, prescricoes, exemplos)\n"
-                            "2. Elimine repeticoes e redundancias\n"
-                            "3. Mantenha estrutura XML valida\n"
-                            "4. Fique com no maximo 2000 caracteres\n"
-                            "5. Mantenha tom prescritivo (QUANDO X, FACA Y)\n\n"
-                            "Retorne APENAS o XML final, sem explicacoes."
-                        ),
+                        "text": merge_system_prompt,
                         "cache_control": {"type": "ephemeral"},
                     }],
                     messages=[{"role": "user", "content": retry_prompt}],
@@ -1637,8 +1630,8 @@ def _merge_memories_via_sonnet(old_content: str, new_content: str) -> Optional[s
                         "role": "user",
                         "content": (
                             f"NOTAS ORIGINAIS:\n"
-                            f"VERSAO A:\n{old_content}\n\n"
-                            f"VERSAO B:\n{new_content}\n\n"
+                            f"VERSAO A:\n{old_content[:2000]}\n\n"
+                            f"VERSAO B:\n{new_content[:2000]}\n\n"
                             f"VERSAO FUNDIDA:\n{retry_merged}\n\n"
                             f"FATOS PERDIDOS (ou \"TODOS_PRESERVADOS\"):"
                         ),
