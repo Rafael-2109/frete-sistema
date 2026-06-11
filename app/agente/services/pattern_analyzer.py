@@ -1160,8 +1160,8 @@ def _build_knowledge_path(
     subdir = _TIPO_TO_SUBDIR.get(tipo, "protocolos")
 
     # (a) Normalizacao deterministica de dominio (flag-gated)
-    dominio_norm = dominio.strip().lower() if dominio else ''
     if USE_DETERMINISTIC_MEMORY_PATH:
+        dominio_norm = dominio.strip().lower() if dominio else ''
         dominio_norm = _DOMINIO_ALIASES.get(dominio_norm, dominio_norm)
         if dominio_norm not in DOMINIOS_VALIDOS:
             if dominio_norm:
@@ -1170,9 +1170,10 @@ def _build_knowledge_path(
                     f"— fallback para 'geral'"
                 )
             dominio_norm = 'geral'
-    # Com flag OFF: preserva dominio original (texto livre, comportamento legado)
-    elif not dominio_norm:
-        pass  # vazio permanece vazio (comportamento original pre-flag)
+    else:
+        # Flag OFF: dominio passa byte-identico (sem strip/lower) —
+        # comportamento pre-flag intacto.
+        dominio_norm = dominio
 
     if dominio_norm:
         subdir = f"{subdir}/{dominio_norm}"

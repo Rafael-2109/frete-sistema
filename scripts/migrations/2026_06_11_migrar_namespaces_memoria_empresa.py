@@ -128,12 +128,17 @@ def _construir_path_novo(path_antigo: str, kind_novo: str, dominio_forcado=None)
 
 
 def executar(aplicar: bool = False, app=None) -> dict:
-    """Executa a migracao (ou dry-run).
+    """Executa a migracao (ou dry-run). Savepoint-safe: NUNCA commita.
+
+    Faz apenas db.session.flush() — o commit e responsabilidade do caller
+    (main() CLI). Isso evita furar o begin_nested() do conftest nos testes
+    (gotcha_commit_service_vaza_savepoint).
 
     Args:
-        aplicar: True para escrever no banco; False para dry-run.
-        app: instancia Flask ja criada (opcional; se None, cria via create_app).
-             Util para testes que ja tem app_context ativo.
+        aplicar: True para escrever (flush) na transacao corrente; False = dry-run.
+                 Com aplicar=True, app= e OBRIGATORIO (caller dono do commit).
+        app: instancia Flask ja criada (opcional p/ dry-run; se None, cria via
+             create_app). Testes passam o app da fixture (app_context ativo).
 
     Returns:
         Dict com 'relatorio' (lista de entradas) e 'writes' (int).
@@ -216,12 +221,25 @@ def executar(aplicar: bool = False, app=None) -> dict:
                 writes += 1
 
         if aplicar and writes:
-            db.session.commit()
+            # Savepoint-safe: NUNCA commit aqui (gotcha_commit_service_vaza_savepoint —
+            # commit dentro da funcao importavel fura o begin_nested() dos testes e
+            # grava dados de teste no banco). flush() materializa os UPDATEs na
+            # transacao corrente; o commit e responsabilidade do entry-point CLI
+            # (main()), fora do caminho importavel pelos testes.
+            db.session.flush()
 
-    # Se app fornecido (testes com app_context ativo), executar diretamente
+    # Se app fornecido (testes com app_context ativo ou main() CLI), executar
+    # diretamente — o caller e dono do contexto E do commit.
     if app is not None:
         _executar_no_contexto()
     else:
+        if aplicar:
+            # Guard anti data-loss: sem app gerenciado pelo caller, os writes
+            # (apenas flush) seriam descartados ao sair do contexto criado aqui.
+            raise RuntimeError(
+                'executar(aplicar=True) requer app= com contexto gerenciado pelo '
+                'caller, que e responsavel pelo commit. Use main() via CLI.'
+            )
         from app import create_app
         _app = create_app()
         with _app.app_context():
@@ -273,7 +291,15 @@ def _gerar_relatorio_md(relatorio: list, aplicar: bool, writes: int) -> str:
 def main():
     aplicar = '--aplicar' in sys.argv
 
-    resultado = executar(aplicar=aplicar)
+    from app import create_app, db
+    _app = create_app()
+    with _app.app_context():
+        resultado = executar(aplicar=aplicar, app=_app)
+        writes_pendentes = resultado['writes']
+        if aplicar and writes_pendentes:
+            # Commit SOMENTE aqui, no entry-point CLI — fora do caminho
+            # importavel pelos testes (gotcha_commit_service_vaza_savepoint).
+            db.session.commit()
     relatorio = resultado['relatorio']
     writes = resultado['writes']
 

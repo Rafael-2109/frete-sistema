@@ -91,6 +91,16 @@ class TestBuildKnowledgePath:
         # Com flag OFF, dominio livre entra no path sem fallback
         assert '/xurupita_123/' in path
 
+    def test_flag_off_byte_identico_sem_strip_lower(self):
+        """Com flag OFF, dominio passa BYTE-IDENTICO (sem strip().lower()) —
+        comportamento pre-flag intacto."""
+        pa = _import_pa()
+        with patch.object(pa, 'USE_DETERMINISTIC_MEMORY_PATH', False):
+            path = pa._build_knowledge_path('heuristica', 'Financeiro', titulo='Teste flag off case')
+        # Sem normalizacao: maiuscula preservada exatamente como veio
+        assert '/Financeiro/' in path, f"Flag OFF deve preservar case original: {path}"
+        assert '/financeiro/' not in path
+
     def test_todos_dominios_validos_passam(self):
         """Cada dominio canonico deve passar sem alteracao."""
         pa = _import_pa()
