@@ -25,6 +25,7 @@ atualizado: 2026-06-10
 - [FASE B — Falante do turno em grupos](#fase-b--falante-do-turno-em-grupos)
 - [FASE C — Entrega garantida (proactive) + timeouts](#fase-c--entrega-garantida-proactive--timeouts)
 - [FASE D — Extras aprovados](#fase-d--extras-aprovados)
+- [FASE E — Entrega contínua no Teams (A+B)](#fase-e--entrega-contínua-no-teams-ab-aprovada-2026-06-11-próxima-sessão)
 - [Pós-implementação (cada fase)](#pós-implementação-cada-fase)
 
 ## Contexto e regras
@@ -553,6 +554,66 @@ Function side: polling que recebe `already_delivered` encerra silenciosamente (r
 - Test: `tests/teams/test_upload.py`
 
 - [ ] Investigação documentada no PR; implementação espelhando o web; testes; commit
+
+---
+
+## FASE E — Entrega contínua no Teams (A+B, aprovada 2026-06-11, PRÓXIMA SESSÃO)
+
+> Decisão Rafael 2026-06-11: expectativa é "envios a qualquer momento", não
+> "streaming até 5 min e depois só no final". Aprovado A+B completo em sessão nova.
+> Contexto de validação: teste real de 11 min OK (task 295a6d7f, delivered_via=
+> proactive 22:21:03, confirmação visual). Memória: teams_melhorias_2026_06_10.
+
+### Task E1 (A): esticar o streaming em tempo real de 5 → ~8,5 min
+
+**Files:**
+- Modify: `azure-functions/frete-bot/bot.py` (`POLL_MAX_ATTEMPTS` default 200 → 340;
+  340 × 1.5s = 510s = 8,5 min; teto da execução é functionTimeout=10min — host.json —
+  sobra ~1,5 min de margem p/ processamento)
+- Verificar: comentário no bot.py sobre update_activity falhar em msgs >2-3 min é
+  EMPIRICAMENTE falso para o progressive update (teste de hoje atualizou a mesma msg
+  por 6 min) — manter o update in-place até o fim do polling.
+
+### Task E2 (B): blocos proativos após o fim do polling
+
+**Design:**
+- Migration: `teams_tasks.proactive_partial_chars INT NOT NULL DEFAULT 0` (offset de
+  chars já entregues via blocos) — DDL .sql + .py (regra dos 2 artefatos).
+- Backend (`app/teams/services.py`): no loop do heartbeat (`_heartbeat_loop`, já roda a
+  cada 60s dentro de `_stream_with_timeout`), quando `elapsed > janela_polling` E houver
+  delta de texto (full_text além do offset, > ~200 chars), POST `/api/notify` com payload
+  `{tipo: 'partial', task_id, texto_delta, conversation_reference}` e persistir offset.
+  SEM claim (claim `delivered_via` é exclusivo da entrega FINAL).
+- Entrega final (`app/teams/proactive.py:notify_function_delivery`): enviar apenas
+  `task.resposta[proactive_partial_chars:]` (delta restante) — evita repetir o que os
+  blocos já entregaram. Offset=0 → comportamento atual (resposta completa).
+- Function (`function_app.py` + `bot.py:deliver_proactive`): aceitar `tipo='partial'`
+  (posta delta como mensagem nova, sem card) vs final (atual). Cada bloco proativo é
+  MENSAGEM NOVA no chat (limitação do canal: proactive não edita mensagem existente).
+- Gotchas: janela_polling acompanha E1 (constante `POLLING_WINDOW_SECONDS` em
+  `proactive.py`, ajustar 270 → ~520); claim/rollback da final intocado; dedup garantido
+  persistindo o offset ANTES do POST do bloco (se POST falha, NÃO avançar offset —
+  inverter: só avançar offset APÓS POST 200, aceitando reenvio raro a duplicar bloco
+  em vez de perder texto).
+- Tests: `tests/teams/test_proactive.py` (final envia delta por offset; partial não
+  clama; offset não avança em falha de POST).
+
+### Task E3: deploy coordenado (mesma ordem da C5)
+
+1. Backend: merge → main → push (auto-deploy Render) + migration PROD (.sql idempotente).
+2. Function: zip deploy via publish profile (fluxo VALIDADO na C5 — token az local
+   revogado; pedir ao Rafael o `.PublishSettings` se o de
+   `/mnt/c/Users/rafael.nascimento/Downloads/frete-bot-func (1).PublishSettings` não
+   estiver disponível; requer "SCM Basic Auth Publishing" ON): montar zip respeitando
+   `.funcignore` + POST Kudu `/api/zipdeploy?isAsync=true` + poll
+   `/api/deployments/latest` (Oryx build remoto já habilitado).
+3. Smoke real: tarefa ~12 min — tempo real até 8,5 min + blocos proativos depois +
+   entrega final só do delta restante.
+
+- [ ] E1 implementada (default 340) + redeploy function
+- [ ] E2: migration + backend (blocos no heartbeat + offset) + function (tipo partial) + tests
+- [ ] E3: deploy coordenado + smoke real >10 min
+- [ ] Atualizar `app/teams/CLAUDE.md` (lifecycle/flags) + esta seção (checkboxes)
 
 ---
 
