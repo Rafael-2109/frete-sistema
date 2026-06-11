@@ -9,7 +9,6 @@ Cobertura:
    <0.85 retorna None; excecao retorna None; EMBEDDINGS_ENABLED=False retorna None.
 4. Integracao: flag ON + titulo similar existente -> enrichment (nao cria path novo).
 """
-import pytest
 from unittest.mock import patch, MagicMock
 
 

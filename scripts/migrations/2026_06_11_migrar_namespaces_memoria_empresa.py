@@ -43,7 +43,6 @@ Uso:
 """
 import os
 import sys
-import json
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
@@ -248,7 +247,7 @@ def executar(aplicar: bool = False, app=None) -> dict:
     return {'relatorio': relatorio, 'writes': writes}
 
 
-def _gerar_relatorio_md(relatorio: list, aplicar: bool, writes: int) -> str:
+def _gerar_relatorio_md(relatorio: list, aplicar: bool, writes: int) -> tuple:
     """Gera relatorio em formato Markdown."""
     from app.utils.timezone import agora_utc_naive
     ts = agora_utc_naive().strftime('%Y%m%d_%H%M%S')
