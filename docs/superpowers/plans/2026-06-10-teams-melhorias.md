@@ -614,7 +614,11 @@ Function side: polling que recebe `already_delivered` encerra silenciosamente (r
 - [x] E2: migration (2026_06_11_teams_proactive_partial) + backend (blocos no heartbeat
   via executor + offset CAS pós-POST-200) + function (tipo partial) + tests (11 novos,
   19 total em test_proactive.py)
-- [ ] E3: deploy coordenado + smoke real >10 min
+- [x] E3: deploy coordenado EXECUTADO 2026-06-11 ~02:25 UTC — migration PROD via psql →
+  backend `dep-d8l1kluk1jcs73e4qr2g` live 02:22 → function deployment `47c81456` 02:24
+  (zip deploy publish profile); smoke técnico OK (/bot/health 200; /api/notify 401 sem
+  key; tipo=partial com key → 200 = código novo confirmado)
+- [ ] Smoke real >10 min com Rafael: tempo real até 8,5 min + blocos depois + final sem repetição
 - [x] Atualizar `app/teams/CLAUDE.md` (lifecycle/flags/gotcha "Entrega continua") + esta seção
 
 ---
