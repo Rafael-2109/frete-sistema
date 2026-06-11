@@ -1393,14 +1393,16 @@ def imprimir_docs_carvia(embarque_id, item_id):
     """Gera UM PDF unico com NF (DANFE) + CTe CarVia (DACTE) + Fatura CarVia de
     um item CarVia do embarque (atalho de impressao consolidada).
 
-    Item elegivel: CarVia com NF (separacao_lote_id == 'CARVIA-NF-{nf_id}') e
-    nao-provisorio. Documentos ausentes (ex.: CTe nao emitido) sao sinalizados
-    na folha de rosto — o PDF e gerado com os disponiveis (decisao 2026-06-11).
+    Item elegivel: CarVia (lote 'CARVIA-*' OU carvia_cotacao_id), nao-provisorio
+    e com nota_fiscal preenchida. A NF e' resolvida por item.nota_fiscal (a
+    maioria dos itens usa lote 'CARVIA-PED-' mesmo apos receber NF). Documentos
+    ausentes (ex.: CTe nao emitido) sao sinalizados na folha de rosto — o PDF e'
+    gerado com os disponiveis (decisao 2026-06-11).
     """
     from io import BytesIO
     from flask import send_file
     from app.embarques.services.docs_carvia_service import (
-        gerar_pdf_docs_carvia, PREFIXO_LOTE_NF,
+        gerar_pdf_docs_carvia, item_elegivel_docs_carvia,
     )
 
     # Validacao backend: item existe e pertence a ESTE embarque
@@ -1409,9 +1411,8 @@ def imprimir_docs_carvia(embarque_id, item_id):
         flash('Item não encontrado neste embarque.', 'warning')
         return redirect(url_for('embarques.visualizar_embarque', id=embarque_id))
 
-    # Validacao backend: e CarVia com NF e nao-provisorio
-    lote = str(item.separacao_lote_id or '')
-    if not lote.startswith(PREFIXO_LOTE_NF) or item.provisorio:
+    # Validacao backend: e CarVia, nao-provisorio e com NF
+    if not item_elegivel_docs_carvia(item):
         flash('Este item não é um item CarVia com NF — sem documentos para imprimir.', 'warning')
         return redirect(url_for('embarques.visualizar_embarque', id=embarque_id))
 

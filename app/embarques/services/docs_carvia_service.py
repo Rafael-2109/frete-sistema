@@ -26,8 +26,13 @@ from flask import render_template
 
 logger = logging.getLogger(__name__)
 
-# Prefixo de lote dos itens CarVia que ja tem NF (os unicos com documentos).
-# Itens CARVIA-PED-/CARVIA-COT- sao provisorios (sem NF) — nao entram aqui.
+# Prefixo de lote que embute o CarviaNf.id no proprio separacao_lote_id.
+# IMPORTANTE: a MAIORIA dos itens CarVia com NF NAO usa este prefixo. Quando um
+# item provisorio recebe NF (app/embarques/routes.py:271-277), o lote PERMANECE
+# 'CARVIA-PED-{pedido_id}' (ou CARVIA-COT-) e so' nota_fiscal/provisorio mudam.
+# Medido em PROD (2026-06-11): 193 itens CARVIA-PED- com NF vs 9 CARVIA-NF-.
+# Por isso a resolucao da NF e' por item.nota_fiscal, com fast-path pelo id do
+# lote quando ele e' CARVIA-NF-.
 PREFIXO_LOTE_NF = 'CARVIA-NF-'
 
 # Rotulos das 3 secoes (ordem do PDF final, apos a capa)
@@ -36,19 +41,94 @@ DOC_CTE = 'CTe CarVia (DACTE)'
 DOC_FATURA = 'Fatura CarVia'
 
 
-def _nf_id_do_lote(separacao_lote_id):
-    """Extrai o CarviaNf.id embutido no separacao_lote_id 'CARVIA-NF-{nf_id}'.
+def _so_digitos(valor):
+    """Normaliza CNPJ/numero para comparacao (mantem so' digitos)."""
+    return ''.join(ch for ch in str(valor or '') if ch.isdigit())
 
-    Retorna int ou None se o lote nao seguir o padrao esperado.
+
+def _eh_item_carvia(embarque_item):
+    """True se o EmbarqueItem pertence ao fluxo CarVia (por lote OU por cotacao).
+
+    Espelha a deteccao do template visualizar_embarque.html (linha ~392):
+    item e' CarVia se o lote comeca com 'CARVIA-' OU tem carvia_cotacao_id.
+    """
+    lote = str(getattr(embarque_item, 'separacao_lote_id', None) or '')
+    return lote.startswith('CARVIA-') or getattr(embarque_item, 'carvia_cotacao_id', None) is not None
+
+
+def item_elegivel_docs_carvia(embarque_item):
+    """True se o item pode gerar o PDF consolidado: CarVia, NAO-provisorio e com NF."""
+    if embarque_item is None or getattr(embarque_item, 'provisorio', False):
+        return False
+    nf = getattr(embarque_item, 'nota_fiscal', None)
+    if not (nf and str(nf).strip()):
+        return False
+    return _eh_item_carvia(embarque_item)
+
+
+def _nf_id_do_lote(separacao_lote_id):
+    """Extrai o CarviaNf.id embutido no lote 'CARVIA-NF-{nf_id}' (so' alguns itens).
+
+    Retorna int ou None se o lote nao seguir esse padrao.
     """
     lote = str(separacao_lote_id or '')
     if not lote.startswith(PREFIXO_LOTE_NF):
         return None
-    sufixo = lote[len(PREFIXO_LOTE_NF):]
     try:
-        return int(sufixo)
+        return int(lote[len(PREFIXO_LOTE_NF):])
     except (ValueError, TypeError):
         return None
+
+
+def _resolver_nf(embarque_item):
+    """Resolve a CarviaNf de um item CarVia de embarque.
+
+    Estrategia (do mais preciso ao mais geral):
+      1. Fast-path: lote 'CARVIA-NF-{id}' -> usa o id direto.
+      2. Caso geral: numero_nf == item.nota_fiscal (status ATIVA). Se houver
+         mais de uma, desambigua preferindo a CarviaNf cujo cnpj_destinatario
+         casa o cnpj_cliente do item; senao, a de maior id (mais recente).
+      3. Ultimo recurso: tambem aceita NF CANCELADA (ao menos exibe a DANFE).
+
+    Raises:
+        ValueError: se a NF nao existir no CarVia (carvia_nfs).
+    """
+    from app import db
+    from app.carvia.models.documentos import CarviaNf
+
+    # 1. Fast-path por id no lote (itens CARVIA-NF-)
+    nf_id = _nf_id_do_lote(getattr(embarque_item, 'separacao_lote_id', None))
+    if nf_id is not None:
+        nf = db.session.get(CarviaNf, nf_id)
+        if nf is not None:
+            return nf
+        # id do lote aponta para NF inexistente -> cai no resolver por numero
+
+    # 2. Caso geral: por numero_nf
+    numero = str(getattr(embarque_item, 'nota_fiscal', None) or '').strip()
+    if not numero:
+        raise ValueError("Item CarVia sem nota_fiscal — nada a resolver.")
+
+    candidatas = (
+        CarviaNf.query
+        .filter(CarviaNf.numero_nf == numero, CarviaNf.status == 'ATIVA')
+        .all()
+    )
+    if not candidatas:
+        # 3. ultimo recurso: inclui canceladas
+        candidatas = CarviaNf.query.filter(CarviaNf.numero_nf == numero).all()
+    if not candidatas:
+        raise ValueError(f"NF {numero} nao encontrada no CarVia (carvia_nfs).")
+    if len(candidatas) == 1:
+        return candidatas[0]
+
+    # Desambiguacao por CNPJ do cliente (= destinatario da carga)
+    cnpj_item = _so_digitos(getattr(embarque_item, 'cnpj_cliente', None))
+    if cnpj_item:
+        for nf in candidatas:
+            if _so_digitos(nf.cnpj_destinatario) == cnpj_item:
+                return nf
+    return max(candidatas, key=lambda n: n.id)
 
 
 def _baixar_pdf(path):
@@ -156,19 +236,8 @@ def gerar_pdf_docs_carvia(embarque_item):
     Raises:
         ValueError: se o item nao for CarVia-com-NF ou a NF nao existir.
     """
-    from app import db
-    from app.carvia.models.documentos import CarviaNf
-
-    nf_id = _nf_id_do_lote(getattr(embarque_item, 'separacao_lote_id', None))
-    if nf_id is None:
-        raise ValueError(
-            "Item nao e CarVia com NF (separacao_lote_id fora do padrao "
-            f"'{PREFIXO_LOTE_NF}{{nf_id}}'): {getattr(embarque_item, 'separacao_lote_id', None)!r}"
-        )
-
-    nf = db.session.get(CarviaNf, nf_id)
-    if nf is None:
-        raise ValueError(f"CarviaNf id={nf_id} nao encontrada (lote do item).")
+    nf = _resolver_nf(embarque_item)
+    nf_id = nf.id
 
     operacao = _resolver_operacao_ativa(nf)
     fatura = _resolver_fatura(nf, operacao)

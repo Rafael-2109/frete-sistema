@@ -550,8 +550,10 @@
                       {% endif %}
 
                       {# Atalho CarVia: imprime NF + CTe CarVia + Fatura CarVia num PDF unico.
-                         So' para itens CarVia com NF (lote CARVIA-NF-) e nao-provisorios. #}
-                      {% if item and not item.provisorio and item.separacao_lote_id and item.separacao_lote_id.startswith('CARVIA-NF-') %}
+                         Item CarVia (lote CARVIA-* OU carvia_cotacao_id), nao-provisorio e com NF.
+                         A NF e' resolvida por nota_fiscal — o lote geralmente fica CARVIA-PED-. #}
+                      {% if item and not item.provisorio and item.nota_fiscal and item.nota_fiscal|trim
+                            and ((item.separacao_lote_id and item.separacao_lote_id.startswith('CARVIA-')) or item.carvia_cotacao_id) %}
                         <a href="{{ url_for('embarques.imprimir_docs_carvia', embarque_id=embarque.id, item_id=item.id) }}"
                            class="btn btn-sm btn-outline-info" target="_blank"
                            title="Imprimir NF + CTe CarVia + Fatura CarVia (PDF único)">
