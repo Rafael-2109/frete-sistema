@@ -172,14 +172,14 @@ Declarar alvo ANTES de cada fase; medir depois. Valores "hoje" medidos no estudo
 
 Rollback por item; nada muda comportamento sem flag. Detalhar TDD na sessao de execucao.
 
-- [ ] **T0.1 — X5: versionar + verificar o merge do pipeline empresa.**
+- [x] **T0.1 — X5: versionar + verificar o merge do pipeline empresa.** (2026-06-11: aadc4a989+ec0b6c15d)
   Sintoma: `_try_enrich_existing` (`app/agente/services/pattern_analyzer.py:1569-1669`) faz
   merge Sonnet destrutivo SEM `save_version` (0 ocorrencias no arquivo) e SEM verificacao
   TODOS_PRESERVADOS (existe so em `memory_consolidator.py:564-571`). Cura: chamar
   `save_version` antes do merge (padrao de `memory_mcp_tool.py:2074`) + portar a verificacao
   com retry do consolidator. Teste: pytest novo cobrindo merge com e sem perda de fatos.
   Rollback: e adicao de salvaguarda.
-- [ ] **T0.2 — Lista fechada de consertos de drift (horas).** Todos re-verificados 2026-06-11:
+- [x] **T0.2 — Lista fechada de consertos de drift (horas).** (2026-06-11: c07f0b9b7; item g direto no ~/.claude/CLAUDE.md) Todos re-verificados 2026-06-11:
   (a) `ROUTING_SKILLS.md:19` "54"→53 + secao Utilitarios com contagem divergente;
   (b) `tool_skill_mapper.py:109` remover `lendo-documentos`, avaliar adicionar `padronizando-docs`;
   (c) docstring L1 de `inventario_pipeline.py`;
@@ -190,7 +190,7 @@ Rollback por item; nada muda comportamento sem flag. Detalhar TDD na sessao de e
   (f) contagens do `especialista-odoo` "9 vs 8 vs 8" (mapa 04);
   (g) espelho CAMINHOS de `~/.claude/CLAUDE.md` sem a linha SPED (mapa 05);
   (h) frontmatter `orientador-loja.md` sem `consultando-venda-loja` — CONFIRMAR INTENCAO antes.
-- [ ] **T0.3 — Triagem unica da memoria dev + regra de aposentadoria.**
+- [x] **T0.3 — Triagem unica da memoria dev + regra de aposentadoria.** (2026-06-11: 27 aposentadas; 4f9b21b12; MEMORY.md 23,3KB — ver Rastreamento)
   Backup `tar.gz` ANTES (diretorio fora de git). Aposentar ~55-65 memorias provadamente
   duplicadas/vencidas (clusters no mapa 02 §3: ~22 do cluster Odoo-estoque ja codificadas em
   `app/odoo/estoque/CLAUDE.md:131,144,161`; worker_render_filas verbatim em ~/.claude/CLAUDE.md;
@@ -200,7 +200,7 @@ Rollback por item; nada muda comportamento sem flag. Detalhar TDD na sessao de e
   (renomeado). Adicionar ao guideline do MEMORY.md: *"memoria cujo conteudo foi codificado em
   skill/CLAUDE.md/reference DEVE ser aposentada na mesma sessao (ponteiro de 1 linha ou
   delecao)"*. Meta: MEMORY.md <22KB.
-- [ ] **T0.4 — X1+X2: determinizar o path da memoria empresa (flag-gated).**
+- [x] **T0.4 — X1+X2: determinizar o path da memoria empresa (flag-gated).** (2026-06-11: cbec4144e+41d35f995+5c35499a3+02c1070fc; migracao PROD: dry-run OK, --aplicar PENDENTE autorizacao)
   (a) Fechar `dominio` em enum ~12 valores no prompt do extrator (`pattern_analyzer.py:962`)
   + validacao em `_build_knowledge_path` (`:1100-1141`) com fallback `geral`;
   (b) dedup de slug por embedding de TITULO (nao da descricao) contra slugs existentes do
@@ -321,6 +321,25 @@ Anexo permanente do desenho-alvo (anti-overengineering). Revisitar item so com g
 > Atualizar a cada sessao de execucao (data + o que fechou + evidencia).
 
 - 2026-06-11 — Plano criado e aprovado em conversa (4 decisoes registradas).
+- 2026-06-11 — **FASE F0 EXECUTADA** (subagent-driven + reviews 2-estagios por task; T0.3 inline).
+  T0.1: save_version (changed_by=sonnet) em ambos os caminhos + verificacao TODOS_PRESERVADOS
+  com retry unico em _merge_memories_via_sonnet (fallback seguro: None -> append preserva tudo);
+  13 pytest. T0.2: 8 consertos (a-h) fechados; ROUTING 54->53 real; orientador-loja ganhou
+  consultando-venda-loja (omissao comprovada por git log). T0.3: 27 memorias dev aposentadas
+  (16 Odoo-estoque + 11 B/C) com verificacao individual por 2 subagentes read-only; exclusivos
+  movidos ANTES (ROADMAP_SKILLS, SKILL portal, ssw/INDEX, resolvedores, agente/CLAUDE.md);
+  regra 6 aposentadoria no MEMORY.md; indice 25,2KB->23,3KB (truncagem ELIMINADA; meta <22KB
+  nao atingida sem remover fato valido — verificadores acharam gotchas exclusivos vivos em
+  ~20 arquivos que o estudo estimava duplicados, ex. worker_render_filas tem bug cache Render
+  ausente do CLAUDE.md global; cadencia T1.4 absorve). T0.4: enum 12 dominios + aliases +
+  dedup titulo (threshold 0.85, cap 200) flag USE_DETERMINISTIC_MEMORY_PATH default ON +
+  migracao com exclusao load-bearing VERIFICADA (usuarios/pendencias/perfis consultados por
+  prefixo em memory_injection.py — ficam fora); 48 pytest; dry-run PROD via Render MCP:
+  45 MIGRAR / 0 COLISAO / 9 EXCLUIDO (relatorio /tmp/relatorio_dryrun_migracao_namespaces_PROD_2026-06-11.md);
+  --aplicar PENDENTE autorizacao explicita (gate DATABASE_URL_PROD negou conexao direta — correto).
+  Follow-up registrado: db.session.commit() pre-existente em _try_enrich_existing vaza
+  savepoint em testes (runtime legitimo de daemon thread; tratar em task propria).
+  Proximo: F1 (T1.1 -> T1.6) em sessao nova.
 - 2026-06-11 — **ITEM 0 EXECUTADO** (read-only): budget 8K confirmado no binario 2.1.170
   (truncamento ATIVO no principal 115% e no gestor-estoque-odoo ~200% — urgencia de T1.2);
   invocacoes/90d coletadas (4 agents com zero na superficie web); flags KG+enrichment ativas
