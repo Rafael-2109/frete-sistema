@@ -134,7 +134,7 @@ Declarar alvo ANTES de cada fase; medir depois. Valores "hoje" medidos no estudo
 | Violacoes regra 3 (dup com estatica) | ~55-65 de 167 (33-39%) | <10 |
 | Duplicacao verdadeira corpus empresa web | ~3-8% | <2%; 0 colisoes de slug novas/mes |
 | Merges nao-versionados no pipeline empresa | 100% dos merges | 0 |
-| Budget descriptions por subagente | gestor-estoque-odoo ~15-16K (limite a confirmar no Item 0) | todos abaixo do limite com lint |
+| Budget descriptions por superficie (limite 8K confirmado I0.3) | principal ~9,2K (115%); gestor-estoque-odoo ~15-16K (~200%) — truncamento ATIVO em ambos | todas as superficies <8K com lint |
 | Anti-gatilhos mortos / contagens divergentes | 1 skill inexistente + 3+ contagens | 0 (lint) |
 | Conhecimento "INVIOLAVEL" so em memoria | ≥1 caso provado (diff_qtd) | 0 |
 | KG no read path | 0 memorias em toda injecao | >0 com higiene OU escrita OFF (decisao T2.2) |
@@ -143,16 +143,30 @@ Declarar alvo ANTES de cada fase; medir depois. Valores "hoje" medidos no estudo
 
 ## ITEM 0 — Verificacoes antes de tudo (minutos)
 
-- [ ] **I0.1** Env vars efetivas no Render (`sistema-fretes`): `MEMORY_KNOWLEDGE_GRAPH`,
-  `USE_MERGE_ENRICHMENT`, `AGENT_DIRECTIVES_INTENT_ONLY`/`USE_OPERATIONAL_DIRECTIVES` —
-  os mapas assumiram defaults do codigo. Nenhuma decisao F2 sem isso.
-- [ ] **I0.2** Query unica em PROD: invocacoes por subagente nos ultimos 60-90 dias
-  (`agent_steps`/`agent_sessions`; a skill `gerindo-agente` declara metricas de roteamento).
-  Insumo de T2.1.
-- [ ] **I0.3** Reconciliar o budget REAL do listing de skills: os mapas se contradizem
-  (8.000 chars conforme `ARQUITETURA_CONTEXTO_AGENTE.md` §Skills vs 16.000 no mapa 03).
-  Inspecionar a formula no cli.js da versao em PROD e recalibrar `skills_listing_audit.py`
-  + metas de T1.2 + lint por subagente de T1.1 com o numero verdadeiro.
+> EXECUTADO 2026-06-11 (mesma sessao do plano). Resultados abaixo de cada item.
+
+- [x] **I0.1** Flags efetivas em PROD — verificadas por COMPORTAMENTO no banco (get_service
+  nao expoe env vars): KG **ATIVO** (1.764 entidades com last_seen_at em 7d; ultima relacao
+  criada 2026-06-11 15:29Z); enriquecimento/merge **ATIVO em volume** (230 memorias empresa
+  com updated_at > created_at+1h em 14d, contra apenas 59 versoes em 14d — o gap X5 de
+  merges nao-versionados esta acontecendo AGORA em PROD, refortalece T0.1);
+  directives intent-only deployado 2026-06-10 (PAD-CTX, nao re-verificado).
+- [x] **I0.2** Invocacoes por subagente em PROD, 90d (`agent_invocation_metrics.agent_type`):
+  gestor-estoque-odoo 37 · especialista-odoo 31 · gestor-recebimento 26 ·
+  auditor-financeiro 7 · raio-x-pedido 4 · gestor-motos-assai 3 · analista-carteira 2 ·
+  gestor-estoque-producao 2 · analista-performance-logistica 1 · gestor-carvia 1 ·
+  auditor-sped-ecd 1. **ZERO invocacoes**: controlador-custo-frete, gestor-devolucoes,
+  gestor-ssw, desenvolvedor-integracao-odoo (+ orientador-loja, que opera na superficie
+  isolada do Agente Lojas). Caveat T2.1: a tabela registra a superficie WEB; uso via Task
+  no CC dev nao aparece aqui — mover do loader web NAO remove disponibilidade no dev.
+- [x] **I0.3** Budget REAL do listing: **8.000 chars CONFIRMADO** no binario bundled 2.1.170
+  (`claude_agent_sdk/_bundled/claude`, o mesmo de PROD): constantes `V85=200000` (ctx) ×
+  `ML7=4` (bytes/token) × `T85=0.01` (fraction default de `skillListingBudgetFraction`) =
+  8.000; override por env `SLASH_COMMAND_TOOL_CHAR_BUDGET` existe (alavanca de emergencia;
+  padrao do PAD-CTX permanece "caber no default, nao subir o teto"). O mapa 03 (16K) estava
+  ERRADO. Consequencia: **truncamento ATIVO confirmado nas DUAS superficies** — principal
+  ~9,2K/8K (115%) e gestor-estoque-odoo ~15-16K/8K (~200%, perde metade das clausulas das
+  skills WRITE). Eleva a urgencia de T1.2; lint T1.1 calibra em 8K por superficie.
 
 ## FASE F0 — Dor ativa, so certeza (~1 semana)
 
@@ -210,11 +224,15 @@ Rollback por item; nada muda comportamento sem flag. Detalhar TDD na sessao de e
   (c) **budget por subagente**: soma das descriptions das skills declaradas no frontmatter de
   cada `.claude/agents/*.md` ≤ limite confirmado no I0.3.
   Padrao de rollout: `ui_policy_lint` (report-only primeiro, enforce no pre-commit depois).
-- [ ] **T1.2 — Solucao A nas descriptions (estoque primeiro).**
+- [ ] **T1.2 — Solucao A nas descriptions (truncamento ATIVO nas 2 superficies — I0.3).**
   Descriptions ≤600c (1 frase proposito + gatilhos + 1 anti-gatilho critico); matriz
-  USAR/NAO-USAR completa move para o CORPO da SKILL.md. Piloto: 2 skills de estoque com a
-  suite pytest do dominio verde antes/depois; depois as 10 de estoque (~15-16K hoje dentro do
-  `gestor-estoque-odoo`); depois os 16 frontmatters >1024c.
+  USAR/NAO-USAR completa move para o CORPO da SKILL.md. Cobre as DUAS superficies acima do
+  limite de 8K: o listing do PRINCIPAL (~9,2K, afeta todo turno do agente web) e as 10 de
+  estoque dentro do `gestor-estoque-odoo` (~15-16K, perde anti-gatilhos das skills WRITE).
+  Piloto: 2 skills com a suite pytest do dominio verde antes/depois; ordem das superficies
+  a decidir na execucao; depois os 16 frontmatters >1024c. Alavanca de emergencia documentada
+  (env `SLASH_COMMAND_TOOL_CHAR_BUDGET`) — usar SO se algo critico for perdido antes da
+  Solucao A concluir.
 - [ ] **T1.3 — Registro G0xx minimalista (resolver colisao de IDs).**
   Colisoes provadas: G002/G021 com significados diferentes em
   `docs/inventario-2026-05/02-gotchas/` vs dominio estoque; DOIS arquivos `G030-*.md` no mesmo
@@ -250,7 +268,10 @@ Rollback por item; nada muda comportamento sem flag. Detalhar TDD na sessao de e
 ## FASE F2 — Decisoes por medida (condicionada a gates)
 
 - [ ] **T2.1 — Agents: aposentadoria por medicao + filtro de superficie.**
-  Gate: dados do I0.2. Agents com ~0 invocacoes → mover para fora do loader (NAO deletar).
+  Gate: dados do I0.2 (JA COLETADOS — candidatos com 0 invocacoes web/90d:
+  controlador-custo-frete, gestor-devolucoes, gestor-ssw, desenvolvedor-integracao-odoo;
+  ponderar uso na superficie dev antes de decidir). Agents com ~0 invocacoes → mover para
+  fora do loader (NAO deletar).
   Independente da medicao: frontmatter `surface: dev` + filtro de ~3 linhas em
   `app/agente/config/agent_loader.py` para `desenvolvedor-integracao-odoo` (dev-only de jure,
   carregado em PROD de facto — risco em si). `gestor-recebimento` MANTER (routing nominal
@@ -299,7 +320,13 @@ Anexo permanente do desenho-alvo (anti-overengineering). Revisitar item so com g
 
 > Atualizar a cada sessao de execucao (data + o que fechou + evidencia).
 
-- 2026-06-11 — Plano criado e aprovado em conversa (4 decisoes registradas). Nada executado.
+- 2026-06-11 — Plano criado e aprovado em conversa (4 decisoes registradas).
+- 2026-06-11 — **ITEM 0 EXECUTADO** (read-only): budget 8K confirmado no binario 2.1.170
+  (truncamento ATIVO no principal 115% e no gestor-estoque-odoo ~200% — urgencia de T1.2);
+  invocacoes/90d coletadas (4 agents com zero na superficie web); flags KG+enrichment ativas
+  por comportamento (230 enriquecidas vs 59 versoes em 14d = X5 sangrando agora).
+  Modo de execucao decidido: N sessoes (1 por fase), subagent-driven nas tasks mecanicas/TDD,
+  inline nas de julgamento (T0.3, gates, decisoes). Proximo: F0 (T0.1 → T0.4) em sessao nova.
 
 ## Fontes
 
