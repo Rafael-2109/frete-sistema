@@ -1224,13 +1224,16 @@ def _find_existing_path_by_title(titulo: str, kind_subdir: str) -> Optional[str]
         AgentMemory = _agente_models.AgentMemory
         EmbeddingService = _emb_service.EmbeddingService
 
-        # Busca paths do mesmo kind
+        # Busca paths do mesmo kind. Cap defensivo: corpus hoje ~85/kind;
+        # se crescer 500+, embeddar tudo por save degrada o pipeline —
+        # mais recentes primeiro (mais propensas a dedup).
         pattern = f'/memories/empresa/{kind_subdir}/%'
         rows = AgentMemory.query.filter(
             AgentMemory.user_id == 0,
             AgentMemory.is_directory == False,  # noqa: E712
             AgentMemory.path.like(pattern),
-        ).with_entities(AgentMemory.path).all()
+        ).with_entities(AgentMemory.path)\
+            .order_by(AgentMemory.updated_at.desc()).limit(200).all()
 
         if not rows:
             return None

@@ -178,7 +178,7 @@ class TestFindExistingPathByTitle:
         # Mock AgentMemory no modulo de origem
         mock_am = MagicMock()
         if rows is not None:
-            mock_am.query.filter.return_value.with_entities.return_value.all.return_value = rows
+            mock_am.query.filter.return_value.with_entities.return_value.order_by.return_value.limit.return_value.all.return_value = rows
         stack.enter_context(patch('app.agente.models.AgentMemory', mock_am))
 
         # Mock EmbeddingService no modulo de origem
@@ -211,7 +211,7 @@ class TestFindExistingPathByTitle:
              patch('app.embeddings.config.MEMORY_SEMANTIC_SEARCH', True):
 
             mock_am = MagicMock()
-            mock_am.query.filter.return_value.with_entities.return_value.all.return_value = rows
+            mock_am.query.filter.return_value.with_entities.return_value.order_by.return_value.limit.return_value.all.return_value = rows
             mock_svc = MagicMock()
             mock_svc.embed_texts.return_value = embed_results
             mock_svc_cls = MagicMock(return_value=mock_svc)
@@ -241,7 +241,7 @@ class TestFindExistingPathByTitle:
              patch('app.embeddings.config.MEMORY_SEMANTIC_SEARCH', True):
 
             mock_am = MagicMock()
-            mock_am.query.filter.return_value.with_entities.return_value.all.return_value = [
+            mock_am.query.filter.return_value.with_entities.return_value.order_by.return_value.limit.return_value.all.return_value = [
                 (existing_path,)
             ]
             mock_svc = MagicMock()
@@ -263,7 +263,7 @@ class TestFindExistingPathByTitle:
              patch('app.embeddings.config.MEMORY_SEMANTIC_SEARCH', True):
 
             mock_am = MagicMock()
-            mock_am.query.filter.return_value.with_entities.return_value.all.return_value = [
+            mock_am.query.filter.return_value.with_entities.return_value.order_by.return_value.limit.return_value.all.return_value = [
                 ('/memories/empresa/protocolos/geral/algo.xml',)
             ]
             mock_svc = MagicMock()
@@ -299,7 +299,7 @@ class TestFindExistingPathByTitle:
              patch('app.embeddings.config.MEMORY_SEMANTIC_SEARCH', True):
 
             mock_am = MagicMock()
-            mock_am.query.filter.return_value.with_entities.return_value.all.return_value = []
+            mock_am.query.filter.return_value.with_entities.return_value.order_by.return_value.limit.return_value.all.return_value = []
 
             with patch('app.agente.models.AgentMemory', mock_am):
                 result = pa._find_existing_path_by_title('Titulo novo', 'heuristicas')
