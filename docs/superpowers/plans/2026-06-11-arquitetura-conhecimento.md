@@ -16,9 +16,9 @@ atualizado: 2026-06-11
 > qualquer fase (Item 0, F0, F1, F2) ou decidir se uma mudanca de conhecimento respeita o
 > papel canonico por camada.
 
-> 🔵 **PROXIMA SESSAO — RETOMAR AQUI:** plano aprovado em conversa com Rafael 2026-06-11
-> (4 decisoes registradas na secao Decisoes). Nada executado ainda. Comecar pelo Item 0
-> (minutos) e F0 (T0.1 → T0.4). Worktree: `feat/arquitetura-conhecimento`.
+> 🔵 **PROXIMA SESSAO — RETOMAR AQUI:** Item 0 + F0 EXECUTADOS e mergeados em main
+> (2026-06-11, merge f57755c5d; migracao namespaces APLICADA em PROD: 45/0/9 + 45 versions).
+> Comecar pela F1 (T1.1 → T1.6) em worktree novo a partir de origin/main.
 > Cada fase ganha detalhamento TDD bite-sized na propria sessao de execucao
 > (padrao text-to-sql S1-S3); este doc e o programa.
 
@@ -200,7 +200,7 @@ Rollback por item; nada muda comportamento sem flag. Detalhar TDD na sessao de e
   (renomeado). Adicionar ao guideline do MEMORY.md: *"memoria cujo conteudo foi codificado em
   skill/CLAUDE.md/reference DEVE ser aposentada na mesma sessao (ponteiro de 1 linha ou
   delecao)"*. Meta: MEMORY.md <22KB.
-- [x] **T0.4 — X1+X2: determinizar o path da memoria empresa (flag-gated).** (2026-06-11: cbec4144e+41d35f995+5c35499a3+02c1070fc; migracao PROD: dry-run OK, --aplicar PENDENTE autorizacao)
+- [x] **T0.4 — X1+X2: determinizar o path da memoria empresa (flag-gated).** (2026-06-11: cbec4144e+41d35f995+5c35499a3+02c1070fc; migracao PROD: APLICADA 2026-06-11 19:53 BRT — 45 MIGRAR/0 COLISAO/9 EXCLUIDO + 45 versions de rollback; relatorios em /tmp)
   (a) Fechar `dominio` em enum ~12 valores no prompt do extrator (`pattern_analyzer.py:962`)
   + validacao em `_build_knowledge_path` (`:1100-1141`) com fallback `geral`;
   (b) dedup de slug por embedding de TITULO (nao da descricao) contra slugs existentes do
@@ -336,7 +336,7 @@ Anexo permanente do desenho-alvo (anti-overengineering). Revisitar item so com g
   migracao com exclusao load-bearing VERIFICADA (usuarios/pendencias/perfis consultados por
   prefixo em memory_injection.py — ficam fora); 48 pytest; dry-run PROD via Render MCP:
   45 MIGRAR / 0 COLISAO / 9 EXCLUIDO (relatorio /tmp/relatorio_dryrun_migracao_namespaces_PROD_2026-06-11.md);
-  --aplicar PENDENTE autorizacao explicita (gate DATABASE_URL_PROD negou conexao direta — correto).
+  --aplicar EXECUTADO 2026-06-11 19:53 BRT com autorizacao explicita do Rafael (45 WRITES + 45 versions; namespaces legados zerados em PROD; embeddings dos 45 paths re-indexam no catch-up diario).
   Follow-up registrado: db.session.commit() pre-existente em _try_enrich_existing vaza
   savepoint em testes (runtime legitimo de daemon thread; tratar em task propria).
   Proximo: F1 (T1.1 -> T1.6) em sessao nova.
