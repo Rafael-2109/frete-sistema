@@ -190,6 +190,44 @@ def _get_or_create_teams_user(
         return None
 
 
+def _merge_linha_a_linha(
+    table_name: str, column_name: str, fantasma_id: int, real_id: int,
+) -> tuple:
+    """Fallback do merge quando o UPDATE em massa colide com UNIQUE.
+
+    Reaponta linha a linha via ctid (independe da PK da tabela); linhas que
+    violam constraint ficam no fantasma e são contadas como colisão.
+
+    Returns:
+        (migradas, colisoes)
+    """
+    from sqlalchemy import text as sql_text
+    from app import db
+
+    migradas = 0
+    colisoes = 0
+    try:
+        ctids = [r[0] for r in db.session.execute(sql_text(
+            f'SELECT ctid FROM "{table_name}" WHERE "{column_name}" = :fid'
+        ), {'fid': fantasma_id}).fetchall()]
+    except Exception:
+        db.session.rollback()
+        return (0, 0)
+
+    for ctid in ctids:
+        try:
+            db.session.execute(sql_text(
+                f'UPDATE "{table_name}" SET "{column_name}" = :rid '
+                f'WHERE ctid = :ctid AND "{column_name}" = :fid'
+            ), {'rid': real_id, 'ctid': ctid, 'fid': fantasma_id})
+            db.session.commit()
+            migradas += 1
+        except Exception:
+            db.session.rollback()
+            colisoes += 1
+    return (migradas, colisoes)
+
+
 def merge_usuario_teams(fantasma_id: int, real_id: int, dry_run: bool = True) -> dict:
     """Reaponta TODAS as FKs de `usuarios(id)` do usuário fantasma para o real.
 
@@ -208,7 +246,7 @@ def merge_usuario_teams(fantasma_id: int, real_id: int, dry_run: bool = True) ->
     from sqlalchemy import text as sql_text
     from app import db
 
-    resultado = {"tabelas": {}, "erros": [], "dry_run": dry_run}
+    resultado = {"tabelas": {}, "erros": [], "colisoes": {}, "dry_run": dry_run}
     fks = db.session.execute(sql_text("""
         SELECT tc.table_name, kcu.column_name
         FROM information_schema.table_constraints tc
@@ -251,8 +289,24 @@ def merge_usuario_teams(fantasma_id: int, real_id: int, dry_run: bool = True) ->
                 resultado["tabelas"][chave] = count
         except Exception as tbl_err:
             db.session.rollback()
-            resultado["erros"].append(f"{chave}: {tbl_err}")
-            logger.warning(f"[TEAMS-MERGE] {chave} falhou (segue): {tbl_err}")
+            # Bug PROD 2026-06-11 (caso Rafael): UNIQUE (ex.: agent_memories
+            # uq_user_memory_path) derruba o UPDATE em massa e a tabela INTEIRA
+            # ficava para tras ('0 memorias' com 19 existentes). Fallback linha
+            # a linha via ctid: nao-colidentes migram; colisoes sao CONTADAS.
+            migradas, colisoes = _merge_linha_a_linha(
+                table_name, column_name, fantasma_id, real_id,
+            )
+            if migradas:
+                resultado["tabelas"][chave] = migradas
+            if colisoes:
+                resultado["colisoes"][chave] = colisoes
+                logger.warning(
+                    f"[TEAMS-MERGE] {chave}: {colisoes} linha(s) colidiram "
+                    f"(ficam no fantasma); {migradas} migraram. Causa: {tbl_err}"
+                )
+            if not migradas and not colisoes:
+                resultado["erros"].append(f"{chave}: {tbl_err}")
+                logger.warning(f"[TEAMS-MERGE] {chave} falhou (segue): {tbl_err}")
 
     if not dry_run:
         try:
@@ -295,15 +349,23 @@ def _merge_usuario_fantasma(nome: Optional[str], real_id: int) -> str:
         resultado = merge_usuario_teams(fantasma.id, real_id, dry_run=False)
         sessoes = resultado["tabelas"].get("agent_sessions.user_id", 0)
         memorias = resultado["tabelas"].get("agent_memories.user_id", 0)
+        colisoes_mem = resultado.get("colisoes", {}).get("agent_memories.user_id", 0)
         logger.info(
             f"[TEAMS-MERGE] Fantasma {fantasma.id} -> real {real_id}: "
-            f"{resultado['tabelas']} erros={len(resultado['erros'])}"
+            f"{resultado['tabelas']} colisoes={resultado.get('colisoes')} "
+            f"erros={len(resultado['erros'])}"
         )
-        if sessoes or memorias:
-            return (
+        if sessoes or memorias or colisoes_mem:
+            resumo = (
                 f"Migrei seu histórico do Teams ({sessoes} conversas, "
                 f"{memorias} memórias)."
             )
+            if colisoes_mem:
+                resumo += (
+                    f" {colisoes_mem} memórias não migraram por já existirem "
+                    f"no seu perfil web (mantive as do web)."
+                )
+            return resumo
         return ""
     except Exception as e:
         logger.warning(f"[TEAMS-MERGE] Merge best-effort falhou (ignorado): {e}")

@@ -119,3 +119,40 @@ class TestMergeFantasmaPorNome:
         from app.teams.services import _merge_usuario_fantasma
         assert _merge_usuario_fantasma(f'Inexistente {uuid.uuid4().hex}', 1) == ''
         assert _merge_usuario_fantasma(None, 1) == ''
+
+
+class TestMergeComColisaoUnique:
+    def test_colisao_de_path_migra_resto_e_reporta(self, app_ctx):
+        """Bug PROD 2026-06-11 (caso Rafael): UPDATE em massa de agent_memories
+        colidia com UNIQUE(user_id, path) -> tabela INTEIRA pulada (19 memorias
+        ficaram para tras, resumo dizia '0 memorias'). Fix: fallback linha a
+        linha; nao-colidentes migram, colidentes sao reportadas."""
+        from app import db
+        from app.agente.models import AgentMemory
+        from app.teams.services import merge_usuario_teams
+        suf = uuid.uuid4().hex[:8]
+        fantasma = _novo_usuario(f'Colide {suf}', f'col_f_{suf}@teams.nacomgoya.local')
+        real = _novo_usuario(f'Colide Real {suf}', f'col_r_{suf}@nacomgoya.com.br')
+        m_real = AgentMemory(user_id=real.id, path='/memories/user.xml', content='web')
+        m_colide = AgentMemory(user_id=fantasma.id, path='/memories/user.xml', content='teams')
+        m_livre = AgentMemory(user_id=fantasma.id, path='/memories/corrections/só-do-teams',
+                              content='unica')
+        _db.session.add_all([m_real, m_colide, m_livre])
+        _db.session.commit()
+        ids = [m_real.id, m_colide.id, m_livre.id]
+        try:
+            out = merge_usuario_teams(fantasma.id, real.id, dry_run=False)
+            # 1 migrou; 1 colidiu (reportada, nao silenciada)
+            assert out['tabelas'].get('agent_memories.user_id') == 1
+            assert out.get('colisoes', {}).get('agent_memories.user_id') == 1
+            _db.session.expire_all()
+            assert _db.session.get(AgentMemory, m_livre.id).user_id == real.id
+            assert _db.session.get(AgentMemory, m_colide.id).user_id == fantasma.id
+        finally:
+            _db.session.rollback()
+            for mid in ids:
+                m = _db.session.get(AgentMemory, mid)
+                if m:
+                    _db.session.delete(m)
+            _db.session.commit()
+            _cleanup(usuario_ids=[fantasma.id, real.id])
