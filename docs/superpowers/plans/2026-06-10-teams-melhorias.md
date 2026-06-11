@@ -478,13 +478,18 @@ Function side: polling que recebe `already_delivered` encerra silenciosamente (r
 
 ### Task C5: Deploy function + env Render + validação real
 
-- [ ] `cd azure-functions/frete-bot && func azure functionapp publish frete-bot-func --python`
-  (deploy roda do diretório da function; hooks PAD não se aplicam a deploy)
-- [ ] Render: adicionar `TEAMS_FUNCTION_URL=https://frete-bot-func-d4awggfge3awcqap.brazilsouth-01.azurewebsites.net`
-  (via MCP `mcp__render__update_environment_variables`, service `sistema-fretes`)
-- [ ] Smoke real no Teams: (1) pergunta rápida (polling entrega); (2) tarefa longa >5 min
-  (function diz "te aviso" e resposta chega via proactive)
-- [ ] Validar /bot/health + logs Render sem erro
+> **EXECUTADO 2026-06-10/11**: token Azure local revogado (troca de senha) → deploy via
+> **zip deploy com publish profile** (Kudu `/api/zipdeploy?isAsync=true`, build remoto Oryx,
+> exigiu habilitar "SCM Basic Auth Publishing" no portal + re-download do profile — o 1o
+> download veio com credenciais `REDACTED`). Env no Render foi ELIMINADA: default da
+> `TEAMS_FUNCTION_URL` no código (`proactive.py`, env sobrepõe).
+
+- [x] Deploy da function (zip deploy via publish profile; Oryx build success)
+- [x] ~~Env TEAMS_FUNCTION_URL no Render~~ — default no código (commit c400a0ec6)
+- [ ] Smoke FUNCIONAL no Teams: (1) pergunta rápida (polling entrega); (2) tarefa longa >5 min
+  (function diz "te aviso" e resposta chega via proactive); (3) `vincular CODIGO`
+- [x] Smoke técnico: /api/notify → 401 (rota nova no ar); /bot/health OK; migrations PROD
+  aplicadas e verificadas; deploy Render live (dep-d8kug748, commit 05197c05f)
 
 ---
 
