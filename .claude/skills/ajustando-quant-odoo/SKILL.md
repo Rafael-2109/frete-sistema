@@ -10,7 +10,7 @@ description: >-
   é o DEFAULT; só efetiva com `--confirmar`.
   NÃO USAR PARA:
   - mover saldo entre 2 lotes/locais (= 2 ajustes) -> transferindo-interno-odoo
-  - transferir saldo entre CÓDIGOS de produto -> transferencia-saldo-codigo
+  - transferir saldo entre CÓDIGOS de produto -> transferencia-saldo-codigo (planejada — ainda nao existe)
   - só consultar/projetar saldo (não altera) -> subagente gestor-estoque-producao
   - resolver/criar lote isolado (sem ajustar saldo) -> StockLotService (util)
 allowed-tools: Read, Bash, Glob, Grep

@@ -327,3 +327,13 @@ FISCAL (007/512/515) → CONTABILIDADE (540/558/559) → ECD/ECF (534/570)
 - **703** — NF de Transferencia (armazem geral)
 - **724** — Volumes Disponiveis no Estoque
 - **741** — Cadastro de Mercadorias
+
+---
+
+## Licoes de geracao da documentacao (25 agentes Sonnet, 3 rodadas — memoria dev aposentada 2026-06-11)
+
+Para futuras sessoes de (re)geracao/expansao desta arvore de docs SSW:
+- NAO usar Bash em agentes de documentacao — Write direto
+- Processar opcoes UMA POR VEZ (nao paralelo)
+- Arquivos >40KB: ler em chunks de 400 linhas
+- Agentes pulam opcoes — instruir explicitamente para NAO pular

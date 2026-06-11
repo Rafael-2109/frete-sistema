@@ -92,6 +92,11 @@ Ao apresentar resultados, CITAR estes campos do JSON de saida de cada script:
 - **SEMPRE** executar --dry-run primeiro, MESMO que usuario peca "direto"
 - AskUserQuestion antes de --confirmar
 
+#### Gotchas criticos do XLSX/lote (memoria dev aposentada 2026-06-11)
+- **Tipos XLSX**: portal retorna HTTP 500 se tipos errados — EAN=int (format '0'), Datas=datetime (format 'd-mmm'), Numeros=int, CNPJ=string OK.
+- **Pedidos fantasmas (saldo=1)**: Atacadao gera pedidos com saldo=1 que NAO sao reais — `SALDO_MINIMO_VALIDO = 2`, filtrar antes de incluir no XLSX.
+- **EANs invalidos**: prefixos `000`, `037`, `37`, `57` sao codigos internos (nao escaneaveis pelo portal); EANs validos comecam com "17". Validar antes do upload.
+
 ## ANTI-ALUCINACAO
 
 - **Protocolos**: Sempre numeros inteiros capturados do portal. NAO inventar.

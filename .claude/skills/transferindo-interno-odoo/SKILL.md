@@ -18,7 +18,7 @@ description: >-
   `--dry-run` é o DEFAULT; só efetiva com `--confirmar`.
   NÃO USAR PARA:
   - ajustar saldo de 1 quant (soma/zera/cria) → ajustando-quant-odoo
-  - transferir saldo entre CÓDIGOS de produto → transferencia-saldo-codigo
+  - transferir saldo entre CÓDIGOS de produto → transferencia-saldo-codigo (planejada — ainda nao existe)
   - transferir entre EMPRESAS diferentes (emite NF) → faturando-odoo/escriturando-odoo
   - cancelar reserva órfã ANTES de transferir → operando-reservas-odoo (skill 2.4)
   - operação que precisa de PICKING (recebimento, devolução) → operando-picking-odoo

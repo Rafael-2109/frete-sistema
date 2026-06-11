@@ -16,7 +16,7 @@ atualizado: 2026-06-08
 - [Passo 2 (ODOO): Tem dado ESTATICO ja documentado?](#passo-2-odoo-tem-dado-estatico-ja-documentado)
 - [Passo 3 (ODOO): Arvore de Decisao de Skills](#passo-3-odoo-arvore-de-decisao-de-skills)
 - [Desambiguacao (quando 2 skills parecem servir)](#desambiguacao-quando-2-skills-parecem-servir)
-- [Skills — Inventario Completo (54 invocaveis em `.claude/skills/`)](#skills-inventario-completo-54-invocaveis-em-claudeskills)
+- [Skills — Inventario Completo (53 invocaveis em `.claude/skills/`)](#skills-inventario-completo-53-invocaveis-em-claudeskills)
   - [MCP Custom Tools (agente web, in-process)](#mcp-custom-tools-agente-web-in-process)
   - [Skills Odoo (19)](#skills-odoo-19)
   - [Skills SSW (2)](#skills-ssw-2)
@@ -24,12 +24,12 @@ atualizado: 2026-06-08
   - [Skills CarVia (1)](#skills-carvia-1)
   - [Agente — gestao do sistema (1)](#agente-gestao-do-sistema-1)
   - [Sentry — monitoramento de erros (1)](#sentry-monitoramento-de-erros-1)
-  - [Utilitarios compartilhados (12)](#utilitarios-compartilhados-12)
+  - [Utilitarios compartilhados (11)](#utilitarios-compartilhados-11)
   - [Skills Lojas HORA (6) — APENAS no Agente Lojas HORA (escopo isolado por `<loja_context>`)](#skills-lojas-hora-6-apenas-no-agente-lojas-hora-escopo-isolado-por-loja_context)
   - [Skills motos_assai (7)](#skills-motos_assai-7)
   - [Skills SPED ECD audit (4) — USO EXCLUSIVO do subagent `auditor-sped-ecd`](#skills-sped-ecd-audit-4-uso-exclusivo-do-subagent-auditor-sped-ecd)
 
-**Ultima Atualizacao**: 09/06/2026 (54 skills invocaveis. Historico de mudancas do inventario: comentario HTML ao fim deste arquivo — F0.4 PAD-CTX moveu o changelog para fora do corpo lido pelo agente.)
+**Ultima Atualizacao**: 11/06/2026 (53 skills invocaveis. Historico de mudancas do inventario: comentario HTML ao fim deste arquivo — F0.4 PAD-CTX moveu o changelog para fora do corpo lido pelo agente.)
 
 **REGRA**: Use a skill MAIS ESPECIFICA. `descobrindo-odoo-estrutura` e ULTIMO RECURSO.
 
@@ -191,7 +191,7 @@ Se a resposta esta no reference -> NAO usar skill.
 
 ---
 
-## Skills — Inventario Completo (54 invocaveis em `.claude/skills/`)
+## Skills — Inventario Completo (53 invocaveis em `.claude/skills/`)
 
 Cada skill tem `SKILL.md` em `.claude/skills/<nome>/`. `consultando-sql` e invocavel mas expoe data folder (schemas/queries) descoberto via filesystem.
 `SKILL_IMPROVEMENT_ROADMAP.md` na raiz de `.claude/skills/` e DOC, nao skill (nao conta no inventario).
@@ -231,7 +231,7 @@ Cada skill tem `SKILL.md` em `.claude/skills/<nome>/`. `consultando-sql` e invoc
 ### Sentry — monitoramento de erros (1)
 `consultando-sentry` (MCP-first, 20 tools, Seer AI)
 
-### Utilitarios compartilhados (12)
+### Utilitarios compartilhados (11)
 `exportando-arquivos`, `lendo-arquivos` (planilhas + documentos; consolidou `lendo-documentos` 2026-06-09), `consultando-sql`,
 `cotando-frete`, `visao-produto`, `resolvendo-entidades`, `gerindo-expedicao`,
 `monitorando-entregas`, `diagnosticando-banco`,
@@ -262,5 +262,6 @@ NAO invocar do agente principal — fluxo orquestrado dentro do subagent.
 
 
 <!-- CHANGELOG DO INVENTARIO (movido da linha "Ultima Atualizacao" em 2026-06-09 — F0.4 do plano PAD-CTX; ~3.8K chars de historico dev que diluiam a leitura do agente):
+2026-06-11 (53 skills invocaveis — correcao de contagem: 54 contava o arquivo SKILL_IMPROVEMENT_ROADMAP.md como skill; Utilitarios 12→11 pela consolidacao lendo-documentos→lendo-arquivos de 2026-06-09 nao refletida no header)
 **Ultima Atualizacao**: 08/06/2026 (54 skills invocaveis — 3 novas em 2026-06-02: `carregando-motos-assai` (motos_assai 6->7), `consultando-venda-loja` (Lojas HORA 5->6), `padronizando-docs` (util docs/dev, padrao PAD-A — antes ausente do inventario). 2026-05-30 (51 skills): `faturando-odoo` adicionada ao inventario; estendida em 2026-05-26 v19+: `escriturando-odoo` virou ABRANGENTE com 7 atomos sobre `account.move`+DFe/PO/invoice (`buscar_dfe`, `criar_dfe_a_partir_do_invoice_saida`, `escriturar_dfe`, `gerar_po_from_dfe`, `preencher_po`, `confirmar_po`, `criar_invoice_from_po`); compostos via FLUXOS L3 1.2.1 caminho A (DFe ja veio via SEFAZ) e 1.2.2 caminho B (DFe ausente — upload XML da SAIDA); dispatch `FaturamentoPipelineExecutor.executar_fluxo_l3_1_2_x` no orchestrator decide caminho A vs B via `buscar_dfe`; wrapper V1 STRICT `criar_recebimento_orchestrado` LF→FB deprecado v20+; `operando-picking-odoo` ganhou atomo `preencher_lotes_picking` (Skill 5 atomo S2 reusado pelos fluxos L3 1.2.x); `criar_picking_entrada_destino_manual` DEPRECATED docblock (museum vivo ate canary v20+); 555 baseline pytest Odoo. Em 2026-05-25 v15a: `operando-picking-odoo` ganhou 3 atomos inter-company para Skill 8 (`criar_picking_inter_company` codifica D-OPS-3 tracking='none' · `validar_picking_inter_company` fluxo F5b completo + G018 peso/volumes · `criar_picking_entrada_destino_manual` ETAPA F com G023 company_id forcado + idempotencia origin); +19 pytest verdes (42→61 stock_picking_service); centralizadas constants ETAPA F (`PICKING_TYPE_ENTRADA_DESTINO_MANUAL`, `COMPANY_LABEL_ENTRADA`, `ACOES_ENTRADA_DESTINO_MANUAL`, `LOCATION_ORIGEM_ENTRADA_INDUSTR`) em `app/odoo/constants/picking_types.py`; smoke PROD validou D-OPS-3 detection em 6 cods v14a-ops; 435 baseline pytest Odoo. Adicionada em 2026-05-25 v14b: `auditando-cadastro-fiscal-odoo` (PRE-FLIGHT perfil V1 'inventario'; sub-skill delegada pela Skill 8 'faturando-odoo' v15+; cobre G017/G018/G035/G014 + D-OPS-2/3; service `app/odoo/estoque/scripts/cadastro_fiscal_audit.py` ~430 LOC; 14 testes pytest verdes; smoke PROD em 6 cods v14a-ops detectou 2 G014 + 1 D-OPS-3 em 987ms). 2026-05-24 v6: `planejando-pre-etapa-odoo` (READ Odoo + WRITE banco local — planejador da pre-etapa D007 do inventario CD/FB; substitui NFs inter-filial CD↔FB R$ 32,9 mi + INDISPONIBILIZAR_* R$ 60,5 mi por transferencias INTERNAS na company + residual minimo CFOP 5152; 4 modos: planejar/propor/listar-onda/aprovar-onda; service `app/odoo/estoque/scripts/pre_etapa.py` capinado de services/; hash sha256 anti-replay no workflow de aprovacao; 19 testes pytest verdes — 13 originais + 6 helpers novos). 2026-05-24 v5: `operando-mo-odoo` (WRITE cancelar Manufacturing Order single ou batch; service novo `app/odoo/estoque/scripts/mo.py`; guard G-MO-01 furo contabil — bloqueia consumo>0; idempotencia validada AO VIVO em MO state=cancel). 2026-05-24 v3: `operando-picking-odoo` (WRITE cancelar/validar/devolver picking; capina StockPickingService para `app/odoo/estoque/scripts/picking.py`; invariante G019/G020 fechada no codigo — re-leitura de state pos-button_validate; novo atomo `devolver` cria stock.return.picking idempotente). 2026-05-24 v2: `transferindo-interno-odoo` (WRITE transferencia interna intra-empresa: lote→lote mesma loc OU loc→loc mesmo lote; composicao de ajustar_quant 2x com delta_esperado propagado, G021/G022/G027 codificados). 2026-05-23: `ajustando-quant-odoo` (WRITE 1 stock.quant), `operando-reservas-odoo` (WRITE cirurgia/cancelamento de pickings com MLs orfas), `consultando-quant-odoo` (READ ao vivo no Odoo — auditoria pos-WRITE). 2026-05-16: `parseando-sped-ecd`, `auditando-sped-contabil`, `auditando-sped-vs-manual`, `comparando-sped-ground-truth` — pipeline de auditoria SPED ECD usado exclusivamente pelo subagent `auditor-sped-ecd`)
 -->

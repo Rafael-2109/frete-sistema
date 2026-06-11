@@ -1,4 +1,4 @@
-"""faturamento_pipeline.py — Orchestrator C3 macro Skill 8 `faturando-odoo` (v17).
+"""inventario_pipeline.py — Orchestrator C3 macro Skill 8 `faturando-odoo` (v17).
 
 Executa pipeline completo A-F de faturamento inter-company de inventario:
 

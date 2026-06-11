@@ -165,4 +165,4 @@ source .venv/bin/activate
 - Design por eixo: `docs/blueprint-agente/eixos/*.md` + crítica `critica/*.md` (Eixo A = telos do flywheel)
 - Plano A4: `docs/superpowers/plans/2026-06-01-a4-promocao-diretriz.md`
 - Guia dev do módulo: `app/agente/CLAUDE.md` (aponta para este diretório)
-- Memórias: `avaliacao-360-agente-2026-05-29` (estado do blueprint), `deploy-web-build-lento`, `b3-escalate-adiado-premissa`, `wiring-agente-tarefa-1-2`, `a3-baseline-fase2-2026-05-31`
+- Memórias: `deploy-web-build-lento`, `b3-escalate-adiado-premissa`, `a3-baseline-fase2-2026-05-31` (estado do blueprint: ver `EXECUCAO.md`; memórias avaliacao-360 e wiring aposentadas 2026-06-11)

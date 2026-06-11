@@ -8,6 +8,14 @@ Arquitetura (spec 2026-06-01): nucleo compartilhado + 2 fachadas finas.
 - Funcoes "ricas" (estilo monolito) servem o shim Python dos 9 importadores.
 - Funcoes "*_cli" (estilo split, JSON achatado, fonte entregas) servem os 7 CLIs / 8 subagentes.
 
+Gotchas (genealogia da consolidacao Onda D, 2026-06):
+- app/utils/grupo_empresarial.py e INCOMPATIVEL com GRUPOS_EMPRESARIAIS daqui
+  (prefixo 8-dig+barra vs 7-dig sem barra). NAO acoplar os dois.
+- resolver_cidade rico carrega ~27k linhas via query.all() (sem caller ativo);
+  wildcards %/_ no termo afetam ILIKE.
+- ABREVIACOES_PRODUTO esta morto no monolito; SoT runtime de busca de produto =
+  app/embeddings/product_search.py.
+
 A API publica e re-exportada abaixo.
 """
 # Nucleo (puro)

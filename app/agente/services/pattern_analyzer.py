@@ -28,10 +28,34 @@ import anthropic
 from app.utils.timezone import agora_utc_naive
 
 # Feature #5 — Memory mining cross-subagent (SDK 0.1.60)
-from app.agente.config.feature_flags import USE_SUBAGENT_MEMORY_MINING
+from app.agente.config.feature_flags import (
+    USE_SUBAGENT_MEMORY_MINING,
+    USE_DETERMINISTIC_MEMORY_PATH,
+)
 from app.agente.sdk.subagent_reader import get_session_subagents_summary
 
 logger = logging.getLogger(__name__)
+
+# ── Enum de dominios validos (T0.4 F0 arquitetura-conhecimento) ──────────────
+# Derivado dos dominios em uso em PROD (2026-06-11): financeiro 51, integracao 36,
+# expedicao 22, recebimento 12, carvia 11, estoque 10, producao 7, fiscal 6,
+# comercial 6, logistica 5 + portal + geral (fallback)
+DOMINIOS_VALIDOS: frozenset = frozenset({
+    'financeiro', 'integracao', 'expedicao', 'recebimento', 'estoque',
+    'producao', 'fiscal', 'comercial', 'logistica', 'carvia', 'portal', 'geral',
+})
+
+# Aliases: dominios fora do enum que mapeiam para canonico
+_DOMINIO_ALIASES: dict = {
+    'odoo': 'integracao',
+    'agente': 'geral',
+    'operacional': 'geral',
+}
+
+# Threshold conservador para dedup por titulo (cosine similarity)
+# Alto (0.85) para evitar fundir vizinhos legitimos; match vira enriquecimento
+# do slot existente (versionado), nao overwrite.
+TITLE_DEDUP_THRESHOLD: float = 0.85
 
 
 SONNET_MODEL = "claude-sonnet-4-6"
@@ -959,7 +983,7 @@ Retorne JSON VALIDO com esta estrutura (array vazio se nao encontrar nada):
       "titulo": "4-10 palavras, manchete do conhecimento",
       "tipo": "protocolo|armadilha|heuristica",
       "nivel": 3,
-      "dominio": "texto livre (ex: recebimento, financeiro, comercial, logistica, carvia, producao, integracao)",
+      "dominio": "um de: financeiro|integracao|expedicao|recebimento|estoque|producao|fiscal|comercial|logistica|carvia|portal|geral",
       "criterios_atendidos": [1, 3],
       "descricao": "Descricao GENERICA do conhecimento (SEM valores absolutos, NFs, datas ou CNPJs especificos — generalize o padrao)",
       "prescricao": "Quando [situacao generica], o agente deve [acao] porque [razao]"
@@ -1110,6 +1134,12 @@ def _build_knowledge_path(
     Usa titulo (gerado pelo Sonnet) como fonte primaria do slug.
     Fallback para descricao se titulo estiver vazio.
 
+    Quando USE_DETERMINISTIC_MEMORY_PATH=True (default), valida e normaliza
+    o dominio contra DOMINIOS_VALIDOS (enum de 12 valores). Aliases (odoo->
+    integracao, agente->geral, operacional->geral) sao aplicados; dominios
+    desconhecidos fazem fallback para 'geral'. Com flag=False, dominio entra
+    livre como antes (backward-compat).
+
     Exemplos:
         - /memories/empresa/protocolos/recebimento/diagnostico-nf-ausente-odoo.xml
         - /memories/empresa/armadilhas/financeiro/update-frete-nao-recalcula-margem.xml
@@ -1128,8 +1158,25 @@ def _build_knowledge_path(
         "relacional": "heuristicas",
     }
     subdir = _TIPO_TO_SUBDIR.get(tipo, "protocolos")
-    if dominio:
-        subdir = f"{subdir}/{dominio}"
+
+    # (a) Normalizacao deterministica de dominio (flag-gated)
+    if USE_DETERMINISTIC_MEMORY_PATH:
+        dominio_norm = dominio.strip().lower() if dominio else ''
+        dominio_norm = _DOMINIO_ALIASES.get(dominio_norm, dominio_norm)
+        if dominio_norm not in DOMINIOS_VALIDOS:
+            if dominio_norm:
+                logger.debug(
+                    f"[KNOWLEDGE_EXTRACTION] Dominio '{dominio_norm}' fora do enum "
+                    f"— fallback para 'geral'"
+                )
+            dominio_norm = 'geral'
+    else:
+        # Flag OFF: dominio passa byte-identico (sem strip/lower) —
+        # comportamento pre-flag intacto.
+        dominio_norm = dominio
+
+    if dominio_norm:
+        subdir = f"{subdir}/{dominio_norm}"
 
     # Titulo eh fonte primaria do slug (gerado pelo Sonnet com 4-10 palavras)
     slug_source = titulo.strip() if titulo else descricao[:80]
@@ -1139,6 +1186,128 @@ def _build_knowledge_path(
     if not slug:
         return ""
     return f"/memories/empresa/{subdir}/{slug}.xml"
+
+
+def _find_existing_path_by_title(titulo: str, kind_subdir: str) -> Optional[str]:
+    """Guard adicional de dedup por embedding de TITULO antes de criar path novo.
+
+    Busca memorias existentes do mesmo kind (ex: 'armadilhas') e compara o
+    embedding do titulo candidato contra os titulos reconstituidos dos slugs
+    existentes. Se similaridade >= TITLE_DEDUP_THRESHOLD (0.85), retorna o
+    path existente — o caller usara esse path no _try_enrich_existing em vez
+    de criar arquivo novo.
+
+    Complementa _find_similar_empresa_memory (que opera em DESCRICAO com
+    threshold 0.80 via dedup_embedding no banco). Este guard opera em TITULO
+    via batch embed em Python puro, antes de qualquer gravacao.
+
+    Args:
+        titulo: Titulo candidato do novo conhecimento (4-10 palavras Sonnet).
+        kind_subdir: Subdiretorio do kind (ex: 'armadilhas', 'protocolos').
+
+    Returns:
+        Path da memoria existente similar, ou None se nao encontrou (incluindo
+        qualquer falha — best-effort: excecao -> None).
+    """
+    try:
+        from app.embeddings.config import EMBEDDINGS_ENABLED, MEMORY_SEMANTIC_SEARCH
+        if not EMBEDDINGS_ENABLED or not MEMORY_SEMANTIC_SEARCH:
+            return None
+
+        titulo = titulo.strip()
+        if not titulo:
+            return None
+
+        # Importa via modulo para permitir patch nos testes
+        import app.agente.models as _agente_models
+        import app.embeddings.service as _emb_service
+        AgentMemory = _agente_models.AgentMemory
+        EmbeddingService = _emb_service.EmbeddingService
+
+        # Busca paths do mesmo kind. Cap defensivo: corpus hoje ~85/kind;
+        # se crescer 500+, embeddar tudo por save degrada o pipeline —
+        # mais recentes primeiro (mais propensas a dedup).
+        pattern = f'/memories/empresa/{kind_subdir}/%'
+        rows = AgentMemory.query.filter(
+            AgentMemory.user_id == 0,
+            AgentMemory.is_directory == False,  # noqa: E712
+            AgentMemory.path.like(pattern),
+        ).with_entities(AgentMemory.path)\
+            .order_by(AgentMemory.updated_at.desc()).limit(200).all()
+
+        if not rows:
+            return None
+
+        # Reconstroi titulos a partir dos slugs (slug = filename sem .xml)
+        existing_paths = []
+        existing_titles = []
+        for (path,) in rows:
+            filename = path.rsplit('/', 1)[-1]
+            slug = filename.replace('.xml', '')
+            titulo_existente = slug.replace('-', ' ')
+            existing_paths.append(path)
+            existing_titles.append(titulo_existente)
+
+        # Embed em batch unico: [titulo_novo] + titulos_existentes
+        svc = EmbeddingService()
+        all_texts = [titulo] + existing_titles
+        vectors = svc.embed_texts(all_texts, input_type="document")
+
+        if not vectors or len(vectors) < 2:
+            return None
+
+        # Calcula similaridade de cosseno em Python puro
+        vec_new = vectors[0]
+        best_sim = -1.0
+        best_path = None
+
+        try:
+            import numpy as np
+            v_new = np.array(vec_new, dtype=float)
+            norm_new = float(np.linalg.norm(v_new))
+            if norm_new == 0:
+                return None
+            for idx, vec_existing in enumerate(vectors[1:]):
+                v_ex = np.array(vec_existing, dtype=float)
+                norm_ex = float(np.linalg.norm(v_ex))
+                if norm_ex == 0:
+                    continue
+                sim = float(np.dot(v_new, v_ex) / (norm_new * norm_ex))
+                if sim > best_sim:
+                    best_sim = sim
+                    best_path = existing_paths[idx]
+        except ImportError:
+            # numpy nao disponivel: fallback produto escalar puro Python
+            def _dot(a, b):
+                return sum(x * y for x, y in zip(a, b))
+
+            def _norm(a):
+                return sum(x * x for x in a) ** 0.5
+
+            norm_new = _norm(vec_new)
+            if norm_new == 0:
+                return None
+            for idx, vec_existing in enumerate(vectors[1:]):
+                norm_ex = _norm(vec_existing)
+                if norm_ex == 0:
+                    continue
+                sim = _dot(vec_new, vec_existing) / (norm_new * norm_ex)
+                if sim > best_sim:
+                    best_sim = sim
+                    best_path = existing_paths[idx]
+
+        if best_sim >= TITLE_DEDUP_THRESHOLD and best_path:
+            logger.info(
+                f"[KNOWLEDGE_EXTRACTION] Dedup por titulo: '{titulo}' similar a "
+                f"'{best_path}' (sim={best_sim:.3f}) -> enriquecimento"
+            )
+            return best_path
+
+        return None
+
+    except Exception as e:
+        logger.debug(f"[KNOWLEDGE_EXTRACTION] Dedup por titulo falhou (ignorado): {e}")
+        return None
 
 
 def _save_empresa_memory(
@@ -1359,8 +1528,23 @@ def _save_conhecimentos_v3(
         )
         content = render_content(meta)
 
+        # ── (b) Dedup por titulo: guard adicional antes de criar path novo ──
+        # Opera somente quando o path exato nao existe (evitar busca de embedding
+        # desnecessaria para o caso comum de enriquecimento por path identico).
+        # Se titulo similar encontrado, redireciona o enriquecimento para o slot
+        # existente em vez de criar arquivo novo com slug diferente.
+        enrich_path = path
+        if USE_DETERMINISTIC_MEMORY_PATH and titulo:
+            from ..models import AgentMemory as _AM
+            if not _AM.get_by_path(0, path):
+                # Path exato nao existe — checar se ha memoria de mesmo titulo
+                kind_subdir = path.split('/memories/empresa/', 1)[-1].split('/')[0]
+                existing_by_title = _find_existing_path_by_title(titulo, kind_subdir)
+                if existing_by_title:
+                    enrich_path = existing_by_title
+
         # ── Tentar enriquecer memoria existente antes de criar nova ──
-        enriched = _try_enrich_existing(path, content, created_by, descricao)
+        enriched = _try_enrich_existing(enrich_path, content, created_by, descricao)
         if enriched:
             counts['enriched'] += 1
         elif _save_empresa_memory(path, content, created_by, meta=meta,
@@ -1514,26 +1698,37 @@ def _merge_memories_via_sonnet(old_content: str, new_content: str) -> Optional[s
 
     Returns:
         Conteudo fundido, ou None se merge falhou (caller mantem original).
+        None faz o caller cair no APPEND legado, que concatena os dois conteudos
+        integralmente — fallback seguro por construcao (zero perda de informacao).
 
-    Custo: ~$0.002 por merge (~2K input, ~500 output Sonnet).
+    Custo: ~$0.002 (sem perda) a ~$0.008 (retry com re-verificacao).
     """
     try:
+        # Import lazy dentro da funcao — sem risco de circular (memory_consolidator
+        # nao importa pattern_analyzer, verificado no modulo).
+        from app.agente.services.memory_consolidator import (
+            VERIFICATION_SYSTEM_PROMPT,
+            VERIFICATION_MAX_TOKENS,
+        )
+
+        merge_system_prompt = (
+            "Voce recebe duas versoes de uma memoria organizacional sobre o MESMO tema. "
+            "Produza UMA UNICA versao que:\n"
+            "1. Preserve TODA informacao unica de ambas (fatos, prescricoes, exemplos)\n"
+            "2. Elimine repeticoes e redundancias\n"
+            "3. Mantenha estrutura XML valida\n"
+            "4. Fique com no maximo 2000 caracteres\n"
+            "5. Mantenha tom prescritivo (QUANDO X, FACA Y)\n\n"
+            "Retorne APENAS o XML final, sem explicacoes."
+        )
+
         client = anthropic.Anthropic()
         response = client.messages.create(
             model=SONNET_MODEL,
             max_tokens=1500,
             system=[{
                 "type": "text",
-                "text": (
-                    "Voce recebe duas versoes de uma memoria organizacional sobre o MESMO tema. "
-                    "Produza UMA UNICA versao que:\n"
-                    "1. Preserve TODA informacao unica de ambas (fatos, prescricoes, exemplos)\n"
-                    "2. Elimine repeticoes e redundancias\n"
-                    "3. Mantenha estrutura XML valida\n"
-                    "4. Fique com no maximo 2000 caracteres\n"
-                    "5. Mantenha tom prescritivo (QUANDO X, FACA Y)\n\n"
-                    "Retorne APENAS o XML final, sem explicacoes."
-                ),
+                "text": merge_system_prompt,
                 "cache_control": {"type": "ephemeral"},
             }],
             messages=[{
@@ -1554,6 +1749,108 @@ def _merge_memories_via_sonnet(old_content: str, new_content: str) -> Optional[s
             return None
         if len(merged) > 2500:
             merged = merged[:2500]
+
+        # Verificacao TODOS_PRESERVADOS: garante que fatos de ambas as versoes
+        # foram preservados no merge. Portado do memory_consolidator.py:547-630.
+        # Verificacao e best-effort: exception na API aceita o merged (nao pode
+        # derrubar o pipeline de enriquecimento).
+        try:
+            verify_response = client.messages.create(
+                model=SONNET_MODEL,
+                max_tokens=VERIFICATION_MAX_TOKENS,
+                system=[{
+                    "type": "text",
+                    "text": VERIFICATION_SYSTEM_PROMPT,
+                    "cache_control": {"type": "ephemeral"},
+                }],
+                messages=[{
+                    "role": "user",
+                    "content": (
+                        f"NOTAS ORIGINAIS:\n"
+                        f"VERSAO A:\n{old_content[:2000]}\n\n"
+                        f"VERSAO B:\n{new_content[:2000]}\n\n"
+                        f"VERSAO FUNDIDA:\n{merged}\n\n"
+                        f"FATOS PERDIDOS (ou \"TODOS_PRESERVADOS\"):"
+                    ),
+                }],
+            )
+            verify_text = verify_response.content[0].text.strip()
+
+            if "TODOS_PRESERVADOS" not in verify_text.upper():
+                # Fatos perdidos detectados — retry unico com instrucao explicita
+                logger.warning(
+                    f"[KNOWLEDGE_EXTRACTION] Fatos perdidos no merge, tentando retry: "
+                    f"{verify_text[:200]}"
+                )
+                retry_prompt = (
+                    f"VERSAO EXISTENTE:\n{old_content[:2000]}\n\n"
+                    f"NOVO CONTEUDO:\n{new_content[:2000]}\n\n"
+                    f"ATENCAO: o merge anterior perdeu estes fatos — "
+                    f"INCLUA-OS obrigatoriamente:\n{verify_text}\n\n"
+                    f"Produza a versao fundida corrigida (maximo 2500 caracteres):"
+                )
+                retry_response = client.messages.create(
+                    model=SONNET_MODEL,
+                    max_tokens=1500,
+                    system=[{
+                        "type": "text",
+                        "text": merge_system_prompt,
+                        "cache_control": {"type": "ephemeral"},
+                    }],
+                    messages=[{"role": "user", "content": retry_prompt}],
+                )
+                retry_merged = retry_response.content[0].text.strip()
+
+                # Re-verifica o retry
+                reverify_response = client.messages.create(
+                    model=SONNET_MODEL,
+                    max_tokens=VERIFICATION_MAX_TOKENS,
+                    system=[{
+                        "type": "text",
+                        "text": VERIFICATION_SYSTEM_PROMPT,
+                        "cache_control": {"type": "ephemeral"},
+                    }],
+                    messages=[{
+                        "role": "user",
+                        "content": (
+                            f"NOTAS ORIGINAIS:\n"
+                            f"VERSAO A:\n{old_content[:2000]}\n\n"
+                            f"VERSAO B:\n{new_content[:2000]}\n\n"
+                            f"VERSAO FUNDIDA:\n{retry_merged}\n\n"
+                            f"FATOS PERDIDOS (ou \"TODOS_PRESERVADOS\"):"
+                        ),
+                    }],
+                )
+                reverify_text = reverify_response.content[0].text.strip()
+
+                if "TODOS_PRESERVADOS" not in reverify_text.upper():
+                    # Retry tambem perdeu fatos — retorna None para o caller usar
+                    # APPEND legado, que preserva os dois conteudos integralmente.
+                    logger.warning(
+                        f"[KNOWLEDGE_EXTRACTION] Retry do merge ainda perde fatos — "
+                        f"usando append legado: {reverify_text[:200]}"
+                    )
+                    return None
+
+                # Retry passou na verificacao — aplicar truncamento e aceitar
+                if retry_merged and len(retry_merged) >= 20:
+                    if len(retry_merged) > 2500:
+                        retry_merged = retry_merged[:2500]
+                    merged = retry_merged
+                    logger.info(
+                        f"[KNOWLEDGE_EXTRACTION] Merge retry OK: {len(merged)} chars"
+                    )
+                else:
+                    return None
+            else:
+                logger.debug("[KNOWLEDGE_EXTRACTION] Verificacao OK: TODOS_PRESERVADOS")
+
+        except Exception as verify_err:
+            # Verificacao best-effort: falha na API aceita o merged original
+            logger.debug(
+                f"[KNOWLEDGE_EXTRACTION] Verificacao falhou (aceitando merged original): "
+                f"{verify_err}"
+            )
 
         logger.info(
             f"[KNOWLEDGE_EXTRACTION] Merge via Sonnet: "
@@ -1622,7 +1919,9 @@ def _try_enrich_existing(
             if merged:
                 enriched = merged
             else:
-                # Fallback: append legado se Sonnet falhar
+                # Fallback: append legado se Sonnet falhar (ou verificacao detectar
+                # perda de fatos apos retry). Append preserva os dois conteudos
+                # integralmente — fallback seguro por construcao.
                 enriched = (
                     f"{existing.content}\n"
                     f"<!-- Enriquecido em {agora_utc_naive().strftime('%Y-%m-%d')} -->\n"
@@ -1650,6 +1949,18 @@ def _try_enrich_existing(
         # _parse_bracket sobrescreveria o DO: do 1o bloco com o do 2o (perda de
         # dado). Preserva o content concatenado + meta best-effort.
         from .memory_format import normalize_for_storage, parse_memory
+
+        # Versionar o conteudo atual ANTES de sobrescrever — salvaguarda contra
+        # merge destrutivo. Segue padrao de memory_mcp_tool.py:2074.
+        # Cobre AMBOS os caminhos (merge e append) pois ambos sobrescrevem o content.
+        from ..models import AgentMemoryVersion
+        if existing.content is not None:
+            AgentMemoryVersion.save_version(
+                memory_id=existing.id,
+                content=existing.content,
+                changed_by='sonnet',
+            )
+
         if '<!-- Enriquecido em' in enriched:
             content_norm, meta_norm = enriched, parse_memory(enriched)
         else:

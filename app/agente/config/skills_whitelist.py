@@ -69,7 +69,7 @@ SKILLS_DOMINIO_ASSAI: Set[str] = {
 # ---------------------------------------------------------------------------
 # Operacoes de ESCRITA de estoque no Odoo -> subagente `gestor-estoque-odoo`
 # Arquitetura orquestrador: principal DELEGA estas operacoes (sempre --dry-run +
-# confirmacao). Ver memory arquitetura_orquestrador_odoo + frontmatter
+# confirmacao). Ver app/odoo/estoque/CLAUDE.md (constituicao do orquestrador) + frontmatter
 # `.claude/agents/gestor-estoque-odoo.md` (declara estas skills).
 # ---------------------------------------------------------------------------
 SKILLS_ODOO_ESTOQUE_SUBAGENTE: Set[str] = {

@@ -286,6 +286,15 @@ COLD_GC_MAX_AGE_DAYS = int(os.getenv("AGENT_COLD_GC_MAX_AGE_DAYS", "90"))
 # Rollback instantaneo: AGENT_MERGE_ENRICHMENT=false
 USE_MERGE_ENRICHMENT = os.getenv("AGENT_MERGE_ENRICHMENT", "true").lower() == "true"
 
+# Path deterministico da memoria empresa (T0.4 F0 arquitetura-conhecimento)
+# Quando true (default): valida dominio contra enum de 12 valores em _build_knowledge_path
+#   + dedup por embedding de TITULO antes de criar path novo em _save_conhecimentos_v3.
+# Quando false: comportamento legado (dominio texto-livre, sem dedup por titulo).
+# Rollback instantaneo: AGENT_DETERMINISTIC_MEMORY_PATH=false
+USE_DETERMINISTIC_MEMORY_PATH = os.getenv(
+    "AGENT_DETERMINISTIC_MEMORY_PATH", "true"
+).lower() == "true"
+
 # Briefing Inter-Sessão — injeta eventos entre sessões (erros Odoo, imports, alertas de memória)
 # Queries SQL leves, zero custo LLM. Injetado como Tier 0b no início da sessão.
 # Default true (env AGENT_INTERSESSION_BRIEFING)
