@@ -1514,10 +1514,19 @@ def _merge_memories_via_sonnet(old_content: str, new_content: str) -> Optional[s
 
     Returns:
         Conteudo fundido, ou None se merge falhou (caller mantem original).
+        None faz o caller cair no APPEND legado, que concatena os dois conteudos
+        integralmente — fallback seguro por construcao (zero perda de informacao).
 
     Custo: ~$0.002 por merge (~2K input, ~500 output Sonnet).
     """
     try:
+        # Import lazy dentro da funcao — sem risco de circular (memory_consolidator
+        # nao importa pattern_analyzer, verificado no modulo).
+        from app.agente.services.memory_consolidator import (
+            VERIFICATION_SYSTEM_PROMPT,
+            VERIFICATION_MAX_TOKENS,
+        )
+
         client = anthropic.Anthropic()
         response = client.messages.create(
             model=SONNET_MODEL,
@@ -1554,6 +1563,117 @@ def _merge_memories_via_sonnet(old_content: str, new_content: str) -> Optional[s
             return None
         if len(merged) > 2500:
             merged = merged[:2500]
+
+        # Verificacao TODOS_PRESERVADOS: garante que fatos de ambas as versoes
+        # foram preservados no merge. Portado do memory_consolidator.py:547-630.
+        # Verificacao e best-effort: exception na API aceita o merged (nao pode
+        # derrubar o pipeline de enriquecimento).
+        try:
+            verify_response = client.messages.create(
+                model=SONNET_MODEL,
+                max_tokens=VERIFICATION_MAX_TOKENS,
+                system=[{
+                    "type": "text",
+                    "text": VERIFICATION_SYSTEM_PROMPT,
+                    "cache_control": {"type": "ephemeral"},
+                }],
+                messages=[{
+                    "role": "user",
+                    "content": (
+                        f"NOTAS ORIGINAIS:\n"
+                        f"VERSAO A:\n{old_content}\n\n"
+                        f"VERSAO B:\n{new_content}\n\n"
+                        f"VERSAO FUNDIDA:\n{merged}\n\n"
+                        f"FATOS PERDIDOS (ou \"TODOS_PRESERVADOS\"):"
+                    ),
+                }],
+            )
+            verify_text = verify_response.content[0].text.strip()
+
+            if "TODOS_PRESERVADOS" not in verify_text.upper():
+                # Fatos perdidos detectados — retry unico com instrucao explícita
+                logger.warning(
+                    f"[KNOWLEDGE_EXTRACTION] Fatos perdidos no merge, tentando retry: "
+                    f"{verify_text[:200]}"
+                )
+                retry_prompt = (
+                    f"VERSAO EXISTENTE:\n{old_content[:2000]}\n\n"
+                    f"NOVO CONTEUDO:\n{new_content[:2000]}\n\n"
+                    f"ATENCAO: o merge anterior perdeu estes fatos — "
+                    f"INCLUA-OS obrigatoramente:\n{verify_text}\n\n"
+                    f"Produza a versao fundida corrigida (maximo 2500 caracteres):"
+                )
+                retry_response = client.messages.create(
+                    model=SONNET_MODEL,
+                    max_tokens=1500,
+                    system=[{
+                        "type": "text",
+                        "text": (
+                            "Voce recebe duas versoes de uma memoria organizacional sobre o MESMO tema. "
+                            "Produza UMA UNICA versao que:\n"
+                            "1. Preserve TODA informacao unica de ambas (fatos, prescricoes, exemplos)\n"
+                            "2. Elimine repeticoes e redundancias\n"
+                            "3. Mantenha estrutura XML valida\n"
+                            "4. Fique com no maximo 2000 caracteres\n"
+                            "5. Mantenha tom prescritivo (QUANDO X, FACA Y)\n\n"
+                            "Retorne APENAS o XML final, sem explicacoes."
+                        ),
+                        "cache_control": {"type": "ephemeral"},
+                    }],
+                    messages=[{"role": "user", "content": retry_prompt}],
+                )
+                retry_merged = retry_response.content[0].text.strip()
+
+                # Re-verifica o retry
+                reverify_response = client.messages.create(
+                    model=SONNET_MODEL,
+                    max_tokens=VERIFICATION_MAX_TOKENS,
+                    system=[{
+                        "type": "text",
+                        "text": VERIFICATION_SYSTEM_PROMPT,
+                        "cache_control": {"type": "ephemeral"},
+                    }],
+                    messages=[{
+                        "role": "user",
+                        "content": (
+                            f"NOTAS ORIGINAIS:\n"
+                            f"VERSAO A:\n{old_content}\n\n"
+                            f"VERSAO B:\n{new_content}\n\n"
+                            f"VERSAO FUNDIDA:\n{retry_merged}\n\n"
+                            f"FATOS PERDIDOS (ou \"TODOS_PRESERVADOS\"):"
+                        ),
+                    }],
+                )
+                reverify_text = reverify_response.content[0].text.strip()
+
+                if "TODOS_PRESERVADOS" not in reverify_text.upper():
+                    # Retry tambem perdeu fatos — retorna None para o caller usar
+                    # APPEND legado, que preserva os dois conteudos integralmente.
+                    logger.warning(
+                        f"[KNOWLEDGE_EXTRACTION] Retry do merge ainda perde fatos — "
+                        f"usando append legado: {reverify_text[:200]}"
+                    )
+                    return None
+
+                # Retry passou na verificacao — aplicar truncamento e aceitar
+                if retry_merged and len(retry_merged) >= 20:
+                    if len(retry_merged) > 2500:
+                        retry_merged = retry_merged[:2500]
+                    merged = retry_merged
+                    logger.info(
+                        f"[KNOWLEDGE_EXTRACTION] Merge retry OK: {len(merged)} chars"
+                    )
+                else:
+                    return None
+            else:
+                logger.debug("[KNOWLEDGE_EXTRACTION] Verificacao OK: TODOS_PRESERVADOS")
+
+        except Exception as verify_err:
+            # Verificacao best-effort: falha na API aceita o merged original
+            logger.debug(
+                f"[KNOWLEDGE_EXTRACTION] Verificacao falhou (aceitando merged original): "
+                f"{verify_err}"
+            )
 
         logger.info(
             f"[KNOWLEDGE_EXTRACTION] Merge via Sonnet: "
@@ -1622,7 +1742,9 @@ def _try_enrich_existing(
             if merged:
                 enriched = merged
             else:
-                # Fallback: append legado se Sonnet falhar
+                # Fallback: append legado se Sonnet falhar (ou verificacao detectar
+                # perda de fatos apos retry). Append preserva os dois conteudos
+                # integralmente — fallback seguro por construcao.
                 enriched = (
                     f"{existing.content}\n"
                     f"<!-- Enriquecido em {agora_utc_naive().strftime('%Y-%m-%d')} -->\n"
@@ -1650,6 +1772,18 @@ def _try_enrich_existing(
         # _parse_bracket sobrescreveria o DO: do 1o bloco com o do 2o (perda de
         # dado). Preserva o content concatenado + meta best-effort.
         from .memory_format import normalize_for_storage, parse_memory
+
+        # Versionar o conteudo atual ANTES de sobrescrever — salvaguarda contra
+        # merge destrutivo. Segue padrao de memory_mcp_tool.py:2074.
+        # Cobre AMBOS os caminhos (merge e append) pois ambos sobrescrevem o content.
+        from ..models import AgentMemoryVersion
+        if existing.content is not None:
+            AgentMemoryVersion.save_version(
+                memory_id=existing.id,
+                content=existing.content,
+                changed_by='sonnet',
+            )
+
         if '<!-- Enriquecido em' in enriched:
             content_norm, meta_norm = enriched, parse_memory(enriched)
         else:
