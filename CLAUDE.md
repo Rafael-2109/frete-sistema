@@ -181,6 +181,7 @@ Gotchas rapidos:
 | `gestor-carvia` | Operacoes CarVia cross-dimensional (ops + entregas + frete) |
 | `gestor-ssw` | Operacoes SSW multi-step (POP-A10, cadastros) |
 | `auditor-financeiro` | Reconciliacao financeira, auditoria Local vs Odoo, SEM_MATCH |
+| `auditor-sped-ecd` | Auditar SPED ECD gerado vs Manual Leiaute 9 + ground truth contadora (4 skills exclusivas parseando/auditando/comparando-sped) |
 | `controlador-custo-frete` | Custo real frete, divergencia CTe, conta corrente transportadoras |
 | `gestor-recebimento` | Pipeline recebimento 4 fases, DFEs bloqueados, troubleshooting |
 | `gestor-devolucoes` | Devolucoes NFD, De-Para AI, descarte vs retorno |
@@ -188,6 +189,7 @@ Gotchas rapidos:
 | `gestor-estoque-odoo` | Operacoes de **escrita** de estoque no Odoo + consulta AO VIVO (quants, transferencias, reservas, pickings, MOs, escrituracao entrada, faturamento saida) — SEMPRE dry-run + confirmacao. Status/versao das skills atomicas: `app/odoo/estoque/CLAUDE.md` + `ROADMAP_SKILLS.md` |
 | `analista-performance-logistica` | KPIs entrega, ranking transportadoras, atrasos (read-only) |
 | `gestor-motos-assai` | Pipeline B2B Q.P.A. Sendas/Assaí (estoque, recibo, separação, NF) |
+| `orientador-loja` | Perguntas cross-entidade Lojas HORA (pedido+NF+recebimento+chassi) — exclusivo Agente Lojas HORA |
 
 ### Confiabilidade de Output (OBRIGATORIO)
 

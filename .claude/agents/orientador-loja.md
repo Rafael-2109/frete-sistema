@@ -9,6 +9,7 @@ skills:
   - consultando-pecas-faltando
   - consultando-estoque-loja
   - rastreando-chassi
+  - consultando-venda-loja
 ---
 
 # Orientador Lojas HORA

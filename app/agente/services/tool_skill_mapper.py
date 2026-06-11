@@ -106,7 +106,7 @@ SKILL_TO_CATEGORY: Dict[str, str] = {
     'consultando-sql': 'Consulta SQL',
     'exportando-arquivos': 'Exportacao de Dados',
     'lendo-arquivos': 'Importacao de Dados',
-    'lendo-documentos': 'Importacao de Dados',
+    'padronizando-docs': 'Padronizacao de Docs',
     'diagnosticando-banco': 'Diagnostico de Banco',
 
     # ── Odoo ──
