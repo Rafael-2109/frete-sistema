@@ -1385,8 +1385,58 @@ def imprimir_separacao(embarque_id, separacao_lote_id):
     response.headers['Content-Type'] = 'text/html; charset=utf-8'
     return response
 
+
+@embarques_bp.route('/<int:embarque_id>/item/<int:item_id>/imprimir-docs-carvia')
+@login_required
+@require_embarques()  # 🔒 mesma proteção da tela de visualização do embarque
+def imprimir_docs_carvia(embarque_id, item_id):
+    """Gera UM PDF unico com NF (DANFE) + CTe CarVia (DACTE) + Fatura CarVia de
+    um item CarVia do embarque (atalho de impressao consolidada).
+
+    Item elegivel: CarVia com NF (separacao_lote_id == 'CARVIA-NF-{nf_id}') e
+    nao-provisorio. Documentos ausentes (ex.: CTe nao emitido) sao sinalizados
+    na folha de rosto — o PDF e gerado com os disponiveis (decisao 2026-06-11).
+    """
+    from io import BytesIO
+    from flask import send_file
+    from app.embarques.services.docs_carvia_service import (
+        gerar_pdf_docs_carvia, PREFIXO_LOTE_NF,
+    )
+
+    # Validacao backend: item existe e pertence a ESTE embarque
+    item = db.session.get(EmbarqueItem, item_id)
+    if item is None or item.embarque_id != embarque_id:
+        flash('Item não encontrado neste embarque.', 'warning')
+        return redirect(url_for('embarques.visualizar_embarque', id=embarque_id))
+
+    # Validacao backend: e CarVia com NF e nao-provisorio
+    lote = str(item.separacao_lote_id or '')
+    if not lote.startswith(PREFIXO_LOTE_NF) or item.provisorio:
+        flash('Este item não é um item CarVia com NF — sem documentos para imprimir.', 'warning')
+        return redirect(url_for('embarques.visualizar_embarque', id=embarque_id))
+
+    try:
+        pdf_bytes, resumo = gerar_pdf_docs_carvia(item)
+    except ValueError as e:
+        logger.warning(f"[DOCS_CARVIA] item={item_id} embarque={embarque_id}: {e}")
+        flash(f'Não foi possível gerar os documentos CarVia: {e}', 'danger')
+        return redirect(url_for('embarques.visualizar_embarque', id=embarque_id))
+    except Exception as e:
+        logger.error(f"[DOCS_CARVIA] erro inesperado item={item_id}: {e}")
+        flash('Erro ao gerar o PDF consolidado dos documentos CarVia.', 'danger')
+        return redirect(url_for('embarques.visualizar_embarque', id=embarque_id))
+
+    download_name = f"docs_carvia_NF{resumo.get('numero_nf') or item_id}.pdf"
+    return send_file(
+        BytesIO(pdf_bytes),
+        mimetype='application/pdf',
+        as_attachment=False,  # abre inline em nova aba (Ctrl+P imprime os 3 juntos)
+        download_name=download_name,
+    )
+
+
 @embarques_bp.route('/<int:embarque_id>/imprimir_embarque')
-@login_required 
+@login_required
 def imprimir_embarque(embarque_id):
     """
     Gera relatório de impressão apenas do embarque individual (sem separações)

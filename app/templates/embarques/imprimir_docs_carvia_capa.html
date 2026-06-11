@@ -1,0 +1,154 @@
+{#
+  Folha de rosto da impressao consolidada de documentos CarVia de um item de
+  embarque. Renderizada para PDF via weasyprint (app/embarques/services/docs_carvia_service.py).
+
+  weasyprint NAO carrega o CSS do app (sem servidor de assets no render do PDF),
+  entao todo o estilo e inline / <style> local.
+
+  Contexto:
+    item    -> EmbarqueItem
+    embarque-> Embarque (pode ser None)
+    nf      -> CarviaNf
+    resumo  -> dict com nf_id/numero_nf
+    docs    -> lista de (rotulo, {status, paginas, ref})
+#}
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<style>
+  @page { size: A4; margin: 1.6cm; }
+  * { box-sizing: border-box; }
+  body {
+    font-family: "Helvetica Neue", Arial, sans-serif;
+    color: #1a1a1a;
+    font-size: 12px;
+    line-height: 1.45;
+  }
+  .header {
+    border-bottom: 3px solid #17a2b8;
+    padding-bottom: 10px;
+    margin-bottom: 18px;
+  }
+  .header h1 { font-size: 19px; margin: 0 0 2px 0; color: #0c5460; }
+  .header .sub { font-size: 11px; color: #555; }
+  .badge-carvia {
+    display: inline-block; background: #17a2b8; color: #fff;
+    font-size: 10px; font-weight: bold; padding: 2px 8px;
+    border-radius: 4px; letter-spacing: .5px;
+  }
+  table.dados { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+  table.dados td { padding: 4px 6px; vertical-align: top; border-bottom: 1px solid #eee; }
+  table.dados td.label { width: 28%; color: #666; font-weight: bold; }
+  h2.secao { font-size: 14px; color: #0c5460; margin: 8px 0 8px 0; }
+  table.checklist { width: 100%; border-collapse: collapse; }
+  table.checklist th {
+    text-align: left; background: #f1f5f7; padding: 7px 8px;
+    border-bottom: 2px solid #cfd8dc; font-size: 11px;
+  }
+  table.checklist td { padding: 8px; border-bottom: 1px solid #e4e9eb; }
+  .st { font-weight: bold; padding: 2px 8px; border-radius: 4px; font-size: 11px; }
+  .st-incluido { background: #d4edda; color: #155724; }
+  .st-faltante { background: #f8d7da; color: #721c24; }
+  .st-erro     { background: #fff3cd; color: #856404; }
+  .aviso {
+    margin-top: 18px; padding: 10px 12px; border-left: 4px solid #dc3545;
+    background: #fdf0f1; font-size: 11px; color: #721c24;
+  }
+  .ok-todos {
+    margin-top: 18px; padding: 10px 12px; border-left: 4px solid #28a745;
+    background: #effaf1; font-size: 11px; color: #155724;
+  }
+  .footer { margin-top: 26px; font-size: 10px; color: #999; text-align: center; }
+</style>
+</head>
+<body>
+  <div class="header">
+    <span class="badge-carvia">CARVIA</span>
+    <h1>Documentos do Frete — Impressão Consolidada</h1>
+    <div class="sub">NF + CTe CarVia + Fatura CarVia · gerado a partir do embarque</div>
+  </div>
+
+  <table class="dados">
+    <tr>
+      <td class="label">Embarque</td>
+      <td>
+        {% if embarque %}Nº {{ embarque.numero or embarque.id }}{% else %}—{% endif %}
+        {% if embarque and embarque.data_embarque %} · Embarcado em {{ embarque.data_embarque.strftime('%d/%m/%Y') }}{% endif %}
+      </td>
+    </tr>
+    <tr>
+      <td class="label">Cliente</td>
+      <td>{{ item.cliente or nf.nome_destinatario or '—' }}</td>
+    </tr>
+    <tr>
+      <td class="label">Pedido</td>
+      <td>{{ item.pedido or '—' }}</td>
+    </tr>
+    <tr>
+      <td class="label">Nota Fiscal</td>
+      <td>
+        {{ nf.numero_nf }}{% if nf.serie_nf %}-{{ nf.serie_nf }}{% endif %}
+        {% if nf.data_emissao %} · Emitida em {{ nf.data_emissao.strftime('%d/%m/%Y') }}{% endif %}
+      </td>
+    </tr>
+    <tr>
+      <td class="label">Remetente</td>
+      <td>{{ nf.nome_emitente or '—' }}{% if nf.cidade_emitente %} ({{ nf.cidade_emitente }}/{{ nf.uf_emitente }}){% endif %}</td>
+    </tr>
+    <tr>
+      <td class="label">Destinatário</td>
+      <td>{{ nf.nome_destinatario or '—' }}{% if nf.cidade_destinatario %} ({{ nf.cidade_destinatario }}/{{ nf.uf_destinatario }}){% endif %}</td>
+    </tr>
+  </table>
+
+  <h2 class="secao">Documentos incluídos neste PDF</h2>
+  <table class="checklist">
+    <thead>
+      <tr>
+        <th style="width: 42%;">Documento</th>
+        <th style="width: 28%;">Referência</th>
+        <th style="width: 18%;">Situação</th>
+        <th style="width: 12%;">Págs.</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% set ns = namespace(faltantes=0) %}
+      {% for rotulo, info in docs %}
+        {% if info.status != 'incluido' %}{% set ns.faltantes = ns.faltantes + 1 %}{% endif %}
+        <tr>
+          <td>{{ rotulo }}</td>
+          <td>{{ info.ref or '—' }}</td>
+          <td>
+            {% if info.status == 'incluido' %}
+              <span class="st st-incluido">✓ Incluído</span>
+            {% elif info.status == 'erro' %}
+              <span class="st st-erro">⚠ Arquivo inválido</span>
+            {% else %}
+              <span class="st st-faltante">✗ Não disponível</span>
+            {% endif %}
+          </td>
+          <td>{{ info.paginas or 0 }}</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  {% if ns.faltantes > 0 %}
+    <div class="aviso">
+      <strong>Atenção:</strong> {{ ns.faltantes }} documento(s) não foi(ram) incluído(s)
+      (não disponível(is) ou ainda não emitido(s)). As demais páginas deste PDF contêm
+      apenas os documentos marcados como <em>Incluído</em> acima.
+    </div>
+  {% else %}
+    <div class="ok-todos">
+      <strong>Completo:</strong> todos os 3 documentos (NF, CTe CarVia e Fatura CarVia)
+      foram incluídos neste PDF.
+    </div>
+  {% endif %}
+
+  <div class="footer">
+    Sistema de Fretes · folha de rosto gerada automaticamente
+  </div>
+</body>
+</html>
