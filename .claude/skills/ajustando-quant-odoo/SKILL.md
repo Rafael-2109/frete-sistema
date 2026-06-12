@@ -1,18 +1,14 @@
 ---
 name: ajustando-quant-odoo
 description: >-
-  Skill WRITE (átomo C1) para AJUSTAR o saldo de UM stock.quant no Odoo via
-  inventory adjustment: somar/subtrair (--delta), definir (--valor-absoluto),
-  zerar (--valor-absoluto 0), criar saldo (--criar-se-faltar) ou corrigir
-  reserva órfã/negativa (--resetar-reserva). Usar quando o pedido é "ajusta o
+  Skill WRITE (átomo C1) para ajustar o saldo de UM stock.quant no Odoo via
+  inventory adjustment: somar/subtrair, definir valor absoluto, zerar, criar
+  saldo ou corrigir reserva órfã/negativa. Usar quando o pedido é "ajusta o
   saldo do lote X", "soma N un no quant", "zera esse quant fantasma", "cria
   saldo do produto Y na empresa Z", "corrige a reserva negativa". `--dry-run`
-  é o DEFAULT; só efetiva com `--confirmar`.
-  NÃO USAR PARA:
-  - mover saldo entre 2 lotes/locais (= 2 ajustes) -> transferindo-interno-odoo
-  - transferir saldo entre CÓDIGOS de produto -> transferencia-saldo-codigo (planejada — ainda nao existe)
-  - só consultar/projetar saldo (não altera) -> subagente gestor-estoque-producao
-  - resolver/criar lote isolado (sem ajustar saldo) -> StockLotService (util)
+  é o DEFAULT; só efetiva com `--confirmar`. NÃO usar para mover saldo entre
+  2 lotes/locais -> transferindo-interno-odoo. Matriz USAR/NÃO-USAR completa
+  no corpo da skill.
 allowed-tools: Read, Bash, Glob, Grep
 ---
 
@@ -23,6 +19,21 @@ allowed-tools: Read, Bash, Glob, Grep
 de estoque: operações maiores (transferência = 2 ajustes; net-zero = N) se compõem dele.
 
 Constituição: `app/odoo/estoque/CLAUDE.md`. Service: `app/odoo/estoque/scripts/quant.py`.
+
+## Quando usar / Quando NÃO usar
+
+**USAR QUANDO** o pedido é ajustar o saldo de UM quant:
+- somar/subtrair (`--delta`), definir (`--valor-absoluto`), zerar (`--valor-absoluto 0`),
+  criar saldo (`--criar-se-faltar`) ou corrigir reserva órfã/negativa (`--resetar-reserva`);
+- "ajusta o saldo do lote X", "soma N un no quant", "zera esse quant fantasma",
+  "cria saldo do produto Y na empresa Z", "corrige a reserva negativa".
+
+**NÃO USAR PARA:**
+- mover saldo entre 2 lotes/locais (= 2 ajustes) -> `transferindo-interno-odoo`
+  (faz os 2 ajustes atomicamente)
+- transferir saldo entre CÓDIGOS de produto -> `transferencia-saldo-codigo` (planejada — ainda nao existe)
+- só consultar/projetar saldo (não altera) -> subagente `gestor-estoque-producao`
+- resolver/criar lote isolado (sem ajustar saldo) -> `StockLotService` (util)
 
 ---
 
@@ -81,7 +92,6 @@ python "$SK" --quant-id 258975 --valor-absoluto 0 --resetar-reserva --delta-espe
 - **`--delta` XOR `--valor-absoluto`** — exatamente um (argparse já força).
 - **`--criar-se-faltar` exige chave + `--delta > 0`** — não cria com `--valor-absoluto` nem por `--quant-id`; lote a criar só com saldo positivo (evita lote órfão).
 - **tracking=serial** é bloqueado (ajuste por qtd não suportado); **tracking=lot** exige `--lote`; **tracking=none** ignora `--lote`.
-- **Não usar para mover saldo** entre lotes/locais — isso é `transferindo-interno-odoo` (faz os 2 ajustes atomicamente).
 - **(NOVO 2026-05-24) Em retomadas de FALHA**, sempre passar `--delta-esperado <pedido_original>`. Sem isso, política homogênea (`--valor-absoluto 0 --resetar-reserva`) pode over-reduzir como no bug CICLAMATO 2026-05-23 (-40.7319 em vez de -7). O guard ABORTA quando diverge — re-execute com args corretos, OU use `--corrigir-para-esperado` para aplicar o pedido original automaticamente.
 - **(2026-05-24) `--delta-esperado 0` ativa o guard esperando NOOP.** Se sua planilha tem campos vazios que viram `0.0` numérico, NÃO passe para `--delta-esperado` (ou converta para `None`). Caso contrário, o guard vai bloquear qualquer ajuste real divergente de 0.
 - **(2026-05-24) `--tolerancia-delta` negativo levanta `ValueError`** (sem o erro, desarmaria o guard silenciosamente — `divergencia > -0.5` é sempre True).
