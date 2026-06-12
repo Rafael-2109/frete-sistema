@@ -37,9 +37,10 @@ ONDA3_EVAL = {'scores', 'cases'}
 ONDA3_MELHORIAS = {'list-open', 'show', 'intelligence-report'}
 
 # Onda 3 fase 3b (flywheel WRITE) — subcomandos de ESCRITA, todos atras de --confirm.
+# eval.run removido (estrategia R2, 2026-06-12): deletado junto com o eval_runner/A3.
 ONDA3_WRITE = {
     'loop': {'approve', 'reject', 'promote-batch'},
-    'eval': {'review', 'run'},
+    'eval': {'review'},
     'melhorias': {'respond'},
 }
 ONDA3_READ = {
@@ -361,7 +362,7 @@ def test_onda3_write_guardado_por_confirm(name):
     Sem o guard, o handler escreveria mesmo em dry-run. Verificamos estruturalmente que cada
     handler WRITE tem o gate de dry-run e que ele faz `return` antes de efetivar.
     """
-    EFEITOS = ('session.commit(', 'run_directive_promotion_batch(', 'enqueue_eval_batch(', 'upsert_response(')
+    EFEITOS = ('session.commit(', 'run_directive_promotion_batch(', 'upsert_response(')
     m = _load(name)
     for sub in ONDA3_WRITE[name]:
         fn = m.HANDLERS[sub]

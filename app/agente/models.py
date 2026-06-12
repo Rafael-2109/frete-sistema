@@ -1831,8 +1831,13 @@ class AgentEvalScore(db.Model):
     """
     A3 (2026-05-31) — score de eval persistido por-agente para o eval gate.
 
-    Substitui o `baseline_score=0.0` hardcoded em eval_gate_service (módulo 28
-    do scheduler). Cada linha representa UM run de eval de um agent_name, com
+    ⚠ ESCRITA APOSENTADA (estratégia R2, 2026-06-12): o único escritor era o
+    eval_runner (A3, removido junto com eval_gate_service/módulo 28/fila
+    'agent_eval'). O modelo permanece para LEITURA do histórico (skill
+    gerindo-agente `eval.py scores`, painel insights). Nenhum código vivo
+    insere novas linhas.
+
+    Cada linha representa UM run de eval de um agent_name, com
     score = passed/total. O baseline para comparação report-only (e enforce
     futuro) é o `score` do run ANTERIOR mais recente do mesmo agent_name.
 
@@ -2043,9 +2048,11 @@ class AgentEvalCase(db.Model):
 
         SAVEPOINT pattern (idêntico a AgentEvalScore.insert_score /
         AgentInvocationMetric.insert_metric): usa `begin_nested()` em vez de
-        `commit()` direto. persist_eval_cases roda no job RQ do eval; um caso
-        que viole NOT NULL não pode derrubar a transação inteira — o SAVEPOINT
-        isola o IntegrityError. O caller consolida no commit final.
+        `commit()` direto. Caller vivo: calibration_sampler (GATE-1 — o
+        eval_runner/A3, antigo caller via persist_eval_cases, foi removido na
+        estratégia R2 2026-06-12); um caso que viole NOT NULL não pode derrubar
+        a transação inteira — o SAVEPOINT isola o IntegrityError. O caller
+        consolida no commit final.
         """
         from sqlalchemy.exc import IntegrityError, DataError
 

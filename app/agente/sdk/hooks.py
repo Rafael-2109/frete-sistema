@@ -345,8 +345,9 @@ def build_hooks(
     async def _enforce_mandatory_invariants(hook_input: PreToolUseHookInput, signal, context: HookContext):
         """Fase 3.5 — HARD enforcement (PreToolUse) de invariantes DUROS formalizados.
 
-        So atua quando AGENT_MANDATORY_HARD_ENFORCE=true (default OFF — caminho comum retorna
-        imediato, custo zero). Bloqueia uma tool call cujo input serializado contenha um token
+        Gated por AGENT_MANDATORY_HARD_ENFORCE (default LIGADO desde a estrategia I4,
+        2026-06-12 — no-op ate a 1a regra dura declarar 'ENFORCE_DENY_SUBSTR:'; rollback:
+        env=false). Bloqueia uma tool call cujo input serializado contenha um token
         proibido declarado por uma regra dura via 'ENFORCE_DENY_SUBSTR: <token>'. FAIL-OPEN:
         qualquer erro -> permite (nunca quebra o fluxo). NUNCA bloqueia por texto livre.
         """

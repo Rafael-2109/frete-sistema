@@ -149,7 +149,7 @@ app/agente/                          # Root — 7 arquivos
 │   ├── approval_inbox_service.py    # Inbox de aprovacao (AgentMemory shadow + ImprovementDialogue proposed)
 │   ├── artifact_service.py          # Service de artifacts (rate limit, spec validation, S3)
 │   ├── directive_promotion_service.py # Promocao automatica de diretriz (A4 flywheel Distill→Deploy)
-│   ├── eval_gate_service.py         # Gate de avaliacao offline (A3 golden dataset / eval-gate)
+│   ├── regression_gate.py           # Gate puro de regressao (eval_gate — sobrevivente do A3 aposentado, R2 2026-06-12)
 │   ├── friction_analyzer.py         # Analise de friccao de uso
 │   ├── improvement_suggester.py     # Dialogo D8 melhoria (batch + real-time)
 │   ├── insights_service.py          # Gerador de insights pos-sessao
@@ -193,12 +193,11 @@ app/agente/                          # Root — 7 arquivos
 │   └── text_to_sql_tool.py          # Text-to-SQL (Enhanced v2.0.0)
 ├── utils/                           # Helpers de modulo — 2 arquivos
 │   └── pii_masker.py                # Mascaramento regex CPF/CNPJ/email (SDK 0.1.60 fase 2)
-└── workers/                         # Workers RQ locais — 9 arquivos
+└── workers/                         # Workers RQ locais — 8 arquivos (eval_runner removido — R2 2026-06-12)
     ├── __init__.py
     ├── artifact_worker.py           # build_artifact_job (Vite+React+TS+Tailwind, queue artifacts)
     ├── background_jobs.py           # Jobs background diversos (varredores D8, enqueue)
     ├── calibration_sampler.py       # Amostra turnos para calibracao do judge (flag AGENT_CALIBRATION_SAMPLER)
-    ├── eval_runner.py               # Runner de avaliacao offline (A3 golden dataset, queue agent_judge)
     ├── plan_verifier.py             # Verify B2 do super-loop (shadow, queue agent_judge)
     ├── step_judge.py                # Judge por step do plano (shadow)
     ├── subagent_validator.py        # Haiku anti-alucinacao (SDK 0.1.60 fase 4, queue agent_validation)

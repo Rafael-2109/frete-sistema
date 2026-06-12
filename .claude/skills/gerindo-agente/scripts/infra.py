@@ -12,7 +12,7 @@ puro). Subcomandos:
   gates          Gates de acesso runtime (permissions.py): WRITE gerindo (dev-only),
                  restricao de estoque + allow-list, debug-mode, reversibilidade,
                  hard-enforce. Cada um com enforcement + allow-list + o que bloqueia.
-  worker-status  Filas RQ do agente (agent_judge/agent_eval/agent_validation/
+  worker-status  Filas RQ do agente (agent_judge/agent_validation/
                  agent_background/artifacts) + workers vivos. Degrada se Redis off.
 
 HONESTIDADE DE AMBIENTE (gotcha que motivou o db_evidence): flags e Redis sao lidos
@@ -72,9 +72,12 @@ EVOLUTION_FLAGS = [
     ('USE_AGENT_ONTOLOGY',          'AGENT_ONTOLOGY',              False, 'Onda 1',         None,                    None),
     ('USE_AGENT_PLANNER',           'AGENT_PLANNER',               False, 'Onda 2',         'planstate_with_plan',   'activity'),
     ('USE_AGENT_VERIFY',            'AGENT_VERIFY',                False, 'Onda 2',         'agent_step_verified',   'activity'),
-    ('AGENT_EVAL_GATE',             'AGENT_EVAL_GATE',             False, 'Onda 3',         'eval_scores',           'activity'),
+    # AGENT_EVAL_GATE removida (estrategia R2, 2026-06-12): A3 aposentado; eval_runner/
+    # fila agent_eval deletados. eval_scores virou metrica historica (sem escritor vivo).
     ('USE_AGENT_EVAL_CALIBRATION',  'AGENT_EVAL_CALIBRATION',      False, 'Onda 3',         'eval_cases',            'activity'),
     ('AGENT_DIRECTIVE_PROMOTION',   'AGENT_DIRECTIVE_PROMOTION',   False, 'Onda 3',         'directives_shadow',     'activity'),
+    # Estrategia R3 (2026-06-12): fonte JUDGE do A4-batch desligada por default.
+    ('AGENT_DIRECTIVE_JUDGE_SOURCE', 'AGENT_DIRECTIVE_JUDGE_SOURCE', False, 'Onda 3',       None,                    None),
     ('USE_AGENT_SKILL_RAG',         'AGENT_SKILL_RAG',             False, 'Onda 4',         None,                    None),
     ('USE_AGENT_WORLD_MODEL_INJECT', 'AGENT_WORLD_MODEL_INJECT',   False, 'Onda 4',         None,                    None),
     # readiness = CONTEUDO que o builder _build_operational_directives injeta = NULL/legado + 'ativa'
@@ -87,15 +90,18 @@ EVOLUTION_FLAGS = [
     ('AGENT_OUTCOME_TRACKING',      'AGENT_OUTCOME_TRACKING',      True,  'Loop corretivo', 'outcome_populated',     'activity'),
     ('AGENT_CORRECTION_PROMOTION',  'AGENT_CORRECTION_PROMOTION',  True,  'Loop corretivo', 'corrections_mandatory', 'activity'),
     ('AGENT_CORRECTION_DEMOTION',   'AGENT_CORRECTION_DEMOTION',   False, 'Loop corretivo', None,                    None),
-    ('USE_MANDATORY_HARD_ENFORCE',  'AGENT_MANDATORY_HARD_ENFORCE', False, 'Loop corretivo', None,                   None),
+    # Default true desde a estrategia I4 (2026-06-12): no-op ate a 1a regra dura com token.
+    ('USE_MANDATORY_HARD_ENFORCE',  'AGENT_MANDATORY_HARD_ENFORCE', True, 'Loop corretivo', None,                   None),
 ]
 
 # Filas RQ relevantes ao agente/flywheel (worker_render.py:143 lista a hardcoded).
-AGENT_QUEUES = ['agent_judge', 'agent_eval', 'agent_validation', 'agent_background', 'artifacts']
+# 'agent_eval' removida (estrategia R2, 2026-06-12 — fila do eval_runner/A3 aposentado).
+AGENT_QUEUES = ['agent_judge', 'agent_validation', 'agent_background', 'artifacts']
 
 # Subcomandos WRITE da skill que o gate _classify_gerindo_write NEGA ao agente web/Teams.
-# Espelha o regex em permissions.py:424 (_GERINDO_WRITE_REGEX) — manter em sincronia se la mudar.
-GERINDO_WRITE_BLOCKED = ['approve', 'reject', 'promote-batch', 'review', 'run', 'respond']
+# Espelha o regex em permissions.py (_GERINDO_WRITE_REGEX) — manter em sincronia se la mudar.
+# 'run' removido (estrategia R2: o subcomando eval.run foi deletado junto com o eval_runner).
+GERINDO_WRITE_BLOCKED = ['approve', 'reject', 'promote-batch', 'review', 'respond']
 
 
 def _scope_info():
@@ -418,7 +424,7 @@ def handle_gates(args):
 
     debug_flag = _read_flag('USE_DEBUG_MODE', 'AGENT_DEBUG_MODE', True)
     reversibility = _read_flag('USE_REVERSIBILITY_CHECK', 'AGENT_REVERSIBILITY_CHECK', True)
-    hard_enforce = _read_flag('USE_MANDATORY_HARD_ENFORCE', 'AGENT_MANDATORY_HARD_ENFORCE', False)
+    hard_enforce = _read_flag('USE_MANDATORY_HARD_ENFORCE', 'AGENT_MANDATORY_HARD_ENFORCE', True)
 
     # Shape FIXO e homogeneo entre gates (snapshot-estavel): name/enforcement/
     # enabled/flag/allow_list/blocks/source.

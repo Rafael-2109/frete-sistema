@@ -543,11 +543,11 @@ python scripts/migrations/2026_05_31_kg_bitemporal.py \
 
 # 26c. Bootstrap ontologia — MOVIDO para fora do guard (so se AGENT_ONTOLOGY=true). Ver fim.
 
-# 26d. A3 gate de regressao (2026-06-01): baseline de eval por-agente + calibracao.
-# agent_eval_scores (baseline score por run, A3 Fase 1) + agent_eval_case (1 linha
-# por caso p/ spot-check humano 5-10%, A3-R3). Ambas idempotentes (IF NOT EXISTS).
-# Necessarias ANTES de ligar AGENT_EVAL_GATE / AGENT_EVAL_CALIBRATION (senao o eval
-# falha por tabela inexistente em prod — SKIP_DB_CREATE=true). Best-effort (|| echo).
+# 26d. Tabelas de eval (2026-06-01). NOTA R2 (2026-06-12): o eval_runner/A3 e a flag
+# AGENT_EVAL_GATE foram REMOVIDOS; agent_eval_scores virou historico (sem escritor vivo)
+# e agent_eval_case segue VIVA — populada pelo calibration_sampler (GATE-1,
+# AGENT_CALIBRATION_SAMPLER) p/ spot-check humano. Ambas idempotentes (IF NOT EXISTS).
+# Necessarias em prod (SKIP_DB_CREATE=true). Best-effort (|| echo).
 echo "Agente 26d.1: tabela agent_eval_scores (A3 baseline)..."
 python scripts/migrations/2026_05_31_agent_eval_scores.py \
     || echo "⚠️ Migration agent_eval_scores falhou, continuando deploy..."

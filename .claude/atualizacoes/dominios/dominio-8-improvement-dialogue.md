@@ -158,51 +158,17 @@ RESTRICOES:
 
 ---
 
-## PASSO 3.5: GATE DE REGRESSAO (A3 — report-only, NUNCA bloqueia)
+## PASSO 3.5: GATE DE REGRESSAO — APOSENTADO (estrategia R2, 2026-06-12)
 
-> Ref: eixos/A-flywheel.md:257-266 (fecha Ruptura #5 e #3). O D8 commitava DIRETO
-> em main SEM eval nenhuma — mudancas entravam cegas. Este passo mede se a mudanca
-> REGRIDIU um subagente, comparando o score do codigo-DEPOIS vs codigo-ANTES.
-> **REPORT-ONLY**: registra `regressed`, mas NAO bloqueia o commit (a flag enforce
-> e' decisao futura). A3-R4.
-
-APLICAR APENAS quando a mudanca tocou um arquivo que afeta um SUBAGENTE com golden
-dataset. Os 4 datasets existem em `.claude/evals/subagents/`:
-`analista-carteira`, `auditor-financeiro`, `controlador-custo-frete`, `gestor-motos-assai`.
-
-Gatilho (heuristica): a mudanca tocou `.claude/agents/<nome>.md`, ou uma skill/reference
-que o subagente usa, ou as REGRAS de negocio que os casos cobrem (ex `REGRAS_P1_P7.md`
-para analista-carteira). Se nao tocou nenhum agente com dataset → PULAR este passo.
-
-Para cada subagente afetado:
-
-```bash
-# sha_baseline = HEAD ANTES desta mudanca (ja' commitado / o pull --rebase do passo 3).
-# Roda o agente real (claude -p) contra o golden dataset N vezes (mediana) e compara
-# com o score do sha-anterior ja' persistido em agent_eval_scores.
-#   --regression: modo gate de regressao (A3-R2)
-#   --sha-baseline: opcional; se omitido, usa o run mais recente como baseline.
-python -m app.agente.workers.eval_runner --regression --agent <nome-do-subagente> \
-       [--sha-baseline <sha_ANTES_da_mudanca>]
-```
-
-Interpretacao do resultado (dict impresso):
-- `regression=False` → OK, a mudanca nao regrediu. Seguir para o commit normalmente.
-- `regression=True` (delta < -threshold) → **NAO bloqueia**, mas:
-  1. Registrar no PASSO 4 com `status="regressed"` (em vez de `responded`) e incluir o
-     `delta` em `implementation_notes`.
-  2. O `verified` do dialogo deixa de ser "o Sonnet acha que resolveu" e passa a refletir
-     o **Δ medido** (fecha Ruptura #3). Lifecycle: `responded → measuring → verified|regressed`.
-  3. Avaliar manualmente se a regressao e' aceitavel (pode ser falso-positivo do judge —
-     ver `invoke_failures` e `case_score_variance` no output: variancia alta = flaky, nao
-     regressao real). Se aceitavel, prosseguir; senao, reverter a mudanca.
-
-**Custo/risco**: o eval roda `claude -p` (API) N_runs vezes por caso — minutos por agente.
-Por isso so' roda para agentes AFETADOS, e e' report-only (um eval flaky NUNCA trava o
-unico atuador de codigo autonomo do sistema — mitigacao de critica/A-flywheel.md:111-116).
-
-> Pre-condicao: o gate so' compara se ha baseline do sha-anterior em `agent_eval_scores`.
-> Na 1a vez (sem baseline) ele apenas estabelece o baseline (delta 0, sem regressao).
+> O `eval_runner` (A3) foi REMOVIDO em 2026-06-12 (estrategia R2,
+> `docs/blueprint-agente/ESTRATEGIA_ATUADORES_2026-06-06.md`): a flag
+> `AGENT_EVAL_GATE` era default-false e OFF em PROD — o eval periodico nunca
+> atuou. O comando `python -m app.agente.workers.eval_runner --regression ...`
+> NAO existe mais; **PULAR este passo** (nao ha substituto automatizado hoje).
+> A funcao pura `eval_gate` sobreviveu em `app/agente/services/regression_gate.py`
+> (usada pela promocao A4). Se uma mudanca tocar um subagente com golden dataset
+> (`.claude/evals/subagents/`), a verificacao e MANUAL (rodar o subagente em 1-2
+> casos representativos) ate existir um gate ancorado em outcome (R9).
 > Calibracao do judge: `--review --agent <nome>` lista a amostra 5-10% p/ spot-check humano
 > (AGENT_EVAL_CALIBRATION=true grava os casos). Ver A3-R3.
 

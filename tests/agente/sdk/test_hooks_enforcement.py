@@ -1,7 +1,11 @@
 """Fase 3.5 do loop corretivo — HARD enforcement (PreToolUse) de invariantes formalizados.
 - _enforce_decision: matching puro (substring case-insensitive do token EXPLICITO).
 - _load_enforce_directives: so regras 'mandatory' com 'ENFORCE_DENY_SUBSTR:' viram invariante.
+- TestFlagDefault: estrategia I4 (2026-06-12) — default LIGADO; env=false desliga (rollback).
 """
+import importlib.util
+from pathlib import Path
+
 import pytest
 from app import create_app, db
 from app.auth.models import Usuario
@@ -97,3 +101,41 @@ def test_load_directives_so_mandatory_com_token(app, cleanup):
     tokens = [t for t, _ in directives]
     assert 'qtd_saldo' in tokens
     assert 'foobar' not in tokens  # contextual nao entra
+
+
+# ───────────────── USE_MANDATORY_HARD_ENFORCE — default I4 (2026-06-12) ─────────────────
+# Estrategia I4: default do CODIGO virou TRUE (canal fail-open, ~zero custo; no-op ate a
+# 1a regra dura declarar ENFORCE_DENY_SUBSTR). Cobertura dos DOIS estados via reload
+# isolado de feature_flags.py com env controlada (o modulo so importa os — sem side effect).
+
+_FF_PATH = Path(__file__).resolve().parents[3] / 'app' / 'agente' / 'config' / 'feature_flags.py'
+
+
+def _load_feature_flags_isolado(monkeypatch, env_value=None):
+    """Carrega feature_flags.py como modulo isolado com AGENT_MANDATORY_HARD_ENFORCE controlada."""
+    if env_value is None:
+        monkeypatch.delenv('AGENT_MANDATORY_HARD_ENFORCE', raising=False)
+    else:
+        monkeypatch.setenv('AGENT_MANDATORY_HARD_ENFORCE', env_value)
+    spec = importlib.util.spec_from_file_location('ff_isolado_enforce', _FF_PATH)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def test_hard_enforce_default_e_on_i4(monkeypatch):
+    """Sem env var, o default do codigo e TRUE (estrategia I4, 2026-06-12)."""
+    ff = _load_feature_flags_isolado(monkeypatch, env_value=None)
+    assert ff.USE_MANDATORY_HARD_ENFORCE is True
+
+
+def test_hard_enforce_env_false_desliga(monkeypatch):
+    """Rollback documentado: AGENT_MANDATORY_HARD_ENFORCE=false desliga o guard."""
+    ff = _load_feature_flags_isolado(monkeypatch, env_value='false')
+    assert ff.USE_MANDATORY_HARD_ENFORCE is False
+
+
+def test_hard_enforce_env_true_liga(monkeypatch):
+    """Estado ON explicito continua coberto (paridade com o comportamento pre-I4)."""
+    ff = _load_feature_flags_isolado(monkeypatch, env_value='true')
+    assert ff.USE_MANDATORY_HARD_ENFORCE is True

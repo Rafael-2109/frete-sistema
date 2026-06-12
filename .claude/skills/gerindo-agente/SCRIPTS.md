@@ -443,10 +443,12 @@ Saude do flywheel: PlanState (`% de sessoes com data->'plan'`; `<5%` => gargalo 
 
 ---
 
-## eval.py (eval-gate A3 — READ)
+## eval.py (historico de evals + calibracao do judge)
 
-> **READ-only (Onda 3 fase 3a).** A ESCRITA (`review` `human_verdict`, `run` que
-> dispara `eval_runner` com custo Haiku+Opus) e **dev-only** e fica para a fase 3b.
+> **READ + `review` (WRITE dev-only).** O subcomando `run` (enfileirava o `eval_runner`/A3
+> na RQ `agent_eval`) foi **REMOVIDO** na estrategia R2 (2026-06-12): A3 aposentado;
+> fila `agent_eval` e flag `AGENT_EVAL_GATE` removidas. `agent_eval_scores` virou historico
+> (sem escritor vivo); `agent_eval_case` segue VIVA via `calibration_sampler` (GATE-1).
 > `--user-id` e exigido por uniformidade do skill (R1, valida o chamador) mas **NAO filtra**:
 > `agent_eval_scores`/`agent_eval_case` sao system-wide (use `--agent` para filtrar por agente).
 
@@ -455,7 +457,7 @@ Saude do flywheel: PlanState (`% de sessoes com data->'plan'`; `<5%` => gargalo 
 |-----------|------|-------------|---------|-----------|
 | `--agent` | str | Nao | — | Filtra por `agent_name` (default: todos) |
 
-Ultimo run por agente (`agent_eval_scores`) + `delta_vs_prev` vs o run anterior (baseline, `models.py:get_baseline_score`) + modo (`report_only`/`enforce`) + contagem de runs. READ-only, custo $0.
+Ultimo run por agente (`agent_eval_scores`) + `delta_vs_prev` vs o run anterior (baseline, `models.py:get_baseline_score`) + modo (`report_only`/`enforce`) + contagem de runs. HISTORICO (escrita aposentada com o A3 — R2 2026-06-12). READ-only, custo $0.
 
 ### cases
 | Argumento | Tipo | Obrigatorio | Default | Descricao |
@@ -463,7 +465,7 @@ Ultimo run por agente (`agent_eval_scores`) + `delta_vs_prev` vs o run anterior 
 | `--agent` | str | Nao | — | Filtra por `agent_name` |
 | `--status` | str | Nao | — | Filtra por `pass`/`fail`/`error` |
 
-Casos por run (`agent_eval_case`) + `human_verdict` + taxa de concordancia judge-vs-humano (`concordance_rate`, calibracao). Em PROD a tabela hoje tem 0 linhas (`USE_AGENT_EVAL_CALIBRATION` OFF) — degrada para lista vazia sem erro. READ-only, custo $0.
+Casos (`agent_eval_case`) + `human_verdict` + taxa de concordancia judge-vs-humano (`concordance_rate`, calibracao). Fonte viva: `calibration_sampler` (online judge, GATE-1) — degrada para lista vazia sem erro. READ-only, custo $0.
 
 ---
 
@@ -519,7 +521,7 @@ Gates de acesso runtime (`permissions.py` + flags de enforcement): `gerindo_writ
 ### worker-status
 Sem argumentos adicionais.
 
-Filas RQ do agente (`agent_judge`/`agent_eval`/`agent_validation`/`agent_background`/`artifacts`) com profundidade (`queued`/`started`/`failed`) + workers vivos (`Worker.all`). Le o Redis DESTE processo (`scope.redis_target` rotula local vs PROD). **Degrada com graca** se Redis off: `reachable=false` + `queues`/`workers` vazios + warning (shape FIXO — nunca `status=query_error`). READ-only, custo $0.
+Filas RQ do agente (`agent_judge`/`agent_validation`/`agent_background`/`artifacts`) com profundidade (`queued`/`started`/`failed`) + workers vivos (`Worker.all`). Le o Redis DESTE processo (`scope.redis_target` rotula local vs PROD). **Degrada com graca** se Redis off: `reachable=false` + `queues`/`workers` vazios + warning (shape FIXO — nunca `status=query_error`). READ-only, custo $0.
 
 ---
 
@@ -565,15 +567,7 @@ Usa `--limit` (comum, default 20) como teto do batch. O batch commita internamen
 | `--note` | str | Nao | — | Nota livre |
 | `--confirm` | flag | Nao | false | Grava o veredito |
 
-Fecha o gap do UPDATE manual (`eval_runner.py:715-783`). Seta `human_verdict`/`human_note`/`reviewed_by`/`reviewed_at`.
-
-### eval.run
-| Argumento | Tipo | Obrigatorio | Default | Descricao |
-|-----------|------|-------------|---------|-----------|
-| `--confirm` | flag | Nao | false | Enfileira na RQ `agent_eval` |
-
-Chama `enqueue_eval_batch`. **CUSTO**: ~105 chamadas Haiku + invokes Opus dos 4 subagentes (20-50min).
-Gated por `AGENT_EVAL_GATE` (OFF -> `{skipped: flag_off}`). Requer worker na fila `agent_eval` (Workers 1/2 PROD).
+Fecha o gap do UPDATE manual. Seta `human_verdict`/`human_note`/`reviewed_by`/`reviewed_at`.
 
 ### melhorias.respond
 | Argumento | Tipo | Obrigatorio | Default | Descricao |

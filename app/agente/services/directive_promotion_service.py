@@ -10,7 +10,7 @@ V1 offline + flag-OFF:
 
 Flywheel:
     sinais (E1/E2 em agent_step.outcome_signal)
-    → eval gate (A3, eval_gate_service.py, Onda 3)
+    → gate de regressão (regression_gate.py — herdado do A3 aposentado)
     → A4 batch (módulo 32): PROMOVE (shadow) diretriz operacional que funcionou
 
 "Diretriz" = heurística empresa em AgentMemory (user_id=0,
@@ -24,7 +24,7 @@ Anti-gaming (R9 / step_judge._judge_core):
     Na dúvida (erro de consulta): NÃO promove (conservador = True).
 
 Ref: app/agente/workers/step_judge.py (_judge_core heurística ambiental)
-Ref: app/agente/services/eval_gate_service.py (eval_gate)
+Ref: app/agente/services/regression_gate.py (eval_gate — gate puro de regressão)
 Ref: app/agente/sdk/plan_state.py (PlanState — plano que funcionou)
 Ref: app/agente/sdk/memory_injection.py:420 (_build_operational_directives)
 """
@@ -32,7 +32,11 @@ import logging
 import re as _re
 from typing import Optional
 
-from app.agente.config.feature_flags import AGENT_DIRECTIVE_PROMOTION, AGENT_DIRECTIVE_MIN_QUALITY
+from app.agente.config.feature_flags import (
+    AGENT_DIRECTIVE_PROMOTION,
+    AGENT_DIRECTIVE_JUDGE_SOURCE,
+    AGENT_DIRECTIVE_MIN_QUALITY,
+)
 
 logger = logging.getLogger('sistema_fretes')
 
@@ -489,8 +493,8 @@ def evaluate_and_promote(
             'reason': 'falha_odoo_ambiental',
         }
 
-    # ─── 2. Regression gate (A3, report_only) ────────────────────────────────
-    from app.agente.services.eval_gate_service import eval_gate
+    # ─── 2. Regression gate (report_only; função pura herdada do A3) ─────────
+    from app.agente.services.regression_gate import eval_gate
 
     gate_result = eval_gate(
         baseline_score=baseline_score,
@@ -810,7 +814,8 @@ def run_directive_promotion_batch(lookback_hours: int = 24, limit: int = 50) -> 
     TRES fontes de candidata:
       1. PLANO: sessão com plano 100% concluído → propose_directive_from_plan.
       2. JUDGE: sessão de alta qualidade validada pelo judge (sem precisar de plano)
-         → propose_directive_from_judge_session. Resolve o no-op eterno (0 PlanStates).
+         → propose_directive_from_judge_session. DESLIGADA por default (estratégia R3,
+         2026-06-12): gated por AGENT_DIRECTIVE_JUDGE_SOURCE (default OFF).
       3. CORRECTION-RECURRENCE: correcao PESSOAL reincidente (correction_count >= threshold)
          → promover_correcoes_recorrentes (priority='mandatory', canal duro <user_rules>).
          Filtro = reincidencia (feedback humano), NAO o gate Odoo das fontes 1/2.
@@ -850,11 +855,22 @@ def run_directive_promotion_batch(lookback_hours: int = 24, limit: int = 50) -> 
             _rollback_seguro()
 
     # ── Fonte 2: JUDGE signal (alta qualidade, sem plano) — Opção B / A4 V2 ───
-    try:
-        sessoes_recentes = _buscar_sessoes_recentes(lookback_hours, limit)
-    except Exception as exc:
-        logger.error(f"[directive_promotion] batch: erro ao buscar sessões (judge): {exc}")
+    # Estratégia R3 (2026-06-12): fonte DESLIGADA por default (flag
+    # AGENT_DIRECTIVE_JUDGE_SOURCE, default false) — promover diretriz por nota
+    # de turno do judge é frágil mesmo endurecido (_meta_tarefa_trivial fica no
+    # código para quando religar). Religar exige judge ANCORADO EM OUTCOME (R9).
+    if AGENT_DIRECTIVE_JUDGE_SOURCE:
+        try:
+            sessoes_recentes = _buscar_sessoes_recentes(lookback_hours, limit)
+        except Exception as exc:
+            logger.error(f"[directive_promotion] batch: erro ao buscar sessões (judge): {exc}")
+            sessoes_recentes = []
+    else:
         sessoes_recentes = []
+        logger.debug(
+            "[directive_promotion] batch: fonte JUDGE desligada "
+            "(AGENT_DIRECTIVE_JUDGE_SOURCE=OFF — estratégia R3)"
+        )
     for s in sessoes_recentes:
         sid = getattr(s, 'session_id', None)
         if not sid or sid in processadas:
