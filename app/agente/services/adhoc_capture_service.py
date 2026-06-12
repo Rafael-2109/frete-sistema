@@ -115,3 +115,39 @@ def is_substantive(command: str) -> bool:
     if _INLINE_CODE_RE.search(cmd_clean):
         return True
     return len(cmd_clean) >= SUBSTANTIVE_MIN_CHARS
+
+
+# ---------------------------------------------------------------------------
+# Extracao de metadados (Haiku, com fallback deterministico)
+# ---------------------------------------------------------------------------
+
+# Reuso da infra LLM da Fase 1 (mesmos modelos/parse).
+from app.agente.services.skill_effectiveness_service import (  # noqa: E402
+    HAIKU_MODEL, SONNET_MODEL, _call_anthropic, _parse_json,
+)
+
+_EXTRACT_SYSTEM = (
+    "Voce extrai metadados de um script ad-hoc executado por um agente. "
+    "Responda APENAS JSON: {\"problema\": \"<=100 chars, o problema de negocio "
+    "que o script resolve>\", \"motivo_fallback\": \"<=150 chars, por que o "
+    "agente usou script em vez da skill ativa — ou null se nao houver skill\"}."
+)
+
+
+def extract_problema(command: str, user_msg: Optional[str],
+                     skill_ativa: Optional[str]) -> tuple:
+    """(problema <=100c, motivo_fallback <=150c|None). Fallback = truncate da msg."""
+    try:
+        user = (f"Skill ativa: {skill_ativa or 'nenhuma'}\n"
+                f"Pedido do usuario: {(user_msg or '')[:500]}\n"
+                f"Comando: {command[:1500]}")
+        raw = _call_anthropic(HAIKU_MODEL, _EXTRACT_SYSTEM, user, max_tokens=300)
+        data = _parse_json(raw)
+        prob = (data.get("problema") or "")[:100] or None
+        motivo = data.get("motivo_fallback")
+        motivo = str(motivo)[:150] if motivo and skill_ativa else None
+        if prob:
+            return prob, motivo
+    except Exception as e:
+        logger.warning(f"[ADHOC] extracao Haiku falhou (fallback): {e}")
+    return ((user_msg or command or "")[:100] or None), None

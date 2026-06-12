@@ -93,3 +93,33 @@ class TestFiltro:
     def test_substantivo(self, cmd, esperado):
         from app.agente.services.adhoc_capture_service import is_substantive
         assert is_substantive(cmd) is esperado
+
+
+class TestExtracao:
+    def test_haiku_ok(self, monkeypatch):
+        from app.agente.services import adhoc_capture_service as svc
+        monkeypatch.setattr(svc, "_call_anthropic",
+            lambda model, system, user, max_tokens=300:
+                '{"problema": "exportar excel multi-aba", "motivo_fallback": "exportar.py so gera 1 aba"}')
+        prob, motivo = svc.extract_problema(
+            command="python -c '...'", user_msg="exporta em 3 abas",
+            skill_ativa="exportando-arquivos")
+        assert prob == "exportar excel multi-aba"
+        assert motivo == "exportar.py so gera 1 aba"
+
+    def test_fallback_truncate(self, monkeypatch):
+        from app.agente.services import adhoc_capture_service as svc
+        def _boom(*a, **k):
+            raise RuntimeError("api down")
+        monkeypatch.setattr(svc, "_call_anthropic", _boom)
+        prob, motivo = svc.extract_problema(
+            command="python -c 'x'", user_msg="m" * 300, skill_ativa=None)
+        assert prob == "m" * 100
+        assert motivo is None
+
+    def test_trunca_limites(self, monkeypatch):
+        from app.agente.services import adhoc_capture_service as svc
+        monkeypatch.setattr(svc, "_call_anthropic",
+            lambda *a, **k: '{"problema": "' + "p" * 200 + '", "motivo_fallback": "' + "q" * 300 + '"}')
+        prob, motivo = svc.extract_problema("cmd", "msg", "skill-x")
+        assert len(prob) <= 100 and len(motivo) <= 150
