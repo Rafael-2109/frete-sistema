@@ -1201,6 +1201,19 @@ AGENT_SKILL_EVAL_CONF_MIN = float(os.getenv("AGENT_SKILL_EVAL_CONF_MIN", "0.7"))
 # Cap de escalonamentos a Sonnet por sessao (anti-explosao de custo).
 AGENT_SKILL_EVAL_MAX_SONNET = int(os.getenv("AGENT_SKILL_EVAL_MAX_SONNET", "3"))
 
+# --- Fase 2 aprendizado ad-hoc -> skill (spec 2026-06-12) ---
+# Master da captura pos-sessao de Bash substantivo (best-effort; tabela
+# agent_adhoc_script precisa existir — migracao 2026_06_12).
+AGENT_ADHOC_CAPTURE = os.getenv("AGENT_ADHOC_CAPTURE", "true").lower() == "true"
+# Similaridade cosine minima p/ herdar cluster do vizinho mais proximo.
+AGENT_ADHOC_SIM = float(os.getenv("AGENT_ADHOC_SIM", "0.85"))
+# Thresholds de demanda (C1) p/ disparar julgamento Sonnet.
+AGENT_ADHOC_THRESHOLD_USER = int(os.getenv("AGENT_ADHOC_THRESHOLD_USER", "3"))
+AGENT_ADHOC_THRESHOLD_GLOBAL = int(os.getenv("AGENT_ADHOC_THRESHOLD_GLOBAL", "5"))
+# Caps diarios (anti-explosao de custo): extracoes Haiku e julgamentos Sonnet.
+AGENT_ADHOC_MAX_HAIKU_DAY = int(os.getenv("AGENT_ADHOC_MAX_HAIKU_DAY", "100"))
+AGENT_ADHOC_MAX_SONNET_DAY = int(os.getenv("AGENT_ADHOC_MAX_SONNET_DAY", "2"))
+
 
 def resolve_sql_first_mode(is_admin: bool) -> str:
     """Resolve o modo SQL-first EFETIVO para este request (Fix B canary).
