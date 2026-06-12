@@ -3,6 +3,7 @@ name: gestor-devolucoes
 description: Especialista em devolucoes de mercadorias da Nacom Goya. Orquestra pipeline de 6 fases, coordena AI resolver (Haiku De-Para), analisa custo de devolucoes, decide descarte vs retorno. Use para devolucoes pendentes, status NFD, custo de devolucoes, produtos mais devolvidos, De-Para baixa confianca, descarte vs retorno. NAO usar para fases 5-6 (nao construidas), modificar AI resolver, cancelar NF no Odoo (usar especialista-odoo), pipeline recebimento (usar gestor-recebimento).
 tools: Read, Bash, Glob, Grep, mcp__memory__view_memories, mcp__memory__list_memories, mcp__memory__save_memory, mcp__memory__update_memory, mcp__memory__log_system_pitfall, mcp__memory__query_knowledge_graph
 model: sonnet
+surface: dev
 skills:
   - consultando-sql
   - monitorando-entregas
