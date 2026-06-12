@@ -1,16 +1,20 @@
 #!/usr/bin/env bash
-# pre-commit hook (FASE 5 governanca + F1.3 PAD-CTX):
+# pre-commit hook (FASE 5 governanca + F1.3 PAD-CTX + T1.1):
 # 1. GATILHO DE PODA: se o commit toca um dos 3 arquivos do system prompt estatico,
 #    roda --check-delta (bloqueia se o prompt CRESCEU vs baseline -> forca decisao
 #    consciente principio-vs-procedimento). Reducao (poda) nunca bloqueia.
 # 2. CONSISTENCIA DE SUBAGENTES/SKILLS: se o commit toca .claude/agents/, as
-#    skills_whitelist, o CLAUDE.md raiz ou o system_prompt, roda --check-consistency
-#    (bloqueia divergencia entre as 3 projecoes de subagentes e skill orfa na
-#    deny-list). Padrao: .claude/references/ARQUITETURA_CONTEXTO_AGENTE.md.
+#    skills_whitelist, o CLAUDE.md raiz, o system_prompt, ROUTING_SKILLS.md,
+#    tool_skill_mapper.py ou qualquer SKILL.md, roda --check-consistency
+#    (bloqueia divergencia entre as 3 projecoes de subagentes, skill orfa na
+#    deny-list, anti-gatilhos mortos, contagens ROUTING erradas, budget subagente).
+#    Padrao: .claude/references/ARQUITETURA_CONTEXTO_AGENTE.md.
 # 3. ORCAMENTO DO LISTING (F2.5): SKILL.md/whitelist tocados -> skills_listing_audit.
 # 4. ORCAMENTO DO HOOK (F6): pipeline de injecao tocado -> test_hook_budget.py.
 # Cobertura dos 5 checks PAD-CTX: (1)+(4) via --check-consistency; (2) listing;
 # (3) hook budget; (5) checklist de admissao = doc (R-EXEC-5 no CLAUDE.md do agente).
+# T1.1: novos gatilhos de --check-consistency: ROUTING_SKILLS.md, tool_skill_mapper.py,
+#        qualquer .claude/skills/*/SKILL.md (anti-gatilhos + budget subagente).
 # Bypass emergencial: git commit --no-verify
 set -e
 
@@ -30,8 +34,10 @@ for f in $VIGIADOS; do
     fi
 done
 
+# T1.1: ampliado para incluir ROUTING_SKILLS.md, tool_skill_mapper.py e SKILL.md
+# (os 3 novos checks precisam rodar quando qualquer um desses e' tocado).
 TOCOU_CONSISTENCIA=0
-if echo "$STAGED" | grep -qE '^(\.claude/agents/.*\.md|app/agente/config/skills_whitelist\.py|app/agente_lojas/config/skills_whitelist\.py|CLAUDE\.md|app/agente/prompts/system_prompt\.md)$'; then
+if echo "$STAGED" | grep -qE '^(\.claude/agents/.*\.md|\.claude/skills/[^/]+/SKILL\.md|\.claude/references/ROUTING_SKILLS\.md|app/agente/config/skills_whitelist\.py|app/agente_lojas/config/skills_whitelist\.py|app/agente/services/tool_skill_mapper\.py|CLAUDE\.md|app/agente/prompts/system_prompt\.md)$'; then
     TOCOU_CONSISTENCIA=1
 fi
 
