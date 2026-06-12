@@ -285,6 +285,23 @@ def _maybe_trigger_skill_eval(session_id: str, user_id: int) -> None:
         logger.warning(f"[POST_SESSION] skill effectiveness (ignorado): {e}")
 
 
+def _maybe_trigger_adhoc_capture(session_id: str, user_id: int) -> None:
+    """Best-effort: enfileira captura de scripts ad-hoc (Fase 2).
+
+    Nunca propaga excecao — se quebrar, nao afeta pos-processamento web nem Teams.
+    """
+    try:
+        from app.agente.config.feature_flags import AGENT_ADHOC_CAPTURE
+        if not AGENT_ADHOC_CAPTURE:
+            return
+        from app.agente.workers.background_jobs import try_enqueue_adhoc_capture
+        if not try_enqueue_adhoc_capture(session_id, user_id):
+            from app.agente.services.adhoc_capture_service import capture_session
+            capture_session(session_id=session_id, user_id=user_id)  # app_context ja ativo
+    except Exception as e:
+        logger.warning(f"[POST_SESSION] adhoc capture (ignorado): {e}")
+
+
 def run_post_session_processing(
     app,
     session,
@@ -547,6 +564,11 @@ def run_post_session_processing(
     # Fase 1: Avaliacao de efetividade de skill (best-effort)
     # =================================================================
     _maybe_trigger_skill_eval(session_id, user_id)
+
+    # =================================================================
+    # Fase 2: Captura de scripts ad-hoc (best-effort)
+    # =================================================================
+    _maybe_trigger_adhoc_capture(session_id, user_id)
 
     # Nota: Improvement Dialogue (D8) roda via APScheduler batch (modulo 25, 07:00 e 10:00)
     # + crontab local (11:03 diario, Claude Code CLI com feature-dev).

@@ -2450,3 +2450,38 @@ class AgentSkillEffectiveness(db.Model):
 
     def __repr__(self):
         return f'<AgentSkillEffectiveness {self.skill_name} sess={self.session_id[:8]} ramo={self.ramo}>'
+
+
+# Tipo vector(1024) com fallback quando pgvector nao esta instalado
+# (mesmo guard de app/embeddings/models.py — evita acoplar import).
+try:
+    from pgvector.sqlalchemy import Vector
+    _ADHOC_EMBEDDING_TYPE = Vector(1024)
+except ImportError:
+    _ADHOC_EMBEDDING_TYPE = db.Text
+
+
+class AgentAdhocScript(db.Model):
+    """Script ad-hoc (Bash substantivo) capturado do transcript pos-sessao (Fase 2).
+
+    Spec: docs/superpowers/specs/2026-06-12-aprendizado-adhoc-fase2-design.md
+    cluster_id incremental: vizinho cosine >= AGENT_ADHOC_SIM herda; senao = proprio id.
+    """
+    __tablename__ = 'agent_adhoc_script'
+
+    id = db.Column(db.Integer, primary_key=True)
+    session_id = db.Column(db.String(64), nullable=False, index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=False, index=True)
+    problema = db.Column(db.String(120), nullable=True)
+    command_masked = db.Column(db.Text, nullable=False)
+    contexto_user_msg = db.Column(db.Text, nullable=True)
+    skill_relacionada = db.Column(db.String(80), nullable=True)
+    tipo_gap = db.Column(db.String(20), nullable=False, default='desconhecido')
+    motivo_fallback = db.Column(db.String(200), nullable=True)
+    retries_sessao = db.Column(db.SmallInteger, default=0)
+    embedding = db.Column(_ADHOC_EMBEDDING_TYPE, nullable=True)
+    cluster_id = db.Column(db.Integer, nullable=True, index=True)
+    criado_em = db.Column(db.DateTime, default=lambda: agora_utc_naive(), index=True)
+
+    def __repr__(self):
+        return f'<AgentAdhocScript {self.id} gap={self.tipo_gap} cluster={self.cluster_id}>'

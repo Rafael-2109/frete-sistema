@@ -532,16 +532,19 @@ class TestTier1Cap:
         finito — NUNCA no Opus (budget=None), exatamente o modelo dos users
         afetados. O cap F6 e incondicional ao modelo."""
         created, user_id = f4_mems
+        # Marcador nao-colidivel: 'aaaa' batia em hash de commit do
+        # <intersession_briefing> (ex.: 4f6baaaae) — falso positivo no assert.
+        gordura = 'xqzgordura' * 350
         content = (
             '<user_profile>\n<resumo>perfil compacto do usuario</resumo>\n'
             '<contextualizacao>como tratar este usuario</contextualizacao>\n'
-            + '<atividades>' + 'a' * 3500 + '</atividades>\n</user_profile>'
+            + '<atividades>' + gordura + '</atividades>\n</user_profile>'
         )
         _mk_mem(user_id, '/memories/user.xml', content, created)
         with _NO_SEMANTIC[0], _NO_SEMANTIC[1], _NO_SEMANTIC[2]:
             main, _tail, _ids = self._call(user_id, model='claude-opus-4-8')
         assert main is not None
-        assert 'aaaa' not in main, "user.xml gordo nao entra integral no Opus"
+        assert 'xqzgordura' not in main, "user.xml gordo nao entra integral no Opus"
         assert 'perfil compacto do usuario' in main, "resumo sobrevive no pointer-mode"
         assert '/memories/user.xml' in main, "ponteiro para a integra presente"
 
