@@ -65,8 +65,9 @@ def db_url():
 
 
 @pytest.fixture()
-def memoria_teste(db_url):
-    """Cria a memoria de teste e garante cleanup (delete --confirm) ao final."""
+def _memoria_teste(db_url):
+    """Fixture de efeito colateral: cria a memoria de teste e garante cleanup
+    (delete --confirm) ao final. Nome com underscore = injetada so pelo efeito."""
     rc, out, err = _run('memoria', [
         'save', '--user-id', TEST_USER_ID, '--path', TEST_PATH,
         '--content', 'T1.4 smoke: memoria descartavel para teste de aposentadoria.',
@@ -92,7 +93,7 @@ def _versions_count(db_url):
     return _json_payload(out).get('total_versions', 0)
 
 
-def test_aposentar_dry_run_nao_muta_e_confirmar_muta(db_url, memoria_teste):
+def test_aposentar_dry_run_nao_muta_e_confirmar_muta(db_url, _memoria_teste):
     # Estado inicial: nao-cold, sem versoes.
     antes = _view(db_url)
     assert antes['is_cold'] is False

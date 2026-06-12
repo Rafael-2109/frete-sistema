@@ -557,10 +557,13 @@ def test_promotion_candidates_registrada_t14():
     d = _load('diagnostico')
     assert 'promotion-candidates' in d.SUBCOMMANDS, "promotion-candidates ausente de SUBCOMMANDS"
     assert 'promotion-candidates' in d.HANDLERS and callable(d.HANDLERS['promotion-candidates'])
-    argnames = {a['name'] for a in d.SUBCOMMANDS['promotion-candidates']['args']}
-    assert '--min-effective' in argnames, "promotion-candidates sem --min-effective"
-    assert '--idade-dias' in argnames, "promotion-candidates sem --idade-dias"
-    assert '--limit' in argnames, "promotion-candidates deve sobrescrever --limit (default 30)"
+    args_cfg = {a['name']: a for a in d.SUBCOMMANDS['promotion-candidates']['args']}
+    assert '--min-effective' in args_cfg, "promotion-candidates sem --min-effective"
+    assert '--idade-dias' in args_cfg, "promotion-candidates sem --idade-dias"
+    assert '--limit' in args_cfg, "promotion-candidates deve sobrescrever --limit (default 30)"
+    assert '--user-id' in args_cfg and args_cfg['--user-id'].get('default') == 0, (
+        "--user-id deve ter default 0 (fila e sempre de memorias empresa)"
+    )
 
 
 def test_promotion_candidates_query_contrato_t14():
@@ -633,8 +636,9 @@ def test_parser_overrides_comuns_t14(monkeypatch):
     assert args.confirmar is False, "dry-run deve ser o default"
 
     d = _load('diagnostico')
-    monkeypatch.setattr(sys, 'argv', ['diagnostico.py', 'promotion-candidates', '--user-id', '1'])
+    monkeypatch.setattr(sys, 'argv', ['diagnostico.py', 'promotion-candidates'])
     args, sub = c.parse_args_with_subcommands('t', d.SUBCOMMANDS)
     assert sub == 'promotion-candidates'
+    assert args.user_id == 0, "promotion-candidates sem --user-id deve cair no default 0"
     assert args.limit == 30, "promotion-candidates deve sobrescrever --limit para default 30"
     assert args.min_effective == 2 and args.idade_dias == 30

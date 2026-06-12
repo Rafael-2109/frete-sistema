@@ -304,6 +304,7 @@ Sem argumentos adicionais.
 ### promotion-candidates
 | Argumento | Tipo | Obrigatorio | Default | Descricao |
 |-----------|------|-------------|---------|-----------|
+| `--user-id` | int | Nao | **0** | Override do comum; escopo da fila e FIXO em empresa (query user_id=0) |
 | `--min-effective` | int | Nao | 2 | Minimo de `effective_count` |
 | `--idade-dias` | int | Nao | 30 | Idade minima desde `created_at` (dias) |
 | `--limit` | int | Nao | **30** | Limite de resultados (override do comum) |

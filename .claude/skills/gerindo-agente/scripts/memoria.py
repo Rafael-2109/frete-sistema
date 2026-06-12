@@ -851,7 +851,7 @@ def main():
         'Gerenciamento de memorias do agente', SUBCOMMANDS
     )
 
-    app, ctx = get_app_context()
+    app, ctx = get_app_context()  # noqa: F841 — app fica disponivel via current_app
     with ctx:
         resolve_user(args.user_id)
         handler = HANDLERS.get(subcommand)

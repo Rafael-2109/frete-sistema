@@ -66,6 +66,10 @@ SUBCOMMANDS = {
     'promotion-candidates': {
         'help': 'Memorias empresa candidatas a promocao memoria→reference (PAD-CTX)',
         'args': [
+            # Override do comum (conflict_handler=resolve): a fila e SEMPRE de
+            # memorias empresa (query hardcoded user_id==0) — CLI nao exige o arg.
+            {'name': '--user-id', 'type': int, 'default': 0, 'dest': 'user_id',
+             'help': 'ID do usuario (default: 0 = empresa; escopo fixo da fila)'},
             {'name': '--min-effective', 'type': int, 'default': 2, 'dest': 'min_effective',
              'help': 'Minimo de effective_count (default: 2)'},
             {'name': '--idade-dias', 'type': int, 'default': 30, 'dest': 'idade_dias',
@@ -1238,7 +1242,7 @@ def main():
         'Diagnosticos do agente', SUBCOMMANDS
     )
 
-    app, ctx = get_app_context()
+    app, ctx = get_app_context()  # noqa: F841 — app fica disponivel via current_app
     with ctx:
         resolve_user(args.user_id)
         handler = HANDLERS.get(subcommand)
