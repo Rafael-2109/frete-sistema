@@ -1,22 +1,14 @@
 ---
 name: operando-reservas-odoo
 description: >-
-  Skill WRITE (átomos C1/C2) para OPERAR RESERVAS no Odoo: cirurgia (cancelar
-  moves órfãos preservando picking), cancelamento (picking inteiro via
-  action_cancel), unreserve (do_unreserve mantendo picking — NOVO v7),
-  find_orphan_mls (READ-only listar MLs zerados — NOVO v7), zerar_reserved_residual
-  (cleanup pós-unlink). 5 ATOMOS no total. Usar quando o pedido é "limpa reserva
-  órfã do picking X", "cancela picking Y", "remove move.lines apontando para
-  quant zerado", "MLs órfãs no picking Z", "picking quebrado pós-ajuste de
-  inventário", "libera reservas mantendo picking" (NOVO v7), "MLs órfãs por
-  quants alvo" (NOVO v7). Compõe **fluxo 2.6 — tratar reserva ATIVA pré-Skill 2**.
-  `--dry-run` é o DEFAULT (modos write); só efetiva com `--confirmar`.
-  NÃO USAR PARA:
-  - ajustar saldo de quant (não toca reservas) -> ajustando-quant-odoo
-  - cancelar MO de produção (mrp.production) -> operando-mo-odoo
-  - mover saldo entre lotes/locais -> transferindo-interno-odoo
-  - só consultar reservas/MLs (não altera) -> consultando-sql ou consultando-quant-odoo
-  - reservar (action_assign) -> Skill 5 operando-picking-odoo
+  Skill WRITE (átomos C1/C2) para OPERAR RESERVAS no Odoo, 5 átomos: cirurgia
+  (cancelar moves órfãos preservando picking), cancelamento de picking,
+  unreserve, find_orphan_mls (READ) e zerar_reserved_residual. Usar quando o
+  pedido é "limpa reserva órfã do picking X", "remove move.lines apontando
+  para quant zerado", "picking quebrado pós-ajuste de inventário", "libera
+  reservas mantendo picking". `--dry-run` é o DEFAULT (modos write); só
+  efetiva com `--confirmar`. NÃO usar para ajustar saldo de quant ->
+  ajustando-quant-odoo. Matriz USAR/NÃO-USAR completa no corpo.
 allowed-tools: Read, Bash, Glob, Grep
 ---
 
@@ -25,6 +17,26 @@ allowed-tools: Read, Bash, Glob, Grep
 Skill **mínimo viável** (C1 mineração ✅ · C2-C5 implementado para 5 átomos · C6-C10 conforme uso). Construída em 2026-05-23 a partir do caso real "6 pickings com 15 MLs órfãs pós-`--resetar-reserva` da skill 1". **Estendida em 2026-05-24 v7** com 2 átomos novos (`unreserve_picking` + `find_orphan_mls`) para fechar gap arquitetural "tratar reserva ATIVA pré-transferência" (caso 71 cods + fluxo 2.6).
 
 Constituição: `app/odoo/estoque/CLAUDE.md`. Service: `app/odoo/estoque/scripts/reserva.py`.
+
+## Quando usar / Quando NÃO usar
+
+**5 átomos**: cirurgia (cancelar moves órfãos preservando picking) · cancelamento
+(picking inteiro via `action_cancel`) · unreserve (`do_unreserve` mantendo picking —
+NOVO v7) · find_orphan_mls (READ-only listar MLs zerados — NOVO v7) ·
+zerar_reserved_residual (cleanup pós-unlink). Compõe **fluxo 2.6 — tratar reserva
+ATIVA pré-Skill 2**.
+
+**USAR QUANDO** o pedido é: "limpa reserva órfã do picking X", "cancela picking Y",
+"remove move.lines apontando para quant zerado", "MLs órfãs no picking Z", "picking
+quebrado pós-ajuste de inventário", "libera reservas mantendo picking" (NOVO v7),
+"MLs órfãs por quants alvo" (NOVO v7).
+
+**NÃO USAR PARA:**
+- ajustar saldo de quant (não toca reservas) -> `ajustando-quant-odoo`
+- cancelar MO de produção (mrp.production) -> `operando-mo-odoo`
+- mover saldo entre lotes/locais -> `transferindo-interno-odoo`
+- só consultar reservas/MLs (não altera) -> `consultando-sql` ou `consultando-quant-odoo`
+- reservar (action_assign) -> Skill 5 `operando-picking-odoo`
 
 ---
 

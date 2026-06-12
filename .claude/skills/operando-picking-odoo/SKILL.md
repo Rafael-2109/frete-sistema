@@ -1,27 +1,14 @@
 ---
 name: operando-picking-odoo
 description: >-
-  Skill WRITE (átomo C2) para OPERAR PICKINGS no Odoo: cancelar (single ou batch
-  fantasmas >7d), validar (button_validate com invariante G019/G020), devolver
-  (criar stock.return.picking + validar, idempotente) E **átomos inter-company
-  v15a** invocados pela Skill 8 faturando-odoo (`criar_picking_inter_company`
-  com D-OPS-3 tracking='none' fix · `validar_picking_inter_company` fluxo F5b
-  completo com G018 peso/volumes · `criar_picking_entrada_destino_manual` ETAPA
-  F com G023 company_id forçado e idempotência via origin). Usar quando o pedido
-  é "cancela picking X", "cancela pickings fantasma da planilha", "re-valida
-  picking Y (state assigned ficou pendurado)", "devolve o picking Z (NF errada)",
-  "estoque voltou pra Em Trânsito Industrialização — devolve".
-  Os átomos inter-company v15a NÃO TÊM CLI ad-hoc — são invocados em Python
-  pelo orchestrator Skill 8 (v15b+). Modo CLI permanece para cancelar/validar/
-  devolver. `--dry-run` é o DEFAULT no CLI; só efetiva com `--confirmar`.
-  NÃO USAR PARA:
-  - cirurgia/MLs órfãs/zerar reserved residual -> operando-reservas-odoo
-  - ajustar saldo de quant (não toca picking) -> ajustando-quant-odoo
-  - mover saldo entre lotes/locais -> transferindo-interno-odoo
-  - faturar inventario inter-company end-to-end (orchestrar A-F) -> faturando-odoo
-    (Skill 8 v15+, em construção — INVOCA os átomos v15a desta skill)
-  - cancelar MO de produção -> operando-mo-odoo
-  - só consultar pickings (não altera) -> consultando-sql
+  Skill WRITE (átomo C2) para OPERAR PICKINGS no Odoo: cancelar (single ou
+  batch fantasmas >7d), validar (button_validate com invariante G019/G020),
+  devolver (stock.return.picking idempotente) e átomos inter-company v15a
+  invocados em Python pela Skill 8. Usar quando o pedido é "cancela picking
+  X", "cancela pickings fantasma da planilha", "re-valida picking Y",
+  "devolve o picking Z (NF errada)". `--dry-run` é o DEFAULT no CLI; só
+  efetiva com `--confirmar`. NÃO usar para cirurgia/MLs órfãs ->
+  operando-reservas-odoo. Matriz USAR/NÃO-USAR completa no corpo.
 allowed-tools: Read, Bash, Glob, Grep
 ---
 
@@ -38,6 +25,29 @@ Skill **mínimo viável** (C1 mineração ✅ · C2-C5 implementados para 3 áto
 - **preencher_lotes_picking (v19+)**: pattern para pickings NATIVOS (gerados pelo Odoo via PO confirmada na escrituração de entrada). Atribui lote default (`MIGRAÇÃO` p/ inventário) ou mapping por produto.
 
 Constituição: `app/odoo/estoque/CLAUDE.md`. Service: `app/odoo/estoque/scripts/picking.py` (StockPickingService — extende padrão pré-existente em `services/`).
+
+## Quando usar / Quando NÃO usar
+
+**Átomos inter-company v15a** (invocados pela Skill 8 `faturando-odoo`):
+`criar_picking_inter_company` com D-OPS-3 tracking='none' fix ·
+`validar_picking_inter_company` fluxo F5b completo com G018 peso/volumes ·
+`criar_picking_entrada_destino_manual` ETAPA F com G023 company_id forçado e
+idempotência via origin. Esses átomos NÃO TÊM CLI ad-hoc — são invocados em
+Python pelo orchestrator Skill 8 (v15b+). Modo CLI permanece para
+cancelar/validar/devolver.
+
+**USAR QUANDO** o pedido é: "cancela picking X", "cancela pickings fantasma da
+planilha", "re-valida picking Y (state assigned ficou pendurado)", "devolve o
+picking Z (NF errada)", "estoque voltou pra Em Trânsito Industrialização — devolve".
+
+**NÃO USAR PARA:**
+- cirurgia/MLs órfãs/zerar reserved residual -> `operando-reservas-odoo`
+- ajustar saldo de quant (não toca picking) -> `ajustando-quant-odoo`
+- mover saldo entre lotes/locais -> `transferindo-interno-odoo`
+- faturar inventario inter-company end-to-end (orquestrar A-F) -> `faturando-odoo`
+  (Skill 8 v15+ — INVOCA os átomos v15a desta skill)
+- cancelar MO de produção -> `operando-mo-odoo`
+- só consultar pickings (não altera) -> `consultando-sql`
 
 ---
 

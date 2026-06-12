@@ -1,51 +1,15 @@
 ---
 name: faturando-odoo
 description: >-
-  Skill WRITE ATOMICA L2 (v24+ AP6 refator) para 5 operacoes sobre `account.move`
-  (NF SAIDA inter-company): validar_invoice_constants (pre-cond fiscal) +
-  liberar_faturamento (dispara robo CIEL IT via XML-RPC) + polling_invoice
-  (aguarda criacao) + validar_invoice_pos_robo (G029+G007+G034) + transmitir_sefaz
-  (Playwright SEFAZ IRREVERSIVEL).
-
-  Constituicao §6 Tabela 1: Skill 8 = SO SAIDA `account.move`; par da Skill 7
-  `escriturando-odoo` (= SO ENTRADA DFe+account.move entrada). Quem une saida +
-  entrada = FLUXO L3 1.3-transferencia-completa.md (⬜ a escrever v25+) ou
-  orchestrator C3 `inventario_pipeline` (renomeado de `faturamento_pipeline.py`
-  em v27+ S3; stub alias REMOVIDO v28+ S6.b 2026-05-28).
-
-  V24+ AT0MICA LIVE (2026-05-27): 5 atomos componiveis em
-  `app/odoo/estoque/scripts/faturamento.py` (~750 LOC, 28 pytest verdes).
-  Espelha pattern Skill 7 ABRANGENTE v19+ (7 atomos). Cada atomo dry-run-first
-  + idempotente intra-Odoo + auto-seguro (G016/G019/G020/G029/G007/G034/D7/D8/
-  D9/CRITICAL-1/MED C-1/MED C-2 codificados intra-atomo).
-
-  Orchestrator C3 LEGACY `inventario_pipeline.py` (renomeado de
-  `faturamento_pipeline.py` em v27+ S3 — stub alias REMOVIDO v28+ S6.b; ~5800 LOC com cleanup deprecated v28+,
-  pipeline A-F + recovery + opt-in --usar-fluxo-l3-v19 + **opt-in
-  --usar-skill8-atomica-v25 LIVE v27+ S1** delegando ETAPAs C+D aos atomos
-  3, 4 e 5 da Skill 8 ATOMICA). Default OFF preserva 100% legacy = zero
-  risco regressao. Canary REAL PROD do opt-in pendente proxima
-  INDUSTRIALIZACAO_FB_LF natural (v26+ cleanup esvaziou candidatos).
-
-  Usar atomos diretamente quando o pedido eh: "valida constants invoice X",
-  "libera faturamento picking Y", "aguarda invoice do robo CIEL IT", "aplica
-  G029+G007+G034 invoice Z", "transmite NF W via SEFAZ".
-
-  Usar orchestrator quando o pedido eh: "executa onda completa de faturamento
-  LF/CD/FB", "retoma faturamento travado em D apos crash", "smoke 1 ajuste
-  end-to-end", "pre-flight cadastro fiscal antes de bulk".
-
-  NAO USAR PARA:
-  - Escrituracao ENTRADA (RecebimentoLf/DFe) -> Skill 7 escriturando-odoo
-  - Picking generico (cancelar/validar/devolver fora pipeline) -> Skill 5
-  - Transferencias internas pre-faturamento intra-empresa -> Skill 2
-  - Recebimento de COMPRAS (DFe fornecedor 4 fases) -> gestor-recebimento
-  - Cancelar NF SEFAZ-autorizada (processo formal 24h) -> NAO ha atomo
-  - Lancar CTe / despesa extra -> integracao-odoo (LancamentoOdooService 16 etapas)
-
-  `dry_run=True` eh o DEFAULT em cada atomo + no orchestrator CLI; atomo
-  `transmitir_sefaz` em real-run exige `confirmar_sefaz=True` (2 nivel —
-  IRREVERSIVEL).
+  Skill WRITE ATOMICA L2 com 5 atomos sobre `account.move` (NF SAIDA
+  inter-company): validar constants, liberar faturamento (robo CIEL IT),
+  polling, validacao pos-robo e transmitir SEFAZ (IRREVERSIVEL). Inclui
+  orchestrator C3 legacy `inventario_pipeline`
+  (pipeline A-F + recovery). Usar para "libera faturamento picking Y",
+  "transmite NF W via SEFAZ", "executa onda completa de faturamento
+  LF/CD/FB", "retoma faturamento travado apos crash". dry_run eh o DEFAULT;
+  transmitir_sefaz exige confirmar_sefaz=True. NAO usar para escrituracao de
+  ENTRADA -> escriturando-odoo. Matriz USAR/NAO-USAR no corpo.
 allowed-tools: Read, Bash, Glob, Grep
 ---
 
@@ -64,6 +28,39 @@ Orchestrator C3 LEGACY: `app/odoo/estoque/orchestrators/inventario_pipeline.py`
 FaturamentoPipelineExecutor, ~5600 LOC).
 Service-fonte legado (COMPAT, NAO MEXER): `app/odoo/services/inventario_pipeline_service.py` (1346 LOC, minerado em §7.2 do planejamento).
 Script-fonte macro (SUPERADO ao final v22+): `scripts/inventario_2026_05/09_executar_onda1_bulk.py` (1866 LOC, minerado em §7.3).
+
+## Quando usar / Quando NÃO usar
+
+**Posicionamento (Constituicao §6 Tabela 1)**: Skill 8 = SO SAIDA `account.move`;
+par da Skill 7 `escriturando-odoo` (= SO ENTRADA DFe+account.move entrada). Quem une
+saida + entrada = FLUXO L3 1.3-transferencia-completa.md (⬜ a escrever v25+) ou
+orchestrator C3 `inventario_pipeline` (renomeado de `faturamento_pipeline.py` em
+v27+ S3; stub alias REMOVIDO v28+ S6.b 2026-05-28; ~5800 LOC com cleanup deprecated
+v28+, pipeline A-F + recovery + opt-in `--usar-fluxo-l3-v19` + **opt-in
+`--usar-skill8-atomica-v25` LIVE v27+ S1** delegando ETAPAs C+D aos atomos 3, 4 e 5
+da Skill 8 ATOMICA). Default OFF preserva 100% legacy = zero risco regressao.
+Canary REAL PROD do opt-in pendente proxima INDUSTRIALIZACAO_FB_LF natural
+(v26+ cleanup esvaziou candidatos).
+
+**Usar atomos diretamente quando o pedido eh**: "valida constants invoice X",
+"libera faturamento picking Y", "aguarda invoice do robo CIEL IT", "aplica
+G029+G007+G034 invoice Z", "transmite NF W via SEFAZ".
+
+**Usar orchestrator quando o pedido eh**: "executa onda completa de faturamento
+LF/CD/FB", "retoma faturamento travado em D apos crash", "smoke 1 ajuste
+end-to-end", "pre-flight cadastro fiscal antes de bulk".
+
+**NAO USAR PARA:**
+- Escrituracao ENTRADA (RecebimentoLf/DFe) -> Skill 7 `escriturando-odoo`
+- Picking generico (cancelar/validar/devolver fora pipeline) -> Skill 5 `operando-picking-odoo`
+- Transferencias internas pre-faturamento intra-empresa -> Skill 2 `transferindo-interno-odoo`
+- Recebimento de COMPRAS (DFe fornecedor 4 fases) -> `gestor-recebimento`
+- Cancelar NF SEFAZ-autorizada (processo formal 24h) -> NAO ha atomo
+- Lancar CTe / despesa extra -> `integracao-odoo` (LancamentoOdooService 16 etapas)
+
+**Defaults de seguranca**: `dry_run=True` eh o DEFAULT em cada atomo + no
+orchestrator CLI; atomo `transmitir_sefaz` em real-run exige `confirmar_sefaz=True`
+(2 nivel — IRREVERSIVEL).
 
 ---
 

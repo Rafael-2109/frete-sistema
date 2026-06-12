@@ -1,31 +1,15 @@
 ---
 name: planejando-pre-etapa-odoo
 description: >-
-  Skill PLANNER+EXECUTOR (READ Odoo + WRITE banco local + WRITE Odoo via C3 macro)
-  da PRE-ETAPA D007 do inventario CD/FB: substitui NFs inter-filial CD↔FB
-  (R$ 32,9 mi) + INDISPONIBILIZAR_* (R$ 60,5 mi) por transferencias INTERNAS
-  na company + residual minimo via ResidualFbCdPlanejado (CFOP 5152) +
-  ajuste positivo puro residual. Modos:
-  planejar (READ Odoo + grava JSON+Excel), propor (WRITE banco local
-  DELETE+INSERT em ajuste_estoque_inventario com status=PROPOSTO), listar-onda
-  (READ + hash sha256), aprovar-onda (WRITE banco local com hash check
-  anti-replay), executar-onda (WRITE Odoo via orchestrator C3 macro que
-  compoe Skills 1+2 sobre ajustes APROVADO — POS/NEG via Skill 2 v2 com
-  delta_esperado propagado, PURO via Skill 1 ajustar_quant com guard CICLAMATO).
-  Usar quando o pedido eh "planeja a pre-etapa CD", "propor pre-etapa CD para o
-  ciclo INVENTARIO_2026_05", "lista a Onda 5", "aprova a Onda 5 com hash X",
-  "executa a Onda 5 do CD", "executar 10 produtos da Onda 5", "executa o cod
-  4310177 da Onda 5", "qual transferencia interna substitui a NF FB->CD?",
-  "gera plano D007 para o CD pre-Onda 2", "regerar plano apos planilha nova".
-  `--dry-run` eh o DEFAULT em todos os modos write (planejar NAO grava JSON/XLSX;
-  propor NAO faz DELETE+INSERT; aprovar NAO altera status; executar NAO chama
-  Odoo). listar-onda eh sempre READ-only (sem dry-run).
-  NAO USAR PARA:
-  - Ajustar quant pontual sem pre-etapa -> ajustando-quant-odoo
-  - Transferir saldo cross loc+lote (sem ciclo de proposta) ->
-    transferindo-interno-odoo
-  - Outras ondas do ciclo (Onda 1/2/3/4) -> 04_propor_ajustes.py (operacao viva)
-  - Auditoria pos-execucao de saldos -> consultando-quant-odoo
+  Skill PLANNER+EXECUTOR (READ Odoo + WRITE banco local + WRITE Odoo via C3
+  macro) da PRE-ETAPA D007 do inventario CD/FB: substitui NFs inter-filial
+  por transferencias INTERNAS na company + residual minimo (CFOP 5152) +
+  ajuste positivo puro. 5 modos: planejar, propor, listar-onda, aprovar-onda,
+  executar-onda. Usar quando o pedido eh "planeja a pre-etapa CD", "propor
+  pre-etapa para o ciclo X", "lista/aprova/executa a Onda 5", "gera plano
+  D007". `--dry-run` eh o DEFAULT nos modos write. NAO usar para ajustar
+  quant pontual sem pre-etapa -> ajustando-quant-odoo. Matriz USAR/NAO-USAR
+  no corpo.
 allowed-tools: Read, Bash, Glob, Grep
 ---
 
@@ -36,6 +20,32 @@ Skill **minimo viavel** (C1 mineracao ✅ · C2-C5 implementados para 5 modos ·
 **Decisao D007** (`docs/inventario-2026-05/00-decisoes/D007-pre-etapa-cd-fb-minimizar-nf.md`): substituir NFs inter-filial CD↔FB (~R$ 32,9 mi) + INDISPONIBILIZAR_LOTE/LOCAL (~R$ 60,5 mi) por **transferencias INTERNAS** dentro da company (mesma fronteira fiscal) + **residual minimo** FB→CD via NF (CFOP 5152) + **ajuste positivo puro** (inventory adjustment sem origem) quando ninguem doa. Onda 5 (CD) executa ANTES da Onda 2 (TRANSFERIR_FB_CD residual). Onda 6 (FB) futura.
 
 Constituicao: `app/odoo/estoque/CLAUDE.md`. Service: `app/odoo/estoque/scripts/pre_etapa.py` (`PreEtapaEstoqueService.planejar()` por produto + helpers top-level `planejar_pre_etapa_batch_company`, `propor_ajustes_pre_etapa`, `listar_onda_pre_etapa`, `aprovar_onda_pre_etapa`). Shim em `services/pre_etapa_estoque_service.py` para 03b/04b/testes legacy.
+
+## Quando usar / Quando NAO usar
+
+**Modos (5)**: planejar (READ Odoo + grava JSON+Excel); propor (WRITE banco local
+DELETE+INSERT em `ajuste_estoque_inventario` com status=PROPOSTO); listar-onda
+(READ + hash sha256); aprovar-onda (WRITE banco local com hash check anti-replay);
+executar-onda (WRITE Odoo via orchestrator C3 macro que compoe Skills 1+2 sobre
+ajustes APROVADO — POS/NEG via Skill 2 v2 com `delta_esperado` propagado, PURO via
+Skill 1 `ajustar_quant` com guard CICLAMATO). Residual minimo via
+`ResidualFbCdPlanejado` (CFOP 5152).
+
+**USAR QUANDO** o pedido eh: "planeja a pre-etapa CD", "propor pre-etapa CD para o
+ciclo INVENTARIO_2026_05", "lista a Onda 5", "aprova a Onda 5 com hash X", "executa
+a Onda 5 do CD", "executar 10 produtos da Onda 5", "executa o cod 4310177 da Onda 5",
+"qual transferencia interna substitui a NF FB->CD?", "gera plano D007 para o CD
+pre-Onda 2", "regerar plano apos planilha nova".
+
+**Dry-run por modo**: `--dry-run` eh o DEFAULT em todos os modos write (planejar
+NAO grava JSON/XLSX; propor NAO faz DELETE+INSERT; aprovar NAO altera status;
+executar NAO chama Odoo). listar-onda eh sempre READ-only (sem dry-run).
+
+**NAO USAR PARA:**
+- Ajustar quant pontual sem pre-etapa -> `ajustando-quant-odoo`
+- Transferir saldo cross loc+lote (sem ciclo de proposta) -> `transferindo-interno-odoo`
+- Outras ondas do ciclo (Onda 1/2/3/4) -> `04_propor_ajustes.py` (operacao viva)
+- Auditoria pos-execucao de saldos -> `consultando-quant-odoo`
 
 ---
 

@@ -166,9 +166,11 @@ SKILLS_EXTERNAS_ROUTING = {
 }
 
 # Flag de controle do check (c) — budget por subagente.
-# False = WARNING (nao bloqueia exit code). Flipar para True na T1.2 apos correcao de
-# gestor-estoque-odoo (que hoje esta em ~15K chars, acima do limite de 8000).
-BUDGET_SUBAGENTE_ENFORCE = False
+# True = ERRO (exit 1) se algum subagente ultrapassar o limite. Flipada na T1.2
+# (2026-06-11) apos a correcao de gestor-estoque-odoo (15391c -> ~6.3K chars):
+# descriptions de SKILL.md ficaram <=600c e a matriz USAR/NAO-USAR completa
+# foi movida para o corpo de cada SKILL.md.
+BUDGET_SUBAGENTE_ENFORCE = True
 
 # Limite de budget (chars) por subagente — igual ao budget do listing do CLI Agent SDK.
 BUDGET_SUBAGENTE_LIMITE = 8000

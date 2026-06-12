@@ -742,21 +742,25 @@ class TestCheckBudgetSubagente:
         assert erros == []
         assert avisos == []
 
-    def test_repo_real_gestor_estoque_odoo_emite_aviso(self):
-        """gestor-estoque-odoo no repo real deve emitir AVISO BUDGET (> 8000c)."""
-        # NOTA T1.2: este teste asserta a VIOLACAO atual; ao reduzir descriptions
-        # na T1.2, INVERTER para assert de estado limpo + flipar
-        # BUDGET_SUBAGENTE_ENFORCE=True
-        _, avisos = mod.check_budget_subagentes(
+    def test_repo_real_nenhum_subagente_acima_do_budget(self):
+        """T1.2 (invertido): NENHUM subagente do repo real emite aviso/erro de budget.
+
+        Antes da T1.2 este teste assertava a violacao de gestor-estoque-odoo
+        (15391c > 8000c). Apos a reducao das descriptions (<=600c, matriz
+        movida para o corpo das SKILL.md), o estado limpo e' o invariante.
+        """
+        erros, avisos = mod.check_budget_subagentes(
             agents_dir=ROOT / ".claude/agents",
             skills_dir=ROOT / ".claude/skills",
             limite=8000,
-            enforce=False,
+            enforce=mod.BUDGET_SUBAGENTE_ENFORCE,
         )
-        # gestor-estoque-odoo esta acima do limite
-        assert any("gestor-estoque-odoo" in a for a in avisos), (
-            f"Esperava aviso para gestor-estoque-odoo. avisos={avisos}"
-        )
+        assert erros == [], f"Nenhum erro de budget esperado. erros={erros}"
+        assert avisos == [], f"Nenhum aviso de budget esperado. avisos={avisos}"
+
+    def test_budget_subagente_enforce_flipado(self):
+        """T1.2: BUDGET_SUBAGENTE_ENFORCE deve estar True (estado limpo atingido)."""
+        assert mod.BUDGET_SUBAGENTE_ENFORCE is True
 
     def test_repo_real_enforce_false_nao_gera_erros_de_budget(self):
         """Com enforce=False, nenhum agente deve gerar ERRO (so avisos)."""
@@ -791,14 +795,19 @@ class TestCheckConsistenciaIntegrado:
         erros, _ = mod.check_consistencia()
         assert erros == [], f"Erros inesperados: {erros}"
 
-    def test_check_consistencia_aviso_budget_propagado(self):
-        """AVISO BUDGET deve aparecer nos avisos de check_consistencia()."""
-        # NOTA T1.2: este teste asserta a VIOLACAO atual; ao reduzir descriptions
-        # na T1.2, INVERTER para assert de estado limpo + flipar
-        # BUDGET_SUBAGENTE_ENFORCE=True
-        _, avisos = mod.check_consistencia()
-        # Com BUDGET_SUBAGENTE_ENFORCE=False, deve ter pelo menos 1 aviso de budget
+    def test_check_consistencia_sem_aviso_nem_erro_de_budget(self):
+        """T1.2 (invertido): check_consistencia() sem aviso/erro de budget.
+
+        Antes da T1.2 este teste assertava >=1 AVISO BUDGET (gestor-estoque-odoo
+        em 15391c). Com descriptions <=600c e BUDGET_SUBAGENTE_ENFORCE=True,
+        o estado limpo (sem avisos E sem erros de budget) e' o invariante.
+        """
+        erros, avisos = mod.check_consistencia()
         avisos_budget = [a for a in avisos if "BUDGET" in a.upper() or "budget" in a.lower()]
-        assert len(avisos_budget) >= 1, (
-            f"Esperava ao menos 1 aviso de budget. avisos={avisos}"
+        erros_budget = [e for e in erros if "BUDGET" in e.upper() or "budget" in e.lower()]
+        assert avisos_budget == [], (
+            f"Nenhum aviso de budget esperado pos-T1.2. avisos={avisos_budget}"
+        )
+        assert erros_budget == [], (
+            f"Nenhum erro de budget esperado pos-T1.2. erros={erros_budget}"
         )
