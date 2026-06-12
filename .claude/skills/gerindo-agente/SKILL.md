@@ -1,6 +1,6 @@
 ---
 name: gerindo-agente
-description: Esta skill deve ser usada quando o usuario precisa gerenciar o Agente Web — memorias persistentes, sessoes anteriores, padroes aprendidos, perfil comportamental, knowledge graph, diagnosticos de saude, analise de friccao, briefing intersessao ou manutencao do sistema. Exemplos que trigam: "memorias do usuario 5", "sessoes anteriores", "historico de conversas", "padroes aprendidos", "pitfalls do sistema", "knowledge graph", "entidades do grafo", "saude do agente", "health score", "metricas do agente", "memorias nao efetivas", "consolidar memorias", "reindexar embeddings", "cleanup do agente", "memorias empresa", "tier frio", "versoes de memoria", "pendencia resolvida", "conflitos de memoria", "cobertura de embeddings", "sumarizar sessao", "analise de friccao", "sinais de frustracao", "briefing entre sessoes", "briefing do agente", "sessoes do Teams", "modelo usado nas sessoes", "perfil comportamental", "perfil do usuario", "user.xml", "gerar perfil", "qualidade dos turnos", "judge score", "step quality", "cobertura de sinal", "adesao de regras", "reincidencia de erro", "sintoma Marcus", "metricas de roteamento", "recomendacoes do agente", "PlanState", "diretrizes operacionais", "diretrizes shadow", "funil de diretrizes", "saude do flywheel", "eval scores", "eval-gate", "calibracao do judge", "dialogo de melhoria", "sugestoes de melhoria", "intelligence report", "flags de evolucao", "estado das flags", "flags ligadas/desligadas", "gates de acesso", "restricoes do agente", "filas RQ", "worker status", "status dos workers". NAO usar para: consultas SQL ou dados de negocio (usar consultando-sql), lembrar preferencias do PROPRIO Claude Code (usar auto-memory), cotacao de frete (usar cotando-frete), operacoes SSW (usar operando-ssw), Odoo (usar skills Odoo).
+description: Esta skill deve ser usada para gerenciar o Agente Web — memorias persistentes, sessoes anteriores, padroes aprendidos, perfil comportamental, knowledge graph, diagnosticos de saude, analise de friccao, briefing intersessao e manutencao. Exemplos: "memorias do usuario 5", "saude do agente", "knowledge graph", "consolidar memorias", "perfil comportamental", "diretrizes operacionais", "flags de evolucao", "filas RQ". NAO usar para consultas SQL ou dados de negocio -> consultando-sql. Lista completa de gatilhos e anti-gatilhos no corpo.
 allowed-tools: Read, Bash, Glob, Grep
 ---
 
@@ -9,6 +9,33 @@ allowed-tools: Read, Bash, Glob, Grep
 Gestao completa do Agente Web: memorias, sessoes, padroes, knowledge graph, diagnosticos e manutencao.
 
 **Substitui**: `memoria-usuario` (deprecated).
+
+## Quando usar / Quando NAO usar
+
+**Exemplos que trigam** (lista completa): "memorias do usuario 5", "sessoes
+anteriores", "historico de conversas", "padroes aprendidos", "pitfalls do sistema",
+"knowledge graph", "entidades do grafo", "saude do agente", "health score",
+"metricas do agente", "memorias nao efetivas", "consolidar memorias", "reindexar
+embeddings", "cleanup do agente", "memorias empresa", "tier frio", "versoes de
+memoria", "pendencia resolvida", "conflitos de memoria", "cobertura de embeddings",
+"sumarizar sessao", "analise de friccao", "sinais de frustracao", "briefing entre
+sessoes", "briefing do agente", "sessoes do Teams", "modelo usado nas sessoes",
+"perfil comportamental", "perfil do usuario", "user.xml", "gerar perfil",
+"qualidade dos turnos", "judge score", "step quality", "cobertura de sinal",
+"adesao de regras", "reincidencia de erro", "sintoma Marcus", "metricas de
+roteamento", "recomendacoes do agente", "PlanState", "diretrizes operacionais",
+"diretrizes shadow", "funil de diretrizes", "saude do flywheel", "eval scores",
+"eval-gate", "calibracao do judge", "dialogo de melhoria", "sugestoes de melhoria",
+"intelligence report", "flags de evolucao", "estado das flags", "flags
+ligadas/desligadas", "gates de acesso", "restricoes do agente", "filas RQ",
+"worker status", "status dos workers".
+
+**NAO usar para:**
+- consultas SQL ou dados de negocio -> `consultando-sql`
+- lembrar preferencias do PROPRIO Claude Code -> auto-memory
+- cotacao de frete -> `cotando-frete`
+- operacoes SSW -> `operando-ssw`
+- Odoo -> skills Odoo
 
 ## REGRAS CRITICAS
 

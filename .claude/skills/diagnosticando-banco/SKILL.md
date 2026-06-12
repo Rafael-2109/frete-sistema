@@ -1,26 +1,13 @@
 ---
 name: diagnosticando-banco
 description: >-
-  Esta skill deve ser usada quando o usuario pergunta "como esta o banco?",
-  "indices nao usados", "queries lentas", "cache hit rate", "conexoes ativas",
-  "vacuum", "bloat", "recomendacao de indice", "otimizar query", "EXPLAIN",
-  "indice hipotetico", "por que essa query e lenta?", "saude do banco",
-  ou precisa de diagnostico de saude, performance e otimizacao do PostgreSQL.
-  Tambem usar quando o usuario quer analisar plano de execucao de uma query,
-  receber sugestoes de indices para melhorar performance, ou investigar
-  problemas de lentidao no banco.
-  - Conexoes: "quantas conexoes?", "conexoes idle", "pool"
-  - Vacuum: "precisa de vacuum?", "dead tuples", "tabelas inchadas"
-  - Sequences: "sequences proximas do limite?", "risco de overflow INTEGER"
-  - Tamanho: "maiores tabelas", "tamanho do banco", "quanto ocupa?"
-  - Indices: "quais indices criar?", "indice pra essa query", "indices redundantes"
-  - Performance: "query lenta", "EXPLAIN ANALYZE", "plano de execucao"
-
-  NAO USAR QUANDO:
-  - Consultas analiticas de dados de negocio → usar **consultando-sql**
-  - Metricas de CPU/memoria do servico → usar **mcp__render__get_metrics**
-  - Logs de aplicacao → usar **mcp__render__list_logs**
-  - Status de deploy → usar **mcp__render__list_deploys**
+  Skill READ-only de diagnostico de saude, performance e otimizacao do
+  PostgreSQL (script local + Postgres MCP Pro). Usar quando o usuario
+  pergunta "como esta o banco?", "queries lentas", "cache hit rate",
+  "precisa de vacuum?", "quais indices criar?", "EXPLAIN ANALYZE", "por que
+  essa query e lenta?", "sequences proximas do limite?". NAO usar para
+  consultas analiticas de dados de negocio -> consultando-sql. Matriz
+  USAR/NAO-USAR completa no corpo.
 allowed-tools: Read, Bash, Glob, Grep, mcp__postgres__analyze_db_health, mcp__postgres__get_top_queries, mcp__postgres__analyze_workload_indexes, mcp__postgres__analyze_query_indexes, mcp__postgres__explain_query, mcp__postgres__execute_sql, mcp__postgres__list_schemas, mcp__postgres__list_objects, mcp__postgres__get_object_details
 ---
 
@@ -34,6 +21,23 @@ Combina um script local com o Postgres MCP Pro (9 tools DBA-level).
 > Para metricas de infra (CPU, memoria, HTTP), use `mcp__render__get_metrics`.
 
 ---
+
+## Quando Usar Esta Skill
+
+Diagnostico de saude, performance e otimizacao do PostgreSQL — incluindo analisar
+plano de execucao de uma query, receber sugestoes de indices para melhorar
+performance, ou investigar problemas de lentidao no banco. Gatilhos por categoria:
+
+- Saude geral: "como esta o banco?", "saude do banco", "indices nao usados",
+  "cache hit rate", "bloat"
+- Conexoes: "quantas conexoes?", "conexoes ativas", "conexoes idle", "pool"
+- Vacuum: "precisa de vacuum?", "dead tuples", "tabelas inchadas"
+- Sequences: "sequences proximas do limite?", "risco de overflow INTEGER"
+- Tamanho: "maiores tabelas", "tamanho do banco", "quanto ocupa?"
+- Indices: "quais indices criar?", "recomendacao de indice", "indice pra essa
+  query", "indices redundantes", "indice hipotetico"
+- Performance: "query lenta", "otimizar query", "EXPLAIN", "EXPLAIN ANALYZE",
+  "plano de execucao", "por que essa query e lenta?"
 
 ## Quando NAO Usar Esta Skill
 
