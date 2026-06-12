@@ -121,7 +121,7 @@ Este é o **inverso**: cada um dos 90 scripts → **qual gold-script absorve sua
 
 ## → `scripts/mo.py` (StockMOService) — cancelar Manufacturing Order
 
-**Skill:** `operando-mo-odoo` ([SKILL.md](../../../.claude/skills/operando-mo-odoo/SKILL.md))  ·  **Fluxo:** [`3.1 cancelar-mo`](../../../app/odoo/estoque/fluxos/3.1-cancelar-mo.md)  ·  **Subagente:** `gestor-estoque-odoo`  ·  **Arquivados em:** [`_validados/operando-mo-odoo/`](../../../scripts/inventario_2026_05/_validados/operando-mo-odoo/VALIDACAO.md) (2026-05-24 v5, 4 dry-run PROD validados; 0 `--confirmar` nesta sessão — pattern validado em PROD 2026-05-20 via scripts-fonte: 120 MOs zumbi canceladas).
+**Skill:** `operando-mo-odoo` ([SKILL.md](../../../.claude/skills/operando-mo-odoo/SKILL.md))  ·  **Fluxos:** [`3.1 cancelar-mo`](../../../app/odoo/estoque/fluxos/3.1-cancelar-mo.md) + [`3.2 concluir-mo`](../../../app/odoo/estoque/fluxos/3.2-concluir-mo.md) (V7 2026-06-12 — fonte minerada: `docs/industrializacao-fb-lf/scripts/e2e_mo_lf_criar.py`, gotcha picked=True ex-G-ENT-10 → G-MO-05)  ·  **Subagente:** `gestor-estoque-odoo`  ·  **Arquivados em:** [`_validados/operando-mo-odoo/`](../../../scripts/inventario_2026_05/_validados/operando-mo-odoo/VALIDACAO.md) (2026-05-24 v5, 4 dry-run PROD validados; 0 `--confirmar` nesta sessão — pattern validado em PROD 2026-05-20 via scripts-fonte: 120 MOs zumbi canceladas).
 
 | Script | O que MINERAR (valor único) | Situação |
 |--------|------------------------------|----------|

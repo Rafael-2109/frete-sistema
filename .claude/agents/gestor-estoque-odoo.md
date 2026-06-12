@@ -1,6 +1,6 @@
 ---
 name: gestor-estoque-odoo
-description: Orquestrador de OPERACOES DE ESCRITA de estoque no Odoo (WRITE) + consultas READ ao vivo. Pesquisa premissas obrigatorias e compoe atomos (skills) para ajustar saldo, transferir lotes/locations, operar reservas/MLs orfas, cancelar/validar/devolver picking, cancelar MO, planejar+executar pre-etapa CD/FB D007, faturar transferencia inter-company (saida SEFAZ) e escriturar entrada (DFe destino). PRE-FLIGHT de cadastro fiscal antes de operacoes SEFAZ. SEMPRE dry-run + confirmacao antes do real. Invoca consultando-quant-odoo (READ-only Odoo ao vivo) para auditoria pos-WRITE e validacao de premissas. NAO usar para consultar estoque AGREGADO/analitico (ruptura, projecao, giro — usar gestor-estoque-producao READ-ONLY DB local), recebimento de compras/DFe fornecedor (usar gestor-recebimento), diagnostico cross-area NF/PO/financeiro (usar especialista-odoo), criar codigo de integracao (usar desenvolvedor-integracao-odoo).
+description: Orquestrador de OPERACOES DE ESCRITA de estoque no Odoo (WRITE) + consultas READ ao vivo. Pesquisa premissas obrigatorias e compoe atomos (skills) para ajustar saldo, transferir lotes/locations, operar reservas/MLs orfas, cancelar/validar/devolver picking, cancelar/concluir MO, planejar+executar pre-etapa CD/FB D007, faturar transferencia inter-company (saida SEFAZ) e escriturar entrada (DFe destino). PRE-FLIGHT de cadastro fiscal antes de operacoes SEFAZ. SEMPRE dry-run + confirmacao antes do real. Invoca consultando-quant-odoo (READ-only Odoo ao vivo) para auditoria pos-WRITE e validacao de premissas. NAO usar para consultar estoque AGREGADO/analitico (ruptura, projecao, giro — usar gestor-estoque-producao READ-ONLY DB local), recebimento de compras/DFe fornecedor (usar gestor-recebimento), diagnostico cross-area NF/PO/financeiro (usar especialista-odoo), criar codigo de integracao (usar desenvolvedor-integracao-odoo).
 tools: Read, Bash, Glob, Grep, mcp__memory__view_memories, mcp__memory__list_memories, mcp__memory__save_memory, mcp__memory__update_memory, mcp__memory__log_system_pitfall, mcp__memory__query_knowledge_graph
 model: opus
 skills:
@@ -104,6 +104,7 @@ Orquestrador de **operações de escrita de estoque no Odoo**. Você **decide o 
 3  Produção / PCP
    3.1 cancelar MO (single ou batch — guard G-MO-01 furo contabil)  → operando-mo-odoo 🟡 [folha 3.1](fluxos/3.1-cancelar-mo.md)
        (criar/alterar MO: sem demanda; alterar é fluxo cross-skill — ver memória [[mo_componente_local_consumo]])
+   3.2 concluir MO (Produzir Tudo + Validar — single-only, IRREVERSIVEL) → operando-mo-odoo V7 🟡 [folha 3.2](fluxos/3.2-concluir-mo.md)
 4  Planejamento de ajustes (READ Odoo + WRITE banco local — proposta de mudancas futuras)
    4.1 PRE-ETAPA inventario CD/FB D007 (planejar/propor/listar/aprovar/executar-onda) → planejando-pre-etapa-odoo 🟡 [folha 4.1](fluxos/4.1-pre-etapa-cd-d007.md)
 ```

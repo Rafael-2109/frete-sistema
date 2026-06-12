@@ -130,6 +130,7 @@ Se a resposta esta no reference -> NAO usar skill.
    |-- Limpar MLs orfas / cirurgia em picking -> operando-reservas-odoo
    |-- Cancelar/validar/devolver picking generico (fantasma, G019 false-positive, NF errada) -> operando-picking-odoo
    |-- Cancelar MO single ou batch (guard G-MO-01 furo contabil; idempotencia) -> operando-mo-odoo
+   |-- Concluir MO (Produzir Tudo + Validar; button_mark_done; guards G-MO-05/06 anti-producao-fantasma; single-only) -> operando-mo-odoo
    |-- Planejar pre-etapa CD/FB D007 (READ Odoo + WRITE banco local; planejar/propor/listar/aprovar com hash anti-replay) -> planejando-pre-etapa-odoo
    |-- Escriturar ENTRADA inter-company (NF nossa, DFe via SEFAZ OU upload XML SAIDA) -> Skill 7 `escriturando-odoo` ABRANGENTE v19+ (7 atomos) compostos via FLUXO L3 1.2.1 (caminho A) ou 1.2.2 (caminho B); dispatch automatico via `FaturamentoPipelineExecutor.executar_fluxo_l3_1_2_x`
    |-- Faturar SAIDA inter-company (pipeline A-F + recovery + SEFAZ via Playwright) -> orchestrator C3 `inventario_pipeline` (atual `faturamento_pipeline.py`; refator AP6 v20+ extrai Skill 8 ATOMICA L2) — invocavel via SKILL.md fachada `.claude/skills/faturando-odoo/SKILL.md` ou diretamente via `python -m app.odoo.estoque.orchestrators.faturamento_pipeline`
@@ -209,7 +210,7 @@ Cada skill tem `SKILL.md` em `.claude/skills/<nome>/`. `consultando-sql` e invoc
 `transferindo-interno-odoo` (WRITE — transferencia interna intra-empresa; delega ajustar_quant×2),
 `operando-reservas-odoo` (WRITE — cirurgia/cancelamento de reservas e MLs orfas),
 `operando-picking-odoo` (WRITE — cancelar/validar/devolver picking generico; invariante G019/G020),
-`operando-mo-odoo` (WRITE — cancelar MO single ou batch; guard G-MO-01 furo contabil),
+`operando-mo-odoo` (WRITE — cancelar MO single/batch + concluir MO single-only V7; guards G-MO-01/05/06),
 `escriturando-odoo` (WRITE ABRANGENTE v19+ — 7 atomos sobre account.move+DFe/PO/invoice: `buscar_dfe`, `criar_dfe_a_partir_do_invoice_saida` (upload XML autorizado da NF SAIDA), `escriturar_dfe`, `gerar_po_from_dfe` (fire-and-poll robo CIEL IT), `preencher_po`, `confirmar_po`, `criar_invoice_from_po`. Compostos via FLUXOS L3 1.2.1 (caminho A = DFe veio via SEFAZ) e 1.2.2 (caminho B = DFe ausente). Wrapper V1 STRICT `criar_recebimento_orchestrado` LF→FB deprecado v20+ (preservado p/ ETAPA E legacy do orchestrator). Cada atomo dry-run-first + idempotencia por campos Odoo.),
 `planejando-pre-etapa-odoo` (READ Odoo + WRITE banco local — planejar/propor/listar/aprovar pre-etapa D007; hash sha256 anti-replay),
 `consultando-quant-odoo` (READ-only AO VIVO — auditoria pos-WRITE, snapshots de quants),

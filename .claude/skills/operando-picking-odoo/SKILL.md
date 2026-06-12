@@ -46,7 +46,7 @@ picking Z (NF errada)", "estoque voltou pra Em Trânsito Industrialização — 
 - mover saldo entre lotes/locais -> `transferindo-interno-odoo`
 - faturar inventario inter-company end-to-end (orquestrar A-F) -> `faturando-odoo`
   (Skill 8 v15+ — INVOCA os átomos v15a desta skill)
-- cancelar MO de produção -> `operando-mo-odoo`
+- cancelar/concluir MO de produção -> `operando-mo-odoo`
 - só consultar pickings (não altera) -> `consultando-sql`
 
 ---

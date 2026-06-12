@@ -36,6 +36,7 @@ METODOS_WRITE_AUDITADOS = frozenset({
     'button_validate', 'button_cancel',
     'action_cancel',
     'action_unbuild',
+    'button_mark_done',  # Skill 4 V7 concluir MO (operacao contabil)
     'do_pass',  # quality check
     # Compras / DFe (Recebimento 4 fases + Skill 7)
     'button_confirm', 'action_confirm',

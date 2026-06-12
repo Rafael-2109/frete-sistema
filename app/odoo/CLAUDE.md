@@ -332,7 +332,7 @@ A partir de 2026-05-22, todas as operacoes de ESCRITA de estoque no Odoo (ajuste
 | `transferindo-interno-odoo` | `app/odoo/estoque/scripts/transfer.py` | `services/stock_internal_transfer_service.py` | 🟡 v10 (Modo C + distribuir_para_indisponivel helper validado 5 cods PROD; FIX D-OPS-5 v14b) |
 | `operando-reservas-odoo` | `app/odoo/estoque/scripts/reserva.py` | — | 🟡 v7+ (5 átomos: cirurgia, cancelamento, unreserve, find_orphan_mls, zerar_residual) |
 | `operando-picking-odoo` | `app/odoo/estoque/scripts/picking.py` | `services/stock_picking_service.py` | 🟡 v15a (6 átomos · 61 pytest · G019/G020 fechada · 3 átomos inter-company para ETAPA F) |
-| `operando-mo-odoo` | `app/odoo/estoque/scripts/mo.py` | `services/stock_mo_service.py` (preventivo) | 🟡 v5 (guard G-MO-01 furo contábil; idempotência action_cancel validada) |
+| `operando-mo-odoo` | `app/odoo/estoque/scripts/mo.py` | `services/stock_mo_service.py` (preventivo) | 🟡 V7 (cancelar + concluir 2026-06-12; guards G-MO-01 + G-MO-05/06; canary concluir pendente) |
 | `escriturando-odoo` ⚠️ V1 STRICT | `app/odoo/estoque/scripts/escrituracao.py` | — | 🟡 V1 LIVE v17.5 — **antipadrão AP1/AP4 documentado em `app/odoo/estoque/CLAUDE.md §6.5` para refator v19+** (Skill 7 ABRANGENTE) |
 | `consultando-quant-odoo` (READ) | `app/odoo/estoque/scripts/consulta_quant.py` | — | 🟡 v7+ (3 modos: quants/move-lines/pickings — fluxo 2.6) |
 

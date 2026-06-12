@@ -33,7 +33,7 @@ quebrado pós-ajuste de inventário", "libera reservas mantendo picking" (NOVO v
 
 **NÃO USAR PARA:**
 - ajustar saldo de quant (não toca reservas) -> `ajustando-quant-odoo`
-- cancelar MO de produção (mrp.production) -> `operando-mo-odoo`
+- cancelar/concluir MO de produção (mrp.production) -> `operando-mo-odoo`
 - mover saldo entre lotes/locais -> `transferindo-interno-odoo`
 - só consultar reservas/MLs (não altera) -> `consultando-sql` ou `consultando-quant-odoo`
 - reservar (action_assign) -> Skill 5 `operando-picking-odoo`

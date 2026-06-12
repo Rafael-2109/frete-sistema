@@ -57,6 +57,7 @@ Exemplo:
 3  Produção / PCP
    3.1 cancelar MO (single ou batch — guard G-MO-01 furo contábil) → operando-mo-odoo 🟡 ([folha](3.1-cancelar-mo.md))
        (3.1.c MO COM consumo > 0 → DELEGADO para `mrp.unbuild` cross-skill — sem skill ainda)
+   3.2 concluir MO (Produzir Tudo + Validar — single-only, guards G-MO-05/06 anti-produção-fantasma) → operando-mo-odoo V7 🟡 ([folha](3.2-concluir-mo.md))
 4  Planejamento de ajustes (READ Odoo + WRITE banco local — proposta de mudanças futuras)
    4.1 PRE-ETAPA inventario CD/FB D007 (planejar/propor/listar/aprovar com hash sha256 anti-replay) → planejando-pre-etapa-odoo 🟡 ([folha](4.1-pre-etapa-cd-d007.md))
        (substitui NFs inter-filial R$ 32,9 mi + INDISPONIBILIZAR R$ 60,5 mi por transferências internas; gera plano JSON+Excel; NÃO executa — quem executa: `09b_executar_pre_etapa.py` compõe Skills 1+2 ainda como C3 macro, não capinada)

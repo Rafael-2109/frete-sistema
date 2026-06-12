@@ -1,16 +1,23 @@
-"""operar_mo.py — skill `operando-mo-odoo`: listar/detalhar/cancelar MO.
+"""operar_mo.py — skill `operando-mo-odoo`: listar/detalhar/cancelar/concluir MO.
 
-Expoe StockMOService via CLI. 3 modos:
+Expoe StockMOService via CLI. 4 modos:
   - listar (READ): lista MOs com classificacao SEGURO/RESERVA_FANTASMA/FURO_REAL
   - detalhar (READ): detalhamento de 1 MO (raws+finished+MLs+consumo)
   - cancelar (WRITE): action_cancel com guard G-MO-01 v6
+  - concluir (WRITE, V7): Produzir Tudo + Validar (button_mark_done) com
+    guards G-MO-05 (picked=True anti-producao-fantasma) + G-MO-06 (componente
+    sem reserva bloqueia). SINGLE-ONLY (--mo-id) — escrita contabil
+    IRREVERSIVEL (MO done nao e cancelavel; reverter = mrp.unbuild).
 
-Default seguro (cancelar):
+Default seguro (cancelar/concluir):
 - `--dry-run` (sem `--confirmar`) so calcula o plano (exit 4).
 - consumo DONE > 0 BLOQUEIA cancelamento (G-MO-01 v6 = furo contabil REAL);
   reserva fantasma (assigned/waiting/picked) PASSA com warning. Para reverter
   furo real, usar mrp.unbuild via fluxo cross-skill (ver memoria
   memoria local Claude Code [[reaproveitar-semiacabado-orfao-mo-cancelada]]).
+- concluir: producao TOTAL apenas (qty_producing = product_qty); produto com
+  tracking lot/serial sem lot_producing_id exige --lote (nunca inventado);
+  MO draft exige action_confirm previo (falha orientando).
 
 Modos:
   listar:    [--create-de Y-M-D] [--create-ate Y-M-D]
@@ -22,6 +29,8 @@ Modos:
   cancelar:  --mo-id <id> [--motivo "..."] [--with-audit]   (single, audit default ON)
              OU (batch — todos os filtros idem listar)
              [--consumo zero|qualquer] [--with-audit]
+  concluir:  --mo-id <id> [--lote "P-12/06"] [--motivo "..."] [--with-audit]
+             (single-only; audit default ON)
 
 Exemplos:
   python operar_mo.py --modo listar --create-ate 2026-05-15 --empresas 1,4,5
@@ -31,6 +40,8 @@ Exemplos:
   python operar_mo.py --modo cancelar --create-ate 2025-06-01 --empresas 1 --consumo zero
   python operar_mo.py --modo cancelar --create-ate 2025-06-01 --empresas 1 --consumo zero --limite 1 --confirmar
   python operar_mo.py --modo cancelar --mo-ids 17449,18108 --confirmar --with-audit
+  python operar_mo.py --modo concluir --mo-id 20606
+  python operar_mo.py --modo concluir --mo-id 20606 --lote "099/26" --confirmar
 
 Exit: 0 efetivado · 4 dry-run OK · 1 falha · 2 uso.
 """
@@ -64,6 +75,11 @@ _FALHAS = {
     'FALHA_FURO_CONTABIL_REAL',   # V6 (done > 0)
     'FALHA_STATE_NAO_CANCELAVEL',
     'FALHA_STATE_INESPERADO',
+    # V7 concluir
+    'FALHA_STATE_NAO_CONCLUIVEL',
+    'FALHA_COMPONENTE_SEM_RESERVA',
+    'FALHA_LOTE_PRODUZIDO_AUSENTE',
+    'FALHA_PRODUCAO_FANTASMA',
 }
 _OKS = {'EXECUTADO', 'NOOP', 'OK_RESERVA_FANTASMA'}  # V6: fantasma OK
 _DRY_OKS = {
@@ -75,6 +91,9 @@ _DRY_OKS = {
     'DRY_RUN_FALHA_FURO_CONTABIL',        # V5 legacy
     'DRY_RUN_FALHA_FURO_CONTABIL_REAL',   # V6
     'DRY_RUN_FALHA_STATE_NAO_CANCELAVEL',
+    # V7 concluir
+    'DRY_RUN_FALHA_STATE_NAO_CONCLUIVEL',
+    'DRY_RUN_FALHA_LOTE_PRODUZIDO_AUSENTE',
 }
 
 
@@ -122,6 +141,29 @@ def cancelar_single(svc: StockMOService, mo_id: int,
         r = svc.cancelar_mo_com_audit(mo_id, motivo=motivo, dry_run=dry_run)
     else:
         r = svc.cancelar_mo(mo_id, motivo=motivo, dry_run=dry_run)
+    out.update(r)
+    return out
+
+
+def concluir_single(svc: StockMOService, mo_id: int, nome_lote: Optional[str],
+                    motivo: str, dry_run: bool,
+                    with_audit: bool = True) -> Dict[str, Any]:
+    """Conclui 1 MO via service (V7). Audit pre/pos default ON (single-only)."""
+    out: Dict[str, Any] = {
+        'modo': 'concluir',
+        'tipo': 'single',
+        'ts_inicio': agora_brasil_naive().isoformat(timespec='seconds'),
+        'dry_run': dry_run,
+        'with_audit': with_audit,
+    }
+    if with_audit:
+        r = svc.concluir_mo_com_audit(
+            mo_id, nome_lote=nome_lote, motivo=motivo, dry_run=dry_run,
+        )
+    else:
+        r = svc.concluir_mo(
+            mo_id, nome_lote=nome_lote, motivo=motivo, dry_run=dry_run,
+        )
     out.update(r)
     return out
 
@@ -238,12 +280,17 @@ def main() -> int:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=__doc__,
     )
-    ap.add_argument('--modo', required=True, choices=['listar', 'detalhar', 'cancelar'])
+    ap.add_argument('--modo', required=True,
+                    choices=['listar', 'detalhar', 'cancelar', 'concluir'])
     ap.add_argument('--mo-id', type=int, default=0,
-                    help='ID de MO (detalhar OU cancelar single)')
+                    help='ID de MO (detalhar, cancelar single OU concluir)')
     ap.add_argument('--mo-ids', default='',
                     help='CSV de IDs (cancelar batch explicito; ex: 17449,18108)')
-    ap.add_argument('--motivo', default='', help='Motivo do cancelamento (auditoria)')
+    ap.add_argument('--motivo', default='', help='Motivo da operacao (auditoria)')
+    ap.add_argument('--lote', default='',
+                    help='concluir: nome do lote produzido (obrigatorio quando o '
+                         'produto tem tracking lot/serial e a MO nao tem '
+                         'lot_producing_id — nunca inventado)')
     # Filtros (listar + cancelar batch)
     ap.add_argument('--create-de', default='',
                     help='YYYY-MM-DD inclusivo (filtro create_date >=)')
@@ -308,6 +355,19 @@ def main() -> int:
             )
             return 2
 
+    if args.modo == 'concluir':
+        # SINGLE-ONLY (decisao 2026-06-12): concluir e escrita contabil
+        # irreversivel — sem batch por criterio nem --mo-ids.
+        if not args.mo_id:
+            logger.error('--modo concluir exige --mo-id <id> (single-only).')
+            return 2
+        if args.mo_ids or args.create_de or args.create_ate:
+            logger.error(
+                'concluir e single-only (--mo-id). Batch nao suportado — '
+                'escrita contabil irreversivel (MO done nao e cancelavel).'
+            )
+            return 2
+
     app = setup_cli_completo(__file__, args.quiet, args.forcar_concorrencia)
     with app.app_context():
         svc = StockMOService()
@@ -324,6 +384,13 @@ def main() -> int:
             )
         elif args.modo == 'detalhar':
             out = detalhar(svc, args.mo_id)
+        elif args.modo == 'concluir':
+            # Single-only: audit default ON (espelha cancelar single)
+            with_audit = args.with_audit if '--with-audit' in sys.argv else True
+            out = concluir_single(
+                svc, args.mo_id, (args.lote or None), args.motivo,
+                args.dry_run, with_audit=with_audit,
+            )
         else:  # cancelar
             if args.mo_id:
                 # Single: audit default ON
@@ -345,7 +412,7 @@ def main() -> int:
                 )
 
         # Sempre salvar log (auditoria)
-        log_path = _salvar_log(out, args.dry_run if args.modo == 'cancelar' else True)
+        log_path = _salvar_log(out, args.dry_run if args.modo in ('cancelar', 'concluir') else True)
         if log_path:
             out['log_path'] = log_path
 

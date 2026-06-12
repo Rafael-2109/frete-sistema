@@ -749,3 +749,285 @@ def test_cancelar_mo_com_audit_dry_run_so_captura_pre():
 
 def test_tol_consumo_pequeno_mas_nao_zero():
     assert TOL_CONSUMO == 0.0001
+
+
+# ============================================================
+# concluir_mo (V7 — Produzir Tudo + Validar)
+# ============================================================
+
+class _FakeOdooConcluir:
+    """Fake roteado por (model, method) para o fluxo do concluir_mo.
+
+    Estado mutavel: mo_state muda apos button_mark_done; raws mudam apos
+    action_assign (simula reserva). Registra chamadas para asserts.
+    """
+
+    def __init__(self, *, mo=None, tracking='lot', raws_pre=None,
+                 raws_pos_assign=None, raws_final=None,
+                 lots_existentes=None, mark_done_result=None,
+                 mark_done_exc=None, state_pos_done='done'):
+        self.mo = mo or {
+            'id': 77, 'name': 'LF/MO/09999', 'state': 'confirmed',
+            'company_id': [5, 'LF'], 'product_id': [29925, 'KETCHUP'],
+            'product_qty': 411.0, 'qty_produced': 0.0,
+            'create_date': '2026-06-01', 'date_start': False,
+            'qty_producing': 0.0, 'lot_producing_id': False,
+        }
+        self.tracking = tracking
+        # raws com MLs (default: 2 raws reservados)
+        self.raws_pre = raws_pre if raws_pre is not None else [
+            {'id': 1001, 'product_id': [10, 'SEMI'], 'product_uom_qty': 5268.0,
+             'state': 'assigned', 'move_line_ids': [9001]},
+            {'id': 1002, 'product_id': [11, 'AGUA'], 'product_uom_qty': 100.0,
+             'state': 'assigned', 'move_line_ids': [9002]},
+        ]
+        self.raws_pos_assign = raws_pos_assign  # None = igual a raws_pre
+        self.raws_final = raws_final if raws_final is not None else [
+            {'id': 1001, 'product_id': [10, 'SEMI'], 'state': 'done', 'quantity': 5268.0},
+            {'id': 1002, 'product_id': [11, 'AGUA'], 'state': 'done', 'quantity': 100.0},
+        ]
+        self.lots_existentes = lots_existentes if lots_existentes is not None else []
+        self.mark_done_result = mark_done_result
+        self.mark_done_exc = mark_done_exc
+        self.state_pos_done = state_pos_done
+        self.assign_chamado = False
+        self.mark_done_chamado = False
+        self.calls = []
+
+    # --- API espelhando OdooConnection ---
+    def search_read(self, model, domain, fields=None, **kw):
+        self.calls.append(('search_read', model, domain, fields))
+        if model == 'mrp.production':
+            mo = dict(self.mo)
+            if self.mark_done_chamado:
+                mo['state'] = self.state_pos_done
+            if fields and 'move_raw_ids' in fields:
+                # _snapshot_mo (audit) le ids de moves — fake sem moves detalhados
+                mo.setdefault('move_raw_ids', [])
+                mo.setdefault('move_finished_ids', [])
+                mo.setdefault('reservation_state', 'assigned')
+            return [mo] if domain == [['id', '=', self.mo['id']]] else []
+        if model == 'stock.move':
+            if fields and 'move_line_ids' in fields:
+                raws = (self.raws_pos_assign
+                        if (self.assign_chamado and self.raws_pos_assign is not None)
+                        else self.raws_pre)
+                return [dict(rm) for rm in raws]
+            return [dict(rm) for rm in self.raws_final]
+        return []
+
+    def execute_kw(self, model, method, args, kwargs=None, **kw):
+        self.calls.append(('execute_kw', model, method, args, kwargs))
+        if model == 'product.product' and method == 'search_read':
+            return [{'id': args[0][0][2], 'tracking': self.tracking}]
+        if model == 'stock.lot' and method == 'search_read':
+            return list(self.lots_existentes)
+        if model == 'stock.lot' and method == 'create':
+            return 555
+        if model == 'mrp.production' and method == 'action_assign':
+            self.assign_chamado = True
+            return True
+        if model == 'mrp.production' and method == 'button_mark_done':
+            self.mark_done_chamado = True
+            if self.mark_done_exc:
+                raise self.mark_done_exc
+            return self.mark_done_result
+        if model == 'mrp.consumption.warning' and method == 'create':
+            return 909
+        return True
+
+    # helpers de assert
+    def chamadas(self, model, method):
+        return [c for c in self.calls
+                if c[0] == 'execute_kw' and c[1] == model and c[2] == method]
+
+
+def test_concluir_mo_dry_run_plano_ok():
+    fake = _FakeOdooConcluir(mo={
+        'id': 77, 'name': 'LF/MO/09999', 'state': 'confirmed',
+        'company_id': [5, 'LF'], 'product_id': [29925, 'K'],
+        'product_qty': 411.0, 'qty_produced': 0.0,
+        'create_date': '2026-06-01', 'date_start': False,
+        'qty_producing': 0.0, 'lot_producing_id': [400, '099/26'],
+    })
+    svc = StockMOService(odoo=fake)
+    r = svc.concluir_mo(77, dry_run=True)
+    assert r['status'] == 'DRY_RUN_OK', r.get('erro')
+    assert r['plano']['qty_producing'] == 411.0
+    assert r['plano']['lote'] == '099/26'
+    assert r['plano']['raws_sem_ml_atual'] == []
+    # dry-run NAO escreve
+    assert fake.chamadas('mrp.production', 'action_assign') == []
+    assert fake.chamadas('mrp.production', 'button_mark_done') == []
+
+
+def test_concluir_mo_dry_run_warning_raw_sem_ml():
+    fake = _FakeOdooConcluir(
+        tracking='none',
+        raws_pre=[{'id': 1, 'product_id': [10, 'SALMOURA'],
+                   'product_uom_qty': 9.0, 'state': 'confirmed',
+                   'move_line_ids': []}],
+    )
+    svc = StockMOService(odoo=fake)
+    r = svc.concluir_mo(77, dry_run=True)
+    assert r['status'] == 'DRY_RUN_OK'
+    assert len(r['plano']['raws_sem_ml_atual']) == 1
+    assert any('G-MO-06' in w for w in r['warnings'])
+
+
+def test_concluir_mo_noop_em_done():
+    fake = _FakeOdooConcluir()
+    fake.mo['state'] = 'done'
+    svc = StockMOService(odoo=fake)
+    assert svc.concluir_mo(77)['status'] == 'NOOP'
+    assert svc.concluir_mo(77, dry_run=True)['status'] == 'DRY_RUN_NOOP'
+    assert fake.chamadas('mrp.production', 'button_mark_done') == []
+
+
+def test_concluir_mo_falha_state_cancel_e_draft():
+    fake = _FakeOdooConcluir()
+    fake.mo['state'] = 'cancel'
+    svc = StockMOService(odoo=fake)
+    assert svc.concluir_mo(77)['status'] == 'FALHA_STATE_NAO_CONCLUIVEL'
+    fake.mo['state'] = 'draft'
+    r = svc.concluir_mo(77)
+    assert r['status'] == 'FALHA_STATE_NAO_CONCLUIVEL'
+    assert 'action_confirm' in r['erro']
+    r_dry = svc.concluir_mo(77, dry_run=True)
+    assert r_dry['status'] == 'DRY_RUN_FALHA_STATE_NAO_CONCLUIVEL'
+
+
+def test_concluir_mo_falha_lote_ausente_tracking_lot():
+    fake = _FakeOdooConcluir(tracking='lot')  # lot_producing_id=False default
+    svc = StockMOService(odoo=fake)
+    r = svc.concluir_mo(77)  # sem nome_lote
+    assert r['status'] == 'FALHA_LOTE_PRODUZIDO_AUSENTE'
+    r_dry = svc.concluir_mo(77, dry_run=True)
+    assert r_dry['status'] == 'DRY_RUN_FALHA_LOTE_PRODUZIDO_AUSENTE'
+    # tracking none nao exige lote
+    fake2 = _FakeOdooConcluir(tracking='none')
+    r2 = StockMOService(odoo=fake2).concluir_mo(77)
+    assert r2['status'] == 'EXECUTADO'
+
+
+def test_concluir_mo_g_mo_06_bloqueia_raw_sem_ml_pos_assign():
+    fake = _FakeOdooConcluir(
+        tracking='none',
+        raws_pos_assign=[
+            {'id': 1001, 'product_id': [10, 'SEMI'], 'product_uom_qty': 5.0,
+             'state': 'assigned', 'move_line_ids': [9001]},
+            {'id': 1002, 'product_id': [12, 'SALMOURA'], 'product_uom_qty': 9.0,
+             'state': 'confirmed', 'move_line_ids': []},  # manual_consumption
+        ],
+    )
+    svc = StockMOService(odoo=fake)
+    r = svc.concluir_mo(77)
+    assert r['status'] == 'FALHA_COMPONENTE_SEM_RESERVA'
+    assert r['raws_sem_ml'][0]['move_id'] == 1002
+    # NAO prosseguiu para mark_done
+    assert fake.chamadas('mrp.production', 'button_mark_done') == []
+
+
+def test_concluir_mo_executado_picked_e_context_company():
+    fake = _FakeOdooConcluir(tracking='none')
+    svc = StockMOService(odoo=fake)
+    r = svc.concluir_mo(77, motivo='canary')
+    assert r['status'] == 'EXECUTADO', r.get('erro')
+    assert r['state_apos'] == 'done'
+    assert r['raws_consumidos'] == 2
+    # G-MO-05: picked=True nas MLs E nos moves (2 raws com ML)
+    ml_writes = fake.chamadas('stock.move.line', 'write')
+    mv_writes = fake.chamadas('stock.move', 'write')
+    assert len(ml_writes) == 2 and len(mv_writes) == 2
+    assert all(c[3][1] == {'picked': True} for c in ml_writes)
+    # context multi-company derivado da MO (LF=5) em action_assign e mark_done
+    assign = fake.chamadas('mrp.production', 'action_assign')[0]
+    assert assign[4]['context']['company_id'] == 5
+    md = fake.chamadas('mrp.production', 'button_mark_done')[0]
+    assert md[4]['context']['allowed_company_ids'] == [5]
+    assert md[4]['context']['skip_backorder'] is True
+
+
+def test_concluir_mo_wizard_consumo_confirmado():
+    fake = _FakeOdooConcluir(
+        tracking='none',
+        mark_done_result={'res_model': 'mrp.consumption.warning', 'type': 'ir.actions.act_window'},
+    )
+    svc = StockMOService(odoo=fake)
+    r = svc.concluir_mo(77)
+    assert r['status'] == 'EXECUTADO', r.get('erro')
+    assert r['wizard_consumo_confirmado'] is True
+    assert len(fake.chamadas('mrp.consumption.warning', 'create')) == 1
+    assert len(fake.chamadas('mrp.consumption.warning', 'action_confirm')) == 1
+
+
+def test_concluir_mo_tolera_cannot_marshal_none():
+    fake = _FakeOdooConcluir(
+        tracking='none',
+        mark_done_exc=Exception("cannot marshal None unless allow_none is enabled"),
+    )
+    svc = StockMOService(odoo=fake)
+    r = svc.concluir_mo(77)
+    assert r['status'] == 'EXECUTADO', r.get('erro')
+
+
+def test_concluir_mo_excecao_real_no_mark_done_propaga_falha():
+    fake = _FakeOdooConcluir(
+        tracking='none',
+        mark_done_exc=Exception('AccessError: voce nao pode'),
+    )
+    svc = StockMOService(odoo=fake)
+    r = svc.concluir_mo(77)
+    assert r['status'] == 'FALHA'
+    assert 'button_mark_done' in r['erro']
+
+
+def test_concluir_mo_state_inesperado_pos_mark_done():
+    fake = _FakeOdooConcluir(tracking='none', state_pos_done='to_close')
+    svc = StockMOService(odoo=fake)
+    r = svc.concluir_mo(77)
+    assert r['status'] == 'FALHA_STATE_INESPERADO'
+
+
+def test_concluir_mo_pos_check_producao_fantasma():
+    fake = _FakeOdooConcluir(
+        tracking='none',
+        raws_final=[
+            {'id': 1001, 'product_id': [10, 'SEMI'], 'state': 'cancel', 'quantity': 0.0},
+            {'id': 1002, 'product_id': [11, 'AGUA'], 'state': 'done', 'quantity': 100.0},
+        ],
+    )
+    svc = StockMOService(odoo=fake)
+    r = svc.concluir_mo(77)
+    assert r['status'] == 'FALHA_PRODUCAO_FANTASMA'
+    assert r['raws_cancelados'][0]['move_id'] == 1001
+
+
+def test_concluir_mo_resolve_lote_por_nome_busca_in_e_company():
+    fake = _FakeOdooConcluir(tracking='lot', lots_existentes=[{'id': 401}])
+    svc = StockMOService(odoo=fake)
+    r = svc.concluir_mo(77, nome_lote='099/26')
+    assert r['status'] == 'EXECUTADO', r.get('erro')
+    assert r['lote'] == {'id': 401, 'nome': '099/26'}
+    busca = fake.chamadas('stock.lot', 'search_read')[0]
+    domain = busca[3][0]
+    assert ['name', 'in', ['099/26']] in domain  # gotcha stock_lot_search_bug
+    assert ['company_id', '=', 5] in domain      # gotcha lote multi-empresa
+    assert fake.chamadas('stock.lot', 'create') == []
+
+
+def test_concluir_mo_cria_lote_quando_ausente():
+    fake = _FakeOdooConcluir(tracking='lot', lots_existentes=[])
+    svc = StockMOService(odoo=fake)
+    r = svc.concluir_mo(77, nome_lote='P-12/06')
+    assert r['status'] == 'EXECUTADO', r.get('erro')
+    cria = fake.chamadas('stock.lot', 'create')[0]
+    assert cria[3][0] == {'name': 'P-12/06', 'product_id': 29925, 'company_id': 5}
+
+
+def test_concluir_mo_com_audit_snapshots():
+    fake = _FakeOdooConcluir(tracking='none')
+    svc = StockMOService(odoo=fake)
+    r = svc.concluir_mo_com_audit(77)
+    assert r['status'] == 'EXECUTADO', r.get('erro')
+    assert 'pre' in r['audit'] and 'pos' in r['audit']

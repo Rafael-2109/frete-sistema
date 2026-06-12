@@ -2,7 +2,7 @@
 # doc-dono: app/odoo/estoque/CLAUDE.md §6
 """StockMOService — operacoes de escrita em mrp.production (Manufacturing Orders).
 
-Primitiva REUTILIZAVEL para CANCELAR MO no Odoo (mrp.production.action_cancel).
+Primitivas REUTILIZAVEIS para CANCELAR e CONCLUIR MO no Odoo.
 
 V1 (2026-05-24): unico atomo demanda-driven (skills nascem de casos reais):
 - cancelar_mo(mo_id, motivo='', forcar_consumo=False, dry_run=False)
@@ -14,6 +14,15 @@ V1 (2026-05-24): unico atomo demanda-driven (skills nascem de casos reais):
     states, empresas, consumo zero|qualquer), mede consumo em batch (perf),
     delega cancelar_mo individual.
 
+V7 (2026-06-12): atomo concluir_mo (demanda real: MO LF/MO/03556 sessao
+2026-06-10 + piloto industrializacao FB-LF 2026-06-01):
+- concluir_mo(mo_id, nome_lote=None, motivo='', dry_run=False)
+  - Produzir Tudo + Validar: action_assign -> lot_producing/qty_producing ->
+    picked=True nos raws (G-MO-05) -> button_mark_done (+ wizard consumo) ->
+    G019-like -> POS-CHECK anti-producao-fantasma. Single-only (sem batch —
+    escrita CONTABIL irreversivel). Sequencia minerada de
+    docs/industrializacao-fb-lf/scripts/e2e_mo_lf_criar.py (validada PROD).
+
 Atomos PREVISTOS sem demanda (NAO implementar — feedback-skills-demanda-driven):
 - criar_mo: sem demanda real isolada (pipeline cria via Odoo)
 - alterar_mo: caso real existe mas e fluxo cross-skill (Skill 2 transfer +
@@ -24,12 +33,25 @@ Gotchas-invariante codificados:
   Operador deve usar mrp.unbuild via fluxo cross-skill se precisar reverter
   consumo. Ver memoria local Claude Code [[reaproveitar-semiacabado-orfao-mo-cancelada]] §3.
 - G-MO-02: manual_consumption=True nao reserva via action_assign. NAO
-  relevante para cancelar (action_cancel ignora reservas/picked). Relevante
-  para criar/alterar (nao cobertos em V1).
+  relevante para cancelar (action_cancel ignora reservas/picked). RELEVANTE
+  para concluir: raw sem move.line e CANCELADO pelo button_mark_done ->
+  G-MO-06 bloqueia (FALHA_COMPONENTE_SEM_RESERVA).
 - G-MO-03: componente em local errado (Indisponivel/Estoque vs location_src
-  declarado). Nao relevante para cancelar (nao toca componentes).
+  declarado). Nao relevante para cancelar. RELEVANTE para concluir: e a outra
+  causa de raw sem move.line pos-action_assign (mesmo bloqueio G-MO-06).
 - G-MO-04: picked=True em to_close/done — herdado de Skill 2.4 G026.
   action_cancel e seguro com picked (nao mexe em quants existentes).
+- G-MO-05 (ex-G-ENT-10 do piloto, validado PROD 2026-06-01): action_assign
+  cria move.line com picked=False; o wizard mrp.consumption.warning dispara
+  button_mark_done(skip_consumption=True) que, com picked=False, interpreta
+  "nada apontado" e CANCELA os raws -> producao fantasma (SVL value=0, sem
+  account.move; caso real MOs 20235/36/38/39). Fix codificado: picked=True
+  em MLs + moves ANTES do mark_done + POS-CHECK pos-done (raw cancelado ->
+  FALHA_PRODUCAO_FANTASMA). Ground-truth MO boa: LF/MO/03510.
+- G-MO-06: raw move sem stock.move.line pos-action_assign (causas: G-MO-02
+  manual_consumption OU G-MO-03 saldo fora do location_src) -> concluir
+  cancelaria o raw silenciosamente (consumo parcial). Default seguro:
+  BLOQUEAR listando os raws (FALHA_COMPONENTE_SEM_RESERVA).
 
 Helpers:
 - medir_consumo_mo(mo_ids): retorna dict {mo_id: {done, reservado, total}}.
@@ -57,6 +79,20 @@ Status canonicos (output['status']):
                                  Passa o guard (action_cancel apenas libera reservas).
 - OK_RESERVA_FANTASMA — espelho confirmado de DRY_RUN_OK_RESERVA_FANTASMA
 
+Status canonicos do concluir_mo (V7 2026-06-12):
+- EXECUTADO — state pos='done' + POS-CHECK G-MO-05 limpo (raws consumidos)
+- NOOP | DRY_RUN_NOOP — state pre='done' (idempotente, nenhum RPC de escrita)
+- DRY_RUN_OK — plano valido (pode carregar `warnings` informativos)
+- FALHA_STATE_NAO_CONCLUIVEL | DRY_RUN_FALHA_STATE_NAO_CONCLUIVEL —
+  state pre IN (cancel, draft); draft orienta action_confirm previo
+- FALHA_COMPONENTE_SEM_RESERVA — G-MO-06: raw sem move.line pos-action_assign
+- FALHA_LOTE_PRODUZIDO_AUSENTE | DRY_RUN_FALHA_LOTE_PRODUZIDO_AUSENTE —
+  tracking lot/serial sem lot_producing_id nem nome_lote informado
+  (nunca inventar nome de lote)
+- FALHA_PRODUCAO_FANTASMA — POS-CHECK G-MO-05: raw cancelado pos-mark_done
+- FALHA_STATE_INESPERADO — mark_done executado mas state pos != 'done'
+- FALHA — excecao generica
+
 Spec: consolidacao de scripts cancelar_mos.py + 14_cancelar_mos_antigas_fb.py
 (inventario 2026-05). Validado AO VIVO 2026-05-24 (10.000 MOs FB / 17 CD /
 3367 LF, idempotencia action_cancel em state=cancel = True sem erro).
@@ -78,6 +114,10 @@ STATES_CANCELAVEIS = ('draft', 'confirmed', 'progress', 'to_close')
 
 # States bloqueados (nao da pra reverter sem unbuild).
 STATES_NAO_CANCELAVEIS = ('done',)
+
+# States em que concluir MO faz sentido (pre). draft exige action_confirm
+# previo (decisao 2026-06-12: falhar pedindo confirmacao, nao auto-confirmar).
+STATES_CONCLUIVEIS = ('confirmed', 'progress', 'to_close')
 
 # Particao de stock.move.state para classificar consumo (G-MO-01 v6, 2026-05-27).
 # DONE = baixa contabil efetivada (action_cancel = furo); RESERVADO = apenas
@@ -360,6 +400,380 @@ class StockMOService:
                 f"por outra em producao, lock pessimista, regra customizada)."
             )
 
+        r['tempo_ms'] = int((time.time() - inicio) * 1000)
+        return r
+
+    # ============================================================
+    # Operacao atomica: concluir 1 MO (V7 — Produzir Tudo + Validar)
+    # ============================================================
+
+    _CAMPOS_MO_CONCLUIR = _CAMPOS_MO + ['qty_producing', 'lot_producing_id']
+
+    @staticmethod
+    def _ctx_company(company_id: Optional[int]) -> Dict[str, Any]:
+        """Context multi-company derivado da PROPRIA MO (licao D-V30-1 GOTCHA 1:
+        action_* com company do USUARIO opera na empresa errada)."""
+        if not company_id:
+            return {}
+        return {'allowed_company_ids': [company_id], 'company_id': company_id}
+
+    def _ler_raws_concluir(self, mo_id: int) -> List[Dict[str, Any]]:
+        """Raws operaveis (state not in done/cancel) com count de move.lines."""
+        raws = self.odoo.search_read(
+            'stock.move',
+            [['raw_material_production_id', '=', mo_id],
+             ['state', 'not in', ['done', 'cancel']]],
+            ['id', 'product_id', 'product_uom_qty', 'state', 'move_line_ids'],
+        )
+        for rm in raws:
+            rm['_mls'] = list(rm.get('move_line_ids') or [])
+        return raws
+
+    def _resolver_lot_producing(
+        self, nome_lote: str, product_id: int, company_id: Optional[int],
+        ctx: Dict[str, Any], *, criar: bool = True,
+    ) -> Optional[int]:
+        """Busca stock.lot por (name, product_id, company_id); cria se ausente.
+
+        Operador 'in' no name (gotcha stock_lot_search_bug: '=' retorna vazio
+        intermitente) + filtro company_id (gotcha lote multi-empresa: mesmo
+        nome existe em FB e LF).
+        """
+        domain: List[Any] = [
+            ['name', 'in', [nome_lote]], ['product_id', '=', product_id],
+        ]
+        if company_id:
+            domain.append(['company_id', '=', company_id])
+        ex = self.odoo.execute_kw(
+            'stock.lot', 'search_read', [domain],
+            {'fields': ['id'], 'context': ctx},
+        )
+        if ex:
+            return ex[0]['id']
+        if not criar:
+            return None
+        vals = {'name': nome_lote, 'product_id': product_id}
+        if company_id:
+            vals['company_id'] = company_id
+        return self.odoo.execute_kw('stock.lot', 'create', [vals], {'context': ctx})
+
+    def concluir_mo(
+        self,
+        mo_id: int,
+        *,
+        nome_lote: Optional[str] = None,
+        motivo: str = '',
+        dry_run: bool = False,
+    ) -> Dict[str, Any]:
+        """Conclui 1 mrp.production (Produzir Tudo + Validar) via button_mark_done.
+
+        Sequencia minerada do piloto industrializacao FB-LF (validada PROD
+        2026-06-01 — docs/industrializacao-fb-lf/scripts/e2e_mo_lf_criar.py):
+          1. action_assign (reservar componentes; idempotente)
+          2. G-MO-06: raw sem move.line pos-assign -> BLOQUEIA (sem isso o
+             mark_done cancela o raw = consumo parcial silencioso)
+          3. lot_producing_id (se tracking lot/serial) + qty_producing =
+             product_qty (Produzir Tudo — producao parcial fora do V7)
+          4. G-MO-05: picked=True nas move.lines E nos moves dos raws
+          5. button_mark_done (context skip_backorder) + wizard
+             mrp.consumption.warning se aparecer
+          6. G019-like: re-le state (esperado 'done')
+          7. POS-CHECK G-MO-05: raw cancelado pos-done -> FALHA_PRODUCAO_FANTASMA
+
+        IRREVERSIVEL: gera consumo contabil (SVL + account.move). MO done nao
+        e cancelavel; reverter exige mrp.unbuild (cross-skill) com efeitos
+        colaterais. Por isso single-only (sem batch).
+
+        Args:
+            mo_id: mrp.production.id alvo.
+            nome_lote: nome do lote produzido (obrigatorio quando o produto
+                tem tracking lot/serial E a MO ainda nao tem lot_producing_id;
+                nunca inventado — decisao 2026-06-12).
+            motivo: registrado para log/auditoria.
+            dry_run: nao escreve; retorna plano com estado atual dos raws.
+
+        Returns:
+            dict com status (ver docstring do modulo, secao V7), mo_id, name,
+            state_antes/state_apos, plano (dry-run), raws_apontados,
+            raws_sem_ml, lote, tempo_ms, erro (se houver).
+
+        Raises:
+            (nenhuma — condicoes de dado retornam status, nao raise).
+        """
+        from app.odoo.utils.connection import is_cannot_marshal_none
+
+        inicio = time.time()
+        r: Dict[str, Any] = {
+            'mo_id': mo_id,
+            'motivo': motivo,
+            'dry_run': dry_run,
+            'acao': 'none',
+        }
+
+        # --- 1. Ler MO (campos de concluir) ---
+        mos = self.odoo.search_read(
+            'mrp.production', [['id', '=', mo_id]], list(self._CAMPOS_MO_CONCLUIR),
+        )
+        if not mos:
+            r['status'] = 'FALHA'
+            r['erro'] = f'MO {mo_id} nao existe no Odoo'
+            r['tempo_ms'] = int((time.time() - inicio) * 1000)
+            return r
+        mo = mos[0]
+
+        state_antes = mo['state']
+        company_id = mo['company_id'][0] if mo.get('company_id') else None
+        product_id = mo['product_id'][0] if mo.get('product_id') else None
+        r['name'] = mo.get('name')
+        r['state_antes'] = state_antes
+        r['company_id'] = company_id
+        r['product_id'] = product_id
+        r['product_qty'] = mo.get('product_qty')
+
+        # --- 2. Idempotencia: ja concluida? ---
+        if state_antes == 'done':
+            r['status'] = 'DRY_RUN_NOOP' if dry_run else 'NOOP'
+            r['state_apos'] = 'done'
+            r['tempo_ms'] = int((time.time() - inicio) * 1000)
+            return r
+
+        # --- 3. State nao-concluivel (cancel/draft) ---
+        if state_antes not in STATES_CONCLUIVEIS:
+            r['status'] = ('DRY_RUN_FALHA_STATE_NAO_CONCLUIVEL'
+                           if dry_run else 'FALHA_STATE_NAO_CONCLUIVEL')
+            if state_antes == 'draft':
+                r['erro'] = (
+                    f"State 'draft' exige action_confirm previo (confirme a MO "
+                    f"no Odoo ou via fluxo proprio antes de concluir)."
+                )
+            else:
+                r['erro'] = (
+                    f"State '{state_antes}' nao e concluivel via "
+                    f"button_mark_done (concluiveis: {STATES_CONCLUIVEIS})."
+                )
+            r['tempo_ms'] = int((time.time() - inicio) * 1000)
+            return r
+
+        ctx = self._ctx_company(company_id)
+
+        # --- 4. Premissas de plano (reads — validas em dry-run E write) ---
+        tracking = 'none'
+        if product_id:
+            prods = self.odoo.execute_kw(
+                'product.product', 'search_read',
+                [[['id', '=', product_id]]],
+                {'fields': ['tracking'], 'context': ctx},
+            )
+            tracking = prods[0].get('tracking') or 'none' if prods else 'none'
+        r['tracking'] = tracking
+
+        lot_atual = mo.get('lot_producing_id')
+        lot_atual_id = lot_atual[0] if lot_atual else None
+        precisa_lote = tracking in ('lot', 'serial')
+        if precisa_lote and not lot_atual_id and not nome_lote:
+            r['status'] = ('DRY_RUN_FALHA_LOTE_PRODUZIDO_AUSENTE'
+                           if dry_run else 'FALHA_LOTE_PRODUZIDO_AUSENTE')
+            r['erro'] = (
+                f"Produto {product_id} tem tracking='{tracking}' e a MO nao tem "
+                f"lot_producing_id. Informe nome_lote (--lote) — nunca inventado."
+            )
+            r['tempo_ms'] = int((time.time() - inicio) * 1000)
+            return r
+
+        raws = self._ler_raws_concluir(mo_id)
+        raws_sem_ml_atual = [
+            {'move_id': rm['id'],
+             'produto': rm['product_id'][1] if rm.get('product_id') else '?',
+             'qty': rm.get('product_uom_qty')}
+            for rm in raws if not rm['_mls']
+        ]
+
+        # --- 5. Dry-run: plano com estado atual ---
+        if dry_run:
+            r['status'] = 'DRY_RUN_OK'
+            r['state_apos_esperado'] = 'done'
+            r['plano'] = {
+                'passos': [
+                    'action_assign', 'lot_producing/qty_producing',
+                    'picked=True raws (G-MO-05)',
+                    'button_mark_done (+wizard consumo)',
+                    'G019-like state', 'POS-CHECK G-MO-05',
+                ],
+                'qty_producing': mo.get('product_qty'),
+                'lote': (lot_atual[1] if lot_atual else nome_lote) if precisa_lote else None,
+                'lote_sera_criado': bool(
+                    precisa_lote and not lot_atual_id and nome_lote
+                    and self._resolver_lot_producing(
+                        nome_lote, product_id, company_id, ctx, criar=False,
+                    ) is None
+                ),
+                'raws_total': len(raws),
+                'raws_sem_ml_atual': raws_sem_ml_atual,
+            }
+            warnings = []
+            if raws_sem_ml_atual:
+                warnings.append(
+                    f'{len(raws_sem_ml_atual)} raw(s) sem move.line no estado '
+                    f'ATUAL — action_assign sera executado no real; se '
+                    f'persistirem sem reserva, G-MO-06 bloqueia '
+                    f'(manual_consumption ou saldo fora do location_src).'
+                )
+            if state_antes == 'progress':
+                warnings.append(
+                    "MO em 'progress': pode haver apontamento do operador no "
+                    "chao de fabrica — concluir por fora conflita com o real."
+                )
+            if warnings:
+                r['warnings'] = warnings
+            r['tempo_ms'] = int((time.time() - inicio) * 1000)
+            return r
+
+        # --- 6. WRITE: action_assign (idempotente) ---
+        try:
+            self.odoo.execute_kw(
+                'mrp.production', 'action_assign', [[mo_id]], {'context': ctx},
+            )
+        except Exception as exc:
+            r['status'] = 'FALHA'
+            r['erro'] = f'action_assign: {str(exc)[:400]}'
+            r['tempo_ms'] = int((time.time() - inicio) * 1000)
+            return r
+
+        # --- 7. G-MO-06: raw sem move.line pos-assign -> bloqueia ---
+        raws = self._ler_raws_concluir(mo_id)
+        raws_sem_ml = [
+            {'move_id': rm['id'],
+             'produto': rm['product_id'][1] if rm.get('product_id') else '?',
+             'qty': rm.get('product_uom_qty')}
+            for rm in raws if not rm['_mls']
+        ]
+        if raws_sem_ml:
+            r['status'] = 'FALHA_COMPONENTE_SEM_RESERVA'
+            r['raws_sem_ml'] = raws_sem_ml
+            r['erro'] = (
+                f"G-MO-06: {len(raws_sem_ml)} raw(s) sem move.line apos "
+                f"action_assign — concluir os cancelaria silenciosamente "
+                f"(consumo parcial). Causas tipicas: manual_consumption "
+                f"(G-MO-02) ou saldo fora do location_src (G-MO-03; ver "
+                f"memoria mo_componente_local_consumo — transferencia interna "
+                f"resolve). Trate os componentes e rode novamente."
+            )
+            r['tempo_ms'] = int((time.time() - inicio) * 1000)
+            return r
+
+        # --- 8. Lote produzido + qty_producing (Produzir Tudo) ---
+        try:
+            vals_mo: Dict[str, Any] = {'qty_producing': mo.get('product_qty')}
+            if precisa_lote:
+                lot_id = lot_atual_id or self._resolver_lot_producing(
+                    nome_lote, product_id, company_id, ctx,  # type: ignore[arg-type]
+                )
+                vals_mo['lot_producing_id'] = lot_id
+                r['lote'] = {'id': lot_id, 'nome': lot_atual[1] if lot_atual else nome_lote}
+            self.odoo.execute_kw(
+                'mrp.production', 'write', [[mo_id], vals_mo], {'context': ctx},
+            )
+        except Exception as exc:
+            r['status'] = 'FALHA'
+            r['erro'] = f'lot/qty_producing: {str(exc)[:400]}'
+            r['tempo_ms'] = int((time.time() - inicio) * 1000)
+            return r
+
+        # --- 9. G-MO-05: picked=True em MLs + moves ANTES do mark_done ---
+        raws_apontados = []
+        try:
+            for rm in raws:
+                if rm['_mls']:
+                    self.odoo.execute_kw(
+                        'stock.move.line', 'write',
+                        [rm['_mls'], {'picked': True}], {'context': ctx},
+                    )
+                    self.odoo.execute_kw(
+                        'stock.move', 'write',
+                        [[rm['id']], {'picked': True}], {'context': ctx},
+                    )
+                    raws_apontados.append(rm['id'])
+        except Exception as exc:
+            r['status'] = 'FALHA'
+            r['erro'] = f'picked=True (G-MO-05): {str(exc)[:400]}'
+            r['tempo_ms'] = int((time.time() - inicio) * 1000)
+            return r
+        r['raws_apontados'] = raws_apontados
+
+        # --- 10. button_mark_done (+ wizard consumo) ---
+        try:
+            res = self.odoo.execute_kw(
+                'mrp.production', 'button_mark_done', [[mo_id]],
+                {'context': dict(ctx, skip_backorder=True)},
+            )
+            if isinstance(res, dict) and res.get('res_model') == 'mrp.consumption.warning':
+                wiz = self.odoo.execute_kw(
+                    'mrp.consumption.warning', 'create',
+                    [{'mrp_production_ids': [(6, 0, [mo_id])]}], {'context': ctx},
+                )
+                self.odoo.execute_kw(
+                    'mrp.consumption.warning', 'action_confirm', [[wiz]],
+                    {'context': ctx},
+                )
+                r['wizard_consumo_confirmado'] = True
+        except Exception as exc:
+            # Unico artefato tolerado: retorno None do XML-RPC (helper T1.5).
+            if not is_cannot_marshal_none(exc):
+                r['status'] = 'FALHA'
+                r['erro'] = f'button_mark_done: {str(exc)[:400]}'
+                r['tempo_ms'] = int((time.time() - inicio) * 1000)
+                return r
+
+        # --- 11. G019-like: re-le state pos mark_done ---
+        mo_pos = self._ler_mo(mo_id)
+        state_apos = mo_pos['state'] if mo_pos else None
+        r['state_apos'] = state_apos
+        if state_apos != 'done':
+            r['status'] = 'FALHA_STATE_INESPERADO'
+            r['erro'] = (
+                f"button_mark_done executado mas state pos='{state_apos}' "
+                f"(esperado 'done'). Investigar no Odoo (wizard pendente, "
+                f"regra customizada, qty_producing zerada)."
+            )
+            r['tempo_ms'] = int((time.time() - inicio) * 1000)
+            return r
+
+        # --- 12. POS-CHECK G-MO-05: raws consumiram de verdade? ---
+        raws_pos = self.odoo.search_read(
+            'stock.move',
+            [['raw_material_production_id', '=', mo_id]],
+            ['id', 'product_id', 'state', 'quantity'],
+        )
+        cancelados = [
+            {'move_id': m['id'],
+             'produto': m['product_id'][1] if m.get('product_id') else '?',
+             'qty': m.get('quantity')}
+            for m in raws_pos if m.get('state') == 'cancel'
+        ]
+        n_consumido = sum(
+            1 for m in raws_pos
+            if m.get('state') == 'done' and float(m.get('quantity') or 0) > TOL_CONSUMO
+        )
+        r['raws_consumidos'] = n_consumido
+        if cancelados:
+            r['status'] = 'FALHA_PRODUCAO_FANTASMA'
+            r['raws_cancelados'] = cancelados
+            r['erro'] = (
+                f"POS-CHECK G-MO-05: {len(cancelados)} raw(s) CANCELADOS apos "
+                f"mark_done — MO done SEM consumir (producao fantasma, SVL "
+                f"value=0). NAO prosseguir; cirurgia manual necessaria "
+                f"(MO ja esta done e nao e cancelavel)."
+            )
+            r['tempo_ms'] = int((time.time() - inicio) * 1000)
+            return r
+
+        r['status'] = 'EXECUTADO'
+        r['acao'] = 'concluida'
+        logger.info(
+            f'MO {mo_id} ({mo.get("name")}) concluida '
+            f'(state {state_antes}->done, {n_consumido} raws consumidos)'
+            + (f' motivo: {motivo}' if motivo else '')
+        )
         r['tempo_ms'] = int((time.time() - inicio) * 1000)
         return r
 
@@ -743,6 +1157,32 @@ class StockMOService:
         out['audit'] = {'pre': snap_pre}
         if not dry_run and snap_pre is not None and out.get('status') in (
             'EXECUTADO', 'OK_RESERVA_FANTASMA', 'NOOP'
+        ):
+            snap_pos = self._snapshot_mo(mo_id)
+            out['audit']['pos'] = snap_pos
+            if snap_pos is not None:
+                out['audit']['diff'] = self._diff_snapshots(snap_pre, snap_pos)
+        return out
+
+    def concluir_mo_com_audit(
+        self,
+        mo_id: int,
+        *,
+        nome_lote: Optional[str] = None,
+        motivo: str = '',
+        dry_run: bool = False,
+    ) -> Dict[str, Any]:
+        """concluir_mo + snapshots pre/pos + diff (opt-in costoso, +1-2s).
+
+        Espelha cancelar_mo_com_audit. Em dry-run, captura so o snapshot pre.
+        """
+        snap_pre = self._snapshot_mo(mo_id)
+        out = self.concluir_mo(
+            mo_id, nome_lote=nome_lote, motivo=motivo, dry_run=dry_run,
+        )
+        out['audit'] = {'pre': snap_pre}
+        if not dry_run and snap_pre is not None and out.get('status') in (
+            'EXECUTADO', 'NOOP',
         ):
             snap_pos = self._snapshot_mo(mo_id)
             out['audit']['pos'] = snap_pos
