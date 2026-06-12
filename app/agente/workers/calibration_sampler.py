@@ -58,8 +58,11 @@ def _map_judge_to_case_fields(step) -> Optional[dict]:
     evidencia = str(judge.get('evidencia', '') or '')
 
     # Discordância de ALTO VALOR (Task 3): judge=success refutado pelo adversarial.
+    # Casos com adversarial.skipped=True (sem matéria — o verifier NÃO chamou o
+    # LLM) NÃO são discordância: não ganham prioridade nem o marcador ⚠ADVERSARIAL.
     adversarial = (outcome.get('verify') or {}).get('adversarial') or {}
-    adv_refuted = adversarial.get('refuted') is True
+    adv_skipped = adversarial.get('skipped') is True
+    adv_refuted = adversarial.get('refuted') is True and not adv_skipped
     prioridade = (label == 'success') and adv_refuted
 
     evidence = f"label={label} score={int(score)} | {evidencia[:400]}"

@@ -70,6 +70,33 @@ class TestMapJudgeToCaseFields:
         f = _map_judge_to_case_fields(s)
         assert f["prioridade"] is False
 
+    def test_sem_prioridade_quando_adversarial_skipped(self):
+        # Skip-sem-matéria (2026-06-12): o verifier NÃO chamou o LLM
+        # ({'refuted': False, 'skipped': True}) -> não é discordância;
+        # sem prioridade e sem marcador ⚠ADVERSARIAL na evidence.
+        from app.agente.workers.calibration_sampler import _map_judge_to_case_fields
+        s = _fake_step("sess-f:6", {
+            "judge": {"label": "success", "score": 88, "evidencia": "ok"},
+            "verify": {"adversarial": {"refuted": False, "skipped": True,
+                                       "reason": "sem_materia"}},
+        })
+        f = _map_judge_to_case_fields(s)
+        assert f["prioridade"] is False
+        assert "ADVERSARIAL" not in f["evidence"].upper()
+
+    def test_sem_prioridade_quando_skipped_mesmo_com_refuted_true(self):
+        # Defensivo: payload anômalo refuted=True + skipped=True NÃO prioriza
+        # (skipped domina — o LLM não viu matéria, refutação não é substantiva).
+        from app.agente.workers.calibration_sampler import _map_judge_to_case_fields
+        s = _fake_step("sess-g:7", {
+            "judge": {"label": "success", "score": 90, "evidencia": "ok"},
+            "verify": {"adversarial": {"refuted": True, "skipped": True,
+                                       "reason": "anomalo"}},
+        })
+        f = _map_judge_to_case_fields(s)
+        assert f["prioridade"] is False
+        assert "ADVERSARIAL" not in f["evidence"].upper()
+
     def test_score_ausente_degrada_seguro(self):
         from app.agente.workers.calibration_sampler import _map_judge_to_case_fields
         # judge sem score numérico -> case_score 0.0, status 'fail', sem quebrar.

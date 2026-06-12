@@ -1,12 +1,18 @@
 """
 Verifier adversarial de plano — B2, Onda 2 (Job RQ).
 
-Tenta REFUTAR a conclusão do passo do agente usando Haiku em modo cético.
-Veredito: {'refuted': bool, 'reason': str}.
+Tenta REFUTAR a conclusão do passo do agente usando Sonnet com a MESMA
+matéria que o judge vê (pergunta + resposta + tools + auditoria Odoo).
+Veredito: {'refuted': bool, 'reason': str} (+ 'skipped': True quando não
+há matéria — chave ADITIVA, contrato preservado).
 
-Padrão SHADOW: nenhum caller ativo. O enqueue automático virá na Onda 3
-sob a flag USE_AGENT_VERIFY (app/agente/config/feature_flags.py, OFF por
-default). Esta função existe exclusivamente para shadow/teste.
+Doutrina (2026-06-12): refutar SOMENTE com razão concreta ancorada na
+matéria apresentada. Sem matéria suficiente → refuted=false (não punir o
+agente por cegueira do verifier). Modelo Sonnet (e não Haiku): modelo
+fraco não audita forte; volume ~263 calls/semana → custo desprezível.
+
+Enqueue ativo via enqueue_pending_verifies sob a flag USE_AGENT_VERIFY
+(app/agente/config/feature_flags.py — ON em PROD via env).
 
 Padrão clonado de: app/agente/workers/step_judge.py
 CRITICAL-1 replicado: db.session.commit() explícito após update_outcome —
@@ -22,7 +28,9 @@ from app import create_app
 
 logger = logging.getLogger('sistema_fretes')
 
-HAIKU_MODEL = 'claude-haiku-4-5-20251001'
+# Sonnet (não Haiku): o adversarial audita respostas produzidas por modelos
+# fortes (Opus/Fable) — modelo fraco não audita forte. ~263 calls/semana.
+ADVERSARIAL_MODEL = 'claude-sonnet-4-6'
 
 # Fila RQ (LEVE) onde o varredor batch enfileira verify_step_shadow.
 # REUSA a mesma fila do step_judge ('agent_judge') — ambos são jobs leves de
@@ -30,20 +38,27 @@ HAIKU_MODEL = 'claude-haiku-4-5-20251001'
 VERIFY_QUEUE_NAME = 'agent_judge'
 
 ADVERSARIAL_SYSTEM_PROMPT = (
-    "Você é um revisor cético. Sua tarefa é tentar REFUTAR a conclusão "
-    "apresentada por um agente logístico.\n\n"
-    "Analise criticamente:\n"
-    "  - A conclusão é suportada pelas ferramentas usadas?\n"
-    "  - Há premissas não verificadas?\n"
-    "  - Há alternativas mais plausíveis ignoradas?\n\n"
-    "Padrão cético: na dúvida, REFUTE (refuted=true).\n\n"
+    "Você é um revisor adversarial de um agente logístico. Sua tarefa é "
+    "tentar REFUTAR a conclusão do passo, mas SOMENTE com razão concreta "
+    "ancorada na matéria apresentada (pergunta do usuário, resposta do "
+    "agente, ferramentas usadas e auditoria Odoo).\n\n"
+    "Regras:\n"
+    "  - Refute (refuted=true) APENAS se você apontar uma falha concreta e "
+    "verificável na matéria: conclusão contradita pela auditoria, premissa "
+    "falsa, pedido do usuário ignorado, número inconsistente.\n"
+    "  - Se a matéria for insuficiente para julgar, retorne refuted=false "
+    'com reason "matéria insuficiente". NÃO refute por falta de acesso a '
+    "dados que não foram apresentados.\n"
+    "  - Proporcionalidade: não exija prova além do escopo da tarefa. "
+    "Ex.: um export de arquivo não exige confirmação no Odoo; uma resposta "
+    "informativa não exige operação executiva.\n\n"
     "Retorne EXCLUSIVAMENTE JSON válido:\n"
     '{"refuted": bool, "reason": str curta}'
 )
 
 
-def _call_haiku_verifier(user_prompt: str) -> str:
-    """Chama Haiku com ADVERSARIAL_SYSTEM_PROMPT e retorna texto da resposta.
+def _call_adversarial_verifier(user_prompt: str) -> str:
+    """Chama o modelo adversarial (Sonnet) com ADVERSARIAL_SYSTEM_PROMPT.
 
     Helper independente para mock nos testes
     (mesmo padrão de step_judge._call_haiku_judge).
@@ -51,8 +66,8 @@ def _call_haiku_verifier(user_prompt: str) -> str:
     import anthropic
     client = anthropic.Anthropic()
     resp = client.messages.create(
-        model=HAIKU_MODEL,
-        max_tokens=300,
+        model=ADVERSARIAL_MODEL,
+        max_tokens=500,
         system=ADVERSARIAL_SYSTEM_PROMPT,
         messages=[{'role': 'user', 'content': user_prompt}],
     )
@@ -76,9 +91,45 @@ def _parse_adversarial_json(raw: str) -> Optional[dict]:
         return None
 
 
-def _build_adversarial_prompt(step) -> str:
-    """Monta prompt para o Haiku adversarial."""
+def _build_adversarial_prompt(step, odoo_ops: Optional[list] = None,
+                              meta: Optional[str] = None,
+                              response: Optional[str] = None) -> str:
+    """Monta o prompt do adversarial com PARIDADE DE MATÉRIA com o judge.
+
+    Inclui (espelha step_judge._build_judge_prompt):
+    - PERGUNTA do usuário (meta, 1500c) e RESPOSTA do agente (response, 3000c)
+    - tools_used do step
+    - resumo das operações Odoo (EXECUTADO/FALHA_ODOO, modelos/métodos)
+    - resumo do judge anterior (quando presente em outcome_signal)
+
+    Sem isto o adversarial refutava cego ("sem acesso ao resultado das
+    ferramentas...") — refutações vazias que poluíam a calibração.
+    """
+    odoo_ops = odoo_ops or []
     tools_section = ', '.join(step.tools_used or []) or '(nenhuma)'
+
+    pergunta_section = (meta or '').strip()[:1500] if meta else '(pergunta do usuario nao disponivel)'
+    resposta_section = (response or '').strip()[:3000] if response else '(resposta do agente nao disponivel)'
+
+    if not odoo_ops:
+        odoo_section = (
+            "AUDITORIA AMBIENTAL: sem auditoria ambiental disponivel "
+            "(flag USE_ODOO_AUDIT_HOOK off ou tabela vazia para esta sessao). "
+            "Julgue apenas pela materia apresentada acima."
+        )
+    else:
+        executado = sum(1 for op in odoo_ops if getattr(op, 'status', '') == 'EXECUTADO')
+        falhas = sum(1 for op in odoo_ops if getattr(op, 'status', '') == 'FALHA_ODOO')
+        modelos = list({getattr(op, 'modelo_odoo', '?') for op in odoo_ops})
+        metodos = list({getattr(op, 'metodo_odoo', '?') for op in odoo_ops if getattr(op, 'metodo_odoo', None)})
+
+        odoo_section = (
+            f"AUDITORIA AMBIENTAL Odoo ({len(odoo_ops)} ops registradas):\n"
+            f"  - EXECUTADO: {executado}\n"
+            f"  - FALHA_ODOO: {falhas}\n"
+            f"  - Modelos: {', '.join(modelos[:5])}\n"
+            f"  - Metodos: {', '.join(metodos[:5])}"
+        )
 
     outcome = step.outcome_signal or {}
     conclusao_resumo = ''
@@ -91,39 +142,102 @@ def _build_adversarial_prompt(step) -> str:
         )
 
     return (
+        f"## PERGUNTA do usuario:\n{pergunta_section}\n\n"
+        f"## RESPOSTA do agente:\n{resposta_section}\n\n"
         f"## Ferramentas usadas no passo:\n{tools_section}\n\n"
+        f"## {odoo_section}\n\n"
         + (f"## {conclusao_resumo}\n\n" if conclusao_resumo else '')
-        + "Tente REFUTAR a conclusão deste passo do agente logístico. "
-        "Retorne JSON com refuted (bool) e reason (str curta)."
+        + "Tente REFUTAR a conclusão deste passo — somente com razão concreta "
+        "ancorada na matéria acima. Retorne JSON com refuted (bool) e reason "
+        "(str curta)."
     )
 
 
-def _verify_core(step) -> Optional[dict]:
-    """Núcleo testável do verifier adversarial: recebe step, retorna veredito.
+def _load_turn_materia(step) -> dict:
+    """Carrega a MATÉRIA do turno (mesmo caminho do worker do step_judge).
+
+    Replica step_judge._judge_step_in_context: odoo_ops via
+    OperacaoOdooAuditoria (session_id + contexto_origem='execute_kw_hook'),
+    pergunta via triage_shadow._extract_user_message_text e resposta via
+    _extract_assistant_response_text — correlação turn_seq = sufixo do
+    step_uid após ':'.
+
+    Best-effort total: cada bloco degrada isolado.
+
+    Returns:
+        {'odoo_ops': list, 'meta': str|None, 'response': str|None,
+         'session': AgentSession|None, 'turn_seq': int|None}
+    """
+    out: dict = {'odoo_ops': [], 'meta': None, 'response': None,
+                 'session': None, 'turn_seq': None}
+
+    try:
+        from app.odoo.models.operacao_odoo_auditoria import OperacaoOdooAuditoria
+        out['odoo_ops'] = OperacaoOdooAuditoria.query.filter_by(
+            session_id=step.session_id,
+            contexto_origem='execute_kw_hook',
+        ).all()
+    except Exception as exc:
+        logger.debug(f'[plan_verifier] odoo_ops nao carregadas (best-effort): {exc}')
+
+    try:
+        from app.agente.models import AgentSession
+        from app.agente.workers.triage_shadow import _extract_user_message_text
+
+        session = AgentSession.query.filter_by(session_id=step.session_id).first()
+        out['session'] = session
+        try:
+            out['turn_seq'] = int(str(step.step_uid).rsplit(':', 1)[-1])
+        except (ValueError, IndexError):
+            out['turn_seq'] = None
+        out['meta'] = _extract_user_message_text(session, out['turn_seq'])
+        out['response'] = _extract_assistant_response_text(session, out['turn_seq'])
+    except Exception as exc:
+        logger.debug(f'[plan_verifier] conteudo do turno nao carregado (best-effort): {exc}')
+
+    return out
+
+
+def _verify_core(step, odoo_ops: Optional[list] = None,
+                 meta: Optional[str] = None,
+                 response: Optional[str] = None) -> Optional[dict]:
+    """Núcleo testável do verifier adversarial: recebe step + matéria do
+    turno (pergunta/resposta/auditoria), retorna veredito.
 
     Separado do boilerplate app_context para facilitar testes unitários
     sem necessidade de mockar create_app ou sessão de banco.
 
-    Padrão cético: se 'refuted' ausente no JSON do Haiku, padrão é True.
+    SKIP-SEM-MATÉRIA: se pergunta E resposta indisponíveis, NÃO chama o LLM
+    — refutar sem matéria produz refutações vazias ("sem acesso ao resultado
+    das ferramentas..."). Grava {'refuted': False, 'skipped': True,
+    'reason': 'sem_materia'} ('skipped' é chave ADITIVA — contrato do
+    outcome_signal.verify preservado).
+
+    Sem viés cego: se 'refuted' ausente no JSON do modelo, padrão é False
+    (refutar exige razão concreta explícita).
 
     Returns:
-        {'refuted': bool, 'reason': str} ou None se Haiku falhar/JSON inválido.
+        {'refuted': bool, 'reason': str} ou None se LLM falhar/JSON inválido.
     """
-    prompt = _build_adversarial_prompt(step)
+    if not (meta or '').strip() and not (response or '').strip():
+        return {'refuted': False, 'skipped': True, 'reason': 'sem_materia'}
+
+    prompt = _build_adversarial_prompt(step, odoo_ops=odoo_ops, meta=meta,
+                                       response=response)
 
     try:
-        raw = _call_haiku_verifier(prompt)
+        raw = _call_adversarial_verifier(prompt)
     except Exception as exc:
-        logger.error(f'[plan_verifier] Haiku falhou: {exc}')
+        logger.error(f'[plan_verifier] LLM adversarial falhou: {exc}')
         return None
 
     parsed = _parse_adversarial_json(raw)
     if parsed is None:
-        logger.warning(f'[plan_verifier] Haiku retornou JSON inválido: {raw[:200]}')
+        logger.warning(f'[plan_verifier] LLM retornou JSON inválido: {raw[:200]}')
         return None
 
-    # Padrão cético: na dúvida, refuta
-    refuted = bool(parsed.get('refuted', True))
+    # Refutar exige razão concreta explícita — sem campo 'refuted', NÃO refuta.
+    refuted = bool(parsed.get('refuted', False))
     reason = str(parsed.get('reason', ''))[:500]
 
     return {'refuted': refuted, 'reason': reason}
@@ -173,7 +287,14 @@ def _verify_adversarial_in_context(step_uid: str) -> None:
         logger.warning(f'[plan_verifier] step_uid={step_uid} não encontrado, abortando')
         return
 
-    veredito = _verify_core(step)
+    # Paridade de matéria com o judge: pergunta + resposta + auditoria Odoo
+    materia = _load_turn_materia(step)
+    veredito = _verify_core(
+        step,
+        odoo_ops=materia['odoo_ops'],
+        meta=materia['meta'],
+        response=materia['response'],
+    )
     if veredito is None:
         logger.warning(
             f'[plan_verifier] veredito None para step_uid={step_uid}, abortando persistência'
@@ -285,7 +406,7 @@ def _verify_step_shadow_in_context(step_uid: str) -> None:
     Separado para evitar aninhamento em testes (espelha
     _verify_adversarial_in_context / _judge_step_in_context).
     """
-    from app.agente.models import AgentStep, AgentSession
+    from app.agente.models import AgentStep
 
     step = AgentStep.query.filter_by(step_uid=step_uid).first()
     if step is None:
@@ -294,9 +415,21 @@ def _verify_step_shadow_in_context(step_uid: str) -> None:
 
     verify: dict = {}
 
-    # ── (1) adversarial — reusa _verify_core (Haiku cético) ──────────────────
+    # Matéria do turno carregada UMA vez (compartilhada pelos 3 verifiers):
+    # sessão + turn_seq + pergunta + resposta + auditoria Odoo — mesmo caminho
+    # de resolução do worker do step_judge (paridade de matéria).
+    materia = _load_turn_materia(step)
+    session = materia['session']
+    turn_seq = materia['turn_seq']
+
+    # ── (1) adversarial — _verify_core (Sonnet, com matéria do turno) ────────
     try:
-        adversarial = _verify_core(step)
+        adversarial = _verify_core(
+            step,
+            odoo_ops=materia['odoo_ops'],
+            meta=materia['meta'],
+            response=materia['response'],
+        )
         if adversarial is not None:
             verify['adversarial'] = adversarial
         else:
@@ -304,25 +437,10 @@ def _verify_step_shadow_in_context(step_uid: str) -> None:
     except Exception as exc:
         logger.debug(f'[verify_shadow] adversarial falhou (best-effort): {exc}')
 
-    # Carrega a sessão UMA vez (compartilhada por arithmetic e domain)
-    session = None
-    try:
-        session = AgentSession.query.filter_by(session_id=step.session_id).first()
-    except Exception as exc:
-        logger.debug(f'[verify_shadow] sessão não carregada (best-effort): {exc}')
-
-    # turn_seq = sufixo do step_uid após ':' (step_uid = '{session_id}:{turn_seq}')
-    turn_seq: Optional[int] = None
-    try:
-        suffix = step_uid.rsplit(':', 1)[-1]
-        turn_seq = int(suffix)
-    except (ValueError, IndexError):
-        turn_seq = None
-
     # ── (2) arithmetic — verifica inconsistências aritméticas na resposta ────
     try:
         from app.agente.sdk.verifiers import verify_arithmetic
-        response_text = _extract_assistant_response_text(session, turn_seq)
+        response_text = materia['response']
         if not response_text:
             verify['arithmetic'] = {'ok': True, 'issues': [], 'skipped': 'no_response_text'}
         else:
