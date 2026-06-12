@@ -86,7 +86,7 @@ arquivos — e o agente web roda Bash inline, nao cria arquivos no repo.
 | Peca | Onde | Uso na Fase 2 |
 |------|------|----------------|
 | Gatilho pos-sessao com `session_id`+`user_id` | `app/agente/routes/_helpers.py:271,549` (`_maybe_trigger_skill_eval`) | Job irmao enfileirado no mesmo ponto |
-| Transcript com `tool_input` completo do Bash | `app/agente/sdk/session_store_adapter.py:319` (`load`) | Fonte da captura |
+| Transcript com `tool_input` completo do Bash | tabela `claude_session_store` — leitura por **SQL sincrono** no job (decisao impl. 2026-06-12: o `load` do adapter e async/asyncpg, inadequado em job RQ; mesma tabela, mesmo conteudo) | Fonte da captura |
 | Janela por skill (qual skill ativa quando o Bash rodou) | `skill_effectiveness_service.py:36` (`build_skill_windows`) | Preenche `skill_relacionada` |
 | PII masking | `mask_pii` (ja usado na Fase 1) | `command_masked`, `contexto_user_msg` |
 | Embeddings Voyage + pgvector | `app/embeddings/models.py` (`AgentMemoryEmbedding` como padrao) | Coluna `embedding` + busca de vizinho |
@@ -210,11 +210,12 @@ Indices: pgvector (cosine) em `embedding`, btree em `cluster_id`, `user_id`,
 
 ## Edge cases
 
-- **Teams degradado**: `tools_used` do Teams grava `"Skill"` sem nome
-  (`app/teams/services.py:1294`; web grava `"Skill:<nome>"`, `chat.py:866`) →
-  `skill_relacionada` indeterminavel → `tipo_gap='desconhecido'` (participa do
-  cluster/C1, nao dispara bypass). Fechar o debito Teams (enriquecer tool_name)
-  multiplica o valor desta fase — recomendado na fila.
+- **Teams — RESOLVIDO por construcao (impl. 2026-06-12)**: a captura le o
+  transcript CRU (`claude_session_store`) onde o tool_use `Skill` traz o nome em
+  qualquer superficie — `skill_relacionada` nao depende do `tools_used` do DB.
+  Alem disso o debito do `tool_name` Teams foi fechado em `ede93a0e2`
+  (`_enrich_tool_name`, `app/teams/services.py:515`), ligando tambem a Fase 1
+  no canal Teams.
 - **Comando gigante** (heredoc longo): truncar p/ embedding e armazenamento;
   `problema` preserva a busca.
 - **Sessao sem Bash substantivo**: job retorna cedo, custo zero.
@@ -251,10 +252,12 @@ Espelho desta fase para scripts `.py` persistidos no repo (~950 em `scripts/`,
 
 ## Decisoes em aberto
 
-- Limiar exato de "Bash substantivo" (chars minimos; sugerido 200) — calibrar no
-  plano de implementacao com transcripts reais.
-- `retries_sessao`: heuristica exata de "tentativa com erro no mesmo assunto"
-  (tool_result com exit code != 0 na mesma janela) — fechar no plano.
+> RESOLVIDAS na implementacao (2026-06-12):
+- Limiar de "Bash substantivo" = **200 chars** (`SUBSTANTIVE_MIN_CHARS`) +
+  regex inline (python -c / heredoc / psql / SQL DML) — validado contra 5
+  transcripts reais (248 entries, 10 candidatos legitimos, zero triviais).
+- `retries_sessao` = tool_result com `is_error=true` do proprio tool_use Bash
+  (match por `tool_use_id` no transcript).
 
 ## Arquivos-alvo
 
