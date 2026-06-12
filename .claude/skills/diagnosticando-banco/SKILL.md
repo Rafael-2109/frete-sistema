@@ -22,11 +22,12 @@ Combina um script local com o Postgres MCP Pro (9 tools DBA-level).
 
 ---
 
-## Quando Usar Esta Skill
+## Quando usar / Quando NAO usar
 
-Diagnostico de saude, performance e otimizacao do PostgreSQL — incluindo analisar
-plano de execucao de uma query, receber sugestoes de indices para melhorar
-performance, ou investigar problemas de lentidao no banco. Gatilhos por categoria:
+**USAR QUANDO**: diagnostico de saude, performance e otimizacao do PostgreSQL —
+incluindo analisar plano de execucao de uma query, receber sugestoes de indices
+para melhorar performance, ou investigar problemas de lentidao no banco.
+Gatilhos por categoria:
 
 - Saude geral: "como esta o banco?", "saude do banco", "indices nao usados",
   "cache hit rate", "bloat"
@@ -39,7 +40,7 @@ performance, ou investigar problemas de lentidao no banco. Gatilhos por categori
 - Performance: "query lenta", "otimizar query", "EXPLAIN", "EXPLAIN ANALYZE",
   "plano de execucao", "por que essa query e lenta?"
 
-## Quando NAO Usar Esta Skill
+**NAO USAR PARA:**
 
 | Situacao | Ferramenta Correta | Por que? |
 |----------|-------------------|----------|

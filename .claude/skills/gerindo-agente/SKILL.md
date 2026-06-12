@@ -1,6 +1,14 @@
 ---
 name: gerindo-agente
-description: Esta skill deve ser usada para gerenciar o Agente Web — memorias persistentes, sessoes anteriores, padroes aprendidos, perfil comportamental, knowledge graph, diagnosticos de saude, analise de friccao, briefing intersessao e manutencao. Exemplos: "memorias do usuario 5", "saude do agente", "knowledge graph", "consolidar memorias", "perfil comportamental", "diretrizes operacionais", "flags de evolucao", "filas RQ". NAO usar para consultas SQL ou dados de negocio -> consultando-sql. Lista completa de gatilhos e anti-gatilhos no corpo.
+description: >-
+  Esta skill deve ser usada para gerenciar o Agente Web — memorias
+  persistentes, sessoes anteriores, padroes aprendidos, perfil comportamental,
+  knowledge graph, diagnosticos de saude, analise de friccao, briefing
+  intersessao e manutencao. Exemplos: "memorias do usuario 5", "saude do
+  agente", "knowledge graph", "consolidar memorias", "perfil comportamental",
+  "diretrizes operacionais", "flags de evolucao", "filas RQ". NAO usar para
+  consultas SQL ou dados de negocio -> consultando-sql. Matriz USAR/NAO-USAR
+  completa no corpo.
 allowed-tools: Read, Bash, Glob, Grep
 ---
 

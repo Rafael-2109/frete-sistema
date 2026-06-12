@@ -6,8 +6,8 @@ description: >-
   saldo ou corrigir reserva órfã/negativa. Usar quando o pedido é "ajusta o
   saldo do lote X", "soma N un no quant", "zera esse quant fantasma", "cria
   saldo do produto Y na empresa Z", "corrige a reserva negativa". `--dry-run`
-  é o DEFAULT; só efetiva com `--confirmar`. NÃO usar para mover saldo entre
-  2 lotes/locais -> transferindo-interno-odoo. Matriz USAR/NÃO-USAR completa
+  é o DEFAULT; só efetiva com `--confirmar`. NAO usar para mover saldo entre
+  2 lotes/locais -> transferindo-interno-odoo. Matriz USAR/NAO-USAR completa
   no corpo da skill.
 allowed-tools: Read, Bash, Glob, Grep
 ---

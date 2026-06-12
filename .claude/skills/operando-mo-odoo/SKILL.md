@@ -7,8 +7,8 @@ description: >-
   cancelar (WRITE, single ou batch, guard G-MO-01 bloqueia FURO_REAL). Usar
   quando o pedido é "lista MOs antigas", "detalhe da MO X", "cancela MO X",
   "cancela MOs zumbi", "limpa MOs draft/confirmed sem consumo done".
-  `--dry-run` é o DEFAULT; `--confirmar` executa. NÃO usar para cancelar
-  PICKING -> operando-picking-odoo. Matriz USAR/NÃO-USAR completa no corpo.
+  `--dry-run` é o DEFAULT; `--confirmar` executa. NAO usar para cancelar
+  PICKING -> operando-picking-odoo. Matriz USAR/NAO-USAR completa no corpo.
 allowed-tools: Read, Bash, Glob, Grep
 ---
 

@@ -7,8 +7,8 @@ description: >-
   invocados em Python pela Skill 8. Usar quando o pedido é "cancela picking
   X", "cancela pickings fantasma da planilha", "re-valida picking Y",
   "devolve o picking Z (NF errada)". `--dry-run` é o DEFAULT no CLI; só
-  efetiva com `--confirmar`. NÃO usar para cirurgia/MLs órfãs ->
-  operando-reservas-odoo. Matriz USAR/NÃO-USAR completa no corpo.
+  efetiva com `--confirmar`. NAO usar para cirurgia/MLs órfãs ->
+  operando-reservas-odoo. Matriz USAR/NAO-USAR completa no corpo.
 allowed-tools: Read, Bash, Glob, Grep
 ---
 

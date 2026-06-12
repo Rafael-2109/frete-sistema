@@ -2,14 +2,14 @@
 name: transferindo-interno-odoo
 description: >-
   Skill WRITE (átomo C2) para TRANSFERIR saldo de estoque DENTRO de uma mesma
-  empresa no Odoo (NÃO emite NF), em 4 modos atômicos: lote->lote,
+  empresa no Odoo (NAO emite NF), em 4 modos atômicos: lote->lote,
   location->location, --para-indisponivel (consolida em MIGRAÇÃO) e
   --loc-e-lote (loc+lote diferentes em 1 chamada). Usar quando o pedido é
   "transfere N un do lote A pro lote B", "move o saldo do lote MIGRAÇÃO para
   o lote canônico", "manda esse saldo pra Indisponível", "mesma empresa, sem
-  NF". `--dry-run` é o DEFAULT; só efetiva com `--confirmar`. NÃO usar para
+  NF". `--dry-run` é o DEFAULT; só efetiva com `--confirmar`. NAO usar para
   transferir entre EMPRESAS (emite NF) -> faturando-odoo. Matriz
-  USAR/NÃO-USAR completa no corpo.
+  USAR/NAO-USAR completa no corpo.
 allowed-tools: Read, Bash, Glob, Grep
 ---
 

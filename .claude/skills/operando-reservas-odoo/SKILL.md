@@ -7,8 +7,8 @@ description: >-
   pedido é "limpa reserva órfã do picking X", "remove move.lines apontando
   para quant zerado", "picking quebrado pós-ajuste de inventário", "libera
   reservas mantendo picking". `--dry-run` é o DEFAULT (modos write); só
-  efetiva com `--confirmar`. NÃO usar para ajustar saldo de quant ->
-  ajustando-quant-odoo. Matriz USAR/NÃO-USAR completa no corpo.
+  efetiva com `--confirmar`. NAO usar para ajustar saldo de quant ->
+  ajustando-quant-odoo. Matriz USAR/NAO-USAR completa no corpo.
 allowed-tools: Read, Bash, Glob, Grep
 ---
 

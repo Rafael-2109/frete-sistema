@@ -1,13 +1,13 @@
 ---
 name: consultando-sentry
-description: >
+description: >-
   Consulta issues, eventos e metricas do Sentry via MCP Server. Use quando o
   usuario mencionar "Sentry", "erros em producao", "exceptions nao tratadas",
   "resolver issue", "issues abertas", "erros das ultimas 24h", "root cause
   analysis" ou variacoes de monitoramento de erros. NAO usar para logs do
   Render (usar MCP Render list_logs), metricas de CPU/memoria (usar MCP
   Render get_metrics), nem diagnostico de banco -> diagnosticando-banco.
-  Gatilhos completos no corpo.
+  Matriz USAR/NAO-USAR completa no corpo.
 ---
 
 # Consultando Sentry
