@@ -193,13 +193,21 @@ def parse_args_with_subcommands(
 
     Returns:
         Tupla (args, nome_subcomando)
+
+    Override de args comuns (T1.4): `conflict_handler='resolve'` permite a um
+    subcomando REDEFINIR um arg comum re-declarando o mesmo option string em
+    `args` (a definicao do subcomando vence). Ex.: `memoria.py aposentar`
+    re-declara `--user-id` com default 0 (memorias empresa) e
+    `diagnostico.py promotion-candidates` re-declara `--limit` com default 30.
     """
     parser = argparse.ArgumentParser(description=description)
     subparsers = parser.add_subparsers(dest='subcommand', help='Subcomando')
     subparsers.required = True
 
     for name, config in subcommands.items():
-        sub = subparsers.add_parser(name, help=config.get('help', ''))
+        sub = subparsers.add_parser(
+            name, help=config.get('help', ''), conflict_handler='resolve'
+        )
         add_common_args(sub)
 
         for arg in config.get('args', []):

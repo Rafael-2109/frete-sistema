@@ -1,26 +1,14 @@
 ---
 name: operando-mo-odoo
 description: >-
-  Skill WRITE+READ (átomo C2 + modos READ §6.b) para operar Ordens de Produção
-  (mrp.production) no Odoo. 3 modos:
-  (1) **listar** (READ) — lista MOs por critério (data/states/empresas) com
-  classificação SEGURO/RESERVA_FANTASMA/FURO_REAL;
-  (2) **detalhar** (READ) — MO completa (raws+finished+MLs+consumo);
-  (3) **cancelar** (WRITE) — action_cancel single ou batch com guard G-MO-01
-  v6 (bloqueia apenas FURO_REAL = consumo done > 0; reserva fantasma passa).
-  Default seguro: --dry-run; --confirmar executa. Opt-in `--with-audit`
-  captura snapshot pré/pós + diff. Usar quando o pedido é "lista MOs antigas",
-  "detalhe da MO X", "cancela MO X", "cancela MOs zumbi", "limpa MOs
-  draft/confirmed sem consumo done".
-  NÃO USAR PARA:
-  - cancelar MO COM consumo done > 0 (gera furo real) -> use mrp.unbuild via
-    cross-skill (ver memória local Claude Code [[reaproveitar-semiacabado-orfao-mo-cancelada]])
-  - criar MO nova -> sem demanda real isolada (pipeline cria via Odoo)
-  - alterar MO (mover componente, ajustar qty) -> fluxo cross-skill
-    (Skill 2 transfer + write em stock.move; ver memória local Claude Code
-    [[mo_componente_local_consumo]])
-  - cancelar PICKING (não é MO) -> operando-picking-odoo
-  - cirurgia/MLs órfãs -> operando-reservas-odoo
+  Skill WRITE+READ (átomo C2 + modos READ §6.b) para operar Ordens de
+  Produção (mrp.production) no Odoo, em 3 modos: listar (READ, com
+  classificação SEGURO/RESERVA_FANTASMA/FURO_REAL), detalhar (READ) e
+  cancelar (WRITE, single ou batch, guard G-MO-01 bloqueia FURO_REAL). Usar
+  quando o pedido é "lista MOs antigas", "detalhe da MO X", "cancela MO X",
+  "cancela MOs zumbi", "limpa MOs draft/confirmed sem consumo done".
+  `--dry-run` é o DEFAULT; `--confirmar` executa. NAO usar para cancelar
+  PICKING -> operando-picking-odoo. Matriz USAR/NAO-USAR completa no corpo.
 allowed-tools: Read, Bash, Glob, Grep
 ---
 
@@ -35,6 +23,28 @@ Skill **mínimo viável** com 3 modos. Construída em 2026-05-24 v5; **estendida
 - **Idempotência action_cancel**: validada AO VIVO 2026-05-24 em MO já cancelada (retorna `True` sem erro, state continua 'cancel').
 
 Constituição: `app/odoo/estoque/CLAUDE.md` (§6.b para modos READ). Service: `app/odoo/estoque/scripts/mo.py` (StockMOService); shim em `app/odoo/services/stock_mo_service.py`.
+
+## Quando usar / Quando NÃO usar
+
+**Modos**: (1) **listar** (READ) — lista MOs por critério (data/states/empresas)
+com classificação SEGURO/RESERVA_FANTASMA/FURO_REAL; (2) **detalhar** (READ) —
+MO completa (raws+finished+MLs+consumo); (3) **cancelar** (WRITE) —
+`action_cancel` single ou batch com guard G-MO-01 v6 (bloqueia apenas FURO_REAL =
+consumo done > 0; reserva fantasma passa). Opt-in `--with-audit` captura snapshot
+pré/pós + diff.
+
+**USAR QUANDO** o pedido é: "lista MOs antigas", "detalhe da MO X", "cancela MO X",
+"cancela MOs zumbi", "limpa MOs draft/confirmed sem consumo done".
+
+**NÃO USAR PARA:**
+- cancelar MO COM consumo done > 0 (gera furo real) -> use `mrp.unbuild` via
+  cross-skill (ver memória local Claude Code [[reaproveitar-semiacabado-orfao-mo-cancelada]])
+- criar MO nova -> sem demanda real isolada (pipeline cria via Odoo)
+- alterar MO (mover componente, ajustar qty) -> fluxo cross-skill
+  (Skill 2 transfer + write em stock.move; ver memória local Claude Code
+  [[mo_componente_local_consumo]])
+- cancelar PICKING (não é MO) -> `operando-picking-odoo`
+- cirurgia/MLs órfãs -> `operando-reservas-odoo`
 
 ---
 

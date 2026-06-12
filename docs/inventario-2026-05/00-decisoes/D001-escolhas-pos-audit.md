@@ -27,8 +27,8 @@ atualizado: 2026-06-03
 - [Contexto](#contexto)
 
 **Data:** 2026-05-17
-**Origem:** F0 Task 0.1 + investigação G001/G002 (`00b_investigar_gotchas.py`)
-**Resolve:** L1, L3 (parcial), L8 do spec; G001, G002
+**Origem:** F0 Task 0.1 + investigação G001/INV-002 (`00b_investigar_gotchas.py`)
+**Resolve:** L1, L3 (parcial), L8 do spec; G001, INV-002
 **Substituído por:** D002 (matriz final) e [D014](D014-cfop-entradas-e-operacoes-referencia.md) (entradas + CFOP por tipo de produto). A linha "dev-industrializacao LF→CD fp 64 REMESSA DE VASILHAME" desta página está **corrigida em D014** (fp 64 é `dev-vasilhame` LF→FB CFOP 5921).
 
 ## COMPANY_LOCATIONS final
@@ -55,7 +55,7 @@ Substituindo o que está em `.claude/references/odoo/IDS_FIXOS.md` (que tem `LF=
 | CD (4) | **13** | — | 18 | 50 |
 | LF (5) | **19** | 64 | 24 | — |
 
-**G002 resolvido**: `stock.picking.type id=16` é `Conferência (CD)`, code=`internal`, `active=False`. **Não tem nada a ver com LF**. Corrigir `IDS_FIXOS.md`.
+**INV-002 resolvido**: `stock.picking.type id=16` é `Conferência (CD)`, code=`internal`, `active=False`. **Não tem nada a ver com LF**. Corrigir `IDS_FIXOS.md`.
 
 ## MATRIZ_INTERCOMPANY final
 

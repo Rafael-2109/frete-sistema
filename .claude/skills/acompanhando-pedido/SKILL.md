@@ -1,24 +1,12 @@
 ---
 name: acompanhando-pedido
 description: >-
-  Esta skill deve ser usada pelo Agente Lojas HORA quando o usuario pergunta
-  sobre status de pedidos da HORA para a Motochefe: "meu pedido X ja chegou?",
-  "pedidos pendentes", "qual pedido ta na fila?", "pedido 001 esta faturado?",
-  "quais motos faltam receber?", ou precisa acompanhar o ciclo pedido -> NF ->
-  recebimento. Respeita escopo de loja via <loja_context>.
-
-  USAR QUANDO:
-  - "meu pedido ja chegou?"
-  - "pedidos pendentes"
-  - "pedido 001 ta faturado?"
-  - "quais motos faltam receber?"
-  - "status dos pedidos"
-
-  NAO USAR PARA:
-  - Estoque (usar consultando-estoque-loja)
-  - Conferencia fisica em andamento (usar conferindo-recebimento)
-  - Pecas faltando (usar consultando-pecas-faltando)
-  - Pedidos Nacom Goya (outro dominio)
+  Skill READ do Agente Lojas HORA para status de pedidos da HORA para a
+  Motochefe (ciclo pedido -> NF -> recebimento). Respeita escopo de loja via
+  <loja_context>. Gatilhos: "meu pedido X ja chegou?", "pedidos pendentes",
+  "pedido 001 esta faturado?", "quais motos faltam receber?". NAO usar para
+  conferencia fisica em andamento -> conferindo-recebimento. Matriz
+  USAR/NAO-USAR completa no corpo.
 allowed-tools: Read, Bash, Glob, Grep
 ---
 
@@ -29,18 +17,22 @@ entrada -> recebimento fisico -> conferencia chassi-por-chassi.
 
 ---
 
-## Quando Usar
+## Quando usar / Quando NAO usar
 
-USE para:
-- Status de pedidos abertos: "meu pedido 001 ja chegou?"
-- Lista de pedidos pendentes: "quais pedidos abertos?"
-- Qtd declarada vs recebida: "faltam quantas motos do pedido X?"
+**USAR QUANDO:**
+- Status de pedidos abertos: "meu pedido 001 ja chegou?", "pedido 001 ta faturado?"
+- Lista de pedidos pendentes: "quais pedidos abertos?", "qual pedido ta na
+  fila?", "status dos pedidos"
+- Qtd declarada vs recebida: "faltam quantas motos do pedido X?", "quais
+  motos faltam receber?"
+- Acompanhar o ciclo pedido -> NF -> recebimento
 
-NAO USE para:
+**NAO USAR PARA:**
 - Estoque agregado -> `consultando-estoque-loja`
 - Historico de 1 chassi -> `rastreando-chassi`
 - Pecas faltando -> `consultando-pecas-faltando`
-- Conferencia em andamento -> `conferindo-recebimento`
+- Conferencia fisica em andamento -> `conferindo-recebimento`
+- Pedidos Nacom Goya (outro dominio)
 
 ---
 

@@ -257,7 +257,7 @@ Sao campos diferentes, atualizados em momentos diferentes durante vinculacao man
 
 **`detalhes` retornados** (`routes.py:1292-1356`): `peso_para_calculo`, `frete_base`, `gris`, `adv`, `rca`, `pedagio`, `valor_tas`, `valor_despacho`, `valor_cte`, `componentes_antes_minimo`, `componentes_apos_minimo`, `frete_liquido_antes_minimo`. Permite quebrar a cotacao em 11 componentes para conferencia humana (vs CTe real).
 
-**JSON sanitization OBRIGATORIA** ao salvar `detalhes` em campo JSONB (Decimals do quantize): usar `app.utils.json_helpers.sanitize_for_json` (regra global em `~/.claude/CLAUDE.md`). Bug historico em CotacaoV2Service motivou a regra.
+**JSON sanitization OBRIGATORIA** ao salvar `detalhes` em campo JSONB (Decimals do quantize): usar `app.utils.json_helpers.sanitize_for_json` (regra global em `.claude/references/REGRAS_DEV_LOCAL.md` secao JSON SANITIZATION). Bug historico em CotacaoV2Service motivou a regra.
 
 `_calcular_componentes_analise()` e funcao **privada** (underscore) mas e importada em `app/carvia/routes/frete_routes.py` — risco de breaking change ao renomear/alterar assinatura. Documentado em "Funcoes Exportadas" abaixo.
 
@@ -448,7 +448,7 @@ Sinal de alta complexidade historica do fluxo. Quando depurar, comecar por `STAT
 | Gotchas Odoo (timeouts, erros, circuit breaker, l10n_br) | `.claude/references/odoo/GOTCHAS.md` |
 | Modelos e campos Odoo (sale.order, account.move, etc.) | `.claude/references/odoo/MODELOS_CAMPOS.md` |
 | Padroes de backend (helpers como `sanitize_for_json`) | `.claude/references/PADROES_BACKEND.md` |
-| JSON sanitization para campos JSONB (Decimal/datetime/UUID) | `~/.claude/CLAUDE.md` secao "JSON SANITIZATION" |
+| JSON sanitization para campos JSONB (Decimal/datetime/UUID) | `.claude/references/REGRAS_DEV_LOCAL.md` secao JSON SANITIZATION |
 
 ### Regras de negocio
 

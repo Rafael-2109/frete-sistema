@@ -18,6 +18,7 @@ from datetime import datetime
 from app import db
 from app.financeiro.models import CnabRetornoLote, CnabRetornoItem, ContasAReceber
 from app.financeiro.services.cnab400_processor_service import Cnab400ProcessorService
+from app.odoo.utils.connection import is_cannot_marshal_none
 
 
 cnab400_bp = Blueprint('cnab400', __name__, url_prefix='/cnab400')
@@ -953,7 +954,7 @@ def api_reconciliar_inconsistencia_cnab(conta_id):
                 },
             )
 
-            # Executar wizard — O6: "cannot marshal None" = SUCESSO
+            # 'cannot marshal None' = sucesso (O6) — ver odoo/GOTCHAS.md
             try:
                 conn.execute(
                     'account.payment.register',
@@ -961,7 +962,7 @@ def api_reconciliar_inconsistencia_cnab(conta_id):
                     [wizard_id],
                 )
             except Exception as e:
-                if 'cannot marshal None' not in str(e):
+                if not is_cannot_marshal_none(e):
                     raise
 
         except Exception as e:

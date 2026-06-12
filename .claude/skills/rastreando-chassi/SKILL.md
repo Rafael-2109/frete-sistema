@@ -1,23 +1,12 @@
 ---
 name: rastreando-chassi
 description: >-
-  Esta skill deve ser usada pelo Agente Lojas HORA quando o usuario pergunta
-  sobre o historico de UM chassi especifico: "cade o chassi XYZ?", "onde esta
-  o chassi ABC?", "historico completo do chassi X", "essa moto foi vendida?",
-  "quando o chassi Y chegou?". Cruza dados de pedido, NF de entrada,
-  recebimento, eventos e venda. Respeita escopo da loja via <loja_context>.
-
-  USAR QUANDO:
-  - "cade o chassi XYZ?"
-  - "historico do chassi MC172..."
-  - "essa moto ja foi vendida?"
-  - "quando o chassi X chegou?"
-  - "em que pedido veio o chassi Y?"
-
-  NAO USAR PARA:
-  - Contagem/visao agregada (usar consultando-estoque-loja)
-  - Consultar venda B2C (usar consultando-venda-loja)
-  - Rastreamento cross-agente Nacom (chassis de caminhao) — nao se aplica
+  Skill READ do Agente Lojas HORA para historico de UM chassi especifico,
+  cruzando pedido, NF de entrada, recebimento, eventos e venda. Respeita
+  escopo da loja via <loja_context>. Gatilhos: "cade o chassi XYZ?",
+  "historico completo do chassi X", "essa moto foi vendida?", "em que pedido
+  veio o chassi Y?". NAO usar para contagem/visao agregada ->
+  consultando-estoque-loja. Matriz USAR/NAO-USAR completa no corpo.
 allowed-tools: Read, Bash, Glob, Grep
 ---
 
@@ -28,17 +17,20 @@ NF de entrada, recebimento, eventos, venda e devolucoes.
 
 ---
 
-## Quando Usar Esta Skill
+## Quando usar / Quando NAO usar
 
-USE para:
-- "cade o chassi MC172922511890568?"
-- "historico do chassi"
-- "essa moto foi vendida?"
+**USAR QUANDO:**
+- "cade o chassi MC172922511890568?" / "onde esta o chassi ABC?"
+- "historico do chassi MC172..."
+- "essa moto (ja) foi vendida?"
+- "quando o chassi X chegou?"
 - "em que pedido veio essa moto?"
 
-NAO USE para:
-- Contagem de estoque -> usar `consultando-estoque-loja`
+**NAO USAR PARA:**
+- Contagem de estoque / visao agregada -> `consultando-estoque-loja`
+- Consultar venda B2C -> `consultando-venda-loja`
 - Registrar venda/baixa -> skill de M3
+- Rastreamento cross-agente Nacom (chassis de caminhao) — nao se aplica
 
 ---
 

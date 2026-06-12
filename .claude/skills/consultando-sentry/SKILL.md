@@ -1,19 +1,31 @@
 ---
 name: consultando-sentry
-description: >
-  Consulta issues, eventos e metricas do Sentry via MCP Server.
-  Use quando o usuario mencionar "Sentry", "issues do Sentry", "erros em producao",
-  "bugs no Sentry", "exceptions nao tratadas", "500 errors no Sentry", "resolver issue",
-  "marcar resolvido no Sentry", ou qualquer variacao que envolva monitoramento de erros.
-  Tambem usar quando o usuario pedir para "ver erros", "checar exceptions",
-  "quantos bugs tem", "issues abertas", "erros das ultimas 24h", ou "root cause analysis".
-  NAO usar para logs do Render (usar MCP Render list_logs), metricas de CPU/memoria
-  (usar MCP Render get_metrics), ou diagnostico de banco (usar diagnosticando-banco).
+description: >-
+  Consulta issues, eventos e metricas do Sentry via MCP Server. Use quando o
+  usuario mencionar "Sentry", "erros em producao", "exceptions nao tratadas",
+  "resolver issue", "issues abertas", "erros das ultimas 24h", "root cause
+  analysis" ou variacoes de monitoramento de erros. NAO usar para logs do
+  Render (usar MCP Render list_logs), metricas de CPU/memoria (usar MCP
+  Render get_metrics), nem diagnostico de banco -> diagnosticando-banco.
+  Matriz USAR/NAO-USAR completa no corpo.
 ---
 
 # Consultando Sentry
 
 Skill para consultar e operar o Sentry da Nacom Goya via **MCP Server** (acesso direto, sem script intermediario).
+
+## Quando usar / Quando NAO usar
+
+**USAR QUANDO** o usuario mencionar: "Sentry", "issues do Sentry", "erros em
+producao", "bugs no Sentry", "exceptions nao tratadas", "500 errors no Sentry",
+"resolver issue", "marcar resolvido no Sentry", "ver erros", "checar exceptions",
+"quantos bugs tem", "issues abertas", "erros das ultimas 24h", "root cause
+analysis", ou qualquer variacao que envolva monitoramento de erros.
+
+**NAO USAR PARA:**
+- logs do Render -> MCP Render `list_logs`
+- metricas de CPU/memoria -> MCP Render `get_metrics`
+- diagnostico de banco -> `diagnosticando-banco`
 
 ## Contexto
 

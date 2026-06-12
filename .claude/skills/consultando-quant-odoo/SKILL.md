@@ -1,25 +1,14 @@
 ---
 name: consultando-quant-odoo
 description: >-
-  Skill READ-only (3 átomos versáteis em 3 modos CLI) para CONSULTAR stock.quant
-  + cross-ref reverso ML→quant + pickings reservando quants no Odoo AO VIVO
-  (não no DB local sincronizado). MODOS: `--modo quants` (default, clássico),
-  `--modo move-lines` (NOVO v7, cross-ref reverso via tupla — G030),
-  `--modo pickings` (NOVO v7, agrupa MLs por picking com metadados — pré-cond
-  inviolável de Skill 2 transferência). Usar quando o pedido é "qual o saldo
-  restante do produto X em empresa Y?", "tem saldo em loc !=Indisponivel?",
-  "quais quants em lote MIGRACAO?", "saldo total por produto+empresa",
+  Skill READ-only (3 átomos em 3 modos CLI) para CONSULTAR stock.quant,
+  cross-ref reverso ML->quant e pickings reservando quants no Odoo AO VIVO
+  (não no DB local sincronizado). Usar quando o pedido é "qual o saldo
+  restante do produto X em empresa Y?", "quais quants em lote MIGRACAO?",
   "auditoria pós-ajuste de inventário", "snapshot ao vivo do estoque",
-  ou (NOVO v7) "quais pickings estão reservando o quant X?" (fluxo 2.6),
-  "quais MLs apontam para esse quant?".
-  NÃO USAR PARA:
-  - consulta no DB local (sincronizado) -> consultando-sql
-  - rastrear NF/PO/SO específico -> rastreando-odoo
-  - explorar modelo Odoo desconhecido -> descobrindo-odoo-estrutura
-  - análise agregada de ruptura/projeção -> Subagente gestor-estoque-producao
-  - operar (WRITE) quants -> ajustando-quant-odoo
-  - operar reservas (WRITE) -> operando-reservas-odoo
-  - localizar MLs órfãs específicas (qty=0) -> Skill 2.4 `--find-orphan`
+  "quais pickings estão reservando o quant X?". NÃO usar para consulta no DB
+  local (sincronizado) -> consultando-sql; operar (WRITE) quants ->
+  ajustando-quant-odoo. Matriz USAR/NÃO-USAR completa no corpo.
 allowed-tools: Read, Bash, Glob, Grep
 ---
 
@@ -28,6 +17,28 @@ allowed-tools: Read, Bash, Glob, Grep
 Skill **mínimo viável** (C1 mineração parcial · C2-C5 implementado para 3 átomos · C6-C10 conforme uso). Construída em 2026-05-23, estendida em 2026-05-24 v7 com 2 modos cross-ref reverso.
 
 Constituição: `app/odoo/estoque/CLAUDE.md`. Service: `app/odoo/estoque/scripts/consulta_quant.py`.
+
+## Quando usar / Quando NÃO usar
+
+**MODOS**: `--modo quants` (default, clássico); `--modo move-lines` (NOVO v7,
+cross-ref reverso via tupla — G030); `--modo pickings` (NOVO v7, agrupa MLs por
+picking com metadados — pré-cond inviolável de Skill 2 transferência).
+
+**USAR QUANDO** o pedido é: "qual o saldo restante do produto X em empresa Y?",
+"tem saldo em loc !=Indisponivel?", "quais quants em lote MIGRACAO?", "saldo total
+por produto+empresa", "auditoria pós-ajuste de inventário", "snapshot ao vivo do
+estoque", ou (NOVO v7) "quais pickings estão reservando o quant X?" (fluxo 2.6),
+"quais MLs apontam para esse quant?".
+
+**NÃO USAR PARA:**
+- consulta no DB local (sincronizado) -> `consultando-sql`
+- rastrear NF/PO/SO específico -> `rastreando-odoo`
+- explorar modelo Odoo desconhecido -> `descobrindo-odoo-estrutura`
+- análise agregada de ruptura/projeção -> subagente `gestor-estoque-producao`
+- operar (WRITE) quants -> `ajustando-quant-odoo`
+- operar reservas (WRITE) -> `operando-reservas-odoo`
+- localizar MLs órfãs específicas (qty=0) -> Skill 2.4 `--find-orphan`
+  (`operando-reservas-odoo`)
 
 ---
 

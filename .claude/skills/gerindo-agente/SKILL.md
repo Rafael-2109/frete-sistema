@@ -1,6 +1,14 @@
 ---
 name: gerindo-agente
-description: Esta skill deve ser usada quando o usuario precisa gerenciar o Agente Web — memorias persistentes, sessoes anteriores, padroes aprendidos, perfil comportamental, knowledge graph, diagnosticos de saude, analise de friccao, briefing intersessao ou manutencao do sistema. Exemplos que trigam: "memorias do usuario 5", "sessoes anteriores", "historico de conversas", "padroes aprendidos", "pitfalls do sistema", "knowledge graph", "entidades do grafo", "saude do agente", "health score", "metricas do agente", "memorias nao efetivas", "consolidar memorias", "reindexar embeddings", "cleanup do agente", "memorias empresa", "tier frio", "versoes de memoria", "pendencia resolvida", "conflitos de memoria", "cobertura de embeddings", "sumarizar sessao", "analise de friccao", "sinais de frustracao", "briefing entre sessoes", "briefing do agente", "sessoes do Teams", "modelo usado nas sessoes", "perfil comportamental", "perfil do usuario", "user.xml", "gerar perfil", "qualidade dos turnos", "judge score", "step quality", "cobertura de sinal", "adesao de regras", "reincidencia de erro", "sintoma Marcus", "metricas de roteamento", "recomendacoes do agente", "PlanState", "diretrizes operacionais", "diretrizes shadow", "funil de diretrizes", "saude do flywheel", "eval scores", "eval-gate", "calibracao do judge", "dialogo de melhoria", "sugestoes de melhoria", "intelligence report", "flags de evolucao", "estado das flags", "flags ligadas/desligadas", "gates de acesso", "restricoes do agente", "filas RQ", "worker status", "status dos workers". NAO usar para: consultas SQL ou dados de negocio (usar consultando-sql), lembrar preferencias do PROPRIO Claude Code (usar auto-memory), cotacao de frete (usar cotando-frete), operacoes SSW (usar operando-ssw), Odoo (usar skills Odoo).
+description: >-
+  Esta skill deve ser usada para gerenciar o Agente Web — memorias
+  persistentes, sessoes anteriores, padroes aprendidos, perfil comportamental,
+  knowledge graph, diagnosticos de saude, analise de friccao, briefing
+  intersessao e manutencao. Exemplos: "memorias do usuario 5", "saude do
+  agente", "knowledge graph", "consolidar memorias", "perfil comportamental",
+  "diretrizes operacionais", "flags de evolucao", "filas RQ". NAO usar para
+  consultas SQL ou dados de negocio -> consultando-sql. Matriz USAR/NAO-USAR
+  completa no corpo.
 allowed-tools: Read, Bash, Glob, Grep
 ---
 
@@ -9,6 +17,34 @@ allowed-tools: Read, Bash, Glob, Grep
 Gestao completa do Agente Web: memorias, sessoes, padroes, knowledge graph, diagnosticos e manutencao.
 
 **Substitui**: `memoria-usuario` (deprecated).
+
+## Quando usar / Quando NAO usar
+
+**Exemplos que trigam** (lista completa): "memorias do usuario 5", "sessoes
+anteriores", "historico de conversas", "padroes aprendidos", "pitfalls do sistema",
+"knowledge graph", "entidades do grafo", "saude do agente", "health score",
+"metricas do agente", "memorias nao efetivas", "consolidar memorias", "reindexar
+embeddings", "cleanup do agente", "memorias empresa", "tier frio", "versoes de
+memoria", "pendencia resolvida", "conflitos de memoria", "cobertura de embeddings",
+"sumarizar sessao", "analise de friccao", "sinais de frustracao", "briefing entre
+sessoes", "briefing do agente", "sessoes do Teams", "modelo usado nas sessoes",
+"perfil comportamental", "perfil do usuario", "user.xml", "gerar perfil",
+"qualidade dos turnos", "judge score", "step quality", "cobertura de sinal",
+"adesao de regras", "reincidencia de erro", "sintoma Marcus", "metricas de
+roteamento", "recomendacoes do agente", "PlanState", "diretrizes operacionais",
+"diretrizes shadow", "funil de diretrizes", "saude do flywheel", "eval scores",
+"eval-gate", "calibracao do judge", "dialogo de melhoria", "sugestoes de melhoria",
+"intelligence report", "flags de evolucao", "estado das flags", "flags
+ligadas/desligadas", "gates de acesso", "restricoes do agente", "filas RQ",
+"worker status", "status dos workers", "candidatas a promocao", "fila de
+promocao memoria→reference", "aposentar memoria promovida".
+
+**NAO usar para:**
+- consultas SQL ou dados de negocio -> `consultando-sql`
+- lembrar preferencias do PROPRIO Claude Code -> auto-memory
+- cotacao de frete -> `cotando-frete`
+- operacoes SSW -> `operando-ssw`
+- Odoo -> skills Odoo
 
 ## REGRAS CRITICAS
 
@@ -54,6 +90,8 @@ O que o usuario quer?
 |   |-- "resolver pendencia"    -> resolve-pendencia --description "..."
 |   |-- "registrar pitfall"     -> log-pitfall --area ... --description "..."
 |   |-- "stats de memorias"     -> stats
+|   |-- "aposentar memoria promovida" -> aposentar --path ... --promovida-para ... [--confirmar]
+|                                        (dry-run default; --user-id default 0 = empresa)
 |
 |-- Sessoes (listar, buscar, ver, resumo)
 |   -> scripts/sessao.py
@@ -90,6 +128,8 @@ O que o usuario quer?
 |   |-- "saude do agente"       -> health [--days N]
 |   |-- "memorias efetivas"     -> effectiveness
 |   |-- "candidatas a cold"     -> cold-candidates
+|   |-- "candidatas a promocao" -> promotion-candidates [--min-effective N] [--idade-dias N]
+|   |                              (fila memoria→reference; quem promove e revisao humana)
 |   |-- "conflitos"             -> conflicts
 |   |-- "cobertura embeddings"  -> embedding-coverage
 |   |-- "analise de friccao"    -> friction [--days N]
@@ -147,11 +187,11 @@ source .venv/bin/activate && python .claude/skills/gerindo-agente/scripts/{SCRIP
 
 | Script | Subcomandos | Dominio |
 |--------|-------------|---------|
-| `memoria.py` | view, save, update, delete, list, clear, search-cold, versions, restore, resolve-pendencia, log-pitfall, stats | Memoria |
+| `memoria.py` | view, save, update, delete, list, clear, search-cold, versions, restore, resolve-pendencia, log-pitfall, stats, **aposentar** | Memoria |
 | `sessao.py` | list, search, semantic, view, summary, users, delete | Sessoes |
 | `padrao.py` | patterns, pitfalls, analyze, extract, empresa, profile | Padroes |
 | `grafo.py` | query, entities, links, relations, stats | Knowledge Graph |
-| `diagnostico.py` | insights, memory-metrics, health, effectiveness, cold-candidates, conflicts, embedding-coverage, friction, briefing, **step-quality**, **step-coverage**, **rule-adhesion**, **routing**, **recommendations**, **status** | Diagnosticos |
+| `diagnostico.py` | insights, memory-metrics, health, effectiveness, cold-candidates, **promotion-candidates**, conflicts, embedding-coverage, friction, briefing, **step-quality**, **step-coverage**, **rule-adhesion**, **routing**, **recommendations**, **status** | Diagnosticos |
 | `manutencao.py` | consolidate, cold-move, summarize, reindex-memories, reindex-sessions, cleanup-orphans | Manutencao |
 | `loop.py` | **directives**, **corrections**, **loop-health** | Flywheel diretrizes (A4) — READ |
 | `eval.py` | **scores**, **cases** | Eval-gate offline (A3) — READ |

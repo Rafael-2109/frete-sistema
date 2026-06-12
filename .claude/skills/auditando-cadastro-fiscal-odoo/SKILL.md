@@ -1,32 +1,40 @@
 ---
 name: auditando-cadastro-fiscal-odoo
-description: |
-  Esta skill deve ser usada quando o usuario precisa fazer PRE-FLIGHT de auditoria
-  de cadastro fiscal de produtos no Odoo ANTES de operacoes que tocam SEFAZ
-  (faturamento inventario, transferencia inter-company, NF de inventario).
-  Cobre G017 (NCM ausente), G018 (weight=0), G035 (barcode invalido GTIN),
-  G038 (l10n_br_origem ausente — NOVO v22+ 2026-05-27), G014 (lote vencido com saldo)
-  + D-OPS-2 (duplicacao em pipeline ativo) + D-OPS-3 (tracking='none' info).
-  Perfil V1: 'inventario' (Skill 8 faturando-odoo).
-  Roadmap perfis: 'venda-cliente' (V2), 'compras-importacao' (V3+).
-
-  USAR QUANDO:
-  - "audita cadastro fiscal do ciclo X"
-  - "pre-flight para faturar onda Y"
-  - "verifica NCM/barcode/weight dos cods Z"
-  - "limpa barcodes invalidos antes de SEFAZ"
-  - "tem duplicacao em pipeline ativo?"
-  - Sub-skill delegada pela Skill 8 'faturando-odoo' (Skill 8 v15+ chama esta)
-
-  NAO USAR QUANDO:
-  - Apenas listar produtos por filtro generico -> usar consultando-sql
-  - Operacoes WRITE de estoque (ajustar/transferir) -> Skills 1/2 estoque
-  - Criar NF / lancamento Odoo -> Skill 8 faturando-odoo (v15+) ou
-    integracao-odoo
-  - Auditoria contabil/financeira -> auditor-financeiro
+description: >-
+  Skill de PRE-FLIGHT de auditoria de cadastro fiscal de produtos no Odoo
+  ANTES de operacoes que tocam SEFAZ (faturamento inventario, transferencia
+  inter-company, NF de inventario). Cobre NCM, weight, barcode GTIN, origem
+  fiscal, lote vencido e duplicacao em pipeline ativo. Usar quando o pedido
+  eh "audita cadastro fiscal do ciclo X", "pre-flight para faturar onda Y",
+  "verifica NCM/barcode/weight dos cods Z", "limpa barcodes invalidos antes
+  de SEFAZ". NAO usar para criar NF / lancamento Odoo -> faturando-odoo.
+  Matriz USAR/NAO-USAR completa no corpo.
 ---
 
 # auditando-cadastro-fiscal-odoo
+
+## Quando usar / Quando NAO usar
+
+**Cobertura**: G017 (NCM ausente), G018 (weight=0), G035 (barcode invalido GTIN),
+G038 (l10n_br_origem ausente — NOVO v22+ 2026-05-27), G014 (lote vencido com saldo)
++ D-OPS-2 (duplicacao em pipeline ativo) + D-OPS-3 (tracking='none' info).
+Perfil V1: 'inventario' (Skill 8 `faturando-odoo`).
+Roadmap perfis: 'venda-cliente' (V2), 'compras-importacao' (V3+).
+
+**USAR QUANDO:**
+- "audita cadastro fiscal do ciclo X"
+- "pre-flight para faturar onda Y"
+- "verifica NCM/barcode/weight dos cods Z"
+- "limpa barcodes invalidos antes de SEFAZ"
+- "tem duplicacao em pipeline ativo?"
+- Sub-skill delegada pela Skill 8 `faturando-odoo` (Skill 8 v15+ chama esta)
+
+**NAO USAR QUANDO:**
+- Apenas listar produtos por filtro generico -> usar `consultando-sql`
+- Operacoes WRITE de estoque (ajustar/transferir) -> Skills 1/2 estoque
+  (`ajustando-quant-odoo` / `transferindo-interno-odoo`)
+- Criar NF / lancamento Odoo -> Skill 8 `faturando-odoo` (v15+) ou `integracao-odoo`
+- Auditoria contabil/financeira -> `auditor-financeiro`
 
 ## Contrato (skill C5 — perfil V1 'inventario')
 

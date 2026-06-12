@@ -1,23 +1,12 @@
 ---
 name: rastreando-chassi-assai
 description: >-
-  Esta skill deve ser usada quando o usuario pergunta sobre o historico
-  completo de UM chassi do modulo Motos Assai (B2B Q.P.A.): "cade o chassi
+  Skill READ para historico completo de UM chassi do modulo Motos Assai (B2B
+  Q.P.A.): eventos cronologicos, recibo Motochefe de origem, separacao ativa,
+  NF Q.P.A., validacao regex contra modelo. Gatilhos: "cade o chassi
   MZX1234?", "historico do chassi X", "essa moto Q.P.A. ja foi separada?",
-  "quando o chassi Y chegou ao CD?". Retorna eventos cronologicos, recibo
-  Motochefe de origem, separacao ativa (se houver), NF Q.P.A. (se faturada),
-  validacao de regex contra modelo.
-
-  USAR QUANDO:
-  - "cade o chassi MZX...?"
-  - "historico do chassi"
-  - "essa moto Q.P.A. ja foi vendida/separada?"
-  - "em que recibo veio o chassi X?"
-
-  NAO USAR PARA:
-  - Estoque agregado (usar consultando-estoque-assai)
-  - Chassis Lojas HORA (usar rastreando-chassi)
-  - Pedido/compra do chassi (usar acompanhando-pedido-compra-assai)
+  "em que recibo veio o chassi X?". NAO usar para estoque agregado ->
+  consultando-estoque-assai. Matriz USAR/NAO-USAR completa no corpo.
 allowed-tools: Read, Bash, Glob, Grep
 ---
 
@@ -25,6 +14,20 @@ allowed-tools: Read, Bash, Glob, Grep
 
 Mostra historico completo de UM chassi: eventos cronologicos, recibo de origem,
 separacao ativa, NF Q.P.A. (se faturada).
+
+## Quando usar / Quando NAO usar
+
+**USAR QUANDO:**
+- "cade o chassi MZX...?"
+- "historico do chassi"
+- "essa moto Q.P.A. ja foi vendida/separada?"
+- "quando o chassi Y chegou ao CD?"
+- "em que recibo veio o chassi X?"
+
+**NAO USAR PARA:**
+- Estoque agregado -> `consultando-estoque-assai`
+- Chassis Lojas HORA -> `rastreando-chassi`
+- Pedido/compra do chassi -> `acompanhando-pedido-compra-assai`
 
 ---
 

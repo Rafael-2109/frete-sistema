@@ -16,11 +16,11 @@ atualizado: 2026-06-11
 > qualquer fase (Item 0, F0, F1, F2) ou decidir se uma mudanca de conhecimento respeita o
 > papel canonico por camada.
 
-> 🔵 **PROXIMA SESSAO — RETOMAR AQUI:** Item 0 + F0 EXECUTADOS e mergeados em main
-> (2026-06-11, merge f57755c5d; migracao namespaces APLICADA em PROD: 45/0/9 + 45 versions).
-> Comecar pela F1 (T1.1 → T1.6) em worktree novo a partir de origin/main.
-> Cada fase ganha detalhamento TDD bite-sized na propria sessao de execucao
-> (padrao text-to-sql S1-S3); este doc e o programa.
+> 🔵 **PROXIMA SESSAO — RETOMAR AQUI:** Item 0 + F0 + **F1 EXECUTADAS** (F1 em 2026-06-12,
+> T1.1 → T1.6 completas em worktree — ver Rastreamento). Pendencias pos-merge da F1:
+> aposentadorias de origem da primeira leva T1.4 (3 memorias dev → ponteiro; memoria web
+> id=311 em PROD via `memoria.py aposentar`) e `~/.claude/CLAUDE.md` → ponteiro fino
+> (T1.6). F2 (T2.1-T2.3) permanece ATRAS DE GATES — so abrir com os gates do texto.
 
 ## Indice
 
@@ -216,7 +216,7 @@ Rollback por item; nada muda comportamento sem flag. Detalhar TDD na sessao de e
 
 ## FASE F1 — Estancar a fonte do drift (2-3 semanas)
 
-- [ ] **T1.1 — Lint de consistencia de roteamento (report-only → enforce).**
+- [x] **T1.1 — Lint de consistencia de roteamento (report-only → enforce).**
   Estender `prompt_size_audit.py --check-consistency`/`skills_listing_audit.py`:
   (a) toda skill citada em anti-gatilho de description, ROUTING_SKILLS.md, tool_skill_mapper
   e frontmatter de agents EXISTE em `.claude/skills/`;
@@ -224,7 +224,7 @@ Rollback por item; nada muda comportamento sem flag. Detalhar TDD na sessao de e
   (c) **budget por subagente**: soma das descriptions das skills declaradas no frontmatter de
   cada `.claude/agents/*.md` ≤ limite confirmado no I0.3.
   Padrao de rollout: `ui_policy_lint` (report-only primeiro, enforce no pre-commit depois).
-- [ ] **T1.2 — Solucao A nas descriptions (truncamento ATIVO nas 2 superficies — I0.3).**
+- [x] **T1.2 — Solucao A nas descriptions (truncamento ATIVO nas 2 superficies — I0.3).**
   Descriptions ≤600c (1 frase proposito + gatilhos + 1 anti-gatilho critico); matriz
   USAR/NAO-USAR completa move para o CORPO da SKILL.md. Cobre as DUAS superficies acima do
   limite de 8K: o listing do PRINCIPAL (~9,2K, afeta todo turno do agente web) e as 10 de
@@ -233,7 +233,7 @@ Rollback por item; nada muda comportamento sem flag. Detalhar TDD na sessao de e
   a decidir na execucao; depois os 16 frontmatters >1024c. Alavanca de emergencia documentada
   (env `SLASH_COMMAND_TOOL_CHAR_BUDGET`) — usar SO se algo critico for perdido antes da
   Solucao A concluir.
-- [ ] **T1.3 — Registro G0xx minimalista (resolver colisao de IDs).**
+- [x] **T1.3 — Registro G0xx minimalista (resolver colisao de IDs).**
   Colisoes provadas: G002/G021 com significados diferentes em
   `docs/inventario-2026-05/02-gotchas/` vs dominio estoque; DOIS arquivos `G030-*.md` no mesmo
   diretorio. Cura: `app/odoo/estoque/CLAUDE.md` continua dono da serie G0xx (de facto);
@@ -241,7 +241,7 @@ Rollback por item; nada muda comportamento sem flag. Detalhar TDD na sessao de e
   tabela-indice apontando donos; portar ao catalogo geral `odoo/GOTCHAS.md` os 2 gotchas
   gerais ausentes: G002 (stock.lot.name busca via `in`/`=like`) e G021 (lote exige
   company_id) — quem opera Odoo fora do estoque hoje nao os encontra.
-- [ ] **T1.4 — Trilho memoria→reference + primeira leva (4 silos provados).**
+- [x] **T1.4 — Trilho memoria→reference + primeira leva (4 silos provados).**
   (a) Secao nova no PAD-CTX (§Memorias) simetrica a promocao→codigo: criterios (estavel,
   nao-deterministico, relevante a 2+ superficies), fluxo (fila → revisao → reference →
   aposentar origem com `is_cold` + `meta.promovida_para`);
@@ -255,12 +255,12 @@ Rollback por item; nada muda comportamento sem flag. Detalhar TDD na sessao de e
   nuance "CD=34 financeiro NAO e company_id" → `odoo/IDS_FIXOS.md`; heuristica
   `duplicacao-de-pedido-atacadao-por-reinsercao` (web) → reference de negocio. Aposentar as
   memorias de origem no mesmo commit.
-- [ ] **T1.5 — Guard "cannot marshal None" (o gotcha mais replicado: ~20 arquivos, 0 guard).**
+- [x] **T1.5 — Guard "cannot marshal None" (o gotcha mais replicado: ~20 arquivos, 0 guard).**
   Wrapper unico no ponto de conexao XML-RPC Odoo (verificar arquivo exato na execucao —
   mapa 06 §E4 sugere `connection.py`) interpretando o Fault como sucesso-com-aviso conforme
   semantica ja documentada em `odoo/GOTCHAS.md`. Reduzir os ecos textuais a ponteiro de
   1 linha. E o piloto do modelo "constituicao generalizada" (T2 da ontologia).
-- [ ] **T1.6 — Versionar o conteudo dev-only de `~/.claude/CLAUDE.md` (17,3KB fora de git).**
+- [x] **T1.6 — Versionar o conteudo dev-only de `~/.claude/CLAUDE.md` (17,3KB fora de git).**
   Criar doc versionado no repo (zona PAD-A) com o conteudo critico (worker RQ, Caddy split,
   migrations, JSON sanitization...); `~/.claude/CLAUDE.md` vira ponteiro fino. Mata a CLASSE
   do drift do espelho, nao so a instancia (0,5 dia).
@@ -340,6 +340,23 @@ Anexo permanente do desenho-alvo (anti-overengineering). Revisitar item so com g
   Follow-up registrado: db.session.commit() pre-existente em _try_enrich_existing vaza
   savepoint em testes (runtime legitimo de daemon thread; tratar em task propria).
   Proximo: F1 (T1.1 -> T1.6) em sessao nova.
+- 2026-06-12 — **FASE F1 EXECUTADA** (subagent-driven + reviews 2-estagios por task, em worktree
+  a partir de origin/main e9c627c2f). T1.1: 4 checks novos em `check_consistencia()` (anti-gatilhos
+  4 fontes, contagens ROUTING, budget por subagente formula CLI) + hook pre-commit ampliado +
+  55 pytest; lint nao se auto-desarma se heading do ROUTING mudar. T1.2: 26 descriptions ≤600c
+  (matriz USAR/NAO-USAR realocada para o corpo, zero clausula perdida — verificada por reviewer);
+  gestor-estoque-odoo 15.391c→~6.018c/8.000c; `BUDGET_SUBAGENTE_ENFORCE=True`; principal intacto
+  7.971c. T1.3: renames minimos G002/G021/G030-reclf → INV-002/021/030 + citacoes (sentido estoque
+  preservado); GOTCHAS.md ganhou tabela de donos de series + entradas G002/G021 estoque portadas.
+  T1.4: trilho memoria→reference no PAD-CTX + MEMORY_PROTOCOL; `promotion-candidates` e `aposentar`
+  no gerindo-agente (73 pytest); primeira leva GRAVADA (diff_qtd→estoque §8.1 com direcao conferida
+  contra D010; anexar→carvia R20; CD=34→IDS_FIXOS; duplicacao pedidos/pagamentos→REGRAS_NEGOCIO §15);
+  aposentadoria das origens = POS-MERGE. T1.5: helper `is_cannot_marshal_none` (connection.py) +
+  28 callsites dedupados com polaridade 1:1 verificada + 16 pytest novos (inclui Fault real);
+  bug de import-em-escopo-local pego por analise estatica e corrigido. T1.6: `.claude/references/
+  REGRAS_DEV_LOCAL.md` (11 secoes verbatim; CAMINHOS vira ponteiro — mata espelho) + 12 ponteiros
+  atualizados; home vira ponteiro fino POS-MERGE. Incidente de execucao: subagente da T1.6 commitou
+  na main local por engano — cherry-picked para a branch e main resetada a origin/main (nada pushado).
 - 2026-06-11 — **ITEM 0 EXECUTADO** (read-only): budget 8K confirmado no binario 2.1.170
   (truncamento ATIVO no principal 115% e no gestor-estoque-odoo ~200% — urgencia de T1.2);
   invocacoes/90d coletadas (4 agents com zero na superficie web); flags KG+enrichment ativas

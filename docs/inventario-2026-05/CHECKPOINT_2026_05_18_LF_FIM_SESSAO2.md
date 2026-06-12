@@ -167,7 +167,7 @@ com pickings 317306 (NF 608629) e 317316 (NF 627348).
 | # | Status | Categoria | Modulo |
 |---|---|---|---|
 | G001 | ✅ FIXADO | NFs referencia | piloto madrugada |
-| G002 | ✅ FIXADO | picking type LF divergente | piloto |
+| INV-002 | ✅ FIXADO | picking type LF divergente | piloto |
 | G003 | ✅ FIXADO | CFOP real | piloto |
 | G004 | ✅ FIXADO | padrao picking robo CIEL IT | piloto |
 | G005 | ⚠️ ABERTO | tempo robo CIEL IT em paralelo | confirmado lento hoje |

@@ -1,45 +1,54 @@
 ---
 name: escriturando-odoo
 description: >-
-  Skill WRITE para ESCRITURAR ENTRADA de NF SEFAZ-autorizada no destino. v19+
-  ABRANGENTE expõe **7 átomos versáteis** que servem qualquer direção FB↔LF↔CD
-  via FLUXOS L3 1.2.1 (DFe veio via SEFAZ) e 1.2.2 (DFe criado via upload do
-  XML da SAÍDA — NF nossa). Átomos: `buscar_dfe`, `criar_dfe_a_partir_do_invoice_saida`,
-  `escriturar_dfe`, `gerar_po_from_dfe` (fire-and-poll), `preencher_po`,
-  `confirmar_po`, `criar_invoice_from_po`. Cada átomo dry-run-first (AP4) +
-  idempotência por campos Odoo. Constituição §6: Skill 7 = SO ENTRADA
-  (DFe/NF→in_invoice→saldo); par da Skill 8 `faturando-odoo` (= SO SAÍDA
-  NF→SEFAZ). Composição (caminho A vs B + sequência) é decidida por FLUXO L3
-  ou orchestrator — átomos NÃO decidem caminho.
-
-  Wrapper LEGACY `criar_recebimento_orchestrado` V1 STRICT (LF→FB only via
-  service externo `RecebimentoLfOdooService`) preservado para retrocompatibilidade
-  da ETAPA E legacy do orchestrator — deprecado v20+ após canary REAL PROD
-  validar `executar_fluxo_l3_1_2_x`.
-
-  Usar quando o pedido é: "escriture a NF SEFAZ na FB", "criar DFe via upload
-  do XML para inventário inter-company", "gerar PO a partir do DFe X",
-  "preencher lotes do picking gerado", "criar invoice draft a partir do PO Y".
-  Átomos são invocados em Python pelo orchestrator (`executar_fluxo_l3_1_2_x`)
-  ou diretamente pelo operador via fluxo L3.
-
-  NÃO USAR PARA:
-  - Faturamento SAÍDA (NF→SEFAZ) -> orchestrator faturamento_pipeline
-  - DFe de fornecedor externo (CTe / Compras — XML externo não controlado
-    por nós): `criar_dfe_a_partir_do_invoice_saida` raise FALHA_XML_VAZIO
-    pois XML existe em `account.move.l10n_br_xml_aut_nfe` APENAS para NF nossa.
-    Para CTe/Compras → gestor-recebimento (subagente).
-  - Recebimento de COMPRAS (DFe fornecedor 4 fases) -> gestor-recebimento
-  - Cancelar RecLf orfão / DFe (idempotência falha) -> investigação manual
-
-  `--dry-run` é o DEFAULT no CLI (futuro v20+); só efetiva com `--confirmar`.
-  Em Python (invocação pelo orchestrator), caller controla dry_run via argumento.
+  Skill WRITE para ESCRITURAR ENTRADA de NF SEFAZ-autorizada no destino
+  (DFe -> PO -> picking -> invoice de entrada), com 7 atomos versateis
+  servindo qualquer direcao FB-LF-CD via FLUXOS L3 1.2.1/1.2.2. Usar quando
+  o pedido eh "escriture a NF SEFAZ na FB", "criar DFe via upload do XML
+  para inventario inter-company", "gerar PO a partir do DFe X", "preencher
+  lotes do picking gerado", "criar invoice draft a partir do PO Y". dry_run
+  eh o DEFAULT em cada atomo. NAO usar para faturamento SAIDA (NF para
+  SEFAZ) -> faturando-odoo. Matriz USAR/NAO-USAR completa no corpo.
 allowed-tools: Read, Bash, Glob, Grep
 ---
 
 # escriturando-odoo (WRITE — Skill 7 ABRANGENTE v19+ + wrapper V1 STRICT deprecado)
 
 > **🆕 v19+ ABRANGENTE (2026-05-26)**: Skill 7 agora expõe **7 átomos versáteis** que servem qualquer direção FB↔LF↔CD via FLUXOS L3 1.2.1 (caminho A — DFe veio via SEFAZ) e 1.2.2 (caminho B — DFe criado via XML da SAÍDA). AP1+AP4 ✅ resolvidos. Wrapper V1 STRICT (`criar_recebimento_orchestrado`) preservado como deprecado v20+.
+
+## Quando usar / Quando NÃO usar
+
+**Átomos** (cada um dry-run-first AP4 + idempotência por campos Odoo): `buscar_dfe`,
+`criar_dfe_a_partir_do_invoice_saida`, `escriturar_dfe`, `gerar_po_from_dfe`
+(fire-and-poll), `preencher_po`, `confirmar_po`, `criar_invoice_from_po`.
+Constituição §6: Skill 7 = SO ENTRADA (DFe/NF→in_invoice→saldo); par da Skill 8
+`faturando-odoo` (= SO SAÍDA NF→SEFAZ). Composição (caminho A vs B + sequência) é
+decidida por FLUXO L3 ou orchestrator — átomos NÃO decidem caminho.
+
+**Wrapper LEGACY** `criar_recebimento_orchestrado` V1 STRICT (LF→FB only via
+service externo `RecebimentoLfOdooService`) preservado para retrocompatibilidade
+da ETAPA E legacy do orchestrator — deprecado v20+ após canary REAL PROD validar
+`executar_fluxo_l3_1_2_x`.
+
+**USAR QUANDO** o pedido é: "escriture a NF SEFAZ na FB", "criar DFe via upload
+do XML para inventário inter-company", "gerar PO a partir do DFe X", "preencher
+lotes do picking gerado", "criar invoice draft a partir do PO Y". Átomos são
+invocados em Python pelo orchestrator (`executar_fluxo_l3_1_2_x`) ou diretamente
+pelo operador via fluxo L3.
+
+**NÃO USAR PARA:**
+- Faturamento SAÍDA (NF→SEFAZ) -> orchestrator `inventario_pipeline`
+  (ex-`faturamento_pipeline`; Skill 8 `faturando-odoo`)
+- DFe de fornecedor externo (CTe / Compras — XML externo não controlado
+  por nós): `criar_dfe_a_partir_do_invoice_saida` raise FALHA_XML_VAZIO
+  pois XML existe em `account.move.l10n_br_xml_aut_nfe` APENAS para NF nossa.
+  Para CTe/Compras -> `gestor-recebimento` (subagente).
+- Recebimento de COMPRAS (DFe fornecedor 4 fases) -> `gestor-recebimento`
+- Cancelar RecLf orfão / DFe (idempotência falha) -> investigação manual
+
+**Defaults**: `--dry-run` é o DEFAULT no CLI (futuro v20+); só efetiva com
+`--confirmar`. Em Python (invocação pelo orchestrator), caller controla dry_run
+via argumento.
 
 ## Átomos v19+ ABRANGENTES (NOVOS — `escrituracao.py` v19+)
 

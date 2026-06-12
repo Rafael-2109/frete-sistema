@@ -29,6 +29,7 @@ atualizado: 2026-06-08
 | Prioridades P1-P7, envio parcial, decisao de corte | [negocio/REGRAS_P1_P7.md](./negocio/REGRAS_P1_P7.md) |
 | Recebimento de materiais | [negocio/RECEBIMENTO_MATERIAIS.md](./negocio/RECEBIMENTO_MATERIAIS.md) |
 | Historico de decisoes | [negocio/historia_nacom.md](./negocio/historia_nacom.md) |
+| **Regras dev-only versionadas (worker RQ, Caddy split, migrations, JSON sanitization, CSS, stack)** | [REGRAS_DEV_LOCAL.md](REGRAS_DEV_LOCAL.md) |
 | **OBRIGATORIO — Timezone (Brasil naive)** | [REGRAS_TIMEZONE.md](REGRAS_TIMEZONE.md) |
 | **Routing de skills** | [ROUTING_SKILLS.md](ROUTING_SKILLS.md) |
 | **Infraestrutura Render e Odoo** | [INFRAESTRUTURA.md](INFRAESTRUTURA.md) |

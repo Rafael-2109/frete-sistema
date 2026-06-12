@@ -26,6 +26,7 @@ from typing import Dict, List, Optional, Tuple
 from app import db
 from app.utils.timezone import agora_utc_naive
 from app.financeiro.models import BaixaTituloLote, BaixaTituloItem
+from app.odoo.utils.connection import is_cannot_marshal_none
 
 logger = logging.getLogger(__name__)
 
@@ -837,7 +838,7 @@ class BaixaTitulosService:
                 self.connection.execute_kw('account.move', 'button_draft', [[move_id]])
                 logger.debug(f"[ANO_2000] Fatura {move_id} despublicada")
             except Exception as e:
-                if "cannot marshal None" not in str(e):
+                if not is_cannot_marshal_none(e):  # 'cannot marshal None' = sucesso (O6) — ver odoo/GOTCHAS.md
                     logger.error(f"[ANO_2000] Erro ao despublicar fatura {move_id}: {e}")
                     return False
 
@@ -1112,7 +1113,7 @@ class BaixaTitulosService:
                 self.connection.execute_kw('account.move', 'action_post', [[move_id]])
                 logger.debug(f"[ANO_2000] Fatura {move_id} republicada")
             except Exception as e:
-                if "cannot marshal None" not in str(e):
+                if not is_cannot_marshal_none(e):  # 'cannot marshal None' = sucesso (O6) — ver odoo/GOTCHAS.md
                     logger.error(f"[ANO_2000] Erro ao republicar fatura {move_id}: {e}")
                     return False
 
@@ -1300,7 +1301,7 @@ class BaixaTitulosService:
                 )
                 return True
             except Exception as e:
-                if "cannot marshal None" in str(e):
+                if is_cannot_marshal_none(e):  # 'cannot marshal None' = sucesso (O6) — ver odoo/GOTCHAS.md
                     # Verificar se postou mesmo com erro XML-RPC
                     move_check = self.connection.search_read(
                         'account.move',
@@ -1507,7 +1508,7 @@ class BaixaTitulosService:
                 {'context': wizard_context}
             )
         except Exception as e:
-            if "cannot marshal None" not in str(e):
+            if not is_cannot_marshal_none(e):  # 'cannot marshal None' = sucesso (O6) — ver odoo/GOTCHAS.md
                 raise
             result = None
 
@@ -1639,7 +1640,7 @@ class BaixaTitulosService:
                 [[move_id]]
             )
         except Exception as e:
-            if "cannot marshal None" not in str(e):
+            if not is_cannot_marshal_none(e):  # 'cannot marshal None' = sucesso (O6) — ver odoo/GOTCHAS.md
                 raise
 
         # Buscar nome gerado
@@ -1660,8 +1661,7 @@ class BaixaTitulosService:
     def _postar_pagamento(self, payment_id: int) -> None:
         """
         Confirma o pagamento (state = posted).
-        Nota: action_post retorna None, causando erro de serializacao XML-RPC.
-        Isso e esperado e deve ser ignorado.
+        'cannot marshal None' = sucesso (O6) — ver odoo/GOTCHAS.md
         """
         try:
             self.connection.execute_kw(
@@ -1670,8 +1670,7 @@ class BaixaTitulosService:
                 [[payment_id]]
             )
         except Exception as e:
-            # Ignorar erro de serializacao - operacao foi executada
-            if "cannot marshal None" not in str(e):
+            if not is_cannot_marshal_none(e):  # 'cannot marshal None' = sucesso (O6) — ver odoo/GOTCHAS.md
                 raise
 
     def _buscar_linha_credito(self, payment_id: int) -> Optional[int]:
@@ -1692,8 +1691,7 @@ class BaixaTitulosService:
     def _reconciliar(self, credit_line_id: int, titulo_id: int) -> None:
         """
         Reconcilia a linha de credito com o titulo.
-        Nota: reconcile retorna None, causando erro de serializacao XML-RPC.
-        Isso e esperado e deve ser ignorado.
+        'cannot marshal None' = sucesso (O6) — ver odoo/GOTCHAS.md
         """
         try:
             self.connection.execute_kw(
@@ -1702,8 +1700,7 @@ class BaixaTitulosService:
                 [[credit_line_id, titulo_id]]
             )
         except Exception as e:
-            # Ignorar erro de serializacao - operacao foi executada
-            if "cannot marshal None" not in str(e):
+            if not is_cannot_marshal_none(e):  # 'cannot marshal None' = sucesso (O6) — ver odoo/GOTCHAS.md
                 raise
 
     def _buscar_partial_reconcile(self, titulo_id: int) -> Optional[int]:
@@ -1820,8 +1817,7 @@ class BaixaTitulosService:
                 [[payment_id]]
             )
         except Exception as e:
-            # Ignorar erro de serializacao - operacao foi executada
-            if "cannot marshal None" not in str(e):
+            if not is_cannot_marshal_none(e):  # 'cannot marshal None' = sucesso (O6) — ver odoo/GOTCHAS.md
                 raise
 
         # Buscar nome gerado
@@ -2161,7 +2157,7 @@ class BaixaTitulosService:
                 [[pendentes_line_id, fresh_line]]
             )
         except Exception as e:
-            if "cannot marshal None" not in str(e):
+            if not is_cannot_marshal_none(e):  # 'cannot marshal None' = sucesso (O6) — ver odoo/GOTCHAS.md
                 raise
 
         logger.info(

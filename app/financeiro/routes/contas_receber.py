@@ -12,6 +12,7 @@ from sqlalchemy import func, or_, exists
 
 from app import db
 from app.financeiro.routes import financeiro_bp
+from app.odoo.utils.connection import is_cannot_marshal_none
 
 
 # ========================================
@@ -860,7 +861,7 @@ def api_criar_pagamento_odoo_inconsistencia(conta_id):
                 },
             )
 
-            # Executar wizard — pode retornar None (GOTCHA O6: "cannot marshal None" = SUCESSO)
+            # 'cannot marshal None' = sucesso (O6) — ver odoo/GOTCHAS.md
             try:
                 conn.execute(
                     'account.payment.register',
@@ -868,8 +869,7 @@ def api_criar_pagamento_odoo_inconsistencia(conta_id):
                     [wizard_id],
                 )
             except Exception as e:
-                # "cannot marshal None" = sucesso (O6)
-                if 'cannot marshal None' not in str(e):
+                if not is_cannot_marshal_none(e):
                     raise
 
         except Exception as e:

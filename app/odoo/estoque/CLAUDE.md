@@ -298,6 +298,18 @@ Faturamento/escrituração tocam SEFAZ (irreversível): **átomo macro** (defaul
 **Pré-requisito bloqueante:** ~~G019/G020 ABERTOS~~ **G019/G020 FECHADAS no service** (2026-05-24 v3 — `validar()` re-lê `state` pós-`button_validate` e raise `RuntimeError` se != 'done'; `liberar_faturamento()` valida pré-cond `state=done` antes; cobertos por 8 testes pytest em `test_stock_picking_service.py`). Docs G019/G020 atualizadas de PROPOSTO → IMPLEMENTADO. Skill 8 `faturando-odoo` agora pode invocar `svc.validar()` confiando no invariante.
 **Irredutível:** tempo do robô CIEL IT (externo) — polling+timeout dá resultado determinístico, nunca tempo.
 
+### 8.1 REGRA INVIOLÁVEL (SOT D010) — direção MIGRAÇÃO pelo sinal de `diff_qtd`
+
+`diff_qtd = qtd_teorica − qtd_odoo_atual`. O **sinal decide SÓ a direção**; a quantidade é SEMPRE `qtd = abs(diff_qtd)`.
+
+| `diff_qtd` | Significado | Transferência |
+|---|---|---|
+| `> 0` | lote PRECISA de saldo | `MIGRACAO → lote` |
+| `< 0` | lote tem EXCESSO | `lote → MIGRACAO` |
+| `≈ 0` | conciliado | SKIP |
+
+Validada por Rafael 2026-05-19 após confusão que quase inverteu ~9.612 transferências. Doc SOT: `docs/inventario-2026-05/00-decisoes/D010-direcao-transferencia-migracao-por-sinal-diff_qtd.md`.
+
 ## 9. SUBAGENTE `gestor-estoque-odoo` (WRITE)
 
 Papel: orquestrar operações de escrita + **pesquisar premissas obrigatórias**. Loop: identificar → navegar árvore → carregar folha → pesquisar/validar premissas → compor em `--dry-run` → mostrar plano → `--confirmar` → verificar no Odoo. Diferenciado de `gestor-estoque-producao` (READ-ONLY). Prompt: `.claude/agents/gestor-estoque-odoo.md`.

@@ -4,7 +4,7 @@ camada: L2
 sot_de: —
 hub: .claude/references/INDEX.md
 superseded_by: —
-atualizado: 2026-06-02
+atualizado: 2026-06-12
 -->
 # IDs Fixos por Empresa - Odoo
 
@@ -50,6 +50,13 @@ CNPJS_GRUPO = [
 ]
 # Usar para excluir NFs internas de validacao NF x PO
 ```
+
+> **ARMADILHA — o "CD=34" de documentos financeiros NAO e company_id do Odoo.**
+> Companies Odoo sao SO as da tabela acima: FB=1, SC=3, CD=4, LF=5 (verificado ao
+> vivo 2026-06-01 via `res.company`). O "34" que aparece em docs/titulos do
+> financeiro local e CODIGO INTERNO multi-company, NAO um id Odoo. Ao operar o
+> Odoo da CD: `company_id=4`; locations `CD/Estoque=32`, `CD/Indisponivel=31090`
+> (tabela abaixo). Promovida da memoria dev `gotcha_cd_company_id_odoo` (T1.4, 2026-06-12).
 
 ---
 

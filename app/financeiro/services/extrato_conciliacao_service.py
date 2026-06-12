@@ -50,6 +50,7 @@ from app.financeiro.constants import (
     CONTA_CLIENTES_NACIONAIS,
     JOURNAL_GRAFENO_ID,
 )
+from app.odoo.utils.connection import is_cannot_marshal_none
 
 logger = logging.getLogger(__name__)
 
@@ -1480,8 +1481,7 @@ class ExtratoConciliacaoService:
                 [[credit_line_id, titulo_id]]
             )
         except Exception as e:
-            # Ignorar erro de serialização - operação foi executada
-            if "cannot marshal None" not in str(e):
+            if not is_cannot_marshal_none(e):  # 'cannot marshal None' = sucesso (O6) — ver odoo/GOTCHAS.md
                 raise
 
     # =========================================================================
@@ -2931,7 +2931,7 @@ class ExtratoConciliacaoService:
                 [ids_reconciliar]
             )
         except Exception as e:
-            if "cannot marshal None" not in str(e):
+            if not is_cannot_marshal_none(e):  # 'cannot marshal None' = sucesso (O6) — ver odoo/GOTCHAS.md
                 raise
         logger.info("  M:N: Extrato reconciliado com sucesso")
 

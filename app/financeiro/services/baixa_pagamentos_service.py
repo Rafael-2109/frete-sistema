@@ -39,6 +39,7 @@ from app.financeiro.constants import (
     CONTA_TRANSITORIA,
     CONTA_JUROS_PAGAMENTOS_POR_COMPANY,
 )
+from app.odoo.utils.connection import is_cannot_marshal_none
 
 logger = logging.getLogger(__name__)
 
@@ -508,7 +509,7 @@ class BaixaPagamentosService:
                 {'context': wizard_context}
             )
         except Exception as e:
-            if "cannot marshal None" not in str(e):
+            if not is_cannot_marshal_none(e):  # 'cannot marshal None' = sucesso (O6) — ver odoo/GOTCHAS.md
                 raise
 
         # 3. Buscar o pagamento criado pelo wizard
@@ -554,8 +555,7 @@ class BaixaPagamentosService:
                 [[payment_id]]
             )
         except Exception as e:
-            # Ignorar erro de serialização - operação foi executada
-            if "cannot marshal None" not in str(e):
+            if not is_cannot_marshal_none(e):  # 'cannot marshal None' = sucesso (O6) — ver odoo/GOTCHAS.md
                 raise
 
     def buscar_linhas_payment(self, payment_id: int) -> Dict:
@@ -610,8 +610,7 @@ class BaixaPagamentosService:
             )
         except Exception as e:
             erro_str = str(e)
-            # Ignorar erro de serialização - operação foi executada
-            if "cannot marshal None" in erro_str:
+            if is_cannot_marshal_none(erro_str):  # 'cannot marshal None' = sucesso (O6) — ver odoo/GOTCHAS.md
                 return
             # Já reconciliados: operação manual no Odoo ou race condition
             if "já estão reconciliados" in erro_str or "already reconciled" in erro_str:

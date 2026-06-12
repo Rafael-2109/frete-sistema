@@ -27,8 +27,21 @@ Uso:
 Nota: tokens sao ESTIMATIVA (bytes/3.5, calibrado p/ pt-BR + XML). A Anthropic nao
 publica tokenizer offline; o objetivo aqui e detectar DEFASAGEM e CRESCIMENTO, nao
 precisao absoluta. Trate como ordem de grandeza.
+
+T1.1 (2026-06-11): novos checks em check_consistencia():
+  (a) skills citadas existem — 4 fontes:
+      a.1 check_anti_gatilhos: anti-gatilhos em descriptions de SKILL.md
+      a.2 check_nomes_inventario_routing: nomes listados no inventario do
+          ROUTING_SKILLS.md (prosa parentetica isenta)
+      a.3 check_chaves_mapper: chaves de SKILL_TO_CATEGORY (tool_skill_mapper.py;
+          validas tambem via .claude/commands/*.md)
+      a.4 check_skills_declaradas_agents: frontmatter skills de agents
+          (ERRO se diretorio inexistente; WARNING se so falta SKILL.md)
+  (b) check_contagens_routing: contagens declaradas no ROUTING_SKILLS.md
+  (c) check_budget_subagentes: budget de descriptions por subagente (WARNING ate T1.2)
 """
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -139,6 +152,450 @@ SKILLS_SEM_SKILL_MD = {
     "consultando-sql",  # descoberta via filesystem (schemas/); decisao 2026 — nao criar SKILL.md
 }
 
+# Skills citaveis como anti-gatilho em descriptions de SKILL.md que NAO existem em
+# .claude/skills/ porque sao skills do Claude Code global (fora do escopo do agente web).
+# Adicionar aqui SOMENTE apos confirmar que o diretorio .claude/skills/<nome>/ nao existe.
+# Confirmado em 2026-06-11 (T1.1): nenhum desses diretorios existe em .claude/skills/.
+SKILLS_EXTERNAS_ROUTING = {
+    "integracao-odoo",   # skill CC-global (dev-only); agente e' desenvolvedor-integracao-odoo
+    "frontend-design",   # skill CC-global (dev-only, Jinja2/HTML)
+    "skill-creator",     # skill CC-global (dev-only, criar/melhorar skills)
+    "ralph-wiggum",      # skill CC-global (dev-only, loop autonomo)
+    "prd-generator",     # skill CC-global (dev-only, spec antes de impl)
+    "resolvendo-problemas",  # skill CC-global (dev-only, investigacao G/XG)
+}
+
+# Flag de controle do check (c) — budget por subagente.
+# True = ERRO (exit 1) se algum subagente ultrapassar o limite. Flipada na T1.2
+# (2026-06-11) apos a correcao de gestor-estoque-odoo (15391c -> ~6.3K chars):
+# descriptions de SKILL.md ficaram <=600c e a matriz USAR/NAO-USAR completa
+# foi movida para o corpo de cada SKILL.md.
+BUDGET_SUBAGENTE_ENFORCE = True
+
+# Limite de budget (chars) por subagente — igual ao budget do listing do CLI Agent SDK.
+BUDGET_SUBAGENTE_LIMITE = 8000
+
+
+# Regex para extrair referencias de anti-gatilho das descriptions de SKILL.md.
+# Captura o nome apos "->", pulando fillers opcionais (usar, use, Subagente, etc.).
+# Requer pelo menos um hifen no nome (todos os nomes de skill/agente tem hifen).
+_RE_ANTI_GATILHO = re.compile(
+    r"->\s*(?:\*\*)?(?:usar\s+|use\s+|Subagente\s+|subagente\s+|o\s+|a\s+)?([a-z][a-z0-9-]+[a-z0-9])(?:\*\*)?",
+    re.IGNORECASE,
+)
+
+
+def _subsecoes_inventario_routing(txt):
+    """Retorna [(grupo, conta_declarada, segmento)] das subsecoes '### Grupo (N)'
+    do inventario do ROUTING_SKILLS.md (entre o heading do inventario e o
+    changelog HTML; cada segmento termina no proximo '###' ou no footer
+    '> Skills dev')."""
+    partes = txt.split("## Skills — Inventario Completo", 1)
+    if len(partes) < 2:
+        return []
+    corpo = partes[1].split("<!-- CHANGELOG", 1)[0]
+    out = []
+    for m in re.finditer(r"^### (.+?)\((\d+)\)", corpo, re.MULTILINE):
+        grupo = m.group(1).strip()
+        conta = int(m.group(2))
+        inicio = m.end()
+        fim_match = re.search(r"^### |^> Skills dev", corpo[inicio:], re.MULTILINE)
+        fim = inicio + fim_match.start() if fim_match else len(corpo)
+        out.append((grupo, conta, corpo[inicio:fim]))
+    return out
+
+
+def _nomes_listados_inventario(segmento):
+    """Extrai [(nome, pos_fim)] dos backtick-names com hifen listados COMO SKILL
+    num segmento de subsecao do inventario — ou seja, com profundidade de
+    parenteses 0. Nomes DENTRO de parenteses sao prosa/anotacao (ex.:
+    '(substitui `memoria-usuario` — deprecated)') e ficam de fora."""
+    out = []
+    for m in re.finditer(r"`([a-z][a-z0-9-]+[a-z0-9])`", segmento):
+        nome = m.group(1)
+        if "-" not in nome:
+            continue
+        antes = segmento[:m.start()]
+        depth = antes.count("(") - antes.count(")")
+        if depth > 0:
+            continue  # prosa parentetica — nao e listagem de skill
+        out.append((nome, m.end()))
+    return out
+
+
+def check_anti_gatilhos(skills_dir=None, agents_stems=None, skills_externas=None):
+    """Check (a.1) — T1.1: verifica que toda referencia anti-gatilho ('->') nas
+    descriptions de SKILL.md aponta para skill/agente que existe.
+
+    Excecoes validas:
+    - Nome seguido de '(planejada' na mesma linha (convencao T0.2).
+    - Nome presente em skills_externas (skills CC-global fora de .claude/skills/).
+
+    Retorna (erros, avisos).
+    """
+    if skills_dir is None:
+        skills_dir = ROOT / ".claude/skills"
+    if agents_stems is None:
+        agents_stems = {p.stem for p in AGENTS_DIR.glob("*.md")}
+    if skills_externas is None:
+        skills_externas = SKILLS_EXTERNAS_ROUTING
+
+    skills_dir = Path(skills_dir)
+    # Skills validas: SKILL.md existente OU apenas diretorio (ex: consultando-sql)
+    skills_validas = {p.parent.name for p in skills_dir.glob("*/SKILL.md")}
+    # Adicionar diretorios sem SKILL.md que existam
+    if skills_dir.exists():
+        for d in skills_dir.iterdir():
+            if d.is_dir():
+                skills_validas.add(d.name)
+
+    erros = []
+    avisos = []
+
+    for skill_md in sorted(skills_dir.glob("*/SKILL.md")):
+        skill_name = skill_md.parent.name
+        try:
+            txt = skill_md.read_text(encoding="utf-8")
+            m = re.search(r"^---\s*\n(.*?)\n---\s*\n", txt, re.DOTALL)
+            if not m:
+                continue
+            fm = m.group(1)
+
+            for match in _RE_ANTI_GATILHO.finditer(fm):
+                nome = match.group(1).strip()
+                # Filtro: precisa ter pelo menos um hifen (nomes de skill/agente)
+                if "-" not in nome or len(nome) <= 4:
+                    continue
+
+                # Ja' esta no filesystem ou nos agents?
+                if nome in skills_validas or nome in agents_stems:
+                    continue
+
+                # E' skill CC-global declarada na lista de excecoes?
+                if nome in skills_externas:
+                    continue
+
+                # E' seguida de '(planejada' no mesmo contexto?
+                inicio = match.end()
+                contexto_proximo = fm[inicio:inicio + 40]
+                if re.search(r"\(planejada", contexto_proximo, re.IGNORECASE):
+                    continue
+
+                erros.append(
+                    f"SKILL.md '{skill_name}': anti-gatilho morto -> '{nome}' "
+                    f"(nao existe em .claude/skills/, .claude/agents/ nem "
+                    f"SKILLS_EXTERNAS_ROUTING; se for skill planejada, adicione "
+                    f"'(planejada' logo apos o nome)"
+                )
+        except Exception as e:  # noqa: BLE001
+            avisos.append(f"check_anti_gatilhos: erro ao ler '{skill_name}': {e}")
+
+    return erros, avisos
+
+
+def check_contagens_routing(routing_path=None, skills_validas=None):
+    """Check (b) — T1.1: verifica que as contagens declaradas no ROUTING_SKILLS.md
+    correspondem ao numero real de skills no filesystem.
+
+    Verifica:
+    - Headline '## Skills — Inventario Completo (N invocaveis)' == total real
+    - Cada subsecao '### Grupo (N)' == numero de backtick-names validos listados
+
+    'Valido' = nome existe em skills_validas (inclui SKILLS_SEM_SKILL_MD).
+
+    Retorna (erros, avisos).
+    """
+    if routing_path is None:
+        routing_path = ROOT / ".claude/references/ROUTING_SKILLS.md"
+    if skills_validas is None:
+        skills_validas = {p.parent.name for p in (ROOT / ".claude/skills").glob("*/SKILL.md")}
+        skills_validas |= SKILLS_SEM_SKILL_MD
+
+    routing_path = Path(routing_path)
+    if not routing_path.exists():
+        return [], [f"ROUTING_SKILLS.md ausente em {routing_path} — contagens nao verificadas"]
+
+    erros = []
+    avisos = []
+    txt = routing_path.read_text(encoding="utf-8")
+
+    # 1. Verificar total na headline
+    m_total = re.search(
+        r"## Skills — Inventario Completo \((\d+) invocaveis", txt
+    )
+    if m_total:
+        total_declarado = int(m_total.group(1))
+        total_real = len(skills_validas)
+        if total_declarado != total_real:
+            erros.append(
+                f"ROUTING_SKILLS.md headline declara {total_declarado} skills invocaveis "
+                f"mas o filesystem tem {total_real} "
+                f"(ajuste a contagem ou adicione/remova a skill correspondente)"
+            )
+    else:
+        # Lint nao pode se auto-desarmar em silencio: heading renomeado/reformatado
+        # (ex.: em-dash -> hifen) faria o check passar sem verificar nada.
+        avisos.append(
+            f"ROUTING_SKILLS.md existe mas a headline "
+            f"'## Skills — Inventario Completo (N invocaveis' nao foi encontrada — "
+            f"contagem total NAO verificada (heading renomeado? atualize o regex "
+            f"em check_contagens_routing)"
+        )
+
+    # 2. Verificar subsecoes '### Grupo (N)' — mesma extracao depth-0 do check (a.2),
+    # garantindo coerencia: nome listado ou conta (se valido) ou e' ERRO no (a.2).
+    subsecoes = _subsecoes_inventario_routing(txt)
+    if not subsecoes:
+        avisos.append(
+            f"ROUTING_SKILLS.md existe mas nenhuma subsecao '### Grupo (N)' foi "
+            f"encontrada no inventario — contagens por grupo NAO verificadas "
+            f"(heading do inventario renomeado? atualize _subsecoes_inventario_routing)"
+        )
+    for grupo, conta_declarada, segmento in subsecoes:
+        nomes_listados = [n for n, _ in _nomes_listados_inventario(segmento)]
+        nomes_validos = [n for n in nomes_listados if n in skills_validas]
+        conta_real = len(nomes_validos)
+
+        if conta_declarada != conta_real:
+            erros.append(
+                f"ROUTING_SKILLS.md secao '{grupo}' declara {conta_declarada} skills "
+                f"mas {conta_real} existem no filesystem "
+                f"(skills listadas: {nomes_validos})"
+            )
+
+    return erros, avisos
+
+
+def check_nomes_inventario_routing(routing_path=None, skills_dir=None,
+                                   agents_stems=None, skills_externas=None):
+    """Check (a.2) — T1.1 fix: todo nome listado COMO SKILL nas subsecoes do
+    inventario do ROUTING_SKILLS.md deve existir (diretorio em .claude/skills/,
+    agent, SKILLS_EXTERNAS_ROUTING, ou sufixo '(planejada').
+
+    Nomes em prosa parentetica (anotacoes/deprecated, ex.: '(substitui
+    `memoria-usuario` — deprecated)') NAO sao listagem — isentos.
+
+    Retorna (erros, avisos).
+    """
+    if routing_path is None:
+        routing_path = ROOT / ".claude/references/ROUTING_SKILLS.md"
+    if skills_dir is None:
+        skills_dir = ROOT / ".claude/skills"
+    if agents_stems is None:
+        agents_stems = {p.stem for p in AGENTS_DIR.glob("*.md")}
+    if skills_externas is None:
+        skills_externas = SKILLS_EXTERNAS_ROUTING
+
+    routing_path = Path(routing_path)
+    skills_dir = Path(skills_dir)
+    if not routing_path.exists():
+        return [], [f"ROUTING_SKILLS.md ausente em {routing_path} — nomes nao verificados"]
+
+    # Valido = qualquer diretorio em .claude/skills/ (com ou sem SKILL.md)
+    skills_validas = set()
+    if skills_dir.exists():
+        skills_validas = {d.name for d in skills_dir.iterdir() if d.is_dir()}
+
+    erros = []
+    avisos = []
+    txt = routing_path.read_text(encoding="utf-8")
+
+    subsecoes = _subsecoes_inventario_routing(txt)
+    if not subsecoes:
+        # Lint nao pode se auto-desarmar em silencio (heading renomeado).
+        avisos.append(
+            f"ROUTING_SKILLS.md existe mas nenhuma subsecao '### Grupo (N)' foi "
+            f"encontrada no inventario — nomes listados NAO verificados "
+            f"(heading do inventario renomeado? atualize _subsecoes_inventario_routing)"
+        )
+    for grupo, _conta, segmento in subsecoes:
+        for nome, pos_fim in _nomes_listados_inventario(segmento):
+            if nome in skills_validas or nome in agents_stems or nome in skills_externas:
+                continue
+            if re.match(r"\s*\(planejada", segmento[pos_fim:pos_fim + 40], re.IGNORECASE):
+                continue
+            erros.append(
+                f"ROUTING_SKILLS.md secao '{grupo}': nome morto listado como skill "
+                f"-> '{nome}' (nao existe em .claude/skills/, .claude/agents/ nem "
+                f"SKILLS_EXTERNAS_ROUTING; se for planejada, adicione '(planejada' "
+                f"logo apos o nome; se for anotacao historica, mova para dentro de "
+                f"parenteses)"
+            )
+
+    return erros, avisos
+
+
+def check_chaves_mapper(mapper_path=None, skills_dir=None, commands_dir=None,
+                        agents_stems=None, skills_externas=None):
+    """Check (a.3) — T1.1 fix: toda chave de SKILL_TO_CATEGORY no
+    tool_skill_mapper.py deve existir como diretorio em .claude/skills/, stem de
+    .claude/commands/*.md (slash commands como 'analise-carteira'), stem de
+    .claude/agents/*.md, ou SKILLS_EXTERNAS_ROUTING. Chave morta = ERRO.
+
+    Retorna (erros, avisos).
+    """
+    if mapper_path is None:
+        mapper_path = ROOT / "app/agente/services/tool_skill_mapper.py"
+    if skills_dir is None:
+        skills_dir = ROOT / ".claude/skills"
+    if commands_dir is None:
+        commands_dir = ROOT / ".claude/commands"
+    if agents_stems is None:
+        agents_stems = {p.stem for p in AGENTS_DIR.glob("*.md")}
+    if skills_externas is None:
+        skills_externas = SKILLS_EXTERNAS_ROUTING
+
+    mapper_path = Path(mapper_path)
+    skills_dir = Path(skills_dir)
+    commands_dir = Path(commands_dir)
+    if not mapper_path.exists():
+        return [], [f"tool_skill_mapper.py ausente em {mapper_path} — chaves nao verificadas"]
+
+    mod_mapper = _carregar_modulo_isolado(mapper_path)
+    chaves = set(getattr(mod_mapper, "SKILL_TO_CATEGORY", {}))
+
+    skills_dirs = {d.name for d in skills_dir.iterdir() if d.is_dir()} if skills_dir.exists() else set()
+    commands = {p.stem for p in commands_dir.glob("*.md")} if commands_dir.exists() else set()
+
+    erros = []
+    for chave in sorted(chaves):
+        if (chave in skills_dirs or chave in commands
+                or chave in agents_stems or chave in skills_externas):
+            continue
+        erros.append(
+            f"tool_skill_mapper.py SKILL_TO_CATEGORY: chave morta '{chave}' "
+            f"(nao existe em .claude/skills/, .claude/commands/, .claude/agents/ "
+            f"nem SKILLS_EXTERNAS_ROUTING — remova a chave ou crie a skill)"
+        )
+
+    return erros, []
+
+
+def check_skills_declaradas_agents(agents_dir=None, skills_dir=None,
+                                   skills_sem_skill_md=None):
+    """Check (a.4) — T1.1 fix: skill declarada no frontmatter `skills:` de
+    .claude/agents/*.md. ERRO se o DIRETORIO .claude/skills/<skill>/ nao existe
+    (skill fantasma — o SDK nao tera o que carregar). WARNING se o diretorio
+    existe mas falta SKILL.md (fora de SKILLS_SEM_SKILL_MD, que e' design
+    intencional e nao gera nada).
+
+    Retorna (erros, avisos).
+    """
+    if agents_dir is None:
+        agents_dir = AGENTS_DIR
+    if skills_dir is None:
+        skills_dir = ROOT / ".claude/skills"
+    if skills_sem_skill_md is None:
+        skills_sem_skill_md = SKILLS_SEM_SKILL_MD
+
+    agents_dir = Path(agents_dir)
+    skills_dir = Path(skills_dir)
+
+    skills_md_fs = {p.parent.name for p in skills_dir.glob("*/SKILL.md")}
+    skills_dirs_fs = {d.name for d in skills_dir.iterdir() if d.is_dir()} if skills_dir.exists() else set()
+
+    erros = []
+    avisos = []
+    for agent_md in sorted(agents_dir.glob("*.md")):
+        agent_nome = agent_md.stem
+        txt = agent_md.read_text(encoding="utf-8")
+        m = re.search(r"^skills:\s*\n((?:\s+-\s+\S+\s*\n)+)", txt, re.MULTILINE)
+        if not m:
+            continue
+        skills = {
+            ln.strip().lstrip("-").strip()
+            for ln in m.group(1).strip().splitlines()
+        }
+        for skill in sorted(skills - skills_md_fs - set(skills_sem_skill_md)):
+            if skill not in skills_dirs_fs:
+                erros.append(
+                    f"agente '{agent_nome}' declara skill '{skill}' INEXISTENTE "
+                    f"(.claude/skills/{skill}/ nao existe — remova do frontmatter "
+                    f"ou crie a skill)"
+                )
+            else:
+                avisos.append(
+                    f"agente '{agent_nome}' declara skill '{skill}' sem "
+                    f".claude/skills/{skill}/SKILL.md"
+                )
+
+    return erros, avisos
+
+
+def check_budget_subagentes(agents_dir=None, skills_dir=None, limite=None, enforce=None):
+    """Check (c) — T1.1: verifica que a soma das descriptions das skills declaradas
+    em cada .claude/agents/*.md nao ultrapassa o limite de 8000 chars (budget CLI).
+
+    Formula identica a skills_listing_audit.py: entry = len(nome) + 4 + len(desc);
+    total = soma(entries) + (N-1) newlines.
+
+    Com enforce=False (padrao ate T1.2): ultrapassar o limite gera AVISO (nao ERRO).
+    Com enforce=True: gera ERRO (exit 1).
+
+    Retorna (erros, avisos).
+    """
+    if agents_dir is None:
+        agents_dir = AGENTS_DIR
+    if skills_dir is None:
+        skills_dir = ROOT / ".claude/skills"
+    if limite is None:
+        limite = BUDGET_SUBAGENTE_LIMITE
+    if enforce is None:
+        enforce = BUDGET_SUBAGENTE_ENFORCE
+
+    agents_dir = Path(agents_dir)
+    skills_dir = Path(skills_dir)
+
+    # Import isolado de skills_listing_audit para reutilizar _extrair_description
+    import importlib.util as _ilu
+    _sla_path = Path(__file__).resolve().parent / "skills_listing_audit.py"
+    _spec = _ilu.spec_from_file_location("_sla_budget", _sla_path)
+    _sla = _ilu.module_from_spec(_spec)
+    _spec.loader.exec_module(_sla)
+
+    erros = []
+    avisos = []
+
+    for agent_md in sorted(agents_dir.glob("*.md")):
+        agent_nome = agent_md.stem
+        txt = agent_md.read_text(encoding="utf-8")
+        m = re.search(r"^skills:\s*\n((?:\s+-\s+\S+\s*\n)+)", txt, re.MULTILINE)
+        if not m:
+            continue  # agente sem skills declaradas — nao conta
+
+        skills = [
+            ln.strip().lstrip("-").strip()
+            for ln in m.group(1).strip().splitlines()
+        ]
+        if not skills:
+            continue
+
+        total = 0
+        n_com_desc = 0
+        for skill_nome in skills:
+            skill_md = skills_dir / skill_nome / "SKILL.md"
+            if not skill_md.exists():
+                continue  # skills sem SKILL.md (consultando-sql, etc.) nao contam
+            desc = _sla._extrair_description(skill_md)
+            total += len(skill_nome) + 4 + len(desc)
+            n_com_desc += 1
+
+        if n_com_desc > 1:
+            total += n_com_desc - 1  # (N-1) newlines
+
+        if total > limite:
+            msg = (
+                f"AVISO BUDGET: agente '{agent_nome}' tem {total}c de descriptions "
+                f"declaradas (limite {limite}c) — o CLI pode truncar skills ao carregar "
+                f"este subagente. Encurte descriptions ou remova skills do frontmatter."
+            )
+            if enforce:
+                erros.append(msg)
+            else:
+                avisos.append(msg)
+
+    return erros, avisos
+
 
 def _carregar_modulo_isolado(path):
     """Carrega um .py SEM importar o pacote `app` (evita boot do Flask).
@@ -248,16 +705,67 @@ def check_consistencia():
                     f"mas NAO e' declarada em nenhum .claude/agents/*.md — orfa, sem dono"
                 )
 
-        # Aviso: skill declarada em agent sem diretorio correspondente
-        skills_fs = {p.parent.name for p in (ROOT / ".claude/skills").glob("*/SKILL.md")}
-        for agente, skills in sorted(_skills_declaradas_em_agents().items()):
-            for skill in sorted(skills - skills_fs - SKILLS_SEM_SKILL_MD):
-                avisos.append(
-                    f"agente '{agente}' declara skill '{skill}' sem "
-                    f".claude/skills/{skill}/SKILL.md"
-                )
     except Exception as e:  # noqa: BLE001 — check nao pode derrubar o commit por bug proprio
         avisos.append(f"nao-orfandade da deny-list nao verificada (erro: {e})")
+
+    # T1.1 check (a.1): referencias mortas em descriptions de SKILL.md
+    try:
+        agents_stems = {p.stem for p in AGENTS_DIR.glob("*.md")}
+        e_anti, a_anti = check_anti_gatilhos(
+            skills_dir=ROOT / ".claude/skills",
+            agents_stems=agents_stems,
+            skills_externas=SKILLS_EXTERNAS_ROUTING,
+        )
+        erros.extend(e_anti)
+        avisos.extend(a_anti)
+    except Exception as e:  # noqa: BLE001
+        avisos.append(f"check_anti_gatilhos nao executado (erro: {e})")
+
+    # T1.1 check (a.2): nomes mortos listados no inventario do ROUTING_SKILLS.md
+    try:
+        e_inv, a_inv = check_nomes_inventario_routing()
+        erros.extend(e_inv)
+        avisos.extend(a_inv)
+    except Exception as e:  # noqa: BLE001
+        avisos.append(f"check_nomes_inventario_routing nao executado (erro: {e})")
+
+    # T1.1 check (a.3): chaves mortas em SKILL_TO_CATEGORY (tool_skill_mapper.py)
+    try:
+        e_map, a_map = check_chaves_mapper()
+        erros.extend(e_map)
+        avisos.extend(a_map)
+    except Exception as e:  # noqa: BLE001
+        avisos.append(f"check_chaves_mapper nao executado (erro: {e})")
+
+    # T1.1 check (a.4): skills declaradas em agents — ERRO se diretorio inexistente,
+    # WARNING se diretorio existe mas falta SKILL.md (substitui o aviso legado).
+    try:
+        e_decl, a_decl = check_skills_declaradas_agents()
+        erros.extend(e_decl)
+        avisos.extend(a_decl)
+    except Exception as e:  # noqa: BLE001
+        avisos.append(f"check_skills_declaradas_agents nao executado (erro: {e})")
+
+    # T1.1 check (b): contagens declaradas no ROUTING_SKILLS.md
+    try:
+        skills_validas = {p.parent.name for p in (ROOT / ".claude/skills").glob("*/SKILL.md")}
+        skills_validas |= SKILLS_SEM_SKILL_MD
+        e_routing, a_routing = check_contagens_routing(
+            routing_path=ROOT / ".claude/references/ROUTING_SKILLS.md",
+            skills_validas=skills_validas,
+        )
+        erros.extend(e_routing)
+        avisos.extend(a_routing)
+    except Exception as e:  # noqa: BLE001
+        avisos.append(f"check_contagens_routing nao executado (erro: {e})")
+
+    # T1.1 check (c): budget por subagente (WARNING ate T1.2 quando BUDGET_SUBAGENTE_ENFORCE=True)
+    try:
+        e_budget, a_budget = check_budget_subagentes()
+        erros.extend(e_budget)
+        avisos.extend(a_budget)
+    except Exception as e:  # noqa: BLE001
+        avisos.append(f"check_budget_subagentes nao executado (erro: {e})")
 
     return erros, avisos
 

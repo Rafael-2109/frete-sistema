@@ -22,6 +22,8 @@ Data: 2026-02-06
 import logging
 from typing import Dict, List, Any
 
+from app.odoo.utils.connection import is_cannot_marshal_none
+
 logger = logging.getLogger(__name__)
 
 
@@ -629,8 +631,7 @@ class OdooDevolucaoService:
             logger.info(f"  ✅ Picking {name} validado com sucesso")
         except Exception as e:
             error_str = str(e)
-            # "cannot marshal None" = operacao executou mas retornou None
-            if 'cannot marshal None' not in error_str:
+            if not is_cannot_marshal_none(error_str):  # 'cannot marshal None' = sucesso (O6) — ver odoo/GOTCHAS.md
                 raise
 
         # Verificar estado final

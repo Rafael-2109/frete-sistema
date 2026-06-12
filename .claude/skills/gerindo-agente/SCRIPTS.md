@@ -4,7 +4,7 @@ camada: L2
 sot_de: —
 hub: .claude/skills/gerindo-agente/SKILL.md
 superseded_by: —
-atualizado: 2026-06-03
+atualizado: 2026-06-12
 -->
 # SCRIPTS.md — Referencia Unificada de Parametros
 
@@ -26,6 +26,7 @@ atualizado: 2026-06-03
   - [resolve-pendencia](#resolve-pendencia)
   - [log-pitfall](#log-pitfall)
   - [stats](#stats)
+  - [aposentar](#aposentar)
 - [sessao.py](#sessaopy)
   - [list](#list)
   - [search](#search)
@@ -52,6 +53,7 @@ atualizado: 2026-06-03
   - [health](#health)
   - [effectiveness](#effectiveness)
   - [cold-candidates](#cold-candidates)
+  - [promotion-candidates](#promotion-candidates)
   - [conflicts](#conflicts)
   - [embedding-coverage](#embedding-coverage)
   - [friction](#friction)
@@ -171,6 +173,22 @@ Apos salvar, executa best-effort: dedup check (warning se duplicata), embedding 
 ### stats
 Sem argumentos adicionais.
 
+### aposentar
+| Argumento | Tipo | Obrigatorio | Default | Descricao |
+|-----------|------|-------------|---------|-----------|
+| `--path` | str | Sim | — | Path da memoria |
+| `--promovida-para` | str | Sim | — | Artefato destino (reference/codigo) que absorveu o conteudo |
+| `--user-id` | int | Nao | **0** | Dono da memoria (override do comum; 0 = empresa) |
+| `--confirmar` | flag | Nao | false | Efetiva (sem isso = **dry-run**, mostra before/after) |
+
+WRITE com **dry-run DEFAULT**. Aposenta memoria promovida a reference/codigo (trilho
+memoria→reference do PAD-CTX): versiona o conteudo ANTES de mutar
+(`changed_by='aposentadoria-manual'`), seta `is_cold=True` + `meta.promovida_para`
+(`flag_modified`) e commita. A memoria sai da injecao/busca semantica; historico segue
+via `search-cold`/`versions`. Fila de candidatas: `diagnostico.py promotion-candidates`.
+Criterios/fluxo: `ARQUITETURA_CONTEXTO_AGENTE.md` §Memorias + `MEMORY_PROTOCOL.md`
+§Promocao Memoria -> Reference.
+
 ---
 
 ## sessao.py
@@ -282,6 +300,21 @@ Sem argumentos adicionais.
 
 ### cold-candidates
 Sem argumentos adicionais.
+
+### promotion-candidates
+| Argumento | Tipo | Obrigatorio | Default | Descricao |
+|-----------|------|-------------|---------|-----------|
+| `--user-id` | int | Nao | **0** | Override do comum; escopo da fila e FIXO em empresa (query user_id=0) |
+| `--min-effective` | int | Nao | 2 | Minimo de `effective_count` |
+| `--idade-dias` | int | Nao | 30 | Idade minima desde `created_at` (dias) |
+| `--limit` | int | Nao | **30** | Limite de resultados (override do comum) |
+
+Fila de candidatas a **promocao memoria→reference** (trilho PAD-CTX, cadencia quinzenal).
+Query READ-only sobre memorias EMPRESA (`user_id=0`): `correction_count >= 2 OU
+effective_count >= --min-effective`, idade >= `--idade-dias`, nao-cold, nao-diretorio e
+SEM `meta.promovida_para` (ja promovidas saem da fila). Output: path | kind/dominio |
+effective | correction | idade_dias | titulo. A query SUGERE; quem promove e revisao
+humana — pos-promocao, aposentar a origem com `memoria.py aposentar`. Custo $0.
 
 ### conflicts
 Sem argumentos adicionais.
@@ -563,3 +596,4 @@ gravar a v2 tambem atualiza o status da v1. Backing = MODELO + rota, **NAO** `im
 |---------|------|-------------|
 | `tests/agente/test_gerindo_agente_skill.py` | ZERO-DB (importlib + inspect) | Contrato: paridade SUBCOMMANDS/HANDLERS, args, destrutivas exigem `--confirm`, envelope `success_output`, `format_datetime` TZ-safe, `run_handler`, ausencia de contexto-duplo em `padrao`. **Fase 3b**: handlers READ sem escrita; WRITE exigem `--confirm` e guardam a escrita atras de `if not args.confirm:` (efeito apos o guard). |
 | `tests/agente/test_gerindo_agente_snapshots.py` | DB-bound (subprocess), skippa sem `.env` | Rede de seguranca P12: trava o shape `--json` (esqueleto de tipos) de cada subcomando READ pelo caminho real `main()`/`run_handler`. Golden: `tests/agente/snapshots/gerindo_agente_json_shapes.json`. Regravar: `GERINDO_SNAPSHOT_RECORD=1 pytest ...`. |
+| `tests/agente/test_gerindo_aposentar_db.py` | DB-bound (subprocess), skippa sem `.env` | T1.4 `memoria.aposentar`: dry-run NAO muta; `--confirmar` muta (`is_cold` + `meta.promovida_para`) + cria versao. Memoria de teste criada/limpa pelo proprio teste. |

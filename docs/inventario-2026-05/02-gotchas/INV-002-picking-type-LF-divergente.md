@@ -4,11 +4,13 @@ camada: L3
 sot_de: —
 hub: docs/inventario-2026-05/02-gotchas/INDEX.md
 superseded_by: —
-atualizado: 2026-06-03
+atualizado: 2026-06-12
 -->
-# G002 — Divergência picking_type_id da LF
+# INV-002 — Divergência picking_type_id da LF
 
-> **Papel:** G002 — Divergência picking_type_id da LF.
+> **Papel:** INV-002 — Divergência picking_type_id da LF.
+
+> **Nota:** Renomeado de G002 em 2026-06-12 (T1.3) — colisao com a serie G0xx do dominio estoque `app/odoo/estoque/`.
 
 **Descoberto em:** 2026-05-17 (audit F0)
 **Severidade:** MÉDIA — afeta consumidor de `.claude/references/odoo/IDS_FIXOS.md`

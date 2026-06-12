@@ -443,7 +443,7 @@ Se a contabilidade exigir que o endereço físico da loja apareça no DANFE (mes
 
 ### 4.6 Sanitização obrigatória
 
-Todos os valores monetários em `HoraVenda/HoraVendaItem` são `Numeric(15,2)` → `Decimal`. Antes de atribuir a `HoraTagPlusNfeEmissao.payload_enviado` (`db.JSON`), passar por `sanitize_for_json()` (ver `~/.claude/CLAUDE.md` seção "JSON SANITIZATION").
+Todos os valores monetários em `HoraVenda/HoraVendaItem` são `Numeric(15,2)` → `Decimal`. Antes de atribuir a `HoraTagPlusNfeEmissao.payload_enviado` (`db.JSON`), passar por `sanitize_for_json()` (ver `.claude/references/REGRAS_DEV_LOCAL.md` seção JSON SANITIZATION).
 
 Para o HTTP request em si, `requests` / `httpx` convertem `Decimal` se passar `json=dict` direto — mas é mais seguro converter para `float` no builder para garantir que o TagPlus receba números JSON válidos.
 
@@ -1071,7 +1071,7 @@ Todas protegidas por `require_hora_perm('nfs', <acao>)` (módulo `nfs` já exist
 
 ## 11. Migrations
 
-Em `scripts/migrations/hora_16_tagplus.{py,sql}` (seguindo regra duas migrations — `~/.claude/CLAUDE.md` seção "MIGRATIONS"):
+Em `scripts/migrations/hora_16_tagplus.{py,sql}` (seguindo regra duas migrations — `.claude/references/REGRAS_DEV_LOCAL.md` seção MIGRATIONS):
 
 ```sql
 -- hora_16_tagplus.sql (idempotente para Render Shell)
@@ -1171,7 +1171,7 @@ Queue RQ: `hora_nfe` (adicionar ao comando do worker do Render).
 
 2. **Chave 44 UNIQUE**: evita 2 vendas diferentes ficarem ligadas à mesma NFe (impossível pelo TagPlus, mas defensivo).
 
-3. **Timezone**: todos os `DateTime` são `naive` em horário de Brasília (padrão do projeto — `~/.claude/CLAUDE.md` regra timezone).
+3. **Timezone**: todos os `DateTime` são `naive` em horário de Brasília (padrão do projeto — `.claude/references/REGRAS_TIMEZONE.md`).
 
 4. **CNPJ único, lojas operacionais**: todas as lojas HORA faturam pelo mesmo CNPJ. A identidade da loja no DANFE vai em `inf_contribuinte` (texto). Isso afeta: (a) numeração de NFe é sequencial global, não por loja; (b) relatório de "NFs por loja" vem do JOIN `hora_tagplus_nfe_emissao ⟂ hora_venda.loja_id`, não da NF no TagPlus; (c) se precisar série distinta por loja, ver item 2 do §8.
 
@@ -1238,4 +1238,4 @@ Estimativa de esforço: 3-5 dias de dev focado para passos 1-9; 1-2 dias para 10
 - Webhooks: `scripts/webhook.md`.
 - Código existente para reuso (engenharia, não import): `app/integracoes/tagplus/oauth2_v2.py`.
 - Contrato do módulo HORA: `app/hora/CLAUDE.md`, `docs/hora/INVARIANTES.md`.
-- Regras universais: `CLAUDE.md` raiz, `~/.claude/CLAUDE.md` (migrations, JSON sanitization, timezone).
+- Regras universais: `CLAUDE.md` raiz, `.claude/references/REGRAS_DEV_LOCAL.md` (migrations, JSON sanitization), `.claude/references/REGRAS_TIMEZONE.md` (timezone).

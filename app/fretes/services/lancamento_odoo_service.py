@@ -571,7 +571,7 @@ class LancamentoOdooService:
             transient_markers = (
                 'timeout', 'timed out',
                 '502', '503', '504', 'bad gateway', 'gateway time-out',
-                'cannot marshal none',
+                'cannot marshal none',  # 'cannot marshal None' = sucesso (O6) — ver odoo/GOTCHAS.md (literal na tupla; helper is_cannot_marshal_none nao se aplica aqui)
                 'connection reset', 'connection aborted',
                 'eof occurred', 'violation of protocol',
             )

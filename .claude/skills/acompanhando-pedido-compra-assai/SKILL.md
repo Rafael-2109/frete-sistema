@@ -1,22 +1,12 @@
 ---
 name: acompanhando-pedido-compra-assai
 description: >-
-  Esta skill deve ser usada quando o usuario pergunta sobre pedidos VOE
-  Q.P.A. (vendas para Sendas/Assai) ou compras Motochefe (vinculadas N:N
-  aos pedidos): "como esta o pedido VOE 12345?", "compras Motochefe abertas",
-  "MA-2026-0001 ja chegou?", "pedidos pendentes Q.P.A.". Mostra status,
-  totais por loja, vinculacoes pedido-compra.
-
-  USAR QUANDO:
-  - "pedido VOE 12345"
-  - "compra Motochefe MA-2026-0001"
-  - "pedidos abertos Q.P.A."
-  - "compras pendentes Motochefe"
-
-  NAO USAR PARA:
-  - Estoque/pipeline (usar consultando-estoque-assai)
-  - Chassis individuais (usar rastreando-chassi-assai)
-  - Separacoes/NFs (usar acompanhando-saida-assai)
+  Skill READ para pedidos VOE Q.P.A. (vendas para Sendas/Assai) e compras
+  Motochefe (vinculadas N:N aos pedidos): status, totais por loja,
+  vinculacoes pedido-compra. Gatilhos: "como esta o pedido VOE 12345?",
+  "compras Motochefe abertas", "MA-2026-0001 ja chegou?", "pedidos pendentes
+  Q.P.A.". NAO usar para estoque/pipeline -> consultando-estoque-assai.
+  Matriz USAR/NAO-USAR completa no corpo.
 allowed-tools: Read, Bash, Glob, Grep
 ---
 
@@ -24,6 +14,19 @@ allowed-tools: Read, Bash, Glob, Grep
 
 Consulta pedidos VOE Q.P.A. (1 por loja x modelo) e compras Motochefe
 (consolidacoes N->1 dos pedidos, com numero MA-AAAA-NNNN).
+
+## Quando usar / Quando NAO usar
+
+**USAR QUANDO:**
+- "pedido VOE 12345"
+- "compra Motochefe MA-2026-0001"
+- "pedidos abertos Q.P.A."
+- "compras pendentes Motochefe"
+
+**NAO USAR PARA:**
+- Estoque/pipeline -> `consultando-estoque-assai`
+- Chassis individuais -> `rastreando-chassi-assai`
+- Separacoes/NFs -> `acompanhando-saida-assai`
 
 ---
 

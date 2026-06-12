@@ -139,5 +139,5 @@ if ajustes_sem_lote:
 - `app/odoo/services/stock_picking_service.py:425-451` (chamada em validar)
 - `app/odoo/services/inventario_pipeline_service.py:704-707` (passar linhas_esperadas)
 - `scripts/inventario_2026_05/09_executar_onda1_bulk.py:919-985` (geração linhas baseada em ajustes)
-- G021 (race A↔B) e G022 (revalidar saldo) — explicam o cenário
+- INV-021 (race A↔B) e G022 (revalidar saldo) — explicam o cenário
 - `app/recebimento/services/recebimento_lf_odoo_service.py:2336-2395` (padrão herdado)

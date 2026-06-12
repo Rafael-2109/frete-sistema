@@ -4,11 +4,13 @@ camada: L3
 sot_de: —
 hub: docs/inventario-2026-05/02-gotchas/INDEX.md
 superseded_by: —
-atualizado: 2026-06-03
+atualizado: 2026-06-12
 -->
-# G021 — ETAPA A reporta resultado prematuro (race condition A↔B)
+# INV-021 — ETAPA A reporta resultado prematuro (race condition A↔B)
 
-> **Papel:** G021 — ETAPA A reporta resultado prematuro (race condition A↔B).
+> **Papel:** INV-021 — ETAPA A reporta resultado prematuro (race condition A↔B).
+
+> **Nota:** Renomeado de G021 em 2026-06-12 (T1.3) — colisao com a serie G0xx do dominio estoque `app/odoo/estoque/`.
 
 **Status**: 🔴 ABERTO
 **Severidade**: HIGH

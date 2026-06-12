@@ -87,7 +87,7 @@ from redis import Redis
 
 from app import db
 from app.recebimento.models import RecebimentoLf
-from app.odoo.utils.connection import get_odoo_connection
+from app.odoo.utils.connection import get_odoo_connection, is_cannot_marshal_none
 from app.utils.database_retry import commit_with_retry
 from app.utils.timezone import agora_utc_naive
 
@@ -1046,7 +1046,7 @@ class RecebimentoLfOdooService:
                 )
                 logger.info(f"  DFe {dfe_id}: ciencia executada")
             except Exception as e:
-                if 'cannot marshal None' not in str(e):
+                if not is_cannot_marshal_none(e):  # 'cannot marshal None' = sucesso (O6) — ver odoo/GOTCHAS.md
                     logger.warning(f"  DFe {dfe_id}: action_ciencia_dfe falhou: {e}")
                     # Tentar write direto do status
                     try:
@@ -1465,7 +1465,7 @@ class RecebimentoLfOdooService:
                 )
                 logger.info(f"  action_assign executado em {picking_name}")
             except Exception as e:
-                if 'cannot marshal None' not in str(e):
+                if not is_cannot_marshal_none(e):  # 'cannot marshal None' = sucesso (O6) — ver odoo/GOTCHAS.md
                     logger.warning(f"  action_assign falhou: {e}")
 
         self._checkpoint(
@@ -2339,7 +2339,7 @@ class RecebimentoLfOdooService:
                 )
                 logger.info(f"  action_confirm executado")
             except Exception as e:
-                if 'cannot marshal None' not in str(e):
+                if not is_cannot_marshal_none(e):  # 'cannot marshal None' = sucesso (O6) — ver odoo/GOTCHAS.md
                     logger.warning(f"  action_confirm falhou: {e}")
 
         # 2. Reservar estoque
@@ -2350,7 +2350,7 @@ class RecebimentoLfOdooService:
             )
             logger.info(f"  action_assign executado")
         except Exception as e:
-            if 'cannot marshal None' not in str(e):
+            if not is_cannot_marshal_none(e):  # 'cannot marshal None' = sucesso (O6) — ver odoo/GOTCHAS.md
                 logger.warning(f"  action_assign falhou: {e}")
 
         # 3. Preencher lotes nos move_lines
@@ -3420,7 +3420,7 @@ class RecebimentoLfOdooService:
                 )
                 logger.info(f"  action_assign executado em {picking_name}")
             except Exception as e:
-                if 'cannot marshal None' not in str(e):
+                if not is_cannot_marshal_none(e):  # 'cannot marshal None' = sucesso (O6) — ver odoo/GOTCHAS.md
                     logger.warning(f"  action_assign falhou: {e}")
 
         self._checkpoint(
@@ -4213,7 +4213,7 @@ class RecebimentoLfOdooService:
                 try:
                     odoo.execute_kw('quality.check', 'do_pass', [[check_id]])
                 except Exception as e:
-                    if 'cannot marshal None' not in str(e):
+                    if not is_cannot_marshal_none(e):  # 'cannot marshal None' = sucesso (O6) — ver odoo/GOTCHAS.md
                         raise
 
                 logger.debug(f"    QC {check_id} ({test_type}): aprovado via do_pass")
@@ -4380,7 +4380,7 @@ class RecebimentoLfOdooService:
                     f"esperado, iniciando polling..."
                 )
                 needs_polling = True
-            elif 'cannot marshal None' in error_str:
+            elif is_cannot_marshal_none(error_str):  # 'cannot marshal None' = sucesso (O6) — ver odoo/GOTCHAS.md
                 logger.info(f"  [{step_name}] Acao completou (retorno None)")
                 fire_result = None
             else:

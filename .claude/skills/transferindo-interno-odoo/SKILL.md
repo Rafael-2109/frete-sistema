@@ -2,27 +2,14 @@
 name: transferindo-interno-odoo
 description: >-
   Skill WRITE (átomo C2) para TRANSFERIR saldo de estoque DENTRO de uma mesma
-  empresa no Odoo (NÃO emite NF). Suporta 4 modos atômicos: (a) lote→lote na
-  MESMA location (`--lote-origem` → `--lote-destino`); (b) location→location
-  com o MESMO lote (`--loc-origem` → `--loc-destino`); (c) **MODO C**
-  `--para-indisponivel` cross loc+lote consolidando em MIGRAÇÃO POR PRODUTO
-  (NOVO 2026-05-24 v4 — codifica invariante destino=Indisp+MIGRAÇÃO; ver G031);
-  (d) **MODO D** `--loc-e-lote` cross loc+lote GENÉRICO (NOVO 2026-05-26 v21+ —
-  combina loc DIFERENTE + lote DIFERENTE em 1 chamada atômica; caso real ETAPA 0
-  do fluxo bulk FB→LF: FB/Indisp/MIGRAÇÃO → FB/Estoque/P-15/05).
-  Internamente delega a `ajustar_quant` 2x (reduz origem, aumenta destino), propagando
-  `delta_esperado` para herdar o guard anti-bug CICLAMATO da Skill 1 (regra
-  inviolável 11 do roadmap 2026-05-24). Usar quando o pedido é "transfere
-  N un do lote A pro lote B", "move o saldo do lote MIGRAÇÃO para o lote
-  canônico", "manda esse saldo pra Indisponível", "mesma empresa, sem NF".
-  `--dry-run` é o DEFAULT; só efetiva com `--confirmar`.
-  NÃO USAR PARA:
-  - ajustar saldo de 1 quant (soma/zera/cria) → ajustando-quant-odoo
-  - transferir saldo entre CÓDIGOS de produto → transferencia-saldo-codigo (planejada — ainda nao existe)
-  - transferir entre EMPRESAS diferentes (emite NF) → faturando-odoo/escriturando-odoo
-  - cancelar reserva órfã ANTES de transferir → operando-reservas-odoo (skill 2.4)
-  - operação que precisa de PICKING (recebimento, devolução) → operando-picking-odoo
-  - só consultar/projetar saldo (não altera) → subagente gestor-estoque-producao
+  empresa no Odoo (NAO emite NF), em 4 modos atômicos: lote->lote,
+  location->location, --para-indisponivel (consolida em MIGRAÇÃO) e
+  --loc-e-lote (loc+lote diferentes em 1 chamada). Usar quando o pedido é
+  "transfere N un do lote A pro lote B", "move o saldo do lote MIGRAÇÃO para
+  o lote canônico", "manda esse saldo pra Indisponível", "mesma empresa, sem
+  NF". `--dry-run` é o DEFAULT; só efetiva com `--confirmar`. NAO usar para
+  transferir entre EMPRESAS (emite NF) -> faturando-odoo. Matriz
+  USAR/NAO-USAR completa no corpo.
 allowed-tools: Read, Bash, Glob, Grep
 ---
 
@@ -34,10 +21,33 @@ Internamente é composição de 2 chamadas a `ajustar_quant` (Skill 1):
 2. **Aumentar** (criar se faltar) quant destino (`delta=+qty`, `delta_esperado=+qty`)
 
 Cada passo herda TODOS os guards da Skill 1 (G002, G028, anti-negativar, anti-reserva,
-`delta_esperado`). NÃO emite NF (inventory adjustment puro — gera 2 `stock.move`
+`delta_esperado` — guard anti-bug CICLAMATO, regra inviolável 11 do roadmap 2026-05-24).
+NÃO emite NF (inventory adjustment puro — gera 2 `stock.move`
 auditáveis com origem "Physical Inventory").
 
 Constituição: `app/odoo/estoque/CLAUDE.md`. Service: `app/odoo/estoque/scripts/transfer.py`.
+
+## Quando usar / Quando NÃO usar
+
+**USAR QUANDO** o pedido é mover saldo intra-empresa, em um dos 4 modos atômicos:
+- (a) lote→lote na MESMA location (`--lote-origem` → `--lote-destino`);
+- (b) location→location com o MESMO lote (`--loc-origem` → `--loc-destino`);
+- (c) **MODO C** `--para-indisponivel` cross loc+lote consolidando em MIGRAÇÃO POR PRODUTO
+  (NOVO 2026-05-24 v4 — codifica invariante destino=Indisp+MIGRAÇÃO; ver G031);
+- (d) **MODO D** `--loc-e-lote` cross loc+lote GENÉRICO (NOVO 2026-05-26 v21+ —
+  combina loc DIFERENTE + lote DIFERENTE em 1 chamada atômica; caso real ETAPA 0
+  do fluxo bulk FB→LF: FB/Indisp/MIGRAÇÃO → FB/Estoque/P-15/05).
+
+Gatilhos típicos: "transfere N un do lote A pro lote B", "move o saldo do lote MIGRAÇÃO
+para o lote canônico", "manda esse saldo pra Indisponível", "mesma empresa, sem NF".
+
+**NÃO USAR PARA:**
+- ajustar saldo de 1 quant (soma/zera/cria) -> `ajustando-quant-odoo`
+- transferir saldo entre CÓDIGOS de produto -> `transferencia-saldo-codigo` (planejada — ainda nao existe)
+- transferir entre EMPRESAS diferentes (emite NF) -> `faturando-odoo`/`escriturando-odoo`
+- cancelar reserva órfã ANTES de transferir -> `operando-reservas-odoo` (skill 2.4)
+- operação que precisa de PICKING (recebimento, devolução) -> `operando-picking-odoo`
+- só consultar/projetar saldo (não altera) -> subagente `gestor-estoque-producao`
 
 ---
 
