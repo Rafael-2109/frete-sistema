@@ -22,6 +22,13 @@ atualizado: 2026-06-12
 
 **Tech Stack:** Flask/SQLAlchemy, RQ, pgvector (`Vector(1024)`), Voyage `voyage-4-lite`, Anthropic Haiku/Sonnet (reuso `_call_anthropic` da Fase 1), pytest.
 
+> **STATUS (2026-06-12): EXECUTADO** — Tasks 0-9 concluidas TDD na branch
+> `feat/agente-adhoc-fase2` (30 testes novos: 27 da feature + 3 do fix dedup
+> incidente). Parser validado contra 5 transcripts reais. Debito Teams ja
+> estava fechado (`ede93a0e2`) — task removida. Extra fora do plano: fix
+> incidente dedup memoria (fallback 0.70->0.92 flag + backfill script).
+> Task 10 (deploy): pendente OK do Rafael — ver checklist abaixo.
+
 ## Indice
 
 - [Decisoes de implementacao](#decisoes-de-implementacao-refinam-a-spec--registradas-na-task-9)
@@ -1089,10 +1096,11 @@ Expected: roda sem excecao; estrutura dos candidatos coerente. **Se o formato re
 
 - [ ] **Step 10.1:** Usar a skill `superpowers:finishing-a-development-branch` — merge na main local apos review.
 - [ ] **Step 10.2:** Checklist de deploy (NAO executar sem OK explicito do Rafael):
-  1. Push `origin/main` (= deploy web + worker via Render auto-deploy).
-  2. Rodar migracao em PROD: `python scripts/migrations/2026_06_12_agent_adhoc_script.py` com `DATABASE_URL_PROD` (requer autorizacao explicita — memoria `database_url_prod_escrita_direta`).
-  3. Flag `AGENT_ADHOC_CAPTURE` ja default `true` no codigo — sem env extra.
-  4. Smoke PROD: 1 sessao web com Bash ad-hoc → `SELECT * FROM agent_adhoc_script ORDER BY id DESC LIMIT 3`.
+  1. Push `origin/main` (= deploy web + worker via Render auto-deploy; inclui o fix do dedup fallback 0.92).
+  2. Rodar migracao em PROD: `DATABASE_URL=$DATABASE_URL_PROD python scripts/migrations/2026_06_12_agent_adhoc_script.py` (requer autorizacao explicita — memoria `database_url_prod_escrita_direta`).
+  3. Backfill dedup (incidente memoria 12/06; classificador negou execucao autonoma): `DATABASE_URL=$DATABASE_URL_PROD python scripts/migrations/2026_06_12_backfill_dedup_embeddings.py --executar` (dry-run sem a flag; 145 registros, ~145 embeddings Voyage = centavos).
+  4. Flag `AGENT_ADHOC_CAPTURE` ja default `true` no codigo — sem env extra.
+  5. Smoke PROD: 1 sessao web com Bash ad-hoc → `SELECT * FROM agent_adhoc_script ORDER BY id DESC LIMIT 3`.
 
 ---
 
