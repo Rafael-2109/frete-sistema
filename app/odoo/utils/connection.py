@@ -21,7 +21,7 @@ from .circuit_breaker import get_circuit_breaker
 logger = logging.getLogger(__name__)
 
 
-def is_cannot_marshal_none(exc: "BaseException | str") -> bool:
+def is_cannot_marshal_none(exc: BaseException | str) -> bool:
     """Fault XML-RPC 'cannot marshal None' = SUCESSO-com-aviso (metodo Odoo retornou None).
 
     Semantica canonica: .claude/references/odoo/GOTCHAS.md (Matriz de Erros).

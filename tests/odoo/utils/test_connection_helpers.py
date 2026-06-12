@@ -79,3 +79,16 @@ class TestIsCannotMarshalNone:
         """Deve aceitar BaseException alem de Exception."""
         exc = BaseException("cannot marshal None")
         assert is_cannot_marshal_none(exc) is True
+
+    def test_xmlrpc_fault_real(self):
+        """Fault real do xmlrpc.client — a excecao que ocorre em producao.
+
+        str(Fault) = "<Fault 1: 'cannot marshal None ...'>"; protege contra
+        regressao se a implementacao trocar str(exc) por exc.faultString.
+        """
+        import xmlrpc.client
+
+        fault = xmlrpc.client.Fault(
+            1, 'cannot marshal None unless allow_none is enabled'
+        )
+        assert is_cannot_marshal_none(fault) is True
