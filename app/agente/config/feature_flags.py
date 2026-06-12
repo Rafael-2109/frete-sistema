@@ -1214,6 +1214,13 @@ AGENT_ADHOC_THRESHOLD_GLOBAL = int(os.getenv("AGENT_ADHOC_THRESHOLD_GLOBAL", "5"
 AGENT_ADHOC_MAX_HAIKU_DAY = int(os.getenv("AGENT_ADHOC_MAX_HAIKU_DAY", "100"))
 AGENT_ADHOC_MAX_SONNET_DAY = int(os.getenv("AGENT_ADHOC_MAX_SONNET_DAY", "2"))
 
+# Threshold do ramo FALLBACK do dedup de memorias (registros pre-migration sem
+# dedup_embedding, comparados via embedding contextual de retrieval). Incidente
+# 2026-06-12: 0.70 bloqueava memorias de assuntos DISTINTOS do mesmo dominio
+# (sim 0.80-0.81 medida em PROD, paths frete-direta-vs-fracionada ~ carvia).
+# 0.92 mantem o ramo pegando near-identical ate o backfill eliminar o estoque.
+AGENT_MEMORY_DEDUP_FALLBACK_SIM = float(os.getenv("AGENT_MEMORY_DEDUP_FALLBACK_SIM", "0.92"))
+
 
 def resolve_sql_first_mode(is_admin: bool) -> str:
     """Resolve o modo SQL-first EFETIVO para este request (Fix B canary).

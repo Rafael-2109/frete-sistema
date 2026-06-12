@@ -1297,8 +1297,10 @@ def _check_memory_duplicate(user_id: int, content: str, current_path: str = '') 
     - Layer 1 (dedup_embedding): Busca contra coluna dedup_embedding que armazena
       embedding do texto limpo (sem contexto Sonnet, sem path, sem XML).
       Threshold: 0.85. Ambos os lados na mesma representação — sem lacuna.
-      Fallback para embedding contextual (threshold 0.70) se dedup_embedding
-      ainda não foi populado (registros pré-migration).
+      Fallback para embedding contextual (threshold AGENT_MEMORY_DEDUP_FALLBACK_SIM,
+      default 0.92 — ver _dedup_fallback_threshold) se dedup_embedding
+      ainda não foi populado (registros pré-migration; backfill:
+      scripts/migrations/2026_06_12_backfill_dedup_embeddings.py).
 
     Args:
         user_id: ID do usuario
@@ -1442,16 +1444,30 @@ def _dedup_embedding_search(
         "current_path": current_path or '',
     })
 
+    fallback_sim = _dedup_fallback_threshold()
     for row in result_fallback.fetchall():
         similarity = float(row.similarity)
-        if similarity >= 0.70:
+        if similarity >= fallback_sim:
             logger.info(
                 f"[MEMORY_MCP] Duplicata detectada (embedding fallback): "
-                f"{current_path} ~ {row.path} (sim={similarity:.3f})"
+                f"{current_path} ~ {row.path} "
+                f"(sim={similarity:.3f}, threshold={fallback_sim})"
             )
             return row.path
 
     return None
+
+
+def _dedup_fallback_threshold() -> float:
+    """Threshold do ramo fallback do dedup (embedding contextual de retrieval).
+
+    Embeddings de retrieval aproximam TEMAS, nao conteudos: em dominio estreito
+    (logistica/frete), 0.70-0.85 e' "mesmo assunto geral". Incidente 2026-06-12:
+    3 saves de memoria sobre frete DIRETA/FRACIONADA bloqueados a sim=0.80-0.81
+    contra memoria CarVia de assunto distinto. Default 0.92 via flag.
+    """
+    from ..config import feature_flags as ff
+    return float(getattr(ff, "AGENT_MEMORY_DEDUP_FALLBACK_SIM", 0.92))
 
 
 # Stopwords PT-BR para Layer 0 (text overlap).
@@ -2141,8 +2157,12 @@ try:
                         "type": "text",
                         "text": (
                             f"Memoria NAO salva: conteudo similar ja existe em "
-                            f"'{dup_err.dup_path}'. Use update_memory para atualizar "
-                            f"o conteudo existente, ou altere significativamente o conteudo."
+                            f"'{dup_err.dup_path}'. ANTES de agir, leia a memoria "
+                            f"existente (view_memories) e decida: (a) MESMO assunto -> "
+                            f"update_memory nela; (b) assunto DISTINTO (deteccao por "
+                            f"tema proximo) -> registre via register_improvement "
+                            f"category='memory_feedback' citando os 2 paths — NAO "
+                            f"grave conteudo de um assunto na memoria de outro."
                         ),
                     }],
                     "structuredContent": {
