@@ -23,8 +23,9 @@ atualizado: 2026-06-12
 > preservadas; relatorio do gate em
 > `relatorios/arquitetura_x_2026-06-11/10-replay-gate-kg-2026-06-12.md` com condicao
 > objetiva de reabertura). Resta da F2 apenas **T2.3, ATRAS DE GATE** (volume minimo
-> helpful/harmful). Follow-ups vivos: 14 bloqueantes PRE-existentes de `doc_audit --strict`
-> em docs antigos — task propria; 3 MENORES do code review T2.1 no Rastreamento 2026-06-12.
+> helpful/harmful). Follow-ups: 14 bloqueantes de `doc_audit --strict` **ZERADOS 2026-06-12**
+> (commit ba39fa8ef: 4 headers via migrar_doc_meta + hubs bidirecionais + 1 handoff consumido
+> deletado); restam os 3 MENORES do code review T2.1 no Rastreamento 2026-06-12.
 
 ## Indice
 
