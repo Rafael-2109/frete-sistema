@@ -100,6 +100,13 @@ Usar Read, Grep, Glob para validar a sugestao:
 
 ### 2.2 Decidir acao
 
+> **EXCECAO F2 (sugestoes de skill por demanda — 2026-06-12):** se
+> `suggestion_key` comeca com `adhoc-` ou `skill-gap-`, **NAO decidir nem
+> implementar** (gate humano obrigatorio: Rafael decide em sessao dev 4-maos
+> via `python scripts/agente/revisar_sugestoes_skill.py listar`). Acao do D8:
+> apenas LISTAR no relatorio (secao "Sugestoes de skill F2 aguardando decisao
+> Rafael+CC", com title + n_membros + idade em dias). NAO escrever status.
+
 Para cada sugestao, decidir UMA das opcoes:
 
 **A) Rejeitar** — sugestao invalida, ja resolvida, ou nao aplicavel

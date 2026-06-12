@@ -155,13 +155,32 @@ produz title + description + `tipo_gap` final. Resultado →
 `AgentImprovementDialogue(category='skill_suggestion', evidence_json={tipo_gap,
 skill_relacionada, cluster_id, membros, motivo_fallback})` → Inbox.
 
-### 4. Pos-aprovacao
+### 4. Pos-aprovacao (REVISADO 2026-06-12 — gate movido p/ Claude Code)
 
-Rafael decide na Inbox. Aprovado → Claude Code implementa: skill nova segue
-skill-creator + checklist padrao completo (`ROUTING_SKILLS.md`, `tool_skill_mapper`,
-SCRIPTS.md, cross-refs); extensao edita a skill alvo. C4 e validado nesse momento.
+**Decisao de Rafael ao testar a Inbox:** "o processo nao pode depender de eu
+avaliar no sistema — no sistema opero logistica, no Claude Code opero Dev; aqui
+avalio melhor, a 4 maos". Fluxo vigente: **D8 → Rafael + Claude Code (sessao
+dev) → sistema.**
+
+- **Gate primario** = sessao dev 4-maos via CLI
+  `scripts/agente/revisar_sugestoes_skill.py` (`listar` mostra evidencia
+  COMPLETA; `aprovar`/`rejeitar` gravam via endpoint oficial do D8
+  `POST /agente/api/improvement-dialogue` — `upsert_response` cria v2
+  author=claude_code e propaga o status a v1).
+- **D8 diario NAO decide sugestoes F2** (`adhoc-%`/`skill-gap-%`): apenas as
+  lista na pauta do relatorio ("aguardando decisao Rafael+CC") — excecao no
+  Passo 2.2 de `dominio-8-improvement-dialogue.md`. Garante cadencia diaria
+  sem depender de tela.
+- **Tela web** (`/agente/memorias` aba Pendentes) = visualizacao secundaria.
+  Bugs conhecidos (conteudo truncado inline; "Aprovar" inexistente para
+  dialogue por design da Fase 1) = debito de baixa prioridade.
+
+Aprovado → Claude Code implementa: skill nova segue skill-creator + checklist
+padrao completo (`ROUTING_SKILLS.md`, `tool_skill_mapper`, SCRIPTS.md,
+cross-refs); extensao edita a skill alvo. C4 e validado nesse momento.
 `tipo_gap=skill_nao_usada` aprovado → acao da Fase 1 (lembrete/description), nao
-gera skill.
+gera skill. Rejeicao SEMPRE com `--motivo` (alimenta a calibracao dos
+thresholds apos ~10 decisoes).
 
 ## Modelo de dados
 
