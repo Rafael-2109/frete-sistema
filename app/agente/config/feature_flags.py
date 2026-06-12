@@ -371,9 +371,12 @@ TEAMS_ASYNC_MODE = os.getenv("TEAMS_ASYNC_MODE", "true").lower() == "true"
 
 # Timeout para AskUserQuestion no Teams (segundos)
 # O usuario tem este tempo para responder o Adaptive Card antes de timeout.
-# Default 180s (3 min) — humano precisa ler o card + render/poll do Teams; 120s
-# estourava em perguntas multi-parte (2026-06-06). Alinhado ao web (AGENT_ASK_USER_TIMEOUT_WEB).
-TEAMS_ASK_USER_TIMEOUT = int(os.getenv("TEAMS_ASK_USER_TIMEOUT", "180"))
+# 2026-06-12: 180s (3 min) era curto demais — o usuario frequentemente demora
+# mais para responder o card (logs: timeouts + resposta tardia rejeitada com 400)
+# -> subido para 600s (10 min). SEGURO porque a espera no Teams agora e ASSINCRONA
+# (permissions.py: async_wait_for_answer) e NAO bloqueia mais o event loop do pool
+# durante a espera. Teams nao tem teto absoluto de stream (DC-9).
+TEAMS_ASK_USER_TIMEOUT = int(os.getenv("TEAMS_ASK_USER_TIMEOUT", "600"))
 
 # Progressive streaming: flush texto parcial ao DB durante processamento
 # Quando true: polling retorna resposta_parcial enquanto status='processing'
@@ -442,6 +445,21 @@ AGENT_TEAMS_VINCULO_FASTPATH = os.getenv(
 TEAMS_PROACTIVE_DELIVERY = os.getenv(
     "TEAMS_PROACTIVE_DELIVERY", "true"
 ).lower() == "true"
+
+# Reconciliador de entregas (2026-06-12): rede de seguranca que re-entrega tasks
+# finais (completed/error) que nunca chegaram ao Teams (delivered_via IS NULL).
+# Root cause: a Azure Function `frete-bot-func` esta no plano Consumption (sku
+# Dynamic, alwaysOn=false) e escala a zero -> o POST /api/notify do backend leva
+# `Connection refused` transitorio em cold-start. O reconciliador (rodado pelo
+# scheduler a cada ~60s) re-tenta a entrega das orfas criadas entre [polling
+# morto] e [teto de idade], sem duplicar (claim atomico em delivered_via).
+# Rollback: TEAMS_RECONCILE_ENABLED=false.
+TEAMS_RECONCILE_ENABLED = os.getenv("TEAMS_RECONCILE_ENABLED", "true").lower() == "true"
+# Teto de idade (min) da orfa para re-entrega: acima disso a resposta perde
+# contexto (e a conversation_reference pode estar velha) -> nao re-entrega.
+TEAMS_RECONCILE_MAX_AGE_MIN = int(os.getenv("TEAMS_RECONCILE_MAX_AGE_MIN", "360"))
+# Maximo de orfas processadas por ciclo (evita longo no scheduler).
+TEAMS_RECONCILE_LIMIT = int(os.getenv("TEAMS_RECONCILE_LIMIT", "50"))
 
 # ====================================================================
 # Session Lifecycle (Fase 2, 2026-04-21)

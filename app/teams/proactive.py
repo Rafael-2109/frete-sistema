@@ -25,6 +25,7 @@ clamam — claim é exclusivo da entrega final.
 """
 import logging
 import os
+import time
 
 import requests
 
@@ -46,6 +47,18 @@ PARTIAL_FINAL_MARKER = "_(fim da resposta — conteúdo já entregue acima)_"
 
 _NOTIFY_TIMEOUT = 30  # POST a function (continue_conversation e rapido)
 
+# Retry+backoff do POST a function. A Azure Function `frete-bot-func` esta no
+# plano Consumption (`sku: Dynamic`, `alwaysOn: false`) e escala a zero: em
+# cold-start/reciclagem a 1a conexao do backend pode levar `Connection refused`
+# (RST) ate o Azure provisionar a instancia. A lista = intervalos (s) ENTRE
+# tentativas; total de POSTs = len(_NOTIFY_BACKOFF) + 1. Dimensionado p/ cobrir
+# o cold-start sem segurar o caller demais — o reconciliador (60s) e' a rede de
+# seguranca para o resto. Tunavel via env TEAMS_NOTIFY_BACKOFF (CSV de segundos).
+_NOTIFY_BACKOFF = [
+    float(x) for x in os.environ.get("TEAMS_NOTIFY_BACKOFF", "2,5,10").split(",")
+    if x.strip()
+]
+
 
 # URL estavel da Azure Function (mesma do teams-manifest/manifest.json).
 # Default no codigo elimina passo de env no go-live; override via env se mudar.
@@ -57,6 +70,40 @@ _DEFAULT_FUNCTION_URL = (
 def _function_url() -> str:
     """URL base da Azure Function (env TEAMS_FUNCTION_URL sobrepoe o default)."""
     return (os.environ.get("TEAMS_FUNCTION_URL", _DEFAULT_FUNCTION_URL) or "").rstrip("/")
+
+
+def _post_notify(base_url: str, payload: dict, api_key: str,
+                 timeout: int = _NOTIFY_TIMEOUT) -> "requests.Response":
+    """POST {base_url}/api/notify com retry+backoff (cold-start Consumption).
+
+    Re-tenta em falha de conexao OU HTTP != 200, dormindo `_NOTIFY_BACKOFF[i]`
+    entre tentativas. Em 200 retorna a Response; se TODAS as tentativas
+    falharem, levanta a ULTIMA excecao para o caller (que faz rollback do claim
+    na entrega final ou nao avanca o offset no bloco parcial).
+
+    A primeira tentativa que esbarra na function fria tambem serve para
+    "cutucar" o Azure a iniciar o cold-start; as seguintes (apos o backoff)
+    tendem a pegar a instancia ja provisionada.
+    """
+    url = f"{base_url}/api/notify"
+    headers = {"X-API-Key": api_key}
+    total = len(_NOTIFY_BACKOFF) + 1
+    ultima_exc: Exception | None = None
+    for i in range(total):
+        try:
+            resp = requests.post(url, json=payload, headers=headers, timeout=timeout)
+            if resp.status_code == 200:
+                return resp
+            ultima_exc = RuntimeError(f"notify HTTP {resp.status_code}: {resp.text[:200]}")
+        except Exception as e:  # ConnectionError, Timeout, etc.
+            ultima_exc = e
+        if i < total - 1:
+            logger.info(
+                f"[TEAMS-NOTIFY] tentativa {i + 1}/{total} falhou ({ultima_exc}); "
+                f"retry em {_NOTIFY_BACKOFF[i]}s"
+            )
+            time.sleep(_NOTIFY_BACKOFF[i])
+    raise ultima_exc if ultima_exc else RuntimeError("notify falhou sem excecao")
 
 
 def notify_function_delivery(task_id: str, min_elapsed: int = POLLING_WINDOW_SECONDS) -> dict:
@@ -128,18 +175,12 @@ def notify_function_delivery(task_id: str, min_elapsed: int = POLLING_WINDOW_SEC
         }
         api_key = os.environ.get("TEAMS_BOT_API_KEY", "")
         try:
-            resp = requests.post(
-                f"{base_url}/api/notify",
-                json=payload,
-                headers={"X-API-Key": api_key},
-                timeout=_NOTIFY_TIMEOUT,
-            )
-            if resp.status_code != 200:
-                raise RuntimeError(f"notify HTTP {resp.status_code}: {resp.text[:200]}")
+            # Retry+backoff absorve o Connection refused transitorio de cold-start
+            _post_notify(base_url, payload, api_key)
         except Exception as post_err:
-            # Rollback do claim: polling (se vivo) ou retry futuro pode entregar
+            # Rollback do claim: polling (se vivo) ou o reconciliador (60s) re-entrega
             logger.warning(
-                f"[TEAMS-PROACTIVE] POST /api/notify falhou (claim revertido): {post_err}"
+                f"[TEAMS-PROACTIVE] POST /api/notify falhou apos retries (claim revertido): {post_err}"
             )
             db.session.execute(sql_text(
                 "UPDATE teams_tasks SET delivered_via = NULL "
@@ -233,14 +274,12 @@ def notify_function_partial(task_id: str, min_elapsed: int = POLLING_WINDOW_SECO
             "conversation_reference": task.conversation_reference,
         }
         api_key = os.environ.get("TEAMS_BOT_API_KEY", "")
-        resp = requests.post(
-            f"{base_url}/api/notify",
-            json=payload,
-            headers={"X-API-Key": api_key},
-            timeout=_NOTIFY_TIMEOUT,
-        )
-        if resp.status_code != 200:
-            return {"ok": False, "motivo": f"post_http_{resp.status_code}"}
+        try:
+            # Retry+backoff absorve o refused transitorio de cold-start
+            _post_notify(base_url, payload, api_key)
+        except Exception as post_err:
+            # Nao avanca o offset -> proximo tick (ou a entrega final) reenvia o delta
+            return {"ok": False, "motivo": f"post_falhou: {post_err}"}
 
         # Offset avanca SO apos POST 200. CAS sobre o offset lido: dois envios
         # concorrentes do mesmo delta nunca somam o avanco duas vezes.
@@ -265,3 +304,93 @@ def notify_function_partial(task_id: str, min_elapsed: int = POLLING_WINDOW_SECO
         except Exception:
             pass
         return {"ok": False, "motivo": f"erro: {e}"}
+
+
+def reconciliar_entregas_pendentes(max_age_min: int = None, limite: int = None) -> dict:
+    """Rede de seguranca: re-entrega tasks finais orfas (delivered_via IS NULL).
+
+    Resolve o cold-start do plano Consumption: quando o POST inline a function
+    fria falhou (mesmo apos retry), esta varredura periodica (scheduler ~60s)
+    re-tenta a entrega — a essa altura a function ja foi 'cutucada'/esquentou.
+
+    Elegibilidade (created_at entre [polling morto] e [teto de idade]):
+      - status IN ('completed','error')
+      - delivered_via IS NULL  (nem polling nem proactive entregaram)
+      - conversation_reference IS NOT NULL  (continue_conversation precisa dela)
+      - created_at <= agora - POLLING_WINDOW  (polling da function ja morreu)
+      - created_at >= agora - max_age  (resposta ainda relevante; ref nao velha)
+
+    Idempotente: `notify_function_delivery` faz o claim atomico em delivered_via
+    (UPDATE ... WHERE delivered_via IS NULL), entao duas execucoes concorrentes
+    do reconciliador — ou uma corrida com o polling — nunca entregam em dobro.
+
+    Returns:
+        {"candidatas": int, "entregues": int, "falhas": int[, "motivo": str]}
+    """
+    from datetime import timedelta
+    from sqlalchemy import text as sql_text
+    from app import db
+    from app.utils.timezone import agora_utc_naive
+    from app.agente.config.feature_flags import (
+        TEAMS_PROACTIVE_DELIVERY,
+        TEAMS_RECONCILE_ENABLED,
+        TEAMS_RECONCILE_MAX_AGE_MIN,
+        TEAMS_RECONCILE_LIMIT,
+    )
+
+    out = {"candidatas": 0, "entregues": 0, "falhas": 0}
+    if not (TEAMS_PROACTIVE_DELIVERY and TEAMS_RECONCILE_ENABLED):
+        out["motivo"] = "flag_off"
+        return out
+    if not _function_url():
+        out["motivo"] = "sem_url"
+        return out
+
+    max_age = TEAMS_RECONCILE_MAX_AGE_MIN if max_age_min is None else max_age_min
+    lim = TEAMS_RECONCILE_LIMIT if limite is None else limite
+    agora = agora_utc_naive()
+    janela_polling = agora - timedelta(seconds=POLLING_WINDOW_SECONDS)  # polling morto
+    janela_idade = agora - timedelta(minutes=max_age)                  # ref ainda relevante
+
+    try:
+        candidatas = db.session.execute(sql_text(
+            "SELECT id FROM teams_tasks "
+            "WHERE status IN ('completed', 'error') "
+            "AND delivered_via IS NULL "
+            "AND conversation_reference IS NOT NULL "
+            "AND created_at <= :janela_polling AND created_at >= :janela_idade "
+            "ORDER BY created_at DESC LIMIT :lim"
+        ), {
+            "janela_polling": janela_polling,
+            "janela_idade": janela_idade,
+            "lim": lim,
+        }).fetchall()
+    except Exception as e:
+        logger.error(f"[TEAMS-RECONCILE] query de candidatas falhou: {e}")
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        out["motivo"] = f"query_erro: {e}"
+        return out
+
+    out["candidatas"] = len(candidatas)
+    for row in candidatas:
+        task_id = row[0]
+        try:
+            # min_elapsed=0: a candidata ja passou o gate de idade na query acima
+            r = notify_function_delivery(task_id, min_elapsed=0)
+            if r.get("ok"):
+                out["entregues"] += 1
+            else:
+                out["falhas"] += 1
+        except Exception as e:
+            logger.warning(f"[TEAMS-RECONCILE] task {str(task_id)[:8]}... falhou: {e}")
+            out["falhas"] += 1
+
+    if out["candidatas"]:
+        logger.info(
+            f"[TEAMS-RECONCILE] candidatas={out['candidatas']} "
+            f"entregues={out['entregues']} falhas={out['falhas']}"
+        )
+    return out
