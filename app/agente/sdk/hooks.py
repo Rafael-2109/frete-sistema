@@ -20,7 +20,25 @@ from threading import Lock as _EnfLock
 
 _ENFORCE_CACHE: dict = {}            # {(user_id, time_bucket): [(token, rule_path), ...]}
 _ENFORCE_CACHE_LOCK = _EnfLock()
-_ENFORCE_TTL_SECONDS = 30
+# TTL 300s (era 30s): com I4 default-ON, cada cache-miss roda no event loop COMPARTILHADO
+# dos streams; regra dura nova passa a valer em <=5min — trade-off aceito (code review I4).
+_ENFORCE_TTL_SECONDS = 300
+
+# Singleton lazy do app Flask para o caminho SEM context (thread do _sdk_loop):
+# create_app() custa ~1,0-1,3s e congelava todos os streams a cada cache-miss.
+# 1x por processo; protegido por lock proprio (corrida criaria 2 apps, um vazaria).
+_ENFORCE_FLASK_APP = None
+_ENFORCE_APP_LOCK = _EnfLock()
+
+
+def _get_enforce_flask_app():
+    global _ENFORCE_FLASK_APP
+    if _ENFORCE_FLASK_APP is None:
+        with _ENFORCE_APP_LOCK:
+            if _ENFORCE_FLASK_APP is None:
+                from app import create_app
+                _ENFORCE_FLASK_APP = create_app()
+    return _ENFORCE_FLASK_APP
 
 
 def _enforce_decision(directives, tool_input_str):
@@ -55,8 +73,7 @@ def _load_enforce_directives(user_id: int):
             _ = _app_probe.name
             _ctx = nullcontext()
         except RuntimeError:
-            from app import create_app as _create_app
-            _ctx = _create_app().app_context()
+            _ctx = _get_enforce_flask_app().app_context()
         with _ctx:
             from ..models import AgentMemory
             import re as _re
@@ -355,13 +372,17 @@ def build_hooks(
             from ..config.feature_flags import USE_MANDATORY_HARD_ENFORCE
             if not USE_MANDATORY_HARD_ENFORCE:
                 return {"continue_": True}
-            directives = _load_enforce_directives(_turn_user()[0])
+            enforce_uid = _turn_user()[0]
+            directives = _load_enforce_directives(enforce_uid)
+            if not directives:
+                # caminho comum (0 regras): sem serializar tool_input (O(input) evitado)
+                return {"continue_": True}
             hit = _enforce_decision(directives, str(hook_input.get('tool_input', '')))
             if hit:
                 token, rule_path = hit
                 logger.warning(
                     f"[ENFORCE] BLOQUEADO: input da tool contem token proibido '{token}' "
-                    f"(regra dura {rule_path}, user={user_id})"
+                    f"(regra dura {rule_path}, user={enforce_uid})"
                 )
                 return {
                     "continue_": True,
@@ -1611,7 +1632,7 @@ def build_hooks(
 
     # ─── Registrar TODOS os hooks ───
     # ORDEM: _keep_stream_open PRIMEIRO (mantem o stream aberto p/ can_use_tool); o enforcement
-    # (Fase 3.5, default OFF) vem DEPOIS — assim o deny so ocorre com o stream ja garantido.
+    # (Fase 3.5, default ON desde I4 2026-06-12) vem DEPOIS — deny so com o stream ja garantido.
     hooks = {
         "PreToolUse": [
             HookMatcher(
