@@ -53,7 +53,10 @@
           <div class="health-gauge-value" id="healthScoreValue">0</div>
         </div>
         <div class="health-gauge-label">Health Score</div>
-        <div class="health-status-text" id="healthStatusText">Calculando...</div>
+        <div class="health-status-text" id="healthStatusText"
+             title="Faixas: acima de 70 = agente operando bem; 41 a 70 = atencao necessaria; 40 ou menos = acao requerida.">Calculando...</div>
+        <!-- Decomposicao do score: 4 componentes ponderados (valor bruto -> pontos) -->
+        <div id="healthBreakdown" style="margin-top:0.6rem; font-size:0.75rem; text-align:left; width:100%; display:none;"></div>
       </div>
 
       <!-- Recommendations -->
@@ -74,39 +77,39 @@
          ZONA 2: KPI Cards Acionaveis
          ═══════════════════════════════════════════════════════════════ -->
     <div class="kpi-grid">
-      <div class="kpi-card">
+      <div class="kpi-card" title="% de sessoes significativas (custo > $0 e 2+ msgs) em que o agente usou ferramentas e houve 4+ mensagens (ida-e-volta real).">
         <div class="kpi-value" id="kpiResolution">0%</div>
-        <div class="kpi-label">Resolucao</div>
+        <div class="kpi-label">Resolucao <i class="fas fa-circle-info" style="font-size:0.75em; opacity:0.55;"></i></div>
         <div class="kpi-delta neutral" id="kpiResolutionDelta">&mdash;</div>
         <div class="kpi-sparkline"><canvas id="sparkResolution"></canvas></div>
       </div>
-      <div class="kpi-card">
+      <div class="kpi-card" title="Custo total do periodo dividido pelo numero de sessoes resolvidas.">
         <div class="kpi-value" id="kpiCostPerRes">$0</div>
-        <div class="kpi-label">$/Resolucao</div>
+        <div class="kpi-label">$/Resolucao <i class="fas fa-circle-info" style="font-size:0.75em; opacity:0.55;"></i></div>
         <div class="kpi-delta neutral" id="kpiCostPerResDelta">&mdash;</div>
         <div class="kpi-sparkline"><canvas id="sparkCostPerRes"></canvas></div>
       </div>
-      <div class="kpi-card">
+      <div class="kpi-card" title="Score 0-100 ponderando queries repetidas (30%), sessoes abandonadas (25%), sinais de frustracao (30%) e sessoes sem tools (15%) — menor e melhor.">
         <div class="kpi-value" id="kpiFriction">0</div>
-        <div class="kpi-label">Friccao</div>
+        <div class="kpi-label">Friccao <i class="fas fa-circle-info" style="font-size:0.75em; opacity:0.55;"></i></div>
         <div class="kpi-delta neutral" id="kpiFrictionDelta">&mdash;</div>
         <div class="kpi-sparkline"><canvas id="sparkFriction"></canvas></div>
       </div>
-      <div class="kpi-card">
+      <div class="kpi-card" title="Usuarios distintos que usaram o agente no periodo dividido pelos usuarios com status 'ativo' no sistema.">
         <div class="kpi-value" id="kpiAdoption">0</div>
-        <div class="kpi-label">Adocao</div>
+        <div class="kpi-label">Adocao <i class="fas fa-circle-info" style="font-size:0.75em; opacity:0.55;"></i></div>
         <div class="kpi-delta neutral" id="kpiAdoptionDelta">&mdash;</div>
         <div class="kpi-sparkline"><canvas id="sparkAdoption"></canvas></div>
       </div>
-      <div class="kpi-card">
+      <div class="kpi-card" title="Total de sessoes iniciadas no periodo selecionado.">
         <div class="kpi-value" id="kpiSessions">0</div>
-        <div class="kpi-label">Sessoes</div>
+        <div class="kpi-label">Sessoes <i class="fas fa-circle-info" style="font-size:0.75em; opacity:0.55;"></i></div>
         <div class="kpi-delta neutral" id="kpiSessionsDelta">&mdash;</div>
         <div class="kpi-sparkline"><canvas id="sparkSessions"></canvas></div>
       </div>
-      <div class="kpi-card">
+      <div class="kpi-card" title="Soma do custo (USD) de todas as sessoes do periodo.">
         <div class="kpi-value" id="kpiCost">$0</div>
-        <div class="kpi-label">Custo Total</div>
+        <div class="kpi-label">Custo Total <i class="fas fa-circle-info" style="font-size:0.75em; opacity:0.55;"></i></div>
         <div class="kpi-delta neutral" id="kpiCostDelta">&mdash;</div>
         <div class="kpi-sparkline"><canvas id="sparkCost"></canvas></div>
       </div>
@@ -209,6 +212,10 @@
       </div>
       <div class="chart-card">
         <h5><i class="fas fa-arrow-trend-down"></i> Reincidencia por Assinatura</h5>
+        <p style="font-size:0.75rem; color:var(--text-muted); margin:0 0 0.5rem;">
+          Mesmo erro voltou a acontecer? Compara reincidencia ANTES da correcao virar regra vs DEPOIS
+          (assinatura = identificador do tipo de erro).
+        </p>
         <div style="max-height:240px; overflow-y:auto; font-size:0.85rem;">
           <table class="table table-sm mb-0">
             <thead>
@@ -249,14 +256,17 @@
       </div>
       <div class="chart-card">
         <h5><i class="fas fa-list-check"></i> Casos para revisar (online judge)</h5>
+        <p style="font-size:0.75rem; color:var(--text-muted); margin:0 0 0.5rem;">
+          Voce audita o avaliador automatico: leia o turno e diga se o veredito dele foi correto.
+        </p>
         <div style="max-height:320px; overflow-y:auto; font-size:0.85rem;">
           <table class="table table-sm mb-0">
             <thead>
               <tr>
-                <th>Caso (step)</th>
+                <th>Data / Origem</th>
                 <th>Usuario</th>
                 <th class="text-center">Judge</th>
-                <th>Evidencia</th>
+                <th>Pergunta</th>
                 <th class="text-center">Judge acertou?</th>
               </tr>
             </thead>
@@ -304,6 +314,11 @@
         </button>
         <button class="filter-pill" data-filter="not_reviewed" onclick="filterSessions('not_reviewed')">
           Nao Revisadas <span class="pill-count" id="countNotReviewed">0</span>
+        </button>
+        <!-- Indicador de drill-down Usuarios -> Sessoes (contadores refletem o subconjunto) -->
+        <button class="filter-pill active" id="userFilterPill" style="display:none;"
+                onclick="clearUserFilter()" title="Limpar filtro de usuario">
+          <i class="fas fa-user"></i> <span id="userFilterName"></span> &times;
         </button>
       </div>
       <div class="table-card" style="margin-bottom:0;">
@@ -701,7 +716,7 @@ async function loadInsights() {
 // ═══════════════════════════════════════════════════════════════════════════
 
 function renderAll(data) {
-  renderHealthScore(data.health_score);
+  renderHealthScore(data.health_score, data.health_breakdown);
   renderRecommendations(data.recommendations || []);
   renderKPIs(data);
   renderDailyChart(data.daily);
@@ -813,12 +828,12 @@ async function loadJudgeCalibration() {
     });
     const json = await resp.json();
     if (!json.success) {
-      if (tbody) tbody.innerHTML = `<tr><td colspan="4" class="text-center text-muted" style="padding:1rem;">${escHtml(json.error || 'Indisponivel')}</td></tr>`;
+      if (tbody) tbody.innerHTML = `<tr><td colspan="5" class="text-center text-muted" style="padding:1rem;">${escHtml(json.error || 'Indisponivel')}</td></tr>`;
       return;
     }
     renderJudgeCalibration(json.data);
   } catch (e) {
-    if (tbody) tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted" style="padding:1rem;">Erro ao carregar</td></tr>';
+    if (tbody) tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted" style="padding:1rem;">Erro ao carregar</td></tr>';
   }
 }
 
@@ -838,13 +853,16 @@ function renderJudgeCalibration(data) {
   if (!tbody) return;
   const casos = data.casos || [];
   if (!casos.length) {
-    tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted" style="padding:1rem;">Nenhum caso pendente de revisao</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted" style="padding:1rem;">Nenhum caso pendente de revisao</td></tr>';
     return;
   }
   tbody.innerHTML = casos.map(c => {
     const prioBadge = c.prioritario
-      ? ' <span class="badge bg-warning"><i class="fas fa-triangle-exclamation"></i> adversarial</span>'
+      ? ' <span class="badge bg-warning" title="Um segundo modelo tentou refutar a aprovacao do judge — caso priorizado para sua revisao. Julgue o JUDGE, nao o refutador."><i class="fas fa-triangle-exclamation"></i> adversarial</span>'
       : '';
+    const origemBadge = (c.origem === 'golden')
+      ? '<span class="badge bg-secondary" title="Caso de dataset golden (legado do eval_runner)">golden</span>'
+      : '<span class="badge bg-info" title="Caso amostrado dos turnos reais avaliados pelo online judge">online</span>';
     const judgeBadge = (c.status === 'pass')
       ? '<span class="badge bg-success">pass</span>'
       : '<span class="badge bg-secondary">fail</span>';
@@ -854,10 +872,12 @@ function renderJudgeCalibration(data) {
     const evidencia = c.evidence || '-';
     return `
     <tr id="judgeCase-${c.id}">
-      <td style="padding:0.3rem;">${escHtml(truncate(c.case_id || '-', 24))}${prioBadge}</td>
+      <td style="padding:0.3rem; white-space:nowrap;" title="${escAttr(c.case_id || '')}">
+        ${formatDateShort(c.created_at || c.recorded_at)}<br>${origemBadge}${prioBadge}
+      </td>
       <td style="padding:0.3rem; white-space:nowrap;">${escHtml(c.user_name || '—')}</td>
       <td class="text-center" style="padding:0.3rem;">${judgeBadge} ${score}</td>
-      <td style="padding:0.3rem;">${escHtml(truncate(evidencia, 120))}
+      <td style="padding:0.3rem;">${escHtml(truncate(pergunta, 80))}
         <button class="btn btn-sm btn-link p-0" style="font-size:0.8rem;" onclick="toggleJudgeDetail(${c.id})" title="Ver turno completo: pergunta, resposta e evidencia">ver</button>
       </td>
       <td class="text-center" style="padding:0.3rem; white-space:nowrap;">
@@ -867,6 +887,7 @@ function renderJudgeCalibration(data) {
     </tr>
     <tr id="judgeDetail-${c.id}" style="display:none;">
       <td colspan="5" style="padding:0.6rem; background:var(--bg-light);">
+        <div style="margin-bottom:0.4rem;"><strong>Caso (step):</strong> <code>${escHtml(c.case_id || '-')}</code></div>
         <div style="margin-bottom:0.4rem;"><strong>Pergunta:</strong><div style="white-space:pre-wrap;">${escHtml(pergunta)}</div></div>
         <div style="margin-bottom:0.4rem;"><strong>Resposta:</strong><div style="white-space:pre-wrap;">${escHtml(resposta)}</div></div>
         <div><strong>Evidencia do judge:</strong><div style="white-space:pre-wrap;">${escHtml(evidencia)}</div></div>
@@ -910,7 +931,7 @@ async function submitJudgeVerdict(caseId, verdict) {
 // ZONA 1: Health Score + Recomendacoes
 // ═══════════════════════════════════════════════════════════════════════════
 
-function renderHealthScore(score) {
+function renderHealthScore(score, breakdown) {
   const value = Math.round(score || 0);
   const el = document.getElementById('healthScoreValue');
   const fill = document.getElementById('healthGaugeFill');
@@ -934,6 +955,32 @@ function renderHealthScore(score) {
     card.classList.add('health-poor');
     statusText.textContent = 'Acao requerida';
   }
+
+  renderHealthBreakdown(breakdown);
+}
+
+// Decomposicao do Health Score: 4 linhas compactas (nome, valor bruto -> pontos).
+// Ex.: "Resolucao 72% -> 25,2 pts" (valor * peso = contribuicao no score).
+function renderHealthBreakdown(breakdown) {
+  const container = document.getElementById('healthBreakdown');
+  if (!container) return;
+  const comps = (breakdown && breakdown.componentes) || [];
+  if (!comps.length) {
+    container.style.display = 'none';
+    return;
+  }
+  container.style.display = 'block';
+  container.innerHTML = comps.map(c => {
+    const pesoPct = Math.round((c.peso || 0) * 100);
+    const valor = (c.valor != null) ? c.valor.toLocaleString('pt-BR', { maximumFractionDigits: 1 }) : '?';
+    const pts = (c.contribuicao != null) ? c.contribuicao.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : '?';
+    return `
+      <div style="display:flex; justify-content:space-between; gap:0.5rem; line-height:1.7; border-bottom:1px dashed var(--border); color:var(--text-muted);"
+           title="${escAttr(c.nome)}: valor ${valor} com peso ${pesoPct}% = ${pts} pontos do score">
+        <span>${escHtml(c.nome)} <span style="opacity:0.6;">(${pesoPct}%)</span></span>
+        <span style="white-space:nowrap;">${valor}% &rarr; <strong style="color:var(--text);">${pts} pts</strong></span>
+      </div>`;
+  }).join('');
 }
 
 function renderRecommendations(recs) {
@@ -1020,7 +1067,7 @@ function renderKPIs(data) {
   renderDelta('kpiResolutionDelta', d.resolution_rate, false);
   renderDelta('kpiCostPerResDelta', d.avg_cost_per_session, true);
   renderDelta('kpiFrictionDelta', d.friction_score, true);
-  renderDelta('kpiAdoptionDelta', d.unique_users, false);
+  renderDelta('kpiAdoptionDelta', d.adoption_rate, false);
   renderDelta('kpiSessionsDelta', d.total_sessions, false);
   renderDelta('kpiCostDelta', d.total_cost_usd, true);
 
@@ -1195,13 +1242,55 @@ function switchTab(tabName) {
 }
 
 // ── Sessions Table ──
+// Drill-down Usuarios -> Sessoes: filtro client-side por usuario sobre
+// cachedSessions (payload tem user_id; fallback por user_name). Os contadores
+// dos pills refletem o SUBCONJUNTO filtrado (consistencia pill <-> tabela).
+let activeUserFilter = null; // {id, name} ou null
+
+function _applyUserFilter(sessions) {
+  if (!activeUserFilter) return sessions;
+  return sessions.filter(s => {
+    if (s.user_id != null && activeUserFilter.id != null) {
+      return s.user_id === activeUserFilter.id;
+    }
+    return s.user_name === activeUserFilter.name;
+  });
+}
+
+function _updateUserFilterPill() {
+  const pill = document.getElementById('userFilterPill');
+  if (!pill) return;
+  if (activeUserFilter) {
+    setText('userFilterName', `Usuario: ${activeUserFilter.name}`);
+    pill.style.display = '';
+  } else {
+    pill.style.display = 'none';
+  }
+}
+
+function drillToUserSessions(userId, userName) {
+  activeUserFilter = { id: userId, name: userName };
+  _updateUserFilterPill();
+  switchTab('sessions');
+  renderSessionsTable(cachedSessions);
+  filterSessions('all');
+}
+
+function clearUserFilter() {
+  activeUserFilter = null;
+  _updateUserFilterPill();
+  renderSessionsTable(cachedSessions);
+  filterSessions('all');
+}
+
 function renderSessionsTable(sessions) {
   cachedSessions = sessions;
   const tbody = document.getElementById('sessionsBody');
 
+  const visible = _applyUserFilter(sessions);
   const reviewed = getReviewedSessions();
-  const counts = { all: sessions.length, resolved: 0, abandoned: 0, no_tools: 0, not_reviewed: 0 };
-  sessions.forEach(s => {
+  const counts = { all: visible.length, resolved: 0, abandoned: 0, no_tools: 0, not_reviewed: 0 };
+  visible.forEach(s => {
     if (counts[s.status] !== undefined) counts[s.status]++;
     if (!reviewed[s.session_id]) counts.not_reviewed++;
   });
@@ -1212,22 +1301,23 @@ function renderSessionsTable(sessions) {
   setText('countNoTools', counts.no_tools);
   setText('countNotReviewed', counts.not_reviewed);
 
-  _renderSessionRows(tbody, sessions);
+  _renderSessionRows(tbody, visible);
 }
 
 function filterSessions(filter) {
-  document.querySelectorAll('.filter-pill').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.filter-pill[data-filter]').forEach(p => p.classList.remove('active'));
   document.querySelector(`.filter-pill[data-filter="${filter}"]`)?.classList.add('active');
 
   const tbody = document.getElementById('sessionsBody');
+  const base = _applyUserFilter(cachedSessions);
   let filtered;
   if (filter === 'all') {
-    filtered = cachedSessions;
+    filtered = base;
   } else if (filter === 'not_reviewed') {
     const reviewed = getReviewedSessions();
-    filtered = cachedSessions.filter(s => !reviewed[s.session_id]);
+    filtered = base.filter(s => !reviewed[s.session_id]);
   } else {
-    filtered = cachedSessions.filter(s => s.status === filter);
+    filtered = base.filter(s => s.status === filter);
   }
 
   _renderSessionRows(tbody, filtered);
@@ -1316,6 +1406,23 @@ function _renderSimpleTable(tbodyId, items, rowFn, colCount) {
 }
 
 // ── Users Tab ──
+// Linhas clicaveis: drill-down para a aba Sessoes filtrada pelo usuario.
+// Nome de usuario e texto LIVRE: nunca interpolar em string JS de onclick
+// (apostrofo quebra o literal apos o decode de entidade do parser HTML).
+// data-* + delegacao de evento mantem o nome fora do contexto JS inline.
+function _userRowAttrs(u) {
+  const name = u.name || 'User #' + u.user_id;
+  return `class="user-row-link" style="cursor:pointer;" title="Ver sessoes de ${escAttr(name)}" ` +
+         `data-user-id="${Number(u.user_id) || ''}" data-user-name="${escAttr(name)}"`;
+}
+
+document.addEventListener('click', function (ev) {
+  const tr = ev.target.closest('tr.user-row-link');
+  if (!tr) return;
+  const uid = tr.dataset.userId ? parseInt(tr.dataset.userId, 10) : null;
+  drillToUserSessions(uid, tr.dataset.userName || '');
+});
+
 function renderUsersTab(usersData, costsData) {
   const activeBody = document.getElementById('activeUsers');
   const activeUsers = usersData?.most_active || [];
@@ -1323,7 +1430,7 @@ function renderUsersTab(usersData, costsData) {
     activeBody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--text-muted);">Sem dados</td></tr>';
   } else {
     activeBody.innerHTML = activeUsers.map(u => `
-      <tr><td>${escHtml(u.name || 'User #' + u.user_id)}</td><td>${u.sessions}</td><td>${u.messages}</td><td class="cost-badge">$${u.cost_usd.toFixed(4)}</td></tr>
+      <tr ${_userRowAttrs(u)}><td>${escHtml(u.name || 'User #' + u.user_id)}</td><td>${u.sessions}</td><td>${u.messages}</td><td class="cost-badge">$${u.cost_usd.toFixed(4)}</td></tr>
     `).join('');
   }
 
@@ -1333,7 +1440,7 @@ function renderUsersTab(usersData, costsData) {
     costBody.innerHTML = '<tr><td colspan="3" style="text-align:center;color:var(--text-muted);">Sem dados</td></tr>';
   } else {
     costBody.innerHTML = byUser.map(u => `
-      <tr><td>${escHtml(u.name || 'User #' + u.user_id)}</td><td>${u.sessions}</td><td class="cost-badge">$${u.cost_usd.toFixed(4)}</td></tr>
+      <tr ${_userRowAttrs(u)}><td>${escHtml(u.name || 'User #' + u.user_id)}</td><td>${u.sessions}</td><td class="cost-badge">$${u.cost_usd.toFixed(4)}</td></tr>
     `).join('');
   }
 }
@@ -1569,6 +1676,16 @@ function formatTime(iso) {
     const d = new Date(iso);
     return d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
   } catch { return ''; }
+}
+
+// dd/mm hh:mm — compacto p/ tabelas densas (card de calibracao do judge)
+function formatDateShort(iso) {
+  if (!iso) return '-';
+  try {
+    const d = new Date(iso);
+    return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
+      + ' ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  } catch { return iso; }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

@@ -104,16 +104,18 @@ def get_insights_data(
                 'summary': 'Analise de friccao indisponivel.',
             }
 
-        # ── Adocao ──
-        current['adoption_rate'] = _calc_adoption_rate(sessions)
+        # ── Adocao ── (ja calculada em _compute_all; garante a chave)
+        current.setdefault('adoption_rate', _calc_adoption_rate(sessions))
 
-        # ── Health Score ──
-        current['health_score'] = _calc_health_score(
+        # ── Health Score (+ decomposicao por componente para a UI) ──
+        health = _health_score_breakdown(
             resolution_rate=current['resolution_rate'],
             friction_score=current['friction'].get('friction_score', 0),
             cost_delta=current['deltas'].get('avg_cost_per_session'),
             adoption_rate=current['adoption_rate'],
         )
+        current['health_score'] = health['score']
+        current['health_breakdown'] = health
 
         # ── Saude de Memorias ──
         try:
@@ -193,6 +195,10 @@ def _compute_all(sessions: List, days: int) -> Dict[str, Any]:
         'model_distribution': model_dist,
         'topics': topics,
         'suggestion_feedback': suggestion_feedback,
+        # Adocao calculada AQUI (e nao so em get_insights_data) para que o
+        # periodo ANTERIOR tambem tenha o valor — sem isso o delta de adocao
+        # em _compute_deltas seria sempre None (previous nunca teria a chave).
+        'adoption_rate': _calc_adoption_rate(sessions),
     }
 
 
@@ -351,6 +357,9 @@ def _calc_adoption_rate(sessions: List) -> float:
     """
     Calcula taxa de adocao: usuarios ativos com agente / total usuarios do sistema.
 
+    Total de usuarios = `usuarios.status == 'ativo'` (o modelo Usuario NAO tem
+    coluna `ativo`; valores possiveis: pendente/ativo/rejeitado/bloqueado).
+
     Returns:
         Percentual 0-100
     """
@@ -359,25 +368,26 @@ def _calc_adoption_rate(sessions: List) -> float:
 
         active_agent_users = len(set(s.user_id for s in sessions if s.user_id))
         total_active_users = Usuario.query.filter(
-            Usuario.ativo == True  # noqa: E712
+            Usuario.status == 'ativo'
         ).count()
 
         if total_active_users == 0:
             return 0.0
 
         return round((active_agent_users / total_active_users) * 100, 1)
-    except Exception:
+    except Exception as e:
+        logger.warning(f"[INSIGHTS] _calc_adoption_rate falhou: {e}")
         return 0.0
 
 
-def _calc_health_score(
+def _health_score_breakdown(
     resolution_rate: float,
     friction_score: float,
     cost_delta: Optional[float],
     adoption_rate: float,
-) -> float:
+) -> Dict[str, Any]:
     """
-    Calcula score de saude composto (0-100).
+    Calcula o Health Score composto (0-100) DECOMPOSTO por componente.
 
     Formula:
         resolution_rate * 0.35
@@ -386,6 +396,10 @@ def _calc_health_score(
         + adoption_rate * 0.20
 
     cost_stability: 100 se custo estavel/desceu, penaliza se subiu muito.
+
+    Returns:
+        {'score': float, 'componentes': [{'nome', 'valor', 'peso', 'contribuicao'}]}
+        — soma das contribuicoes == score (antes do clamp 0-100).
     """
     # Cost stability: quanto mais subiu, pior (0-100)
     if cost_delta is None:
@@ -401,6 +415,15 @@ def _calc_health_score(
     else:
         cost_stability = 0.0  # disparou
 
+    componentes = [
+        {'nome': 'Resolucao', 'valor': round(resolution_rate, 1), 'peso': 0.35},
+        {'nome': 'Baixa friccao', 'valor': round(100 - friction_score, 1), 'peso': 0.25},
+        {'nome': 'Estabilidade de custo', 'valor': round(cost_stability, 1), 'peso': 0.20},
+        {'nome': 'Adocao', 'valor': round(adoption_rate, 1), 'peso': 0.20},
+    ]
+    for comp in componentes:
+        comp['contribuicao'] = round(comp['valor'] * comp['peso'], 1)
+
     score = (
         resolution_rate * 0.35
         + (100 - friction_score) * 0.25
@@ -408,7 +431,29 @@ def _calc_health_score(
         + adoption_rate * 0.20
     )
 
-    return round(min(max(score, 0), 100), 1)
+    return {
+        'score': round(min(max(score, 0), 100), 1),
+        'componentes': componentes,
+    }
+
+
+def _calc_health_score(
+    resolution_rate: float,
+    friction_score: float,
+    cost_delta: Optional[float],
+    adoption_rate: float,
+) -> float:
+    """Calcula score de saude composto (0-100).
+
+    Assinatura preservada (backward compat) — delega para
+    _health_score_breakdown, que expoe a decomposicao por componente.
+    """
+    return _health_score_breakdown(
+        resolution_rate=resolution_rate,
+        friction_score=friction_score,
+        cost_delta=cost_delta,
+        adoption_rate=adoption_rate,
+    )['score']
 
 
 # =============================================================================
@@ -449,6 +494,9 @@ def _compute_deltas(current: Dict, previous: Dict) -> Dict[str, Optional[float]]
     deltas['resolution_rate'] = pct_delta(
         current.get('resolution_rate', 0), previous.get('resolution_rate', 0)
     )
+    deltas['adoption_rate'] = pct_delta(
+        current.get('adoption_rate', 0), previous.get('adoption_rate', 0)
+    )
 
     # Friction delta (inversao: diminuicao = positivo)
     curr_friction = current.get('friction', {}).get('friction_score', 0)
@@ -472,6 +520,7 @@ def _null_deltas() -> Dict[str, None]:
         'avg_cost_per_session': None,
         'unique_users': None,
         'resolution_rate': None,
+        'adoption_rate': None,
         'friction_score': None,
     }
 
@@ -516,6 +565,7 @@ def _empty_insights(days: int) -> Dict[str, Any]:
         },
         'adoption_rate': 0.0,
         'health_score': 0.0,
+        'health_breakdown': {'score': 0.0, 'componentes': []},
         'friction': {
             'friction_score': 0,
             'total_sessions_analyzed': 0,
@@ -819,6 +869,7 @@ def _calc_sessions(sessions: List) -> Dict[str, Any]:
         all_sessions.append({
             'session_id': s.session_id,
             'title': s.title or '(sem titulo)',
+            'user_id': s.user_id,
             'user_name': user_names.get(s.user_id, f'Usuario #{s.user_id}') if s.user_id else 'N/A',
             'message_count': msg_count,
             'cost_usd': cost,
@@ -1779,9 +1830,22 @@ def _serialize_calibration_case(case) -> Dict[str, Any]:
     PURO (sem DB). `prioritario`=True quando a evidence carrega o marcador
     ⚠ADVERSARIAL (judge=success refutado pelo adversarial — discordância de
     ALTO VALOR de calibração, achado Task 3). A UI destaca esses casos.
+
+    `origem`: 'online' quando o caso veio do calibration_sampler (que grava
+    SEMPRE com agent_name='__online_judge__' e case_id=step_uid); 'golden'
+    caso contrário (casos legados do eval_runner, por subagente).
+    `created_at`: alias de recorded_at (data do caso, p/ a 1a coluna da UI).
     """
+    from app.agente.workers.calibration_sampler import CALIBRATION_AGENT_NAME
+
     ev = case.evidence or ''
     recorded = getattr(case, 'recorded_at', None)
+    recorded_iso = recorded.isoformat() if recorded else None
+    origem = (
+        'online'
+        if getattr(case, 'agent_name', None) == CALIBRATION_AGENT_NAME
+        else 'golden'
+    )
     return {
         'id': case.id,
         'case_id': case.case_id,
@@ -1789,7 +1853,9 @@ def _serialize_calibration_case(case) -> Dict[str, Any]:
         'status': case.status,
         'evidence': ev,
         'prioritario': 'ADVERSARIAL' in ev,
-        'recorded_at': recorded.isoformat() if recorded else None,
+        'recorded_at': recorded_iso,
+        'created_at': recorded_iso,
+        'origem': origem,
     }
 
 

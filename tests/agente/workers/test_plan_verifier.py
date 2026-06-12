@@ -1,14 +1,20 @@
 """
 Testa job RQ de verifier adversarial — Parte B (B2, Onda 2).
 
+Atualizado 2026-06-12 (paridade de matéria + fim do viés cego + Sonnet):
+- o adversarial agora recebe pergunta/resposta/auditoria Odoo (paridade com o judge);
+- sem matéria (pergunta E resposta indisponíveis) → NÃO chama o LLM e grava
+  {'refuted': False, 'skipped': True, 'reason': 'sem_materia'} (chave aditiva);
+- JSON sem campo 'refuted' → padrão refuted=False (refutar exige razão explícita);
+- modelo: ADVERSARIAL_MODEL (Sonnet) via _call_adversarial_verifier.
+
 Cobertura:
 - test_verify_plan_adversarial_persiste_veredito: fluxo feliz — veredito persiste em outcome_signal['verify']
 - test_verify_plan_adversarial_commita(spy): CRITICAL-1 — db.session.commit() é chamado (spy passthrough)
-- test_verify_core_haiku_refuta: Haiku retorna refuted=true → _verify_core retorna dict correto
-- test_verify_core_haiku_ok: Haiku retorna refuted=false → ok (não refutado)
-- test_verify_core_json_invalido: JSON inválido → best-effort, retorna None
-- test_verify_plan_adversarial_uid_inexistente: no-op seguro quando step não existe
-- test_default_cetico: quando Haiku retorna JSON sem 'refuted', padrão é refuted=True (cético)
+- test_verify_core_refuta / _ok / _json_invalido: contrato do núcleo
+- test_skip_sem_materia_*: skip-sem-matéria não toca o LLM
+- test_prompt_*: paridade de matéria no prompt
+- test_system_prompt_sem_vies_cego / test_modelo_adversarial_sonnet
 """
 import json
 import uuid
@@ -66,20 +72,23 @@ def _cleanup_step(step_uid: str):
 
 # ─── Testes unitários (sem DB) ───────────────────────────────────────────────
 
-def test_verify_core_haiku_refuta(monkeypatch):
-    """_verify_core retorna refuted=True quando Haiku refuta a conclusão."""
+class _FakeStepBase:
+    step_uid = 'sess-fake-pv:1'
+    session_id = 'sess-fake-pv'
+    tools_used = ['cotando-frete']
+    outcome_signal = None
+
+
+def test_verify_core_refuta(monkeypatch):
+    """_verify_core retorna refuted=True quando o modelo refuta a conclusão."""
     from app.agente.workers import plan_verifier
 
-    class _FakeStep:
-        step_uid = 'sess-fake-pv:1'
-        session_id = 'sess-fake-pv'
-        tools_used = ['cotando-frete']
-        outcome_signal = None
+    resp = json.dumps({'refuted': True, 'reason': 'Frete calculado sem considerar peso cubado'})
+    monkeypatch.setattr(plan_verifier, '_call_adversarial_verifier', lambda prompt: resp)
 
-    haiku_resp = json.dumps({'refuted': True, 'reason': 'Frete calculado sem considerar peso cubado'})
-    monkeypatch.setattr(plan_verifier, '_call_haiku_verifier', lambda prompt: haiku_resp)
-
-    result = plan_verifier._verify_core(_FakeStep())
+    result = plan_verifier._verify_core(
+        _FakeStepBase(), meta='qual o frete?', response='O frete é R$ 100.'
+    )
 
     assert result is not None
     assert result['refuted'] is True
@@ -87,61 +96,158 @@ def test_verify_core_haiku_refuta(monkeypatch):
     assert len(result['reason']) > 0
 
 
-def test_verify_core_haiku_ok(monkeypatch):
-    """_verify_core retorna refuted=False quando Haiku não consegue refutar."""
+def test_verify_core_ok(monkeypatch):
+    """_verify_core retorna refuted=False quando o modelo não consegue refutar."""
     from app.agente.workers import plan_verifier
 
-    class _FakeStep:
-        step_uid = 'sess-fake-pv2:1'
-        session_id = 'sess-fake-pv2'
-        tools_used = ['consultando-sql']
-        outcome_signal = None
+    resp = json.dumps({'refuted': False, 'reason': 'Conclusão consistente com dados disponíveis'})
+    monkeypatch.setattr(plan_verifier, '_call_adversarial_verifier', lambda prompt: resp)
 
-    haiku_resp = json.dumps({'refuted': False, 'reason': 'Conclusão consistente com dados disponíveis'})
-    monkeypatch.setattr(plan_verifier, '_call_haiku_verifier', lambda prompt: haiku_resp)
-
-    result = plan_verifier._verify_core(_FakeStep())
+    result = plan_verifier._verify_core(
+        _FakeStepBase(), meta='qual o frete?', response='O frete é R$ 100.'
+    )
 
     assert result is not None
     assert result['refuted'] is False
 
 
 def test_verify_core_json_invalido(monkeypatch):
-    """JSON inválido do Haiku → best-effort, _verify_core retorna None."""
+    """JSON inválido do modelo → best-effort, _verify_core retorna None."""
     from app.agente.workers import plan_verifier
 
-    class _FakeStep:
-        step_uid = 'sess-fake-pv3:1'
-        session_id = 'sess-fake-pv3'
-        tools_used = []
-        outcome_signal = None
+    monkeypatch.setattr(plan_verifier, '_call_adversarial_verifier',
+                        lambda prompt: 'nao e json valido')
 
-    monkeypatch.setattr(plan_verifier, '_call_haiku_verifier', lambda prompt: 'nao e json valido')
-
-    result = plan_verifier._verify_core(_FakeStep())
+    result = plan_verifier._verify_core(
+        _FakeStepBase(), meta='pergunta', response='resposta'
+    )
 
     assert result is None
 
 
-def test_default_cetico(monkeypatch):
-    """Quando Haiku retorna JSON sem 'refuted', padrão é refuted=True (cético)."""
+def test_default_nao_refuta_sem_campo_refuted(monkeypatch):
+    """JSON sem 'refuted' → padrão é refuted=False (refutar exige razão
+    explícita — fim do viés 'na dúvida, REFUTE')."""
     from app.agente.workers import plan_verifier
 
-    class _FakeStep:
-        step_uid = 'sess-fake-pv4:1'
-        session_id = 'sess-fake-pv4'
-        tools_used = []
-        outcome_signal = None
+    resp = json.dumps({'reason': 'inconclusivo'})
+    monkeypatch.setattr(plan_verifier, '_call_adversarial_verifier', lambda prompt: resp)
 
-    # JSON válido mas sem campo 'refuted'
-    haiku_resp = json.dumps({'reason': 'inconclusivo'})
-    monkeypatch.setattr(plan_verifier, '_call_haiku_verifier', lambda prompt: haiku_resp)
+    result = plan_verifier._verify_core(
+        _FakeStepBase(), meta='pergunta', response='resposta'
+    )
 
-    result = plan_verifier._verify_core(_FakeStep())
-
-    # Deve retornar dict (não None) com refuted=True (padrão cético)
     assert result is not None
-    assert result['refuted'] is True
+    assert result['refuted'] is False
+
+
+def test_skip_sem_materia_nao_chama_llm(monkeypatch):
+    """Pergunta E resposta indisponíveis → NÃO chama o LLM; grava veredito
+    skipped {'refuted': False, 'skipped': True, 'reason': 'sem_materia'}."""
+    from app.agente.workers import plan_verifier
+
+    def _explode(prompt):
+        raise AssertionError('LLM NAO deveria ser chamado sem matéria')
+
+    monkeypatch.setattr(plan_verifier, '_call_adversarial_verifier', _explode)
+
+    result = plan_verifier._verify_core(_FakeStepBase(), meta=None, response=None)
+
+    assert result == {'refuted': False, 'skipped': True, 'reason': 'sem_materia'}
+
+
+def test_skip_sem_materia_strings_vazias(monkeypatch):
+    """Strings vazias/whitespace contam como matéria indisponível."""
+    from app.agente.workers import plan_verifier
+
+    def _explode(prompt):
+        raise AssertionError('LLM NAO deveria ser chamado sem matéria')
+
+    monkeypatch.setattr(plan_verifier, '_call_adversarial_verifier', _explode)
+
+    result = plan_verifier._verify_core(_FakeStepBase(), meta='  ', response='')
+    assert result['skipped'] is True and result['refuted'] is False
+
+
+def test_so_pergunta_disponivel_chama_llm(monkeypatch):
+    """Com SÓ a pergunta disponível, há matéria parcial → LLM é chamado."""
+    from app.agente.workers import plan_verifier
+
+    chamadas = []
+
+    def _fake(prompt):
+        chamadas.append(prompt)
+        return json.dumps({'refuted': False, 'reason': 'matéria insuficiente'})
+
+    monkeypatch.setattr(plan_verifier, '_call_adversarial_verifier', _fake)
+
+    result = plan_verifier._verify_core(_FakeStepBase(), meta='qual o frete?', response=None)
+    assert len(chamadas) == 1
+    assert result['refuted'] is False
+    assert 'skipped' not in result
+
+
+def test_prompt_contem_pergunta_resposta_tools_e_auditoria():
+    """Paridade de matéria: o prompt do adversarial inclui pergunta (1500c),
+    resposta (3000c), tools e auditoria Odoo — mesmo material do judge."""
+    from app.agente.workers.plan_verifier import _build_adversarial_prompt
+
+    class _Op:
+        status = 'EXECUTADO'
+        modelo_odoo = 'stock.picking'
+        metodo_odoo = 'button_validate'
+
+    prompt = _build_adversarial_prompt(
+        _FakeStepBase(),
+        odoo_ops=[_Op()],
+        meta='quanto de palmito tem em estoque?',
+        response='Ha 1.234 caixas de palmito disponiveis.',
+    )
+
+    assert 'quanto de palmito tem em estoque?' in prompt
+    assert 'Ha 1.234 caixas de palmito disponiveis.' in prompt
+    assert 'cotando-frete' in prompt
+    assert 'EXECUTADO: 1' in prompt
+    assert 'stock.picking' in prompt
+
+
+def test_prompt_sem_materia_marca_indisponivel():
+    """Sem meta/response o prompt marca explicitamente a indisponibilidade
+    (caminho usado apenas quando há matéria parcial)."""
+    from app.agente.workers.plan_verifier import _build_adversarial_prompt
+
+    prompt = _build_adversarial_prompt(_FakeStepBase(), meta='pergunta x', response=None)
+    assert 'pergunta x' in prompt
+    assert '(resposta do agente nao disponivel)' in prompt
+
+
+def test_prompt_trunca_pergunta_resposta():
+    """Orçamento de tokens: pergunta truncada em 1500c e resposta em 3000c."""
+    from app.agente.workers.plan_verifier import _build_adversarial_prompt
+
+    prompt = _build_adversarial_prompt(
+        _FakeStepBase(), meta='P' * 5000, response='R' * 9000,
+    )
+    assert 'P' * 1500 in prompt and 'P' * 1501 not in prompt
+    assert 'R' * 3000 in prompt and 'R' * 3001 not in prompt
+
+
+def test_system_prompt_sem_vies_cego():
+    """O system prompt NÃO carrega mais o viés 'na dúvida, REFUTE'; exige razão
+    concreta, prevê 'matéria insuficiente' e proporcionalidade."""
+    from app.agente.workers.plan_verifier import ADVERSARIAL_SYSTEM_PROMPT
+
+    assert 'na dúvida, REFUTE' not in ADVERSARIAL_SYSTEM_PROMPT
+    assert 'razão concreta' in ADVERSARIAL_SYSTEM_PROMPT
+    assert 'matéria insuficiente' in ADVERSARIAL_SYSTEM_PROMPT
+    assert 'Proporcionalidade' in ADVERSARIAL_SYSTEM_PROMPT
+
+
+def test_modelo_adversarial_sonnet():
+    """Doutrina: modelo fraco não audita forte — adversarial roda em Sonnet."""
+    from app.agente.workers.plan_verifier import ADVERSARIAL_MODEL
+
+    assert ADVERSARIAL_MODEL == 'claude-sonnet-4-6'
 
 
 def test_verify_plan_adversarial_uid_inexistente_nao_crasha(app_ctx, monkeypatch):
@@ -157,16 +263,21 @@ def test_verify_plan_adversarial_uid_inexistente_nao_crasha(app_ctx, monkeypatch
 # ─── Testes de integração (com DB) ───────────────────────────────────────────
 
 def test_verify_plan_adversarial_persiste_veredito(app_ctx, monkeypatch):
-    """Fluxo feliz: verify_plan_adversarial persiste veredito em outcome_signal['verify']."""
+    """Fluxo feliz: verify_plan_adversarial persiste veredito em outcome_signal['verify'].
+
+    Cria sessão com 1 turno (matéria disponível) — sem ela o verifier skipa
+    o LLM (skip-sem-matéria) e o veredito mockado nunca seria usado.
+    """
     from app.agente.workers import plan_verifier
     from app.agente.models import AgentStep
 
     sid = _mk_sid()
     uid, _ = _mk_step(app_ctx, sid)
+    _mk_session_with_response(sid, 'qual o frete para Manaus?', 'O frete é R$ 100,00.')
 
-    haiku_resp = json.dumps({'refuted': True, 'reason': 'Premissa não suportada pelos dados'})
+    resp = json.dumps({'refuted': True, 'reason': 'Premissa não suportada pelos dados'})
 
-    monkeypatch.setattr(plan_verifier, '_call_haiku_verifier', lambda prompt: haiku_resp)
+    monkeypatch.setattr(plan_verifier, '_call_adversarial_verifier', lambda prompt: resp)
     monkeypatch.setattr(plan_verifier, 'create_app', lambda: app_ctx)
 
     try:
@@ -179,6 +290,35 @@ def test_verify_plan_adversarial_persiste_veredito(app_ctx, monkeypatch):
         verify_data = step.outcome_signal.get('verify', {})
         assert verify_data.get('refuted') is True
         assert 'reason' in verify_data
+    finally:
+        _cleanup_step(uid)
+        _cleanup_session(sid)
+
+
+def test_verify_plan_adversarial_sem_materia_persiste_skip(app_ctx, monkeypatch):
+    """Step SEM sessão (sem pergunta/resposta) → persiste o veredito skipped
+    sem chamar o LLM: {'refuted': False, 'skipped': True, 'reason': 'sem_materia'}."""
+    from app.agente.workers import plan_verifier
+    from app.agente.models import AgentStep
+
+    sid = _mk_sid()
+    uid, _ = _mk_step(app_ctx, sid)  # sem AgentSession correspondente
+
+    def _explode(prompt):
+        raise AssertionError('LLM NAO deveria ser chamado sem matéria')
+
+    monkeypatch.setattr(plan_verifier, '_call_adversarial_verifier', _explode)
+    monkeypatch.setattr(plan_verifier, 'create_app', lambda: app_ctx)
+
+    try:
+        plan_verifier.verify_plan_adversarial(uid)
+
+        _db.session.expire_all()
+        step = AgentStep.query.filter_by(step_uid=uid).first()
+        verify_data = (step.outcome_signal or {}).get('verify', {})
+        assert verify_data.get('refuted') is False
+        assert verify_data.get('skipped') is True
+        assert verify_data.get('reason') == 'sem_materia'
     finally:
         _cleanup_step(uid)
 
@@ -199,9 +339,10 @@ def test_verify_plan_adversarial_commita(app_ctx, monkeypatch):
 
     sid = _mk_sid()
     uid, _ = _mk_step(app_ctx, sid)
+    _mk_session_with_response(sid, 'qual o frete?', 'O frete é R$ 50,00.')
 
-    haiku_resp = json.dumps({'refuted': False, 'reason': 'Conclusão plausível'})
-    monkeypatch.setattr(plan_verifier, '_call_haiku_verifier', lambda prompt: haiku_resp)
+    resp = json.dumps({'refuted': False, 'reason': 'Conclusão plausível'})
+    monkeypatch.setattr(plan_verifier, '_call_adversarial_verifier', lambda prompt: resp)
     monkeypatch.setattr(plan_verifier, 'create_app', lambda: app_ctx)
 
     # Spy: conta chamadas + executa commit REAL (passthrough)
@@ -227,9 +368,11 @@ def test_verify_plan_adversarial_commita(app_ctx, monkeypatch):
         _db.session.expire_all()
         step = AgentStep.query.filter_by(step_uid=uid).first()
         assert step.outcome_signal.get('verify', {}).get('refuted') is False
+        assert 'skipped' not in step.outcome_signal.get('verify', {})
     finally:
         monkeypatch.undo()
         _cleanup_step(uid)
+        _cleanup_session(sid)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -286,7 +429,7 @@ def test_verify_step_shadow_grava_3_subchaves_e_commita(app_ctx, monkeypatch):
     _db.session.commit()
 
     # Mocks dos 3 verifiers (helpers mockáveis):
-    monkeypatch.setattr(plan_verifier, '_call_haiku_verifier',
+    monkeypatch.setattr(plan_verifier, '_call_adversarial_verifier',
                         lambda prompt: json.dumps({'refuted': False, 'reason': 'ok'}))
     monkeypatch.setattr(verifiers, '_call_sonnet_verifier', lambda prompt: 'OK')
     import app.agente.tools.ontology_query_tool as _oqt
@@ -343,11 +486,11 @@ def test_verify_step_shadow_best_effort_um_verifier_falha(app_ctx, monkeypatch):
     uid, _ = _mk_step(app_ctx, sid)
     _mk_session_with_response(sid, 'pergunta', 'resposta sem numeros')
 
-    # adversarial LEVANTA dentro de _verify_core (via _call_haiku_verifier)
+    # adversarial LEVANTA dentro de _verify_core (via _call_adversarial_verifier)
     def _boom(prompt):
         raise RuntimeError('haiku indisponivel')
 
-    monkeypatch.setattr(plan_verifier, '_call_haiku_verifier', _boom)
+    monkeypatch.setattr(plan_verifier, '_call_adversarial_verifier', _boom)
     monkeypatch.setattr(verifiers, '_call_sonnet_verifier', lambda prompt: 'OK')
     monkeypatch.setattr(plan_verifier, 'create_app', lambda: app_ctx)
 
@@ -378,7 +521,7 @@ def test_verify_step_shadow_sem_resposta_skipa_arithmetic(app_ctx, monkeypatch):
     sess.add_user_message('só pergunta, sem resposta')
     _db.session.commit()
 
-    monkeypatch.setattr(plan_verifier, '_call_haiku_verifier',
+    monkeypatch.setattr(plan_verifier, '_call_adversarial_verifier',
                         lambda prompt: json.dumps({'refuted': False, 'reason': 'ok'}))
     monkeypatch.setattr(plan_verifier, 'create_app', lambda: app_ctx)
 
@@ -404,7 +547,7 @@ def test_verify_step_shadow_sem_plano_skipa_domain(app_ctx, monkeypatch):
     uid, _ = _mk_step(app_ctx, sid)
     _mk_session_with_response(sid, 'pergunta', 'resposta')  # sem data['plan']
 
-    monkeypatch.setattr(plan_verifier, '_call_haiku_verifier',
+    monkeypatch.setattr(plan_verifier, '_call_adversarial_verifier',
                         lambda prompt: json.dumps({'refuted': False, 'reason': 'ok'}))
     monkeypatch.setattr(verifiers, '_call_sonnet_verifier', lambda prompt: 'OK')
     monkeypatch.setattr(plan_verifier, 'create_app', lambda: app_ctx)
