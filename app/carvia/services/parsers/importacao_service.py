@@ -1471,15 +1471,18 @@ class ImportacaoService:
                         e_outer,
                     )
 
-            # Enfileirar verificacao de CTRC para CarviaOperacao via opcao
-            # 101 --cte (nCT do XML). Corrige `ctrc_numero` deduzido
-            # CAR-{nCT}-{cDV} do parser para o CTRC real do SSW.
-            # Nao-bloqueante: erro aqui nao afeta a importacao.
+            # Enfileirar verificacao de CTRC e download de DACTE PDF para
+            # CarviaOperacao via opcao 101 --cte (nCT do XML). Corrige
+            # `ctrc_numero` deduzido CAR-{nCT}-{cDV} do parser para o CTRC
+            # real do SSW. PDF so e enfileirado quando `cte_pdf_path` vazio
+            # (DACTE nao veio junto no upload).
+            # Nao-bloqueante: erros aqui nao afetam a importacao.
             if operacoes_criadas:
                 try:
                     from app.portal.workers import enqueue_job
                     from app.carvia.workers.verificar_ctrc_ssw_jobs import (
                         verificar_ctrc_operacao_job,
+                        baixar_pdf_ssw_operacao_job,
                     )
                     for _op in operacoes_criadas:
                         _op_id = getattr(_op, 'id', None)
@@ -1505,9 +1508,33 @@ class ImportacaoService:
                                 "id=%s: %s",
                                 _op_id, e_job,
                             )
+                        # Enfileirar download DACTE PDF quando nao veio no
+                        # upload (mesmo job acionado pelo botao "CTe PDF").
+                        if not getattr(_op, 'cte_pdf_path', None):
+                            try:
+                                enqueue_job(
+                                    baixar_pdf_ssw_operacao_job,
+                                    _op_id,
+                                    queue_name='default',
+                                    timeout='10m',
+                                )
+                                logger.info(
+                                    "CarviaOperacao id=%s: job "
+                                    "baixar_pdf_ssw enfileirado "
+                                    "(pos-commit importacao, sem DACTE)",
+                                    _op_id,
+                                )
+                            except Exception as e_pdf:
+                                logger.warning(
+                                    "Falha ao enfileirar "
+                                    "baixar_pdf_ssw_operacao_job para op "
+                                    "id=%s: %s",
+                                    _op_id, e_pdf,
+                                )
                 except ImportError as e_imp:
                     logger.warning(
-                        "Falha ao importar verificar_ctrc_operacao_job: %s",
+                        "Falha ao importar jobs verificar_ctrc/"
+                        "baixar_pdf_ssw: %s",
                         e_imp,
                     )
 
