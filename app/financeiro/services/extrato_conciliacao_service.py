@@ -50,6 +50,7 @@ from app.financeiro.constants import (
     CONTA_CLIENTES_NACIONAIS,
     JOURNAL_GRAFENO_ID,
 )
+from app.odoo.utils.connection import is_cannot_marshal_none
 
 logger = logging.getLogger(__name__)
 
@@ -83,7 +84,7 @@ class ExtratoConciliacaoService:
     def connection(self):
         """Retorna a conexão Odoo, criando se necessário."""
         if self._connection is None:
-            from app.odoo.utils.connection import get_odoo_connection, is_cannot_marshal_none
+            from app.odoo.utils.connection import get_odoo_connection
             self._connection = get_odoo_connection()
             if not self._connection.authenticate():
                 raise Exception("Falha na autenticação com Odoo")

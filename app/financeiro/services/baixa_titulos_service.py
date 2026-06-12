@@ -26,6 +26,7 @@ from typing import Dict, List, Optional, Tuple
 from app import db
 from app.utils.timezone import agora_utc_naive
 from app.financeiro.models import BaixaTituloLote, BaixaTituloItem
+from app.odoo.utils.connection import is_cannot_marshal_none
 
 logger = logging.getLogger(__name__)
 
@@ -122,7 +123,7 @@ class BaixaTitulosService:
     def connection(self):
         """Retorna a conexao Odoo, criando se necessario."""
         if self._connection is None:
-            from app.odoo.utils.connection import get_odoo_connection, is_cannot_marshal_none
+            from app.odoo.utils.connection import get_odoo_connection
             self._connection = get_odoo_connection()
             if not self._connection.authenticate():
                 raise Exception("Falha na autenticacao com Odoo")

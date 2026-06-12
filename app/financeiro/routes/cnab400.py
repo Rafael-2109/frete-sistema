@@ -18,6 +18,7 @@ from datetime import datetime
 from app import db
 from app.financeiro.models import CnabRetornoLote, CnabRetornoItem, ContasAReceber
 from app.financeiro.services.cnab400_processor_service import Cnab400ProcessorService
+from app.odoo.utils.connection import is_cannot_marshal_none
 
 
 cnab400_bp = Blueprint('cnab400', __name__, url_prefix='/cnab400')
@@ -901,7 +902,7 @@ def api_reconciliar_inconsistencia_cnab(conta_id):
             }), 400
 
         # Conectar ao Odoo
-        from app.odoo.utils.connection import get_odoo_connection, is_cannot_marshal_none
+        from app.odoo.utils.connection import get_odoo_connection
         conn = get_odoo_connection()
         if not conn.authenticate():
             return jsonify({

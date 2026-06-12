@@ -5,7 +5,6 @@ Funcao pura (sem Flask/DB) — testa o helper canonico do gotcha O6:
 
 Semantica: .claude/references/odoo/GOTCHAS.md (Matriz de Erros).
 """
-import pytest
 from app.odoo.utils.connection import is_cannot_marshal_none
 
 

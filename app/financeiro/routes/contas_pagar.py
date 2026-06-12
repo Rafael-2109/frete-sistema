@@ -23,6 +23,7 @@ from sqlalchemy import func, or_
 from app import db
 from app.financeiro.routes import financeiro_bp
 from app.financeiro.models import ContasAPagar
+from app.odoo.utils.connection import is_cannot_marshal_none
 
 
 # =============================================================================
@@ -568,7 +569,7 @@ def api_criar_pagamento_odoo_inconsistencia_pagar(conta_id):
             }), 400
 
         # Criar pagamento via wizard no Odoo
-        from app.odoo.utils.connection import get_odoo_connection, is_cannot_marshal_none
+        from app.odoo.utils.connection import get_odoo_connection
         conn = get_odoo_connection()
         if not conn.authenticate():
             return jsonify({

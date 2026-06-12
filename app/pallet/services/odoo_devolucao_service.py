@@ -22,6 +22,8 @@ Data: 2026-02-06
 import logging
 from typing import Dict, List, Any
 
+from app.odoo.utils.connection import is_cannot_marshal_none
+
 logger = logging.getLogger(__name__)
 
 
@@ -102,7 +104,7 @@ class OdooDevolucaoService:
     def odoo(self):
         """Lazy loading do cliente Odoo."""
         if self._odoo_client is None:
-            from app.odoo.utils.connection import get_odoo_connection, is_cannot_marshal_none
+            from app.odoo.utils.connection import get_odoo_connection
             self._odoo_client = get_odoo_connection()
         return self._odoo_client
 
