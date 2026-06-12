@@ -1407,11 +1407,21 @@ function _renderSimpleTable(tbodyId, items, rowFn, colCount) {
 
 // ── Users Tab ──
 // Linhas clicaveis: drill-down para a aba Sessoes filtrada pelo usuario.
+// Nome de usuario e texto LIVRE: nunca interpolar em string JS de onclick
+// (apostrofo quebra o literal apos o decode de entidade do parser HTML).
+// data-* + delegacao de evento mantem o nome fora do contexto JS inline.
 function _userRowAttrs(u) {
   const name = u.name || 'User #' + u.user_id;
-  return `style="cursor:pointer;" title="Ver sessoes de ${escAttr(name)}" ` +
-         `onclick="drillToUserSessions(${u.user_id}, '${escAttr(name)}')"`;
+  return `class="user-row-link" style="cursor:pointer;" title="Ver sessoes de ${escAttr(name)}" ` +
+         `data-user-id="${Number(u.user_id) || ''}" data-user-name="${escAttr(name)}"`;
 }
+
+document.addEventListener('click', function (ev) {
+  const tr = ev.target.closest('tr.user-row-link');
+  if (!tr) return;
+  const uid = tr.dataset.userId ? parseInt(tr.dataset.userId, 10) : null;
+  drillToUserSessions(uid, tr.dataset.userName || '');
+});
 
 function renderUsersTab(usersData, costsData) {
   const activeBody = document.getElementById('activeUsers');
