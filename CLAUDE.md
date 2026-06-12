@@ -12,12 +12,12 @@ atualizado: 2026-06-08
 
 ## Contexto
 
-Ponto de entrada do repositorio. Conteudo dev-only (Quick Start, CSS, migrations, CLAUDE.md de modulo) vive em `~/.claude/CLAUDE.md`. Fonte de dados por superficie: agente web = `mcp__sql__consultar_sql` + skills; Claude Code dev = MCP do Render (ver `.claude/references/INFRAESTRUTURA.md`). Campos de tabela vem dos schemas JSON; antes de qualquer skill ou operacao Odoo, ler `.claude/references/ROUTING_SKILLS.md`.
+Ponto de entrada do repositorio. Conteudo dev-only (Quick Start, CSS, migrations, CLAUDE.md de modulo) versionado em `.claude/references/REGRAS_DEV_LOCAL.md` (SOT); `~/.claude/CLAUDE.md` e ponteiro local do dev. Fonte de dados por superficie: agente web = `mcp__sql__consultar_sql` + skills; Claude Code dev = MCP do Render (ver `.claude/references/INFRAESTRUTURA.md`). Campos de tabela vem dos schemas JSON; antes de qualquer skill ou operacao Odoo, ler `.claude/references/ROUTING_SKILLS.md`.
 
 **Ultima Atualizacao**: 08/06/2026
 
 > Este CLAUDE.md e lido por AMBOS os contextos (Claude Code dev + Agent SDK web).
-> Conteudo dev-only (Quick Start, CSS, migrations) esta em `~/.claude/CLAUDE.md`.
+> Conteudo dev-only (Quick Start, CSS, migrations) versionado em `.claude/references/REGRAS_DEV_LOCAL.md`.
 
 ---
 
@@ -37,7 +37,7 @@ Ponto de entrada do repositorio. Conteudo dev-only (Quick Start, CSS, migrations
 | **Observability** | Sentry SDK 2.54 (errors + APM) · structlog · colorlog |
 | **Integracoes externas** | Odoo XML-RPC (ERP CIEL IT) · Microsoft Teams Bot Framework · WhatsApp via OpenClaw (Baileys) · Pluggy Open Finance (Bradesco) |
 
-> Linhas dev-only do stack (Frontend/Jinja2, Artifacts React, Mobile App GPS, libs Data/Files, Build/Deploy): `~/.claude/CLAUDE.md` secao TECH STACK COMPLEMENTO.
+> Linhas dev-only do stack (Frontend/Jinja2, Artifacts React, Mobile App GPS, libs Data/Files, Build/Deploy): `.claude/references/REGRAS_DEV_LOCAL.md` secao TECH STACK COMPLEMENTO.
 
 ---
 
@@ -80,7 +80,7 @@ Gotchas rapidos:
 
 > **Lista COMPLETA de references** (este indice e um subconjunto quick-reference): `.claude/references/INDEX.md`
 > Indice unico consultado por AMBOS os contextos.
-> Entradas dev-only (CSS, Best Practices, MCP Capabilities, CLAUDE.md de modulo) estao em `~/.claude/CLAUDE.md`.
+> Entradas dev-only (CSS, Best Practices, MCP Capabilities, CLAUDE.md de modulo) estao em `.claude/references/REGRAS_DEV_LOCAL.md` (versionado) — `~/.claude/CLAUDE.md` e ponteiro local.
 
 ### Modelos e Regras de Negocio
 
@@ -137,7 +137,7 @@ Gotchas rapidos:
 
 ### Design System (UI/CSS) — dev-only
 
-> Tabela completa (GUIA_COMPONENTES_UI, ui_audit, lint policy, visual regression): `~/.claude/CLAUDE.md` secao DESIGN SYSTEM.
+> Tabela completa (GUIA_COMPONENTES_UI, ui_audit, lint policy, visual regression): `.claude/references/REGRAS_DEV_LOCAL.md` secao DESIGN SYSTEM.
 
 ---
 
@@ -194,7 +194,7 @@ Gotchas rapidos:
 ### Confiabilidade de Output (OBRIGATORIO)
 
 > Ref completa: `.claude/references/SUBAGENT_RELIABILITY.md`
-> Criar/editar subagents (manual, templates, boilerplate Odoo, evals — dev-only): `~/.claude/CLAUDE.md` secao REFERENCIAS DEV-ONLY.
+> Criar/editar subagents (manual, templates, boilerplate Odoo, evals — dev-only): `~/.claude/CLAUDE.md` secao REFERENCIAS DEV-ONLY (config pessoal local).
 
 Subagentes retornam resumo compactado (10:1 a 50:1). **Nao existe validacao automatica.**
 

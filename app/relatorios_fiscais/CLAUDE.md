@@ -57,7 +57,7 @@ atualizado: 2026-06-06
 
 1. **NUNCA leia o PDF de erros nem o SPED gerado inteiros** — consultar `SPED_ECD_PLANO.md` (este diretorio) com inventario das ~30 categorias de erro.
 2. **NUNCA leia os 5 services completos de uma vez** (~4600 linhas total) — usar offsets `Read(offset=N, limit=M)`.
-3. **PROD usa fila `sped_ecd` no worker** — adicionar fila a worker_render.py + start_worker_render.sh (regra `~/.claude/CLAUDE.md`). JA REGISTRADA — bug historico SPED ECD V1.3 (commit `9d4e11d2`).
+3. **PROD usa fila `sped_ecd` no worker** — adicionar fila a worker_render.py + start_worker_render.sh (regra `.claude/references/REGRAS_DEV_LOCAL.md` secao WORKER RQ). JA REGISTRADA — bug historico SPED ECD V1.3 (commit `9d4e11d2`).
 4. **Modo dev iterativo**: usar `scripts/sped_ecd/gerar_sped.py` (standalone, sem RQ).
 5. **Manual ECD em PDF NAO precisa ser lido inteiro** — usar `manual_ecd/INDEX.md` e abrir so o bloco/registro relevante.
 
@@ -312,7 +312,7 @@ Funcao `_ind_dc(saldo, natural)` (blocks.py:908) inverte natural se saldo<0. Man
 
 ### 7. PROD vs DEV worker
 
-Fila `sped_ecd` esta em `start_worker_render.sh` (PROD) E `worker_atacadao.py` (DEV). Manter sincronia — regra global ~/.claude/CLAUDE.md.
+Fila `sped_ecd` esta em `start_worker_render.sh` (PROD) E `worker_atacadao.py` (DEV). Manter sincronia — regra global `.claude/references/REGRAS_DEV_LOCAL.md` secao WORKER RQ.
 
 ### 8. Consolidacao por code (nao por account_id)
 
@@ -408,6 +408,6 @@ python scripts/sped_ecd/gerar_sped.py
 | Manual ECD oficial (PDF online) | http://sped.rfb.gov.br/pasta/show/1569 |
 | IDs Odoo fixos | `.claude/references/odoo/IDS_FIXOS.md` |
 | Boilerplate Odoo (REGRA ZERO) | `.claude/references/odoo/AGENT_BOILERPLATE.md` |
-| Workers RQ — adicionar fila | `~/.claude/CLAUDE.md` secao "WORKER RQ — DEV vs PROD" |
+| Workers RQ — adicionar fila | `.claude/references/REGRAS_DEV_LOCAL.md` secao WORKER RQ |
 | Timezone (datas SPED) | `.claude/references/REGRAS_TIMEZONE.md` |
-| JSON sanitization | `~/.claude/CLAUDE.md` secao "JSON SANITIZATION" |
+| JSON sanitization | `.claude/references/REGRAS_DEV_LOCAL.md` secao JSON SANITIZATION |
