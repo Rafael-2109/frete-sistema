@@ -294,3 +294,104 @@ def maybe_fire_suggestion(row) -> Optional[str]:
     db.session.add(d)
     db.session.flush()
     return f"dialogue:{d.id}"
+
+
+# ---------------------------------------------------------------------------
+# Orquestracao (entry-point do job pos-sessao)
+# ---------------------------------------------------------------------------
+
+def _load_transcript_entries(sdk_session_id: str) -> List[Dict[str, Any]]:
+    """Le o transcript cru via SQL sincrono (mesma tabela do SessionStore async).
+
+    Decisao impl. 1 do plano: sem asyncio em job RQ. Filtra subpath='' (main
+    transcript; subagentes ficam fora).
+    """
+    from app import db
+    from sqlalchemy import text as _text
+    import json as _json
+    rows = db.session.execute(_text("""
+        SELECT entry FROM claude_session_store
+        WHERE session_id = :sid AND subpath = ''
+        ORDER BY seq
+    """), {"sid": sdk_session_id}).fetchall()
+    out: List[Dict[str, Any]] = []
+    for r in rows:
+        v = r[0]
+        out.append(_json.loads(v) if isinstance(v, (str, bytes)) else v)
+    return out
+
+
+def _haiku_cap_ok() -> bool:
+    from app.agente.models import AgentAdhocScript
+    from app.agente.config import feature_flags as ff
+    from app.utils.timezone import agora_utc_naive
+    from datetime import timedelta
+    desde = agora_utc_naive() - timedelta(days=1)
+    n = AgentAdhocScript.query.filter(AgentAdhocScript.criado_em >= desde).count()
+    return n < getattr(ff, "AGENT_ADHOC_MAX_HAIKU_DAY", 100)
+
+
+def capture_session(session_id: str, user_id: int, app=None) -> Dict[str, Any]:
+    """Entry-point do job: captura Bash substantivo da sessao (best-effort total)."""
+    if app is not None:
+        with app.app_context():
+            return _capture_inner(session_id, user_id)
+    return _capture_inner(session_id, user_id)
+
+
+def _capture_inner(session_id: str, user_id: int) -> Dict[str, Any]:
+    from app import db
+    from app.agente.models import AgentSession, AgentAdhocScript
+    from app.agente.config import feature_flags as ff
+    from app.agente.utils.pii_masker import mask_pii
+
+    if not getattr(ff, "AGENT_ADHOC_CAPTURE", True):
+        return {"capturados": 0, "skip": "flag_off"}
+    result: Dict[str, Any] = {"capturados": 0}
+    try:
+        sess = AgentSession.query.filter_by(session_id=session_id).first()
+        sdk_sid = sess.get_sdk_session_id() if sess else None
+        if not sdk_sid:
+            return {**result, "skip": "sem_sdk_session_id"}
+        entries = _load_transcript_entries(sdk_sid)
+        if not entries:
+            return {**result, "skip": "transcript_vazio"}
+        vistos: set = set()
+        for cand in extract_adhoc_candidates(entries):
+            cmd = cand["command"]
+            if cmd in vistos:  # dedup exato intra-sessao
+                continue
+            vistos.add(cmd)
+            problema, motivo = (None, None)
+            if _haiku_cap_ok():
+                problema, motivo = extract_problema(cmd, cand["user_msg"], cand["skill_ativa"])
+            problema = problema or (cand["user_msg"] or cmd)[:100]
+            tipo_gap = ("skill_insuficiente" if (cand["skill_ativa"] and motivo)
+                        else "desconhecido" if cand["skill_ativa"] else "sem_skill")
+            row = AgentAdhocScript(
+                session_id=session_id, user_id=user_id,
+                problema=problema,
+                command_masked=mask_pii(cmd)[:8000],
+                contexto_user_msg=mask_pii(cand["user_msg"] or "")[:1000] or None,
+                skill_relacionada=cand["skill_ativa"],
+                tipo_gap=tipo_gap, motivo_fallback=motivo,
+                retries_sessao=1 if cand["teve_erro"] else 0,
+                embedding=gerar_embedding(f"{problema}\n{cmd[:2000]}"),
+            )
+            db.session.add(row)
+            db.session.flush()
+            assign_cluster(row)
+            try:
+                maybe_fire_suggestion(row)
+            except Exception as e:
+                logger.warning(f"[ADHOC] disparo falhou (segue): {e}")
+            result["capturados"] += 1
+        db.session.commit()
+    except Exception as e:
+        logger.error(f"[ADHOC] capture_session falhou: {e}", exc_info=True)
+        try:
+            from app import db as _db
+            _db.session.rollback()
+        except Exception:
+            pass
+    return result

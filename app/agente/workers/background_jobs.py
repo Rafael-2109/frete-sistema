@@ -277,3 +277,36 @@ def try_enqueue_skill_effectiveness(session_id: str, user_id: int) -> bool:
     except Exception as e:
         logger.warning(f"[RQ] enqueue skill_eval falhou (fallback inline): {e}")
         return False
+
+
+def adhoc_capture_job(session_id: str, user_id: int) -> bool:
+    """Job RQ: captura scripts ad-hoc do transcript da sessao (Fase 2)."""
+    try:
+        from app import create_app
+        from app.agente.services.adhoc_capture_service import capture_session
+        app = create_app()
+        capture_session(session_id=session_id, user_id=user_id, app=app)
+        return True
+    except Exception as e:
+        logger.error(f"[RQ_JOB adhoc] session={session_id[:8]}... erro: {e}", exc_info=True)
+        return False
+
+
+def try_enqueue_adhoc_capture(session_id: str, user_id: int) -> bool:
+    """Enfileira captura ad-hoc. True se enfileirou; False = caller faz fallback."""
+    if not _is_rq_enabled():
+        return False
+    q = _get_queue()
+    if q is None:
+        return False
+    try:
+        q.enqueue(
+            adhoc_capture_job,
+            session_id, user_id,
+            job_timeout=180,
+            description=f"adhoc_capture {session_id[:8]}",
+        )
+        return True
+    except Exception as e:
+        logger.warning(f"[RQ] enqueue adhoc falhou (fallback inline): {e}")
+        return False

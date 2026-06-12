@@ -247,3 +247,48 @@ class TestDisparo:
         assert svc.maybe_fire_suggestion(rows[-1]) is None
         assert all(r.tipo_gap == "one_off" for r in rows)
         db.session.rollback()
+
+
+class TestCapture:
+    def test_capture_session_persiste(self, db, monkeypatch):
+        from app.agente.services import adhoc_capture_service as svc
+        from app.agente.models import AgentSession, AgentAdhocScript
+        import uuid
+        sid = f"test-adhoc-{uuid.uuid4().hex[:12]}"
+        sess = AgentSession(session_id=sid, user_id=1, data={"sdk_session_id": f"sdk-{sid}"})
+        db.session.add(sess)
+        db.session.flush()
+
+        entries = [
+            _user("exporta 3 abas"),
+            _tu("Skill", "t1", skill="exportando-arquivos"), _tr("t1"),
+            _tu("Bash", "t2", command="python -c 'pandas'" + "x" * 300),
+            _tr("t2", is_error=True),
+        ]
+        monkeypatch.setattr(svc, "_load_transcript_entries", lambda sdk_sid: entries)
+        monkeypatch.setattr(svc, "extract_problema",
+                            lambda c, u, s: ("exportar multi-aba", "so 1 aba"))
+        monkeypatch.setattr(svc, "gerar_embedding", lambda t: None)  # sem voyage no teste
+        monkeypatch.setattr(svc, "maybe_fire_suggestion", lambda r: None)
+
+        try:
+            res = svc.capture_session(session_id=sid, user_id=1)
+            assert res["capturados"] == 1
+            row = AgentAdhocScript.query.filter_by(session_id=sid).first()
+            assert row.skill_relacionada == "exportando-arquivos"
+            assert row.tipo_gap == "skill_insuficiente"
+            assert row.retries_sessao == 1
+            assert row.cluster_id == row.id  # embedding None -> cluster proprio
+        finally:
+            # capture_session COMMITA (fura o savepoint da fixture) — cleanup
+            # explicito por id unico (gotcha_commit_service_vaza_savepoint).
+            AgentAdhocScript.query.filter_by(session_id=sid).delete()
+            AgentSession.query.filter_by(session_id=sid).delete()
+            db.session.commit()
+
+    def test_flag_off_no_op(self, monkeypatch, app):
+        from app.agente.config import feature_flags as ff
+        from app.agente.services import adhoc_capture_service as svc
+        monkeypatch.setattr(ff, "AGENT_ADHOC_CAPTURE", False)
+        with app.app_context():
+            assert svc.capture_session("qualquer", 1) == {"capturados": 0, "skip": "flag_off"}
