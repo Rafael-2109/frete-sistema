@@ -14,7 +14,7 @@ atualizado: 2026-06-12
 
 | Serie | Dono / Catalogo | Descricao |
 |-------|-----------------|-----------|
-| `G0xx` | `app/odoo/estoque/` — catalogo em `CLAUDE.md §8` + arquivos detalhe em `docs/inventario-2026-05/02-gotchas/G0xx-*.md` | Serie canonica do dominio estoque Odoo. Proximo ID livre: proximo apos G041 (verificar `02-gotchas/INDEX.md`). |
+| `G0xx` | `app/odoo/estoque/` — classes de gotcha em `CLAUDE.md §8`; enumeracao por ID em `ROADMAP_SKILLS.md` + arquivos detalhe em `docs/inventario-2026-05/02-gotchas/G0xx-*.md` | Serie canonica do dominio estoque Odoo. Proximo ID livre: proximo apos G041 (verificar `02-gotchas/INDEX.md`). |
 | `INV-xxx` | `docs/inventario-2026-05/` — arquivos detalhe em `docs/inventario-2026-05/02-gotchas/INV-xxx-*.md` | Gotchas do PIPELINE de inventario 2026-05 (nao do dominio estoque). Renomeados de G002/G021/G030 em 2026-06-12 (T1.3) para eliminar colisao. |
 | `G-MO-xx` | `docs/inventario-2026-05/02-gotchas/G-MO-xx-*.md` | Gotchas especificos de Manufacturing Orders (MO). |
 
