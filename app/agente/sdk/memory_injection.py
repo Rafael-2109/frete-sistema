@@ -676,7 +676,9 @@ _DOMAIN_SKILLS = {
     'odoo_compras': ['validacao-nf-po', 'conciliando-odoo-po', 'recebimento-fisico-odoo', 'especialista-odoo'],
     'odoo_financeiro': ['executando-odoo-financeiro', 'rastreando-odoo', 'razao-geral-odoo'],
     'frete': ['cotando-frete', 'gerindo-carvia'],
-    'ssw': ['acessando-ssw', 'operando-ssw', 'gestor-ssw'],
+    # T2.1 (2026-06-12): 'gestor-ssw' removido — fora do loader web (surface: dev);
+    # recomenda-lo como preferred_skill induziria Task(subagent_type) inexistente.
+    'ssw': ['acessando-ssw', 'operando-ssw'],
     # F0.3 PAD-CTX (2026-06-09): entry 'admin' REMOVIDA — mapeava 3 skills dev-only
     # (gerindo-agente, diagnosticando-banco, consultando-sentry) com 0-2 usos em 90d
     # (finding A5), todas fora do listing do principal a partir da F2. Dominio 'admin'

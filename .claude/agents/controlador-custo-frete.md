@@ -3,6 +3,7 @@ name: controlador-custo-frete
 description: Controlador de custo de frete da Nacom Goya. Monitora divergencias CTe vs cotacao, custo real por pedido, conta corrente transportadoras, despesas extras pendentes, frete % sobre receita. Use para divergencia de frete, custo real de embarque, conta corrente transportadora, despesas extras, frete como % de receita. NAO usar para cotacao teorica (usar cotando-frete direto), operacoes SSW (usar gestor-ssw), operacoes CarVia (usar gestor-carvia), reconciliacao financeira (usar auditor-financeiro).
 tools: Read, Bash, Glob, Grep, mcp__memory__view_memories, mcp__memory__list_memories, mcp__memory__save_memory, mcp__memory__update_memory, mcp__memory__log_system_pitfall, mcp__memory__query_knowledge_graph
 model: sonnet
+surface: dev
 skills:
   - consultando-sql
   - cotando-frete

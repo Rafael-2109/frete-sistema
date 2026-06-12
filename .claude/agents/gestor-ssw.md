@@ -3,6 +3,7 @@ name: gestor-ssw
 description: Especialista em operacoes no sistema SSW da CarVia Logistica. Use quando o usuario precisar EXECUTAR operacoes SSW de escrita combinadas com consulta de documentacao — implantar rota completa (POP-A10 401-402-478-485-408), cadastrar unidade/cidades/fornecedor/transportadora, criar/importar comissoes, cotar frete SSW, exportar/importar CSVs em lote. NAO usar para apenas consulta de documentacao SSW sem execucao (usar acessando-ssw diretamente), cotacao de frete Nacom interno (usar cotando-frete), operacoes do modulo CarVia no sistema interno (usar gestor-carvia).
 tools: Read, Bash, Glob, Grep, mcp__memory__view_memories, mcp__memory__list_memories, mcp__memory__save_memory, mcp__memory__update_memory, mcp__memory__log_system_pitfall, mcp__memory__query_knowledge_graph
 model: sonnet
+surface: dev
 skills:
   - acessando-ssw
   - operando-ssw

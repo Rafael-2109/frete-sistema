@@ -141,6 +141,9 @@ EXCECOES_SYSTEM_PROMPT = {
     "desenvolvedor-integracao-odoo": "dev-only (Claude Code; CLAUDE.md o lista marcado dev-only)",
     "orientador-loja": "superficie isolada agente_lojas (/agente-lojas)",
     "auditor-sped-ecd": "fluxo dev SPED ECD (nao operacional do agente web)",
+    "controlador-custo-frete": "fora do loader web por medicao T2.1 (0 invocacoes web/90d + dev/30d); disponivel via Task no CC dev",
+    "gestor-devolucoes": "fora do loader web por medicao T2.1 (0 invocacoes web/90d + dev/30d); disponivel via Task no CC dev",
+    "gestor-ssw": "fora do loader web por medicao T2.1 (0 invocacoes web/90d + dev/30d); disponivel via Task no CC dev",
 }
 # Agentes intencionalmente FORA da tabela SUBAGENTES do CLAUDE.md raiz.
 EXCECOES_CLAUDE_MD = {

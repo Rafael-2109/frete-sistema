@@ -179,12 +179,12 @@ Gotchas rapidos:
 | `raio-x-pedido` | Visao 360 do pedido |
 | `desenvolvedor-integracao-odoo` | Criar/modificar integracoes Odoo (dev-only, nao exposto ao agente web) |
 | `gestor-carvia` | Operacoes CarVia cross-dimensional (ops + entregas + frete) |
-| `gestor-ssw` | Operacoes SSW multi-step (POP-A10, cadastros) |
+| `gestor-ssw` | Operacoes SSW multi-step (POP-A10, cadastros) (dev-only via Task — fora do loader web desde T2.1 2026-06-12, 0 invocacoes web/90d) |
 | `auditor-financeiro` | Reconciliacao financeira, auditoria Local vs Odoo, SEM_MATCH |
 | `auditor-sped-ecd` | Auditar SPED ECD gerado vs Manual Leiaute 9 + ground truth contadora (4 skills exclusivas parseando/auditando/comparando-sped) |
-| `controlador-custo-frete` | Custo real frete, divergencia CTe, conta corrente transportadoras |
+| `controlador-custo-frete` | Custo real frete, divergencia CTe, conta corrente transportadoras (dev-only via Task — fora do loader web desde T2.1 2026-06-12, 0 invocacoes web/90d) |
 | `gestor-recebimento` | Pipeline recebimento 4 fases, DFEs bloqueados, troubleshooting |
-| `gestor-devolucoes` | Devolucoes NFD, De-Para AI, descarte vs retorno |
+| `gestor-devolucoes` | Devolucoes NFD, De-Para AI, descarte vs retorno (dev-only via Task — fora do loader web desde T2.1 2026-06-12, 0 invocacoes web/90d) |
 | `gestor-estoque-producao` | Ruptura, estoque comprometido, producao vs programada (READ-ONLY) |
 | `gestor-estoque-odoo` | Operacoes de **escrita** de estoque no Odoo + consulta AO VIVO (quants, transferencias, reservas, pickings, MOs, escrituracao entrada, faturamento saida) — SEMPRE dry-run + confirmacao. Status/versao das skills atomicas: `app/odoo/estoque/CLAUDE.md` + `ROADMAP_SKILLS.md` |
 | `analista-performance-logistica` | KPIs entrega, ranking transportadoras, atrasos (read-only) |

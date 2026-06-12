@@ -5,6 +5,7 @@ tools: Read, Bash, Write, Edit, Glob, Grep, mcp__memory__view_memories, mcp__mem
 model: opus
 effort: xhigh
 max_turns: 50
+surface: dev
 skills:
   - rastreando-odoo
   - executando-odoo-financeiro

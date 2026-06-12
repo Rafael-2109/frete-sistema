@@ -13,6 +13,10 @@ Mapeamento frontmatter -> AgentDefinition:
 - model -> AgentDefinition.model (mapeado para "opus"|"sonnet"|"haiku"|None)
 - skills (csv) -> AgentDefinition.skills (list, nativo SDK >= 0.1.49)
                    Fallback: injetado como texto no prompt (SDK < 0.1.49)
+- surface -> filtro de superficie (T2.1): "dev" = agent disponivel SO no
+             Claude Code dev (Task tool le o .md direto; o CLI ignora campos
+             de frontmatter desconhecidos). Ausente ou qualquer outro valor =
+             carregado no loader web (default retrocompativel).
 """
 
 import logging
@@ -356,6 +360,15 @@ def load_agent_definitions(agents_dir: str) -> dict:
             content = agent_file.read_text(encoding="utf-8")
 
             frontmatter, body = _parse_frontmatter(content)
+
+            # Filtro de superficie (T2.1): surface=dev fica FORA do loader web.
+            # O agent continua disponivel no Claude Code dev (Task tool le o .md).
+            surface = str(frontmatter.get("surface") or "").strip().lower()
+            if surface == "dev":
+                logger.info(
+                    f"[AGENT_LOADER] {agent_file.name}: surface=dev — fora do loader web (T2.1)"
+                )
+                continue
 
             # Campo obrigatorio: name
             name = frontmatter.get("name")
