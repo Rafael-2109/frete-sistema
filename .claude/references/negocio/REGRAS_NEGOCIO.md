@@ -4,7 +4,7 @@ camada: L2
 sot_de: —
 hub: .claude/references/INDEX.md
 superseded_by: —
-atualizado: 2026-06-02
+atualizado: 2026-06-12
 -->
 # Regras de Negocio - Sistema de Fretes
 
@@ -40,6 +40,7 @@ Este documento descreve as regras de negocio especificas do sistema logistico.
 12. [Termos Comuns (Glossario)](#12-termos-comuns-glossario)
 13. [Criacao de Separacao](#13-criacao-de-separacao)
 14. [Agendamento para Criacao de Separacao](#14-agendamento-para-criacao-de-separacao)
+15. [Duplicacao de Pedidos e Pagamentos em Lote](#15-duplicacao-de-pedidos-e-pagamentos-em-lote)
 
 ---
 
@@ -505,3 +506,34 @@ Se usuario NAO informar agendamento/protocolo quando exigido:
 
 Se usuario INFORMAR mesmo quando nao exigido:
 - REGISTRAR normalmente (campos serao preenchidos)
+
+---
+
+## 15. Duplicacao de Pedidos e Pagamentos em Lote
+
+> Promovida da memoria web empresa id=311 (heuristicas/comercial/duplicacao-de-pedido-atacadao-por-reinsercao) em 2026-06-12 — T1.4.
+
+### 15.1 Deteccao
+
+**Pedidos atacarejo (Atacadao, Assai)** — duas fontes de duplicata:
+
+1. **Reimportacao do mesmo `pedido_cliente` em dias consecutivos** — dois `num_pedido` internos com valor, itens e CNPJ identicos (38 casos historicos).
+2. **Upload duplo de PDF por retry** — o sistema lanca AMBAS as importacoes como `LANCADO` em `pedido_importacao_temp` com o mesmo `numero_documento`. PDF Assai com 117 filiais gera ~117 SOs duplicados.
+
+Sinais auxiliares:
+- `COUNT > 3` do mesmo grupo indica insercao parcial;
+- `odoo_order_name NULL` indica insercao parcialmente falha SEM impacto operacional;
+- Pedidos ativos duplicados podem gerar **NF duplicada**.
+
+**Pagamentos em lote** — o Odoo aceita SILENCIOSAMENTE pagamentos duplicados com mesmo parceiro/data/valor: sem erro visivel, sem constraint de unicidade. Scripts sem idempotencia executados mais de uma vez criam excedentes postados sem vinculo ao titulo. Caso ALIANCA NAVEGACAO: 9 pagamentos excedentes alem dos 10 corretos reconciliados (19 total onde deveriam existir 10).
+
+**FITID/Extrato** — mesmo valor e data NAO implica duplicata: multiplas guias SISCOMEX, matriculas SABESP ou transferencias para beneficiarios distintos podem ter valor e data identicos legitimamente. FITIDs distintos SEM sufixo = transacoes legitimas; FITIDs com sufixo adicionado pelo Odoo (apostrofo, traco) = reimportacao do mesmo registro.
+
+### 15.2 Correcao
+
+| Suspeita | Passos |
+|----------|--------|
+| Duplicacao por reinsercao | Verificar dois `num_pedido` com mesmo `pedido_cliente`, CNPJ, valor e quantidade em datas consecutivas — **cancelar o mais recente ANTES de faturar** |
+| Upload duplo de PDF | (1) buscar em `pedido_importacao_temp` mesmo `numero_documento` com dois IDs distintos `LANCADO`; (2) delta de timestamp < 30 min confirma upload duplo; (3) agrupar `registro_pedido_odoo` por filial/CNPJ — `COUNT > 1` indica duplicata; (4) verificar a **fila de impostos** pelos IDs Odoo da segunda leva ANTES de cancelar/excluir — jobs de impostos enfileirados precisam ser cancelados separadamente para evitar execucao pos-exclusao; (5) manter SO da PRIMEIRA importacao e cancelar os da segunda; (6) ignorar registros com `odoo_order_name NULL` |
+| Lancamentos com mesmo valor/data/descricao | Verificar se os FITIDs diferem apenas por sufixo adicionado pelo Odoo ou sao genuinamente distintos do banco — FITIDs originalmente distintos sao transacoes legitimas; excluir um causa perda de dado real |
+| Criar/reprocessar pagamentos em lote | Verificar PREVIAMENTE a existencia de pagamentos ja criados para mesmo parceiro/data/valor ANTES de executar o script |

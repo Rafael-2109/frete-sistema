@@ -4,7 +4,7 @@ camada: L1
 sot_de: —
 hub: CLAUDE.md
 superseded_by: —
-atualizado: 2026-06-08
+atualizado: 2026-06-12
 -->
 # CarVia — Guia de Desenvolvimento
 
@@ -32,6 +32,7 @@ atualizado: 2026-06-08
   - [R16 + R17: Pre-vinculo e historico de match](#r16-r17-pre-vinculo-e-historico-de-match)
   - [R18: NF Triangular (2026-04-20) — vinculo NF Transferencia -> NF Venda](#r18-nf-triangular-2026-04-20-vinculo-nf-transferencia---nf-venda)
   - [R19: SOT Tomador/Incoterm = XML do CTe (2026-04-20)](#r19-sot-tomadorincoterm-xml-do-cte-2026-04-20)
+  - [R20: "Anexar" tem 2 semanticas — desambiguar ANTES de implementar](#r20-anexar-tem-2-semanticas-desambiguar-antes-de-implementar)
 - [Modelos](#modelos)
 - [Interdependencias](#interdependencias)
 - [Permissao](#permissao)
@@ -213,6 +214,19 @@ Tomador do frete tem fonte unica: `CarviaOperacao.cte_tomador` (extraido de `<id
 **Exports Excel com DUPLO CABECALHO hierarquico** (linha 1 = grupo mesclado, linha 2 = campos). Helper: `app/carvia/utils/excel_export_helper.py` (`ColunaGrupo`, `Campo`, `grupo_dinamico`).
   - Granularidade: NF=1 linha/item, CTe=1 linha/NF vinculada, CTe Comp=1 linha/comp, Faturas=1 linha/fatura.
   - Agrupamentos: cada export mostra campos da PROPRIA entidade + agrupamentos SUPERIORES (ex.: Fatura aparece no export CTe). NUNCA agrupamento inferior.
+
+### R20: "Anexar" tem 2 semanticas — desambiguar ANTES de implementar
+
+No CarVia, "anexar" significa DUAS coisas distintas:
+
+1. **Upload de ARQUIVO** — anexo fisico (`CarviaCustoEntregaAnexo`, `CarviaAnexo`; rotas `/carvia/api/anexo/.../upload`).
+2. **VINCULAR entidade a um container** — ex.: "Anexar Subcontratos" = vincular `CarviaSubcontrato` a `CarviaFaturaTransportadora` (rota `anexar_subcontratos_fatura_transportadora`); nenhum arquivo envolvido.
+
+Desambiguar ANTES de implementar qualquer pedido com "anexar"; se ambiguo, perguntar com opcoes concretas ("upload de arquivo OU vincular X a Y?").
+
+**Regra de negocio associada (2026-05-20)**: `pode_anexar_item()` permite VINCULAR mesmo com fatura `CONFERIDA`/`PAGA`/conciliada; `pode_editar()`/`pode_desanexar_subcontrato()` continuam travando nesses status. Vincular NAO recalcula `valor_total` nem re-concilia.
+
+> Promovida da memoria empresa "CarVia anexar = 2 semanticas" (T1.4, 2026-06-12).
 
 ---
 

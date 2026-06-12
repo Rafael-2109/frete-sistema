@@ -4,7 +4,7 @@ camada: L2
 sot_de: —
 hub: .claude/references/INDEX.md
 superseded_by: —
-atualizado: 2026-06-10
+atualizado: 2026-06-12
 -->
 # Protocolo de Memoria do Agente
 
@@ -20,6 +20,7 @@ atualizado: 2026-06-10
 - [Criterios de Qualidade](#criterios-de-qualidade)
 - [Protecoes](#protecoes)
 - [Promocao Memoria -> Codigo](#promocao-memoria---codigo)
+- [Promocao Memoria -> Reference](#promocao-memoria---reference)
 - [Triggers de Salvamento](#triggers-de-salvamento)
   - [Automatico (silencioso)](#automatico-silencioso)
   - [Explicito (com confirmacao)](#explicito-com-confirmacao)
@@ -185,6 +186,35 @@ buscavel via `search_cold_memories` sem gastar contexto).
 Ja promovidas (2026-06-09): TMPDIR divergente (`routes/_constants.py`
 AGENTE_FILES_ROOT) · verificacao de arquivo existente (`routes/files.py`; check
 de tamanho>0 na skill `exportando-arquivos`).
+
+---
+
+## Promocao Memoria -> Reference
+
+> Criterios canonicos no PAD-CTX (`ARQUITETURA_CONTEXTO_AGENTE.md` §Memorias,
+> bloco "Promocao memoria→reference"). Esta secao e o espelho operacional.
+
+Conhecimento NAO-deterministico (se fosse deterministico, iria para codigo —
+secao acima) que se provou ESTAVEL e relevante a 2+ superficies nao deve ficar
+preso em memoria: promove-se para a **reference dona do assunto** (1 dono por
+assunto). Promover quando atender **TODOS os 3 criterios**:
+
+1. ESTAVEL: idade 30+ dias, contadores (effective/correction) comprovam uso;
+2. NAO-deterministico: exige julgamento (heuristica, protocolo, regra de negocio);
+3. Relevante a 2+ superficies (web + dev) ou multiplos usuarios.
+
+**Fluxo** (cadencia QUINZENAL, ~30min; degradar para trimestral se 2 ciclos
+seguidos vierem vazios — decisao Rafael 2026-06-11):
+
+1. Fila por query: `gerindo-agente` → `diagnostico.py promotion-candidates`
+   (empresa `user_id=0`, `correction_count>=2 OU effective_count>=2`,
+   idade>=30d, nao-cold, sem `meta.promovida_para`);
+2. Revisao HUMANA (a query sugere; quem promove e gente);
+3. Escrever o conteudo na reference dona (respeitar doc:meta + indices);
+4. Aposentar a origem: `memoria.py aposentar --path ... --promovida-para
+   <artefato>` — seta `is_cold=true` + `meta.promovida_para` (mesma mecanica
+   F5.6 da promocao a codigo: sai da injecao/busca semantica, historico segue
+   via `search_cold_memories`; versiona o conteudo antes de mutar).
 
 ---
 

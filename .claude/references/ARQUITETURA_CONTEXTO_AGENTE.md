@@ -4,7 +4,7 @@ camada: L2
 sot_de: arquitetura de contexto do Agente Web (PAD-CTX)
 hub: .claude/references/INDEX.md
 superseded_by: —
-atualizado: 2026-06-10
+atualizado: 2026-06-12
 -->
 # Arquitetura de Contexto do Agente Web (PAD-CTX)
 
@@ -288,6 +288,26 @@ apontando o artefato — sai da injecao e da busca semantica, historico segue vi
 promovidos: TMPDIR divergente (`_constants.py` AGENTE_FILES_ROOT), verificacao de
 arquivo existente (`files.py`; check de tamanho>0 JA implementado na skill
 `exportando-arquivos` — `_verificar_entrega`, guard P7 #787).
+
+**Promocao memoria→reference** (simetrica a memoria→codigo; criterios — todos os 3):
+(1) conhecimento ESTAVEL (idade 30+ dias e contadores de uso/correcao comprovam que
+continua valido e usado), (2) NAO-deterministico — se fosse deterministico iria para
+codigo (bloco acima); aqui e conhecimento que exige julgamento (heuristica, protocolo,
+regra de negocio), (3) relevante a 2+ superficies (agente web + Claude Code dev, ou
+multiplos usuarios) — conhecimento de 1 usuario so fica como memoria pessoal.
+Fluxo: fila GERADA POR QUERY (`gerindo-agente` → `diagnostico.py promotion-candidates`:
+memorias empresa user_id=0, correction_count>=2 OU effective_count>=2, idade>=30d,
+nao-cold, sem `meta.promovida_para`) → revisao HUMANA (a query sugere, nao promove) →
+escrever na reference DONA do assunto (1 dono por assunto — ver §Regra de redundancia)
+→ aposentar a origem (`memoria.py aposentar`: `is_cold=true` + `meta.promovida_para`
+apontando a reference; mesma mecanica F5.6 — sai da injecao, historico via
+`search_cold_memories`). **Cadencia QUINZENAL** (checklist ~30min: rodar a fila,
+revisar, promover, aposentar); degradar para trimestral se 2 ciclos seguidos vierem
+vazios (decisao Rafael 2026-06-11). Primeira leva (T1.4 2026-06-12): regra MIGRACAO
+diff_qtd → `app/odoo/estoque/CLAUDE.md §8.1` · "anexar" 2 semanticas → `app/carvia/CLAUDE.md`
+R20 · CD=34 ≠ company_id → `odoo/IDS_FIXOS.md` · duplicacao pedidos/pagamentos →
+`negocio/REGRAS_NEGOCIO.md §15`. Espelho operacional: `MEMORY_PROTOCOL.md`
+§Promocao Memoria -> Reference.
 
 ## Caminhos de descoberta
 
