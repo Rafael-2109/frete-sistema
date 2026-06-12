@@ -131,11 +131,19 @@ padrão.
 PONTEIRO: `app/agente/tools/schema_mcp_tool.py` · `app/agente/tools/routes_search_tool.py` · `app/agente/prompts/system_prompt.md` (regra de grounding) · hook PostToolUse em `app/agente/sdk/hooks.py`.
 DoD: em sessão de teste, afirmação sobre campo/tela inexistente é detectada/bloqueada antes de chegar ao usuário.
 
-**I3 — [Categoria C] Gatilho DETERMINÍSTICO por tarefa/entidade.** Substituir/complementar a recuperação por
-vector sobre o prompt (falha em prompt curto: "atualizar baseline" → semantic=0) por gatilho determinístico:
-tipo-de-tarefa + entidades da ação. A regex layer-1 do KG já extrai entidade.
+**I3 — [Categoria C] Gatilho DETERMINÍSTICO por tarefa/entidade. ⚠ MAJORITARIAMENTE COBERTO por planos
+POSTERIORES (reconciliado 2026-06-12)** — este item NÃO é mais uma frente; resta só validar o DoD residual:
+- rerank no read path LIGADO **por medida** (0.463>0.388, ~320ms PROD) + backfill `meta.do` (94,9% das
+  operativas) — plano engenharia de memória D3/D4 (pós-06/06);
+- diretrizes por INTENT do turno (F6 intent-only PAD-CTX, 2026-06-10 — ver I6);
+- correção PESSOAL reincidente promove a `priority='mandatory'` no canal duro `<user_rules>` (fonte 3 da A4,
+  preservada na limpeza R3) — o "gatilho determinístico" da Categoria C para o caso recorrente;
+- NOTA: a regex layer-1 do KG citada abaixo segue disponível como função pura, mas o pipeline KG foi
+  DESLIGADO 2026-06-12 (`MEMORY_KNOWLEDGE_GRAPH=false`, replay-gate T2.2 — retorno de leitura zero);
+  um futuro gatilho por entidade NÃO deve assumir o KG ativo.
 PONTEIRO: `app/agente/sdk/memory_injection.py` (pipeline de retrieval) · `app/agente/services/knowledge_graph_service.py` (layer 1 regex) · `app/agente/services/tool_skill_mapper.py`.
-DoD: tarefa "baseline" recupera as regras do baseline 100% das vezes (não depende de similaridade).
+DoD RESIDUAL (validação de 1 caso, não frente): tarefa "baseline" recupera as regras do baseline 100% das
+vezes com o retrieval ATUAL (rerank+meta). Se falhar, reabrir o item com o caso medido.
 
 **I4 — [Categoria D] ENFORCEMENT hard para WRITE Odoo, ancorado em R9. ✅ GUARD LIGADO (2026-06-12, `aeed5212d`).**
 `USE_MANDATORY_HARD_ENFORCE` agora é default **true** (canal fail-open, custo ~zero; 0 regras com
@@ -146,16 +154,25 @@ outcome segue como evolução futura.
 PONTEIRO: `app/agente/sdk/hooks.py:345` (_enforce_mandatory_invariants, PreToolUse) · `app/agente/config/feature_flags.py` (`USE_MANDATORY_HARD_ENFORCE`) · `app/utils/odoo_audit_helpers.py` + tabela `operacao_odoo_auditoria` (R9, CLAUDE.md).
 DoD: WRITE Odoo de risco sem dry-run/contra guard é bloqueado no hook (teste).
 
-**I5 — Ciclo de vida: reconciliação no write + invalidação por OUTCOME.** Mata o inchaço ("memórias gigantes").
-Write-path decide ADD/UPDATE/DELETE/NOOP (estilo Mem0); re-peso/invalidação por outcome real (R9 / reincidência),
-não por eco textual. `effective_count` hoje é desacoplado do outcome.
-PONTEIRO: `app/agente/services/pattern_analyzer.py` (_save_personal_insight ~:2045, _track_signature_recurrence ~:1998) · `app/agente/services/memory_consolidator.py` · `app/agente/models.py` (colunas outcome).
-DoD: memória redundante funde; memória que levou a outcome ruim cai/invalida.
+**I5 — Ciclo de vida: reconciliação no write + invalidação por OUTCOME. ⚠ PARCIALMENTE COBERTO; o restante
+TEM DONO E GATE (reconciliado 2026-06-12)**:
+- reconciliação no WRITE: FEITA pela F0 do plano arquitetura-conhecimento (T0.1 merge versionado com
+  verificação TODOS_PRESERVADOS; T0.4 dedup de slug por título → match vira ENRIQUECIMENTO versionado,
+  path determinístico kind/dominio/slug aplicado em PROD 2026-06-11);
+- invalidação por OUTCOME real: é exatamente o **T2.3 do plano arquitetura-conhecimento** (consolidar os
+  4 contadores com `helpful/harmful` como sinal canônico + período de sombra) — ATRÁS DE GATE de volume
+  mínimo por decisão consciente (não esquecido). NÃO duplicar a frente aqui.
+PONTEIRO: `docs/superpowers/plans/2026-06-11-arquitetura-conhecimento.md` (T0.1/T0.4/T2.3) · `app/agente/services/pattern_analyzer.py` · `app/agente/services/memory_consolidator.py`.
+DoD (do T2.3, quando o gate abrir): memória que levou a outcome ruim cai/invalida por helpful/harmful.
 
-**I6 — Progressive disclosure (substitui R4).** Parar de injetar 66; injetar um ÍNDICE + o agente recupera sob
-demanda (estilo Claude Code: CLAUDE.md aponta, abre o que precisa via view_memories). Reduz diluição e custo.
-PONTEIRO: `app/agente/sdk/memory_injection.py:420` · `app/agente/tools/memory_mcp_tool.py` (view_memories).
-DoD: prompt injeta índice + ≤N itens recuperados por gatilho (I3), não 66 por recência.
+**I6 — Progressive disclosure (substitui R4). ✅ SUPERSEDED — EXECUTADO por plano POSTERIOR (reconciliado
+2026-06-12).** Implementado como **F6 intent-only do PAD-CTX (deployado 2026-06-10**, flag
+`AGENT_DIRECTIVES_INTENT_ONLY` default-ON): as diretrizes ORGÂNICAS saíram do bloco fixo
+`<operational_directives>` e chegam por INTENT do turno via Tier 2 RAG (constitucionais ficam fixas).
+Ablação que decidiu: bloco fixo = 0/20 de utilidade turn-level vs Tier 2 = 72%. Decisão Rafael:
+"granularidade por necessidade". Também elimina a dupla injeção directive×tier2. R4 resolvido por esta via.
+PONTEIRO: `app/agente/config/feature_flags.py:225-232` (`AGENT_DIRECTIVES_INTENT_ONLY`) · `app/agente/sdk/memory_injection.py:828` (F6) · `.claude/references/ARQUITETURA_CONTEXTO_AGENTE.md` (PAD-CTX).
+DoD: CUMPRIDO (medido por ablação; kill-switch documentado).
 
 ---
 
@@ -174,7 +191,12 @@ DoD: prompt injeta índice + ≤N itens recuperados por gatilho (I3), não 66 po
 4. **Limpeza R2/R3/R1/R6:** ✅ EXECUTADA 2026-06-12 (`aeed5212d`) — eval_runner/eval_gate removidos,
    fonte judge-driven A4 desligada (flag), injeção de pressão cortada, R6 verificado (zero atuação
    automática por nota cega restante).
-5. **I3 gatilho determinístico + I6 progressive disclosure + I5 ciclo de vida:** refundação do retrieval/memória (maior, estrutural).
+5. **I3 gatilho determinístico + I6 progressive disclosure + I5 ciclo de vida:** ⚠ RECONCILIADO 2026-06-12 —
+   a "refundação do retrieval" prevista aqui foi MAJORITARIAMENTE entregue por planos posteriores a este doc
+   (rerank D3/D4 por medida; F6 intent-only PAD-CTX; T0.1/T0.4 da F0 arquitetura-conhecimento). NÃO é mais
+   uma frente deste doc. Restos com dono: DoD residual do I3 (validar 1 caso "baseline") e invalidação por
+   outcome = T2.3 do plano arquitetura-conhecimento (gated). Lição registrada: plano novo que cobre item de
+   estratégia anterior DEVE reconciliar o doc antigo no mesmo merge (esta linha existe porque não reconciliaram).
 
 ## Backlog — condicionado a caso-prova (NÃO é alvo até existir erro real em PROD)
 
