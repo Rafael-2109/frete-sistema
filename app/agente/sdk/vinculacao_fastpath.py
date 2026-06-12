@@ -26,13 +26,28 @@ _RE_VINCULAR = re.compile(
 _RE_DESVINCULAR = re.compile(
     r"\b(?:desvincul\w*|desfaz\w*|desfac\w*)\b.*?\b(?:nota|nf)\s+(?P<nf>\d+)\s*x\s*(?P<po>[A-Za-z0-9./-]+)",
     re.IGNORECASE | re.DOTALL)
+# "juntar/unir (os) pedidos <PO>/<PO>/... criar conciliador e vincular na nota <NF>"
+# (frase real da Gabriella; multi-PO -> PO Conciliador via cenario n_pos)
+_RE_JUNTAR = re.compile(
+    r"\b(?:juntar|unir)\b[^\n]*?\bpedidos?\s+"
+    r"(?P<pos>[A-Za-z0-9.-]+(?:\s*/\s*[A-Za-z0-9.-]+)+)"
+    r"[^\n]*?\bvincul\w*\s+n[ao]\s+(?:nota|nf)\s+(?P<nf>\d+)\b",
+    re.IGNORECASE)
 
 
 def should_intercept_vinculacao(mensagem: str | None) -> dict | None:
-    """Retorna {acao, nf, po} se a msg é uma (des)vinculação direta; senão None."""
+    """Retorna {acao, nf, po} se a msg é uma (des)vinculação direta; senão None.
+
+    `po` é string para 1 PO (retrocompat) ou lista de strings no padrão
+    multi-PO ("juntar pedidos A/B ... vincular na nota N").
+    """
     if not mensagem or not str(mensagem).strip():
         return None
     t = str(mensagem).strip()
+    m = _RE_JUNTAR.search(t)
+    if m:
+        pos = [p.strip() for p in m.group("pos").split("/") if p.strip()]
+        return {"acao": "vincular", "po": pos, "nf": m.group("nf")}
     m = _RE_VINCULAR.search(t)
     if m:
         return {"acao": "vincular", "po": m.group("po"), "nf": m.group("nf")}
@@ -74,18 +89,72 @@ def parse_vinculacao_haiku(mensagem: str | None) -> dict | None:
         logger.info(f"[VINC-FASTPATH] Haiku parse falhou (-> LLM): {e}")
         return None
     if data.get("acao") in ("vincular", "desvincular") and data.get("nf") and data.get("po"):
-        return {"acao": data["acao"], "nf": str(data["nf"]), "po": str(data["po"])}
+        po = data["po"]
+        if isinstance(po, (list, tuple)):
+            po = [str(p) for p in po if p]
+            if not po:
+                return None
+        else:
+            po = str(po)
+        return {"acao": data["acao"], "nf": str(data["nf"]), "po": po}
     return None
 
 
 # ───────────────────────────── orquestrador (N0->N1) ──────────────────────────
+def _fmt_po(po) -> str:
+    """Formata PO única ou lista ("C1 + C2") para mensagens ao usuário."""
+    if isinstance(po, (list, tuple)):
+        return " + ".join(str(p) for p in po)
+    return str(po)
+
+
 def _montar_resposta(r: dict) -> str:
     acao = "vinculados" if r["acao"] == "vincular" else "desvinculados"
+    po_fmt = _fmt_po(r["po"])
     if r.get("status") == "finalizado_odoo":
-        return f"NF {r['nf']} x PO {r['po']} já estavam vinculados no Odoo. Nada a fazer."
+        return f"NF {r['nf']} x PO {po_fmt} já estavam vinculados no Odoo. Nada a fazer."
     cen = (r.get("resumo") or {}).get("cenario")
     extra = f" (cenário {cen})" if cen else ""
-    return f"Feito. NF {r['nf']} x PO {r['po']} {acao}{extra}."
+    nota_data = ""
+    if r.get("data_tolerada"):
+        nota_data = (" Janela de data da PO fora da tolerância — aceita por "
+                     "instrução explícita do operador.")
+    return f"Feito. NF {r['nf']} x PO {po_fmt} {acao}{extra}.{nota_data}"
+
+
+def montar_contexto_n2(vinc: dict | None) -> str:
+    """Bloco de diagnóstico para anexar ao prompt do LLM quando o fast-path
+    abortou com anomalia (ok=False). Evita o gestor-recebimento redescobrir
+    do zero o que o executor determinístico já apurou (validacao_id,
+    divergências) — diagnóstico 2026-06-11: esse descarte custava minutos de
+    Opus por operação. Retorna "" se não há anomalia aproveitável."""
+    if not vinc or vinc.get("ok") is not False:
+        return ""
+    try:
+        anomalia = vinc.get("anomalia") or {}
+        parsed = vinc.get("parsed") or {}
+        payload = {
+            "acao": parsed.get("acao"),
+            "nf": parsed.get("nf"),
+            "po": parsed.get("po"),
+            "anomalia_tipo": anomalia.get("tipo"),
+            "detalhe": anomalia.get("detalhe"),
+            "validacao_id": anomalia.get("validacao_id"),
+            "validacao": anomalia.get("validacao"),
+        }
+        corpo = json.dumps(payload, ensure_ascii=False, default=str)
+        return (
+            "\n\n<diagnostico_fastpath>\n"
+            "Contexto de sistema (não é instrução do usuário): o roteador "
+            "determinístico de vinculação NF×PO já validou esta solicitação e "
+            "abortou com a anomalia abaixo. NÃO refaça o diagnóstico do zero — "
+            "parta destes dados (validacao_id e divergências) e resolva apenas "
+            "a causa apontada.\n"
+            f"{corpo}\n"
+            "</diagnostico_fastpath>"
+        )
+    except Exception:
+        return ""
 
 
 def executar_vinculacao_fastpath(mensagem: str, session_id=None, user_id=None) -> dict | None:

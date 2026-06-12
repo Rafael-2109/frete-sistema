@@ -51,14 +51,28 @@ def montar_pos_para_consolidar(validacao_id: int) -> list[dict]:
     return sorted(pos_dict.values(), key=lambda x: x["valor_total"], reverse=True)
 
 
-def executar_vinculacao_por_nf(nf: str, po_esperado: str | None,
-                               acao: str, usuario: str | None) -> dict:
+def executar_vinculacao_por_nf(nf: str, po_esperado, acao: str,
+                               usuario: str | None) -> dict:
     """Roteia (des)vinculação NF×PO para as funções existentes do recebimento.
 
+    `po_esperado` aceita None, string (1 PO) ou lista de strings (multi-PO —
+    "juntar pedidos A/B ... vincular na nota N" -> PO Conciliador via n_pos).
+
     Retorna SEMPRE um dict com chaves: ok, acao, nf, po, status, resumo, anomalia.
-    Caminho feliz só efetiva com status='aprovado' (vincular) + PO confirmado;
-    qualquer anomalia => ok=False (caller decide N1/N2). NUNCA levanta.
+    Caminho feliz: status='aprovado' (match limpo) OU, quando o operador
+    INFORMOU a(s) PO(s) e o match automático bloqueou, um RETRY DIRIGIDO
+    (dados frescos do Odoo + escopo nas POs informadas + tolerância de data —
+    tipo aprovável por regra existente, TIPOS_APROVACAO_PERMITIDA inclui
+    'data_entrega'). Preço, quantidade e De-Para continuam estritos; qualquer
+    anomalia => ok=False (caller decide N1/N2). NUNCA levanta.
     """
+    if isinstance(po_esperado, (list, tuple)):
+        pos_informadas = [str(p) for p in po_esperado if p]
+    elif po_esperado:
+        pos_informadas = [str(po_esperado)]
+    else:
+        pos_informadas = []
+
     base = {"ok": False, "acao": acao, "nf": str(nf), "po": po_esperado,
             "status": None, "resumo": None, "anomalia": None}
     try:
@@ -68,7 +82,7 @@ def executar_vinculacao_por_nf(nf: str, po_esperado: str | None,
                                 "detalhe": f"NF {nf} não está na carteira de validação.",
                                 "validacao_id": None}
             return base
-        if len(vals) > 1 and not po_esperado:
+        if len(vals) > 1 and not pos_informadas:
             base["anomalia"] = {"tipo": "nf_ambigua",
                                 "detalhe": f"{len(vals)} NFs com número {nf}; informe o fornecedor.",
                                 "validacao_id": None}
@@ -89,6 +103,22 @@ def executar_vinculacao_por_nf(nf: str, po_esperado: str | None,
         # acao == "vincular": rodar match determinístico (já existente)
         res = ValidacaoNfPoService().validar_dfe(val.odoo_dfe_id)
         status = res.get("status")
+
+        # RETRY DIRIGIDO: match automático bloqueou MAS o operador informou
+        # a(s) PO(s). Re-roda com dados frescos do Odoo (resolve pedido_compras
+        # stale), escopo restrito às POs informadas e data tolerada. Diagnóstico
+        # 2026-06-11: 6/6 interceptações da Gabriella caíam aqui -> N2 Opus.
+        if status not in ("aprovado", "finalizado_odoo") and pos_informadas:
+            res = ValidacaoNfPoService().validar_dfe(
+                val.odoo_dfe_id,
+                usar_dados_locais=False,
+                pos_escopo=[_norm_po(p) for p in pos_informadas],
+                tolerar_data=True,
+            )
+            status = res.get("status")
+            if res.get("datas_toleradas"):
+                base["data_tolerada"] = True
+
         base["status"] = status
         if status == "finalizado_odoo":
             base.update(ok=True, resumo=res)
@@ -100,9 +130,11 @@ def executar_vinculacao_por_nf(nf: str, po_esperado: str | None,
 
         pos = montar_pos_para_consolidar(val.id)
         po_names = {_norm_po(p["po_name"]) for p in pos}
-        if po_esperado and _norm_po(po_esperado) not in po_names:
+        pos_faltantes = [p for p in pos_informadas if _norm_po(p) not in po_names]
+        if pos_faltantes:
             base["anomalia"] = {"tipo": "po_diverge",
-                                "detalhe": f"NF casou com {sorted(po_names)}, não com {po_esperado}.",
+                                "detalhe": (f"NF casou com {sorted(po_names)}, "
+                                            f"não com {pos_faltantes}."),
                                 "validacao_id": val.id}
             return base
 

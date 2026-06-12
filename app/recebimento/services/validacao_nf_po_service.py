@@ -69,14 +69,31 @@ class ValidacaoNfPoService:
         # OTIMIZACAO: Cache local de produtos durante validacao
         # Evita N+1 queries ao Odoo (buscar mesmo produto varias vezes)
         self._product_cache: Dict[str, Optional[int]] = {}
+        # Match dirigido (fast-path vinculacao): escopo de POs informadas pelo
+        # operador + tolerancia de data. Setados por validar_dfe(); defaults
+        # preservam o comportamento estrito original.
+        self._pos_escopo: Optional[set] = None
+        self._tolerar_data: bool = False
 
     # =========================================================================
     # MAIN VALIDATION FLOW
     # =========================================================================
 
-    def validar_dfe(self, odoo_dfe_id: int, usar_dados_locais: bool = True) -> Dict[str, Any]:
+    def validar_dfe(self, odoo_dfe_id: int, usar_dados_locais: bool = True,
+                    pos_escopo: Optional[List[str]] = None,
+                    tolerar_data: bool = False) -> Dict[str, Any]:
         """
         Executa validacao completa de um DFE (NF-e) contra POs.
+
+        Match dirigido (fast-path vinculacao, 2026-06-12):
+        - pos_escopo: nomes de PO informados pelo operador — restringe os
+          candidatos a essas POs (roteamento puro; PO de outro fornecedor
+          simplesmente nao aparece e o item bloqueia como sem_po).
+        - tolerar_data: trata data fora da janela (+/- 2 dias uteis) como
+          match (campo data_tolerada=True). Espelha a aprovacao manual ja
+          permitida na rota web (TIPOS_APROVACAO_PERMITIDA inclui
+          'data_entrega'). Preco (0%), quantidade (10%) e De-Para continuam
+          ESTRITOS.
 
         FLUXO:
         1. Buscar dados do DFE e suas linhas
@@ -101,6 +118,19 @@ class ValidacaoNfPoService:
         """
         try:
             logger.info(f"Iniciando validacao NF x PO do DFE {odoo_dfe_id}")
+
+            # Match dirigido: configura escopo/tolerancia desta validacao
+            self._pos_escopo = (
+                {str(p).strip().upper() for p in pos_escopo if p}
+                if pos_escopo else None
+            )
+            self._tolerar_data = bool(tolerar_data)
+            if self._pos_escopo or self._tolerar_data:
+                logger.info(
+                    f"[MATCH-DIRIGIDO] DFE {odoo_dfe_id}: "
+                    f"pos_escopo={sorted(self._pos_escopo) if self._pos_escopo else None} "
+                    f"tolerar_data={self._tolerar_data}"
+                )
 
             # OTIMIZACAO: Limpar cache de produtos no inicio da validacao
             self._limpar_cache_produtos()
@@ -281,6 +311,19 @@ class ValidacaoNfPoService:
             else:
                 pos_candidatos = self._buscar_pos_fornecedor(cnpj_fornecedor)
 
+            # Match dirigido: restringe candidatos as POs informadas pelo
+            # operador. Escopo que zera os candidatos segue o fluxo normal
+            # de bloqueio sem_po (caller decide N2).
+            if self._pos_escopo:
+                pos_candidatos = [
+                    po for po in pos_candidatos
+                    if str(po.get('name') or '').strip().upper() in self._pos_escopo
+                ]
+                logger.info(
+                    f"[MATCH-DIRIGIDO] DFE {odoo_dfe_id}: "
+                    f"{len(pos_candidatos)} candidatos apos filtro de escopo"
+                )
+
             if not pos_candidatos:
                 # DEFENSIVO: antes de bloquear, verificar se ha POs com cnpj_fornecedor
                 # NULL que NAO puderam ser auto-curados (partner Odoo sem CNPJ ou PO
@@ -452,13 +495,23 @@ class ValidacaoNfPoService:
                 f"{len(pos_envolvidos)} POs para consolidar"
             )
 
+            # Match dirigido: rastreia datas toleradas para o caller informar
+            # o operador (auditavel na resposta do agente)
+            datas_toleradas = [
+                {'po_name': r.get('po_name'),
+                 'cod_produto': (r.get('item') or {}).get('cod_produto_interno'),
+                 'data_nf': r.get('data_nf'), 'data_po': r.get('data_po')}
+                for r in itens_ok if r.get('data_tolerada')
+            ]
+
             return {
                 'status': 'aprovado',
                 'mensagem': f'Todos os {len(itens_ok)} itens com match',
                 'itens_match': len(itens_ok),
                 'total_itens': len(dfe_lines),
                 'pos_para_consolidar': pos_envolvidos,
-                'validacao_id': validacao.id
+                'validacao_id': validacao.id,
+                'datas_toleradas': datas_toleradas,
             }
 
         except Exception as e:
@@ -1070,20 +1123,32 @@ class ValidacaoNfPoService:
                     continue
 
                 # Validar DATA (+/- 2 dias uteis)
+                data_tolerada = False
                 if not self._validar_data(data_nf, data_po):
-                    if melhor_motivo is None:
-                        melhor_motivo = 'data_diverge'
-                        melhor_match = {
-                            'status': 'data_diverge',
-                            'motivo': f'Data NF ({data_nf}) fora da tolerancia do PO ({data_po})',
-                            'item': item,
-                            'po_id': po['id'],
-                            'po_name': po['name'],
-                            'po_line_id': line['id'],
-                            'data_nf': str(data_nf),
-                            'data_po': str(data_po)
-                        }
-                    continue
+                    # Match dirigido: data fora da janela e' aceita quando o
+                    # operador informou a PO explicitamente (tolerar_data) —
+                    # espelha a aprovacao manual 'data_entrega' da rota web.
+                    if getattr(self, '_tolerar_data', False):
+                        data_tolerada = True
+                        logger.info(
+                            f"[MATCH-DIRIGIDO] Data tolerada: produto "
+                            f"{cod_interno} PO {po['name']} "
+                            f"(NF {data_nf} x PO {data_po})"
+                        )
+                    else:
+                        if melhor_motivo is None:
+                            melhor_motivo = 'data_diverge'
+                            melhor_match = {
+                                'status': 'data_diverge',
+                                'motivo': f'Data NF ({data_nf}) fora da tolerancia do PO ({data_po})',
+                                'item': item,
+                                'po_id': po['id'],
+                                'po_name': po['name'],
+                                'po_line_id': line['id'],
+                                'data_nf': str(data_nf),
+                                'data_po': str(data_po)
+                            }
+                        continue
 
                 # Validar QUANTIDADE (NF <= saldo_PO + 10%)
                 if not self._validar_quantidade(qtd_nf, saldo_po):
@@ -1113,7 +1178,8 @@ class ValidacaoNfPoService:
                     'preco_nf': float(preco_nf),
                     'preco_po': float(preco_po),
                     'data_nf': str(data_nf),
-                    'data_po': str(data_po) if data_po else None
+                    'data_po': str(data_po) if data_po else None,
+                    'data_tolerada': data_tolerada,
                 }
 
         # Nao encontrou nenhum PO com o produto

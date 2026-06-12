@@ -85,3 +85,58 @@ def test_orquestrador_sem_match_e_sem_haiku_retorna_none():
          patch.object(fp, "parse_vinculacao_haiku", return_value=None):
         r = fp.executar_vinculacao_fastpath("bom dia", session_id="s", user_id=69)
     assert r is None  # nada a interceptar -> fluxo LLM normal
+
+
+# ─── Multi-PO: "juntar/unir pedidos A/B criar conciliador e vincular na nota N"
+# Frases REAIS da Gabriella (sessoes 09-11/06) que o N0 single-PO nao alcancava.
+
+def test_juntar_pedidos_multi_po():
+    from app.agente.sdk.vinculacao_fastpath import should_intercept_vinculacao
+    r = should_intercept_vinculacao(
+        "juntar os pedidos C2618286/C2618568/C2618501/C2619292 "
+        "criar conciliador e vincular na nota 2993")
+    assert r is not None and r["acao"] == "vincular"
+    assert r["nf"] == "2993"
+    assert r["po"] == ["C2618286", "C2618568", "C2618501", "C2619292"]
+
+
+def test_unir_pedidos_multi_po():
+    from app.agente.sdk.vinculacao_fastpath import should_intercept_vinculacao
+    r = should_intercept_vinculacao(
+        "Unir pedidos C2618286/C2618568 criar conciliador e vincular na nota 2993")
+    assert r is not None and r["acao"] == "vincular"
+    assert r["po"] == ["C2618286", "C2618568"]
+
+
+def test_juntar_sem_vincular_nao_casa():
+    from app.agente.sdk.vinculacao_fastpath import should_intercept_vinculacao
+    assert should_intercept_vinculacao("juntar os pedidos C1/C2") is None
+
+
+# ─── Contexto N2: anomalia diagnosticada NAO pode ser descartada ────────────
+
+def test_montar_contexto_n2_inclui_diagnostico():
+    from app.agente.sdk.vinculacao_fastpath import montar_contexto_n2
+    vinc = {
+        "ok": False,
+        "anomalia": {
+            "tipo": "status_nao_aprovado",
+            "detalhe": "bloqueado",
+            "validacao_id": 1539,
+            "validacao": {"status": "bloqueado",
+                          "divergencias": ["Nenhum PO com preco/data validos para 209000410"]},
+        },
+        "parsed": {"acao": "vincular", "po": "C2618524", "nf": "442228"},
+    }
+    ctx = montar_contexto_n2(vinc)
+    assert "442228" in ctx and "C2618524" in ctx
+    assert "1539" in ctx and "status_nao_aprovado" in ctx
+    assert "209000410" in ctx
+    # marcado como contexto de sistema (nao instrucao do usuario)
+    assert ctx.startswith("\n\n<diagnostico_fastpath>")
+    assert ctx.rstrip().endswith("</diagnostico_fastpath>")
+
+
+def test_montar_contexto_n2_vazio_para_none():
+    from app.agente.sdk.vinculacao_fastpath import montar_contexto_n2
+    assert montar_contexto_n2(None) == ""

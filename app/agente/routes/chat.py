@@ -508,6 +508,18 @@ def api_chat():
                             'Connection': 'keep-alive',
                         },
                     )
+                elif _vinc:
+                    # Anomalia diagnosticada (ok=False): NAO descartar — anexa o
+                    # diagnostico ao prompt do LLM para o gestor-recebimento nao
+                    # redescobrir do zero (validacao_id + divergencias ja apuradas).
+                    from app.agente.sdk.vinculacao_fastpath import montar_contexto_n2
+                    _ctx_n2 = montar_contexto_n2(_vinc)
+                    if _ctx_n2:
+                        enriched_message = enriched_message + _ctx_n2
+                        logger.info(
+                            "[AGENTE] vinculacao fast-path anomalia -> "
+                            "diagnostico anexado ao prompt (N2)"
+                        )
         except Exception as _ve:
             logger.warning(f"[AGENTE] fast-path vinculacao ignorado (-> LLM): {_ve}")
 

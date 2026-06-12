@@ -762,9 +762,14 @@ def processar_mensagem_bot(
         # Anomalia (status!=aprovado, PO diverge, NF ambigua) ou None -> baseline/
         # LLM abaixo (N2). Ver R-EXEC-6 e sdk/vinculacao_fastpath.py.
         _vinc_resposta = None
+        # Mensagem ao LLM pode ganhar <diagnostico_fastpath> (anomalia do
+        # fast-path); persistencia continua com `mensagem` original.
+        mensagem_llm = mensagem
         try:
             from app.agente.config.feature_flags import AGENT_VINCULACAO_FASTPATH
-            from app.agente.sdk.vinculacao_fastpath import executar_vinculacao_fastpath
+            from app.agente.sdk.vinculacao_fastpath import (
+                executar_vinculacao_fastpath, montar_contexto_n2,
+            )
             if AGENT_VINCULACAO_FASTPATH:
                 _vinc = executar_vinculacao_fastpath(
                     mensagem, session_id=teams_session_id, user_id=teams_user_id,
@@ -772,6 +777,14 @@ def processar_mensagem_bot(
                 if _vinc and _vinc.get("ok"):
                     _vinc_resposta = _vinc["resposta"]
                     logger.info(f"[TEAMS-BOT] vinculacao fast-path (sem subagente) user={teams_user_id}")
+                elif _vinc:
+                    _ctx_n2 = montar_contexto_n2(_vinc)
+                    if _ctx_n2:
+                        mensagem_llm = mensagem + _ctx_n2
+                        logger.info(
+                            "[TEAMS-BOT] vinculacao fast-path anomalia -> "
+                            "diagnostico anexado ao prompt (N2)"
+                        )
         except Exception as _ve:
             logger.warning(f"[TEAMS-BOT] fast-path vinculacao ignorado (-> LLM): {_ve}")
 
@@ -822,7 +835,7 @@ def processar_mensagem_bot(
 
             # Obter resposta do agente (com can_use_tool para graceful denial de AskUserQuestion)
             _sync_result = _obter_resposta_agente(
-                mensagem=mensagem,
+                mensagem=mensagem_llm,
                 usuario=usuario,
                 sdk_session_id=sdk_session_id,
                 user_id=teams_user_id,
@@ -2024,9 +2037,15 @@ def process_teams_task_async(
             # via agent_result sintético com 0 tokens.
             agent_result: Optional[StreamResult] = None
             selected_model = None
+            # Mensagem enviada ao LLM: pode ganhar o bloco <diagnostico_fastpath>
+            # quando o fast-path abortou com anomalia (a persistencia e o model
+            # routing continuam usando `mensagem` original).
+            mensagem_llm = mensagem
             try:
                 from app.agente.config.feature_flags import AGENT_VINCULACAO_FASTPATH
-                from app.agente.sdk.vinculacao_fastpath import executar_vinculacao_fastpath
+                from app.agente.sdk.vinculacao_fastpath import (
+                    executar_vinculacao_fastpath, montar_contexto_n2,
+                )
                 if AGENT_VINCULACAO_FASTPATH:
                     _vinc = executar_vinculacao_fastpath(
                         mensagem, session_id=teams_session_id, user_id=teams_user_id,
@@ -2041,6 +2060,16 @@ def process_teams_task_async(
                             f"[TEAMS-ASYNC] vinculacao fast-path (sem subagente) "
                             f"user={teams_user_id}"
                         )
+                    elif _vinc:
+                        # Anomalia diagnosticada: anexa ao prompt do N2 para o
+                        # gestor-recebimento nao redescobrir do zero.
+                        _ctx_n2 = montar_contexto_n2(_vinc)
+                        if _ctx_n2:
+                            mensagem_llm = mensagem + _ctx_n2
+                            logger.info(
+                                "[TEAMS-ASYNC] vinculacao fast-path anomalia -> "
+                                "diagnostico anexado ao prompt (N2)"
+                            )
             except Exception as _ve:
                 logger.warning(f"[TEAMS-ASYNC] fast-path vinculacao ignorado (-> LLM): {_ve}")
 
@@ -2094,7 +2123,7 @@ def process_teams_task_async(
                 try:
                     if TEAMS_PROGRESSIVE_STREAMING:
                         agent_result = _obter_resposta_agente_streaming(
-                            mensagem=mensagem,
+                            mensagem=mensagem_llm,
                             usuario=usuario,
                             task_id=task_id,
                             sdk_session_id=sdk_session_id,
@@ -2107,7 +2136,7 @@ def process_teams_task_async(
                         )
                     else:
                         agent_result = _obter_resposta_agente(
-                            mensagem=mensagem,
+                            mensagem=mensagem_llm,
                             usuario=usuario,
                             sdk_session_id=sdk_session_id,
                             user_id=teams_user_id,
