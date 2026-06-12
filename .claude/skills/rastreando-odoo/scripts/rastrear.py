@@ -74,7 +74,10 @@ CAMPOS = {
         'full_reconcile_id', 'statement_line_id',
     ],
     'account_full_reconcile': [
-        'id', 'name', 'reconciled_line_ids', 'partial_reconcile_ids',
+        # NOTA: 'name' NAO existe em account.full.reconcile na instancia CIEL IT
+        # (Odoo rejeita com ValueError: Invalid field 'name'). Confirmado em runtime
+        # ao rastrear NF 139310 (2026-06-09). O campo nunca foi consumido no codigo.
+        'id', 'reconciled_line_ids', 'partial_reconcile_ids',
     ],
     'account_bank_statement_line': [
         'id', 'date', 'payment_ref', 'partner_id', 'amount', 'move_id',

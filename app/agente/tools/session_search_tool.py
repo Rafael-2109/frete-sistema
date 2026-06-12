@@ -241,7 +241,15 @@ try:
             "Em debug mode: use target_user_id para buscar sessões de outro usuário, "
             "e channel='teams' ou 'web' para filtrar por canal."
         ),
-        {"query": Annotated[str, "Texto a buscar em sessoes anteriores (minimo 2 caracteres). Busca em titulos e conteudo de mensagens"]},
+        {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "Texto a buscar em sessoes anteriores (minimo 2 caracteres). Busca em titulos e conteudo de mensagens"},
+                "target_user_id": {"type": "integer", "description": "Admin-only (debug mode): buscar sessoes de outro usuario"},
+                "channel": {"type": "string", "enum": ["web", "teams"], "description": "Admin-only (debug mode): filtrar por canal"},
+            },
+            "required": ["query"],
+        },
         annotations=ToolAnnotations(
             readOnlyHint=True,
             destructiveHint=False,
@@ -387,7 +395,14 @@ try:
             "Em debug mode: use target_user_id para listar sessões de outro usuário, "
             "e channel='teams' ou 'web' para filtrar por canal."
         ),
-        {"limit": Annotated[int, "Numero maximo de sessoes recentes a retornar (default 10)"]},
+        {
+            "type": "object",
+            "properties": {
+                "limit": {"type": "integer", "description": "Numero maximo de sessoes recentes a retornar (default 10)"},
+                "target_user_id": {"type": "integer", "description": "Admin-only (debug mode): listar sessoes de outro usuario"},
+                "channel": {"type": "string", "enum": ["web", "teams"], "description": "Admin-only (debug mode): filtrar por canal"},
+            },
+        },
         annotations=ToolAnnotations(
             readOnlyHint=True,
             destructiveHint=False,
@@ -499,7 +514,15 @@ try:
             "Encontra conversas por similaridade de significado, não apenas texto exato. "
             "Em debug mode: use target_user_id para buscar sessões de outro usuário."
         ),
-        {"query": Annotated[str, "Texto ou tema para busca semantica por similaridade em sessoes anteriores (minimo 2 caracteres)"], "limit": Annotated[int, "Numero maximo de resultados a retornar (default 10)"]},
+        {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "Texto ou tema para busca semantica por similaridade em sessoes anteriores (minimo 2 caracteres)"},
+                "limit": {"type": "integer", "description": "Numero maximo de resultados a retornar (default 10)"},
+                "target_user_id": {"type": "integer", "description": "Admin-only (debug mode): buscar sessoes de outro usuario"},
+            },
+            "required": ["query"],
+        },
         annotations=ToolAnnotations(
             readOnlyHint=True,
             destructiveHint=False,

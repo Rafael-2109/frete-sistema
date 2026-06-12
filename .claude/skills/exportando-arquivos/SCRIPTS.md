@@ -49,7 +49,8 @@ python .claude/skills/exportando-arquivos/scripts/exportar.py --formato imagem -
 
 | Modo | Formato | Entrada | Descricao |
 |------|---------|---------|-----------|
-| Excel | `--formato excel` | stdin JSON | Gera .xlsx com formatacao (cabecalho azul, moeda BR, largura auto) |
+| Excel | `--formato excel` | stdin JSON `{"dados": [...]}` | Gera .xlsx com formatacao (cabecalho azul, moeda BR, largura auto) |
+| Excel multi-abas | `--formato excel` | stdin JSON `{"abas": [...]}` | Gera .xlsx com VARIAS abas (cada aba = `{titulo, dados, colunas?}`); titulo truncado a 31 chars, duplicatas recebem sufixo `_N` |
 | CSV | `--formato csv` | stdin JSON | Gera .csv com separador ponto-e-virgula (`;`) e encoding utf-8-sig |
 | MD/TXT | `--formato md` | `--arquivo` (.md/.txt ja escrito) | Copia para o diretorio SERVIDO com guard de entrega + URL verificada (caso real 2026-06-10: dump .md exigia workaround manual com risco de TMPDIR) |
 | JSON | `--formato json` | stdin JSON | Gera .json formatado com indent=2 |
@@ -64,6 +65,21 @@ python .claude/skills/exportando-arquivos/scripts/exportar.py --formato imagem -
   ]
 }
 ```
+
+**Formato do stdin (Excel MULTI-ABAS — apenas `--formato excel`):**
+```json
+{
+  "abas": [
+    {"titulo": "Fantasmas Ativos", "dados": [{"nome": "A", "valor": 10.5}]},
+    {"titulo": "Bloqueados", "dados": [{"id": 1}], "colunas": ["id"]},
+    {"titulo": "Sem Vinculo", "dados": [{"user": "x", "email": "x@y.z"}]}
+  ]
+}
+```
+- Cada aba: `titulo` (nome da sheet, truncado a 31 chars), `dados` (linhas), `colunas` (subconjunto/ordem opcional).
+- Titulos duplicados recebem sufixo `_1`, `_2`... (Excel rejeita sheets homonimas).
+- `dados: []` gera uma aba vazia sem quebrar. O retorno inclui `arquivo.abas` (qtd) e `registros` (soma de todas as abas).
+- Multi-abas e exclusivo do Excel; `csv`/`json` usam `{"dados": [...]}`.
 
 **Retorno JSON:**
 ```json

@@ -121,27 +121,101 @@ def gerar_excel(dados, nome_arquivo, titulo=None, colunas=None):
         # Formato de moeda
         money_format = workbook.add_format({'num_format': 'R$ #,##0.00'})
 
-        # Formato de data
-        date_format = workbook.add_format({'num_format': 'dd/mm/yyyy'})
-
-        # Aplicar formato ao cabecalho
-        for col_num, value in enumerate(df.columns):
-            worksheet.write(0, col_num, value, header_format)
-
-        # Ajustar largura das colunas
-        for i, col in enumerate(df.columns):
-            max_len = max(
-                df[col].fillna('').astype(str).map(len).max() if len(df) > 0 else 0,
-                len(str(col))
-            ) + 2
-            worksheet.set_column(i, i, min(max_len, 50))
-
-            # Aplicar formato de moeda para colunas de valor
-            col_lower = col.lower()
-            if any(term in col_lower for term in ['valor', 'preco', 'custo', 'total']):
-                worksheet.set_column(i, i, 15, money_format)
+        # Cabecalho + largura auto + moeda (compartilhado com gerar_excel_multi_abas)
+        _formatar_aba_excel(df, worksheet, header_format, money_format)
 
     return filepath, filename
+
+
+def _formatar_aba_excel(df, worksheet, header_format, money_format):
+    """Aplica cabecalho, largura auto e formato de moeda a uma worksheet ja escrita."""
+    # Cabecalho
+    for col_num, value in enumerate(df.columns):
+        worksheet.write(0, col_num, value, header_format)
+
+    # Largura das colunas + moeda
+    for i, col in enumerate(df.columns):
+        max_len = max(
+            df[col].fillna('').astype(str).map(len).max() if len(df) > 0 else 0,
+            len(str(col))
+        ) + 2
+        worksheet.set_column(i, i, min(max_len, 50))
+
+        col_lower = str(col).lower()
+        if any(term in col_lower for term in ['valor', 'preco', 'custo', 'total']):
+            worksheet.set_column(i, i, 15, money_format)
+
+
+def gerar_excel_multi_abas(abas, nome_arquivo):
+    """
+    Gera arquivo Excel com MULTIPLAS abas (sheets).
+
+    Caso real (2026-06-11): relatorio de vinculacao Teams precisava de 3 abas
+    (Fantasmas Ativos, Fantasmas Bloqueados, Usuarios Sem Vinculo). A skill so
+    gerava 1 aba, forcando workaround manual com xlsxwriter via Bash.
+
+    Args:
+        abas: Lista de dicts no formato:
+              [{"titulo": str, "dados": [ {...}, ... ], "colunas": [str] (opcional)}]
+              - titulo: nome da aba (truncado a 31 chars; duplicatas recebem sufixo)
+              - dados: lista de dicionarios (linhas)
+              - colunas: subconjunto/ordem de colunas a incluir (opcional)
+        nome_arquivo: Nome do arquivo (sem extensao)
+
+    Returns:
+        (filepath, filename, total_registros)
+    """
+    import pandas as pd
+
+    if not abas or not isinstance(abas, list):
+        raise ValueError("'abas' deve ser uma lista nao-vazia de {titulo, dados}")
+
+    file_id = str(uuid.uuid4())[:8]
+    filename = f"{file_id}_{nome_arquivo}.xlsx"
+    filepath = os.path.join(get_upload_folder(), filename)
+
+    total_registros = 0
+    nomes_usados = set()
+
+    with pd.ExcelWriter(filepath, engine='xlsxwriter') as writer:
+        workbook = writer.book
+        header_format = workbook.add_format({
+            'bold': True,
+            'bg_color': '#4472C4',
+            'font_color': 'white',
+            'border': 1
+        })
+        money_format = workbook.add_format({'num_format': 'R$ #,##0.00'})
+
+        for idx, aba in enumerate(abas):
+            if not isinstance(aba, dict):
+                raise ValueError(f"Aba {idx} invalida: esperado dict {{titulo, dados}}")
+
+            # Nome da aba: truncar a 31 chars (limite Excel) e garantir unicidade
+            titulo = (aba.get('titulo') or f'Aba{idx + 1}')[:31]
+            base = titulo
+            n = 1
+            while titulo.lower() in nomes_usados:
+                sufixo = f"_{n}"
+                titulo = base[:31 - len(sufixo)] + sufixo
+                n += 1
+            nomes_usados.add(titulo.lower())
+
+            dados = aba.get('dados', [])
+            colunas = aba.get('colunas')
+
+            df = pd.DataFrame(dados)
+            if colunas:
+                cols_existentes = [c for c in colunas if c in df.columns]
+                if cols_existentes:
+                    df = df[cols_existentes]
+
+            df.to_excel(writer, sheet_name=titulo, index=False)
+            total_registros += len(df)
+
+            _formatar_aba_excel(df, writer.sheets[titulo], header_format, money_format)
+
+    return filepath, filename, total_registros
 
 
 def gerar_csv(dados, nome_arquivo, colunas=None):
@@ -427,10 +501,21 @@ Exemplos:
 
         # Extrair dados
         dados = entrada.get('dados', [])
+        abas = entrada.get('abas')
 
-        if not dados:
+        # Modo multi-abas (apenas Excel): {"abas": [{"titulo": "...", "dados": [...]}]}
+        usar_multi_abas = (
+            args.formato == 'excel'
+            and isinstance(abas, list)
+            and len(abas) > 0
+        )
+
+        if not usar_multi_abas and not dados:
             resultado['erro'] = 'Campo "dados" vazio ou ausente'
-            resultado['mensagem'] = 'O JSON deve conter: {"dados": [...]}'
+            resultado['mensagem'] = (
+                'O JSON deve conter {"dados": [...]} ou, para Excel com varias abas, '
+                '{"abas": [{"titulo": "...", "dados": [...]}]}'
+            )
             print(json.dumps(resultado, ensure_ascii=False, indent=2))
             return
 
@@ -443,15 +528,21 @@ Exemplos:
                 pass
 
         # Gerar arquivo conforme formato
-        if args.formato == 'excel':
+        if usar_multi_abas:
+            filepath, filename, registros_count = gerar_excel_multi_abas(abas, args.nome)
+            extensao = 'xlsx'
+        elif args.formato == 'excel':
             filepath, filename = gerar_excel(dados, args.nome, args.titulo, colunas)
             extensao = 'xlsx'
+            registros_count = len(dados)
         elif args.formato == 'csv':
             filepath, filename = gerar_csv(dados, args.nome, colunas)
             extensao = 'csv'
+            registros_count = len(dados)
         else:  # json
             filepath, filename = gerar_json(dados, args.nome)
             extensao = 'json'
+            registros_count = len(dados)
 
         # Guard de ENTREGA (P7 #787): nao declarar sucesso com arquivo ausente/vazio.
         ok_entrega, motivo_entrega = _verificar_entrega(filepath)
@@ -482,18 +573,23 @@ Exemplos:
             'url_completa': url_completa,
             'tamanho': tamanho,
             'tamanho_formatado': f"{tamanho / 1024:.1f} KB" if tamanho < 1024*1024 else f"{tamanho / (1024*1024):.1f} MB",
-            'registros': len(dados),
+            'registros': registros_count,
             'formato': args.formato,
             'caminho_local': filepath  # Para debug
         }
-        resultado['mensagem'] = f"Arquivo {args.formato.upper()} criado com {len(dados)} registros!"
+        if usar_multi_abas:
+            resultado['arquivo']['abas'] = len(abas)
+        sufixo_abas = f" em {len(abas)} abas" if usar_multi_abas else ""
+        resultado['mensagem'] = (
+            f"Arquivo {args.formato.upper()} criado com {registros_count} registros{sufixo_abas}!"
+        )
 
         # Instrucao para o agente - SEMPRE usar URL completa
         resultado['instrucao_agente'] = (
             f"Informe ao usuario que o arquivo esta disponivel para download.\n"
             f"IMPORTANTE: Use a URL COMPLETA na resposta (com dominio):\n"
             f"📥 **[Clique aqui para baixar]({url_completa})**\n"
-            f"Arquivo: {args.nome}.{extensao} | {len(dados)} registros"
+            f"Arquivo: {args.nome}.{extensao} | {registros_count} registros{sufixo_abas}"
         )
 
     except ImportError as e:

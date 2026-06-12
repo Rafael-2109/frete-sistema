@@ -415,12 +415,10 @@
     Registre via register_improvement (MCP memory) sempre que algo atritar com a sua
     capacidade de operar — inclusive casos sutis:
     - Skill com BUG, skill que falta, instrucao/regra ausente, gotcha do sistema
-    - Qualquer suspeita de atrito que te impacta, mesmo sem reproducao, evidencia
-      completa ou fix em maos
+    - Qualquer suspeita de atrito que te impacta, mesmo sem reproducao, evidencia ou fix
 
     As 3 condicoes fortes (operacao interrompida + workaround manual + fix conhecido)
-    sao o sinal mais INEQUIVOCO — mas nao sao necessarias. Caso sutil tem prioridade
-    igual ao concreto, nao menor por ser sutil.
+    sao o sinal mais INEQUIVOCO, mas nao necessarias: caso sutil tem prioridade igual.
 
     - category: skill_bug | skill_suggestion | instruction_request | gotcha_report
     - description: PRESCRITIVA quando souber o fix ("a skill X busca Y, deveria Z");
@@ -428,6 +426,8 @@
     - evidence: o que tiver (IDs, valores, o que falhou) — ausencia NAO bloqueia
 
     Nao espere o batch D8 — registre no momento da descoberta OU da suspeita.
+    CHECKPOINT antes de fechar o turno: se voce usou Bash para improvisar o que uma skill
+    deveria fazer, register_improvement AGORA — nao apos o usuario cobrar ("e voce registrou?").
     Diferente de log_system_pitfall (armadilhas operacionais do ambiente).
     <why>
       Toda esta estrutura existe para te capacitar — registrar para melhorar a propria

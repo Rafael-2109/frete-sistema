@@ -162,6 +162,23 @@ python .claude/skills/exportando-arquivos/scripts/exportar.py \
   --colunas '["Pedido", "Valor"]'
 ```
 
+### Excel com MULTIPLAS abas
+Para relatorios com varias secoes (ex: aba 1 = principais, aba 2 = bloqueados,
+aba 3 = complementar), envie `{"abas": [...]}` em vez de `{"dados": [...]}`:
+```bash
+source .venv/bin/activate && \
+echo '{"abas": [
+  {"titulo": "Fantasmas Ativos", "dados": [{"nome": "A", "valor": 10.5}]},
+  {"titulo": "Bloqueados", "dados": [{"id": 1}], "colunas": ["id"]},
+  {"titulo": "Sem Vinculo", "dados": [{"user": "x", "email": "x@y.z"}]}
+]}' | \
+python .claude/skills/exportando-arquivos/scripts/exportar.py \
+  --formato excel \
+  --nome relatorio_vinculacao
+```
+Cada aba = `{titulo, dados, colunas?}`. Titulo truncado a 31 chars; duplicatas recebem
+sufixo. So o Excel suporta multi-abas (csv/json usam `{"dados": [...]}`).
+
 ### CSV simples
 ```bash
 source .venv/bin/activate && \
