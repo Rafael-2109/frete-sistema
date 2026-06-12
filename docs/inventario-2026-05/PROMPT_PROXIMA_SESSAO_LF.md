@@ -160,7 +160,7 @@ Sem urgência. Estrategias:
 - ⏳ **DEV_LF_FB** — 148 ajustes nunca testados em pipeline
 - ⏳ **Fix G029 code-level** (opcional, evita recovery manual)
 
-## Resumo dos gotchas relevantes (G016-G030)
+## Resumo dos gotchas relevantes (G016-G029 + INV-030)
 
 | # | Status | Impacto |
 |---|--------|---------|

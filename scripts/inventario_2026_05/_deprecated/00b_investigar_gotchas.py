@@ -150,7 +150,7 @@ def main(dry_run: bool):
                 'company_saida_esperada': company_saida_esperada,
             }
 
-        print('\n=== G002: investigar stock.picking.type id=16 ===\n')
+        print('\n=== INV-002: investigar stock.picking.type id=16 ===\n')
         pt16 = investigar_picking_type_16(odoo)
         result['g002_picking_type_16'] = pt16
 
@@ -160,7 +160,7 @@ def main(dry_run: bool):
         print(f'\nSnapshot: {out}')
 
         if dry_run:
-            print('\n[DRY RUN] (snapshot ja gravado, sem atualizar G001/G002.md)')
+            print('\n[DRY RUN] (snapshot ja gravado, sem atualizar G001/INV-002.md)')
             return
 
         # Atualizar G001 com achados

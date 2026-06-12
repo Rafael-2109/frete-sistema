@@ -34,8 +34,8 @@ atualizado: 2026-06-12
   - [Integer 0 vs False no ORM Odoo](#integer-0-vs-false-no-orm-odoo)
   - [Tratamento button_validate](#tratamento-button_validate)
   - [Quality Checks - Ordem Critica](#quality-checks---ordem-critica)
-  - [G002 (estoque): stock.lot.name com operador = e instavel](#comportamentos-inesperados)
-  - [G021 (estoque): lote sem company_id retorna empresa errada](#comportamentos-inesperados)
+  - [G002 (estoque) — stock.lot.name operador =](#g002-estoque--stocklotname-operador-)
+  - [G021 (estoque) — lote exige company_id](#g021-estoque--lote-exige-company_id)
 - [Ordem de Operacoes Critica](#ordem-de-operacoes-critica)
 - [Extrato Bancario: 3 Campos que o Odoo NAO Preenche para Boletos](#extrato-bancario-3-campos-que-o-odoo-nao-preenche-para-boletos)
   - [Regra: SEMPRE Usar preparar_extrato_para_reconciliacao() (corrigido 2026-02-19)](#regra-sempre-usar-preparar_extrato_para_reconciliacao-corrigido-2026-02-19)
@@ -172,8 +172,8 @@ else:
 | **`action_update_taxes` zera tax_id/amount_tax** | `sale.order` com `fiscal_position` que mapeia impostos para vazio (ex.: ID 49 "SAÍDA - TRANSFERÊNCIA ENTRE FILIAIS") | **NUNCA usar `action_update_taxes` em SOs BR.** Usar `onchange_l10n_br_calcular_imposto` (worker `app/pedidos/workers/impostos_jobs.py`) |
 | Lote duplicado | stock.lot | Verificar existencia antes de `lot_name`, usar `lot_id` se existir |
 | Quality checks pendentes | button_validate falha | Processar TODOS checks (`do_pass`/`do_fail`/`do_measure`) ANTES |
-| **G002 (estoque): `stock.lot.name` com operador `=` e instavel** | Busca de lote por nome em XML-RPC; retorna vazio ou resultados errados intermitentemente | **Usar `'in', [nome]` (lista) ou `'=like'` como fallback.** Helper canonico `StockLotService.buscar_por_nome` ja normaliza. Dono: `app/odoo/estoque/CLAUDE.md` / `scripts/transfer.py:48`. |
-| **G021 (estoque): resolucao de lote por nome sem `company_id` retorna lote de empresa errada silenciosamente** | Mesmo nome de lote existe em FB e LF; busca sem filtro `company_id` retorna lote de company errada → erro "Empresas incompatíveis" downstream | **SEMPRE filtrar `company_id` em toda busca de `stock.lot` por nome.** `StockLotService` ja aplica. Dono: `app/odoo/estoque/CLAUDE.md` / `scripts/transfer.py`. |
+| `stock.lot.name` com `=` instavel | Busca de lote por nome | Ver [G002 (estoque)](#g002-estoque--stocklotname-operador-) |
+| Lote de empresa errada sem `company_id` | Busca de lote por nome | Ver [G021 (estoque)](#g021-estoque--lote-exige-company_id) |
 
 ### Recalcular Impostos em `sale.order` (BR): NUNCA `action_update_taxes`
 
@@ -289,6 +289,42 @@ for qc in quality_checks:
 # SO DEPOIS validar picking
 odoo.execute_kw('stock.picking', 'button_validate', [[picking_id]])
 ```
+
+### G002 (estoque) — stock.lot.name operador =
+
+`stock.lot.name` com operador `=` e instavel em buscas XML-RPC — retorna vazio
+ou resultados errados intermitentemente.
+
+```python
+# ERRADO: intermitente (retorna vazio mesmo com lote existente)
+odoo.search('stock.lot', [['name', '=', nome_lote], ['product_id', '=', pid]])
+
+# CORRETO: operador 'in' (lista); fallback '=like'
+odoo.search('stock.lot', [['name', 'in', [nome_lote]], ['product_id', '=', pid]])
+```
+
+Helper canonico `StockLotService.buscar_por_nome` ja normaliza (`in` + fallback `=like`).
+Dono: `app/odoo/estoque/CLAUDE.md` / `app/odoo/estoque/scripts/transfer.py:48`.
+
+### G021 (estoque) — lote exige company_id
+
+Resolucao de lote por nome SEM filtro `company_id` retorna lote de empresa errada
+silenciosamente (mesmo nome de lote existe em FB e LF) → erro "Empresas
+incompatíveis" downstream.
+
+```python
+# ERRADO: pode retornar lote da LF quando a operacao e na FB
+odoo.search('stock.lot', [['name', 'in', [nome]], ['product_id', '=', pid]])
+
+# CORRETO: SEMPRE filtrar company_id
+odoo.search('stock.lot', [
+    ['name', 'in', [nome]], ['product_id', '=', pid],
+    ['company_id', '=', company_id],
+])
+```
+
+`StockLotService` ja aplica. Dono: `app/odoo/estoque/CLAUDE.md` /
+`app/odoo/estoque/scripts/transfer.py`.
 
 ---
 
