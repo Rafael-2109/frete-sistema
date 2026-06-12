@@ -547,7 +547,7 @@ class TestCheckContagensRouting:
             routing_path=refs_dir / "ROUTING_SKILLS.md",
             skills_validas={"skill-a", "skill-b"},
         )
-        assert any("53" in e or "total" in e.lower() or "invocaveis" in e for e in erros), f"erros={erros}"
+        assert any("total" in e.lower() or "invocaveis" in e for e in erros), f"erros={erros}"
 
     def test_subsecao_errada_gera_erro(self, tmp_path):
         """Subsecao com contagem errada -> ERRO."""
@@ -596,6 +596,50 @@ class TestCheckContagensRouting:
         )
         assert erros == []
         assert len(avisos) == 1
+
+    def test_heading_renomeado_emite_aviso(self, tmp_path):
+        """Routing EXISTE mas heading/headline renomeados -> AVISO (lint nao
+        pode se auto-desarmar em silencio)."""
+        refs_dir = tmp_path / ".claude/references"
+        refs_dir.mkdir(parents=True)
+        # heading com hifen no lugar do em-dash + headline sem '(N invocaveis'
+        linhas = [
+            "## Skills - Inventario Completo (2 skills)",
+            "",
+            "### Grupo A (2)",
+            "`skill-a` desc,",
+            "`skill-b` desc,",
+            "",
+        ]
+        (refs_dir / "ROUTING_SKILLS.md").write_text("\n".join(linhas), encoding="utf-8")
+        erros, avisos = mod.check_contagens_routing(
+            routing_path=refs_dir / "ROUTING_SKILLS.md",
+            skills_validas={"skill-a", "skill-b"},
+        )
+        assert erros == []
+        # headline nao encontrada + nenhuma subsecao parseada (heading do
+        # inventario renomeado) = 2 avisos
+        assert len(avisos) == 2, f"avisos={avisos}"
+        assert any("headline" in a for a in avisos)
+        assert any("subsecao" in a for a in avisos)
+
+    def test_heading_renomeado_emite_aviso_nomes_inventario(self, tmp_path):
+        """check_nomes_inventario_routing tambem avisa com heading renomeado."""
+        refs_dir = tmp_path / ".claude/references"
+        refs_dir.mkdir(parents=True)
+        (refs_dir / "ROUTING_SKILLS.md").write_text(
+            "## Skills - Inventario (renomeado)\n\n### Grupo A (1)\n`skill-x`\n",
+            encoding="utf-8",
+        )
+        erros, avisos = mod.check_nomes_inventario_routing(
+            routing_path=refs_dir / "ROUTING_SKILLS.md",
+            skills_dir=tmp_path / ".claude/skills",
+            agents_stems=set(),
+            skills_externas=set(),
+        )
+        assert erros == []
+        assert len(avisos) == 1, f"avisos={avisos}"
+        assert "subsecao" in avisos[0]
 
     def test_repo_real_contagens_ok(self):
         """Verifica que o repositorio real tem contagens consistentes."""
@@ -700,6 +744,9 @@ class TestCheckBudgetSubagente:
 
     def test_repo_real_gestor_estoque_odoo_emite_aviso(self):
         """gestor-estoque-odoo no repo real deve emitir AVISO BUDGET (> 8000c)."""
+        # NOTA T1.2: este teste asserta a VIOLACAO atual; ao reduzir descriptions
+        # na T1.2, INVERTER para assert de estado limpo + flipar
+        # BUDGET_SUBAGENTE_ENFORCE=True
         _, avisos = mod.check_budget_subagentes(
             agents_dir=ROOT / ".claude/agents",
             skills_dir=ROOT / ".claude/skills",
@@ -746,6 +793,9 @@ class TestCheckConsistenciaIntegrado:
 
     def test_check_consistencia_aviso_budget_propagado(self):
         """AVISO BUDGET deve aparecer nos avisos de check_consistencia()."""
+        # NOTA T1.2: este teste asserta a VIOLACAO atual; ao reduzir descriptions
+        # na T1.2, INVERTER para assert de estado limpo + flipar
+        # BUDGET_SUBAGENTE_ENFORCE=True
         _, avisos = mod.check_consistencia()
         # Com BUDGET_SUBAGENTE_ENFORCE=False, deve ter pelo menos 1 aviso de budget
         avisos_budget = [a for a in avisos if "BUDGET" in a.upper() or "budget" in a.lower()]

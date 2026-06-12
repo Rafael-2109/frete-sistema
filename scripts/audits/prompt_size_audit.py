@@ -242,9 +242,10 @@ def check_anti_gatilhos(skills_dir=None, agents_stems=None, skills_externas=None
     # Skills validas: SKILL.md existente OU apenas diretorio (ex: consultando-sql)
     skills_validas = {p.parent.name for p in skills_dir.glob("*/SKILL.md")}
     # Adicionar diretorios sem SKILL.md que existam
-    for d in skills_dir.iterdir():
-        if d.is_dir():
-            skills_validas.add(d.name)
+    if skills_dir.exists():
+        for d in skills_dir.iterdir():
+            if d.is_dir():
+                skills_validas.add(d.name)
 
     erros = []
     avisos = []
@@ -313,6 +314,7 @@ def check_contagens_routing(routing_path=None, skills_validas=None):
         return [], [f"ROUTING_SKILLS.md ausente em {routing_path} — contagens nao verificadas"]
 
     erros = []
+    avisos = []
     txt = routing_path.read_text(encoding="utf-8")
 
     # 1. Verificar total na headline
@@ -328,10 +330,26 @@ def check_contagens_routing(routing_path=None, skills_validas=None):
                 f"mas o filesystem tem {total_real} "
                 f"(ajuste a contagem ou adicione/remova a skill correspondente)"
             )
+    else:
+        # Lint nao pode se auto-desarmar em silencio: heading renomeado/reformatado
+        # (ex.: em-dash -> hifen) faria o check passar sem verificar nada.
+        avisos.append(
+            f"ROUTING_SKILLS.md existe mas a headline "
+            f"'## Skills — Inventario Completo (N invocaveis' nao foi encontrada — "
+            f"contagem total NAO verificada (heading renomeado? atualize o regex "
+            f"em check_contagens_routing)"
+        )
 
     # 2. Verificar subsecoes '### Grupo (N)' — mesma extracao depth-0 do check (a.2),
     # garantindo coerencia: nome listado ou conta (se valido) ou e' ERRO no (a.2).
-    for grupo, conta_declarada, segmento in _subsecoes_inventario_routing(txt):
+    subsecoes = _subsecoes_inventario_routing(txt)
+    if not subsecoes:
+        avisos.append(
+            f"ROUTING_SKILLS.md existe mas nenhuma subsecao '### Grupo (N)' foi "
+            f"encontrada no inventario — contagens por grupo NAO verificadas "
+            f"(heading do inventario renomeado? atualize _subsecoes_inventario_routing)"
+        )
+    for grupo, conta_declarada, segmento in subsecoes:
         nomes_listados = [n for n, _ in _nomes_listados_inventario(segmento)]
         nomes_validos = [n for n in nomes_listados if n in skills_validas]
         conta_real = len(nomes_validos)
@@ -343,7 +361,7 @@ def check_contagens_routing(routing_path=None, skills_validas=None):
                 f"(skills listadas: {nomes_validos})"
             )
 
-    return erros, []
+    return erros, avisos
 
 
 def check_nomes_inventario_routing(routing_path=None, skills_dir=None,
@@ -377,9 +395,18 @@ def check_nomes_inventario_routing(routing_path=None, skills_dir=None,
         skills_validas = {d.name for d in skills_dir.iterdir() if d.is_dir()}
 
     erros = []
+    avisos = []
     txt = routing_path.read_text(encoding="utf-8")
 
-    for grupo, _conta, segmento in _subsecoes_inventario_routing(txt):
+    subsecoes = _subsecoes_inventario_routing(txt)
+    if not subsecoes:
+        # Lint nao pode se auto-desarmar em silencio (heading renomeado).
+        avisos.append(
+            f"ROUTING_SKILLS.md existe mas nenhuma subsecao '### Grupo (N)' foi "
+            f"encontrada no inventario — nomes listados NAO verificados "
+            f"(heading do inventario renomeado? atualize _subsecoes_inventario_routing)"
+        )
+    for grupo, _conta, segmento in subsecoes:
         for nome, pos_fim in _nomes_listados_inventario(segmento):
             if nome in skills_validas or nome in agents_stems or nome in skills_externas:
                 continue
@@ -393,7 +420,7 @@ def check_nomes_inventario_routing(routing_path=None, skills_dir=None,
                 f"parenteses)"
             )
 
-    return erros, []
+    return erros, avisos
 
 
 def check_chaves_mapper(mapper_path=None, skills_dir=None, commands_dir=None,
