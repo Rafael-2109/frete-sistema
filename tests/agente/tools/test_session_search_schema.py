@@ -60,3 +60,17 @@ class TestSessionSearchSchema:
         # additionalProperties:false e' mantido (strict schema), mas agora com os campos certos
         for tool in (st.search_sessions, st.list_recent_sessions, st.semantic_search_sessions):
             assert _final_schema(tool)["additionalProperties"] is False
+
+    def test_get_subagent_transcript_opcionais_nao_required(self):
+        # follow-up 2026-06-12: dict-simples forcava include_tools_detail/target_user_id
+        # como required (factory all-required); handler so exige session_id + agent_type
+        schema = _final_schema(st.get_subagent_transcript)
+        assert schema["required"] == ["session_id", "agent_type"]
+        assert "include_tools_detail" in schema["properties"]
+        assert "target_user_id" in schema["properties"]
+
+    def test_list_session_users_limit_opcional(self):
+        # limit tem default 20 no handler -> nada obrigatorio
+        schema = _final_schema(st.list_session_users)
+        assert schema.get("required", []) == []
+        assert schema["properties"]["limit"]["type"] == "integer"

@@ -76,8 +76,10 @@ CAMPOS = {
     'account_full_reconcile': [
         # NOTA: 'name' NAO existe em account.full.reconcile na instancia CIEL IT
         # (Odoo rejeita com ValueError: Invalid field 'name'). Confirmado em runtime
-        # ao rastrear NF 139310 (2026-06-09). O campo nunca foi consumido no codigo.
-        'id', 'reconciled_line_ids', 'partial_reconcile_ids',
+        # ao rastrear NF 139310 (2026-06-09) e pelo dump fields_get offline
+        # (scripts/analise_baixa_titulos/documentacao/account_full_reconcile_campos.json).
+        # Para rotulo no print, usar 'display_name' (computado, existe no modelo).
+        'id', 'display_name', 'reconciled_line_ids', 'partial_reconcile_ids',
     ],
     'account_bank_statement_line': [
         'id', 'date', 'payment_ref', 'partner_id', 'amount', 'move_id',
@@ -698,7 +700,8 @@ def imprimir_fluxo(resultado: Dict):
         if concs:
             print(f"\n🔗 CONCILIAÇÕES ({len(concs)})")
             for c in concs[:3]:
-                print(f"   [{c.get('id')}] {c.get('name', 'N/A')}")
+                # account.full.reconcile nao tem 'name' (ver NOTA em CAMPOS) — display_name e o rotulo
+                print(f"   [{c.get('id')}] {c.get('display_name', 'N/A')}")
 
     elif tipo == 'venda':
         # SO

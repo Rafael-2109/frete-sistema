@@ -17,7 +17,7 @@ Uso pelo agente:
 
 import logging
 import threading
-from typing import Annotated, Any, Dict, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple
 from contextvars import ContextVar
 
 logger = logging.getLogger(__name__)
@@ -668,7 +668,12 @@ try:
             "Retorna user_id, nome, total de sessões, breakdown web/teams e última atividade. "
             "Use para descobrir target_user_id antes de buscar sessões de outro usuário."
         ),
-        {"limit": Annotated[int, "Numero maximo de usuarios a retornar (default 20, max 50). Requer debug mode"]},
+        {
+            "type": "object",
+            "properties": {
+                "limit": {"type": "integer", "description": "Numero maximo de usuarios a retornar (default 20, max 50). Requer debug mode"},
+            },
+        },
         annotations=ToolAnnotations(
             readOnlyHint=True,
             destructiveHint=False,
@@ -800,10 +805,14 @@ try:
             "generico (use search_sessions). Admin (debug_mode) pode usar target_user_id."
         ),
         {
-            "session_id": Annotated[str, "UUID da sessao (ex: '6cfe04d6-5f1f-...')"],
-            "agent_type": Annotated[str, "Tipo do subagente (ex: 'analista-carteira', 'raio-x-pedido')"],
-            "include_tools_detail": Annotated[bool, "Se True, inclui lista de tools com args/results resumidos (default True)"],
-            "target_user_id": Annotated[int, "Admin-only (debug_mode): investigar sessao de outro usuario"],
+            "type": "object",
+            "properties": {
+                "session_id": {"type": "string", "description": "UUID da sessao (ex: '6cfe04d6-5f1f-...')"},
+                "agent_type": {"type": "string", "description": "Tipo do subagente (ex: 'analista-carteira', 'raio-x-pedido')"},
+                "include_tools_detail": {"type": "boolean", "description": "Se True, inclui lista de tools com args/results resumidos (default True)"},
+                "target_user_id": {"type": "integer", "description": "Admin-only (debug_mode): investigar sessao de outro usuario"},
+            },
+            "required": ["session_id", "agent_type"],
         },
         annotations=ToolAnnotations(
             readOnlyHint=True,

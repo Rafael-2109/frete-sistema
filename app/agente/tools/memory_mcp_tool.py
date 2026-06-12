@@ -18,7 +18,7 @@ import logging
 import re
 import threading
 from contextvars import ContextVar
-from typing import Annotated, Any, Optional
+from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -1890,7 +1890,13 @@ try:
         "Use path='/memories' para listar diretórios. "
         "Use path='/memories/user.xml' para ver arquivo específico. "
         "Esta ferramenta é sua ÚNICA fonte de contexto cross-session.",
-        {"path": Annotated[str, "Path da memoria a visualizar. Raiz: /memories. Subdiretorios: user.xml, preferences.xml, corrections/, empresa/. Use /memories para listar tudo"]},
+        {
+            "type": "object",
+            "properties": {
+                "path": {"type": "string", "description": "Path da memoria a visualizar. Raiz: /memories. Subdiretorios: user.xml, preferences.xml, corrections/, empresa/. Use /memories para listar tudo"},
+                "target_user_id": {"type": "integer", "description": "Admin-only (debug mode): visualizar memorias de outro usuario"},
+            },
+        },
         annotations=ToolAnnotations(
             readOnlyHint=True,
             destructiveHint=False,
@@ -1991,7 +1997,17 @@ try:
         "'WHEN: <gatilho>' e 'DO: <acao concreta>' (content sem DO é rejeitado "
         "com instrucoes). "
         "Se o arquivo já existir, o conteúdo será SUBSTITUÍDO.",
-        {"path": Annotated[str, "Path completo onde salvar (ex: /memories/user.xml, /memories/corrections/regra_frete.md, /memories/empresa/termos/palmito.md)"], "content": Annotated[str, "Conteudo da memoria em formato texto ou XML. Para user.xml e preferences.xml, usar formato XML existente"], "priority": Annotated[str, "Prioridade: 'mandatory' (regra usuario) | 'advisory' (diretriz operacional) | 'contextual' (default) - mapeia para 3 canais de memoria via injection"]},
+        {
+            "type": "object",
+            "properties": {
+                "path": {"type": "string", "description": "Path completo onde salvar (ex: /memories/user.xml, /memories/corrections/regra_frete.md, /memories/empresa/termos/palmito.md)"},
+                "content": {"type": "string", "description": "Conteudo da memoria em formato texto ou XML. Para user.xml e preferences.xml, usar formato XML existente"},
+                "priority": {"type": "string", "enum": ["mandatory", "advisory", "contextual"], "description": "Prioridade: 'mandatory' (regra usuario) | 'advisory' (diretriz operacional) | 'contextual' (default) - mapeia para 3 canais de memoria via injection"},
+                "category": {"type": "string", "enum": ["permanent", "structural", "operational", "contextual"], "description": "Override opcional da categoria; sem informar, classificacao automatica por heuristica de path + content"},
+                "target_user_id": {"type": "integer", "description": "Admin-only (debug mode): salvar memoria para outro usuario"},
+            },
+            "required": ["path", "content"],
+        },
         annotations=ToolAnnotations(
             readOnlyHint=False,
             destructiveHint=False,
@@ -2341,7 +2357,16 @@ try:
         "Substitui um trecho de texto em um arquivo de memória existente. "
         "O old_str deve ser encontrado exatamente UMA vez no arquivo. "
         "Use para atualizar informações específicas sem reescrever o arquivo inteiro.",
-        {"path": Annotated[str, "Path da memoria a atualizar"], "old_str": Annotated[str, "Texto EXATO a substituir (deve aparecer exatamente uma vez no conteudo atual)"], "new_str": Annotated[str, "Novo texto para substituir old_str (pode ser string vazia para deletar trecho)"]},
+        {
+            "type": "object",
+            "properties": {
+                "path": {"type": "string", "description": "Path da memoria a atualizar"},
+                "old_str": {"type": "string", "description": "Texto EXATO a substituir (deve aparecer exatamente uma vez no conteudo atual)"},
+                "new_str": {"type": "string", "description": "Novo texto para substituir old_str (pode ser string vazia para deletar trecho)"},
+                "target_user_id": {"type": "integer", "description": "Admin-only (debug mode): atualizar memoria de outro usuario"},
+            },
+            "required": ["path", "old_str"],
+        },
         annotations=ToolAnnotations(
             readOnlyHint=False,
             destructiveHint=False,
@@ -2505,7 +2530,14 @@ try:
         "delete_memory",
         "Deleta um arquivo ou diretório de memória. "
         "Não é possível deletar o diretório raiz /memories.",
-        {"path": Annotated[str, "Path da memoria ou diretorio a deletar permanentemente"]},
+        {
+            "type": "object",
+            "properties": {
+                "path": {"type": "string", "description": "Path da memoria ou diretorio a deletar permanentemente"},
+                "target_user_id": {"type": "integer", "description": "Admin-only (debug mode): deletar memoria de outro usuario"},
+            },
+            "required": ["path"],
+        },
         annotations=ToolAnnotations(
             readOnlyHint=False,
             destructiveHint=True,
@@ -2699,7 +2731,12 @@ try:
         "Limpa TODAS as memórias do usuário. "
         "Use apenas quando o usuário pedir explicitamente para limpar tudo. "
         "Esta ação é IRREVERSÍVEL.",
-        {},
+        {
+            "type": "object",
+            "properties": {
+                "target_user_id": {"type": "integer", "description": "Admin-only (debug mode): limpar memorias de outro usuario"},
+            },
+        },
         annotations=ToolAnnotations(
             readOnlyHint=False,
             destructiveHint=True,
@@ -2752,7 +2789,14 @@ try:
         "injeção por baixa efetividade (injetadas 20+ vezes sem nunca serem usadas na resposta). "
         "Use quando precisar consultar histórico de informações antigas que não aparecem mais "
         "no contexto automático. Busca por texto no conteúdo e path.",
-        {"query": Annotated[str, "Texto para buscar no conteudo e path das memorias frias (arquivadas). Busca case-insensitive por substring"]},
+        {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "Texto para buscar no conteudo e path das memorias frias (arquivadas). Busca case-insensitive por substring"},
+                "target_user_id": {"type": "integer", "description": "Admin-only (debug mode): buscar memorias frias de outro usuario"},
+            },
+            "required": ["query"],
+        },
         annotations=ToolAnnotations(
             readOnlyHint=True,
             destructiveHint=False,
@@ -2852,7 +2896,15 @@ try:
         "Use para ver quando e por quem a memória foi alterada, "
         "e o conteúdo de versões anteriores (preview de 200 chars). "
         "Útil para auditoria ou antes de restaurar uma versão antiga.",
-        {"path": Annotated[str, "Path da memoria cujo historico de versoes sera consultado"], "limit": Annotated[int, "Maximo de versoes a retornar (1-20, default 5)"]},
+        {
+            "type": "object",
+            "properties": {
+                "path": {"type": "string", "description": "Path da memoria cujo historico de versoes sera consultado"},
+                "limit": {"type": "integer", "description": "Maximo de versoes a retornar (1-20, default 5)"},
+                "target_user_id": {"type": "integer", "description": "Admin-only (debug mode): consultar historico de memoria de outro usuario"},
+            },
+            "required": ["path"],
+        },
         annotations=ToolAnnotations(
             readOnlyHint=True,
             destructiveHint=False,
@@ -2956,7 +3008,15 @@ try:
         "Restaura uma versão anterior de uma memória. "
         "O conteúdo atual é salvo como nova versão antes da restauração (backup automático). "
         "Use view_memory_history primeiro para ver versões disponíveis.",
-        {"path": Annotated[str, "Path da memoria a restaurar para versao anterior"], "version": Annotated[int, "Numero da versao a restaurar (use view_memory_history para ver versoes disponiveis)"]},
+        {
+            "type": "object",
+            "properties": {
+                "path": {"type": "string", "description": "Path da memoria a restaurar para versao anterior"},
+                "version": {"type": "integer", "description": "Numero da versao a restaurar (use view_memory_history para ver versoes disponiveis)"},
+                "target_user_id": {"type": "integer", "description": "Admin-only (debug mode): restaurar memoria de outro usuario"},
+            },
+            "required": ["path", "version"],
+        },
         annotations=ToolAnnotations(
             readOnlyHint=False,
             destructiveHint=False,
@@ -3099,7 +3159,14 @@ try:
         "Use quando o usuário confirmar que uma pendência listada já foi tratada, "
         "ou quando você mesmo completar a tarefa descrita. "
         "A pendência simplesmente desaparece do contexto de sessões futuras.",
-        {"description": Annotated[str, "Texto EXATO da pendencia a marcar como resolvida (deve corresponder a uma pendencia existente no briefing)"]},
+        {
+            "type": "object",
+            "properties": {
+                "description": {"type": "string", "description": "Texto EXATO da pendencia a marcar como resolvida (deve corresponder a uma pendencia existente no briefing)"},
+                "target_user_id": {"type": "integer", "description": "Admin-only (debug mode): resolver pendencia de outro usuario"},
+            },
+            "required": ["description"],
+        },
         annotations=ToolAnnotations(
             readOnlyHint=False,
             destructiveHint=False,
@@ -3198,7 +3265,15 @@ try:
         "'API do HIBP retorna 429 se bater mais de 1 req/1.5s', "
         "'campo fiscal X só recalcula via Playwright, não XML-RPC'. "
         "Diferente de corrections (erros do agente) — são conhecimentos sobre armadilhas do sistema.",
-        {"area": Annotated[str, "Area do sistema: odoo, ssw, banco, deploy, api, frete, carteira, financeiro"], "description": Annotated[str, "Descricao da armadilha/gotcha operacional encontrada no sistema (max 20 pitfalls ativos)"]},
+        {
+            "type": "object",
+            "properties": {
+                "area": {"type": "string", "description": "Area do sistema: odoo, ssw, banco, deploy, api, frete, carteira, financeiro"},
+                "description": {"type": "string", "description": "Descricao da armadilha/gotcha operacional encontrada no sistema (max 20 pitfalls ativos)"},
+                "target_user_id": {"type": "integer", "description": "Admin-only (debug mode): registrar pitfall em nome de outro usuario"},
+            },
+            "required": ["area", "description"],
+        },
         annotations=ToolAnnotations(
             readOnlyHint=False,
             destructiveHint=False,
@@ -3356,9 +3431,14 @@ try:
         "'quais transportadoras atendem AM?', ou 'que relações existem com este cliente?'. "
         "Retorna entidades relacionadas, tipos de relação e memórias associadas.",
         {
-            "entity_name": Annotated[str, "Nome da entidade a buscar (ex: RODONAVES, AM, Atacadao). Case-insensitive, busca por ILIKE"],
-            "entity_type": Annotated[Optional[str], "Filtro opcional: transportadora, uf, cliente, produto, pedido, fornecedor, conceito. Se omitido, busca todos os tipos"],
-            "max_hops": Annotated[Optional[int], "Profundidade da busca: 1 (relacoes diretas) ou 2 (relacoes de relacoes). Default: 1"],
+            "type": "object",
+            "properties": {
+                "entity_name": {"type": "string", "description": "Nome da entidade a buscar (ex: RODONAVES, AM, Atacadao). Case-insensitive, busca por ILIKE"},
+                "entity_type": {"type": "string", "description": "Filtro opcional: transportadora, uf, cliente, produto, pedido, fornecedor, conceito. Se omitido, busca todos os tipos"},
+                "max_hops": {"type": "integer", "description": "Profundidade da busca: 1 (relacoes diretas) ou 2 (relacoes de relacoes). Default: 1"},
+                "target_user_id": {"type": "integer", "description": "Admin-only (debug mode): consultar grafo de outro usuario"},
+            },
+            "required": ["entity_name"],
         },
         annotations=ToolAnnotations(
             readOnlyHint=True,
@@ -3547,11 +3627,16 @@ try:
         "bastam). Nao espere o batch D8. Diferente de log_system_pitfall (armadilhas do "
         "ambiente) — isto vai para o dialogo de melhoria Agent SDK <-> Claude Code.",
         {
-            "category": Annotated[str, "Categoria: skill_bug, skill_suggestion, instruction_request, prompt_feedback, gotcha_report, memory_feedback"],
-            "severity": Annotated[str, "Severidade: critical (erro/frustacao recorrente), warning (melhoria significativa), info (nice-to-have)"],
-            "title": Annotated[str, "Titulo conciso da sugestao (max 100 chars)"],
-            "description": Annotated[str, "Prescritiva quando souber o fix (o que deve mudar e por que; para skill_bug: nome da skill, o que fez errado, o que deveria fazer). Sem fix em maos? Hipotese + sintoma, etiquetada como hipotese"],
-            "evidence": Annotated[str, "Evidencia da sessao: o que aconteceu, IDs envolvidos, valores, o que falhou. O que tiver — ausencia NAO bloqueia o registro"],
+            "type": "object",
+            "properties": {
+                "category": {"type": "string", "enum": ["skill_bug", "skill_suggestion", "instruction_request", "prompt_feedback", "gotcha_report", "memory_feedback"], "description": "Categoria da sugestao"},
+                "severity": {"type": "string", "enum": ["critical", "warning", "info"], "description": "Severidade: critical (erro/frustacao recorrente), warning (melhoria significativa), info (nice-to-have). Default: info"},
+                "title": {"type": "string", "description": "Titulo conciso da sugestao (max 100 chars)"},
+                "description": {"type": "string", "description": "Prescritiva quando souber o fix (o que deve mudar e por que; para skill_bug: nome da skill, o que fez errado, o que deveria fazer). Sem fix em maos? Hipotese + sintoma, etiquetada como hipotese"},
+                "evidence": {"type": "string", "description": "Evidencia da sessao: o que aconteceu, IDs envolvidos, valores, o que falhou. O que tiver — ausencia NAO bloqueia o registro"},
+                "target_user_id": {"type": "integer", "description": "Admin-only (debug mode): registrar em nome de outro usuario"},
+            },
+            "required": ["category", "title", "description"],
         },
         annotations=ToolAnnotations(
             readOnlyHint=False,

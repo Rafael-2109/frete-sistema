@@ -180,14 +180,14 @@ app/agente/                          # Root — 7 arquivos
 │   ├── _mcp_enhanced.py             # Wrapper Enhanced (outputSchema + structuredContent)
 │   ├── artifact_tool.py             # build_artifact MCP tool (Enhanced v1.0)
 │   ├── buscar_tabelas_tool.py       # buscar_tabelas: descoberta de tabela por intencao (S1, Enhanced v1.0)
-│   ├── memory_mcp_tool.py           # 12 operacoes de memoria (Enhanced v2.1.0)
+│   ├── memory_mcp_tool.py           # 13 operacoes de memoria (Enhanced v2.2.0)
 │   ├── ontology_query_tool.py       # Query da ontologia/knowledge graph (MCP tool)
 │   ├── playwright_mcp_tool.py       # Browser automation (13 tools, SSW + Atacadao)
 │   ├── resolver_mcp_tool.py         # Resolvedores deterministicos (app.resolvedores) — fonte-que-prova entidade
 │   ├── render_logs_tool.py          # Consulta logs Render
 │   ├── routes_search_tool.py        # Busca em rotas Flask
 │   ├── schema_mcp_tool.py           # Consulta schemas de tabelas
-│   ├── session_search_tool.py       # 4 operacoes de busca em sessoes (Enhanced v4.0.0)
+│   ├── session_search_tool.py       # 5 operacoes de busca em sessoes (Enhanced v4.1.0)
 │   ├── sql_session_context.py       # Helpers de contexto SQL por sessao
 │   ├── teams_card_tool.py           # Adaptive Cards para Teams (rich responses)
 │   └── text_to_sql_tool.py          # Text-to-SQL (Enhanced v2.0.0)
@@ -513,7 +513,7 @@ Screenshots Playwright (`playwright-screenshots/{YYYY-MM}/`) e archive de sessoe
 Guia completo de regras (R1-R5), gotchas e interdependencias: [`services/CLAUDE.md`](./services/CLAUDE.md).
 Todos controlados por feature flags em `config/feature_flags.py`.
 
-### MCP Tools de memoria (memory_mcp_tool.py v2.1.0 Enhanced, 12 operacoes)
+### MCP Tools de memoria (memory_mcp_tool.py v2.2.0 Enhanced, 13 operacoes)
 | Tool | O que faz |
 |------|-----------|
 | `view_memories` | Le memoria por path |
@@ -527,18 +527,24 @@ Todos controlados por feature flags em `config/feature_flags.py`.
 | `restore_memory_version` | Restaura versao anterior (backup automatico do atual) |
 | `resolve_pendencia` | Marca pendencia como resolvida (desaparece do briefing) |
 | `log_system_pitfall` | Registra armadilha/gotcha do sistema (max 20, category=structural) |
+| `query_knowledge_graph` | Consulta relacoes entre entidades no Knowledge Graph de memorias |
 | `register_improvement` | Registra sugestao de melhoria real-time para Claude Code (skill_bug, skill_suggestion, etc.) |
 
-**Admin (debug mode)**: TODAS as 12 tools aceitam `target_user_id=N` para acesso cross-user.
+**Admin (debug mode)**: TODAS as 13 tools aceitam `target_user_id=N` para acesso cross-user.
 Validacao: `_resolve_user_id(args)` — requer `get_debug_mode() == True`. Todo acesso logado.
+**GOTCHA schema (fix 2026-06-12)**: declarar campo no handler NAO basta — o `input_schema`
+dict-simples faz o factory marcar tudo `required` + `additionalProperties:false`, rejeitando
+`target_user_id` ANTES do handler. Schemas devem ser dict-completo (type+properties+required);
+travado por `tests/agente/tools/test_memory_mcp_schema.py`.
 
-### MCP Tools de sessao (session_search_tool.py v4.0.0 Enhanced, 4 operacoes)
+### MCP Tools de sessao (session_search_tool.py v4.1.0 Enhanced, 5 operacoes)
 | Tool | O que faz |
 |------|-----------|
 | `search_sessions` | Busca textual (ILIKE) em sessoes anteriores |
 | `list_recent_sessions` | Lista sessoes recentes com titulo, data, resumo |
 | `semantic_search_sessions` | Busca semantica via embeddings (fallback ILIKE) |
 | `list_session_users` | Lista usuarios com sessoes — **admin-only, debug mode** |
+| `get_subagent_transcript` | Transcript completo de subagente executado em uma sessao (tools, duracao, findings) |
 
 **Admin (debug mode)**: `search_sessions`, `list_recent_sessions` e `semantic_search_sessions`
 aceitam `target_user_id=N` para busca cross-user. `channel='teams'|'web'` filtra por canal.

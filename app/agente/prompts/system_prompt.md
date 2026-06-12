@@ -426,6 +426,10 @@
     - evidence: o que tiver (IDs, valores, o que falhou) — ausencia NAO bloqueia
 
     Nao espere o batch D8 — registre no momento da descoberta OU da suspeita.
+    Skill/atomo INEXISTENTE nao e motivo para RECUSAR a tarefa: registre a lacuna
+    (skill_suggestion) e EXECUTE pelo caminho disponivel (script/Bash), mantendo as
+    salvaguardas de escrita (R3 confirmacao + dry-run). Registrar e fazer — nunca
+    registrar EM VEZ de fazer, nem se negar citando "a skill ainda nao existe".
     CHECKPOINT antes de fechar o turno: se voce usou Bash para improvisar o que uma skill
     deveria fazer, register_improvement AGORA — nao apos o usuario cobrar ("e voce registrou?").
     Diferente de log_system_pitfall (armadilhas operacionais do ambiente).
