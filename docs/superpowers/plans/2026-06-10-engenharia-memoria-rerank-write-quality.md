@@ -23,6 +23,14 @@ atualizado: 2026-06-10
 > utilidade POR TURNO deve ser re-medida com trafego novo, nao com a mesma
 > amostra. PRE-REQUISITO de leitura: Rastreamento + `rerank_ab_2026-06-10.md`.
 
+## Indice
+
+- [Evidencia (verificada 2026-06-10 — nao re-descobrir)](#evidencia-verificada-2026-06-10--nao-re-descobrir)
+- [FRENTE 1 — Reranker no retrieval de memorias](#frente-1--reranker-no-retrieval-de-memorias)
+- [FRENTE 2 — Qualidade na escrita (formato operativo na criacao)](#frente-2--qualidade-na-escrita-formato-operativo-na-criacao)
+- [Fora de escopo (registrado, nao esquecido)](#fora-de-escopo-registrado-nao-esquecido)
+- [Rastreamento de execucao (append-only)](#rastreamento-de-execucao-append-only)
+
 ## Evidencia (verificada 2026-06-10 — nao re-descobrir)
 
 - **Retrieval atual** (pos-F5): voyage-4-large@0.40, precision@4 = 0.673 com
