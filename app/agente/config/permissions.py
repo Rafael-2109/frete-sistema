@@ -802,10 +802,25 @@ async def can_use_tool(
                     except Exception as e:
                         logger.error(f"[PERMISSION] Erro ao atualizar TeamsTask: {e}", exc_info=True)
 
-                    # Bloqueia até o usuário responder via card no Teams
-                    # (timeout = TEAMS_ASK_USER_TIMEOUT, default 180s — env-configuravel)
+                    # Aguarda a resposta do card no Teams (timeout =
+                    # TEAMS_ASK_USER_TIMEOUT, env-configuravel).
+                    # Espera ASSINCRONA quando ha event loop (path persistente/pool):
+                    # suspende a coroutine em vez de BLOQUEAR o loop COMPARTILHADO do
+                    # pool por ate o timeout — bloquear congelaria TODAS as outras
+                    # conversas. Espelha o path web (async_wait_for_answer, ja em
+                    # producao). Fallback sync defensivo se nao houver loop.
                     from app.agente.config.feature_flags import TEAMS_ASK_USER_TIMEOUT
-                    answers = wait_for_answer(current_session_id, timeout=TEAMS_ASK_USER_TIMEOUT)
+                    import asyncio as _asyncio
+                    try:
+                        _asyncio.get_running_loop()
+                        from app.agente.sdk.pending_questions import async_wait_for_answer
+                        answers = await async_wait_for_answer(
+                            current_session_id, timeout=TEAMS_ASK_USER_TIMEOUT
+                        )
+                    except RuntimeError:
+                        answers = wait_for_answer(
+                            current_session_id, timeout=TEAMS_ASK_USER_TIMEOUT
+                        )
 
                     if answers is None:
                         logger.warning(

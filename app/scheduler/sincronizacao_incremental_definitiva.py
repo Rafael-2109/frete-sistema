@@ -2406,6 +2406,36 @@ def executar_inicial():
         JANELA_CARTEIRA = janela_carteira_original
 
 
+def executar_reconciliacao_teams():
+    """Job periodico: re-entrega respostas do Teams que nunca chegaram ao usuario.
+
+    Root cause: a Azure Function `frete-bot-func` esta no plano Consumption
+    (sku Dynamic, alwaysOn=false) e escala a zero -> o POST /api/notify do
+    backend leva `Connection refused` transitorio em cold-start, deixando tasks
+    `completed` com `delivered_via IS NULL`. Esta varredura re-tenta a entrega
+    (a function ja foi 'cutucada'/esquentou). Best-effort, NUNCA derruba o
+    scheduler. Idempotente (claim atomico em delivered_via).
+
+    Segue o padrao de `executar_sincronizacao`: cria app por execucao + dispose
+    de conexoes (Render derruba SSL idle apos ~30-40s).
+    """
+    try:
+        from app import create_app, db
+        from app.teams.proactive import reconciliar_entregas_pendentes
+        app = create_app()
+        with app.app_context():
+            try:
+                db.session.close()
+                db.engine.dispose()
+            except Exception:
+                pass
+            res = reconciliar_entregas_pendentes()
+            if res.get("candidatas"):
+                logger.info(f"🔁 [TEAMS-RECONCILE] {res}")
+    except Exception as e:
+        logger.error(f"❌ [TEAMS-RECONCILE] job falhou: {e}", exc_info=True)
+
+
 def main():
     """
     Função principal - inicializa services FORA do contexto e configura scheduler
@@ -2446,6 +2476,22 @@ def main():
         misfire_grace_time=300,
         replace_existing=True
     )
+
+    # Reconciliador de entregas Teams (2026-06-12): re-entrega tasks finais
+    # orfas (delivered_via NULL) quando a Azure Function (Consumption/cold-start)
+    # recusou o POST /api/notify. Best-effort, isolado (try/except no job).
+    _teams_recon_min = int(os.getenv("TEAMS_RECONCILE_INTERVAL_MIN", "2"))
+    scheduler.add_job(
+        func=executar_reconciliacao_teams,
+        trigger="interval",
+        minutes=_teams_recon_min,
+        id="teams_reconcile_entregas",
+        name="Reconciliação de entregas Teams (órfãs delivered_via NULL)",
+        max_instances=1,
+        misfire_grace_time=120,
+        replace_existing=True
+    )
+    logger.info(f"   8. Reconciliação Teams: a cada {_teams_recon_min} min (re-entrega órfãs)")
 
     logger.info("=" * 60)
     logger.info("✅ Scheduler configurado com TODAS as correções:")

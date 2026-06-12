@@ -180,8 +180,10 @@ class TestNotifyFunctionDelivery:
             _cleanup([t])
 
     def test_post_falha_faz_rollback_do_claim(self, app_ctx, monkeypatch):
+        import time as _time
         from app.teams import proactive
         monkeypatch.setattr(proactive, '_function_url', lambda: 'https://fake.azurewebsites.net')
+        monkeypatch.setattr(_time, 'sleep', lambda s: None)  # retry+backoff: nao dormir
 
         def fake_post(url, **kwargs):
             raise ConnectionError('function fora do ar')
@@ -257,8 +259,10 @@ class TestNotifyFunctionPartial:
             _cleanup([t])
 
     def test_partial_post_falha_nao_avanca_offset(self, app_ctx, monkeypatch):
+        import time as _time
         from app.teams import proactive
         monkeypatch.setattr(proactive, '_function_url', lambda: 'https://fake.azurewebsites.net')
+        monkeypatch.setattr(_time, 'sleep', lambda s: None)  # retry+backoff: nao dormir
 
         def fake_post(url, **kwargs):
             raise ConnectionError('function fora do ar')

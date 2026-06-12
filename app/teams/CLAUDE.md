@@ -235,6 +235,35 @@ da Fase C ja tinha). Refinamento possivel: function informar chars entregues
 progressivamente ao fim do polling.
 — FONTE: `proactive.py:notify_function_partial`, `services.py:_heartbeat_loop`
 
+### ROOT CAUSE "morre mudo" / cold-start da function (2026-06-12)
+
+**A Azure Function `frete-bot-func` esta no plano CONSUMPTION** (`sku: Dynamic`,
+`alwaysOn: false`, `minimumElasticInstanceCount: 0`, SEM `ipSecurityRestrictions`)
+-> **escala a zero**. Em cold-start/reciclagem o `POST /api/notify` do backend
+para a function leva `[Errno 111] Connection refused` TRANSITORIO (o Azure ainda
+nao provisionou a instancia). Sintoma: tasks `completed`/`error` ficam com
+`delivered_via IS NULL` e o usuario NUNCA recebe a resposta (tarefas longas, que
+ja passaram do polling de 8,5 min, dependem 100% do `/api/notify`). Diagnostico:
+~48 orfas em 7 dias; 10/10 entregas OK em dia de uso intenso (function quente) vs
+0/2 em dia esparso (function fria). NAO eh firewall/IP (refutado pelo JSON da
+function) nem function morta (responde 401 publicamente).
+
+**Defesa em 2 camadas (P0):**
+1. **Retry+backoff** (`proactive.py:_post_notify`, `TEAMS_NOTIFY_BACKOFF=2,5,10`):
+   a 1a tentativa "cutuca" a function fria; as seguintes pegam ela ja quente.
+2. **Reconciliador** (`proactive.py:reconciliar_entregas_pendentes`, job no
+   scheduler a cada `TEAMS_RECONCILE_INTERVAL_MIN`): rede de seguranca que
+   re-entrega orfas com `delivered_via IS NULL` + `conversation_reference` +
+   idade em `[POLLING_WINDOW, TEAMS_RECONCILE_MAX_AGE_MIN]`. Idempotente (claim
+   atomico em `delivered_via`).
+
+> Orfas mais velhas que `TEAMS_RECONCILE_MAX_AGE_MIN` (default 6h) NAO sao
+> re-entregues (ref velha + resposta fora de contexto). Solucao definitiva da
+> FONTE seria Premium/EP1 (always-on, custo fixo) ou trazer `continue_conversation`
+> para o backend (elimina a ponte Render->Azure). O P0 absorve o cold-start sem custo.
+— FONTE: `proactive.py:_post_notify,reconciliar_entregas_pendentes`,
+`app/scheduler/sincronizacao_incremental_definitiva.py:executar_reconciliacao_teams`
+
 ### session_id vs sdk_session_id
 | ID | Escopo | Persistencia | Uso |
 |----|--------|-------------|-----|
@@ -261,7 +290,7 @@ NUNCA usar `create_app()` na thread. Reutilizar `current_app._get_current_object
 |------|---------|---------|
 | `TEAMS_DEFAULT_MODEL` | `claude-opus-4-8` | Modelo LLM (rollback: `claude-opus-4-7`) |
 | `TEAMS_ASYNC_MODE` | `true` | Async (thread) vs sync |
-| `TEAMS_ASK_USER_TIMEOUT` | `180` | Timeout Adaptive Card (seg) — doc dizia 120; default real e 180 (`feature_flags.py`) |
+| `TEAMS_ASK_USER_TIMEOUT` | `600` | Timeout Adaptive Card (seg) — subido 180→600 em 2026-06-12 (humano demora p/ responder card; resposta tardia levava 400). SEGURO porque a espera virou ASSINCRONA (`permissions.py:async_wait_for_answer`) e nao bloqueia mais o event loop do pool |
 | `TEAMS_INACTIVITY_TIMEOUT` | `300` | Sem chunk por 5 min = timeout (DC-9, sem teto absoluto); env configuravel desde Fase C — era constante hardcoded |
 | `TEAMS_PROGRESSIVE_STREAMING` | `true` | Flush parcial ao DB |
 | `TEAMS_STREAM_FLUSH_INTERVAL` | `4.0` | Intervalo flush (seg) |
@@ -270,6 +299,11 @@ NUNCA usar `create_app()` na thread. Reutilizar `current_app._get_current_object
 | `AGENT_BASELINE_FASTPATH` | `true` | "atualizar baseline" (Marcus) resolvido sem LLM. Ver `app/agente/sdk/baseline_fastpath.py`. Fase A 2026-06-10: fast-paths agora interceptam tambem no path ASYNC (`process_teams_task_async`) — antes so existiam no sync morto |
 | `AGENT_TEAMS_VINCULO_FASTPATH` | `true` | Fase A: fast-path `vincular ABC123` (pareamento de identidade, meta-comando sem LLM/sessao). Ver `app/agente/sdk/vincular_teams_fastpath.py` |
 | `TEAMS_PROACTIVE_DELIVERY` | `true` | Fases C/E2: entrega proativa pos-polling (final + blocos parciais a cada 60s) via `{TEAMS_FUNCTION_URL}/api/notify` + `continue_conversation`. URL tem default no codigo (`proactive.py`); env `TEAMS_FUNCTION_URL` sobrepoe. Desligar tambem desliga os blocos parciais |
+| `TEAMS_NOTIFY_BACKOFF` | `2,5,10` | CSV de segundos ENTRE tentativas do POST `/api/notify` (total = len+1 = 4 POSTs). Absorve o `Connection refused` transitorio de cold-start da function (`proactive.py:_post_notify`) |
+| `TEAMS_RECONCILE_ENABLED` | `true` | Reconciliador (rede de seguranca): re-entrega tasks finais orfas (`delivered_via IS NULL`). Rodado pelo scheduler `sincronizacao_incremental_definitiva` a cada `TEAMS_RECONCILE_INTERVAL_MIN`. Rollback total: `false` |
+| `TEAMS_RECONCILE_MAX_AGE_MIN` | `360` | Teto de idade (min) da orfa p/ re-entrega (acima disso a resposta perde contexto / ref velha) |
+| `TEAMS_RECONCILE_LIMIT` | `50` | Max de orfas processadas por ciclo |
+| `TEAMS_RECONCILE_INTERVAL_MIN` | `2` | Intervalo (min) do job no scheduler (`sincronizacao_incremental_definitiva.py:executar_reconciliacao_teams`) |
 
 ---
 
