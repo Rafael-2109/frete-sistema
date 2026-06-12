@@ -1,24 +1,13 @@
 ---
 name: consultando-pecas-faltando
 description: >-
-  Esta skill deve ser usada pelo Agente Lojas HORA quando o usuario pergunta
-  sobre pecas faltando registradas na conferencia: "quais pecas faltando?",
-  "o chassi X ta com peca faltando?", "pecas abertas da minha loja", "tem
-  chassi doador?", "pecas pendentes de resolucao". Lista registros com fotos
-  (S3 keys), status de resolucao e chassi doador se houver. Respeita escopo.
-
-  USAR QUANDO:
-  - "quais pecas faltando?"
-  - "pecas pendentes"
-  - "o chassi X ta com peca faltando?"
-  - "tem peca aberta na minha loja?"
-  - "chassi doador"
-
-  NAO USAR PARA:
-  - Conferencia completa (usar conferindo-recebimento)
-  - Status de pedido (usar acompanhando-pedido)
-  - Divergencias de chassi errado/moto faltando (essas sao tipo_divergencia no
-    conferindo-recebimento; peca faltando e categoria separada)
+  Skill READ do Agente Lojas HORA para pecas faltando registradas na
+  conferencia: registros com fotos (S3 keys), status de resolucao e chassi
+  doador. Respeita escopo de loja. Gatilhos: "quais pecas faltando?", "o
+  chassi X ta com peca faltando?", "pecas pendentes de resolucao", "tem
+  chassi doador?". NAO usar para conferencia completa nem divergencias de
+  chassi/moto -> conferindo-recebimento. Matriz USAR/NAO-USAR completa no
+  corpo.
 allowed-tools: Read, Bash, Glob, Grep
 ---
 
@@ -29,17 +18,20 @@ fotos tiradas pelo operador, status e chassi doador (se houver).
 
 ---
 
-## Quando Usar
+## Quando usar / Quando NAO usar
 
-USE para:
-- "quais pecas faltando?"
+**USAR QUANDO:**
+- "quais pecas faltando?" / "pecas pendentes"
 - "pecas pendentes de resolucao"
-- "chassi X tem pecas em aberto?"
-- "quantas pecas abertas na minha loja?"
+- "o chassi X ta com peca faltando?" / "chassi X tem pecas em aberto?"
+- "pecas abertas da minha loja" / "quantas pecas abertas na minha loja?"
+- "tem chassi doador?"
 
-NAO USE para:
+**NAO USAR PARA:**
 - Conferencia completa (inclui chassis OK) -> `conferindo-recebimento`
-- Divergencia de chassi/moto -> `conferindo-recebimento` (tipo_divergencia)
+- Status de pedido -> `acompanhando-pedido`
+- Divergencias de chassi errado/moto faltando -> `conferindo-recebimento`
+  (essas sao `tipo_divergencia` la; peca faltando e categoria separada)
 
 ---
 

@@ -1,26 +1,13 @@
 ---
 name: carregando-motos-assai
 description: >-
-  Esta skill deve ser usada para CONSULTAR e OPERAR o carregamento (etapa fisica
-  entre Separacao e NF) no modulo Motos Assai (B2B Q.P.A.): "carregamentos em
-  andamento", "status do carregamento X", "quantos chassis escaneados", "inicia
-  carregamento do pedido P loja L", "escaneia o chassi MZX no carregamento X",
-  "finaliza o carregamento X", "cancela o carregamento X", "reabre o carregamento
-  X". Modo READ para consultar; modo WRITE (dry-run obrigatorio + --confirmar +
-  --user-id) para iniciar/escanear/finalizar/cancelar/alterar.
-
-  USAR QUANDO:
-  - "carregamentos em andamento" / "status do carregamento 12"
-  - "inicia carregamento do pedido 9 loja 2"
-  - "escaneia chassi MZX1234 no carregamento 12"
-  - "finaliza/cancela/reabre o carregamento 12"
-
-  NAO USAR PARA:
-  - Estoque agregado (usar consultando-estoque-assai)
-  - Historico de UM chassi (usar rastreando-chassi-assai)
-  - Eventos de moto montagem/disponibilizar/separar (usar registrando-evento-moto-assai)
-  - Separacoes / NFs Q.P.A. (usar acompanhando-saida-assai)
-  - Conferir recibo Motochefe (usar conferindo-recibo-assai)
+  Skill READ+WRITE para CONSULTAR e OPERAR o carregamento (etapa fisica entre
+  Separacao e NF) no modulo Motos Assai (B2B Q.P.A.). Gatilhos: "carregamentos
+  em andamento", "inicia carregamento do pedido P loja L", "escaneia o chassi
+  MZX no carregamento X", "finaliza/cancela/reabre o carregamento X". WRITE
+  exige --user-id; dry-run e o default, so efetiva com --confirmar. NAO usar
+  para separacoes/NFs Q.P.A. -> acompanhando-saida-assai. Matriz USAR/NAO-USAR
+  completa no corpo.
 allowed-tools: Read, Bash, Glob, Grep
 ---
 
@@ -28,6 +15,25 @@ allowed-tools: Read, Bash, Glob, Grep
 
 Consulta e opera o carregamento (etapa fisica entre Separacao FECHADA e NF Q.P.A.,
 escaneia chassi por chassi). Reusa `carregamento_service`.
+
+## Quando usar / Quando NAO usar
+
+**USAR QUANDO:**
+- "carregamentos em andamento" / "status do carregamento 12"
+- "quantos chassis escaneados"
+- "inicia carregamento do pedido 9 loja 2"
+- "escaneia chassi MZX1234 no carregamento 12"
+- "finaliza/cancela/reabre o carregamento 12"
+
+Modo READ para consultar; modo WRITE (dry-run obrigatorio + `--confirmar` +
+`--user-id`) para iniciar/escanear/finalizar/cancelar/alterar.
+
+**NAO USAR PARA:**
+- Estoque agregado -> `consultando-estoque-assai`
+- Historico de UM chassi -> `rastreando-chassi-assai`
+- Eventos de moto montagem/disponibilizar/separar -> `registrando-evento-moto-assai`
+- Separacoes / NFs Q.P.A. -> `acompanhando-saida-assai`
+- Conferir recibo Motochefe -> `conferindo-recibo-assai`
 
 ## REGRAS CRITICAS
 

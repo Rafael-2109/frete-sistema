@@ -1,25 +1,12 @@
 ---
 name: conferindo-recebimento
 description: >-
-  Esta skill deve ser usada pelo Agente Lojas HORA quando o usuario precisa
-  ver status de uma conferencia de recebimento em andamento ou concluida:
-  "como esta a conferencia da NF X?", "quantos chassis faltam conferir?",
-  "tem divergencia no recebimento?", "qual o resultado da conferencia do
-  recebimento 1?", "fotos das divergencias". Mostra conferidos vs pendentes,
-  divergencias e detalhes. Respeita escopo de loja.
-
-  USAR QUANDO:
-  - "como esta a conferencia da NF X?"
-  - "quantos chassis faltam conferir?"
-  - "tem divergencia no recebimento?"
-  - "status do recebimento 5?"
-  - "quais chassis do meu ultimo recebimento?"
-
-  NAO USAR PARA:
-  - Status de pedido (usar acompanhando-pedido)
-  - Estoque agregado (usar consultando-estoque-loja)
-  - Rastrear 1 chassi (usar rastreando-chassi)
-  - Pecas faltando (usar consultando-pecas-faltando)
+  Skill READ do Agente Lojas HORA para status de conferencia de recebimento
+  (em andamento ou concluida): conferidos vs pendentes, divergencias e fotos.
+  Respeita escopo de loja. Gatilhos: "como esta a conferencia da NF X?",
+  "quantos chassis faltam conferir?", "tem divergencia no recebimento?",
+  "status do recebimento 5?". NAO usar para pecas faltando ->
+  consultando-pecas-faltando. Matriz USAR/NAO-USAR completa no corpo.
 allowed-tools: Read, Bash, Glob, Grep
 ---
 
@@ -30,16 +17,20 @@ conferidos vs pendentes, divergencias e detalhes.
 
 ---
 
-## Quando Usar
+## Quando usar / Quando NAO usar
 
-USE para:
-- "como esta a conferencia do recebimento 5?"
-- "quantos chassis faltam na NF 36612?"
-- "tem divergencia aberta?"
+**USAR QUANDO:**
+- "como esta a conferencia da NF X?" / "como esta a conferencia do recebimento 5?"
+- "quantos chassis faltam conferir?" / "quantos chassis faltam na NF 36612?"
+- "tem divergencia no recebimento?" / "tem divergencia aberta?"
+- "qual o resultado da conferencia do recebimento 1?"
+- "fotos das divergencias"
+- "quais chassis do meu ultimo recebimento?"
 - "lista recebimentos em andamento"
 
-NAO USE para:
-- Ciclo de pedido completo -> `acompanhando-pedido`
+**NAO USAR PARA:**
+- Status de pedido / ciclo de pedido completo -> `acompanhando-pedido`
+- Estoque agregado -> `consultando-estoque-loja`
 - Historico de 1 chassi -> `rastreando-chassi`
 - Pecas faltando (registros com foto) -> `consultando-pecas-faltando`
 

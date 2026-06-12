@@ -1,29 +1,32 @@
 ---
 name: acompanhando-saida-assai
 description: >-
-  Esta skill deve ser usada quando o usuario pergunta sobre separacoes em
-  andamento ou NFs Q.P.A. importadas no modulo Motos Assai: "separacoes
-  abertas", "NF Q.P.A. 12345 importada?", "ha divergencias em NFs?",
-  "match BATEU?". Mostra separacoes ativas (EM_SEPARACAO/FECHADA),
-  NFs Q.P.A. com resultado de match (BATEU/DIVERGENTE/NAO_RECONCILIADO).
-
-  USAR QUANDO:
-  - "separacoes em andamento Q.P.A."
-  - "NF Q.P.A. 12345 bateu?"
-  - "divergencias em NFs"
-  - "qual loja recebeu NF X?"
-
-  NAO USAR PARA:
-  - Estoque (usar consultando-estoque-assai)
-  - Chassi individual (usar rastreando-chassi-assai)
-  - Pedidos/compras (usar acompanhando-pedido-compra-assai)
-  - Carregamento (etapa Sep->NF) (usar carregando-motos-assai)
+  Skill READ para separacoes em andamento e NFs Q.P.A. importadas no modulo
+  Motos Assai: separacoes ativas (EM_SEPARACAO/FECHADA) e NFs com resultado
+  de match (BATEU/DIVERGENTE/NAO_RECONCILIADO). Gatilhos: "separacoes abertas
+  Q.P.A.", "NF Q.P.A. 12345 bateu?", "ha divergencias em NFs?", "qual loja
+  recebeu NF X?". NAO usar para carregamento (escaneio fisico) ->
+  carregando-motos-assai. Matriz USAR/NAO-USAR completa no corpo.
 allowed-tools: Read, Bash, Glob, Grep
 ---
 
 # Acompanhando Saida Motos Assai
 
 Consulta separacoes em andamento e NFs Q.P.A. importadas com resultado de match.
+
+## Quando usar / Quando NAO usar
+
+**USAR QUANDO:**
+- "separacoes em andamento Q.P.A." / "separacoes abertas"
+- "NF Q.P.A. 12345 importada?" / "NF Q.P.A. 12345 bateu?" / "match BATEU?"
+- "divergencias em NFs"
+- "qual loja recebeu NF X?"
+
+**NAO USAR PARA:**
+- Estoque -> `consultando-estoque-assai`
+- Chassi individual -> `rastreando-chassi-assai`
+- Pedidos/compras -> `acompanhando-pedido-compra-assai`
+- Carregamento (etapa entre Separacao e NF) -> `carregando-motos-assai`
 
 ---
 

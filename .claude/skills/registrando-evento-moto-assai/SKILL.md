@@ -1,29 +1,14 @@
 ---
 name: registrando-evento-moto-assai
 description: >-
-  Esta skill deve ser usada para EXECUTAR transicoes de estado de chassis no
-  pipeline do modulo Motos Assai (B2B Q.P.A.): "monte o chassi X", "marque
-  como pendente", "resolva pendencia", "disponibilize a moto Y", "reverta
-  disponibilizacao", "separe o chassi Z para o pedido P/loja L", "desfaca a
-  separacao do item N", "cancele a separacao S". Skill WRITE — sempre exige
-  --user-id e --confirmar para efetivar; sem --confirmar retorna preview
-  dry-run com status_efetivo atual.
-
-  USAR QUANDO:
-  - "registre montagem do chassi MZX...", "monte o chassi"
-  - "marque como pendente com descricao..."
-  - "resolva pendencia do chassi"
-  - "disponibilize a moto X"
-  - "reverta disponibilizacao do chassi (motivo)"
-  - "separe chassi para pedido X loja Y"
-  - "desfaca chassi X da separacao"
-  - "cancele a separacao S (motivo)"
-
-  NAO USAR PARA:
-  - Conferir/registrar recibo Motochefe (usar conferindo-recibo-assai)
-  - Apenas consultar estado (usar consultando-estoque-assai/rastreando-chassi-assai)
-  - Pedidos VOE Q.P.A. (usar acompanhando-pedido-compra-assai)
-  - Estoque/venda Lojas HORA (usar consultando-venda-loja ou skills HORA)
+  Skill WRITE para EXECUTAR transicoes de estado de chassis no pipeline Motos
+  Assai (B2B Q.P.A.): montar, marcar/resolver pendencia, disponibilizar/reverter,
+  separar/desfazer/cancelar separacao. Gatilhos: "monte o chassi X",
+  "disponibilize a moto Y", "separe o chassi Z para o pedido P/loja L",
+  "cancele a separacao S". Sempre exige --user-id; sem --confirmar retorna
+  preview dry-run com status_efetivo atual. NAO usar para apenas consultar
+  estado -> consultando-estoque-assai / rastreando-chassi-assai. Matriz
+  USAR/NAO-USAR completa no corpo.
 allowed-tools: Read, Bash, Glob, Grep
 ---
 
@@ -33,6 +18,24 @@ Skill WRITE que executa transicoes de estado de chassis no pipeline Motos
 Assai. Apoia 8 sub-comandos que cobrem todo o fluxo
 ESTOQUE -> MONTADA/PENDENTE -> DISPONIVEL -> SEPARADA com possibilidades de
 reversao.
+
+## Quando usar / Quando NAO usar
+
+**USAR QUANDO:**
+- "registre montagem do chassi MZX...", "monte o chassi"
+- "marque como pendente com descricao..."
+- "resolva pendencia do chassi"
+- "disponibilize a moto X"
+- "reverta disponibilizacao do chassi (motivo)"
+- "separe chassi para pedido X loja Y"
+- "desfaca chassi X da separacao"
+- "cancele a separacao S (motivo)"
+
+**NAO USAR PARA:**
+- Conferir/registrar recibo Motochefe -> `conferindo-recibo-assai`
+- Apenas consultar estado -> `consultando-estoque-assai` / `rastreando-chassi-assai`
+- Pedidos VOE Q.P.A. -> `acompanhando-pedido-compra-assai`
+- Estoque/venda Lojas HORA -> `consultando-venda-loja` ou skills HORA
 
 ---
 

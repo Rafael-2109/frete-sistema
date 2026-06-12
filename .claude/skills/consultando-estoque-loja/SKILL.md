@@ -1,25 +1,12 @@
 ---
 name: consultando-estoque-loja
 description: >-
-  Esta skill deve ser usada pelo Agente Lojas HORA quando o usuario pergunta
-  sobre estoque de motos nas lojas HORA: "quantas motos tenho?", "quanto tem
-  de <modelo>?", "o chassi XYZ ja chegou?", "quais motos estao em transito?",
-  ou precisa conferir disponibilidade fisica por loja. Respeita
-  automaticamente o escopo do usuario via <loja_context> (usuario escopado
-  ve so sua loja; admin ve todas).
-
-  USAR QUANDO:
-  - "quantas motos tenho aqui?"
-  - "quantas <modelo> tem disponivel?"
-  - "quanto tenho em estoque?"
-  - "o chassi XXX ja chegou?"
-  - "quais motos em transito?"
-
-  NAO USAR PARA:
-  - Historico completo de um chassi (usar rastreando-chassi)
-  - Conferencia de recebimento (usar conferindo-recebimento — M2)
-  - Consultar vendas (usar consultando-venda-loja)
-  - Estoque Nacom Goya (usar gerindo-expedicao — agente diferente)
+  Skill READ do Agente Lojas HORA para estoque de motos nas lojas HORA:
+  contagem por loja/modelo, chegada de chassi, motos em transito. Respeita
+  escopo via <loja_context> (escopado ve so sua loja; admin ve todas).
+  Gatilhos: "quantas motos tenho?", "quanto tem de <modelo>?", "o chassi XYZ
+  ja chegou?", "quais motos em transito?". NAO usar para historico completo
+  de um chassi -> rastreando-chassi. Matriz USAR/NAO-USAR completa no corpo.
 allowed-tools: Read, Bash, Glob, Grep
 ---
 
@@ -30,18 +17,21 @@ escopo por loja do usuario.
 
 ---
 
-## Quando Usar Esta Skill
+## Quando usar / Quando NAO usar
 
-USE para:
-- Contagem de estoque: "quantas motos tenho?", "quanto de <modelo>?"
+**USAR QUANDO:**
+- Contagem de estoque: "quantas motos tenho aqui?", "quanto de <modelo>?",
+  "quantas <modelo> tem disponivel?", "quanto tenho em estoque?"
 - Verificar chassi: "o chassi MC172XXX ja chegou?"
 - Motos em transito: "quais motos pedidas mas nao recebidas?"
-- Visao por loja (admin): "como esta o estoque de cada loja?"
+- Disponibilidade fisica por loja / visao por loja (admin): "como esta o
+  estoque de cada loja?"
 
-NAO USE para:
-- Historico detalhado de UM chassi -> usar `rastreando-chassi`
-- Conferencia fisica de recebimento -> usar `conferindo-recebimento`
-- Consultar venda B2C -> usar `consultando-venda-loja`
+**NAO USAR PARA:**
+- Historico completo/detalhado de UM chassi -> `rastreando-chassi`
+- Conferencia fisica de recebimento -> `conferindo-recebimento` (M2)
+- Consultar vendas B2C -> `consultando-venda-loja`
+- Estoque Nacom Goya -> `gerindo-expedicao` (agente diferente)
 
 ---
 

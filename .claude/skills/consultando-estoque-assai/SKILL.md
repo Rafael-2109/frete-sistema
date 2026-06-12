@@ -1,26 +1,13 @@
 ---
 name: consultando-estoque-assai
 description: >-
-  Esta skill deve ser usada quando o usuario pergunta sobre estoque ou pipeline
-  de motos do modulo Motos Assai (B2B Q.P.A. Sendas/Assai): "quantas motos
-  disponiveis?", "estoque por modelo Q.P.A.", "quanto de SOL temos?", "pipeline
-  de motos Assai", "quantas em ESTOQUE/MONTADA/DISPONIVEL/SEPARADA?". Retorna
-  totais por estagio (ESTOQUE/MONTADA/PENDENTE/DISPONIVEL/SEPARADA/FATURADA),
-  por modelo e lista de motos com pendencia.
-
-  USAR QUANDO:
-  - "quantas motos Q.P.A. disponiveis?"
-  - "estoque por modelo Assai"
-  - "quanto de SOL/X11_MINI/DOT temos?"
-  - "pipeline de motos hoje"
-  - "quais chassis em PENDENTE?"
-
-  NAO USAR PARA:
-  - Historico de UM chassi especifico (usar rastreando-chassi-assai)
-  - Pedidos VOE Q.P.A. ou compras Motochefe (usar acompanhando-pedido-compra-assai)
-  - Separacoes ou NFs Q.P.A. (usar acompanhando-saida-assai)
-  - Estoque Lojas HORA (usar consultando-estoque-loja)
-  - Estoque Nacom Goya (usar gerindo-expedicao)
+  Skill READ para estoque e pipeline de motos do modulo Motos Assai (B2B
+  Q.P.A. Sendas/Assai): totais por estagio
+  (ESTOQUE/MONTADA/PENDENTE/DISPONIVEL/SEPARADA/FATURADA), por modelo e motos
+  com pendencia. Gatilhos: "quantas motos Q.P.A. disponiveis?", "estoque por
+  modelo Assai", "quanto de SOL temos?", "pipeline de motos hoje". NAO usar
+  para historico de UM chassi -> rastreando-chassi-assai. Matriz
+  USAR/NAO-USAR completa no corpo.
 allowed-tools: Read, Bash, Glob, Grep
 ---
 
@@ -31,17 +18,20 @@ de evento (ESTOQUE/MONTADA/PENDENTE/DISPONIVEL/SEPARADA/FATURADA).
 
 ---
 
-## Quando Usar
+## Quando usar / Quando NAO usar
 
-USE para:
-- Contagem por estagio: "quantas DISPONIVEL?", "quantas em PENDENTE?"
-- Filtro por modelo: "quanto de SOL?"
-- Resumo geral do pipeline
+**USAR QUANDO:**
+- Contagem por estagio: "quantas DISPONIVEL?", "quantas em PENDENTE?",
+  "quantas em ESTOQUE/MONTADA/DISPONIVEL/SEPARADA?", "quais chassis em PENDENTE?"
+- Filtro por modelo: "quanto de SOL/X11_MINI/DOT temos?", "estoque por modelo Q.P.A."
+- Resumo geral do pipeline: "pipeline de motos Assai", "pipeline de motos hoje"
 
-NAO USE para:
-- Historico de UM chassi -> `rastreando-chassi-assai`
-- Pedidos/compras -> `acompanhando-pedido-compra-assai`
-- Separacoes/NFs -> `acompanhando-saida-assai`
+**NAO USAR PARA:**
+- Historico de UM chassi especifico -> `rastreando-chassi-assai`
+- Pedidos VOE Q.P.A. ou compras Motochefe -> `acompanhando-pedido-compra-assai`
+- Separacoes ou NFs Q.P.A. -> `acompanhando-saida-assai`
+- Estoque Lojas HORA -> `consultando-estoque-loja`
+- Estoque Nacom Goya -> `gerindo-expedicao`
 
 ---
 

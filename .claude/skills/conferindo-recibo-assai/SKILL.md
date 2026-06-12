@@ -1,27 +1,14 @@
 ---
 name: conferindo-recibo-assai
 description: >-
-  Esta skill deve ser usada para operar a conferencia de recibos Motochefe no
-  modulo Motos Assai (B2B Q.P.A.): listar recibos pendentes, ver detalhes de
-  conferencia (chassis conferidos vs faltantes, divergencias), registrar
-  conferencia de chassi (valida modelo/cor + cria evento ESTOQUE) e finalizar
-  recibo (marca faltantes como MOTO_FALTANDO). Modo READ para consultar e
-  modo WRITE com dry-run obrigatorio para operacoes que mutam dados.
-
-  USAR QUANDO:
-  - "quais recibos Q.P.A. pendentes de conferencia?"
-  - "status do recibo 12"
-  - "registrar conferencia chassi MZX1234 no recibo 12"
-  - "finalizar recibo 12 com faltantes"
-  - "quantos chassis ja conferidos no recibo 5?"
-
-  NAO USAR PARA:
-  - Estoque agregado (usar consultando-estoque-assai)
-  - Historico de UM chassi (usar rastreando-chassi-assai)
-  - Pedidos VOE / compras Motochefe (usar acompanhando-pedido-compra-assai)
-  - Eventos pos-recebimento ESTOQUE->MONTADA->DISPONIVEL (usar registrando-evento-moto-assai)
-  - Separacoes / NFs Q.P.A. (usar acompanhando-saida-assai)
-  - Recebimento Lojas HORA (usar conferindo-recebimento)
+  Skill READ+WRITE para operar a conferencia de recibos Motochefe no modulo
+  Motos Assai (B2B Q.P.A.): listar pendentes, detalhar (conferidos vs
+  faltantes, divergencias), registrar conferencia de chassi, finalizar recibo.
+  Gatilhos: "quais recibos Q.P.A. pendentes de conferencia?", "status do
+  recibo 12", "registrar conferencia chassi MZX1234 no recibo 12", "finalizar
+  recibo 12 com faltantes". WRITE exige --user-id; dry-run default, efetiva
+  com --confirmar. NAO usar para eventos pos-recebimento ->
+  registrando-evento-moto-assai. Matriz USAR/NAO-USAR completa no corpo.
 allowed-tools: Read, Bash, Glob, Grep
 ---
 
@@ -34,18 +21,28 @@ registro de conferencia individual e finalizacao do recibo.
 
 ---
 
-## Quando Usar
+## Quando usar / Quando NAO usar
 
-USE para:
-- Listar recibos com status pendente (AGUARDANDO/EM_CONFERENCIA)
-- Ver detalhe de UM recibo (itens conferidos, faltantes, divergencias)
-- Registrar conferencia de UM chassi (cria/atualiza moto + evento ESTOQUE)
-- Finalizar recibo (marca todos faltantes como MOTO_FALTANDO)
+**USAR QUANDO:**
+- Listar recibos com status pendente (AGUARDANDO/EM_CONFERENCIA) —
+  "quais recibos Q.P.A. pendentes de conferencia?"
+- Ver detalhe de UM recibo (itens conferidos, faltantes, divergencias) —
+  "status do recibo 12", "quantos chassis ja conferidos no recibo 5?"
+- Registrar conferencia de UM chassi (valida modelo/cor + cria/atualiza moto
+  + evento ESTOQUE) — "registrar conferencia chassi MZX1234 no recibo 12"
+- Finalizar recibo (marca todos faltantes como MOTO_FALTANDO) —
+  "finalizar recibo 12 com faltantes"
 
-NAO USE para:
-- Eventos pos-recebimento (MONTADA/DISPONIVEL/PENDENTE) -> `registrando-evento-moto-assai`
+Modo READ para consultar e modo WRITE com dry-run obrigatorio para operacoes
+que mutam dados.
+
+**NAO USAR PARA:**
+- Eventos pos-recebimento ESTOQUE->MONTADA->DISPONIVEL/PENDENTE -> `registrando-evento-moto-assai`
 - Estoque agregado por modelo -> `consultando-estoque-assai`
 - Historico cronologico de 1 chassi -> `rastreando-chassi-assai`
+- Pedidos VOE / compras Motochefe -> `acompanhando-pedido-compra-assai`
+- Separacoes / NFs Q.P.A. -> `acompanhando-saida-assai`
+- Recebimento Lojas HORA -> `conferindo-recebimento`
 
 ---
 

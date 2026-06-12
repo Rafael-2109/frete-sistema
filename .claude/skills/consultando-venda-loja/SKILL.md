@@ -1,25 +1,14 @@
 ---
 name: consultando-venda-loja
 description: >-
-  Esta skill deve ser usada pelo Agente Lojas HORA quando o usuario pergunta
-  sobre VENDAS da loja: "minhas vendas hoje", "venda 9 ja faturou?", "essa moto
-  (chassi) foi vendida e por quanto?", "vendas pendentes de NFe", "qual o preco
-  de tabela do modelo X a vista?", "um desconto de R$Y nesse modelo bate com a
-  tabela?", "qual a margem da venda 9?". READ-only. Respeita escopo de loja via
-  <loja_context>.
-
-  USAR QUANDO:
-  - "minhas vendas hoje" / "vendas pendentes de NFe"
-  - "essa moto foi vendida e por quanto?"
-  - "preco de tabela do modelo X a vista/a prazo"
-  - "esse desconto bate com a tabela?"
-  - "qual a margem da venda 9?"
-
-  NAO USAR PARA:
-  - Estoque de motos (usar consultando-estoque-loja)
-  - Historico de UM chassi (usar rastreando-chassi)
-  - Status de pedido HORA->Motochefe (usar acompanhando-pedido)
-  - CRIAR/editar/cancelar venda ou emitir NFe (operacao de WRITE — feita na web, NAO pelo agente)
+  Skill READ do Agente Lojas HORA para VENDAS da loja: lista vendas, valida
+  preco/desconto contra a tabela e calcula margem. Respeita escopo de loja
+  via <loja_context>. Gatilhos: "minhas vendas hoje", "venda 9 ja faturou?",
+  "essa moto (chassi) foi vendida e por quanto?", "preco de tabela do modelo
+  X a vista?", "qual a margem da venda 9?". NAO usar para estoque de motos ->
+  consultando-estoque-loja, nem para CRIAR/editar/cancelar venda ou emitir
+  NFe (WRITE — feito na web, NAO pelo agente). Matriz USAR/NAO-USAR completa
+  no corpo.
 allowed-tools: Read, Bash, Glob, Grep
 ---
 
@@ -27,6 +16,23 @@ allowed-tools: Read, Bash, Glob, Grep
 
 Consulta vendas ao consumidor final da Lojas HORA + valida preco/desconto + margem.
 READ-only: NUNCA cria, edita, confirma, cancela venda nem emite NFe.
+
+## Quando usar / Quando NAO usar
+
+**USAR QUANDO:**
+- "minhas vendas hoje" / "vendas pendentes de NFe"
+- "venda 9 ja faturou?"
+- "essa moto (chassi) foi vendida e por quanto?"
+- "preco de tabela do modelo X a vista/a prazo"
+- "um desconto de R$Y nesse modelo bate com a tabela?"
+- "qual a margem da venda 9?"
+
+**NAO USAR PARA:**
+- Estoque de motos -> `consultando-estoque-loja`
+- Historico de UM chassi -> `rastreando-chassi`
+- Status de pedido HORA->Motochefe -> `acompanhando-pedido`
+- CRIAR/editar/cancelar venda ou emitir NFe (operacao de WRITE — feita na
+  web, NAO pelo agente)
 
 ## REGRAS CRITICAS
 
