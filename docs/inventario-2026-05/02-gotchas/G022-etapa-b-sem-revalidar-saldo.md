@@ -15,7 +15,7 @@ atualizado: 2026-06-03
 - [Sintoma](#sintoma)
 - [Evidência](#evidência)
 - [Refinamento (2026-05-18 sessão 3 batch 30) — Over-reservation pós-renomeação](#refinamento-2026-05-18-sessão-3-batch-30-over-reservation-pós-renomeação)
-- [Combinação com G021](#combinação-com-g021)
+- [Combinação com INV-021](#combinação-com-inv-021)
 - [Mitigação atual](#mitigação-atual)
 - [Fix proposto](#fix-proposto)
 - [Ref](#ref)
@@ -73,9 +73,9 @@ sub-locations (LF/Estoque/MOLHO/R-1/N-1/P-01 etc.) mas saldo dos produtos
 do batch fica direto em LF/Estoque(42). `child_of=42` retorna idêntico
 a `=42`.
 
-## Combinação com G021
+## Combinação com INV-021
 
-Quando combinado com G021 (race A↔B), o sintoma se manifesta como
+Quando combinado com INV-021 (race A↔B), o sintoma se manifesta como
 **TODOS os pickings PERDA falhando** porque o saldo pós-A ainda não
 foi commitado quando B consultou.
 
@@ -119,5 +119,5 @@ e ~150 moves, ~150 queries extras (~2-3s).
 ## Ref
 
 - `app/odoo/services/stock_picking_service.py:validar()` (alvo do fix)
-- `docs/inventario-2026-05/02-gotchas/G021-etapa-a-reporta-prematuro.md` (causa correlacionada)
+- `docs/inventario-2026-05/02-gotchas/INV-021-etapa-a-reporta-prematuro.md` (causa correlacionada)
 - `docs/inventario-2026-05/02-gotchas/G019-f5b-validar-engole-erro.md` (fix relacionado)

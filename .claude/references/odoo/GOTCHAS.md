@@ -4,11 +4,21 @@ camada: L2
 sot_de: —
 hub: .claude/references/INDEX.md
 superseded_by: —
-atualizado: 2026-06-02
+atualizado: 2026-06-12
 -->
 # GOTCHAS Criticos - Integracao Odoo
 
 > **Papel:** GOTCHAS Criticos - Integracao Odoo.
+
+## Series de Gotchas — Tabela de Donos
+
+| Serie | Dono / Catalogo | Descricao |
+|-------|-----------------|-----------|
+| `G0xx` | `app/odoo/estoque/` — catalogo em `CLAUDE.md §8` + arquivos detalhe em `docs/inventario-2026-05/02-gotchas/G0xx-*.md` | Serie canonica do dominio estoque Odoo. Proximo ID livre: proximo apos G041 (verificar `02-gotchas/INDEX.md`). |
+| `INV-xxx` | `docs/inventario-2026-05/` — arquivos detalhe em `docs/inventario-2026-05/02-gotchas/INV-xxx-*.md` | Gotchas do PIPELINE de inventario 2026-05 (nao do dominio estoque). Renomeados de G002/G021/G030 em 2026-06-12 (T1.3) para eliminar colisao. |
+| `G-MO-xx` | `docs/inventario-2026-05/02-gotchas/G-MO-xx-*.md` | Gotchas especificos de Manufacturing Orders (MO). |
+
+**Regra invariavel:** ID novo de gotcha de estoque = proximo livre da serie do dono. NUNCA reusar ID de outra serie.
 
 ## Indice
 
@@ -24,6 +34,8 @@ atualizado: 2026-06-02
   - [Integer 0 vs False no ORM Odoo](#integer-0-vs-false-no-orm-odoo)
   - [Tratamento button_validate](#tratamento-button_validate)
   - [Quality Checks - Ordem Critica](#quality-checks---ordem-critica)
+  - [G002 (estoque): stock.lot.name com operador = e instavel](#comportamentos-inesperados)
+  - [G021 (estoque): lote sem company_id retorna empresa errada](#comportamentos-inesperados)
 - [Ordem de Operacoes Critica](#ordem-de-operacoes-critica)
 - [Extrato Bancario: 3 Campos que o Odoo NAO Preenche para Boletos](#extrato-bancario-3-campos-que-o-odoo-nao-preenche-para-boletos)
   - [Regra: SEMPRE Usar preparar_extrato_para_reconciliacao() (corrigido 2026-02-19)](#regra-sempre-usar-preparar_extrato_para_reconciliacao-corrigido-2026-02-19)
@@ -160,6 +172,8 @@ else:
 | **`action_update_taxes` zera tax_id/amount_tax** | `sale.order` com `fiscal_position` que mapeia impostos para vazio (ex.: ID 49 "SAÍDA - TRANSFERÊNCIA ENTRE FILIAIS") | **NUNCA usar `action_update_taxes` em SOs BR.** Usar `onchange_l10n_br_calcular_imposto` (worker `app/pedidos/workers/impostos_jobs.py`) |
 | Lote duplicado | stock.lot | Verificar existencia antes de `lot_name`, usar `lot_id` se existir |
 | Quality checks pendentes | button_validate falha | Processar TODOS checks (`do_pass`/`do_fail`/`do_measure`) ANTES |
+| **G002 (estoque): `stock.lot.name` com operador `=` e instavel** | Busca de lote por nome em XML-RPC; retorna vazio ou resultados errados intermitentemente | **Usar `'in', [nome]` (lista) ou `'=like'` como fallback.** Helper canonico `StockLotService.buscar_por_nome` ja normaliza. Dono: `app/odoo/estoque/CLAUDE.md` / `scripts/transfer.py:48`. |
+| **G021 (estoque): resolucao de lote por nome sem `company_id` retorna lote de empresa errada silenciosamente** | Mesmo nome de lote existe em FB e LF; busca sem filtro `company_id` retorna lote de company errada → erro "Empresas incompatíveis" downstream | **SEMPRE filtrar `company_id` em toda busca de `stock.lot` por nome.** `StockLotService` ja aplica. Dono: `app/odoo/estoque/CLAUDE.md` / `scripts/transfer.py`. |
 
 ### Recalcular Impostos em `sale.order` (BR): NUNCA `action_update_taxes`
 

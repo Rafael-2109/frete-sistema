@@ -33,7 +33,7 @@ Esta pasta arquiva **checkpoints intermediários** e **prompts de próxima sess�
    Entrada FB do piloto via RecebimentoLf, MIGRAÇÃO padronizado, bulk script 09 validado em dry-run.
 
 4. **`CHECKPOINT_2026_05_18_SUBPILOTO_FINAL.md`** (2026-05-18 ~04:30)
-   Sub-piloto 10 produtos com 13 fixes L6-L17 detalhados (ponteiros file:line já migrados para gotchas G021-G023), 2 NFs autorizadas, picking 317346 pendente invoice.
+   Sub-piloto 10 produtos com 13 fixes L6-L17 detalhados (ponteiros file:line já migrados para gotchas INV-021/G022/G023), 2 NFs autorizadas, picking 317346 pendente invoice.
 
 5. **`QUICK_START_NEXT_SESSION.md`** (2026-05-18 ~05:00)
    Prompt para sessão pós-sub-piloto. Obsoleto — 11 PROPOSTO pendentes já tratados.
@@ -61,7 +61,7 @@ Estes 9 arquivos foram arquivados porque:
 
 **Informação crítica única** que estava em alguns destes arquivos foi migrada para gotchas/decisões permanentes antes do arquivamento:
 
-- Ponteiros file:line dos fixes L6-L17 → ver `02-gotchas/G021-etapa-a-reporta-prematuro.md`, `G022`, `G023`, `G026` (este último criado a partir do `SUBPILOTO_FINAL`)
+- Ponteiros file:line dos fixes L6-L17 → ver `02-gotchas/INV-021-etapa-a-reporta-prematuro.md`, `G022`, `G023`, `G026` (este último criado a partir do `SUBPILOTO_FINAL`)
 - E1/E2 (duplicação acidental, workaround stock.lot.name ignorado) → ver `00-decisoes/D008-licoes-seguranca-operacional-e1-e2.md` (criado a partir do `CD_FINALIZADO`)
 - B1/B2 (bugs latentes 09b) → ver `02-gotchas/G027-09b-bugs-latentes-b1-b2.md` (criado a partir do `CD_FINALIZADO`)
 - Lista de 10 produtos sem cadastro Odoo no CD → ver `PENDENCIAS.md` P11

@@ -3,8 +3,8 @@
 **Sessao Claude Code 3**: 2026-05-18 ~13:00 → 17:30 UTC
 **Foco**: bulk LF (batches 50/30/15 prods) + fixes over-reservation
 **Status global**: 4 pickings PERDA + 1 INDUSTR processados completos
-(SEFAZ + entrada FB). 5 gotchas adicionais documentados (G021-G023 da
-manha + G028-G030 da tarde).
+(SEFAZ + entrada FB). 5 gotchas adicionais documentados (INV-021/G022/G023 da
+manha + G028/INV-030 da tarde).
 
 > Substitui `CHECKPOINT_2026_05_18_LF_FIM_SESSAO2.md`. Proxima sessao:
 > continuar LF restante com fixes G023/G028 ativos.
@@ -38,12 +38,12 @@ manha + G028-G030 da tarde).
 
 | # | Severidade | Tema | Status |
 |---|------------|------|--------|
-| G021 | HIGH | ETAPA A reporta resultado prematuro (race A↔B) | 🔴 ABERTO (mitigado via sleep 90s) |
+| INV-021 | HIGH | ETAPA A reporta resultado prematuro (race A↔B) | 🔴 ABERTO (mitigado via sleep 90s) |
 | G022 | MEDIUM | ETAPA B sem re-validar saldo (mitigado por G028) | 🟡 ABERTO |
 | G023 | HIGH | ETAPA F: entrada manual destino FB→LF | ✅ IMPLEMENTADO |
 | **G028** | **CRITICAL** | **Over-reservation pos-renomeacao lote** | ✅ **IMPLEMENTADO** |
 | G029 | HIGH | payment_provider em recovery manual | 🟡 WORKAROUND |
-| G030 | MEDIUM | Pipeline RecLf trava em Fase 4 (raro) | 📝 DOCUMENTADO |
+| INV-030 | MEDIUM | Pipeline RecLf trava em Fase 4 (raro) | 📝 DOCUMENTADO |
 
 ### G028 — fix principal da sessao
 
@@ -130,7 +130,7 @@ PROPOSTO 1617 ajustes:
 
 **Estrategia recomendada** (com fixes ativos):
 - Batches de 15-30 prods, max-picking=5
-- Pausa 90s entre A e B (G021 mitigation)
+- Pausa 90s entre A e B (INV-021 mitigation)
 - Sleep 5s entre pickings B (codigo)
 - G028 fix vai consolidar move_lines automaticamente
 
@@ -190,7 +190,7 @@ python scripts/inventario_2026_05/09_executar_onda1_bulk.py \
     --company-id=5 --onda=1 --max-produtos-picking=5 \
     --filtro-cod-produto="$CODS" --ate-etapa=A \
     --confirmar --usuario=rafael
-sleep 90  # G021 mitigation
+sleep 90  # INV-021 mitigation
 # PASSO 2: B-F (G028 fix ativo)
 python scripts/inventario_2026_05/09_executar_onda1_bulk.py \
     --company-id=5 --onda=1 --max-produtos-picking=5 \
@@ -203,10 +203,10 @@ python scripts/inventario_2026_05/09_executar_onda1_bulk.py \
 
 ## 8. Referencias
 
-- `02-gotchas/G021-etapa-a-reporta-prematuro.md`
+- `02-gotchas/INV-021-etapa-a-reporta-prematuro.md`
 - `02-gotchas/G022-etapa-b-sem-revalidar-saldo.md`
 - `02-gotchas/G023-etapa-f-entrada-destino-manual.md`
 - **`02-gotchas/G028-over-reservation-action-assign-pos-renomeacao.md`** ← fix principal
 - `02-gotchas/G029-payment-provider-recovery-manual.md`
-- `02-gotchas/G030-pipeline-reclf-trava-em-fase-4.md`
+- `02-gotchas/INV-030-pipeline-reclf-trava-em-fase-4.md`
 - `99-historia/CHECKPOINT_2026_05_18_LF_FIM_SESSAO2.md` (anterior)

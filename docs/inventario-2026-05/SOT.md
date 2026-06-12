@@ -549,7 +549,7 @@ docs/
       P011-dev-industrializacao-fb-lf-sem-precedente.md
     02-gotchas/
       G001-nfs-referencia-sao-entradas-nao-saidas.md
-      G002-picking-type-LF-divergente.md
+      INV-002-picking-type-LF-divergente.md
       G003-cfop-real-divergente-do-prompt.md
       G004-padrao-real-eh-picking-robo-CIEL-IT.md
     03-canary/              # vazio (F4 pendente)

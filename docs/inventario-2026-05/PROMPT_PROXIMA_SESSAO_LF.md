@@ -109,13 +109,13 @@ SELECT STRING_AGG(cod_produto, ',') FROM (
 
 CODS=$(cat /tmp/bulk_lf_batch_codes.txt)
 
-# 2. PASSO 1: ETAPA A só (mitiga G021)
+# 2. PASSO 1: ETAPA A só (mitiga INV-021)
 python scripts/inventario_2026_05/09_executar_onda1_bulk.py \
     --company-id=5 --onda=1 --max-produtos-picking=5 \
     --filtro-cod-produto="$CODS" \
     --ate-etapa=A --confirmar --usuario=rafael
 
-# 3. SLEEP 90s (G021 mitigation)
+# 3. SLEEP 90s (INV-021 mitigation)
 sleep 90
 
 # 4. PASSO 2: B-F (G028 fix ativo)
@@ -170,12 +170,12 @@ Sem urgência. Estrategias:
 | G018 v2 | ✅ FIXADO | Weight=0 fallback no picking |
 | G019 | ✅ FIXADO | F5b validar checa state=done |
 | G020 | ✅ FIXADO | F5c pre-cond state=done |
-| G021 | 🔴 ABERTO | Race A↔B (mitigado via sleep) |
+| INV-021 | 🔴 ABERTO | Race A↔B (mitigado via sleep) |
 | G022 | 🟡 ABERTO | Mitigado por G028 |
 | G023 | ✅ FIXADO | ETAPA F entrada destino auto |
 | **G028** | ✅ **FIXADO** | **Over-reservation pos-renomeacao (FIX PRINCIPAL)** |
 | G029 | 🟡 WORKAROUND | payment_provider em recovery manual |
-| G030 | 📝 DOCUMENTADO | Pipeline RecLf trava em Fase 4 (raro) |
+| INV-030 | 📝 DOCUMENTADO | Pipeline RecLf trava em Fase 4 (raro) |
 
 ## Comandos auxiliares
 

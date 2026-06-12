@@ -4,7 +4,7 @@ camada: L1
 sot_de: —
 hub: docs/inventario-2026-05/02-gotchas/INDEX.md
 superseded_by: —
-atualizado: 2026-06-03
+atualizado: 2026-06-12
 -->
 # 02-gotchas — indice
 
@@ -12,7 +12,7 @@ atualizado: 2026-06-03
 
 - [G-MO-05 — `medir_consumo_mo` indistinto por `state` inflava FURO_CONTABIL em MOs com apenas RESERVA FANTASMA](./G-MO-05-falso-positivo-reserva-fantasma.md)
 - [G001 — NFs de referência do prompt são ENTRADAS, não SAÍDAS](./G001-nfs-referencia-sao-entradas-nao-saidas.md)
-- [G002 — Divergência picking_type_id da LF](./G002-picking-type-LF-divergente.md)
+- [INV-002 — Divergência picking_type_id da LF](./INV-002-picking-type-LF-divergente.md)
 - [G003 — CFOP real no Odoo diverge do prompt original](./G003-cfop-real-divergente-do-prompt.md)
 - [G004 — Padrão real de NF inter-company é picking + robô CIEL IT, não account.move direto](./G004-padrao-real-eh-picking-robo-CIEL-IT.md)
 - [G006 — Picking inter-company exige location virtual destino](./G006-picking-inter-company-location-virtual.md)
@@ -30,7 +30,7 @@ atualizado: 2026-06-03
 - [G018 — weight=0 no produto bloqueia F5c liberar_faturamento](./G018-weight-zero-bloqueia-f5c.md)
 - [G019 — f5b validar() engole erro e marca F5b_VALIDADO sem picking estar done](./G019-f5b-validar-engole-erro.md)
 - [G020 — f5c liberar_faturamento NÃO checa pre-condicao state=done](./G020-f5c-sem-checar-state-done.md)
-- [G021 — ETAPA A reporta resultado prematuro (race condition A↔B)](./G021-etapa-a-reporta-prematuro.md)
+- [INV-021 — ETAPA A reporta resultado prematuro (race condition A↔B)](./INV-021-etapa-a-reporta-prematuro.md)
 - [G022 — ETAPA B não re-valida saldo entre action_assign e button_validate](./G022-etapa-b-sem-revalidar-saldo.md)
 - [G023 — ETAPA F: entrada manual destino para NFs FB→{LF,CD}](./G023-etapa-f-entrada-destino-manual.md)
 - [G024 — `stock.quant.reserved_quantity` NAO recompute apos `unlink` de move_line orfa](./G024-reserved-quantity-nao-recompute-apos-unlink.md)
@@ -39,7 +39,7 @@ atualizado: 2026-06-03
 - [G027 — Bugs latentes do `09b_executar_pre_etapa.py` (B1 + B2)](./G027-09b-bugs-latentes-b1-b2.md)
 - [G028 — Over-reservation em action_assign após renomeação de lote](./G028-over-reservation-action-assign-pos-renomeacao.md)
 - [G029 — payment_provider_id ausente em recovery manual de NF](./G029-payment-provider-recovery-manual.md)
-- [G030 — Pipeline RecebimentoLfOdooService trava em Fase 4 (rare)](./G030-pipeline-reclf-trava-em-fase-4.md)
+- [INV-030 — Pipeline RecebimentoLfOdooService trava em Fase 4 (rare)](./INV-030-pipeline-reclf-trava-em-fase-4.md)
 - [G030 — `stock.move.line.quant_id` em Odoo CIEL IT é COMPUTED `store: False`](./G030-quant-id-em-stock-move-line-eh-computed.md)
 - [G031 — `stock.lot` é POR PRODUTO; `LOTES_MIGRACAO_POR_COMPANY` NÃO é FK universal](./G031-lot-migracao-por-produto.md)
 - [G034 — Robô CIEL IT aplica defaults PT 66 em DEV_* (CFOP 5124 errado)](./G034-robo-ciel-it-aplica-defaults-pt-66-em-dev-industr.md)

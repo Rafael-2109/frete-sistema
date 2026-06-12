@@ -4,11 +4,13 @@ camada: L3
 sot_de: —
 hub: docs/inventario-2026-05/02-gotchas/INDEX.md
 superseded_by: —
-atualizado: 2026-06-03
+atualizado: 2026-06-12
 -->
-# G030 — Pipeline RecebimentoLfOdooService trava em Fase 4 (rare)
+# INV-030 — Pipeline RecebimentoLfOdooService trava em Fase 4 (rare)
 
-> **Papel:** G030 — Pipeline RecebimentoLfOdooService trava em Fase 4 (rare).
+> **Papel:** INV-030 — Pipeline RecebimentoLfOdooService trava em Fase 4 (rare).
+
+> **Nota:** Renomeado de G030 em 2026-06-12 (T1.3) — colisao com a serie G0xx do dominio estoque `app/odoo/estoque/`.
 
 ## Indice
 

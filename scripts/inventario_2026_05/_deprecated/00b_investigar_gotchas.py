@@ -4,12 +4,12 @@ Investigacao focada dos GOTCHAS descobertos em F0 Task 0.1:
 G001 — Para cada NF de entrada encontrada, buscar a SAIDA correspondente
        (mesmo numero fiscal mas em outra company / outro move_type).
 
-G002 — Identificar o que e stock.picking.type id=16 (que IDS_FIXOS.md
+INV-002 — Identificar o que e stock.picking.type id=16 (que IDS_FIXOS.md
        documenta como LF picking_type mas audit nao encontrou).
 
 Output:
 - /tmp/audit_gotchas_2026_05.json
-- Atualiza docs/inventario-2026-05/02-gotchas/G001-*.md e G002-*.md com achados
+- Atualiza docs/inventario-2026-05/02-gotchas/G001-*.md e INV-002-*.md com achados
 """
 import sys
 import os
@@ -196,7 +196,7 @@ def _atualizar_g001(saidas_por_nf):
 
 
 def _atualizar_g002(pt16):
-    path = '/home/rafaelnascimento/projetos/frete_sistema/docs/inventario-2026-05/02-gotchas/G002-picking-type-LF-divergente.md'
+    path = '/home/rafaelnascimento/projetos/frete_sistema/docs/inventario-2026-05/02-gotchas/INV-002-picking-type-LF-divergente.md'
     if not os.path.exists(path):
         return
     nova_secao = ['\n---\n', '## Resultado da investigação\n\n']
@@ -210,7 +210,7 @@ def _atualizar_g002(pt16):
             nova_secao.append(f'  - `{k}`: {v}\n')
     with open(path, 'a') as f:
         f.write(''.join(nova_secao))
-    print(f'  G002 atualizado: {path}')
+    print(f'  INV-002 atualizado: {path}')
 
 
 if __name__ == '__main__':
