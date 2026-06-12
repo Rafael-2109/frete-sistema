@@ -193,3 +193,104 @@ def assign_cluster(row) -> None:
         row.cluster_id = int(res.cluster_id)
     else:
         row.cluster_id = row.id
+
+
+# ---------------------------------------------------------------------------
+# Disparo: thresholds + bypass gap nomeado + caps + dedup -> dialogue
+# ---------------------------------------------------------------------------
+
+_JUDGE_SYSTEM = (
+    "Voce julga se um cluster de scripts ad-hoc recorrentes de um agente "
+    "justifica criar/estender uma skill. Criterios: C2 generalizavel (parametros "
+    "variam entre membros? comando identico sempre = fast-path/cron, nao skill); "
+    "C3 cobertura (skill_relacionada presente e insuficiente -> extensao; "
+    "presente mas nao invocada -> skill_nao_usada; ausente -> sem_skill; "
+    "nao generaliza -> one_off); C6 friccao (retries indicam conhecimento "
+    "nao-derivavel = skill agrega muito). Responda APENAS JSON: "
+    '{"vale_skill": bool, "tipo_gap": "sem_skill|skill_nao_usada|'
+    'skill_insuficiente|one_off", "titulo": "<=180 chars", "descricao": "<=800 chars"}'
+)
+
+
+def _suggestion_key(row) -> str:
+    if row.tipo_gap == "skill_insuficiente" and row.skill_relacionada:
+        slug = re.sub(r"[^a-z0-9]+", "-", (row.motivo_fallback or "")[:40].lower()).strip("-")
+        return f"skill-gap-{row.skill_relacionada}-{slug or row.cluster_id}"[:100]
+    return f"adhoc-cluster-{row.cluster_id}"[:100]
+
+
+def _sonnet_cap_ok() -> bool:
+    from app.agente.models import AgentImprovementDialogue
+    from app.agente.config import feature_flags as ff
+    from app.utils.timezone import agora_utc_naive
+    from datetime import timedelta
+    cap = getattr(ff, "AGENT_ADHOC_MAX_SONNET_DAY", 2)
+    desde = agora_utc_naive() - timedelta(days=1)
+    n = AgentImprovementDialogue.query.filter(
+        (AgentImprovementDialogue.suggestion_key.like("adhoc-%") |
+         AgentImprovementDialogue.suggestion_key.like("skill-gap-%")),
+        AgentImprovementDialogue.created_at >= desde).count()
+    return n < cap
+
+
+def maybe_fire_suggestion(row) -> Optional[str]:
+    """Avalia disparo p/ o cluster do row. Retorna 'dialogue:<id>' ou None."""
+    from app import db
+    from app.agente.models import AgentAdhocScript, AgentImprovementDialogue
+    from app.agente.config import feature_flags as ff
+    from app.utils.json_helpers import sanitize_for_json
+
+    if row.cluster_id is None:
+        return None
+    membros = AgentAdhocScript.query.filter_by(cluster_id=row.cluster_id).all()
+    por_user = sum(1 for m in membros if m.user_id == row.user_id)
+    bypass = bool(row.tipo_gap == "skill_insuficiente"
+                  and row.skill_relacionada and row.motivo_fallback)
+    if not bypass and por_user < getattr(ff, "AGENT_ADHOC_THRESHOLD_USER", 3) \
+            and len(membros) < getattr(ff, "AGENT_ADHOC_THRESHOLD_GLOBAL", 5):
+        return None
+    key = _suggestion_key(row)
+    if AgentImprovementDialogue.query.filter_by(suggestion_key=key).first():
+        return None  # checkpoint: ja proposto (inclusive rejeitado — trava)
+    if not _sonnet_cap_ok():
+        logger.info("[ADHOC] cap diario Sonnet atingido — adiado")
+        return None
+
+    resumo = "\n".join(
+        f"- problema: {m.problema} | skill: {m.skill_relacionada or '-'} | "
+        f"motivo: {m.motivo_fallback or '-'} | retries: {m.retries_sessao} | "
+        f"cmd: {(m.command_masked or '')[:300]}"
+        for m in membros[:10])
+    try:
+        raw = _call_anthropic(SONNET_MODEL, _JUDGE_SYSTEM,
+                              f"Cluster {row.cluster_id} ({len(membros)} membros):\n{resumo}",
+                              max_tokens=600)
+        veredito = _parse_json(raw)
+    except Exception as e:
+        logger.warning(f"[ADHOC] julgamento Sonnet falhou: {e}")
+        return None
+    if not veredito.get("vale_skill"):
+        # Trava barata: marca cluster como one_off (sem poluir a Inbox).
+        # Reavaliar se o cluster dobrar de tamanho e' melhoria futura (YAGNI).
+        for m in membros:
+            m.tipo_gap = "one_off"
+        return None
+
+    d = AgentImprovementDialogue(
+        suggestion_key=key, version=1, author="agent_sdk", status="proposed",
+        category="skill_suggestion", severity="info",
+        title=(veredito.get("titulo") or f"Skill para cluster {row.cluster_id}")[:200],
+        description=(veredito.get("descricao") or "")[:4000],
+        evidence_json=sanitize_for_json({
+            "tipo_gap": veredito.get("tipo_gap", row.tipo_gap),
+            "skill_relacionada": row.skill_relacionada,
+            "cluster_id": row.cluster_id,
+            "n_membros": len(membros),
+            "membros": [{"problema": m.problema, "session_id": m.session_id,
+                         "motivo": m.motivo_fallback} for m in membros[:10]],
+        }),
+        source_session_ids=sorted({m.session_id for m in membros})[:20],
+    )
+    db.session.add(d)
+    db.session.flush()
+    return f"dialogue:{d.id}"

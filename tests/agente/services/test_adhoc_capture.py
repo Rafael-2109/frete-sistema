@@ -182,3 +182,68 @@ class TestCluster:
         assign_cluster(row)
         assert row.cluster_id == row.id
         db.session.rollback()
+
+
+class TestDisparo:
+    def _mk(self, db, cluster_id, n, user_id=1, **kw):
+        from app.agente.models import AgentAdhocScript
+        rows = []
+        for i in range(n):
+            r = AgentAdhocScript(session_id=f"s-d{cluster_id}-{i}", user_id=user_id,
+                                 command_masked=f"cmd{i}", problema=f"prob {cluster_id}",
+                                 cluster_id=cluster_id, **kw)
+            db.session.add(r); rows.append(r)
+        db.session.flush()
+        return rows
+
+    def test_threshold_user_dispara_dialogue(self, db, monkeypatch):
+        from app.agente.services import adhoc_capture_service as svc
+        from app.agente.models import AgentImprovementDialogue
+        monkeypatch.setattr(svc, "_call_anthropic", lambda *a, **k:
+            '{"vale_skill": true, "tipo_gap": "sem_skill", "titulo": "skill p/ X", "descricao": "cluster de 3"}')
+        rows = self._mk(db, cluster_id=777001, n=3)
+        ref = svc.maybe_fire_suggestion(rows[-1])
+        assert ref and ref.startswith("dialogue:")
+        d = AgentImprovementDialogue.query.filter_by(
+            suggestion_key="adhoc-cluster-777001").first()
+        assert d is not None and d.category == "skill_suggestion"
+        assert d.evidence_json["tipo_gap"] == "sem_skill"
+        db.session.rollback()
+
+    def test_abaixo_threshold_nao_dispara(self, db, monkeypatch):
+        from app.agente.services import adhoc_capture_service as svc
+        called = []
+        monkeypatch.setattr(svc, "_call_anthropic", lambda *a, **k: called.append(1) or "{}")
+        rows = self._mk(db, cluster_id=777002, n=2)
+        assert svc.maybe_fire_suggestion(rows[-1]) is None
+        assert not called  # Sonnet nem foi chamado
+        db.session.rollback()
+
+    def test_bypass_gap_nomeado(self, db, monkeypatch):
+        from app.agente.services import adhoc_capture_service as svc
+        monkeypatch.setattr(svc, "_call_anthropic", lambda *a, **k:
+            '{"vale_skill": true, "tipo_gap": "skill_insuficiente", "titulo": "estender exportar", "descricao": "1 aba"}')
+        rows = self._mk(db, cluster_id=777003, n=1,
+                        skill_relacionada="exportando-arquivos",
+                        tipo_gap="skill_insuficiente", motivo_fallback="so 1 aba")
+        ref = svc.maybe_fire_suggestion(rows[-1])
+        assert ref is not None  # 1 ocorrencia ja basta
+        db.session.rollback()
+
+    def test_dedup_suggestion_key(self, db, monkeypatch):
+        from app.agente.services import adhoc_capture_service as svc
+        monkeypatch.setattr(svc, "_call_anthropic", lambda *a, **k:
+            '{"vale_skill": true, "tipo_gap": "sem_skill", "titulo": "t", "descricao": "d"}')
+        rows = self._mk(db, cluster_id=777004, n=3)
+        assert svc.maybe_fire_suggestion(rows[-1]) is not None
+        assert svc.maybe_fire_suggestion(rows[-1]) is None  # 2a vez trava
+        db.session.rollback()
+
+    def test_veto_sonnet_marca_one_off(self, db, monkeypatch):
+        from app.agente.services import adhoc_capture_service as svc
+        monkeypatch.setattr(svc, "_call_anthropic", lambda *a, **k:
+            '{"vale_skill": false, "tipo_gap": "one_off", "titulo": "", "descricao": ""}')
+        rows = self._mk(db, cluster_id=777005, n=3)
+        assert svc.maybe_fire_suggestion(rows[-1]) is None
+        assert all(r.tipo_gap == "one_off" for r in rows)
+        db.session.rollback()
