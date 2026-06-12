@@ -16,14 +16,15 @@ atualizado: 2026-06-12
 > qualquer fase (Item 0, F0, F1, F2) ou decidir se uma mudanca de conhecimento respeita o
 > papel canonico por camada.
 
-> 🔵 **PROXIMA SESSAO — RETOMAR AQUI:** Item 0 + F0 + F1 + **T2.1 EXECUTADA** e
-> **replay-gate da T2.2 CONCLUIDO** (2026-06-12, branch `feat/arquitetura-conhecimento-f2`;
-> ver Rastreamento). Pendencias: (a) merge da branch em main; (b) DECISAO T2.2 com o Rafael —
-> recomendacao do gate: `MEMORY_KNOWLEDGE_GRAPH=false` preservando tabelas (relatorio
-> `relatorios/arquitetura_x_2026-06-11/10-replay-gate-kg-2026-06-12.md`); execucao = 1 env var
-> no servico sistema-fretes, NAO feita (exige autorizacao explicita); (c) T2.3 segue ATRAS
-> DE GATE (volume minimo helpful/harmful). Follow-up anterior mantido: 14 bloqueantes
-> PRE-existentes de `doc_audit --strict` em docs antigos — task propria.
+> 🔵 **PROXIMA SESSAO — RETOMAR AQUI:** Item 0 + F0 + F1 + **T2.1 e T2.2 EXECUTADAS E
+> FECHADAS** (2026-06-12; merge d583a56a0; pos-merge EXECUTADO na mesma janela com
+> autorizacao explicita do Rafael: `MEMORY_KNOWLEDGE_GRAPH=false` aplicada via Render MCP
+> no web srv-d13m38vfte5s738t6p60 E no worker srv-d2muidggjchc73d4segg, tabelas KG
+> preservadas; relatorio do gate em
+> `relatorios/arquitetura_x_2026-06-11/10-replay-gate-kg-2026-06-12.md` com condicao
+> objetiva de reabertura). Resta da F2 apenas **T2.3, ATRAS DE GATE** (volume minimo
+> helpful/harmful). Follow-ups vivos: 14 bloqueantes PRE-existentes de `doc_audit --strict`
+> em docs antigos — task propria; 3 MENORES do code review T2.1 no Rastreamento 2026-06-12.
 
 ## Indice
 
@@ -279,10 +280,12 @@ Rollback por item; nada muda comportamento sem flag. Detalhar TDD na sessao de e
   `app/agente/config/agent_loader.py` para `desenvolvedor-integracao-odoo` (dev-only de jure,
   carregado em PROD de facto — risco em si). `gestor-recebimento` MANTER (routing nominal
   comprovado). NAO converter roteadores finos (NAO-FAZER N4).
-- [ ] **T2.2 — KG: replay-gate → higiene X3-lite OU flag-off (decisao 3).**
-  *(GATE EXECUTADO 2026-06-12 — causa confirmada com refinamento topologico; recomendacao:
-  flag-off preservando tabelas; relatorio `10-replay-gate-kg-2026-06-12.md`. Resta DECISAO
-  do Rafael + 1 env var — NAO executar sem autorizacao explicita.)*
+- [x] **T2.2 — KG: replay-gate → higiene X3-lite OU flag-off (decisao 3).**
+  *(GATE EXECUTADO 2026-06-12 — causa confirmada com refinamento topologico; relatorio
+  `10-replay-gate-kg-2026-06-12.md`. DECISAO do Rafael na mesma janela: flag-off.
+  `MEMORY_KNOWLEDGE_GRAPH=false` APLICADA 2026-06-12 ~09:31Z via Render MCP no web
+  srv-d13m38vfte5s738t6p60 + worker srv-d2muidggjchc73d4segg; tabelas preservadas;
+  rollback = remover/inverter a env var.)*
   Replay controlado de 1 dia reproduzindo `query_graph_memories`
   (`knowledge_graph_service.py:877-882`) com prompts reais para CONFIRMAR a causa do graph=0
   (hipotese: vocabularios disjuntos prompt-side canonico vs memory-side ruidoso).
@@ -326,6 +329,13 @@ Anexo permanente do desenho-alvo (anti-overengineering). Revisitar item so com g
 
 > Atualizar a cada sessao de execucao (data + o que fechou + evidencia).
 
+- 2026-06-12 — **POS-MERGE EXECUTADO (mesma janela, autorizacao explicita do Rafael):**
+  merge d583a56a0 em main (auto-deploy Render com T2.1) + decisao T2.2 = flag-off:
+  `MEMORY_KNOWLEDGE_GRAPH=false` aplicada ~09:31Z via Render MCP (merge de env, nao replace)
+  no web srv-d13m38vfte5s738t6p60 e no worker srv-d2muidggjchc73d4segg; tabelas
+  entities/links/relations preservadas; frente USE_AGENT_ONTOLOGY intocada. T2.1 e T2.2
+  fechadas; F2 restante = so T2.3 (gate de volume helpful/harmful). Memoria
+  `diagnostico_efetividade_sensores_agente` atualizada (sensor KG: causa fechada + flag-off).
 - 2026-06-12 — **F2 PARCIAL: T2.1 EXECUTADA + replay-gate T2.2 CONCLUIDO** (worktree
   `feat/arquitetura-conhecimento-f2` a partir de origin/main fb54ec640; subagent-driven com
   reviews 2-estagios na T2.1, inline no gate). T2.1 (eaf195238 + fix): medicao dev comprovou
