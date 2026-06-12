@@ -27,6 +27,7 @@ import time
 
 from .models import RegistroPedidoOdoo
 from app import db
+from app.odoo.utils.connection import is_cannot_marshal_none
 
 logger = logging.getLogger(__name__)
 
@@ -261,7 +262,7 @@ class OdooIntegrationService:
                     f"esperado, iniciando polling..."
                 )
                 needs_polling = True
-            elif 'cannot marshal None' in error_str:
+            elif is_cannot_marshal_none(error_str):  # 'cannot marshal None' = sucesso (O6) — ver odoo/GOTCHAS.md
                 logger.info(f"  [{step_name}] Ação completou (retorno None)")
                 fire_result = None
             else:

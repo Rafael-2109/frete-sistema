@@ -18,7 +18,7 @@ import logging
 
 from app import db
 from app.financeiro.models_correcao_datas import CorrecaoDataNFCredito
-from app.odoo.utils.connection import get_odoo_connection
+from app.odoo.utils.connection import get_odoo_connection, is_cannot_marshal_none
 
 logger = logging.getLogger(__name__)
 
@@ -614,14 +614,11 @@ class CorrecaoDatasService:
                     logger.error(f"CRÍTICO: Falha ao restaurar lock_dates: {restore_error}")
 
     def _safe_button_draft(self, move_id: int) -> None:
-        """
-        Coloca documento em draft com tratamento do erro 'cannot marshal None'.
-        Raises Exception se o documento não for para draft.
-        """
+        """Coloca documento em draft. 'cannot marshal None' = sucesso (O6) — ver odoo/GOTCHAS.md"""
         try:
             self.odoo.execute_kw('account.move', 'button_draft', [[move_id]])
         except Exception as draft_error:
-            if 'cannot marshal None' in str(draft_error):
+            if is_cannot_marshal_none(draft_error):
                 logger.warning(f"Erro XML-RPC 'None' no button_draft para {move_id}, verificando estado...")
                 move_check = self.odoo.execute_kw(
                     'account.move', 'read',
@@ -637,14 +634,11 @@ class CorrecaoDatasService:
                 raise
 
     def _safe_action_post(self, move_id: int) -> None:
-        """
-        Reposta documento com tratamento do erro 'cannot marshal None'.
-        Raises Exception se o documento não for para posted.
-        """
+        """Reposta documento. 'cannot marshal None' = sucesso (O6) — ver odoo/GOTCHAS.md"""
         try:
             self.odoo.execute_kw('account.move', 'action_post', [[move_id]])
         except Exception as post_error:
-            if 'cannot marshal None' in str(post_error):
+            if is_cannot_marshal_none(post_error):
                 logger.warning(f"Erro XML-RPC 'None' no action_post para {move_id}, verificando estado...")
                 move_check = self.odoo.execute_kw(
                     'account.move', 'read',

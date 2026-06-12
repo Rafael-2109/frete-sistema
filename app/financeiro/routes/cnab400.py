@@ -901,7 +901,7 @@ def api_reconciliar_inconsistencia_cnab(conta_id):
             }), 400
 
         # Conectar ao Odoo
-        from app.odoo.utils.connection import get_odoo_connection
+        from app.odoo.utils.connection import get_odoo_connection, is_cannot_marshal_none
         conn = get_odoo_connection()
         if not conn.authenticate():
             return jsonify({
@@ -953,7 +953,7 @@ def api_reconciliar_inconsistencia_cnab(conta_id):
                 },
             )
 
-            # Executar wizard — O6: "cannot marshal None" = SUCESSO
+            # 'cannot marshal None' = sucesso (O6) — ver odoo/GOTCHAS.md
             try:
                 conn.execute(
                     'account.payment.register',
@@ -961,7 +961,7 @@ def api_reconciliar_inconsistencia_cnab(conta_id):
                     [wizard_id],
                 )
             except Exception as e:
-                if 'cannot marshal None' not in str(e):
+                if not is_cannot_marshal_none(e):
                     raise
 
         except Exception as e:

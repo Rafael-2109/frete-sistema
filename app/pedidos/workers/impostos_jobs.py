@@ -22,6 +22,8 @@ import time
 import xmlrpc.client
 from datetime import datetime
 
+from app.odoo.utils.connection import is_cannot_marshal_none
+
 logger = logging.getLogger(__name__)
 
 # Fire-and-Poll — parâmetros para cálculo de impostos
@@ -149,8 +151,7 @@ def calcular_impostos_odoo(order_id: int, order_name: str = None):
 
         except Exception as e:
             error_str = str(e)
-            if 'cannot marshal None' in error_str:
-                # Retorno None é esperado — onchange funcionou
+            if is_cannot_marshal_none(error_str):  # 'cannot marshal None' = sucesso (O6) — ver odoo/GOTCHAS.md
                 tempo_total = (datetime.now() - inicio).total_seconds()
                 logger.info(f"[Job Impostos] {pedido_ref} calculado (marshal None) em {tempo_total:.1f}s")
                 return _resultado_sucesso(order_id, order_name, tempo_total)

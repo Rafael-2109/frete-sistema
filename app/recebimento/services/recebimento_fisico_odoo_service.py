@@ -31,7 +31,7 @@ from app.recebimento.models import (
     RecebimentoLote,
     RecebimentoQualityCheck,
 )
-from app.odoo.utils.connection import get_odoo_connection
+from app.odoo.utils.connection import get_odoo_connection, is_cannot_marshal_none
 
 logger = logging.getLogger(__name__)
 
@@ -492,7 +492,7 @@ class RecebimentoFisicoOdooService:
                             [[check.odoo_check_id]]
                         )
                     except Exception as e:
-                        if 'cannot marshal None' not in str(e):
+                        if not is_cannot_marshal_none(e):  # 'cannot marshal None' = sucesso (O6) — ver odoo/GOTCHAS.md
                             raise
                 else:
                     try:
@@ -501,7 +501,7 @@ class RecebimentoFisicoOdooService:
                             [[check.odoo_check_id]]
                         )
                     except Exception as e:
-                        if 'cannot marshal None' not in str(e):
+                        if not is_cannot_marshal_none(e):  # 'cannot marshal None' = sucesso (O6) — ver odoo/GOTCHAS.md
                             raise
 
                 check.processado = True
@@ -535,7 +535,7 @@ class RecebimentoFisicoOdooService:
                         [[check.odoo_check_id]]
                     )
                 except Exception as e:
-                    if 'cannot marshal None' not in str(e):
+                    if not is_cannot_marshal_none(e):  # 'cannot marshal None' = sucesso (O6) — ver odoo/GOTCHAS.md
                         raise
 
                 check.processado = True
@@ -556,7 +556,7 @@ class RecebimentoFisicoOdooService:
         """
         Chama button_validate no picking para finalizar recebimento.
 
-        IMPORTANTE: 'cannot marshal None' e retorno normal do Odoo = sucesso.
+        'cannot marshal None' = sucesso (O6) — ver odoo/GOTCHAS.md
         """
         try:
             odoo.execute_kw(
@@ -564,9 +564,8 @@ class RecebimentoFisicoOdooService:
                 [[picking_id]]
             )
         except Exception as e:
-            if 'cannot marshal None' not in str(e):
+            if not is_cannot_marshal_none(e):  # 'cannot marshal None' = sucesso (O6) — ver odoo/GOTCHAS.md
                 raise
-            # Sucesso (padrao Odoo - retorna None que causa marshal error)
             logger.debug(f"  button_validate retornou None (sucesso) para picking {picking_id}")
 
     # =========================================================================

@@ -102,7 +102,7 @@ class OdooDevolucaoService:
     def odoo(self):
         """Lazy loading do cliente Odoo."""
         if self._odoo_client is None:
-            from app.odoo.utils.connection import get_odoo_connection
+            from app.odoo.utils.connection import get_odoo_connection, is_cannot_marshal_none
             self._odoo_client = get_odoo_connection()
         return self._odoo_client
 
@@ -629,8 +629,7 @@ class OdooDevolucaoService:
             logger.info(f"  ✅ Picking {name} validado com sucesso")
         except Exception as e:
             error_str = str(e)
-            # "cannot marshal None" = operacao executou mas retornou None
-            if 'cannot marshal None' not in error_str:
+            if not is_cannot_marshal_none(error_str):  # 'cannot marshal None' = sucesso (O6) — ver odoo/GOTCHAS.md
                 raise
 
         # Verificar estado final

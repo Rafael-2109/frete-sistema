@@ -20,6 +20,16 @@ from .circuit_breaker import get_circuit_breaker
 
 logger = logging.getLogger(__name__)
 
+
+def is_cannot_marshal_none(exc: "BaseException | str") -> bool:
+    """Fault XML-RPC 'cannot marshal None' = SUCESSO-com-aviso (metodo Odoo retornou None).
+
+    Semantica canonica: .claude/references/odoo/GOTCHAS.md (Matriz de Erros).
+    Helper canonico — usar em vez de string-match inline (O6).
+    """
+    return "cannot marshal none" in str(exc).lower()
+
+
 class OdooConnection:
     """Classe para gerenciar conexão com Odoo"""
     
@@ -226,10 +236,8 @@ class OdooConnection:
             except Exception as e:
                 error_str = str(e).lower()
 
-                # Erro conhecido: métodos Odoo que retornam None (reconcile, button_validate, etc.)
-                # O servidor Odoo não tem allow_none=True, então Fault é gerado na serialização
-                # Mas a operação FOI executada com sucesso antes do retorno
-                if "cannot marshal none" in error_str:
+                # 'cannot marshal None' = sucesso (O6) — ver odoo/GOTCHAS.md
+                if is_cannot_marshal_none(e):
                     logger.debug(
                         f"✓ {model}.{method} executado com sucesso (retorno None é esperado)"
                     )

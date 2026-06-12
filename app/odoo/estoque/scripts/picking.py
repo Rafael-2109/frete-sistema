@@ -26,7 +26,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from app.odoo.constants import ids_diversos
 from app.odoo.services.stock_lot_service import StockLotService
-from app.odoo.utils.connection import get_odoo_connection
+from app.odoo.utils.connection import get_odoo_connection, is_cannot_marshal_none
 
 logger = logging.getLogger(__name__)
 
@@ -467,7 +467,7 @@ class StockPickingService:
                 }},
             )
         except Exception as e:
-            if 'cannot marshal None' in str(e):
+            if is_cannot_marshal_none(e):  # 'cannot marshal None' = sucesso (O6) — ver odoo/GOTCHAS.md
                 marshal_none = True
             else:
                 raise

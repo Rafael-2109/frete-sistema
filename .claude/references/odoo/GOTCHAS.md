@@ -536,7 +536,7 @@ f"{ODOO_URL}/web#id={invoice_id}&cids=1-3-4&menu_id=124&action=243&model=account
 |------|-------|---------|
 | `Authentication failed` | Credenciais invalidas | Verificar `odoo_config.py` |
 | `Circuit breaker is OPEN` | 5 falhas consecutivas | Aguardar 30s ou verificar Odoo |
-| `cannot marshal None` | Metodo retornou None | **SUCESSO!** Tratar com try/except |
+| `cannot marshal None` | Metodo retornou None (O6) | **SUCESSO!** Usar helper canonico `is_cannot_marshal_none` em `app/odoo/utils/connection.py` |
 | `OperationalError` | Conexao DB local | Verificar PostgreSQL |
 | `Timeout` | Operacao lenta | Usar `timeout_override` |
 | `Field 'X' does not exist` | Versao Odoo diferente | Usar `SafeConnection` |
