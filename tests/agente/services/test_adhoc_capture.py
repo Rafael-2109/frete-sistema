@@ -123,3 +123,62 @@ class TestExtracao:
             lambda *a, **k: '{"problema": "' + "p" * 200 + '", "motivo_fallback": "' + "q" * 300 + '"}')
         prob, motivo = svc.extract_problema("cmd", "msg", "skill-x")
         assert len(prob) <= 100 and len(motivo) <= 150
+
+
+def _vec(direcao: int) -> list:
+    """Vetor 1024-dim quase-unitario numa 'direcao' sintetica."""
+    v = [0.001] * 1024
+    v[direcao] = 1.0
+    return v
+
+
+class TestCluster:
+    def test_primeiro_vira_proprio_cluster(self, db):
+        pytest.importorskip("pgvector")
+        from app.agente.services.adhoc_capture_service import assign_cluster
+        from app.agente.models import AgentAdhocScript
+        row = AgentAdhocScript(session_id="s-c1", user_id=1, command_masked="x",
+                               embedding=_vec(0))
+        db.session.add(row); db.session.flush()
+        assign_cluster(row)
+        assert row.cluster_id == row.id
+        db.session.rollback()
+
+    def test_vizinho_proximo_herda(self, db):
+        pytest.importorskip("pgvector")
+        from app.agente.services.adhoc_capture_service import assign_cluster
+        from app.agente.models import AgentAdhocScript
+        a = AgentAdhocScript(session_id="s-c2", user_id=1, command_masked="a",
+                             embedding=_vec(5))
+        db.session.add(a); db.session.flush()
+        a.cluster_id = a.id; db.session.flush()
+        b = AgentAdhocScript(session_id="s-c2", user_id=1, command_masked="b",
+                             embedding=_vec(5))  # identico -> sim 1.0
+        db.session.add(b); db.session.flush()
+        assign_cluster(b)
+        assert b.cluster_id == a.id
+        db.session.rollback()
+
+    def test_distante_abre_cluster(self, db):
+        pytest.importorskip("pgvector")
+        from app.agente.services.adhoc_capture_service import assign_cluster
+        from app.agente.models import AgentAdhocScript
+        a = AgentAdhocScript(session_id="s-c3", user_id=1, command_masked="a",
+                             embedding=_vec(10))
+        db.session.add(a); db.session.flush()
+        a.cluster_id = a.id; db.session.flush()
+        b = AgentAdhocScript(session_id="s-c3", user_id=1, command_masked="b",
+                             embedding=_vec(900))  # ortogonal -> sim ~0
+        db.session.add(b); db.session.flush()
+        assign_cluster(b)
+        assert b.cluster_id == b.id
+        db.session.rollback()
+
+    def test_sem_embedding_cluster_proprio(self, db):
+        from app.agente.services.adhoc_capture_service import assign_cluster
+        from app.agente.models import AgentAdhocScript
+        row = AgentAdhocScript(session_id="s-c4", user_id=1, command_masked="x")
+        db.session.add(row); db.session.flush()
+        assign_cluster(row)
+        assert row.cluster_id == row.id
+        db.session.rollback()

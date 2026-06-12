@@ -151,3 +151,45 @@ def extract_problema(command: str, user_msg: Optional[str],
     except Exception as e:
         logger.warning(f"[ADHOC] extracao Haiku falhou (fallback): {e}")
     return ((user_msg or command or "")[:100] or None), None
+
+
+# ---------------------------------------------------------------------------
+# Embedding + clustering incremental
+# ---------------------------------------------------------------------------
+
+def gerar_embedding(texto: str) -> Optional[list]:
+    """Embedding Voyage do texto (problema + comando). None em falha (best-effort)."""
+    try:
+        from app.embeddings.client import embed_with_retry
+        from app.embeddings.config import VOYAGE_DEFAULT_MODEL
+        vecs = embed_with_retry([texto[:4000]], model=VOYAGE_DEFAULT_MODEL,
+                                input_type="document")
+        return vecs[0] if vecs else None
+    except Exception as e:
+        logger.warning(f"[ADHOC] embedding falhou (segue sem cluster): {e}")
+        return None
+
+
+def assign_cluster(row) -> None:
+    """Clustering incremental: vizinho cosine >= AGENT_ADHOC_SIM herda cluster_id;
+    senao abre cluster proprio (cluster_id = id). Requer row.id (apos flush)."""
+    from app import db
+    from sqlalchemy import text as _text
+    from app.agente.config import feature_flags as ff
+
+    if row.embedding is None:
+        row.cluster_id = row.id
+        return
+    sim_min = getattr(ff, "AGENT_ADHOC_SIM", 0.85)
+    emb_str = "[" + ",".join(str(float(x)) for x in row.embedding) + "]"
+    res = db.session.execute(_text("""
+        SELECT cluster_id, 1 - (embedding <=> CAST(:q AS vector)) AS similarity
+        FROM agent_adhoc_script
+        WHERE id != :rid AND embedding IS NOT NULL AND cluster_id IS NOT NULL
+        ORDER BY embedding <=> CAST(:q AS vector)
+        LIMIT 1
+    """), {"q": emb_str, "rid": row.id}).first()
+    if res is not None and float(res.similarity) >= sim_min:
+        row.cluster_id = int(res.cluster_id)
+    else:
+        row.cluster_id = row.id
