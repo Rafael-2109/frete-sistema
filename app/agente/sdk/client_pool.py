@@ -559,6 +559,14 @@ async def _periodic_cleanup():
 async def _cleanup_idle_clients(idle_timeout: float):
     """Desconecta clients que ultrapassaram o idle timeout.
 
+    INVARIANTE (bug 2026-06-11): client com turno ATIVO (pooled.lock preso
+    durante query()/receive_response()) NUNCA e desconectado pelo cleanup —
+    last_used nao e renovado durante o streaming, entao turnos longos
+    (subagente Odoo 15-30 min) pareciam "idle" e eram mortos no meio, fazendo
+    o stream terminar vazio ("O agente nao retornou uma resposta").
+    Excecao patologica: lock preso ha mais de 4x o timeout (lock vazado /
+    turno zumbi) -> desconecta mesmo assim para nao acumular subprocessos.
+
     Args:
         idle_timeout: Segundos de inatividade antes de desconectar
     """
@@ -569,6 +577,12 @@ async def _cleanup_idle_clients(idle_timeout: float):
         for session_id, pooled in _registry.items():
             idle_seconds = now - pooled.last_used
             if idle_seconds > idle_timeout and pooled.connected:
+                if pooled.lock.locked() and idle_seconds <= idle_timeout * 4:
+                    logger.info(
+                        f"[SDK_POOL] Cleanup pulado (turno ativo): "
+                        f"session={session_id[:8]}... idle={idle_seconds:.0f}s"
+                    )
+                    continue
                 to_disconnect.append(session_id)
 
     if not to_disconnect:
@@ -590,6 +604,20 @@ async def _cleanup_idle_clients(idle_timeout: float):
         f"[SDK_POOL] Cleanup concluído: {len(to_disconnect)} clients desconectados, "
         f"{len(_registry)} restantes"
     )
+
+
+def touch_client(session_id: str) -> None:
+    """Renova last_used do client da sessão (marca atividade do turno).
+
+    API pública para marcar atividade sem expor o registry: o idle do
+    cleanup passa a contar da ÚLTIMA atividade real — não do início do
+    turno. (O caminho persistente em client.py renova inline via
+    `pooled.last_used` por mensagem.) Sessão desconhecida é no-op.
+    """
+    with _registry_lock:
+        pooled = _registry.get(session_id)
+    if pooled is not None:
+        pooled.last_used = time.time()
 
 
 # =============================================================================

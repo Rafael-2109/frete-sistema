@@ -480,3 +480,74 @@ class TestShutdownPool:
         shutdown_pool()  # Nao deve levantar excecao
 
         assert cp._pool_initialized is False
+
+
+# ─── 11. Cleanup NUNCA mata turno ativo (bug 2026-06-11) ────────────────────
+# Root cause: turno persistente segura pooled.lock durante todo o
+# receive_response() (30+ min com subagente) sem renovar last_used; o
+# cleanup de 900s desconectava o client NO MEIO do turno -> stream terminava
+# vazio -> "O agente nao retornou uma resposta" (sessao Rafael, 2x).
+
+class TestCleanupSkipsActiveTurn:
+
+    @patch('app.agente.config.feature_flags.USE_PERSISTENT_SDK_CLIENT', True)
+    def test_cleanup_skips_client_with_active_turn(self, pool_reset):
+        """Client com lock preso (turno ativo) NAO e desconectado, mesmo idle."""
+        _ensure_pool_initialized()
+
+        client_mock = AsyncMock()
+        pooled = PooledClient(
+            client=client_mock, session_id='sess-turno-ativo',
+            connected=True,
+        )
+        pooled.last_used = time.time() - 1200  # bem alem dos 900s
+        cp._registry['sess-turno-ativo'] = pooled
+
+        async def _segura_lock_e_roda_cleanup():
+            async with pooled.lock:  # simula turno em andamento
+                await _cleanup_idle_clients(idle_timeout=900)
+
+        submit_coroutine(_segura_lock_e_roda_cleanup()).result(timeout=5)
+
+        assert 'sess-turno-ativo' in cp._registry
+        assert pooled.connected is True
+        client_mock.disconnect.assert_not_called()
+
+    @patch('app.agente.config.feature_flags.USE_PERSISTENT_SDK_CLIENT', True)
+    def test_cleanup_force_disconnects_pathological_lock(self, pool_reset):
+        """Teto patologico: lock preso ha mais de 4x o timeout -> desconecta."""
+        _ensure_pool_initialized()
+
+        client_mock = AsyncMock()
+        client_mock.disconnect = AsyncMock()
+        pooled = PooledClient(
+            client=client_mock, session_id='sess-lock-vazado',
+            connected=True,
+        )
+        pooled.last_used = time.time() - 4000  # > 4 * 900s? nao — 4*900=3600; 4000 > 3600
+        cp._registry['sess-lock-vazado'] = pooled
+
+        async def _segura_lock_e_roda_cleanup():
+            async with pooled.lock:
+                await _cleanup_idle_clients(idle_timeout=900)
+
+        submit_coroutine(_segura_lock_e_roda_cleanup()).result(timeout=5)
+
+        assert 'sess-lock-vazado' not in cp._registry
+
+    @patch('app.agente.config.feature_flags.USE_PERSISTENT_SDK_CLIENT', True)
+    def test_touch_client_renova_last_used(self, pool_reset):
+        """touch_client renova last_used para o idle contar do FIM do turno."""
+        _ensure_pool_initialized()
+
+        pooled = PooledClient(
+            client=MagicMock(), session_id='sess-touch', connected=True,
+        )
+        pooled.last_used = time.time() - 1200
+        cp._registry['sess-touch'] = pooled
+
+        cp.touch_client('sess-touch')
+
+        assert time.time() - pooled.last_used < 5
+        # sessao desconhecida nao levanta
+        cp.touch_client('sess-inexistente')

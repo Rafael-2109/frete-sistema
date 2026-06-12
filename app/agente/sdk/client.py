@@ -2400,6 +2400,10 @@ Nunca invente informações."""
 
                 # Receber resposta (termina após ResultMessage)
                 async for message in pooled.client.receive_response():
+                    # Renova last_used a cada mensagem: turnos longos (subagente
+                    # 15-30 min) não podem parecer "idle" para o cleanup do pool
+                    # (bug 2026-06-11 — client morto no meio do turno).
+                    pooled.last_used = time.time()
                     # Drenar stderr lines acumuladas (thread-safe SimpleQueue)
                     while True:
                         try:
