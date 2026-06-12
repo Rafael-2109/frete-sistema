@@ -12,9 +12,10 @@ from app.agente.config.permissions import _classify_gerindo_write
 B = '.claude/skills/gerindo-agente/scripts'
 
 
+# ('eval', 'run') removido (estrategia R2, 2026-06-12): subcomando deletado com o eval_runner.
 @pytest.mark.parametrize('script,sub', [
     ('loop', 'approve'), ('loop', 'reject'), ('loop', 'promote-batch'),
-    ('eval', 'review'), ('eval', 'run'), ('melhorias', 'respond'),
+    ('eval', 'review'), ('melhorias', 'respond'),
 ])
 def test_write_subcomandos_sao_classificados(script, sub):
     """Cada WRITE (com ou sem --confirm) e detectado -> sera NEGADO ao agente web."""

@@ -103,12 +103,11 @@ HEALTH_CHECK_CUSTEIO_ENABLED = os.environ.get("HEALTH_CHECK_CUSTEIO_ENABLED", "t
 HEALTH_CHECK_CUSTEIO_HOUR = int(os.environ.get("HEALTH_CHECK_CUSTEIO_HOUR", "7"))
 _ultimo_health_check_custeio = None  # Timestamp do ultimo health check bem-sucedido
 
-# Eval Gate (28º módulo) — Onda 3 / A3, report-only, flag-OFF por default
-# Roda 1x/dia às 11:00 (apos Improvement Dialogue das 10:00).
-# DEFAULT false (flag AGENT_EVAL_GATE): modulo e' no-op. Ativar em deploy.
-EVAL_GATE_ENABLED = os.environ.get("AGENT_EVAL_GATE", "false").lower() == "true"
-EVAL_GATE_HOUR = int(os.environ.get("AGENT_EVAL_GATE_HOUR", "11"))
-_ultimo_eval_gate = None  # Timestamp da ultima execucao bem-sucedida
+# Eval Gate (28º módulo) — REMOVIDO (estrategia R2, 2026-06-12): A3 aposentado
+# (2026-06-03, EXECUCAO.md); AGENT_EVAL_GATE era default-false e OFF em PROD —
+# o modulo nunca atuou. eval_runner/eval_gate_service deletados; a funcao pura
+# eval_gate migrou para app/agente/services/regression_gate.py (promocao A4).
+# A numeracao dos modulos 29-33 foi PRESERVADA.
 
 # Judge Enqueuer (29º módulo) — Onda 1 / E2, report-only, flag-OFF por default
 # REUSA a flag AGENT_STEP_JUDGE (mesma que controla o job judge_step em shadow).
@@ -247,7 +246,7 @@ def executar_sincronizacao():
     Executa sincronização usando services já instanciados
     Similar ao que funciona em SincronizacaoIntegradaService
     """
-    global faturamento_service, carteira_service, requisicao_service, pedido_service, alocacao_service, entrada_material_service, cte_service, contas_receber_service, baixas_service, contas_pagar_service, nfd_service, pallet_service, reversao_service, monitoramento_sync_service, validacao_recebimento_job, validacao_ibscbs_job, extratos_service, picking_recebimento_sync_service, cte_cancelamento_outlook_job, _ultima_reindexacao_embeddings, _ultima_varredura_seguranca, _ultimo_kg_cleanup, _ultima_auditoria_financeira, _ultimo_improvement_dialogue, _ultimo_fechamento_mes_custeio, _ultimo_health_check_custeio, _ultimo_eval_gate
+    global faturamento_service, carteira_service, requisicao_service, pedido_service, alocacao_service, entrada_material_service, cte_service, contas_receber_service, baixas_service, contas_pagar_service, nfd_service, pallet_service, reversao_service, monitoramento_sync_service, validacao_recebimento_job, validacao_ibscbs_job, extratos_service, picking_recebimento_sync_service, cte_cancelamento_outlook_job, _ultima_reindexacao_embeddings, _ultima_varredura_seguranca, _ultimo_kg_cleanup, _ultima_auditoria_financeira, _ultimo_improvement_dialogue, _ultimo_fechamento_mes_custeio, _ultimo_health_check_custeio
 
     _t_inicio = time.time()
     logger.info("=" * 60)
@@ -2087,45 +2086,9 @@ def executar_sincronizacao():
 
         logger.info(f"   [TIMER] Step 27 (Health Check Custeio): {time.time() - _t_step:.1f}s")
 
-        # ── 2️⃣8️⃣ EVAL GATE — golden datasets de subagentes (28º módulo, report-only) ──
-        # Onda 3 / A3 (wiring REAL — Fase 1, 3b). Flag AGENT_EVAL_GATE default OFF → no-op.
-        # Quando ON: ENFILEIRA run_eval_batch na fila NOVA 'agent_eval' (PESADA).
-        # NAO roda inline: o eval REAL invoca o agente via `claude -p` (20-50min) e
-        # bloquearia o ciclo de sincronizacao. O job RQ roda nos Workers 1/2
-        # (light-reserved Worker 0 preservado). Persiste score por-agente em
-        # agent_eval_scores + gate report-only (NUNCA bloqueia).
-        # Guard temporal 1x/dia preservado; best-effort isolado.
-        _t_step = time.time()
-        eval_gate_executou = False
-
-        if EVAL_GATE_ENABLED:
-            hora_eg = agora_utc_naive().hour
-            hoje_eg = agora_utc_naive().date()
-
-            deve_rodar_eg = (
-                hora_eg == EVAL_GATE_HOUR
-                and (_ultimo_eval_gate is None
-                     or _ultimo_eval_gate.date() < hoje_eg)
-            )
-
-            if deve_rodar_eg:
-                eval_gate_executou = True
-                try:
-                    from app.agente.workers.eval_runner import enqueue_eval_batch
-
-                    _eg_result = enqueue_eval_batch()
-                    logger.info(f"[EVAL_GATE] enfileirado run_eval_batch: {_eg_result}")
-
-                    _ultimo_eval_gate = agora_utc_naive()
-                except Exception as e:
-                    logger.error(f"[EVAL_GATE] Erro no modulo 28: {e}")
-                    _ultimo_eval_gate = agora_utc_naive()
-                    try:
-                        db.session.rollback()
-                    except Exception:
-                        pass
-
-        logger.info(f"   [TIMER] Step 28 (Eval Gate): {time.time() - _t_step:.1f}s")
+        # ── 2️⃣8️⃣ EVAL GATE — REMOVIDO (estrategia R2, 2026-06-12). A3 aposentado;
+        # AGENT_EVAL_GATE era OFF em PROD e o modulo nunca atuou. Numeracao dos
+        # modulos 29-33 preservada. ──
 
         # ── 2️⃣9️⃣ JUDGE ENQUEUER — varredor RQ do step_judge (29º módulo, report-only) ──
         # Onda 1 / E2. Flag AGENT_STEP_JUDGE default OFF → no-op.
@@ -2310,7 +2273,7 @@ def executar_sincronizacao():
         if health_custeio_executou:
             modulos_sync.append(sucesso_health_custeio)
 
-        # Modulo 28 (EVAL GATE) e' report-only e nunca falha o cron — nao incluir no total
+        # Modulo 28 (EVAL GATE) foi removido (estrategia R2, 2026-06-12)
 
         total_modulos = len(modulos_sync)
         total_sucesso = sum(modulos_sync)
@@ -2493,7 +2456,6 @@ def main():
     logger.info(f"   5. Segurança: 21º módulo, diário às {SEGURANCA_SCAN_HOUR:02d}:00 (enabled={SEGURANCA_SCAN_ENABLED})")
     logger.info(f"   6. Fechamento Custeio: 26º módulo, mensal dia {FECHAR_MES_CUSTEIO_DAY} às {FECHAR_MES_CUSTEIO_HOUR:02d}:00 (enabled={FECHAR_MES_CUSTEIO_ENABLED})")
     logger.info(f"   7. Health Check Custeio: 27º módulo, diário às {HEALTH_CHECK_CUSTEIO_HOUR:02d}:00 (enabled={HEALTH_CHECK_CUSTEIO_ENABLED})")
-    logger.info(f"   8. Eval Gate (A3): 28º módulo, diário às {EVAL_GATE_HOUR:02d}:00 report-only (enabled={EVAL_GATE_ENABLED})")
     logger.info(f"   Próxima execução em {INTERVALO_MINUTOS} minutos...")
     logger.info("=" * 60)
 

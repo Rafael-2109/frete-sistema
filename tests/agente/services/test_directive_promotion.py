@@ -331,9 +331,9 @@ class TestEvaluateAndPromote:
     def test_gate_report_only_nao_bloqueia_production_path(self):
         """
         eval_gate em mode='report_only' nunca bloqueia — mesmo com regressão,
-        o gate apenas loga. Confirma integração com eval_gate_service.
+        o gate apenas loga. Confirma integração com regression_gate.
         """
-        from app.agente.services.eval_gate_service import eval_gate
+        from app.agente.services.regression_gate import eval_gate
 
         # Regressão severa
         result = eval_gate(baseline_score=0.9, candidate_score=0.2, mode='report_only')
@@ -351,7 +351,7 @@ class TestEvaluateAndPromote:
         candidata = self._candidata_mock()
 
         with patch('app.agente.services.directive_promotion_service._tem_falha_odoo', return_value=True):
-            with patch('app.agente.services.eval_gate_service.eval_gate') as mock_gate:
+            with patch('app.agente.services.regression_gate.eval_gate') as mock_gate:
                 result = evaluate_and_promote(candidata, baseline_score=0.8, candidate_score=0.9)
 
         assert result['decision'] == 'rejected'
@@ -496,7 +496,9 @@ class TestRunBatch:
     def test_promove_via_judge_sem_plano(self):
         """Opção B / A4 V2: sessão SEM plano mas de ALTA QUALIDADE (judge) vira
         candidata e é promovida (shadow). Prova que o batch deixou de depender de
-        PlanState — a 2ª fonte é o judge signal."""
+        PlanState — a 2ª fonte é o judge signal. Estratégia R3 (2026-06-12): a
+        fonte agora é gated por AGENT_DIRECTIVE_JUDGE_SOURCE (default OFF) — este
+        teste liga a flag para preservar a cobertura do comportamento ON."""
         from app.agente.services import directive_promotion_service as svc
         from unittest.mock import patch
         s2 = self._sess('s2', None)
@@ -505,6 +507,7 @@ class TestRunBatch:
             {'score': 80, 'label': 'success', 'evidencia': 'ok', 'tools': ['Bash']},
         ]
         with patch.object(svc, 'AGENT_DIRECTIVE_PROMOTION', True), \
+             patch.object(svc, 'AGENT_DIRECTIVE_JUDGE_SOURCE', True), \
              patch.object(svc, '_buscar_sessoes_com_plano_concluido', return_value=[]), \
              patch.object(svc, '_buscar_sessoes_recentes', return_value=[s2]), \
              patch.object(svc, '_judge_steps_da_sessao', return_value=judge_steps), \
@@ -515,6 +518,45 @@ class TestRunBatch:
             r = svc.run_directive_promotion_batch(lookback_hours=24, limit=50)
         assert r['promovidos'] == 1, f"esperado 1 promovido via judge, foi {r}"
         mock_persist.assert_called_once()
+
+    def test_fonte_judge_desligada_por_default_r3(self):
+        """Estratégia R3 (2026-06-12): com AGENT_DIRECTIVE_JUDGE_SOURCE=OFF (default),
+        a fonte 2 (JUDGE) NÃO é processada — nem busca sessões recentes — enquanto
+        as fontes 1 (PLAN) e 3 (CORRECTION-RECURRENCE) seguem rodando."""
+        from app.agente.services import directive_promotion_service as svc
+        from unittest.mock import patch
+        plan = {'steps': {'1': {'subject': 'consultar', 'status': 'completed'},
+                          '2': {'subject': 'validar', 'status': 'completed'}}}
+        with patch.object(svc, 'AGENT_DIRECTIVE_PROMOTION', True), \
+             patch.object(svc, 'AGENT_DIRECTIVE_JUDGE_SOURCE', False), \
+             patch.object(svc, '_buscar_sessoes_com_plano_concluido', return_value=[self._sess('s1', plan)]), \
+             patch.object(svc, '_buscar_sessoes_recentes') as mock_recentes, \
+             patch.object(svc, '_quality_score_da_sessao', return_value=0.85), \
+             patch.object(svc, '_tem_falha_odoo', return_value=False), \
+             patch.object(svc, 'promover_correcoes_recorrentes', return_value={'promovidas': 2}) as mock_corr, \
+             patch.object(svc, '_persist_directive', return_value=1) as mock_persist:
+            r = svc.run_directive_promotion_batch(lookback_hours=24, limit=50)
+        # Fonte 2 NÃO consultada (flag OFF)
+        mock_recentes.assert_not_called()
+        # Fonte 1 (PLAN) processou e promoveu normalmente
+        assert r['promovidos'] == 1
+        mock_persist.assert_called_once()
+        # Fonte 3 (CORRECTION-RECURRENCE) rodou normalmente
+        mock_corr.assert_called_once()
+        assert r['correcoes_promovidas'] == 2
+
+    def test_default_da_flag_judge_source_e_off(self):
+        """A flag AGENT_DIRECTIVE_JUDGE_SOURCE existe e o DEFAULT do código é false
+        (estratégia R3 — religar exige judge ancorado em outcome, R9)."""
+        import re
+        from pathlib import Path
+        ff_path = (Path(__file__).resolve().parents[3]
+                   / 'app' / 'agente' / 'config' / 'feature_flags.py')
+        ff_src = ff_path.read_text(encoding='utf-8')
+        assert re.search(
+            r'AGENT_DIRECTIVE_JUDGE_SOURCE\s*=\s*os\.getenv\(\s*"AGENT_DIRECTIVE_JUDGE_SOURCE"\s*,\s*"false"',
+            ff_src,
+        ), "AGENT_DIRECTIVE_JUDGE_SOURCE deve existir com default 'false' (R3)"
 
 
 # ---------------------------------------------------------------------------

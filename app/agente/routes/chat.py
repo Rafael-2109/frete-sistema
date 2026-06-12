@@ -773,19 +773,20 @@ async def _async_stream_sdk_client(
     )
 
     # =================================================================
-    # P1-2: Sentiment Detection — ajusta tom se frustração detectada
+    # P1-2: Sentiment Detection — captura o frustration_score como RÓTULO.
+    # Estratégia R1 (2026-06-12, ESTRATEGIA_ATUADORES_2026-06-06.md): a
+    # INJEÇÃO de pressão no prompt (enrich_message_if_frustrated, "seja mais
+    # direto") foi REMOVIDA — atuador errado e perigoso p/ WRITE (induz pular
+    # dry-run). O score continua capturado cross-turn para o quality spine
+    # (get_last_frustration_score, atrás de USE_AGENT_QUALITY_SPINE).
     # =================================================================
-    enriched_prompt = message
     try:
-        from app.agente.config.feature_flags import USE_SENTIMENT_DETECTION
-
-        if USE_SENTIMENT_DETECTION:
-            from app.agente.services.sentiment_detector import enrich_message_if_frustrated
-            enriched_prompt = enrich_message_if_frustrated(
-                message=message,
-                response_state=response_state,
-                session_id=our_session_id,
-            )
+        from app.agente.services.sentiment_detector import track_frustration_score
+        track_frustration_score(
+            message=message,
+            response_state=response_state,
+            session_id=our_session_id,
+        )
     except Exception as sentiment_err:
         logger.warning(f"[AGENTE] Erro na detecção de sentimento (ignorado): {sentiment_err}")
 
@@ -793,7 +794,7 @@ async def _async_stream_sdk_client(
         # ─── STREAMING direto com query() ───
         # Sem pool, sem locks, sem connect/disconnect
         async for event in client.stream_response(
-            prompt=enriched_prompt,
+            prompt=message,
             user_name=user_name,
             model=model,
             effort_level=effort_level,

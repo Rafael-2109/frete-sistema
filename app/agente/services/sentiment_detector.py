@@ -2,7 +2,7 @@
 P1-2: Detecção de Sentimento do Usuário.
 
 Detecta frustração do operador logístico usando heurísticas locais (sem API).
-Quando frustração é detectada, retorna uma instrução para o modelo ser mais direto.
+O score é um RÓTULO DE TRIAGEM (telemetria/quality spine) — NÃO um atuador.
 
 Custo: zero (detecção local, sem chamada Haiku).
 
@@ -13,8 +13,15 @@ Sinais de frustração detectados:
 4. Pontuação excessiva (???, !!!, CAPS)
 
 Uso:
-    O detector é chamado em _async_stream_sdk_client() antes de enviar a mensagem ao SDK.
-    Se frustração detectada, a mensagem é prefixada com instrução de ajuste de tom.
+    track_frustration_score() é chamado em _async_stream_sdk_client() a cada turno
+    para manter o cache cross-turn; get_last_frustration_score() é lido pelo quality
+    spine (chat.py, atrás de USE_AGENT_QUALITY_SPINE) e pelo Teams como rótulo.
+
+ESTRATÉGIA R1 (2026-06-12, ESTRATEGIA_ATUADORES_2026-06-06.md): a INJEÇÃO de
+pressão no prompt (`enrich_message_if_frustrated` + FRUSTRATION_INSTRUCTION,
+"seja mais direto") foi REMOVIDA — pressão emocional no prompt é o atuador errado
+e PERIGOSO para WRITE (induz pular dry-run/verificação). O score permanece só
+como rótulo de triagem.
 """
 
 import logging
@@ -85,17 +92,9 @@ FRUSTRATION_MARKERS = [
     r'\bdeu ruim\b',
 ]
 
-# Instrução injetada quando frustração é detectada.
-# FIX 2026-04-17: usa <system-reminder> (tag oficial Claude) em vez de
-# "[CONTEXTO INTERNO — NAO MENCIONE: ...]" — Opus 4.7+ tem defesas fortes
-# contra prompt injection e estava sinalizando o formato antigo como
-# ataque (falso positivo — era instrucao legitima do sistema).
-FRUSTRATION_INSTRUCTION = (
-    "\n\n<system-reminder>O usuario demonstra pressa ou frustracao. "
-    "Seja MAIS direto, MENOS explicativo. Va direto ao ponto sem rodeios. "
-    "Evite introducoes longas, listas desnecessarias e explicacoes que o usuario nao pediu. "
-    "Responda de forma concisa e objetiva.</system-reminder>"
-)
+# NOTA (estratégia R1, 2026-06-12): a constante FRUSTRATION_INSTRUCTION e a
+# função enrich_message_if_frustrated (que a prependava ao prompt) foram
+# removidas — a injeção de pressão era atuador errado/perigoso para WRITE.
 
 
 def detect_frustration(
@@ -213,24 +212,23 @@ def get_last_frustration_score(session_id: Optional[str]) -> Optional[int]:
     return scores[-1] if scores else None
 
 
-def enrich_message_if_frustrated(
+def track_frustration_score(
     message: str,
     response_state: dict,
     session_id: Optional[str] = None,
-) -> str:
+) -> None:
     """
-    Verifica frustração e enriquece a mensagem se necessário.
+    Detecta frustração e registra o score no cache cross-turn (SÓ rótulo).
 
-    Função principal chamada por routes.py antes de enviar ao SDK.
-    Mantém scores cross-turn em cache in-memory por session_id.
+    Sucessora de `enrich_message_if_frustrated` (estratégia R1, 2026-06-12):
+    mantém a CAPTURA do score (lido por get_last_frustration_score no quality
+    spine e no Teams), mas NÃO modifica a mensagem — a injeção de pressão no
+    prompt foi removida (atuador errado/perigoso para WRITE).
 
     Args:
         message: Mensagem original do usuário
         response_state: Estado da resposta (contém error_message se houve erro)
         session_id: ID da sessão para tracking cross-turn (opcional)
-
-    Returns:
-        Mensagem original (se sem frustração) ou mensagem + instrução de tom
     """
     try:
         had_error = bool(response_state.get('error_message'))
@@ -238,7 +236,7 @@ def enrich_message_if_frustrated(
         # Carregar scores anteriores da sessão
         recent_scores = _session_scores.get(session_id, []) if session_id else []
 
-        is_frustrated, current_score = detect_frustration(
+        _is_frustrated, current_score = detect_frustration(
             message=message,
             had_error=had_error,
             recent_scores=recent_scores,
@@ -250,11 +248,6 @@ def enrich_message_if_frustrated(
             scores.append(current_score)
             _session_scores[session_id] = scores[-3:]
 
-        if is_frustrated:
-            return message + FRUSTRATION_INSTRUCTION
-
     except Exception as e:
         # Best-effort: nunca bloqueia
         logger.warning(f"[SENTIMENT] Erro na detecção (ignorado): {e}")
-
-    return message

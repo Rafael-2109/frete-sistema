@@ -30,7 +30,7 @@ app/agente/services/
   ├── memory_consolidator.py          #   736 LOC — Consolidacao + tier frio (P0)
   ├── metrics_dashboard_service.py    #   690 LOC — Dashboard telemetria subagent (Fase A1+A3)
   ├── improvement_suggester.py        #   602 LOC — Dialogo melhoria Agent SDK <-> Claude Code (D8)
-  ├── eval_gate_service.py            #   568 LOC — Gate de avaliacao offline (A3 golden dataset)
+  ├── regression_gate.py              #    70 LOC — Gate puro de regressao (eval_gate; sobrevivente do A3 aposentado, R2 2026-06-12)
   ├── directive_promotion_service.py  #   887 LOC — Promocao automatica de diretriz (A4 Distill→Deploy)
   ├── ontology_bootstrap.py           #   211 LOC — Bootstrap da ontologia (knowledge graph / ontology_query)
   ├── intersession_briefing.py        #   576 LOC — Briefing entre sessoes, zero LLM (P0)

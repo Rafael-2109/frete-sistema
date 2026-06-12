@@ -257,7 +257,7 @@ Cada endpoint DEVE continuar funcionando identicamente após a migração.
 | S04 | friction_analyzer.py | 463 | `USE_FRICTION_ANALYSIS` | routes.py (/insights) | NÃO |
 | S05 | memory_consolidator.py | 510 | `USE_MEMORY_CONSOLIDATION` | Background job | NÃO |
 | S06 | session_summarizer.py | 402 | `USE_SESSION_SUMMARY` | routes.py (bg) | NÃO |
-| S07 | sentiment_detector.py | 177 | `USE_SENTIMENT_DETECTION` | routes.py (_async_stream) | PARCIAL — chamado no stream |
+| S07 | sentiment_detector.py | 177 | — (flag removida 2026-06-12, estrategia R1: injecao aposentada; captura incondicional via track_frustration_score) | routes.py (_async_stream) | PARCIAL — chamado no stream |
 | S08 | intersession_briefing.py | 331 | `USE_INTERSESSION_BRIEFING` | client.py (_load_memories) | NÃO |
 | S09 | suggestions_generator.py | 209 | `USE_PROMPT_SUGGESTIONS` | routes.py (pós-done) | PARCIAL — chamado pós-stream |
 | S10 | tool_skill_mapper.py | 316 | TBD | TBD | NÃO |

@@ -4,7 +4,7 @@ camada: L2
 sot_de: estrategia de atuacao do agente por tipo de erro (insumo do plano de implementacao) — auditoria de sensores 2026-06-06
 hub: docs/blueprint-agente/EXECUCAO.md
 superseded_by: —
-atualizado: 2026-06-06
+atualizado: 2026-06-12
 -->
 
 # Estratégia de Atuação por Tipo de Erro — insumo do plano (próxima sessão)
@@ -49,35 +49,54 @@ Memória soft serve bem a ~nenhum. A maioria do valor está em A (código via D8
 
 ## REMOVER (sem dó — custo sem retorno / loop aberto / atuador errado)
 
-**R1 — Injeção de PRESSÃO por frustração.** `enrich_message_if_frustrated` prependa "seja mais direto"
+**R1 — Injeção de PRESSÃO por frustração. ✅ EXECUTADO (2026-06-12, `aeed5212d`).** `enrich_message_if_frustrated` prependa "seja mais direto"
 ao prompt do turno — efeito imprevisível e PERIGOSO para WRITE (induz pular dry-run/verificação).
-Remover a INJEÇÃO; manter `frustration_score` só como rótulo de triagem (não atuador).
-PONTEIRO: `app/agente/routes/chat.py:621-628` (callsite enrich) · `app/agente/services/sentiment_detector.py` (enrich_message_if_frustrated, get_last_frustration_score).
+INJEÇÃO removida (+ flag `USE_SENTIMENT_DETECTION`, que só a gateava); `frustration_score` mantido só como rótulo de triagem
+(`track_frustration_score` + `get_last_frustration_score`; quality spine intacto).
+PONTEIRO: `app/agente/routes/chat.py:775` (callsite) · `app/agente/services/sentiment_detector.py` (track_frustration_score, get_last_frustration_score).
 
-**R2 — eval_runner / eval_gate (A3).** Aposentado (ROADMAP O1.4); `invoke_fn` é stub `NotImplementedError`;
-`mode='report_only'` nunca bloqueia. Remover, desacoplando de `calibration_sampler` (que usa `AgentEvalCase`)
-e do scheduler. NÃO remover a tabela `agent_eval_case` (a calibração usa).
-PONTEIRO: `app/agente/workers/eval_runner.py` · `app/agente/services/eval_gate_service.py` · callers: `app/scheduler/sincronizacao_incremental_definitiva.py`, `directive_promotion_service.py`, `workers/calibration_sampler.py`.
+**R2 — eval_runner / eval_gate (A3). ✅ EXECUTADO (2026-06-12, `aeed5212d`).** Aposentado (ROADMAP O1.4); `AGENT_EVAL_GATE`
+era default-false e OFF em PROD — nunca atuou. REMOVIDOS: `eval_runner.py`, `eval_gate_service.py`, módulo 28 do scheduler
+(numeração 29-33 preservada), fila RQ `agent_eval` (worker_render/worker_atacadao/start_worker_render), flag `AGENT_EVAL_GATE`,
+subcomando `eval.run` da skill gerindo-agente. A função pura `eval_gate` (caller vivo: promoção A4) migrou para
+`app/agente/services/regression_gate.py`. PRESERVADOS: tabela/modelo `AgentEvalCase` (calibração GATE-1 usa),
+`AgentEvalScore` (modelo histórico, escrita aposentada anotada), `.claude/evals/` (dev offline).
 
-**R3 — Fonte JUDGE-DRIVEN da promoção A4.** `propose_directive_from_judge_session` promove diretriz a partir
-de judge não-calibrado = reward-hacking (gera "BOM DIA validado pelo judge"; crítica A §C1). Mesmo com o
-endurecimento desta sessão (`_meta_tarefa_trivial`, commit d2a97147b), promover por nota cega é frágil.
-DESLIGAR essa fonte até existir judge ancorado em outcome (ver I2/I4). Manter a fonte por CORREÇÃO recorrente.
-PONTEIRO: `app/agente/services/directive_promotion_service.py:145` (propose_directive_from_judge_session) · gate em `run_directive_promotion_batch`.
+**R3 — Fonte JUDGE-DRIVEN da promoção A4. ✅ EXECUTADO (2026-06-12, `aeed5212d`).** `propose_directive_from_judge_session`
+promove diretriz a partir de judge não-calibrado = reward-hacking (gera "BOM DIA validado pelo judge"; crítica A §C1). Mesmo com o
+endurecimento (`_meta_tarefa_trivial`, commit d2a97147b — permanece no código), promover por nota cega é frágil.
+Fonte DESLIGADA via flag nova `AGENT_DIRECTIVE_JUDGE_SOURCE` (default false). O judge online foi CALIBRADO em
+2026-06-12 (GATE-1: 12/12 concordância), mas calibração ≠ ancoragem em outcome — religar exige judge ANCORADO EM
+OUTCOME (R9). Fontes PLAN e CORREÇÃO recorrente intactas.
+PONTEIRO: `app/agente/services/directive_promotion_service.py` (propose_directive_from_judge_session) · gate em `run_directive_promotion_batch`.
 
 **R4 — Injeção AUTOMÁTICA de ~66 diretrizes legado todo turno.** Dilui o contexto; ninguém escolhe o relevante.
 Substituir por progressive disclosure (I6). Com `AGENT_OPERATIONAL_DIRECTIVES=ON` em PROD, isto injeta 66 itens
 por turno hoje.
 PONTEIRO: `app/agente/sdk/memory_injection.py:420` (_build_operational_directives) · filtro NULL/'ativa' ~:471-475.
 
-**R5 — 👍👎 turn-level como BASE.** NÃO construir o contrato 3 camadas (R8) + Teams para trazer like ao turno.
-É reforçador escasso (0/244), não fundação. Despriorizado.
+**R5 — 👍👎 turn-level como BASE. ✅ REAFIRMADO (decisão Rafael 2026-06-12: manter despriorizado).** NÃO construir
+o contrato 3 camadas (R8) + Teams para trazer like ao turno. É reforçador escasso (0/244), não fundação. Despriorizado.
 PONTEIRO: `app/agente/routes/feedback.py:46` (session-level) · crítica E "lacuna nº1".
 
 **R6 — judge GENÉRICO (nota de turno cega) como sinal de atuação.** `step_judge` roda 244/244 mas é loop aberto
 (telemetria + shadow). Ou re-fundar no outcome real (I2/I4) com saída acionável, ou aposentar como atuador
 (manter opt-in só telemetria). NÃO usar nota-de-turno cega para promover/rankear.
 PONTEIRO: `app/agente/workers/step_judge.py` · `app/agente/sdk/verifiers.py`.
+
+> **✅ VERIFICADO (2026-06-12):** varredura dos consumidores de `outcome_signal.judge` em caminhos de
+> ATUAÇÃO automática. Resultado: **nenhuma atuação automática por nota cega restante após o R3.**
+> (a) `directive_promotion_service` — era a ÚNICA atuação judge-driven; a fonte 2 está gated OFF (R3).
+> A nota ainda entra como *floor de qualidade* (`_quality_score_da_sessao`) na fonte 1 (PLAN), mas só
+> como FILTRO conservador (abstém sem judge) para escrita em `directive_status='shadow'` (nunca injetada
+> sem aprovação humana), atrás de `AGENT_DIRECTIVE_PROMOTION` default-OFF — aceitável.
+> (b) `calibration_sampler` + painel `insights_service.get_judge_calibration_panel` — human-gated
+> (spot-check GATE-1) / telemetria — OK. (c) `plan_verifier` — usa o resumo do judge só como INSUMO do
+> prompt adversarial (shadow) — OK. (d) `skill_effectiveness_service` NÃO consome a nota do judge (tem
+> avaliador próprio Haiku/Sonnet). Achado ADJACENTE (fora do escopo R6, reportado para ciência): o ramo
+> `lembrete_usuario` desse avaliador aplica memória `priority='mandatory'` por-usuário AUTOMATICAMENTE
+> quando confiança ≥ `AGENT_SKILL_EVAL_CONF_MIN` (ramos `lembrete_todos`/`ajuste_codigo` são human-gated
+> via Inbox) — não é nota de judge, e não foi alterado.
 
 ---
 
@@ -118,9 +137,13 @@ tipo-de-tarefa + entidades da ação. A regex layer-1 do KG já extrai entidade.
 PONTEIRO: `app/agente/sdk/memory_injection.py` (pipeline de retrieval) · `app/agente/services/knowledge_graph_service.py` (layer 1 regex) · `app/agente/services/tool_skill_mapper.py`.
 DoD: tarefa "baseline" recupera as regras do baseline 100% das vezes (não depende de similaridade).
 
-**I4 — [Categoria D] ENFORCEMENT hard para WRITE Odoo, ancorado em R9.** Ligar/expandir o guard PreToolUse
-(existe, OFF) usando o audit determinístico R9 (operacao_odoo_auditoria) como ground-truth de outcome.
-PONTEIRO: `app/agente/sdk/memory_injection.py` (_enforce_mandatory_invariants, flag `USE_MANDATORY_HARD_ENFORCE` OFF) · `app/agente/sdk/hooks.py` (PreToolUse) · `app/utils/odoo_audit_helpers.py` + tabela `operacao_odoo_auditoria` (R9, CLAUDE.md).
+**I4 — [Categoria D] ENFORCEMENT hard para WRITE Odoo, ancorado em R9. ✅ GUARD LIGADO (2026-06-12, `aeed5212d`).**
+`USE_MANDATORY_HARD_ENFORCE` agora é default **true** (canal fail-open, custo ~zero; 0 regras com
+`ENFORCE_DENY_SUBSTR:` em PROD hoje = no-op até a 1ª regra dura curada declarar token; rollback = env false).
+Expansão de deny-list Odoo **CONDICIONADA a caso-prova** (decisão Rafael R12.1 = "só avisando"; o tax-gate já
+cobre o caso provado — NÃO foi criada deny-list nova). A ancoragem do guard no audit R9 como ground-truth de
+outcome segue como evolução futura.
+PONTEIRO: `app/agente/sdk/hooks.py:345` (_enforce_mandatory_invariants, PreToolUse) · `app/agente/config/feature_flags.py` (`USE_MANDATORY_HARD_ENFORCE`) · `app/utils/odoo_audit_helpers.py` + tabela `operacao_odoo_auditoria` (R9, CLAUDE.md).
 DoD: WRITE Odoo de risco sem dry-run/contra guard é bloqueado no hook (teste).
 
 **I5 — Ciclo de vida: reconciliação no write + invalidação por OUTCOME.** Mata o inchaço ("memórias gigantes").
@@ -144,10 +167,13 @@ DoD: prompt injeta índice + ≤N itens recuperados por gatilho (I3), não 66 po
 1. **I2 grounding — 1º ALVO (erro dominante, 4/4 casos):** verificar a fonte (schema/rota/código/arquivo)
    ANTES de afirmar estrutura. Ataca a alucinação (549/630/692/801) — o maior valor provado.
    **Plano TDD (cobertura ampla — regra constitucional L2 + tool `resolver`, 3 tasks):** `docs/superpowers/plans/2026-06-06-grounding-cobertura-ampla.md`. O plano `*-verificador-turno-principal.md` foi DESCARTADO (premissa "afirma sem verificar" refutada pela mineração PROD: nos casos reais ele verifica, mas com evidência insuficiente).
-2. **I4 enforcement WRITE Odoo:** segurança; usa R9 (ground-truth pronto).
+2. **I4 enforcement WRITE Odoo:** segurança; usa R9 (ground-truth pronto). ✅ guard LIGADO 2026-06-12
+   (default true, no-op até 1ª regra com token; deny-list Odoo condicionada a caso-prova).
 3. **I1 generalização (§3a/§3c):** recorrência determinística por error_signature força candidata D8 +
    gate de saída do D8 autônomo + default transversal no `exportar.py`. (O baseline já está feito.)
-4. **Limpeza R2/R3/R1/R6:** remover eval_runner/eval_gate, desligar fonte judge-driven A4, cortar injeção de pressão, tirar judge cego do caminho de atuação.
+4. **Limpeza R2/R3/R1/R6:** ✅ EXECUTADA 2026-06-12 (`aeed5212d`) — eval_runner/eval_gate removidos,
+   fonte judge-driven A4 desligada (flag), injeção de pressão cortada, R6 verificado (zero atuação
+   automática por nota cega restante).
 5. **I3 gatilho determinístico + I6 progressive disclosure + I5 ciclo de vida:** refundação do retrieval/memória (maior, estrutural).
 
 ## Backlog — condicionado a caso-prova (NÃO é alvo até existir erro real em PROD)

@@ -87,11 +87,13 @@ SESSION_SUMMARY_THRESHOLD = int(os.getenv("AGENT_SESSION_SUMMARY_THRESHOLD", "3"
 # Para desativar: AGENT_PROMPT_SUGGESTIONS=false
 USE_PROMPT_SUGGESTIONS = os.getenv("AGENT_PROMPT_SUGGESTIONS", "true").lower() == "true"
 
-# Sentiment Detection — detecta frustração do operador e ajusta tom da resposta
-# Heuristicas locais (sem chamada API): mensagens curtas, repetidas, marcadores explicitos
-# Custo: zero (deteccao local por regex/heuristica)
-# Default false: ativar apos validar que os sinais de frustracao sao precisos
-USE_SENTIMENT_DETECTION = os.getenv("AGENT_SENTIMENT_DETECTION", "true").lower() == "true"
+# Sentiment Detection — flag USE_SENTIMENT_DETECTION REMOVIDA (estrategia R1,
+# 2026-06-12, ESTRATEGIA_ATUADORES_2026-06-06.md). Ela gateava APENAS a injecao
+# de pressao no prompt (enrich_message_if_frustrated, "seja mais direto"), que
+# foi removida — atuador errado e perigoso p/ WRITE (induz pular dry-run). A
+# CAPTURA do frustration_score (rotulo de triagem) continua incondicional
+# (heuristica local, custo zero) em sentiment_detector.track_frustration_score;
+# a persistencia no quality spine segue gated por USE_AGENT_QUALITY_SPINE.
 
 # Pattern Learning — analisa sessoes historicas e identifica padroes recorrentes
 # Usa Sonnet para detectar: clientes frequentes, queries repetidas, preferencias
@@ -634,9 +636,11 @@ AGENT_OUTCOME_HARMFUL_THRESHOLD = int(os.getenv("AGENT_OUTCOME_HARMFUL_THRESHOLD
 # So bloqueia tool call cujo input contenha um token proibido declarado EXPLICITAMENTE por uma
 # regra dura via 'ENFORCE_DENY_SUBSTR: <token>' (curadoria humana). NUNCA bloqueia por texto
 # livre; o error_signature (slug de metrica) NAO e usado p/ matching. Fail-open (erro -> permite).
-# Default OFF (DESVIO consciente da regra "flags ON"): enforcement DURO pode bloquear uma operacao
-# legitima por falso-positivo — so ligar com invariantes bem curados (nome de campo, op destrutiva).
-USE_MANDATORY_HARD_ENFORCE = os.getenv("AGENT_MANDATORY_HARD_ENFORCE", "false").lower() == "true"
+# Default ON (estrategia I4, 2026-06-12, ESTRATEGIA_ATUADORES_2026-06-06.md): o canal e
+# fail-open e custo ~zero sem regras; hoje ha 0 regras com 'ENFORCE_DENY_SUBSTR:' em PROD,
+# entao ligar e NO-OP ate a 1a regra dura curada declarar um token. Expansao de deny-list
+# (ex: Odoo) CONDICIONADA a caso-prova. Rollback: AGENT_MANDATORY_HARD_ENFORCE=false.
+USE_MANDATORY_HARD_ENFORCE = os.getenv("AGENT_MANDATORY_HARD_ENFORCE", "true").lower() == "true"
 
 # ====================================================================
 # Features SDK 0.1.60 — Subagent Transparency (2026-04-16)
@@ -1052,17 +1056,16 @@ USE_AGENT_PLANNER = os.getenv("AGENT_PLANNER", "false").lower() == "true"
 USE_AGENT_VERIFY = os.getenv("AGENT_VERIFY", "false").lower() == "true"
 
 # ====================================================================
-# Onda 3 — A3: Eval Gate (golden datasets, report-only, D8 cron)
+# Onda 3 — A3: Eval Gate — APOSENTADO (flag AGENT_EVAL_GATE removida)
 # ====================================================================
-# Quando ON: D8 (modulo 28) roda run_evals() contra os 4 golden datasets
-# de subagentes e loga resultado (report-only — NUNCA bloqueia o cron).
-# invoke_fn e' o seam injetavel; em shadow (flag ON) usa default que raise
-# NotImplementedError e reporta todos os casos como 'error' (safe).
-# Wiring real do agente sera' feito na ativacao futura.
-#
-# Default false (flag-OFF, D8 no-op). Ativar: AGENT_EVAL_GATE=true.
-# Rollback instantaneo: AGENT_EVAL_GATE=false.
-AGENT_EVAL_GATE = os.getenv("AGENT_EVAL_GATE", "false").lower() == "true"
+# Estrategia R2 (2026-06-12, ESTRATEGIA_ATUADORES_2026-06-06.md): o A3 foi
+# aposentado em 2026-06-03 (ver EXECUCAO.md); a flag era default-false e OFF
+# em PROD — o eval periodico NUNCA atuou. Removidos junto com a flag:
+# eval_runner.py, eval_gate_service.py (exceto a funcao pura eval_gate, que
+# migrou para regression_gate.py — caller vivo: promocao A4), o modulo 28 do
+# scheduler e a fila RQ 'agent_eval'. A tabela agent_eval_case e a calibracao
+# do judge ONLINE (USE_AGENT_EVAL_CALIBRATION/AGENT_CALIBRATION_SAMPLER,
+# GATE-1) seguem VIVAS — nao dependem do A3.
 
 # ====================================================================
 # Onda 3 — A3-R3: Calibracao do judge de eval (spot-check humano)
@@ -1158,6 +1161,18 @@ USE_AGENT_WORLD_MODEL_INJECT = os.getenv("AGENT_WORLD_MODEL_INJECT", "false").lo
 #
 # Default false. Ativar: AGENT_DIRECTIVE_PROMOTION=true. Rollback: =false.
 AGENT_DIRECTIVE_PROMOTION = os.getenv("AGENT_DIRECTIVE_PROMOTION", "false").lower() == "true"
+
+# Fonte 2 (JUDGE) do A4-batch — DESLIGADA pela estrategia R3 (2026-06-12,
+# ESTRATEGIA_ATUADORES_2026-06-06.md): promover diretriz por NOTA DE TURNO do
+# judge e fragil mesmo endurecido (reward-hacking embrionario — critica A C1).
+# O judge online foi CALIBRADO em 2026-06-12 (GATE-1: 12/12 concordancia), mas
+# calibracao != ancoragem em outcome: religar esta fonte exige judge ANCORADO
+# EM OUTCOME real (R9 / operacao_odoo_auditoria), nao so calibrado. O
+# endurecimento _meta_tarefa_trivial permanece no codigo para quando religar.
+# So atua com AGENT_DIRECTIVE_PROMOTION=ON; fontes 1 (PLAN) e 3 (CORRECTION-
+# RECURRENCE) NAO sao afetadas por esta flag.
+# Default false. Religar (apos R9): AGENT_DIRECTIVE_JUDGE_SOURCE=true.
+AGENT_DIRECTIVE_JUDGE_SOURCE = os.getenv("AGENT_DIRECTIVE_JUDGE_SOURCE", "false").lower() == "true"
 
 # A4-batch: parâmetros do varredor (módulo D8 32). Só atuam com AGENT_DIRECTIVE_PROMOTION=ON.
 AGENT_DIRECTIVE_LOOKBACK_HOURS = int(os.getenv("AGENT_DIRECTIVE_LOOKBACK_HOURS", "24"))

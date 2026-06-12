@@ -171,7 +171,7 @@ O que o usuario quer?
 ```
 
 > **Flywheel: o AGENTE WEB so usa os subcomandos de LEITURA acima.** Os subcomandos de
-> ESCRITA (`approve` shadow->ativa, `reject`, `promote-batch`, `review`, `run`, `respond`)
+> ESCRITA (`approve` shadow->ativa, `reject`, `promote-batch`, `review`, `respond`)
 > existem em `loop.py`/`eval.py`/`melhorias.py` mas sao **DEV-ONLY** (operados pelo Claude Code
 > via CLI, atras de `--confirm`/dry-run). **NAO invoque WRITE pelo agente web** — `approve`
 > muta o prompt PROD em tempo real (ALTO RISCO). Params dos WRITE: ver `SCRIPTS.md` (dev).
@@ -231,7 +231,6 @@ source .venv/bin/activate && python .claude/skills/gerindo-agente/scripts/{SCRIP
 | `AGENT_BEHAVIORAL_PROFILE_THRESHOLD` | 3 | Threshold de sessoes para geracao de perfil |
 | `USE_FRICTION_ANALYSIS` | true | Analise de friccao (5 sinais) |
 | `USE_INTERSESSION_BRIEFING` | true | Briefing entre sessoes |
-| `USE_SENTIMENT_DETECTION` | true | Deteccao de frustracao (inline) |
 | `USE_POST_SESSION_EXTRACTION` | true | Extracao pos-sessao de padroes |
 | `POST_SESSION_EXTRACTION_MIN_MESSAGES` | 3 | Threshold minimo de msgs para extract |
 | `USE_SESSION_TURN_EMBEDDING` | true | Embedding inline de turnos |

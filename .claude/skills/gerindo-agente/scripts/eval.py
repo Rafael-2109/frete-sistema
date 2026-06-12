@@ -1,18 +1,21 @@
 #!/usr/bin/env python3
 """
-eval.py — eval-gate offline (A3) do Agente Web (READ, Onda 3 / fase 3a).
+eval.py — historico de evals + calibracao do judge (Agente Web, Onda 3).
 
-Expoe a camada A3 (golden dataset / eval_gate_service) para INSPECAO. Custo $0 de
-tokens (so leitura do banco — NAO dispara avaliacao). Subcomandos:
+Custo $0 de tokens (so leitura/escrita pontual no banco — NAO dispara avaliacao).
+Subcomandos:
 
   scores   Serie agregada por agente (agent_eval_scores): score atual + delta vs
-           o run anterior (baseline) + modo (report_only|enforce).
-  cases    Casos por run (agent_eval_case): score/status por caso + veredito humano
+           o run anterior (baseline) + modo (report_only|enforce). HISTORICO:
+           a escrita foi aposentada com o eval_runner/A3 (estrategia R2, 2026-06-12).
+  cases    Casos (agent_eval_case): score/status por caso + veredito humano
            (human_verdict) + taxa de concordancia judge-vs-humano (calibracao).
+           Fonte VIVA: calibration_sampler (online judge, GATE-1).
+  review   [WRITE dev-only] marca human_verdict de um caso (calibracao), atras
+           de --confirm.
 
-ESCRITA (review human_verdict, run -> dispara eval_runner com custo Haiku+Opus) NAO
-mora aqui: fase 3b, dev-only atras de --confirm + aviso de custo. Ver
-docs/superpowers/plans/2026-06-03-evolucao-gerindo-agente.md (Onda 3).
+O subcomando `run` (enfileirava o eval_runner A3 na RQ 'agent_eval') foi REMOVIDO
+na estrategia R2 (2026-06-12): A3 aposentado, fila e flag AGENT_EVAL_GATE removidas.
 """
 
 import sys
@@ -48,12 +51,8 @@ SUBCOMMANDS = {
             {'name': '--confirm', 'action': 'store_true', 'help': 'Efetiva o veredito (sem isso = preview)'},
         ],
     },
-    'run': {
-        'help': '[WRITE] Enfileira eval_runner (CUSTO Haiku+Opus, 20-50min). dry-run sem --confirm',
-        'args': [
-            {'name': '--confirm', 'action': 'store_true', 'help': 'Enfileira de verdade na RQ agent_eval'},
-        ],
-    },
+    # 'run' REMOVIDO (estrategia R2, 2026-06-12): enfileirava o eval_runner/A3
+    # (aposentado) na RQ 'agent_eval' (removida).
 }
 
 
@@ -127,17 +126,17 @@ def handle_scores(args):
             ])
         print(format_table(['Agente', 'Score', 'Pass/Tot', 'Delta', 'Modo', 'Runs'], rows))
     else:
-        print("  (Sem scores registrados — eval_runner ainda nao rodou.)")
+        print("  (Sem scores registrados — escrita aposentada com o A3; tabela e so historico.)")
     for w in warnings:
         print(f"  [!] {w}")
 
 
 def handle_cases(args):
-    """Casos por run (agent_eval_case) + concordancia humana (calibracao do judge).
+    """Casos (agent_eval_case) + concordancia humana (calibracao do judge).
 
-    human_verdict NULL = nao revisado. concordance_rate (models.py:2095) = agree/reviewed
-    (literatura: ~85% judge-vs-humano e o esperado). Em PROD a tabela hoje tem 0 linhas
-    (USE_AGENT_EVAL_CALIBRATION OFF) — degrada para lista vazia sem erro.
+    human_verdict NULL = nao revisado. concordance_rate = agree/reviewed
+    (literatura: ~85% judge-vs-humano e o esperado). Fonte viva: calibration_sampler
+    (online judge, GATE-1) — degrada para lista vazia sem erro.
     """
     from app import db
     from app.agente.models import AgentEvalCase
@@ -217,7 +216,7 @@ def handle_cases(args):
         ] for c in cases]
         print(format_table(['Agente', 'Caso', 'Score', 'Status', 'Veredito'], rows))
     else:
-        print("  (Sem casos — USE_AGENT_EVAL_CALIBRATION OFF ou eval_runner nao populou.)")
+        print("  (Sem casos — calibration_sampler (AGENT_CALIBRATION_SAMPLER) ainda nao populou.)")
     for w in warnings:
         print(f"  [!] {w}")
 
@@ -291,57 +290,15 @@ def handle_review(args):
         print(f"  [!] {w}")
 
 
-def handle_run(args):
-    """[WRITE] Enfileira o eval_runner (run_eval_batch) na RQ 'agent_eval'.
-
-    CUSTO REAL: ~105 chamadas Haiku + invokes Opus dos 4 subagentes (20-50min). Gated por
-    AGENT_EVAL_GATE (OFF -> {skipped: flag_off}). dry-run avisa o custo; --confirm enfileira.
-    Requer um worker processando a fila 'agent_eval' (Workers 1/2 em PROD).
-    """
-    from app.agente.config import feature_flags as ff
-    gate_on = bool(getattr(ff, 'AGENT_EVAL_GATE', False))
-
-    warnings = [
-        "CUSTO: ~105 chamadas Haiku + invokes Opus dos 4 subagentes (20-50min).",
-        "Requer worker na fila RQ 'agent_eval' (Workers 1/2 em PROD).",
-    ]
-    if not gate_on:
-        warnings.append("AGENT_EVAL_GATE=OFF -> enqueue_eval_batch retorna {skipped: flag_off} (no-op).")
-
-    if not args.confirm:
-        data = {'dry_run': True, 'enqueued': False, 'AGENT_EVAL_GATE': gate_on}
-        if args.json_mode:
-            success_output('run', data, json_mode=True, warnings=warnings)
-            return
-        print("[DRY-RUN] run (enfileirar eval_runner):\n")
-        print(f"  AGENT_EVAL_GATE={gate_on}")
-        for w in warnings:
-            print(f"  [!] {w}")
-        print("\n  Rode com --confirm para enfileirar na RQ 'agent_eval'.")
-        return
-
-    from app.agente.workers.eval_runner import enqueue_eval_batch
-    resultado = enqueue_eval_batch()
-    data = {'dry_run': False, 'enqueued': bool(resultado.get('enfileirado')), 'resultado': resultado,
-            'AGENT_EVAL_GATE': gate_on}
-    if args.json_mode:
-        success_output('run', data, json_mode=True, warnings=warnings)
-        return
-    print(f"OK: enqueue_eval_batch -> {resultado}")
-    for w in warnings:
-        print(f"  [!] {w}")
-
-
 HANDLERS = {
     'scores': handle_scores,
     'cases': handle_cases,
     'review': handle_review,
-    'run': handle_run,
 }
 
 
 def main():
-    run_handler('Eval-gate offline (A3) do Agente Web (READ + WRITE dev-only)', SUBCOMMANDS, HANDLERS)
+    run_handler('Historico de evals + calibracao do judge (READ + review dev-only)', SUBCOMMANDS, HANDLERS)
 
 
 if __name__ == '__main__':

@@ -396,7 +396,7 @@ def _classify_estoque_restricao(
 # GERINDO-AGENTE WRITE (2026-06-03) — gate dev-only do flywheel (Onda 3 fase 3b)
 # =============================================================================
 # Os scripts da skill gerindo-agente (loop.py/eval.py/melhorias.py) tem subcomandos
-# de ESCRITA (approve/reject/promote-batch/review/run/respond) que mutam o flywheel
+# de ESCRITA (approve/reject/promote-batch/review/respond) que mutam o flywheel
 # do proprio agente — inclusive o PROMPT PROD VIVO (approve: directive shadow->ativa).
 # Sao DEV-ONLY: operados pelo Claude Code via CLI (que NAO passa por can_use_tool).
 # O agente web/Teams NUNCA deve executa-los via Bash. Este classificador detecta a
@@ -420,8 +420,10 @@ def _classify_gerindo_write(tool_name: str, tool_input: dict) -> dict | None:
     global _GERINDO_WRITE_REGEX
     if _GERINDO_WRITE_REGEX is None:
         import re as _re
+        # 'run' removido do grupo (estrategia R2, 2026-06-12): o subcomando eval.run
+        # foi deletado junto com o eval_runner/A3.
         _GERINDO_WRITE_REGEX = _re.compile(
-            r'(loop|eval|melhorias)\.py\s+(approve|reject|promote-batch|review|run|respond)\b'
+            r'(loop|eval|melhorias)\.py\s+(approve|reject|promote-batch|review|respond)\b'
         )
     m = _GERINDO_WRITE_REGEX.search(command)
     if m:
