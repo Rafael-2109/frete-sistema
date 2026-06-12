@@ -16,17 +16,17 @@ atualizado: 2026-06-12
 
 ## Indice
 
-- [REGRAS DEV](#regras-dev)
+- [REGRAS DEV](#regras-dev-complementam-regras-universais-do-projeto)
 - [WORKER RQ — DEV vs PROD (CRITICO)](#worker-rq--dev-vs-prod-critico)
 - [WEB — CADDY SPLIT AGENTE x SISTEMA (CRITICO)](#web--caddy-split-agente-x-sistema-critico)
 - [MIGRATIONS](#migrations)
 - [JSON SANITIZATION](#json-sanitization-campos-dbjson--jsonb)
 - [ARQUITETURA CSS](#arquitetura-css)
 - [SUBDIRECTORY CLAUDE.md](#subdirectory-claudemd)
-- [REGRAS DEV ADICIONAIS](#regras-dev-adicionais)
-- [TECH STACK COMPLEMENTO](#tech-stack-complemento)
-- [FORMATACAO NUMERICA BRASILEIRA](#formatacao-numerica-brasileira)
-- [DESIGN SYSTEM (UI/CSS)](#design-system-uicss--tabela-completa)
+- [REGRAS DEV ADICIONAIS](#regras-dev-adicionais-movidas-do-claudemd-do-projeto)
+- [TECH STACK COMPLEMENTO](#tech-stack-complemento-linhas-dev-only-movidas-do-claudemd-raiz--f3-pad-ctx-2026-06-09)
+- [FORMATACAO NUMERICA BRASILEIRA](#formatacao-numerica-brasileira-templates-jinja2--movida-do-claudemd-raiz)
+- [DESIGN SYSTEM (UI/CSS)](#design-system-uicss--tabela-completa-movida-do-claudemd-raiz)
 - [CAMINHOS DO SISTEMA](#caminhos-do-sistema)
 
 ---
