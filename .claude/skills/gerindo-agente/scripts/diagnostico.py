@@ -8,6 +8,7 @@ Subcomandos:
   health             Health score composto (0-100)
   effectiveness      Memorias mais/menos efetivas
   cold-candidates    Memorias candidatas a tier frio
+  promotion-candidates  Memorias empresa candidatas a promocao memoria→reference (T1.4)
   conflicts          Memorias com conflito potencial
   embedding-coverage Cobertura de embeddings (memorias e sessoes)
   friction           Analise detalhada de friccao (5 sinais)
@@ -61,6 +62,17 @@ SUBCOMMANDS = {
     'cold-candidates': {
         'help': 'Memorias candidatas a tier frio',
         'args': [],
+    },
+    'promotion-candidates': {
+        'help': 'Memorias empresa candidatas a promocao memoria→reference (PAD-CTX)',
+        'args': [
+            {'name': '--min-effective', 'type': int, 'default': 2, 'dest': 'min_effective',
+             'help': 'Minimo de effective_count (default: 2)'},
+            {'name': '--idade-dias', 'type': int, 'default': 30, 'dest': 'idade_dias',
+             'help': 'Idade minima em dias desde created_at (default: 30)'},
+            {'name': '--limit', 'type': int, 'default': 30,
+             'help': 'Limite de resultados (default: 30 — override do comum)'},
+        ],
     },
     'conflicts': {
         'help': 'Memorias com conflito potencial',
@@ -354,6 +366,100 @@ def handle_cold_candidates(args):
                 format_datetime(m.updated_at),
             ])
         print(format_table(['Path', 'Uso', 'Cat.', 'Imp.', 'Atualizado'], rows))
+
+
+def handle_promotion_candidates(args):
+    """Memorias empresa candidatas a promocao memoria→reference (T1.4 PAD-CTX).
+
+    Fila GERADA POR QUERY (revisao humana decide): memorias empresa (user_id=0)
+    ESTAVEIS (idade >= --idade-dias), com sinal de uso (correction_count >= 2 OU
+    effective_count >= --min-effective), nao-cold e ainda NAO promovidas
+    (sem meta.promovida_para). Criterios e fluxo: ARQUITETURA_CONTEXTO_AGENTE.md
+    §Memorias — "Promocao memoria→reference". Aposentadoria pos-promocao:
+    `memoria.py aposentar`.
+    """
+    from datetime import timedelta
+
+    from sqlalchemy import or_
+
+    from app.agente.models import AgentMemory
+    from app.utils.timezone import agora_utc_naive
+
+    agora = agora_utc_naive()
+    cutoff = agora - timedelta(days=args.idade_dias)
+
+    candidates = AgentMemory.query.filter(
+        AgentMemory.user_id == 0,
+        AgentMemory.is_directory == False,  # noqa: E712
+        AgentMemory.is_cold == False,  # noqa: E712
+        or_(
+            AgentMemory.correction_count >= 2,
+            AgentMemory.effective_count >= args.min_effective,
+        ),
+        AgentMemory.created_at <= cutoff,
+        or_(
+            AgentMemory.meta.is_(None),
+            ~AgentMemory.meta.has_key('promovida_para'),  # noqa: W601
+        ),
+    ).order_by(
+        AgentMemory.effective_count.desc(), AgentMemory.correction_count.desc()
+    ).limit(args.limit).all()
+
+    def _row(m):
+        meta = m.meta or {}
+        kind = meta.get('kind') or '-'
+        dominio = meta.get('dominio') or '-'
+        idade = (agora - m.created_at).days if m.created_at else None
+        return {
+            'path': m.path,
+            'kind_dominio': f"{kind}/{dominio}",
+            'effective_count': m.effective_count,
+            'correction_count': m.correction_count,
+            'idade_dias': idade,
+            'titulo': meta.get('titulo') or '-',
+        }
+
+    data = [_row(m) for m in candidates]
+
+    if args.json_mode:
+        print(format_json({
+            'total': len(data),
+            'criterios': {
+                'user_id': 0,
+                'min_effective': args.min_effective,
+                'min_correction': 2,
+                'idade_dias_min': args.idade_dias,
+                'exclui': ['is_cold', 'is_directory', 'meta.promovida_para'],
+            },
+            'candidatas': data,
+        }))
+        return
+
+    if not data:
+        print("Nenhuma memoria candidata a promocao memoria→reference.")
+        print(f"(Criterio: empresa user_id=0, correction>=2 OU effective>={args.min_effective}, "
+              f"idade>={args.idade_dias}d, nao-cold, sem meta.promovida_para)")
+        return
+
+    print(f"Candidatas a Promocao memoria→reference ({len(data)}):")
+    print(f"(Criterio: empresa user_id=0, correction>=2 OU effective>={args.min_effective}, "
+          f"idade>={args.idade_dias}d, nao-cold, sem meta.promovida_para)\n")
+    rows = []
+    for r in data:
+        rows.append([
+            truncate(r['path'], 50),
+            r['kind_dominio'],
+            str(r['effective_count']),
+            str(r['correction_count']),
+            str(r['idade_dias'] if r['idade_dias'] is not None else '-'),
+            truncate(r['titulo'], 45),
+        ])
+    print(format_table(
+        ['Path', 'Kind/Dominio', 'Efetivo', 'Correcao', 'Idade(d)', 'Titulo'],
+        rows
+    ))
+    print("\nProximo passo: revisar -> escrever na reference dona -> "
+          "`memoria.py aposentar --path ... --promovida-para ...` (pos-merge).")
 
 
 def handle_conflicts(args):
@@ -1113,6 +1219,7 @@ HANDLERS = {
     'health': handle_health,
     'effectiveness': handle_effectiveness,
     'cold-candidates': handle_cold_candidates,
+    'promotion-candidates': handle_promotion_candidates,
     'conflicts': handle_conflicts,
     'embedding-coverage': handle_embedding_coverage,
     'friction': handle_friction,

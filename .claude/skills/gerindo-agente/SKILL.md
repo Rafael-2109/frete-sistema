@@ -36,7 +36,8 @@ roteamento", "recomendacoes do agente", "PlanState", "diretrizes operacionais",
 "eval-gate", "calibracao do judge", "dialogo de melhoria", "sugestoes de melhoria",
 "intelligence report", "flags de evolucao", "estado das flags", "flags
 ligadas/desligadas", "gates de acesso", "restricoes do agente", "filas RQ",
-"worker status", "status dos workers".
+"worker status", "status dos workers", "candidatas a promocao", "fila de
+promocao memoria→reference", "aposentar memoria promovida".
 
 **NAO usar para:**
 - consultas SQL ou dados de negocio -> `consultando-sql`
@@ -89,6 +90,8 @@ O que o usuario quer?
 |   |-- "resolver pendencia"    -> resolve-pendencia --description "..."
 |   |-- "registrar pitfall"     -> log-pitfall --area ... --description "..."
 |   |-- "stats de memorias"     -> stats
+|   |-- "aposentar memoria promovida" -> aposentar --path ... --promovida-para ... [--confirmar]
+|                                        (dry-run default; --user-id default 0 = empresa)
 |
 |-- Sessoes (listar, buscar, ver, resumo)
 |   -> scripts/sessao.py
@@ -125,6 +128,8 @@ O que o usuario quer?
 |   |-- "saude do agente"       -> health [--days N]
 |   |-- "memorias efetivas"     -> effectiveness
 |   |-- "candidatas a cold"     -> cold-candidates
+|   |-- "candidatas a promocao" -> promotion-candidates [--min-effective N] [--idade-dias N]
+|   |                              (fila memoria→reference; quem promove e revisao humana)
 |   |-- "conflitos"             -> conflicts
 |   |-- "cobertura embeddings"  -> embedding-coverage
 |   |-- "analise de friccao"    -> friction [--days N]
@@ -182,11 +187,11 @@ source .venv/bin/activate && python .claude/skills/gerindo-agente/scripts/{SCRIP
 
 | Script | Subcomandos | Dominio |
 |--------|-------------|---------|
-| `memoria.py` | view, save, update, delete, list, clear, search-cold, versions, restore, resolve-pendencia, log-pitfall, stats | Memoria |
+| `memoria.py` | view, save, update, delete, list, clear, search-cold, versions, restore, resolve-pendencia, log-pitfall, stats, **aposentar** | Memoria |
 | `sessao.py` | list, search, semantic, view, summary, users, delete | Sessoes |
 | `padrao.py` | patterns, pitfalls, analyze, extract, empresa, profile | Padroes |
 | `grafo.py` | query, entities, links, relations, stats | Knowledge Graph |
-| `diagnostico.py` | insights, memory-metrics, health, effectiveness, cold-candidates, conflicts, embedding-coverage, friction, briefing, **step-quality**, **step-coverage**, **rule-adhesion**, **routing**, **recommendations**, **status** | Diagnosticos |
+| `diagnostico.py` | insights, memory-metrics, health, effectiveness, cold-candidates, **promotion-candidates**, conflicts, embedding-coverage, friction, briefing, **step-quality**, **step-coverage**, **rule-adhesion**, **routing**, **recommendations**, **status** | Diagnosticos |
 | `manutencao.py` | consolidate, cold-move, summarize, reindex-memories, reindex-sessions, cleanup-orphans | Manutencao |
 | `loop.py` | **directives**, **corrections**, **loop-health** | Flywheel diretrizes (A4) — READ |
 | `eval.py` | **scores**, **cases** | Eval-gate offline (A3) — READ |

@@ -543,3 +543,98 @@ def test_infra_evidence_for_shape_homogeneo():
         assert ev['signal'] == sig, f"signal esperado {sig}, veio {ev['signal']}"
         assert ev['value'] == val
         assert isinstance(m._verdict(True, ev), str) and isinstance(m._verdict(False, ev), str)
+
+
+# ─────────────────────────────────────────────────────────────────────────
+# T1.4 (trilho memoria→reference) — fila de promocao (diagnostico.py
+# promotion-candidates) + aposentadoria manual (memoria.py aposentar).
+# Tudo ZERO-DB: importlib + inspect + parser real via sys.argv monkeypatch.
+# ─────────────────────────────────────────────────────────────────────────
+
+
+def test_promotion_candidates_registrada_t14():
+    """promotion-candidates registrado em diagnostico com handler callable e args do contrato."""
+    d = _load('diagnostico')
+    assert 'promotion-candidates' in d.SUBCOMMANDS, "promotion-candidates ausente de SUBCOMMANDS"
+    assert 'promotion-candidates' in d.HANDLERS and callable(d.HANDLERS['promotion-candidates'])
+    argnames = {a['name'] for a in d.SUBCOMMANDS['promotion-candidates']['args']}
+    assert '--min-effective' in argnames, "promotion-candidates sem --min-effective"
+    assert '--idade-dias' in argnames, "promotion-candidates sem --idade-dias"
+    assert '--limit' in argnames, "promotion-candidates deve sobrescrever --limit (default 30)"
+
+
+def test_promotion_candidates_query_contrato_t14():
+    """A query da fila respeita o contrato T1.4: user_id=0 (empresa), nao-cold,
+    nao-diretorio, contadores OR, idade minima e exclusao de ja-promovidas
+    (meta ? 'promovida_para'). Confronto por TEXTO (ZERO-DB)."""
+    d = _load('diagnostico')
+    src = inspect.getsource(d.handle_promotion_candidates)
+    code = '\n'.join(l for l in src.splitlines() if not l.lstrip().startswith('#'))
+    assert 'user_id == 0' in code, "fila deve consultar user_id=0 (memorias empresa)"
+    assert 'is_cold == False' in code, "fila deve excluir tier frio"
+    assert 'is_directory == False' in code, "fila deve excluir diretorios"
+    assert 'correction_count' in code and 'effective_count' in code, "contadores ausentes"
+    assert 'promovida_para' in code, "fila deve excluir memorias ja promovidas (meta.promovida_para)"
+    assert 'created_at' in code, "fila deve filtrar por idade minima (created_at)"
+
+
+def test_aposentar_registrada_t14():
+    """aposentar registrado em memoria com handler callable e args do contrato
+    (--path/--promovida-para obrigatorios, --confirmar opt-in, --user-id default 0)."""
+    mem = _load('memoria')
+    assert 'aposentar' in mem.SUBCOMMANDS, "aposentar ausente de SUBCOMMANDS"
+    assert 'aposentar' in mem.HANDLERS and callable(mem.HANDLERS['aposentar'])
+    args_cfg = {a['name']: a for a in mem.SUBCOMMANDS['aposentar']['args']}
+    assert '--path' in args_cfg and args_cfg['--path'].get('required'), "--path deve ser obrigatorio"
+    assert '--promovida-para' in args_cfg and args_cfg['--promovida-para'].get('required'), (
+        "--promovida-para deve ser obrigatorio"
+    )
+    assert '--confirmar' in args_cfg, "aposentar sem --confirmar (dry-run default)"
+    assert '--user-id' in args_cfg and args_cfg['--user-id'].get('default') == 0, (
+        "--user-id deve ter default 0 (memorias empresa)"
+    )
+
+
+def test_aposentar_dry_run_default_e_versiona_antes_t14():
+    """Contrato de seguranca: a ESCRITA (save_version/is_cold/meta/commit) fica atras
+    do guard `if not args.confirmar` (dry-run default), versiona ANTES de mutar e usa
+    flag_modified no meta (R7 JSONB). Confronto por TEXTO (ZERO-DB)."""
+    mem = _load('memoria')
+    src = inspect.getsource(mem.handle_aposentar)
+    code = '\n'.join(l for l in src.splitlines() if not l.lstrip().startswith('#'))
+    guard_pos = code.find('if not args.confirmar')
+    assert guard_pos != -1, "handler sem guard dry-run `if not args.confirmar`"
+    for token in ('save_version(', 'is_cold = True', 'flag_modified(', 'commit()'):
+        pos = code.find(token)
+        assert pos != -1, f"handler sem '{token}'"
+        assert pos > guard_pos, f"'{token}' deve vir DEPOIS do guard dry-run"
+    # Versionamento ANTES da mutacao (padrao memory_mcp_tool.py:2074).
+    assert code.find('save_version(') < code.find('is_cold = True'), (
+        "save_version deve rodar ANTES de mutar is_cold/meta"
+    )
+    assert "'promovida_para'" in code or '"promovida_para"' in code, (
+        "handler deve gravar meta['promovida_para']"
+    )
+
+
+def test_parser_overrides_comuns_t14(monkeypatch):
+    """parse_args_with_subcommands permite OVERRIDE de arg comum por subcomando
+    (conflict_handler='resolve'): aposentar --user-id default 0; promotion-candidates
+    --limit default 30. Parser real via sys.argv (ZERO-DB)."""
+    mem = _load('memoria')
+    c = _load('common')
+    monkeypatch.setattr(
+        sys, 'argv',
+        ['memoria.py', 'aposentar', '--path', '/memories/x.xml', '--promovida-para', 'docs/ref.md'],
+    )
+    args, sub = c.parse_args_with_subcommands('t', mem.SUBCOMMANDS)
+    assert sub == 'aposentar'
+    assert args.user_id == 0, "aposentar sem --user-id deve cair no default 0"
+    assert args.confirmar is False, "dry-run deve ser o default"
+
+    d = _load('diagnostico')
+    monkeypatch.setattr(sys, 'argv', ['diagnostico.py', 'promotion-candidates', '--user-id', '1'])
+    args, sub = c.parse_args_with_subcommands('t', d.SUBCOMMANDS)
+    assert sub == 'promotion-candidates'
+    assert args.limit == 30, "promotion-candidates deve sobrescrever --limit para default 30"
+    assert args.min_effective == 2 and args.idade_dias == 30

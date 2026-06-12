@@ -17,6 +17,7 @@ Subcomandos:
   resolve-pendencia Marcar pendencia como resolvida
   log-pitfall       Registrar gotcha do sistema
   stats             Estatisticas agregadas de memorias
+  aposentar         Aposentar memoria promovida a reference/codigo (is_cold + meta.promovida_para)
 """
 
 import json
@@ -115,6 +116,19 @@ SUBCOMMANDS = {
     'stats': {
         'help': 'Estatisticas agregadas de memorias',
         'args': [],
+    },
+    'aposentar': {
+        'help': 'Aposentar memoria promovida (is_cold=True + meta.promovida_para; dry-run default)',
+        'args': [
+            {'name': '--path', 'required': True, 'help': 'Path da memoria'},
+            {'name': '--promovida-para', 'required': True, 'dest': 'promovida_para',
+             'help': 'Artefato destino (reference/codigo) que absorveu o conteudo'},
+            # Override do comum (conflict_handler=resolve): default 0 = memorias empresa.
+            {'name': '--user-id', 'type': int, 'default': 0, 'dest': 'user_id',
+             'help': 'ID do usuario dono da memoria (default: 0 = empresa)'},
+            {'name': '--confirmar', 'action': 'store_true',
+             'help': 'Efetiva a aposentadoria (sem isso = dry-run, mostra before/after)'},
+        ],
     },
 }
 
@@ -717,6 +731,100 @@ def handle_stats(args):
             print(f"    {esc}: {count}")
 
 
+def handle_aposentar(args):
+    """Aposentar memoria promovida a reference/codigo (T1.4 PAD-CTX).
+
+    Mecanismo F5.6: `is_cold=True` + `meta.promovida_para` apontando o artefato
+    que absorveu o conteudo — a memoria SAI da injecao e da busca semantica, mas
+    o historico segue acessivel via `search-cold`. Versiona o conteudo ANTES de
+    mutar (padrao memory_mcp_tool.py:2074). Dry-run DEFAULT; --confirmar efetiva.
+    Fluxo completo: ARQUITETURA_CONTEXTO_AGENTE.md §Memorias ("Promocao
+    memoria→reference"); fila de candidatas: `diagnostico.py promotion-candidates`.
+    """
+    from sqlalchemy.orm.attributes import flag_modified
+
+    from app import db
+    from app.agente.models import AgentMemory, AgentMemoryVersion
+    from app.agente.tools.memory_mcp_tool import _validate_path
+
+    path = _validate_path(args.path)
+    user_id = args.user_id
+
+    mem = AgentMemory.get_by_path(user_id, path)
+    if not mem:
+        error_exit(f"Memoria nao encontrada: {path} (user_id={user_id})")
+    if mem.is_directory:
+        error_exit(f"{path} e diretorio — aposentar apenas arquivos.")
+
+    meta_atual = mem.meta or {}
+    before = {
+        'id': mem.id,
+        'path': mem.path,
+        'user_id': mem.user_id,
+        'is_cold': mem.is_cold,
+        'promovida_para': meta_atual.get('promovida_para'),
+        'usage_count': mem.usage_count,
+        'effective_count': mem.effective_count,
+        'correction_count': mem.correction_count,
+    }
+    after = {
+        'is_cold': True,
+        'promovida_para': args.promovida_para,
+    }
+
+    ja_aposentada = bool(mem.is_cold and meta_atual.get('promovida_para'))
+
+    if not args.confirmar:
+        if args.json_mode:
+            print(format_json({
+                'dry_run': True,
+                'ja_aposentada': ja_aposentada,
+                'before': before,
+                'after': after,
+            }))
+        else:
+            print(f"[DRY-RUN] Aposentadoria de {path} (user_id={user_id}) — NADA gravado.")
+            if ja_aposentada:
+                print(f"  AVISO: memoria JA aposentada (promovida_para="
+                      f"{meta_atual.get('promovida_para')}).")
+            print(f"  BEFORE: is_cold={before['is_cold']} | "
+                  f"promovida_para={before['promovida_para']} | "
+                  f"uso={before['usage_count']}x efetiva={before['effective_count']}x "
+                  f"corrigida={before['correction_count']}x")
+            print(f"  AFTER:  is_cold=True | promovida_para={args.promovida_para}")
+            print("  Use --confirmar para efetivar (versiona o conteudo antes de mutar).")
+        return
+
+    # Versionar ANTES de mutar (padrao memory_mcp_tool.py:2074 / pattern_analyzer T0.1).
+    if mem.content:
+        AgentMemoryVersion.save_version(
+            mem.id, mem.content, changed_by='aposentadoria-manual'
+        )
+
+    mem.is_cold = True
+    mem.meta = {**meta_atual, 'promovida_para': args.promovida_para}
+    flag_modified(mem, 'meta')  # R7 JSONB (models.py): garantir flush do meta
+    db.session.commit()
+
+    if args.json_mode:
+        print(format_json({
+            'dry_run': False,
+            'sucesso': True,
+            'ja_aposentada': ja_aposentada,
+            'before': before,
+            'after': after,
+        }))
+    else:
+        print(f"Aposentada: {path} (user_id={user_id})")
+        if ja_aposentada:
+            print(f"  AVISO: ja estava aposentada (promovida_para anterior="
+                  f"{before['promovida_para']}).")
+        print(f"  BEFORE: is_cold={before['is_cold']} | promovida_para={before['promovida_para']}")
+        print(f"  AFTER:  is_cold=True | promovida_para={args.promovida_para}")
+        print("  Conteudo versionado (changed_by=aposentadoria-manual); "
+              "historico via search-cold/versions.")
+
+
 # =====================================================================
 # DISPATCH
 # =====================================================================
@@ -734,6 +842,7 @@ HANDLERS = {
     'resolve-pendencia': handle_resolve_pendencia,
     'log-pitfall': handle_log_pitfall,
     'stats': handle_stats,
+    'aposentar': handle_aposentar,
 }
 
 
