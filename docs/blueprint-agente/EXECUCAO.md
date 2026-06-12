@@ -44,6 +44,7 @@ atualizado: 2026-06-03
 > sem consultar os gates aqui; NENHUM item é "done" sem marcar o checklist aqui.
 > Spec de design: `BLUEPRINT_MESTRE.md` (+ `eixos/*.md` detalhe, `critica/*.md` revisão).
 > Planos executáveis por onda: `docs/superpowers/plans/` (formato writing-plans, TDD).
+> Estratégia de atuação por tipo de erro (auditoria de sensores 2026-06-06, insumo das próximas ondas): [ESTRATEGIA_ATUADORES_2026-06-06.md](./ESTRATEGIA_ATUADORES_2026-06-06.md) — 1º alvo I2 grounding EXECUTADO via [plano grounding cobertura-ampla](../superpowers/plans/2026-06-06-grounding-cobertura-ampla.md) (mergeado `07b99fdec`).
 > **FILA FORWARD sequenciada (ondas 0–7 + protocolo de sessão anti-perda): `ROADMAP.md`.**
 > Este arquivo = narrativa/checkpoints; `ROADMAP.md` = a fila do que falta + estado vivo dos cards.
 > Branch do projeto: `feat/agente-evolucao` (worktree isolada). Cadência: **subagent-driven**.

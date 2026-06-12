@@ -1,4 +1,45 @@
+<!-- doc:meta
+tipo: explanation
+camada: L3
+sot_de: design da consolidacao dos 7 resolvedores de entidades em app/resolvedores (Onda D / Caminho C) — EXECUTADA
+hub: docs/superpowers/specs/INDEX.md
+superseded_by: —
+atualizado: 2026-06-12
+-->
 # Spec — Consolidação de `resolver_entidades` em `app/resolvedores/` (Onda D / Caminho C)
+
+> **Papel:** Spec — Consolidação de `resolver_entidades` em `app/resolvedores/` (Onda D / Caminho C).
+
+## Indice
+
+- [1. Objetivo](#1-objetivo)
+- [2. Achados da Fase 0 (reverificação AO VIVO — correções ao mapa)](#2-achados-da-fase-0-reverificação-ao-vivo-correções-ao-mapa)
+- [3. Decisões travadas (aprovadas pelo Rafael 2026-06-01)](#3-decisões-travadas-aprovadas-pelo-rafael-2026-06-01)
+- [4. Arquitetura alvo](#4-arquitetura-alvo)
+- [5. Contrato por entidade (o que cada função retorna e quem consome)](#5-contrato-por-entidade-o-que-cada-função-retorna-e-quem-consome)
+  - [5.1 Núcleo compartilhado (1 implementação, sem divergência)](#51-núcleo-compartilhado-1-implementação-sem-divergência)
+  - [5.2 Produto (2 fachadas — Python-rico BLOB+AND vs CLI híbrido via product_search; núcleo `product_search` compartilhado)](#52-produto-2-fachadas-python-rico-bloband-vs-cli-híbrido-via-product_search-núcleo-product_search-compartilhado)
+  - [5.3 Pedido (2 fachadas — tupla Python-rica vs CLI achatado; estratégias de busca compartilhadas)](#53-pedido-2-fachadas-tupla-python-rica-vs-cli-achatado-estratégias-de-busca-compartilhadas)
+  - [5.4 Cliente (2 fachadas — semânticas distintas)](#54-cliente-2-fachadas-semânticas-distintas)
+  - [5.5 Cidade (2 fachadas)](#55-cidade-2-fachadas)
+  - [5.6 Grupo (2 fachadas)](#56-grupo-2-fachadas)
+  - [5.7 UF (2 fachadas)](#57-uf-2-fachadas)
+  - [5.8 Transportadora (núcleo novo — port da split)](#58-transportadora-núcleo-novo-port-da-split)
+- [6. Plano de fases (gates onde PARAR para revisão do Rafael)](#6-plano-de-fases-gates-onde-parar-para-revisão-do-rafael)
+  - [Fase 1 — Construir `app/resolvedores/` + pytest](#fase-1-construir-appresolvedores-pytest)
+  - [Fase 2 — Regressão (golden set + baseline snapshot)  ⟶ **GATE**](#fase-2-regressão-golden-set-baseline-snapshot-gate)
+  - [Fase 3 — Shim do monolito](#fase-3-shim-do-monolito)
+  - [Fase 4 — Wrappers finos dos 7 CLIs](#fase-4-wrappers-finos-dos-7-clis)
+  - [Fase 5 — Pacote-skill completo + remover código morto](#fase-5-pacote-skill-completo-remover-código-morto)
+  - [Fase 6 — Verificação final + self-audit  ⟶ **GATE (antes de qualquer commit/merge)**](#fase-6-verificação-final-self-audit-gate-antes-de-qualquer-commitmerge)
+- [7. Estratégia de teste](#7-estratégia-de-teste)
+- [8. Critérios de aceitação (do §6 do projeto, ajustados) — STATUS FINAL](#8-critérios-de-aceitação-do-6-do-projeto-ajustados-status-final)
+  - [Correções extras (decisões Rafael 2026-06-01) + revisão de código](#correções-extras-decisões-rafael-2026-06-01-revisão-de-código)
+  - [Escopo do diff](#escopo-do-diff)
+- [9. Riscos & mitigações](#9-riscos-mitigações)
+- [10. Fora de escopo](#10-fora-de-escopo)
+- [Anexo A — Inventário de callers (reverificado ao vivo)](#anexo-a-inventário-de-callers-reverificado-ao-vivo)
+- [Contexto](#contexto)
 
 > **Data:** 2026-06-01 · **Autor:** Claude Code (sessão dedicada) · **Status:** SPEC-LOCK (GATE Fase 0 — aguardando revisão do Rafael)
 > **Worktree:** `/home/rafaelnascimento/projetos/frete_sistema_resolvedores` · **Branch:** `skills/onda-d-resolvedores` · **Base:** `origin/main` `34924fef2`
@@ -268,3 +309,7 @@ Nenhum código de `app/` (web) modificado — apenas adição de `app/resolvedor
 **8 subagentes consumidores do JSON dos CLIs** (degradam silenciosamente): `analista-performance-logistica`, `auditor-financeiro`, `controlador-custo-frete`, `gestor-carvia`, `gestor-devolucoes`, `gestor-estoque-odoo`, `gestor-estoque-producao`, `raio-x-pedido` (+ agente PROD via `ROUTING_SKILLS.md:206` "utilitários compartilhados"; mapeado em `tool_skill_mapper.py:103`; não está em deny-list de `skills_whitelist.py`).
 
 **Cross-refs "NÃO USAR PARA":** `cotando-frete/SKILL.md:160`, `operando-portal-atacadao/SKILL.md:162/213/281`.
+
+## Contexto
+
+_A completar (PAD-A Onda 4)._

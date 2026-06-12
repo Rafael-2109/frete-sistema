@@ -1,4 +1,30 @@
+<!-- doc:meta
+tipo: explanation
+camada: L3
+sot_de: design da skill consultando-venda-loja (Onda F / HORA M3 venda READ) — EXECUTADA
+hub: docs/superpowers/specs/INDEX.md
+superseded_by: —
+atualizado: 2026-06-12
+-->
 # Spec — Skill `consultando-venda-loja` (Onda F / HORA M3 venda READ)
+
+> **Papel:** Spec — Skill `consultando-venda-loja` (Onda F / HORA M3 venda READ).
+
+## Indice
+
+- [1. Contexto e problema](#1-contexto-e-problema)
+- [2. Objetivo](#2-objetivo)
+  - [Não-objetivos (YAGNI)](#não-objetivos-yagni)
+- [3. Escopo — 3 capacidades (modos)](#3-escopo-3-capacidades-modos)
+- [4. Arquitetura](#4-arquitetura)
+  - [4.1 Contrato CLI](#41-contrato-cli)
+  - [4.2 Saída JSON (shapes)](#42-saída-json-shapes)
+  - [4.3 Reuso de services (assinaturas verificadas)](#43-reuso-de-services-assinaturas-verificadas)
+- [5. Pacote completo (wiring — checklist `feedback_skill_padrao_completo`)](#5-pacote-completo-wiring-checklist-feedback_skill_padrao_completo)
+- [6. Testes (determinístico, $0, sem DB/PROD — `feedback_evals_llm_caros_preferir_pytest`)](#6-testes-determinístico-0-sem-dbprod-feedback_evals_llm_caros_preferir_pytest)
+- [7. Riscos / decisões](#7-riscos-decisões)
+- [8. Critérios de aceite](#8-critérios-de-aceite)
+- [Contexto](#contexto)
 
 **Data:** 2026-06-02
 **Status:** design aprovado (brainstorming) — aguardando review da spec antes do plano de implementação
@@ -104,3 +130,7 @@ python .../consultando_venda_loja.py --modo margem --venda-id 123 --loja-ids 2
 - pytest determinístico verde, sem DB/PROD.
 - Wiring completo (whitelist + system_prompt + ROUTING + tool_skill_mapper + refs corrigidas); barreira SDK intacta.
 - `py_compile` + `--help` OK.
+
+## Contexto
+
+_A completar (PAD-A Onda 4)._

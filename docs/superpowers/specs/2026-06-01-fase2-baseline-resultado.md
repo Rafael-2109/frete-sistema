@@ -1,4 +1,14 @@
+<!-- doc:meta
+tipo: explanation
+camada: L3
+sot_de: resultado do baseline golden-set da Fase 2 da Onda D (7 CLIs antigos vs app.resolvedores, mesmo banco) — registro historico
+hub: docs/superpowers/specs/INDEX.md
+superseded_by: —
+atualizado: 2026-06-12
+-->
 # Fase 2 — Resultado do baseline (golden set) · Onda D / resolvedores
+
+> **Papel:** Fase 2 — Resultado do baseline (golden set) · Onda D / resolvedores.
 
 > 2026-06-01 · GATE Fase 2. Compara os 7 CLIs ANTIGOS (split intacta) vs as funcoes `_cli` do
 > modulo `app.resolvedores`, no MESMO banco local. Ferramenta: `/tmp/baseline_resolvedores.py`.
@@ -33,3 +43,7 @@
 ### Pytest da Fase 1
 `tests/resolvedores/` — **82 passed**. Funções puras + contrato de borda + comportamento real
 (accent provado, AND multi-termo, stemming, dedup ABREVIACOES via `is`).
+
+## Contexto
+
+_A completar (PAD-A Onda 4)._

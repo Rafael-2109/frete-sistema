@@ -1,4 +1,27 @@
+<!-- doc:meta
+tipo: how-to
+camada: L3
+sot_de: plano de implementacao da skill consultando-venda-loja (Onda F / HORA M3 venda READ) — EXECUTADO
+hub: docs/superpowers/plans/INDEX.md
+superseded_by: —
+atualizado: 2026-06-12
+-->
 # Skill `consultando-venda-loja` — Implementation Plan
+
+> **Papel:** Skill `consultando-venda-loja` — Implementation Plan.
+
+## Indice
+
+- [File Structure](#file-structure)
+  - [Task 1: Wrapper público `validar_desconto_tabela` em `venda_service`](#task-1-wrapper-público-validar_desconto_tabela-em-venda_service)
+  - [Task 2: Esqueleto do script (helpers + roteador `--modo`)](#task-2-esqueleto-do-script-helpers-roteador---modo)
+  - [Task 3: Modo `vendas` (SQL bruto + escopo)](#task-3-modo-vendas-sql-bruto-escopo)
+  - [Task 4: Modo `preco` (reuso de services)](#task-4-modo-preco-reuso-de-services)
+  - [Task 5: Modo `margem` (reuso `montar_preview` + escopo)](#task-5-modo-margem-reuso-montar_preview-escopo)
+  - [Task 6: SKILL.md](#task-6-skillmd)
+  - [Task 7: Wiring (whitelist + system_prompt + refs + ROUTING + mapper)](#task-7-wiring-whitelist-system_prompt-refs-routing-mapper)
+  - [Task 8: Verificação final](#task-8-verificação-final)
+- [Self-Review (writing-plans)](#self-review-writing-plans)
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 

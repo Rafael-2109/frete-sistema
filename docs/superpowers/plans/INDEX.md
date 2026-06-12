@@ -14,6 +14,8 @@ atualizado: 2026-06-04
 - [PAD-A Onda 2 — Conflitos diagnosticados](2026-06-02-pad-a-onda-2-conflitos.md) — reconcilia 6 conflitos doc/memoria + 1 bug worker-RQ + aposenta gold-script
 - [PAD-A Onda 3 — Governanca dos scripts inventario/estoque](2026-06-02-pad-a-onda-3-governanca-scripts.md) — indice na zona + aposenta ~29 mortos + headers + estado-1-lugar + 2 ADRs
 - [PAD-A Onda 4 — Varredura por cluster](2026-06-02-pad-a-onda-4-varredura-cluster.md) — toolchain migracao + calibracao + sub-ondas 4a-4g (orfao-zero + link-rot-zero + doc:meta) + promove C1/C7/C8 a block
+- [GATE-1 — Calibracao do Judge Online (E3) + bugs do verify](2026-06-03-gate1-calibracao-judge-online.md) — sampler 5-10% + rotulagem humana acertou/errou + concordancia >=80% com >=10 rotulos; CUMPRIDO 2026-06-12 (12/12)
+- [Grounding de estrutura (cobertura ampla)](2026-06-06-grounding-cobertura-ampla.md) — regra L2 + MCP tool resolver (fonte-que-prova); I2 da estrategia de atuadores; EXECUTADO (merge 07b99fdec)
 - [HORA — Desconsiderar moto de NF de compra](2026-06-03-hora-desconsiderar-moto-nf.md) — flag desconsiderado por item + relaxa FK chassi + valida nao-em-pedido/nao-recebido (9 tasks TDD)
 - [HORA — Unificar Pedido de Venda + filtro loja/vendedor + fix desconto](2026-06-03-hora-unificar-pedido-venda.md) — tela unica cria+edita (remove venda_detalhe), criterio loja/vendedor por usuario, fix drift centavos (13 tasks)
 - [HORA — Pedido de Venda: editar item + Enter=Próximo + chassi autocomplete + regressões](2026-06-03-hora-pedido-venda-edicao-autocomplete.md) — editar moto = só desconto/valor (moto travada); Enter avança campo; chassi autocomplete; restaura CRÍTICOS+ALTOS da unificação (20 tasks, 3 fases)
