@@ -16,11 +16,13 @@ atualizado: 2026-06-11
 > qualquer fase (Item 0, F0, F1, F2) ou decidir se uma mudanca de conhecimento respeita o
 > papel canonico por camada.
 
-> 🔵 **PROXIMA SESSAO — RETOMAR AQUI:** Item 0 + F0 + **F1 EXECUTADAS** (F1 em 2026-06-12,
-> T1.1 → T1.6 completas em worktree — ver Rastreamento). Pendencias pos-merge da F1:
-> aposentadorias de origem da primeira leva T1.4 (3 memorias dev → ponteiro; memoria web
-> id=311 em PROD via `memoria.py aposentar`) e `~/.claude/CLAUDE.md` → ponteiro fino
-> (T1.6). F2 (T2.1-T2.3) permanece ATRAS DE GATES — so abrir com os gates do texto.
+> 🔵 **PROXIMA SESSAO — RETOMAR AQUI:** Item 0 + F0 + **F1 EXECUTADAS E FECHADAS**
+> (F1 mergeada em main 2026-06-12, merge 9107f81bd; pos-merge EXECUTADO na mesma janela:
+> 3 memorias dev aposentadas → ponteiro + indice corrigido; memoria web id=311 aposentada
+> em PROD com version de rollback; `~/.claude/CLAUDE.md` virou ponteiro fino para
+> `.claude/references/REGRAS_DEV_LOCAL.md`). F2 (T2.1-T2.3) permanece ATRAS DE GATES —
+> so abrir com os gates do texto. Follow-up registrado: 14 bloqueantes PRE-existentes
+> de `doc_audit --strict` em docs antigos (blueprint-agente, plans/specs) — task propria.
 
 ## Indice
 
