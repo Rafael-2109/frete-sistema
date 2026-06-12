@@ -5110,7 +5110,23 @@ def lancamento_freteiros():
                 despesas_por_embarque[embarque_id] = []
             despesas_por_embarque[embarque_id].append(despesa)
 
-        if fretes_pendentes or despesas_pendentes:
+        # 🆕 CarVia (2026-06-12): fretes subcontratados do MESMO freteiro,
+        # exibidos junto por embarque — processo Nacom = processo CarVia
+        # (lazy import: direcao fretes->carvia permitida, R1/R2 CarVia).
+        fretes_carvia_pendentes = []
+        try:
+            from app.carvia.services.financeiro.lancamento_freteiro_service import (
+                listar_fretes_carvia_pendentes_freteiro,
+            )
+            fretes_carvia_pendentes = listar_fretes_carvia_pendentes_freteiro(freteiro.id)
+        except Exception as e:
+            logger.warning(f"[FRETEIROS] CarVia indisponivel para freteiro {freteiro.id}: {e}")
+
+        carvia_por_embarque = {}
+        for fc in fretes_carvia_pendentes:
+            carvia_por_embarque.setdefault(fc["embarque_id"], []).append(fc)
+
+        if fretes_pendentes or despesas_pendentes or fretes_carvia_pendentes:
             # Organiza fretes por embarque
             fretes_por_embarque = {}
             total_valor = 0
@@ -5188,15 +5204,35 @@ def lancamento_freteiros():
                         "total_considerado": 0,
                     }
 
+            # 🆕 CarVia (2026-06-12): injeta nos cards existentes + cria cards
+            # de embarques 100% CarVia (sem frete Nacom pendente)
+            total_carvia_transportadora = 0
+            for embarque_id, fretes_carvia in carvia_por_embarque.items():
+                if embarque_id not in fretes_por_embarque:
+                    embarque = db.session.get(Embarque, embarque_id)
+                    fretes_por_embarque[embarque_id] = {
+                        "embarque": embarque,
+                        "fretes": [],
+                        "despesas_extras": despesas_por_embarque.get(embarque_id, []),
+                        "total_cotado": 0,
+                        "total_considerado": 0,
+                    }
+                total_carvia_emb = sum(fc["valor_considerado"] for fc in fretes_carvia)
+                fretes_por_embarque[embarque_id]["fretes_carvia"] = fretes_carvia
+                fretes_por_embarque[embarque_id]["total_carvia"] = total_carvia_emb
+                total_carvia_transportadora += total_carvia_emb
+
             dados_freteiros.append(
                 {
                     "freteiro": freteiro,
                     "fretes_por_embarque": fretes_por_embarque,
-                    "total_pendencias": len(fretes_pendentes) + len(despesas_pendentes),
+                    "total_pendencias": len(fretes_pendentes) + len(despesas_pendentes)
+                    + len(fretes_carvia_pendentes),
                     "total_valor": total_valor + sum([d.valor_despesa or 0 for d in despesas_pendentes]),
                     "peso_total": peso_total_transportadora,
                     "valor_nf_total": valor_nf_total_transportadora,
                     "valor_cotado_total": valor_cotado_total_transportadora,
+                    "total_carvia": total_carvia_transportadora,
                 }
             )
 
@@ -5230,10 +5266,27 @@ def emitir_fatura_freteiro(transportadora_id):
             # Pega os IDs dos fretes e despesas selecionados via request.form
             fretes_selecionados = request.form.getlist("fretes_selecionados")
             despesas_selecionadas = request.form.getlist("despesas_selecionadas")
+            # 🆕 CarVia (2026-06-12): fretes subcontratados do freteiro no
+            # mesmo fechamento (processo Nacom = processo CarVia)
+            carvia_selecionados = request.form.getlist("carvia_selecionados")
 
-            if not fretes_selecionados and not despesas_selecionadas:
+            if not fretes_selecionados and not despesas_selecionadas and not carvia_selecionados:
                 flash("Selecione pelo menos um lançamento para emitir a fatura", "warning")
                 return redirect(url_for("fretes.lancamento_freteiros"))
+
+            # 🆕 Carrega fretes CarVia selecionados (lazy import — R1/R2 CarVia)
+            fretes_carvia = []
+            if carvia_selecionados:
+                from app.carvia.models import CarviaFrete
+                fretes_carvia = [
+                    cf for cf in (
+                        db.session.get(CarviaFrete, int(cid)) for cid in carvia_selecionados
+                    )
+                    if cf and cf.transportadora_id == transportadora_id
+                ]
+            carvia_por_embarque_sel = {}
+            for cf in fretes_carvia:
+                carvia_por_embarque_sel.setdefault(cf.embarque_id, []).append(cf)
 
             data_vencimento = form.data_vencimento.data
             observacoes = form.observacoes.data or ""
@@ -5262,8 +5315,9 @@ def emitir_fatura_freteiro(transportadora_id):
                     except (ValueError, TypeError):
                         pass
 
-            # Aplica rateio por peso se valores foram alterados
+            # Aplica rateio se valores foram alterados
             rateios_por_embarque = {}
+            carvia_rateios = {}  # 🆕 {carvia_frete_id: valor_rateado}
             for embarque_id, valor_novo in valores_considerados_embarque.items():
                 # Busca fretes do embarque selecionados
                 fretes_embarque = [
@@ -5271,9 +5325,29 @@ def emitir_fatura_freteiro(transportadora_id):
                     for fid in fretes_selecionados
                     if db.session.get(Frete,int(fid)) and db.session.get(Frete,int(fid)).embarque_id == embarque_id
                 ]
+                carvia_embarque = carvia_por_embarque_sel.get(embarque_id, [])
 
-                if fretes_embarque:
-                    # Calcula peso total
+                if carvia_embarque:
+                    # 🆕 Re-rateio CONJUNTO Nacom+CarVia (decisao Rafael
+                    # 2026-06-12: "diferenca ambas pagam"). Base proporcional
+                    # ao valor_cotado de cada frete — as bases de peso divergem
+                    # (Nacom bruto vs CarVia cubado p/ motos), proporcional ao
+                    # cotado soma exato e preserva o rateio da portaria.
+                    cotado_total = (
+                        sum(f.valor_cotado or 0 for f in fretes_embarque)
+                        + sum(float(cf.valor_cotado or 0) for cf in carvia_embarque)
+                    )
+                    if cotado_total > 0:
+                        for frete in fretes_embarque:
+                            rateios_por_embarque[frete.id] = (
+                                (frete.valor_cotado or 0) / cotado_total
+                            ) * valor_novo
+                        for cf in carvia_embarque:
+                            carvia_rateios[cf.id] = (
+                                float(cf.valor_cotado or 0) / cotado_total
+                            ) * valor_novo
+                elif fretes_embarque:
+                    # Comportamento legado (sem CarVia no embarque): rateio por peso
                     peso_total = sum(
                         [
                             sum([item.peso for item in frete.embarque.itens if item.peso])
@@ -5340,54 +5414,86 @@ def emitir_fatura_freteiro(transportadora_id):
 
                     ctes_criados.append(f"Despesa: {despesa.tipo_despesa} - R$ {valor_despesa_final:.2f}")
 
-            # Cria a fatura (limitando o nome para caber nos 50 caracteres do banco)
-            data_venc_str = data_vencimento.strftime("%d/%m/%Y")
-            # Encurta nome da transportadora para caber no limite de 50 caracteres
-            # Formato: "Fech [NOME] [DD/MM/YYYY]" = 5 + espaços + nome + 10 = máx 50
-            max_chars_nome = 50 - 5 - 1 - 10 - 1  # 33 chars para o nome
-            nome_transportadora = transportadora.razao_social[:max_chars_nome]
-            nome_fatura = f"Fech {nome_transportadora} {data_venc_str}"[:50]  # Garantia extra
+            # Cria a fatura Nacom (apenas se houver fretes/despesas Nacom —
+            # 🆕 seleção 100% CarVia não cria FaturaFrete vazia)
+            nova_fatura = None
+            if fretes_selecionados or despesas_selecionadas:
+                data_venc_str = data_vencimento.strftime("%d/%m/%Y")
+                # Encurta nome da transportadora para caber no limite de 50 caracteres
+                # Formato: "Fech [NOME] [DD/MM/YYYY]" = 5 + espaços + nome + 10 = máx 50
+                max_chars_nome = 50 - 5 - 1 - 10 - 1  # 33 chars para o nome
+                nome_transportadora = transportadora.razao_social[:max_chars_nome]
+                nome_fatura = f"Fech {nome_transportadora} {data_venc_str}"[:50]  # Garantia extra
 
-            nova_fatura = FaturaFrete(
-                transportadora_id=transportadora_id,
-                numero_fatura=nome_fatura,
-                data_emissao=agora_utc_naive().date(),
-                valor_total_fatura=valor_total_fatura,
-                vencimento=data_vencimento,
-                status_conferencia="CONFERIDO",  # Automaticamente conferida
-                conferido_por=current_user.nome,
-                conferido_em=agora_utc_naive(),
-                observacoes_conferencia=f"Fatura criada automaticamente via lançamento freteiros. {observacoes}",
-                criado_por=current_user.nome,
-            )
+                nova_fatura = FaturaFrete(
+                    transportadora_id=transportadora_id,
+                    numero_fatura=nome_fatura,
+                    data_emissao=agora_utc_naive().date(),
+                    valor_total_fatura=valor_total_fatura,
+                    vencimento=data_vencimento,
+                    status_conferencia="CONFERIDO",  # Automaticamente conferida
+                    conferido_por=current_user.nome,
+                    conferido_em=agora_utc_naive(),
+                    observacoes_conferencia=f"Fatura criada automaticamente via lançamento freteiros. {observacoes}",
+                    criado_por=current_user.nome,
+                )
 
-            db.session.add(nova_fatura)
-            db.session.flush()  # Para obter o ID
+                db.session.add(nova_fatura)
+                db.session.flush()  # Para obter o ID
 
-            # Vincula fretes à fatura
-            for frete_id in fretes_selecionados:
-                frete = db.session.get(Frete,int(frete_id)) if int(frete_id) else None
-                if frete:
-                    frete.fatura_frete_id = nova_fatura.id
+                # Vincula fretes à fatura
+                for frete_id in fretes_selecionados:
+                    frete = db.session.get(Frete,int(frete_id)) if int(frete_id) else None
+                    if frete:
+                        frete.fatura_frete_id = nova_fatura.id
 
-            # ✅ Vincula despesas à fatura via FK
-            for despesa_id in despesas_selecionadas:
-                despesa = db.session.get(DespesaExtra,int(despesa_id)) if int(despesa_id) else None
-                if despesa:
-                    despesa.fatura_frete_id = nova_fatura.id
+                # ✅ Vincula despesas à fatura via FK
+                for despesa_id in despesas_selecionadas:
+                    despesa = db.session.get(DespesaExtra,int(despesa_id)) if int(despesa_id) else None
+                    if despesa:
+                        despesa.fatura_frete_id = nova_fatura.id
+
+            # 🆕 Lado CarVia (2026-06-12): mesma ação, tabelas do módulo CarVia
+            # (CarviaFrete + CarviaSubcontrato + CarviaFaturaTransportadora).
+            # Mesma transação — rollback conjunto se qualquer lado falhar.
+            resultado_carvia = None
+            if fretes_carvia:
+                from app.carvia.services.financeiro.lancamento_freteiro_service import (
+                    emitir_fatura_freteiro_carvia,
+                )
+                itens_carvia = [
+                    {
+                        "frete_id": cf.id,
+                        "valor_considerado": carvia_rateios.get(cf.id)
+                        or float(cf.valor_considerado or cf.valor_cotado or 0),
+                    }
+                    for cf in fretes_carvia
+                ]
+                resultado_carvia = emitir_fatura_freteiro_carvia(
+                    transportadora_id=transportadora_id,
+                    itens=itens_carvia,
+                    data_vencimento=data_vencimento,
+                    usuario_nome=current_user.nome,
+                    observacoes=observacoes,
+                )
 
             db.session.commit()
 
-            flash(
-                f"""
-                <strong>Fatura criada com sucesso!</strong><br>
-                <strong>Fatura:</strong> {nova_fatura.numero_fatura}<br>
-                <strong>Valor Total:</strong> R$ {valor_total_fatura:,.2f}<br>
-                <strong>CTes Criados:</strong> {len(ctes_criados)}<br>
-                <strong>Vencimento:</strong> {data_vencimento.strftime('%d/%m/%Y')}
-            """,
-                "success",
-            )
+            msg = "<strong>Fatura criada com sucesso!</strong><br>"
+            if nova_fatura:
+                msg += (
+                    f"<strong>Fatura Nacom:</strong> {nova_fatura.numero_fatura}<br>"
+                    f"<strong>Valor Nacom:</strong> R$ {valor_total_fatura:,.2f}<br>"
+                    f"<strong>CTes Criados:</strong> {len(ctes_criados)}<br>"
+                )
+            if resultado_carvia:
+                msg += (
+                    f"<strong>Fatura CarVia:</strong> {resultado_carvia['numero_fatura']}<br>"
+                    f"<strong>Valor CarVia:</strong> R$ {resultado_carvia['valor_total']:,.2f}<br>"
+                    f"<strong>Fretes CarVia:</strong> {resultado_carvia['fretes']}<br>"
+                )
+            msg += f"<strong>Vencimento:</strong> {data_vencimento.strftime('%d/%m/%Y')}"
+            flash(msg, "success")
 
             return redirect(url_for("fretes.listar_faturas"))
 
@@ -6649,8 +6755,22 @@ def exportar_fechamento_freteiros():
     faturas = query.order_by(desc(FaturaFrete.criado_em)).all()
 
     if not faturas:
-        flash("Nenhuma fatura de freteiro encontrada com os filtros selecionados.", "warning")
-        return redirect(url_for("fretes.listar_faturas"))
+        # 🆕 Pode haver fechamento 100% CarVia no periodo (abas 3/4) —
+        # so redireciona se NENHUM dos dois lados tiver faturas.
+        tem_carvia = False
+        try:
+            from app.carvia.models import CarviaFaturaTransportadora
+            tem_carvia = db.session.query(
+                CarviaFaturaTransportadora.id
+            ).join(
+                Transportadora,
+                CarviaFaturaTransportadora.transportadora_id == Transportadora.id,
+            ).filter(Transportadora.freteiro == True).first() is not None
+        except Exception:
+            pass
+        if not tem_carvia:
+            flash("Nenhuma fatura de freteiro encontrada com os filtros selecionados.", "warning")
+            return redirect(url_for("fretes.listar_faturas"))
 
     # ========== ABA 1: DETALHAMENTO ==========
     dados_detalhamento = []
@@ -6778,27 +6898,124 @@ def exportar_fechamento_freteiros():
     if not df_resumo.empty:
         df_resumo = df_resumo.sort_values("Transportadora", ascending=True)
 
+    # ========== 🆕 ABAS CARVIA (2026-06-12) ==========
+    # Mesmo Excel, abas separadas, mesmo range de datas (decisao Rafael):
+    # CarviaFaturaTransportadora de freteiros (lazy import — R1/R2 CarVia).
+    dados_detalhamento_carvia = []
+    dados_resumo_carvia = []
+    try:
+        from app.carvia.models import CarviaFaturaTransportadora, CarviaFrete
+
+        query_cv = CarviaFaturaTransportadora.query.join(
+            Transportadora,
+            CarviaFaturaTransportadora.transportadora_id == Transportadora.id,
+        ).filter(Transportadora.freteiro == True)
+
+        if transportadora_id:
+            try:
+                query_cv = query_cv.filter(
+                    CarviaFaturaTransportadora.transportadora_id == int(transportadora_id)
+                )
+            except (ValueError, TypeError):
+                pass
+        if data_criacao_de:
+            try:
+                query_cv = query_cv.filter(
+                    CarviaFaturaTransportadora.criado_em
+                    >= datetime.strptime(data_criacao_de, "%Y-%m-%d")
+                )
+            except ValueError:
+                pass
+        if data_criacao_ate:
+            try:
+                dt_ate = datetime.strptime(data_criacao_ate, "%Y-%m-%d").replace(
+                    hour=23, minute=59, second=59
+                )
+                query_cv = query_cv.filter(CarviaFaturaTransportadora.criado_em <= dt_ate)
+            except ValueError:
+                pass
+
+        faturas_cv = query_cv.order_by(desc(CarviaFaturaTransportadora.criado_em)).all()
+
+        resumo_cv = {}
+        transp_cv_info = {}
+        for fatura_cv in faturas_cv:
+            fretes_cv = CarviaFrete.query.filter(
+                CarviaFrete.fatura_transportadora_id == fatura_cv.id,
+                CarviaFrete.status != "CANCELADO",
+            ).all()
+            transp_cv = db.session.get(Transportadora, fatura_cv.transportadora_id)
+            for frete_cv in fretes_cv:
+                valor_cv = float(frete_cv.valor_considerado or frete_cv.valor_cotado or 0)
+                dados_detalhamento_carvia.append({
+                    "CNPJ Transportadora": transp_cv.cnpj if transp_cv else "",
+                    "Transportadora": transp_cv.razao_social if transp_cv else "",
+                    "Operação": "CARVIA",
+                    "Tipo": "Frete",
+                    "Fatura": fatura_cv.numero_fatura,
+                    "Embarque": frete_cv.embarque_id or "",
+                    "NFs": frete_cv.numeros_nfs or "",
+                    "Cliente": frete_cv.nome_destino or "",
+                    "Valor NFs": formatar_valor_br(float(frete_cv.valor_total_nfs or 0)),
+                    "Peso NFs": formatar_valor_br(float(frete_cv.peso_total or 0)),
+                    "Valor Frete/Despesa": formatar_valor_br(valor_cv),
+                })
+                if transp_cv:
+                    transp_cv_info[transp_cv.id] = transp_cv
+                    resumo_cv[transp_cv.id] = resumo_cv.get(transp_cv.id, 0) + valor_cv
+
+        for transp_id_cv, valor_total_cv in resumo_cv.items():
+            t = transp_cv_info[transp_id_cv]
+            tipo_conta_cv = ""
+            if t.tipo_conta:
+                tipo_conta_cv = t.tipo_conta.replace("corrente", "Corrente").replace("poupanca", "Poupança")
+            dados_resumo_carvia.append({
+                "CNPJ": t.cnpj or "",
+                "Transportadora": t.razao_social or "",
+                "Banco": t.banco or "",
+                "Agência": t.agencia or "",
+                "Conta": t.conta or "",
+                "Tipo Conta": tipo_conta_cv,
+                "PIX": t.pix or "",
+                "CPF/CNPJ Favorecido": t.cpf_cnpj_favorecido or "",
+                "Obs. Financeira": t.obs_financ or "",
+                "Valor Total": formatar_valor_br(valor_total_cv),
+            })
+    except Exception as e:
+        logger.warning(f"[FECHAMENTO_FRETEIROS] Abas CarVia indisponiveis: {e}")
+
+    df_detalhamento_carvia = pd.DataFrame(dados_detalhamento_carvia)
+    df_resumo_carvia = pd.DataFrame(dados_resumo_carvia)
+    if not df_resumo_carvia.empty:
+        df_resumo_carvia = df_resumo_carvia.sort_values("Transportadora", ascending=True)
+
     # ========== GERAR EXCEL ==========
+    def _ajustar_larguras(writer, df, sheet_name):
+        worksheet = writer.sheets[sheet_name]
+        for idx, col in enumerate(df.columns):
+            max_length = max(df[col].fillna('').astype(str).map(len).max(), len(col)) + 2
+            col_letter = chr(65 + idx) if idx < 26 else "A" + chr(65 + idx - 26)
+            worksheet.column_dimensions[col_letter].width = min(max_length, 50)
+
     output = BytesIO()
     with pd.ExcelWriter(output, engine="openpyxl") as writer:
         # Aba 1: Detalhamento
         if not df_detalhamento.empty:
             df_detalhamento.to_excel(writer, index=False, sheet_name="Detalhamento")
-            # Ajustar larguras
-            worksheet = writer.sheets["Detalhamento"]
-            for idx, col in enumerate(df_detalhamento.columns):
-                max_length = max(df_detalhamento[col].fillna('').astype(str).map(len).max(), len(col)) + 2
-                col_letter = chr(65 + idx) if idx < 26 else "A" + chr(65 + idx - 26)
-                worksheet.column_dimensions[col_letter].width = min(max_length, 50)
+            _ajustar_larguras(writer, df_detalhamento, "Detalhamento")
 
         # Aba 2: Resumo
         if not df_resumo.empty:
             df_resumo.to_excel(writer, index=False, sheet_name="Resumo por Transportadora")
-            worksheet = writer.sheets["Resumo por Transportadora"]
-            for idx, col in enumerate(df_resumo.columns):
-                max_length = max(df_resumo[col].fillna('').astype(str).map(len).max(), len(col)) + 2
-                col_letter = chr(65 + idx) if idx < 26 else "A" + chr(65 + idx - 26)
-                worksheet.column_dimensions[col_letter].width = min(max_length, 50)
+            _ajustar_larguras(writer, df_resumo, "Resumo por Transportadora")
+
+        # 🆕 Abas 3/4: CarVia (mesmo arquivo, abas separadas)
+        if not df_detalhamento_carvia.empty:
+            df_detalhamento_carvia.to_excel(writer, index=False, sheet_name="Detalhamento CarVia")
+            _ajustar_larguras(writer, df_detalhamento_carvia, "Detalhamento CarVia")
+        if not df_resumo_carvia.empty:
+            df_resumo_carvia.to_excel(writer, index=False, sheet_name="Resumo CarVia")
+            _ajustar_larguras(writer, df_resumo_carvia, "Resumo CarVia")
 
     output.seek(0)
 

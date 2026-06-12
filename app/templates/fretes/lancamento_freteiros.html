@@ -157,6 +157,9 @@
                                                     </span>
                                                 {% endif %}
                                                 <span class="badge bg-info ms-2">{{ embarque_data.fretes|length }} fretes</span>
+                                                {% if embarque_data.fretes_carvia %}
+                                                    <span class="badge bg-primary ms-1">{{ embarque_data.fretes_carvia|length }} CarVia</span>
+                                                {% endif %}
                                             </h6>
                                             
                                             <!-- Indicadores do Embarque (na mesma linha) -->
@@ -187,17 +190,27 @@
                                     </div>
                                     <div class="col-md-4 text-end">
                                         {% set total_embarque = embarque_data.fretes | sum(attribute='valor_considerado') or embarque_data.fretes | sum(attribute='valor_cotado') or 0 %}
-                                        <strong>Subtotal: R$ <span id="subtotal_{{ embarque_id }}">{{ "{:,.2f}".format(total_embarque) }}</span></strong>
+                                        {% set total_carvia_emb = embarque_data.total_carvia or 0 %}
+                                        {% if embarque_data.fretes_carvia %}
+                                            <small class="text-muted">
+                                                Nacom R$ <span id="subtotal_nacom_{{ embarque_id }}">{{ "{:,.2f}".format(total_embarque) }}</span>
+                                                / <span class="text-primary">CarVia R$ <span id="subtotal_carvia_{{ embarque_id }}">{{ "{:,.2f}".format(total_carvia_emb) }}</span></span>
+                                            </small><br>
+                                            <strong>Embarque: R$ <span id="subtotal_{{ embarque_id }}">{{ "{:,.2f}".format(total_embarque + total_carvia_emb) }}</span></strong>
+                                        {% else %}
+                                            <strong>Subtotal: R$ <span id="subtotal_{{ embarque_id }}">{{ "{:,.2f}".format(total_embarque) }}</span></strong>
+                                        {% endif %}
                                         <div class="mt-1">
                                             <small class="text-muted">Valor Considerado:</small>
-                                            <input type="number" step="0.01" min="0" 
+                                            <input type="number" step="0.01" min="0"
                                                    class="form-control form-control-sm d-inline-block valor-considerado"
-                                                   style="width: 120px;" 
+                                                   style="width: 120px;"
                                                    id="valor_considerado_{{ embarque_id }}"
                                                    data-embarque-id="{{ embarque_id }}"
                                                    data-transportadora-id="{{ dados.freteiro.id }}"
-                                                   data-total-original="{{ total_embarque }}"
-                                                   placeholder="{{ "{:.2f}".format(total_embarque) }}">
+                                                   data-total-original="{{ total_embarque + total_carvia_emb }}"
+                                                   data-tem-carvia="{{ '1' if embarque_data.fretes_carvia else '0' }}"
+                                                   placeholder="{{ "{:.2f}".format(total_embarque + total_carvia_emb) }}">
                                         </div>
                                     </div>
                                 </div>
@@ -279,7 +292,50 @@
                                                 </td>
                                             </tr>
                                             {% endfor %}
-                                            
+
+                                            <!-- 🆕 Fretes CarVia do embarque (mesmo freteiro — emissão espelhada) -->
+                                            {% for fc in embarque_data.fretes_carvia or [] %}
+                                            <tr class="carvia-row table-primary" data-carvia-id="{{ fc.id }}" style="--bs-table-bg: rgba(13,110,253,.06);">
+                                                <td style="text-align: center;">
+                                                    <input type="checkbox" class="form-check-input carvia-checkbox"
+                                                           name="carvia_selecionados"
+                                                           value="{{ fc.id }}"
+                                                           data-embarque-id="{{ embarque_id }}"
+                                                           data-transportadora-id="{{ dados.freteiro.id }}"
+                                                           data-peso="0"
+                                                           data-valor-cotado="{{ fc.valor_cotado }}"
+                                                           data-valor-considerado="{{ fc.valor_considerado }}">
+                                                </td>
+                                                <td style="max-width: 250px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"
+                                                    title="{{ fc.nome_destino }}">
+                                                    {{ fc.nome_destino }}
+                                                    <span class="badge bg-primary ms-1" style="font-size: 0.65rem;">CARVIA</span>
+                                                </td>
+                                                <td style="text-align: center;">
+                                                    <small title="{{ fc.numeros_nfs }}">
+                                                        {{ fc.numeros_nfs[:20] }}{% if fc.numeros_nfs|length > 20 %}...{% endif %}
+                                                    </small>
+                                                </td>
+                                                <td style="text-align: center;">
+                                                    <small>{{ fc.cidade_destino }}/{{ fc.uf_destino }}</small>
+                                                </td>
+                                                <td style="text-align: right;">
+                                                    <small>{{ "{:,.0f}".format(fc.peso_total) }} kg</small>
+                                                </td>
+                                                <td style="text-align: right;">
+                                                    <small>{{ "{:,.2f}".format(fc.valor_total_nfs) }}</small>
+                                                </td>
+                                                <td style="text-align: right;">
+                                                    <small>{{ "{:,.2f}".format(fc.valor_cotado) }}</small>
+                                                </td>
+                                                <td style="text-align: right;">
+                                                    <strong class="valor-considerado-carvia" data-carvia-id="{{ fc.id }}">
+                                                        {{ "{:,.2f}".format(fc.valor_considerado) }}
+                                                    </strong>
+                                                </td>
+                                            </tr>
+                                            {% endfor %}
+
                                             <!-- Linha de Totalizador do Embarque -->
                                             <tr class="table-info">
                                                 <td style="text-align: center;"><i class="fas fa-calculator"></i></td>
@@ -475,49 +531,92 @@
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     
-    // Função para calcular rateio por peso
+    // Função para calcular rateio.
+    // Embarque SEM CarVia: legado (proporcional ao peso, só fretes Nacom).
+    // Embarque COM CarVia: re-rateio CONJUNTO Nacom+CarVia proporcional ao
+    // valor_cotado ("diferença ambas pagam" — espelha o backend).
     function calcularRateio(embarqueId, valorTotal) {
-        const fretesEmbarque = document.querySelectorAll(`input[data-embarque-id="${embarqueId}"]`);
+        const fretesNacom = document.querySelectorAll(`input[name="fretes_selecionados"][data-embarque-id="${embarqueId}"]`);
+        const fretesCarvia = document.querySelectorAll(`input[name="carvia_selecionados"][data-embarque-id="${embarqueId}"]`);
+
+        if (fretesCarvia.length > 0) {
+            let cotadoTotal = 0;
+            fretesNacom.forEach(f => { cotadoTotal += parseFloat(f.getAttribute('data-valor-cotado') || 0); });
+            fretesCarvia.forEach(f => { cotadoTotal += parseFloat(f.getAttribute('data-valor-cotado') || 0); });
+            if (cotadoTotal === 0) return;
+
+            fretesNacom.forEach(frete => {
+                const cotado = parseFloat(frete.getAttribute('data-valor-cotado') || 0);
+                const valorRateado = (cotado / cotadoTotal) * valorTotal;
+                const elementoValor = document.querySelector(`.valor-considerado-individual[data-frete-id="${frete.value}"]`);
+                if (elementoValor) {
+                    elementoValor.textContent = `R$ ${valorRateado.toLocaleString('pt-BR', {minimumFractionDigits: 2})}`;
+                }
+                frete.setAttribute('data-valor-considerado-rateado', valorRateado.toFixed(2));
+            });
+            fretesCarvia.forEach(frete => {
+                const cotado = parseFloat(frete.getAttribute('data-valor-cotado') || 0);
+                const valorRateado = (cotado / cotadoTotal) * valorTotal;
+                const elementoValor = document.querySelector(`.valor-considerado-carvia[data-carvia-id="${frete.value}"]`);
+                if (elementoValor) {
+                    elementoValor.textContent = `R$ ${valorRateado.toLocaleString('pt-BR', {minimumFractionDigits: 2})}`;
+                }
+                frete.setAttribute('data-valor-considerado-rateado', valorRateado.toFixed(2));
+            });
+            return;
+        }
+
+        // Legado: rateio por peso (sem CarVia no embarque)
         let pesoTotal = 0;
-        
-        // Calcula peso total
-        fretesEmbarque.forEach(frete => {
+        fretesNacom.forEach(frete => {
             pesoTotal += parseFloat(frete.getAttribute('data-peso') || 0);
         });
-        
+
         if (pesoTotal === 0) return;
-        
-        // Distribui valor proporcionalmente ao peso
-        fretesEmbarque.forEach(frete => {
+
+        fretesNacom.forEach(frete => {
             const peso = parseFloat(frete.getAttribute('data-peso') || 0);
             const valorRateado = (peso / pesoTotal) * valorTotal;
-            
+
             // Atualiza o valor considerado individual
             const freteId = frete.value;
             const elementoValor = document.querySelector(`.valor-considerado-individual[data-frete-id="${freteId}"]`);
             if (elementoValor) {
                 elementoValor.textContent = `R$ ${valorRateado.toLocaleString('pt-BR', {minimumFractionDigits: 2})}`;
             }
-            
+
             // Atualiza o data-attribute
             frete.setAttribute('data-valor-considerado-rateado', valorRateado.toFixed(2));
         });
     }
     
-    // Função para atualizar subtotal do embarque
+    // Função para atualizar subtotal do embarque (Nacom + CarVia quando houver)
     function atualizarSubtotalEmbarque(embarqueId) {
-        const fretesEmbarque = document.querySelectorAll(`input[data-embarque-id="${embarqueId}"]`);
-        let subtotal = 0;
-        
-        fretesEmbarque.forEach(frete => {
-            const valorConsiderado = parseFloat(frete.getAttribute('data-valor-considerado-rateado') || 
-                                             frete.getAttribute('data-valor-considerado') || 0);
-            subtotal += valorConsiderado;
+        const fretesNacom = document.querySelectorAll(`input[name="fretes_selecionados"][data-embarque-id="${embarqueId}"]`);
+        const fretesCarvia = document.querySelectorAll(`input[name="carvia_selecionados"][data-embarque-id="${embarqueId}"]`);
+        let subtotalNacom = 0;
+        let subtotalCarvia = 0;
+
+        fretesNacom.forEach(frete => {
+            subtotalNacom += parseFloat(frete.getAttribute('data-valor-considerado-rateado') ||
+                                        frete.getAttribute('data-valor-considerado') || 0);
         });
-        
+        fretesCarvia.forEach(frete => {
+            subtotalCarvia += parseFloat(frete.getAttribute('data-valor-considerado-rateado') ||
+                                         frete.getAttribute('data-valor-considerado') || 0);
+        });
+
         const elementoSubtotal = document.getElementById(`subtotal_${embarqueId}`);
         if (elementoSubtotal) {
-            elementoSubtotal.textContent = subtotal.toLocaleString('pt-BR', {minimumFractionDigits: 2});
+            elementoSubtotal.textContent = (subtotalNacom + subtotalCarvia).toLocaleString('pt-BR', {minimumFractionDigits: 2});
+        }
+        const elementoNacom = document.getElementById(`subtotal_nacom_${embarqueId}`);
+        if (elementoNacom) {
+            elementoNacom.textContent = subtotalNacom.toLocaleString('pt-BR', {minimumFractionDigits: 2});
+        }
+        const elementoCarvia = document.getElementById(`subtotal_carvia_${embarqueId}`);
+        if (elementoCarvia) {
+            elementoCarvia.textContent = subtotalCarvia.toLocaleString('pt-BR', {minimumFractionDigits: 2});
         }
     }
     
@@ -674,7 +773,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const botaoEmitir = document.querySelector(`.emitir-fatura-btn[data-transportadora-id="${transportadoraId}"]`);
         const statusText = document.getElementById(`status_${transportadoraId}`);
         
-        const itensSelecionados = document.querySelectorAll(`input[name="fretes_selecionados"][data-transportadora-id="${transportadoraId}"]:checked, input[name="despesas_selecionadas"][data-transportadora-id="${transportadoraId}"]:checked`).length;
+        const itensSelecionados = document.querySelectorAll(`input[name="fretes_selecionados"][data-transportadora-id="${transportadoraId}"]:checked, input[name="despesas_selecionadas"][data-transportadora-id="${transportadoraId}"]:checked, input[name="carvia_selecionados"][data-transportadora-id="${transportadoraId}"]:checked`).length;
         const temData = dataVencimento && dataVencimento.value.trim() !== '';
         
         if (!temData) {
@@ -780,6 +879,16 @@ document.addEventListener('DOMContentLoaded', function() {
         checkbox.addEventListener('change', function() {
             const transportadoraId = this.getAttribute('data-transportadora-id');
             atualizarTotalGeral(transportadoraId);  // Atualiza total quando despesa é selecionada/deselecionada
+            atualizarStatusBotao(transportadoraId);
+        });
+    });
+
+    // 🆕 Event listeners para checkboxes de fretes CarVia
+    document.querySelectorAll('input[name="carvia_selecionados"]').forEach(checkbox => {
+        checkbox.addEventListener('change', function() {
+            const transportadoraId = this.getAttribute('data-transportadora-id');
+            const embarqueId = this.getAttribute('data-embarque-id');
+            atualizarSubtotalEmbarque(embarqueId);
             atualizarStatusBotao(transportadoraId);
         });
     });

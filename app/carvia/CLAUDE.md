@@ -80,7 +80,7 @@ app/carvia/
                    #   custo_entrega, admin, cliente, cotacao_v2, pedido, frete, gerencial,
                    #   aprovacao, comissao, config, conta_corrente, exportacao, receita,
                    #   scanner, simulador, tabela_carvia, importacao_config, api, anexo)
-  services/        # 42 services em 6 sub-pacotes + 2 root:
+  services/        # 43 services em 6 sub-pacotes + 2 root:
                    #   admin/ (admin_service)
                    #   clientes/ (cliente_service)
                    #   documentos/ (carvia_frete, conferencia, embarque_carvia,
@@ -89,7 +89,10 @@ app/carvia/
                    #   financeiro/ (conciliacao, csv_razao, historico_match, ofx, pagamento,
                    #                sugestao, comissao, conta_corrente, custo_entrega_autolink,
                    #                custo_entrega_cobertura, custo_entrega_fatura, fluxo_caixa,
-                   #                gerencial, previnculo, rateio_conciliacao_helper) — 15
+                   #                gerencial, previnculo, rateio_conciliacao_helper,
+                   #                lancamento_freteiro [2026-06-12: espelho CarVia do
+                   #                fechamento de freteiros Nacom — FT sintetica CONFERIDA,
+                   #                consumido por app/fretes via lazy import]) — 16
                    #   parsers/ (importacao, importacao_config, cte_xml, danfe_pdf,
                    #            dacte_pdf, fatura_pdf, nfe_xml) — 7
                    #   pricing/ (cotacao, cotacao_v2, margem, moto_recognition,

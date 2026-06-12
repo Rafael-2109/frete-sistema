@@ -233,9 +233,9 @@ Sao campos diferentes, atualizados em momentos diferentes durante vinculacao man
 | Vinculo Frete↔documento | `frete_cte_id` → CTe | Sem CTe; fatura agrupa diretamente |
 | Despesas extras | `tipo_documento='CTE'` + `despesa_cte_id` | `tipo_documento='NFS'` ou `'RECIBO'` |
 | Lancamento Odoo (despesa) | `/despesas/<id>/lancar_odoo` (16 etapas via DFe) | `/despesas/<id>/lancar_nfs_recibo` (`routes.py:5522`) — fluxo simplificado, sem DFe |
-| Fechamento | Fatura criada por upload PDF/integracao | UI dedicada `/lancamento_freteiros` (`routes.py:4763`) lista pendencias por freteiro |
-| Geracao da fatura | Operador ou automatica (XML CTe) | `POST /emitir_fatura_freteiro/<transportadora_id>` (`routes.py:4944`) — agrupa fretes/despesas selecionados |
-| Excel de fechamento | — | `GET /faturas/exportar-fechamento-freteiros` (`routes.py:6314`) — 2 abas (Detalhamento + Resumo com dados bancarios). Restrito a admin/financeiro/logistica |
+| Fechamento | Fatura criada por upload PDF/integracao | UI dedicada `/lancamento_freteiros` (`routes.py:5035`) lista pendencias por freteiro — Nacom E CarVia |
+| Geracao da fatura | Operador ou automatica (XML CTe) | `POST /emitir_fatura_freteiro/<transportadora_id>` (`routes.py:5252`) — agrupa fretes/despesas selecionados + lado CarVia |
+| Excel de fechamento | — | `GET /faturas/exportar-fechamento-freteiros` (`routes.py:6692`) — 4 abas (Detalhamento + Resumo com dados bancarios + Detalhamento CarVia + Resumo CarVia). Restrito a admin/financeiro/logistica |
 | Filtro analises | `incluir_transportadora=True/False` | `incluir_freteiro=True/False` (default ambos True). Ver `analise_dinamica` |
 
 ### Pontos de atencao
@@ -243,6 +243,7 @@ Sao campos diferentes, atualizados em momentos diferentes durante vinculacao man
 - **Frete em si segue mesma estrutura**: `lancar_frete_automatico` cria `Frete` para freteiro IGUAL ao transportador regular (mesma logica DIRETA/FRACIONADA). A diferenca aparece apenas no documento fiscal (sem CTe → sem `frete_cte_id`) e no fechamento.
 - **Despesa extra de freteiro**: preferir `tipo_documento='NFS'` (com NF de servico — Odoo vincula via `partner_id`+`numero_documento`) sobre `'RECIBO'` (sem NF — cria DFe sintetica). Ambos suportados.
 - **Pagamento**: fatura de freteiro nao tem `numero_fatura` de transportadora — usa numero sequencial proprio gerado em `emitir_fatura_freteiro`.
+- **CarVia unificado (2026-06-12, decisao Rafael — IMP-2026-06-10-005)**: a MESMA tela exibe e EMITE os fretes CarVia do freteiro (embarque compartilhado: carga Nacom + motos CarVia; o freteiro alega o frete TOTAL). Leitura/escrita CarVia via LAZY import de `app/carvia/services/financeiro/lancamento_freteiro_service.py` (`listar_fretes_carvia_pendentes_freteiro` + `emitir_fatura_freteiro_carvia`) — direcao fretes->carvia permitida (R1/R2 CarVia). Lado CarVia grava nas tabelas do modulo (CarviaFrete APROVADO/FATURADO + CarviaSubcontrato `Sub-###` + CarviaFaturaTransportadora CONFERIDA); pagamento CarVia segue conciliacao (R11) — emissao NAO marca FT paga. **Re-rateio conjunto**: embarque COM CarVia selecionado re-rateia o Valor Considerado proporcional ao `valor_cotado` de cada frete (Nacom+CarVia, "diferenca ambas pagam"); SEM CarVia mantém o rateio legado por peso. MESMA transacao (rollback conjunto). Selecao 100% CarVia nao cria FaturaFrete Nacom vazia. Testes: `tests/carvia/test_lancamento_freteiro_service.py`.
 
 ---
 
