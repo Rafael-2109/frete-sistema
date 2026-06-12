@@ -23,3 +23,73 @@ class TestModel:
         assert row.id is not None
         assert row.cluster_id is None  # setado pelo clustering, nao pelo insert
         db.session.rollback()
+
+
+# ---------------------------------------------------------------------------
+# Helpers de fixture: entries sinteticas no formato JSONL do SDK
+# ---------------------------------------------------------------------------
+
+def _tu(name, tid, **inp):
+    return {"type": "assistant", "message": {"content": [
+        {"type": "tool_use", "id": tid, "name": name, "input": inp}]}}
+
+
+def _tr(tid, is_error=False):
+    return {"type": "user", "message": {"content": [
+        {"type": "tool_result", "tool_use_id": tid, "is_error": is_error}]}}
+
+
+def _user(texto):
+    return {"type": "user", "message": {"content": texto}}
+
+
+class TestParser:
+    def test_extrai_bash_com_skill_e_retry(self):
+        from app.agente.services.adhoc_capture_service import extract_adhoc_candidates
+        entries = [
+            _user("exporta as 3 carteiras em abas"),
+            _tu("Skill", "t1", skill="exportando-arquivos"),
+            _tr("t1"),
+            _tu("Bash", "t2", command="python -c 'tenta1'" + "x" * 300),
+            _tr("t2", is_error=True),
+            _tu("Bash", "t3", command="python -c 'tenta2'" + "x" * 300),
+            _tr("t3"),
+        ]
+        cands = extract_adhoc_candidates(entries)
+        assert len(cands) == 2
+        assert cands[0]["skill_ativa"] == "exportando-arquivos"
+        assert cands[0]["user_msg"] == "exporta as 3 carteiras em abas"
+        assert cands[0]["teve_erro"] is True
+        assert cands[1]["teve_erro"] is False
+
+    def test_sem_skill_anterior(self):
+        from app.agente.services.adhoc_capture_service import extract_adhoc_candidates
+        entries = [_user("soma os fretes"),
+                   _tu("Bash", "t1", command="python -c 'x'" + "y" * 300), _tr("t1")]
+        cands = extract_adhoc_candidates(entries)
+        assert cands[0]["skill_ativa"] is None
+
+    def test_user_msg_em_blocks(self):
+        from app.agente.services.adhoc_capture_service import extract_adhoc_candidates
+        entries = [
+            {"type": "user", "message": {"content": [{"type": "text", "text": "oi"}]}},
+            _tu("Bash", "t1", command="psql -c 'SELECT 1'" + "z" * 300), _tr("t1"),
+        ]
+        assert extract_adhoc_candidates(entries)[0]["user_msg"] == "oi"
+
+
+class TestFiltro:
+    @pytest.mark.parametrize("cmd,esperado", [
+        ("python -c 'import pandas; ...'", True),
+        ("psql $DATABASE_URL -c \"SELECT count(*) FROM fretes\"", True),
+        ("python << 'EOF'\nimport app\nEOF", True),
+        ("x" * 250, True),                                     # longo = substantivo
+        ("ls -la", False),
+        ("git status", False),
+        ("cat arquivo.txt", False),
+        ("python .claude/skills/consultando-sql/scripts/consultar.py --q 'x'", False),  # script de skill
+        ("source .venv/bin/activate && python app/odoo/scripts/foo.py", False),         # script persistido
+    ])
+    def test_substantivo(self, cmd, esperado):
+        from app.agente.services.adhoc_capture_service import is_substantive
+        assert is_substantive(cmd) is esperado
