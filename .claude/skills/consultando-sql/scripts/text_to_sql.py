@@ -2233,7 +2233,10 @@ class TextToSQLPipeline:
                     i for i in det_result.get("issues", [])
                     if str(i).startswith("campo_inexistente:")
                 ]
-                if campo_issues:
+                # admin_mode: não bloquear por campo-inexistente no schema JSON.
+                # Admins confirmam o próprio SQL; o Postgres é o árbitro final.
+                # Schema pode estar desatualizado (campo adicionado após last regen).
+                if campo_issues and not admin_mode:
                     result["sucesso"] = False
                     result["aviso"] = self._build_schema_feedback(
                         tables_in_sql, campo_issues, admin_mode
@@ -2244,6 +2247,16 @@ class TextToSQLPipeline:
                     )
                     result["tempo_total_ms"] = int((time.time() - start_time) * 1000)
                     return result
+                elif campo_issues and admin_mode:
+                    result["aviso"] = (
+                        "Admin: campos não encontrados no schema JSON (schema pode "
+                        "estar desatualizado — regenere com generate_schemas.py): "
+                        + " | ".join(str(i) for i in campo_issues[:3])
+                    )
+                    result["etapas"]["sql_first_admin_schema_warning"] = campo_issues
+                    logger.info(
+                        f"[SQL_FIRST] admin_mode: campo não no schema, aviso apenas: {campo_issues[:3]}"
+                    )
                 if det_result.get("issues"):
                     result["aviso"] = (
                         "SQL-first: avisos do validador deterministico (nao "

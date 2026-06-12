@@ -1,0 +1,53 @@
+{
+  "name": "teams_vinculo_codigos",
+  "description": "Codigo de pareamento Teams <-> Web (uso unico, TTL 10 min).",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "user_id",
+      "type": "integer",
+      "description": "FK → usuarios.id",
+      "nullable": false
+    },
+    {
+      "name": "codigo_hash",
+      "type": "varchar(64)",
+      "description": "sha256 hex",
+      "nullable": false
+    },
+    {
+      "name": "expires_at",
+      "type": "timestamp",
+      "nullable": false
+    },
+    {
+      "name": "used_at",
+      "type": "timestamp"
+    },
+    {
+      "name": "created_at",
+      "type": "timestamp",
+      "description": "Data de criação",
+      "nullable": false
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "user_id",
+      "references": "usuarios.id"
+    }
+  ],
+  "indices": [
+    {
+      "name": "ix_teams_vinculo_codigos_codigo_hash",
+      "columns": [
+        "codigo_hash"
+      ],
+      "unique": false
+    }
+  ]
+}

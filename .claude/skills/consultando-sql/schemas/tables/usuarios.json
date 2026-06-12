@@ -56,6 +56,15 @@
       "default": false
     },
     {
+      "name": "teams_user_id",
+      "type": "varchar(64)"
+    },
+    {
+      "name": "teams_vinculo_origem",
+      "type": "varchar(20)",
+      "description": "'codigo'|'email'|'admin'"
+    },
+    {
       "name": "vendedor_vinculado",
       "type": "varchar(100)",
       "description": "Nome do vendedor no faturamento (para perfil vendedor)"
@@ -113,6 +122,13 @@
       "name": "sistema_motos_assai",
       "type": "boolean",
       "description": "Acesso ao módulo Motos Assaí",
+      "nullable": false,
+      "default": false
+    },
+    {
+      "name": "agente_fable5",
+      "type": "boolean",
+      "description": "Opt-in modelo Fable 5 (caro)",
       "nullable": false,
       "default": false
     },

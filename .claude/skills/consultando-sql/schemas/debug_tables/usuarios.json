@@ -1,12 +1,11 @@
 {
   "name": "usuarios",
-  "description": "[DEBUG] Tabela interna: usuarios",
-  "columns": [
+  "description": "[DEBUG] Tabela interna: usuarios — desbloqueada em debug mode para admin",
+  "fields": [
     {
       "name": "id",
       "type": "INTEGER",
-      "nullable": false,
-      "default": "nextval('usuarios_id_seq'::regclass)"
+      "nullable": false
     },
     {
       "name": "nome",
@@ -26,12 +25,14 @@
     {
       "name": "perfil",
       "type": "VARCHAR(30)",
-      "nullable": true
+      "nullable": true,
+      "description": "portaria, vendedor, gerente_comercial, financeiro, logistica, administrador"
     },
     {
       "name": "status",
       "type": "VARCHAR(20)",
-      "nullable": true
+      "nullable": true,
+      "description": "pendente, ativo, rejeitado, bloqueado"
     },
     {
       "name": "empresa",
@@ -49,8 +50,101 @@
       "nullable": true
     },
     {
+      "name": "whatsapp_autorizado",
+      "type": "BOOLEAN",
+      "nullable": false,
+      "default": "false"
+    },
+    {
+      "name": "teams_user_id",
+      "type": "VARCHAR(64)",
+      "nullable": true,
+      "description": "ID do usuário no Microsoft Teams"
+    },
+    {
+      "name": "teams_vinculo_origem",
+      "type": "VARCHAR(20)",
+      "nullable": true,
+      "description": "'codigo'|'email'|'admin'"
+    },
+    {
       "name": "vendedor_vinculado",
       "type": "VARCHAR(100)",
+      "nullable": true
+    },
+    {
+      "name": "sistema_logistica",
+      "type": "BOOLEAN",
+      "nullable": false,
+      "default": "false"
+    },
+    {
+      "name": "sistema_motochefe",
+      "type": "BOOLEAN",
+      "nullable": false,
+      "default": "false"
+    },
+    {
+      "name": "sistema_carvia",
+      "type": "BOOLEAN",
+      "nullable": false,
+      "default": "false"
+    },
+    {
+      "name": "sistema_seguranca",
+      "type": "BOOLEAN",
+      "nullable": false,
+      "default": "false"
+    },
+    {
+      "name": "acesso_comissao_carvia",
+      "type": "BOOLEAN",
+      "nullable": false,
+      "default": "false"
+    },
+    {
+      "name": "sistema_remessa_vortx",
+      "type": "BOOLEAN",
+      "nullable": false,
+      "default": "false"
+    },
+    {
+      "name": "sistema_lojas",
+      "type": "BOOLEAN",
+      "nullable": false,
+      "default": "false"
+    },
+    {
+      "name": "sistema_motos_assai",
+      "type": "BOOLEAN",
+      "nullable": false,
+      "default": "false"
+    },
+    {
+      "name": "agente_fable5",
+      "type": "BOOLEAN",
+      "nullable": false,
+      "default": "false"
+    },
+    {
+      "name": "loja_hora_id",
+      "type": "INTEGER",
+      "nullable": true
+    },
+    {
+      "name": "criterio_pedidos_hora",
+      "type": "VARCHAR(10)",
+      "nullable": false,
+      "default": "loja"
+    },
+    {
+      "name": "perfil_id",
+      "type": "INTEGER",
+      "nullable": true
+    },
+    {
+      "name": "perfil_nome",
+      "type": "VARCHAR(50)",
       "nullable": true
     },
     {
@@ -79,66 +173,27 @@
       "nullable": true
     },
     {
-      "name": "perfil_id",
-      "type": "INTEGER",
-      "nullable": true
-    },
-    {
-      "name": "perfil_nome",
-      "type": "VARCHAR(50)",
-      "nullable": true
-    },
-    {
-      "name": "sistema_logistica",
-      "type": "BOOLEAN",
-      "nullable": false,
-      "default": "false",
-      "description": "Usuário tem acesso ao sistema de logística"
-    },
-    {
-      "name": "sistema_motochefe",
-      "type": "BOOLEAN",
-      "nullable": false,
-      "default": "false",
-      "description": "Usuário tem acesso ao sistema motochefe"
-    },
-    {
-      "name": "sistema_carvia",
-      "type": "BOOLEAN",
-      "nullable": false,
-      "default": "false"
-    },
-    {
-      "name": "sistema_seguranca",
-      "type": "BOOLEAN",
-      "nullable": false,
-      "default": "false"
+      "name": "preferences",
+      "type": "JSONB",
+      "nullable": false
     }
   ],
-  "primary_key": [
-    "id"
-  ],
+  "primary_key": ["id"],
   "foreign_keys": [],
   "indexes": [
     {
       "name": "idx_usuarios_sistema_logistica",
-      "columns": [
-        "sistema_logistica"
-      ],
+      "columns": ["sistema_logistica"],
       "unique": false
     },
     {
       "name": "idx_usuarios_sistema_motochefe",
-      "columns": [
-        "sistema_motochefe"
-      ],
+      "columns": ["sistema_motochefe"],
       "unique": false
     },
     {
       "name": "usuarios_email_key",
-      "columns": [
-        "email"
-      ],
+      "columns": ["email"],
       "unique": true
     }
   ]

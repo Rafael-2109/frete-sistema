@@ -50,6 +50,20 @@
       "type": "varchar(255)"
     },
     {
+      "name": "conversation_reference",
+      "type": "json"
+    },
+    {
+      "name": "delivered_via",
+      "type": "varchar(12)"
+    },
+    {
+      "name": "proactive_partial_chars",
+      "type": "integer",
+      "nullable": false,
+      "default": 0
+    },
+    {
       "name": "created_at",
       "type": "timestamp",
       "description": "Data de criação",

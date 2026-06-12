@@ -105,7 +105,7 @@
     "vinculacao_carteira_separacao",
     "webhook_configs"
   ],
-  "total_tabelas": 316,
+  "total_tabelas": 317,
   "tabelas": [
     {
       "name": "agendamentos_entrega",
@@ -3368,6 +3368,16 @@
       "dominio": "Teams"
     },
     {
+      "name": "teams_vinculo_codigos",
+      "description": "Codigo de pareamento Teams <-> Web (uso unico, TTL 10 min).",
+      "key_fields": [
+        "user_id",
+        "codigo_hash",
+        "expires_at"
+      ],
+      "dominio": "Autenticação"
+    },
+    {
       "name": "transportadoras",
       "description": "Cadastro de transportadoras com dados logísticos e financeiros.",
       "key_fields": [
@@ -3549,9 +3559,9 @@
       "name": "usuarios",
       "description": "Tabela usuarios",
       "key_fields": [
+        "teams_user_id",
         "loja_hora_id",
-        "status",
-        "nome"
+        "status"
       ],
       "dominio": "Autenticação",
       "admin_only": true
