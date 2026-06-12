@@ -4,7 +4,7 @@ camada: L3
 sot_de: plano de implementacao da arquitetura de conhecimento (memorias + agents + skills + camada estatica)
 hub: docs/superpowers/plans/INDEX.md
 superseded_by: —
-atualizado: 2026-06-11
+atualizado: 2026-06-12
 -->
 # Arquitetura de Conhecimento — Plano de Implementacao (Jeito X)
 
@@ -16,13 +16,14 @@ atualizado: 2026-06-11
 > qualquer fase (Item 0, F0, F1, F2) ou decidir se uma mudanca de conhecimento respeita o
 > papel canonico por camada.
 
-> 🔵 **PROXIMA SESSAO — RETOMAR AQUI:** Item 0 + F0 + **F1 EXECUTADAS E FECHADAS**
-> (F1 mergeada em main 2026-06-12, merge 9107f81bd; pos-merge EXECUTADO na mesma janela:
-> 3 memorias dev aposentadas → ponteiro + indice corrigido; memoria web id=311 aposentada
-> em PROD com version de rollback; `~/.claude/CLAUDE.md` virou ponteiro fino para
-> `.claude/references/REGRAS_DEV_LOCAL.md`). F2 (T2.1-T2.3) permanece ATRAS DE GATES —
-> so abrir com os gates do texto. Follow-up registrado: 14 bloqueantes PRE-existentes
-> de `doc_audit --strict` em docs antigos (blueprint-agente, plans/specs) — task propria.
+> 🔵 **PROXIMA SESSAO — RETOMAR AQUI:** Item 0 + F0 + F1 + **T2.1 EXECUTADA** e
+> **replay-gate da T2.2 CONCLUIDO** (2026-06-12, branch `feat/arquitetura-conhecimento-f2`;
+> ver Rastreamento). Pendencias: (a) merge da branch em main; (b) DECISAO T2.2 com o Rafael —
+> recomendacao do gate: `MEMORY_KNOWLEDGE_GRAPH=false` preservando tabelas (relatorio
+> `relatorios/arquitetura_x_2026-06-11/10-replay-gate-kg-2026-06-12.md`); execucao = 1 env var
+> no servico sistema-fretes, NAO feita (exige autorizacao explicita); (c) T2.3 segue ATRAS
+> DE GATE (volume minimo helpful/harmful). Follow-up anterior mantido: 14 bloqueantes
+> PRE-existentes de `doc_audit --strict` em docs antigos — task propria.
 
 ## Indice
 
@@ -269,7 +270,7 @@ Rollback por item; nada muda comportamento sem flag. Detalhar TDD na sessao de e
 
 ## FASE F2 — Decisoes por medida (condicionada a gates)
 
-- [ ] **T2.1 — Agents: aposentadoria por medicao + filtro de superficie.**
+- [x] **T2.1 — Agents: aposentadoria por medicao + filtro de superficie.** (2026-06-12: eaf195238 + fix `_DOMAIN_SKILLS`; ver Rastreamento)
   Gate: dados do I0.2 (JA COLETADOS — candidatos com 0 invocacoes web/90d:
   controlador-custo-frete, gestor-devolucoes, gestor-ssw, desenvolvedor-integracao-odoo;
   ponderar uso na superficie dev antes de decidir). Agents com ~0 invocacoes → mover para
@@ -279,6 +280,9 @@ Rollback por item; nada muda comportamento sem flag. Detalhar TDD na sessao de e
   carregado em PROD de facto — risco em si). `gestor-recebimento` MANTER (routing nominal
   comprovado). NAO converter roteadores finos (NAO-FAZER N4).
 - [ ] **T2.2 — KG: replay-gate → higiene X3-lite OU flag-off (decisao 3).**
+  *(GATE EXECUTADO 2026-06-12 — causa confirmada com refinamento topologico; recomendacao:
+  flag-off preservando tabelas; relatorio `10-replay-gate-kg-2026-06-12.md`. Resta DECISAO
+  do Rafael + 1 env var — NAO executar sem autorizacao explicita.)*
   Replay controlado de 1 dia reproduzindo `query_graph_memories`
   (`knowledge_graph_service.py:877-882`) com prompts reais para CONFIRMAR a causa do graph=0
   (hipotese: vocabularios disjuntos prompt-side canonico vs memory-side ruidoso).
@@ -322,6 +326,31 @@ Anexo permanente do desenho-alvo (anti-overengineering). Revisitar item so com g
 
 > Atualizar a cada sessao de execucao (data + o que fechou + evidencia).
 
+- 2026-06-12 — **F2 PARCIAL: T2.1 EXECUTADA + replay-gate T2.2 CONCLUIDO** (worktree
+  `feat/arquitetura-conhecimento-f2` a partir de origin/main fb54ec640; subagent-driven com
+  reviews 2-estagios na T2.1, inline no gate). T2.1 (eaf195238 + fix): medicao dev comprovou
+  0 invocacoes via Task em 452 transcripts/30d para os 4 candidatos do I0.2 → `surface: dev`
+  no frontmatter dos 4 + filtro de 4 linhas no agent_loader (web carrega 12 de 16) + 3 blocos
+  removidos do `<subagents>` + 3 excecoes declaradas no lint + CLAUDE.md raiz anotado + teste
+  novo (4 casos); reviews: spec 8/8 PASS, code review APROVADO (suite 1590 passed); fix
+  complementar do review: `_DOMAIN_SKILLS['ssw']` sem gestor-ssw (preferred_skill advisory
+  apontaria para subagente fora do loader). Follow-ups MENORES registrados (nao corrigidos):
+  (i) `_skills_declaradas_em_agents()` do lint conta agent `surface: dev` como dono de skill
+  da deny-list — gap latente se um dia o UNICO dono for dev-only; (ii) superficie agente_lojas
+  usa `setting_sources: ["project"]` e ve os .md direto (pre-existente — invariante "fora do
+  loader" cobre so app/agente); (iii) capability_registry itera os .md sem filtro (inerte,
+  flag OFF). T2.2 replay-gate (read-only, MCP Render): runtime re-confirmado graph=0 universal
+  (30d de logs, 0 ocorrencias `graph=[1-9]`); replay fiel (18/18 identico ao codigo real)
+  sobre TODOS os 1.337 prompts user/30d: 5,0% extraem entidade L1, 1,4% teriam hop1
+  contemporaneo — franja 100% redundante com semantica (14/14 memorias com embedding);
+  topologia: grafo organico linkado (~96% dos links vivos) usa vocabulario que prompt-side
+  NUNCA gera (`:E`/`:A` + conceito LLM); 1.586 entities canonicas (seed ontology_bootstrap
+  07-11/06, frente USE_AGENT_ONTOLOGY) tem 1 link — deficit decisivo = ORFANDADE DE ARESTAS,
+  nao nome sujo; teto Layer 2 com Voyage perfeito ≈ 1 memoria. X3-lite NAO cria read path em
+  ≤1 semana → recomendacao: `MEMORY_KNOWLEDGE_GRAPH=false` preservando tabelas (nao afeta
+  frente ontologia — flag e read path proprios). Relatorio:
+  `relatorios/arquitetura_x_2026-06-11/10-replay-gate-kg-2026-06-12.md` (inclui condicao
+  objetiva de reabertura). Cura NAO implementada (escopo do gate).
 - 2026-06-11 — Plano criado e aprovado em conversa (4 decisoes registradas).
 - 2026-06-11 — **FASE F0 EXECUTADA** (subagent-driven + reviews 2-estagios por task; T0.3 inline).
   T0.1: save_version (changed_by=sonnet) em ambos os caminhos + verificacao TODOS_PRESERVADOS
