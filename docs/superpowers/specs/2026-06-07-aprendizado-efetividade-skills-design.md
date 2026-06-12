@@ -4,7 +4,7 @@ camada: L3
 sot_de: design da camada de aprendizado automatico por efetividade (skills + scripts ad-hoc) do Agente Web
 hub: docs/superpowers/specs/INDEX.md
 superseded_by: —
-atualizado: 2026-06-07
+atualizado: 2026-06-12
 -->
 
 # Aprendizado automatico por efetividade — skills + scripts ad-hoc
@@ -363,7 +363,13 @@ Admin abre /agente/memorias -> aba "Pendentes de Aprovacao"
 
 ## Fase 2 — scripts ad-hoc (design de alto nivel)
 
-Spec propria sera escrita na Fase 2. Esboco:
+> **Spec propria ESCRITA em 2026-06-12:**
+> [2026-06-12-aprendizado-adhoc-fase2-design.md](2026-06-12-aprendizado-adhoc-fase2-design.md)
+> — detalha e REVISA este esboco (campos estruturados `problema`/`session_id`,
+> criterios C1-C6, quadrifurcacao com EXTENSAO de skill, bypass p/ gap nomeado).
+> O esboco abaixo permanece como registro historico da decisao 6.
+
+Esboco original:
 
 - "Script ad-hoc" = uso de `Bash` (Python/SQL inline) pelo agente fora de skill.
 - **Captura:** o `skill_effectiveness_job` (ou job irmao) le o **transcript**
