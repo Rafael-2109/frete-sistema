@@ -25,8 +25,12 @@ def main():
 
     app = create_app()
     with app.app_context():
+        # user_id/path CANONICOS vem de agent_memories (am.*), NAO da linha de
+        # embedding: 13/145 do backfill PROD tinham denormalizacao stale
+        # (user_id divergente pos-merge de usuarios Teams; path renomeado) e o
+        # get_by_path com os valores stale retornava silenciosamente.
         rows = db.session.execute(text("""
-            SELECT ame.id, ame.user_id, ame.path, am.content
+            SELECT ame.id, am.user_id, am.path, am.content
             FROM agent_memory_embeddings ame
             JOIN agent_memories am ON am.id = ame.memory_id
             WHERE ame.dedup_embedding IS NULL
