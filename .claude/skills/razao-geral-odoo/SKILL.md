@@ -14,6 +14,7 @@ allowed-tools: Read, Bash, Glob, Grep
 - Operacoes financeiras como pagamentos ou reconciliacao de extratos (esta skill apenas exporta relatorios)
 - Rastrear fluxo documental de NF/PO/SO (esta skill gera relatorio contabil, nao rastreia documentos)
 - Explorar modelo Odoo desconhecido (esta skill trabalha exclusivamente com account.move.line)
+- Analisar arquivo de razao ENVIADO pelo usuario (ex: "encontre a diferenca no razao que te encaminhei") -> lendo-arquivos + analise ad-hoc; esta skill exporta DO Odoo, nao le upload (caso real: diferenca R$ 621,17, sessao 11e4d3f6 — IMP-2026-06-10-002)
 
 ## REGRAS ANTI-ALUCINACAO
 
