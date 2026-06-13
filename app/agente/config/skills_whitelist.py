@@ -99,6 +99,22 @@ SKILLS_SPED_RESERVED: FrozenSet[str] = frozenset({
 })
 
 # ---------------------------------------------------------------------------
+# Auditoria contabil READ no Odoo -> subagente `auditor-financeiro`.
+# Skill especializada/episodica (reclassificacao contabil em lote, ex. mutirao
+# CPV/VarNeg do Marcus). DECISAO 2026-06-13 (Rafael, 4-maos #164): NAO entra no
+# listing do principal — o listing ja estava saturado (21 skills = 7971/8000c;
+# adicionar empurraria p/ 8444 > 8000, truncando descriptions em silencio). O
+# dono semantico e o `auditor-financeiro` ("auditorias Local x Odoo" = o proprio
+# modo validar-lote: arquivo-alvo local vs estado real no Odoo). O subagente a
+# declara no frontmatter `.claude/agents/auditor-financeiro.md` (listing
+# independente do principal). Acesso do usuario final: via delegacao do principal.
+# (Consolidacao contabil-LF mais ampla = follow-up separado, fora do #164.)
+# ---------------------------------------------------------------------------
+SKILLS_AUDITORIA_CONTABIL_SUBAGENTE: Set[str] = {
+    'auditando-reclassificacao-odoo',
+}
+
+# ---------------------------------------------------------------------------
 # Skills reservadas a superficies DEV/ADMIN — fora do listing do agente web.
 # F2.1+F2.2 PAD-CTX (decisao Rafael 2026-06-09). Evidencia (finding A5, 90 dias):
 # diagnosticando-banco=0 usos, padronizando-docs=0, gerindo-agente=1 (admin),
@@ -127,6 +143,7 @@ SKILLS_DELEGADAS_SUBAGENTE: FrozenSet[str] = frozenset(
     SKILLS_DOMINIO_HORA
     | SKILLS_DOMINIO_ASSAI
     | SKILLS_ODOO_ESTOQUE_SUBAGENTE
+    | SKILLS_AUDITORIA_CONTABIL_SUBAGENTE
     | SKILLS_SPED_RESERVED
     | SKILLS_DEV_RESERVED
 )

@@ -23,6 +23,7 @@ allowed-tools: Read, Bash, Glob, Grep
 | Explorar modelo Odoo desconhecido | **descobrindo-odoo-estrutura** | Esta skill usa modelos ja mapeados |
 | Criar integracao/service | **integracao-odoo** | Esta skill consulta, nao desenvolve |
 | Exportar razao geral | **razao-geral-odoo** | Relatorio contabil, nao rastreamento |
+| Auditar reclassificacao contabil em lote (medir/validar/monitorar par de contas) | **auditando-reclassificacao-odoo** | READ-only de reclassificacao por par origem→destino, nao rastreamento documental |
 
 ---
 

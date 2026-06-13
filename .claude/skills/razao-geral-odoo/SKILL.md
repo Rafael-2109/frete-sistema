@@ -15,6 +15,7 @@ allowed-tools: Read, Bash, Glob, Grep
 - Rastrear fluxo documental de NF/PO/SO (esta skill gera relatorio contabil, nao rastreia documentos)
 - Explorar modelo Odoo desconhecido (esta skill trabalha exclusivamente com account.move.line)
 - Analisar arquivo de razao ENVIADO pelo usuario (ex: "encontre a diferenca no razao que te encaminhei") -> lendo-arquivos + analise ad-hoc; esta skill exporta DO Odoo, nao le upload (caso real: diferenca R$ 621,17, sessao 11e4d3f6 — IMP-2026-06-10-002)
+- Auditar uma RECLASSIFICACAO contabil em lote (medir saldos de UM par origem→destino por periodo, validar lote-alvo JSON, monitorar % migrado) -> auditando-reclassificacao-odoo (READ-only focada; esta skill exporta o razao/balancete COMPLETO, nao audita reclassificacao)
 
 ## REGRAS ANTI-ALUCINACAO
 
