@@ -40,9 +40,9 @@ atualizado: 2026-06-08
 
 | Componente | Versao | Notas |
 |-----------|--------|-------|
-| `anthropic` SDK | **0.98.1** | Atualizado de 0.84.0 em 2026-05-09. Historico completo (0.85→0.98.1) em `app/agente/SDK_CHANGELOG.md` |
-| `claude-agent-sdk` | **0.2.95** | CLI 2.1.170 (bundled). Atualizado de 0.2.89 em 2026-06-09 (bumps 0.2.90-95 = so CLI bundled 2.1.163→2.1.170). **ZERO breaking no SDK Python** — CLI 2.1.170 reconhece `claude-fable-5` (alias `fable`). Bump anterior 0.2.87→0.2.89 (2026-06-03): 0.2.88 = 1 bug fix `session_store` (asyncio->anyio, so afeta runtime **trio** que NAO usamos); CLI 2.1.156 fix Opus 4.8 thinking blocks (somos Opus 4.8 default), 2.1.161 fix subagente background corrompendo stdout do `claude -p`. Historico completo em `app/agente/SDK_CHANGELOG.md`. 0.1.77: `skills` option em `ClaudeAgentOptions` |
-| `mcp` | >=1.26.0 | 7 servers, 35 tools |
+| `anthropic` SDK | **0.109.1** | Atualizado de 0.98.1 em 2026-06-13 (11 minors, sem breaking nos padroes usados). Antes: 0.84.0→0.98.1 em 2026-05-09. Historico completo (0.85→0.109.1) em `app/agente/SDK_CHANGELOG.md` |
+| `claude-agent-sdk` | **0.2.101** | CLI 2.1.177 (bundled). Atualizado de 0.2.95 em 2026-06-13 (bumps 0.2.96-101 = CLI bundled 2.1.172→2.1.177; 0.2.96 pinou `mcp<2.0.0`; 0.2.101 add `TaskUpdatedMessage` ADITIVO #1016). **ZERO breaking no SDK Python** — CLI 2.1.170+ reconhece `claude-fable-5` (alias `fable`). Historico completo em `app/agente/SDK_CHANGELOG.md`. 0.1.77: `skills` option em `ClaudeAgentOptions` |
+| `mcp` | >=1.26.0,<2.0.0 | 7 servers, 35 tools. Teto `<2.0.0` alinhado ao pin do claude-agent-sdk 0.2.96+ |
 | pgvector | **0.8.1** (confirmado prod) | iterative_scan SUPORTADO, halfvec disponivel |
 
 ---
@@ -58,8 +58,9 @@ atualizado: 2026-06-08
 - **claude-agent-sdk 0.2.83 → 0.2.87** (2026-05-25): bumps CLI 2.1.146 → 2.1.150 + adocao tardia das Task* tools (TaskCreate/TaskUpdate/TaskGet/TaskList introduzidas pela breaking 0.2.82 — passaram despercebidas ate este upgrade). Diff GitHub `v0.2.82...v0.2.87`: 19 commits, 10 arquivos modificados, ZERO arquivos `src/` do SDK Python. Sem impacto pratico (agente ja nao usava TodoWrite). Detalhes: `app/agente/SDK_CHANGELOG.md:1-110`.
 - **claude-agent-sdk 0.2.88 → 0.2.89** (2026-06-03): bumps CLI 2.1.150 → 2.1.162. **ZERO breaking no SDK Python** — 0.2.89 = so bump do CLI bundled; 0.2.88 = 1 bug fix `session_store` (asyncio->anyio, so afeta runtime **trio** que NAO usamos). Ganho real e o CLI bundled (~12 versoes): 2.1.156 fix Opus 4.8 thinking blocks (elimina erros 400 intermitentes — somos Opus 4.8 default); 2.1.161 fix subagente background corrompendo stdout do `claude -p` (agente usa subagentes headless). Detalhes: `app/agente/SDK_CHANGELOG.md` (secao 0.2.87 → 0.2.89).
 - **claude-agent-sdk 0.2.90 → 0.2.95** (2026-06-09): bumps CLI 2.1.163 → 2.1.170. **ZERO breaking no SDK Python** — todas as 6 releases (0.2.90-95) sao so manutencao do CLI bundled (0.2.91 trocou suite de teste pytest-asyncio→anyio, sem impacto runtime). Motivacao: CLI 2.1.170 reconhece o modelo `claude-fable-5` (alias `fable`) — pre-requisito para expor Fable 5 no agente. Validado: 17 simbolos do bloco import de `client.py` + `MirrorErrorMessage`/`project_key_for_directory` importam; `app.agente.sdk.client` importa limpo. Detalhes: `app/agente/SDK_CHANGELOG.md`.
-- **Risco**: ZERO — claude-agent-sdk NAO depende de anthropic (verificado)
-- **Historico completo**: `app/agente/SDK_CHANGELOG.md` (SDK 0.1.49 → 0.2.95 + anthropic 0.98.1)
+- **claude-agent-sdk 0.2.96 → 0.2.101 + anthropic 0.98.1 → 0.109.1** (2026-06-13): bumps CLI 2.1.172 → 2.1.177. **ZERO breaking no SDK Python** (verificado nas DUAS fontes: release pages + `CHANGELOG.md` raw). 0.2.96 pinou `mcp<2.0.0` (#1028, espelhado no requirements); 0.2.97-100 = so CLI; 0.2.101 add `TaskUpdatedMessage` tipado (#1016, ADITIVO — nao adotado, projeto ja parseia task via `_build_task_event`). anthropic 0.98.1→0.109.1 (11 minors): sem secao "BREAKING CHANGES"; padroes usados estaveis (`Anthropic()`/`messages.create`/`APIStatusError`/`APIError`). Validado: 17 simbolos + 3 novos exports 0.2.101 + `app.agente.sdk.client` import limpo + `pytest tests/agente/sdk+tools+fable5_gate` 113 passed. Detalhes: `app/agente/SDK_CHANGELOG.md`.
+- **Risco**: ZERO — claude-agent-sdk NAO depende de anthropic (verificado via `pip install --dry-run`)
+- **Historico completo**: `app/agente/SDK_CHANGELOG.md` (SDK 0.1.49 → 0.2.101 + anthropic 0.85 → 0.109.1)
 
 ### 0.2 Prompt Caching nas chamadas diretas
 - **O que**: Separacao system/user em todos `messages.create()` com `cache_control: {"type": "ephemeral"}`

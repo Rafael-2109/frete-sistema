@@ -1,9 +1,68 @@
-# Agente Web — SDK Changelog (0.1.49 → 0.2.95)
+# Agente Web — SDK Changelog (0.1.49 → 0.2.101)
 
 > Historico de adocoes, breaking changes, bug fixes e features NAO adotadas do
 > Claude Agent SDK + Anthropic SDK Python. Extraido de `CLAUDE.md` para reducao de ruido.
 >
-> **Atualizado**: 2026-06-09 (SDK 0.2.95 + CLI bundled 2.1.170 — upgrade so do CLI; habilita `claude-fable-5`)
+> **Atualizado**: 2026-06-13 (SDK 0.2.101 + CLI bundled 2.1.177 + anthropic 0.98.1 → 0.109.1 — bumps CLI + 1 feature aditiva; zero breaking)
+
+---
+
+## SDK 0.2.95 → 0.2.101 + anthropic 0.98.1 → 0.109.1 (2026-06-13) — CLI bundled 2.1.170 → 2.1.177
+
+**Versao**: `claude-agent-sdk==0.2.101` (CLI bundled 2.1.177) + `anthropic==0.109.1` + `mcp>=1.26.0,<2.0.0`
+**Bumps intermediarios**: 0.2.96 (CLI 2.1.172), 0.2.97 (2.1.173), 0.2.98 (2.1.174), 0.2.99 (2.1.175), 0.2.100 (2.1.176)
+
+### Mudancas no SDK Python (quase zero!)
+
+Fonte primaria verificada nas DUAS fontes (licao do 0.2.82, em que a release page do GitHub
+listava breakings AUSENTES do `CHANGELOG.md` do repo): release pages v0.2.96-v0.2.101 + `CHANGELOG.md` raw.
+
+- **0.2.97-0.2.100**: TODAS sao SO bump do CLI bundled (2.1.173 → 2.1.176). Nada no codigo Python.
+- **0.2.96** (CLI 2.1.172): 1 bug fix — pinou `mcp` em `<2.0.0` (#1028) para evitar breaking changes
+  incompativeis do mcp 2.x. Constraint transitiva: `mcp<2.0.0,>=1.23.0`. Espelhado no `requirements.txt`
+  (`mcp>=1.26.0,<2.0.0`) para tornar explicito; mcp instalado segue **1.26.0** (dentro do range).
+- **0.2.101** (CLI 2.1.177): 1 feature ADITIVA (#1016) — expoe os eventos terminais `system/task_updated`
+  como `TaskUpdatedMessage` tipado (`task_id`, `patch`, `status`, `session_id`, `uuid`) + type
+  `TaskUpdatedStatus` + frozenset `TERMINAL_TASK_STATUSES`. Resolve hang de consumidores que rastreiam
+  background tasks quando a task termina via `task_updated` sem `TaskNotificationMessage` correspondente.
+
+**Breaking changes no SDK Python: NENHUMA.** `ClaudeAgentOptions` (campos `model`/`skills`/`effort`/
+`strict_mcp_config`/`cli_path`/`session_store_flush` intactos — validados via introspection),
+hooks, `can_use_tool` inalterados. Os 17 simbolos do bloco `from claude_agent_sdk import (...)`
+de `client.py:25-46` + `MirrorErrorMessage` importam; `app.agente.sdk.client` importa limpo no 0.2.101.
+
+### Feature disponivel mas NAO adotada
+
+#### `TaskUpdatedMessage` (SDK 0.2.101, #1016)
+
+Disponivel em `claude_agent_sdk` (validado: `TaskUpdatedMessage`, `TaskUpdatedStatus`, `TERMINAL_TASK_STATUSES`
+importam). **NAO adotado** neste bump: o projeto ja parseia eventos de task via `client.py:_build_task_event`
+(adocao das Task* tools no 0.2.82+, emit `task_event` SSE). O novo tipo melhora o bookkeeping de
+background tasks terminais — reavaliar se aparecer hang real de task-tracking em prod (sintoma: subagente
+"running" eterno apos terminar). Adocao seria no handler de mensagens do `_parse_sdk_message`.
+
+### anthropic 0.98.1 → 0.109.1 (11 minors)
+
+`CHANGELOG.md` oficial do `anthropic-sdk-python` (0.99.0 → 0.109.1): **nenhuma secao "BREAKING CHANGES"**.
+Mudancas notaveis: deprecacao (NAO remocao) de model constants antigas (Sonnet/Opus 4 em 0.95.0, Opus 4.1
+em 0.106.0); minimo Python 3.9+ (projeto roda 3.12). **Padroes usados no projeto sao estaveis**: `anthropic.Anthropic()`,
+`client.messages.create(...)`, `anthropic.APIStatusError`, `anthropic.APIError` (validados via `hasattr` no 0.109.1).
+Projeto usa strings literais de modelo (`claude-opus-4-8`, `claude-haiku-4-5`), nao constantes do SDK — deprecacoes
+de constantes nao afetam. ~30 callsites em `app/agente/`, `app/hora/`, `app/devolucao/`, `app/carvia/`,
+`app/motos_assai/`, `app/scanner/` (todos no mesmo padrao client + messages.create + exceptions).
+
+> **Risco**: BAIXO. `claude-agent-sdk` NAO depende de `anthropic` (independentes — confirmado por `pip install --dry-run`).
+
+### Como foi atualizado (2026-06-13)
+- `requirements.txt`: `anthropic==0.109.1`, `claude-agent-sdk==0.2.101`, `mcp>=1.26.0,<2.0.0`
+- venv local: `pip install claude-agent-sdk==0.2.101 anthropic==0.109.1` (confirmado `_cli_version.py` = 2.1.177;
+  venv estava com `anthropic` 0.84.0 desincronizado do requirements 0.98.1 — corrigido no mesmo passo)
+- `CLAUDE.md` (raiz) tech stack + `app/agente/CLAUDE.md` (Versao SDK atual + Mapa de Navegacao + nota historico)
+- `.claude/references/BEST_PRACTICES_2026.md` + `MCP_CAPABILITIES_2026.md` (os 3 docs sincronizados)
+- **Validacao**: smoke test imports (17 simbolos + 3 novos exports 0.2.101 + anthropic 0.109.1) +
+  `app.agente.sdk.client` import limpo + `pytest tests/agente/sdk + tools + fable5_gate` (113 passed).
+- **Deploy web**: preparado, SEM push (a pedido — Rafael dispara o deploy no Render). O deploy entrega o
+  CLI bundled 2.1.177 a producao (Render roda `_bundled/claude` do wheel, nao instala CLI via npm).
 
 ---
 

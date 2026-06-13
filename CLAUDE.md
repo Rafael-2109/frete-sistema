@@ -31,7 +31,7 @@ Ponto de entrada do repositorio. Conteudo dev-only (Quick Start, CSS, migrations
 | **Infra (Render, Oregon)** | Web `sistema-fretes` (Pro Plus) · Worker `sistema-fretes-worker-atacadao` (Standard, RQ) · Postgres 18 `sistema-fretes-db` (Basic 4GB) · Redis 8.1 `sistema-fretes-redis` (Starter, `allkeys_lru`) |
 | **Backend** | Python 3.12 · **Flask 3.1.2** · Flask-SQLAlchemy 3.1 · Flask-Login 0.6 · Flask-Migrate 4.1 · Flask-WTF 1.2 · SQLAlchemy 2.0 · Gunicorn 25 + gevent · psycopg2 + asyncpg (pool async SessionStore) · Pydantic 2.12 · FastAPI 0.129 (endpoints isolados) |
 | **Workers / Async** | RQ 2.6 · Redis 7.2 (client) · APScheduler · 3 perfis de worker (light-reserved / full / general — anti-starvation) |
-| **AI / Agente** | Anthropic SDK 0.98.1 · Claude Agent SDK 0.2.95 (CLI bundled 2.1.170) · MCP 1.26 · Voyage AI + pgvector (embeddings) |
+| **AI / Agente** | Anthropic SDK 0.109.1 · Claude Agent SDK 0.2.101 (CLI bundled 2.1.177) · MCP 1.26 · Voyage AI + pgvector (embeddings) |
 | **Browser Automation** | Playwright 1.58 (Chromium — SSW, Atacadao Hodie Booking) · Selenium 4.40 (legado) |
 | **Storage** | AWS S3 via boto3 1.42 — screenshots, archives sessao, artifacts, anexos devolucao |
 | **Observability** | Sentry SDK 2.54 (errors + APM) · structlog · colorlog |

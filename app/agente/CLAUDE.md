@@ -32,7 +32,7 @@ atualizado: 2026-06-08
 |---|---|
 | Detalhe de **Artifacts**, **Telemetria de subagent**, **Memoria compartilhada**, **Avaliador de skill** ou o **inventario de eventos SSE** | [`SUBSISTEMAS.md`](SUBSISTEMAS.md) |
 | **Fast-paths deterministicos** (reducao de custo: tarefa rotineira+estruturada resolvida SEM LLM/subagente — `baseline_fastpath.py` p/ baseline do Marcus, `vinculacao_fastpath.py` p/ vincular/desvincular NF×PO da Gabriella). Mecanica: detector regex N0 → executor deterministico; fallback Haiku N1 / LLM N2. Flags `AGENT_BASELINE_FASTPATH`, `AGENT_VINCULACAO_FASTPATH` | planos `docs/superpowers/plans/2026-06-06-reducao-custo-agente-fast-path.md` (F1/F2) e `2026-06-08-fastpath-vinculacao-nf-po.md` (F3) |
-| **Historico do SDK** — features por versao, breaking changes, bug fixes (0.1.49 → 0.2.89) | `SDK_CHANGELOG.md` |
+| **Historico do SDK** — features por versao, breaking changes, bug fixes (0.1.49 → 0.2.101) | `SDK_CHANGELOG.md` |
 | **Estado VIVO da evolucao** — flywheel Ondas 0-4, gates, log append-only | `docs/blueprint-agente/EXECUCAO.md` |
 | **Design dos 5 eixos** do flywheel (visao + grafo de dependencias) | `docs/blueprint-agente/BLUEPRINT_MESTRE.md` |
 | Migracao `query()` → `ClaudeSDKClient` (roadmap, riscos, rollback) | `.claude/references/ROADMAP_SDK_CLIENT.md` |
@@ -638,7 +638,7 @@ Avalia pos-sessao se as skills invocadas resolveram o problema; quando nao, cria
 
 ## Versao SDK atual
 
-- **claude-agent-sdk**: `0.2.95` | **CLI bundled**: 2.1.170 (suporta `claude-fable-5`) | **anthropic**: `0.98.1` | **Floor**: `mcp>=1.19.0` (fix `CallToolResult` perdido em 0.1.70)
+- **claude-agent-sdk**: `0.2.101` | **CLI bundled**: 2.1.177 (suporta `claude-fable-5`) | **anthropic**: `0.109.1` | **mcp**: `>=1.26.0,<2.0.0` (teto `<2.0.0` exigido pelo claude-agent-sdk 0.2.96+; floor herda fix `CallToolResult` perdido em 0.1.70). Bump 0.2.95→0.2.101 (2026-06-13): CLI bundled 2.1.170→2.1.177 + `TaskUpdatedMessage` tipado (#1016, ADITIVO — não adotado); ZERO breaking. anthropic 0.98.1→0.109.1: sem breaking nos padrões usados (`Anthropic()`/`messages.create`/`APIStatusError`/`APIError`).
 - **Modelo default**: `claude-opus-4-8` ($5/$25 per MTok, adaptive thinking, 1M context). **Rollback rapido**: `AGENT_MODEL=claude-opus-4-7` + `TEAMS_DEFAULT_MODEL=claude-opus-4-7` (ou `4-6`).
 - **Fable 5 (opt-in por usuario, 2026-06-10)**: `claude-fable-5` (modelo mais capaz, mais CARO + tokenizer ~30% mais tokens) e' exposto na UI (`chat.html`, var `pode_usar_fable5`) e aceito no backend (`chat.py` gate defense-in-depth → fallback Opus se nao-autorizado) SO' para user_ids em `AGENT_FABLE5_ALLOWED_USER_IDS` (CSV, default `"1"`). Helper: `feature_flags.is_fable5_allowed()`. Compativel sem mudar `client.py` (thinking adaptive/omit OK; sem `budget_tokens`/sampling; smart-router so' rebaixa `opus`, nao toca `fable`). Pre-req: CLI bundled >= 2.1.170.
 - **SessionStore**: `PostgresSessionStore` source-of-truth (Fase B; tabela `claude_session_store`; flag `AGENT_SDK_SESSION_STORE_ENABLED` ON; flush `batched`|`eager` via `AGENT_SDK_SESSION_STORE_FLUSH`). Rollback: `ROLLBACK_SESSION_STORE.md`.
@@ -654,7 +654,7 @@ Features SDK adotadas com impacto direto em `app/agente/` (detalhe — fluxo, go
 | Refusal + erro HTTP observavel | 0.88.0+ / 0.1.76 | `stop_details` + `api_error_status` propagados no `done`; Sentry tags `anthropic_http_status` / `_5xx`; `APIStatusError.type` em `scanner/service.py` + `memory_consolidator.py` |
 | Actionable errors | 0.1.77 | `ProcessError` carrega texto real do CLI ("Reached maximum number of turns") |
 
-> **Historico completo (adocoes, breaking changes, bug fixes, features NAO adotadas — 0.1.49 → 0.2.89 + anthropic 0.85 → 0.98.1, com fluxos e arquitetura)**: `SDK_CHANGELOG.md`. Versoes tambem em `.claude/references/BEST_PRACTICES_2026.md` e `MCP_CAPABILITIES_2026.md` (manter os 3 sincronizados ao bumpar).
+> **Historico completo (adocoes, breaking changes, bug fixes, features NAO adotadas — 0.1.49 → 0.2.101 + anthropic 0.85 → 0.109.1, com fluxos e arquitetura)**: `SDK_CHANGELOG.md`. Versoes tambem em `.claude/references/BEST_PRACTICES_2026.md` e `MCP_CAPABILITIES_2026.md` (manter os 3 sincronizados ao bumpar).
 
 ---
 

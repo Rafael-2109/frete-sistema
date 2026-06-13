@@ -34,9 +34,9 @@ atualizado: 2026-06-08
 
 | Package | Versao | Nota |
 |---|---|---|
-| `claude-agent-sdk` | 0.2.95 | CLI 2.1.170 (bundled). Atualizado de 0.2.89 em 2026-06-09 (0.2.90-95 = so bumps do CLI bundled 2.1.163->2.1.170, ZERO breaking no SDK Python; CLI 2.1.170 reconhece o modelo `claude-fable-5`). Bump anterior 0.2.87->0.2.89 (2026-06-03): 0.2.88 trouxe 1 bug fix `session_store` asyncio->anyio (so afeta runtime **trio**, que NAO usamos); CLI 2.1.156 fix Opus 4.8 thinking blocks; 2.1.161 fix subagente background corrompendo stdout `claude -p`. 0.1.77: `skills` option em `ClaudeAgentOptions`. Historico completo (0.1.49->0.2.95) em `app/agente/SDK_CHANGELOG.md` |
-| `anthropic` | 0.98.1 | Atualizado de 0.84.0 em 2026-05-09 |
-| `mcp` | >=1.26.0 | MCP Python SDK (spec 2025-11-25). Pin atual em requirements.txt |
+| `claude-agent-sdk` | 0.2.101 | CLI 2.1.177 (bundled). Atualizado de 0.2.95 em 2026-06-13 (0.2.96-101 = bumps CLI bundled 2.1.172->2.1.177; 0.2.96 pinou `mcp<2.0.0`; 0.2.101 add `TaskUpdatedMessage` ADITIVO #1016, nao adotado). **ZERO breaking no SDK Python**; CLI 2.1.170+ reconhece `claude-fable-5`. 0.1.77: `skills` option em `ClaudeAgentOptions`. Historico completo (0.1.49->0.2.101) em `app/agente/SDK_CHANGELOG.md` |
+| `anthropic` | 0.109.1 | Atualizado de 0.98.1 em 2026-06-13 (11 minors, sem breaking nos padroes usados: `Anthropic()`/`messages.create`/`APIStatusError`/`APIError`). Antes: 0.84.0->0.98.1 em 2026-05-09 |
+| `mcp` | >=1.26.0,<2.0.0 | MCP Python SDK (spec 2025-11-25). Teto `<2.0.0` alinhado ao pin do claude-agent-sdk 0.2.96+. Pin em requirements.txt |
 
 ---
 

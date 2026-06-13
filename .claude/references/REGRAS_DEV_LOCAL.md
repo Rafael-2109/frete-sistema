@@ -173,7 +173,7 @@ explodia flush por `detalhes_calculo` com Decimals vindos da `CalculadoraFrete`.
 Modulos complexos tem CLAUDE.md proprio com patterns, convencoes e gotchas de desenvolvimento:
 
 **Criados** (stats dos proprios CLAUDE.md, atualizar ao editar cada modulo):
-- `app/agente/CLAUDE.md` — ~51K LOC, 97 arquivos (+ `services/CLAUDE.md` — ~12.8K LOC, 20 arquivos; + `SDK_CHANGELOG.md` — historico SDK 0.1.49-0.2.95)
+- `app/agente/CLAUDE.md` — ~51K LOC, 97 arquivos (+ `services/CLAUDE.md` — ~12.8K LOC, 20 arquivos; + `SDK_CHANGELOG.md` — historico SDK 0.1.49-0.2.101)
 - `app/agente_lojas/CLAUDE.md` — ~2.2K LOC, 17 arquivos (status M2), agente isolado para Lojas HORA, endpoint `/agente-lojas/*`
 - `app/carteira/CLAUDE.md` — ~18.1K LOC, 50 arquivos, 22 JS
 - `app/carvia/CLAUDE.md` — ~66K LOC, 104 arquivos, 108 templates (+ 12 sub-docs CONFERENCIA/FINANCEIRO/etc.)
