@@ -451,7 +451,8 @@
 
   // ========== Opcoes de empacotamento (sliders) ==========
 
-  /** Le as opcoes de empacotamento dos sliders (fallback p/ defaults se ausentes). */
+  /** Le as opcoes de APOIO dos sliders (fallback p/ defaults se ausentes).
+      Nao ha sobreposicao: caixas nunca se interpenetram. */
   function getPackingOptions() {
     function rd(id, def, div) {
       var el = document.getElementById(id);
@@ -461,8 +462,6 @@
       return div ? v / div : v;
     }
     return {
-      overlapComp: rd('pack-overlap-comp', 10, 100),
-      overlapLarg: rd('pack-overlap-larg', 15, 100),
       minSupport: rd('pack-min-support', 50, 100),
       maxOverhang: rd('pack-max-overhang', 15, 1),
       maxGap: rd('pack-max-gap', 50, 1),

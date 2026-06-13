@@ -1,25 +1,10 @@
-{# Controles de empacotamento (sobreposicao + empilhamento) — incluido no modo
-   livre (sidebar) e no modo embarque (painel recolhivel). IDs compartilhados;
-   lidos por simulador-ui.js getPackingOptions(). #}
+{# Controles de APOIO/empilhamento — incluido no modo livre (sidebar) e no modo
+   embarque (painel recolhivel). IDs compartilhados; lidos por simulador-ui.js
+   getPackingOptions().
+   Nao ha controle de sobreposicao: caixas nunca se interpenetram.
+   A horizontalidade (comprimento sempre horizontal, nunca "de pe") e regra fixa
+   do algoritmo — nao e configuravel. #}
 <div class="simulador-pack-controls">
-  <div class="simulador-range-row">
-    <label for="pack-overlap-comp">
-      Sobrep. comprimento
-      <span class="simulador-range-val" id="val-overlap-comp">10%</span>
-    </label>
-    <input type="range" class="form-range simulador-pack-input" id="pack-overlap-comp"
-           data-suffix="%" min="0" max="30" step="1" value="10">
-  </div>
-
-  <div class="simulador-range-row">
-    <label for="pack-overlap-larg">
-      Sobrep. largura
-      <span class="simulador-range-val" id="val-overlap-larg">15%</span>
-    </label>
-    <input type="range" class="form-range simulador-pack-input" id="pack-overlap-larg"
-           data-suffix="%" min="0" max="30" step="1" value="15">
-  </div>
-
   <div class="simulador-range-row">
     <label for="pack-min-support">
       Apoio mín. p/ empilhar
