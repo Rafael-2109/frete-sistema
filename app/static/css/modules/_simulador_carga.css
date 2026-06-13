@@ -4,6 +4,7 @@
   display: flex;
   gap: 0;
   min-height: 600px;
+  height: calc(100vh - 200px); /* ocupa a altura visivel disponivel */
   border: 1px solid var(--border);
   border-radius: var(--radius-lg, 8px);
   overflow: hidden;
@@ -39,7 +40,7 @@
   flex: 1;
   position: relative;
   min-height: 600px;
-  height: 600px;
+  height: 100%; /* segue a altura do container (stretch) */
   background: var(--bg-dark);
 }
 
@@ -67,17 +68,29 @@
   transition: border-color 0.2s;
 }
 
-.simulador-moto-select-wrap {
+.simulador-moto-info {
   flex: 1;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.simulador-moto-select-wrap {
+  width: 100%;
+  min-width: 0;
+}
+
+.simulador-moto-select-wrap .simulador-modelo-select {
+  width: 100%;
 }
 
 .simulador-moto-dims {
   font-size: 0.7rem;
   color: var(--text-muted);
   white-space: nowrap;
-  width: 100%;
-  margin-top: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .simulador-moto-qty {
@@ -369,6 +382,7 @@
 @media (max-width: 768px) {
   .simulador-container {
     flex-direction: column;
+    height: auto; /* mobile: empilha sidebar + canvas, sem travar altura */
   }
   .simulador-sidebar {
     width: 100%;
@@ -380,5 +394,6 @@
   }
   .simulador-canvas-wrap {
     min-height: 400px;
+    height: 60vh;
   }
 }

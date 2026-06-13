@@ -144,6 +144,10 @@
     row.style.borderLeftColor = colorHex;
     row.dataset.color = colorHex;
 
+    // Coluna com o modelo (select) por cima e as medidas embaixo
+    var infoDiv = document.createElement('div');
+    infoDiv.className = 'simulador-moto-info';
+
     var selectDiv = document.createElement('div');
     selectDiv.className = 'simulador-moto-select-wrap';
     var select = createMotoModelSelect();
@@ -154,6 +158,9 @@
     var dimsSpan = document.createElement('div');
     dimsSpan.className = 'simulador-moto-dims';
     dimsSpan.textContent = getDimsText(select);
+
+    infoDiv.appendChild(selectDiv);
+    infoDiv.appendChild(dimsSpan);
 
     var qtyDiv = document.createElement('div');
     qtyDiv.className = 'simulador-moto-qty';
@@ -203,8 +210,7 @@
     qtyDiv.appendChild(qtyInput);
     qtyDiv.appendChild(btnPlus);
 
-    row.appendChild(selectDiv);
-    row.appendChild(dimsSpan);
+    row.appendChild(infoDiv);
     row.appendChild(qtyDiv);
     row.appendChild(btnRemove);
 
