@@ -468,6 +468,17 @@ Journals sale LF com no_payment de compensação: j863 `industrializacao`→5101
 - **pt98 "Retorno Industrialização (LF)" configurado** (era `invoice_move_type=False`/`tipo_pedido=False`, 0 usos): agora `invoice_move_type='out_invoice'` + `l10n_br_tipo_pedido='venda-industrializacao'` (espelha o pt66 no que importa p/ faturamento, mantendo src/dest de terceiros `31093→26489`). **Escolhido configurar pt98 (não clonar pt66)** — pt98 já é semanticamente o retorno de terceiros, 0 usos.
 - ⚠️ **No GATE 1**: o picking pt98 do piloto deve ficar `liberado_faturamento=False` + `picking.robo` fora de 1..11 (agora que pt98 tem `invoice_move_type='out_invoice'`, entra no domain do robô se houver picking liberado).
 
+### ⚠️ GATE 1 EXECUTADO (2026-06-13) — 3 camadas reveladas; 1 BLOQUEADOR (`s11_gate1_emissao.py`)
+> Ensaio da emissão no piloto real (produto **4870112 MOLHO SHOYU**, lote PILOTO-3105). Tudo revertido: NF draft deletada, PA de volta em 31093. **Rastro:** 4 pickings done origin=GATE1 (2 saídas + 2 devoluções internas, net-zero — não deletáveis, rastreáveis). **PA preservado.**
+
+1. **pt98 (dst 26489) REFUTADO empiricamente** — faturar o picking 31093→**26489** falha (`Empresas incompatíveis: Account 3101010001 pertence a outra empresa`): o destino transito **não dispara a operação fiscal** de venda-industrializacao. As VND reais saem por **pt66 → `5` Parceiros/Clientes** (provado: VND 738097, src 42→dst 5, linha 5124 conta 26349 SERVIÇOS, op 2702). ⇒ **picking de retorno = pt66 com src override 31093, dst 5** (NÃO pt98/26489). **pt98 config revertido** (volta a False/False).
+2. **🔑 GOTCHA `create_invoice` exige contexto LF-ONLY** — via XML-RPC com `allowed_company_ids=[1,5]` o Odoo resolve a property `income` da categoria na company **FB** (conta 22497 = `3101010001` FB) → `Empresas incompatíveis`. Com **`allowed_company_ids=[5]` apenas (como o robô: `company.ids`)** → resolve na LF (26344) → **OK, NF draft criada em 48s**. ⇒ todo faturamento via wizard XML-RPC roda **company-only**, NÃO `[1,5]` (contraria a regra geral de ops LF). **Timeout do recompute = 48s** (o >400s anterior era do `onchange` numa mista grande — aqui o create_invoice já calcula).
+3. **🔴 BLOQUEADOR — a expansão dos insumos 5902 NÃO acontece p/ o shoyu**: a NF saiu com **1 linha (5124 PA) e ZERO 5902**. Causa: **o piloto 4870112 NÃO tem BoM `subcontract`**; o azeite (4739099, que expande 9/9) tem a **BoM 14794 `type=subcontract`** (subcontractor=[35] LF, **company FB=1**). ⇒ **CORREÇÃO de entendimento da sessão 7 (§I):** a subcontratação é dormente no fluxo FÍSICO (0 pickings pt75), MAS a **BoM subcontract é o GATILHO da expansão das 5902 no `create_invoice`** do CIEL IT — não é dormente para o faturamento. **Sem ela, não há linhas-insumo p/ separar (o split fica sem objeto).**
+
+**Conta da linha 5124 do shoyu** = `3101010001 VENDA PRODUÇÃO` (LF 26344) + CST 51, ≠ azeite (`3101030001 SERVIÇOS` 26349) — a operação 2702 não foi plenamente aplicada (provável co-sintoma da ausência da BoM subcontract).
+
+**Próximo (decisão Rafael):** criar a **BoM subcontract do shoyu** (espelhar a 14794 do azeite: company FB=1, subcontractor=LF=35, componentes = os 16 de terceiros) → re-rodar GATE 1 → esperar 1×5124 + 16×5902 → então o split. **Para o rollout:** todos os produtos de industrialização precisam de BoM subcontract (153 já têm; mapear os que faltam).
+
 
 ## Contexto
 
