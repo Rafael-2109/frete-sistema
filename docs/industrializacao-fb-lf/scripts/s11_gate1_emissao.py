@@ -163,7 +163,10 @@ def main():
     if args.faturar:
         pid = args.faturar
         print(f"=== FATURAR via wizard stock.invoice.onshipping (picking {pid}, journal {J847}) ===")
-        wctx = dict(CTX, active_ids=[pid], active_model='stock.picking')
+        # GATE 1 GOTCHA: contexto LF-ONLY (allowed_company_ids=[5]), como o robo (company.ids).
+        # Com [1,5] o Odoo resolve a income da categoria na company FB -> "empresas incompativeis".
+        wctx = {'allowed_company_ids': [LF], 'company_id': LF, 'active_ids': [pid],
+                'active_model': 'stock.picking'}
         wiz = o.execute_kw('stock.invoice.onshipping', 'create',
                            [{'company_id': LF, 'journal_id': J847}], {'context': wctx})
         print(f"  wizard {wiz} criado; chamando create_invoice() ... (mede timeout)")
