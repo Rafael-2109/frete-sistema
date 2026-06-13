@@ -52,7 +52,12 @@ def main():
     ap.add_argument('--faturar', type=int, metavar='PICK_ID')
     ap.add_argument('--medir', type=int, metavar='MOVE_ID')
     ap.add_argument('--revert', nargs='+', type=int, metavar='PICK_ID MOVE_IDS')
+    ap.add_argument('--produto', type=int, default=PA_PROD, help='product.product id (default shoyu)')
+    ap.add_argument('--lote', type=int, default=PA_LOT, help='stock.lot id')
+    ap.add_argument('--src', type=int, default=LOC_SRC, help='location origem')
+    ap.add_argument('--origin', default='GATE1', help='origin/label do picking')
     args = ap.parse_args()
+    PROD, LOTE, SRC, ORIGIN = args.produto, args.lote, args.src, args.origin
 
     o = get_odoo_connection(); assert o.authenticate(), "FALHA AUTH"
 
@@ -122,32 +127,32 @@ def main():
     def w(model, ids, vals):
         return o.execute_kw(model, 'write', [list(ids), vals], {'context': CTX})
 
-    # ============ CRIAR PICKING pt66 (PA piloto, 31093->5 Clientes) — [escrita 1] ============
+    # ============ CRIAR PICKING pt66 (PA, src->5 Clientes) — [escrita 1] ============
     if args.criar_picking:
-        print(f"=== CRIAR PICKING pt66 (PA 4870112, 31093->5 Clientes) ===")
-        prod = rd('product.product', [PA_PROD], ['uom_id'])[0]
+        print(f"=== CRIAR PICKING pt66 (produto {PROD}, {SRC}->5 Clientes) ===")
+        prod = rd('product.product', [PROD], ['uom_id'])[0]
         uom = prod['uom_id'][0]
         pid = o.execute_kw('stock.picking', 'create', [{
-            'picking_type_id': PT_RET, 'partner_id': FB, 'location_id': LOC_SRC,
-            'location_dest_id': LOC_DST, 'company_id': LF, 'origin': 'GATE1-PILOTO-4870112',
+            'picking_type_id': PT_RET, 'partner_id': FB, 'location_id': SRC,
+            'location_dest_id': LOC_DST, 'company_id': LF, 'origin': ORIGIN,
         }], {'context': CTX})
         mid = o.execute_kw('stock.move', 'create', [{
-            'name': 'PA 4870112 GATE1', 'picking_id': pid, 'product_id': PA_PROD,
-            'product_uom_qty': 1.0, 'product_uom': uom, 'location_id': LOC_SRC,
+            'name': f'PA {PROD} {ORIGIN}', 'picking_id': pid, 'product_id': PROD,
+            'product_uom_qty': 1.0, 'product_uom': uom, 'location_id': SRC,
             'location_dest_id': LOC_DST, 'company_id': LF,
         }], {'context': CTX})
         o.execute_kw('stock.picking', 'action_confirm', [[pid]], {'context': CTX})
         o.execute_kw('stock.picking', 'action_assign', [[pid]], {'context': CTX})
         mlf = o.execute_kw('stock.move.line', 'fields_get', [], {'attributes': ['type'], 'context': CTX})
-        upd = {'lot_id': PA_LOT, 'quantity': 1.0}
+        upd = {'lot_id': LOTE, 'quantity': 1.0}
         if 'qty_done' in mlf: upd['qty_done'] = 1.0
         if 'picked' in mlf: upd['picked'] = True
         mls = rr('stock.move.line', [('picking_id', '=', pid)], ['id'])
         if mls:
             w('stock.move.line', [mls[0]['id']], upd)
         else:
-            upd.update({'move_id': mid, 'picking_id': pid, 'product_id': PA_PROD,
-                        'location_id': LOC_SRC, 'location_dest_id': LOC_DST, 'product_uom_id': uom, 'company_id': LF})
+            upd.update({'move_id': mid, 'picking_id': pid, 'product_id': PROD,
+                        'location_id': SRC, 'location_dest_id': LOC_DST, 'product_uom_id': uom, 'company_id': LF})
             o.execute_kw('stock.move.line', 'create', [upd], {'context': CTX})
         w('stock.picking', [pid], {'liberado_faturamento': False, 'robo': 0})  # anti-robo
         o.execute_kw('stock.picking', 'button_validate', [[pid]],
@@ -235,27 +240,28 @@ def main():
             except Exception as e:
                 o.execute_kw('account.move', 'button_cancel', [[mv]], {'context': CTX})
                 print(f"  move {mv} unlink falhou; CANCELADO ({str(e)[:60]})")
-        # devolver o PA p/ 31093 se nao estiver la (saiu p/ Clientes 5)
-        q31 = rr('stock.quant', [('product_id', '=', PA_PROD), ('location_id', '=', LOC_SRC),
-                                 ('lot_id', '=', PA_LOT)], ['quantity'])
-        em31 = sum(x.get('quantity', 0) for x in q31)
-        print(f"  PA em 31093: {em31}")
-        if em31 < 1:
-            prod = rd('product.product', [PA_PROD], ['uom_id'])[0]; uom = prod['uom_id'][0]
+        # devolver 1 un p/ src SE o picking de saida estiver done (sempre moveu 1 un p/ Clientes 5).
+        # BUG-FIX: NAO checar estoque em SRC — produtos com saldo pre-existente (ex. azeite tem 4)
+        # enganam a checagem e deixam 1 un presa em Clientes. Rodar --revert 1x (nao idempotente).
+        pst = rd('stock.picking', [pid], ['state'])
+        saiu = bool(pst and pst[0].get('state') == 'done')
+        print(f"  picking saida {pid} state={pst[0].get('state') if pst else '?'} -> devolver={saiu}")
+        if saiu:
+            prod = rd('product.product', [PROD], ['uom_id'])[0]; uom = prod['uom_id'][0]
             ipt = rr('stock.picking.type', [('company_id', '=', LF), ('code', '=', 'internal')],
                      ['id'], limit=1)
             rpid = o.execute_kw('stock.picking', 'create', [{
-                'picking_type_id': ipt[0]['id'], 'location_id': LOC_DST, 'location_dest_id': LOC_SRC,
+                'picking_type_id': ipt[0]['id'], 'location_id': LOC_DST, 'location_dest_id': SRC,
                 'company_id': LF, 'origin': 'GATE1-REVERT'}], {'context': CTX})
             mid_r = o.execute_kw('stock.move', 'create', [{
-                'name': 'REVERT PA GATE1', 'picking_id': rpid, 'product_id': PA_PROD,
+                'name': 'REVERT PA GATE1', 'picking_id': rpid, 'product_id': PROD,
                 'product_uom_qty': 1.0, 'product_uom': uom, 'location_id': LOC_DST,
-                'location_dest_id': LOC_SRC, 'company_id': LF}], {'context': CTX})
+                'location_dest_id': SRC, 'company_id': LF}], {'context': CTX})
             o.execute_kw('stock.picking', 'action_confirm', [[rpid]], {'context': CTX})
             # customer(5) nao reserva -> criar move.line manual
             mlf = o.execute_kw('stock.move.line', 'fields_get', [], {'attributes': [], 'context': CTX})
-            mlv = {'move_id': mid_r, 'picking_id': rpid, 'product_id': PA_PROD, 'lot_id': PA_LOT,
-                   'location_id': LOC_DST, 'location_dest_id': LOC_SRC, 'product_uom_id': uom,
+            mlv = {'move_id': mid_r, 'picking_id': rpid, 'product_id': PROD, 'lot_id': LOTE,
+                   'location_id': LOC_DST, 'location_dest_id': SRC, 'product_uom_id': uom,
                    'quantity': 1.0, 'company_id': LF}
             if 'qty_done' in mlf: mlv['qty_done'] = 1.0
             if 'picked' in mlf: mlv['picked'] = True
