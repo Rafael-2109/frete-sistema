@@ -45,6 +45,16 @@
       <!-- Legenda -->
       <div id="simulador-legend" class="simulador-legend"></div>
 
+      <!-- Painel de empacotamento recolhivel -->
+      <div class="simulador-pack-panel" id="simulador-pack-panel">
+        <button type="button" class="simulador-pack-toggle" id="simulador-pack-toggle">
+          <i class="fas fa-sliders-h me-1"></i> Empacotamento
+        </button>
+        <div class="simulador-pack-body" id="simulador-pack-body" style="display:none">
+          {% include 'carvia/simulador/_pack_controls.html' %}
+        </div>
+      </div>
+
       <!-- Stats overlay -->
       <div style="position:absolute;top:12px;left:12px;display:flex;gap:8px;z-index:10">
         <div class="simulador-stat-card stat-success" style="min-width:80px;background:rgba(0,0,0,0.55);color:#fff;border-radius:6px">

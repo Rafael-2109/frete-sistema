@@ -29,6 +29,7 @@
     renderer: null,
     colorMap: {}, // {modelo_id: '#hex'}
     debounceTimer: null,
+    motoListEmbarque: [], // lista de motos do embarque (modo 'embarque'), p/ re-empacotar
   };
 
   function init() {
@@ -62,6 +63,7 @@
         populateVeiculoSelect();
         populateModeloOptions();
         bindEvents();
+        bindPackControls(scheduleRecalc);
 
         // Selecionar primeiro veiculo com dimensoes
         var selectEl = document.getElementById('simulador-veiculo');
@@ -359,11 +361,9 @@
       });
     }
     state.colorMap = colorMap;
+    state.motoListEmbarque = motoList;
 
-    var result = BinPacker.pack(state.veiculoSelecionado, motoList);
-    state.renderer.render(result, state.veiculoSelecionado, colorMap);
-    updateStats(result, state.veiculoSelecionado);
-    updateLegend(motoList, colorMap);
+    recalcularEmbarque();
 
     // Bind vistas
     document.querySelectorAll('.simulador-view-btn').forEach(function (btn) {
@@ -376,13 +376,27 @@
         state.renderer.setView(preset, state.veiculoSelecionado);
       });
     });
+
+    // Painel de empacotamento recolhivel + sliders
+    bindPackPanelToggle();
+    bindPackControls(scheduleRecalc);
+  }
+
+  function recalcularEmbarque() {
+    if (!state.renderer || !state.veiculoSelecionado) return;
+    var options = getPackingOptions();
+    var result = BinPacker.pack(state.veiculoSelecionado, state.motoListEmbarque, options);
+    state.renderer.render(result, state.veiculoSelecionado, state.colorMap);
+    updateStats(result, state.veiculoSelecionado);
+    updateLegend(state.motoListEmbarque, state.colorMap);
   }
 
   // ========== Recalc ==========
 
   function scheduleRecalc() {
     if (state.debounceTimer) clearTimeout(state.debounceTimer);
-    state.debounceTimer = setTimeout(recalcular, DEBOUNCE_MS);
+    var fn = state.modo === 'embarque' ? recalcularEmbarque : recalcular;
+    state.debounceTimer = setTimeout(fn, DEBOUNCE_MS);
   }
 
   function recalcular() {
@@ -428,10 +442,61 @@
 
     state.colorMap = colorMap;
 
-    var result = BinPacker.pack(bay, motoList);
+    var options = getPackingOptions();
+    var result = BinPacker.pack(bay, motoList, options);
     state.renderer.render(result, bay, colorMap);
     updateStats(result, bay);
     updateLegend(motoList, colorMap);
+  }
+
+  // ========== Opcoes de empacotamento (sliders) ==========
+
+  /** Le as opcoes de empacotamento dos sliders (fallback p/ defaults se ausentes). */
+  function getPackingOptions() {
+    function rd(id, def, div) {
+      var el = document.getElementById(id);
+      if (!el) return def;
+      var v = parseFloat(el.value);
+      if (isNaN(v)) return def;
+      return div ? v / div : v;
+    }
+    return {
+      overlapComp: rd('pack-overlap-comp', 10, 100),
+      overlapLarg: rd('pack-overlap-larg', 15, 100),
+      minSupport: rd('pack-min-support', 50, 100),
+      maxOverhang: rd('pack-max-overhang', 15, 1),
+      maxGap: rd('pack-max-gap', 50, 1),
+    };
+  }
+
+  /** Conecta os sliders: atualiza o valor exibido e dispara recalculo (debounced). */
+  function bindPackControls(onChange) {
+    var inputs = document.querySelectorAll('.simulador-pack-input');
+    for (var i = 0; i < inputs.length; i++) {
+      (function (el) {
+        function update() {
+          var span = document.getElementById('val-' + el.id.replace('pack-', ''));
+          if (span) span.textContent = el.value + (el.dataset.suffix || '');
+          if (onChange) onChange();
+        }
+        el.addEventListener('input', update);
+        // Sincroniza o valor exibido com o value inicial do HTML
+        var span0 = document.getElementById('val-' + el.id.replace('pack-', ''));
+        if (span0) span0.textContent = el.value + (el.dataset.suffix || '');
+      })(inputs[i]);
+    }
+  }
+
+  /** Toggle do painel de empacotamento recolhivel (modo embarque). */
+  function bindPackPanelToggle() {
+    var toggle = document.getElementById('simulador-pack-toggle');
+    var body = document.getElementById('simulador-pack-body');
+    if (!toggle || !body) return;
+    toggle.addEventListener('click', function () {
+      var hidden = body.style.display === 'none' || !body.style.display;
+      body.style.display = hidden ? 'block' : 'none';
+      toggle.classList.toggle('active', hidden);
+    });
   }
 
   function getEffectiveBay() {

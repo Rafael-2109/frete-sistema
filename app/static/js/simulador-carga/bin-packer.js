@@ -3,14 +3,22 @@
  *
  * Regras de orientacao:
  * - Comprimento da moto SEMPRE horizontal (eixos X ou Z do bau, nunca Y)
- * - Largura e altura intercambiaveis (moto pode ser deitada)
+ * - Largura e altura intercambiaveis (moto pode ser deitada de lado)
  * - 4 orientacoes validas por moto, testadas individualmente
  *
- * Regras de apoio fisico (empilhamento):
+ * Sobreposicao permitida (encaixe real):
+ * - Motos reais se interpenetram (guidoes alternados, rodas encaixadas).
+ * - O footprint EFETIVO usado para empacotar e encolhido por um fator de
+ *   sobreposicao no comprimento e/ou largura. A dimensao VISUAL (renderizada)
+ *   permanece a real — duas caixas adjacentes se sobrepoem pela margem encolhida.
+ * - O limite fisico do bau (paredes) usa SEMPRE a dimensao VISUAL (real).
+ *
+ * Regras de apoio fisico (empilhamento) — CONFIGURAVEIS via options:
  * - Moto no chao (Y=0): sempre valida
  * - Moto empilhada (Y>0): deve ter apoio suficiente embaixo
- *   - Max 10cm de balanco (overhang) em cada extremidade
- *   - Max 40cm de vao livre no centro (apoiado pelos 2 lados)
+ *   - options.minSupport: % minimo da base com apoio real (default 0.50)
+ *   - options.maxOverhang: balanco maximo nas extremidades em cm (default 15)
+ *   - options.maxGap: vao maximo no centro, apoiado pelos 2 lados, em cm (default 50)
  *
  * Algoritmo: Maximal Rectangles + FFD + Best Short Side Fit + validacao de suporte.
  */
@@ -19,12 +27,32 @@
 
   var MAX_ITEMS = 200;
   var MIN_DIM = 5;
+  var MIN_EFFECTIVE = 1; // piso para o footprint efetivo apos encolher por sobreposicao
 
-  // Regras de apoio fisico
-  var MAX_OVERHANG_EDGE = 10;   // cm — balanco maximo nas extremidades
-  var MAX_GAP_CENTER = 40;      // cm — vao maximo no centro (apoiado dos 2 lados)
+  // Defaults de empacotamento (sobrescritos por options em pack()).
+  var DEFAULTS = {
+    overlapComp: 0.10, // fracao do comprimento que pode sobrepor vizinha (0-0.30)
+    overlapLarg: 0.15, // fracao da largura que pode sobrepor vizinha (0-0.30)
+    minSupport: 0.50,  // fracao minima da base com apoio para empilhar (0.10-1.0)
+    maxOverhang: 15,   // cm — balanco maximo nas extremidades
+    maxGap: 50,        // cm — vao maximo no centro (apoiado dos 2 lados)
+  };
 
-  function pack(bay, motoList) {
+  function normalizeOptions(o) {
+    o = o || {};
+    function num(v, def) { return (typeof v === 'number' && isFinite(v)) ? v : def; }
+    function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+    return {
+      overlapComp: clamp(num(o.overlapComp, DEFAULTS.overlapComp), 0, 0.30),
+      overlapLarg: clamp(num(o.overlapLarg, DEFAULTS.overlapLarg), 0, 0.30),
+      minSupport: clamp(num(o.minSupport, DEFAULTS.minSupport), 0.10, 1.0),
+      maxOverhang: clamp(num(o.maxOverhang, DEFAULTS.maxOverhang), 0, 100),
+      maxGap: clamp(num(o.maxGap, DEFAULTS.maxGap), 0, 200),
+    };
+  }
+
+  function pack(bay, motoList, options) {
+    var opt = normalizeOptions(options);
     var items = expandAndSort(motoList);
     if (items.length > MAX_ITEMS) items = items.slice(0, MAX_ITEMS);
 
@@ -34,18 +62,24 @@
 
     for (var i = 0; i < items.length; i++) {
       var item = items[i];
-      var orientations = getOrientations(item);
-      var best = findBestFit(orientations, freeSpaces, bay, placed);
+      var orientations = getOrientations(item, opt);
+      var best = findBestFit(orientations, freeSpaces, bay, placed, opt);
 
       if (best) {
         var p = {
           moto: item,
           x: best.x, y: best.y, z: best.z,
+          // Dimensoes VISUAIS (reais) — usadas para render e calculo de apoio
           w: best.ow, d: best.od, h: best.oh,
+          // Footprint EFETIVO (encolhido) — usado para subtrair do espaco livre
+          ew: best.ew, ed: best.ed,
           orientacao: best.orientIdx,
         };
         placed.push(p);
-        freeSpaces = subtractBox(freeSpaces, p);
+        // Subtrai apenas o footprint efetivo: vizinhas podem ocupar a margem de sobreposicao
+        freeSpaces = subtractBox(freeSpaces, {
+          x: p.x, y: p.y, z: p.z, w: p.ew, d: p.ed, h: p.h,
+        });
       } else {
         rejected.push(item);
       }
@@ -58,6 +92,11 @@
       totalPeso += placed[j].moto.peso_medio || 0;
     }
 
+    // Com sobreposicao, a soma dos volumes visuais pode passar do volume do bau
+    // (as motos compartilham espaco). Limitamos a exibicao a 100% para nao confundir.
+    var pctOcupacao = bayVol > 0 ? Math.round((usedVol / bayVol) * 100) : 0;
+    if (pctOcupacao > 100) pctOcupacao = 100;
+
     return {
       placed: placed,
       rejected: rejected,
@@ -68,7 +107,7 @@
         rejeitadas: rejected.length,
         volumeOcupado: usedVol,
         volumeTotal: bayVol,
-        percentualOcupacao: bayVol > 0 ? Math.round((usedVol / bayVol) * 100) : 0,
+        percentualOcupacao: pctOcupacao,
         pesoTotal: Math.round(totalPeso * 100) / 100,
       },
     };
@@ -91,13 +130,32 @@
     return items;
   }
 
-  function getOrientations(item) {
+  /**
+   * 4 orientacoes — comprimento (C) sempre na horizontal (X ou Z), nunca na altura.
+   * Cada orientacao carrega:
+   * - ow/od/oh: dimensao VISUAL (real) nos eixos X/Z/Y
+   * - ew/ed: footprint EFETIVO (encolhido pela sobreposicao) nos eixos X/Z
+   *
+   * Sobreposicao so encolhe a dimensao correspondente:
+   * - comprimento encolhe por overlapComp (encaixe longitudinal)
+   * - largura encolhe por overlapLarg (encaixe lateral — guidoes alternados)
+   * - altura NUNCA encolhe (sem sobreposicao vertical)
+   */
+  function getOrientations(item, opt) {
     var C = item.comprimento, L = item.largura, A = item.altura;
+    var shrinkC = C * opt.overlapComp; // encaixe longitudinal (cm)
+    var shrinkL = L * opt.overlapLarg; // encaixe lateral (cm)
+    function eff(dim, shrink) { return Math.max(MIN_EFFECTIVE, dim - shrink); }
+
     return [
-      { ow: C, od: L, oh: A, idx: 0 },
-      { ow: C, od: A, oh: L, idx: 1 },
-      { ow: L, od: C, oh: A, idx: 2 },
-      { ow: A, od: C, oh: L, idx: 3 },
+      // ow=C(X) od=L(Z) oh=A(Y)
+      { ow: C, od: L, oh: A, ew: eff(C, shrinkC), ed: eff(L, shrinkL), idx: 0 },
+      // ow=C(X) od=A(Z) oh=L(Y) — tombada de lado, comprimento ainda horizontal
+      { ow: C, od: A, oh: L, ew: eff(C, shrinkC), ed: A, idx: 1 },
+      // ow=L(X) od=C(Z) oh=A(Y)
+      { ow: L, od: C, oh: A, ew: eff(L, shrinkL), ed: eff(C, shrinkC), idx: 2 },
+      // ow=A(X) od=C(Z) oh=L(Y) — tombada de lado
+      { ow: A, od: C, oh: L, ew: A, ed: eff(C, shrinkC), idx: 3 },
     ];
   }
 
@@ -110,8 +168,10 @@
    *   2. Menor short side (encaixe justo)
    *   3. Menor long side
    *   4. Menor Y, Z, X
+   *
+   * Encaixe e residuo usam o footprint EFETIVO (ew/ed); limite do bau usa o VISUAL (ow/od).
    */
-  function findBestFit(orientations, freeSpaces, bay, placed) {
+  function findBestFit(orientations, freeSpaces, bay, placed, opt) {
     var best = null;
     var bestSupport = -1;     // % apoio (0-100), so usado para Y>0
     var bestShortSide = Infinity;
@@ -124,20 +184,22 @@
       for (var o = 0; o < orientations.length; o++) {
         var ori = orientations[o];
 
-        if (ori.ow > sp.w + 0.1 || ori.od > sp.d + 0.1 || ori.oh > sp.h + 0.1) continue;
+        // Cabe no espaco livre considerando a sobreposicao permitida (footprint efetivo)
+        if (ori.ew > sp.w + 0.1 || ori.ed > sp.d + 0.1 || ori.oh > sp.h + 0.1) continue;
+        // Limite fisico do bau (paredes) usa a dimensao REAL (visual) — nunca ultrapassa
         if (sp.x + ori.ow > bay.w + 0.1) continue;
         if (sp.z + ori.od > bay.d + 0.1) continue;
         if (sp.y + ori.oh > bay.h + 0.1) continue;
 
-        // Calcular apoio para empilhamento
+        // Calcular apoio para empilhamento (usa footprint VISUAL — apoio fisico real)
         var supportPct = 100; // chao = apoio total
         if (sp.y > 0.1) {
-          supportPct = getSupportPercentage(sp.x, sp.y, sp.z, ori.ow, ori.od, placed);
-          if (supportPct < MIN_SUPPORT_RATIO * 100) continue; // rejeitar se < 60%
+          supportPct = getSupportPercentage(sp.x, sp.y, sp.z, ori.ow, ori.od, placed, opt);
+          if (supportPct < opt.minSupport * 100) continue; // rejeitar se < minimo
         }
 
-        var residuoW = sp.w - ori.ow;
-        var residuoD = sp.d - ori.od;
+        var residuoW = sp.w - ori.ew;
+        var residuoD = sp.d - ori.ed;
         var shortSide = Math.min(residuoW, residuoD);
         var longSide = Math.max(residuoW, residuoD);
 
@@ -170,6 +232,7 @@
           best = {
             x: sp.x, y: sp.y, z: sp.z,
             ow: ori.ow, od: ori.od, oh: ori.oh,
+            ew: ori.ew, ed: ori.ed,
             orientIdx: ori.idx,
           };
         }
@@ -198,9 +261,10 @@
 
   /**
    * Calcula % de apoio real para uma posicao empilhada.
-   * Retorna 0-100. Tambem valida overhang e vao central.
+   * Retorna 0-100. Tambem valida overhang e vao central (limites em opt).
+   * Usa o footprint VISUAL das motos ja posicionadas (apoio fisico real).
    */
-  function getSupportPercentage(px, py, pz, pw, pd, placed) {
+  function getSupportPercentage(px, py, pz, pw, pd, placed, opt) {
     var px2 = px + pw;
     var pz2 = pz + pd;
     var baseArea = pw * pd;
@@ -226,8 +290,8 @@
     // Verificar overhang e vao
     var supportsX = supports.map(function (s) { return [s.x1, s.x2]; });
     var supportsZ = supports.map(function (s) { return [s.z1, s.z2]; });
-    if (!checkAxisSupport(supportsX, px, px2)) return 0;
-    if (!checkAxisSupport(supportsZ, pz, pz2)) return 0;
+    if (!checkAxisSupport(supportsX, px, px2, opt)) return 0;
+    if (!checkAxisSupport(supportsZ, pz, pz2, opt)) return 0;
 
     var supportArea = calcSupportArea(supports);
     return Math.round(supportArea / baseArea * 100);
@@ -236,8 +300,6 @@
   // =====================================================================
   // Validacao de apoio fisico
   // =====================================================================
-
-  var MIN_SUPPORT_RATIO = 0.60; // 60% da base deve ter apoio real
 
   /**
    * Calcula area total de apoio (uniao de retangulos 2D).
@@ -294,9 +356,9 @@
   }
 
   /**
-   * Verifica overhang e vao central num eixo.
+   * Verifica overhang e vao central num eixo (limites vindos de opt).
    */
-  function checkAxisSupport(intervals, start, end) {
+  function checkAxisSupport(intervals, start, end, opt) {
     var merged = mergeIntervals(intervals);
 
     var minSupport = Infinity;
@@ -307,14 +369,14 @@
     }
 
     // Overhang nas extremidades
-    if (minSupport - start > MAX_OVERHANG_EDGE) return false;
-    if (end - maxSupport > MAX_OVERHANG_EDGE) return false;
+    if (minSupport - start > opt.maxOverhang) return false;
+    if (end - maxSupport > opt.maxOverhang) return false;
 
     // Vao central
     if (merged.length > 1) {
       for (var g = 1; g < merged.length; g++) {
         var gap = merged[g][0] - merged[g - 1][1];
-        if (gap > MAX_GAP_CENTER) return false;
+        if (gap > opt.maxGap) return false;
       }
     }
 

@@ -1,0 +1,49 @@
+{# Controles de empacotamento (sobreposicao + empilhamento) — incluido no modo
+   livre (sidebar) e no modo embarque (painel recolhivel). IDs compartilhados;
+   lidos por simulador-ui.js getPackingOptions(). #}
+<div class="simulador-pack-controls">
+  <div class="simulador-range-row">
+    <label for="pack-overlap-comp">
+      Sobrep. comprimento
+      <span class="simulador-range-val" id="val-overlap-comp">10%</span>
+    </label>
+    <input type="range" class="form-range simulador-pack-input" id="pack-overlap-comp"
+           data-suffix="%" min="0" max="30" step="1" value="10">
+  </div>
+
+  <div class="simulador-range-row">
+    <label for="pack-overlap-larg">
+      Sobrep. largura
+      <span class="simulador-range-val" id="val-overlap-larg">15%</span>
+    </label>
+    <input type="range" class="form-range simulador-pack-input" id="pack-overlap-larg"
+           data-suffix="%" min="0" max="30" step="1" value="15">
+  </div>
+
+  <div class="simulador-range-row">
+    <label for="pack-min-support">
+      Apoio mín. p/ empilhar
+      <span class="simulador-range-val" id="val-min-support">50%</span>
+    </label>
+    <input type="range" class="form-range simulador-pack-input" id="pack-min-support"
+           data-suffix="%" min="10" max="100" step="5" value="50">
+  </div>
+
+  <div class="simulador-range-row">
+    <label for="pack-max-overhang">
+      Balanço máx.
+      <span class="simulador-range-val" id="val-max-overhang">15cm</span>
+    </label>
+    <input type="range" class="form-range simulador-pack-input" id="pack-max-overhang"
+           data-suffix="cm" min="0" max="60" step="5" value="15">
+  </div>
+
+  <div class="simulador-range-row">
+    <label for="pack-max-gap">
+      Vão central máx.
+      <span class="simulador-range-val" id="val-max-gap">50cm</span>
+    </label>
+    <input type="range" class="form-range simulador-pack-input" id="pack-max-gap"
+           data-suffix="cm" min="0" max="150" step="10" value="50">
+  </div>
+</div>

@@ -244,6 +244,20 @@
         var wire = new THREE.LineSegments(wireGeom, wireMat);
         wire.position.copy(mesh.position);
         this.motosGroup.add(wire);
+
+        // Rotulo com o nome do modelo, sobre a moto
+        var nome = (p.moto && p.moto.nome) ? p.moto.nome : '';
+        if (nome) {
+          var label = this._makeLabelSprite(nome);
+          if (label) {
+            label.position.set(
+              p.x * SCALE + mw / 2,
+              p.y * SCALE + mh + 0.02,
+              p.z * SCALE + md / 2
+            );
+            this.motosGroup.add(label);
+          }
+        }
       }
     }
 
@@ -262,6 +276,76 @@
     // Fallback: paleta por modelo_id
     var paletteIdx = (moto.id || index) % PALETTE.length;
     return PALETTE[paletteIdx];
+  };
+
+  /**
+   * Cria um sprite de texto (rotulo) com o nome do modelo, para sobrepor a moto 3D.
+   * Visual neutro (pilula escura translucida + texto branco) — legivel em dark e light
+   * e sobre qualquer cor de caixa, sem depender do tema atual.
+   * @param {string} text - Nome do modelo
+   * @returns {THREE.Sprite|null}
+   */
+  CargaRenderer.prototype._makeLabelSprite = function (text) {
+    text = (text || '').toString().trim();
+    if (!text) return null;
+
+    var canvas = document.createElement('canvas');
+    var ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+
+    var fontSize = 44;
+    var padX = 18;
+    var padY = 12;
+    var font = 'bold ' + fontSize + 'px Arial, Helvetica, sans-serif';
+
+    // Medir texto para dimensionar o canvas
+    ctx.font = font;
+    var textW = Math.ceil(ctx.measureText(text).width);
+    canvas.width = textW + padX * 2;
+    canvas.height = fontSize + padY * 2;
+
+    // Resize do canvas reseta o contexto — reaplicar font/alinhamento
+    ctx.font = font;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+
+    // Pilula de fundo (neutra, independente de tema)
+    var radius = canvas.height / 2;
+    ctx.fillStyle = 'rgba(15, 18, 25, 0.72)';
+    this._roundRect(ctx, 0, 0, canvas.width, canvas.height, radius);
+    ctx.fill();
+
+    // Texto
+    ctx.fillStyle = '#ffffff';
+    ctx.fillText(text, canvas.width / 2, canvas.height / 2 + 1);
+
+    var texture = new THREE.CanvasTexture(canvas);
+    texture.minFilter = THREE.LinearFilter;
+    texture.needsUpdate = true;
+
+    var mat = new THREE.SpriteMaterial({ map: texture, transparent: true });
+    var sprite = new THREE.Sprite(mat);
+
+    // Altura do rotulo em unidades 3D (~14cm); largura preserva o aspecto do canvas
+    var labelH = 0.14;
+    sprite.scale.set(labelH * (canvas.width / canvas.height), labelH, 1);
+    return sprite;
+  };
+
+  /** Desenha um retangulo arredondado (fallback p/ navegadores sem ctx.roundRect). */
+  CargaRenderer.prototype._roundRect = function (ctx, x, y, w, h, r) {
+    if (typeof ctx.roundRect === 'function') {
+      ctx.beginPath();
+      ctx.roundRect(x, y, w, h, r);
+      return;
+    }
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
   };
 
   /**
@@ -386,14 +470,19 @@
   };
 
   CargaRenderer.prototype._clearGroup = function (group) {
+    function disposeMat(m) {
+      if (!m) return;
+      if (m.map) m.map.dispose(); // textura do sprite de rotulo (CanvasTexture)
+      m.dispose();
+    }
     while (group.children.length > 0) {
       var child = group.children[0];
       if (child.geometry) child.geometry.dispose();
       if (child.material) {
         if (Array.isArray(child.material)) {
-          child.material.forEach(function (m) { m.dispose(); });
+          child.material.forEach(disposeMat);
         } else {
-          child.material.dispose();
+          disposeMat(child.material);
         }
       }
       group.remove(child);
