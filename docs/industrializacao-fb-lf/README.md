@@ -4,7 +4,7 @@ camada: L1
 sot_de: —
 hub: docs/industrializacao-fb-lf/INDEX.md
 superseded_by: —
-atualizado: 2026-06-03
+atualizado: 2026-06-13
 -->
 # Industrialização FB↔LF — Índice
 
@@ -41,13 +41,15 @@ Config base (reversível): ✅ op 3252 (`movimento_estoque=False`) · ✅ L1 (ca
 | 2 — Entrada LF (Model B) | ✅ picking 322451→31092; ENTIN 737062 posted; Δ1150100011=0 |
 | E — MO | ✅ MOs 20252+20254; net-zero terceiros; PA em 31093 |
 | 4 — Retorno LF→FB (faturar) | 🟢 **DESBLOQUEADO — Contadora APROVOU 2 NF** (2026-06-02, c/ 3 requisitos R1/R2/R3). Caminho (b) separar a 5902. **A IMPLEMENTAR** (Forma 2): emissão automática da 2ª NF (deriva da BoM) + journal `no_payment` PASSIVA. `SOT §6` |
+| Sessão 8 (engenharia R1) | ✅ **Hipótese (i) REFUTADA** (`create_invoice` CIEL IT **funde** 5124+5902; toda op 5124 ≡ venda-industrializacao → VIA 1 fechada). **Caminho = split na janela DRAFT→pré-SEFAZ.** `ACHADOS §sessão 8` |
+| Sessão 9 (desenho §6.1 + GATE 0) | ✅ **Desenho E2E da emissão 2-NF fechado** (`SOT §6.1 v3.1`, revisado por painel adversarial 3 lentes) + ✅ **GATE 0 EXECUTADO E APROVADO (13/06)**: split contábil em journals de teste **provou** que doc só-5902 com `no_payment=26667` **baixa a PASSIVA `5101020001`** (sem CLIENTES); NF só-5124 limpa. Sem SEFAZ, deletado (zero rabo). ✅ **Veículo DECIDIDO: server action** (Rafael 13/06; dívida: script de re-aplicação + monitor anti-upgrade). `ACHADOS §"GATE 0 EXECUTADO"` |
 | 5 — Entrada FB (escriturar) | 🟢 **DESBLOQUEADO** (= G4). **A IMPLEMENTAR**: escrituração automática do DFe da NF de retorno junto da industrialização (entrada já é `DFe→PO→invoice`, 3087 casos — estender p/ 2 DFes vinculados). `SOT §6` |
 | Sessão 5 (execução G4/G5a) | ✅ READ-ONLY + 4 lentes + 2 NF-teste (postadas/excluídas, sem sujeira) — mecanismo provado; **nada escrito em definitivo** (`ACHADOS §sessão 5` TL;DR) |
 | Sessão 6 (R-UNIF) | ✅ **R-UNIF PROVADO** — NF-teste mista de ENTRADA postada/excluída (zero sujeira): `no_payment=22800` no j1001 não baixa a ATIVA (FORNECEDORES absorve a 1902). **G5a = G4** (1902/5902 em doc separado). j1001 intacto (`ACHADOS §"ACHADO 2026-06-02 (sessão 6)"`) |
 | Sessão 7 (fluxo 2-NF) | ✅ **GROUNDING 2-NF nas 3 esferas (READ-only, 5 scripts `s7_*`, zero escrita).** Separação = **composição de linhas** (insumos 5902/1902 já simbólicos; PA viaja na linha de serviço 5124↔1124). Robô: journal = `picking_type.tipo_pedido`. **3 gaps p/ executar (b):** journal c/ no_payment PASSIVA `5101020001` inexistente · pt98 `tipo_pedido=False` · veículo da NF de insumos simbólica. Anexado ao `MATERIAL_CONTADORA §5`; provas em `ACHADOS §sessão 7` |
 | ⭐ **Decisão Contadora (2026-06-02)** | ✅ **APROVADO emitir 2 NF** (retorno de insumos 5902/1902 SEPARADO do serviço 5124/1124) com **3 requisitos**: (R1) emissão da NF de retorno **automática** (= a inclusão dos componentes na NF hoje) · (R2) escrituração do DFe **automática junto** da industrialização · (R3) **vínculo** entre as 2 NFs. ⇒ caminho (b); **próxima fase = IMPLEMENTAÇÃO** (Forma 2). `SOT §6` · `MATERIAL_CONTADORA §0` |
 
-**Próximo:** ✅ **Contadora APROVOU (2026-06-02)** — gargalo fiscal removido. **Próxima sessão = IMPLEMENTAR os 3 requisitos** (Forma 2 — pipeline deriva a 2ª NF da BoM · vínculo refNFe · escrituração automática) + resolver os gaps (journal `no_payment` PASSIVA · onde emitir a 2ª NF · veículo da NF de insumos) + rodar o piloto 4+5. Investigar a **engenharia da automação**. Detalhe → `PROMPT_PROXIMA_SESSAO.md` + `SOT §6`.
+**Próximo:** ✅ GATE 0 passou + ✅ veículo = server action (13/06). ▶️ Agora (em curso): **(1) config** — criar journal RETIND (LF sale, `l10n_br_no_payment=True` + `no_payment=26667` + tipo_pedido vazio) + picking_type de saída de 31093 (configurar pt98 ou clonar pt66) + isolamento anti-robô · **(2) GATE 1** (piloto draft-only, asserts a-g `SOT §6.1` — inclui contrapartida das 5902 e mede o timeout do recompute) · **(3) GATE 2** (SEFAZ, pré-condições ETL+FB+POP). Detalhe → `PROMPT_PROXIMA_SESSAO.md` + `SOT §6.1`.
 
 ## Decisões fechadas (detalhe e porquê na `SOT`)
 - ⭐ **Contadora APROVOU emitir 2 NF** (2026-06-02): retorno de insumos (5902/1902) em documento separado do serviço (5124/1124), com 3 requisitos (R1 emissão automática · R2 escrituração automática · R3 vínculo). `SOT §6` · `MATERIAL_CONTADORA §0`.

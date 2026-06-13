@@ -4,15 +4,15 @@ camada: L3
 sot_de: —
 hub: docs/industrializacao-fb-lf/INDEX.md
 superseded_by: —
-atualizado: 2026-06-03
+atualizado: 2026-06-13
 -->
 # PROMPT — Próxima sessão (Industrialização FB↔LF)
 
-> **Atualizado 2026-06-03 (fim da 8ª sessão — CONTADORA APROVOU emitir 2 NF + 3 requisitos. A próxima sessão MUDA DE FASE: de grounding/decisão → IMPLEMENTAÇÃO da automação).**
-> Handoff = próximo passo + estado. Estado completo: `README.md`. Desenho/decisões (dona): `SOT_OPERACOES.md` (§6 = requisitos da Contadora). Mecanismo + provas (NÃO refazer): `ACHADOS_TECNICOS.md §"ACHADO 2026-06-02 (sessão 7)"` blocos **A–I** (ler o TL;DR lá).
+> **Atualizado 2026-06-12 (retomada — incorpora a sessão 8 de 03/06 à tarde, scripts `s8_*`, que NÃO estava registrada nos docs: hipótese (i) REFUTADA + GATE 0 armado aguardando go. Estado ao vivo re-validado 12/06: idêntico.)**
+> Handoff = próximo passo + estado. Estado completo: `README.md`. Desenho/decisões (dona): `SOT_OPERACOES.md` (§6 = requisitos da Contadora). Mecanismo + provas (NÃO refazer): `ACHADOS_TECNICOS.md` §sessão 7 (blocos **A–I**) + **§sessão 8** (hipótese (i) refutada, GATE 0).
 
 ## Como começar
-Leia nesta ordem: **`README.md`** (índice+estado) → **este handoff** → **`ACHADOS_TECNICOS.md` blocos A–I da sessão 7** (o que já foi PROVADO — não refazer) + TL;DR sessões 5/6. Desenho/decisões: **`SOT_OPERACOES.md`** (§6 requisitos + Etapa 4/5; em conflito, ela vence). Material da Contadora (decisão registrada): `MATERIAL_CONTADORA_G4.md §0`.
+Leia nesta ordem: **`README.md`** (índice+estado) → **este handoff** → **`ACHADOS_TECNICOS.md` §sessão 8 + blocos A–I da sessão 7** (o que já foi PROVADO — não refazer) + TL;DR sessões 5/6. Desenho/decisões: **`SOT_OPERACOES.md`** (§6 requisitos + Etapa 4/5; em conflito, ela vence). Material da Contadora (decisão registrada): `MATERIAL_CONTADORA_G4.md §0`.
 
 ## A DECISÃO (aprovada 2026-06-02) — ponto de partida da implementação
 A Contadora **APROVOU emitir o retorno em 2 NF** — o retorno de insumos (5902/1902) em **documento separado** do serviço (5124/1124) — com **3 REQUISITOS invioláveis**:
@@ -24,7 +24,8 @@ A Contadora **APROVOU emitir o retorno em 2 NF** — o retorno de insumos (5902/
 
 ## Onde estamos (piloto 1 caixa, produto 4870112, lote PILOTO-3105)
 - ✅ Etapas **1 → dreno físico → 2 → E** (remessa `RPI/2026/00245` SEFAZ-OK; entrada LF Model B ENTIN 737062; MO 20252+20254; PA em 31093). **Faltam Etapa 4 (faturar retorno) + Etapa 5 (escriturar FB).**
-- ✅ Sessões 5–7: mecanismo do retorno **totalmente mapeado e provado** (READ-only + experimentos NF-teste postada/excluída; **zero escrita definitiva no Odoo**).
+- ✅ Sessões 5–8: mecanismo do retorno **totalmente mapeado e provado** (READ-only + experimentos NF-teste postada/excluída; **zero escrita definitiva no Odoo**). Sessão 8 fechou a engenharia da emissão (hipótese (i) refutada → split pré-SEFAZ) e armou o GATE 0.
+- ✅ **Estado ao vivo re-validado 12/06** (`s8c`/`s8d` dry-run): PA 1 un em 31093 lote PILOTO-3105 livre; NF-modelo 180552 intacta; nenhum journal sale LF com no_payment=26667 (gap confirmado).
 
 ## O QUE JÁ FOI PROVADO — NÃO refazer (`ACHADOS §A–§I`)
 - 1 NF mista **NÃO baixa** a compensação (8 ângulos + R-UNIF nos 2 lados). Caminho = **2 documentos**.
@@ -34,11 +35,10 @@ A Contadora **APROVOU emitir o retorno em 2 NF** — o retorno de insumos (5902/
 - Operador cria **1 picking (só o PA)**; o robô expande a BoM via `stock.invoice.onshipping.create_invoice` (`journal = picking_type.l10n_br_tipo_pedido`; 1 picking = 1 account.move).
 
 ## PRÓXIMA SESSÃO = IMPLEMENTAR (investigar a engenharia da automação, nesta ordem)
-1. **R1 — emitir a 2ª NF (saída LF):** o que HOJE expande os componentes (5902) é o método **`create_invoice()` do wizard `stock.invoice.onshipping`** (extensão do **módulo** CIEL IT — Python, caixa-preta), **chamado pela** server action 1512 "Robô Faturamento" (`ir.actions.server`, `state=code`, **editável por nós via XML-RPC** — mas ela só ORQUESTRA: escolhe journal por `picking_type.l10n_br_tipo_pedido`, chama `create_invoice`, posta; **não** é ela que expande a BoM). Investigar, nesta ordem (hipótese do Rafael primeiro):
-   - **(i) ⭐ reusar o mecanismo de expansão nativo:** o `create_invoice` decide o journal/documento por **`picking_type`** → se a expansão das linhas 5902 puder ser roteada a um picking_type/journal próprio (2 picking_types: serviço `venda-industrializacao`→j847 + insumos com tipo_pedido próprio→journal no_pay PASSIVA), o CIEL IT emitiria **2 NFs nativamente, sem código nosso** — só config. **CONFIRMAR ao vivo** se o `create_invoice` separa por picking_type ou se funde tudo na NF do picking faturado (não testado ainda; é o 1º experimento).
-   - **(ii)** estender a **server action 1512** (editável) para separar pós-`create_invoice`: ⚠️ ela fatura TODOS os pickings de TODAS as empresas (não só industrialização) + server action custom **some em upgrade** do CIEL IT (precedente DFE NFD) → risco alto.
-   - **(iii) nosso pipeline** (Skill 8) emite a 2ª NF explodindo a BoM (como já fazemos na remessa) — mais controle, isolado do robô.
-   Gatilho real = picking do PA / `liberar_faturamento`.
+1. **R1 — emitir a 2ª NF (saída LF).** ✅ **DESENHO E2E FECHADO na sessão 9 (12/06): `SOT §6.1 v3.1`** (🟡 proposta, aguarda validação do Rafael) — **wizard nativo `stock.invoice.onshipping` chamado por NÓS** (mesma chamada do robô ⇒ expansão automática da BoM = R1 literal) **+ split em DRAFT** (NF-serviço só-5124 no j847; NF-insumos só-5902 no journal RETIND com `l10n_br_no_payment=True` + `no_payment=26667` + price_unit FORÇADO = remessa) + saga de transmissão (serviço → refNFe → insumos). Histórico: hipótese (i) refutada na sessão 8 (`create_invoice` funde; VIA 1 fechada). Desenho revisado por painel adversarial 3 lentes (30 findings incorporados — CST 50/51 corrigido, pt98 pré-req, ETL pré-condição GATE 2, 3 alavancas anti-robô).
+   - ✅ **GATE 0 EXECUTADO E APROVADO (2026-06-13)** (`scripts/s8d_gate0_split_experimento.py` v3.1): split contábil em journals de teste **provou a hipótese central** — NF só-5902 com journal `l10n_br_no_payment=True`+conta 26667 **baixa a PASSIVA `5101020001`** (`D 8,37`, total=0) no `action_post`; NF só-5124 fica limpa. Sem SEFAZ, postado e deletado (zero rabo; NF-modelo 180552 intacta). **2 aprendizados** (`ACHADOS §"GATE 0 EXECUTADO"`): (a) o redirecionamento do no_payment só aparece pós-`action_post` (draft mostra CLIENTES) — não assustar no GATE 1; (b) resíduo = a conta de contrapartida das 5902 (transitória 1150100012 vs terceiros 1150200001) — definida pela OPERAÇÃO fiscal da linha, a verificar no GATE 1.
+   - ✅ **VEÍCULO DECIDIDO: SERVER ACTION** (Rafael 13/06) — server-side mata o timeout do recompute; gatilho via cron (padrão dos 12 robôs); ⚠️ dívida: script de re-aplicação versionado + monitor anti-upgrade (some em upgrade CIEL IT); SEFAZ fica fora da SA (Playwright nosso). `SOT §6.1` "Veículo".
+   - ▶️ **PRÓXIMOS PASSOS (em curso)**: (1) **config** — criar **journal RETIND** (LF sale, `l10n_br_no_payment=True` + `account_no_payment_id=26667` + `l10n_br_tipo_pedido` VAZIO) + **picking_type de saída de 31093** (configurar pt98 `invoice_move_type='out_invoice'` OU clonar pt66 — decidir no grounding) + isolamento anti-robô (`picking.robo` fora de 1..11); (2) **GATE 1** (piloto draft-only, asserts a-g `SOT §6.1`, inclui contrapartida das 5902 = terceiros 1150200001 + mede timeout recompute); (3) **GATE 2** (SEFAZ, pré-condições ETL + contenção FB + POP); (4) escrever a server action + script de re-aplicação + monitor.
 2. **Journal + no_payment (config):** criar/repontar **1 journal de retorno-de-insumos** (LF sale) com `no_payment=26667` (PASSIVA `5101020001`) — hoje **NENHUM** journal sale LF aponta a PASSIVA (j1002 RETRABALHO usa 5101010046; mudá-lo atinge todo o retrabalho). Lado FB: journal de entrada-de-insumos com `no_payment=22800` (ATIVA) ou ajustar j1001. *(CFOP 5902/1902, não 5949 — confirmar fp que força 5902.)*
 3. **R3 — vínculo:** preencher `referencia_ids` (refNFe) automaticamente nas 2 NFs de retorno (apontando remessa RPI/5901 e/ou uma à outra) + mesmo `invoice_origin`.
 4. **R2 — escrituração automática (entrada FB):** estender `DFe→PO→invoice` para os 2 DFes (serviço + insumos) escriturarem **juntos e vinculados** (o trilho já roda em 3087 casos).

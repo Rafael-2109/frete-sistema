@@ -152,10 +152,15 @@ def main():
     ja = o.execute_kw('account.journal', 'create',
                       [{'name': 'ZZ TESTE GATE0 PA — DELETAR', 'code': 'ZG0A', 'type': 'sale', 'company_id': 5}],
                       {'context': CTX})
+    # FIX painel sessao 9 (lente mecanismo, HIGH): os precedentes vivos (j1002/j1003)
+    # tem o BOOLEAN l10n_br_no_payment=True ALEM da conta — campo armazenado independente
+    # (3 journals com conta setada + boolean False existem). Sem o boolean, a copia-B
+    # poderia dar FALSO NEGATIVO (logica CIEL IT pode gatear a substituicao pelo boolean).
     jb = o.execute_kw('account.journal', 'create',
                       [{'name': 'ZZ TESTE GATE0 INSUMOS — DELETAR', 'code': 'ZG0B', 'type': 'sale',
-                        'company_id': 5, 'account_no_payment_id': NO_PAY_PASSIVA}], {'context': CTX})
-    print(f"      journal A (PA, no_pay vazio)={ja} ; journal B (INSUMOS, no_pay {NO_PAY_PASSIVA})={jb}")
+                        'company_id': 5, 'l10n_br_no_payment': True,
+                        'account_no_payment_id': NO_PAY_PASSIVA}], {'context': CTX})
+    print(f"      journal A (PA, no_pay vazio)={ja} ; journal B (INSUMOS, no_payment_bool=True + conta {NO_PAY_PASSIVA})={jb}")
 
     def copia_e_separa(jid, remover_cfop, label):
         cid = o.execute_kw('account.move', 'copy', [VND_MISTA_MENOR, {'journal_id': jid}], {'context': CTX})

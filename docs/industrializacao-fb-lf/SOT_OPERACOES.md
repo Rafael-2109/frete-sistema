@@ -4,7 +4,7 @@ camada: L3
 sot_de: —
 hub: docs/industrializacao-fb-lf/INDEX.md
 superseded_by: —
-atualizado: 2026-06-03
+atualizado: 2026-06-13
 -->
 # SOT — Operações de Industrialização FB↔LF (fonte única)
 
@@ -43,13 +43,15 @@ Industrialização por encomenda: os **insumos nunca mudam de dono** — são e 
 - **LF**: material **não é seu** → balanço com impacto de equity **zero**; reconhece **receita de serviço de industrialização**.
 - **Ciclo fecha**: controle FB e compensação LF **zeram** a cada remessa↔retorno; estoque físico só reflete PA (FB) + sobras.
 
-### Tributação por CFOP (✔v2 — NF de retorno é MISTA)
+### Tributação por CFOP (✔v2 — NF de retorno é MISTA; CST corrigido v3.1)
 | CFOP | O que é | ICMS | Observação |
 |---|---|---|---|
-| 5901→1901 | Remessa dos insumos (da FB) | **suspenso CST 51** | valor = custo dos insumos; prazo legal de retorno (**180 dias** ❓Contador) |
-| 5902→1902 | Retorno **simbólico** dos insumos **utilizados** | **suspenso CST 51** | **valor = valor da remessa 5901** (invariante de fechamento ✔v2) |
-| 5903→1903 | Retorno dos insumos **não utilizados** (sobra) | **suspenso CST 51** | valor = custo da sobra |
-| 5124→1124 | **Industrialização efetuada** = valor agregado LF (serviço + materiais próprios LF) | **SEM ICMS** ✔v2.1 (confirmado em NF real: CBS/IBS/PIS/COFINS + "INDUSTRIALIZACAO", zero ICMS) | **NÃO é "o PA"** ✔v2; é o valor agregado |
+| 5901→1901 | Remessa dos insumos (da FB) | **suspensão CST 50** ✔v3.1 (verificado ao vivo: RPI/2026/00245 linhas `icms_cst=50`, PIS/COFINS 08) | valor = custo dos insumos; prazo legal de retorno (**180 dias** ❓Contador) |
+| 5902→1902 | Retorno **simbólico** dos insumos **utilizados** | **suspensão CST 50** ✔v3.1 (verificado: VND 738097 linhas 5902 `icms_cst=50`, PIS/COFINS 08, tax_ids=[]) | **valor = valor da remessa 5901** (invariante de fechamento ✔v2) |
+| 5903→1903 | Retorno dos insumos **não utilizados** (sobra) | CST 50 presumido (mesmo regime) — [confirmar no GATE 1] | valor = custo da sobra |
+| 5124→1124 | **Industrialização efetuada** = valor agregado LF (serviço + materiais próprios LF) | **SEM ICMS destacado — CST 51 (diferimento)** ✔v3.1 (verificado: linha 5124 `icms_cst=51`, PIS/COFINS **01**) | **NÃO é "o PA"** ✔v2; é o valor agregado |
+
+> ⚠️ **v3.1 (2026-06-12):** as versões anteriores diziam "CST 51 suspenso" para todas as linhas — INCORRETO em 2 sentidos (51 = diferimento, não suspensão; remessa/retorno usam **50**). Na implementação **NÃO hardcodar CST** — deixar a operação/posição fiscal derivar; assert no GATE 1 de que as linhas saem iguais às NFs autorizadas de referência.
 
 > ✔v2.1 (2026-05-30, NF real): **NÃO há ICMS em nenhuma etapa** (CST51 suspenso na remessa; impostos do retorno = CBS/IBS/PIS/COFINS + "INDUSTRIALIZACAO", já tratados pelas operações atuais). **Não mexer em imposto.** A NF de retorno LF→FB tem **N linhas 5902** (insumos, valor=remessa) + **linha(s) 5124** (valor agregado) + **linhas 5903** (sobra). O PA físico na FB é valorado por (insumos consumidos + valor agregado).
 
@@ -173,12 +175,42 @@ A Contadora **aprovou separar em 2 NF** (`MATERIAL_CONTADORA §0`) com **3 requi
 
 **Gaps de execução (a resolver na implementação — detalhe em `PROMPT_PROXIMA_SESSAO`):**
 1. **Journal de retorno-insumos** (LF sale) com `no_payment=26667` (PASSIVA `5101020001`) — **NENHUM** journal sale LF aponta a PASSIVA hoje (criar/repontar; mudar j1002 atinge o retrabalho). Lado FB: `no_payment=22800` (ATIVA) no j1001 ou journal dedicado.
-2. **Onde emitir a 2ª NF:** (A) customizar `create_invoice` do CIEL IT (fornecedor) **ou (B) nosso pipeline** (recomendado — mais controle).
-3. **Veículo da NF de insumos** (simbólica, sem movimento físico) + CFOP **5902/1902** (não 5949).
+2. **Onde emitir a 2ª NF:** (A) customizar `create_invoice` do CIEL IT (fornecedor) **ou (B) nosso pipeline** (recomendado — mais controle). → resolvido pelo desenho §6.1 (wizard nativo + split em draft).
+3. **Veículo da NF de insumos** (simbólica, sem movimento físico) + CFOP **5902/1902** (não 5949). → resolvido pelo desenho §6.1 (account.move direto, sem picking).
 4. **AVCO Ic+S (G8)** — medir no piloto (`ACHADOS §D`).
 5. **Pontos de código que assumem 1 NF** — `ACHADOS §E` (orchestrator `inventario_pipeline`, Skill 7/8, `recebimento_lf_odoo_service`, ETL `faturamento_service`).
 
-> Mecanismo/provas: `ACHADOS §A–§I`. Próximo passo operacional: `PROMPT_PROXIMA_SESSAO`.
+### 6.1 Desenho E2E da EMISSÃO 2-NF (v3.1, sessão 9 — 🟡 PROPOSTA, validar com Rafael)
+
+> Grounding READ-only sessão 9 (`s9_grounding_desenho.py` + código da server action 1512) — `ACHADOS §sessão 9`. **v3.1 = v3.0 revisada por painel adversarial 3 lentes** (mecanismo/fiscal/operacional; 30 findings, veredicto unânime AJUSTES_NECESSARIOS — nenhuma refutação da espinha). Princípio do Rafael: **replicar a forma automática de puxar os componentes** (expansão nativa da BoM = R1 literal) **em 2 docs separados**, com a NF do serviço **puxando** a NF de retorno dos insumos.
+
+**Premissa confirmada (2 camadas — por que 2 docs):**
+- **Física (stock.move): GRANULARIZA por linha** — `l10n_br_movimento_estoque` é da operação, atribuída POR LINHA (`account.move.line.l10n_br_operacao_id`); op 3252 já criada p/ a 1902. ⇒ o lado "não re-inflar estoque" se resolve por item da NF.
+- **Contábil (contrapartida/baixa da compensação): NÃO granulariza por linha** — o `no_payment` é do JOURNAL (documento); em NF mista o CLIENTES/FORNECEDORES do serviço **absorve** a contrapartida das linhas simbólicas (provado 2×: sessão 5 saída, sessão 6 entrada/R-UNIF; a operação NÃO tem campo de conta — 133 campos verificados). ⇒ a baixa da 5101010001/5101020001 **exige documento separado**. É a razão de ser das 2 NFs.
+
+**Escopo desta versão:** ciclo SEM sobras (piloto consome 100%). O desenho-alvo geral inclui a perna **5903** (sobras — tem movimento físico real; 3º documento via picking próprio) — adicionar antes do rollout.
+
+**Fluxo da emissão (Etapa 4, LF→FB):**
+| # | Passo | Mecanismo | Fonte/prova |
+|---|---|---|---|
+| 0 | Operador cria **1 picking só com o PA** (como hoje), **NÃO libera faturamento** + **isolamento técnico**: `picking.robo` fora da partição 1..11 e `refaturar_se_cancelado=False` | 3 alavancas: domain do robô exige `liberado_faturamento=True` E `robo=N` (1..11); robô pula picking c/ `invoice_id` não-cancelado (⚠️ guard comentado `# REGRA DESATIVADA` no code — não confiar só nele). POP operacional formalizado (quem NÃO libera) | código 1512 (sessão 9) + painel |
+| 1 | Automação detecta picking done do regime — **discriminador: origem `31093` / pt98 / whitelist do piloto** — e chama o **wizard nativo** `stock.invoice.onshipping` (`create({company_id, journal_id=j847})` → `create_invoice()`) | mesma chamada do robô ⇒ NF mista nasce em DRAFT com expansão automática da BoM (R1 literal). **PRÉ-REQUISITO: pt98 hoje tem `invoice_move_type=False` e `tipo_pedido=False`** (verificado) → configurar `invoice_move_type='out_invoice'` (plano B: clonar pt66 com src=31093). ⚠️ Expansão só foi provada em pt66 — assert no GATE 1 | código 1512; BoM 9/9 (`ACHADOS §G`); painel (pt98) |
+| 2 | **Split em DRAFT** (ordem fixa): remover linhas 5902 da NF original → criar NF-insumos no **journal RETIND** com as 5902 → **write `price_unit` = valores da REMESSA (RPI)** → recompute fiscal → **RE-ASSERT linha a linha** (preço sobrevive? 5902 não re-expandiu na NF-serviço?) | **Spec RETIND** (LF sale): `l10n_br_no_payment=True` **+** `account_no_payment_id=26667` (precedentes j1002/j1003 têm AMBOS — boolean é campo independente) **+ `l10n_br_tipo_pedido` VAZIO** (sempre setado por nós; evita o search `limit=1` do robô rotear retrabalho p/ o RETIND). NF-insumos = `account.move` direto, sem picking | V3 (expansão valora por `lst_price`, NÃO remessa ⇒ forçar obrigatório); painel (boolean + ordem + re-expansão) |
+| 3 | `onchange impostos` + `action_post` das 2 — **imediatamente antes da transmissão** (janela de segundos, não minutos: NF-serviço posted em j847 é visualmente idêntica às VND que o operador transmite hoje) | contrapartidas: serviço `D CLIENTES (S) / C receita+tributos`; insumos `D 5101020001 PASSIVA (Ic) / C [transitória]` = **a baixa**. ⚠️ recompute via XML-RPC já mediu **>400s** → timeout ≥600s + cada passo idempotente (pesa pró-server-action) | **GATE 0 (s8d) prova antes do piloto**; painel |
+| 4-5 | **Saga de transmissão** (Playwright; máquina de estados persistida por picking): pré-validar NF-insumos → transmitir **serviço** → `cstat=100` → gravar `referencia_ids` (chave do serviço + da RPI) na NF-insumos → transmitir **insumos** → `cstat=100` | robô tem transmissão **DESATIVADA** (código). Em rejeição da NF-insumos: retentativas + correção em draft + **deadline < janela de ~24h de cancelamento da NF-serviço**. ⚠️ **NF só-5902 é INÉDITA na SEFAZ** (SARET autorizada = 5949; única 5902 está cancelada) — precedente de FORMA = a própria RPI/5901 (CST 50, autorizada rotineiramente); rejeição = cenário normal, não falha do desenho | sessão 9 + painel (V4 corrigido) |
+
+**Veículo da automação — ✅ DECIDIDO: SERVER ACTION (Rafael, 2026-06-13).** Roda server-side ⇒ elimina o timeout do recompute >400s; gatilho via **cron** (padrão dos 12 robôs 1512; `base.automation` quase não usado no ambiente — só 1). Precedente: **264 server actions `state=code`** (2 do Rafael — 1952/1953); uid 42 cria/edita SA+automation+journal+picking_type (verificado 13/06). ⚠️ **Dívida de manutenção OBRIGATÓRIA** (o código vive no banco do Odoo, não no Git): (a) **script de re-aplicação idempotente versionado** (re-cria a SA via XML-RPC) + (b) **monitor anti-upgrade** (SA custom some em upgrade CIEL IT — precedente DFE NFD). A **transmissão SEFAZ fica FORA da SA** (Playwright nosso, com saga/rollback — o robô 1512 já tem a transmissão desativada). GATE 1 ainda mede o recompute (informa a implementação da SA).
+
+**Resiliência (falha no meio — obrigatório na implementação):** máquina de estados persistida keyed por `picking_id` (retomada idempotente em cada passo); **marcador na NF mista draft** (`ref`/narration "AUTOMACAO-2NF — NÃO POSTAR/TRANSMITIR" + activity); varredura "mista draft do regime > N min" com alerta; rollback sempre zera `liberado_faturamento` e garante `refaturar_se_cancelado=False` (senão o robô re-fatura NF cancelada).
+
+**Gates até o faturamento (ordem, sem SEFAZ até o GATE 2):**
+- **GATE 0** — ✅ **EXECUTADO E APROVADO (2026-06-13)** (`s8d` v3.1, journal B com `l10n_br_no_payment=True`): split contábil em journals de teste provou que a NF só-5902 com no_payment **baixa a PASSIVA `5101020001` (`D 8,37`, total=0)** e a NF só-5124 fica limpa (`D CLIENTES / C serviço+tributos`). Sem SEFAZ, postado e deletado (zero rabo). **Aprendizado:** redirecionamento só aparece pós-`action_post` (draft mostra CLIENTES); resíduo = conta de contrapartida das 5902 (transitória vs terceiros `1150200001`) p/ o GATE 1. Detalhe: `ACHADOS §"GATE 0 EXECUTADO"`.
+- **GATE 1** (piloto, draft-only, tudo deletável) — asserts: (a) wizard aceita o picking pt98 configurado; (b) nº linhas 5902 == BoM do 4870112 (16 comps); (c) CFOPs (5124/5902) + CST (51/50) + ops por linha iguais às NFs autorizadas de referência; (d) pós-onchange a NF-serviço NÃO re-expande as 5902; (e) `price_unit` forçado == RPI/2026/00245 (11 casas) pós-recompute; (f) robô não seleciona o RETIND p/ nenhum picking existente; (g) write de `referencia_ids` em move posted funciona.
+- **GATE 2** (piloto, SEFAZ — irreversível, go duplo) — **PRÉ-CONDIÇÕES**: filtro ETL deployado (`faturamento_service` ignora NF do journal RETIND — ⚠️ `total≈0` NÃO é filtro confiável: `amount_untaxed` carrega valor) + contenção lado FB (avisar fiscal: **NÃO escriturar os 2 DFes** até a Etapa 5 — op default 2027 re-infla estoque) + POP de transmissão (auditar `write_uid` das últimas transmissões p/ confirmar o ator) + runbook de rollback parcial (3 saídas: retransmitir insumos corrigida / cancelar serviço na janela 24h via UI / estorno contábil). Medição: `Δ5101020001(LF) = −278,56` (baixa Ic), refNFe presente, j847 íntegro, **zero `FaturamentoProduto`/PO espúrios**.
+
+**Resíduos conhecidos (pós-piloto, antes do rollout):** G8 AVCO Ic+S na entrada FB (medir no piloto, `ACHADOS §D`) · perna **5903** (sobras) · mapeamento insumo→preço-da-remessa p/ ciclos com N remessas (par remessa↔retorno por ciclo/lote via refNFe) · controle do prazo **180 dias** CST 50 (alerta ~150d; backlog R$60,8M = `GOALS G9`) · pontos de código 1-NF (`ACHADOS §E`) · Etapa 5 (escrituração 2 DFes na FB).
+
+> Mecanismo/provas: `ACHADOS §A–§I` + `§sessão 8` + `§sessão 9`. Próximo passo operacional: `PROMPT_PROXIMA_SESSAO`.
 
 ---
 
@@ -195,6 +227,7 @@ A Contadora **aprovou separar em 2 NF** (`MATERIAL_CONTADORA §0`) com **3 requi
 | 2.6 | 2026-06-02 | **EXPERIMENTO ENTRADA (sessão 6, NF-teste postada/excluída — zero sujeira) — R-UNIF PROVADO** (`ACHADOS §"ACHADO 2026-06-02 (sessão 6)"`). `no_payment=22800` no j1001 **sozinho NÃO baixa a ATIVA** numa NF mista de entrada: o `FORNECEDORES` do serviço (1124) absorve a 1902 (NET ATIVA=0, FORNECEDORES=−120,05), espelho do `R2` da saída. **G5a CONVERGE com G4:** a 1902 precisa vir em DOC SEPARADO do serviço — **mesma decisão fiscal (Contadora) resolve os 2 lados**. Estrutura real medida: **0/1600 ENTSI tocam a ATIVA**; 1124→op **1917** (docs diziam 3064/3134), 1902→op **2027** (autocancela); 490 mista / 1060 pura-serviço / 1 pura-1902; op 3252 recompute >400s (lento, normal). |
 | 2.7 | 2026-06-02 | **GROUNDING FLUXO 2-NF (sessão 7, READ-only, 5 scripts `s7_*`) — `ACHADOS §"ACHADO 2026-06-02 (sessão 7)"`.** O "COMO" da separação mapeado ao vivo: separação = **composição de linhas** (insumos 5902/1902 já simbólicos, 0 move; PA viaja na linha de serviço 5124↔1124, única com move). Journal = `picking_type.l10n_br_tipo_pedido` (1 picking=1 NF). **3 gaps p/ executar (b):** journal c/ no_payment PASSIVA `5101020001` inexistente; pt98 `tipo_pedido=False`; veículo da NF de insumos simbólica a definir. SARET prova o mecanismo (no_payment em doc total=0) mas é devolução de produto REAL. Anexado ao `MATERIAL_CONTADORA §5`. PA=Ic+S = resíduo do piloto (G8). |
 | **2.8** | **2026-06-02** | **CONTADORA APROVOU emitir 2 NF** (`MATERIAL_CONTADORA §0`) + **3 requisitos** (R1 emissão automática · R2 escrituração automática · R3 vínculo — ver **§6**). Caminho (b) confirmado. **Forma 1 (subcontratação nativa) DESCARTADA** (configurada mas dormente, `ACHADOS §I`); **Forma 2 (pipeline deriva a 2ª NF)** = caminho. **Etapas 4/5 DESBLOQUEADAS** → projeto entra na fase de **IMPLEMENTAÇÃO**. Requisitos+gaps em §6; handoff em `PROMPT_PROXIMA_SESSAO`. |
+| **3.1** | **2026-06-12** | **Desenho E2E da emissão 2-NF (§6.1)** — sessão 9: hipótese (i) já refutada (sessão 8) → caminho = **wizard nativo chamado por nós + split em DRAFT** (NF do serviço puxa a NF de insumos, princípio Rafael). Grounding ao vivo: robô **não transmite** SEFAZ (code 1512), expansão valora por `lst_price` (≠ remessa ⇒ forçar price_unit), 3 alavancas de isolamento do robô. Revisado por **painel adversarial 3 lentes** (30 findings → v3.1): CST corrigido (5901/5902=**50**; 5124=**51**), spec RETIND completa (`l10n_br_no_payment=True`+conta+tipo_pedido vazio), pt98 config = pré-req GATE 1, ETL = pré-condição GATE 2, saga SEFAZ c/ janela 24h, NF só-5902 é inédita (precedente de forma = RPI). **🟡 PROPOSTA — aguarda validação Rafael → GATE 0.** |
 
 ## Contexto
 

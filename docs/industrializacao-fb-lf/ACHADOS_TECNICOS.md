@@ -4,7 +4,7 @@ camada: L3
 sot_de: —
 hub: docs/industrializacao-fb-lf/INDEX.md
 superseded_by: —
-atualizado: 2026-06-03
+atualizado: 2026-06-13
 -->
 # ACHADOS TÉCNICOS — Industrialização FB↔LF (Odoo / CIEL IT)
 
@@ -56,6 +56,8 @@ atualizado: 2026-06-03
   - [G. Como a NF é montada HOJE — o operador NÃO digita os insumos (fluxo operacional)](#g-como-a-nf-é-montada-hoje-o-operador-não-digita-os-insumos-fluxo-operacional)
   - [H. Rastreabilidade remessa ↔ PA para o cenário 2-NF (vínculo de TELA nativo — `s7_rastreabilidade`)](#h-rastreabilidade-remessa-pa-para-o-cenário-2-nf-vínculo-de-tela-nativo-s7_rastreabilidade)
   - [I. Subcontratação nativa + fluxo de ENTRADA (`s7_subcontratacao`) — base para "1 doc → resto automático"](#i-subcontratação-nativa-fluxo-de-entrada-s7_subcontratacao-base-para-1-doc-resto-automático)
+- [ACHADO 2026-06-03 (sessão 8) — hipótese (i) REFUTADA (create_invoice FUNDE) + GATE 0 armado](#achado-2026-06-03-sessão-8-hipótese-i-refutada-create_invoice-funde-gate-0-armado)
+- [ACHADO 2026-06-12 (sessão 9) — grounding do desenho da emissão (robô lido por dentro + valores da expansão)](#achado-2026-06-12-sessão-9-grounding-do-desenho-da-emissão-robô-lido-por-dentro-valores-da-expansão)
 - [Contexto](#contexto)
 
 > **Papel deste doc:** mecanismo Odoo/CIEL IT + **IDs/constantes** (contas, operações, journals, locations, picking types). Desenho-alvo e decisões = `SOT_OPERACOES.md`. Índice geral: `README.md`.
@@ -406,6 +408,59 @@ Journals sale LF com no_payment de compensação: j863 `industrializacao`→5101
 **RESOLVIDO — uso medido (`s7_ciclo_subcontratacao`): a subcontratação nativa está CONFIGURADA mas DORMENTE.** 153 BoMs subcontract (100% subcontratante=LF), MAS **0 pickings** em pt75/pt74/pt80 (resupply + MO subcontract **nunca usados**) e **1 única MO subcontract — CANCELADA, 2024** (FB/SBC3/00001). O fluxo REAL é via **3087 POs `serv-industrializacao`** (entrada FB, geradas do DFe) + pickings MANUAIS (pt53 remessa / pt66 retorno) + robô CIEL IT.
 - ⇒ **VEREDITO: Forma 1 (subcontratação nativa) NÃO recomendada** — exigiria reativar um fluxo morto p/ 153 produtos + validar a camada fiscal CIEL IT do subcontracting (nunca exercitada) + retreinar operação. Alto risco/esforço, muda o dia-a-dia.
 - ⇒ **Forma 2 (pipeline deriva) é o caminho** — aderente ao fluxo atual. **A ENTRADA já é automática e vinculada** (`DFe → PO serv-industrializacao → invoice`, 3087 casos): 2 DFes (serviço + insumos) gerariam 2 escriturações automáticas, ligadas por refNFe/PO. **O trabalho concentra-se na SAÍDA** (separar a emissão que hoje funde tudo em 1 NF via expansão da BoM no robô — o nosso pipeline emite a 2ª NF de insumos derivada da BoM, OU customiza-se o `create_invoice` do CIEL IT).
+
+
+## ACHADO 2026-06-03 (sessão 8) — hipótese (i) REFUTADA (create_invoice FUNDE) + GATE 0 armado
+
+> READ-only (4 scripts: `s8_hipotese_i_grounding`, `s8b_server_action_grounding`, `s8c_gate0_mapear`, `s8d_gate0_split_experimento` em dry-run). Zero escrita Odoo. Painel adversarial 3 lentes sobre a hipótese (i). Outputs originais em `/tmp` (efêmeros, perdidos); **fatos centrais re-validados ao vivo em 2026-06-12** (s8c+s8d re-executados — estado idêntico).
+
+### TL;DR (sessão 8)
+1. **Hipótese (i) do handoff REFUTADA** (painel 3 lentes, 3/3): o `create_invoice()` do CIEL IT (`stock.invoice.onshipping`) **FUNDE** 5124+5902 na NF do picking faturado — **não** separa a expansão da BoM por picking_type. Não existem "2 NFs nativas só por config" via wizard.
+2. **VIA 1 (rotear o PA por uma operação 5124 "sem explosão") FECHADA**: TODAS as operações com CFOP 5124 (ops **849**/FB, **2702**/LF, **3039**/LF) têm `tipo_pedido='venda-industrializacao'` — 5124 ≡ venda-industrializacao; não há tipo alternativo p/ o PA escapar da expansão. *(Re-confirmado ao vivo 12/06.)*
+3. **Server action no Odoo é veículo VIÁVEL para a automação** (pergunta do Rafael, `s8b`): precedentes de robôs/server actions custom existem (11 robôs CIEL IT); padrão de disparo = cron/`base.automation`. ⚠️ Risco conhecido: server action custom **some em upgrade** do CIEL IT (precedente DFE NFD) — exige runbook de re-aplicação.
+4. **Questão central convergiu para: como a NF do PA sai SÓ-5124** (a expansão das 5902 é embutida no `create_invoice`). Caminho restante = **VIA 2/B: split na janela DRAFT→pré-SEFAZ** — deixar a NF mista nascer e separá-la em 2 documentos ANTES de transmitir.
+5. **GATE 0 armado (`s8d_gate0_split_experimento.py`) — AGUARDANDO GO**: copia a VND mista menor (**180552** `VND/2025/00089`, 1×5124 + 24×5902, total R$43,37) para 2 journals de teste — **cópia A** só-5124 (no_payment VAZIO) e **cópia B** só-5902 (`no_payment=26667` PASSIVA) — recompute fiscal nativo → `action_post` (SÓ contábil, **sem SEFAZ**) → mede contrapartidas (A: D CLIENTES só do serviço; B: baixa `5101020001`) → cleanup total (draft+unlink+deleta journals, zero sujeira). Modos: dry-run (sem flag) → `--confirmar` → `--postar A B` → `--cleanup A B JA JB`.
+6. **3 gaps fiscais permanecem** (inalterados 12/06): (a) op 5124-sem-explode inexistente (item 2); (b) **nenhum journal sale LF com `no_payment=26667`** (j847 venda-industrializacao = no_pay VAZIO; j1003 perda → 26652 ATIVA — o erro dos R$8,67M); (c) pt98 `tipo_pedido=False`.
+
+### Estado ao vivo re-validado (2026-06-12)
+- PA piloto 27834 (4870112): **1 un em `31093 LF/PA-Terceiros`, lote `PILOTO-3105` (lot 60542), reserva 0** — pronto p/ Etapa 4. (+1 un em 42/LF-Estoque lote 142/26, fora do piloto.)
+- NF-modelo do experimento intacta: 180552 `VND/2025/00089` (1×5124 + 24×5902). Próximas candidatas: 76427 (R$81,20), 149498 (R$100,74).
+- Operações 5902: op 850 (FB, dev-industrializacao) · op **2710** (LF, dev-industrializacao → j1002 RETRABALHO) · op **2864** (LF, venda-industrializacao = a da NF mista).
+
+
+## ACHADO 2026-06-12 (sessão 9) — grounding do desenho da emissão (robô lido por dentro + valores da expansão)
+
+> READ-only (`s9_grounding_desenho.py` + leitura do `code` da server action 1512 + follow-ups). Zero escrita Odoo. Fundamenta o desenho `SOT §6.1`.
+
+### TL;DR (sessão 9)
+1. **O robô NÃO transmite à SEFAZ** — o code da 1512 tem o bloco `## DESATIVADO TRANSMISSAO DA NFE` com `continue` ANTES do `action_gerar_nfe()`. O robô só: busca pickings → wizard → `create_invoice()` → onchange impostos → `action_post`. A transmissão das VND (autorizadas em ~5–10 min após create, cstat=100) é de OUTRO ator (manual/Josefa — não há cron de transmissão ativo com nome fatura/nfe/nf-e/transmit). ⇒ a "corrida" pós-post é com humano, não com cron — mas o desenho não depende de janela (conduzimos a emissão inteira).
+2. **Domain do robô (12 crons de 1 min, particionados pelo campo `picking.robo`=1..11):** `[(company), (picking_type_id.invoice_move_type='out_invoice'), (state='done'), (date_done>=2023), (liberado_faturamento=True), (erro_faturamento=False), (robo=N)]` — e **PULA picking com `invoice_id` setado** (não-cancelado). ⇒ **2 alavancas de isolamento**: não liberar faturamento E/OU faturar nós primeiro (invoice_id ocupa o slot). Campo `robo` é uma 3ª alavanca.
+3. **O wizard é chamável por nós**: o robô faz exatamente `stock.invoice.onshipping.with_context(active_ids=[picking]).create({'company_id', 'journal_id'})` → `create_invoice()` — journal passado EXPLICITAMENTE (fallback: journal sale com `l10n_br_no_payment=False`). ⇒ replicar a expansão nativa via XML-RPC = a mesma chamada (R1 literal). Em erro, o robô marca `picking.erro_faturamento=True` + activity (não tocar nesses campos).
+4. **V3 — valores da expansão NÃO vêm da remessa**: nas linhas 5902 da VND/2026/00359, `price_unit` = **`lst_price` do cadastro** (3 matches exatos de 11 casas: ETIQUETA 0.02561108249, FILME 8.0777707682, FITA 0.06769348779); 7 produtos com lst_price=0 hoje têm pu≠0 (preço da época/pricelist). ⇒ **invariante fiscal 5902=5901 NÃO é garantido pelo nativo** — a NF-insumos deve ter price_unit FORÇADO = valores da remessa (nós os temos).
+5. **V4 — precedente SEFAZ p/ NF simbólica (CORRIGIDO pós-painel)**: NF **total=0 autorizada existe** (SARET cstat=100), MAS as SARET autorizadas são **CFOP 5949** — a única SARET com CFOP **5902** (SARET/2026/00003, move 630193) está **CANCELADA sem cstat**. ⇒ **NÃO há precedente vivo de NF só-5902 autorizada** — a 1ª transmissão do regime será inédita. Precedente de FORMA mais próximo = a própria **remessa RPI/5901** (NF standalone do regime, CST 50, autorizada rotineiramente). Tratar rejeição como cenário normal (corrigível em draft).
+6. **V5/R3 — modelo do refNFe verificado**: `l10n_br_ciel_it_account.account.move.referencia` = `{move_id, l10n_br_chave_nf (44 díg.), company_id}` — preencher é um create simples.
+7. **Campos de status NFe** (nomes reais): `l10n_br_chave_nf`, `l10n_br_cstat_nf`, `l10n_br_situacao_nf` (selection: 'autorizado', 'cce', …), `l10n_br_xml_aut_nfe`. (Sufixo `_nf`, não `_nfe`.)
+
+### Painel adversarial sessão 9 (3 lentes sobre o desenho `SOT §6.1`) — fatos NOVOS verificados ao vivo
+> 30 findings (6 HIGH), veredicto unânime AJUSTES_NECESSARIOS (espinha do desenho mantida). Incorporados na `SOT §6.1 v3.1`. Fatos abaixo re-verificados pelo agente principal (12/06):
+- **CST real por linha (docs anteriores diziam "CST 51 suspenso" — ERRADO):** 5901 e 5902 = **ICMS CST 50 (suspensão)** + PIS/COFINS 08 + tax_ids=[]; **5124 = ICMS CST 51 (diferimento)** + PIS/COFINS 01. Verificado em RPI/2026/00245 e VND/2026/00359. Não hardcodar CST na implementação.
+- **`account.journal.l10n_br_no_payment` (boolean) é campo armazenado INDEPENDENTE da conta** — os precedentes vivos do mecanismo (j1002, j1003) têm **boolean True + conta**; existem journals com conta setada e boolean False. ⇒ journal de teste/RETIND DEVE setar os 2 (fix aplicado no `s8d` v3.1). Os experimentos das sessões 5/6 (journals reais j847/j1001) não são afetados — só o journal de TESTE nascia incompleto.
+- **pt98: `invoice_move_type=False` + `tipo_pedido=False` CONFIRMADO ao vivo** (pt66 = 'out_invoice' + 'venda-industrializacao'). Configurar pt98 é PRÉ-REQUISITO do GATE 1; setar invoice_move_type coloca o picking no domain do robô ⇒ compensar com `picking.robo` fora de 1..11 (3ª alavanca).
+- **Guard `invoice_id` do robô tem comentário `# REGRA DESATIVADA`** no code (o if está ativo hoje, mas a CIEL IT já mexeu nele) — não confiar como única proteção. Caminho residual: invoice cancelada + `refaturar_se_cancelado=True` + liberado ⇒ robô re-fatura.
+- **Expansão da BoM só foi provada em pt66** (42→5); pt98 (31093→26489, 0 usos) é contexto novo — engine seleciona operação POR LINHA por partner/destino ⇒ asserts no GATE 1 (nº linhas, CFOPs, ops).
+
+### ✅ GATE 0 EXECUTADO E APROVADO (2026-06-13) — o mecanismo do split em 2 docs está PROVADO
+> Experimento `s8d_gate0_split_experimento.py` rodado em PROD com go do Rafael, em journals de TESTE, **sem SEFAZ**, postado e **deletado** (cleanup verificado: 0 journals residuais, 0 moves, NF-modelo 180552 intacta posted/43,37/25 linhas). Cópias da VND/2025/00089 (1×5124 + 24×5902).
+
+**Resultado contábil (pós-`action_post`):**
+- **Cópia-A (PA só-5124)** → NF de serviço **limpa**: `D 1120100001 CLIENTES 35,00 / C 3101030001 SERVIÇOS DE INDUSTRIALIZAÇÃO 33,39 + PIS/COFINS`. untax=33,39 total=35,00. (separar as 5902 não quebrou a NF do serviço.)
+- **Cópia-B (INSUMOS só-5902, journal `l10n_br_no_payment=True` + conta 26667)** → **`D 5101020001 REMESSA INDUSTRIALIZAÇÃO (PASSIVA) 8,37 / C 1150100012 FATURAMENTO FÍSICO FISCAL (24 linhas, 8,37)`**. **untax=8,37 total=0,0**. ⇒ **A PASSIVA É BAIXADA (débito) — sem CLIENTES.** ✅ Hipótese central do desenho CONFIRMADA: documento separado só-5902 com no_payment redireciona a contrapartida-resumo (que seria CLIENTES) para a conta de compensação.
+
+**Aprendizados (entram no desenho/GATE 1):**
+1. **O redirecionamento do no_payment só materializa no `action_post`** — em DRAFT a cópia-B mostrava `D CLIENTES 8,37`; só após postar virou `D 5101020001`. ⇒ no GATE 1 **NÃO assustar com o draft**; medir contrapartida apenas pós-post.
+2. **O boolean `l10n_br_no_payment=True` (fix do painel) estava no journal-B e funcionou** — não dá para isolar se a conta sozinha bastaria, mas o desenho está validado COM o boolean (spec RETIND mantém os 2 campos).
+3. **RESÍDUO — conta de contrapartida das 5902**: na cópia-B as 5902 creditaram a transitória `1150100012` (herdada da NF-modelo). No fluxo REAL (NF-insumos simbólica, sem stock.move) essa transitória **não tem SVL que a feche** → ficaria aberta. Para o NET fechar contra a Etapa 2 (`D 1150200001 / C 5101020001`), as 5902 da NF-insumos real precisam creditar a **conta de terceiros `1150200001`** (não a transitória) — definido pela **operação fiscal** da linha 5902, não pelo journal. ⇒ **a verificar no GATE 1** (o GATE 0 provou a baixa da PASSIVA, que é o que estava em xeque; a perna da contrapartida é refinamento do par net-zero, conecta com Design A/B da Etapa 2).
+4. A 180552 tem 5902 com valor real (8,37 contribui ao total da mista) — a NF-insumos do regime deve ter `price_unit` = valores da remessa (já no desenho, V3).
 
 
 ## Contexto
