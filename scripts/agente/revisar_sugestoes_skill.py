@@ -11,6 +11,10 @@ Uso:
     python scripts/agente/revisar_sugestoes_skill.py listar [--all]
     python scripts/agente/revisar_sugestoes_skill.py aprovar adhoc-cluster-4 --nota "..."
     python scripts/agente/revisar_sugestoes_skill.py rejeitar adhoc-cluster-6 --motivo "..."
+    python scripts/agente/revisar_sugestoes_skill.py fechar adhoc-cluster-4 --nota "..."
+
+`fechar` marca status='closed' (sugestao implementada) e propaga a v1 — usar
+APOS a implementacao concluida da skill aprovada.
 
 Env: CRON_API_KEY (carregada do .env). --base-url para apontar fora de PROD.
 """
@@ -82,9 +86,10 @@ def _post_decisao(base_url: str, key: str, status: str, descricao: str,
 def main() -> int:
     load_dotenv()
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("acao", choices=["listar", "aprovar", "rejeitar"])
+    ap.add_argument("acao", choices=["listar", "aprovar", "rejeitar", "fechar"])
     ap.add_argument("suggestion_key", nargs="?")
-    ap.add_argument("--nota", default="", help="plano/observacao da aprovacao")
+    ap.add_argument("--nota", default="",
+                    help="plano da aprovacao OU resumo da implementacao no fechamento")
     ap.add_argument("--motivo", default="", help="motivo da rejeicao (calibracao)")
     ap.add_argument("--all", action="store_true", help="listar todas as categorias")
     ap.add_argument("--base-url", default=DEFAULT_BASE_URL)
@@ -104,6 +109,15 @@ def main() -> int:
             a.base_url, a.suggestion_key, "responded",
             f"Aprovada por Rafael em sessao dev 4-maos ({hoje}). "
             f"Implementacao segue com o Claude Code.",
+            a.nota)
+    if a.acao == "fechar":
+        if not a.nota:
+            print("ERRO: --nota obrigatoria no fechamento (resumo da implementacao)",
+                  file=sys.stderr)
+            return 2
+        return _post_decisao(
+            a.base_url, a.suggestion_key, "closed",
+            f"Implementada e fechada em sessao dev 4-maos ({hoje}).",
             a.nota)
     # rejeitar
     if not a.motivo:
