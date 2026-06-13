@@ -78,6 +78,8 @@ Contas a receber/pagar, extratos bancarios, conciliacao Odoo, CNAB 400, comprova
 ```
 app/financeiro/
   ├── routes/       # 18 arquivos de rotas + __init__.py (financeiro_bp + cnab400_bp)
+  ├── scripts/      # CLI utilitarios. importar_extrato_pdf_srm.py: PDF SRM Bank -> OFX
+  │                 #   (FITID sintetico Data/Hora/Sinal/Valor/Saldo; dedup via unique_import_id)
   ├── services/     # 27 services root + subpacote remessa_vortx/ (8 services)
   ├── workers/      # 8 RQ job files + utils.py (batch processing via Redis)
   ├── parsers/      # 4 parsers (dispatcher, pix_sicoob, models)

@@ -2341,4 +2341,38 @@
     font-size: 0.8rem;
   }
 
+  /* ── Conversor de Extrato SRM (financeiro/conversor_srm.html) ───────────── */
+  .srm-drop {
+    border: 2px dashed var(--bs-border-color, hsl(0 0% 80%));
+    border-radius: .75rem;
+    padding: 2.5rem 1.5rem;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color .15s, background-color .15s;
+  }
+  .srm-drop:hover,
+  .srm-drop.dragover {
+    border-color: var(--bs-primary, hsl(214 100% 46%));
+    background-color: var(--semantic-info-subtle, hsl(214 100% 96%));
+  }
+  .srm-drop__icon { font-size: 2.5rem; opacity: .6; }
+  .srm-file-list { list-style: none; padding: 0; margin: 1rem 0 0; }
+  .srm-file-list li {
+    display: flex; align-items: center; gap: .5rem;
+    padding: .35rem .5rem; border-radius: .4rem;
+  }
+  .srm-result-card {
+    border: 1px solid var(--bs-border-color, hsl(0 0% 87%));
+    border-left-width: 4px;
+    border-radius: .5rem; padding: 1rem 1.25rem; margin-bottom: 1rem;
+  }
+  .srm-result-card.ok { border-left-color: var(--semantic-success, hsl(152 69% 31%)); }
+  .srm-result-card.fail { border-left-color: var(--semantic-danger, hsl(354 70% 54%)); }
+  .srm-kv { display: flex; flex-wrap: wrap; gap: .25rem 1.5rem; margin: .5rem 0; }
+  .srm-kv span { font-size: .875rem; }
+  .srm-kv b { font-variant-numeric: tabular-nums; }
+  .srm-msg { font-size: .825rem; margin: .15rem 0; }
+  .srm-msg--warn { color: var(--semantic-warning-text, hsl(45 100% 25%)); }
+  .srm-msg--err { color: var(--semantic-danger-text, hsl(354 70% 40%)); }
+
 } /* End @layer modules */

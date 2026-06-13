@@ -19,6 +19,7 @@ Estrutura:
 - dashboard.py           - Dashboard central financeiro (NEW)
 - comprovantes.py        - Upload e listagem de comprovantes de pagamento de boleto (NEW)
 - comprovante_match.py   - Matching de comprovantes com faturas Odoo (NEW)
+- conversor_extrato_srm.py - Conversor de extrato SRM Bank: PDF -> OFX (NEW)
 """
 
 import os
@@ -50,3 +51,4 @@ from app.financeiro.routes import dashboard
 from app.financeiro.routes import comprovantes
 from app.financeiro.routes import comprovante_match
 from app.financeiro.routes import remessa_vortx
+from app.financeiro.routes import conversor_extrato_srm

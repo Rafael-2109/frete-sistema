@@ -1,0 +1,250 @@
+{% extends "base.html" %}
+
+{% block title %}Converter Extrato SRM{% endblock %}
+
+{% block content %}
+<div class="fin-container premium-page">
+  <header class="fin-header reveal">
+    <div class="fin-header__content">
+      <h1 class="fin-header__title">
+        <i class="fas fa-file-invoice-dollar"></i>
+        Converter Extrato SRM
+      </h1>
+      <p class="fin-header__subtitle">
+        Extrato SRM Bank em PDF &rarr; OFX pronto para importar no Odoo
+        (FITID sintetico + dedup por <code>unique_import_id</code>)
+      </p>
+    </div>
+    <div class="fin-header__actions">
+      <a href="{{ url_for('financeiro.dashboard') }}" class="btn btn-outline-light btn-sm">
+        <i class="fas fa-arrow-left"></i> Voltar
+      </a>
+    </div>
+  </header>
+
+  <div class="card mb-4">
+    <div class="card-body">
+      <div id="srmDrop" class="srm-drop">
+        <div class="srm-drop__icon"><i class="fas fa-cloud-upload-alt"></i></div>
+        <p class="mb-1"><strong>Arraste os PDFs aqui</strong> ou clique para selecionar</p>
+        <p class="text-muted mb-0"><small>Aceita multiplos extratos SRM (.pdf) de uma vez</small></p>
+        <input type="file" id="srmInput" accept="application/pdf,.pdf" multiple hidden>
+      </div>
+      <ul id="srmFileList" class="srm-file-list"></ul>
+      <div class="d-flex gap-2 mt-3">
+        <button id="srmConverter" class="btn btn-primary" disabled>
+          <i class="fas fa-cogs"></i> Converter
+        </button>
+        <button id="srmLimpar" class="btn btn-outline-secondary" disabled>
+          <i class="fas fa-times"></i> Limpar
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div id="srmResultadoWrap" class="d-none">
+    <div id="srmContinuidade"></div>
+    <div class="d-flex justify-content-between align-items-center mb-2">
+      <h5 class="mb-0">Resultado</h5>
+      <button id="srmBaixarTodos" class="btn btn-success btn-sm d-none">
+        <i class="fas fa-download"></i> Baixar todos os OFX
+      </button>
+    </div>
+    <div id="srmResultado"></div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  const URL_CONVERTER = "{{ url_for('financeiro.conversor_srm_converter') }}";
+  const drop = document.getElementById('srmDrop');
+  const input = document.getElementById('srmInput');
+  const fileList = document.getElementById('srmFileList');
+  const btnConverter = document.getElementById('srmConverter');
+  const btnLimpar = document.getElementById('srmLimpar');
+  const resultadoWrap = document.getElementById('srmResultadoWrap');
+  const resultado = document.getElementById('srmResultado');
+  const continuidade = document.getElementById('srmContinuidade');
+  const btnBaixarTodos = document.getElementById('srmBaixarTodos');
+
+  let arquivos = [];     // File[]
+  let ofxGerados = [];   // {nome, base64}
+
+  function csrfToken() {
+    const m = document.querySelector('meta[name="csrf-token"]');
+    return m ? m.getAttribute('content') : '';
+  }
+
+  function fmtMoeda(v) {
+    if (v === null || v === undefined) return '—';
+    return Number(v).toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+  }
+
+  function escapeHtml(s) {
+    const d = document.createElement('div');
+    d.textContent = s == null ? '' : String(s);
+    return d.innerHTML;
+  }
+
+  function renderFileList() {
+    fileList.innerHTML = '';
+    arquivos.forEach((f, i) => {
+      const li = document.createElement('li');
+      li.innerHTML = `<i class="fas fa-file-pdf text-danger"></i>
+        <span class="flex-grow-1">${escapeHtml(f.name)}</span>
+        <small class="text-muted">${(f.size/1024).toFixed(0)} KB</small>
+        <button class="btn btn-sm btn-link text-danger p-0" data-i="${i}" title="Remover">
+          <i class="fas fa-times"></i></button>`;
+      li.querySelector('button').addEventListener('click', () => {
+        arquivos.splice(i, 1); renderFileList(); syncBotoes();
+      });
+      fileList.appendChild(li);
+    });
+  }
+
+  function syncBotoes() {
+    btnConverter.disabled = arquivos.length === 0;
+    btnLimpar.disabled = arquivos.length === 0;
+  }
+
+  function addFiles(novos) {
+    for (const f of novos) {
+      if (!f.name.toLowerCase().endsWith('.pdf')) continue;
+      if (!arquivos.some(a => a.name === f.name && a.size === f.size)) arquivos.push(f);
+    }
+    renderFileList(); syncBotoes();
+  }
+
+  drop.addEventListener('click', () => input.click());
+  input.addEventListener('change', () => { addFiles(input.files); input.value = ''; });
+  ['dragenter','dragover'].forEach(ev => drop.addEventListener(ev, e => {
+    e.preventDefault(); drop.classList.add('dragover');
+  }));
+  ['dragleave','drop'].forEach(ev => drop.addEventListener(ev, e => {
+    e.preventDefault(); drop.classList.remove('dragover');
+  }));
+  drop.addEventListener('drop', e => { if (e.dataTransfer) addFiles(e.dataTransfer.files); });
+
+  btnLimpar.addEventListener('click', () => {
+    arquivos = []; ofxGerados = [];
+    renderFileList(); syncBotoes();
+    resultadoWrap.classList.add('d-none');
+    resultado.innerHTML = ''; continuidade.innerHTML = '';
+    btnBaixarTodos.classList.add('d-none');
+  });
+
+  function baixarOfx(nome, base64) {
+    const bin = atob(base64);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    const blob = new Blob([bytes], {type: 'application/x-ofx'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = nome;
+    document.body.appendChild(a); a.click(); a.remove();
+    URL.revokeObjectURL(url);
+  }
+
+  function renderResultado(data) {
+    resultadoWrap.classList.remove('d-none');
+    ofxGerados = [];
+    continuidade.innerHTML = '';
+
+    (data.continuidade || []).forEach(c => {
+      const div = document.createElement('div');
+      div.className = 'alert ' + (c.continuo ? 'alert-success' : 'alert-warning') + ' py-2';
+      if (c.continuo) {
+        div.innerHTML = `<i class="fas fa-link"></i> <strong>${escapeHtml(c.de)}</strong>
+          &rarr; <strong>${escapeHtml(c.para)}</strong>: continuo (saldo R$ ${fmtMoeda(c.fim)}).`;
+      } else {
+        div.innerHTML = `<i class="fas fa-exclamation-triangle"></i>
+          <strong>GAP de R$ ${fmtMoeda(c.gap)}</strong> entre
+          <strong>${escapeHtml(c.de)}</strong> (fim R$ ${fmtMoeda(c.fim)}) e
+          <strong>${escapeHtml(c.para)}</strong> (SALDO ANTERIOR R$ ${fmtMoeda(c.ini)}).
+          Falta um extrato cobrindo o intervalo.`;
+      }
+      continuidade.appendChild(div);
+    });
+
+    resultado.innerHTML = '';
+    (data.arquivos || []).forEach(a => {
+      const card = document.createElement('div');
+      card.className = 'srm-result-card ' + (a.ok ? 'ok' : 'fail');
+      const r = a.resumo || {};
+      let html = `<div class="d-flex justify-content-between align-items-start">
+        <div>
+          <strong>${a.ok ? '<i class="fas fa-check-circle text-success"></i>'
+                         : '<i class="fas fa-times-circle text-danger"></i>'}
+            ${escapeHtml(a.nome)}</strong>`;
+      if (a.ok) {
+        html += `<div class="srm-kv">
+          <span>Conta <b>${escapeHtml(r.conta || '—')}</b> (banco ${escapeHtml(r.banco || '—')})</span>
+          <span>Periodo <b>${escapeHtml(r.periodo || '—')}</b></span>
+          <span>Transacoes <b>${r.n_transacoes ?? '—'}</b></span>
+        </div>
+        <div class="srm-kv">
+          <span>Saldo anterior <b>R$ ${fmtMoeda(r.saldo_anterior)}</b></span>
+          <span>Saldo final <b>R$ ${fmtMoeda(r.saldo_final)}</b></span>
+          <span>Creditos <b>R$ ${fmtMoeda(r.creditos)}</b></span>
+          <span>Debitos <b>R$ ${fmtMoeda(r.debitos)}</b></span>
+        </div>`;
+      }
+      html += `</div>`;
+      if (a.ok && a.ofx_base64) {
+        html += `<button class="btn btn-success btn-sm" data-nome="${escapeHtml(a.ofx_nome)}">
+          <i class="fas fa-download"></i> Baixar OFX</button>`;
+      }
+      html += `</div>`;
+
+      (a.warnings || []).forEach(w => {
+        html += `<p class="srm-msg srm-msg--warn"><i class="fas fa-info-circle"></i> ${escapeHtml(w)}</p>`;
+      });
+      (a.erros || []).forEach(e => {
+        html += `<p class="srm-msg srm-msg--err"><i class="fas fa-ban"></i> ${escapeHtml(e)}</p>`;
+      });
+      card.innerHTML = html;
+
+      if (a.ok && a.ofx_base64) {
+        ofxGerados.push({nome: a.ofx_nome, base64: a.ofx_base64});
+        card.querySelector('button[data-nome]').addEventListener('click',
+          () => baixarOfx(a.ofx_nome, a.ofx_base64));
+      }
+      resultado.appendChild(card);
+    });
+
+    btnBaixarTodos.classList.toggle('d-none', ofxGerados.length < 2);
+  }
+
+  btnBaixarTodos.addEventListener('click', () => ofxGerados.forEach(o => baixarOfx(o.nome, o.base64)));
+
+  btnConverter.addEventListener('click', async () => {
+    if (!arquivos.length) return;
+    btnConverter.disabled = true;
+    btnConverter.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Convertendo...';
+    const fd = new FormData();
+    arquivos.forEach(f => fd.append('arquivos', f));
+    try {
+      const resp = await fetch(URL_CONVERTER, {
+        method: 'POST',
+        headers: {'X-CSRFToken': csrfToken()},
+        body: fd,
+      });
+      if (!resp.ok) {
+        let msg = 'Erro ' + resp.status;
+        try { const j = await resp.json(); if (j.erro) msg = j.erro; } catch (_) {}
+        alert(msg);
+      } else {
+        renderResultado(await resp.json());
+      }
+    } catch (err) {
+      alert('Falha de rede: ' + err);
+    } finally {
+      btnConverter.disabled = false;
+      btnConverter.innerHTML = '<i class="fas fa-cogs"></i> Converter';
+    }
+  });
+})();
+</script>
+{% endblock %}
