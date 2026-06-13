@@ -12,6 +12,7 @@ skills:
   - conciliando-transferencias-internas
   - resolvendo-entidades
   - lendo-arquivos
+  - auditando-reclassificacao-odoo
 ---
 
 # Auditor Financeiro — Especialista em Reconciliacao

@@ -130,6 +130,7 @@ SKILL_TO_CATEGORY: Dict[str, str] = {
     'planejando-pre-etapa-odoo': 'Estoque Odoo (Write)',
     'consultando-quant-odoo': 'Estoque Odoo (Read)',
     'auditando-cadastro-fiscal-odoo': 'Pre-Flight Cadastro Fiscal Odoo',
+    'auditando-reclassificacao-odoo': 'Auditoria Reclassificacao Odoo',
 
     # ── SPED ECD audit (subagente auditor-sped-ecd) ──
     'parseando-sped-ecd': 'Auditoria SPED ECD',
