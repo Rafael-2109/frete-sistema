@@ -98,6 +98,41 @@ Usar Read, Grep, Glob para validar a sugestao:
 | `gotcha_report` | Verificar se gotcha ja esta documentado. Confirmar no codigo se e real |
 | `memory_feedback` | Nao tenho acesso direto a memorias — registrar para revisao humana |
 
+### 2.1.1 Anti-falso-positivo: proveniencia e trabalho-dev-em-curso
+
+> Aplicar a `gotcha_report` e `skill_bug` cuja evidencia e um DADO anomalo observado em PROD
+> e que afirmam "o fluxo/processo X grava/trata errado" ou "falta tratamento". Motivo: um dado
+> pode estar torto SEM que o codigo tenha bug — porque foi criado por escrita ad-hoc do proprio
+> agente (falta de ferramenta) ou e workaround de algo ja sendo resolvido em dev. Caso origem:
+> IMP-2026-06-12-003 (embarque DIRETA = falso positivo auto-induzido; o dado veio de criacao
+> ad-hoc do agente, e o embarque era ficticio — workaround da worktree `feat/redespacho-multi-perna`,
+> ainda nao em prod).
+
+**A leitura do codigo do fluxo oficial e SOBERANA** (e o juiz — ja e o passo da tabela acima).
+Se o codigo realmente erra -> **BUG REAL**: implementar/propor, ponto. O resto desta secao so se
+aplica quando **o codigo oficial esta CORRETO mas o dado esta torto**.
+
+Nesse caso ambiguo, ANTES de fechar a causa, checar (sao EVIDENCIA, NAO veredito):
+- **(a) Trabalho dev em curso** — `git worktree list`, `git branch -a` e specs recentes
+  (`docs/`, `docs/superpowers/specs/`): existe solucao estrutural em andamento que explica/obvia
+  o dado anomalo? (ex.: registro criado na mao so porque uma feature ainda nao foi para prod).
+- **(b) Proveniencia ad-hoc** — consultar `agent_adhoc_script` no mesmo Render Postgres (secao
+  "RENDER POSTGRES CONFIG"), filtrando por entidade/tema da sugestao no `command_masked`, SE houver
+  registro: o dado pode ser residuo de escrita ad-hoc do agente (improviso por falta de skill),
+  nao bug de fluxo.
+
+**Matriz de decisao (NEUTRA — nao pesar a mao para nenhum lado):**
+
+| Codigo do fluxo oficial | Sinal externo (a) ou (b) | Conclusao |
+|---|---|---|
+| Erra | qualquer | **BUG REAL** — implementar/propor (sinal externo e irrelevante) |
+| Correto | presente | **NAO e bug de fluxo** — reclassificar: `skill-gap`/falta de ferramenta (proveniencia ad-hoc) OU "obviado por trabalho dev em curso" (worktree/spec). Registrar a causa real na nota |
+| Correto | ausente | **Investigar** — NAO classificar automaticamente |
+
+Principio: (a)/(b) so desempatam a linha do meio ("codigo ok, dado torto, por que?"). NUNCA
+rebaixam um bug confirmado no codigo — um bug de verdade e corrigido mesmo com escrita ad-hoc
+presente; um falso positivo so e reclassificado DEPOIS que o codigo provou estar correto.
+
 ### 2.2 Decidir acao
 
 > **EXCECAO F2 (sugestoes de skill por demanda — 2026-06-12):** se
