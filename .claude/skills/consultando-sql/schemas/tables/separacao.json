@@ -53,11 +53,13 @@
     },
     {
       "name": "valor_saldo",
-      "type": "float"
+      "type": "float",
+      "description": "Valor financeiro do saldo do item (compoe o valor do lote/embarque)"
     },
     {
       "name": "pallet",
-      "type": "float"
+      "type": "float",
+      "description": "Quantidade de pallets do item"
     },
     {
       "name": "peso",
@@ -65,11 +67,13 @@
     },
     {
       "name": "rota",
-      "type": "varchar(50)"
+      "type": "varchar(50)",
+      "description": "Rota logistica (por UF)"
     },
     {
       "name": "sub_rota",
-      "type": "varchar(50)"
+      "type": "varchar(50)",
+      "description": "Sub-rota logistica (por cidade)"
     },
     {
       "name": "observ_ped_1",
@@ -78,15 +82,18 @@
     },
     {
       "name": "roteirizacao",
-      "type": "varchar(255)"
+      "type": "varchar(255)",
+      "description": "DEPRECADO (sem uso desde ~2025, era importado via Excel): transportadora roteirizada/sugerida para a separacao"
     },
     {
       "name": "expedicao",
-      "type": "date"
+      "type": "date",
+      "description": "Data prevista de expedicao (saida do estoque)"
     },
     {
       "name": "agendamento",
-      "type": "date"
+      "type": "date",
+      "description": "Data de agendamento de entrega no cliente"
     },
     {
       "name": "agendamento_confirmado",
@@ -96,7 +103,8 @@
     },
     {
       "name": "protocolo",
-      "type": "varchar(50)"
+      "type": "varchar(50)",
+      "description": "Protocolo do agendamento no cliente"
     },
     {
       "name": "pedido_cliente",
@@ -110,7 +118,8 @@
     },
     {
       "name": "equipe_vendas",
-      "type": "varchar(100)"
+      "type": "varchar(100)",
+      "description": "Equipe de vendas (Odoo), desnormalizado de CarteiraPrincipal por num_pedido"
     },
     {
       "name": "tipo_envio",
@@ -166,19 +175,23 @@
     },
     {
       "name": "cidade_normalizada",
-      "type": "varchar(120)"
+      "type": "varchar(120)",
+      "description": "Cidade normalizada (para cotacao e agrupamento)"
     },
     {
       "name": "uf_normalizada",
-      "type": "varchar(2)"
+      "type": "varchar(2)",
+      "description": "UF normalizada (para cotacao e agrupamento)"
     },
     {
       "name": "codigo_ibge",
-      "type": "varchar(10)"
+      "type": "varchar(10)",
+      "description": "Codigo IBGE do municipio (normalizado)"
     },
     {
       "name": "separacao_impressa",
       "type": "boolean",
+      "description": "Flag: separacao ja foi impressa",
       "nullable": false,
       "default": false
     },
@@ -211,7 +224,8 @@
     },
     {
       "name": "chassi_assai",
-      "type": "varchar(50)"
+      "type": "varchar(50)",
+      "description": "Chassi quando a linha espelha um AssaiSeparacaoItem (lotes ASSAI-SEP-%); NULL para Nacom/CarVia"
     },
     {
       "name": "cotacao_id",

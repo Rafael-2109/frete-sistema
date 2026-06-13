@@ -20,18 +20,18 @@ class Separacao(db.Model):
     nome_produto = db.Column(db.String(255), nullable=True)
 
     qtd_saldo = db.Column(db.Float, nullable=True)  # agora pode ser nulo
-    valor_saldo = db.Column(db.Float, nullable=True)
-    pallet = db.Column(db.Float, nullable=True)
+    valor_saldo = db.Column(db.Float, nullable=True, info={'description': 'Valor financeiro do saldo do item (compoe o valor do lote/embarque)'})
+    pallet = db.Column(db.Float, nullable=True, info={'description': 'Quantidade de pallets do item'})
     peso = db.Column(db.Float, nullable=True)
 
-    rota = db.Column(db.String(50), nullable=True)
-    sub_rota = db.Column(db.String(50), nullable=True)
+    rota = db.Column(db.String(50), nullable=True, info={'description': 'Rota logistica (por UF)'})
+    sub_rota = db.Column(db.String(50), nullable=True, info={'description': 'Sub-rota logistica (por cidade)'})
     observ_ped_1 = db.Column(db.String(700), nullable=True)  # Truncado automaticamente antes de salvar
-    roteirizacao = db.Column(db.String(255), nullable=True)
-    expedicao = db.Column(db.Date, nullable=True)
-    agendamento = db.Column(db.Date, nullable=True)
+    roteirizacao = db.Column(db.String(255), nullable=True, info={'description': 'DEPRECADO (sem uso desde ~2025, era importado via Excel): transportadora roteirizada/sugerida para a separacao'})
+    expedicao = db.Column(db.Date, nullable=True, info={'description': 'Data prevista de expedicao (saida do estoque)'})
+    agendamento = db.Column(db.Date, nullable=True, info={'description': 'Data de agendamento de entrega no cliente'})
     agendamento_confirmado = db.Column(db.Boolean, default=False)  # Flag para confirmação de agendamento
-    protocolo = db.Column(db.String(50), nullable=True)
+    protocolo = db.Column(db.String(50), nullable=True, info={'description': 'Protocolo do agendamento no cliente'})
     pedido_cliente = db.Column(db.String(100), nullable=True)  # 🆕 Pedido de Compra do Cliente
 
     # 🏷️ TAGS DO PEDIDO (ODOO) — sincronizado de CarteiraPrincipal
@@ -41,7 +41,7 @@ class Separacao(db.Model):
     # via AtualizarDadosService (sync pos-Odoo) e nos pontos de criacao de Separacao.
     # Elimina o LEFT JOIN caro com carteira_principal na VIEW pedidos
     # (equipe_vendas e constante por num_pedido). Mesmo padrao de tags_pedido.
-    equipe_vendas = db.Column(db.String(100), nullable=True)
+    equipe_vendas = db.Column(db.String(100), nullable=True, info={'description': 'Equipe de vendas (Odoo), desnormalizado de CarteiraPrincipal por num_pedido'})
 
     # 🎯 ETAPA 2: CAMPO TIPO DE ENVIO (ADICIONADO NA MIGRAÇÃO)
     tipo_envio = db.Column(db.String(10), default='total', nullable=True)  # total, parcial
@@ -59,12 +59,12 @@ class Separacao(db.Model):
     data_embarque = db.Column(db.Date, nullable=True)  # Data de embarque
     
     # Campos de normalização (para cotação e agrupamento)
-    cidade_normalizada = db.Column(db.String(120), nullable=True)
-    uf_normalizada = db.Column(db.String(2), nullable=True)
-    codigo_ibge = db.Column(db.String(10), nullable=True)
+    cidade_normalizada = db.Column(db.String(120), nullable=True, info={'description': 'Cidade normalizada (para cotacao e agrupamento)'})
+    uf_normalizada = db.Column(db.String(2), nullable=True, info={'description': 'UF normalizada (para cotacao e agrupamento)'})
+    codigo_ibge = db.Column(db.String(10), nullable=True, info={'description': 'Codigo IBGE do municipio (normalizado)'})
     
     # Controle de impressão
-    separacao_impressa = db.Column(db.Boolean, default=False, nullable=False)
+    separacao_impressa = db.Column(db.Boolean, default=False, nullable=False, info={'description': 'Flag: separacao ja foi impressa'})
     separacao_impressa_em = db.Column(db.DateTime, nullable=True)
     separacao_impressa_por = db.Column(db.String(100), nullable=True)
 
@@ -78,7 +78,7 @@ class Separacao(db.Model):
     # Para lotes Nacom (LOTE_*) ou CarVia, fica NULL.
     # UNIQUE parcial (separacao_lote_id, chassi_assai) garante 1 linha por chassi
     # por lote Assai — granularidade real do mirror_assai_to_separacao.
-    chassi_assai = db.Column(db.String(50), nullable=True, index=True)
+    chassi_assai = db.Column(db.String(50), nullable=True, index=True, info={'description': 'Chassi quando a linha espelha um AssaiSeparacaoItem (lotes ASSAI-SEP-%); NULL para Nacom/CarVia'})
 
     # Relacionamento com cotação (para manter compatibilidade com Pedido)
     cotacao_id = db.Column(db.Integer, db.ForeignKey('cotacoes.id'), nullable=True)

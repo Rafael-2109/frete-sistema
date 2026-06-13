@@ -11,8 +11,8 @@ class TabelaFrete(db.Model):
     uf_destino = db.Column(db.String(2), nullable=False)
     nome_tabela = db.Column(db.String(50), nullable=False, info={'description': 'Nome da tabela dado pela transportadora que está realizando o frete'})
 
-    tipo_carga = db.Column(db.String(20), nullable=False, info={'description': 'DIRETA (modalidade=veículo, 1-1 no Embarque, rateada por peso no Frete) ou FRACIONADA (modalidade=FRETE PESO/VALOR, 1-1 no EmbarqueItem, calculada por CNPJ)'})
-    modalidade = db.Column(db.String(50), nullable=False, info={'description': 'Modalidade da tabela: FRACIONADA → FRETE PESO/FRETE VALOR; DIRETA → tipo de veículo'})
+    tipo_carga = db.Column(db.String(20), nullable=False, info={'description': 'DIRETA (1-1 no Embarque, rateado por peso no Frete) ou FRACIONADA (1-1 no EmbarqueItem, por CNPJ)'})
+    modalidade = db.Column(db.String(50), nullable=False, info={'description': 'Modalidade da tabela: FRACIONADA = FRETE PESO/FRETE VALOR; DIRETA = tipo de veiculo'})
 
     valor_kg = db.Column(db.Float, info={'description': 'Preço por kg da transportadora'})
     frete_minimo_peso = db.Column(db.Float, info={'description': 'Peso mínimo para cálculo do frete'})

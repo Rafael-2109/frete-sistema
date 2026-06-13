@@ -9,11 +9,13 @@
     },
     {
       "name": "numero",
-      "type": "integer"
+      "type": "integer",
+      "description": "Numero sequencial unico do embarque"
     },
     {
       "name": "data_prevista_embarque",
-      "type": "date"
+      "type": "date",
+      "description": "Data prevista de embarque"
     },
     {
       "name": "data_embarque",
@@ -26,7 +28,8 @@
     },
     {
       "name": "observacoes",
-      "type": "text"
+      "type": "text",
+      "description": "Observacoes do embarque"
     },
     {
       "name": "placa_veiculo",
@@ -99,6 +102,7 @@
     {
       "name": "alterado_apos_impressao",
       "type": "boolean",
+      "description": "Flag: embarque alterado apos a impressao",
       "nullable": false,
       "default": false
     },
@@ -172,59 +176,73 @@
     },
     {
       "name": "tabela_nome_tabela",
-      "type": "varchar(100)"
+      "type": "varchar(100)",
+      "description": "Nome da tabela dado pela transportadora que está realizando o frete"
     },
     {
       "name": "tabela_valor_kg",
-      "type": "float"
+      "type": "float",
+      "description": "Preço por kg da transportadora"
     },
     {
       "name": "tabela_percentual_valor",
-      "type": "float"
+      "type": "float",
+      "description": "Custo de frete relativo ao valor da mercadoria (%)"
     },
     {
       "name": "tabela_frete_minimo_valor",
-      "type": "float"
+      "type": "float",
+      "description": "Valor mínimo do frete"
     },
     {
       "name": "tabela_frete_minimo_peso",
-      "type": "float"
+      "type": "float",
+      "description": "Peso mínimo para cálculo do frete"
     },
     {
       "name": "tabela_icms",
-      "type": "float"
+      "type": "float",
+      "description": "% de ICMS quando há tratativa comercial (substitui o icms_destino fixo)"
     },
     {
       "name": "tabela_percentual_gris",
-      "type": "float"
+      "type": "float",
+      "description": "% de GRIS (Gerenciamento de Risco)"
     },
     {
       "name": "tabela_pedagio_por_100kg",
-      "type": "float"
+      "type": "float",
+      "description": "Valor de pedágio cobrado por fração de 100kg"
     },
     {
       "name": "tabela_valor_tas",
-      "type": "float"
+      "type": "float",
+      "description": "Taxa fixa de administração do SEFAZ (TAS)"
     },
     {
       "name": "tabela_percentual_adv",
-      "type": "float"
+      "type": "float",
+      "description": "% de ADV (seguro cobrado)"
     },
     {
       "name": "tabela_percentual_rca",
-      "type": "float"
+      "type": "float",
+      "description": "% de RCA (seguro fluvial)"
     },
     {
       "name": "tabela_valor_despacho",
-      "type": "float"
+      "type": "float",
+      "description": "Taxa fixa por CNPJ despachado pela transportadora contratada"
     },
     {
       "name": "tabela_valor_cte",
-      "type": "float"
+      "type": "float",
+      "description": "Taxa fixa por CT-e emitido pela transportadora contratada"
     },
     {
       "name": "tabela_icms_incluso",
       "type": "boolean",
+      "description": "Flag: ICMS já incluso no valor ou precisa ser adicionado",
       "default": false
     },
     {
@@ -246,11 +264,13 @@
     },
     {
       "name": "icms_destino",
-      "type": "float"
+      "type": "float",
+      "description": "% de ICMS fixo por regiao"
     },
     {
       "name": "transportadora_optante",
-      "type": "boolean"
+      "type": "boolean",
+      "description": "Flag: transportadora optante do Simples Nacional (snapshot — afeta calculo de ICMS)"
     },
     {
       "name": "nf_pallet_transportadora",

@@ -20,6 +20,7 @@
     {
       "name": "data_movimentacao",
       "type": "date",
+      "description": "Data da movimentacao de estoque",
       "nullable": false
     },
     {
@@ -37,6 +38,7 @@
     {
       "name": "qtd_movimentacao",
       "type": "numeric(15,3)",
+      "description": "Quantidade movimentada",
       "nullable": false
     },
     {
@@ -66,7 +68,8 @@
     },
     {
       "name": "codigo_embarque",
-      "type": "integer"
+      "type": "integer",
+      "description": "Embarque que originou a saida (referencia embarques.id)"
     },
     {
       "name": "odoo_picking_id",
@@ -110,19 +113,23 @@
     },
     {
       "name": "observacao",
-      "type": "text"
+      "type": "text",
+      "description": "Observacao da movimentacao"
     },
     {
       "name": "operacao_producao_id",
-      "type": "varchar(50)"
+      "type": "varchar(50)",
+      "description": "ID que agrupa as movimentacoes de uma operacao de producao (prefixo PROD_ + timestamp + sequencial)"
     },
     {
       "name": "tipo_origem_producao",
-      "type": "varchar(20)"
+      "type": "varchar(20)",
+      "description": "Tipo de origem na cascata de producao: RAIZ, CONSUMO_DIRETO, PRODUCAO_AUTO, CONSUMO_AUTO"
     },
     {
       "name": "cod_produto_raiz",
-      "type": "varchar(50)"
+      "type": "varchar(50)",
+      "description": "Codigo do produto raiz (produto que iniciou a cascata de producao)"
     },
     {
       "name": "producao_pai_id",
@@ -131,7 +138,8 @@
     },
     {
       "name": "ordem_producao",
-      "type": "varchar(50)"
+      "type": "varchar(50)",
+      "description": "Ordem de Producao (OP)"
     },
     {
       "name": "tipo_destinatario",
@@ -140,11 +148,13 @@
     },
     {
       "name": "cnpj_destinatario",
-      "type": "varchar(20)"
+      "type": "varchar(20)",
+      "description": "CNPJ do destinatario (controle de pallet em terceiros)"
     },
     {
       "name": "nome_destinatario",
-      "type": "varchar(255)"
+      "type": "varchar(255)",
+      "description": "Nome do destinatario (controle de pallet em terceiros)"
     },
     {
       "name": "embarque_item_id",
@@ -173,19 +183,23 @@
     {
       "name": "qtd_abatida",
       "type": "numeric(15,3)",
+      "description": "Quantidade ja devolvida/abatida da NF de remessa (saldo fiscal de pallet)",
       "default": 0
     },
     {
       "name": "nf_remessa_origem",
-      "type": "varchar(20)"
+      "type": "varchar(20)",
+      "description": "NF original da transportadora que foi substituida"
     },
     {
       "name": "cnpj_responsavel",
-      "type": "varchar(20)"
+      "type": "varchar(20)",
+      "description": "CNPJ do responsavel pelo retorno (pode diferir do destinatario)"
     },
     {
       "name": "nome_responsavel",
-      "type": "varchar(255)"
+      "type": "varchar(255)",
+      "description": "Nome do responsavel pelo retorno"
     },
     {
       "name": "criado_em",

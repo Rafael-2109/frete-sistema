@@ -33,12 +33,12 @@ class MovimentacaoEstoque(db.Model):
     nome_produto = db.Column(db.String(200), nullable=False)
     
     # Dados da movimentação
-    data_movimentacao = db.Column(db.Date, nullable=False, index=True)
+    data_movimentacao = db.Column(db.Date, nullable=False, index=True, info={'description': 'Data da movimentacao de estoque'})
     tipo_movimentacao = db.Column(db.String(50), nullable=False, index=True)  # ENTRADA, SAIDA, AJUSTE, PRODUCAO
     local_movimentacao = db.Column(db.String(50), nullable=False)  # COMPRA, VENDA, PRODUCAO, AJUSTE, DEVOLUCAO
     
     # Quantidades
-    qtd_movimentacao = db.Column(db.Numeric(15, 3), nullable=False)
+    qtd_movimentacao = db.Column(db.Numeric(15, 3), nullable=False, info={'description': 'Quantidade movimentada'})
 
     # Campos estruturados para sincronização NF (NOVO)
     separacao_lote_id = db.Column(db.String(50), nullable=True, index=True)  # ID do lote de separação
@@ -46,7 +46,7 @@ class MovimentacaoEstoque(db.Model):
     num_pedido = db.Column(db.String(50), nullable=True, index=True)  # Número do pedido
     tipo_origem = db.Column(db.String(20), nullable=True)  # ODOO, TAGPLUS, MANUAL, LEGADO
     status_nf = db.Column(db.String(20), nullable=True)  # FATURADO, CANCELADO
-    codigo_embarque = db.Column(db.Integer, db.ForeignKey('embarques.id', ondelete='SET NULL'), nullable=True)
+    codigo_embarque = db.Column(db.Integer, db.ForeignKey('embarques.id', ondelete='SET NULL'), nullable=True, info={'description': 'Embarque que originou a saida (referencia embarques.id)'})
 
     # Campos Odoo - Rastreabilidade de Entradas de Compras
     odoo_picking_id = db.Column(db.String(50), nullable=True, index=True)  # ID do stock.picking no Odoo
@@ -62,24 +62,24 @@ class MovimentacaoEstoque(db.Model):
     data_validade = db.Column(db.Date, nullable=True)           # Data de validade do lote
 
     # Observações (mantido para compatibilidade)
-    observacao = db.Column(db.Text, nullable=True)
+    observacao = db.Column(db.Text, nullable=True, info={'description': 'Observacao da movimentacao'})
 
     # Campos de Vinculação Produção/Consumo
     # PseudoID que agrupa todas as movimentações de uma operação (PROD_YYYYMMDD_HHMMSS_XXXX)
-    operacao_producao_id = db.Column(db.String(50), nullable=True, index=True)
+    operacao_producao_id = db.Column(db.String(50), nullable=True, index=True, info={'description': 'ID que agrupa as movimentacoes de uma operacao de producao (prefixo PROD_ + timestamp + sequencial)'})
     # Tipo de origem: RAIZ, CONSUMO_DIRETO, PRODUCAO_AUTO, CONSUMO_AUTO
-    tipo_origem_producao = db.Column(db.String(20), nullable=True)
+    tipo_origem_producao = db.Column(db.String(20), nullable=True, info={'description': 'Tipo de origem na cascata de producao: RAIZ, CONSUMO_DIRETO, PRODUCAO_AUTO, CONSUMO_AUTO'})
     # Código do produto raiz (produto que iniciou a cascata de produção)
-    cod_produto_raiz = db.Column(db.String(50), nullable=True, index=True)
+    cod_produto_raiz = db.Column(db.String(50), nullable=True, index=True, info={'description': 'Codigo do produto raiz (produto que iniciou a cascata de producao)'})
     # FK para produção que gerou este consumo (auto-referência)
     producao_pai_id = db.Column(db.Integer, db.ForeignKey('movimentacao_estoque.id', ondelete='SET NULL'), nullable=True, index=True)
     # Ordem de Produção (OP) - identificador da ordem de produção
-    ordem_producao = db.Column(db.String(50), nullable=True, index=True)
+    ordem_producao = db.Column(db.String(50), nullable=True, index=True, info={'description': 'Ordem de Producao (OP)'})
 
     # Campos para controle de Pallet em Terceiros
     tipo_destinatario = db.Column(db.String(20), nullable=True)  # CLIENTE ou TRANSPORTADORA
-    cnpj_destinatario = db.Column(db.String(20), nullable=True, index=True)
-    nome_destinatario = db.Column(db.String(255), nullable=True)
+    cnpj_destinatario = db.Column(db.String(20), nullable=True, index=True, info={'description': 'CNPJ do destinatario (controle de pallet em terceiros)'})
+    nome_destinatario = db.Column(db.String(255), nullable=True, info={'description': 'Nome do destinatario (controle de pallet em terceiros)'})
     embarque_item_id = db.Column(db.Integer, db.ForeignKey('embarque_itens.id', ondelete='SET NULL'), nullable=True)
     baixado = db.Column(db.Boolean, default=False, nullable=True)  # Se a saida de pallet foi baixada
     baixado_em = db.Column(db.DateTime, nullable=True)
@@ -88,15 +88,15 @@ class MovimentacaoEstoque(db.Model):
 
     # Saldo fiscal para controle de devolucoes (PALLET)
     # Quantidade ja devolvida/abatida da NF de remessa
-    qtd_abatida = db.Column(db.Numeric(15, 3), default=0, nullable=True)
+    qtd_abatida = db.Column(db.Numeric(15, 3), default=0, nullable=True, info={'description': 'Quantidade ja devolvida/abatida da NF de remessa (saldo fiscal de pallet)'})
 
     # Campos para substituicao de NF (quando NF cliente consome parte de NF transportadora)
     # nf_remessa_origem: NF original da transportadora que foi substituida
-    nf_remessa_origem = db.Column(db.String(20), nullable=True, index=True)
+    nf_remessa_origem = db.Column(db.String(20), nullable=True, index=True, info={'description': 'NF original da transportadora que foi substituida'})
     # cnpj_responsavel: CNPJ de quem e responsavel pelo retorno (pode ser diferente do destinatario)
     # Em substituicoes, destinatario pode ser CLIENTE mas responsavel continua TRANSPORTADORA
-    cnpj_responsavel = db.Column(db.String(20), nullable=True, index=True)
-    nome_responsavel = db.Column(db.String(255), nullable=True)
+    cnpj_responsavel = db.Column(db.String(20), nullable=True, index=True, info={'description': 'CNPJ do responsavel pelo retorno (pode diferir do destinatario)'})
+    nome_responsavel = db.Column(db.String(255), nullable=True, info={'description': 'Nome do responsavel pelo retorno'})
 
     # Auditoria
     criado_em = db.Column(db.DateTime, default=agora_utc_naive, nullable=False)

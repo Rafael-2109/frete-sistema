@@ -33,13 +33,13 @@
     {
       "name": "tipo_carga",
       "type": "varchar(20)",
-      "description": "DIRETA (modalidade=veículo, 1-1 no Embarque, rateada por peso no Frete) ou FRACIONADA (modalidade=FRETE PESO/VALOR, 1-1 ",
+      "description": "DIRETA (1-1 no Embarque, rateado por peso no Frete) ou FRACIONADA (1-1 no EmbarqueItem, por CNPJ)",
       "nullable": false
     },
     {
       "name": "modalidade",
       "type": "varchar(50)",
-      "description": "Modalidade da tabela: FRACIONADA FRETE PESO/FRETE VALOR; DIRETA tipo de veículo",
+      "description": "Modalidade da tabela: FRACIONADA = FRETE PESO/FRETE VALOR; DIRETA = tipo de veiculo",
       "nullable": false
     },
     {

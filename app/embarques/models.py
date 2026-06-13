@@ -12,11 +12,11 @@ class Embarque(db.Model):
     )
 
     id = db.Column(db.Integer, primary_key=True)
-    numero = db.Column(db.Integer, unique=True, nullable=True)
-    data_prevista_embarque = db.Column(db.Date, nullable=True)
+    numero = db.Column(db.Integer, unique=True, nullable=True, info={'description': 'Numero sequencial unico do embarque'})
+    data_prevista_embarque = db.Column(db.Date, nullable=True, info={'description': 'Data prevista de embarque'})
     data_embarque = db.Column(db.Date, nullable=True)
     transportadora_id = db.Column(db.Integer, db.ForeignKey('transportadoras.id'), nullable=True)
-    observacoes = db.Column(db.Text)
+    observacoes = db.Column(db.Text, info={'description': 'Observacoes do embarque'})
     placa_veiculo = db.Column(db.String(10)) #Não utilizado
     paletizado = db.Column(db.Boolean, default=False) #Não utilizado
     laudo_anexado = db.Column(db.Boolean, default=False) #Não utilizado
@@ -32,7 +32,7 @@ class Embarque(db.Model):
     # === IMPRESSAO: Auditoria de impressao ===
     impresso_em = db.Column(db.DateTime, nullable=True)
     impresso_por = db.Column(db.String(100), nullable=True)
-    alterado_apos_impressao = db.Column(db.Boolean, nullable=False, default=False, server_default='false')
+    alterado_apos_impressao = db.Column(db.Boolean, nullable=False, default=False, server_default='false', info={'description': 'Flag: embarque alterado apos a impressao'})
 
     tipo_cotacao = db.Column(db.String(20), default='Automatica')  # 'Automatica' ou 'Manual'
     valor_total = db.Column(db.Float) #Somatória do valor dos itens do embarque
@@ -61,20 +61,20 @@ class Embarque(db.Model):
     modalidade = db.Column(db.String(50))  # TIPO DE VEICULO CONTRATADO (MODELOS EM "app/veiculos/models/veiculos.nome")
     
     # Parâmetros da tabela para carga DIRETA
-    tabela_nome_tabela = db.Column(db.String(100))
-    tabela_valor_kg = db.Column(db.Float)
-    tabela_percentual_valor = db.Column(db.Float)
-    tabela_frete_minimo_valor = db.Column(db.Float)
-    tabela_frete_minimo_peso = db.Column(db.Float)
-    tabela_icms = db.Column(db.Float)
-    tabela_percentual_gris = db.Column(db.Float)
-    tabela_pedagio_por_100kg = db.Column(db.Float)
-    tabela_valor_tas = db.Column(db.Float)
-    tabela_percentual_adv = db.Column(db.Float)
-    tabela_percentual_rca = db.Column(db.Float)
-    tabela_valor_despacho = db.Column(db.Float)
-    tabela_valor_cte = db.Column(db.Float)
-    tabela_icms_incluso = db.Column(db.Boolean, default=False)
+    tabela_nome_tabela = db.Column(db.String(100), info={'description': 'Nome da tabela dado pela transportadora que está realizando o frete'})
+    tabela_valor_kg = db.Column(db.Float, info={'description': 'Preço por kg da transportadora'})
+    tabela_percentual_valor = db.Column(db.Float, info={'description': 'Custo de frete relativo ao valor da mercadoria (%)'})
+    tabela_frete_minimo_valor = db.Column(db.Float, info={'description': 'Valor mínimo do frete'})
+    tabela_frete_minimo_peso = db.Column(db.Float, info={'description': 'Peso mínimo para cálculo do frete'})
+    tabela_icms = db.Column(db.Float, info={'description': '% de ICMS quando há tratativa comercial (substitui o icms_destino fixo)'})
+    tabela_percentual_gris = db.Column(db.Float, info={'description': '% de GRIS (Gerenciamento de Risco)'})
+    tabela_pedagio_por_100kg = db.Column(db.Float, info={'description': 'Valor de pedágio cobrado por fração de 100kg'})
+    tabela_valor_tas = db.Column(db.Float, info={'description': 'Taxa fixa de administração do SEFAZ (TAS)'})
+    tabela_percentual_adv = db.Column(db.Float, info={'description': '% de ADV (seguro cobrado)'})
+    tabela_percentual_rca = db.Column(db.Float, info={'description': '% de RCA (seguro fluvial)'})
+    tabela_valor_despacho = db.Column(db.Float, info={'description': 'Taxa fixa por CNPJ despachado pela transportadora contratada'})
+    tabela_valor_cte = db.Column(db.Float, info={'description': 'Taxa fixa por CT-e emitido pela transportadora contratada'})
+    tabela_icms_incluso = db.Column(db.Boolean, default=False, info={'description': 'Flag: ICMS já incluso no valor ou precisa ser adicionado'})
     
     # ===== NOVOS CAMPOS DE VALORES MÍNIMOS E ICMS =====
     tabela_gris_minimo = db.Column(db.Float, default=0)    # Valor mínimo de GRIS
@@ -82,8 +82,8 @@ class Embarque(db.Model):
     tabela_icms_proprio = db.Column(db.Float, nullable=True)  # ICMS próprio da tabela
     
     # Campos para cálculo do ICMS
-    icms_destino = db.Column(db.Float)
-    transportadora_optante = db.Column(db.Boolean)
+    icms_destino = db.Column(db.Float, info={'description': '% de ICMS fixo por regiao'})
+    transportadora_optante = db.Column(db.Boolean, info={'description': 'Flag: transportadora optante do Simples Nacional (snapshot — afeta calculo de ICMS)'})
 
     # === GRUPO 2: PALLETS FÍSICOS (Controle Real - Gestão de Ativos PBR) ===
     # Valores REAIS preenchidos manualmente para controle de NF remessa
