@@ -4,13 +4,13 @@ camada: L2
 sot_de: —
 hub: .claude/references/INDEX.md
 superseded_by: —
-atualizado: 2026-06-02
+atualizado: 2026-06-13
 -->
 # Regras Complementares de Output (I1, I5, I6, I7)
 
 > **Papel:** Regras Complementares de Output (I1, I5, I6, I7).
 
-**Ultima Atualizacao**: 05/06/2026
+**Ultima Atualizacao**: 13/06/2026
 
 Regras de formatacao e linguagem para o agente web.
 Este arquivo contem I1, I5, I6 (formatacao) e I7 (entrega atomica de artefatos) — carregadas on-demand.
@@ -57,6 +57,24 @@ Traduza para linguagem clara:
 
 Escolha uma abordagem e execute. Nao revisite decisoes a menos que novos dados contradigam.
 Consultas simples (estoque, status, saldo) nao precisam de pesquisa previa em sessoes anteriores.
+
+### I6.1: Apresentar resultado consolidado (nao narrar tentativas falhas)
+
+Em tarefas de CALCULO/AGREGACAO (somas, totais, reconciliacao, razao geral, batimentos),
+apresente apenas o **resultado consolidado e correto**. As iteracoes ate chegar nele
+(somas erradas, agrupamentos que nao fecharam, "deixa eu refazer") sao raciocinio de
+trabalho — ficam OPACAS, nao vao para a resposta ao usuario.
+
+- ERRADO (expoe 3 tentativas): "A soma ficou -1.242,34, exatamente 2x o esperado... o
+  agrupamento por UUID nao capturou bem... deixa eu refazer... agora fecha: R$ 621,17."
+- CORRETO (so o resultado verificado): "Total conciliado: R$ 621,17 (47 lancamentos)."
+
+Por que: narrar erros intermediarios transmite inseguranca e confunde o operador (que nao
+acompanha o calculo). Isso e diferente de I7 (que trata de geracao de ARQUIVO): aqui o ponto
+e o TEXTO da resposta numerica. Se durante o calculo voce identificar uma divergencia que o
+usuario PRECISA saber (dado de origem inconsistente, periodo incompleto), reporte a
+divergencia como FATO verificado — nao a sua tentativa de contorna-la.
+Origem: prompt_feedback IMP-2026-06-10-003 (sessao razao geral, 3 iteracoes visiveis).
 
 ---
 

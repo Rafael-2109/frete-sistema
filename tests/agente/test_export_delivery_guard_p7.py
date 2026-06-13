@@ -121,6 +121,18 @@ class TestCopiarTexto:
         _, filename = exportar.copiar_texto(str(origem), None)
         assert filename.endswith(".txt")
 
+    def test_py_suportado(self, exportar, monkeypatch, tmp_path):
+        # IMP-2026-06-12-006: entregar SCRIPT (.py) sem `cp` manual ao dir servido.
+        servido = tmp_path / "servido"
+        servido.mkdir()
+        monkeypatch.setattr(exportar, "get_upload_folder", lambda: str(servido))
+        origem = tmp_path / "piloto.py"
+        origem.write_text("print('ola')\n", encoding="utf-8")
+        filepath, filename = exportar.copiar_texto(str(origem), "piloto")
+        assert filename.endswith(".py")
+        ok, _ = exportar._verificar_entrega(filepath)
+        assert ok
+
     def test_extensao_nao_textual_rejeitada(self, exportar, tmp_path):
         origem = tmp_path / "binario.bin"
         origem.write_bytes(b"\x00\x01")

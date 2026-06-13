@@ -15,6 +15,7 @@ allowed-tools: Read, Bash, Glob, Grep
 
 | Situacao | Skill Correta | Por que? |
 |----------|--------------|----------|
+| Saldo de estoque / "disponivel para faturar" / quants ao vivo | **consultando-quant-odoo** | Esta skill rastreia DOCUMENTOS (NF/PO/SO/titulos), nao calcula saldo. "Disponivel para faturar" exige filtrar location faturavel (Estoque) e EXCLUIR Indisponivel/MIGRACAO (`--excluir-indisp`) — saldo nessas locations NAO e real |
 | Match NF x PO especifico | **validacao-nf-po** | Fase 2 do recebimento, nao rastreamento geral |
 | Split/consolidar PO | **conciliando-odoo-po** | Fase 3, operacao de escrita em POs |
 | Recebimento fisico (lotes/quality check) | **recebimento-fisico-odoo** | Fase 4, operacao no armazem |

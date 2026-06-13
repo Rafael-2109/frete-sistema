@@ -116,20 +116,32 @@ FORMATOS SUPORTADOS
 │   Formatacao: indentado, UTF-8
 │   Suporta Decimal e datetime automaticamente
 │
-└── Imagem (.png, .jpg, .jpeg, .gif)
-    Copia imagem existente para pasta de downloads
-    NAO precisa de stdin — usa --imagem /caminho/arquivo.png
+├── Imagem (.png, .jpg, .jpeg, .gif)
+│   Copia imagem existente para pasta de downloads
+│   NAO precisa de stdin — usa --imagem /caminho/arquivo.png
+│
+└── Texto / Codigo (.md, .txt, .py, .sql, .json, .log, .csv, .xml, .yaml/.yml, .sh, .ini, .cfg, .toml, .rst, .env)
+    Copia um arquivo de texto/codigo JA ESCRITO para a pasta de downloads
+    NAO precisa de stdin — usa --arquivo /caminho/arquivo.ext --formato texto
+    Extensao original PRESERVADA. Binarios (.bin/.exe/...) sao rejeitados de proposito.
+    (formato `md` segue valido como alias retrocompativel de `texto`)
 ```
+
+> **Quando usar `texto` vs `excel/csv/json`**: `excel/csv/json` recebem DADOS via stdin
+> e GERAM o arquivo. `texto` ENTREGA um arquivo ja escrito (relatorio .md, script .py,
+> dump .sql) sem precisar de `cp` manual ao diretorio servido — a rota de download
+> serve qualquer dessas extensoes (forca download para nao-imagens).
 
 ## Parametros
 
 | Parametro | Obrigatorio | Descricao | Exemplo |
 |-----------|-------------|-----------|---------|
-| `--formato` | Sim | Formato: `excel`, `csv`, `json` ou `imagem` | `--formato excel` |
+| `--formato` | Sim | Formato: `excel`, `csv`, `json`, `imagem` ou `texto` (alias `md`) | `--formato excel` |
 | `--nome` | Sim | Nome do arquivo (sem extensao) | `--nome pedidos_atacadao` |
 | `--titulo` | Nao | Titulo da planilha (Excel, max 31 chars) | `--titulo "Pedidos Atacadao"` |
 | `--colunas` | Nao | Colunas a incluir (JSON array) | `--colunas '["Pedido","Cliente"]'` |
 | `--imagem` | Sim* | Caminho da imagem (*apenas formato imagem) | `--imagem /tmp/screenshot.png` |
+| `--arquivo` | Sim** | Caminho do arquivo texto/codigo ja escrito (**apenas formato texto/md) | `--arquivo /tmp/script.py` |
 
 ### Entrada de Dados (Excel/CSV/JSON)
 
@@ -147,6 +159,19 @@ Dados via **stdin** no formato JSON:
 
 ```bash
 python exportar.py --formato imagem --imagem /tmp/grafico.png --nome vendas
+```
+
+### Texto / Codigo ja escrito (sem stdin)
+
+Entrega um arquivo de texto/codigo JA EXISTENTE (relatorio .md, script .py, dump .sql)
+para download — sem `cp` manual ao diretorio servido:
+
+```bash
+# Entregar um script .py
+python exportar.py --formato texto --arquivo /tmp/piloto.py --nome piloto
+
+# Entregar um relatorio .md (formato `md` segue valido como alias)
+python exportar.py --formato md --arquivo /tmp/relatorio.md --nome relatorio
 ```
 
 ## Exemplos de Uso

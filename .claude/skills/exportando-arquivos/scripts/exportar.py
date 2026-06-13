@@ -311,17 +311,31 @@ def copiar_imagem(caminho_origem, nome_arquivo=None):
     return filepath, filename
 
 
+# Extensoes de TEXTO/CODIGO entregaveis via copiar_texto (whitelist explicita).
+# A rota de download (app/agente/routes/files.py) serve qualquer extensao:
+# .md/.txt/.json/.log/.csv/.xml tem mimetype proprio; as demais caem em
+# application/octet-stream com as_attachment=True (forca download — sem render
+# inline, sem risco de XSS). Binarios (.bin/.exe/...) ficam DE FORA de proposito.
+EXTENSOES_TEXTO_SUPORTADAS = (
+    'md', 'txt', 'py', 'sql', 'json', 'log', 'csv', 'xml',
+    'yaml', 'yml', 'sh', 'ini', 'cfg', 'toml', 'rst', 'env',
+)
+
+
 def copiar_texto(caminho_origem, nome_arquivo=None):
     """
-    Copia um arquivo de TEXTO ja escrito (.md/.txt) para a pasta de downloads.
+    Copia um arquivo de TEXTO/CODIGO ja escrito para a pasta de downloads.
 
     Caso real (2026-06-10): agente precisava entregar dump .md e a skill so
     gerava Excel/CSV/JSON — workaround manual arriscava TMPDIR divergente.
-    Mesma mecanica do copiar_imagem: a skill e quem conhece o diretorio
-    SERVIDO e aplica o guard de entrega (P7 #787).
+    Estendido em 2026-06-13 (IMP-2026-06-12-006): aceita tambem codigo/texto
+    (.py/.sql/.yaml/...) para entregar scripts sem `cp` manual ao diretorio
+    servido. Mesma mecanica do copiar_imagem: a skill e quem conhece o diretorio
+    SERVIDO e aplica o guard de entrega (P7 #787). A extensao original e
+    PRESERVADA no arquivo entregue.
 
     Args:
-        caminho_origem: Caminho do arquivo de texto existente
+        caminho_origem: Caminho do arquivo de texto/codigo existente
         nome_arquivo: Nome para o arquivo (opcional, usa nome original)
 
     Returns:
@@ -333,8 +347,11 @@ def copiar_texto(caminho_origem, nome_arquivo=None):
         raise FileNotFoundError(f"Arquivo nao encontrado: {caminho_origem}")
 
     ext = caminho_origem.rsplit('.', 1)[-1].lower() if '.' in caminho_origem else ''
-    if ext not in ('md', 'txt'):
-        raise ValueError(f"Formato de texto nao suportado: {ext} (aceitos: md, txt)")
+    if ext not in EXTENSOES_TEXTO_SUPORTADAS:
+        raise ValueError(
+            f"Formato de texto nao suportado: {ext or '(sem extensao)'} "
+            f"(aceitos: {', '.join(EXTENSOES_TEXTO_SUPORTADAS)})"
+        )
 
     if not nome_arquivo:
         nome_arquivo = os.path.basename(caminho_origem).rsplit('.', 1)[0]
@@ -350,18 +367,21 @@ def copiar_texto(caminho_origem, nome_arquivo=None):
 
 def main():
     parser = argparse.ArgumentParser(
-        description='Gera arquivo para download (Excel, CSV, JSON ou Imagem)',
+        description='Gera arquivo para download (Excel, CSV, JSON, Imagem ou Texto/Codigo)',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Exemplos:
   echo '{"dados": [{"col1": "val1"}]}' | python exportar.py --formato excel --nome teste
   echo '{"dados": [{"col1": "val1"}]}' | python exportar.py --formato csv --nome teste
   python exportar.py --formato imagem --imagem /caminho/para/imagem.png --nome screenshot
+  python exportar.py --formato texto --arquivo /tmp/script.py --nome piloto
+  python exportar.py --formato md --arquivo /tmp/relatorio.md --nome relatorio
         """
     )
 
-    parser.add_argument('--formato', required=True, choices=['excel', 'csv', 'json', 'imagem', 'md'],
-                        help='Formato do arquivo (excel, csv, json, imagem, md)')
+    parser.add_argument('--formato', required=True,
+                        choices=['excel', 'csv', 'json', 'imagem', 'md', 'texto'],
+                        help='Formato do arquivo (excel, csv, json, imagem, md/texto)')
     parser.add_argument('--nome', required=True,
                         help='Nome do arquivo (sem extensao)')
     parser.add_argument('--titulo', default=None,
@@ -371,7 +391,8 @@ Exemplos:
     parser.add_argument('--imagem', default=None,
                         help='Caminho da imagem a exportar (apenas formato imagem)')
     parser.add_argument('--arquivo', default=None,
-                        help='Caminho do arquivo .md/.txt ja escrito (apenas formato md)')
+                        help='Caminho do arquivo de texto/codigo ja escrito '
+                             '(.md/.txt/.py/.sql/.json/... — formato md/texto)')
 
     args = parser.parse_args()
 
@@ -435,11 +456,12 @@ Exemplos:
             print(json.dumps(resultado, ensure_ascii=False, indent=2, default=decimal_default))
             return
 
-        # Formato md: copia arquivo de texto JA ESCRITO (nao usa stdin)
-        if args.formato == 'md':
+        # Formato md/texto: copia arquivo de texto/codigo JA ESCRITO (nao usa stdin)
+        # 'texto' e alias de 'md' — ambos cobrem .md/.txt/.py/.sql/.json/... via copiar_texto
+        if args.formato in ('md', 'texto'):
             if not args.arquivo:
-                resultado['erro'] = 'Parametro --arquivo obrigatorio para formato md'
-                resultado['mensagem'] = 'Use: python exportar.py --formato md --arquivo /tmp/doc.md --nome relatorio'
+                resultado['erro'] = 'Parametro --arquivo obrigatorio para formato md/texto'
+                resultado['mensagem'] = 'Use: python exportar.py --formato texto --arquivo /tmp/script.py --nome piloto'
                 print(json.dumps(resultado, ensure_ascii=False, indent=2))
                 return
 
