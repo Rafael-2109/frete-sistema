@@ -27,15 +27,15 @@ class Frete(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     embarque_id = db.Column(db.Integer, db.ForeignKey('embarques.id'), nullable=False)
-    cnpj_cliente = db.Column(db.String(20), nullable=False, index=True)
-    nome_cliente = db.Column(db.String(255), nullable=False)
+    cnpj_cliente = db.Column(db.String(20), nullable=False, index=True, info={'description': 'CNPJ do cliente — fonte de dedup na cotação e no rateio do frete'})
+    nome_cliente = db.Column(db.String(255), nullable=False, info={'description': 'Razão social / nome do cliente'})
     transportadora_id = db.Column(db.Integer, db.ForeignKey('transportadoras.id'), nullable=False)
     
     # Dados básicos do frete
     tipo_carga = db.Column(db.String(20), nullable=False)  # 'FRACIONADA' ou 'DIRETA'
     modalidade = db.Column(db.String(50), nullable=False)  # VALOR, PESO, VAN, etc.
-    uf_destino = db.Column(db.String(2), nullable=False)
-    cidade_destino = db.Column(db.String(100), nullable=False)
+    uf_destino = db.Column(db.String(2), nullable=False, info={'description': 'UF de destino do frete'})
+    cidade_destino = db.Column(db.String(100), nullable=False, info={'description': 'Cidade de destino do frete'})
     
     # Totais das NFs deste CNPJ no embarque
     peso_total = db.Column(db.Float, nullable=False)
@@ -44,21 +44,21 @@ class Frete(db.Model):
     numeros_nfs = db.Column(db.Text, nullable=False)  # Lista das NFs separadas por vírgula
     
     # Dados da tabela utilizada (copiados do embarque/embarque_item)
-    tabela_nome_tabela = db.Column(db.String(100))
-    tabela_valor_kg = db.Column(db.Float)
-    tabela_percentual_valor = db.Column(db.Float)
-    tabela_frete_minimo_valor = db.Column(db.Float)
-    tabela_frete_minimo_peso = db.Column(db.Float)
-    tabela_icms = db.Column(db.Float)
-    tabela_percentual_gris = db.Column(db.Float)
-    tabela_pedagio_por_100kg = db.Column(db.Float)
-    tabela_valor_tas = db.Column(db.Float)
-    tabela_percentual_adv = db.Column(db.Float)
-    tabela_percentual_rca = db.Column(db.Float)
-    tabela_valor_despacho = db.Column(db.Float)
-    tabela_valor_cte = db.Column(db.Float)
-    tabela_icms_incluso = db.Column(db.Boolean, default=False)
-    tabela_icms_destino = db.Column(db.Float)
+    tabela_nome_tabela = db.Column(db.String(100), info={'description': 'Nome da tabela dado pela transportadora que está realizando o frete'})
+    tabela_valor_kg = db.Column(db.Float, info={'description': 'Preço por kg da transportadora'})
+    tabela_percentual_valor = db.Column(db.Float, info={'description': 'Custo de frete relativo ao valor da mercadoria (%)'})
+    tabela_frete_minimo_valor = db.Column(db.Float, info={'description': 'Valor mínimo do frete'})
+    tabela_frete_minimo_peso = db.Column(db.Float, info={'description': 'Peso mínimo para cálculo do frete'})
+    tabela_icms = db.Column(db.Float, info={'description': '% de ICMS quando há tratativa comercial (substitui o icms_destino fixo)'})
+    tabela_percentual_gris = db.Column(db.Float, info={'description': '% de GRIS (Gerenciamento de Risco)'})
+    tabela_pedagio_por_100kg = db.Column(db.Float, info={'description': 'Valor de pedágio cobrado por fração de 100kg'})
+    tabela_valor_tas = db.Column(db.Float, info={'description': 'Taxa fixa de administração do SEFAZ (TAS)'})
+    tabela_percentual_adv = db.Column(db.Float, info={'description': '% de ADV (seguro cobrado)'})
+    tabela_percentual_rca = db.Column(db.Float, info={'description': '% de RCA (seguro fluvial)'})
+    tabela_valor_despacho = db.Column(db.Float, info={'description': 'Taxa fixa por CNPJ despachado pela transportadora contratada'})
+    tabela_valor_cte = db.Column(db.Float, info={'description': 'Taxa fixa por CT-e emitido pela transportadora contratada'})
+    tabela_icms_incluso = db.Column(db.Boolean, default=False, info={'description': 'Flag: ICMS já incluso no valor ou precisa ser adicionado'})
+    tabela_icms_destino = db.Column(db.Float, info={'description': '% de ICMS fixo por região'})
     
     # ===== NOVOS CAMPOS DE VALORES MÍNIMOS E ICMS =====
     tabela_gris_minimo = db.Column(db.Float, default=0)    # Valor mínimo de GRIS
@@ -66,7 +66,7 @@ class Frete(db.Model):
     tabela_icms_proprio = db.Column(db.Float, nullable=True)  # ICMS próprio da tabela
     
     # Condição de pagamento ("A Vista" ou "XX dias")
-    condicao_pagamento = db.Column(db.String(50))
+    condicao_pagamento = db.Column(db.String(50), info={'description': 'Condição de pagamento do frete: "A Vista" ou "XX dias"'})
 
     # OS 4 TIPOS DE VALORES DO FRETE
     valor_cotado = db.Column(db.Float, nullable=False)  # Calculado automaticamente pela tabela
@@ -94,10 +94,10 @@ class Frete(db.Model):
 
     # Status e aprovação
     status = db.Column(db.String(20), default='PENDENTE')  # PENDENTE, EM_TRATATIVA, APROVADO, REJEITADO, PAGO, CANCELADO, LANCADO_ODOO
-    requer_aprovacao = db.Column(db.Boolean, default=False)
+    requer_aprovacao = db.Column(db.Boolean, default=False, info={'description': 'Flag: frete exige aprovação por divergência > R$ 5,00 entre valor considerado × pago/cotado (vai p/ EM_TRATATIVA)'})
     aprovado_por = db.Column(db.String(100))
     aprovado_em = db.Column(db.DateTime)
-    observacoes_aprovacao = db.Column(db.Text)
+    observacoes_aprovacao = db.Column(db.Text, info={'description': 'Observações registradas na aprovação/tratativa do frete'})
 
     # Controle
     considerar_diferenca = db.Column(db.Boolean, default=False)  # Para lançar na conta corrente mesmo com diferença até R$ 5,00
@@ -112,6 +112,7 @@ class Frete(db.Model):
         db.String(20), nullable=False,
         default=FRETE_ORIGEM_NACOM, server_default=FRETE_ORIGEM_NACOM,
         index=True,
+        info={'description': 'Origem do frete: NACOM (default) ou OP_ASSAI (Op. Assaí Q.P.A. Sendas)'},
     )
 
     # Relacionamentos

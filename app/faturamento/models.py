@@ -64,15 +64,15 @@ class FaturamentoProduto(db.Model):
     peso_total = db.Column(db.Numeric(15, 3), nullable=True, default=0)  # peso_unitario * qtd
     
     # Dados de origem (número do pedido)
-    origem = db.Column(db.String(20), nullable=True, index=True)
+    origem = db.Column(db.String(20), nullable=True, index=True, info={'description': 'num_pedido relacionado a essa NF'})
         
     # Status
     status_nf = db.Column(db.String(20), nullable=False, default='Provisório')  # Lançado, Cancelado, Provisório
 
     # Campos de Reversão (NF revertida via Nota de Crédito no Odoo)
-    revertida = db.Column(db.Boolean, default=False, nullable=False, index=True)
+    revertida = db.Column(db.Boolean, default=False, nullable=False, index=True, info={'description': 'Flag: NF devolvida integralmente'})
     nota_credito_id = db.Column(db.Integer, nullable=True)  # ID do out_refund no Odoo
-    data_reversao = db.Column(db.DateTime, nullable=True)
+    data_reversao = db.Column(db.DateTime, nullable=True, info={'description': 'Data da reversão'})
 
     # Auditoria
     created_at = db.Column(db.DateTime, default=agora_utc_naive, nullable=False)

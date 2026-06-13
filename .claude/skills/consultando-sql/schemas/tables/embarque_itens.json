@@ -20,25 +20,30 @@
     },
     {
       "name": "cnpj_cliente",
-      "type": "varchar(20)"
+      "type": "varchar(20)",
+      "description": "CNPJ do cliente — fonte de dedup na cotação e no rateio do frete"
     },
     {
       "name": "cliente",
       "type": "varchar(120)",
+      "description": "Nome fantasia do cliente",
       "nullable": false
     },
     {
       "name": "pedido",
       "type": "varchar(50)",
+      "description": "Nosso número do pedido",
       "nullable": false
     },
     {
       "name": "protocolo_agendamento",
-      "type": "varchar(50)"
+      "type": "varchar(50)",
+      "description": "Senha única do comprovante de agendamento"
     },
     {
       "name": "data_agenda",
-      "type": "varchar(10)"
+      "type": "varchar(10)",
+      "description": "Data do agendamento no cliente"
     },
     {
       "name": "agendamento_confirmado",
@@ -53,11 +58,13 @@
     },
     {
       "name": "nota_fiscal",
-      "type": "varchar(20)"
+      "type": "varchar(20)",
+      "description": "Número da NF"
     },
     {
       "name": "volumes",
-      "type": "integer"
+      "type": "integer",
+      "description": "Qtd de volumes (possivelmente não utilizada)"
     },
     {
       "name": "peso",
@@ -89,11 +96,13 @@
     {
       "name": "uf_destino",
       "type": "varchar(2)",
+      "description": "UF de destino do frete",
       "nullable": false
     },
     {
       "name": "cidade_destino",
       "type": "varchar(100)",
+      "description": "Cidade de destino do frete",
       "nullable": false
     },
     {
@@ -103,68 +112,84 @@
     },
     {
       "name": "modalidade",
-      "type": "varchar(50)"
+      "type": "varchar(50)",
+      "description": "FRETE PESO ou FRETE VALOR (quando tipo_carga=FRACIONADA)"
     },
     {
       "name": "tabela_nome_tabela",
-      "type": "varchar(100)"
+      "type": "varchar(100)",
+      "description": "Nome da tabela dado pela transportadora que está realizando o frete"
     },
     {
       "name": "tabela_valor_kg",
-      "type": "float"
+      "type": "float",
+      "description": "Preço por kg da transportadora"
     },
     {
       "name": "tabela_percentual_valor",
-      "type": "float"
+      "type": "float",
+      "description": "Custo de frete relativo ao valor da mercadoria (%)"
     },
     {
       "name": "tabela_frete_minimo_valor",
-      "type": "float"
+      "type": "float",
+      "description": "Valor mínimo do frete"
     },
     {
       "name": "tabela_frete_minimo_peso",
-      "type": "float"
+      "type": "float",
+      "description": "Peso mínimo para cálculo do frete"
     },
     {
       "name": "tabela_icms",
-      "type": "float"
+      "type": "float",
+      "description": "% de ICMS quando há tratativa comercial (substitui o icms_destino fixo)"
     },
     {
       "name": "tabela_percentual_gris",
-      "type": "float"
+      "type": "float",
+      "description": "% de GRIS (Gerenciamento de Risco)"
     },
     {
       "name": "tabela_pedagio_por_100kg",
-      "type": "float"
+      "type": "float",
+      "description": "Valor de pedágio cobrado por fração de 100kg"
     },
     {
       "name": "tabela_valor_tas",
-      "type": "float"
+      "type": "float",
+      "description": "Taxa fixa de administração do SEFAZ (TAS)"
     },
     {
       "name": "tabela_percentual_adv",
-      "type": "float"
+      "type": "float",
+      "description": "% de ADV (seguro cobrado)"
     },
     {
       "name": "tabela_percentual_rca",
-      "type": "float"
+      "type": "float",
+      "description": "% de RCA (seguro fluvial)"
     },
     {
       "name": "tabela_valor_despacho",
-      "type": "float"
+      "type": "float",
+      "description": "Taxa fixa por CNPJ despachado pela transportadora contratada"
     },
     {
       "name": "tabela_valor_cte",
-      "type": "float"
+      "type": "float",
+      "description": "Taxa fixa por CT-e emitido pela transportadora contratada"
     },
     {
       "name": "tabela_icms_incluso",
       "type": "boolean",
+      "description": "Flag: ICMS já incluso no valor ou precisa ser adicionado",
       "default": false
     },
     {
       "name": "icms_destino",
-      "type": "float"
+      "type": "float",
+      "description": "% de ICMS fixo por região"
     },
     {
       "name": "tabela_gris_minimo",
@@ -191,12 +216,14 @@
     {
       "name": "provisorio",
       "type": "boolean",
+      "description": "Flag: pedido CarVia ainda sem NF (provisório)",
       "nullable": false,
       "default": false
     },
     {
       "name": "carvia_cotacao_id",
-      "type": "integer"
+      "type": "integer",
+      "description": "ID da cotação para pedidos da CarVia"
     },
     {
       "name": "nf_pallet_cliente",

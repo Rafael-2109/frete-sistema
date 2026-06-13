@@ -7,28 +7,28 @@ class TabelaFrete(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     transportadora_id = db.Column(db.Integer, db.ForeignKey('transportadoras.id'), nullable=False)
-    uf_origem = db.Column(db.String(2), nullable=False)
+    uf_origem = db.Column(db.String(2), nullable=False, info={'description': 'UF de origem da rota da tabela (par com uf_destino)'})
     uf_destino = db.Column(db.String(2), nullable=False)
-    nome_tabela = db.Column(db.String(50), nullable=False)
+    nome_tabela = db.Column(db.String(50), nullable=False, info={'description': 'Nome da tabela dado pela transportadora que está realizando o frete'})
 
-    tipo_carga = db.Column(db.String(20), nullable=False)
-    modalidade = db.Column(db.String(50), nullable=False)
+    tipo_carga = db.Column(db.String(20), nullable=False, info={'description': 'DIRETA (modalidade=veículo, 1-1 no Embarque, rateada por peso no Frete) ou FRACIONADA (modalidade=FRETE PESO/VALOR, 1-1 no EmbarqueItem, calculada por CNPJ)'})
+    modalidade = db.Column(db.String(50), nullable=False, info={'description': 'Modalidade da tabela: FRACIONADA → FRETE PESO/FRETE VALOR; DIRETA → tipo de veículo'})
 
-    valor_kg = db.Column(db.Float)
-    frete_minimo_peso = db.Column(db.Float)
-    percentual_valor = db.Column(db.Float)
-    frete_minimo_valor = db.Column(db.Float)
+    valor_kg = db.Column(db.Float, info={'description': 'Preço por kg da transportadora'})
+    frete_minimo_peso = db.Column(db.Float, info={'description': 'Peso mínimo para cálculo do frete'})
+    percentual_valor = db.Column(db.Float, info={'description': 'Custo de frete relativo ao valor da mercadoria (%)'})
+    frete_minimo_valor = db.Column(db.Float, info={'description': 'Valor mínimo do frete'})
 
-    percentual_gris = db.Column(db.Float)
-    percentual_adv = db.Column(db.Float)
-    percentual_rca = db.Column(db.Float)
-    pedagio_por_100kg = db.Column(db.Float)
+    percentual_gris = db.Column(db.Float, info={'description': '% de GRIS (Gerenciamento de Risco)'})
+    percentual_adv = db.Column(db.Float, info={'description': '% de ADV (seguro cobrado)'})
+    percentual_rca = db.Column(db.Float, info={'description': '% de RCA (seguro fluvial)'})
+    pedagio_por_100kg = db.Column(db.Float, info={'description': 'Valor de pedágio cobrado por fração de 100kg'})
 
-    valor_despacho = db.Column(db.Float)
-    valor_cte = db.Column(db.Float)
-    valor_tas = db.Column(db.Float)
+    valor_despacho = db.Column(db.Float, info={'description': 'Taxa fixa por CNPJ despachado pela transportadora contratada'})
+    valor_cte = db.Column(db.Float, info={'description': 'Taxa fixa por CT-e emitido pela transportadora contratada'})
+    valor_tas = db.Column(db.Float, info={'description': 'Taxa fixa de administração do SEFAZ (TAS)'})
 
-    icms_incluso = db.Column(db.Boolean, default=False)
+    icms_incluso = db.Column(db.Boolean, default=False, info={'description': 'Flag: ICMS já incluso no valor ou precisa ser adicionado'})
     
     # ===== NOVOS CAMPOS DE VALORES MÍNIMOS E ICMS =====
     gris_minimo = db.Column(db.Float, default=0)    # Valor mínimo de GRIS (usa o maior entre calculado e mínimo)

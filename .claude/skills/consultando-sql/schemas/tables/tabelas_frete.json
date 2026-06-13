@@ -16,6 +16,7 @@
     {
       "name": "uf_origem",
       "type": "varchar(2)",
+      "description": "UF de origem da rota da tabela (par com uf_destino)",
       "nullable": false
     },
     {
@@ -26,65 +27,80 @@
     {
       "name": "nome_tabela",
       "type": "varchar(50)",
+      "description": "Nome da tabela dado pela transportadora que está realizando o frete",
       "nullable": false
     },
     {
       "name": "tipo_carga",
       "type": "varchar(20)",
+      "description": "DIRETA (modalidade=veículo, 1-1 no Embarque, rateada por peso no Frete) ou FRACIONADA (modalidade=FRETE PESO/VALOR, 1-1 ",
       "nullable": false
     },
     {
       "name": "modalidade",
       "type": "varchar(50)",
+      "description": "Modalidade da tabela: FRACIONADA FRETE PESO/FRETE VALOR; DIRETA tipo de veículo",
       "nullable": false
     },
     {
       "name": "valor_kg",
-      "type": "float"
+      "type": "float",
+      "description": "Preço por kg da transportadora"
     },
     {
       "name": "frete_minimo_peso",
-      "type": "float"
+      "type": "float",
+      "description": "Peso mínimo para cálculo do frete"
     },
     {
       "name": "percentual_valor",
-      "type": "float"
+      "type": "float",
+      "description": "Custo de frete relativo ao valor da mercadoria (%)"
     },
     {
       "name": "frete_minimo_valor",
-      "type": "float"
+      "type": "float",
+      "description": "Valor mínimo do frete"
     },
     {
       "name": "percentual_gris",
-      "type": "float"
+      "type": "float",
+      "description": "% de GRIS (Gerenciamento de Risco)"
     },
     {
       "name": "percentual_adv",
-      "type": "float"
+      "type": "float",
+      "description": "% de ADV (seguro cobrado)"
     },
     {
       "name": "percentual_rca",
-      "type": "float"
+      "type": "float",
+      "description": "% de RCA (seguro fluvial)"
     },
     {
       "name": "pedagio_por_100kg",
-      "type": "float"
+      "type": "float",
+      "description": "Valor de pedágio cobrado por fração de 100kg"
     },
     {
       "name": "valor_despacho",
-      "type": "float"
+      "type": "float",
+      "description": "Taxa fixa por CNPJ despachado pela transportadora contratada"
     },
     {
       "name": "valor_cte",
-      "type": "float"
+      "type": "float",
+      "description": "Taxa fixa por CT-e emitido pela transportadora contratada"
     },
     {
       "name": "valor_tas",
-      "type": "float"
+      "type": "float",
+      "description": "Taxa fixa de administração do SEFAZ (TAS)"
     },
     {
       "name": "icms_incluso",
       "type": "boolean",
+      "description": "Flag: ICMS já incluso no valor ou precisa ser adicionado",
       "default": false
     },
     {

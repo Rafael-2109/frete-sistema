@@ -1,13 +1,14 @@
 {
   "table": "tabelas_frete",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "business_rules": [
     "Chave de negócio do JOIN com cidades_atendidas é (transportadora_id, nome_tabela) — não apenas transportadora_id; uma transportadora pode ter várias tabelas com nomes distintos",
     "tipo_carga: 'DIRETA' (um destino) ou 'FRACIONADA' (múltiplos destinos); modalidade: 'VALOR', 'PESO', 'VAN' e outras — determinam a fórmula de cálculo do frete",
     "icms_incluso=True significa ICMS já embutido nas tarifas; False significa aplicar grossing-up: valor_com_icms = valor_liquido / (1 - icms_rate)",
     "icms_proprio: quando preenchido, substitui o ICMS da cidade destino (tabela cidades) no cálculo; se NULL, usa ICMS da cidade",
     "gris_minimo e adv_minimo são pisos: usa o maior entre o valor calculado (percentual × valor_nf) e o mínimo cadastrado",
-    "Uma tabela sem vínculo em cidades_atendidas está 'órfã' e não será usada em cotações"
+    "Uma tabela sem vínculo em cidades_atendidas está 'órfã' e não será usada em cotações",
+    "Uma tabela e localizada por uf_origem + uf_destino + tipo_carga + modalidade: DIRETA -> modalidade = tipo de veiculo (gravada 1-1 no Embarque); FRACIONADA -> modalidade = FRETE PESO ou FRETE VALOR (gravada 1-1 no EmbarqueItem, calculada por CNPJ)"
   ],
   "query_hints": [
     {

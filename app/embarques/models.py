@@ -385,15 +385,15 @@ class EmbarqueItem(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     embarque_id = db.Column(db.Integer, db.ForeignKey('embarques.id'), nullable=False)
     separacao_lote_id = db.Column(db.String(50), nullable=True, index=True)  # VARCHAR ex: LOTE_20251004_032844_195 (NAO e integer)
-    cnpj_cliente = db.Column(db.String(20), nullable=True)
-    cliente = db.Column(db.String(120), nullable=False)
-    pedido = db.Column(db.String(50), nullable=False)
-    protocolo_agendamento = db.Column(db.String(50))
-    data_agenda = db.Column(db.String(10))
+    cnpj_cliente = db.Column(db.String(20), nullable=True, info={'description': 'CNPJ do cliente — fonte de dedup na cotação e no rateio do frete'})
+    cliente = db.Column(db.String(120), nullable=False, info={'description': 'Nome fantasia do cliente'})
+    pedido = db.Column(db.String(50), nullable=False, info={'description': 'Nosso número do pedido'})
+    protocolo_agendamento = db.Column(db.String(50), info={'description': 'Senha única do comprovante de agendamento'})
+    data_agenda = db.Column(db.String(10), info={'description': 'Data do agendamento no cliente'})
     agendamento_confirmado = db.Column(db.Boolean, default=False)  # ✅ NOVO: Status de confirmação do agendamento
     hora_agendamento = db.Column(db.Time, nullable=True)  # Horario do agendamento (HH:MM) — exclusivo CarVia (Nacom deixa NULL)
-    nota_fiscal = db.Column(db.String(20))
-    volumes = db.Column(db.Integer, nullable=True)
+    nota_fiscal = db.Column(db.String(20), info={'description': 'Número da NF'})
+    volumes = db.Column(db.Integer, nullable=True, info={'description': 'Qtd de volumes (possivelmente não utilizada)'})
     peso = db.Column(db.Float)  # Peso bruto (fisico) do item
     peso_cubado = db.Column(db.Float, nullable=True)  # Peso cubado (CarVia motos); NULL = usar peso
     valor = db.Column(db.Float)  # Valor do item
@@ -405,30 +405,30 @@ class EmbarqueItem(db.Model):
 
     status = db.Column(db.String(20), nullable=False, default='ativo')  # 'ativo' ou 'cancelado'
 
-    uf_destino = db.Column(db.String(2), nullable=False)
-    cidade_destino = db.Column(db.String(100), nullable=False)
+    uf_destino = db.Column(db.String(2), nullable=False, info={'description': 'UF de destino do frete'})
+    cidade_destino = db.Column(db.String(100), nullable=False, info={'description': 'Cidade de destino do frete'})
 
     # Campos específicos para carga FRACIONADA
     # Cada item do embarque tem sua própria cotação
     cotacao_id = db.Column(db.Integer, db.ForeignKey('cotacoes.id', name='fk_embarque_item_cotacao'), nullable=True)
-    modalidade = db.Column(db.String(50))
+    modalidade = db.Column(db.String(50), info={'description': 'FRETE PESO ou FRETE VALOR (quando tipo_carga=FRACIONADA)'})
     
     # Parâmetros da tabela para carga FRACIONADA
-    tabela_nome_tabela = db.Column(db.String(100))
-    tabela_valor_kg = db.Column(db.Float)
-    tabela_percentual_valor = db.Column(db.Float)
-    tabela_frete_minimo_valor = db.Column(db.Float)
-    tabela_frete_minimo_peso = db.Column(db.Float)
-    tabela_icms = db.Column(db.Float)
-    tabela_percentual_gris = db.Column(db.Float)
-    tabela_pedagio_por_100kg = db.Column(db.Float)
-    tabela_valor_tas = db.Column(db.Float)
-    tabela_percentual_adv = db.Column(db.Float)
-    tabela_percentual_rca = db.Column(db.Float)
-    tabela_valor_despacho = db.Column(db.Float)
-    tabela_valor_cte = db.Column(db.Float)
-    tabela_icms_incluso = db.Column(db.Boolean, default=False)
-    icms_destino = db.Column(db.Float)
+    tabela_nome_tabela = db.Column(db.String(100), info={'description': 'Nome da tabela dado pela transportadora que está realizando o frete'})
+    tabela_valor_kg = db.Column(db.Float, info={'description': 'Preço por kg da transportadora'})
+    tabela_percentual_valor = db.Column(db.Float, info={'description': 'Custo de frete relativo ao valor da mercadoria (%)'})
+    tabela_frete_minimo_valor = db.Column(db.Float, info={'description': 'Valor mínimo do frete'})
+    tabela_frete_minimo_peso = db.Column(db.Float, info={'description': 'Peso mínimo para cálculo do frete'})
+    tabela_icms = db.Column(db.Float, info={'description': '% de ICMS quando há tratativa comercial (substitui o icms_destino fixo)'})
+    tabela_percentual_gris = db.Column(db.Float, info={'description': '% de GRIS (Gerenciamento de Risco)'})
+    tabela_pedagio_por_100kg = db.Column(db.Float, info={'description': 'Valor de pedágio cobrado por fração de 100kg'})
+    tabela_valor_tas = db.Column(db.Float, info={'description': 'Taxa fixa de administração do SEFAZ (TAS)'})
+    tabela_percentual_adv = db.Column(db.Float, info={'description': '% de ADV (seguro cobrado)'})
+    tabela_percentual_rca = db.Column(db.Float, info={'description': '% de RCA (seguro fluvial)'})
+    tabela_valor_despacho = db.Column(db.Float, info={'description': 'Taxa fixa por CNPJ despachado pela transportadora contratada'})
+    tabela_valor_cte = db.Column(db.Float, info={'description': 'Taxa fixa por CT-e emitido pela transportadora contratada'})
+    tabela_icms_incluso = db.Column(db.Boolean, default=False, info={'description': 'Flag: ICMS já incluso no valor ou precisa ser adicionado'})
+    icms_destino = db.Column(db.Float, info={'description': '% de ICMS fixo por região'})
     
     # ===== NOVOS CAMPOS DE VALORES MÍNIMOS E ICMS =====
     tabela_gris_minimo = db.Column(db.Float, default=0)    # Valor mínimo de GRIS
@@ -441,8 +441,8 @@ class EmbarqueItem(db.Model):
     # === CARVIA: Item Provisorio ===
     # Quando True, este item e um placeholder de cotacao CarVia aguardando pedidos/NF.
     # Sera substituido por itens reais quando NFs forem anexadas aos pedidos da cotacao.
-    provisorio = db.Column(db.Boolean, nullable=False, default=False, server_default='false')
-    carvia_cotacao_id = db.Column(db.Integer, nullable=True, index=True)
+    provisorio = db.Column(db.Boolean, nullable=False, default=False, server_default='false', info={'description': 'Flag: pedido CarVia ainda sem NF (provisório)'})
+    carvia_cotacao_id = db.Column(db.Integer, nullable=True, index=True, info={'description': 'ID da cotação para pedidos da CarVia'})
 
     # === GRUPO 2: PALLETS FÍSICOS (Controle Real) ===
     # Para rastrear NF de pallet específica do cliente

@@ -1,6 +1,6 @@
 {
   "table": "fretes",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "business_rules": [
     "4 tipos de valor: valor_cotado (calculado pela tabela de frete), valor_cte (cobrado pela transportadora no CTe), valor_considerado (validado internamente, inicia = valor_cotado), valor_pago (efetivamente pago)",
     "Para CUSTO REAL de frete use valor_pago (NAO valor_cotado nem valor_cte)",
@@ -8,7 +8,9 @@
     "status: PENDENTE, EM_TRATATIVA, APROVADO, REJEITADO, PAGO, CANCELADO, LANCADO_ODOO",
     "tipo_carga: DIRETA (1 destino) ou FRACIONADA (multiplos destinos)",
     "numeros_nfs e CSV (texto separado por virgula) com as NFs cobertas pelo frete",
-    "1 frete agrupa NFs por CNPJ dentro de 1 embarque (embarque_id)"
+    "1 frete agrupa NFs por CNPJ dentro de 1 embarque (embarque_id)",
+    "Os campos tabela_* sao um SNAPSHOT da tabela de frete (TabelaFrete) congelado no momento do lancamento — leia-os direto do proprio Frete, NAO faca JOIN com tabelas_frete",
+    "Calculo de valor_cotado por tipo_carga: DIRETA usa a tabela do Embarque e rateia pelo peso do CNPJ; FRACIONADA usa a tabela do EmbarqueItem e calcula direto por CNPJ"
   ],
   "query_hints": [
     {

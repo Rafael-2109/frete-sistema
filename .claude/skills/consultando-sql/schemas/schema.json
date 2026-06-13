@@ -241,7 +241,8 @@
       "business_rules": [
         "embarque_id = FK para embarques.id",
         "status: ativo, cancelado",
-        "peso, valor, pallets sao do item individual"
+        "peso, valor, pallets sao do item individual",
+        "Os campos tabela_* (snapshot da tabela de frete) so sao preenchidos quando o embarque e tipo_carga=FRACIONADA; em DIRETA a tabela de frete mora em embarques (campos tabela_* do Embarque) e o frete e rateado por peso"
       ],
       "fields": [
         {"name": "id", "type": "integer", "description": "Primary key"},

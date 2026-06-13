@@ -95,7 +95,8 @@
     },
     {
       "name": "origem",
-      "type": "varchar(20)"
+      "type": "varchar(20)",
+      "description": "num_pedido relacionado a essa NF"
     },
     {
       "name": "status_nf",
@@ -107,6 +108,7 @@
     {
       "name": "revertida",
       "type": "boolean",
+      "description": "Flag: NF devolvida integralmente",
       "nullable": false,
       "default": false
     },
@@ -117,7 +119,8 @@
     },
     {
       "name": "data_reversao",
-      "type": "timestamp"
+      "type": "timestamp",
+      "description": "Data da reversão"
     },
     {
       "name": "created_at",

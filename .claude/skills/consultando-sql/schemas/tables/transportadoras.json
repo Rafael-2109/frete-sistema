@@ -35,7 +35,8 @@
     },
     {
       "name": "condicao_pgto",
-      "type": "varchar(50)"
+      "type": "varchar(50)",
+      "description": "Condição de pagamento da transportadora (texto livre, sem vínculo automático com o frete)"
     },
     {
       "name": "freteiro",
@@ -113,20 +114,24 @@
     {
       "name": "motorista_proprio",
       "type": "boolean",
+      "description": "Motorista da própria empresa (não é terceiro)",
       "nullable": false,
       "default": false
     },
     {
       "name": "banco",
-      "type": "varchar(100)"
+      "type": "varchar(100)",
+      "description": "Instituição bancária da transportadora"
     },
     {
       "name": "agencia",
-      "type": "varchar(20)"
+      "type": "varchar(20)",
+      "description": "Agência da conta"
     },
     {
       "name": "conta",
-      "type": "varchar(30)"
+      "type": "varchar(30)",
+      "description": "Conta corrente"
     },
     {
       "name": "tipo_conta",
@@ -135,15 +140,18 @@
     },
     {
       "name": "pix",
-      "type": "varchar(100)"
+      "type": "varchar(100)",
+      "description": "Chave PIX da transportadora"
     },
     {
       "name": "cpf_cnpj_favorecido",
-      "type": "varchar(20)"
+      "type": "varchar(20)",
+      "description": "CPF/CNPJ do favorecido"
     },
     {
       "name": "obs_financ",
-      "type": "text"
+      "type": "text",
+      "description": "Observação financeira relevante"
     }
   ],
   "foreign_keys": [

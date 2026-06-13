@@ -36,7 +36,7 @@ class Transportadora(db.Model):
     cidade = db.Column(db.String(100), nullable=False)
     uf = db.Column(db.String(2), nullable=False)
     optante = db.Column(db.Boolean, default=False)  # Sim/Não
-    condicao_pgto = db.Column(db.String(50), nullable=True)
+    condicao_pgto = db.Column(db.String(50), nullable=True, info={'description': 'Condição de pagamento da transportadora (texto livre, sem vínculo automático com o frete)'})
     freteiro = db.Column(db.Boolean, default=False)  # Define se é freteiro
     ativo = db.Column(db.Boolean, default=True, nullable=False)  # Status ativo/inativo para cotações
 
@@ -65,16 +65,16 @@ class Transportadora(db.Model):
     nao_aceita_nf_pallet = db.Column(db.Boolean, default=False, nullable=False)  # Transportadora não aceita NF de pallet
 
     # Motorista próprio da empresa (não terceirizado)
-    motorista_proprio = db.Column(db.Boolean, default=False, nullable=False)
+    motorista_proprio = db.Column(db.Boolean, default=False, nullable=False, info={'description': 'Motorista da própria empresa (não é terceiro)'})
 
     # ===== CAMPOS FINANCEIROS =====
-    banco = db.Column(db.String(100), nullable=True)
-    agencia = db.Column(db.String(20), nullable=True)
-    conta = db.Column(db.String(30), nullable=True)
+    banco = db.Column(db.String(100), nullable=True, info={'description': 'Instituição bancária da transportadora'})
+    agencia = db.Column(db.String(20), nullable=True, info={'description': 'Agência da conta'})
+    conta = db.Column(db.String(30), nullable=True, info={'description': 'Conta corrente'})
     tipo_conta = db.Column(db.String(20), nullable=True)  # 'corrente' ou 'poupanca'
-    pix = db.Column(db.String(100), nullable=True)
-    cpf_cnpj_favorecido = db.Column(db.String(20), nullable=True)
-    obs_financ = db.Column(db.Text, nullable=True)
+    pix = db.Column(db.String(100), nullable=True, info={'description': 'Chave PIX da transportadora'})
+    cpf_cnpj_favorecido = db.Column(db.String(20), nullable=True, info={'description': 'CPF/CNPJ do favorecido'})
+    obs_financ = db.Column(db.Text, nullable=True, info={'description': 'Observação financeira relevante'})
 
     def obter_prefixos_cnpj_grupo(self) -> set:
         """

@@ -16,11 +16,13 @@
     {
       "name": "cnpj_cliente",
       "type": "varchar(20)",
+      "description": "CNPJ do cliente — fonte de dedup na cotação e no rateio do frete",
       "nullable": false
     },
     {
       "name": "nome_cliente",
       "type": "varchar(255)",
+      "description": "Razão social / nome do cliente",
       "nullable": false
     },
     {
@@ -44,11 +46,13 @@
     {
       "name": "uf_destino",
       "type": "varchar(2)",
+      "description": "UF de destino do frete",
       "nullable": false
     },
     {
       "name": "cidade_destino",
       "type": "varchar(100)",
+      "description": "Cidade de destino do frete",
       "nullable": false
     },
     {
@@ -74,64 +78,79 @@
     },
     {
       "name": "tabela_nome_tabela",
-      "type": "varchar(100)"
+      "type": "varchar(100)",
+      "description": "Nome da tabela dado pela transportadora que está realizando o frete"
     },
     {
       "name": "tabela_valor_kg",
-      "type": "float"
+      "type": "float",
+      "description": "Preço por kg da transportadora"
     },
     {
       "name": "tabela_percentual_valor",
-      "type": "float"
+      "type": "float",
+      "description": "Custo de frete relativo ao valor da mercadoria (%)"
     },
     {
       "name": "tabela_frete_minimo_valor",
-      "type": "float"
+      "type": "float",
+      "description": "Valor mínimo do frete"
     },
     {
       "name": "tabela_frete_minimo_peso",
-      "type": "float"
+      "type": "float",
+      "description": "Peso mínimo para cálculo do frete"
     },
     {
       "name": "tabela_icms",
-      "type": "float"
+      "type": "float",
+      "description": "% de ICMS quando há tratativa comercial (substitui o icms_destino fixo)"
     },
     {
       "name": "tabela_percentual_gris",
-      "type": "float"
+      "type": "float",
+      "description": "% de GRIS (Gerenciamento de Risco)"
     },
     {
       "name": "tabela_pedagio_por_100kg",
-      "type": "float"
+      "type": "float",
+      "description": "Valor de pedágio cobrado por fração de 100kg"
     },
     {
       "name": "tabela_valor_tas",
-      "type": "float"
+      "type": "float",
+      "description": "Taxa fixa de administração do SEFAZ (TAS)"
     },
     {
       "name": "tabela_percentual_adv",
-      "type": "float"
+      "type": "float",
+      "description": "% de ADV (seguro cobrado)"
     },
     {
       "name": "tabela_percentual_rca",
-      "type": "float"
+      "type": "float",
+      "description": "% de RCA (seguro fluvial)"
     },
     {
       "name": "tabela_valor_despacho",
-      "type": "float"
+      "type": "float",
+      "description": "Taxa fixa por CNPJ despachado pela transportadora contratada"
     },
     {
       "name": "tabela_valor_cte",
-      "type": "float"
+      "type": "float",
+      "description": "Taxa fixa por CT-e emitido pela transportadora contratada"
     },
     {
       "name": "tabela_icms_incluso",
       "type": "boolean",
+      "description": "Flag: ICMS já incluso no valor ou precisa ser adicionado",
       "default": false
     },
     {
       "name": "tabela_icms_destino",
-      "type": "float"
+      "type": "float",
+      "description": "% de ICMS fixo por região"
     },
     {
       "name": "tabela_gris_minimo",
@@ -152,7 +171,8 @@
     },
     {
       "name": "condicao_pagamento",
-      "type": "varchar(50)"
+      "type": "varchar(50)",
+      "description": "Condição de pagamento do frete: \"A Vista\" ou \"XX dias\""
     },
     {
       "name": "valor_cotado",
@@ -231,6 +251,7 @@
     {
       "name": "requer_aprovacao",
       "type": "boolean",
+      "description": "Flag: frete exige aprovação por divergência > R$ 5,00 entre valor considerado × pago/cotado (vai p/ EM_TRATATIVA)",
       "default": false
     },
     {
@@ -243,7 +264,8 @@
     },
     {
       "name": "observacoes_aprovacao",
-      "type": "text"
+      "type": "text",
+      "description": "Observações registradas na aprovação/tratativa do frete"
     },
     {
       "name": "considerar_diferenca",
@@ -272,6 +294,7 @@
     {
       "name": "origem",
       "type": "varchar(20)",
+      "description": "Origem do frete: NACOM (default) ou OP_ASSAI (Op. Assaí Q.P.A. Sendas)",
       "nullable": false,
       "default": "NACOM"
     }
