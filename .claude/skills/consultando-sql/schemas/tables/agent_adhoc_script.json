@@ -1,6 +1,6 @@
 {
   "name": "agent_adhoc_script",
-  "description": "Script ad-hoc (Bash substantivo) capturado do transcript pos-sessao (Fase 2).",
+  "description": "Pipeline de APRENDIZADO (Fase 2): captura Bash 'substantivo' pos-sessao para detectar gaps de skill e clusterizar comandos parecidos (cluster_id, tipo_gap). NAO e' repositorio de recuperacao: command_masked e' MASCARADO (PII) + truncado (8000c) + filtrado (so inline/heredoc/SQL; exclui scripts de arquivo). Para o SCRIPT INTEGRO que a sessao rodou, use a tool mcp__sessions__get_session_transcript (ou claude_session_store), NAO esta tabela.",
   "fields": [
     {
       "name": "id",

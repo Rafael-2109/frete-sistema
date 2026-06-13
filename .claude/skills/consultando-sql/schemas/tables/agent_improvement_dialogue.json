@@ -1,6 +1,6 @@
 {
   "name": "agent_improvement_dialogue",
-  "description": "Dialogo versionado de melhoria continua entre Agent SDK e Claude Code.",
+  "description": "Dialogo de melhoria Agent SDK <-> Claude Code (D8 + real-time). evidence_json (JSONB) e source_session_ids (array) guardam o contexto. suggestion_key e' a chave de dedup; status: proposed/closed/etc.",
   "fields": [
     {
       "name": "id",

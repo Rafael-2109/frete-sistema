@@ -1,6 +1,6 @@
 {
   "name": "agent_skill_effectiveness",
-  "description": "Avaliacao de efetividade de UMA invocacao de skill (1 linha por ancora).",
+  "description": "Avaliacao pos-sessao de efetividade de skill. action_ref e' string com prefixo: 'memory:<id>' / 'dialogue:<id>' / 'approval:<id>' (parseie o prefixo p/ saber a tabela). anchor_msg_id referencia agent_sessions.data->'messages'[].id (sem FK). evidencia_json e' mascarado (PII) e truncado — nao e' a conversa integra.",
   "fields": [
     {
       "name": "id",

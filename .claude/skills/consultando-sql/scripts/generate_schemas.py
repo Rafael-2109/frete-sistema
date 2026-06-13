@@ -294,6 +294,73 @@ TABLE_DESCRIPTIONS = {
     'log_integracao': 'Logs de integrações com sistemas externos.',
     # NF TagPlus
     'nf_pendente_tagplus': 'NFs pendentes no TagPlus.',
+    # =================================================================
+    # Dominio AGENTE — tabelas com JSONB opaco / juncao nao-FK / 2 IDs.
+    # Descricoes ricas para o text_to_sql nao gerar query ingenua (vazia).
+    # =================================================================
+    'agent_adhoc_script': (
+        "Pipeline de APRENDIZADO (Fase 2): captura Bash 'substantivo' pos-sessao para "
+        "detectar gaps de skill e clusterizar comandos parecidos (cluster_id, tipo_gap). "
+        "NAO e' repositorio de recuperacao: command_masked e' MASCARADO (PII) + truncado "
+        "(8000c) + filtrado (so inline/heredoc/SQL; exclui scripts de arquivo). Para o "
+        "SCRIPT INTEGRO que a sessao rodou, use a tool mcp__sessions__get_session_transcript "
+        "(ou claude_session_store), NAO esta tabela."
+    ),
+    'agent_sessions': (
+        "Sessao do agente (1 linha por conversa). session_id = UUID interno nosso. "
+        "JSONB 'data' contem as chaves (NAO sao colunas): channel ('web'/'teams'), "
+        "sdk_session_id (junta ao transcript cru em claude_session_store), messages "
+        "(array do historico produto), subagent_costs.entries (custo por subagente), "
+        "forked_from, plan, deliberation_log, s3_archive. JSONB 'summary' contem: "
+        "resumo_geral, topicos_abordados, ferramentas_usadas, tarefas_pendentes, "
+        "alertas, acoes_usuario, pedidos_mencionados, decisoes_tomadas, perfil_signals. "
+        "Filtrar canal: data->>'channel'='teams'. Para o que a sessao EXECUTOU "
+        "(Bash/scripts/tools), use a tool mcp__sessions__get_session_transcript em vez "
+        "de SQL cru. admin_only."
+    ),
+    'claude_session_store': (
+        "Transcript SDK cru (1 linha por evento JSONL; source-of-truth do conteudo de "
+        "sessao). ATENCAO 2 IDs: session_id aqui = sdk_session_id (efemero do CLI), NAO "
+        "agent_sessions.session_id. Juncao SEM FK: JOIN agent_sessions a ON "
+        "a.data->>'sdk_session_id' = claude_session_store.session_id. subpath='' = "
+        "transcript principal; subagentes tem subpath proprio. entry (jsonb) = evento "
+        "do SDK; blocos entry->'message'->'content'[*] com type='tool_use' name='Bash' "
+        "tem input.command (script executado, INTEGRO). Prefira a tool "
+        "mcp__sessions__get_session_transcript a montar esta query a mao."
+    ),
+    'agent_step': (
+        "Telemetria por turno (1 linha por turn). step_uid = '{session_id}:{turn_seq}' "
+        "— o numero do turno vem de split_part(step_uid,':',2)::int (NAO ha coluna "
+        "turn_seq). session_id e' coluna sem FK: DELETE da sessao NAO apaga os steps "
+        "(use LEFT JOIN). outcome_signal (JSONB) tem judge.evidencia (truncado em 500c)."
+    ),
+    'agent_skill_effectiveness': (
+        "Avaliacao pos-sessao de efetividade de skill. action_ref e' string com prefixo: "
+        "'memory:<id>' / 'dialogue:<id>' / 'approval:<id>' (parseie o prefixo p/ saber a "
+        "tabela). anchor_msg_id referencia agent_sessions.data->'messages'[].id (sem FK). "
+        "evidencia_json e' mascarado (PII) e truncado — nao e' a conversa integra."
+    ),
+    'agent_memories': (
+        "Memorias persistentes do agente. Para memorias ESTRUTURADAS (heuristica/"
+        "armadilha/protocolo/correcao) a FONTE DE VERDADE e' o JSONB 'meta' (kind, "
+        "dominio, nivel, when, do, criterios, titulo); a coluna 'content' e' DERIVADA "
+        "de meta (NAO filtrar por content). Filtre por meta->>'kind' e meta->>'dominio'. "
+        "is_cold=true = memoria fria (excluir de busca operacional)."
+    ),
+    'agent_improvement_dialogue': (
+        "Dialogo de melhoria Agent SDK <-> Claude Code (D8 + real-time). evidence_json "
+        "(JSONB) e source_session_ids (array) guardam o contexto. suggestion_key e' a "
+        "chave de dedup; status: proposed/closed/etc."
+    ),
+    'agente_artifacts': (
+        "Artefatos HTML gerados pelo agente. O conteudo HTML NAO esta no banco: s3_key "
+        "aponta o bundle no S3 (acesse via presigned URL)."
+    ),
+    'teams_tasks': (
+        "Tarefas do canal Teams. pending_questions, conversation_reference e resposta_card "
+        "sao JSON. pending_question_session_id e' a ponte (sem FK) para "
+        "agent_sessions.session_id."
+    ),
 }
 
 

@@ -1,36 +1,38 @@
 {
   "name": "claude_session_store",
-  "description": "PostgresSessionStore: transcripts SDK do agente (Fase B cutover 2026-04-21). Source-of-truth do conteudo de sessao.",
+  "description": "Transcript SDK cru do agente (1 linha por evento JSONL; source-of-truth do conteudo de sessao, Fase B cutover 2026-04-21). ATENCAO 2 IDs: session_id aqui = sdk_session_id (efemero do CLI), NAO agent_sessions.session_id. Juncao SEM FK: JOIN agent_sessions a ON a.data->>'sdk_session_id' = claude_session_store.session_id. subpath='' = transcript principal; subagentes tem subpath proprio. entry (jsonb) traz blocos entry->'message'->'content'[*] com type='tool_use' name='Bash' e input.command (script executado, INTEGRO). Prefira a tool mcp__sessions__get_session_transcript a montar esta query a mao.",
   "fields": [
     {
       "name": "project_key",
       "type": "text",
-      "description": "Primary key"
+      "description": "Primary key. Hash do diretorio de trabalho (recompute via project_key_for_directory)."
     },
     {
       "name": "session_id",
       "type": "text",
-      "description": "Primary key"
+      "description": "Primary key. = sdk_session_id (efemero do CLI), NAO agent_sessions.session_id. Junte via agent_sessions.data->>'sdk_session_id'."
     },
     {
       "name": "subpath",
       "type": "text",
-      "description": "Primary key"
+      "description": "Primary key. '' = transcript principal; subagentes tem subpath proprio."
     },
     {
       "name": "seq",
       "type": "bigint",
-      "description": "Primary key"
+      "description": "Primary key. Ordem do evento dentro de (project_key, session_id, subpath)."
     },
     {
       "name": "entry",
       "type": "jsonb",
-      "nullable": false
+      "nullable": false,
+      "description": "Evento JSONL do SDK. Blocos entry->'message'->'content'[*]: type='tool_use' name='Bash' tem input.command (INTEGRO, nao mascarado)."
     },
     {
       "name": "mtime",
       "type": "bigint",
-      "nullable": false
+      "nullable": false,
+      "description": "Epoch-ms UTC do evento."
     }
   ],
   "indices": [

@@ -1,6 +1,6 @@
 {
   "name": "agent_step",
-  "description": "Onda 0 (2026-05-30) — Entidade de PASSO/TURNO do agente.",
+  "description": "Telemetria por turno (1 linha por turn). step_uid = '{session_id}:{turn_seq}' — o numero do turno vem de split_part(step_uid,':',2)::int (NAO ha coluna turn_seq). session_id e' coluna sem FK: DELETE da sessao NAO apaga os steps (use LEFT JOIN). outcome_signal (JSONB) tem judge.evidencia (truncado em 500c).",
   "fields": [
     {
       "name": "id",

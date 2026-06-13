@@ -1,6 +1,6 @@
 {
   "name": "teams_tasks",
-  "description": "Tarefa assíncrona para processamento de mensagem do Teams.",
+  "description": "Tarefas do canal Teams. pending_questions, conversation_reference e resposta_card sao JSON. pending_question_session_id e' a ponte (sem FK) para agent_sessions.session_id.",
   "fields": [
     {
       "name": "id",

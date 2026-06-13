@@ -1913,12 +1913,12 @@ Nunca invente informações."""
         except Exception as e:
             logger.warning(f"[AGENT_CLIENT] Erro MCP buscar_tabelas: {e}")
 
-        # Sessions (busca em sessões anteriores — 4 operações)
+        # Sessions (busca em sessões anteriores + transcript cru — 6 operações)
         try:
             from ..tools.session_search_tool import sessions_server
             from ..tools.session_search_tool import set_current_user_id as set_session_search_user_id
             if _register_mcp("sessions", sessions_server, set_session_search_user_id):
-                logger.info("[AGENT_CLIENT] MCP 'sessions' registrada (4 operações)")
+                logger.info("[AGENT_CLIENT] MCP 'sessions' registrada (6 operações)")
         except ImportError:
             logger.debug("[AGENT_CLIENT] MCP sessions não disponível")
         except Exception as e:

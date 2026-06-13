@@ -1,6 +1,6 @@
 {
   "name": "agente_artifacts",
-  "description": "Artifact (bundle.html auto-contido) gerado pelo agente via skill",
+  "description": "Artefatos HTML gerados pelo agente. O conteudo HTML NAO esta no banco: s3_key aponta o bundle no S3 (acesse via presigned URL).",
   "fields": [
     {
       "name": "id",

@@ -1,6 +1,6 @@
 {
   "name": "agent_memories",
-  "description": "Memória persistente do agente por usuário.",
+  "description": "Memorias persistentes do agente. Para memorias ESTRUTURADAS (heuristica/armadilha/protocolo/correcao) a FONTE DE VERDADE e' o JSONB 'meta' (kind, dominio, nivel, when, do, criterios, titulo); a coluna 'content' e' DERIVADA de meta (NAO filtrar por content). Filtre por meta->>'kind' e meta->>'dominio'. is_cold=true = memoria fria (excluir de busca operacional).",
   "fields": [
     {
       "name": "id",

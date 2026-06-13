@@ -74,3 +74,11 @@ class TestSessionSearchSchema:
         schema = _final_schema(st.list_session_users)
         assert schema.get("required", []) == []
         assert schema["properties"]["limit"]["type"] == "integer"
+
+    def test_get_session_transcript_so_session_id_required(self):
+        # recuperacao do transcript cru (Bash/scripts): so session_id obrigatorio;
+        # filter_tool/include_odoo/target_user_id opcionais (dict-completo, nao all-required)
+        schema = _final_schema(st.get_session_transcript)
+        assert schema["required"] == ["session_id"]
+        for opt in ("filter_tool", "include_odoo", "target_user_id"):
+            assert opt in schema["properties"], f"falta {opt} no schema"

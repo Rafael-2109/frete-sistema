@@ -969,21 +969,215 @@ try:
             }
 
     # ========================================================================
-    # MCP Server Registration (Enhanced v4.1.0)
+    # OUTPUT SCHEMA — get_session_transcript
+    # ========================================================================
+
+    SESSION_TRANSCRIPT_OUTPUT_SCHEMA: dict = {
+        "type": "object",
+        "properties": {
+            "found": {"type": "boolean"},
+            "session_id": {"type": "string"},
+            "sdk_session_id": {"type": "string"},
+            "channel": {"type": "string"},
+            "num_executions": {"type": "integer"},
+            "executions": {"type": "array"},
+            "odoo_operations": {"type": "object"},
+            "truncated": {"type": "boolean"},
+            "masked": {"type": "boolean"},
+            "error": {"type": "string"},
+        },
+        "required": ["found"],
+    }
+
+    # Recuperacao do script INTEGRO e' o proposito: limite generoso por comando
+    # (script ad-hoc raramente excede) + teto de itens para nao explodir tokens.
+    _SESSION_TX_MAX_ITEMS = 40
+    _SESSION_TX_MAX_CMD_CHARS = 12000
+
+    @enhanced_tool(
+        "get_session_transcript",
+        (
+            "Recupera o que uma sessao do agente EXECUTOU (comandos Bash, scripts ad-hoc, "
+            "tool calls) a partir do transcript cru (claude_session_store), resolvendo "
+            "sozinha a juncao pelos 2 session_id distintos. Use quando o usuario perguntar: "
+            "'qual o script que ajustou o estoque na sessao X', 'o que rodou naquela sessao', "
+            "'mostra os comandos que o agente executou'. Opcional: filter_tool='Bash' (so "
+            "shell), include_odoo correlaciona operacoes Odoo da sessao. Para o transcript de "
+            "um SUBAGENTE especifico use get_subagent_transcript. Admin (debug_mode) ve "
+            "integro e pode usar target_user_id."
+        ),
+        {
+            "type": "object",
+            "properties": {
+                "session_id": {"type": "string", "description": "UUID interno da sessao (agent_sessions.session_id)"},
+                "filter_tool": {"type": "string", "description": "Filtra por nome de tool (ex: 'Bash'). Vazio = todas as tool calls."},
+                "include_odoo": {"type": "boolean", "description": "Correlaciona operacoes Odoo da sessao via operacao_odoo_auditoria (default True)"},
+                "target_user_id": {"type": "integer", "description": "Admin-only (debug_mode): sessao de outro usuario"},
+            },
+            "required": ["session_id"],
+        },
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+        output_schema=SESSION_TRANSCRIPT_OUTPUT_SCHEMA,
+    )
+    async def get_session_transcript(args: Dict[str, Any]) -> Dict[str, Any]:
+        """Recupera comandos/scripts executados numa sessao (transcript cru)."""
+        session_id = (args.get("session_id") or "").strip()
+        filter_tool = (args.get("filter_tool") or "").strip()
+        include_odoo = args.get("include_odoo", True)
+
+        if not session_id:
+            structured = {"found": False, "error": "session_id e' obrigatorio"}
+            return {"content": [{"type": "text", "text": structured["error"]}],
+                    "structuredContent": structured, "is_error": True}
+
+        try:
+            user_id = _resolve_user_id(args)
+        except (RuntimeError, PermissionError) as e:
+            structured = {"found": False, "error": str(e)}
+            return {"content": [{"type": "text", "text": f"Erro: {e}"}],
+                    "structuredContent": structured, "is_error": True}
+
+        from ..config.permissions import get_debug_mode
+        is_admin = get_debug_mode()
+
+        def _do():
+            import json as _json
+            from app import db
+            from sqlalchemy import text as _text
+            from ..models import AgentSession
+            from ..utils.pii_masker import mask_pii
+
+            sess = AgentSession.query.filter_by(session_id=session_id).first()
+            if sess is None:
+                return {"found": False, "error": f"Sessao {session_id[:12]} nao encontrada"}
+            # Escopo: nao-admin so' acessa as PROPRIAS sessoes
+            if not is_admin and sess.user_id != user_id:
+                return {"found": False, "error": "Sessao pertence a outro usuario (requer Modo Debug)"}
+
+            sdk_sid = sess.get_sdk_session_id()
+            channel = (sess.data or {}).get("channel", "")
+            if not sdk_sid:
+                return {"found": False, "session_id": session_id, "channel": channel,
+                        "error": "Sessao sem transcript SDK (sdk_session_id ausente — pre-Fase B ou nao iniciada)"}
+
+            rows = db.session.execute(_text("""
+                SELECT entry FROM claude_session_store
+                WHERE session_id = :sid AND subpath = ''
+                ORDER BY seq
+            """), {"sid": sdk_sid}).fetchall()
+
+            entries = []
+            for r in rows:
+                v = r[0]
+                entries.append(_json.loads(v) if isinstance(v, (str, bytes)) else v)
+
+            # 1o passe: tool_use_ids que falharam (tool_result is_error)
+            error_ids = set()
+            for e in entries:
+                content = (e.get("message") or {}).get("content")
+                if isinstance(content, list):
+                    for b in content:
+                        if isinstance(b, dict) and b.get("type") == "tool_result" and b.get("is_error"):
+                            error_ids.add(b.get("tool_use_id"))
+
+            execs = []
+            truncated = False
+            for e in entries:
+                content = (e.get("message") or {}).get("content")
+                if not isinstance(content, list):
+                    continue
+                for b in content:
+                    if not isinstance(b, dict) or b.get("type") != "tool_use":
+                        continue
+                    name = b.get("name", "")
+                    if filter_tool and name != filter_tool:
+                        continue
+                    tinput = b.get("input") or {}
+                    detail = tinput.get("command") if name == "Bash" else _json.dumps(tinput, ensure_ascii=False)
+                    detail = detail or ""
+                    if not is_admin:
+                        detail = mask_pii(detail)
+                    if len(detail) > _SESSION_TX_MAX_CMD_CHARS:
+                        detail = detail[:_SESSION_TX_MAX_CMD_CHARS] + "\n...[truncado]"
+                        truncated = True
+                    execs.append({"tool": name, "detail": detail, "is_error": b.get("id") in error_ids})
+                    if len(execs) >= _SESSION_TX_MAX_ITEMS:
+                        break
+                if len(execs) >= _SESSION_TX_MAX_ITEMS:
+                    truncated = True
+                    break
+
+            result = {
+                "found": True, "session_id": session_id, "sdk_session_id": sdk_sid,
+                "channel": channel, "num_executions": len(execs), "executions": execs,
+                "truncated": truncated, "masked": not is_admin,
+            }
+
+            if include_odoo:
+                odoo_rows = db.session.execute(_text("""
+                    SELECT status, COUNT(*) AS n
+                    FROM operacao_odoo_auditoria
+                    WHERE session_id = :sid
+                    GROUP BY status
+                """), {"sid": session_id}).fetchall()
+                if odoo_rows:
+                    result["odoo_operations"] = {
+                        "total": sum(int(r[1]) for r in odoo_rows),
+                        "by_status": {str(r[0]): int(r[1]) for r in odoo_rows},
+                    }
+            return result
+
+        try:
+            structured = _execute_with_context(_do)
+        except Exception as e:
+            logger.error(f"[SESSION_SEARCH] Erro get_session_transcript: {e}")
+            structured = {"found": False, "error": f"Erro interno: {str(e)[:200]}"}
+            return {"content": [{"type": "text", "text": structured["error"]}],
+                    "structuredContent": structured, "is_error": True}
+
+        if not structured.get("found"):
+            return {"content": [{"type": "text", "text": structured.get("error", "Nao encontrado")}],
+                    "structuredContent": structured, "is_error": True}
+
+        lines = [
+            f"Sessao {structured['session_id'][:12]} | canal={structured.get('channel') or '?'} | "
+            f"{structured['num_executions']} execucao(oes)"
+            + (" | MASCARADO (ative Modo Debug p/ integro)" if structured.get("masked") else "")
+        ]
+        if structured.get("odoo_operations"):
+            oo = structured["odoo_operations"]
+            lines.append(f"Operacoes Odoo: {oo['total']} ({oo.get('by_status')})")
+        for i, ex in enumerate(structured["executions"], 1):
+            flag = " [ERRO]" if ex.get("is_error") else ""
+            lines.append(f"\n#{i} {ex['tool']}{flag}:\n{ex['detail']}")
+        if structured.get("truncated"):
+            lines.append("\n...[resultado truncado — refine com filter_tool]")
+
+        return {"content": [{"type": "text", "text": "\n".join(lines)}],
+                "structuredContent": structured}
+
+    # ========================================================================
+    # MCP Server Registration (Enhanced v4.2.0)
     # ========================================================================
     sessions_server = create_enhanced_mcp_server(
         name="sessions",
-        version="4.1.0",
+        version="4.2.0",
         tools=[
             search_sessions,
             list_recent_sessions,
             semantic_search_sessions,
             list_session_users,
             get_subagent_transcript,
+            get_session_transcript,
         ],
     )
 
-    logger.info("[SESSION_SEARCH] Enhanced MCP 'sessions' v4.1.0 registrado (5 tools, structuredContent)")
+    logger.info("[SESSION_SEARCH] Enhanced MCP 'sessions' v4.2.0 registrado (6 tools, structuredContent)")
 
 except ImportError as e:
     sessions_server = None

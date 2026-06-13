@@ -1,6 +1,6 @@
 {
   "name": "agent_sessions",
-  "description": "Sessão do Agente Claude.",
+  "description": "Sessao do agente (1 linha por conversa). session_id = UUID interno nosso. JSONB 'data' contem as chaves (NAO sao colunas): channel ('web'/'teams'), sdk_session_id (junta ao transcript cru em claude_session_store), messages (array do historico produto), subagent_costs.entries (custo por subagente), forked_from, plan, deliberation_log, s3_archive. JSONB 'summary' contem: resumo_geral, topicos_abordados, ferramentas_usadas, tarefas_pendentes, alertas, acoes_usuario, pedidos_mencionados, decisoes_tomadas, perfil_signals. Filtrar canal: data->>'channel'='teams'. Para o que a sessao EXECUTOU (Bash/scripts/tools), use a tool mcp__sessions__get_session_transcript em vez de SQL cru. admin_only.",
   "fields": [
     {
       "name": "id",
