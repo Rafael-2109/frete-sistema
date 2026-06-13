@@ -105,7 +105,7 @@
     "vinculacao_carteira_separacao",
     "webhook_configs"
   ],
-  "total_tabelas": 317,
+  "total_tabelas": 318,
   "tabelas": [
     {
       "name": "agendamentos_entrega",
@@ -116,6 +116,17 @@
         "forma_agendamento"
       ],
       "dominio": "Monitoramento"
+    },
+    {
+      "name": "agent_adhoc_script",
+      "description": "Script ad-hoc (Bash substantivo) capturado do transcript pos-sessao (Fase 2).",
+      "key_fields": [
+        "session_id",
+        "user_id",
+        "cluster_id",
+        "tipo_gap"
+      ],
+      "dominio": "Agente"
     },
     {
       "name": "agent_eval_case",
@@ -139,7 +150,7 @@
     },
     {
       "name": "agent_improvement_dialogue",
-      "description": "Dialogo versionado de melhoria continua entre Agent SDK e Claude Code.",
+      "description": "Dialogo de melhoria Agent SDK <-> Claude Code (D8 + real-time). evidence_json (JSONB) e source_session_ids (array) guardam o contexto. suggestion_key e' a chave de dedup; status: proposed/closed/etc.",
       "key_fields": [
         "status",
         "suggestion_key",
@@ -209,7 +220,7 @@
     },
     {
       "name": "agent_step",
-      "description": "Onda 0 (2026-05-30) — Entidade de PASSO/TURNO do agente.",
+      "description": "Telemetria por turno (1 linha por turn). step_uid = '{session_id}:{turn_seq}' — o numero do turno vem de split_part(step_uid,':',2)::int (NAO ha coluna turn_seq). session_id e' coluna sem FK: DELETE da sessao NAO apaga os steps (use LEFT JOIN). outcome_signal (JSONB) tem judge.evidencia (truncado em 500c).",
       "key_fields": [
         "session_id",
         "user_id",
@@ -219,7 +230,7 @@
     },
     {
       "name": "agente_artifacts",
-      "description": "Artifact (bundle.html auto-contido) gerado pelo agente via skill",
+      "description": "Artefatos HTML gerados pelo agente. O conteudo HTML NAO esta no banco: s3_key aponta o bundle no S3 (acesse via presigned URL).",
       "key_fields": [
         "user_id",
         "session_id",
@@ -3358,7 +3369,7 @@
     },
     {
       "name": "teams_tasks",
-      "description": "Tarefa assíncrona para processamento de mensagem do Teams.",
+      "description": "Tarefas do canal Teams. pending_questions, conversation_reference e resposta_card sao JSON. pending_question_session_id e' a ponte (sem FK) para agent_sessions.session_id.",
       "key_fields": [
         "conversation_id",
         "user_id",
@@ -3447,7 +3458,7 @@
   "tabelas_admin": [
     {
       "name": "agent_memories",
-      "description": "Memória persistente do agente por usuário.",
+      "description": "Memorias persistentes do agente. Para memorias ESTRUTURADAS (heuristica/armadilha/protocolo/correcao) a FONTE DE VERDADE e' o JSONB 'meta' (kind, dominio, nivel, when, do, criterios, titulo); a coluna 'content' e' DERIVADA de meta (NAO filtrar por content). Filtre por meta->>'kind' e meta->>'dominio'. is_cold=true = memoria fria (excluir de busca operacional).",
       "key_fields": [
         "user_id",
         "source_session_id",
@@ -3480,7 +3491,7 @@
     },
     {
       "name": "agent_sessions",
-      "description": "Sessão do Agente Claude.",
+      "description": "Sessao do agente (1 linha por conversa). session_id = UUID interno nosso. JSONB 'data' contem as chaves (NAO sao colunas): channel ('web'/'teams'), sdk_session_id (junta ao transcript cru em claude_session_store), messages (array do historico produto), subagent_costs.entries (custo por subagente), forked_from, plan, deliberation_log, s3_archive. JSONB 'summary' contem: resumo_geral, topicos_abordados, ferramentas_usadas, tarefas_pendentes, alertas, acoes_usuario, pedidos_mencionados, decisoes_tomadas, perfil_signals. Filtrar canal: data->>'channel'='teams'. Para o que a sessao EXECUTOU (Bash/scripts/tools), use a tool mcp__sessions__get_session_transcript em vez de SQL cru. admin_only.",
       "key_fields": [
         "session_id",
         "user_id",
@@ -3491,7 +3502,7 @@
     },
     {
       "name": "agent_skill_effectiveness",
-      "description": "Avaliacao de efetividade de UMA invocacao de skill (1 linha por ancora).",
+      "description": "Avaliacao pos-sessao de efetividade de skill. action_ref e' string com prefixo: 'memory:<id>' / 'dialogue:<id>' / 'approval:<id>' (parseie o prefixo p/ saber a tabela). anchor_msg_id referencia agent_sessions.data->'messages'[].id (sem FK). evidencia_json e' mascarado (PII) e truncado — nao e' a conversa integra.",
       "key_fields": [
         "user_id",
         "session_id",

@@ -1,0 +1,103 @@
+{
+  "name": "agent_adhoc_script",
+  "description": "Script ad-hoc (Bash substantivo) capturado do transcript pos-sessao (Fase 2).",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "session_id",
+      "type": "varchar(64)",
+      "nullable": false
+    },
+    {
+      "name": "user_id",
+      "type": "integer",
+      "description": "FK → usuarios.id",
+      "nullable": false
+    },
+    {
+      "name": "problema",
+      "type": "varchar(120)"
+    },
+    {
+      "name": "command_masked",
+      "type": "text",
+      "nullable": false
+    },
+    {
+      "name": "contexto_user_msg",
+      "type": "text"
+    },
+    {
+      "name": "skill_relacionada",
+      "type": "varchar(80)"
+    },
+    {
+      "name": "tipo_gap",
+      "type": "varchar(20)",
+      "nullable": false,
+      "default": "desconhecido"
+    },
+    {
+      "name": "motivo_fallback",
+      "type": "varchar(200)"
+    },
+    {
+      "name": "retries_sessao",
+      "type": "smallint",
+      "default": 0
+    },
+    {
+      "name": "embedding",
+      "type": "vector"
+    },
+    {
+      "name": "cluster_id",
+      "type": "integer"
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação"
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "user_id",
+      "references": "usuarios.id"
+    }
+  ],
+  "indices": [
+    {
+      "name": "ix_agent_adhoc_script_cluster_id",
+      "columns": [
+        "cluster_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_agent_adhoc_script_criado_em",
+      "columns": [
+        "criado_em"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_agent_adhoc_script_session_id",
+      "columns": [
+        "session_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_agent_adhoc_script_user_id",
+      "columns": [
+        "user_id"
+      ],
+      "unique": false
+    }
+  ]
+}
