@@ -462,6 +462,12 @@ Journals sale LF com no_payment de compensação: j863 `industrializacao`→5101
 3. **RESÍDUO — conta de contrapartida das 5902**: na cópia-B as 5902 creditaram a transitória `1150100012` (herdada da NF-modelo). No fluxo REAL (NF-insumos simbólica, sem stock.move) essa transitória **não tem SVL que a feche** → ficaria aberta. Para o NET fechar contra a Etapa 2 (`D 1150200001 / C 5101020001`), as 5902 da NF-insumos real precisam creditar a **conta de terceiros `1150200001`** (não a transitória) — definido pela **operação fiscal** da linha 5902, não pelo journal. ⇒ **a verificar no GATE 1** (o GATE 0 provou a baixa da PASSIVA, que é o que estava em xeque; a perna da contrapartida é refinamento do par net-zero, conecta com Design A/B da Etapa 2).
 4. A 180552 tem 5902 com valor real (8,37 contribui ao total da mista) — a NF-insumos do regime deve ter `price_unit` = valores da remessa (já no desenho, V3).
 
+### ✅ CONFIG APLICADA (2026-06-13) — pré-requisito do GATE 1 (cadastro, reversível, sem SEFAZ)
+> `s10_config_emissao.py` (dry-run → `--confirmar`, validado `--validar`). Reversível: `--revert` (deleta journal + restaura pt98). **Veículo = server action** (decidido Rafael 13/06).
+- **Journal RETIND `id=1083`** criado (LF sale): `l10n_br_no_payment=True` + `account_no_payment_id=26667` (5101020001 PASSIVA) + `l10n_br_tipo_pedido=VAZIO` (impede o robô de roteá-lo; nós setamos o journal no split). Combinação PROVADA no GATE 0. *(j1047 ENTRADA-REMESSA é purchase e já usa 26667 — o RETIND é o lado SALE, que faltava.)*
+- **pt98 "Retorno Industrialização (LF)" configurado** (era `invoice_move_type=False`/`tipo_pedido=False`, 0 usos): agora `invoice_move_type='out_invoice'` + `l10n_br_tipo_pedido='venda-industrializacao'` (espelha o pt66 no que importa p/ faturamento, mantendo src/dest de terceiros `31093→26489`). **Escolhido configurar pt98 (não clonar pt66)** — pt98 já é semanticamente o retorno de terceiros, 0 usos.
+- ⚠️ **No GATE 1**: o picking pt98 do piloto deve ficar `liberado_faturamento=False` + `picking.robo` fora de 1..11 (agora que pt98 tem `invoice_move_type='out_invoice'`, entra no domain do robô se houver picking liberado).
+
 
 ## Contexto
 
