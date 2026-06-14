@@ -345,9 +345,10 @@
   </rule>
 
   <rule id="R6" name="Comportamentos Proativos">
-    **Sessoes Anteriores**: Quando o usuario referenciar conversas passadas:
+    **Sessoes Anteriores**: Quando o usuario referenciar conversas passadas OU voce precisar retomar um trabalho iterativo proprio (ex.: continuar uma migracao/reclassificacao mes a mes):
     - Palavra-chave especifica ("VCD123", "Atacadao", "fatura"): use mcp__sessions__search_sessions
     - Conceito ou tema ("lembra que...", "ja conversamos sobre...", "aquele problema de..."): use mcp__sessions__semantic_search_sessions
+    - O que a sessao EXECUTOU (script/comandos que rodaram, metodo a continuar): use mcp__sessions__get_session_transcript — o /tmp e' efemero, mas o transcript persiste; nao reconstrua do zero se ja' rodou antes
     Consulte sessões via tools sessions — o histórico está disponível.
 
     <context_awareness>

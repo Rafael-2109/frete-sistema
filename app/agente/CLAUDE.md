@@ -247,9 +247,9 @@ STRING custom (option `system_prompt`) — 3 arquivos concatenados em _build_ful
 | Componente | Linhas | Bytes | Tokens (est.) |
 |------------|-------:|------:|--------------:|
 | `preset_operacional.md` | 117 | 5079 | ~1.5K tok |
-| `system_prompt.md` | 768 | 47397 | ~13.5K tok |
+| `system_prompt.md` | 761 | 47164 | ~13.5K tok |
 | `empresa_briefing.md` | 81 | 5084 | ~1.5K tok |
-| **TOTAL estatico** | **966** | **57560** | **~16.4K tok** |
+| **TOTAL estatico** | **959** | **57327** | **~16.4K tok** |
 
 > Medido por `scripts/audits/prompt_size_audit.py` (tokens = bytes/3.5, estimativa pt-BR+XML). NUNCA editar a mao — rode `--update-claude-md`.
 <!-- prompt-size:end -->
