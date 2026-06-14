@@ -53,7 +53,7 @@ Industrialização por encomenda: os **insumos nunca mudam de dono** — são e 
 
 > ⚠️ **v3.1 (2026-06-12):** as versões anteriores diziam "CST 51 suspenso" para todas as linhas — INCORRETO em 2 sentidos (51 = diferimento, não suspensão; remessa/retorno usam **50**). Na implementação **NÃO hardcodar CST** — deixar a operação/posição fiscal derivar; assert no GATE 1 de que as linhas saem iguais às NFs autorizadas de referência.
 
-> ✔v2.1 (2026-05-30, NF real): **NÃO há ICMS em nenhuma etapa** (CST51 suspenso na remessa; impostos do retorno = CBS/IBS/PIS/COFINS + "INDUSTRIALIZACAO", já tratados pelas operações atuais). **Não mexer em imposto.** A NF de retorno LF→FB tem **N linhas 5902** (insumos, valor=remessa) + **linha(s) 5124** (valor agregado) + **linhas 5903** (sobra). O PA físico na FB é valorado por (insumos consumidos + valor agregado).
+> 🔒 **TRIBUTAÇÃO — REGRA DEFINITIVA (confirmada Rafael, 2026-06-13):** **NADA tem ICMS.** **Só a linha de industrialização/serviço (5124) tem PIS e COFINS** (CST 01, tributado; + CBS/IBS). As **linhas de insumos 5902 (e sobra 5903) NÃO têm ICMS, PIS nem COFINS** — `tax_ids=[]` (CST ICMS 50 = suspensão / CST PIS/COFINS 08 = sem incidência = só CODIFICAÇÃO, tributo 0). O 5124 sai com ICMS apenas **diferido** (CST 51, valor 0). **Não mexer em imposto** — e garantir que o retorno (5902) saia com `tax_ids=[]`/`amount_tax=0` (igual à NF real). A NF de retorno LF→FB tem **N linhas 5902** (insumos, valor=remessa, sem tributo) + **linha(s) 5124** (valor agregado, com PIS/COFINS) + **linhas 5903** (sobra, sem tributo). O PA físico na FB é valorado por (insumos consumidos + valor agregado).
 
 ---
 
@@ -182,6 +182,8 @@ A Contadora **aprovou separar em 2 NF** (`MATERIAL_CONTADORA §0`) com **3 requi
 
 ### 6.1 Desenho E2E da EMISSÃO 2-NF (v3.1, sessão 9 — 🟡 PROPOSTA, validar com Rafael)
 
+> ✅ **v3.2 — ESTRATÉGIA FIRMADA (Rafael, 2026-06-13 tarde):** desenho-alvo = **1 server action que gera as 2 NFs** (serviço 5124 via `create_invoice` + insumos 5902 no RETIND 1083). **Não existe** expansão automática hoje (busca exaustiva — `ACHADOS §"SESSÃO 2026-06-13 (tarde)"`): a operadora monta as 5902 à mão. **A fonte dos 5902 = MATERIAIS DE TERCEIROS via MO/quant** (consumido de `31092 LF/Materiais de Terceiros`, explodindo sub-MOs) — **exclui ÁGUA (consumo local) e semis** ⇒ os 16 corretos (a BoM teórica pura dá 17). Plano de execução: `PROMPT_PROXIMA_SESSAO.md`.
+
 > Grounding READ-only sessão 9 (`s9_grounding_desenho.py` + código da server action 1512) — `ACHADOS §sessão 9`. **v3.1 = v3.0 revisada por painel adversarial 3 lentes** (mecanismo/fiscal/operacional; 30 findings, veredicto unânime AJUSTES_NECESSARIOS — nenhuma refutação da espinha). Princípio do Rafael: **replicar a forma automática de puxar os componentes** (expansão nativa da BoM = R1 literal) **em 2 docs separados**, com a NF do serviço **puxando** a NF de retorno dos insumos.
 
 **Premissa confirmada (2 camadas — por que 2 docs):**
@@ -214,6 +216,28 @@ A Contadora **aprovou separar em 2 NF** (`MATERIAL_CONTADORA §0`) com **3 requi
 **Resíduos conhecidos (pós-piloto, antes do rollout):** G8 AVCO Ic+S na entrada FB (medir no piloto, `ACHADOS §D`) · perna **5903** (sobras) · mapeamento insumo→preço-da-remessa p/ ciclos com N remessas (par remessa↔retorno por ciclo/lote via refNFe) · controle do prazo **180 dias** CST 50 (alerta ~150d; backlog R$60,8M = `GOALS G9`) · pontos de código 1-NF (`ACHADOS §E`) · Etapa 5 (escrituração 2 DFes na FB).
 
 > Mecanismo/provas: `ACHADOS §A–§I` + `§sessão 8` + `§sessão 9`. Próximo passo operacional: `PROMPT_PROXIMA_SESSAO`.
+
+### 6.2 AUTOMAÇÃO DOS 2 GATILHOS (v3.4, 2026-06-14 — FASE B concluída via SA; falta só o disparo automático)
+
+> ✅✅✅ **MOTOR FISCAL + TRANSMISSÃO SEFAZ PROVADOS end-to-end (`s37`/`s40`–`s59`):** 1 server action gera **NF-1 (serviço 5124)** via `create_invoice` + recompute + **NF-2 (insumos 5902)** = `account.move` direto no RETIND 1083 + **R3** (invoice_origin comum + refNFe→remessa); posta (**baixa PASSIVA `Δ5101020001 = +279,23`**); e **TRANSMITE as 2 ao SEFAZ via SERVER ACTION → cstat 100** (NF-1 791437, NF-2 791441 — chaves em `ACHADOS §"FASE B"`). **A transmissão via SA dispensa o Playwright.** Falta só a **camada de disparo automático** abaixo + R2 (entrada FB).
+
+**Requisito (Rafael, 2026-06-14):** o operador faz **exatamente o de hoje** — (1) cria o picking do serviço de industrialização, (2) **valida** (→ nasce a NF-1), (3) **transmite** a NF-1. O sistema faz o resto sozinho, em 2 gatilhos:
+
+- **G1 — na criação da NF-1 → cria a NF-2.** Discriminador **determinístico = serviço de industrialização** (journal **j847** / `l10n_br_tipo_pedido=venda-industrializacao` / op 2702). O j847 é **100% desse regime** (200/200 VND recentes = partner FB). Cron próprio (padrão dos 11 robôs CIEL IT) detecta NF-1 do j847 **sem NF-2 vinculada** → SA monta a NF-2 (estrutura `s37`/`s35`: op 2864, CST 50, conta 1150100012, `calcular_imposto=False`, tributo 0) + vínculo. **Mudança operacional:** a operadora **deixa de adicionar as 5902 à mão** (a NF-1 sai só com 5124) — menos trabalho que hoje.
+- **G2 — na transmissão da NF-1 → transmite a NF-2.** Cron detecta NF-1 transmitida (`l10n_br_cstat_nf=100`) com NF-2 vinculada não transmitida → adiciona **cross-refNFe** (chave da NF-1 na NF-2) + transmite a NF-2. **✅ Transmissão via SERVER ACTION (provado `s54`, 14/06 — substitui o Playwright):** a SA chama `action_previsualizar_xml_nfe` (força o recompute server-side que destrava o `nfe_infnfe_*` stale → SEFAZ 225) **+** `action_gerar_nfe`, **na mesma transação** (o recompute fica no cache p/ o gerar_nfe — melhor que o Playwright, que faz 2 requests). *(O Playwright `transmitir_nfe_via_playwright` continua válido como fallback; o XML-RPC **direto** é que falha — sem o preview.)* Tratar `excecao_autorizado` (rejeição) como retransmissível.
+
+**Fonte dos componentes da NF-2 — abordagem A/B/C (Rafael, validada `s46`):**
+- **A.** Genealogia recursiva: do **PA+lote da NF-1** → **todas as MOs do lote** + **sub-MOs dos semis** (ex.: BATELADA → 9 químicos) → materiais de terceiros consumidos de **31092**. (`s46` provou: desce nos semis e acha os 16 + água.)
+- **B.** Rateio = **(qtd faturada na NF-1) / (total REAL produzido do lote)** × cada componente. Robusto a múltiplas MOs do mesmo lote (o piloto tem 3 por tentativas — o rateio cancela).
+- **3 refinamentos de implementação** (`s46`): (i) **excluir ÁGUA** (`type=consu`, consumo local — como `s30`); (ii) **total = produção REAL**, não `count(MOs)` (as 3 MOs do piloto são tentativas fragmentadas → frasco deu 4 vs 12); (iii) **🔴 valor NÃO sai do quant atual de 31092** (os consumidos zeram o quant → `vu=0`) — o valor de remessa (invariante 5902=5901) está no **histórico (SVL / move de consumo)**, não no saldo atual. Decisão Rafael: base = materiais de terceiros valorados pela remessa.
+
+**R2 — escrituração na FB (reusar trilho existente):** `app/recebimento/services/recebimento_lf_odoo_service.py` já faz **transmite NFe LF (Playwright) → extrai XML/chave → cria DFe na FB (idempotente, por chave/número)**. Estender para os **2 DFes** (serviço + insumos) vinculados.
+
+**Veículo + dívida:** server action (server-side, mata timeout do recompute **e** faz a transmissão SEFAZ — provado) disparada por **cron**. Dívida OBRIGATÓRIA: script de re-aplicação idempotente versionado + monitor anti-upgrade (SA/cron custom somem em upgrade CIEL IT).
+
+**🔴 CADASTRO FISCAL OBRIGATÓRIO na geração (4 gaps provados na FASE B, já no `s37`):** a NF gerada programaticamente NÃO herda o que a duplicação da NF-modelo herda — setar nas 2: `invoice_incoterm_id`=**6 CIF** (retorno = frete do emitente LF; **não** FOB) + `l10n_br_carrier_id`=**999** (LF) + `payment_provider_id`=**31**; e na NF-1, **vencimento a-prazo** (`date_maturity`=emissão+1) senão a SEFAZ rejeita a duplicata ("à vista"). Detalhe: `ACHADOS §"FASE B"`.
+
+**Pendências para construir:** (1) cron G1 + SA com a fonte A/B/C (resolver o valor via SVL) **+ descoberta automática da remessa** (no piloto é FIXA); (2) cron G2 + transmissão via SA (já provada `s54`); (3) **R2 nos 2 DFes na FB** (Etapa 5, reusar `recebimento_lf_odoo_service`); (4) resiliência (máquina de estados por picking, marcador anti-post, rollback). Provas: `ACHADOS §"FASE B"`. Scripts da sessão: `s36`–`s59`.
 
 ---
 
