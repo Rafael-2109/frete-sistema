@@ -41,6 +41,14 @@ Indice de execucoes do dialogo de melhoria Agent SDK <-> Claude Code.
 | 35 | 2026-06-09 | 2 | 1 | 0 | 1 | OK (IMP-001: lock Redis re-entrada no lancamento CTe/despesa Odoo — anti duplo-clique POs/invoices duplicados, 9 TDD; IMP-002 proposta: skill WRITE CarVia + gotcha replica p/ revisao humana) |
 | 36 | 2026-06-12 | 10 | 6 | 2 | 2 | OK (2 skill_bug corrigidos: schema MCP sessions target_user_id/channel + rastrear.py campo 'name' invalido; multi-abas Excel exportar.py; tripla R9 system_prompt em 1 edicao; 2 rejeicoes por roteamento; 2 propostas CarVia/transferencia-saldo-codigo; 12 testes novos) |
 | 37 | 2026-06-13 | 9 | 4 | 2 | 3 | OK (exportar.py entrega codigo/texto .py via --formato texto + doc; I6.1 REGRAS_OUTPUT nao-expor-calculo; anti-gatilho roteamento rastreando-odoo->consultando-quant; 2 rejeicoes raiz "falta de ferramenta"; cluster 3 propostas industrializacao FB-LF contabil+arquitetural; 1 teste novo, suite export 18/18) |
+| 38 | 2026-06-14 | 0 | 0 | 0 | 0 | SKIP (sem backlog) |
+
+## 2026-06-14
+- **SKIP** — nenhuma sugestao pendente no banco (query principal retornou `[]`).
+- Filtros: `status='proposed'`, `author='agent_sdk'`, `version=1`, sem v2 correspondente.
+- Sugestoes F2 (`adhoc-`/`skill-gap-`, v1, sem v2): 0 — nada aguardando gate humano Rafael+CC.
+- Estatisticas atuais: 176 linhas totais (123 responded, 34 rejected, 9 verified, 8 needs_revision, 2 closed, 0 proposed). Ultima criacao agent_sdk: 2026-06-12 16:25 UTC (~2 dias sem novas).
+- Gate A3 PULADO (aposentado R2). Nenhum commit alem do relatorio e historico.
 
 ## 2026-06-13
 - **OK** — 9 sugestoes avaliadas: 4 implementadas, 2 rejeitadas, 3 propostas. v2 persistida (IDs 168-176, HTTP 200). Commit direto em `main`. Gate A3 PULADO (aposentado R2; nenhum subagente com golden dataset afetado). Nenhuma sugestao `adhoc-`/`skill-gap-` (F2 nao aplicavel).
