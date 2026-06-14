@@ -12,3 +12,4 @@ bash scripts/hooks/pre-commit-doc-lint.sh
 bash scripts/hooks/pre-commit-script-lint.sh
 bash scripts/hooks/pre-commit-prompt-lint.sh
 bash scripts/hooks/pre-commit-claude-md-stats.sh
+bash scripts/hooks/pre-commit-route-template-lint.sh

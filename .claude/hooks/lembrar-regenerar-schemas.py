@@ -2,10 +2,11 @@
 """
 Hook PostToolUse: Auto-regenerar Schemas apos editar modelos.
 
-Detecta edicoes em models.py, models/<x>.py e models_<x>.py e EXECUTA
-o generate_schemas.py (agora idempotente: so grava o que mudou, sem poluir
-o git). NUNCA apaga schemas orfaos automaticamente — apenas loga
-(remocao exige --prune-orphans manual; ver generate_schemas.py).
+Detecta edicoes em models.py, models/<x>.py e models_<x>.py e dispara o
+generate_schemas.py em BACKGROUND (detached). O gerador importa o app inteiro e
+leva ~45s; rodar sincrono no PostToolUse travaria o agente a cada edicao de model.
+O gerador e idempotente (so grava o que mudou, sem poluir o git) e NUNCA apaga
+schemas orfaos automaticamente (remocao exige --prune-orphans manual).
 
 Exit 0 sempre — falha na regeneracao nao deve bloquear o fluxo.
 """
@@ -79,30 +80,30 @@ def main():
 
         python_bin = venv_python if os.path.isfile(venv_python) else sys.executable
 
-        # Executar regeneracao (timeout 30s, silencioso em sucesso)
-        result = subprocess.run(
+        # Regeneracao em BACKGROUND (detached): o gerador leva ~45s; rodar sincrono
+        # travaria o agente a cada edicao de model. Dispara e retorna; o
+        # write-if-changed (S0) do gerador mantem o git limpo. Concorrencia entre
+        # dois disparos e inofensiva (gerador idempotente).
+        import tempfile
+        log_path = os.path.join(tempfile.gettempdir(), "regen_schemas.log")
+        try:
+            logf = open(log_path, "ab")
+        except OSError:
+            logf = subprocess.DEVNULL
+
+        subprocess.Popen(
             [python_bin, script],
             cwd=project_dir,
-            capture_output=True,
-            text=True,
-            timeout=30,
+            stdout=logf,
+            stderr=logf,
+            start_new_session=True,
+        )
+        print(
+            f"Hook: regeneracao de schemas disparada em background (~45s) apos editar "
+            f"{os.path.basename(file_path)}",
+            file=sys.stderr,
         )
 
-        if result.returncode == 0:
-            print(
-                f"Hook: schemas regenerados (idempotente — so grava o que mudou) "
-                f"apos editar {os.path.basename(file_path)}",
-                file=sys.stderr,
-            )
-        else:
-            print(
-                f"Hook: ERRO ao regenerar schemas (exit {result.returncode})\n"
-                f"  stderr: {result.stderr[:300]}",
-                file=sys.stderr,
-            )
-
-    except subprocess.TimeoutExpired:
-        print("Hook: timeout ao regenerar schemas (>30s)", file=sys.stderr)
     except Exception as e:
         print(f"Hook: erro inesperado: {e}", file=sys.stderr)
 
