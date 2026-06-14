@@ -282,6 +282,23 @@ NUNCA usar `create_app()` na thread. Reutilizar `current_app._get_current_object
 `create_app()` cria MCP servers duplicados → conflito de portas.
 — FONTE: `bot_routes.py:172-174`, `services.py:1019-1021`
 
+### Telemetria por-turno — path async grava `agent_step` + `agent_session_costs` (2026-06-14)
+O path async (`process_teams_task_async`, ATIVO) grava DUAS telemetrias logo após
+`session.model = selected_model`:
+- `agent_step` (model + tokens) via `_gravar_agent_step_teams` — **antes só o path
+  SYNC (em desuso) chamava**, deixando `agent_step` VAZIO p/ Teams.
+- `agent_session_costs` (model + **cache breakdown**) via `_persist_cost_teams` —
+  **antes só o canal web gravava** (chat.py `_persist_session_cost`). `message_id`
+  sintético `teams:{session}:{turn_seq}` (idempotente via UNIQUE), best-effort/INV-6,
+  atrás da flag `USE_COST_TRACKER_PERSIST` (ON em PROD, OFF local).
+
+**Por quê importa:** o prompt cache é MODEL-SCOPED e o smart routing alterna
+Sonnet↔Opus por mensagem (`TEAMS_SMART_MODEL_ROUTING`) — cada troca invalida o cache
+inteiro. Medido em PROD: Teams re-escreve cache ~4x o web (34% vs 8,7% em <5min).
+Registrar model+cache na MESMA linha torna essa alternância mensurável.
+— FONTE: `services.py:_persist_cost_teams,_gravar_agent_step_teams` (chamados ~L2236);
+memória dev `teams_cache_churn_model_routing.md`
+
 ---
 
 ## Feature Flags
