@@ -642,6 +642,43 @@ def _gravar_agent_step_teams(session, user_id, model, sync_result):
         logger.warning(f"[TEAMS-BOT] agent_step nao gravado (best-effort): {e}")
 
 
+def _persist_cost_teams(session, user_id, model, agent_result, cost_usd):
+    """Telemetria de custo per-turno do Teams em agent_session_costs (espelha o web).
+
+    GAP corrigido 2026-06-14: o path async do Teams NUNCA gravava agent_session_costs
+    — so o canal web (chat.py _persist_session_cost). Sem isto o Teams ficava invisivel
+    no dashboard de custo E era impossivel correlacionar modelo<->cache por turno. Isso
+    importa porque o prompt cache e MODEL-SCOPED: o smart routing do Teams alterna
+    Sonnet<->Opus por mensagem (TEAMS_SMART_MODEL_ROUTING) e cada troca invalida o
+    cache inteiro (tools+system+messages) -> re-escrita paga. Registrar model+cache na
+    MESMA linha permite medir essa alternancia.
+
+    message_id sintetico e deterministico (teams:{session}:{turn_seq}) => idempotente
+    via UNIQUE. Best-effort: insert_entry usa begin_nested (SAVEPOINT) consolidado pelo
+    commit do caller; falha NUNCA quebra o turno.
+    """
+    try:
+        from app.agente.config.feature_flags import USE_COST_TRACKER_PERSIST
+        if not USE_COST_TRACKER_PERSIST or session is None:
+            return
+        from app.agente.models import AgentSessionCost
+        _msgs = (session.data or {}).get('messages', [])
+        _turn_seq = sum(1 for m in _msgs if m.get('role') == 'user')
+        AgentSessionCost.insert_entry(
+            message_id=f"teams:{session.session_id}:{_turn_seq}",
+            session_id=session.session_id,
+            user_id=user_id,
+            model=model,
+            input_tokens=getattr(agent_result, 'input_tokens', 0) or 0,
+            output_tokens=getattr(agent_result, 'output_tokens', 0) or 0,
+            cache_read_tokens=getattr(agent_result, 'cache_read_tokens', 0) or 0,
+            cache_creation_tokens=getattr(agent_result, 'cache_creation_tokens', 0) or 0,
+            cost_usd=float(cost_usd or 0),
+        )
+    except Exception as e:
+        logger.warning(f"[TEAMS] agent_session_costs nao gravado (best-effort): {e}")
+
+
 def _commit_with_retry(log_prefix: str = "[TEAMS]") -> bool:
     """
     Commit com retry para conexoes PostgreSQL stale (SSL dropped pelo Render).
@@ -2234,6 +2271,15 @@ def process_teams_task_async(
 
                     # GAP 6: Model (registra modelo efetivamente usado)
                     session.model = selected_model
+
+                    # Telemetria por-turno (GAP corrigido 2026-06-14): o path async
+                    # (ATIVO em PROD) nao gravava agent_step (model) nem
+                    # agent_session_costs (model+cache) — so o canal web. Sem isto o
+                    # Teams era invisivel no custo e a alternancia de modelo (que
+                    # invalida o prompt cache, model-scoped) nao podia ser medida.
+                    # Ambos best-effort + idempotentes (INV-6: nao quebram o turno).
+                    _gravar_agent_step_teams(session, teams_user_id, selected_model, agent_result)
+                    _persist_cost_teams(session, teams_user_id, selected_model, agent_result, final_cost)
 
                     logger.info(
                         f"[TEAMS-ASYNC] Custo sessão {teams_session_id[:8]}: "

@@ -40,9 +40,9 @@ atualizado: 2026-06-11
 
 ## Contexto
 
-~3.2K LOC, 5 arquivos. Threads non-daemon (concluem durante reciclagem do gunicorn) + retry de SSL + persistencia de transcript + entrega proativa. Regras criticas: `daemon=False` obrigatorio em `process_teams_task_async()` e `_commit_with_retry()` sempre (nunca commit direto — Render derruba SSL em idle).
+~3.7K LOC, 5 arquivos. Threads non-daemon (concluem durante reciclagem do gunicorn) + retry de SSL + persistencia de transcript + entrega proativa. Regras criticas: `daemon=False` obrigatorio em `process_teams_task_async()` e `_commit_with_retry()` sempre (nunca commit direto — Render derruba SSL em idle).
 
-**LOC**: ~3.5K | **Arquivos**: 5 | **Atualizado**: 11/06/2026
+**LOC**: ~3.7K | **Arquivos**: 5 | **Atualizado**: 14/06/2026
 
 Bot assincrono Microsoft Teams via Azure Function bridge. Non-daemon threads + SSL retry + transcript persistence.
 
