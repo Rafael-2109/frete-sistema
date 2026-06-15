@@ -4,7 +4,7 @@ camada: L3
 sot_de: regularizacao historica (G9) da industrializacao FB<->LF
 hub: docs/industrializacao-fb-lf/INDEX.md
 superseded_by: —
-atualizado: 2026-06-14
+atualizado: 2026-06-15
 -->
 # G9 — Regularização histórica da industrialização FB↔LF (evidências + dimensionamento)
 
@@ -152,6 +152,30 @@ Provada a viabilidade da **reversão pura per-documento** na NF `VND/2026/00234`
 
 ---
 
+## 9. Conciliação de extrato FB→LF 2026 (recebimentos da LF) — EXECUTADA 2026-06-15
+
+> Frente **distinta** da regularização ATIVA/PASSIVA acima: aqui o objetivo é **baixar o a-receber da LF** (NFs `VND` contra a FB) com os pagamentos que a FB efetivamente fez, lançados no extrato bancário da LF mas **não conciliados**.
+
+**Mecânica (provada):** a `account.bank.statement.line` do recebimento tem a contrapartida em crédito na conta suspense `1110100003 TRANSITORIA DE VALORES`. Conciliar = reapontar essa linha → `26085` CLIENTES (partner FB=1) e reconciliar **FIFO** com os débitos das `VND` a receber mais antigas. Scripts `g9_34`/`g9_35` (SICOOB), `g9_44` (Santander) — dry-run default, `--confirmar` efetiva, idempotente.
+
+**🔴 GOTCHA decisivo — NÃO filtrar as entradas LF por `payment_ref ilike 'NACOM'`.** O extrato **SANTANDER (j1030)** da LF registra os PIX da FB com memo **`PIX RECEBIDO 61724241000178`** (CNPJ da FB), **sem a palavra NACOM** — o filtro NACOM (que servia ao SICOOB) **cegava** 100% do Santander e fazia esses pagamentos parecerem "extrato faltando". O correto é cruzar **todas as contas bancárias da LF** e casar por valor com os débitos `FORNECEDORES` (conta `11038`, partner LF=35) da FB. CNPJs: **LF = 18.467.441/0001-63** (`l10n_br_cnpj`, partner 35) · **FB = 61.724.241/0001-78** (partner 1).
+
+**Resultado (medido ao vivo, uid 42):**
+
+| Banco LF | Conciliado FB→LF | Obs |
+|---|---:|---|
+| SICOOB (j386) | 115 entradas · R$ 10,96M | 102 anteriores + **13 nesta sessão** (`g9_35`) |
+| SANTANDER (j1030) | **24 entradas · R$ 503.574,37** | `g9_44` — filtro `eh_fb` **E** casa-por-valor (exclui resgate/PIX-própria-LF/sem-par) |
+| **Pagamentos FB sem entrada em banco LF** | **R$ 0,00** | **não há extrato faltando** (`g9_43`) |
+
+Consistência: SICOOB R$ 10,96M + Santander R$ 0,50M ≈ R$ 11,46M ≈ total pago FB→LF 2026 (R$ 11,45M / 139 transações).
+
+**Falsos positivos corrigidos — 2× SABESP/água (R$ 327,92).** `BRAD/2026/00802` e `00803` (statement.line 42285/42286): pagamento de **conta de água SABESP** reconciliado por engano contra `FORNECEDORES NACIONAIS` com partner **LA FAMIGLIA - LF**, baixando a fatura de industrialização `ENTSI/2025/05/0047`. **Desconciliados** via `account.move.line.remove_move_reconcile` (`g9_42` — `button_undo_reconciliation` NÃO existe nesta versão CIEL IT) → fatura ENTSI `paid` → **`partial`, residual R$ 327,92** (os 2 PIX legítimos seguem casados). ⚠️ **PENDENTE: reclassificar** as 2 linhas `FORNECEDORES/LF` (hoje em aberto) para **despesa de água**, e quitar/reconciliar o residual reaberto da ENTSI.
+
+**Resíduos não-conciliados (não são FB→LF — Financeiro tratar à parte):** Santander 13 · R$ 2.015,46 (5 resgate CONTAMAX de aplicação + 5 PIX da própria LF + 3 PIX pequenos sem par no pagamento FB: 153,96 / 156,64 / 163,97) · SICOOB 12 · R$ 4.080,33 (a investigar).
+
+---
+
 ## Fontes
 
 - **Odoo PROD** (READ-only, uid 42, 2026-06-14) — saldos de contas de controle, NFs de retorno (j847), lock dates, recebíveis, quants/SVL.
@@ -159,6 +183,7 @@ Provada a viabilidade da **reversão pura per-documento** na NF `VND/2026/00234`
 - `scripts/g9_07_levantamento_universo.py` → `g9_universo_desde_2025.csv` — universo de 1.152 NFs desde 01/2025.
 - `scripts/g9_05_corrigir_caso.py` (caso-piloto) e `scripts/g9_09_rollout_abril2026.py` (rollout abr/2026) — correção WRITE (dry-run default, `--confirmar`).
 - `SOT_OPERACOES.md` — fluxo prospectivo (contas/operações corretas) referenciado nas tabelas EM USO × CORRETO.
+- **Conciliação de extrato (seção 9)**: `scripts/g9_35_concilia_extrato_robusto.py` (SICOOB) · `scripts/g9_43_cruza_todos_bancos_lf.py` (cruzamento todos os bancos LF, READ) · `scripts/g9_44_concilia_santander_lf.py` (Santander) · `scripts/g9_42_desconcilia_sabesp.py` (desconciliação SABESP via `remove_move_reconcile`) · `scripts/g9_39_export_extrato_faltando.py` / `g9_40_investiga_move.py` / `g9_41_varre_conciliacao_errada.py` (investigação READ) — WRITE com dry-run default + `--confirmar`.
 
 ## Contexto
 Documento — industrialização por encomenda FB↔LF. Tema: regularização histórica (G9) — evidências e dimensionamento.
