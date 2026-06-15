@@ -22,6 +22,7 @@ from app.motos_assai.models import (
     AssaiLoja, AssaiModelo,
     AssaiMoto, AssaiSeparacao, AssaiSeparacaoItem, AssaiNfQpa, AssaiNfQpaItem,
     AssaiDivergencia, AssaiPedidoExcel,
+    AssaiCompraMotochefe, AssaiReciboMotochefe, AssaiReciboItem,
     PEDIDO_STATUS_ABERTO,
     SEPARACAO_STATUS_FATURADA, SEPARACAO_STATUS_FECHADA,
     NF_STATUS_BATEU, NF_STATUS_CANCELADA, NF_STATUS_NAO_RECONCILIADO,
@@ -68,6 +69,24 @@ def _criar_moto_disponivel(admin, chassi, modelo):
     emitir_evento(chassi, EVENTO_ESTOQUE, admin.id)
     emitir_evento(chassi, EVENTO_MONTADA, admin.id)
     emitir_evento(chassi, EVENTO_DISPONIVEL, admin.id)
+
+
+def _criar_recibo_conferido(chassi):
+    """Cria AssaiReciboItem conferido para o chassi.
+
+    Regra CHASSI_FATURADO_SEM_RECIBO (nf_qpa_adapter, 2026-05-17): _calcular_match
+    so vincula (BATEU) chassi que tenha AssaiReciboItem conferido+ativo em recibo
+    Motochefe. Testes que esperam vinculacao bem-sucedida precisam montar este
+    pre-requisito.
+    """
+    compra = AssaiCompraMotochefe(numero=f'MA-TST-{_uid()}')
+    db.session.add(compra); db.session.flush()
+    recibo = AssaiReciboMotochefe(compra_id=compra.id)
+    db.session.add(recibo); db.session.flush()
+    db.session.add(AssaiReciboItem(
+        recibo_id=recibo.id, chassi=chassi, conferido=True, ativo=True,
+    ))
+    db.session.flush()
 
 
 def _criar_nf_e_itens(admin, loja, chave, chassis_modelo_valor):
@@ -125,6 +144,7 @@ def test_d5_match_ignora_sep_faturada(app, admin_user):
         # 2. NF nova com chassi_b (chassi diferente, mesma loja)
         chassi_b = f'TST_D5_B_{_uid()}'
         _criar_moto_disponivel(admin_user, chassi_b, modelo_dot)
+        _criar_recibo_conferido(chassi_b)  # pre-req CHASSI_FATURADO_SEM_RECIBO
 
         # Cria pedido 2 com sep ativa para chassi_b
         p2, _ = _criar_pedido(admin_user, loja, qtd=1)

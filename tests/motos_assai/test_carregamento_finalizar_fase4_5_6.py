@@ -159,7 +159,7 @@ def test_fase5_excel_versao_1_quando_nao_havia_anterior(app, admin_user):
         assert excels[0].versao == 1
         assert excels[0].ativo is True
         assert excels[0].pedido_id == pedido.id
-        assert 'Carregamento finalizado' in (excels[0].motivo_regeneracao or '')
+        assert f'Carregamento {car.id} finalizado' in (excels[0].motivo_regeneracao or '')
         db.session.rollback()
 
 

@@ -17,6 +17,15 @@ from decimal import Decimal
 # NÃO sobrescrever DATABASE_URL - usar o PostgreSQL local
 os.environ['TESTING'] = 'true'
 
+# Desabilitar Sentry nos testes. create_app() chama load_dotenv(), que sobe a
+# arvore de diretorios e acha o .env da raiz — ativando o profiler do Sentry
+# (profiles_sample_rate=0.1). O profiler amostra stacks durante compile()/
+# ast.parse das rotas (werkzeug) e contribui para SIGSEGV flaky. Testes nao
+# precisam de APM/profiler. Forcar vazio ANTES de importar `app` garante que
+# `if _sentry_dsn:` (app/__init__.py) seja falso. load_dotenv(override=False)
+# preserva este valor (nao sobrescreve var ja definida no ambiente).
+os.environ['SENTRY_DSN'] = ''
+
 # Code review fix (2026-05-13): removido `pytest_plugins = ['tests.motos_assai.conftest']`
 # que causava "Plugin already registered under a different name" em pytest 8.4+.
 # Pytest carrega o conftest local automaticamente quando coleta testes da subpasta.
@@ -49,21 +58,44 @@ def app():
 @pytest.fixture(scope='function')
 def db(app):
     """
-    Fornece o banco de dados com transação revertida após cada teste.
+    Fornece o banco com isolamento por SAVEPOINT robusto.
 
     Escopo: function (para cada teste)
 
-    Cada teste roda em uma transação que é revertida ao final,
-    garantindo isolamento e sem afetar dados de produção.
+    Padrao SQLAlchemy 2.0 "join session into external transaction":
+      - uma conexao dedicada abre UMA transacao externa real;
+      - a session do Flask-SQLAlchemy e religada a essa conexao com
+        join_transaction_mode="create_savepoint";
+      - QUALQUER db.session.commit() de service (HORA, Motos Assai) vira
+        commit de SAVEPOINT (NAO promove a transacao externa) e um novo
+        savepoint e aberto automaticamente na proxima operacao;
+      - no teardown, rollback da transacao externa desfaz TUDO.
+
+    Antes (begin_nested + rollback simples), um commit() de service promovia
+    a transacao externa e os dados de teste PERSISTIAM, acumulando entre runs
+    (colisoes de unique, paginacao/listagem afetadas por residuo).
     """
+    from sqlalchemy.orm import scoped_session, sessionmaker
+
     with app.app_context():
-        # Iniciar savepoint (nested transaction)
-        _db.session.begin_nested()
+        connection = _db.engine.connect()
+        transaction = connection.begin()
 
-        yield _db
+        TestingSession = scoped_session(sessionmaker(
+            bind=connection,
+            join_transaction_mode="create_savepoint",
+        ))
+        original_session = _db.session
+        _db.session = TestingSession
 
-        # Reverter todas as alterações do teste
-        _db.session.rollback()
+        try:
+            yield _db
+        finally:
+            TestingSession.remove()
+            if transaction.is_active:
+                transaction.rollback()
+            connection.close()
+            _db.session = original_session
 
 
 @pytest.fixture(scope='function')

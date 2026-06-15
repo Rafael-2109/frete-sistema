@@ -134,11 +134,11 @@ def importar(
             confianca = 1.0
         except MotochefeReciboLlmFallbackError as e:
             if not items:
-                raise ReciboParserError(f'Deterministico zero + LLM falhou: {e}')
+                raise ReciboParserError(f'Determinístico zero + LLM falhou: {e}')
             logger.error(f'LLM falhou; usando deterministico com baixa confianca: {e}')
 
     if not items:
-        raise ReciboParserError('Zero chassis extraidos')
+        raise ReciboParserError('Zero chassis extraídos')
 
     # 3. Parsing OK -> upload S3 (licao C2: nunca antes de validar)
     ext = 'pdf' if tipo_doc == 'PDF' else 'xlsx'
@@ -234,7 +234,7 @@ def _detectar_tipo(nome_arquivo: str, mime_type: Optional[str]) -> str:
         return 'PDF'
     if nome_lower.endswith(('.xlsx', '.xls')) or (mime_type and 'sheet' in (mime_type or '')):
         return 'EXCEL'
-    raise ReciboParserError(f'Tipo de arquivo nao suportado: {nome_arquivo}')
+    raise ReciboParserError(f'Tipo de arquivo não suportado: {nome_arquivo}')
 
 
 def _calcular_confianca(items: list) -> float:

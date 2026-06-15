@@ -11,7 +11,16 @@ from app.motos_assai.models import AssaiPedidoVenda, AssaiPedidoVendaItem
 
 FIXTURE = os.path.join(os.path.dirname(__file__), 'fixtures', 'pedido_voe_exemplo.pdf')
 
+# Fixture binaria nao versionada (.gitignore exclui *.pdf). Testes que abrem o
+# arquivo real ficam SKIP (em vez de FileNotFoundError) quando ausente — mesmo
+# padrao de test_recibo_service.py.
+_skip_sem_fixture = pytest.mark.skipif(
+    not os.path.exists(FIXTURE),
+    reason='Fixture binaria de pedido VOE ausente (nao versionada)',
+)
 
+
+@_skip_sem_fixture
 def test_importar_pdf_voe_sucesso(app, admin_user):
     """Importa o PDF canônico e persiste 38 lojas × 3 modelos = 114 items."""
     with app.app_context():
@@ -43,6 +52,7 @@ def test_importar_pdf_voe_sucesso(app, admin_user):
         assert len(items) == 38 * 3, f'Esperava 114 items, veio {len(items)}'
 
 
+@_skip_sem_fixture
 def test_importar_duplicado_falha(app, admin_user):
     with app.app_context():
         with open(FIXTURE, 'rb') as f:

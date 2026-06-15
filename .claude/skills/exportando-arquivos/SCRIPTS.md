@@ -14,6 +14,13 @@ Referencia detalhada de parametros, retornos e modos de operacao.
 
 ---
 
+## Indice
+
+- [Ambiente Virtual](#ambiente-virtual)
+- [1. exportar.py](#1-exportarpy)
+
+---
+
 ## Ambiente Virtual
 
 Sempre ativar antes de executar:
