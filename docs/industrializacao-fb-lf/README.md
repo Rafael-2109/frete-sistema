@@ -20,6 +20,7 @@ Industrialização por encomenda no grupo: **FB** (encomendante) remete insumos 
 |---|---|---|---|
 | índice | **`README.md`** (este) | índice + ESTADO atual | ponto de entrada |
 | handoff | **`PROMPT_PROXIMA_SESSAO.md`** | próximo passo da sessão | retomar o trabalho |
+| **POP operacional** 👷 | **`POP_OPERACIONAL_INDUSTRIALIZACAO.md`** | passo a passo das 5 etapas p/ os **usuários** (FB/LF/PCP/fiscal) | treinar/orientar operador no fluxo |
 | desenho ⭐ | **`SOT_OPERACOES.md`** | desenho-alvo + **DECISÕES** (CFOP/contábil/estoque por etapa) | entender "o que deve ser" / qualquer decisão |
 | metas | **`GOALS.md`** | metas + critério de sucesso por goal | medir se uma etapa fechou |
 | mecanismo | **`ACHADOS_TECNICOS.md`** | como o Odoo/CIEL IT decide + IDs/constantes | precisar de um ID ou do mecanismo |
