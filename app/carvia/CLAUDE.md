@@ -33,6 +33,7 @@ atualizado: 2026-06-15
   - [R18: NF Triangular (2026-04-20) — vinculo NF Transferencia -> NF Venda](#r18-nf-triangular-2026-04-20-vinculo-nf-transferencia---nf-venda)
   - [R19: SOT Tomador/Incoterm = XML do CTe (2026-04-20)](#r19-sot-tomadorincoterm-xml-do-cte-2026-04-20)
   - [R20: "Anexar" tem 2 semanticas — desambiguar ANTES de implementar](#r20-anexar-tem-2-semanticas-desambiguar-antes-de-implementar)
+  - [R21: Comissoes — ajustes (debito/credito) + vendedor = usuario](#r21-comissoes-ajustes-debitocredito-vendedor-usuario)
 - [Modelos](#modelos)
 - [Interdependencias](#interdependencias)
 - [Permissao](#permissao)
@@ -231,6 +232,29 @@ Desambiguar ANTES de implementar qualquer pedido com "anexar"; se ambiguo, pergu
 
 > Promovida da memoria empresa "CarVia anexar = 2 semanticas" (T1.4, 2026-06-12).
 
+### R21: Comissoes — ajustes (debito/credito) + vendedor = usuario (2026-06-15)
+
+Snapshot congela cada CTe no fechamento. Se o `cte_valor` de um CTe ja comissionado muda
+(`editar_cte_valor`) ou o CTe/operacao e cancelado, o sistema gera um `CarviaComissaoAjuste`
+(delta = (novo − base) × percentual_snapshot; >0 credito, <0 debito) abatido no PROXIMO fechamento
+do mesmo vendedor — o fechamento de origem NUNCA muda.
+
+- **Vendedor = `Usuario`**: `vendedor_usuario_id` (FK `usuarios`) e a chave canonica e de matching;
+  `vendedor_nome`/`vendedor_email` sao snapshot de exibicao. O select na criacao filtra
+  `acesso_comissao_carvia=True AND status='ativo'`.
+- **Gatilho** (`ComissaoService.sincronizar_ajustes_cte`, flush-only) em 3 pontos:
+  `operacao_routes.editar_cte_valor`, cancelamento direto (`operacao_routes`) e o cascade
+  (`operacao_cancel_service`). Base corrente = ultimo ajuste nao-cancelado ou o snapshot.
+- **Nunca negativo**: ao criar, ajustes PENDENTE do vendedor sao incorporados
+  (`_incorporar_ajustes_pendentes`); se o total ficaria < 0, BLOQUEIA a criacao (debitos acumulam
+  ate haver comissao suficiente). Guards tambem em `excluir_cte`/`marcar_pago`.
+- **Filtro de criacao = apenas data final (corte)**: `cte_data_emissao <= data_fim` (as comissoes
+  "matam o passado" via exclusao de ja-comissionados). `data_inicio` do registro e derivada do CTe
+  mais antigo.
+- Fechamentos sem vinculo: resolver via `POST /comissoes/<id>/vincular-vendedor`.
+- Arquivos: `models/comissao.py`, `services/financeiro/comissao_service.py`,
+  `routes/comissao_routes.py`, `templates/carvia/comissoes/{criar,detalhe}.html`.
+
 ---
 
 ## Modelos
@@ -254,6 +278,7 @@ Lista apenas **gotchas nao-obvios**. Para campos completos, consultar schemas JS
 | `CarviaPreVinculoExtratoCotacao` | Vinculo SOFT — linha continua PENDENTE. Status `ATIVO → RESOLVIDO \| CANCELADO`. UNIQUE parcial `WHERE status='ATIVO'`. Ver [FINANCEIRO.md](FINANCEIRO.md) |
 | `CarviaHistoricoMatchExtrato` | Append-only log de aprendizado. **Sem UNIQUE** por design (1 descricao → N CNPJs). Ver [FINANCEIRO.md](FINANCEIRO.md) |
 | `CarviaAdminAudit` | `dados_snapshot` JSONB com serializacao completa ANTES da acao. Indices em `acao`, `(entidade_tipo, entidade_id)`, `executado_em`, `executado_por` |
+| `CarviaComissaoFechamento` / `CarviaComissaoFechamentoCte` / `CarviaComissaoAjuste` | Vendedor = FK `usuarios` (`vendedor_usuario_id`); `vendedor_nome/email` = snapshot. Junction congela o CTe (snapshot). Alterar/cancelar CTe ja comissionado gera `CarviaComissaoAjuste` (delta) abatido no proximo fechamento. `total_comissao` = CTes + `total_ajustes`; NUNCA negativo. Ver R21 |
 
 ---
 
