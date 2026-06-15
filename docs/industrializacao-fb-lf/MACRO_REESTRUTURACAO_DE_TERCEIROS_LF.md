@@ -48,11 +48,16 @@ Locations-chave: `42` LF/Estoque · `53` LF/Pré-Produção · `31092` Mat. Terc
 5. **Contábil:** definir conta de valoração de 31092/31093 (terceiros) vs a de 42.
 6. **Automação G1/G2:** validar consistência com 31092 (já provada nos canários 0-3).
 
-## Plano de sessões (decidido com Rafael)
-- **Sessão 1 (esta) ✅** — macro processo (este doc) + preparo (reservas limpas).
-- **Sessão 2** — desenho detalhado costurando TODAS as pontas: investigação ampla (PO, processos, movimentos, histórico) para não deixar nada passar. Produz o plano de execução wired.
-- **Sessão 3** — implementação no Odoo (wired direto): migração de saldo + reescrita de rules/picking_types + contábil.
-- **Sessão 4** — implementação dos SA (automação G1/G2) sobre o estado já reestruturado.
+## Plano de sessões — DoD + GATE (decidido com Rafael; SEGUIR NA ORDEM)
+
+> **🔒 Regra de faseamento (garantia de que as sessões sejam seguidas):** cada sessão só começa quando a anterior cumpriu sua **DoD** E foi **aprovada por Rafael** (4-mãos). **NÃO pular fases** — em especial, **NÃO implementar (S3) sem o desenho da S2 aprovado**, e **NÃO ligar SA (S4) sem a reestruturação (S3) concluída**. Cada sessão TERMINA atualizando: (1) a coluna Status desta tabela, (2) o banner + gatilho do `PROMPT_PROXIMA_SESSAO.md`.
+
+| Sessão | Status | Foco | Definition of Done (DoD) | Gate p/ avançar |
+|---|---|---|---|---|
+| **S1** | ✅ | Macro | As-Is/To-Be mapeado + plano + reservas LF/Estoque limpas (este doc) | feito |
+| **S2** | ⏭️ **PRÓXIMA** | Desenho + investigação ampla | Plano de execução **wired completo**, costurado ponta a ponta: PO/entrada · todas rotas/rules (src e dst=42) · histórico de `stock.move` em 42 · contábil · mecanismo de migração · exceções (ver checklist abaixo) | **Rafael aprova o plano** |
+| **S3** | ⬜ | Implementação Odoo | Saldo migrado 42→31092/31093 + rules/picking_types reescritos + contábil ajustado; **validado** (saldo, reserva, produção, entrega não quebram) | **Rafael aprova** + go por escrita |
+| **S4** | ⬜ | Automação (SA) | Crons G1/G2 ligados (domain data-de-corte "daqui pra frente") + G2 SEFAZ piloto, sobre o estado reestruturado (= **estágio 4** do RUNBOOK `fluxos/1.1.4`) | **go duplo** (SEFAZ irreversível) |
 
 ## Checklist de investigação para a Sessão 2 (não deixar passar nada)
 - [ ] **PO/entrada:** como cada material entra — remessa de industrialização (FB) vs compra LF vs ajuste pré-Odoo. Mapear o roteamento de entrada completo e o alvo por tipo de entrada.
