@@ -19,6 +19,13 @@ atualizado: 2026-06-15
 
 **Spec:** `docs/superpowers/specs/2026-06-15-carvia-comissao-ajustes-design.md`
 
+> **Estado (2026-06-15): ✅ EXECUTADO e integrado na `main`** (238 testes CarVia). Ajustes vs este plano:
+> (1) a **migration** NÃO foi feita via Flask-Migrate (`flask db migrate`/`migrations/versions/`) — o
+> projeto tem essa cadeia congelada; foi feita como par idempotente
+> `scripts/migrations/carvia_comissao_ajustes.{sql,py}` (ver memória `mecanismo-schema-migrations-projeto`).
+> Ignorar os passos de `flask db migrate` da Task 1; o resto vale. (2) Acrescentada a edição
+> (`editar_comissao`) usando `<select>` de usuário via `vincular_vendedor` (não previsto no plano).
+
 ---
 
 ## Setup (antes da Task 1)

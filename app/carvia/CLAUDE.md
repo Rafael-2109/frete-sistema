@@ -251,9 +251,13 @@ do mesmo vendedor — o fechamento de origem NUNCA muda.
 - **Filtro de criacao = apenas data final (corte)**: `cte_data_emissao <= data_fim` (as comissoes
   "matam o passado" via exclusao de ja-comissionados). `data_inicio` do registro e derivada do CTe
   mais antigo.
-- Fechamentos sem vinculo: resolver via `POST /comissoes/<id>/vincular-vendedor`.
+- **Criar e Editar usam `<select>` de usuario** (mesmo filtro). `editar_comissao` troca o vendedor
+  via `vincular_vendedor` (NUNCA texto livre) — mantem `vendedor_usuario_id` consistente com o snapshot.
+- Fechamentos sem vinculo: resolver via `POST /comissoes/<id>/vincular-vendedor` (botao no detalhe).
 - Arquivos: `models/comissao.py`, `services/financeiro/comissao_service.py`,
-  `routes/comissao_routes.py`, `templates/carvia/comissoes/{criar,detalhe}.html`.
+  `routes/comissao_routes.py`, `routes/exportacao_routes.py`,
+  `templates/carvia/comissoes/{criar,detalhe,editar}.html`.
+  Migration: `scripts/migrations/carvia_comissao_ajustes.{sql,py}` (ver [MIGRATIONS.md](MIGRATIONS.md)).
 
 ---
 

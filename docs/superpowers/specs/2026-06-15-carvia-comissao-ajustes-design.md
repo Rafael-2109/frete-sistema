@@ -15,6 +15,12 @@ atualizado: 2026-06-15
 > vendedor — sem tocar no fechamento original. Também troca o filtro da tela de criação de
 > `(data inicial + data final)` para **apenas data final** ("data de corte").
 
+> **Estado (2026-06-15):** ✅ IMPLEMENTADO e integrado na `main`. Divergências de execução vs este
+> design: (1) a **migration** foi feita como par idempotente
+> `scripts/migrations/carvia_comissao_ajustes.{sql,py}` (padrão REAL do projeto — Flask-Migrate está
+> congelado; ver §5), não em `migrations/versions/`; (2) `editar_comissao` também migrou para
+> `<select>` de usuário via `vincular_vendedor` (adição pós-design, ver §4.5). Suíte CarVia: 238 testes.
+
 ## Contexto
 
 Levantamento de 2026-06-15 (sessão Claude Code). Operação com dados REAIS (comissões pagas a
@@ -222,6 +228,14 @@ ajustes futuros casem. No detalhe (`detalhe.html`), quando `vendedor_usuario_id 
 valores nem totais). Ao vincular, ajustes `PENDENTE` órfãos daquele fechamento herdam o
 `vendedor_usuario_id`.
 
+### 4.5 Edição (`editar_comissao`) — IMPLEMENTADO (adição pós-design)
+A tela "Editar comissão" (`editar.html` + `editar_comissao`), que antes editava o vendedor como
+texto livre (`vendedor_nome`/`vendedor_email`), passou a usar o **mesmo `<select>` de usuário** da
+criação. No POST, se o vendedor mudou, chama `ComissaoService.vincular_vendedor(...)` (FK + snapshot
++ herança nos ajustes órfãos); percentual/observações seguem via `editar_fechamento`. Mantém o
+`vendedor_usuario_id` consistente com o snapshot exibido — sem essa mudança, editar o nome
+dessincronizaria a tela do usuário realmente vinculado.
+
 > **Fora de escopo (futuro)**: tela dedicada de gestão/listagem de ajustes pendentes. Por ora a
 > visibilidade vem da criação (pendentes do vendedor) e do detalhe (incorporados).
 
@@ -229,13 +243,19 @@ valores nem totais). Ao vincular, ajustes `PENDENTE` órfãos daquele fechamento
 
 ## 5. Migration (dois artefatos — regra do projeto)
 
-1. **DDL** + **migration Python (Flask-Migrate)**:
-   - `CREATE TABLE carvia_comissao_ajustes` (§1.1) com FKs (incl. `vendedor_usuario_id` → `usuarios.id`), checks e índices.
-   - `ALTER TABLE carvia_comissao_fechamentos ADD COLUMN vendedor_usuario_id INTEGER REFERENCES usuarios(id)` (nullable, indexed).
-   - `ALTER TABLE carvia_comissao_fechamentos ADD COLUMN total_ajustes NUMERIC(15,2) NOT NULL DEFAULT 0`.
-2. Backfill (na própria migration, idempotente):
-   - `total_ajustes = 0` para fechamentos existentes (default cobre). Sem ajustes históricos (feature nova).
-   - `UPDATE carvia_comissao_fechamentos f SET vendedor_usuario_id = u.id FROM usuarios u WHERE lower(f.vendedor_email) = lower(u.email) AND f.vendedor_email IS NOT NULL`. Os não-casados permanecem NULL → resolução manual (§4.4).
+> **Como FOI implementado** (o projeto NÃO usa Flask-Migrate para mudanças novas — a cadeia está
+> congelada na head `7e880edbf40a`; ver memória `mecanismo-schema-migrations-projeto`):
+> par **`scripts/migrations/carvia_comissao_ajustes.sql` + `.py`** idempotente (`DO $$ ... IF NOT
+> EXISTS`, `CREATE TABLE IF NOT EXISTS`, backfill `UPDATE`; o `.py` faz `sys.path.insert` + `create_app()`
+> + executa o `.sql` com BEFORE/AFTER). A tabela nova também nasce via `create_all` no boot; **as 2
+> colunas em tabela existente NÃO** → o `.sql` é obrigatório em PROD. Rodar:
+> `python scripts/migrations/carvia_comissao_ajustes.py`.
+
+Conteúdo (idempotente):
+- `CREATE TABLE carvia_comissao_ajustes` (§1.1) com FKs (incl. `vendedor_usuario_id` → `usuarios.id`), checks e índices.
+- `ALTER TABLE carvia_comissao_fechamentos ADD COLUMN vendedor_usuario_id INTEGER REFERENCES usuarios(id)` (nullable, indexed).
+- `ALTER TABLE carvia_comissao_fechamentos ADD COLUMN total_ajustes NUMERIC(15,2) NOT NULL DEFAULT 0`.
+- Backfill: `total_ajustes` default cobre; `UPDATE ... SET vendedor_usuario_id = u.id FROM usuarios u WHERE lower(f.vendedor_email) = lower(u.email)`. Não-casados ficam NULL → resolução manual (§4.4).
 
 ---
 
