@@ -30,6 +30,22 @@ FITID SINTETICO (deterministico e estavel entre PDFs)
 - `occ` = indice de ocorrencia para tuplas identicas no mesmo dia (cobre o caso
   teorico de par +X/-X/+X). Nos 4 extratos reais, occ e' sempre 0.
 
+ESTRUTURA DE UM REGISTRO (e por que o FAVORECIDO precisa de look-ahead)
+-----------------------------------------------------------------------
+Cada registro ocupa ate 4 linhas visuais, NA ORDEM:
+    1. TIPO        ex.: 'ENVIO DE TED' / 'RECEBIMENTO DE PIX QRCODE'
+                   -> aparece INLINE na linha de valor OU em UMA linha de texto
+                      IMEDIATAMENTE ACIMA dela.
+    2. VALOR       '[DD/MM/YYYY] <valor> <saldo>' (ancora: 1 registro = 1 linha de valor)
+    3. HORA+FAVOR. 'HH:MM:SS [cod_banco_3dig] FAVORECIDO ...' (TED/PIX/transf)
+    4. DETALHES    continuacao do nome do favorecido e/ou identificadores
+                   (E2E do PIX, hash interno) e/ou 'COD.: xxxx'.
+Como o TIPO da linha 1 vem ACIMA do valor, a montagem usa look-ahead de 1 linha:
+uma linha de texto cujo SUCESSOR e' um valor SEM tipo inline e' o tipo desse
+proximo registro; caso contrario e' continuacao/detalhe do registro corrente.
+O favorecido (linha 3 + continuacao textual) vai para o campo OFX <NAME> e
+tambem para o <MEMO>; E2E/hash sao identificadores, nao favorecido.
+
 CONSUMIDORES
 ------------
 - CLI: `app/financeiro/scripts/importar_extrato_pdf_srm.py` (--check / --ofx)
@@ -52,6 +68,10 @@ import pdfplumber
 X_CREDITO_MAX = 410.0   # coluna Credito: x0 ~= 366
 X_DEBITO_MAX = 490.0    # coluna Debito:  x0 ~= 432
 # acima de X_DEBITO_MAX -> coluna Saldo (x0 ~= 506-523, x1 ~= 549.6)
+# Tipo/favorecido/continuacao ficam na coluna de lancamento (x0 ~= 118). Linhas
+# de texto fora dela (rodape de ouvidoria centralizado em x0 ~= 232, etc.) NAO
+# sao detalhe de transacao e devem ser ignoradas na montagem.
+X_DESCRICAO_MAX = 130.0
 
 # O SRM arredonda o saldo para 2 casas na exibicao; a soma das transacoes de um
 # dia pode divergir do saldo de fechamento em ate ~1 centavo (ruido interno do
@@ -68,6 +88,13 @@ RE_AGENCIA = re.compile(r'Ag[eê]ncia:\s*(\d+)')
 RE_BANCO = re.compile(r'Banco:\s*(\d+)')
 RE_PERIODO = re.compile(r'Per[ií]odo:\s*(\d{2}/\d{2}/\d{4})\s*a\s*(\d{2}/\d{2}/\d{4})')
 
+# Identificadores que aparecem nas linhas de detalhe e NAO sao favorecido:
+# E2E do PIX ('E' + 31 alfanumericos) e hash interno do SRM (32 hexadecimais).
+RE_E2E = re.compile(r'^E[0-9A-Za-z]{31}$')
+RE_HASH = re.compile(r'^[0-9A-Fa-f]{32}$')
+# Codigo de instituicao (3 digitos) que prefixa o favorecido na linha de hora.
+RE_COD_BANCO = re.compile(r'^\d{3}$')
+
 
 def _dec(texto):
     """'1.861,69' -> Decimal('1861.69')"""
@@ -80,8 +107,31 @@ def _centavos(valor):
     return str(int(q))
 
 
+def _eh_identificador(texto):
+    """True se o texto e' um identificador de detalhe (E2E do PIX ou hash interno),
+    nunca um nome de favorecido."""
+    t = texto.strip()
+    return bool(RE_E2E.match(t) or RE_HASH.match(t))
+
+
+def _extrair_favorecido(tokens_apos_hora):
+    """
+    Da linha de hora 'HH:MM:SS [cod_banco] FAVORECIDO ...', recebe os tokens JA
+    SEM a hora e retorna o nome do favorecido, descartando o codigo de instituicao
+    de 3 digitos quando presente.
+        ['756', 'NACOM', 'GOYA', 'COMERCIAL', 'LTDA'] -> 'NACOM GOYA COMERCIAL LTDA'
+        ['FRANK', 'ROGERIO', 'HOMEM']                 -> 'FRANK ROGERIO HOMEM'
+        []                                            -> ''
+    """
+    toks = list(tokens_apos_hora)
+    if toks and RE_COD_BANCO.match(toks[0]):
+        toks = toks[1:]
+    return ' '.join(toks).strip()
+
+
 class Transacao:
-    __slots__ = ('data', 'hora', 'tipo', 'valor', 'saldo', 'descricao', 'cod', '_occ')
+    __slots__ = ('data', 'hora', 'tipo', 'valor', 'saldo', 'descricao',
+                 'favorecido', 'detalhes', 'cod', '_occ')
 
     def __init__(self, data, tipo, valor, saldo, descricao):
         self.data = data          # 'DD/MM/YYYY'
@@ -89,7 +139,9 @@ class Transacao:
         self.tipo = tipo          # 'C' ou 'D'
         self.valor = valor        # Decimal positivo
         self.saldo = saldo        # Decimal (saldo apos a transacao)
-        self.descricao = descricao
+        self.descricao = descricao  # tipo do lancamento (ex.: 'ENVIO DE TED')
+        self.favorecido = None    # nome da contraparte (TED/PIX/transf), se houver
+        self.detalhes = []        # identificadores extras (E2E do PIX, hash)
         self.cod = None
         self._occ = 0
 
@@ -135,6 +187,23 @@ def _agrupar_linhas(words, tol=2.5):
         yield sorted(linhas[chave], key=lambda x: x['x0'])
 
 
+def _eh_valor_sem_tipo_inline(ws):
+    """
+    True se a linha visual `ws` e' uma linha de transacao (valor de movimento +
+    saldo) que NAO carrega o tipo do lancamento inline. Usado como look-ahead:
+    quando a proxima linha satisfaz isto, a linha de texto corrente e' o TIPO
+    desse proximo registro (e nao continuacao do registro atual).
+    """
+    cols = [c for c in (_classificar(w) for w in ws) if c]
+    valor_mov = [c for c in cols if c[0] in ('C', 'D')]
+    valor_saldo = [c for c in cols if c[0] == 'S']
+    if not (valor_mov and valor_saldo):
+        return False
+    inline = [w['text'] for w in ws
+              if not RE_VALOR.match(w['text']) and not RE_DATA.match(w['text'])]
+    return not inline
+
+
 def parse_pdf(fonte, nome=None):
     """
     Parseia o extrato e retorna dict:
@@ -164,75 +233,113 @@ def parse_pdf(fonte, nome=None):
         if mper:
             meta['periodo_ini'], meta['periodo_fim'] = mper.group(1), mper.group(2)
 
+        # 1) Coletar as linhas de movimentacao (descartando cabecalho/rodape e
+        #    extraindo o SALDO ANTERIOR), preservando a ordem de leitura. A
+        #    montagem precisa olhar a PROXIMA linha (look-ahead), por isso a
+        #    materializamos antes de iterar.
+        linhas = []
         for page in pdf.pages:
             for ws in _agrupar_linhas(page.extract_words()):
-                primeiro = ws[0]['text']
                 texto = ' '.join(w['text'] for w in ws)
-
-                # Ignorar cabecalho/rodape
                 if texto.startswith(('Extrato da conta', 'Emitido em', 'NACOM GOYA',
                                      'Banco:', 'Agência:', 'Conta:', 'Período:',
                                      'Movimentações', 'Data Lançamento', 'R$',
                                      'Os dados acima', 'Conforme Res')):
                     continue
-                if 'Ouvidoria' in texto:
+                # Rodape de ouvidoria: a linha "Conforme Res ... WhatsApp:" quebra e
+                # continua em "(11) ...; E-mail: ...". Filtra ambas (continuacao por conteudo).
+                if 'Ouvidoria' in texto or 'E-mail:' in texto:
                     continue
-
-                # SALDO ANTERIOR (saldo de abertura do arquivo)
                 if texto.startswith('SALDO ANTERIOR'):
                     vals = [c for c in (_classificar(w) for w in ws) if c]
                     if vals:
                         meta['saldo_anterior'] = vals[-1][1]
                     continue
+                linhas.append(ws)
 
-                tem_data = RE_DATA.match(primeiro) and ws[0]['x0'] < 90
-                tem_hora = RE_HORA.match(primeiro)
+        # 2) Montar as transacoes. O TIPO do lancamento vem ACIMA da linha de
+        #    valor (quando nao esta inline) e o FAVORECIDO vem ABAIXO (linha de
+        #    hora + continuacao textual). Estado:
+        tipo_pendente = None     # tipo de UMA linha que precede um valor sem tipo inline
+        atual = None             # transacao corrente (recebe os detalhes ABAIXO do valor)
+        coletando_fav = False    # acumulando a continuacao textual do nome do favorecido?
 
-                # Linha "DD/MM/YYYY SALDO <valor>"
-                if tem_data and 'SALDO' in texto:
+        for i, ws in enumerate(linhas):
+            primeiro = ws[0]['text']
+            texto = ' '.join(w['text'] for w in ws)
+            cols = [c for c in (_classificar(w) for w in ws) if c]
+            valor_mov = [c for c in cols if c[0] in ('C', 'D')]
+            valor_saldo = [c for c in cols if c[0] == 'S']
+            tem_data = bool(RE_DATA.match(primeiro)) and ws[0]['x0'] < 90
+            tem_hora = bool(RE_HORA.match(primeiro))
+
+            # Linha "DD/MM/YYYY SALDO <valor>" -> fecha o dia e reinicia o contexto
+            if tem_data and 'SALDO' in texto and not valor_mov:
+                data_corrente = primeiro
+                if cols:
+                    saldo_dia[data_corrente] = cols[-1][1]
+                tipo_pendente = None
+                atual = None
+                coletando_fav = False
+                continue
+
+            # Linha de transacao: 1 valor de movimento + 1 saldo
+            if valor_mov and valor_saldo:
+                inline = ' '.join(
+                    w['text'] for w in ws
+                    if not RE_VALOR.match(w['text']) and not RE_DATA.match(w['text'])
+                ).strip()
+                tipo = inline or (tipo_pendente or '')
+                tipo_pendente = None
+                if tem_data:
                     data_corrente = primeiro
-                    vals = [c for c in (_classificar(w) for w in ws) if c]
-                    if vals:
-                        saldo_dia[data_corrente] = vals[-1][1]
+                if data_corrente is None:
+                    raise ValueError(
+                        f'{rotulo}: transacao sem data de contexto: {texto!r}')
+                atual = Transacao(data_corrente,
+                                  valor_mov[0][0],           # 'C'|'D' pela coluna
+                                  valor_mov[0][1].copy_abs(),  # sinal vem da coluna
+                                  valor_saldo[-1][1],          # saldo pode ser negativo
+                                  tipo)
+                transacoes.append(atual)
+                coletando_fav = False
+                continue
+
+            # Linha de hora -> hora + favorecido da transacao corrente
+            if tem_hora:
+                if atual is not None:
+                    atual.hora = primeiro
+                    fav = _extrair_favorecido([w['text'] for w in ws[1:]])
+                    if fav:
+                        atual.favorecido = fav
+                        coletando_fav = True
+                continue
+
+            # Linha 'COD.: xxxx' -> ref da transacao corrente
+            if texto.startswith('COD.'):
+                if atual is not None:
+                    atual.cod = texto.split(':', 1)[-1].strip()
+                continue
+
+            # Linha sem valores: ou e' o TIPO do PROXIMO registro (quando a proxima
+            # linha e' um valor sem tipo inline) ou e' continuacao/detalhe do atual.
+            if not cols:
+                # Texto fora da coluna de lancamento = rodape/ruido, nunca detalhe.
+                if ws[0]['x0'] >= X_DESCRICAO_MAX:
                     continue
-
-                # Linha de hora -> metadado da transacao anterior
-                if tem_hora:
-                    if transacoes:
-                        transacoes[-1].hora = primeiro
+                prox = linhas[i + 1] if i + 1 < len(linhas) else None
+                if prox is not None and _eh_valor_sem_tipo_inline(prox):
+                    tipo_pendente = texto
+                    coletando_fav = False
                     continue
-
-                cols = [c for c in (_classificar(w) for w in ws) if c]
-                valor_mov = [c for c in cols if c[0] in ('C', 'D')]
-                valor_saldo = [c for c in cols if c[0] == 'S']
-
-                # Linha de transacao: tem 1 valor de movimento + 1 saldo
-                if valor_mov and valor_saldo:
-                    tipo = valor_mov[0][0]
-                    valor = valor_mov[0][1].copy_abs()  # sinal vem da coluna
-                    saldo = valor_saldo[-1][1]           # saldo pode ser negativo
-                    if tem_data:
-                        data_corrente = primeiro
-                    if data_corrente is None:
-                        raise ValueError(
-                            f'{rotulo}: transacao sem data de contexto: {texto!r}')
-                    # descricao = tokens nao numericos, sem data
-                    desc_tokens = [w['text'] for w in ws
-                                   if not RE_VALOR.match(w['text'])
-                                   and not RE_DATA.match(w['text'])]
-                    transacoes.append(Transacao(data_corrente, tipo, valor, saldo,
-                                                ' '.join(desc_tokens).strip()))
-                    continue
-
-                # Linha 'COD.: xxxx' -> anexa ref a transacao anterior
-                if texto.startswith('COD.') and transacoes:
-                    transacoes[-1].cod = texto.split(':', 1)[-1].strip()
-                    continue
-
-                # Demais linhas = continuacao de descricao
-                if transacoes and not cols:
-                    transacoes[-1].descricao = (
-                        f'{transacoes[-1].descricao} {texto}').strip()
+                if atual is not None:
+                    if _eh_identificador(texto):
+                        atual.detalhes.append(texto.strip())
+                        coletando_fav = False
+                    elif coletando_fav:
+                        atual.favorecido = f'{atual.favorecido} {texto}'.strip()
+                    else:
+                        atual.descricao = f'{atual.descricao} {texto}'.strip()
 
     # Calcular occ deterministico (tuplas identicas no mesmo dia)
     vistos = defaultdict(int)
@@ -427,12 +534,22 @@ def gerar_ofx(parsed):
     add(f'<BANKTRANLIST><DTSTART>{dt_ini}000000<DTEND>{dt_fim}235959')
     for t in ordenadas:
         trntype = 'CREDIT' if t.tipo == 'C' else 'DEBIT'
-        memo = _sanitizar(t.descricao + (f' COD {t.cod}' if t.cod else ''))
+        # MEMO completo: tipo | favorecido | identificadores | COD
+        partes = [t.descricao]
+        if t.favorecido:
+            partes.append(t.favorecido)
+        partes.extend(t.detalhes)
+        if t.cod:
+            partes.append(f'COD {t.cod}')
+        memo = _sanitizar(' | '.join(p for p in partes if p))
         add('<STMTTRN>')
         add(f'<TRNTYPE>{trntype}')
         add(f'<DTPOSTED>{t.data_iso}120000')
         add(f'<TRNAMT>{t.signed}')
         add(f'<FITID>{t.fitid()}')
+        # <NAME> (A-32): nome da contraparte -> o Odoo usa para casar o parceiro.
+        if t.favorecido:
+            add(f'<NAME>{_sanitizar(t.favorecido, limite=32)}')
         add(f'<MEMO>{memo}')
         add('</STMTTRN>')
     add('</BANKTRANLIST>')

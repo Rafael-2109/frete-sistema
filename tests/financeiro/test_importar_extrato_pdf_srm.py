@@ -39,10 +39,18 @@ def _parsed(transacoes, saldo_anterior, saldo_dia,
     }
 
 
-def _t(data, tipo, valor, saldo, desc='LANC', hora=None):
+def _t(data, tipo, valor, saldo, desc='LANC', hora=None, favorecido=None, detalhes=None):
     t = Transacao(data, tipo, Decimal(valor), Decimal(saldo), desc)
     t.hora = hora
+    t.favorecido = favorecido
+    if detalhes:
+        t.detalhes = list(detalhes)
     return t
+
+
+def _tok(text, x0):
+    """Token sintetico (dict no formato do pdfplumber) para os testes de layout."""
+    return {'text': text, 'x0': x0, 'top': 0.0}
 
 
 # ---------------------------------------------------------------------------
@@ -72,6 +80,79 @@ class TestCentavos:
 
     def test_milhao(self):
         assert mod._centavos(Decimal('1000675.01')) == '100067501'
+
+
+# ---------------------------------------------------------------------------
+# _extrair_favorecido (nome da contraparte na linha de hora)
+# ---------------------------------------------------------------------------
+class TestExtrairFavorecido:
+    def test_remove_codigo_banco(self):
+        # 'HH:MM:SS 756 NACOM GOYA ...' -> tokens apos a hora descartam o '756'
+        assert mod._extrair_favorecido(
+            ['756', 'NACOM', 'GOYA', 'COMERCIAL', 'LTDA']) == 'NACOM GOYA COMERCIAL LTDA'
+
+    def test_sem_codigo_banco(self):
+        assert mod._extrair_favorecido(
+            ['FRANK', 'ROGERIO', 'HOMEM']) == 'FRANK ROGERIO HOMEM'
+
+    def test_codigo_533(self):
+        assert mod._extrair_favorecido(
+            ['533', 'M18', 'ADMINISTRACAO']) == 'M18 ADMINISTRACAO'
+
+    def test_vazio(self):
+        assert mod._extrair_favorecido([]) == ''
+
+    def test_so_codigo_banco(self):
+        assert mod._extrair_favorecido(['237']) == ''
+
+
+# ---------------------------------------------------------------------------
+# _eh_identificador (E2E do PIX / hash interno NAO sao favorecido)
+# ---------------------------------------------------------------------------
+class TestEhIdentificador:
+    def test_e2e_pix(self):
+        assert mod._eh_identificador('E60746948202512041644C0347TOFZLC')
+        assert mod._eh_identificador('E05392810202605152010JVBQ8UQJO5C')
+
+    def test_hash(self):
+        assert mod._eh_identificador('A7317D2399CF4878A356680854A740C0')
+        assert mod._eh_identificador('F533D8CB8B6944F691F9838A625DB424')
+
+    def test_nome_nao_e_identificador(self):
+        assert not mod._eh_identificador('EMBALAGENS LTDA')
+        assert not mod._eh_identificador('NACOM GOYA COMERCIAL LTDA')
+
+    def test_tipo_nao_e_identificador(self):
+        assert not mod._eh_identificador('ENVIO DE TED')
+        assert not mod._eh_identificador('RECEBIMENTO DE PIX QRCODE')
+
+
+# ---------------------------------------------------------------------------
+# _eh_valor_sem_tipo_inline (look-ahead que resolve o TIPO acima do valor)
+# ---------------------------------------------------------------------------
+class TestValorSemTipoInline:
+    def test_valor_puro(self):
+        # coluna debito (x0 ~432) + saldo (x0 ~511), sem texto -> tipo vem ACIMA
+        ws = [_tok('2.334,06', 432), _tok('66.138,80', 511)]
+        assert mod._eh_valor_sem_tipo_inline(ws)
+
+    def test_credito_puro(self):
+        ws = [_tok('23.934,60', 366), _tok('95.317,70', 511)]
+        assert mod._eh_valor_sem_tipo_inline(ws)
+
+    def test_com_tipo_inline(self):
+        ws = [_tok('CRÉDITO', 118), _tok('DE', 150), _tok('BOLETO', 200),
+              _tok('2.802,75', 432), _tok('119.342,44', 511)]
+        assert not mod._eh_valor_sem_tipo_inline(ws)
+
+    def test_com_data_e_tipo_inline(self):
+        ws = [_tok('22/12/2025', 58), _tok('TARIFA', 118), _tok('SISTÊMICA', 160),
+              _tok('15,54', 432), _tok('116.539,69', 511)]
+        assert not mod._eh_valor_sem_tipo_inline(ws)
+
+    def test_linha_de_texto_nao_e_valor(self):
+        ws = [_tok('ENVIO', 118), _tok('DE', 145), _tok('TED', 159)]
+        assert not mod._eh_valor_sem_tipo_inline(ws)
 
 
 # ---------------------------------------------------------------------------
@@ -222,6 +303,49 @@ class TestGerarOfx:
         assert parsed.account.number == '0000142844'
         assert len(st.transactions) == len(ts)
         assert len({t.id for t in st.transactions}) == len(ts)  # FITIDs unicos
+
+
+# ---------------------------------------------------------------------------
+# gerar_ofx — favorecido em <NAME> + <MEMO>
+# ---------------------------------------------------------------------------
+class TestGerarOfxFavorecido:
+    def _ofx_um(self, t):
+        return mod.gerar_ofx(_parsed([t], '0.00', {t.data: t.saldo}))
+
+    def test_favorecido_no_name_e_no_memo(self):
+        t = _t('01/01/2026', 'D', '2334.06', '66138.80', desc='ENVIO DE TED',
+                hora='12:07:54',
+                favorecido='FUNDO DE INVESTIMENTO EM DIREITOS CREDITORIOS EXODUS')
+        ofx = self._ofx_um(t)
+        import re
+        m = re.search(r'<NAME>([^\n<]*)', ofx)
+        assert m and m.group(1).startswith('FUNDO DE INVESTIMENTO')
+        assert len(m.group(1)) <= 32                                  # <NAME> A-32
+        # MEMO traz tipo + favorecido COMPLETO (sem truncar)
+        assert 'ENVIO DE TED | FUNDO DE INVESTIMENTO EM DIREITOS CREDITORIOS EXODUS' in ofx
+
+    def test_detalhes_entram_no_memo_nao_no_name(self):
+        t = _t('01/01/2026', 'C', '8363.63', '335061.58',
+                desc='RECEBIMENTO DE PIX QRCODE', hora='10:23:37',
+                favorecido='DML DISTRIBUIDORA DE ALIMENTOS E EMBALAGENS LTDA',
+                detalhes=['E60746948202512021323C3612EQW3SA'])
+        ofx = self._ofx_um(t)
+        assert 'E60746948202512021323C3612EQW3SA' in ofx           # id no MEMO
+        import re
+        nome = re.search(r'<NAME>([^\n<]*)', ofx).group(1)
+        assert 'E6074' not in nome                                  # id NUNCA no NAME
+
+    def test_sem_favorecido_nao_emite_name(self):
+        t = _t('01/01/2026', 'D', '30.00', '120.00', desc='TARIFA SISTEMICA')
+        ofx = self._ofx_um(t)
+        assert '<NAME>' not in ofx
+        assert '<MEMO>TARIFA SISTEMICA' in ofx
+
+    def test_cod_no_memo(self):
+        t = _t('01/01/2026', 'D', '159.98', '65244.38', desc='TARIFA DE TED')
+        t.cod = '3839410'
+        ofx = self._ofx_um(t)
+        assert 'COD 3839410' in ofx
 
 
 # ---------------------------------------------------------------------------
