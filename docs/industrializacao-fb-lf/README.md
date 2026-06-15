@@ -4,7 +4,7 @@ camada: L1
 sot_de: —
 hub: docs/industrializacao-fb-lf/INDEX.md
 superseded_by: —
-atualizado: 2026-06-13
+atualizado: 2026-06-15
 -->
 # Industrialização FB↔LF — Índice
 
@@ -53,7 +53,7 @@ Config base (reversível): ✅ op 3252 (`movimento_estoque=False`) · ✅ L1 (ca
 
 **ESTADO (15/06):** ✅ **Mecanismo E2E provado** — Etapa 4 (2 NFs AUTORIZADAS SEFAZ via SA, `s37`/`s54`) + **Etapa 5 (entrada FB) CONCLUÍDA no piloto, gate contábil fechado** (`s67`: NF-2 montada direto baixa a ATIVA; PA recebe Ic+S na conta; medido pela conta, AVCO aceito). ✅ **Transversal #6 — ETL não importa NFs inter-company da LF** (`faturamento_service` `company_id not in [5]` + 5 testes, commit `43127eb76`; **pende push/deploy**); 34 registros espúrios do piloto **limpos em PROD** (`s68`). ⚠️ Pendências: trânsito físico 26489=−1 · histórico LF no faturamento (934 linhas desde fev, só relatório) · 5903 (sobras) · pontos de código 1-NF (`ACHADOS §E`).
 
-▶️ **PRÓXIMA SESSÃO = AUTOMAÇÃO** (a mecânica está provada; falta o disparo automático): (1) **descoberta automática da remessa** (genealogia lote→MO→mat.terceiros, `s46`); (2) **G1** (NF-1 serviço → monta NF-2) + **G2** (transmite NF-2) — SA durável no Odoo (`SOT §6.2`); (3) **R2** (gatilho da entrada FB, lógica do `s67`); (4) ajustar pontos de código 1-NF + reconciliar 26489. **POP operacional para os usuários:** `POP_OPERACIONAL_INDUSTRIALIZACAO.md`.
+▶️ **PRÓXIMA SESSÃO = AUTOMAÇÃO** (fundação do R2 pronta — falta compor + a SA). **✅ Sessão 15/06:** item 1 (descoberta automática da remessa) CONCLUÍDO como módulo testado+validado PROD (`descoberta_industrializacao.py`; valor via SVL de ENTRADA, rateio faturado/produzido); **FLUXO L3 `1.2.4`** do R2 desenhado; **átomos do R2 capinados** (`montar_invoice_entrada_direta` genérico, skill `revalorando-custo-odoo`, picking C9); 7 commits anteriores (filtro ETL) PUSHADOS. **Próximo:** (1) **WIRE do R2** (compor o FLUXO 1.2.4 end-to-end, dry-run-first; rodar = go fresco); (2) **SA DURÁVEL da saída (G1+G2)** = objetivo final (G1 reusa `montar_invoice_entrada_direta`+descoberta; G2 transmite via SA `s54`); (3) reconciliar 26489. Detalhe: `PROMPT_PROXIMA_SESSAO.md`. **POP do usuário:** `POP_OPERACIONAL_INDUSTRIALIZACAO.md`.
 
 ## Decisões fechadas (detalhe e porquê na `SOT`)
 - ⭐ **Contadora APROVOU emitir 2 NF** (2026-06-02): retorno de insumos (5902/1902) em documento separado do serviço (5124/1124), com 3 requisitos (R1 emissão automática · R2 escrituração automática · R3 vínculo). `SOT §6` · `MATERIAL_CONTADORA §0`.
