@@ -56,7 +56,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 .claude/hooks/validar-estrutura.py"
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/validar-estrutura.py\""
           }
         ]
       }
@@ -67,7 +67,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 .claude/hooks/enriquecer-feature-dev.py"
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/enriquecer-feature-dev.py\""
           }
         ]
       },
@@ -76,7 +76,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 .claude/hooks/pad_creation_gate.py"
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/pad_creation_gate.py\""
           }
         ]
       },
@@ -85,7 +85,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 .claude/hooks/pad_sot_modulo.py"
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/pad_sot_modulo.py\""
           }
         ]
       }
@@ -95,7 +95,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 .claude/hooks/pad_stop_completude.py"
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/pad_stop_completude.py\""
           }
         ]
       }
@@ -106,7 +106,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 .claude/hooks/agent_metrics_dev_hook.py"
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/agent_metrics_dev_hook.py\""
           }
         ]
       },
@@ -115,11 +115,11 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 .claude/hooks/lembrar-regenerar-schemas.py"
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/lembrar-regenerar-schemas.py\""
           },
           {
             "type": "command",
-            "command": "python3 .claude/hooks/ban_datetime_now.py"
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/ban_datetime_now.py\""
           }
         ]
       }
