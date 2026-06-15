@@ -4,7 +4,7 @@ camada: L1
 sot_de: —
 hub: CLAUDE.md
 superseded_by: —
-atualizado: 2026-06-08
+atualizado: 2026-06-15
 -->
 # Agente Logistico Web — Guia de Desenvolvimento
 
@@ -45,9 +45,9 @@ atualizado: 2026-06-08
 
 ## Contexto
 
-Encapsula o Claude Agent SDK: chat web (SSE) + Teams bot (async); ~53.5K LOC em 104 arquivos. Para o roteiro de onde achar cada detalhe, ver **Mapa de Navegacao** acima.
+Encapsula o Claude Agent SDK: chat web (SSE) + Teams bot (async); ~56.4K LOC em 108 arquivos. Para o roteiro de onde achar cada detalhe, ver **Mapa de Navegacao** acima.
 
-**LOC**: ~53.5K | **Arquivos**: 104 | **Atualizado**: 08/06/2026
+**LOC**: ~56.4K | **Arquivos**: 108 | **Atualizado**: 15/06/2026
 
 > **EVOLUCAO DO AGENTE (flywheel/blueprint Ondas 0-4)**: o rastreador VIVO e o
 > `docs/blueprint-agente/EXECUCAO.md` (estado de cada item, gates, log append-only); o design
@@ -70,12 +70,13 @@ Encapsula o Claude Agent SDK: chat web (SSE) + Teams bot (async); ~53.5K LOC em 
 ## Estrutura
 
 ```
-app/agente/                          # Root — 7 arquivos
+app/agente/                          # Root — 8 arquivos
 ├── __init__.py                      # Blueprint import de routes/ + init_app()
 ├── CLAUDE.md                        # Este arquivo (guia dev)
 ├── SUBSISTEMAS.md                   # Detalhe de Artifacts/telemetria subagent/memoria compartilhada/avaliador skill + inventario SSE (ver Mapa de Navegacao)
-├── SDK_CHANGELOG.md                 # Historico SDK 0.1.49 -> 0.2.89 (features, breaking, fixes) — inclui revisao retroativa do 0.2.82 (2 breakings omitidas)
+├── SDK_CHANGELOG.md                 # Historico SDK 0.1.49 -> 0.2.101 (features, breaking, fixes) — inclui revisao retroativa do 0.2.82 (2 breakings omitidas)
 ├── ROLLBACK_SESSION_STORE.md        # Procedimento rollback PostgresSessionStore (Fase B)
+├── conversa.md                      # Referencia historica de conversa (legado, 16K)
 ├── historia.md                      # Referencia historica (legado, 76K)
 ├── models.py                        # SQLAlchemy models (AgentSession, AgentMemory, etc.)
 ├── routes/                          # Flask routes modularizadas — 21 arquivos
@@ -117,7 +118,7 @@ app/agente/                          # Root — 7 arquivos
 │   ├── preset_operacional.md        # Preset customizado (substitui claude_code preset)
 │   ├── prompt_inventario.md         # Prompt operacional inventario 2026-05 (NACOM/LF)
 │   └── system_prompt.md             # System prompt do agente (usuarios finais)
-├── sdk/                             # Integracao com Claude Agent SDK — 24 arquivos
+├── sdk/                             # Integracao com Claude Agent SDK — 26 arquivos
 │   ├── __init__.py
 │   ├── _sanitization.py             # Helpers de sanitizacao PII cross-modulo
 │   ├── baseline_fastpath.py         # Fast-path deterministico do baseline (Marcus user_id=18, sem loop LLM)
@@ -141,11 +142,14 @@ app/agente/                          # Root — 7 arquivos
 │   ├── sticky_session.py            # Afinidade de sessao por processo (R-SPLIT-NGINX / Pattern 2)
 │   ├── stream_parser.py             # Dataclasses + classificacao de erros de tool
 │   ├── subagent_reader.py           # Wrapper list_subagents + get_subagent_messages (SDK 0.1.60)
-│   └── verifiers.py                 # Verificadores B2 (verify shadow do super-loop)
-├── services/                        # Servicos de inteligencia — 23 arquivos (ver services/CLAUDE.md)
+│   ├── turn_context_registry.py     # Resolve falante do turno em grupos Teams (client do pool reusado NAO reaplica hooks — Fase B)
+│   ├── verifiers.py                 # Verificadores B2 (verify shadow do super-loop)
+│   └── vincular_teams_fastpath.py   # Fast-path meta-comando `vincular ABC123` (pareamento identidade Teams, sem LLM/sessao)
+├── services/                        # Servicos de inteligencia — 25 arquivos (ver services/CLAUDE.md)
 │   ├── __init__.py
 │   ├── CLAUDE.md                    # Sub-guia com regras R1-R5 dos services
 │   ├── _utils.py                    # Helpers compartilhados (parse_llm_json_response)
+│   ├── adhoc_capture_service.py     # Captura ad-hoc de conhecimento/correcao fora do ciclo pos-sessao
 │   ├── approval_inbox_service.py    # Inbox de aprovacao (AgentMemory shadow + ImprovementDialogue proposed)
 │   ├── artifact_service.py          # Service de artifacts (rate limit, spec validation, S3)
 │   ├── directive_promotion_service.py # Promocao automatica de diretriz (A4 flywheel Distill→Deploy)
@@ -156,6 +160,7 @@ app/agente/                          # Root — 7 arquivos
 │   ├── intersession_briefing.py     # Briefing entre sessoes
 │   ├── knowledge_graph_service.py   # Grafo de conhecimento (memorias)
 │   ├── memory_consolidator.py       # Consolidacao de memorias redundantes
+│   ├── memory_format.py             # Serializador canonico de memorias (meta JSONB + sentinela) — PURO sem DB
 │   ├── metrics_dashboard_service.py # Dashboard telemetria subagent (Fase A1+A3)
 │   ├── ontology_bootstrap.py        # Bootstrap da ontologia (knowledge graph / ontology_query)
 │   ├── pattern_analyzer.py          # Extracao de padroes e conhecimento
@@ -509,7 +514,7 @@ Screenshots Playwright (`playwright-screenshots/{YYYY-MM}/`) e archive de sessoe
 |---------|--------|
 | `historia.md` (76K) | Apenas referencia historica |
 
-### Services (23 arquivos, ~13.8K LOC)
+### Services (25 arquivos, ~14.9K LOC)
 Guia completo de regras (R1-R5), gotchas e interdependencias: [`services/CLAUDE.md`](./services/CLAUDE.md).
 Todos controlados por feature flags em `config/feature_flags.py`.
 

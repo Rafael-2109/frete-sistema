@@ -14,7 +14,7 @@ atualizado: 2026-06-08
 
 Ponto de entrada do repositorio. Conteudo dev-only (Quick Start, CSS, migrations, CLAUDE.md de modulo) versionado em `.claude/references/REGRAS_DEV_LOCAL.md` (SOT); `~/.claude/CLAUDE.md` e ponteiro local do dev. Fonte de dados por superficie: agente web = `mcp__sql__consultar_sql` + skills; Claude Code dev = MCP do Render (ver `.claude/references/INFRAESTRUTURA.md`). Campos de tabela vem dos schemas JSON; antes de qualquer skill ou operacao Odoo, ler `.claude/references/ROUTING_SKILLS.md`.
 
-**Ultima Atualizacao**: 08/06/2026
+**Ultima Atualizacao**: 15/06/2026
 
 > Este CLAUDE.md e lido por AMBOS os contextos (Claude Code dev + Agent SDK web).
 > Conteudo dev-only (Quick Start, CSS, migrations) versionado em `.claude/references/REGRAS_DEV_LOCAL.md`.

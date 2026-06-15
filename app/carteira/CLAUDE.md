@@ -4,7 +4,7 @@ camada: L1
 sot_de: —
 hub: CLAUDE.md
 superseded_by: —
-atualizado: 2026-06-08
+atualizado: 2026-06-15
 -->
 # Carteira — Guia de Desenvolvimento
 
@@ -35,7 +35,7 @@ atualizado: 2026-06-08
 
 ~18.5K LOC, 50 arquivos. Exibe pedidos agrupados, gera separacoes, analisa ruptura de estoque, programa lotes (Atacadao/Sendas) e gerencia standby. Campos de tabela vem dos schemas JSON; regras CarteiraPrincipal vs Separacao em `.claude/references/modelos/REGRAS_CARTEIRA_SEPARACAO.md`. `main_routes.py` e apenas o dashboard `index()` — novas rotas em `routes/`.
 
-**LOC**: ~18.5K | **Arquivos**: 50 | **22 JS** (21 templates + 1 static) | **Atualizado**: 08/06/2026
+**LOC**: ~18.5K | **Arquivos**: 50 | **22 JS** (21 templates + 1 static) | **Atualizado**: 15/06/2026
 
 Workspace principal do sistema de fretes. Exibe pedidos agrupados, gera separacoes,
 analisa ruptura de estoque, programa lotes (Atacadao/Sendas) e gerencia standby.

@@ -4,13 +4,13 @@ camada: L2
 sot_de: —
 hub: app/agente/CLAUDE.md
 superseded_by: —
-atualizado: 2026-06-08
+atualizado: 2026-06-15
 -->
 # Agente Services — Guia de Desenvolvimento
 
 > **Papel:** guia dev dos services de inteligencia do Agente Web (analise, otimizacao e aprendizado de sessoes). Companheiro do guia do modulo: [`CLAUDE.md`](../CLAUDE.md). Abra antes de editar `app/agente/services/`.
 
-**LOC**: ~13.8K | **Arquivos**: 23 | **Atualizado**: 2026-06-08
+**LOC**: ~14.9K | **Arquivos**: 25 | **Atualizado**: 2026-06-15
 
 ## Contexto
 
@@ -23,6 +23,7 @@ Hub de analise, otimizacao e aprendizado de sessoes em 3 camadas (P0 core, P1 UX
 ```
 app/agente/services/
   ├── _utils.py                       #    57 LOC — Helpers compartilhados (parse_llm_json_response)
+  ├── adhoc_capture_service.py        #   Captura ad-hoc de conhecimento/correcao fora do ciclo pos-sessao
   ├── memory_format.py                #   Serializador canonico de memorias — PURO (sem DB): parse 5 formatos legados + render sentinela/embed + meta JSONB
   ├── pattern_analyzer.py             # 2,432 LOC — Patterns prescritivos + perfil + extracao (P1-3)
   ├── insights_service.py             # 1,897 LOC — Dashboard admin: metricas + health_score (P2)
