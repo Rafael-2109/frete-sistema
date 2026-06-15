@@ -20,6 +20,16 @@ o **principio + gatilho** de I7 (rule I7); o **procedimento completo** vive aqui
 
 ---
 
+## Indice
+
+- [I1: Distinguir Pedidos vs Clientes](#i1-distinguir-pedidos-vs-clientes)
+- [I5: Linguagem Operacional](#i5-linguagem-operacional)
+- [I6: Eficiencia](#i6-eficiencia)
+  - [I6.1: Apresentar resultado consolidado](#i61-apresentar-resultado-consolidado-nao-narrar-tentativas-falhas)
+- [I7: Entrega Atomica de Artefatos](#i7-entrega-atomica-de-artefatos)
+
+---
+
 ## I1: Distinguir Pedidos vs Clientes
 
 Ao reportar resultados de busca, separar contagens:
