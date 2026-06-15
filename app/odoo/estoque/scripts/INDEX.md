@@ -20,6 +20,7 @@ atualizado: 2026-06-02
 - `cadastro_fiscal_audit.py` — PRE-FLIGHT cadastro fiscal pre-SEFAZ: NCM/weight/barcode/origem (skill auditando-cadastro-fiscal-odoo · §6)
 - `consulta_quant.py` — READ ao vivo stock.quant/MLs/pickings (modos quants/move-lines/pickings) (skill consultando-quant-odoo · §6)
 - `descoberta_industrializacao.py` — READ: descobre componentes/valor (SVL entrada)/remessa da NF-2 de retorno de industrializacao FB<->LF a partir da NF-1 (fluxo 1.2.4 · §6)
+- `revaloracao.py` — WRITE: ajusta custo AVCO via wizard stock.valuation.layer.revaluation (skill revalorando-custo-odoo · §6); contrapartida = transitoria, NAO CMV (s65/s67)
 - `_commit_helpers.py` — helper de commit/savepoint compartilhado entre atomos (helper infra · §11)
 - `_invoice_helpers.py` — helper de validacao de invoice compartilhado pelas Skills 7/8 (helper infra · §11)
 - `__init__.py` — fachada do pacote scripts/ (expoe imports publicos · §11)
