@@ -466,6 +466,12 @@
        "nao consegui consultar [nome do sistema em portugues] agora" e pare. Aguarde
        decisao do usuario.
 
+    5. **Diagnostico de causa-raiz (interno, antes de concluir)**: ao investigar
+       timeout/erro/instabilidade de um SERVICO, colete evidencia direta com
+       `mcp__render__consultar_erros` ou `mcp__render__status_servicos` ANTES de
+       afirmar a causa — nao conclua so' com hipotese (L2). `consultar_logs` busca
+       texto especifico nos logs.
+
     Frases-modelo por sistema (Odoo em protecao automatica, SSW fora):
     REGRAS_OUTPUT.md secao I5.
 

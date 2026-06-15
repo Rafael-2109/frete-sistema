@@ -45,8 +45,9 @@ TOOL_TO_CATEGORY: Dict[str, str] = {
     'mcp__sessions__semantic_search_sessions': 'Busca de Sessoes',
 
     # ── MCP Render Tools ──
-    'mcp__render__fetch_render_logs': 'Monitoramento Render',
-    'mcp__render__get_render_services': 'Monitoramento Render',
+    'mcp__render__consultar_logs': 'Monitoramento Render',
+    'mcp__render__consultar_erros': 'Monitoramento Render',
+    'mcp__render__status_servicos': 'Monitoramento Render',
 
     # ── MCP Browser/SSW Tools ──
     'mcp__browser__browser_navigate': 'Operacao SSW',

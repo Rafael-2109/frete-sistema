@@ -70,13 +70,12 @@ Encapsula o Claude Agent SDK: chat web (SSE) + Teams bot (async); ~56.4K LOC em 
 ## Estrutura
 
 ```
-app/agente/                          # Root — 8 arquivos
+app/agente/                          # Root — 7 arquivos
 ├── __init__.py                      # Blueprint import de routes/ + init_app()
 ├── CLAUDE.md                        # Este arquivo (guia dev)
 ├── SUBSISTEMAS.md                   # Detalhe de Artifacts/telemetria subagent/memoria compartilhada/avaliador skill + inventario SSE (ver Mapa de Navegacao)
 ├── SDK_CHANGELOG.md                 # Historico SDK 0.1.49 -> 0.2.101 (features, breaking, fixes) — inclui revisao retroativa do 0.2.82 (2 breakings omitidas)
 ├── ROLLBACK_SESSION_STORE.md        # Procedimento rollback PostgresSessionStore (Fase B)
-├── conversa.md                      # Referencia historica de conversa (legado, 16K)
 ├── historia.md                      # Referencia historica (legado, 76K)
 ├── models.py                        # SQLAlchemy models (AgentSession, AgentMemory, etc.)
 ├── routes/                          # Flask routes modularizadas — 21 arquivos
@@ -252,9 +251,9 @@ STRING custom (option `system_prompt`) — 3 arquivos concatenados em _build_ful
 | Componente | Linhas | Bytes | Tokens (est.) |
 |------------|-------:|------:|--------------:|
 | `preset_operacional.md` | 117 | 5079 | ~1.5K tok |
-| `system_prompt.md` | 761 | 47164 | ~13.5K tok |
+| `system_prompt.md` | 767 | 47523 | ~13.6K tok |
 | `empresa_briefing.md` | 81 | 5084 | ~1.5K tok |
-| **TOTAL estatico** | **959** | **57327** | **~16.4K tok** |
+| **TOTAL estatico** | **965** | **57686** | **~16.5K tok** |
 
 > Medido por `scripts/audits/prompt_size_audit.py` (tokens = bytes/3.5, estimativa pt-BR+XML). NUNCA editar a mao — rode `--update-claude-md`.
 <!-- prompt-size:end -->
