@@ -34,6 +34,7 @@ atualizado: 2026-06-08
 | **Routing de skills** | [ROUTING_SKILLS.md](ROUTING_SKILLS.md) |
 | **Infraestrutura Render e Odoo** | [INFRAESTRUTURA.md](INFRAESTRUTURA.md) |
 | **S3 storage (14+ modulos, todos os folders e triggers)** | [S3_STORAGE.md](S3_STORAGE.md) |
+| **Padroes de progressive disclosure (CLAUDE.md root+modulo, docs L1-L3, memoria)** | [PROGRESSIVE_DISCLOSURE_PATTERN.md](PROGRESSIVE_DISCLOSURE_PATTERN.md) |
 | Artifacts no Agente Web (skill gerando-artifact, modal, worker) | `.claude/skills/gerando-artifact/SKILL.md` + `app/agente/CLAUDE.md` (secao Artifacts) |
 | **Confiabilidade de subagentes** | [SUBAGENT_RELIABILITY.md](SUBAGENT_RELIABILITY.md) |
 | **Manual para criar/editar subagents** | [AGENT_DESIGN_GUIDE.md](AGENT_DESIGN_GUIDE.md) |
@@ -175,3 +176,37 @@ atualizado: 2026-06-08
 | `escriturando-odoo` (WRITE ABRANGENTE) | `app/odoo/estoque/CLAUDE.md`, `app/odoo/estoque/fluxos/1.2.1-escriturar-dfe-industrializacao.md`, `odoo/IDS_FIXOS.md` |
 | `auditando-cadastro-fiscal-odoo` (PRE-FLIGHT) | `app/odoo/estoque/CLAUDE.md` (G017/G018/G035/G014 + D-OPS-2/3) |
 | `faturando-odoo` (WRITE Skill 8) | `app/odoo/estoque/CLAUDE.md`, `app/odoo/estoque/orchestrators/inventario_pipeline.py`, `odoo/IDS_FIXOS.md` |
+
+
+## Module -> CLAUDE.md
+
+CLAUDE.md de modulo (Padrao 1 de [PROGRESSIVE_DISCLOSURE_PATTERN.md](PROGRESSIVE_DISCLOSURE_PATTERN.md)) — lido ao trabalhar no modulo, nunca no boot de quem nao o toca.
+
+| Modulo | CLAUDE.md | Dominio |
+|---|---|---|
+| Agente Web | `app/agente/CLAUDE.md` (+ `app/agente/services/CLAUDE.md`) | Claude Agent SDK, contexto, memoria |
+| Agente Lojas HORA | `app/agente_lojas/CLAUDE.md` | SDK isolado, endpoint `/agente-lojas/*` |
+| Carteira | `app/carteira/CLAUDE.md` | Carteira de pedidos, P1-P7, separacao, ruptura |
+| CarVia | `app/carvia/CLAUDE.md` | Frete subcontratado (transportadora do grupo) |
+| Chat in-app | `app/chat/CLAUDE.md` | Chat web, artifacts |
+| Devolucao | `app/devolucao/CLAUDE.md` | NFD, De-Para AI, descarte vs retorno |
+| Financeiro | `app/financeiro/CLAUDE.md` | Reconciliacao, CNAB, extratos, multi-company |
+| Fretes | `app/fretes/CLAUDE.md` | CTe, custo real, conta corrente transportadoras |
+| Lojas HORA | `app/hora/CLAUDE.md` | Motochefe (motos), TagPlus NFe |
+| Motos Assai | `app/motos_assai/CLAUDE.md` | B2B Q.P.A. Sendas/Assai |
+| Odoo | `app/odoo/CLAUDE.md` (+ `app/odoo/estoque/CLAUDE.md`) | Integracao ERP CIEL IT; estoque WRITE (skills atomicas) |
+| Relatorios Fiscais | `app/relatorios_fiscais/CLAUDE.md` | SPED ECD (Leiaute 9) |
+| Seguranca | `app/seguranca/CLAUDE.md` | Varreduras de seguranca |
+| Teams Bot | `app/teams/CLAUDE.md` | Bot Framework Microsoft Teams |
+| WhatsApp Bot | `app/whatsapp/CLAUDE.md` | Canal via OpenClaw (Baileys) |
+
+## Modulos silenciosos mas criticos
+
+Modulos invocados dinamicamente (sem CLAUDE.md proprio e raramente citados), porem vitais. **JAMAIS remover por parecerem orfaos** — a ausencia de citacao nao implica ausencia de uso.
+
+| Modulo | Papel | Invocacao |
+|---|---|---|
+| `app/supply_chain/` | `EventoSupplyChain` — tabela append-only (event sourcing) de carteira/separacao/faturamento | Trigger PostgreSQL em toda mutacao; registrado em `app/__init__.py` |
+| `app/embeddings/` | Busca semantica (Voyage AI + pgvector): entidades, memoria, produto, route-template, sessao, regras SPED | Memoria do agente, rerank, text-to-SQL, resolucao |
+| `app/resolvedores/` | SoT da resolucao de entidade de negocio por nome/termo (cidade, cliente, produto, transportadora, pedido, grupo, uf) | Skill `resolvendo-entidades` e agente |
+| `app/permissions/` | Controle de acesso (decorators, escopo de equipe/vendedor) | Decorators em rotas; `sync_equipes` |
