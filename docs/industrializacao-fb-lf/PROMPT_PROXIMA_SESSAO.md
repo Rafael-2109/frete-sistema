@@ -8,23 +8,37 @@ atualizado: 2026-06-13
 -->
 # PROMPT — Próxima sessão (Industrialização FB↔LF)
 
-> **Atualizado 2026-06-14 — ✅✅✅ PARTE DA LF CONCLUÍDA: as 2 NFs de retorno AUTORIZADAS na SEFAZ produção via SERVER ACTION (`s48`–`s59`). Playwright NÃO foi necessário (resposta à pergunta do Rafael).** 4 gaps de cadastro descobertos e incorporados no `s37`. **Próximo: R2 (escriturar os 2 DFes na FB, Etapa 5) + automação dos 2 gatilhos (com descoberta automática da remessa).**
+> **Atualizado 2026-06-15 — ENTRADA na FB (Etapa 5) CONCLUÍDA no piloto: GATE CONTÁBIL FECHADO (`s67`).** LF concluída (2 NFs de retorno AUTORIZADAS SEFAZ via SA, `s48`–`s59`). Entrada FB: NF-2 MONTADA DIRETO (refuta caminho A) + NF-1 serviço — **ambas POSTED** (escrituração definitiva). Gate medido pela CONTA (decisão Rafael: revaloração AVCO dilui, aceito). **Próximo: SA DURÁVEL no Odoo + automação dos 2 gatilhos + reconciliar trânsito físico 26489.**
 
 ## 🔑 GATILHO DE RETOMADA (colar para retomar)
-> **Retomar industrialização FB↔LF — agora a ENTRADA na FB (R2/Etapa 5) + automação.** Ler `docs/industrializacao-fb-lf/`: `README.md` (estado) → este handoff → `ACHADOS_TECNICOS.md §"FASE B"`. **Estado FIRMADO (14/06):** a SA `s37` gera NF-1 (serviço 5124, j847) + NF-2 (insumos 16×5902, RETIND 1083) + R3, posta (baixa PASSIVA Δ+279,23) e **as 2 foram TRANSMITIDAS e AUTORIZADAS na SEFAZ** (cstat 100): **NF-1 791437 `VND/2026/00384` chave `…131007914378`** + **NF-2 791441 `RETIN/2026/00001` chave `…141007914413`**. São **NFes fiscais reais — NÃO limpar.**
-> **🔑 TRANSMISSÃO VIA SERVER ACTION (provada, `s54`):** uma SA chama `action_previsualizar_xml_nfe` (destrava o stale/225 server-side) + `action_gerar_nfe`, na mesma transação. Saga: transmite NF-1 → chave → cross-refNFe (chave NF-1 na NF-2) → transmite NF-2; aborta se NF-1 rejeita. Estado `excecao_autorizado` (rejeição) é retransmissível.
-> **🔴 4 GAPS DE CADASTRO (incorporados no `s37`; a NF gerada não herda da duplicação de modelo):** (1) `invoice_incoterm_id`=**6 CIF** [regra Rafael: retorno = CIF/frete do emitente LF + transportadora LF, NÃO FOB]; (2) `l10n_br_carrier_id`=**999** (LF); (3) `payment_provider_id`=**31**; (4) **vencimento a-prazo** na NF-1 (`date_maturity`=emissão+1) senão a duplicata cai em "à vista" e a SEFAZ rejeita.
-> **🎯 PRÓXIMOS PASSOS:**
-> 1. **R2 — escriturar a ENTRADA na FB** (Etapa 5): criar os 2 DFes (serviço + insumos) na FB a partir das chaves/XML autorizados, vinculados (trilho `recebimento_lf_odoo_service` já transmite NFe LF + cria DFe FB idempotente, 3087 casos). Op default 2027 re-infla estoque ⇒ usar op `movimento_estoque=False` (3252) na 1902.
-> 2. **Automação dos 2 gatilhos** (`SOT §6.2`): G1 (na NF-1 do j847 → cria a NF-2) + G2 (na transmissão da NF-1 → transmite a NF-2 via SA). **Falta a descoberta automática da remessa correspondente** (no piloto é FIXA no `s37`): genealogia lote→MO→mat.terceiros→remessa (fonte A/B/C, `s46`).
-> 3. **Validar a SA `s37` atualizada** (4 gaps) num próximo ciclo real (não testada gerando NF nova após a edição).
+> **Retomar industrialização FB↔LF — construir a SA DURÁVEL da entrada + automação dos gatilhos.** Ler `docs/industrializacao-fb-lf/`: `README.md` (estado) → este handoff → `ACHADOS_TECNICOS.md §"R2.3b"` (gate contábil fechado + achado AVCO) + §"FASE B" (saída via SA). Desenho/decisões: `SOT_OPERACOES.md §6.2`.
 >
-> **🔴 Toda transmissão SEFAZ é PRODUÇÃO (`tpAmb=1`), IRREVERSÍVEL.** **Regras invioláveis:** dry-run + go FRESCO em CADA escrita Odoo; NF de teste sempre limpar (as do piloto firmado NÃO — são reais).
+> **✅ PILOTO 4870112 — CICLO 4+5 COMPLETO (2 NF).** A LÓGICA da SA da entrada está provada e EXECUTADA (`s67`); o que falta é **torná-la durável no Odoo** + automatizar os gatilhos.
+> - **Saída (Etapa 4):** 2 NFs de retorno AUTORIZADAS SEFAZ via SA (`s54`): NF-1 791437 `VND/2026/00384` (5124) + NF-2 791441 `RETIN/2026/00001` (16×5902), cstat 100, baixa PASSIVA Δ+279,23, R3 completo.
+> - **Entrada (Etapa 5):** **NF-2 MONTADA DIRETO** (in_invoice j1084, 16×op 3252, `calcular_imposto=False`, preços remessa **279,23 exato**) — **refuta o caminho A** (o `criar_invoice` do robô ganha tax lines ESPELHO que auto-cancelam ⇒ não baixa; provado `s66`). **NF-1 serviço 792219** via caminho A (PA via picking C9 325347 done). **Ambas POSTED** (reversível, NÃO SEFAZ).
+> - **🔑 DECISÃO Rafael (15/06): gate `PA=Ic+S` MEDIDO PELA CONTA, não pela unidade.** A revaloração `stock.valuation.layer.revaluation` opera sobre o **AVCO do produto inteiro** (593 un do pool) → dilui o Ic (+0,39/un, std 29,87); "305 numa unidade isolada" é incompatível com custo médio (qualquer veículo recalcula a média). Aceito: o **saldo da CONTA de estoque do PA** (`1150100007`) sobe +Ic; a revaloração permanece (fecha a transitória).
+> - **GATE CONTÁBIL FECHADO (medido pelo CICLO — NÃO saldo global, que tem tráfego concorrente massivo):** ATIVA `5101010001`=**+0,00** (remessa +279,23 / NF-2 −279,23) · transitória `1150100011`=**−0,00** · estoque PA `1150100007`=**+305,46 (Ic+S)** · refNFe presente · 30720=0.
+> - **⚠️ PENDÊNCIA física (não contábil): 26489=−1** (contorno manual do picking C9 `s64`, falta o lado LF→26489) — reconciliar na SA durável.
+>
+> **FOCO DA PRÓXIMA SESSÃO:**
+> 1. **SA DURÁVEL no Odoo** (server action persistente, espelho da saída `s37`): ao escriturar a NF-1 → monta+posta a NF-2 DIRETO (spec abaixo) + revalora o PA + R3. Dívida: script de re-aplicação idempotente versionado + monitor anti-upgrade (SA custom some em upgrade CIEL IT).
+> 2. **Automação dos 2 gatilhos** (`SOT §6.2`): G1 (NF-1 serviço → cria NF-2) + G2 (transmissão via SA) + **descoberta automática da remessa** (genealogia lote→MO→mat.terceiros, fonte A/B/C `s46`; no piloto é FIXA = move 735679).
+> 3. **Reconciliar o trânsito físico 26489** (lado LF→26489) no fluxo automatizado.
+> 4. **Pontos de código que assumem "1 NF"** (`ACHADOS §E`): orchestrator `inventario_pipeline`, Skill 8 `faturamento.py`, Skill 7 `escrituracao.py`, `recebimento_lf_odoo_service`, ETL `faturamento_service` (filtrar NF de insumos total=0).
+>
+> **🔧 SPEC NF-2 (montada DIRETO — provada `s67 --montar-nf2`):** `account.move` `in_invoice`, partner LF=35, journal **j1084**, `invoice_date`=NF-1; 16 linhas op `3252`+`operacao_manual=True` + **preços da REMESSA** (move 735679, total 279,23); `l10n_br_calcular_imposto=False`; **NÃO** rodar `onchange_l10n_br_calcular_imposto_btn`; R3 = `referencia_ids`[(0,0,{'l10n_br_chave_nf': <chave remessa>})] + `invoice_origin`. A op 3252 leva a conta da linha a **1150100011** sozinha. Postar → `D 1150100011 / C 5101010001 ATIVA 279,23`.
+>
+> **🔧 AJUSTE DE CUSTO (`s67 --revalorar`):** wizard `stock.valuation.layer.revaluation` (`product_id`=27834, `added_value`=+279,23, `account_journal_id`=8, **`account_id`=1150100011** [a conta que SOBRA na NF-2, NÃO CMV]) → `D 1150100007 PA / C 1150100011`. Dilui no AVCO (aceito); a CONTA do PA sobe +Ic.
+>
+> **IDs-chave:** FB=1/LF=5 · PA **27834**(4870112) lote **PILOTO-3105**(61519) · **j1084 ENTRI**(no_payment 22800=ATIVA) · op **3252**(1902 entrada, conta linha 1150100011) · op **1917**(serviço) · contas **1150100007** PA / **1150100011** transit / **22800** ATIVA · remessa move **735679** · DFe **44522**(insumos)/**44523**(serviço) · picking **325347** · PO **43464**(NF-1) · team **144** · partner LF **35** · pt52(26489→8) · journal revaloração **8**.
+>
+> **Estado vivo no Odoo (POSTED, reversível `s67 --reverter <id_nf2>`):** NF-1 **792219** posted · NF-2 **795439** posted (`ENTRI/2026/06/0001`) · picking 325347 done · PO 43464 · j1084. Scripts **`s60`–`s67`** em `docs/industrializacao-fb-lf/scripts/` (untracked, sem commit).
+>
+> **🔴 Regras invioláveis:** **dry-run + go FRESCO do Rafael em CADA escrita Odoo**; nada postado sem go; reversível (j1084/j1001 `restrict_mode_hash_table=False`); toda transmissão SEFAZ é PRODUÇÃO (`tpAmb=1`), IRREVERSÍVEL. **Medir SEMPRE pelo LANÇAMENTO do ciclo, nunca pelo saldo global** (contas compartilhadas pela empresa inteira).
 
 ## Como começar
-Leia nesta ordem: **`README.md`** (índice+estado) → o **GATILHO DE RETOMADA acima** → **`ACHADOS_TECNICOS.md §"FASE B"`** (transmissão via SA + os 4 gaps de cadastro + vínculo remessa). Desenho/decisões (dona): **`SOT_OPERACOES.md §6.2`** (automação dos 2 gatilhos, v3.4) + §6 requisitos.
-**JÁ CONCLUÍDO — NÃO refazer:** Etapas 1-3 (remessa / entrada LF / MO) + **Etapa 4 (retorno LF→FB) FIRMADA** — Task #4 (a SA `s37` une NF-1 5124 + NF-2 16×5902 + R3), Fase A (post + baixa PASSIVA Δ+279,23) e **Fase B (transmissão SEFAZ via SERVER ACTION → 2 NFs autorizadas cstat 100)**. A `s37` já embute os 4 gaps de cadastro; a saga `s54` já transmite via SA.
-**FOCO da próxima sessão = R2 (Etapa 5: escriturar os 2 DFes na FB) + automação dos 2 gatilhos.** Investigação READ-only inicial: (a) trilho `recebimento_lf_odoo_service` (cria DFe na FB a partir do XML/chave) p/ estender aos **2 DFes** vinculados; (b) op de entrada da 1902 com `movimento_estoque=False` (3252) p/ não re-inflar estoque; (c) fonte A/B/C (`s46`) p/ **descobrir a remessa correspondente** no gatilho G1 (hoje fixa no s37).
+Leia nesta ordem: **`README.md`** (índice+estado) → o **GATILHO DE RETOMADA acima** → **`ACHADOS_TECNICOS.md §"R2.3b"`** (gate da entrada fechado) + §"FASE B" (saída via SA). Desenho/decisões (dona): **`SOT_OPERACOES.md §6.2`** (automação dos 2 gatilhos, v3.4) + §6 requisitos.
+**JÁ CONCLUÍDO — NÃO refazer:** Etapas 1-3 (remessa / entrada LF / MO) + **Etapa 4 (retorno LF→FB)** (2 NFs autorizadas SEFAZ via SA) + **Etapa 5 (entrada FB) no piloto** (2 NFs escrituradas/posted, gate contábil fechado `s67`). **O que falta é a AUTOMAÇÃO (SA durável + gatilhos), não a prova do fluxo.**
 
 > ⬇️ **Abaixo = HISTÓRICO do desenho (a emissão das 2 NFs JÁ foi implementada e a LF firmada — ver o gatilho de retomada no topo).** Mantido como contexto/arqueologia.
 

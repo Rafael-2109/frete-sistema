@@ -217,7 +217,7 @@ A Contadora **aprovou separar em 2 NF** (`MATERIAL_CONTADORA §0`) com **3 requi
 
 > Mecanismo/provas: `ACHADOS §A–§I` + `§sessão 8` + `§sessão 9`. Próximo passo operacional: `PROMPT_PROXIMA_SESSAO`.
 
-### 6.2 AUTOMAÇÃO DOS 2 GATILHOS (v3.4, 2026-06-14 — FASE B concluída via SA; falta só o disparo automático)
+### 6.2 AUTOMAÇÃO DOS 2 GATILHOS (v3.5, 2026-06-15 — saída via SA + entrada R2 provada `s67`; falta só o disparo automático e a resiliência)
 
 > ✅✅✅ **MOTOR FISCAL + TRANSMISSÃO SEFAZ PROVADOS end-to-end (`s37`/`s40`–`s59`):** 1 server action gera **NF-1 (serviço 5124)** via `create_invoice` + recompute + **NF-2 (insumos 5902)** = `account.move` direto no RETIND 1083 + **R3** (invoice_origin comum + refNFe→remessa); posta (**baixa PASSIVA `Δ5101020001 = +279,23`**); e **TRANSMITE as 2 ao SEFAZ via SERVER ACTION → cstat 100** (NF-1 791437, NF-2 791441 — chaves em `ACHADOS §"FASE B"`). **A transmissão via SA dispensa o Playwright.** Falta só a **camada de disparo automático** abaixo + R2 (entrada FB).
 
@@ -231,13 +231,20 @@ A Contadora **aprovou separar em 2 NF** (`MATERIAL_CONTADORA §0`) com **3 requi
 - **B.** Rateio = **(qtd faturada na NF-1) / (total REAL produzido do lote)** × cada componente. Robusto a múltiplas MOs do mesmo lote (o piloto tem 3 por tentativas — o rateio cancela).
 - **3 refinamentos de implementação** (`s46`): (i) **excluir ÁGUA** (`type=consu`, consumo local — como `s30`); (ii) **total = produção REAL**, não `count(MOs)` (as 3 MOs do piloto são tentativas fragmentadas → frasco deu 4 vs 12); (iii) **🔴 valor NÃO sai do quant atual de 31092** (os consumidos zeram o quant → `vu=0`) — o valor de remessa (invariante 5902=5901) está no **histórico (SVL / move de consumo)**, não no saldo atual. Decisão Rafael: base = materiais de terceiros valorados pela remessa.
 
-**R2 — escrituração na FB (reusar trilho existente):** `app/recebimento/services/recebimento_lf_odoo_service.py` já faz **transmite NFe LF (Playwright) → extrai XML/chave → cria DFe na FB (idempotente, por chave/número)**. Estender para os **2 DFes** (serviço + insumos) vinculados.
+**R2 — escrituração na FB — ✅ MECÂNICA PROVADA E2E (`s67`, 2026-06-15; `ACHADOS §"R2.3b"`).** Disparada quando os **2 DFes** (serviço + insumos) chegam na FB (a SEFAZ distribui ao destinatário; CIEL IT popula). O gatilho lógico é a **NF-1 (serviço)** — espelho da saída. 3 sub-passos (cada um via XML-RPC do nosso lado — **NÃO precisa de server action no Odoo** para a entrada; o recompute fiscal da NF-2 montada-direto persiste via `create`):
+- **(a) NF-1 (serviço 5124→1124):** caminho A `DFe→PO→invoice` (trilho `EscrituracaoLfService`, átomos manuais) + **picking manual do PA** (átomo C9 `criar_picking_entrada_destino_manual`, pt52 26489→8) porque a PO de industrialização **não gera picking nativo** (D-V30-1). → invoice DRAFT (j1001 ENTSI) → postar.
+- **(b) NF-2 (insumos 5902→1902):** **MONTADA DIRETO** (`account.move` `in_invoice`, journal **j1084 ENTRI**, 16 linhas op **3252**/`operacao_manual=True`, **`l10n_br_calcular_imposto=False`**, preços da REMESSA, R3 `referencia_ids`+`invoice_origin`). **NÃO via PO/`create_invoice`** — o caminho A gera *tax lines espelho* que auto-cancelam e a baixa não ocorre (`s66`). A op 3252 leva a conta da linha à transitória **1150100011** sozinha. Postar → **`D 1150100011 / C 5101010001 ATIVA`** = a baixa da ATIVA.
+- **(c) Ajuste de custo do PA (G8):** wizard `stock.valuation.layer.revaluation` (`added_value=+Ic`, `account_id=1150100011`) → `D 1150100007 PA / C 1150100011` (fecha a transitória, sobe a conta do PA). **🔴 A revaloração DILUI no AVCO do produto inteiro** (pool de N un) — inevitável; **decisão Rafael: gate `PA=Ic+S` medido pelo SALDO DA CONTA `1150100007`, não pelo `std_price` unitário.**
+- **Gate (medir pelo CICLO, não saldo global):** ATIVA `5101010001`=0 (remessa+Ic / entrada−Ic) · transitória `1150100011`=0 · conta PA `1150100007`=+(Ic+S) · refNFe presente.
+- **⚠️ Pendência: trânsito 26489=−1** (o picking C9 manual não tem o move de entrada LF→26489) — reconciliar no fluxo automatizado.
+
+> *Alternativa de criação de DFe:* `recebimento_lf_odoo_service.py` cria DFe na FB a partir do XML/chave (idempotente) — **não foi necessário no piloto** (os 2 DFes já chegaram populados pela SEFAZ); fica como fallback se algum DFe não distribuir.
 
 **Veículo + dívida:** server action (server-side, mata timeout do recompute **e** faz a transmissão SEFAZ — provado) disparada por **cron**. Dívida OBRIGATÓRIA: script de re-aplicação idempotente versionado + monitor anti-upgrade (SA/cron custom somem em upgrade CIEL IT).
 
 **🔴 CADASTRO FISCAL OBRIGATÓRIO na geração (4 gaps provados na FASE B, já no `s37`):** a NF gerada programaticamente NÃO herda o que a duplicação da NF-modelo herda — setar nas 2: `invoice_incoterm_id`=**6 CIF** (retorno = frete do emitente LF; **não** FOB) + `l10n_br_carrier_id`=**999** (LF) + `payment_provider_id`=**31**; e na NF-1, **vencimento a-prazo** (`date_maturity`=emissão+1) senão a SEFAZ rejeita a duplicata ("à vista"). Detalhe: `ACHADOS §"FASE B"`.
 
-**Pendências para construir:** (1) cron G1 + SA com a fonte A/B/C (resolver o valor via SVL) **+ descoberta automática da remessa** (no piloto é FIXA); (2) cron G2 + transmissão via SA (já provada `s54`); (3) **R2 nos 2 DFes na FB** (Etapa 5, reusar `recebimento_lf_odoo_service`); (4) resiliência (máquina de estados por picking, marcador anti-post, rollback). Provas: `ACHADOS §"FASE B"`. Scripts da sessão: `s36`–`s59`.
+**Pendências para construir:** (1) cron G1 + SA com a fonte A/B/C (resolver o valor via SVL) **+ descoberta automática da remessa** (no piloto é FIXA); (2) cron G2 + transmissão via SA (já provada `s54`); (3) **R2 — gatilho da entrada FB** (a MECÂNICA já está provada `s67`: NF-1 caminho A + NF-2 direto + revaloração; falta o disparo automático ao chegarem os 2 DFes + reconciliar o trânsito 26489); (4) resiliência (máquina de estados por picking, marcador anti-post, rollback); (5) **ajustar os pontos de código que assumem 1 NF** (`ACHADOS §E`) ANTES de ligar o automático. Provas: `ACHADOS §"FASE B"` (saída) + `§"R2.3b"` (entrada). Scripts: `s36`–`s59` (saída), `s60`–`s67` (entrada).
 
 ---
 
