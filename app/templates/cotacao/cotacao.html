@@ -434,7 +434,7 @@
               <td>
                 {% set _tipo_carga = emb_info.embarque.tipo_carga or 'DIRETA' %}
                 <button class="btn btn-warning btn-sm"
-                        onclick="incluirEmEmbarque({{ emb_info.embarque.id }}, {{ _tipo_carga | tojson }})">
+                        onclick='incluirEmEmbarque({{ emb_info.embarque.id }}, {{ _tipo_carga | tojson }})'>
                   <i class="fas fa-plus"></i> Incluir
                 </button>
               </td>
