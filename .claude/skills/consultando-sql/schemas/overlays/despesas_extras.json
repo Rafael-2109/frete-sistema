@@ -1,0 +1,11 @@
+{
+ "table": "despesas_extras",
+ "version": "1.0.0",
+ "business_rules": [
+  "Lancamento no Odoo exige tres condicoes simultaneas: tipo_documento='CTe' (case-insensitive), despesa_cte_id preenchido (CTe Complementar vinculado) e status='VINCULADO_CTE'. Quando lancado com sucesso, status vai para 'LANCADO_ODOO'.",
+  "Despesas com tipo_documento diferente de 'CTe' (ex: NFS, RECIBO) encerram em status='LANCADO' sem passar pelo Odoo — o comprovante e armazenado via comprovante_path (S3).",
+  "transportadora_id e opcional: se NULL a despesa e paga para a transportadora do frete pai; se preenchido, indica transportadora alternativa (ex: coleta de devolucao feita por terceiro). A property transportadora_efetiva implementa essa logica de fallback.",
+  "Para despesas de devolucao: tipo_despesa='DEVOLUCAO' e nfd_id deve ser preenchido com o id da NF de devolucao (tabela nf_devolucao). numero_nfd e cache do numero para exibicao rapida.",
+  "origem de uma DespesaExtra nao tem coluna propria — sempre herda do Frete pai (frete.origem). Valores possiveis: NACOM ou OP_ASSAI."
+ ]
+}

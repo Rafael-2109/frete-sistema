@@ -12,7 +12,13 @@ atualizado: 2026-06-15
 
 ## Contexto
 
-Rafael pediu para curar o README (6+ meses) e ver o que enriquece o text_to_SQL, sem adicionar as cegas. Verificacao por 11 modelos (workflow read-only). Resultado: 152 ja-cobertos (nao re-adicionar), 78 lacunas reais (ADICIONAR), 10 drift descartados, 4 incertos, 48 business_rules de negocio propostas. Aplicacao recomendada via OVERLAYS (`schemas/overlays/*.json` — camada de curadoria): criar overlay novo para tabelas sem um (`relatorio_faturamento_importado`, `despesas_extras`, `usuarios`); adicionar `business_rules`/field hints aos overlays existentes.
+Rafael pediu para curar o README (6+ meses) e ver o que enriquece o text_to_SQL, sem adicionar as cegas. Verificacao por 11 modelos (workflow read-only). Resultado: 152 ja-cobertos (nao re-adicionar), 78 lacunas reais (ADICIONAR), 10 drift descartados, 4 incertos, 48 business_rules de negocio propostas. Aplicacao via OVERLAYS (`schemas/overlays/*.json` — camada de curadoria; contrato: overlay carrega `business_rules`/`query_hints`/`lineage`, NAO field descriptions, que moram na fonte/modelo).
+
+**APLICADO (2026-06-15):** criado overlay novo `overlays/despesas_extras.json` (5 business_rules verificados; SERVIDA; carga validada via SchemaProvider).
+
+**NAO aplicavel (descoberto na verificacao contra catalog.json):** `usuarios` e `relatorio_faturamento_importado` estao em `tabelas_bloqueadas` — o text_to_SQL nao as serve, logo overlay nelas seria inerte. A curadoria desses 2 fica como REFERENCIA neste report (parte do conhecimento de `relatorio_faturamento_importado`, grao header, pode aplicar-se a `faturamento_produto` (grao item, SERVIDA, JA tem overlay) — avaliar adicao coordenada).
+
+**Follow-up coordenado (zona ativa, nao feito agora):** (a) 78 field descriptions -> model `info={'desc':...}` na fonte; (b) adicoes de `business_rules` aos overlays JA existentes (separacao, embarque_itens, embarques, entregas_monitoradas, transportadoras, contatos_agendamento, cidades, faturamento_produto).
 
 ## Indice
 
