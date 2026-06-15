@@ -9,24 +9,33 @@ def _mk_odoo(qtde=150, limit_returned=100):
     odoo = MagicMock()
     odoo.search_count.return_value = qtde
 
-    def _search(model, *args, **kwargs):
+    # O servico usa search_read('stock.move.line', ...) para as ROWS (com
+    # offset/limit/order) e read('product.product', ...) para enriquecer.
+    # search() fica apenas para stock.move (filtro tipo) e res.users (filtro
+    # usuario). Mock anterior assumia search+read (padrao antigo) e devolvia
+    # search_read=[] -> rows vazias -> assert len(rows)==N falhava.
+    def _rows(n):
+        return [{'id': i, 'date': '2026-05-18 10:00:00',
+                 'company_id': [4, 'CD'],
+                 'product_id': [100, '[X] X'],
+                 'lot_id': [50, 'L01'], 'qty_done': 5.0,
+                 'location_id': [10, 'CD/Estoque'],
+                 'location_dest_id': [20, 'CD/Saida'],
+                 'move_id': [200, 'MOVE'],
+                 'create_uid': [1, 'admin']}
+                for i in range(1, n + 1)]
+
+    def _search_read(model, *args, **kwargs):
         if model == 'stock.move.line':
-            return list(range(1, min(qtde, limit_returned) + 1))
+            return _rows(min(qtde, limit_returned))
+        return []
+    odoo.search_read = MagicMock(side_effect=_search_read)
+
+    def _search(model, *args, **kwargs):
         return []
     odoo.search = MagicMock(side_effect=_search)
-    odoo.search_read = MagicMock(return_value=[])
 
     def _read(model, ids, fields):
-        if model == 'stock.move.line':
-            return [{'id': i, 'date': '2026-05-18 10:00:00',
-                     'company_id': [4, 'CD'],
-                     'product_id': [100, '[X] X'],
-                     'lot_id': [50, 'L01'], 'qty_done': 5.0,
-                     'location_id': [10, 'CD/Estoque'],
-                     'location_dest_id': [20, 'CD/Saida'],
-                     'move_id': [200, 'MOVE'],
-                     'create_uid': [1, 'admin']}
-                    for i in ids]
         if model == 'product.product':
             return [{'id': 100, 'default_code': 'X', 'name': 'X'}]
         return []

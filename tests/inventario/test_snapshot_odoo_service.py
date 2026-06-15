@@ -1,8 +1,25 @@
 """Testes do SnapshotOdooService com mock Odoo."""
+import pytest
 from decimal import Decimal
 from unittest.mock import patch, MagicMock
 from app.inventario.models import InventarioSnapshotOdoo
 from app.inventario.services.snapshot_odoo_service import SnapshotOdooService
+from app.recebimento.services.nf_transferencia_service import NfTransferenciaService
+
+
+@pytest.fixture(autouse=True)
+def _mock_nf_transferencia():
+    """Isola os testes do Odoo REAL.
+
+    SnapshotOdooService.refresh chama NfTransferenciaService.refresh e
+    agregar_em_transito_por_destino, que abrem conexao real ao Odoo (NAO sao
+    cobertas pelo patch de get_odoo_connection do snapshot). Sem este mock,
+    test_refresh_idempotente contava ~150 NFs em transito reais (cnt=150, nao 1).
+    """
+    with patch.object(NfTransferenciaService, 'refresh', return_value={}), \
+         patch.object(NfTransferenciaService,
+                      'agregar_em_transito_por_destino', return_value={}):
+        yield
 
 
 def _mk_odoo_mock_estoque_simples():

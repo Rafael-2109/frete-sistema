@@ -29,10 +29,18 @@ def _uid():
 def test_vincular_nf_nao_reconciliado_cria_sep_em_faturada(app, admin_user):
     """NF NAO_RECONCILIADO + pedido + loja explicita -> sep criada via S1=b."""
     with app.app_context():
-        modelo = AssaiModelo.query.filter_by(codigo='DOT').first()
-        loja = AssaiLoja.query.first()
-
         uid = _uid()
+        modelo = AssaiModelo.query.filter_by(codigo='DOT').first()
+        # Loja de teste com CNPJ unico — a vinculacao casa NF<->Loja por CNPJ
+        # destinatario (AssaiLoja.cnpj nao tem UNIQUE; CNPJ unico evita o erro
+        # 'CNPJ ambiguo' caso exista loja real com o mesmo CNPJ).
+        cnpj_loja = str(uuid.uuid4().int)[:14]
+        loja = AssaiLoja(
+            numero=uid, cnpj=cnpj_loja,
+            nome='Loja Teste Vinc', razao_social='Loja Teste Vinc LTDA',
+        )
+        db.session.add(loja); db.session.flush()
+
         pedido = AssaiPedidoVenda(numero=f'TST-V1-{uid}', status=PEDIDO_STATUS_ABERTO,
                                   criado_por_id=admin_user.id)
         db.session.add(pedido); db.session.flush()
@@ -58,6 +66,7 @@ def test_vincular_nf_nao_reconciliado_cria_sep_em_faturada(app, admin_user):
         nf = AssaiNfQpa(
             chave_44=chave[:44], numero=f'TSTV1-{uid}',
             destinatario_nome='SENDAS LJ-DESCONHECIDA',
+            destinatario_cnpj=cnpj_loja,
             loja_id=None,
             status_match=NF_STATUS_NAO_RECONCILIADO,
             importada_por_id=admin_user.id,
@@ -71,7 +80,7 @@ def test_vincular_nf_nao_reconciliado_cria_sep_em_faturada(app, admin_user):
 
         # Vincular manualmente
         result = vincular_nf_manualmente(
-            nf_id=nf.id, pedido_id=pedido.id, loja_id=loja.id,
+            nf_id=nf.id, pedido_id=pedido.id,
             operador_id=admin_user.id,
         )
         db.session.commit()
@@ -106,7 +115,7 @@ def test_vincular_nf_ja_bateu_falha(app, admin_user):
 
         with pytest.raises(VincularNfError, match='NAO_RECONCILIADO'):
             vincular_nf_manualmente(
-                nf_id=nf.id, pedido_id=pedido.id, loja_id=loja.id,
+                nf_id=nf.id, pedido_id=pedido.id,
                 operador_id=admin_user.id,
             )
         db.session.rollback()
@@ -115,11 +124,19 @@ def test_vincular_nf_ja_bateu_falha(app, admin_user):
 def test_vincular_nf_pedido_inexistente_falha(app, admin_user):
     """Pedido inexistente -> VincularNfError."""
     with app.app_context():
-        loja = AssaiLoja.query.first()
+        # Loja com CNPJ unico para a NF passar a validacao CNPJ->Loja e chegar
+        # na validacao de pedido inexistente (alvo deste teste).
+        cnpj_loja = str(uuid.uuid4().int)[:14]
+        loja = AssaiLoja(
+            numero=_uid(), cnpj=cnpj_loja,
+            nome='Loja Teste Vinc3', razao_social='Loja Teste Vinc3 LTDA',
+        )
+        db.session.add(loja); db.session.flush()
 
         chave = (str(uuid.uuid4().int)[:44]).ljust(44, '0')
         nf = AssaiNfQpa(
             chave_44=chave[:44], numero=f'TSTV3',
+            destinatario_cnpj=cnpj_loja,
             loja_id=None,
             status_match=NF_STATUS_NAO_RECONCILIADO,
             importada_por_id=admin_user.id,
@@ -129,7 +146,7 @@ def test_vincular_nf_pedido_inexistente_falha(app, admin_user):
 
         with pytest.raises(VincularNfError, match='Pedido'):
             vincular_nf_manualmente(
-                nf_id=nf.id, pedido_id=9999999, loja_id=loja.id,
+                nf_id=nf.id, pedido_id=9999999,
                 operador_id=admin_user.id,
             )
         db.session.rollback()

@@ -67,15 +67,34 @@ def _criar_chassi(modelo, chassi, admin):
 def test_fase3_excedente_remove_LIFO_outras_seps(app, admin_user):
     """R1.2: excedente remove os mais RECENTES das outras seps."""
     with app.app_context():
-        pedido, loja, modelo = _setup_pedido_qtd(admin_user, qtd_pedida=3)
-        chassi_old = f'TST_F3O_{_uid()}'  # mais antigo
-        chassi_new_outra = f'TST_F3OUT_{_uid()}'  # mais recente em outra sep
-        chassi_n1 = f'TST_F3N1_{_uid()}'
-        chassi_n2 = f'TST_F3N2_{_uid()}'
-        for c in [chassi_old, chassi_new_outra, chassi_n1, chassi_n2]:
+        pedido, loja, modelo = _setup_pedido_qtd(admin_user, qtd_pedida=2)
+        # Cenario alinhado ao exemplo canonico da spec (secao §6, linha ~762): o
+        # carregamento TEM chassi em comum com a sep alvo (Fase 1 escolhe a sep
+        # por contagem de chassis em comum) e o excedente sai por LIFO da OUTRA
+        # sep. O cenario anterior nao tinha chassi em comum -> caia no caso de
+        # borda (carregamento sobrescreve a unica sep ativa), que nao e o que
+        # R1.2 descreve.
+        chassi_alvo = f'TST_F3A_{_uid()}'        # em comum: sep_alvo + carregamento
+        chassi_old = f'TST_F3O_{_uid()}'         # outra sep, mais antigo
+        chassi_new_outra = f'TST_F3OUT_{_uid()}'  # outra sep, mais recente (LIFO)
+        for c in [chassi_alvo, chassi_old, chassi_new_outra]:
             _criar_chassi(modelo, c, admin_user)
 
-        # Sep_outra: tem chassi_old (mais antigo) + chassi_new_outra (mais recente). Total=2
+        # Sep_alvo: tem chassi_alvo -> sera o alvo do carregamento (1 chassi em comum)
+        sep_alvo = AssaiSeparacao(
+            pedido_id=pedido.id, loja_id=loja.id,
+            status=SEPARACAO_STATUS_EM_SEPARACAO,
+        )
+        db.session.add(sep_alvo)
+        db.session.flush()
+        db.session.add(AssaiSeparacaoItem(
+            separacao_id=sep_alvo.id, chassi=chassi_alvo,
+            modelo_id=modelo.id, valor_unitario_qpa=Decimal('1000.00'),
+        ))
+        emitir_evento(chassi_alvo, EVENTO_SEPARADA, operador_id=admin_user.id)
+        db.session.flush()
+
+        # Sep_outra: chassi_old (mais antigo) + chassi_new_outra (mais recente). Total=2
         sep_outra = AssaiSeparacao(
             pedido_id=pedido.id, loja_id=loja.id,
             status=SEPARACAO_STATUS_EM_SEPARACAO,
@@ -99,11 +118,11 @@ def test_fase3_excedente_remove_LIFO_outras_seps(app, admin_user):
         db.session.commit()
         sep_outra_id = sep_outra.id
 
-        # Carregamento: 2 chassis novos. Total = 2+2 = 4 > pedido(3). Excedente=1.
+        # Carregamento escaneia chassi_alvo (em comum com sep_alvo -> sep_alvo e o
+        # alvo). Total = sep_alvo(1) + sep_outra(2) = 3 > pedido(2). Excedente=1.
         car = criar_carregamento(pedido.id, loja.id, operador_id=admin_user.id)
         db.session.flush()
-        escanear_carregamento_item(car.id, chassi_n1, operador_id=admin_user.id)
-        escanear_carregamento_item(car.id, chassi_n2, operador_id=admin_user.id)
+        escanear_carregamento_item(car.id, chassi_alvo, operador_id=admin_user.id)
         db.session.commit()
 
         finalizar_carregamento(car.id, operador_id=admin_user.id)

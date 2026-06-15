@@ -4,7 +4,7 @@ Spec: docs/superpowers/specs/2026-05-12-motos-assai-carregamento-divergencia-des
 Plano: docs/superpowers/plans/2026-05-12-motos-assai-fase2-3-carregamento.md Tasks 1-4
 """
 import pytest
-from app import create_app, db
+from app import db
 from app.motos_assai.models import (
     AssaiCd, AssaiLoja, AssaiModelo, AssaiPedidoVenda, AssaiCarregamento,
     AssaiCarregamentoItem, AssaiMoto,
@@ -25,27 +25,59 @@ from app.motos_assai.services.carregamento_service import (
 from app.utils.timezone import agora_brasil_naive
 
 
-@pytest.fixture
-def app():
-    app = create_app('testing')
-    with app.app_context():
-        db.create_all()
-        yield app
-        db.session.rollback()
-        db.drop_all()
+# NOTA: este arquivo usava um fixture `app` local com create_app('testing')
+# (SQLite in-memory) + db.create_all(). O SQLite nao renderiza o tipo ARRAY
+# (agent_improvement_dialogue.affected_files e Postgres-only) -> 14 ERROR no
+# setup. Migrado para o fixture `db` do conftest (Postgres local + SAVEPOINT
+# robusto), consistente com o resto da suite. Os db.session.commit() abaixo
+# viram commits de savepoint, revertidos no teardown.
+
+
+@pytest.fixture(autouse=True)
+def _garantir_operador_2(db):
+    """assai_carregamento.iniciado_por_id/cancelado_por_id tem FK -> usuarios.
+    Os testes usam operador_id=1 (Rafael, existe) e operador_id=2. No SQLite
+    anterior nao havia FK enforcement; no Postgres garantimos que o usuario 2
+    exista (clona o 1). Revertido pelo SAVEPOINT no teardown.
+    """
+    from sqlalchemy import text
+    ja_existe = db.session.execute(
+        text("SELECT 1 FROM usuarios WHERE id = 2")
+    ).scalar()
+    if not ja_existe:
+        db.session.execute(text(
+            "INSERT INTO usuarios (id, nome, email, senha_hash) "
+            "SELECT 2, nome || ' [TEST-OP2]', 'test_op2@savepoint.local', senha_hash "
+            "FROM usuarios WHERE id = 1"
+        ))
+        db.session.flush()
 
 
 @pytest.fixture
-def setup_pedido_loja(app):
-    cd = AssaiCd(nome='CD', cnpj='12345678000100')
-    loja = AssaiLoja(
-        numero='999', cnpj='98765432000100', nome='Loja Teste',
-        razao_social='Loja Teste LTDA',
+def setup_pedido_loja(db):
+    import uuid
+    uid = uuid.uuid4().hex[:8].upper()
+
+    def _get_or_create(model, defaults=None, **kw):
+        obj = model.query.filter_by(**kw).first()
+        if obj:
+            return obj
+        obj = model(**kw, **(defaults or {}))
+        db.session.add(obj)
+        db.session.flush()
+        return obj
+
+    # Reusa cadastros canonicos quando ja existem (codigo/nome/numero sao
+    # UNIQUE) — evita colisao com seeds reais do Postgres (ex: modelo 'SOL').
+    _get_or_create(AssaiCd, {'cnpj': '12345678000100'}, nome='CD')
+    loja = _get_or_create(
+        AssaiLoja,
+        {'cnpj': '98765432000100', 'nome': 'Loja Teste',
+         'razao_social': 'Loja Teste LTDA'},
+        numero='999',
     )
-    modelo = AssaiModelo(codigo='SOL', nome='Sol')
-    db.session.add_all([cd, loja, modelo])
-    db.session.flush()
-    pedido = AssaiPedidoVenda(numero='TEST001', status=PEDIDO_STATUS_ABERTO)
+    modelo = _get_or_create(AssaiModelo, {'nome': 'Sol'}, codigo='SOL')
+    pedido = AssaiPedidoVenda(numero=f'TEST-{uid}', status=PEDIDO_STATUS_ABERTO)
     db.session.add(pedido)
     db.session.commit()
     return pedido, loja, modelo
@@ -147,7 +179,7 @@ def test_escanear_chassi_em_outro_carregamento_ativo_falha(setup_pedido_loja, ch
 
     car2 = criar_carregamento(pedido.id, loja.id, operador_id=2)
     db.session.flush()
-    with pytest.raises(CarregamentoConflictError, match='outro carregamento'):
+    with pytest.raises(CarregamentoConflictError, match='ja esta no Carregamento'):
         escanear_carregamento_item(car2.id, 'TESTC001', operador_id=2)
 
 
@@ -266,7 +298,7 @@ def test_cancelar_carregamento_motivo_obrigatorio(setup_pedido_loja):
     car = criar_carregamento(pedido.id, loja.id, operador_id=1)
     db.session.commit()
 
-    with pytest.raises(CarregamentoValidationError, match='motivo'):
+    with pytest.raises(CarregamentoValidationError, match='[Mm]otivo'):
         cancelar_carregamento(car.id, motivo='', operador_id=1)
 
 

@@ -120,8 +120,15 @@ class TestQueryOntologyEntities:
 
     def test_une_user_id_e_zero(self, app_ctx, clean_entities):
         """
-        Busca sem filtros retorna entidades de AMBOS user_id=7 e user_id=0.
+        Busca retorna entidades de AMBOS user_id=7 e user_id=0.
         Prova que a query faz `user_id = ANY([user_id, 0])`.
+
+        Usa name_like='D4' (sufixo comum as 2 entidades de teste) para isolar o
+        resultado de forma DETERMINISTICA: sem esse filtro, as ~44 entidades
+        canonicas user_id=0 ja presentes no banco competem por mention_count
+        (ORDER BY mention_count DESC, LIMIT 20) e empurram a entidade de teste
+        para fora do top-N — fragilidade de ambiente, nao da logica testada.
+        O union de user_id continua sendo exercido (uma entidade e 0, outra e 7).
         """
         from app.agente.tools.ontology_query_tool import query_ontology_entities
 
@@ -130,7 +137,7 @@ class TestQueryOntologyEntities:
             _upsert_entity(conn, 7, 'cliente', 'ENTIDADE USER7 D4', None)
             conn.commit()
 
-        results = query_ontology_entities(user_id=7)
+        results = query_ontology_entities(user_id=7, name_like='D4')
         names = [r['entity_name'] for r in results]
         assert 'ATACADAO TESTE D4' in names, "user_id=0 deve ser incluído"
         assert 'ENTIDADE USER7 D4' in names, "user_id=7 deve ser incluído"
