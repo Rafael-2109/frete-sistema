@@ -457,3 +457,16 @@ Integrado ao scheduler existente (`app/scheduler/sincronizacao_incremental_defin
 - `validacao-nf-po` — Debug/operacao da Fase 2
 - `conciliando-odoo-po` — Split/consolidacao de POs (Fase 3)
 - `recebimento-fisico-odoo` — Debug/operacao da Fase 4
+
+---
+
+## Fontes
+
+- `app/recebimento/models.py` — models do modulo (Fases 1/2/4, snapshot e `FornecedorBloqueado`)
+- `app/recebimento/services/` — validacao fiscal, match NF x PO, recebimento fisico
+- `app/recebimento/routes/views.py` — APIs e telas (inclui CRUD de fornecedores desconsiderados)
+- `app/odoo/services/entrada_material_service.py` — sync stock.picking -> MovimentacaoEstoque (entrada/compra)
+- `app/odoo/services/pedido_compras_service.py` — sync purchase.order -> PedidoCompras
+- `app/recebimento/services/recebimento_fisico_odoo_service.py` — MovimentacaoEstoque no recebimento fisico (Fase 4)
+- `app/scheduler/sincronizacao_incremental_definitiva.py` — agendamento da validacao fiscal
+- Schemas de campos (auto-gerados): `.claude/skills/consultando-sql/schemas/tables/`
