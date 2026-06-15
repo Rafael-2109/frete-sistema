@@ -100,13 +100,12 @@ else:
     if ja:
         log('G1-RESULT skip ciclo=%s nf2=%s motivo=ja_existe' % (ciclo, ja.id))
     else:
-        pick = env['stock.picking'].sudo().search(['|', ('invoice_id', '=', nf1.id), ('invoice_ids', 'in', nf1.id)], limit=1)
+        pick = env['stock.picking'].sudo().search(['|', ('invoice_id', '=', nf1.id), ('invoice_ids', 'in', [nf1.id])], limit=1)
         ml = pick.move_line_ids.filtered(lambda m: m.product_id == pa)[:1]
         lote_pa = ml.lot_id
         # === GENEALOGIA (iterativa; espelha _explodir + _producao_total) ===
         acc = {}
         stack = [(lote_pa.id, pa_qty)]
-        first = True
         for _ in range(200):                                   # guard anti-loop (semis rasos)
             if not stack:
                 break
@@ -147,12 +146,15 @@ else:
             if pk:
                 votos[pk.id] = votos.get(pk.id, 0) + 1
         remessa_pick = env['stock.picking'].sudo().browse(max(votos, key=lambda k: votos[k])) if votos else False
-        # 🔴 CANARY: resolver a CHAVE da NF de remessa (RPI) a partir do picking. No piloto o
-        #    s37 usava REMESSA=735679 (account.move) direto; aqui derivar do picking/DFe.
+        # chave da NF de remessa (RPI) p/ R3: `picking.origin` é o nome da PO (ex.: 'C2619830'),
+        # NÃO o nome da NF. A NF de entrada da remessa (ENTIN LF) tem `invoice_origin` == esse
+        # origin + a chave. Validado READ contra PROD (canary G1, picking 322451 → NF 737062 →
+        # chave ...6795 == oráculo). `chave!=False` ignora docs sem chave do mesmo origin.
         chave_remessa = ''
         if remessa_pick and remessa_pick.origin:
             rem_nf = env['account.move'].sudo().search(
-                [('name', '=', remessa_pick.origin), ('company_id', '=', 5)], limit=1)
+                [('invoice_origin', '=', remessa_pick.origin), ('company_id', '=', 5),
+                 ('l10n_br_chave_nf', '!=', False)], limit=1)
             chave_remessa = rem_nf.l10n_br_chave_nf or ''
         # === MONTAGEM (fiel s37 — NF-2 insumos) ===
         nf2 = env['account.move'].sudo().with_context(allowed_company_ids=[5], lang='pt_BR').create({
