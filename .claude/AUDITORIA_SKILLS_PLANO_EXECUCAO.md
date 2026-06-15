@@ -1,7 +1,7 @@
 # Plano de Execução das Sugestões da Auditoria de Skills
 
 > Companion de `AUDITORIA_SKILLS_2026-05-29.md`. Decisões tomadas com o Rafael em 2026-05-30.
-> Status (2026-06-02): **Ondas 0/A/B/C(a) MERGEADAS. Onda D + E1 + F(venda) + F(carregamento) EXECUTADAS em 4 branches separadas, NÃO mergeadas (ver §Onda E/F — RESULTADO). Prioridade Rafael: F > G > mais testes. Falta: F `transferencia-saldo-codigo` + Onda G.**
+> Status (2026-06-15): **Ondas 0/A/B/C(a)/D/E1/F(venda)/F(carregamento) MERGEADAS (git: 473b7c9be D, bb83a3640 E, 3e07e6944 F, 34c9ec8c1 F2; worktrees ja removidos). Falta: F `transferencia-saldo-codigo` + Onda G (renomes). Prioridade Rafael: F > G > mais testes.** (companions DRIFT_MAP/PROJETO_CONSOLIDACAO/PROMPT_PROXIMA_SESSAO arquivados em `.claude/_deprecated/` na limpeza 2026-06-15.)
 > Forense git (wf_192add78) confirmou: os 6 commits da auditoria (6c5cfe037, 7c6ecb0fd, f2c39789f, 894f6fc63, 869fb3052, 88e59dfb1) são TODOS alcançáveis a partir do HEAD atual (d87765cc8); conteúdo presente no working tree (dpg=0, buscando-rotas=0, ROUTING=51, 3 scripts órfãos ABSENT, py_compile OK). Branches/worktrees skills/onda-b e skills/onda-c já removidos (cleanup pós-merge). **C(b) REVERTIDA por decisão do Rafael** (ANTIPADRÕES + CHECKLIST seguem inline em faturando-odoo). **Onda D concluída** — ver §Onda D — RESULTADO. Próximo gate: E (testes, baixo risco).
 
 ## Decisões (Rafael, 2026-05-30)

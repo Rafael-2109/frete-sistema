@@ -43,7 +43,7 @@ atualizado: 2026-06-12
 
 > **Data:** 2026-06-01 · **Autor:** Claude Code (sessão dedicada) · **Status:** SPEC-LOCK (GATE Fase 0 — aguardando revisão do Rafael)
 > **Worktree:** `/home/rafaelnascimento/projetos/frete_sistema_resolvedores` · **Branch:** `skills/onda-d-resolvedores` · **Base:** `origin/main` `34924fef2`
-> Companion de `.claude/AUDITORIA_SKILLS_ONDA_D_DRIFT_MAP.md`, `.claude/AUDITORIA_SKILLS_ONDA_D_PROJETO_CONSOLIDACAO.md`, `.claude/AUDITORIA_SKILLS_PLANO_EXECUCAO.md`.
+> Companion de `.claude/_deprecated/AUDITORIA_SKILLS_ONDA_D_DRIFT_MAP.md`, `.claude/_deprecated/AUDITORIA_SKILLS_ONDA_D_PROJETO_CONSOLIDACAO.md` (arquivados 2026-06-15, Onda D ja mergeada), `.claude/AUDITORIA_SKILLS_PLANO_EXECUCAO.md`.
 
 ---
 
