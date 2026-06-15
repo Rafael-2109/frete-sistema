@@ -21,6 +21,15 @@ from app import db
 
 logger = logging.getLogger(__name__)
 
+# Companies cujas NFs NAO entram no faturamento de VENDAS da NACOM (ETL account.move).
+# LF (5) = LA FAMIGLIA: as NFs de industrializacao LF->FB (servico 5124 + insumos 5902)
+# sao transacoes INTER-COMPANY (partner = a propria FB), nao venda a cliente externo.
+# A NF de insumos (total=0, journal RETIND 1083) gerava FaturamentoProduto +
+# MovimentacaoEstoque espurios re-baixando estoque (medido em PROD 2026-06-15).
+# FB(1), SC(3), CD(4) permanecem — CD e' o maior faturador (~2578 NFs/90d).
+COMPANIES_EXCLUIDAS_ETL_FATURAMENTO = [5]  # LF (LA FAMIGLIA)
+
+
 class FaturamentoService:
     """
     Serviço para integração de faturamento com Odoo
@@ -1393,6 +1402,8 @@ class FaturamentoService:
                     ('move_id.l10n_br_tipo_pedido', '=', 'exportacao'),
                     ('move_id.l10n_br_tipo_pedido', '=', 'venda-industrializacao')
                 ])
+                # Excluir NFs inter-company da LF (industrializacao LF->FB nao e' venda) — 2026-06-15
+                domain.append(('move_id.company_id', 'not in', COMPANIES_EXCLUIDAS_ETL_FATURAMENTO))
 
                 horas_status = minutos_status / 60
                 logger.info(f"   📌 Buscando NFs criadas desde: {data_corte_str} UTC (últimas {horas_status:.1f} horas)")
@@ -1456,9 +1467,12 @@ class FaturamentoService:
                     ('move_id.l10n_br_tipo_pedido', '=', 'exportacao'),
                     ('move_id.l10n_br_tipo_pedido', '=', 'venda-industrializacao')
                 ])
-            
+
+            # Excluir NFs inter-company da LF (cobre ambos os ramos do if/else) — 2026-06-15
+            domain.append(('move_id.company_id', 'not in', COMPANIES_EXCLUIDAS_ETL_FATURAMENTO))
+
             campos_basicos = [
-                'id', 'move_id', 'partner_id', 'product_id', 
+                'id', 'move_id', 'partner_id', 'product_id',
                 'quantity', 'price_unit', 'price_total', 'date', 'l10n_br_total_nfe'
             ]
             
@@ -1796,6 +1810,7 @@ class FaturamentoService:
                 [
                     ('state', '=', 'cancel'),
                     ('l10n_br_numero_nota_fiscal', '!=', False),
+                    ('company_id', 'not in', COMPANIES_EXCLUIDAS_ETL_FATURAMENTO),
                     '|',
                     '|',
                     '|',
