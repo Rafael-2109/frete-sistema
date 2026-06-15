@@ -5,6 +5,43 @@ from urllib.parse import urlparse
 _CONTROL_CHARS = ('\t', '\n', '\r', '\x00', '\x0b', '\x0c')
 
 
+# Rotulos legiveis para alertas de sistema (sender_system_source).
+# Usado tanto na lista de threads quanto no remetente das mensagens.
+SYSTEM_SOURCE_LABELS = {
+    'recebimento': 'Recebimento',
+    'dfe': 'DFe bloqueado',
+    'cte': 'CTe divergente',
+    'sistema': 'Sistema',
+}
+
+# Rotulos legiveis para entity_type de threads de entidade.
+ENTITY_TYPE_LABELS = {
+    'pedido': 'Pedido',
+    'nf': 'NF',
+    'embarque': 'Embarque',
+    'recebimento': 'Recebimento',
+    'separacao': 'Separacao',
+    'frete': 'Frete',
+    'cotacao': 'Cotacao',
+}
+
+
+def system_source_label(source: str) -> str:
+    """Converte sender_system_source tecnico em rotulo legivel.
+
+    Fallback: title-case com underscores virando espaco ('meu_source' -> 'Meu Source').
+    """
+    if not source:
+        return 'Sistema'
+    return SYSTEM_SOURCE_LABELS.get(source, source.replace('_', ' ').title())
+
+
+def entity_label(entity_type: str, entity_id: str) -> str:
+    """Monta rotulo legivel para thread de entidade ('pedido' + 'VCD123' -> 'Pedido VCD123')."""
+    base = ENTITY_TYPE_LABELS.get(entity_type, (entity_type or 'Entidade').title())
+    return f'{base} {entity_id}' if entity_id else base
+
+
 def url_safe(url: str) -> bool:
     """Valida deep_link: aceita http, https e paths absolutos do proprio site.
 

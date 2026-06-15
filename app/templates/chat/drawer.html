@@ -19,6 +19,11 @@
               type="button" aria-label="Fechar chat">&times;</button>
     </div>
   </div>
+  <div class="chat-drawer__search">
+    <i class="fas fa-magnifying-glass chat-drawer__search-icon"></i>
+    <input type="search" id="chat-search-input" autocomplete="off"
+           placeholder="Buscar nas conversas..." aria-label="Buscar mensagens">
+  </div>
   <div class="chat-drawer__tabs" role="tablist">
     <button class="chat-drawer__tab active" type="button" data-tipo="" role="tab">Todos</button>
     <button class="chat-drawer__tab" type="button" data-tipo="dm" role="tab">DMs</button>
@@ -27,7 +32,7 @@
     <button class="chat-drawer__tab" type="button" data-tipo="system_dm" role="tab">Sistema</button>
   </div>
   <div class="chat-drawer__list" id="chat-thread-list">
-    <div class="text-muted p-3">Carregando...</div>
+    <div class="chat-empty"><div class="chat-empty__hint">Carregando...</div></div>
   </div>
   <div class="chat-drawer__panel" id="chat-panel-container" style="display:none"></div>
 </div>
