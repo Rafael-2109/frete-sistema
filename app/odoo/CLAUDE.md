@@ -33,13 +33,13 @@ atualizado: 2026-06-08
 
 ## Contexto
 
-70 arquivos, ~42.5K LOC. API-only (sem models SQLAlchemy proprios, salvo 2 excecoes de inventario/auditoria) — le/escreve models de 8+ outros modulos; e o modulo mais consumido do sistema (37+ arquivos externos importam). O subpacote `estoque/` (orquestrador WRITE + READ ao vivo) tem guia proprio em `app/odoo/estoque/CLAUDE.md`.
+77 arquivos, ~44.8K LOC. API-only (sem models SQLAlchemy proprios, salvo 2 excecoes de inventario/auditoria) — le/escreve models de 8+ outros modulos; e o modulo mais consumido do sistema (37+ arquivos externos importam). O subpacote `estoque/` (orquestrador WRITE + READ ao vivo) tem guia proprio em `app/odoo/estoque/CLAUDE.md`.
 
-**70 arquivos** | **~42.5K LOC** | **Atualizado**: 08/06/2026
+**77 arquivos** | **~44.8K LOC** | **Atualizado**: 15/06/2026
 
 Integracao bidirecional com Odoo ERP via XML-RPC. API-only: sem models SQLAlchemy proprios — le/escreve models de outros modulos (8+). Modulo mais consumido do sistema (37+ arquivos externos importam).
 
-> Subpacote `estoque/` (orquestrador WRITE + READ ao vivo): 19 arquivos / ~19.9K LOC. Guia completo: `app/odoo/estoque/CLAUDE.md`.
+> Subpacote `estoque/` (orquestrador WRITE + READ ao vivo): 26 arquivos / ~22.1K LOC. Guia completo: `app/odoo/estoque/CLAUDE.md`.
 
 ---
 
@@ -103,7 +103,7 @@ app/odoo/
   │   ├── mapeamento_campos_odoo_carteira.md
   │   └── triggers_sale_order.md
   └── estoque/                 # Subpacote ORQUESTRADOR (skills WRITE + READ ao vivo, 2026-05-22+)
-      │                        # 19 arquivos / ~19.9K LOC. Ver app/odoo/estoque/CLAUDE.md
+      │                        # 26 arquivos / ~22.1K LOC. Ver app/odoo/estoque/CLAUDE.md
       ├── __init__.py / _cli_utils.py / _utils.py
       ├── scripts/             # Atomos por skill (Skills 1, 2, 2.4, 5, 4, 6, 7, 8, 9 + PRE-FLIGHT)
       │   ├── _commit_helpers.py   # Helpers de commit/savepoint compartilhados
