@@ -8,6 +8,8 @@ atualizado: 2026-06-13
 -->
 # PROMPT — Próxima sessão (Industrialização FB↔LF)
 
+> **✅ 2026-06-15 (tarde) — WIRE do R2 (FOCO 1) CONSTRUÍDO dry-run-first.** Worktree `feat/wire-r2-industrializacao` (NÃO commitado — aguarda go). Orchestrator C3 `app/odoo/estoque/orchestrators/entrada_retorno_industrializacao.py` compõe o FLUXO L3 1.2.4 end-to-end (8 modos CLI, cada escrita gated `--confirmar`) + **3 átomos R3 NOVOS na Skill 7** (`resolver_chave_remessa`, `marcar_vinculo_r3`, `postar_invoice`). 25 pytest novos · suíte `tests/odoo` 868 verde · **validado DRY-RUN contra PROD** (plan resolve chave RPI/DFe 44523/total rateio 90,89; escriturar-nf1-po idempotente→PO 43464; medir→ATIVA=0). Detalhe: `.remember/remember.md` + ROADMAP_SKILLS + fluxo 1.2.4. **Pendente**: commit + execução real (go) + D reconciliar 26489 + FOCO 2 (SA saída) + FOCO 3 (constants L0).
+
 > **Atualizado 2026-06-15 (sessão AUTOMAÇÃO) — FUNDAÇÃO DO R2 PRONTA + 7 commits anteriores PUSHADOS (ETL deployado).** Item 1 (descoberta automática da remessa) CONCLUÍDO como módulo de produção testado + validado PROD; FLUXO L3 `1.2.4` do R2 desenhado; **TODOS os átomos do R2 capinados** (`montar_invoice_entrada_direta` Skill 7 genérico, `revalorando-custo-odoo` skill nova, picking C9 confirmado). 3 commits NA MAIN (não pushados — dry-run-first, nada os chama ainda): `b697ce93b` `748cd5bd3` `35c1376b7`. **Próximo: (1) WIRE do R2 — service que compõe o FLUXO 1.2.4 end-to-end; (2) SA DURÁVEL da saída (G1+G2) = objetivo final.** Estado anterior (provado): entrada FB CONCLUÍDA no piloto (gate contábil fechado `s67`), LF concluída (2 NFs SEFAZ via SA `s48`–`s59`).
 
 ## 🔑 GATILHO DE RETOMADA (colar para retomar)

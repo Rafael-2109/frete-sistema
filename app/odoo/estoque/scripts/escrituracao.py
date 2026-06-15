@@ -2400,3 +2400,194 @@ class EscrituracaoLfService:
                    invoice_id=int(mid) if isinstance(mid, (int, float)) else None,
                    n_linhas=len(inv_lines), total=total, r3=r3)
         return out
+
+    # ── R3 (vínculo refNFe) — átomos-gap do WIRE do R2 (FLUXO L3 1.2.4) ──────────
+
+    def resolver_chave_remessa(
+        self,
+        *,
+        nf_saida_id: int,
+        company_id: int,
+    ) -> Dict[str, Any]:
+        """READ — resolve a(s) chave(s) refNFe da remessa a partir das `referencia_ids`
+        da NF de SAÍDA da LF (NF-1 serviço), para o R3 da entrada FB (FLUXO L3 1.2.4).
+
+        Caminho PROVADO no Odoo vivo (`s70`): `account.move(nf_saida).referencia_ids`
+        → `l10n_br_ciel_it_account.account.move.referencia.l10n_br_chave_nf`. A NF-1 de
+        saída tem 1 referencia = a remessa RPI (a SA da saída gravou o R3, `s59`); a NF-2
+        de saída tem 2 (remessa + cross-NF-1) — retorna TODAS, `chave` = a 1ª. Caminho
+        superior ao via picking (que só expõe número da NF-e, não a chave). READ-only.
+
+        Args:
+            nf_saida_id: account.move da NF-1 de serviço de SAÍDA da LF (gatilho do ciclo).
+            company_id: empresa das referencias (LF=5 — onde as NFs de saída vivem).
+
+        Returns:
+            status: 'OK' | 'VAZIO' | 'FALHA'
+            chave: str|None (1ª refNFe) · chaves: List[str] · n: int · tempo_ms · erro
+        """
+        out: Dict[str, Any] = {'status': 'FALHA', 'chave': None, 'chaves': [], 'n': 0, 'erro': None}
+        t0 = time.time()
+        if not isinstance(nf_saida_id, int) or nf_saida_id <= 0:
+            out['erro'] = 'nf_saida_id_invalido'
+            return out
+        if not isinstance(company_id, int) or company_id <= 0:
+            out['erro'] = 'company_id_invalido'
+            return out
+        try:
+            mv = self.odoo.read('account.move', [nf_saida_id], ['referencia_ids'])
+            ref_ids = (mv[0].get('referencia_ids') or []) if mv else []
+            if not ref_ids:
+                out.update(status='VAZIO', tempo_ms=int((time.time() - t0) * 1000))
+                return out
+            refs = self.odoo.read(
+                'l10n_br_ciel_it_account.account.move.referencia',
+                ref_ids, ['l10n_br_chave_nf'])
+            chaves = [r.get('l10n_br_chave_nf') for r in (refs or [])
+                      if r.get('l10n_br_chave_nf')]
+            out.update(status='OK' if chaves else 'VAZIO',
+                       chave=chaves[0] if chaves else None,
+                       chaves=chaves, n=len(chaves),
+                       tempo_ms=int((time.time() - t0) * 1000))
+        except Exception as e:
+            out['erro'] = f'read_falhou: {str(e)[:200]}'
+        return out
+
+    def marcar_vinculo_r3(
+        self,
+        *,
+        invoice_id: int,
+        company_id: int,
+        invoice_origin: Optional[str] = None,
+        refnfe_chave: Optional[str] = None,
+        allowed_company_ids: Optional[List[int]] = None,
+        dry_run: bool = True,
+    ) -> Dict[str, Any]:
+        """WRITE (dry-run-first) — grava o R3 (`invoice_origin` + `referencia_ids` refNFe)
+        numa NF JÁ criada. Usado na NF-1 de ENTRADA (caminho A): o `criar_invoice_from_po`
+        não preenche origin/refNFe (no piloto, `s63:199`/`s64:100` faziam write CRU — agora
+        átomo). Espelha o R3 do `montar_invoice_entrada_direta` (que cobre só a NF-2 montada
+        direto). O modelo `referencia` exige `company_id` além de `l10n_br_chave_nf` (s67).
+
+        Args:
+            invoice_id: account.move a marcar (ex.: NF-1 de entrada FB).
+            company_id: empresa do move (FB=1) — também vai na referencia.
+            invoice_origin: R3 — origin comum com a NF-2 (ex.: 'RET-IND-<ciclo>').
+            refnfe_chave: R3 — chave da remessa (de `resolver_chave_remessa`).
+            allowed_company_ids: contexto multi-company (default [company_id]).
+            dry_run: True (default) NÃO escreve — retorna o `plano` (write_vals).
+
+        Returns:
+            status: 'DRY_RUN_OK' | 'OK' | 'FALHA'
+            + plano (dry-run) | origin_set: bool, r3: bool | erro
+        """
+        out: Dict[str, Any] = {'status': 'FALHA', 'invoice_id': invoice_id,
+                               'origin_set': False, 'r3': False, 'erro': None}
+        # pré-cond LEVES (sem raise — dry-run sempre planeja; AP4)
+        if not isinstance(invoice_id, int) or invoice_id <= 0:
+            out['erro'] = 'invoice_id_invalido'
+            return out
+        if not isinstance(company_id, int) or company_id <= 0:
+            out['erro'] = 'company_id_invalido'
+            return out
+        if not invoice_origin and not refnfe_chave:
+            out['erro'] = 'nada_a_marcar (sem invoice_origin nem refnfe_chave)'
+            return out
+
+        write_vals: Dict[str, Any] = {}
+        if invoice_origin:
+            write_vals['invoice_origin'] = invoice_origin
+        if refnfe_chave:
+            write_vals['referencia_ids'] = [(0, 0, {
+                'l10n_br_chave_nf': refnfe_chave,
+                'company_id': company_id,   # gotcha s67: referencia exige company_id
+            })]
+
+        if dry_run:
+            out.update(status='DRY_RUN_OK', plano=write_vals)
+            return out
+
+        ctx = {'allowed_company_ids': allowed_company_ids or [company_id],
+               'company_id': company_id, 'lang': 'pt_BR'}
+        try:
+            self.odoo.execute_kw('account.move', 'write',
+                                 [[invoice_id], write_vals], {'context': ctx})
+        except Exception as e:
+            out['erro'] = f'write_falhou: {str(e)[:200]}'
+            return out
+        out.update(status='OK',
+                   origin_set=bool(invoice_origin),
+                   r3=bool(refnfe_chave))
+        return out
+
+    def postar_invoice(
+        self,
+        *,
+        invoice_id: int,
+        company_id: int,
+        allowed_company_ids: Optional[List[int]] = None,
+        dry_run: bool = True,
+    ) -> Dict[str, Any]:
+        """WRITE (dry-run-first) — `action_post` de uma NF de ENTRADA (escrituração
+        contábil, NÃO SEFAZ). No piloto, `s67` fazia XML-RPC cru (`--postar-nf1`/
+        `--postar-nf2`); vira átomo p/ o orchestrator C3 só COMPOR (constituição §3.1).
+
+        É o `action_post` que produz o lançamento contábil: na NF-2 (insumos) baixa a
+        compensação `no_payment` do journal (ATIVA); na NF-1 (serviço) cruza o SVL do
+        picking C9. Idempotente por `state` (já 'posted' → não re-posta). Reversível
+        (journal `restrict_mode_hash_table=False` → `button_draft`). NÃO transmite SEFAZ.
+
+        Args:
+            invoice_id: account.move draft a postar.
+            company_id: empresa do move (FB=1 na entrada).
+            allowed_company_ids: contexto multi-company (default [company_id]).
+            dry_run: True (default) NÃO posta — retorna o plano + state atual.
+
+        Returns:
+            status: 'DRY_RUN_OK' | 'POSTADO' | 'IDEMPOTENT_POSTED' | 'FALHA'
+            + state_atual (dry-run) | state_final (real) | erro
+        """
+        out: Dict[str, Any] = {'status': 'FALHA', 'invoice_id': invoice_id, 'erro': None}
+        t0 = time.time()
+        if not isinstance(invoice_id, int) or invoice_id <= 0:
+            out['erro'] = 'invoice_id_invalido'
+            return out
+        if not isinstance(company_id, int) or company_id <= 0:
+            out['erro'] = 'company_id_invalido'
+            return out
+
+        ctx = {'allowed_company_ids': allowed_company_ids or [company_id],
+               'company_id': company_id, 'lang': 'pt_BR'}
+        try:
+            mv = self.odoo.read('account.move', [invoice_id], ['state'])
+        except Exception as e:
+            out['erro'] = f'read_state_falhou: {str(e)[:200]}'
+            return out
+        state_atual = (mv[0].get('state') if mv else None) or 'desconhecido'
+
+        if state_atual == 'posted':
+            out.update(status='IDEMPOTENT_POSTED', state_final='posted',
+                       tempo_ms=int((time.time() - t0) * 1000))
+            return out
+
+        if dry_run:
+            out.update(status='DRY_RUN_OK', state_atual=state_atual,
+                       plano={'action': 'account.move.action_post', 'invoice_ids': [invoice_id]})
+            return out
+
+        try:
+            self.odoo.execute_kw('account.move', 'action_post', [[invoice_id]], {'context': ctx})
+        except Exception as e:
+            out['erro'] = f'action_post_falhou: {str(e)[:200]}'
+            return out
+        try:
+            mv2 = self.odoo.read('account.move', [invoice_id], ['state'])
+            state_final = (mv2[0].get('state') if mv2 else None) or 'desconhecido'
+        except Exception:
+            state_final = 'desconhecido'
+        out.update(status='POSTADO' if state_final == 'posted' else 'FALHA',
+                   state_final=state_final,
+                   tempo_ms=int((time.time() - t0) * 1000))
+        if state_final != 'posted':
+            out['erro'] = f'pos_post_state={state_final} (esperado posted)'
+        return out

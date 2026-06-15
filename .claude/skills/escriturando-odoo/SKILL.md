@@ -66,6 +66,19 @@ Todos os átomos seguem pattern: **kwargs nomeados, `dry_run=True` default, reto
 
 **Cobertura pytest**: 22 testes mockados em `tests/odoo/services/test_escrituracao_lf_service_v19.py` (3 por átomo + 1 AP4 pre-cond invalid).
 
+## Átomos do WIRE R2 (NOVOS 2026-06-15 — `escrituracao.py`, para o FLUXO L3 1.2.4)
+
+Mesmo pattern (kwargs nomeados, `dry_run` default onde escreve, retorno `dict` com `status`/`erro`).
+
+| Átomo | Inputs essenciais | Outputs | XML-RPC primário |
+|-------|-------------------|---------|------------------|
+| `resolver_chave_remessa(nf_saida_id, company_id)` ⚙️ READ | NF-1 de SAÍDA da LF | `{status, chave, chaves, n}` (`OK`/`VAZIO`/`FALHA`) | lê `account.move.referencia_ids` → `l10n_br_ciel_it_account.account.move.referencia.l10n_br_chave_nf` (R3 já gravado pela SA da saída). Caminho provado `s70` (superior ao via picking) |
+| `marcar_vinculo_r3(invoice_id, company_id, invoice_origin, refnfe_chave, dry_run)` | NF JÁ criada (NF-1 de entrada caminho A) | `{status, origin_set, r3}` (`DRY_RUN_OK`/`OK`/`FALHA`) | `write('account.move', [id], {invoice_origin, referencia_ids:[(0,0,{l10n_br_chave_nf, company_id})]})` (company_id obrigatório — gotcha s67). Substitui write cru `s63:199`/`s64:100` |
+| `postar_invoice(invoice_id, company_id, dry_run)` | NF de entrada draft | `{status, state_final}` (`DRY_RUN_OK`/`POSTADO`/`IDEMPOTENT_POSTED`/`FALHA`) | lê `state` (idempotência) + `account.move.action_post` (escrituração contábil, NÃO SEFAZ). Substitui XML-RPC cru `s67 --postar-nf1/--postar-nf2` |
+
+**Cobertura pytest**: 13 testes mockados (`test_escrituracao_r3_atomos.py` 9 + `test_escrituracao_postar_invoice.py` 4).
+**Composto pelo orchestrator C3** `app/odoo/estoque/orchestrators/entrada_retorno_industrializacao.py` (WIRE do R2 — FLUXO L3 1.2.4).
+
 ## Composição via FLUXO L3 (orchestrator/operador)
 
 A inteligência de **decisão caminho A vs B** vive nos fluxos L3, NÃO nos átomos:
