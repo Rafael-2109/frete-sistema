@@ -24,15 +24,17 @@
                     <div class="card-header"><strong>Dados do Fechamento</strong></div>
                     <div class="card-body">
                         <div class="row g-3">
-                            <div class="col-md-5">
-                                <label for="vendedor_nome" class="form-label">Vendedor *</label>
-                                <input type="text" class="form-control" id="vendedor_nome" name="vendedor_nome"
-                                       required value="{{ fechamento.vendedor_nome }}">
-                            </div>
-                            <div class="col-md-4">
-                                <label for="vendedor_email" class="form-label">Email</label>
-                                <input type="email" class="form-control" id="vendedor_email" name="vendedor_email"
-                                       value="{{ fechamento.vendedor_email or '' }}">
+                            <div class="col-md-9">
+                                <label for="vendedor_usuario_id" class="form-label">Vendedor *</label>
+                                <select class="form-select" id="vendedor_usuario_id" name="vendedor_usuario_id" required>
+                                    <option value="">Selecione...</option>
+                                    {% for v in vendedores %}
+                                    <option value="{{ v.id }}" {{ 'selected' if v.id == fechamento.vendedor_usuario_id else '' }}>{{ v.nome }} ({{ v.email }})</option>
+                                    {% endfor %}
+                                </select>
+                                {% if not fechamento.vendedor_usuario_id %}
+                                <div class="form-text text-warning">Atual (sem vinculo): {{ fechamento.vendedor_nome }}{{ ' — ' ~ fechamento.vendedor_email if fechamento.vendedor_email else '' }}. Selecione o usuario para vincular.</div>
+                                {% endif %}
                             </div>
                             <div class="col-md-3">
                                 <label for="percentual" class="form-label">Percentual (%) *</label>

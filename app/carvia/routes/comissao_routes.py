@@ -242,15 +242,22 @@ def register_comissao_routes(bp):
             flash(f'Nao e possivel editar fechamento {fechamento.status}.', 'warning')
             return redirect(url_for('carvia.detalhe_comissao', comissao_id=comissao_id))
 
+        # Vendedores elegiveis (beneficiarios de comissao = usuarios com a flag)
+        from app.auth.models import Usuario
+        vendedores = Usuario.query.filter_by(
+            acesso_comissao_carvia=True, status='ativo',
+        ).order_by(Usuario.nome).all()
+
         if request.method == 'POST':
             try:
+                # Vendedor: vincula via usuario (atualiza FK + snapshot + ajustes orfaos)
+                vendedor_usuario_id = request.form.get('vendedor_usuario_id', '').strip()
+                if vendedor_usuario_id and int(vendedor_usuario_id) != (fechamento.vendedor_usuario_id or 0):
+                    ComissaoService.vincular_vendedor(
+                        comissao_id, int(vendedor_usuario_id), current_user.email,
+                    )
+
                 dados = {}
-
-                vendedor_nome = request.form.get('vendedor_nome', '').strip()
-                if vendedor_nome:
-                    dados['vendedor_nome'] = vendedor_nome
-
-                dados['vendedor_email'] = request.form.get('vendedor_email', '').strip()
                 dados['observacoes'] = request.form.get('observacoes', '').strip()
 
                 percentual_str = request.form.get('percentual', '').strip()
@@ -279,6 +286,7 @@ def register_comissao_routes(bp):
             'carvia/comissoes/editar.html',
             fechamento=fechamento,
             pct_display=pct_display,
+            vendedores=vendedores,
         )
 
     # ==================== STATUS ====================

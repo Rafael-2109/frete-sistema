@@ -302,3 +302,42 @@ def test_hook_cancelamento_gera_debito_via_sincronizar(db):
     ComissaoService.sincronizar_ajustes_cte(op.id, 0, 'CANCELAMENTO_CTE', 'test')
     debitos = CarviaComissaoAjuste.query.filter_by(operacao_id=op.id, motivo='CANCELAMENTO_CTE').all()
     assert len(debitos) == 1 and debitos[0].delta_comissao == Decimal('-50.00')
+
+
+# --------------------------------------------------------------------------
+# vincular_vendedor (usado por editar_comissao + resolucao manual)
+# --------------------------------------------------------------------------
+
+def test_vincular_vendedor_atualiza_snapshot_e_ajustes_orfaos(db):
+    from app.carvia.services.financeiro.comissao_service import ComissaoService
+    from app.carvia.models.comissao import (
+        CarviaComissaoFechamento, CarviaComissaoAjuste,
+    )
+    u = _criar_usuario(db, nome='Jessica Tereza')
+    op = _criar_op(db, cte_valor='1000.00')
+    # fechamento SEM vinculo + 1 ajuste orfao (vendedor_usuario_id NULL)
+    f = CarviaComissaoFechamento(
+        numero_fechamento=f'COM-{_sfx()}',
+        vendedor_usuario_id=None, vendedor_nome='Antigo', vendedor_email=None,
+        data_inicio=date(2026, 4, 1), data_fim=date(2026, 4, 30),
+        percentual=Decimal('0.05'), status='PENDENTE', criado_por='test',
+    )
+    db.session.add(f)
+    db.session.flush()
+    aj = CarviaComissaoAjuste(
+        operacao_id=op.id, fechamento_origem_id=f.id, vendedor_usuario_id=None,
+        vendedor_nome='Antigo', motivo='ALTERACAO_VALOR', cte_numero=op.cte_numero,
+        valor_cte_anterior=Decimal('1000.00'), valor_cte_novo=Decimal('1100.00'),
+        percentual_snapshot=Decimal('0.05'), delta_comissao=Decimal('5.00'),
+        status='PENDENTE', criado_por='test',
+    )
+    db.session.add(aj)
+    db.session.flush()
+
+    ComissaoService.vincular_vendedor(f.id, u.id, 'admin@ex.com')
+
+    assert f.vendedor_usuario_id == u.id
+    assert f.vendedor_nome == 'Jessica Tereza'   # snapshot ressincronizado
+    assert f.vendedor_email == u.email
+    db.session.refresh(aj)
+    assert aj.vendedor_usuario_id == u.id         # ajuste orfao herdou o vinculo
