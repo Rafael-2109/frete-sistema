@@ -19,9 +19,21 @@ def _nova_loja(cnpj, apelido, nome):
     )
 
 
+def _cnpj_unico():
+    """CNPJ unico de 14 digitos por chamada.
+
+    Os services HORA usam db.session.commit() (escapam o savepoint do fixture
+    `db`), entao a loja persiste alem do teste. Com CNPJ fixo, o teste seguinte
+    colidia em hora_loja_cnpj_key (UniqueViolation) — causa raiz dos ERROR
+    ambientais reincidentes. CNPJ unico por chamada elimina a colisao.
+    """
+    import uuid
+    return ''.join(c for c in uuid.uuid4().hex if c.isdigit()).ljust(14, '0')[:14]
+
+
 @pytest.fixture
 def loja_origem(db):
-    loja = _nova_loja('11111111000101', 'LojaOrigemTest', 'Loja Origem')
+    loja = _nova_loja(_cnpj_unico(), 'LojaOrigemTest', 'Loja Origem')
     _db.session.add(loja)
     _db.session.flush()
     return loja
@@ -29,7 +41,7 @@ def loja_origem(db):
 
 @pytest.fixture
 def loja_destino(db):
-    loja = _nova_loja('22222222000102', 'LojaDestinoTest', 'Loja Destino')
+    loja = _nova_loja(_cnpj_unico(), 'LojaDestinoTest', 'Loja Destino')
     _db.session.add(loja)
     _db.session.flush()
     return loja
@@ -37,7 +49,10 @@ def loja_destino(db):
 
 @pytest.fixture
 def modelo_moto(db):
-    m = HoraModelo(nome_modelo='TESTE-MODEL', ativo=True)
+    # nome_modelo e unique (hora_modelo_nome_modelo_key); nome fixo colidia
+    # entre modulos sem cleanup (mesmo padrao do CNPJ da loja). uuid evita.
+    import uuid
+    m = HoraModelo(nome_modelo=f'TESTE-MODEL-{uuid.uuid4().hex[:8].upper()}', ativo=True)
     _db.session.add(m)
     _db.session.flush()
     return m
@@ -67,9 +82,11 @@ def loja_factory(db):
 
     def make(**kw):
         uid = uuid.uuid4().hex[:8]
-        cnpj_digits = ''.join(c for c in uid if c.isdigit()).ljust(14, '0')[:14]
+        # _cnpj_unico() usa o hex COMPLETO (16+ digitos) — o antigo uid[:8]
+        # rendia ~4 digitos significativos + zeros, colidindo em
+        # hora_loja_cnpj_key com residuo acumulado (services commitam).
         defaults = {
-            'cnpj': cnpj_digits,
+            'cnpj': _cnpj_unico(),
             'apelido': f'Loja{uid}',
             'nome': f'Loja {uid}',
         }

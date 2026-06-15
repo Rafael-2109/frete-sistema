@@ -15,6 +15,14 @@ from app.motos_assai.models import (
 FIXTURE_PDF = os.path.join(os.path.dirname(__file__), 'fixtures', 'recibo_motochefe_exemplo.pdf')
 FIXTURE_XLSX = os.path.join(os.path.dirname(__file__), 'fixtures', 'recibo_motochefe_exemplo.xlsx')
 
+# Fixtures binarias nao versionadas (.gitignore exclui *.pdf/*.xlsx). Os testes
+# que abrem o arquivo real ficam SKIP (em vez de ERROR ambiental) quando ausente.
+# Testes com mock/bytes inline neste modulo continuam rodando normalmente.
+_skip_sem_fixture = pytest.mark.skipif(
+    not (os.path.exists(FIXTURE_PDF) and os.path.exists(FIXTURE_XLSX)),
+    reason='Fixtures binarias de recibo ausentes (nao versionadas)',
+)
+
 
 def _criar_compra_minima(admin_user):
     """Cria um AssaiPedidoVenda e consolida numa compra para usar nos testes."""
@@ -26,6 +34,7 @@ def _criar_compra_minima(admin_user):
     return criar_consolidado([p.id], None, admin_user.id)
 
 
+@_skip_sem_fixture
 def test_importar_pdf_recibo(app, admin_user):
     """Importa PDF canônico e persiste > 50 chassis com rollback no final."""
     with app.app_context():
@@ -61,6 +70,7 @@ def test_importar_pdf_recibo(app, admin_user):
         db.session.rollback()
 
 
+@_skip_sem_fixture
 def test_importar_xlsx_recibo(app, admin_user):
     """Importa XLSX canônico e persiste chassis."""
     with app.app_context():
@@ -116,6 +126,7 @@ def test_compra_inexistente_retorna_404(app, admin_user):
         db.session.rollback()
 
 
+@_skip_sem_fixture
 def test_s3_upload_ocorre_apos_parsing(app, admin_user):
     """Garante que S3 upload (save_file) é chamado SOMENTE após parsing OK — lição C2."""
     with app.app_context():

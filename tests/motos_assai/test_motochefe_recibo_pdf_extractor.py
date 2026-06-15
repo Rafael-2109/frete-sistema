@@ -7,6 +7,13 @@ from app.motos_assai.services.parsers.motochefe_recibo_pdf_extractor import (
 
 FIXTURE = os.path.join(os.path.dirname(__file__), 'fixtures', 'recibo_motochefe_exemplo.pdf')
 
+# Fixture binaria nao versionada (.gitignore exclui *.pdf). Sem o arquivo, os
+# testes do extractor sao SKIP em vez de ERROR/FAILED ambiental.
+pytestmark = pytest.mark.skipif(
+    not os.path.exists(FIXTURE),
+    reason='Fixture binaria recibo_motochefe_exemplo.pdf ausente (nao versionada)',
+)
+
 
 def test_fixture_exists():
     assert os.path.exists(FIXTURE)

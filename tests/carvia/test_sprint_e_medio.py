@@ -106,17 +106,11 @@ class TestE5AdminCorrigirFT:
 
 
 # ---------------------------------------------------------------------------
-# E8 — fila DIVERGENTE
+# E8 — fila DIVERGENTE: teste REMOVIDO (orfao). O metodo
+# ConferenciaService.listar_fretes_divergentes foi removido no refactor
+# 10f6aaab5 ("remove D3/E6/E7 (assuncoes)"); conferencia_service.py:20 documenta
+# a remocao. O teste falhava com AttributeError por chamar metodo inexistente.
 # ---------------------------------------------------------------------------
-
-class TestE8FilaDivergente:
-    def test_listar_retorna_lista(self, app):
-        from app.carvia.services.documentos.conferencia_service import (
-            ConferenciaService,
-        )
-        with app.app_context():
-            resultado = ConferenciaService().listar_fretes_divergentes()
-            assert isinstance(resultado, list)
 
 
 # ---------------------------------------------------------------------------

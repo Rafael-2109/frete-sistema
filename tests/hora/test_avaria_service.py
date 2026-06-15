@@ -29,12 +29,17 @@ def test_registrar_avaria_cria_header_foto_e_evento(db, chassi_em_estoque, loja_
     assert ev.origem_id == avaria.id
 
 
-def test_registrar_sem_foto_falha(db, chassi_em_estoque, loja_origem):
-    with pytest.raises(ValueError, match=r"pelo menos 1 foto"):
-        avaria_service.registrar_avaria(
-            numero_chassi=chassi_em_estoque, descricao='dano',
-            fotos=[], usuario='x', loja_id=loja_origem.id,
-        )
+def test_registrar_sem_foto_ok(db, chassi_em_estoque, loja_origem):
+    # Desde 2026-05-07 a foto deixou de ser obrigatoria (avaria_service.py:8,49):
+    # a avaria pode ser registrada sem foto; o operador anexa depois pela tela
+    # de detalhe. O teste antigo (esperava ValueError "pelo menos 1 foto") ficou
+    # obsoleto quando a regra mudou.
+    avaria = avaria_service.registrar_avaria(
+        numero_chassi=chassi_em_estoque, descricao='dano sem foto no registro',
+        fotos=[], usuario='x', loja_id=loja_origem.id,
+    )
+    assert avaria.id is not None
+    assert len(avaria.fotos) == 0
 
 
 def test_descricao_curta_falha(db, chassi_em_estoque, loja_origem):

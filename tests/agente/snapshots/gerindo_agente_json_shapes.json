@@ -60,19 +60,7 @@
     ],
     "friction_score": "float",
     "frustration_signals": [
-      {
-        "created_at": "str",
-        "session_id": "str",
-        "signal_count": "int",
-        "signals": [
-          {
-            "marker": "str",
-            "message": "str",
-            "type": "str"
-          }
-        ],
-        "title": "str"
-      }
+      "<empty>"
     ],
     "generated_at": "str",
     "no_tool_sessions": [
@@ -148,12 +136,13 @@
       ]
     },
     "deltas": {
-      "avg_cost_per_session": "null",
+      "adoption_rate": "null",
+      "avg_cost_per_session": "float",
       "friction_score": "null",
-      "resolution_rate": "null",
-      "total_cost_usd": "null",
-      "total_sessions": "null",
-      "unique_users": "null"
+      "resolution_rate": "float",
+      "total_cost_usd": "float",
+      "total_sessions": "float",
+      "unique_users": "float"
     },
     "friction": {
       "abandoned_sessions": [
@@ -168,19 +157,7 @@
       ],
       "friction_score": "float",
       "frustration_signals": [
-        {
-          "created_at": "str",
-          "session_id": "str",
-          "signal_count": "int",
-          "signals": [
-            {
-              "marker": "str",
-              "message": "str",
-              "type": "str"
-            }
-          ],
-          "title": "str"
-        }
+        "<empty>"
       ],
       "generated_at": "str",
       "no_tool_sessions": [
@@ -201,6 +178,17 @@
       "total_sessions_analyzed": "int"
     },
     "generated_at": "str",
+    "health_breakdown": {
+      "componentes": [
+        {
+          "contribuicao": "float",
+          "nome": "str",
+          "peso": "float",
+          "valor": "float"
+        }
+      ],
+      "score": "float"
+    },
     "health_score": "float",
     "memory_health": {
       "by_scope": "<map>",
@@ -273,6 +261,7 @@
           "topics": [
             "<empty>"
           ],
+          "user_id": "int",
           "user_name": "str"
         }
       ]
@@ -317,10 +306,7 @@
       ]
     },
     "topics": [
-      {
-        "count": "int",
-        "topic": "str"
-      }
+      "<empty>"
     ],
     "users": {
       "most_active": [
@@ -438,10 +424,7 @@
     "period_days": "int",
     "sessions_com_summary": "int",
     "skill_distribution": [
-      {
-        "count": "int",
-        "tool": "str"
-      }
+      "<empty>"
     ],
     "struggling": [
       "<empty>"
@@ -450,10 +433,7 @@
       "<empty>"
     ],
     "topics": [
-      {
-        "count": "int",
-        "topic": "str"
-      }
+      "<empty>"
     ],
     "total_sessions": "int"
   },
@@ -482,12 +462,13 @@
     "command": "str",
     "data": {
       "deltas": {
-        "avg_cost_per_session": "null",
+        "adoption_rate": "null",
+        "avg_cost_per_session": "float",
         "friction_score": "null",
-        "resolution_rate": "null",
-        "total_cost_usd": "null",
-        "total_sessions": "null",
-        "unique_users": "null"
+        "resolution_rate": "float",
+        "total_cost_usd": "float",
+        "total_sessions": "float",
+        "unique_users": "float"
       },
       "embeddings": {
         "memorias": {
