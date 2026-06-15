@@ -135,3 +135,21 @@ def test_provisionar_cron_fica_gated_por_canary():
     res = Prov(_saudavel()).provisionar(dry_run=True, incluir_cron=True)
     cron = [p for p in res['plano'] if p['acao'] == 'CRON_PENDENTE_CANARY']
     assert cron and 'canary' in cron[0]['nota'].lower()
+
+
+# ── marcador do canary estágio 2 (s71 --montagem trunca antes do POST) ────────────
+def test_sa_body_g1_tem_marcador_post():
+    """O canary `s71 --montagem` (estágio 2) trunca o SA_BODY_G1 em '# === POST' p/ montar
+    a NF-2 em DRAFT sem postar — o marcador é o contrato; removê-lo quebra o estágio 2."""
+    assert '# === POST' in SA_BODY_G1
+    assert SA_BODY_G1.count('# === POST') == 1                # marcador único (split determinístico)
+
+
+def test_sa_body_g1_montagem_truncada_nao_posta():
+    """split('# === POST')[0] = genealogia + montagem + recompute + R3, SEM action_post
+    (draft deletável). Garante que o estágio 2 nunca posta nem transmite."""
+    head = SA_BODY_G1.split('# === POST')[0]
+    assert "'move_type': 'out_invoice'" in head               # cria a NF-2
+    assert 'onchange_l10n_br_calcular_imposto' in head        # recompute server-side
+    assert 'referencia_ids' in head                           # R3
+    assert 'action_post' not in head                          # 🔴 NÃO posta (nem SEFAZ)

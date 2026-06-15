@@ -187,7 +187,7 @@ else:
         if chave_remessa:
             nf2.with_context(check_move_validity=False).write(
                 {'referencia_ids': [(0, 0, {'l10n_br_chave_nf': chave_remessa, 'company_id': 5})]})
-        # post (baixa a PASSIVA 5101020001) — reversível (journal hash=False), NÃO SEFAZ
+        # === POST (baixa PASSIVA 5101020001) === reversível (journal hash=False), NÃO SEFAZ
         try:
             nf2.action_post()
         except Exception as e:

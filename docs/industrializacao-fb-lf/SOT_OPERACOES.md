@@ -4,7 +4,7 @@ camada: L3
 sot_de: —
 hub: docs/industrializacao-fb-lf/INDEX.md
 superseded_by: —
-atualizado: 2026-06-13
+atualizado: 2026-06-15
 -->
 # SOT — Operações de Industrialização FB↔LF (fonte única)
 
@@ -12,6 +12,7 @@ atualizado: 2026-06-13
 
 ## Indice
 
+- [🎯 OBJETIVO FINAL (Definition of Done) — NORTE ESTÁVEL](#-objetivo-final-definition-of-done--norte-estável)
 - [0. Princípio fiscal-contábil (a regra)](#0-princípio-fiscal-contábil-a-regra)
   - [Tributação por CFOP (✔v2 — NF de retorno é MISTA)](#tributação-por-cfop-v2-nf-de-retorno-é-mista)
 - [1. Decisão de conta (❓ Contador — base do SOT)](#1-decisão-de-conta-contador-base-do-sot)
@@ -33,6 +34,24 @@ atualizado: 2026-06-13
 > **v2.2 (2026-06-01)** — ✅ **Contadora CONFIRMOU as Etapas 4 e 5 + Opção A (Ativo→Ativo)**: insumos consumidos incorporam-se ao custo do PA (`D 1150100007 / C 5101010001`), **CPV só na venda final** (não CPV no retorno). Roteamento G4/G5a mapeado ao vivo → spec em `PROPOSTA_CONFIG_RETORNO.md`. Itens ✔v2.2.
 > Status: ✅ correto · 🔧 config · 🔴 principal/dev · ❓ Contador.
 > **FB e LF = mesma UF (SP, Santana de Parnaíba) → operações INTRAESTADUAIS (CFOP 5xxx/1xxx). Não há 6xxx.** ✔v2
+
+---
+
+## 🎯 OBJETIVO FINAL (Definition of Done) — NORTE ESTÁVEL
+
+> **SEÇÃO ESTÁVEL — NÃO reescrever por sessão** (é o destino fixo, validado por Rafael 2026-06-15). O **status vivo** de cada critério (✅/⏭️) mora no tracker que muda por sessão: `app/odoo/estoque/fluxos/1.1.4 §"CANARY — RUNBOOK"` (estágios da automação da emissão) + `ACHADOS §"CANARY G1"` + banner do `PROMPT_PROXIMA_SESSAO.md`. Divisão de papéis: **Rafael = dono do destino** (define/valida o "pronto"); **condução dos meios/ordem = Claude Code** (reporta o progresso contra estes 8 critérios a cada sessão).
+
+**Estado-alvo:** no ciclo de industrialização por encomenda FB↔LF, o operador faz **só o gesto de hoje** (cria o picking do PA, valida, transmite a **NF-1 de serviço**). Todo o resto acontece **sozinho e correto**.
+
+**Critérios de Pronto (inequívocos):**
+1. **R1 — Emissão automática:** ao transmitir a NF-1 de industrialização (serviço 5124), o sistema **monta e transmite sozinho** a NF-2 de retorno de insumos (5902) ao SEFAZ — operador nem sabe que ela existe. *(cron G1 monta+posta · cron G2 transmite)*
+2. **R2 — Escrituração automática:** o DFe da NF-2 de retorno escritura na FB **junto** com a NF de industrialização (DFe→PO→invoice).
+3. **R3 — Vínculo:** as 2 NFs ligadas (refNFe + `invoice_origin`) para rastreabilidade.
+4. **Estoque correto nas 2 empresas** — incluindo o **trânsito `26489` reconciliado** (sem pendência física).
+5. **Contabilização fechada PELO CICLO** (nunca saldo global): PASSIVA `5101020001` e ATIVA `5101010001` zeram; PA recebe Ic+S; transitórias zeram; diários/tipos de pedido/contas corretos por empresa.
+6. **Durável:** SA+cron resistem a upgrade CIEL IT (provisionamento idempotente versionado + monitor anti-upgrade D8/hook).
+7. **Constants em L0** verificados contra o Odoo vivo (FOCO 3 — `account.account` é company-specific).
+8. **Validado em piloto real** (SEFAZ tpAmb=1, com go fresco) antes do regime automático.
 
 ---
 

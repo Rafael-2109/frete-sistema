@@ -49,6 +49,19 @@ COD_CONTA_NF2 = '1150100012'         # conta destino das linhas 5902 (transitór
 ACC_PASSIVA_LF = (26667, '5101020001')
 
 
+def _total_esperado_por_linha(spec: Dict[str, Any]) -> float:
+    """Total esperado da NF-2 = Σ do `price_subtotal` arredondado POR LINHA (replica como a
+    NF-e soma), NÃO o float arredondado só no fim. Usado por `validar` (estrutura) e `medir`
+    (baixa PASSIVA): a baixa = total da NF = soma por-linha. Comparar contra o float acusaria
+    falsa divergência de arredondamento (N linhas → ~R$0,0n) sem ser erro de cálculo.
+    Fallback p/ `total_ic` quando o spec não traz `componentes` (qty + price_unit)."""
+    componentes = spec.get('componentes') or []
+    if componentes:
+        return round(sum(round((c.get('qty') or 0) * (c.get('price_unit') or 0), 2)
+                         for c in componentes), 2)
+    return round(spec.get('total_ic') or 0, 2)
+
+
 class SaidaRetornoIndustrializacaoExecutor:
     """Orchestrator C3 READ do lado nosso da SAÍDA. Services-átomos injetáveis (test-friendly)."""
 
@@ -155,9 +168,13 @@ class SaidaRetornoIndustrializacaoExecutor:
             divergencias.append(f'conta_linha={sorted(contas_cod)} (esperado {COD_CONTA_NF2})')
 
         total_nf2 = round(nf2.get('amount_untaxed') or 0, 2)
-        total_spec = round(spec.get('total_ic') or 0, 2)
+        # Total esperado = Σ por-linha (replica a NF-e); float só p/ transparência. Ver
+        # _total_esperado_por_linha — não afrouxa a tolerância de 0,01 (pega erro real).
+        total_spec_float = round(spec.get('total_ic') or 0, 2)
+        total_spec = _total_esperado_por_linha(spec)
         if total_spec and abs(total_nf2 - total_spec) > 0.01:
-            divergencias.append(f'total={total_nf2} (esperado ≈ {total_spec} do spec)')
+            divergencias.append(
+                f'total={total_nf2} (esperado ≈ {total_spec} por-linha; float={total_spec_float})')
 
         if not nf2.get('invoice_origin'):
             divergencias.append('R3 invoice_origin ausente')
@@ -173,6 +190,7 @@ class SaidaRetornoIndustrializacaoExecutor:
             'csts': sorted(csts),
             'total_nf2': total_nf2,
             'total_spec': total_spec,
+            'total_spec_float': total_spec_float,
             'state': nf2.get('state'),
         }
 
@@ -190,12 +208,15 @@ class SaidaRetornoIndustrializacaoExecutor:
         acc_id, acc_cod = ACC_PASSIVA_LF
         move_ids, detalhe = self._coletar_moves_ciclo(ciclo=ciclo, extra_ids=[nf2_id] if nf2_id else [])
         baixa = self._debito_moves_conta(move_ids, acc_id)
+        # Alvo = total por-linha (= total da NF = baixa da PASSIVA). Float só p/ transparência.
+        alvo = _total_esperado_por_linha(spec)
         return {
             'ciclo': ciclo,
             'conta_passiva': acc_cod,
             'baixa_passiva': baixa,
-            'alvo': spec.get('total_ic'),
-            'ok': bool(spec.get('total_ic')) and abs(baixa - round(spec['total_ic'], 2)) <= 0.01,
+            'alvo': alvo,
+            'alvo_float': round(spec.get('total_ic') or 0, 2),
+            'ok': bool(alvo) and abs(baixa - alvo) <= 0.01,
             'moves_incluidos': detalhe,
             'nota': ('baixa = D na conta 26667 das NFs do ciclo (= total insumos). Em fatura '
                      'PARCIAL (rateio) a baixa é do PA faturado; lote inteiro fecha a PASSIVA.'),

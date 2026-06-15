@@ -167,6 +167,28 @@ def test_validar_pega_r3_ausente():
     assert any('referencia_ids' in d for d in res['divergencias'])
 
 
+def test_validar_total_por_linha_evita_falsa_divergencia_arredondamento():
+    """A NF-e soma price_subtotal arredondado POR LINHA; o validar compara contra o total
+    por-linha do spec (não o float arredondado no fim). 4×1,004: por-linha=4,00 vs float=4,02.
+    Com a tolerância antiga (contra o float) acusaria falsa divergência de R$0,02."""
+    comps = [{'product_id': i, 'qty': 1.0, 'price_unit': 1.004} for i in range(4)]
+    spec = {'ciclo': 'C', 'n_componentes': 4, 'total_ic': 4.016, 'componentes': comps}
+    fake = FakeOdooValidar(linhas=[_linha(sub=1.00) for _ in range(4)], untax=4.00)
+    res = Saida(odoo=fake).validar(spec, nf2_id=1)
+    assert res['ok'] is True, res['divergencias']
+    assert res['total_spec'] == 4.00 and res['total_spec_float'] == 4.02
+
+
+def test_validar_total_real_divergente_ainda_pego_com_por_linha():
+    """A comparação por-linha NÃO afrouxa: erro de cálculo real (R$5,00) segue divergente."""
+    comps = [{'product_id': 1, 'qty': 1.0, 'price_unit': 50.0}]
+    spec = {'ciclo': 'C', 'n_componentes': 1, 'total_ic': 50.0, 'componentes': comps}
+    fake = FakeOdooValidar(linhas=[_linha(sub=45.0)], untax=45.0)
+    res = Saida(odoo=fake).validar(spec, nf2_id=1)
+    assert res['ok'] is False
+    assert any('total' in d for d in res['divergencias'])
+
+
 # ── medir (READ — baixa da PASSIVA pelo ciclo) ────────────────────────────────
 class FakeOdooMedir:
     """Modela a baixa da PASSIVA 26667 pela NF-2 do ciclo (query DIRECIONADA por origin)."""
@@ -215,3 +237,28 @@ def test_medir_query_e_direcionada_por_origin_nunca_conta_inteira():
     # toda busca de account.move filtra por invoice_origin (direcionada)
     am = [d for m, d in capt['domains'] if m == 'account.move']
     assert am and all(_dom_get(d, 'invoice_origin') is not None for d in am)
+
+
+def test_medir_alvo_por_linha_nao_acusa_arredondamento():
+    """A baixa da PASSIVA = total da NF (Σ por-linha). O alvo do medir é por-linha, não o
+    float — senão acusaria falsa divergência de arredondamento (baixa 4,00 vs float 4,02)."""
+    spec = {'ciclo': 'C', 'total_ic': 4.016,
+            'componentes': [{'product_id': i, 'qty': 1.0, 'price_unit': 1.004} for i in range(4)]}
+
+    class FakeBaixa:
+        def search_read(self, model, domain, fields=None, **k):
+            if model == 'account.move' and _dom_get(domain, 'invoice_origin'):
+                return [{'id': 900, 'name': 'RETIN/2026/00002'}]
+            if model == 'account.move.line':
+                acc = _dom_get(domain, 'account_id'); mids = _dom_get(domain, 'move_id') or []
+                if acc == ACC_PASSIVA_LF[0] and 900 in mids:
+                    return [{'debit': 4.00, 'credit': 0.0}]
+            return []
+
+        def execute_kw(self, *a, **k):
+            return True
+
+    res = Saida(odoo=FakeBaixa()).medir(spec, nf2_id=900)
+    assert res['baixa_passiva'] == 4.00
+    assert res['alvo'] == 4.00 and res['alvo_float'] == 4.02
+    assert res['ok'] is True
