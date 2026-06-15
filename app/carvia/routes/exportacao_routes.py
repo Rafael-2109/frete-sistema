@@ -1781,6 +1781,7 @@ def register_exportacao_routes(bp):
                 'Percentual (%)': float(f.percentual * 100) if f.percentual else 0,
                 'Qtd CTes': f.qtd_ctes,
                 'Total Bruto': float(f.total_bruto or 0),
+                'Total Ajustes': float(getattr(f, 'total_ajustes', 0) or 0),
                 'Total Comissao': float(f.total_comissao or 0),
                 'Status': f.status,
                 'Data Pagamento': _fmt_date(f.data_pagamento),
