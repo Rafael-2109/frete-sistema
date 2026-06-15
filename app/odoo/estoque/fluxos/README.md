@@ -44,6 +44,7 @@ Exemplo:
         1.2.1 caminho A — DFe via SEFAZ → escriturando-odoo ✅ v19+ ([folha](1.2.1-escriturar-dfe-industrializacao.md))
         1.2.2 caminho B — DFe via upload XML SAÍDA → escriturando-odoo ✅ v19+ ([folha](1.2.2-criar-dfe-manual-transferencia.md))
         1.2.3 COMPRAS (DFe fornecedor) → DELEGA gestor-recebimento
+        1.2.4 entrada de RETORNO de INDUSTRIALIZAÇÃO (2 DFes: serviço 5124 + insumos 5902; FB recebe da LF) → 🟡 DESENHO ([folha](1.2.4-entrada-retorno-industrializacao.md)) — NF-1 caminho A + picking manual C9 (D-V30-1) · NF-2 MONTADA-DIRETO (caminho A falha, s66) · revaloração AVCO · reconciliar 26489. ⚠️ depende de 2 átomos a capinar (montar_invoice_entrada_direta + revalorar_custo_pa)
    1.3  transferência completa (saída+entrada) = compõe 1.1.1 + 1.2.x → ✅ v27+ S5 ([folha](1.3-transferencia-completa.md)) — caminho com-ciclo (AjusteEstoqueInventario existente)
         1.3.1 remessa AVULSA de insumo (sem ciclo de inventário) → ✅ C4 ([folha](1.3.1-remessa-avulsa-insumo.md)) — origina átomos diretamente (Skill 5 picking → Skill 8 SEFAZ → Skill 7 entrada); AjusteEstoqueInventario OPCIONAL (C1)
 2  Estoque (sem NF)
