@@ -53,7 +53,7 @@ atualizado: 2026-06-02
   - [MovimentacaoEstoque (app/estoque/models.py)](#movimentacaoestoque-appestoquemodelspy)
   - [ProgramacaoProducao (app/producao/models.py)](#programacaoproducao-appproducaomodelspy)
   - [ContatoAgendamento (app/cadastros_agendamento/models.py)](#contatoagendamento-appcadastros_agendamentomodelspy)
-  - [CidadeAtendida / CadastroSubRota (app/cotacao/models.py)](#cidadeatendida-cadastrosubrota-appcotacaomodelspy)
+  - [CidadeAtendida (app/vinculos/models.py) / CadastroSubRota (app/localidades/models.py)](#cidadeatendida-appvinculosmodelspy--cadastrosubrota-applocalidadesmodelspy)
 - [Devolucoes (app/devolucao/models.py)](#devolucoes-appdevolucaomodelspy)
   - [NFDevolucao](#nfdevolucao)
   - [OcorrenciaDevolucao](#ocorrenciadevolucao)
@@ -70,7 +70,7 @@ atualizado: 2026-06-02
 
 ## Pedido (app/pedidos/models.py)
 
-> Campos completos: ver schema em `.claude/skills/consultando-sql/schemas/tables/pedidos.json`
+> Campos completos: ver schema em `.claude/skills/consultando-sql/schemas/tables/mv_pedidos.json` (a view `pedidos` e materializada como `mv_pedidos` — nao ha `pedidos.json` gerado).
 
 ### E UMA VIEW (nao tabela)
 ```python
@@ -86,7 +86,7 @@ __table_args__ = {'info': {'is_view': True}}
 
 ## PreSeparacaoItem (app/carteira/models.py)
 
-> Campos completos: ver schema em `.claude/skills/consultando-sql/schemas/tables/pre_separacao_items.json`
+> Tabela `pre_separacao_item` (singular). Schema JSON NAO gerado (tabela deprecada — ver abaixo); campos direto no modelo `app/carteira/models.py:457`.
 
 ### DEPRECATED - NAO USAR!
 SEMPRE substituir por Separacao com status='PREVISAO' para fazer tudo que PreSeparacaoItem fazia.
@@ -298,7 +298,7 @@ Tipos: ENTRADA, SAIDA, AJUSTE, COMPRA
 
 **Valores de `forma`**: `SEM AGENDAMENTO`, `Portal`, `Telefone`, `E-mail`, `WhatsApp` (NULL = sem agendamento)
 
-### CidadeAtendida / CadastroSubRota (app/cotacao/models.py)
+### CidadeAtendida (app/vinculos/models.py) / CadastroSubRota (app/localidades/models.py)
 
 > Campos completos: ver schemas em `.claude/skills/consultando-sql/schemas/tables/`
 

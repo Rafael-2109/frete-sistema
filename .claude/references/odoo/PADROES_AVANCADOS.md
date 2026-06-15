@@ -77,7 +77,7 @@ class MeuService:
             return False, None, str(e)
 ```
 
-**Referencia:** `app/fretes/services/lancamento_odoo_service.py:498-672`
+**Referencia:** `app/fretes/services/lancamento_odoo_service.py:873-1048` (`_registrar_auditoria:873` + `_executar_com_auditoria:961`)
 
 ---
 
@@ -253,7 +253,7 @@ def _gerar_po_com_timeout_estendido(self, dfe_id):
         raise
 ```
 
-**Referencia:** `app/fretes/services/lancamento_odoo_service.py:1088-1141`
+**Referencia:** `app/fretes/services/lancamento_odoo_service.py:509-689` (`_gerar_po_dfe_fire_and_poll`)
 
 ---
 
@@ -310,9 +310,9 @@ TIPO DE INTEGRACAO
 
 | Service | Linhas | Padroes Usados | Arquivo |
 |---------|--------|----------------|---------|
-| `lancamento_odoo_service.py` | 1.824 | 1, 2, 3, 7, 8 | `app/fretes/services/` |
-| `cte_service.py` | 976 | 4 | `app/odoo/services/` |
-| `carteira_service.py` | 2.790 | 4 | `app/odoo/services/` |
-| `pedido_compras_service.py` | 925 | 4 | `app/odoo/services/` |
-| `recebimento_fisico_odoo_service.py` | 500+ | 5, 6 | `app/recebimento/services/` |
-| `baixa_titulos_service.py` | 1.128 | 1 | `app/financeiro/services/` |
+| `lancamento_odoo_service.py` | 2.240 | 1, 2, 3, 7, 8 | `app/fretes/services/` |
+| `cte_service.py` | 1.168 | 4 | `app/odoo/services/` |
+| `carteira_service.py` | 3.117 | 4 | `app/odoo/services/` |
+| `pedido_compras_service.py` | 1.352 | 4 | `app/odoo/services/` |
+| `recebimento_fisico_odoo_service.py` | 773 | 5, 6 | `app/recebimento/services/` |
+| `baixa_titulos_service.py` | 2.167 | 1 | `app/financeiro/services/` |

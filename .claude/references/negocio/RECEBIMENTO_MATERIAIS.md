@@ -30,7 +30,7 @@ atualizado: 2026-06-02
   - [DFE (l10n_br_ciel_it_account.dfe)](#dfe-l10n_br_ciel_it_accountdfe)
   - [DFE Line (l10n_br_ciel_it_account.dfe.line)](#dfe-line-l10n_br_ciel_it_accountdfeline)
 - [Arquivos do Modulo](#arquivos-do-modulo)
-  - [Models (20 models em `app/recebimento/models.py`)](#models-20-models-em-apprecebimentomodelspy)
+  - [Models (23 models em `app/recebimento/models.py`)](#models-23-models-em-apprecebimentomodelspy)
   - [Services (13 em `app/recebimento/services/`)](#services-13-em-apprecebimentoservices)
   - [Routes (5 em `app/recebimento/routes/`)](#routes-5-em-apprecebimentoroutes)
   - [Jobs (3 em `app/recebimento/jobs/`)](#jobs-3-em-apprecebimentojobs)
@@ -352,11 +352,12 @@ CREATE TABLE validacao_fiscal_dfe (
 
 ## Arquivos do Modulo
 
-### Models (20 models em `app/recebimento/models.py`)
+### Models (23 models em `app/recebimento/models.py`)
 
 **Fase 1**: PerfilFiscalProdutoFornecedor, DivergenciaFiscal, CadastroPrimeiraCompra, ValidacaoFiscalDfe, NcmIbsCbsValidado, PendenciaFiscalIbsCbs
 **Fase 2**: ProdutoFornecedorDepara, ValidacaoNfPoDfe, MatchNfPoItem, MatchAlocacao, DivergenciaNfPo
 **Fase 4**: RecebimentoFisico, RecebimentoLote, RecebimentoQualityCheck, PickingRecebimento, PickingRecebimentoProduto, PickingRecebimentoMoveLine, PickingRecebimentoQualityCheck, RecebimentoLf, RecebimentoLfLote
+**Transferencia (snapshot)**: NfTransferenciaSnapshot, NfTransferenciaProdutoSnapshot, NfTransferenciaDesconsiderada
 
 ### Services (13 em `app/recebimento/services/`)
 
