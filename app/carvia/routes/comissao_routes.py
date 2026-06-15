@@ -107,28 +107,31 @@ def register_comissao_routes(bp):
             pct_display = None
             pct_warning = str(e)
 
+        # Vendedores elegiveis (beneficiarios de comissao = usuarios com a flag)
+        from app.auth.models import Usuario
+        vendedores = Usuario.query.filter_by(
+            acesso_comissao_carvia=True, status='ativo',
+        ).order_by(Usuario.nome).all()
+
         if request.method == 'POST':
-            vendedor_nome = request.form.get('vendedor_nome', '').strip()
-            vendedor_email = request.form.get('vendedor_email', '').strip()
-            data_inicio_str = request.form.get('data_inicio', '').strip()
+            vendedor_usuario_id = request.form.get('vendedor_usuario_id', '').strip()
             data_fim_str = request.form.get('data_fim', '').strip()
             percentual_str = request.form.get('percentual', '').strip()
             observacoes = request.form.get('observacoes', '').strip()
             operacao_ids_raw = request.form.getlist('operacao_ids')
 
             # Validacoes basicas
-            if not vendedor_nome:
-                flash('Nome do vendedor e obrigatorio.', 'warning')
+            if not vendedor_usuario_id:
+                flash('Selecione o vendedor.', 'warning')
                 return redirect(url_for('carvia.criar_comissao'))
-            if not data_inicio_str or not data_fim_str:
-                flash('Periodo e obrigatorio.', 'warning')
+            if not data_fim_str:
+                flash('Data de corte e obrigatoria.', 'warning')
                 return redirect(url_for('carvia.criar_comissao'))
             if not operacao_ids_raw:
                 flash('Selecione ao menos um CTe.', 'warning')
                 return redirect(url_for('carvia.criar_comissao'))
 
             try:
-                data_inicio = date.fromisoformat(data_inicio_str)
                 data_fim = date.fromisoformat(data_fim_str)
 
                 percentual = None
@@ -138,9 +141,7 @@ def register_comissao_routes(bp):
                 operacao_ids = [int(x) for x in operacao_ids_raw]
 
                 fechamento = ComissaoService.criar_fechamento(
-                    vendedor_nome=vendedor_nome,
-                    vendedor_email=vendedor_email,
-                    data_inicio=data_inicio,
+                    vendedor_usuario_id=int(vendedor_usuario_id),
                     data_fim=data_fim,
                     operacao_ids=operacao_ids,
                     criado_por=current_user.email,
@@ -166,6 +167,7 @@ def register_comissao_routes(bp):
             'carvia/comissoes/criar.html',
             pct_display=pct_display,
             pct_warning=pct_warning,
+            vendedores=vendedores,
         )
 
     # ==================== DETALHE ====================
@@ -199,11 +201,23 @@ def register_comissao_routes(bp):
             excluido=True,
         ).order_by(CarviaComissaoFechamentoCte.excluido_em.desc()).all()
 
+        # Ajustes incorporados a este fechamento + vendedores p/ vinculo manual
+        from app.carvia.models.comissao import CarviaComissaoAjuste
+        from app.auth.models import Usuario
+        ajustes = CarviaComissaoAjuste.query.filter_by(
+            fechamento_aplicado_id=comissao_id,
+        ).order_by(CarviaComissaoAjuste.id).all()
+        vendedores = Usuario.query.filter_by(
+            acesso_comissao_carvia=True, status='ativo',
+        ).order_by(Usuario.nome).all()
+
         return render_template(
             'carvia/comissoes/detalhe.html',
             fechamento=fechamento,
             ctes_ativos=ctes_ativos,
             ctes_excluidos=ctes_excluidos,
+            ajustes=ajustes,
+            vendedores=vendedores,
         )
 
     # ==================== EDITAR ====================
@@ -316,19 +330,19 @@ def register_comissao_routes(bp):
 
         from app.carvia.services.financeiro.comissao_service import ComissaoService
 
-        data_inicio_str = request.args.get('data_inicio', '')
         data_fim_str = request.args.get('data_fim', '')
+        data_inicio_str = request.args.get('data_inicio', '')
 
-        if not data_inicio_str or not data_fim_str:
-            return jsonify({'erro': 'Periodo obrigatorio (data_inicio, data_fim).'}), 400
+        if not data_fim_str:
+            return jsonify({'erro': 'data_fim obrigatorio.'}), 400
 
         try:
-            data_inicio = date.fromisoformat(data_inicio_str)
             data_fim = date.fromisoformat(data_fim_str)
+            data_inicio = date.fromisoformat(data_inicio_str) if data_inicio_str else None
         except ValueError:
             return jsonify({'erro': 'Formato de data invalido (YYYY-MM-DD).'}), 400
 
-        ctes = ComissaoService.buscar_ctes_elegiveis(data_inicio, data_fim)
+        ctes = ComissaoService.buscar_ctes_elegiveis(data_fim, data_inicio)
 
         return jsonify({
             'sucesso': True,
@@ -348,6 +362,66 @@ def register_comissao_routes(bp):
                 for op in ctes
             ],
         })
+
+    # ==================== API: Ajustes pendentes do vendedor ====================
+
+    @bp.route('/api/comissoes/ajustes-pendentes')  # type: ignore
+    @login_required
+    def api_ajustes_pendentes():  # type: ignore
+        """Ajustes PENDENTE de um vendedor (preview na criacao do fechamento)."""
+        if not _pode_acessar_comissao():
+            return jsonify({'erro': 'Acesso negado.'}), 403
+
+        from app.carvia.models.comissao import CarviaComissaoAjuste
+
+        vid = request.args.get('vendedor_usuario_id', type=int)
+        if not vid:
+            return jsonify({'sucesso': True, 'qtd': 0, 'total_delta': 0, 'ajustes': []})
+
+        ajustes = CarviaComissaoAjuste.query.filter_by(
+            vendedor_usuario_id=vid, status='PENDENTE',
+        ).all()
+
+        return jsonify({
+            'sucesso': True,
+            'qtd': len(ajustes),
+            'total_delta': float(sum(a.delta_comissao for a in ajustes)) if ajustes else 0,
+            'ajustes': [
+                {
+                    'id': a.id,
+                    'cte_numero': a.cte_numero,
+                    'motivo': a.motivo,
+                    'delta_comissao': float(a.delta_comissao),
+                    'fechamento_origem_id': a.fechamento_origem_id,
+                }
+                for a in ajustes
+            ],
+        })
+
+    # ==================== Vincular vendedor (resolucao manual) ====================
+
+    @bp.route('/comissoes/<int:comissao_id>/vincular-vendedor', methods=['POST'])  # type: ignore
+    @login_required
+    def vincular_vendedor_comissao(comissao_id):  # type: ignore
+        """Vincula um Usuario a um fechamento sem vinculo (correcao de metadado)."""
+        if not _pode_acessar_comissao():
+            flash('Acesso negado.', 'danger')
+            return redirect(url_for('main.dashboard'))
+
+        from app.carvia.services.financeiro.comissao_service import ComissaoService
+
+        usuario_id = request.form.get('vendedor_usuario_id', type=int)
+        try:
+            ComissaoService.vincular_vendedor(comissao_id, usuario_id, current_user.email)
+            flash('Vendedor vinculado.', 'success')
+        except ValueError as ve:
+            flash(str(ve), 'warning')
+        except Exception as e:
+            db.session.rollback()
+            logger.error("Erro ao vincular vendedor comissao %d: %s", comissao_id, e)
+            flash(f'Erro: {e}', 'danger')
+
+        return redirect(url_for('carvia.detalhe_comissao', comissao_id=comissao_id))
 
     # ==================== API: Incluir CTe ====================
 
