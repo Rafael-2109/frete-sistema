@@ -594,6 +594,7 @@ def vincular_nf_manualmente(
             pedido nao tem cabecalho com esse CNPJ.
     """
     import re as _re
+    from sqlalchemy.orm import lazyload
     from app.motos_assai.models import (
         AssaiPedidoVenda, AssaiPedidoVendaLoja, AssaiLoja,
     )
@@ -602,10 +603,17 @@ def vincular_nf_manualmente(
     # Lock pessimista (code review #2): impede 2 operadores vinculando a mesma
     # NF em paralelo. Segue o padrao "Lock pessimista e invariantes de
     # concorrencia" ja estabelecido no modulo (CLAUDE.md Plano 3).
+    # FIX: AssaiNfQpa tem relationships eager (lazy='joined': separacao, loja)
+    # que geram LEFT OUTER JOIN. FOR UPDATE sem of= tenta lockar a parte nullable
+    # do outer join -> Postgres "FOR UPDATE cannot be applied to the nullable
+    # side of an outer join" (quebrava vincular_nf_manualmente em producao).
+    # lazyload('*') remove os eager joins desta query de lock; of=AssaiNfQpa
+    # locka apenas a linha da NF.
     nf = (
         db.session.query(AssaiNfQpa)
         .filter(AssaiNfQpa.id == nf_id)
-        .with_for_update()
+        .options(lazyload('*'))
+        .with_for_update(of=AssaiNfQpa)
         .first()
     )
     if not nf:
