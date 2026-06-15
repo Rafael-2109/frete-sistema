@@ -91,7 +91,7 @@ Notas:
 
 **A margem e calculada**:
 - Em **INSERT** (sync inicial de pedido novo).
-- Em **UPDATE** quando algum dos campos relevantes muda (preco, qtd, UF, incoterm, ICMS, PIS, COFINS, desconto, forma_pgto, vendedor, cnpj). FONTE: `carteira_service.py:2625-2700`.
+- Em **UPDATE** quando algum dos campos relevantes muda (preco, qtd, UF, incoterm, ICMS, PIS, COFINS, desconto, forma_pgto, vendedor, cnpj). FONTE: `carteira_service.py:2647-2715` (set `CAMPOS_QUE_DISPARAM_RECALCULO_MARGEM` em :2649).
 
 Para forcar recalculo manual: `POST /custeio/api/margem/recalcular`.
 

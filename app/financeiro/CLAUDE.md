@@ -4,7 +4,7 @@ camada: L1
 sot_de: —
 hub: CLAUDE.md
 superseded_by: —
-atualizado: 2026-06-08
+atualizado: 2026-06-15
 -->
 # Financeiro — Guia de Desenvolvimento
 
@@ -62,9 +62,9 @@ atualizado: 2026-06-08
 
 ## Contexto
 
-80 arquivos, ~46.2K LOC. Tem o maior `models.py` do projeto (40+ models, ~2.8K linhas). Gotchas completos (80+) em `app/financeiro/GOTCHAS.md`; campos de tabela nos schemas JSON. Processamento pesado via workers RQ (Redis).
+83 arquivos, ~46.9K LOC. Tem o maior `models.py` do projeto (40+ models, ~2.8K linhas). Gotchas completos (80+) em `app/financeiro/GOTCHAS.md`; campos de tabela nos schemas JSON. Processamento pesado via workers RQ (Redis).
 
-**80 arquivos** | **~46.2K LOC** | **Atualizado**: 08/06/2026
+**83 arquivos** | **~46.9K LOC** | **Atualizado**: 15/06/2026
 
 Contas a receber/pagar, extratos bancarios, conciliacao Odoo, CNAB 400, comprovantes e baixas.
 
@@ -77,10 +77,10 @@ Contas a receber/pagar, extratos bancarios, conciliacao Odoo, CNAB 400, comprova
 
 ```
 app/financeiro/
-  ├── routes/       # 18 arquivos de rotas + __init__.py (financeiro_bp + cnab400_bp)
+  ├── routes/       # 19 arquivos de rotas + __init__.py (financeiro_bp + cnab400_bp; inclui conversor_extrato_srm.py)
   ├── scripts/      # CLI utilitarios. importar_extrato_pdf_srm.py: PDF SRM Bank -> OFX
   │                 #   (FITID sintetico Data/Hora/Sinal/Valor/Saldo; dedup via unique_import_id)
-  ├── services/     # 27 services root + subpacote remessa_vortx/ (8 services)
+  ├── services/     # 28 services root (inclui extrato_pdf_srm_service.py) + subpacote remessa_vortx/ (8 services)
   ├── workers/      # 8 RQ job files + utils.py (batch processing via Redis)
   ├── parsers/      # 4 parsers (dispatcher, pix_sicoob, models)
   ├── models.py     # 40+ models (~2.8K linhas — MAIOR models.py do projeto)

@@ -4,7 +4,7 @@ camada: L1
 sot_de: —
 hub: CLAUDE.md
 superseded_by: —
-atualizado: 2026-06-11
+atualizado: 2026-06-14
 -->
 # Teams Bot — Guia de Desenvolvimento
 

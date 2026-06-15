@@ -85,7 +85,7 @@ O projeto ja tinha 14 docs core sobre prompt engineering e agent design (~125K t
 **Contexto do projeto Nacom Goya**:
 - System prompt atual: `app/agente/prompts/system_prompt.md` v4.3.3 (last_updated 2026-05-21 — historicamente v4.2.0 em 2026-03-28; findings deste estudo aplicados em 2026-04-12 elevaram para v4.3.0; v4.3.2 vigente apos refinamentos; v4.3.3 com `gestor-motos-assai` wired em 2026-05-09; refinamento posterior em 2026-05-21 mantendo a mesma versao)
 - Modelos: Opus 4.8 (decisoes criticas, default desde 2026-05-28 — migracao 4.7->4.8 sem mudanca de SDK; rollback via env `AGENT_MODEL`), Sonnet 4.6 (analises), Haiku 4.5 (exploracao)
-- SDK: `claude-agent-sdk==0.2.95` (CLI bundled 2.1.170, bump 2026-06-09 — 0.2.90-95 cosmeticos: so CLI bundled, zero breaking no SDK Python; CLI 2.1.170 reconhece `claude-fable-5`) + `anthropic==0.98.1` (atualizado em 2026-05-09)
+- SDK: `claude-agent-sdk==0.2.101` (CLI bundled 2.1.177, bump 2026-06-13 — 0.2.96-101 cosmeticos: bumps CLI bundled + `TaskUpdatedMessage` aditivo #1016 nao adotado, zero breaking no SDK Python; CLI 2.1.170+ reconhece `claude-fable-5`) + `anthropic==0.109.1` (atualizado de 0.98.1 em 2026-06-13, 11 minors sem breaking)
 - 16 subagents (15 Nacom Goya + 1 orientador-loja Lojas HORA), 54 skills invocaveis, 7 MCP servers (35 tools)
 - Docs core ja existentes: BEST_PRACTICES_2026.md (SDK features), AGENT_DESIGN_GUIDE.md, AGENT_TEMPLATES.md, SUBAGENT_RELIABILITY.md, DOC-1/DOC-2 (5-layer architecture)
 
