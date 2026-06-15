@@ -4,7 +4,7 @@ camada: L2
 sot_de: —
 hub: .claude/references/INDEX.md
 superseded_by: —
-atualizado: 2026-06-02
+atualizado: 2026-06-15
 -->
 # Recebimento de Materiais - Documentacao de Referencia
 
@@ -26,6 +26,7 @@ atualizado: 2026-06-02
   - [divergencia_fiscal](#divergencia_fiscal)
   - [cadastro_primeira_compra](#cadastro_primeira_compra)
   - [validacao_fiscal_dfe](#validacao_fiscal_dfe)
+  - [fornecedor_bloqueado](#fornecedor_bloqueado)
 - [Campos Odoo Utilizados](#campos-odoo-utilizados)
   - [DFE (l10n_br_ciel_it_account.dfe)](#dfe-l10n_br_ciel_it_accountdfe)
   - [DFE Line (l10n_br_ciel_it_account.dfe.line)](#dfe-line-l10n_br_ciel_it_accountdfeline)
@@ -309,6 +310,35 @@ CREATE TABLE validacao_fiscal_dfe (
 );
 ```
 
+### fornecedor_bloqueado
+
+**Proposito**: Fornecedores cujas ENTRADAS DE COMPRA sao *desconsideradas* na importacao do Odoo. CNPJ armazenado normalizado (apenas digitos); match EXATO de 14 digitos via `FornecedorBloqueado.esta_bloqueado(cnpj)`.
+
+**Regra de negocio**: quando o CNPJ esta cadastrado e `ativo=True`, o sync do Odoo NAO grava:
+
+- `PedidoCompras` — `app/odoo/services/pedido_compras_service.py`
+- `MovimentacaoEstoque` (tipo=ENTRADA, local=COMPRA) — `app/odoo/services/entrada_material_service.py` **e** `app/recebimento/services/recebimento_fisico_odoo_service.py`
+
+So afeta importacoes FUTURAS — registros ja gravados nao sao removidos. Complementa (nao substitui) o filtro `_eh_fornecedor_grupo` das empresas do grupo (CNPJs hardcoded `61.724.241` / `18.467.441`).
+
+**Tela (CRUD)**: Central Compras > Cadastros > **Fornecedores Desconsiderados** (`/operacional/compras/fornecedores-bloqueados`). Desativar = "reconsiderar" (soft delete, `ativo=False`).
+
+```sql
+CREATE TABLE fornecedor_bloqueado (
+    id SERIAL PRIMARY KEY,
+    cnpj VARCHAR(14) NOT NULL UNIQUE,   -- normalizado (apenas digitos)
+    razao_social VARCHAR(255),
+    motivo VARCHAR(500),
+    ativo BOOLEAN NOT NULL DEFAULT TRUE,
+    criado_em TIMESTAMP NOT NULL,
+    criado_por VARCHAR(100),
+    atualizado_em TIMESTAMP,
+    atualizado_por VARCHAR(100)
+);
+```
+
+> Migration: `scripts/migrations/2026_06_15_fornecedor_bloqueado.{sql,py}` (idempotente).
+
 ---
 
 ## Campos Odoo Utilizados
@@ -352,12 +382,13 @@ CREATE TABLE validacao_fiscal_dfe (
 
 ## Arquivos do Modulo
 
-### Models (23 models em `app/recebimento/models.py`)
+### Models (24 models em `app/recebimento/models.py`)
 
 **Fase 1**: PerfilFiscalProdutoFornecedor, DivergenciaFiscal, CadastroPrimeiraCompra, ValidacaoFiscalDfe, NcmIbsCbsValidado, PendenciaFiscalIbsCbs
 **Fase 2**: ProdutoFornecedorDepara, ValidacaoNfPoDfe, MatchNfPoItem, MatchAlocacao, DivergenciaNfPo
 **Fase 4**: RecebimentoFisico, RecebimentoLote, RecebimentoQualityCheck, PickingRecebimento, PickingRecebimentoProduto, PickingRecebimentoMoveLine, PickingRecebimentoQualityCheck, RecebimentoLf, RecebimentoLfLote
 **Transferencia (snapshot)**: NfTransferenciaSnapshot, NfTransferenciaProdutoSnapshot, NfTransferenciaDesconsiderada
+**Cadastros**: FornecedorBloqueado (fornecedores desconsiderados — ver [fornecedor_bloqueado](#fornecedor_bloqueado))
 
 ### Services (13 em `app/recebimento/services/`)
 
