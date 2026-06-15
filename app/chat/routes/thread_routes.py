@@ -1,25 +1,157 @@
 """Rotas de thread do chat in-app — Task 12."""
 from flask import jsonify, request
 from flask_login import login_required, current_user
-from sqlalchemy import select, or_
+from sqlalchemy import select, or_, and_, func
 
 from app import db
 from app.chat import chat_bp
 from app.chat.services.thread_service import ThreadService
 from app.chat.services.permission_checker import pode_adicionar, usuarios_elegiveis_query
-from app.chat.models import ChatThread, ChatMember
+from app.chat.models import ChatThread, ChatMember, ChatMessage
+from app.chat.utils import system_source_label, entity_label
 from app.auth.models import Usuario
 
 
+# Limite de caracteres do preview da ultima mensagem na lista de threads.
+_PREVIEW_LEN = 90
+
+
+def _avatar(kind: str, text: str = '', color_seed: int = 0, icon: str = '') -> dict:
+    """Descritor de avatar consumido pelo chat_ui.js.
+
+    kind='initials' -> renderiza iniciais com cor deterministica (color_idx 0..7).
+    kind='icon'     -> renderiza um icone FontAwesome (system/entity).
+    """
+    if kind == 'icon':
+        return {'kind': 'icon', 'icon': icon, 'color_idx': color_seed % 8}
+    # Iniciais: 1a letra das 2 primeiras palavras (ou 1 letra so).
+    parts = [p for p in (text or '').strip().split() if p]
+    if not parts:
+        initials = '?'
+    elif len(parts) == 1:
+        initials = parts[0][:2].upper()
+    else:
+        initials = (parts[0][0] + parts[1][0]).upper()
+    return {'kind': 'initials', 'text': initials, 'color_idx': abs(color_seed) % 8}
+
+
+def _serialize_threads(user, threads):
+    """Serializa lista de threads com nome de exibicao, avatar, preview e nao-lidas.
+
+    Usa queries em LOTE (4 queries no total, independente da qtd de threads) para
+    evitar N+1 — a lista cabe em <=50 threads (list_threads_for_user limit=50).
+    Tambem reusavel para 1 thread recem-criada (sem mensagens): tudo degrada gracioso.
+    """
+    if not threads:
+        return []
+    ids = [t.id for t in threads]
+    uid = user.id
+
+    # 1. Membros ativos das threads (interlocutor de DM + contagem de grupo).
+    member_rows = db.session.query(
+        ChatMember.thread_id, ChatMember.user_id, Usuario.nome
+    ).join(Usuario, Usuario.id == ChatMember.user_id).filter(
+        ChatMember.thread_id.in_(ids),
+        ChatMember.removido_em.is_(None),
+    ).all()
+    members_by_thread: dict[int, list] = {}
+    for tid, member_uid, nome in member_rows:
+        members_by_thread.setdefault(tid, []).append((member_uid, nome))
+
+    # 2. Ultima mensagem de cada thread (preview).
+    last_subq = db.session.query(
+        ChatMessage.thread_id, func.max(ChatMessage.id).label('mid')
+    ).filter(ChatMessage.thread_id.in_(ids)).group_by(ChatMessage.thread_id).subquery()
+    last_msgs = db.session.query(ChatMessage).join(
+        last_subq, ChatMessage.id == last_subq.c.mid
+    ).all()
+    last_by_thread = {m.thread_id: m for m in last_msgs}
+    sender_ids = {m.sender_user_id for m in last_msgs if m.sender_user_id}
+    sender_names = {}
+    if sender_ids:
+        sender_names = {
+            u_id: nome for u_id, nome in db.session.query(Usuario.id, Usuario.nome)
+            .filter(Usuario.id.in_(sender_ids)).all()
+        }
+
+    # 3. Contagem de nao-lidas por thread (msgs depois do last_read, nao proprias).
+    unread_rows = db.session.query(
+        ChatMessage.thread_id, func.count(ChatMessage.id)
+    ).join(
+        ChatMember, and_(
+            ChatMember.thread_id == ChatMessage.thread_id,
+            ChatMember.user_id == uid,
+            ChatMember.removido_em.is_(None),
+        )
+    ).filter(
+        ChatMessage.thread_id.in_(ids),
+        ChatMessage.deletado_em.is_(None),
+        or_(ChatMessage.sender_user_id.is_(None), ChatMessage.sender_user_id != uid),
+        or_(
+            ChatMember.last_read_message_id.is_(None),
+            ChatMessage.id > ChatMember.last_read_message_id,
+        ),
+    ).group_by(ChatMessage.thread_id).all()
+    unread_by_thread = {tid: c for tid, c in unread_rows}
+
+    out = []
+    for t in threads:
+        members = members_by_thread.get(t.id, [])
+        others = [(mid, nome) for (mid, nome) in members if mid != uid]
+        last = last_by_thread.get(t.id)
+
+        # display_name + avatar por tipo
+        if t.tipo == 'dm':
+            counter = others[0] if others else (None, 'Conversa')
+            display_name = counter[1] or 'Conversa'
+            avatar = _avatar('initials', display_name, color_seed=counter[0] or t.id)
+        elif t.tipo == 'system_dm':
+            display_name = 'Avisos do sistema'
+            avatar = _avatar('icon', icon='fa-bell', color_seed=0)
+        elif t.tipo == 'group':
+            display_name = t.titulo or 'Grupo'
+            avatar = _avatar('initials', display_name, color_seed=t.id)
+            avatar['group'] = True
+        else:  # entity
+            display_name = t.titulo or entity_label(t.entity_type, t.entity_id)
+            avatar = _avatar('icon', icon='fa-tag', color_seed=t.id)
+
+        # preview da ultima mensagem
+        preview = ''
+        preview_sender = ''
+        if last is not None:
+            if last.deletado_em is not None:
+                preview = 'Mensagem removida'
+            else:
+                preview = (last.content or '')[:_PREVIEW_LEN]
+            if last.sender_type == 'system':
+                preview_sender = system_source_label(last.sender_system_source)
+            elif last.sender_user_id == uid:
+                preview_sender = 'Você'
+            else:
+                preview_sender = sender_names.get(last.sender_user_id, 'Usuário')
+
+        out.append({
+            'id': t.id,
+            'tipo': t.tipo,
+            'titulo': t.titulo,
+            'entity_type': t.entity_type,
+            'entity_id': t.entity_id,
+            'display_name': display_name,
+            'avatar': avatar,
+            'preview': preview,
+            'preview_sender': preview_sender,
+            'preview_nivel': last.nivel if last is not None else None,
+            'unread_count': unread_by_thread.get(t.id, 0),
+            'members_count': len(members),
+            'last_message_at': t.last_message_at.isoformat() if t.last_message_at else None,
+        })
+    return out
+
+
 def _thread_dict(t: ChatThread) -> dict:
-    return {
-        'id': t.id,
-        'tipo': t.tipo,
-        'titulo': t.titulo,
-        'entity_type': t.entity_type,
-        'entity_id': t.entity_id,
-        'last_message_at': t.last_message_at.isoformat() if t.last_message_at else None,
-    }
+    """Serializa UMA thread (recem-criada). Wrapper sobre o serializer em lote."""
+    return _serialize_threads(current_user, [t])[0]
 
 
 @chat_bp.route('/threads', methods=['GET'])
@@ -27,7 +159,7 @@ def _thread_dict(t: ChatThread) -> dict:
 def list_threads():
     tipo = request.args.get('tipo')
     threads = ThreadService.list_threads_for_user(current_user, tipo=tipo)
-    return jsonify({'threads': [_thread_dict(t) for t in threads]})
+    return jsonify({'threads': _serialize_threads(current_user, threads)})
 
 
 @chat_bp.route('/threads/dm', methods=['POST'])

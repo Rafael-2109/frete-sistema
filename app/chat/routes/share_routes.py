@@ -39,10 +39,13 @@ def share_screen():
 
     comentario = (data.get('comentario') or '').strip()
     title = (data.get('title') or 'Tela compartilhada').strip()
+    # NAO embutir link markdown no content: o renderer markdown e dead code
+    # (CLAUDE.md Bug #7) e apareceria literal. O link clicavel vem do card de
+    # deep_link (renderizado pelo chat_ui.js). Aqui so texto limpo.
     body_parts = []
     if comentario:
         body_parts.append(comentario)
-    body_parts.append(f'↗ **{title}**\n[abrir tela]({url})')
+    body_parts.append(f'↗ Compartilhou a tela: {title}')
     content = '\n\n'.join(body_parts)
 
     try:

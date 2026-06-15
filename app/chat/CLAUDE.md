@@ -252,15 +252,19 @@ SELECT + INSERT sem lock criava 2 DMs em double-click. Solucao:
 `pg_advisory_xact_lock(hash(par_ordenado))` serializa por par.
 Mesmo padrao em `get_or_create_system_dm` (workers RQ concorrentes).
 
-### Bug #7: Markdown renderer e DEAD CODE
-`render_markdown` e `sanitize_html` em `markdown_parser.py` NAO sao invocados
-em lugar nenhum do backend. Frontend (`chat_ui.js:203`) usa `escapeHtml(m.content)`
-direto. Resultado: `**bold**` aparece literal e links markdown nao viram clicaveis.
-O UNICO vetor de link e `deep_link` (validado via `url_safe`).
+### Bug #7: Markdown renderer e DEAD CODE (parcialmente resolvido no redesign)
+`render_markdown` e `sanitize_html` em `markdown_parser.py` continuam NAO sendo
+invocados no backend. O frontend AGORA renderiza um **markdown leve e seguro**
+via `renderRich()` (`chat_ui.js`): escapa o conteudo primeiro (escapeHtml) e so
+entao injeta tags FIXAS `<strong>` (`**x**`), `<code>` (`` `x` ``) e `<br>` (`\n`).
+NAO ha injecao de `href` a partir do texto — o UNICO vetor de link continua sendo
+`deep_link` (validado via `url_safe` no backend + `isClickableUrl` no client).
+Por isso `share/screen` e `forward` deixaram de embutir links markdown no `content`
+(apareciam literais): hoje mandam texto limpo e o link clicavel vem do card de
+deep_link. Auto-linkify de URLs digitadas NAO foi adicionado (evita superficie XSS).
 
-Decisao pendente: ativar markdown (aplicar `sanitize_html` no `_message_dict`) OU
-remover o dead code e documentar que mensagens sao texto puro. Se ativar, revalidar
-testes de XSS (payloads com inline handlers `onerror`, base64 data URIs).
+Pendente: o dead code em `markdown_parser.py` pode ser removido (so `extract_mentions`
+e usado). Se um dia ativar markdown completo, revalidar XSS (`onerror`, data: URIs).
 
 ### Débito: Hooks de alerta nao instalados em workers (nao e bug)
 `notify_recebimento_finalizado`, `notify_dfe_bloqueado`, `notify_cte_divergente`
@@ -314,6 +318,37 @@ except Exception:
 ```
 
 ---
+
+## Redesign de UI (branch `claude/system-chat-redesign`)
+
+Reforma de apresentacao SEM tocar na arquitetura de polling (R2) nem nas regras
+de seguranca P0 (R3-R8). Backend: enriquecimento ADITIVO de 2 serializers
+(contrato so cresceu, nada removido).
+
+**`_serialize_threads` (thread_routes.py)** — alem dos campos antigos, devolve:
+`display_name` (DM = nome do interlocutor; system_dm = "Avisos do sistema";
+group = titulo; entity = titulo|`entity_label`), `avatar` (`{kind:'initials'|'icon',
+text|icon, color_idx 0..7, group?}`), `preview` + `preview_sender` (ultima msg),
+`preview_nivel`, `unread_count` (por thread), `members_count`. Usa 4 queries em
+LOTE (sem N+1) para ate 50 threads. `_thread_dict` virou wrapper sobre o lote.
+
+**`_message_dict` / `_serialize_messages` (message_routes.py)** — alem dos antigos:
+`sender_name` (nome real, fim do `user#42`), `is_own`, `can_edit` (autor + janela
+15min), `can_delete` (autor ou admin), `reactions` (`[{emoji,count,mine}]` agregado),
+`reply_to` (`{id,sender_name,preview}`). A listagem usa serializer em lote (reacoes,
+replies e nomes em 3 queries). Single (send/edit/forward) resolve sozinho.
+
+**Frontend** (`chat_ui.js` + `_chat.css` + `drawer.html`): avatares (8 hues hsl),
+bolhas alinhadas (own a direita), agrupamento + separador de data, barra de acoes
+no hover (reagir/responder/encaminhar/editar/excluir/copiar link), chips de reacao,
+citacao (reply), busca FTS na barra do drawer, toasts (`toast()` substitui `alert()`),
+modais via classes CSS (`buildModal`, fim do CSS inline), encaminhar com seletor de
+conversa/pessoa (nao mais ID numerico digitado). Helpers compartilhados de rotulo em
+`app/chat/utils.py` (`system_source_label`, `entity_label`).
+
+**Share screen** agora inclui `window.location.hash` na URL compartilhada — telas
+com estado em `#fragment` (filtros/abas) eram compartilhadas sem ele e abriam estado
+diferente. Conteudo da mensagem virou texto limpo (ver Bug #7).
 
 ## Observabilidade
 
