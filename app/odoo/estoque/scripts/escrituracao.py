@@ -2281,3 +2281,122 @@ class EscrituracaoLfService:
         ) else None
         out['tempo_ms'] = int((time.time() - t0) * 1000)
         return out
+
+    def montar_invoice_entrada_direta(
+        self,
+        *,
+        journal_id: int,
+        partner_id: int,
+        company_id: int,
+        invoice_date,
+        linhas: List[Dict[str, Any]],
+        operacao_id: int,
+        move_type: str = 'in_invoice',
+        calcular_imposto: bool = False,
+        invoice_origin: Optional[str] = None,
+        refnfe_chave: Optional[str] = None,
+        allowed_company_ids: Optional[List[int]] = None,
+        dry_run: bool = True,
+    ) -> Dict[str, Any]:
+        """Monta uma NF MONTADA-DIRETO (account.move SEM PO), com `l10n_br_operacao_id`
+        + `l10n_br_operacao_manual=True` por linha e `l10n_br_calcular_imposto` controlado.
+
+        Usado pela ENTRADA do retorno de industrialização (FLUXO L3 1.2.4): a NF-2 de
+        insumos (in_invoice, j1084, op 3252) NÃO pode vir por caminho A — o `criar_invoice`
+        do robô monta *tax lines espelho* que auto-cancelam e a baixa do `no_payment` do
+        journal NÃO ocorre (provado `s66`). Montada direto com `calcular_imposto=False`
+        (sem espelho), a op leva a conta da linha à transitória sozinha e o `action_post`
+        baixa a compensação (`s62`/`s67`). Genérico: serve entrada (in_invoice/op 3252) e
+        saída (out_invoice/op 2864) variando args.
+
+        Invariantes codificados (gotchas s24/s62/s66):
+          - header `l10n_br_calcular_imposto=calcular_imposto` (default False = sem espelho);
+          - cada linha `l10n_br_operacao_manual=True` (senão o onchange apaga a op);
+          - **NÃO** rodar `onchange_l10n_br_calcular_imposto[_btn]` (recriaria o espelho) —
+            responsabilidade do caller: este átomo só cria, não roda onchange de imposto.
+
+        Args:
+            journal_id: diário (ex.: j1084 ENTRI = no_payment ATIVA 22800).
+            partner_id: fornecedor/cliente (ex.: LF=35 na entrada FB).
+            company_id: empresa do move (ex.: FB=1).
+            invoice_date: data (alinhar à NF-1 p/ não postar antes da emissão).
+            linhas: [{'product_id','quantity','price_unit'}] (preços da remessa — 5902=5901).
+            operacao_id: `l10n_br_operacao_id` por linha (ex.: 3252 entrada / 2864 saída).
+            move_type: 'in_invoice' (entrada, default) ou 'out_invoice' (saída).
+            calcular_imposto: header `l10n_br_calcular_imposto` (False = sem tax lines espelho).
+            invoice_origin: R3 — origin comum com a NF-1.
+            refnfe_chave: R3 — chave da remessa p/ `referencia_ids` (best-effort, com company_id).
+            allowed_company_ids: contexto multi-company (default [company_id]).
+            dry_run: True (default) NÃO escreve — retorna o move_vals planejado.
+
+        Returns:
+            status: 'DRY_RUN_OK' | 'CRIADO' | 'FALHA'
+            + move_vals (dry-run) | invoice_id, r3 (real) | n_linhas | total | erro
+        """
+        out: Dict[str, Any] = {'status': 'FALHA', 'invoice_id': None, 'erro': None}
+        # pré-cond LEVES (sem raise — dry-run sempre planeja; AP4)
+        if not linhas:
+            out['erro'] = 'linhas_vazias'
+            return out
+        for campo, val in (('journal_id', journal_id), ('partner_id', partner_id),
+                           ('company_id', company_id), ('operacao_id', operacao_id)):
+            if not isinstance(val, int) or val <= 0:
+                out['erro'] = f'{campo}_invalido'
+                return out
+        for l in linhas:
+            if not ({'product_id', 'quantity', 'price_unit'} <= set(l)):
+                out['erro'] = 'linha_incompleta (exige product_id/quantity/price_unit)'
+                return out
+
+        inv_lines = [(0, 0, {
+            'product_id': int(l['product_id']),
+            'quantity': l['quantity'],
+            'price_unit': l['price_unit'],
+            'l10n_br_operacao_id': operacao_id,
+            'l10n_br_operacao_manual': True,   # senão onchange apaga a op (s24/s62)
+        }) for l in linhas]
+        move_vals: Dict[str, Any] = {
+            'move_type': move_type,
+            'journal_id': journal_id,
+            'company_id': company_id,
+            'partner_id': partner_id,
+            'invoice_date': invoice_date,
+            'l10n_br_calcular_imposto': calcular_imposto,   # False = sem tax lines espelho (s66)
+            'invoice_line_ids': inv_lines,
+        }
+        if invoice_origin:
+            move_vals['invoice_origin'] = invoice_origin
+        total = sum((l['quantity'] or 0) * (l['price_unit'] or 0) for l in linhas)  # precisão cheia; caller arredonda
+
+        if dry_run:
+            out.update(status='DRY_RUN_OK', move_vals=move_vals,
+                       n_linhas=len(inv_lines), total=total)
+            return out
+
+        ctx = {'allowed_company_ids': allowed_company_ids or [company_id],
+               'company_id': company_id, 'lang': 'pt_BR'}
+        try:
+            mid = self.odoo.execute_kw('account.move', 'create', [move_vals], {'context': ctx})
+        except Exception as e:
+            out['erro'] = f'create_falhou: {str(e)[:200]}'
+            return out
+
+        r3 = False
+        if refnfe_chave:
+            try:
+                # gotcha s67: o modelo referencia exige company_id além de l10n_br_chave_nf
+                self.odoo.execute_kw(
+                    'account.move', 'write',
+                    [[mid], {'referencia_ids': [(0, 0, {
+                        'l10n_br_chave_nf': refnfe_chave,
+                        'company_id': company_id,
+                    })]}],
+                    {'context': ctx})
+                r3 = True
+            except Exception as e:
+                logger.warning(f'R3 refNFe best-effort falhou (nao critico): {str(e)[:120]}')
+
+        out.update(status='CRIADO',
+                   invoice_id=int(mid) if isinstance(mid, (int, float)) else None,
+                   n_linhas=len(inv_lines), total=total, r3=r3)
+        return out
