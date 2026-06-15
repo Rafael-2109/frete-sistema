@@ -302,6 +302,12 @@ def executar_cancelamento_cascata(
                 resultado['erros'].append(f'operacao_bloqueada: {razao}')
             else:
                 op.status = 'CANCELADO'
+                # Consistencia de comissao: CTe cancelado gera debito (estorno)
+                # nos fechamentos ativos. Flush-only — entra no commit atomico abaixo.
+                from app.carvia.services.financeiro.comissao_service import ComissaoService
+                ComissaoService.sincronizar_ajustes_cte(
+                    operacao_id, 0, 'CANCELAMENTO_CTE', usuario,
+                )
                 resultado['cancelados']['operacao'] = operacao_id
 
         # Commit atomico. Se nenhum item foi cancelado, status=NADA_CANCELADO

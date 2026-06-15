@@ -878,6 +878,14 @@ def register_operacao_routes(bp):
                 )
                 operacao.fatura_cliente_id = None
             operacao.status = 'CANCELADO'
+
+            # Consistencia de comissao: CTe cancelado gera debito (estorno) nos
+            # fechamentos ativos que o contem.
+            from app.carvia.services.financeiro.comissao_service import ComissaoService
+            ComissaoService.sincronizar_ajustes_cte(
+                operacao_id, 0, 'CANCELAMENTO_CTE', current_user.email,
+            )
+
             db.session.commit()
             logger.info(
                 f"Operacao #{operacao_id} cancelada por {current_user.email}"
@@ -1321,6 +1329,13 @@ def register_operacao_routes(bp):
 
             # NAO recalcular fatura.valor_total — fatura e entidade
             # independente (alinhado com modulo de fretes).
+
+            # Consistencia de comissao: se o CTe ja foi comissionado em algum
+            # fechamento ativo, gera ajuste (debito/credito) pela diferenca.
+            from app.carvia.services.financeiro.comissao_service import ComissaoService
+            ComissaoService.sincronizar_ajustes_cte(
+                operacao_id, cte_valor, 'ALTERACAO_VALOR', current_user.email,
+            )
 
             db.session.commit()
             logger.info(
