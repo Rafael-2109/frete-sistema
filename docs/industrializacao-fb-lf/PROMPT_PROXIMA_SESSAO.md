@@ -24,7 +24,7 @@ atualizado: 2026-06-13
 > 1. **SA DURÁVEL no Odoo** (server action persistente, espelho da saída `s37`): ao escriturar a NF-1 → monta+posta a NF-2 DIRETO (spec abaixo) + revalora o PA + R3. Dívida: script de re-aplicação idempotente versionado + monitor anti-upgrade (SA custom some em upgrade CIEL IT).
 > 2. **Automação dos 2 gatilhos** (`SOT §6.2`): G1 (NF-1 serviço → cria NF-2) + G2 (transmissão via SA) + **descoberta automática da remessa** (genealogia lote→MO→mat.terceiros, fonte A/B/C `s46`; no piloto é FIXA = move 735679).
 > 3. **Reconciliar o trânsito físico 26489** (lado LF→26489) no fluxo automatizado.
-> 4. **Pontos de código que assumem "1 NF"** (`ACHADOS §E`): orchestrator `inventario_pipeline`, Skill 8 `faturamento.py`, Skill 7 `escrituracao.py`, `recebimento_lf_odoo_service`, ETL `faturamento_service` (filtrar NF de insumos total=0).
+> 4. **Pontos de código que assumem "1 NF"** (`ACHADOS §E`) — ✅ **ETL `faturamento_service` FEITO (15/06):** `company_id not in [5]` exclui as NFs inter-company da LF (commit `43127eb76` + 5 testes; **pende push/deploy**); 34 registros espúrios do piloto limpos em PROD (`s68`). ⚠️ **histórico LF (934 linhas desde fev) a limpar à parte** (só infla relatório). **FALTAM:** orchestrator `inventario_pipeline`, Skill 8 `faturamento.py`, Skill 7 `escrituracao.py`, `recebimento_lf_odoo_service` (ajustar p/ 2 DFes/invoices — `recebimento` pega `invoice_ids[-1]`, quebra com a NF simbólica).
 >
 > **🔧 SPEC NF-2 (montada DIRETO — provada `s67 --montar-nf2`):** `account.move` `in_invoice`, partner LF=35, journal **j1084**, `invoice_date`=NF-1; 16 linhas op `3252`+`operacao_manual=True` + **preços da REMESSA** (move 735679, total 279,23); `l10n_br_calcular_imposto=False`; **NÃO** rodar `onchange_l10n_br_calcular_imposto_btn`; R3 = `referencia_ids`[(0,0,{'l10n_br_chave_nf': <chave remessa>})] + `invoice_origin`. A op 3252 leva a conta da linha a **1150100011** sozinha. Postar → `D 1150100011 / C 5101010001 ATIVA 279,23`.
 >
@@ -32,7 +32,7 @@ atualizado: 2026-06-13
 >
 > **IDs-chave:** FB=1/LF=5 · PA **27834**(4870112) lote **PILOTO-3105**(61519) · **j1084 ENTRI**(no_payment 22800=ATIVA) · op **3252**(1902 entrada, conta linha 1150100011) · op **1917**(serviço) · contas **1150100007** PA / **1150100011** transit / **22800** ATIVA · remessa move **735679** · DFe **44522**(insumos)/**44523**(serviço) · picking **325347** · PO **43464**(NF-1) · team **144** · partner LF **35** · pt52(26489→8) · journal revaloração **8**.
 >
-> **Estado vivo no Odoo (POSTED, reversível `s67 --reverter <id_nf2>`):** NF-1 **792219** posted · NF-2 **795439** posted (`ENTRI/2026/06/0001`) · picking 325347 done · PO 43464 · j1084. Scripts **`s60`–`s67`** em `docs/industrializacao-fb-lf/scripts/` (untracked, sem commit).
+> **Estado vivo no Odoo (POSTED, reversível `s67 --reverter <id_nf2>`):** NF-1 **792219** posted · NF-2 **795439** posted (`ENTRI/2026/06/0001`) · picking 325347 done · PO 43464 · j1084. Scripts **`s60`–`s68`** + filtro ETL + **`POP_OPERACIONAL_INDUSTRIALIZACAO.md`** COMMITADOS (`43127eb76` filtro+testes / `76a44db6b` docs+scripts; **⚠️ PENDENTE PUSH/DEPLOY** — sem o deploy do filtro, o próximo ciclo LF→FB volta a contaminar o ETL).
 >
 > **🔴 Regras invioláveis:** **dry-run + go FRESCO do Rafael em CADA escrita Odoo**; nada postado sem go; reversível (j1084/j1001 `restrict_mode_hash_table=False`); toda transmissão SEFAZ é PRODUÇÃO (`tpAmb=1`), IRREVERSÍVEL. **Medir SEMPRE pelo LANÇAMENTO do ciclo, nunca pelo saldo global** (contas compartilhadas pela empresa inteira).
 
