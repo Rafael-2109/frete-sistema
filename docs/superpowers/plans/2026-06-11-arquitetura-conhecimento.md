@@ -414,7 +414,7 @@ Anexo permanente do desenho-alvo (anti-overengineering). Revisitar item so com g
   (01-05 mapas por camada, 06 cross-layer, 07 avaliacao adversarial KG, 08-* propostas
   episteme/refinaria/x-enxuto, 09-* juizes escalabilidade/risco-retorno). Diretorio
   nao-versionado (gitignore `relatorios/`).
-- FONTE: conversa motivadora — `app/agente/conversa.md` (nao-versionada; raiz do repo principal).
+- FONTE: conversa motivadora — `app/agente/conversa.md` (REMOVIDA do repo em 2026-06-15: estava versionada por engano via commit acidental `e9c627c2f`; diagnostico ja absorvido neste plano — conteudo preservado no historico git).
 - FONTE: padroes que este plano generaliza — `.claude/references/ARQUITETURA_CONTEXTO_AGENTE.md`
   (PAD-CTX: dono + redundancia autorizada + lint; promocao memoria→codigo),
   `.claude/references/ARQUITETURA_DE_ARTEFATOS.md` (PAD-A), `app/odoo/estoque/CLAUDE.md`

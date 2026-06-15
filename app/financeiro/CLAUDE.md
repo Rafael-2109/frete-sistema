@@ -280,6 +280,7 @@ NAO copiar a funcao localmente — importar do modulo compartilhado.
 | `app.monitoramento.models` | `EntregaMonitorada` | Delivery tracking. 5 arquivos |
 | `app.embeddings` | `EmbeddingService` | Feature-flagged, lazy. 3 services |
 | `app.portal.workers` | `enqueue_job`, `get_queue` | RQ job queue. 8 workers |
+| `app.agente.sdk.baseline_fastpath` | `executar_baseline_fastpath` | Lazy (dentro da rota). `POST /financeiro/baseline/gerar` — botao "Gerar Baseline" da Central Financeira reusa o fast-path do agente (deterministico, sem LLM) |
 
 | Exporta para | O que | Cuidado |
 |-------------|-------|---------|
