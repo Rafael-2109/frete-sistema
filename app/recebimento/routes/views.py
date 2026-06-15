@@ -34,7 +34,8 @@ from app.recebimento.models import (
     CadastroPrimeiraCompra,
     PerfilFiscalProdutoFornecedor,
     NcmIbsCbsValidado,
-    PendenciaFiscalIbsCbs
+    PendenciaFiscalIbsCbs,
+    FornecedorBloqueado
 )
 from app import db
 
@@ -869,6 +870,150 @@ def ncm_ibscbs_cadastro_local(prefixo):
             'sucesso': False,
             'mensagem': str(e)
         }), 500
+
+
+# =============================================================================
+# TELA: FORNECEDORES BLOQUEADOS (entradas de compra nao registradas)
+# =============================================================================
+
+def _serializar_fornecedor_bloqueado(item):
+    """Serializa FornecedorBloqueado para JSON (usado nos modais de edicao)."""
+    return {
+        'id': item.id,
+        'cnpj': item.cnpj,
+        'razao_social': item.razao_social or '',
+        'motivo': item.motivo or '',
+        'ativo': item.ativo,
+    }
+
+
+@recebimento_views_bp.route('/fornecedores-bloqueados')
+@login_required
+def fornecedores_bloqueados():
+    """
+    Tela CRUD de fornecedores bloqueados.
+
+    Quando um CNPJ esta cadastrado e ATIVO, o sync do Odoo NAO grava
+    PedidoCompras nem MovimentacaoEstoque (ENTRADA/COMPRA) desse fornecedor.
+    """
+    cnpj_filtro = request.args.get('cnpj', '').strip()
+    apenas_ativos = request.args.get('apenas_ativos', '1') == '1'
+    page = request.args.get('page', 1, type=int)
+    per_page = 20
+
+    query = FornecedorBloqueado.query
+
+    if apenas_ativos:
+        query = query.filter_by(ativo=True)
+    if cnpj_filtro:
+        from app.pallet.utils import normalizar_cnpj
+        cnpj_norm = normalizar_cnpj(cnpj_filtro)
+        query = query.filter(
+            db.or_(
+                FornecedorBloqueado.cnpj.ilike(f'%{cnpj_norm}%'),
+                FornecedorBloqueado.razao_social.ilike(f'%{cnpj_filtro}%')
+            )
+        )
+
+    paginacao = query.order_by(
+        FornecedorBloqueado.razao_social.asc().nulls_last(),
+        FornecedorBloqueado.cnpj.asc()
+    ).paginate(page=page, per_page=per_page, error_out=False)
+
+    stats = {
+        'total': FornecedorBloqueado.query.count(),
+        'ativos': FornecedorBloqueado.query.filter_by(ativo=True).count(),
+        'inativos': FornecedorBloqueado.query.filter_by(ativo=False).count(),
+    }
+
+    itens_json = json.dumps([
+        _serializar_fornecedor_bloqueado(item)
+        for item in paginacao.items
+    ])
+
+    return render_template(
+        'fornecedores_bloqueados.html',
+        paginacao=paginacao,
+        stats=stats,
+        filtros={'cnpj': cnpj_filtro, 'apenas_ativos': apenas_ativos},
+        itens_json=itens_json
+    )
+
+
+@recebimento_views_bp.route('/fornecedores-bloqueados/salvar', methods=['POST'])
+@login_required
+def fornecedores_bloqueados_salvar():
+    """Salva (cria ou atualiza) um fornecedor bloqueado."""
+    from app.pallet.utils import normalizar_cnpj
+    try:
+        fb_id = request.form.get('id')
+        cnpj_raw = request.form.get('cnpj', '').strip()
+        cnpj_norm = normalizar_cnpj(cnpj_raw)
+
+        if not cnpj_norm or len(cnpj_norm) != 14:
+            flash('CNPJ invalido: informe os 14 digitos.', 'danger')
+            return redirect(url_for('recebimento_views.fornecedores_bloqueados'))
+
+        usuario = current_user.nome if hasattr(current_user, 'nome') else str(current_user.id)
+
+        if fb_id:
+            fb = db.session.get(FornecedorBloqueado, int(fb_id)) if int(fb_id) else None
+            if not fb:
+                flash('Fornecedor bloqueado nao encontrado.', 'danger')
+                return redirect(url_for('recebimento_views.fornecedores_bloqueados'))
+            # Impede duplicar o CNPJ em OUTRO registro
+            conflito = db.session.query(FornecedorBloqueado).filter(
+                FornecedorBloqueado.cnpj == cnpj_norm,
+                FornecedorBloqueado.id != fb.id
+            ).first()
+            if conflito:
+                flash(f'CNPJ {cnpj_norm} ja cadastrado em outro registro.', 'warning')
+                return redirect(url_for('recebimento_views.fornecedores_bloqueados'))
+            fb.atualizado_por = usuario
+        else:
+            existente = db.session.query(FornecedorBloqueado).filter_by(cnpj=cnpj_norm).first()
+            if existente:
+                flash(f'CNPJ {cnpj_norm} ja cadastrado.', 'warning')
+                return redirect(url_for('recebimento_views.fornecedores_bloqueados'))
+            fb = FornecedorBloqueado(cnpj=cnpj_norm, criado_por=usuario)
+            db.session.add(fb)
+
+        fb.cnpj = cnpj_norm
+        fb.razao_social = request.form.get('razao_social', '').strip() or None
+        fb.motivo = request.form.get('motivo', '').strip() or None
+        fb.ativo = request.form.get('ativo') == '1'
+
+        db.session.commit()
+        acao = 'atualizado' if fb_id else 'cadastrado'
+        flash(f'Fornecedor {cnpj_norm} {acao} com sucesso!', 'success')
+
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Erro ao salvar: {str(e)}', 'danger')
+
+    return redirect(url_for('recebimento_views.fornecedores_bloqueados'))
+
+
+@recebimento_views_bp.route('/fornecedores-bloqueados/<int:fb_id>/desativar', methods=['POST'])
+@login_required
+def fornecedores_bloqueados_desativar(fb_id):
+    """Reconsidera um fornecedor (desativa o registro). Soft delete — pode ser reativado na edicao."""
+    try:
+        fb = db.session.get(FornecedorBloqueado, fb_id) if fb_id else None
+        if not fb:
+            flash('Fornecedor nao encontrado.', 'danger')
+            return redirect(url_for('recebimento_views.fornecedores_bloqueados'))
+
+        fb.ativo = False
+        fb.atualizado_por = current_user.nome if hasattr(current_user, 'nome') else str(current_user.id)
+        db.session.commit()
+        flash(f'Fornecedor {fb.cnpj} reconsiderado (voltara a ser registrado).', 'success')
+
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Erro ao reconsiderar: {str(e)}', 'danger')
+
+    return redirect(url_for('recebimento_views.fornecedores_bloqueados'))
 
 
 # =============================================================================

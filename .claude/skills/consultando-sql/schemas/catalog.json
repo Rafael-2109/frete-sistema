@@ -105,7 +105,7 @@
     "vinculacao_carteira_separacao",
     "webhook_configs"
   ],
-  "total_tabelas": 318,
+  "total_tabelas": 319,
   "tabelas": [
     {
       "name": "agendamentos_entrega",
@@ -1642,6 +1642,16 @@
         "entity_type"
       ],
       "dominio": "Embeddings"
+    },
+    {
+      "name": "fornecedor_bloqueado",
+      "description": "Fornecedores cujas ENTRADAS DE COMPRA nao devem ser registradas no sistema.",
+      "key_fields": [
+        "cnpj",
+        "razao_social",
+        "motivo"
+      ],
+      "dominio": "Recebimento"
     },
     {
       "name": "frete_devolucao",

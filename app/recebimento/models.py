@@ -1885,3 +1885,52 @@ class NfTransferenciaDesconsiderada(db.Model):
         return (
             f'<NfTransferenciaDesconsiderada move_id={self.account_move_id_origem}>'
         )
+
+
+class FornecedorBloqueado(db.Model):
+    """Fornecedores cujas ENTRADAS DE COMPRA nao devem ser registradas no sistema.
+
+    Quando um CNPJ esta cadastrado e ATIVO aqui, o sync do Odoo NAO grava:
+      - PedidoCompras            (app/odoo/services/pedido_compras_service.py)
+      - MovimentacaoEstoque      ENTRADA/COMPRA via:
+          - app/odoo/services/entrada_material_service.py
+          - app/recebimento/services/recebimento_fisico_odoo_service.py
+
+    O CNPJ e' armazenado NORMALIZADO (apenas digitos, ver app.pallet.utils.
+    normalizar_cnpj) para casar com o `l10n_br_cnpj` do Odoo independente de
+    formatacao. O match e' EXATO (14 digitos) — cada filial e' um registro.
+    """
+    __tablename__ = 'fornecedor_bloqueado'
+
+    id = db.Column(db.Integer, primary_key=True)
+    # CNPJ normalizado (apenas digitos). Unico para evitar duplicidade.
+    cnpj = db.Column(db.String(14), nullable=False, unique=True, index=True)
+    razao_social = db.Column(db.String(255), nullable=True)
+    motivo = db.Column(db.String(500), nullable=True)
+    ativo = db.Column(db.Boolean, nullable=False, default=True, index=True)
+
+    criado_em = db.Column(db.DateTime, nullable=False, default=agora_utc_naive)
+    criado_por = db.Column(db.String(100), nullable=True)
+    atualizado_em = db.Column(db.DateTime, nullable=True, onupdate=agora_utc_naive)
+    atualizado_por = db.Column(db.String(100), nullable=True)
+
+    def __repr__(self):
+        return f'<FornecedorBloqueado {self.cnpj} ativo={self.ativo}>'
+
+    @classmethod
+    def esta_bloqueado(cls, cnpj) -> bool:
+        """Retorna True se o CNPJ (com ou sem formatacao) estiver cadastrado e ATIVO.
+
+        Usado como filtro nos sync de compras/entradas. Normaliza o CNPJ de
+        entrada (so digitos) antes de comparar com o valor armazenado.
+        """
+        if not cnpj:
+            return False
+        from app.pallet.utils import normalizar_cnpj
+        cnpj_norm = normalizar_cnpj(cnpj)
+        if not cnpj_norm:
+            return False
+        return db.session.query(cls.id).filter(
+            cls.cnpj == cnpj_norm,
+            cls.ativo.is_(True),
+        ).first() is not None

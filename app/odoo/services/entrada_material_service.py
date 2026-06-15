@@ -162,6 +162,16 @@ class EntradaMaterialService:
                         resultado['entradas_ignoradas'] += 1
                         continue
 
+                    # 3.1.1 Verificar lista de fornecedores bloqueados (por CNPJ)
+                    from app.recebimento.models import FornecedorBloqueado
+                    if FornecedorBloqueado.esta_bloqueado(cnpj_fornecedor):
+                        logger.info(
+                            f"   ⛔ Fornecedor bloqueado (CNPJ {cnpj_fornecedor}) "
+                            f"- PULANDO movimentacao de estoque"
+                        )
+                        resultado['entradas_ignoradas'] += 1
+                        continue
+
                     # 3.2 Buscar movimentos do picking (do cache)
                     movimentos = cache['movimentos_por_picking'].get(picking_id, [])
 

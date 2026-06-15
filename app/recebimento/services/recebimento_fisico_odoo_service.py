@@ -602,6 +602,17 @@ class RecebimentoFisicoOdooService:
 
         logger.info(f"  Processando {len(lotes_processados)} lotes para MovimentacaoEstoque")
 
+        # Filtro: fornecedor bloqueado NAO gera MovimentacaoEstoque (entrada de compra).
+        # O CNPJ nao esta carregado aqui — buscamos o partner do picking no Odoo.
+        from app.recebimento.models import FornecedorBloqueado
+        cnpj_fornecedor = self._buscar_cnpj_fornecedor_picking(odoo, recebimento.odoo_picking_id)
+        if FornecedorBloqueado.esta_bloqueado(cnpj_fornecedor):
+            logger.info(
+                f"  [Recebimento {recebimento.id}] Fornecedor bloqueado "
+                f"(CNPJ {cnpj_fornecedor}) - nenhuma MovimentacaoEstoque criada"
+            )
+            return
+
         # Coletar todos os product_ids e move_line_ids para buscar em batch
         product_ids = list(set(lote.odoo_product_id for lote in lotes_processados if lote.odoo_product_id))
         move_line_ids = list(set(lote.odoo_move_line_criado_id for lote in lotes_processados if lote.odoo_move_line_criado_id))
@@ -710,6 +721,36 @@ class RecebimentoFisicoOdooService:
             f"  MovimentacaoEstoque: {movimentacoes_criadas} criadas, "
             f"{movimentacoes_atualizadas} atualizadas"
         )
+
+    def _buscar_cnpj_fornecedor_picking(self, odoo, picking_id):
+        """Busca o CNPJ (l10n_br_cnpj) do fornecedor (partner) de um picking.
+
+        Usado para aplicar o filtro de FornecedorBloqueado no recebimento fisico.
+        Retorna None se nao houver partner ou em caso de erro (fail-open: na
+        duvida, NAO bloqueia — preserva o comportamento atual).
+        """
+        try:
+            pickings = odoo.execute_kw(
+                'stock.picking', 'read',
+                [[int(picking_id)]],
+                {'fields': ['partner_id']}
+            )
+            if not pickings or not pickings[0].get('partner_id'):
+                return None
+            partner_id = pickings[0]['partner_id'][0]
+            partners = odoo.execute_kw(
+                'res.partner', 'read',
+                [[partner_id]],
+                {'fields': ['l10n_br_cnpj']}
+            )
+            if partners:
+                return partners[0].get('l10n_br_cnpj')
+        except Exception as e:
+            logger.warning(
+                f"  Nao foi possivel obter CNPJ do fornecedor do picking "
+                f"{picking_id}: {e}"
+            )
+        return None
 
     def _buscar_codigos_produto_batch(self, odoo, product_ids):
         """

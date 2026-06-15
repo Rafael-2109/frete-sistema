@@ -514,6 +514,17 @@ class PedidoComprasServiceOtimizado:
                             pedidos_grupo_ignorados += 1
                             continue  # Pula este pedido
 
+                        # Lista de fornecedores bloqueados (por CNPJ)
+                        from app.recebimento.models import FornecedorBloqueado
+                        if FornecedorBloqueado.esta_bloqueado(cnpj):
+                            self.logger.info(
+                                f"   ⛔ Pedido {pedido_odoo['name']} do fornecedor "
+                                f"{fornecedor.get('name')} (CNPJ: {cnpj[:15]}...) "
+                                f"- FORNECEDOR BLOQUEADO - IGNORADO"
+                            )
+                            pedidos_grupo_ignorados += 1
+                            continue  # Pula este pedido
+
                 self.logger.info(f"📋 Processando pedido {pedido_odoo['name']}...")
 
                 # Buscar linhas no CACHE
