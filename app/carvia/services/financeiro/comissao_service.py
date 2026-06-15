@@ -117,18 +117,21 @@ class ComissaoService:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def buscar_ctes_elegiveis(data_inicio, data_fim, excluir_ja_comissionados=True):
-        """Retorna CTes CarVia elegiveis para comissao no periodo.
+    def buscar_ctes_elegiveis(data_fim, data_inicio=None, excluir_ja_comissionados=True):
+        """Retorna CTes CarVia elegiveis para comissao ate a data de corte.
 
         Criterios:
-        - cte_data_emissao BETWEEN data_inicio AND data_fim
+        - cte_data_emissao <= data_fim (ou BETWEEN data_inicio..data_fim se data_inicio dado)
         - status != 'CANCELADO'
         - cte_valor IS NOT NULL AND cte_valor > 0
         - (opcional) Nao incluso em outro fechamento ativo
 
+        As comissoes "matam o passado": como CTes ja comissionados sao excluidos,
+        basta a data final (corte). data_inicio fica opcional (retrocompat).
+
         Args:
-            data_inicio: date
-            data_fim: date
+            data_fim: date — data de corte (inclusive)
+            data_inicio: date or None — se dado, restringe BETWEEN; senao, tudo <= data_fim
             excluir_ja_comissionados: se True, exclui CTes ja em fechamentos nao-cancelados
 
         Returns:
@@ -139,12 +142,17 @@ class ComissaoService:
             CarviaComissaoFechamento, CarviaComissaoFechamentoCte,
         )
 
-        query = db.session.query(CarviaOperacao).filter(
-            CarviaOperacao.cte_data_emissao.between(data_inicio, data_fim),
+        filtros = [
             CarviaOperacao.status != 'CANCELADO',
             CarviaOperacao.cte_valor.isnot(None),
             CarviaOperacao.cte_valor > 0,
-        )
+        ]
+        if data_inicio is not None:
+            filtros.append(CarviaOperacao.cte_data_emissao.between(data_inicio, data_fim))
+        else:
+            filtros.append(CarviaOperacao.cte_data_emissao <= data_fim)
+
+        query = db.session.query(CarviaOperacao).filter(*filtros)
 
         if excluir_ja_comissionados:
             # Subquery: operacao_ids ja em fechamentos ativos (nao excluidos)
@@ -168,50 +176,165 @@ class ComissaoService:
     # Criar fechamento
     # ------------------------------------------------------------------
 
+    # ------------------------------------------------------------------
+    # Ajustes (debito/credito) por alteracao/cancelamento de CTe ja comissionado
+    # ------------------------------------------------------------------
+
     @staticmethod
-    def criar_fechamento(
-        vendedor_nome,
-        vendedor_email,
-        data_inicio,
+    def sincronizar_ajustes_cte(operacao_id, novo_valor_efetivo, motivo, usuario):
+        """Gera ajustes de comissao (delta) para um CTe cujo valor mudou ou que
+        foi cancelado, em TODOS os fechamentos ativos (status != CANCELADO) que
+        o contem. FLUSH-ONLY — o caller controla a transacao.
+
+        delta = (novo_valor - base_corrente) * percentual_snapshot do fechamento.
+        base_corrente = ultimo ajuste nao-cancelado da junction, ou o snapshot.
+
+        Args:
+            operacao_id: int — CarviaOperacao que mudou
+            novo_valor_efetivo: Decimal/number — novo cte_valor (0 em cancelamento)
+            motivo: 'ALTERACAO_VALOR' | 'CANCELAMENTO_CTE'
+            usuario: str — email
+
+        Returns:
+            list[CarviaComissaoAjuste] criados (delta != 0).
+        """
+        from app.carvia.models.comissao import (
+            CarviaComissaoFechamento, CarviaComissaoFechamentoCte, CarviaComissaoAjuste,
+        )
+
+        novo = Decimal(str(novo_valor_efetivo or 0))
+
+        junctions = db.session.query(CarviaComissaoFechamentoCte).join(
+            CarviaComissaoFechamento,
+            CarviaComissaoFechamentoCte.fechamento_id == CarviaComissaoFechamento.id,
+        ).filter(
+            CarviaComissaoFechamentoCte.operacao_id == operacao_id,
+            CarviaComissaoFechamentoCte.excluido.is_(False),
+            CarviaComissaoFechamento.status != 'CANCELADO',
+        ).all()
+
+        criados = []
+        for j in junctions:
+            fechamento = db.session.get(CarviaComissaoFechamento, j.fechamento_id)
+
+            ultimo = CarviaComissaoAjuste.query.filter(
+                CarviaComissaoAjuste.operacao_id == operacao_id,
+                CarviaComissaoAjuste.fechamento_origem_id == j.fechamento_id,
+                CarviaComissaoAjuste.status != 'CANCELADO',
+            ).order_by(CarviaComissaoAjuste.id.desc()).first()
+            base = (
+                Decimal(str(ultimo.valor_cte_novo)) if ultimo
+                else Decimal(str(j.valor_cte_snapshot))
+            )
+
+            pct = Decimal(str(j.percentual_snapshot))
+            delta = ((novo - base) * pct).quantize(Decimal('0.01'))
+            if delta == 0:
+                continue
+
+            ajuste = CarviaComissaoAjuste(
+                operacao_id=operacao_id,
+                fechamento_origem_id=j.fechamento_id,
+                vendedor_usuario_id=fechamento.vendedor_usuario_id,
+                vendedor_nome=fechamento.vendedor_nome,
+                vendedor_email=fechamento.vendedor_email,
+                motivo=motivo,
+                cte_numero=j.cte_numero,
+                valor_cte_anterior=base,
+                valor_cte_novo=novo,
+                percentual_snapshot=pct,
+                delta_comissao=delta,
+                status='PENDENTE',
+                criado_por=usuario,
+            )
+            db.session.add(ajuste)
+            criados.append(ajuste)
+
+        db.session.flush()
+        if criados:
+            logger.info(
+                "%d ajuste(s) de comissao gerado(s) p/ operacao #%s (%s) por %s",
+                len(criados), operacao_id, motivo, usuario,
+            )
+        return criados
+
+    @staticmethod
+    def _incorporar_ajustes_pendentes(fechamento, usuario):
+        """Incorpora ajustes PENDENTE do vendedor ao fechamento (FLUSH-ONLY).
+
+        Marca cada ajuste APLICADO + fechamento_aplicado_id; recalcula totais.
+        Bloqueia (ValueError) se o total final ficaria negativo — caller faz rollback.
+        Sem vinculo de vendedor (vendedor_usuario_id NULL), nao incorpora nada.
+
+        Returns:
+            list[CarviaComissaoAjuste] incorporados.
+        """
+        from app.carvia.models.comissao import CarviaComissaoAjuste
+
+        fechamento.recalcular_totais()  # total_comissao = so CTes (ainda sem ajustes)
+
+        if not fechamento.vendedor_usuario_id:
+            return []
+
+        pendentes = CarviaComissaoAjuste.query.filter_by(
+            vendedor_usuario_id=fechamento.vendedor_usuario_id,
+            status='PENDENTE',
+        ).all()
+        if not pendentes:
+            return []
+
+        soma_delta = sum((a.delta_comissao or Decimal('0')) for a in pendentes)
+        total_final = (fechamento.total_comissao or Decimal('0')) + soma_delta
+        if total_final < 0:
+            raise ValueError(
+                f'Debitos pendentes (R$ {-soma_delta:.2f}) excedem a comissao do '
+                f'periodo (R$ {fechamento.total_comissao:.2f}). '
+                f'Inclua mais CTes ou aguarde o proximo periodo.'
+            )
+
+        for a in pendentes:
+            a.status = 'APLICADO'
+            a.fechamento_aplicado_id = fechamento.id
+            a.aplicado_em = agora_utc_naive()
+
+        db.session.flush()
+        fechamento.recalcular_totais()  # agora inclui ajustes aplicados
+        logger.info(
+            "%d ajuste(s) incorporado(s) ao fechamento %s (R$ %s) por %s",
+            len(pendentes), fechamento.numero_fechamento,
+            fechamento.total_ajustes, usuario,
+        )
+        return pendentes
+
+    @staticmethod
+    def _montar_fechamento(
+        vendedor_usuario_id,
         data_fim,
         operacao_ids,
         criado_por,
         percentual=None,
         observacoes=None,
     ):
-        """Cria fechamento de comissao com CTes selecionados.
+        """Monta fechamento + junctions + incorpora ajustes + despesa.
+        FLUSH-ONLY (nao comita) — testavel sob savepoint.
 
-        Args:
-            vendedor_nome: str — nome do vendedor
-            vendedor_email: str or None
-            data_inicio: date
-            data_fim: date
-            operacao_ids: list[int] — IDs de CarviaOperacao
-            criado_por: str — email do usuario
-            percentual: Decimal or None — se None, usa CarviaConfig
-            observacoes: str or None
-
-        Returns:
-            CarviaComissaoFechamento
+        data_inicio do registro e derivada do CTe mais antigo selecionado.
 
         Raises:
-            ValueError para validacoes de negocio.
+            ValueError para validacoes de negocio (inclui total negativo).
         """
         from app.carvia.models import CarviaOperacao
         from app.carvia.models.comissao import (
             CarviaComissaoFechamento, CarviaComissaoFechamentoCte,
         )
+        from app.auth.models import Usuario
 
-        if not vendedor_nome or not vendedor_nome.strip():
-            raise ValueError('Nome do vendedor e obrigatorio.')
-
+        usuario = db.session.get(Usuario, vendedor_usuario_id)
+        if not usuario:
+            raise ValueError('Vendedor (usuario) nao encontrado.')
         if not operacao_ids:
             raise ValueError('Selecione ao menos um CTe.')
 
-        if data_inicio > data_fim:
-            raise ValueError('Data inicio deve ser anterior ou igual a data fim.')
-
-        # Percentual: usar override ou config
         if percentual is not None:
             pct = Decimal(str(percentual))
             if pct > 1:
@@ -219,17 +342,14 @@ class ComissaoService:
         else:
             pct = ComissaoService.get_percentual_config()
 
-        # Validar operacoes
         operacoes = CarviaOperacao.query.filter(
             CarviaOperacao.id.in_(operacao_ids),
         ).all()
-
         if len(operacoes) != len(operacao_ids):
             encontrados = {o.id for o in operacoes}
             faltando = set(operacao_ids) - encontrados
             raise ValueError(f'CTes nao encontrados: {faltando}')
 
-        # Validar: nenhum cancelado, todos com cte_valor e cte_data_emissao
         for op in operacoes:
             if op.status == 'CANCELADO':
                 raise ValueError(f'{op.cte_numero}: CTe cancelado.')
@@ -238,11 +358,15 @@ class ComissaoService:
             if not op.cte_data_emissao:
                 raise ValueError(f'{op.cte_numero}: sem data de emissao do CTe.')
 
-        # Criar fechamento
+        data_inicio = min(op.cte_data_emissao for op in operacoes)  # derivada
+        if data_inicio > data_fim:
+            data_inicio = data_fim
+
         fechamento = CarviaComissaoFechamento(
             numero_fechamento=CarviaComissaoFechamento.gerar_numero_fechamento(),
-            vendedor_nome=vendedor_nome.strip(),
-            vendedor_email=(vendedor_email or '').strip() or None,
+            vendedor_usuario_id=usuario.id,
+            vendedor_nome=usuario.nome,
+            vendedor_email=usuario.email,
             data_inicio=data_inicio,
             data_fim=data_fim,
             percentual=pct,
@@ -253,37 +377,64 @@ class ComissaoService:
         db.session.add(fechamento)
         db.session.flush()  # Gera fechamento.id
 
-        # Criar junctions com snapshots
         for op in operacoes:
             valor_cte = Decimal(str(op.cte_valor))
-            valor_comissao = (valor_cte * pct).quantize(Decimal('0.01'))
-
-            cte_junction = CarviaComissaoFechamentoCte(
+            db.session.add(CarviaComissaoFechamentoCte(
                 fechamento_id=fechamento.id,
                 operacao_id=op.id,
                 cte_numero=op.cte_numero or f'OP-{op.id}',
                 cte_data_emissao=op.cte_data_emissao,
                 valor_cte_snapshot=valor_cte,
                 percentual_snapshot=pct,
-                valor_comissao=valor_comissao,
+                valor_comissao=(valor_cte * pct).quantize(Decimal('0.01')),
                 incluido_por=criado_por,
-            )
-            db.session.add(cte_junction)
-
-        # Recalcular totais
+            ))
         db.session.flush()
-        fechamento.recalcular_totais()
 
-        # Criar despesa vinculada para conciliacao bancaria
+        # Incorpora ajustes pendentes do vendedor (pode levantar ValueError)
+        ComissaoService._incorporar_ajustes_pendentes(fechamento, criado_por)
+
+        # Despesa vinculada com o total final (ja inclui ajustes)
         ComissaoService._criar_despesa_vinculada(fechamento, criado_por)
+        return fechamento
 
+    @staticmethod
+    def criar_fechamento(
+        vendedor_usuario_id,
+        data_fim,
+        operacao_ids,
+        criado_por,
+        percentual=None,
+        observacoes=None,
+    ):
+        """Cria fechamento de comissao (wrapper que comita _montar_fechamento).
+
+        Args:
+            vendedor_usuario_id: int — Usuario beneficiario
+            data_fim: date — data de corte
+            operacao_ids: list[int] — IDs de CarviaOperacao
+            criado_por: str — email do usuario
+            percentual: Decimal or None — se None, usa CarviaConfig
+            observacoes: str or None
+
+        Returns:
+            CarviaComissaoFechamento
+
+        Raises:
+            ValueError para validacoes de negocio (inclui total negativo).
+        """
+        fechamento = ComissaoService._montar_fechamento(
+            vendedor_usuario_id, data_fim, operacao_ids, criado_por,
+            percentual=percentual, observacoes=observacoes,
+        )
         db.session.commit()
 
         logger.info(
-            "Comissao %s criada: %d CTes, R$ %s bruto, R$ %s comissao (%.2f%%) por %s",
+            "Comissao %s criada: %d CTes, R$ %s bruto, R$ %s comissao "
+            "(ajustes R$ %s) por %s",
             fechamento.numero_fechamento, fechamento.qtd_ctes,
             fechamento.total_bruto, fechamento.total_comissao,
-            float(pct * 100), criado_por,
+            fechamento.total_ajustes, criado_por,
         )
         return fechamento
 
@@ -400,8 +551,18 @@ class ComissaoService:
         junction.excluido_em = agora_utc_naive()
         junction.excluido_por = excluido_por
 
+        # Cancelar ajustes PENDENTE desta junction — o CTe saiu do fechamento
+        from app.carvia.models.comissao import CarviaComissaoAjuste
+        CarviaComissaoAjuste.query.filter_by(
+            fechamento_origem_id=fechamento_id,
+            operacao_id=operacao_id,
+            status='PENDENTE',
+        ).update({'status': 'CANCELADO'})
+
         db.session.flush()
         fechamento.recalcular_totais()
+        if (fechamento.total_comissao or 0) < 0:
+            raise ValueError('Exclusao deixaria a comissao do fechamento negativa.')
         ComissaoService._sincronizar_despesa(fechamento)
         db.session.commit()
 
@@ -636,6 +797,8 @@ class ComissaoService:
             )
         if fechamento.qtd_ctes == 0:
             raise ValueError('Fechamento sem CTes — nao pode ser pago.')
+        if (fechamento.total_comissao or 0) < 0:
+            raise ValueError('Fechamento com comissao negativa — nao pode ser pago.')
 
         fechamento.status = 'PAGO'
         fechamento.data_pagamento = data_pagamento
@@ -692,3 +855,48 @@ class ComissaoService:
             "Comissao %s cancelada por %s",
             fechamento.numero_fechamento, cancelado_por,
         )
+
+    # ------------------------------------------------------------------
+    # Vinculo de vendedor (resolucao manual de fechamentos sem usuario)
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def vincular_vendedor(fechamento_id, usuario_id, editado_por):
+        """Vincula um Usuario a um fechamento (correcao de metadado, qualquer status).
+
+        Atualiza snapshot (vendedor_nome/email) e faz ajustes orfaos deste
+        fechamento herdarem o vinculo. Nao altera valores nem totais.
+
+        Raises:
+            ValueError se fechamento ou usuario nao encontrado.
+        """
+        from app.carvia.models.comissao import (
+            CarviaComissaoFechamento, CarviaComissaoAjuste,
+        )
+        from app.auth.models import Usuario
+
+        fechamento = db.session.get(CarviaComissaoFechamento, fechamento_id)
+        if not fechamento:
+            raise ValueError('Fechamento nao encontrado.')
+        usuario = db.session.get(Usuario, usuario_id) if usuario_id else None
+        if not usuario:
+            raise ValueError('Usuario nao encontrado.')
+
+        fechamento.vendedor_usuario_id = usuario.id
+        fechamento.vendedor_nome = usuario.nome
+        fechamento.vendedor_email = usuario.email
+
+        CarviaComissaoAjuste.query.filter_by(
+            fechamento_origem_id=fechamento_id, vendedor_usuario_id=None,
+        ).update({
+            'vendedor_usuario_id': usuario.id,
+            'vendedor_nome': usuario.nome,
+            'vendedor_email': usuario.email,
+        })
+        db.session.commit()
+
+        logger.info(
+            "Comissao %s vinculada ao usuario #%d por %s",
+            fechamento.numero_fechamento, usuario.id, editado_por,
+        )
+        return fechamento

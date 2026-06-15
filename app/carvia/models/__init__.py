@@ -84,7 +84,7 @@ from app.carvia.models.anexos import CarviaAnexo  # noqa: F401
 
 # Comissao
 from app.carvia.models.comissao import (  # noqa: F401
-    CarviaComissaoFechamento, CarviaComissaoFechamentoCte,
+    CarviaComissaoFechamento, CarviaComissaoFechamentoCte, CarviaComissaoAjuste,
 )
 
 # Aprovacao de Fretes (tratativa)
@@ -132,7 +132,7 @@ __all__ = [
     # Anexos polimorficos
     'CarviaAnexo',
     # Comissao
-    'CarviaComissaoFechamento', 'CarviaComissaoFechamentoCte',
+    'CarviaComissaoFechamento', 'CarviaComissaoFechamentoCte', 'CarviaComissaoAjuste',
     # Aprovacao Fretes
     'CarviaAprovacaoFrete', 'STATUS_APROVACAO',
     # Conta Corrente
