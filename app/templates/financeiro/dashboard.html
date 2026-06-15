@@ -282,6 +282,16 @@
                     </div>
                     <span class="fin-section-link__badge fin-section-link__badge--new">NOVO</span>
                 </a>
+                <button type="button" id="btnGerarBaseline" class="fin-section-link fin-section-link--btn">
+                    <div class="fin-section-link__icon">
+                        <i class="fas fa-file-excel"></i>
+                    </div>
+                    <div class="fin-section-link__text">
+                        <div class="fin-section-link__title">Gerar Baseline de Extratos Pendentes</div>
+                        <div class="fin-section-link__subtitle" id="baselineStatus">Foto das conciliacoes pendentes (Excel) &mdash; sem abrir o assistente</div>
+                    </div>
+                    <span class="fin-section-link__badge fin-section-link__badge--new">NOVO</span>
+                </button>
             </div>
         </div>
 
@@ -331,4 +341,38 @@
 
     </div>
 </div>
+
+<script>
+(function () {
+    const btn = document.getElementById('btnGerarBaseline');
+    const status = document.getElementById('baselineStatus');
+    if (!btn) return;
+    btn.addEventListener('click', async function () {
+        btn.disabled = true;
+        status.textContent = 'Gerando baseline...';
+        try {
+            const resp = await fetch("{{ url_for('financeiro.gerar_baseline') }}", {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': '{{ csrf_token() }}',
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            });
+            const data = await resp.json();
+            if (data.ok && data.url) {
+                status.innerHTML = 'Pronto (' + data.total + ' pendentes) &mdash; '
+                    + '<a href="' + data.url + '" target="_blank" rel="noopener">baixar Excel</a>';
+            } else if (data.ok) {
+                status.textContent = 'Gerado (' + data.total + ' pendentes), mas o arquivo nao ficou disponivel.';
+            } else {
+                status.textContent = 'Falha ao gerar: ' + (data.erro || 'erro desconhecido');
+            }
+        } catch (e) {
+            status.textContent = 'Erro de rede ao gerar o baseline. Tente novamente.';
+        } finally {
+            btn.disabled = false;
+        }
+    });
+})();
+</script>
 {% endblock %}

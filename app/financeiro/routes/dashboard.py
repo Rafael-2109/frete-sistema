@@ -44,3 +44,25 @@ def requires_financeiro(f):
 def dashboard():
     """Central do modulo financeiro"""
     return render_template('financeiro/dashboard.html')
+
+
+@financeiro_bp.route('/baseline/gerar', methods=['POST'])
+@login_required
+@requires_financeiro
+def gerar_baseline():
+    """Gera o baseline de extratos pendentes (Excel) deterministicamente, SEM o assistente.
+
+    Reusa o fast-path ja validado em PROD (`executar_baseline_fastpath`), tirando a
+    tarefa recorrente do fluxo conversacional (REC-2026-05-05-001). Import lazy
+    (padrao do modulo) para nao acoplar o boot do financeiro ao SDK do agente.
+    """
+    from flask import jsonify
+    from app.agente.sdk.baseline_fastpath import executar_baseline_fastpath
+
+    resultado = executar_baseline_fastpath(user_id=current_user.id)
+    return jsonify({
+        'ok': resultado.get('ok', False),
+        'url': resultado.get('url'),
+        'total': resultado.get('total'),
+        'erro': resultado.get('erro'),
+    })

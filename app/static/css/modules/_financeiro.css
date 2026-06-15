@@ -145,6 +145,15 @@
       transform: translateX(4px);
   }
 
+  /* <button> que se comporta como .fin-section-link: reseta user-agent
+     (font/alinhamento/largura) sem cor inline — cor herda de .fin-section-link */
+  .fin-section-link--btn {
+      width: 100%;
+      text-align: left;
+      cursor: pointer;
+      font: inherit;
+  }
+
   .fin-section-link__icon {
       width: 32px;
       height: 32px;
