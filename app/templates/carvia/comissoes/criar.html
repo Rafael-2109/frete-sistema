@@ -26,32 +26,33 @@
             <div class="card-header"><strong>Dados do Fechamento</strong></div>
             <div class="card-body">
                 <div class="row g-3">
-                    <div class="col-md-4">
-                        <label for="vendedor_nome" class="form-label">Vendedor *</label>
-                        <input type="text" class="form-control" id="vendedor_nome" name="vendedor_nome"
-                               required placeholder="Nome do vendedor">
+                    <div class="col-md-5">
+                        <label for="vendedor_usuario_id" class="form-label">Vendedor *</label>
+                        <select class="form-select" id="vendedor_usuario_id" name="vendedor_usuario_id"
+                                required onchange="carregarAjustes()">
+                            <option value="">Selecione...</option>
+                            {% for v in vendedores %}
+                            <option value="{{ v.id }}">{{ v.nome }} ({{ v.email }})</option>
+                            {% endfor %}
+                        </select>
                     </div>
-                    <div class="col-md-4">
-                        <label for="vendedor_email" class="form-label">Email</label>
-                        <input type="email" class="form-control" id="vendedor_email" name="vendedor_email"
-                               placeholder="email@exemplo.com">
-                    </div>
-                    <div class="col-md-4">
+                    <div class="col-md-3">
                         <label for="percentual" class="form-label">Percentual (%) *</label>
                         <input type="number" class="form-control" id="percentual" name="percentual"
                                step="any" min="0.0001" max="100" required
                                value="{{ pct_display if pct_display is not none else '' }}"
                                placeholder="Ex: 5.00">
-                        <div class="form-text">Valor sera aplicado como percentual sobre o valor do CTe.</div>
+                        <div class="form-text">Aplicado sobre o valor do CTe.</div>
+                    </div>
+                    <div class="col-md-4">
+                        <label for="observacoes" class="form-label">Observacoes</label>
+                        <input type="text" class="form-control" id="observacoes" name="observacoes"
+                               placeholder="Opcional">
                     </div>
                 </div>
                 <div class="row g-3 mt-1">
                     <div class="col-md-3">
-                        <label for="data_inicio" class="form-label">Periodo Inicio *</label>
-                        <input type="date" class="form-control" id="data_inicio" name="data_inicio" required>
-                    </div>
-                    <div class="col-md-3">
-                        <label for="data_fim" class="form-label">Periodo Fim *</label>
+                        <label for="data_fim" class="form-label">Comissoes ate (data de corte) *</label>
                         <input type="date" class="form-control" id="data_fim" name="data_fim" required>
                     </div>
                     <div class="col-md-2 d-flex align-items-end">
@@ -59,10 +60,8 @@
                             <i class="fas fa-search"></i> Buscar CTes
                         </button>
                     </div>
-                    <div class="col-md-4">
-                        <label for="observacoes" class="form-label">Observacoes</label>
-                        <input type="text" class="form-control" id="observacoes" name="observacoes"
-                               placeholder="Opcional">
+                    <div class="col-md-7 d-flex align-items-end">
+                        <div id="painelAjustes" class="text-muted small"></div>
                     </div>
                 </div>
             </div>
@@ -110,17 +109,13 @@
 <script>
 const csrfToken = document.querySelector('meta[name="csrf-token"]').content;
 let ctesData = [];
+let ajustesTotal = 0;
 
 function buscarCtes() {
-    const inicio = document.getElementById('data_inicio').value;
     const fim = document.getElementById('data_fim').value;
+    if (!fim) { alert('Informe a data de corte.'); return; }
 
-    if (!inicio || !fim) {
-        alert('Selecione o periodo.');
-        return;
-    }
-
-    const url = `/carvia/api/comissoes/ctes-elegiveis?data_inicio=${inicio}&data_fim=${fim}`;
+    const url = `/carvia/api/comissoes/ctes-elegiveis?data_fim=${fim}`;
     fetch(url, { headers: { 'X-CSRFToken': csrfToken } })
         .then(r => r.json())
         .then(data => {
@@ -129,6 +124,26 @@ function buscarCtes() {
             renderCtes();
         })
         .catch(err => alert('Erro: ' + err.message));
+}
+
+// Carrega ajustes (debito/credito) pendentes do vendedor — incorporados ao total
+function carregarAjustes() {
+    const vid = document.getElementById('vendedor_usuario_id').value;
+    const painel = document.getElementById('painelAjustes');
+    ajustesTotal = 0;
+    if (!vid) { painel.innerHTML = ''; atualizarResumo(); return; }
+    fetch(`/carvia/api/comissoes/ajustes-pendentes?vendedor_usuario_id=${vid}`, { headers: { 'X-CSRFToken': csrfToken } })
+        .then(r => r.json())
+        .then(data => {
+            ajustesTotal = data.total_delta || 0;
+            if (data.qtd > 0) {
+                const fmt = ajustesTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+                const cls = ajustesTotal < 0 ? 'text-danger' : 'text-success';
+                painel.innerHTML = `<i class="fas fa-info-circle"></i> ${data.qtd} ajuste(s) pendente(s): <strong class="${cls}">${fmt}</strong> (incorporado ao total).`;
+            } else { painel.innerHTML = ''; }
+            atualizarResumo();
+        })
+        .catch(() => { painel.innerHTML = ''; });
 }
 
 function renderCtes() {
@@ -190,13 +205,17 @@ function atualizarResumo() {
         }
     });
 
-    const totalComissao = totalBruto * pct / 100;
+    const totalComissao = totalBruto * pct / 100 + ajustesTotal;
 
     document.getElementById('resumoSelecionados').textContent = count + ' CTes selecionados';
     document.getElementById('resumoBruto').textContent = totalBruto.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
     document.getElementById('resumoPct').textContent = pct.toFixed(2);
     document.getElementById('resumoComissao').textContent = totalComissao.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
     document.getElementById('resumoCtes').textContent = `${count} de ${ctesData.length} selecionados`;
+
+    // Nunca permite fechamento com total negativo (debitos > comissao do periodo)
+    const submitBtn = document.querySelector('#cardResumo button[type="submit"]');
+    if (submitBtn) submitBtn.disabled = totalComissao < 0;
 }
 
 // Recalcular ao mudar percentual
