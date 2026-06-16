@@ -162,7 +162,8 @@ Decisão Rafael (D1): o estoque LF deve valorar como **terceiros** (`1150200001`
 
 **✅ Validado em dry-run pelo builder `s82` (`--plano`, READ):** dos 442 livres → **431 quants p/ 31092** (5.655.181,0 un) + **11 quants p/ 31093** (978,7 un); o reservado (açúcar lote `230326`, 3.157,6 un) fica de fora (D3). **Invariante OK:** `Σ destinos (5.656.159,653) == Σ a migrar`; `total 5.659.317,3 = migrar + açúcar`. Plano linha-a-linha em `/tmp/s2_s82_migracao_plan.json`. Os 5 quants de açúcar **livres** (lotes ≠ 230326) migram normal p/ 31092.
 
-**Por que picking interno único (vs skill `transferindo-interno-odoo` em loop de 444 docs):** rastreável (1 documento), reversível por estorno, preserva lote (440/443 têm lote), 0 SVL (neutro). A skill `transferindo-interno-odoo` (átomo C2, `--loc-e-lote`) serve de fallback por item. **Excluir da migração** o lote/quant do açúcar reservado (picking 321794) até a saída FB ser resolvida (§5).
+**Por que picking interno (vs skill `transferindo-interno-odoo`):** rastreável (1-2 docs), reversível por estorno, preserva lote, **0 SVL (neutro)**. ⚠️ **Descoberta (verificação do átomo):** a skill `transferindo-interno-odoo` usa `StockInternalTransferService.transferir_entre_locations`, que faz **inventory adjustment 2× (ajusta quant)** — isso **GERA SVL** (saída+entrada, net-zero se mesma conta), **violando a promessa "0 SVL"**. ⇒ **NÃO usar o átomo para a migração**; usar `stock.move`/picking de verdade.
+**Veículo correto (reuso testado):** `app/odoo/estoque/scripts/picking.py` `PickingService`: `criar_transferencia(5,5,42,dst,linhas,pt=23, incoterm=None, carrier=None, partner=None, origin=...)` → `confirmar_e_reservar` → **`consolidar_move_lines(pid, linhas_esperadas=[{product_id,lot_name,quantity}])`** (G023 — trata **multi-lote por produto**; `preencher_qty_done` faz match só por produto, **não serve** p/ produtos com vários lotes) → `validar(pid, linhas_esperadas)` (button_validate com guards G019/G023). **2 pickings:** 42→31092 (431 linhas) e 42→31093 (11 linhas). 🔶 **Primeiro go = CANARY** (1-3 produtos, incluindo 1 multi-lote) p/ validar o fluxo antes dos 442. **Excluir** o açúcar reservado (lote 230326 / picking 321794) até a saída FB ser resolvida (§5).
 
 > **Nota fina (automação):** para o **saldo migrado**, o "move de entrada em 31092" será o move de migração (interno, **sem SVL**); a automação G1 lê "SVL da entrada mais recente em 31092". Como a G1 opera "daqui pra frente" (data-de-corte) e os **novos** ciclos entram frescos em 31092 (com SVL), não há conflito — mas registrar para o piloto da S4.
 
@@ -186,7 +187,18 @@ Decisão Rafael (D1): o estoque LF deve valorar como **terceiros** (`1150200001`
 
 ## 6. Ordem de execução da S3 + validações + reversibilidade
 
-**Builder pronto:** `scripts/s82_exec_reestruturacao.py` implementa A1–A4 **dry-run-first** (modos `--reparent`/`--putaway`/`--migrar`/`--mapa-a5`, escrita só com `--confirmar` + go) + gera o mapa A5. `--plano` (default) já validado em dry-run (READ).
+**Builder + validador prontos:** `s82_exec_reestruturacao.py` (A1–A4 dry-run-first, escrita só com `--confirmar`; A4 reusa `StockPickingService`) + `s83_validador_reestruturacao.py` (gates). `--plano` validado em dry; baseline pré-go já capturado (`s83 --baseline` → `/tmp/s2_baseline.json`).
+
+**Comandos do go (1 por passo, cada um após dry + go fresco):**
+```
+# (baseline já capturado: s83 --baseline)
+s82 --reparent --confirmar                 # A1
+s82 --migrar --canary-n 3 --confirmar      # A4 canary (validar fluxo)
+s82 --migrar --confirmar                   # A4 restante
+s82 --putaway --confirmar                  # A2/A3
+s83 --validar                              # gates pós-go
+# A5 (repoint L1): só após validação do Contador (CSV /tmp/s2_mapa_a5_...csv)
+```
 
 **Sequência (cada passo = dry-run → medir → go fresco do Rafael → executar → validar):** *ordem importa* — **A1 antes de A4** (senão o saldo migrado fica fora do `lot_stock` até o reparent); **A4 antes de A2/A3** (migração usa `dst` explícito 31092/31093, então não é redirecionada pela put-away; ativar put-away depois evita qualquer interação e só vale p/ fluxos futuros).
 1. **A1 reparent** 31092/31093 sob 42 (`s82 --reparent`) → validar: `child_of(42)` inclui ambas; on-hand do WH inalterado.

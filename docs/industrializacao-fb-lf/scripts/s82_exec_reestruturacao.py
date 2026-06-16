@@ -17,6 +17,7 @@ sys.path.insert(0, '/home/rafaelnascimento/projetos/frete_sistema_wire_r2')
 from dotenv import load_dotenv
 load_dotenv('/home/rafaelnascimento/projetos/frete_sistema/.env')
 from app.odoo.utils.connection import get_odoo_connection
+from app.odoo.estoque.scripts.picking import StockPickingService
 
 CTX = {'allowed_company_ids': [1, 5], 'company_id': 5, 'lang': 'pt_BR'}
 SEP = '=' * 92
@@ -31,6 +32,7 @@ def main():
     ap = argparse.ArgumentParser()
     for m in ['plano', 'reparent', 'putaway', 'migrar', 'mapa-a5', 'confirmar']:
         ap.add_argument(f'--{m}', action='store_true')
+    ap.add_argument('--canary-n', type=int, default=0, help='A4: limita a N linhas (1o go canary)')
     args = ap.parse_args()
     blocos = any([args.reparent, args.putaway, args.migrar, getattr(args, 'mapa_a5')])
     plano = args.plano or not blocos
@@ -114,7 +116,9 @@ def main():
             cat = pcat.get(q['product_id'][0])
             dst = LOC_PA if cat in pa_cats else LOC_MP
             destino[dst] += 1; dqty[dst] += q['quantity']
-            plan_lines.append({'quant': q['id'], 'product': q['product_id'][1], 'lot': m2(q.get('lot_id')),
+            plan_lines.append({'quant': q['id'], 'product_id': q['product_id'][0], 'product': q['product_id'][1],
+                               'lot_id': q['lot_id'][0] if q.get('lot_id') else None,
+                               'lot_name': q['lot_id'][1] if q.get('lot_id') else None, 'lot': m2(q.get('lot_id')),
                                'qty': q['quantity'], 'src': q['location_id'][0], 'dst': dst})
         soma_mig = sum(q['quantity'] for q in migrar)
         soma_tot = sum(q['quantity'] for q in qn)
@@ -134,9 +138,33 @@ def main():
             json.dump(plan_lines, f, ensure_ascii=False, indent=2, default=str)
         print("  [dump] /tmp/s2_s82_migracao_plan.json (442 linhas planejadas)")
         if args.migrar and confirmar:
-            print("  ⚠️ ESCRITA da migração exige go explícito — implementar criação de picking pt23 aqui (gated).")
+            canary = getattr(args, 'canary_n', 0)
+            ps = StockPickingService(odoo=o)
+            grupos = {LOC_MP: [l for l in plan_lines if l['dst'] == LOC_MP],
+                      LOC_PA: [l for l in plan_lines if l['dst'] == LOC_PA]}
+            if canary:
+                # 1o go: canary com N linhas do grupo MP (inclui multi-lote se houver)
+                grupos = {LOC_MP: grupos[LOC_MP][:canary], LOC_PA: []}
+                print(f"  🔶 CANARY: só {canary} linhas (grupo 31092)")
+            R['A4']['pickings'] = []
+            for dst, linhas_g in grupos.items():
+                if not linhas_g:
+                    continue
+                linhas = [{'product_id': l['product_id'], 'quantity': l['qty'],
+                           'lot_id': l['lot_id'], 'lot_name': l['lot_name'],
+                           'name': f"Reestrut terceiros {l['product']}"} for l in linhas_g]
+                esperadas = [{'product_id': l['product_id'], 'lot_name': l['lot_name'], 'quantity': l['qty']}
+                             for l in linhas_g]
+                pid = ps.criar_transferencia(5, 5, LOC_42, dst, linhas, PT_INTERNO,
+                                             partner_id=None, incoterm_id=None, carrier_id=None,
+                                             origin='S3-REESTRUT-DE-TERCEIROS')
+                ps.confirmar_e_reservar(pid)
+                ps.consolidar_move_lines(pid, linhas_esperadas=esperadas)
+                ps.validar(pid, linhas_esperadas=esperadas)
+                print(f"  ✅ picking {pid} (42->{dst}, {len(linhas)} linhas) VALIDADO (done)")
+                R['A4']['pickings'].append({'pid': pid, 'dst': dst, 'linhas': len(linhas)})
         else:
-            print("  [DRY] criação de picking interno pt23 (não executado)")
+            print("  [DRY] criação de picking interno pt23 via PickingService (não executado)")
 
     # ================= A5 mapa (READ) =================
     if plano or getattr(args, 'mapa_a5'):
