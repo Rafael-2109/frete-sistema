@@ -137,6 +137,15 @@ PDFs SSW (`ssw.inf.br`) contem N faturas por arquivo (1 por pagina).
 **Matching de NF**: numero + CNPJ contraparte (emitente OU destinatario), ambos normalizados.
 **Fallback 3 niveis**: 1) Match direto → 2) Via junction → 3) Criar NF referencia (se `auto_criar_nf=True`).
 
+**Guarda de cancelados (R4/R5) — 2026-06-16**: o re-linking retroativo NUNCA ressuscita
+operacao CANCELADA. `resolver_operacao_por_cte` filtra `status != 'CANCELADO'` (simetria com
+os resolvers de NF e CTe Comp); `_criar_junction_se_necessario` recusa junction p/ operacao
+cancelada; e a promocao `→ FATURADO` (`vincular_operacao_a_itens_fatura_orfaos`,
+`vincular_operacoes_da_fatura`) pula operacoes canceladas. Antes, importar/relinkar um doc
+relacionado promovia operacao CANCELADA → FATURADO (bug "revive de cancelados"). Coberto por
+`tests/carvia/test_revive_cancelados.py`. Vetor NAO incluido: reimportar a MESMA chave de NF
+cancelada ainda a reativa (`importacao_service.py:517-528`) — comportamento intencional.
+
 **Chamado automaticamente por**:
 - `ImportacaoService.salvar_importacao()` — durante import de fatura PDF
 - `ImportacaoService.salvar_importacao()` — apos criar NF: `vincular_nf_a_operacoes_orfas` + `vincular_nf_a_itens_fatura_orfaos`

@@ -46,8 +46,13 @@ class LinkingService:
         from app.carvia.models import CarviaOperacao
 
         cte_norm = cte_numero.lstrip('0') or '0'
+        # R4/R5: operacao CANCELADA nao deve ser resolvida para (re)vinculo.
+        # Simetria com resolver_cte_complementar_por_cte e resolver_nf_por_numero,
+        # que ja filtram cancelados. Sem isso, importar um doc relacionado
+        # ressuscita o vinculo a uma operacao cancelada.
         operacao = CarviaOperacao.query.filter(
-            func.ltrim(CarviaOperacao.cte_numero, '0') == cte_norm
+            func.ltrim(CarviaOperacao.cte_numero, '0') == cte_norm,
+            CarviaOperacao.status != 'CANCELADO',
         ).first()
 
         return operacao
@@ -239,7 +244,18 @@ class LinkingService:
         if not operacao_id or not nf_id:
             return False
 
-        from app.carvia.models import CarviaOperacaoNf
+        from app.carvia.models import CarviaOperacaoNf, CarviaOperacao
+
+        # R4: status irreversivel. Nunca recriar junction apontando para uma
+        # operacao CANCELADA — reimportar/relinkar um doc relacionado nao pode
+        # ressuscitar o vinculo de uma operacao ja cancelada.
+        operacao = db.session.get(CarviaOperacao, operacao_id)
+        if operacao is not None and operacao.status == 'CANCELADO':
+            logger.info(
+                f"Junction NAO criada (operacao CANCELADA): "
+                f"operacao_id={operacao_id} nf_id={nf_id}"
+            )
+            return False
 
         existente = CarviaOperacaoNf.query.filter_by(
             operacao_id=operacao_id,
@@ -427,7 +443,8 @@ class LinkingService:
             # se ainda nao vinculada. Primeira fatura ganha quando
             # varios itens de faturas diferentes referenciam o mesmo CTe.
             if (item.fatura_cliente_id
-                    and operacao.fatura_cliente_id is None):
+                    and operacao.fatura_cliente_id is None
+                    and operacao.status != 'CANCELADO'):
                 operacao.fatura_cliente_id = item.fatura_cliente_id
                 operacao.status = 'FATURADO'
                 logger.info(
@@ -667,6 +684,16 @@ class LinkingService:
         ).all()
 
         for operacao in operacoes:
+            # R4/R5: nao promover operacao CANCELADA para FATURADO. Importar uma
+            # fatura cujos itens citam o CTe nao pode ressuscitar uma operacao
+            # ja cancelada (era o vetor mais grave do "revive de cancelados").
+            if operacao.status == 'CANCELADO':
+                logger.warning(
+                    f"Operacao {operacao.id} CANCELADA — ignorada no backward "
+                    f"binding da fatura {fatura_id}"
+                )
+                continue
+
             if operacao.fatura_cliente_id is not None:
                 stats['operacoes_ja_vinculadas'] += 1
                 if operacao.fatura_cliente_id != fatura_id:
