@@ -67,8 +67,9 @@ Boilerplate Odoo: `.claude/references/odoo/AGENT_BOILERPLATE.md`
 ```
 objeto:        account.move.line (READ-only)
 input:         --contas <id:rotulo,...> --data-inicio --data-fim
-                 [--company-id 4] [--journal-id 845] [--json]
-filtro fixo:   debit>0 AND parent_state=posted (linhas a debito efetivas)
+                 [--company-id 4] [--journal-id 845] [--state posted] [--json]
+filtro:        debit>0 AND parent_state=<state> (default posted; --state draft|both
+               para contar o que falta postar pos-reclassificacao; both omite o filtro)
 output (JSON): {modo, company_id, journal_id, periodo:{inicio,fim},
                 saldos:[{conta_id, rotulo, n_linhas, total_debito}]}
 pre-condicoes: contas nao-vazio; datas YYYY-MM-DD

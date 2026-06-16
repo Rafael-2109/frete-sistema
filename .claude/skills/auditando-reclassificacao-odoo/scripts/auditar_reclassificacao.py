@@ -104,24 +104,33 @@ def _acc_id(row):
     return acc or None
 
 
-def _dominio_saldo(conta_id, data_inicio, data_fim, company_id, journal_id):
-    return [
+def _dominio_saldo(conta_id, data_inicio, data_fim, company_id, journal_id, state='posted'):
+    dom = [
         ('account_id', '=', conta_id),
         ('company_id', '=', company_id),
         ('journal_id', '=', journal_id),
         ('date', '>=', data_inicio),
         ('date', '<=', data_fim),
         ('debit', '>', 0),
-        ('parent_state', '=', 'posted'),
     ]
+    if state in ('posted', 'draft'):
+        dom.append(('parent_state', '=', state))
+    # state == 'both' -> sem filtro de parent_state (posted + draft)
+    return dom
 
 
 def medir_saldos(c, contas, data_inicio, data_fim,
-                 company_id=DEFAULT_COMPANY_ID, journal_id=DEFAULT_JOURNAL_ID):
-    """Mede n_linhas + total_debito por conta (debit>0, posted) no periodo."""
+                 company_id=DEFAULT_COMPANY_ID, journal_id=DEFAULT_JOURNAL_ID,
+                 state='posted'):
+    """Mede n_linhas + total_debito por conta (debit>0) no periodo.
+
+    state: 'posted' (default, comportamento historico), 'draft' ou 'both' — filtra
+    parent_state do move. 'both' inclui lancamentos ainda em rascunho (ex: contar
+    o que falta postar pos-reclassificacao).
+    """
     saldos = []
     for conta_id, rotulo in contas:
-        dom = _dominio_saldo(conta_id, data_inicio, data_fim, company_id, journal_id)
+        dom = _dominio_saldo(conta_id, data_inicio, data_fim, company_id, journal_id, state)
         rows = c.search_read(MODEL_LINE, dom, ['debit'])
         saldos.append({
             'conta_id': conta_id,
@@ -133,6 +142,7 @@ def medir_saldos(c, contas, data_inicio, data_fim,
         'modo': 'medir-saldos',
         'company_id': company_id,
         'journal_id': journal_id,
+        'state': state,
         'periodo': {'inicio': data_inicio, 'fim': data_fim},
         'saldos': saldos,
     }
@@ -232,6 +242,8 @@ def build_parser():
                        help=f'Default {DEFAULT_COMPANY_ID} (CD)')
     p_med.add_argument('--journal-id', type=int, default=DEFAULT_JOURNAL_ID,
                        help=f'Default {DEFAULT_JOURNAL_ID}')
+    p_med.add_argument('--state', choices=['posted', 'draft', 'both'], default='posted',
+                       help='Estado dos lancamentos: posted (default), draft ou both')
     p_med.add_argument('--json', action='store_true', help='Saida JSON (default: tabela)')
 
     for nome, ajuda in (('validar-lote', 'Arquivo-alvo vs estado real (integridade)'),
@@ -267,7 +279,7 @@ def _print(res, as_json):
     modo = res['modo']
     if modo == 'medir-saldos':
         print(f"=== MEDIR SALDOS | company={res['company_id']} journal={res['journal_id']} "
-              f"| {res['periodo']['inicio']} a {res['periodo']['fim']} ===")
+              f"state={res['state']} | {res['periodo']['inicio']} a {res['periodo']['fim']} ===")
         print(f"{'conta':>8} {'rotulo':<10} {'n_linhas':>9} {'total_debito':>16}")
         for s in res['saldos']:
             print(f"{s['conta_id']:>8} {s['rotulo']:<10} {s['n_linhas']:>9} "
@@ -296,7 +308,8 @@ def main(argv=None):
     c = _conectar()
     if args.modo == 'medir-saldos':
         res = medir_saldos(c, parse_contas(args.contas), args.data_inicio, args.data_fim,
-                           company_id=args.company_id, journal_id=args.journal_id)
+                           company_id=args.company_id, journal_id=args.journal_id,
+                           state=args.state)
     else:
         registros = carregar_alvo(args.arquivo, args.chave)
         if args.modo == 'validar-lote':

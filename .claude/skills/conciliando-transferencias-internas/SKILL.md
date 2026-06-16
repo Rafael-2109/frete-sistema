@@ -113,7 +113,14 @@ domain = [
 | Ambos extratos nao conciliados | `criar_transferencia_interna_e_conciliar()` | stmt_pag_id, stmt_rec_id, journal_pag_id, journal_rec_id, amount, date |
 | Recebimento conciliado, pagamento pendente | `conciliar_pagamento_transferencia_existente()` | stmt_pag_id, amount, date, journal_pag_id — **auto-escala para 2b se busca direta falhar** |
 | Diagnostico de cadeia (chamado automaticamente por Sit 2) | `rastrear_cadeia_documental()` | stmt_pag_id — retorna diagnostico, NAO executa |
-| Levantar todos os pares pendentes | `levantar_pares_transferencia_interna()` | — (aceita args de filtro) |
+| Levantar todos os pares pendentes | `levantar_pares_transferencia_interna()` | filtros opcionais: `data_inicio`, `data_fim`, `valor`, `journal` (nome/code/ID), `payment_ref` |
+
+> `levantar_pares_transferencia_interna` retorna **list de pares**; ou `dict {'error': ...}`
+> quando o `journal` informado e ambiguo (com `candidatos`) ou nao-encontrado — checar o
+> retorno antes de iterar. `payment_ref` (opcional) **substitui** o OR default
+> `NACOM GOYA`|`61.724.241` por um filtro unico por esse termo, para conciliar outra
+> contraparte/empresa (sem ele, o OR default ja cobre todos os journals da NACOM, incl.
+> o SRM sem CNPJ via o ramo `NACOM GOYA`).
 
 Codigo completo: [references/codigo-operacional.md](./references/codigo-operacional.md)
 Testes validados: [references/fluxo-validado.md](./references/fluxo-validado.md)

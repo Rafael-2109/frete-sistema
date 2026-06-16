@@ -266,6 +266,19 @@ class TestLevantarPares:
         assert ["date", ">=", "2025-09-01"] in domain
         assert ["date", "<=", "2025-09-30"] in domain
 
+    def test_payment_ref_customizado_substitui_or(self, ns, odoo_mock):
+        # Quando payment_ref e informado, filtra SO por esse termo (sem o OR
+        # default NACOM GOYA|CNPJ) — permite conciliar outra contraparte/empresa.
+        odoo_mock.execute_kw.return_value = []
+        ns["levantar_pares_transferencia_interna"](payment_ref="NACOM GOYA COMERCIAL")
+        domain = odoo_mock.execute_kw.call_args[0][2][0]
+        assert ["payment_ref", "ilike", "NACOM GOYA COMERCIAL"] in domain
+        assert "|" not in domain                              # OR default removido
+        assert ["payment_ref", "ilike", "61.724.241"] not in domain
+        # filtros inviolaveis (REGRAS ANTI-ALUCINACAO) preservados
+        assert ["is_reconciled", "=", False] in domain
+        assert ["to_check", "=", False] in domain
+
 
 # ---------------------------------------------------------------------------
 # preparar_extrato_e_reconciliar — invariante CRITICA: account_id e o ULTIMO

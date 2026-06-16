@@ -185,6 +185,36 @@ def test_medir_saldos_metadados(mod):
     assert res['periodo'] == {'inicio': '2025-09-01', 'fim': '2025-09-30'}
 
 
+def test_medir_saldos_state_default_posted(mod):
+    # Sem --state, mantem o comportamento historico (so posted): ids 1,2 = 150.
+    c = _fake_para_medir()
+    res = mod.medir_saldos(c, [(25091, 'CPV')], '2025-09-01', '2025-09-30',
+                           company_id=4, journal_id=845)
+    assert res['state'] == 'posted'
+    assert res['saldos'][0]['n_linhas'] == 2
+    assert res['saldos'][0]['total_debito'] == pytest.approx(150.0)
+
+
+def test_medir_saldos_state_draft(mod):
+    # state='draft' conta SO a linha em move draft (id 5, debit 77).
+    c = _fake_para_medir()
+    res = mod.medir_saldos(c, [(25091, 'CPV')], '2025-09-01', '2025-09-30',
+                           company_id=4, journal_id=845, state='draft')
+    assert res['state'] == 'draft'
+    assert res['saldos'][0]['n_linhas'] == 1
+    assert res['saldos'][0]['total_debito'] == pytest.approx(77.0)
+
+
+def test_medir_saldos_state_both(mod):
+    # state='both' soma posted (1,2) + draft (5) = 227, sem filtro parent_state.
+    c = _fake_para_medir()
+    res = mod.medir_saldos(c, [(25091, 'CPV')], '2025-09-01', '2025-09-30',
+                           company_id=4, journal_id=845, state='both')
+    assert res['state'] == 'both'
+    assert res['saldos'][0]['n_linhas'] == 3
+    assert res['saldos'][0]['total_debito'] == pytest.approx(227.0)
+
+
 # ---------------------------------------------------------------------------
 # validar_lote — divergencias, ausentes, duplicados, draft
 # ---------------------------------------------------------------------------
@@ -299,6 +329,15 @@ def test_cli_parser_medir_saldos(mod):
     assert args.company_id == 4       # default CD
     assert args.journal_id == 845     # default
     assert args.json is False
+    assert args.state == 'posted'     # default historico
+
+
+def test_cli_parser_medir_saldos_state(mod):
+    args = mod.build_parser().parse_args([
+        'medir-saldos', '--contas', '25091:CPV',
+        '--data-inicio', '2025-09-01', '--data-fim', '2025-09-30', '--state', 'both',
+    ])
+    assert args.state == 'both'
 
 
 def test_cli_parser_validar_lote(mod):

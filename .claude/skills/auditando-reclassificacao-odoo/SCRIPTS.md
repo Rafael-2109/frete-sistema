@@ -37,8 +37,8 @@ python "$SK" <modo> [opcoes]
 
 ### Modo medir-saldos
 
-Mede `n_linhas` + `total_debito` por conta no periodo, com o filtro fixo
-`debit>0 AND parent_state=posted` (linhas a debito efetivas, posted).
+Mede `n_linhas` + `total_debito` por conta no periodo, com o filtro
+`debit>0 AND parent_state=<state>` (linhas a debito efetivas; `state` default `posted`).
 
 | Param | Obrig | Default | Descricao |
 |-------|-------|---------|-----------|
@@ -47,11 +47,12 @@ Mede `n_linhas` + `total_debito` por conta no periodo, com o filtro fixo
 | `--data-fim` | sim | — | `YYYY-MM-DD` |
 | `--company-id` | nao | `4` (CD) | company_id Odoo |
 | `--journal-id` | nao | `845` | journal_id Odoo |
+| `--state` | nao | `posted` | `posted` (so postados), `draft` (so rascunho) ou `both` (ambos — omite o filtro `parent_state`). Use `draft`/`both` para contar o que falta postar pos-reclassificacao. |
 | `--json` | nao | tabela | saida JSON |
 
 **Retorno (JSON):**
 ```json
-{"modo": "medir-saldos", "company_id": 4, "journal_id": 845,
+{"modo": "medir-saldos", "company_id": 4, "journal_id": 845, "state": "posted",
  "periodo": {"inicio": "2025-09-01", "fim": "2025-09-30"},
  "saldos": [{"conta_id": 25091, "rotulo": "CPV", "n_linhas": 7591,
              "total_debito": 5924701.64}]}

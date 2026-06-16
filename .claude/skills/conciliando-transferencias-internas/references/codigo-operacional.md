@@ -512,7 +512,8 @@ def _extrair_journal_destino(payment_ref):
             return journal_id
     return None
 
-def levantar_pares_transferencia_interna(data_inicio=None, data_fim=None, valor=None, journal=None):
+def levantar_pares_transferencia_interna(data_inicio=None, data_fim=None, valor=None,
+                                         journal=None, payment_ref=None):
     """Busca pares de transferencia interna pendentes, com filtros opcionais.
 
     Args:
@@ -520,6 +521,13 @@ def levantar_pares_transferencia_interna(data_inicio=None, data_fim=None, valor=
         data_fim: str 'YYYY-MM-DD' — data maxima (inclusive)
         valor: float — filtrar por valor absoluto especifico
         journal: str ou int — nome do journal (ex: 'GRAFENO') ou ID (ex: 883)
+        payment_ref: str — termo do payment_ref a casar (ilike). Quando informado,
+            SUBSTITUI o OR default 'NACOM GOYA'|'61.724.241' por um filtro unico
+            por esse termo (para conciliar outra contraparte/empresa). Quando None,
+            usa o OR default (cobre todos os journals da NACOM, incl. SRM sem CNPJ).
+
+    Returns:
+        list de pares; ou dict {'error': ...} se o journal for ambiguo/nao-encontrado.
     """
 
     odoo = get_odoo_connection()
@@ -535,11 +543,18 @@ def levantar_pares_transferencia_interna(data_inicio=None, data_fim=None, valor=
         if journal_id is None:
             return {'error': f'journal nao encontrado: {journal!r}'}
 
-    # Montar domain base
-    domain = [
-        '|',
-        ['payment_ref', 'ilike', 'NACOM GOYA'],
-        ['payment_ref', 'ilike', '61.724.241'],
+    # Montar domain base. Filtro de contraparte: por padrao o OR NACOM GOYA|CNPJ
+    # (cobre todos os journals da NACOM, incl. SRM sem CNPJ via ramo 'NACOM GOYA');
+    # se payment_ref for informado, filtra SO por esse termo (outra contraparte).
+    if payment_ref:
+        domain = [['payment_ref', 'ilike', payment_ref]]
+    else:
+        domain = [
+            '|',
+            ['payment_ref', 'ilike', 'NACOM GOYA'],
+            ['payment_ref', 'ilike', '61.724.241'],
+        ]
+    domain += [
         ['is_reconciled', '=', False],
         ['to_check', '=', False],
     ]
