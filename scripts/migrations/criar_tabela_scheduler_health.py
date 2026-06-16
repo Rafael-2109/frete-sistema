@@ -33,9 +33,16 @@ def run():
         with open(sql_path, 'r') as f:
             sql_content = f.read()
 
-        for stmt in sql_content.split(';'):
-            stmt = stmt.strip()
-            if stmt and not stmt.startswith('--'):
+        for raw_stmt in sql_content.split(';'):
+            # Remove linhas de comentario ANTES de avaliar o statement: o .sql
+            # comeca com um cabecalho '-- Migration...' no MESMO bloco do CREATE
+            # TABLE (split por ';'), e o antigo `startswith('--')` pulava o bloco
+            # inteiro -> a tabela nunca era criada e o CREATE INDEX seguinte
+            # estourava "relation does not exist" em banco limpo.
+            stmt = '\n'.join(
+                ln for ln in raw_stmt.splitlines() if not ln.strip().startswith('--')
+            ).strip()
+            if stmt:
                 db.session.execute(text(stmt))
 
         db.session.commit()
