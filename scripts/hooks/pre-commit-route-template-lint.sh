@@ -3,6 +3,14 @@
 # inexistente. Baseline (scripts/audits/route_template_baseline.json) congela rotas
 # legadas ja quebradas; so achado NOVO em .py staged bloqueia.
 # Bypass emergencial: git commit --no-verify
+#
+# NOTA (WSL2): route_template_audit.py importa `app` e carrega libs nativas
+# (numpy/pandas/lxml/rapidfuzz). Nesse ambiente isso pode dar Segmentation fault
+# (exit 139) INTERMITENTE que, com `set -e`, aborta o commit sem violacao real.
+# Se acontecer: RE-TENTE o commit (e' intermitente); use --no-verify SO quando o
+# commit NAO tocar rota/template, validando depois com:
+#   python3 scripts/audits/route_template_audit.py
+# Detalhes: .claude/references/REGRAS_DEV_LOCAL.md (REGRAS DEV ADICIONAIS, item 6).
 set -e
 
 ROOT="$(git rev-parse --show-toplevel)"

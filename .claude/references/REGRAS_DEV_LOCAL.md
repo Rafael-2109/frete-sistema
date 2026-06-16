@@ -205,6 +205,10 @@ Modulos complexos tem CLAUDE.md proprio com patterns, convencoes e gotchas de de
 3. **OPENCLAW / PLAYWRIGHT**: Timeouts generosos para tool calls longas (30s+ minimo). Verificar resultados DIRETO no sistema alvo (Odoo, SSW) — NAO confiar apenas no output do Playwright. Despachar jobs via API OpenClaw — NAO rodar dominios de cron manualmente.
 4. **PAD-A (docs/scripts)**: ANTES de criar/editar doc ou script: LER `.claude/references/ARQUITETURA_DE_ARTEFATOS.md` ou usar skill `padronizando-docs`. (Movida do CLAUDE.md raiz na F3 PAD-CTX 2026-06-09 — o agente web nao cria docs.)
 5. **CONTEXTO DO AGENTE (PAD-CTX)**: ANTES de adicionar/mover conteudo em qualquer camada do contexto do Agente Web (preset, system_prompt, CLAUDE.md raiz, skills, hook, memorias): LER `.claude/references/ARQUITETURA_CONTEXTO_AGENTE.md` (criterios de admissao por camada).
+6. **SEGFAULT INTERMITENTE (WSL2)**: carregar muitas extensoes C no mesmo processo Python (numpy/pandas/lxml/rapidfuzz/PIL + SQLAlchemy/psycopg2) causa `Segmentation fault` (exit 139) INTERMITENTE neste ambiente WSL2. Dois sintomas observados (2026-06-16):
+   - **pytest**: rodar suites de modulos diferentes JUNTAS crasha (ex.: `tests/carvia/` + `tests/portal_sendas/` no mesmo processo). Rodar cada modulo em invocacao pytest SEPARADA passa limpo.
+   - **pre-commit**: `scripts/hooks/pre-commit-route-template-lint.sh` → `route_template_audit.py` importa `app` e pode segfaultar; com `set -e`, o exit 139 ABORTA o commit SEM violacao real.
+   **Mitigacao**: (1) RE-TENTAR o commit/teste — o crash e' intermitente; (2) `git commit --no-verify` SO quando o commit NAO toca rota/template (unico alvo do audit = `render_template` -> template inexistente) e VALIDAR depois com `python3 scripts/audits/route_template_audit.py`. Nunca usar `--no-verify` em commit que toca rotas/templates sem rodar o audit manualmente antes.
 
 ---
 
