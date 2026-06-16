@@ -16,7 +16,7 @@ load_dotenv('/home/rafaelnascimento/projetos/frete_sistema/.env')
 from app.odoo.utils.connection import get_odoo_connection
 
 CTX = {'allowed_company_ids': [1, 5], 'company_id': 5, 'lang': 'pt_BR'}
-ORIGIN_LIKE = 'S3-REESTRUT%'
+ORIGIN_LIKE = 'S3-%'   # S3-REESTRUT / S3-ACUCAR / S3-SEMLOTE
 
 # wizards que o button_validate pode disparar (Odoo) e o método que confirma cada um
 WIZ_METHODS = {
