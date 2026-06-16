@@ -130,7 +130,24 @@ def inspecionar_registro(odoo, modelo: str, registro_id: int) -> Dict[str, Any]:
     }
 
     try:
-        registros = odoo.read(modelo, [registro_id])
+        try:
+            registros = odoo.read(modelo, [registro_id])
+        except Exception as e_full:
+            # PYTHON-FLASK-YF: campos computados frágeis do Odoo (ex:
+            # stock.location.weight com move_line de product_id=False) estouram
+            # Fault no read de TODOS os campos. Fallback: ler só os campos
+            # armazenados (store=True) via fields_get.
+            campos_def = odoo.execute_kw(
+                modelo, 'fields_get', [], {'attributes': ['store']}
+            )
+            stored = [c for c, d in (campos_def or {}).items() if d.get('store')]
+            if not stored:
+                raise e_full
+            registros = odoo.read(modelo, [registro_id], stored)
+            resultado['aviso'] = (
+                f'Campos computados omitidos (read completo falhou: {e_full}). '
+                f'Lidos {len(stored)} campos armazenados.'
+            )
 
         if not registros:
             resultado['erro'] = f'Registro {registro_id} nao encontrado'

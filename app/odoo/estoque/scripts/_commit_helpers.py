@@ -77,6 +77,18 @@ def commit_resilient(
         Propaga excecoes nao-OperationalError (ex: IntegrityError) sem retry.
     """
     from app import db  # lazy (evita circular em tests)
+    from flask import has_app_context
+
+    # PYTHON-FLASK-Y9: guard fail-fast. Sem app context ativo, db.session
+    # (scoped_session) estoura "Working outside of application context" obscuro
+    # no commit. Acontece quando um átomo é chamado via 'python -' / import cru
+    # sem o bootstrap canônico. Converte num erro acionável.
+    if not has_app_context():
+        raise RuntimeError(
+            "commit_resilient exige um Flask app context ativo. Rode o átomo via "
+            "o bootstrap canônico: app = setup_cli_completo(__file__, ...) ; "
+            "with app.app_context(): ...  (ver app/odoo/estoque/_cli_utils.py)."
+        )
 
     last_err: Optional[Exception] = None
     for attempt in range(1, max_attempts + 1):

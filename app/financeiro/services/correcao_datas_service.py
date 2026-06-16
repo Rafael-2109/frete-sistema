@@ -85,17 +85,34 @@ class CorrecaoDatasService:
                 return resultado
 
             # 2. Buscar mensagens do CIEL IT em julho/2025 para account.move
-            # IMPORTANTE: Há ~81.000 mensagens, precisamos de limite alto
-            messages_ciel = self.odoo.execute_kw(
-                'mail.message', 'search_read',
-                [[
-                    ['author_id', 'in', ciel_user_ids],
-                    ['model', '=', 'account.move'],
-                    ['create_date', '>=', '2025-07-01 00:00:00'],
-                    ['create_date', '<=', '2025-07-31 23:59:59']
-                ]],
-                {'fields': ['id', 'res_id', 'tracking_value_ids'], 'limit': 100000}
-            )
+            # PYTHON-FLASK-YD: ~81.000 mensagens estouravam o timeout de 120s num
+            # único read. Paginar por cursor de id (P4 Batch Fan-Out) mantém cada
+            # batch rápido e evita o timeout em mail.message.read.
+            messages_ciel = []
+            _last_id = 0
+            _BATCH_MSG = 5000
+            while True:
+                _lote_msg = self.odoo.execute_kw(
+                    'mail.message', 'search_read',
+                    [[
+                        ['author_id', 'in', ciel_user_ids],
+                        ['model', '=', 'account.move'],
+                        ['create_date', '>=', '2025-07-01 00:00:00'],
+                        ['create_date', '<=', '2025-07-31 23:59:59'],
+                        ['id', '>', _last_id],
+                    ]],
+                    {
+                        'fields': ['id', 'res_id', 'tracking_value_ids'],
+                        'limit': _BATCH_MSG,
+                        'order': 'id asc',
+                    }
+                )
+                if not _lote_msg:
+                    break
+                messages_ciel.extend(_lote_msg)
+                _last_id = _lote_msg[-1]['id']
+                if len(_lote_msg) < _BATCH_MSG:
+                    break
 
             logger.info(f"Mensagens do CIEL IT em julho/2025: {len(messages_ciel)}")
 
