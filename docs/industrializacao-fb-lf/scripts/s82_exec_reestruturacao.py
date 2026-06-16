@@ -18,6 +18,8 @@ from dotenv import load_dotenv
 load_dotenv('/home/rafaelnascimento/projetos/frete_sistema/.env')
 from app.odoo.utils.connection import get_odoo_connection
 from app.odoo.estoque.scripts.picking import StockPickingService
+sys.path.insert(0, '/home/rafaelnascimento/projetos/frete_sistema_wire_r2/docs/industrializacao-fb-lf/scripts')
+from s84_canary_recovery import finalizar_picking  # button_validate + trata wizard expiry/backorder
 
 CTX = {'allowed_company_ids': [1, 5], 'company_id': 5, 'lang': 'pt_BR'}
 SEP = '=' * 92
@@ -112,31 +114,46 @@ def main():
         pcat = {p['id']: (p['categ_id'][0] if p.get('categ_id') else None)
                 for p in rd('product.product', prod_ids, ['categ_id'])}
         destino = collections.Counter(); dqty = collections.defaultdict(float); plan_lines = []
+        ja_no_lugar = 0; sem_lote = []
         for q in migrar:
             cat = pcat.get(q['product_id'][0])
             dst = LOC_PA if cat in pa_cats else LOC_MP
+            src = q['location_id'][0]
+            if src == dst:                      # quant já no destino correto (ex.: já em 31092/31093) — NÃO migrar
+                ja_no_lugar += 1
+                continue
+            if not q.get('lot_id'):             # quant SEM lote (produto tracking=lot inconsistente) — exceção, à parte
+                sem_lote.append({'quant': q['id'], 'product_id': q['product_id'][0],
+                                 'product': q['product_id'][1], 'qty': q['quantity'], 'dst': dst})
+                continue
             destino[dst] += 1; dqty[dst] += q['quantity']
             plan_lines.append({'quant': q['id'], 'product_id': q['product_id'][0], 'product': q['product_id'][1],
                                'lot_id': q['lot_id'][0] if q.get('lot_id') else None,
                                'lot_name': q['lot_id'][1] if q.get('lot_id') else None, 'lot': m2(q.get('lot_id')),
-                               'qty': q['quantity'], 'src': q['location_id'][0], 'dst': dst})
-        soma_mig = sum(q['quantity'] for q in migrar)
+                               'qty': q['quantity'], 'src': src, 'dst': dst})
+        soma_mig = sum(l['qty'] for l in plan_lines)
         soma_tot = sum(q['quantity'] for q in qn)
         # o açúcar reservado (lote 230326) já sai via 'reservados'; 'acucar' é rede de segurança caso esteja livre
         sugar_resv = [q for q in reservados if q.get('lot_id') and SUGAR_LOT in str(q['lot_id'][1])]
         print(f"  quants(qty!=0)={len(qn)} | livres={len(livres)} | EXCLUÍDOS: reservados={len(reservados)} "
-              f"(açúcar lote {SUGAR_LOT}={len(sugar_resv)}) + açúcar-livre-no-filtro={len(acucar)}")
-        print(f"  A MIGRAR={len(migrar)}  ->  31092(MP/EMB)={destino[LOC_MP]} ({dqty[LOC_MP]:,.1f})  "
+              f"(açúcar lote {SUGAR_LOT}={len(sugar_resv)}) + açúcar-livre={len(acucar)} + já-no-destino={ja_no_lugar} "
+              f"+ SEM-LOTE={len(sem_lote)}")
+        if sem_lote:
+            print(f"    ⚠ quants sem lote (exceção, migrar à parte): {[(s['product'][:24], s['qty']) for s in sem_lote]}")
+            with open('/tmp/s2_s82_sem_lote.json', 'w') as f:
+                json.dump(sem_lote, f, ensure_ascii=False, indent=2, default=str)
+        print(f"  A MIGRAR={len(plan_lines)}  ->  31092(MP/EMB)={destino[LOC_MP]} ({dqty[LOC_MP]:,.1f})  "
               f"31093(PA)={destino[LOC_PA]} ({dqty[LOC_PA]:,.1f})")
         inv_ok = abs((dqty[LOC_MP] + dqty[LOC_PA]) - soma_mig) < 1e-3
         print(f"  INVARIANTE Σdst == Σmigrar: {dqty[LOC_MP]+dqty[LOC_PA]:,.3f} == {soma_mig:,.3f} -> {'OK' if inv_ok else 'FALHA'}")
-        print(f"  (saldo total {soma_tot:,.1f} = migrar {soma_mig:,.1f} + reservado/açúcar {soma_tot-soma_mig:,.1f})")
-        R['A4'] = {'qn': len(qn), 'migrar': len(migrar), 'dst_31092': destino[LOC_MP], 'dst_31093': destino[LOC_PA],
+        print(f"  (saldo total {soma_tot:,.1f}; migrar {soma_mig:,.1f} + açúcar/reservado + já-no-destino {ja_no_lugar})")
+        R['A4'] = {'qn': len(qn), 'migrar': len(plan_lines), 'ja_no_lugar': ja_no_lugar, 'sem_lote': len(sem_lote),
+                   'dst_31092': destino[LOC_MP], 'dst_31093': destino[LOC_PA],
                    'qty_31092': round(dqty[LOC_MP], 2), 'qty_31093': round(dqty[LOC_PA], 2),
                    'acucar_excluido': [q['id'] for q in acucar], 'invariante_ok': inv_ok}
         with open('/tmp/s2_s82_migracao_plan.json', 'w') as f:
             json.dump(plan_lines, f, ensure_ascii=False, indent=2, default=str)
-        print("  [dump] /tmp/s2_s82_migracao_plan.json (442 linhas planejadas)")
+        print(f"  [dump] /tmp/s2_s82_migracao_plan.json ({len(plan_lines)} linhas planejadas)")
         if args.migrar and confirmar:
             canary = getattr(args, 'canary_n', 0)
             ps = StockPickingService(odoo=o)
@@ -153,14 +170,47 @@ def main():
                 linhas = [{'product_id': l['product_id'], 'quantity': l['qty'],
                            'lot_id': l['lot_id'], 'lot_name': l['lot_name'],
                            'name': f"Reestrut terceiros {l['product']}"} for l in linhas_g]
-                esperadas = [{'product_id': l['product_id'], 'lot_name': l['lot_name'], 'quantity': l['qty']}
-                             for l in linhas_g]
                 pid = ps.criar_transferencia(5, 5, LOC_42, dst, linhas, PT_INTERNO,
                                              partner_id=None, incoterm_id=None, carrier_id=None,
                                              origin='S3-REESTRUT-DE-TERCEIROS')
-                ps.confirmar_e_reservar(pid)
-                ps.consolidar_move_lines(pid, linhas_esperadas=esperadas)
-                ps.validar(pid, linhas_esperadas=esperadas)
+                # FIX 2026-06-16: action_assign NÃO reserva em move pai->filha (42->31092/31093,
+                # pós-A1 reparent) — canary 325571 confirmou 0 move_lines com quants disponíveis
+                # (s84/s85). Correção (o próprio Odoo sugere "codifique as quantidades"): após
+                # action_confirm, criar a move.line MANUAL (quantity+lot+picked) e button_validate
+                # sem depender da reserva. criar_transferencia faz 1 move por linha.
+                o.execute_kw('stock.picking', 'action_confirm', [[pid]], {'context': CTX})
+                # pt23 é at_confirm -> action_confirm pode AUTO-RESERVAR move.lines p/ parte dos
+                # produtos. Removê-las antes de codificar as manuais evita DUPLICAÇÃO (qty 2x).
+                old_mls = o.execute_kw('stock.move.line', 'search', [[('picking_id', '=', pid)]], {'context': CTX})
+                if old_mls:
+                    o.execute_kw('stock.move.line', 'unlink', [old_mls], {'context': CTX})
+                moves = o.execute_kw('stock.move', 'search_read', [[('picking_id', '=', pid)]],
+                                     {'fields': ['id', 'product_id', 'product_uom_qty'],
+                                      'order': 'id', 'context': CTX})
+                mbp = collections.defaultdict(list)
+                for mv in moves:
+                    mbp[mv['product_id'][0]].append(mv)
+                # Odoo MESCLA moves do mesmo produto -> normalmente 1 move/produto (N lotes).
+                # Cria 1 move.line por linha (lote); se houver N moves do produto, pareia por qty.
+                lpp = collections.defaultdict(list)
+                for l in linhas_g:
+                    lpp[l['product_id']].append(l)
+                for prod, lns in lpp.items():
+                    mvs = mbp.get(prod, [])
+                    if not mvs:
+                        raise RuntimeError(f"sem move p/ produto {prod} no picking {pid}")
+                    for i, l in enumerate(lns):
+                        mid = mvs[0]['id'] if len(mvs) == 1 else \
+                            next((m for m in mvs if abs(m['product_uom_qty'] - l['qty']) < 1e-3),
+                                 mvs[min(i, len(mvs) - 1)])['id']
+                        o.execute_kw('stock.move.line', 'create', [{
+                            'move_id': mid, 'picking_id': pid, 'product_id': prod,
+                            'lot_id': l['lot_id'], 'quantity': l['qty'], 'picked': True,
+                            'location_id': l['src'], 'location_dest_id': dst, 'company_id': 5,
+                        }], {'context': CTX})
+                st = finalizar_picking(o, pid)  # button_validate + trata wizard (expiry lotes a vencer)
+                if st != 'done':
+                    raise RuntimeError(f"picking {pid} ficou '{st}' apos button_validate (esperado done)")
                 print(f"  ✅ picking {pid} (42->{dst}, {len(linhas)} linhas) VALIDADO (done)")
                 R['A4']['pickings'].append({'pid': pid, 'dst': dst, 'linhas': len(linhas)})
         else:

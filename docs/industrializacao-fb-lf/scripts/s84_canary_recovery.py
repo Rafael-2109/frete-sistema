@@ -18,16 +18,58 @@ from app.odoo.utils.connection import get_odoo_connection
 CTX = {'allowed_company_ids': [1, 5], 'company_id': 5, 'lang': 'pt_BR'}
 ORIGIN_LIKE = 'S3-REESTRUT%'
 
+# wizards que o button_validate pode disparar (Odoo) e o método que confirma cada um
+WIZ_METHODS = {
+    'expiry.picking.confirmation': 'process',        # lotes a vencer/vencidos (product_expiry)
+    'stock.immediate.transfer': 'process',
+    'stock.backorder.confirmation': 'process_cancel_backorder',
+}
+
+
+def finalizar_picking(o, pid, max_wiz=6):
+    """button_validate tratando wizards ENCADEADOS (expiry/immediate/backorder)
+    até o picking ficar 'done'. Retorna o state final. Reusado pelo s82 (A4)."""
+    ctx = dict(CTX); ctx.update({'skip_backorder': True, 'picking_ids_not_to_backorder': [pid]})
+
+    def state():
+        return o.execute_kw('stock.picking', 'read', [[pid]], {'fields': ['state'], 'context': CTX})[0]['state']
+
+    try:
+        action = o.execute_kw('stock.picking', 'button_validate', [[pid]], {'context': ctx})
+    except Exception as e:
+        if 'cannot marshal None' in str(e):
+            return state()
+        raise
+    for _ in range(max_wiz):
+        if not (isinstance(action, dict) and action.get('res_model')):
+            break
+        rm = action['res_model']; rid = action.get('res_id'); ctxw = dict(action.get('context') or ctx)
+        meth = WIZ_METHODS.get(rm, 'process')
+        wid = rid or o.execute_kw(rm, 'create', [{}], {'context': ctxw})
+        try:
+            action = o.execute_kw(rm, meth, [[wid]], {'context': ctxw})
+        except Exception as e:
+            if 'cannot marshal None' in str(e):
+                action = None
+            else:
+                raise
+    return state()
+
 
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--diag', action='store_true')
     ap.add_argument('--limpar', action='store_true')
     ap.add_argument('--quant', nargs='*', default=None, help='product_ids p/ inspecionar quants em child_of 42')
+    ap.add_argument('--finalizar', type=int, default=0, help='button_validate tratando wizard, p/ PID')
     ap.add_argument('--confirmar', action='store_true')
     args = ap.parse_args()
     o = get_odoo_connection()
     assert o.authenticate(), 'falha auth'
+
+    if args.finalizar:
+        print('STATE FINAL:', finalizar_picking(o, args.finalizar))
+        return
 
     if args.quant is not None:
         codes = args.quant or ['29']

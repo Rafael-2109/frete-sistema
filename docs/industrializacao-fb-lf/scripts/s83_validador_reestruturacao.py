@@ -115,11 +115,15 @@ def main():
         falhas.append(f'{len(difs)} produtos com saldo alterado (ex: {difs[:3]})')
     print(f"  [A4] saldo por produto conservado: {'OK' if not difs else f'FALHA ({len(difs)} difs)'}")
 
-    # 3. 42 esvaziado exceto açúcar
-    q42 = cur['quants_por_loc'].get(LOC_42, 0)
-    print(f"  [A4] quants restantes em 42: {q42} (esperado ~1 = açúcar)")
-    if q42 > 2:
-        falhas.append(f'42 ainda tem {q42} quants (esperado ~1 açúcar)')
+    # 3. 42 esvaziado exceto EXCEÇÕES (açúcar reservado D3 + sem-lote + resíduo ~0).
+    #    Falha só se sobrar quant MIGRÁVEL (com lote, qty>1e-3, livre, não-açúcar).
+    q42_det = o.execute_kw('stock.quant', 'search_read', [[('location_id', '=', LOC_42), ('quantity', '!=', 0)]],
+                           {'fields': ['product_id', 'lot_id', 'quantity', 'reserved_quantity'], 'context': CTX})
+    migravel = [q for q in q42_det if q.get('lot_id') and SUGAR_LOT not in str(q['lot_id'][1])
+                and abs(q['quantity']) > 1e-3 and not (q.get('reserved_quantity') and q['reserved_quantity'] > 1e-6)]
+    print(f"  [A4] quants em 42: {len(q42_det)} (migráveis remanescentes={len(migravel)}; resto=açúcar D3/sem-lote/resíduo~0)")
+    if migravel:
+        falhas.append(f'{len(migravel)} quants MIGRÁVEIS ainda em 42: {[(q["product_id"][1], q["quantity"]) for q in migravel[:5]]}')
 
     # 4. contas de estoque Δ=0 (neutralidade)
     for code in ESTOQUE_CODES:
