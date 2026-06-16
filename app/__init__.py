@@ -88,6 +88,13 @@ if _sentry_dsn:
             logentry = event.get("logentry") or {}
             if isinstance(logentry, dict):
                 message = message or logentry.get("message", "") or logentry.get("formatted", "")
+            # Inclui o valor da exceção (erros que sobem como exception, não como
+            # log string) para os filtros abaixo conseguirem casar.
+            _exc = event.get("exception") or {}
+            if isinstance(_exc, dict):
+                for _v in (_exc.get("values") or []):
+                    if isinstance(_v, dict) and _v.get("value"):
+                        message = f"{message} {_v['value']}"
             msg_low = message.lower()
 
             extra = event.get("extra") or {}
@@ -103,6 +110,21 @@ if _sentry_dsn:
                 and "task exception was never retrieved" in msg_low
                 and "exit code 143" in msg_low
             ):
+                return None
+
+            # (a2) TODOS ambientes: indisponibilidade do Odoo (jobs de sync
+            # best-effort, 0 usuários, recupera quando o Odoo volta). Suprime a
+            # família inteira de ruído de auth/502 que fragmenta em dezenas de
+            # issues por ponto de log (PYTHON-FLASK-6J/V5/V6/CC/5C/4/3/...).
+            # Mantém o log no Render (warning); só tira do Sentry. Credencial
+            # realmente inválida aparece nos logs do Render + tela de status.
+            if any(s in msg_low for s in (
+                "falha na autenticacao com odoo",
+                "falha na autenticação com odoo",
+                "circuit breaker aberto",
+                "502 bad gateway",
+                "protocolerror for odoo",
+            )):
                 return None
 
             # (b) TODOS ambientes: execucao ad-hoc/interativa.
