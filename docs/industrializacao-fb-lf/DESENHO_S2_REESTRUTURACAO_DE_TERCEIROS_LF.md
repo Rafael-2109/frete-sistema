@@ -165,7 +165,15 @@ Decisão Rafael (D1): o estoque LF deve valorar como **terceiros** (`1150200001`
 **Por que picking interno (vs skill `transferindo-interno-odoo`):** rastreável (1-2 docs), reversível por estorno, preserva lote, **0 SVL (neutro)**. ⚠️ **Descoberta (verificação do átomo):** a skill `transferindo-interno-odoo` usa `StockInternalTransferService.transferir_entre_locations`, que faz **inventory adjustment 2× (ajusta quant)** — isso **GERA SVL** (saída+entrada, net-zero se mesma conta), **violando a promessa "0 SVL"**. ⇒ **NÃO usar o átomo para a migração**; usar `stock.move`/picking de verdade.
 **Veículo correto (reuso testado):** `app/odoo/estoque/scripts/picking.py` `PickingService`: `criar_transferencia(5,5,42,dst,linhas,pt=23, incoterm=None, carrier=None, partner=None, origin=...)` → `confirmar_e_reservar` → **`consolidar_move_lines(pid, linhas_esperadas=[{product_id,lot_name,quantity}])`** (G023 — trata **multi-lote por produto**; `preencher_qty_done` faz match só por produto, **não serve** p/ produtos com vários lotes) → `validar(pid, linhas_esperadas)` (button_validate com guards G019/G023). **2 pickings:** 42→31092 (431 linhas) e 42→31093 (11 linhas). 🔶 **Primeiro go = CANARY** (1-3 produtos, incluindo 1 multi-lote) p/ validar o fluxo antes dos 442. **Excluir** o açúcar reservado (lote 230326 / picking 321794) até a saída FB ser resolvida (§5).
 
-> **Nota fina (automação):** para o **saldo migrado**, o "move de entrada em 31092" será o move de migração (interno, **sem SVL**); a automação G1 lê "SVL da entrada mais recente em 31092". Como a G1 opera "daqui pra frente" (data-de-corte) e os **novos** ciclos entram frescos em 31092 (com SVL), não há conflito — mas registrar para o piloto da S4.
+> **⚠️ Nota crítica (automação G1/G2 — verificado na fonte 2026-06-16):** a descoberta da NF-2 (`descoberta_industrializacao.py` + `SA_BODY_G1` em `sa_retorno_industrializacao.py`) usa `31092` **EXATO** em **dois** filtros:
+> - **F1 — genealogia:** `move_raw.location_id == 31092` (`descoberta:157` / `SA_BODY_G1:126`) decide se o componente consumido é "de terceiros". Falhar = componente **descartado da NF-2** (não é só preço — some da nota).
+> - **F2 — entrada:** `location_dest_id == 31092` (`descoberta:81` / `SA_BODY_G1:132`) acha o SVL (preço, `descoberta:90`) e **vota a remessa** (chave R3, `descoberta:116` / `SA_BODY_G1:148`).
+>
+> Duas consequências da reestruturação:
+> 1. **Janela de transição:** lote remetido/produzido **antes** da migração (move com `location_id`/`location_dest_id` = **42**) e **retornado depois** → F1 descarta o componente e F2 perde SVL + remessa → NF-2 incompleta / sem R3 (fiscalmente errada). A data-de-corte da G1 é a do **retorno**, não a da remessa — logo **não protege**.
+> 2. **Poluição do voto:** o picking de migração A4 (42→31092, `done`, **0 SVL**) casa o domain de F2 e **conta voto** de remessa (o voto não exige SVL) → pode vencer a votação e apontar remessa errada.
+>
+> ⇒ **Pré-condição de S4** (habilitar o cron G1), **não** bloqueia A4 — o cron G1 ainda está em **canary/OFF** (`SA_BODY_G1` marca "🔴 CANARY REQUIRED ... ANTES de habilitar o cron G1"). **Endurecer a descoberta antes de ligar o cron** → **§7.1-D4**.
 
 ---
 
@@ -180,8 +188,10 @@ Decisão Rafael (D1): o estoque LF deve valorar como **terceiros** (`1150200001`
 | MO 20797 (ketchup) | abastecida de 53, 0 raws em 42 | sem ação |
 | Subcontratação | pt48/63 OFF, 0 moves reais | sem ação |
 | **Reservas** | só 1 (açúcar) | re-checar imediatamente antes da migração |
+| **Janela de transição (automação G1)** | descoberta G1 usa `31092` exato (F1/F2); lotes pré-migração entram/consomem em 42 | **pré-condição de S4, não de A4** (cron G1 em canary/OFF): endurecer F1/F2 + excluir picking de migração do voto **antes de ligar o cron G1** → §7.1-D4 |
 
 **Pré-condições da S3:** (1) reservas LF/Estoque limpas (feito na S1, exceto açúcar); (2) janela sem produção iniciando que reserve 42; (3) decisões §7 resolvidas; (4) go fresco do Rafael por escrita.
+**Pré-condição da S4 (registrada aqui pois A4 a origina):** descoberta G1 endurecida (§7.1-D4) **antes** de habilitar o cron G1 — enquanto G1 ficar em canary/OFF, A1–A5 são seguros.
 
 ---
 
@@ -212,6 +222,8 @@ s83 --validar                              # gates pós-go
 
 **Reversibilidade:** A1 (reparent) e A4 (picking interno) reversíveis por write/estorno; A2/A3 (put-away) por unlink; A5 (lançamento) por estorno. Nada toca SEFAZ.
 
+**Dependência p/ S4 (não p/ S3):** habilitar o **cron G1** exige antes endurecer a descoberta (§7.1-D4) — A4 cria a janela de transição **e** o picking que polui o voto de remessa. Enquanto G1 ficar em **canary/OFF**, A1–A5 são seguros; o canary G1 (READ + oráculo `saida_retorno_industrializacao validar`) detectaria qualquer NF-2 errada **antes** de postar. Sequenciar: A1–A4 → (S4) endurecer F1/F2 + excluir migração do voto → canary G1 → habilitar cron.
+
 **Validações automatizáveis (gates da S3):** saldo por (produto,lote) idêntico pré/pós; `Σ quants 31092+31093 == Σ quants 42 antigo (−açúcar)`; `Δ` contas de estoque pela migração A4 = 0; reserva da MO 20797 intacta; pós-A5, lançamento de reclassificação fecha pelo ciclo.
 
 ---
@@ -224,10 +236,18 @@ s83 --validar                              # gates pós-go
 | **D2** | **Reparent 31092/31093 sob 42** | passo **A1**. (A opção "lot_stock→41" foi **refutada** — `lot_stock_id` exige `internal`, 41 é `view`, `s79`.) lot_stock segue 42; on-hand passa a ver 31092/31093 sem trazer 53/54. |
 | **D3** | **Migrar livres agora; açúcar depois** | A4 exclui o quant do açúcar reservado (picking 321794); passo **7** migra após a saída FB ser resolvida. |
 
-**Status S2:** desenho concluído + decisões tomadas ⇒ **DoD da S2 cumprida**. Próximo = **S3 (implementação Odoo)** — não iniciar sem o "go por escrita" do Rafael (cada passo dry-run-first).
+**Status S2:** desenho concluído + decisões D1–D3 tomadas ⇒ **DoD da S2 cumprida**. A investigação ampla da S2 (escopo "contábil + exceções") **descobriu** uma pré-condição de S4 (D4, abaixo) que **não** altera o plano físico A1–A5. Próximo = **S3 (implementação Odoo)** — não iniciar sem o "go por escrita" do Rafael (cada passo dry-run-first).
+
+### 7.1 Decisão ABERTA (descoberta 2026-06-16, verificada na fonte)
+
+| # | Decisão (pendente Rafael) | Implicação no plano |
+|---|---|---|
+| **D4** | **Endurecer a descoberta G1 antes de ligar o cron (S4)** | **Pré-condição de S4** — A4 abre a janela de transição + o picking que polui o voto (ver §4 Nota crítica + §5). **Não** bloqueia A1–A5 (cron G1 em canary/OFF). Correção recomendada (aplicar em `descoberta_industrializacao.py` **e** `SA_BODY_G1`): **F1** `move_raw.location_id` `child_of 42` (em vez de `== 31092`) — pós-reparent, todo estoque LF sob 42 é terceiros; **F2** `location_dest_id` `child_of 42` **E** restringir `entrada` aos moves **com SVL `unit_cost`** (exclui o move de migração 0-SVL do **preço e do voto**). Remessas legítimas (ENTIN/compra) sempre têm SVL. Re-deploy da server action exige **canary READ + oráculo** (`saida_retorno_industrializacao validar`) antes do cron. **Decisão/validação Rafael + Contador (preço).** |
 
 ---
 
 ## Contexto
+
+Documento — industrialização por encomenda FB↔LF. Entregável da **Sessão 2** (desenho detalhado), companheiro do `MACRO_REESTRUTURACAO_DE_TERCEIROS_LF.md` (S1). Investigação ao vivo (READ-only) nos scripts `s72`–`s81`. Norte: `SOT_OPERACOES.md §"OBJETIVO FINAL"` (critério #4 estoque correto + #5 contabilização pelo ciclo). **Achado D4 (§7.1) verificado na fonte 2026-06-16** (`descoberta_industrializacao.py` 81/157 + `SA_BODY_G1` 126/132). Próximo: aprovação Rafael (GATE) → **S3 implementação Odoo**. Relacionado: `app/odoo/estoque/fluxos/1.1.4` (automação G1/G2), `app/odoo/estoque/scripts/descoberta_industrializacao.py` + `app/odoo/estoque/provisioning/sa_retorno_industrializacao.py` (leem `31092`).
 
 Documento — industrialização por encomenda FB↔LF. Entregável da **Sessão 2** (desenho detalhado), companheiro do `MACRO_REESTRUTURACAO_DE_TERCEIROS_LF.md` (S1). Investigação ao vivo (READ-only) nos scripts `s72`–`s78`. Norte: `SOT_OPERACOES.md §"OBJETIVO FINAL"` (critério #4 estoque correto + #5 contabilização pelo ciclo). Próximo: aprovação Rafael (GATE) → **S3 implementação Odoo**. Relacionado: `app/odoo/estoque/fluxos/1.1.4` (automação G1/G2), `app/odoo/estoque/provisioning/sa_retorno_industrializacao.py` (lê `31092`).

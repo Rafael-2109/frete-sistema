@@ -48,7 +48,7 @@ Locations-chave: `42` LF/Estoque · `53` LF/Pré-Produção · `31092` Mat. Terc
 3. **Roteamento produção:** rules "Escolha os Componentes" src `42 → 31092`; rules Pós-Produção→Estoque + picking_type "Armazenar PA" dst `42 → 31093`.
 4. **Roteamento saída:** rules de entrega/retorno src `42 → 31093` (PA) / `31092`.
 5. **Contábil:** definir conta de valoração de 31092/31093 (terceiros) vs a de 42.
-6. **Automação G1/G2:** validar consistência com 31092 (já provada nos canários 0-3).
+6. **Automação G1/G2:** validar consistência com 31092 (provada nos canários 0-3 **com o piloto que forçava 31092**). **⚠️ Pré-condição p/ ligar o cron G1 (descoberta 2026-06-16):** a descoberta usa `31092` **exato** (genealogia + entrada) → **janela de transição** (lotes pré-migração em 42) + **poluição do voto** pelo picking de migração — endurecer antes do cron: `DESENHO_S2 §7.1-D4`.
 
 ## Plano de sessões — DoD + GATE (decidido com Rafael; SEGUIR NA ORDEM)
 
@@ -59,7 +59,7 @@ Locations-chave: `42` LF/Estoque · `53` LF/Pré-Produção · `31092` Mat. Terc
 | **S1** | ✅ | Macro | As-Is/To-Be mapeado + plano + reservas LF/Estoque limpas (este doc) | feito |
 | **S2** | ✅ | Desenho + investigação ampla | Plano wired completo em **`DESENHO_S2_REESTRUTURACAO_DE_TERCEIROS_LF.md`** (investigação ao vivo `s72`–`s79`); decisões GATE tomadas (D1 terceiros contábil/L1 · D2 reparent 31092/31093 sob 42 · D3 açúcar depois) | **Rafael aprovou (GATE 15/06)** |
 | **S3** | ⏭️ **PRÓXIMA** | Implementação Odoo | A1 reparent + A2/A3 put-away (cat 6→31093, cat 1→31092) + A4 migração 442 livres + A5 repoint L1; **validado** (saldo, reserva, produção, entrega, neutralidade) | **go por escrita (dry-run-first, cada passo)** |
-| **S4** | ⬜ | Automação (SA) | Crons G1/G2 ligados (domain data-de-corte "daqui pra frente") + G2 SEFAZ piloto, sobre o estado reestruturado (= **estágio 4** do RUNBOOK `fluxos/1.1.4`) | **go duplo** (SEFAZ irreversível) |
+| **S4** | ⬜ | Automação (SA) | **Pré-condição (D4): endurecer a descoberta G1** (genealogia+entrada `child_of 42` + exigir SVL no voto/preço — `DESENHO_S2 §7.1`) **antes** de ligar o cron + canary READ/oráculo. Depois: crons G1/G2 ligados (domain data-de-corte "daqui pra frente") + G2 SEFAZ piloto, sobre o estado reestruturado (= **estágio 4** do RUNBOOK `fluxos/1.1.4`) | **go duplo** (SEFAZ irreversível) |
 
 ## Checklist de investigação da Sessão 2 — ✅ RESOLVIDO em `DESENHO_S2_REESTRUTURACAO_DE_TERCEIROS_LF.md` (scripts `s72`–`s79`)
 - [x] **PO/entrada:** pt19 compra (heterogêneo MP+EMB+PA, 16 já→31092), pt64 industrializ. (src real Clientes→42, gera SVL), ajustes 38→42, Model B Vendors→31092 — `s73`/`s75`/`s76`.
