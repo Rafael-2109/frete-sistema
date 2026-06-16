@@ -229,11 +229,14 @@ function processarArquivo(file) {
         return;
     }
 
-    // Mostrar loading
+    // Mostrar loading SEM animacao: evita a race de "close durante a abertura"
+    // do overlay, que prendia o loading aberto mesmo apos a resposta chegar.
     Swal.fire({
         title: 'Processando...',
         text: 'Verificando agendamentos na planilha',
         allowOutsideClick: false,
+        showClass: { popup: '', backdrop: '' },
+        hideClass: { popup: '', backdrop: '' },
         didOpen: () => {
             Swal.showLoading();
         }
@@ -243,9 +246,15 @@ function processarArquivo(file) {
     const formData = new FormData();
     formData.append('file', file);
 
+    // Timeout de seguranca: se o backend nao responder, fecha o loading em vez
+    // de girar para sempre (rede contra "loading infinito").
+    const _ctrl = new AbortController();
+    const _timer = setTimeout(() => _ctrl.abort(), 120000);
+
     fetch('/portal/sendas/api/verificacao/processar', {
         method: 'POST',
-        body: formData
+        body: formData,
+        signal: _ctrl.signal
     })
     .then(response => {
         console.log('Response status:', response.status);
@@ -255,6 +264,7 @@ function processarArquivo(file) {
         return response.json();
     })
     .then(data => {
+        clearTimeout(_timer);
         console.log('Dados recebidos:', data);
         Swal.close();
 
@@ -268,9 +278,13 @@ function processarArquivo(file) {
         }
     })
     .catch(error => {
+        clearTimeout(_timer);
         console.error('Erro na requisição:', error);
         Swal.close();
-        Swal.fire('Erro', 'Erro ao processar arquivo: ' + error, 'error');
+        const msg = (error && error.name === 'AbortError')
+            ? 'O processamento excedeu o tempo limite. O servidor pode ainda estar concluindo — recarregue a tela para conferir o resultado.'
+            : 'Erro ao processar arquivo: ' + error;
+        Swal.fire('Erro', msg, 'error');
     });
 }
 
