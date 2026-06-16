@@ -1,9 +1,9 @@
 # CarVia — Fluxos Financeiros
 
-**Referenciado por**: `app/carvia/CLAUDE.md` (regras R11, R16, R17)
-**Atualizado**: 2026-04-15
+**Referenciado por**: `app/carvia/CLAUDE.md` (regras R11, R16, R17, R22)
+**Atualizado**: 2026-06-16
 
-Cobre: conciliacao bancaria, propagacao FT→CE, pre-vinculo extrato↔cotacao (frete pre-pago) e historico de match aprendido (boost de scoring).
+Cobre: conciliacao bancaria, propagacao FT→CE, pre-vinculo extrato↔cotacao (frete pre-pago), historico de match aprendido (boost de scoring) e conciliacao p/ comprovante (modo invertido, R22).
 
 ---
 
@@ -143,7 +143,7 @@ Apenas `fatura_cliente` (CREDITO/recebimento). O modelo tem campo `tipo_document
 | `conciliacao_routes.py::api_matches_linha` | Modal inline Extrato Bancario |
 | `previnculo_service.py::listar_candidatos_extrato` | Pre-vinculo cotacao (com `cnpj_cliente` via `cotacao.cliente.cnpj`) |
 
-**Fora do escopo**: `api_matches_por_documento` (fluxo inverso doc→linhas) usa scoring inline proprio e NAO foi modificado — requer refator separado.
+**`api_matches_por_documento`** (fluxo inverso doc→linhas) usa scoring inline proprio (valor + data + boost historico por `cnpj_doc`). Desde a Frente 3 (2026-06-16, R22) tambem aplica **boost por `cnpj_pagador` do comprovante** da fatura — ver "Conciliacao p/ Comprovante" abaixo e [COMPROVANTES.md](COMPROVANTES.md).
 
 ### Artefatos
 
@@ -165,5 +165,27 @@ Apenas `fatura_cliente` (CREDITO/recebimento). O modelo tem campo `tipo_document
 | Extrato Bancario | `/carvia/extrato-bancario` | Importar OFX/CSV, lista linhas |
 | Extrato da Conta | `/carvia/extrato-conta` | Movimentacoes com saldo acumulado |
 | Fluxo de Caixa | `/carvia/fluxo-de-caixa` | Accordions por dia + Pagar/Desfazer |
+| Conciliacao p/ Comprovante | `/carvia/conciliacao/por-comprovante` | Modo invertido: fatura-com-comprovante → linha do extrato (R22, ver abaixo) |
 
 **Modelo central**: `CarviaConciliacao` (junction N:N extrato↔documento) com `UNIQUE(extrato_linha_id, tipo_documento, documento_id)`. `valor_alocado` sempre positivo.
+
+---
+
+## Conciliacao p/ Comprovante (modo invertido — R22)
+
+2o modo de conciliacao (pagina `/carvia/conciliacao/por-comprovante`, linkada no header da
+conciliacao por extrato) que **inverte o fluxo**: em vez de partir da linha do extrato, parte
+das **faturas cliente com comprovante de pagamento e saldo em aberto**
+(`CarviaComprovanteService.faturas_cliente_com_comprovante`), exibe o comprovante
+(valor/data/`cnpj_pagador`) e busca a linha do extrato candidata.
+
+- Reusa `api_matches_por_documento` (sugestao de linhas) e `api_conciliar` (`CarviaConciliacao`)
+  — nao cria modelo de conciliacao novo.
+- **Boost por `cnpj_pagador`**: `api_matches_por_documento`, para `fatura_cliente`, le os
+  `cnpj_pagador` dos comprovantes (`cnpjs_pagadores`) e da boost **deterministico** a linha cuja
+  descricao traz esse CNPJ (0.95) ou a raiz de 8 digitos (0.82) — flag `score_comprovante`.
+  **E isto que resolve "pagou com CNPJ ≠ fatura"**, caso em que o boost historico R17 (por
+  `cnpj_cliente`) nao ajuda.
+- Complementa o pre-vinculo extrato↔cotacao (R16) e o historico de match (R17).
+
+> SOT da feature de comprovantes: [COMPROVANTES.md](COMPROVANTES.md).

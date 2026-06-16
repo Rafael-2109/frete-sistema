@@ -34,15 +34,16 @@ atualizado: 2026-06-15
   - [R19: SOT Tomador/Incoterm = XML do CTe (2026-04-20)](#r19-sot-tomadorincoterm-xml-do-cte-2026-04-20)
   - [R20: "Anexar" tem 2 semanticas — desambiguar ANTES de implementar](#r20-anexar-tem-2-semanticas-desambiguar-antes-de-implementar)
   - [R21: Comissoes — ajustes (debito/credito) + vendedor = usuario](#r21-comissoes-ajustes-debitocredito-vendedor-usuario)
+  - [R22: Comprovantes de Pagamento (N:N) — propagacao + conciliacao invertida](#r22-comprovantes-de-pagamento-nn-propagacao--conciliacao-invertida)
 - [Modelos](#modelos)
 - [Interdependencias](#interdependencias)
 - [Permissao](#permissao)
 
 ## Contexto
 
-108 arquivos, ~67.7K LOC, 110 templates. Importa NF PDFs/XMLs + CTe XMLs, faz match NF-CTe, subcontrata com cotacao via tabelas existentes, gera faturas de cliente e transportadora e emite CTe direto no SSW via Playwright. Detalhe por topico nos sub-docs (CONFERENCIA, FINANCEIRO, IMPORTACAO, etc.) — prefira ler o sub-doc a reconstruir o contexto a partir do codigo.
+111 arquivos, ~69.1K LOC, 112 templates. Importa NF PDFs/XMLs + CTe XMLs, faz match NF-CTe, subcontrata com cotacao via tabelas existentes, gera faturas de cliente e transportadora e emite CTe direto no SSW via Playwright. Detalhe por topico nos sub-docs (CONFERENCIA, FINANCEIRO, COMPROVANTES, IMPORTACAO, etc.) — prefira ler o sub-doc a reconstruir o contexto a partir do codigo.
 
-**108 arquivos** | **~67.7K LOC** | **110 templates** | **Atualizado**: 2026-06-15
+**111 arquivos** | **~69.1K LOC** | **112 templates** | **Atualizado**: 2026-06-16
 
 Gestao de frete subcontratado: importar NF PDFs/XMLs + CTe XMLs, matchear NF-CTe, subcontratar transportadoras com cotacao via tabelas existentes, gerar faturas cliente e transportadora. Tambem emite CTe diretamente no SSW via Playwright.
 
@@ -56,7 +57,7 @@ Sempre prefira ler o sub-doc correspondente ao topico ao inves de reconstruir co
 |---------|-------|
 | [CONFERENCIA.md](CONFERENCIA.md) | Bifurcacao venda/compra, lifecycle de status, conferencia `CarviaFrete` (Phase C), gates FT |
 | [FINANCEIRO.md](FINANCEIRO.md) | Conciliacao, propagacao FT→CE, pre-vinculo extrato↔cotacao (R16), historico de match (R17) |
-| [COMPROVANTES.md](COMPROVANTES.md) | Comprovantes de pagamento (N:N cotacao↔NF↔CTe↔fatura), propagacao, flag "Cotacao Paga", conciliacao invertida (WIP) |
+| [COMPROVANTES.md](COMPROVANTES.md) | Comprovantes de pagamento (N:N cotacao↔NF↔CTe↔fatura), propagacao, flag "Cotacao Paga", conciliacao invertida por cnpj_pagador (R22) |
 | [FLUXOS_CRIACAO.md](FLUXOS_CRIACAO.md) | Orquestrador `CarviaFreteService`, hook portaria, fluxo unico cotacao→embarque→NF, condicoes comerciais |
 | [IMPORTACAO.md](IMPORTACAO.md) | Pipeline upload → classificacao → parsing → matching → linking retroativo |
 | [COTACAO.md](COTACAO.md) | `CidadeAtendida`, categorias moto, cotacoes comerciais e de rotas |
@@ -77,17 +78,18 @@ Sempre prefira ler o sub-doc correspondente ao topico ao inves de reconstruir co
 
 ```
 app/carvia/
-  routes/          # 30 sub-rotas (dashboard, importacao, nf, nf_transferencia, operacao,
+  routes/          # 31 sub-rotas (dashboard, importacao, nf, nf_transferencia, operacao,
                    #   subcontrato, fatura, despesa, fluxo_caixa, conciliacao, cte_complementar,
                    #   custo_entrega, admin, cliente, cotacao_v2, pedido, frete, gerencial,
                    #   aprovacao, comissao, config, conta_corrente, exportacao, receita,
-                   #   scanner, simulador, tabela_carvia, importacao_config, api, anexo)
-  services/        # 43 services em 6 sub-pacotes + 2 root:
+                   #   scanner, simulador, tabela_carvia, importacao_config, api, anexo,
+                   #   comprovante)
+  services/        # 44 services em 6 sub-pacotes + 2 root:
                    #   admin/ (admin_service)
                    #   clientes/ (cliente_service)
                    #   documentos/ (carvia_frete, conferencia, embarque_carvia,
                    #                linking, matching, nf_transferencia, operacao_cancel,
-                   #                ssw_emissao, aprovacao_frete, anexo) — 10
+                   #                ssw_emissao, aprovacao_frete, anexo, comprovante) — 11
                    #   financeiro/ (conciliacao, csv_razao, historico_match, ofx, pagamento,
                    #                sugestao, comissao, conta_corrente, custo_entrega_autolink,
                    #                custo_entrega_cobertura, custo_entrega_fatura, fluxo_caixa,
@@ -103,12 +105,12 @@ app/carvia/
   workers/         # 4 workers RQ com SSL-drop resilience (R15):
                    #   _ssw_helpers, ssw_cte_jobs, ssw_cte_complementar_jobs, verificar_ctrc_ssw_jobs
   utils/           # tomador.py, upload_policies.py, excel_export_helper.py, papeis_frete.py
-  models/          # Pacote 14 modulos: admin, anexos, aprovacao, clientes, comissao,
-                   #   config_moto, conta_corrente, cotacao, cte_custos, documentos, faturas,
-                   #   financeiro, frete, tabelas
+  models/          # Pacote 15 modulos: admin, anexos, aprovacao, clientes, comissao,
+                   #   comprovante, config_moto, conta_corrente, cotacao, cte_custos,
+                   #   documentos, faturas, financeiro, frete, tabelas
   forms.py         # 4 forms WTForms
 
-app/templates/carvia/  # 110 templates (dashboard, listagens, detalhes, wizards, modais)
+app/templates/carvia/  # 112 templates (dashboard, listagens, detalhes, wizards, modais)
 ```
 
 ---
@@ -261,6 +263,30 @@ do mesmo vendedor — o fechamento de origem NUNCA muda.
   `routes/comissao_routes.py`, `routes/exportacao_routes.py`,
   `templates/carvia/comissoes/{criar,detalhe,editar}.html`.
   Migration: `scripts/migrations/carvia_comissao_ajustes.{sql,py}` (ver [MIGRATIONS.md](MIGRATIONS.md)).
+
+### R22: Comprovantes de Pagamento (N:N) — propagacao + conciliacao invertida (2026-06-16)
+
+Comprovante (PIX/boleto/TED) anexavel na cadeia **cotacao → NF → CTe → fatura cliente**.
+SOT: [COMPROVANTES.md](COMPROVANTES.md).
+
+- **N:N polimorfico**: `CarviaComprovantePagamento` (arquivo S3 1x via `get_file_storage`) +
+  `CarviaComprovanteVinculo` (`entidade_tipo` ∈ `cotacao/nf/operacao/fatura_cliente`, sem FK
+  fisica). UNIQUE (comprovante, tipo, id). `origem` `MANUAL`/`PROPAGADO`. Soft-delete via `ativo`.
+- **Propagacao** `CarviaComprovanteService.sincronizar_cadeia` — idempotente, eixo = NFs;
+  chamada no upload (retroativo) e no **hook da criacao de fatura** (heranca futura, isolado
+  por SAVEPOINT, espelha o pre-vinculo R16). So propaga para **Fatura Cliente** (decisao Rafael —
+  pagamento e do cliente = receita).
+- **`cnpj_pagador`** (no comprovante) pode diferir do `cnpj_cliente` da fatura — e o sinal que
+  destrava a conciliacao de pagamento despadronizado (antecipado, CNPJ ≠ fatura, N fretes num pgto).
+- **Conciliacao invertida** (DESTINO): pagina `GET /carvia/conciliacao/por-comprovante` parte das
+  faturas com comprovante e busca a linha do extrato; `api_matches_por_documento` da boost por
+  `cnpj_pagador`. Reusa `api_conciliar` — NAO substitui a conciliacao por extrato (R11/R16/R17).
+  Ver [FINANCEIRO.md](FINANCEIRO.md).
+- UI: card nas 4 telas de detalhe (cotacao/NF/CTe/fatura) + toggle "Cotacao Paga" na cotacao +
+  emoji 💳 nas 4 listagens. Widget `templates/carvia/_comprovantes_card.html` +
+  `static/carvia/js/comprovantes_widget.js`.
+- Arquivos: `models/comprovante.py`, `services/documentos/comprovante_service.py`,
+  `routes/comprovante_routes.py`. Migration `scripts/migrations/carvia_comprovante_pagamento.{sql,py}`.
 
 ---
 
