@@ -4,7 +4,7 @@ camada: L1
 sot_de: —
 hub: CLAUDE.md
 superseded_by: —
-atualizado: 2026-06-15
+atualizado: 2026-06-16
 -->
 # Carteira — Guia de Desenvolvimento
 
@@ -24,6 +24,7 @@ atualizado: 2026-06-15
   - [R7: 2 variantes de ruptura — escolher a correta](#r7-2-variantes-de-ruptura-escolher-a-correta)
   - [R8: Template usa `data-pedido` (NAO `data-num-pedido`)](#r8-template-usa-data-pedido-nao-data-num-pedido)
   - [R9: POSTs AJAX precisam de X-CSRFToken](#r9-posts-ajax-precisam-de-x-csrftoken)
+  - [R10: Analise de ruptura roda em pool concorrente priorizando visiveis](#r10-analise-de-ruptura-roda-em-pool-concorrente-priorizando-visiveis)
 - [Modelos](#modelos)
 - [Padroes do Modulo](#padroes-do-modulo)
   - [Enriquecimento de pedidos (agrupamento_service.py)](#enriquecimento-de-pedidos-agrupamento_servicepy)
@@ -35,7 +36,7 @@ atualizado: 2026-06-15
 
 ~18.5K LOC, 50 arquivos. Exibe pedidos agrupados, gera separacoes, analisa ruptura de estoque, programa lotes (Atacadao/Sendas) e gerencia standby. Campos de tabela vem dos schemas JSON; regras CarteiraPrincipal vs Separacao em `.claude/references/modelos/REGRAS_CARTEIRA_SEPARACAO.md`. `main_routes.py` e apenas o dashboard `index()` — novas rotas em `routes/`.
 
-**LOC**: ~18.5K | **Arquivos**: 50 | **22 JS** (21 templates + 1 static) | **Atualizado**: 15/06/2026
+**LOC**: ~18.5K | **Arquivos**: 50 | **22 JS** (21 templates + 1 static) | **Atualizado**: 16/06/2026
 
 Workspace principal do sistema de fretes. Exibe pedidos agrupados, gera separacoes,
 analisa ruptura de estoque, programa lotes (Atacadao/Sendas) e gerencia standby.
@@ -118,6 +119,18 @@ Todas requisicoes POST/PUT/DELETE devem incluir:
 ```javascript
 headers: { 'X-CSRFToken': document.querySelector('[name=csrf_token]')?.value || '' }
 ```
+
+### R10: Analise de ruptura roda em pool concorrente priorizando visiveis
+`ruptura-estoque.js` (`RupturaEstoqueManager`) NAO processa os pedidos em fila
+sequencial. Mantem um **pool de ate `CONCORRENCIA_MAX` (10) analises simultaneas**
+contra o endpoint single `/carteira/api/ruptura/sem-cache/analisar-pedido/<num>`,
+e um `IntersectionObserver` faz o `selecionarProximoPedido()` escolher sempre um
+pedido **visivel no viewport** antes dos nao-visiveis (atualiza os botoes do que o
+usuario esta olhando primeiro). Estado por pedido vive em `this.pedidos` (Map:
+`status` pendente/analisando/concluido + `visivel`); cada analise libera o slot no
+`finally` e re-chama `processarFila()`. NUNCA reverter para fila 1-a-1 nem remover
+o observer. Preservar pausar/retomar (clique/modal) e re-enfileiramento de
+abortados (volta a `status='pendente'`).
 
 ---
 
