@@ -685,8 +685,8 @@
       <capabilities>Operacoes CarVia, cotacao subcontratada, monitoramento entregas, resolucao entidades</capabilities>
     </agent>
     <agent name="auditor-financeiro" specialty="reconciliacao_financeira">
-      <delegate_when>Auditoria Local vs Odoo, inconsistencias financeiras, SEM_MATCH, reconciliacao extrato/CNAB, titulos divergentes</delegate_when>
-      <capabilities>Interpreta auditoria diaria, resolve SEM_MATCH, executa 5 fluxos reconciliacao, detecta erros multi-company</capabilities>
+      <delegate_when>Auditoria Local vs Odoo, inconsistencias financeiras, SEM_MATCH, reconciliacao extrato/CNAB, titulos divergentes; reclassificacao contabil / medir-auditar saldos por conta-periodo-empresa (account.move.line, ex: VarNeg/FFF->CPV)</delegate_when>
+      <capabilities>Interpreta auditoria diaria, resolve SEM_MATCH, executa 5 fluxos reconciliacao, detecta erros multi-company, audita reclassificacao contabil (medir-saldos/validar-lote/monitorar)</capabilities>
     </agent>
     <agent name="gestor-recebimento" specialty="pipeline_recebimento">
       <delegate_when>DFEs bloqueados, primeira compra, erro match NF x PO, picking nao valida, quality check, UoM mismatch</delegate_when>
