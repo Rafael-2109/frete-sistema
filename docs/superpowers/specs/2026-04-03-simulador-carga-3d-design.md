@@ -4,7 +4,7 @@ camada: L3
 sot_de: —
 hub: docs/superpowers/specs/INDEX.md
 superseded_by: —
-atualizado: 2026-06-02
+atualizado: 2026-06-16
 -->
 # Simulador 3D de Carga de Motos — Design Spec
 
@@ -54,7 +54,8 @@ Criar um simulador 3D interativo que:
 | Modelo de motos | `CarviaModeloMoto` | Ja possui comprimento/largura/altura em cm |
 | Dimensoes veiculo | Adicionar ao modelo `Veiculo` | 3 campos Float (comprimento_bau, largura_bau, altura_bau) |
 | Tecnologia 3D | Three.js via CDN | Leve (~170KB), camera orbital, raycasting, ecossistema maduro |
-| Algoritmo | 3D Guillotine / Maximal Rectangles | Suporta empilhamento e 4 orientacoes, performante para <200 itens |
+| Algoritmo (1 passada) | Maximal Rectangles + **Bottom-Left-Back** + ordem por altura-deitada | Enche o chao e forma camadas planas; ~73%, estavel. (Best Short Side Fit, original, foi abandonado em 2026-06-16 — espalhava as motos, ~47% e instavel) |
+| Otimizacao | **Simulated Annealing** sobre a ordem de insercao (`packOptimized`) | Acomoda todas as motos quando cabem (~77%), no browser. OR-Tools/CP-SAT avaliado e descartado (sem geometria nativa, ignora apoio fisico, nao escala >100 itens, exigiria backend) |
 | Orientacoes | 4 por moto | Comprimento sempre horizontal; largura/altura intercambiaveis (deitada) |
 | Empilhamento | Permitido | Se a altura residual comportar |
 | Layout | Sidebar esquerda + Canvas 3D | Espaco para controles detalhados |
@@ -119,28 +120,46 @@ Dois artefatos: `scripts/migrations/adicionar_dimensoes_bau_veiculo.py` + `.sql`
 
 ### Frontend (JavaScript — IIFE, sem bundler)
 
-**`bin-packer.js`** — `window.BinPacker`
+**`bin-packer.js`** — `window.BinPacker` (2 pontos de entrada). Atualizado 2026-06-16 (commit `74cf2b6a7`).
 
-Algoritmo 3D Guillotine com Maximal Rectangles:
-1. Inicia com 1 cuboid livre = bau inteiro
-2. Para cada moto (ordenadas por volume decrescente — FFD):
-   a. Gera 4 orientacoes validas (comprimento nunca vertical)
-   b. Para cada cuboid livre, testa cada orientacao
-   c. Prioriza: menor Y (chao primeiro), depois menor Z, depois menor X
-   d. Ao posicionar, subdivide cuboid residual em ate 3 sub-cuboids
-   e. Merge cuboids adjacentes para evitar fragmentacao
-3. Retorna: `{ placed: [{moto, x, y, z, w, d, h, orientacao}], rejected: [moto] }`
+Espaco livre via **Maximal Rectangles**; escolha de posicao via **Bottom-Left-Back Fill**.
+Regras fisicas fixas (nao configuraveis): comprimento SEMPRE horizontal (4 orientacoes,
+nunca "de pe"; `oh` ∈ {largura, altura} da moto), caixas nunca se interpenetram, e moto
+empilhada (Y>0) exige apoio minimo embaixo (sliders: apoio %, balanco max, vao central max).
 
-As 4 orientacoes validas:
-```
-O1: (comprimento→X, largura→Z, altura→Y) — em pe, alinhada
-O2: (comprimento→X, altura→Z, largura→Y) — deitada, alinhada
-O3: (largura→X, comprimento→Z, altura→Y) — em pe, rotacionada 90
-O4: (largura→X, altura→Z, comprimento→Y) — deitada e rotacionada (*excluida se comprimento > bau.altura*)
-```
-*Nota: O4 coloca comprimento na vertical — INVALIDA pela regra. Na pratica, temos 3 orientacoes validas + 1 condicional.*
+- **`pack(bay, motoList, options)`** — 1 passada gulosa, instantanea:
+  1. Expande quantidades e ordena por **altura-deitada ascendente** (`min(largura, altura)`):
+     motos mais baixas primeiro formam camadas planas, base para empilhar denso; desempate
+     por volume desc.
+  2. Para cada moto, escolhe a posicao livre que minimiza **(Y, Z, X)** — "cai" para o
+     fundo-baixo-esquerda do bau — validando apoio quando Y>0; desempate por encaixe justo.
+  3. Subtrai o volume ocupado (Maximal Rectangles, ate 6 sub-espacos) e segue.
+  Resultado tipico: **~73%** de ocupacao, estavel e monotono (mais motos na entrada nunca
+  reduzem o total posicionado).
 
-Correcao: O4 correta seria `(altura→X, comprimento→Z, largura→Y)` — comprimento ao longo da profundidade, deitada lateralmente. Todas 4 mantem comprimento horizontal.
+- **`packOptimized(bay, motoList, options, budget)`** — **Simulated Annealing** sobre a
+  ORDEM de insercao, avaliada por `pack`. Movimento dirigido (joga motos rejeitadas para o
+  inicio da fila) + early-stop ao acomodar tudo. **Determinístico** (PRNG com seed fixo:
+  mesma entrada -> mesmo layout, sem "pulos"). Acomoda **todas** as motos quando cabem
+  (**~77%**), em dezenas de ms a ~350ms. `budget` default: `maxIters=160`, `maxMs=1500`.
+
+Retorna: `{ placed: [{moto, x, y, z, w, d, h, orientacao}], rejected: [moto], stats: {...} }`.
+
+**Historico — Best Short Side Fit (abandonado 2026-06-16):** a versao original priorizava
+o encaixe justo (posicao era so desempate), o que **espalhava** as motos e criava topos
+irregulares, **inviabilizando empilhar** (100% das rejeicoes cabiam em espaco livre mas
+falhavam na validacao de apoio). Resultado: ~47% de ocupacao, com itens rejeitados e
+comportamento **instavel** (1 moto a menos na entrada fazia 20 caberem a mais).
+
+**Por que nao OR-Tools/CP-SAT** (avaliado 2026-06-16): *container loading* 3D com apoio
+fisico e NP-dificil e mal modelado em programacao por restricoes — CP-SAT nao tem geometria
+nativa, nao escala >100 itens e ignora o apoio fisico (*"boxes cannot hang in the air"*),
+alem de exigir mover o calculo para o backend Python. A metaheuristica (SA) roda no proprio
+navegador, respeita as regras fisicas e acha o otimo em ~ms. Fonte:
+[OR-Tools Discussion #5011](https://github.com/google/or-tools/discussions/5011).
+
+**Testes:** `app/static/js/simulador-carga/bin-packer.test.js` — 13 testes (densidade,
+estabilidade/monotonia, determinismo, invariantes fisicos). Rodar: `node app/static/js/simulador-carga/bin-packer.test.js`.
 
 **`carga-renderer.js`** — `window.CargaRenderer`
 
@@ -160,7 +179,10 @@ Three.js scene:
 - Fetch catalogo → popula selects
 - Event listeners em vehicle select e campos de quantidade
 - Debounce 200ms no recalculo
-- Fluxo: coletar form → `BinPacker.pack()` → `CargaRenderer.render()` → atualizar stats DOM
+- Fluxo (`packAndRender`, **render em 2 fases**): coletar form → `BinPacker.pack()`
+  instantaneo → `CargaRenderer.render()` + stats (feedback imediato) → em seguida
+  `BinPacker.packOptimized()` "sobe" o resultado e re-renderiza. `state.packToken`
+  descarta a otimizacao se a entrada mudou nesse meio-tempo. Vale nos 2 modos (livre/embarque).
 
 ### CSS
 
@@ -226,6 +248,7 @@ Three.js scene:
 
 ## Verificacao
 
+0. **Testes do packer (automatizado)**: `node app/static/js/simulador-carga/bin-packer.test.js` — 13 testes verdes (densidade ≥70%, monotonia, determinismo de `packOptimized`, invariantes fisicos)
 1. **Cadastrar dimensoes**: Editar veiculo CARRETA com dims (1400x260x280cm), confirmar que persiste
 2. **Simulador livre**: Abrir `/carvia/simulador-carga`, selecionar CARRETA, adicionar 10 Pop 110i + 5 CG 160
    - Verificar: cena 3D renderiza, motos coloridas por modelo, stats corretos
