@@ -66,43 +66,64 @@ if _sentry_dsn:
         _sentry_env = os.getenv("ENVIRONMENT", "development")
 
         def _before_send(event, hint):
-            """Enriquece eventos do agente com component tag.
+            """Enriquece eventos do agente com component tag e filtra ruido.
 
-            Filtra "Task was destroyed but it is pending!" do logger asyncio
-            em environment=development — sao falsos-positivos de teardown
-            do pytest (pool persistente nao tem shutdown limpo em testes).
+            Filtros aplicados em TODOS os ambientes:
+            - Task asyncio orfa de shutdown/cancelamento do subprocesso CLI do
+              agente (SIGTERM exit 143) — graceful shutdown, nao bug
+              (PYTHON-FLASK-YB). So' exit 143; exit 1 (crash real) passa.
+            - Execucao ad-hoc/interativa em PRODUCAO (REPL, python -c, python -,
+              scripts gerados em /tmp): nao sao bugs de producao servida a
+              usuarios, sao operacao manual/exploratoria no dyno
+              (PYTHON-FLASK-YG/Y8/Y9/Y0/YC + Faults Odoo "Invalid field" ad-hoc).
 
-            Filtra eventos environment=development de scripts ad-hoc (sys.argv:
-            "-c", "-", "<string>"), pytest, migrations e excepthook — sao
-            ruidosos e nao representam bugs em producao
-            (PYTHON-FLASK-PA/PT/D2/P4/P9/PD/PC/PB/PH/PS).
+            Filtros so' em development (ruido de teste local):
+            - "Task was destroyed but it is pending!" (teardown do pytest).
+            - pytest/migrations/scripts rodados localmente
+              (PYTHON-FLASK-PA/PT/D2/P4/P9/PD/PC/PB/PH/PS).
             """
-            # Filtro: asyncio warnings em dev (pytest teardown)
+            logger_name = event.get("logger", "")
+            message = (event.get("message") or "") if isinstance(event.get("message"), str) else ""
+            # Fallback: logentry.message (asyncio usa logentry)
+            logentry = event.get("logentry") or {}
+            if isinstance(logentry, dict):
+                message = message or logentry.get("message", "") or logentry.get("formatted", "")
+            msg_low = message.lower()
+
+            extra = event.get("extra") or {}
+            argv = extra.get("sys.argv") or []
+            has_argv = isinstance(argv, list) and len(argv) > 0
+            first_argv = (str(argv[0]).lower() if argv[0] else "") if has_argv else None
+
+            # (a) TODOS ambientes: SIGTERM (exit 143) do subprocesso CLI do agente
+            #     aflorando como Task asyncio orfa. So' exit 143 (SIGTERM); exit 1
+            #     (crash logico real) NAO e' suprimido.
+            if (
+                logger_name == "asyncio"
+                and "task exception was never retrieved" in msg_low
+                and "exit code 143" in msg_low
+            ):
+                return None
+
+            # (b) TODOS ambientes: execucao ad-hoc/interativa.
+            #     Guard has_argv evita suprimir eventos legitimos SEM sys.argv.
+            #     Requests web/worker tem sys.argv[0]=gunicorn/worker (preservados).
+            if has_argv and (
+                first_argv in ("-c", "-", "")
+                or (first_argv or "").startswith("/tmp/")
+            ):
+                return None
+
+            # (c) SO' development: ruido de teste local
             if _sentry_env == "development":
-                logger_name = event.get("logger", "")
-                message = (event.get("message") or "") if isinstance(event.get("message"), str) else ""
-                # Fallback: logentry.message (asyncio usa logentry)
-                logentry = event.get("logentry") or {}
-                if isinstance(logentry, dict):
-                    message = message or logentry.get("message", "") or logentry.get("formatted", "")
                 if logger_name == "asyncio" and "Task was destroyed but it is pending" in message:
                     return None
-
-                # FIX 2026-04-28: descartar erros de scripts ad-hoc em dev
-                # (REPL, python -c, python -, pytest, migrations rodadas localmente).
-                # Producao usa gunicorn/worker_render — sys.argv nunca tem esses padroes.
-                extra = event.get("extra") or {}
-                argv = extra.get("sys.argv") or []
-                if isinstance(argv, list) and argv:
-                    first = str(argv[0]).lower() if argv[0] else ""
-                    is_adhoc = (
-                        first in ("-c", "-", "")
-                        or "pytest" in first
-                        or "scripts/migrations/" in first
-                        or first.endswith(".py") and "scripts/" in first
-                    )
-                    if is_adhoc:
-                        return None
+                if has_argv and first_argv is not None and (
+                    "pytest" in first_argv
+                    or "scripts/migrations/" in first_argv
+                    or (first_argv.endswith(".py") and "scripts/" in first_argv)
+                ):
+                    return None
 
             tags = event.get("tags", {})
             if tags.get("agent.active") == "true":

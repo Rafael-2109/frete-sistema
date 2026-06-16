@@ -164,6 +164,10 @@ class OdooCircuitBreaker:
                 for keyword in [
                     'timeout', 'timed out', 'connection refused', 'connection reset',
                     'eof occurred', 'violation of protocol',  # SSL transiente
+                    # Odoo/proxy indisponivel (PYTHON-FLASK-6J/TY/TW/TJ): contar 5xx
+                    # de gateway para o circuit ABRIR e parar a cascata de re-logs ERROR
+                    '502', 'bad gateway', '503', 'service unavailable',
+                    '504', 'gateway time-out', 'gateway timeout', 'protocolerror',
                 ]
             )
 
