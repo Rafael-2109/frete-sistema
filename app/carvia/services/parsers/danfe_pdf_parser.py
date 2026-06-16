@@ -599,6 +599,25 @@ class DanfePDFParser:
                 except ValueError:
                     pass
 
+        # Strategy 1c: 'N Volume(s)' — quantidade seguida da palavra Volume
+        # (DANFEs Bling: linha de valores "6 Volume(s) 0,000 0,000", com a
+        # linha de cabecalho separada dos valores por "Marca Numeracao", o que
+        # quebra a Strategy 2 tabular que olha apenas idx+1).
+        # Lookbehind (?<![\d.,]) impede pegar o "000" de um peso "13.176,000"
+        # (caso de regressao documentado abaixo).
+        match = re.search(
+            r'(?<![\d.,])(\d{1,4})[^\S\n]*Volume',
+            self.texto_completo,
+            re.IGNORECASE,
+        )
+        if match:
+            try:
+                valor = int(match.group(1))
+                if valor > 0:
+                    return valor
+            except ValueError:
+                pass
+
         # Strategy 2: layout tabular com guard 'ESPECIE' (tipico de DANFE)
         idx = self._encontrar_linha('QUANTIDADE', 'ESP')
         if idx is None:
@@ -892,6 +911,23 @@ class DanfePDFParser:
                     cidade = self._completar_cidade_cross_line(linhas, i, cidade)
                     return (uf, cidade)
 
+        # Strategy 1d: ordem invertida 'CEP - Cidade - UF' (DANFEs Bling)
+        # Ex: "03.412-030 - São Paulo - SP 1-Saída ..." — o CEP vem ANTES da
+        # cidade, ao contrario das strategies acima (que esperam CEP depois da
+        # UF). Ancora no CEP (8 digitos com . e -) para evitar falso positivo
+        # com numero de logradouro.
+        for i in range(limite):
+            match = re.search(
+                r'\d{2}\.?\d{3}-?\d{3}\s*-\s*'
+                r'([A-Za-zÀ-ÿ][A-Za-zÀ-ÿ\s]+?)\s*-\s*([A-Z]{2})\b',
+                linhas[i],
+            )
+            if match:
+                cidade = match.group(1).strip()
+                uf = match.group(2)
+                if uf in self._UFS_BRASIL and len(cidade) >= 2:
+                    return (uf, cidade)
+
         # Strategy 2: 'CIDADE/UF' pattern (sem hifen)
         for i in range(limite):
             match = re.search(
@@ -1052,6 +1088,12 @@ class DanfePDFParser:
                 prod_starts.append(i)
 
         if not prod_starts:
+            # Layout Bling: a secao de itens e titulada "Itens da nota fiscal"
+            # (nao "Dados dos Produtos/Servicos") e tem estrutura proper — parser
+            # dedicado para nao arriscar regressao nos demais layouts.
+            itens_bling = self._parsear_itens_bling()
+            if itens_bling:
+                return itens_bling
             logger.debug("get_itens_produto: secao DADOS PRODUTO(S) nao encontrada")
             return itens
 
@@ -1178,6 +1220,112 @@ class DanfePDFParser:
                 itens.append(item)
             else:
                 logger.warning(f"get_itens_produto: bloco {idx} FALHOU parse: {ncm_line[:100]}")
+
+        return itens
+
+    def _parsear_itens_bling(self) -> List[Dict]:
+        """Parser dedicado para itens de DANFE gerada pelo Bling.
+
+        Layout (NF PABLO 6586):
+            "Itens da nota fiscal"                          <- titulo da secao
+            ...cabecalhos...
+            "133 - AUTOPROPELIDO ELETRICO EQUIPADO"         <- codigo + desc (linha 1)
+            "GERAÇÃO 1 / ANGIE"                             <- desc (continua)
+            "...VELOCIDADE 87116000 200 6.102PÇ 2,001.200,00 2.400,002.400,00 ..."  <- linha-NCM
+            "AG11 - CARBONO"                                <- desc (continua, tem o MODELO)
+            "MAX 32KM"                                      <- desc (continua)
+
+        Peculiaridades vs layout padrao:
+        - Secao titulada "Itens da nota fiscal" (nao "Dados dos Produtos").
+        - Codigo + inicio da descricao vem ACIMA da linha-NCM; resto ABAIXO.
+        - Unidade colada no CFOP ("6.102PÇ") e qtde colada no V.Unit
+          ("2,001.200,00") — qtde tem 2 casas decimais no Bling.
+
+        Returns: lista de dicts no mesmo formato de _parsear_linha_produto.
+        """
+        linhas = self._linhas()
+        inicio = next(
+            (i for i, l in enumerate(linhas) if 'ITENS DA NOTA FISCAL' in l.upper()),
+            None,
+        )
+        if inicio is None:
+            return []
+
+        fim = next(
+            (i for i in range(inicio + 1, len(linhas))
+             if re.search(r'C[AÁ]LCULO DO ISSQN|DADOS ADICIONAIS|'
+                          r'INFORMA[ÇC][ÕO]ES COMPLEMENTARES', linhas[i], re.IGNORECASE)),
+            len(linhas),
+        )
+
+        # Inicio de item = linha que comeca com "<codigo numerico> - <texto>"
+        starts = [
+            i for i in range(inicio + 1, fim)
+            if re.match(r'^\d+\s*-\s+\S', linhas[i].strip())
+        ]
+        if not starts:
+            return []
+        starts.append(fim)
+
+        # NCM (8) + CST (1-4) + CFOP(\d\.?\d{3}) colado a UN(alfa) +
+        # qtde (X,dd) colada a V.Unit (X.XXX,dd)
+        ncm_re = re.compile(
+            r'(\d{8})\s+\d{1,4}\s+(\d\.?\d{3})([A-Za-zÀ-ÿ]+)\s+'
+            r'(\d+,\d{2})(\d{1,3}(?:\.\d{3})*,\d{2})'
+        )
+
+        itens: List[Dict] = []
+        for k in range(len(starts) - 1):
+            bloco = [linhas[i] for i in range(starts[k], starts[k + 1])]
+            cod_match = re.match(r'^(\d+)\s*-', bloco[0].strip())
+            if not cod_match:
+                continue
+            codigo = cod_match.group(1)
+
+            # Localizar a linha-NCM e parsear dados fiscais
+            ncm_idx = None
+            m = None
+            for j, linha in enumerate(bloco):
+                m = ncm_re.search(linha)
+                if m:
+                    ncm_idx = j
+                    break
+            if m is None or ncm_idx is None:
+                logger.warning("itens_bling: bloco cod=%s sem linha-NCM parseavel", codigo)
+                continue
+
+            ncm = m.group(1)
+            cfop = m.group(2).replace('.', '')
+            unidade = m.group(3)
+            quantidade = self._parse_valor_br(m.group(4))
+            valor_unitario = self._parse_valor_br(m.group(5))
+            valor_total_item = None
+            if quantidade is not None and valor_unitario is not None:
+                valor_total_item = round(quantidade * valor_unitario, 2)
+
+            # Descricao: bloco inteiro, removendo "<codigo> -" da 1a linha e a
+            # parte fiscal (a partir do NCM) da linha-NCM. Inclui o modelo (AG11).
+            partes = []
+            for j, linha in enumerate(bloco):
+                t = linha.strip()
+                if j == 0:
+                    t = re.sub(r'^\d+\s*-\s*', '', t)
+                if j == ncm_idx:
+                    t = linha[:m.start(1)].strip()
+                if t:
+                    partes.append(t)
+            descricao = ' '.join(partes).strip()
+
+            itens.append({
+                'codigo_produto': codigo[:60],
+                'descricao': descricao[:255],
+                'ncm': ncm,
+                'cfop': cfop,
+                'unidade': unidade,
+                'quantidade': quantidade,
+                'valor_unitario': valor_unitario,
+                'valor_total_item': valor_total_item,
+            })
 
         return itens
 
@@ -1586,6 +1734,21 @@ class DanfePDFParser:
             return True
         return False
 
+    def _secao_tem_indicio_chassi(self, texto: str) -> bool:
+        """Indica se a secao de dados adicionais realmente lista chassi.
+
+        Sinais: keyword CHASSI (o mesmo sinal do gate global) ou um VIN de 17
+        caracteres alfanumericos (sem I/O/Q). Usado para nao escalar o LLM de
+        veiculos em NFs NCM 8711 que NAO declaram chassi (ex: autopropelido
+        eletrico) — onde so a presenca do NCM dispararia o gate global.
+        """
+        upper = (texto or '').upper()
+        if 'CHASSI' in upper:
+            return True
+        if re.search(r'\b[A-HJ-NPR-Z0-9]{17}\b', upper):
+            return True
+        return False
+
     def _extrair_texto_dados_adicionais(self) -> str:
         """Extrai texto bruto da secao DADOS ADICIONAIS / INFORMACOES COMPLEMENTARES.
 
@@ -1983,6 +2146,14 @@ class DanfePDFParser:
 
         texto_secao = self._extrair_texto_dados_adicionais()
         if not texto_secao or len(texto_secao.strip()) < 10:
+            return []
+
+        # Sem indicio de chassi na secao de dados adicionais nao ha veiculo a
+        # extrair — ex: autopropelido eletrico (NCM 8711) que NAO declara chassi.
+        # Sem este gate, itens NCM 8711 fariam _quantidade_esperada_veiculos
+        # retornar > 0 e o pipeline escalaria Haiku->Sonnet->Sonnet atras de
+        # chassis inexistentes a cada importacao.
+        if not self._secao_tem_indicio_chassi(texto_secao):
             return []
 
         esperado = self._quantidade_esperada_veiculos()

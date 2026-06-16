@@ -1,0 +1,77 @@
+08/06/2026, 10:57 Bling - DANFE
+RECEBEMOS DE GA MOTORS COMERCIO DE MOBILIDADE ELETRICA LTDA OS PRODUTOS CONSTANTES DA NOTA FISCAL INDICADA AO LADO
+NF-e
+Nº 006586
+Data de recebimento Identificação e assinatura do recebedor Série 1
+Controle do Fisco
+DANFE
+GA MOTORS COMERCIO DE Documento Auxiliar
+MOBILIDADE ELETRICA da Nota Fiscal
+LTDA Eletrônica
+Rua Caçaquera, 39, CONJ G
+SALA, Vila Antonina 0-Entrada 1 Chave de acesso
+03.412-030 - São Paulo - SP 1-Saída 3526 0663 9019 8200 0102 5500 1000 0065 8612 3316 0880
+Fone (11) 99573-1710 - Nº 006586
+comercial.gamotors@gmail.com SERIE: 1 Consulta de autenticidade no portal nacional da NF-e
+Página: 1 de 1 www.nfe.fazenda.gov.br/portal
+ou no site da Sefaz autorizadora
+Natureza da operação Protocolo de autorização de uso
+Venda de mercadoria 135262241458766 08/06/2026 10:56:42-03:00
+Inscrição Estadual CNPJ
+Inscr.est. do subst.trib.
+157.027.060.117 63.901.982/0001-02
+Destinatário/Remetente
+Nome / Razão Social CNPJ/CPF Inscrição Estadual Data emissão
+PABLO VASCONCELLOS LEAL ME 24.727.443/0001-47 1000308887 08/06/2026
+Endereço Bairro CEP Data saída
+Rua dos Cacadores, 13B Cassino 96.210-050 08/06/2026
+Município UF Fone/Fax Hora saída
+Rio Grande RS (53) 99972-4388 10:56:40
+Faturas
+Número Vencimento Valor Número Vencimento Valor Número Vencimento Valor
+Cálculo do imposto
+Base de cálculo do ICMS Valor do ICMS Base de cálculo do ICMS Subst. Valor do ICMS Subst. Valor do FCP ST Valor total dos produtos
+7.200,00 288,00 0,00 0,00 0,00 7.200,00
+Valor do frete Valor do seguro Desconto Outras despesas acessórias Valor do IPI Valor total da nota
+0,00 0,00 0,00 0,00 0,00 7.200,00
+Transportador/Volumes transportados
+Frete por conta
+Nome 1 - Contratação do Frete por conta do Código ANTT Placa do veículo UF CNPJ/CPF
+Destinatário (FOB)
+Endereço Município UF Inscrição Estadual
+Quantidade Espécie Peso bruto Peso líquido
+Marca Numeração
+6 Volume(s) 0,000 0,000
+Itens da nota fiscal
+Preço Preço BC
+Código Descrição do produto/serviço NCM/SHCSTCFOPUNQtde Vlr.ICMSVlr.IPI%ICMS%IPI
+un total ICMS
+133 - AUTOPROPELIDO ELETRICO EQUIPADO
+GERAÇÃO 1 / ANGIE
+COM MOTOR ELETRICO DE 1000W, VELOCIDADE 87116000 200 6.102PÇ 2,001.200,00 2.400,002.400,00 96,00 0,00 4,0000 0,00
+AG11 - CARBONO
+MAX 32KM
+132 - AUTOPROPELIDO ELETRICO EQUIPADO
+GERAÇÃO 1 / ANGIE
+COM MOTOR ELETRICO DE 1000W, VELOCIDADE 87116000 000 6.102PÇ 2,001.200,00 2.400,002.400,00 96,00 0,00 4,0000 0,00
+AG11 - BRANCA
+MAX 32KM
+131 - AUTOPROPELIDO ELETRICO EQUIPADO
+GERAÇÃO 1 / ANGIE
+COM MOTOR ELETRICO DE 1000W, VELOCIDADE 87116000 000 6.102PÇ 1,001.200,00 1.200,001.200,00 48,00 0,00 4,0000 0,00
+AG11 - CINZA
+MAX 32KM
+136 - AUTOPROPELIDO ELETRICO EQUIPADO
+GERAÇÃO 1 / ANGIE
+COM MOTOR ELETRICO DE 1000W, VELOCIDADE 87116000 200 6.102PÇ 1,001.200,00 1.200,001.200,00 48,00 0,00 4,0000 0,00
+AG11 - CAMUFLADA
+MAX 32KM
+Cálculo do ISSQN
+Inscrição Municipal Valor total dos serviços Base de cálculo do ISSQN Valor do ISSQN
+0.093.234-5 0,00 0,00 0,00
+Dados adicionais
+Observações Reservado ao fisco
+Total aproximado de tributos: R$ 3.498,84 (48,59%) Federais R$ 2.634,84 (36,59%)
+Estaduais R$ 864,00 (12,00%) . Fonte IBPT.
+08/06/2026 10:56:50
+https://www.bling.com.br/relatorios/danfe.php?idNota1=26023316088&fechaPopup=N 1/1

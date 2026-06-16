@@ -148,6 +148,9 @@ nest-asyncio==1.6.0        # Fix para Playwright Sync em loop asyncio
 cryptography==46.0.5       # Criptografia de cookies/sessões (OpenSSL patches)
 # PyPDF2==3.0.1            # Removido - pypdf é o sucessor
 pdfplumber==0.11.9
+pdfminer.six==20251230     # Engine de layout do pdfplumber — PINADO p/ extracao
+                           # de texto deterministica entre ambientes (o agrupamento
+                           # de linhas afeta os parsers de DANFE/DACTE por regex)
 pypdf==6.7.1
 python-docx==1.1.2         # Fase C 2026-04-14 — skill lendo-documentos (.docx parse)
 
