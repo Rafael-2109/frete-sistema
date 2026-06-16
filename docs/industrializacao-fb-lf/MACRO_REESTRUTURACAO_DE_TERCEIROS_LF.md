@@ -8,6 +8,8 @@ atualizado: 2026-06-15
 -->
 # MACRO — Reestruturação do estoque LF para "De Terceiros" (industrialização por encomenda)
 
+> **Papel:** macro/esboço (Sessão 1) da reestruturação do estoque LF para "De Terceiros" (31092/31093) — As-Is/To-Be + plano de sessões com DoD/gate. **Abra quando:** for entender o panorama da frente ou acompanhar o faseamento S1→S4. Desenho detalhado da S2: `DESENHO_S2_REESTRUTURACAO_DE_TERCEIROS_LF.md`.
+
 > **RASCUNHO MACRO (Sessão 1 de 4).** Decisão Rafael 2026-06-15: **Opção A — processo completo**. Material e PA da LF passam a viver fisicamente em **De Terceiros**. Esta é a etapa de macro/esboço; o desenho detalhado costurando todas as pontas (PO, processos, movimentos, histórico) é a **Sessão 2**. NÃO implementar a partir deste doc — ele lista o que investigar.
 
 ## Decisão e porquê
@@ -55,20 +57,20 @@ Locations-chave: `42` LF/Estoque · `53` LF/Pré-Produção · `31092` Mat. Terc
 | Sessão | Status | Foco | Definition of Done (DoD) | Gate p/ avançar |
 |---|---|---|---|---|
 | **S1** | ✅ | Macro | As-Is/To-Be mapeado + plano + reservas LF/Estoque limpas (este doc) | feito |
-| **S2** | ⏭️ **PRÓXIMA** | Desenho + investigação ampla | Plano de execução **wired completo**, costurado ponta a ponta: PO/entrada · todas rotas/rules (src e dst=42) · histórico de `stock.move` em 42 · contábil · mecanismo de migração · exceções (ver checklist abaixo) | **Rafael aprova o plano** |
-| **S3** | ⬜ | Implementação Odoo | Saldo migrado 42→31092/31093 + rules/picking_types reescritos + contábil ajustado; **validado** (saldo, reserva, produção, entrega não quebram) | **Rafael aprova** + go por escrita |
+| **S2** | ✅ | Desenho + investigação ampla | Plano wired completo em **`DESENHO_S2_REESTRUTURACAO_DE_TERCEIROS_LF.md`** (investigação ao vivo `s72`–`s79`); decisões GATE tomadas (D1 terceiros contábil/L1 · D2 reparent 31092/31093 sob 42 · D3 açúcar depois) | **Rafael aprovou (GATE 15/06)** |
+| **S3** | ⏭️ **PRÓXIMA** | Implementação Odoo | A1 reparent + A2/A3 put-away (cat 6→31093, cat 1→31092) + A4 migração 442 livres + A5 repoint L1; **validado** (saldo, reserva, produção, entrega, neutralidade) | **go por escrita (dry-run-first, cada passo)** |
 | **S4** | ⬜ | Automação (SA) | Crons G1/G2 ligados (domain data-de-corte "daqui pra frente") + G2 SEFAZ piloto, sobre o estado reestruturado (= **estágio 4** do RUNBOOK `fluxos/1.1.4`) | **go duplo** (SEFAZ irreversível) |
 
-## Checklist de investigação para a Sessão 2 (não deixar passar nada)
-- [ ] **PO/entrada:** como cada material entra — remessa de industrialização (FB) vs compra LF vs ajuste pré-Odoo. Mapear o roteamento de entrada completo e o alvo por tipo de entrada.
-- [ ] **Todas as rotas/rules** que tocam 42 (as 7 src=42 + 4 dst=42 já listadas) + rotas completas (`stock.route`) e seus `rule_ids`.
-- [ ] **Histórico de stock.move em 42** (janela ampla) para mapear TODOS os fluxos reais (entrada, consumo, PA, entrega, retorno, transferência, subcontratação) — garantir que nenhum fluxo fica órfão pós-mudança.
-- [ ] **Contábil:** `property_stock_valuation_account_id` de 42 vs 31092/31093; impacto de SVL ao reclassificar; alinhamento com a conta de "estoque de terceiros".
-- [ ] **Mecanismo de migração em massa** dos 444 quants: picking interno único (rastreável + reversível por estorno) vs skill `transferindo-interno-odoo` em loop (444 docs). Preservar lote (442/445 têm lote).
-- [ ] **Exceções:** açúcar (saída FB `LF/LF/SAI/RNA/00103`), lotes MIGRAÇÃO/P-15/05, 4 produtos sem PO.
-- [ ] **Subcontratação:** papel do "Local de subcontratação" no fluxo (rota subcontract).
-- [ ] **Impacto entregas/retorno:** Ordens de Entrega (LF) e o retorno de industrialização (origem 42 hoje).
-- [ ] **MOs/reservas ativas** no momento da migração (re-checar — hoje só restava o açúcar).
+## Checklist de investigação da Sessão 2 — ✅ RESOLVIDO em `DESENHO_S2_REESTRUTURACAO_DE_TERCEIROS_LF.md` (scripts `s72`–`s79`)
+- [x] **PO/entrada:** pt19 compra (heterogêneo MP+EMB+PA, 16 já→31092), pt64 industrializ. (src real Clientes→42, gera SVL), ajustes 38→42, Model B Vendors→31092 — `s73`/`s75`/`s76`.
+- [x] **Todas as rotas/rules** que tocam 42: 15 rules / 7 rotas mapeadas (src e dst) — `s73 §1.3`.
+- [x] **Histórico de stock.move em 42** (365d): entradas/saídas por pt e por origem/destino; nenhum fluxo de subcontratação real — `s74 §1.5`.
+- [x] **Contábil:** valoração é por `product.category` (não location; campos da location vazios); migração interna = **0 SVL** (2000 moves) — `s72`/`s75`/`s76 §1.7`. ⇒ premissa do MACRO refutada (§ DESENHO_S2 §2).
+- [x] **Mecanismo de migração:** 443 quants em 42 direto (442 livres + 1 açúcar); picking interno único pt23, por categoria — `s72`/§4.
+- [x] **Exceções:** açúcar = picking `321794`; lotes P-15/05 (82) e MIGRAÇÃO (5) migram normal — `s72`/`s75`.
+- [x] **Subcontratação:** pt48/63 OFF, 0 moves reais — `s73`/`s74` (sem ação).
+- [x] **Impacto entregas/retorno:** pt20/66/94/97 (conteúdo PA vs material) + pt98 já em 31093 — `s73`/`s77`.
+- [x] **MOs/reservas ativas:** só MO 20797 (ketchup, em 53); única reserva = açúcar — `s75`.
 
 ## Estado preparado nesta sessão (não refazer)
 - Reservas em LF/Estoque limpas: MO **03507 cancelada** (liberou 4 quants), picking **`LF/PC/03497` unreserved** (liberou 7 quants, da MO 03575 — batelada de ketchup mantida em Pré-Produção). Resta só o açúcar (1 quant, saída FB — fora da migração).
