@@ -1,5 +1,5 @@
 /**
- * BinPacker — Algoritmo 3D Maximal Rectangles + Best Fit para empacotamento de motos.
+ * BinPacker — Algoritmo 3D Maximal Rectangles + Bottom-Left-Back para empacotamento de motos.
  *
  * Regra NAO-NEGOCIAVEL — horizontalidade:
  * - Comprimento da moto SEMPRE horizontal (eixos X ou Z do bau, nunca Y).
@@ -16,7 +16,14 @@
  *   - options.maxOverhang: balanco maximo nas extremidades em cm (default 15)
  *   - options.maxGap: vao maximo no centro, apoiado pelos 2 lados, em cm (default 50)
  *
- * Algoritmo: Maximal Rectangles + FFD + Best Short Side Fit + validacao de suporte.
+ * Algoritmo: Maximal Rectangles + ordenacao por altura-deitada + Bottom-Left-Back Fill
+ * + validacao de suporte. (Best Short Side Fit foi abandonado: espalhava as motos,
+ *  criava topos irregulares e inviabilizava empilhar — ~47% de ocupacao e instavel.)
+ *
+ * Dois pontos de entrada:
+ *   - pack(bay, motoList, options): 1 passada gulosa, instantanea.
+ *   - packOptimized(bay, motoList, options, budget): Simulated Annealing sobre a ORDEM
+ *     de insercao (avaliada por pack), determinístico, acomoda mais motos no mesmo bau.
  */
 ;(function () {
   'use strict';
@@ -42,19 +49,99 @@
     };
   }
 
+  // Passada unica rapida (Bottom-Left com ordenacao por altura-deitada).
   function pack(bay, motoList, options) {
     var opt = normalizeOptions(options);
     var items = expandAndSort(motoList);
     if (items.length > MAX_ITEMS) items = items.slice(0, MAX_ITEMS);
+    return packItems(bay, items, opt);
+  }
 
+  /**
+   * Empacotamento OTIMIZADO: Simulated Annealing sobre a ORDEM de insercao, usando
+   * packItems (Bottom-Left) como avaliador. So muda a ORDEM em que as motos entram —
+   * mantem TODAS as regras fisicas (horizontalidade, apoio, sem interpenetracao).
+   * Determinístico (PRNG com seed fixo): mesmos inputs -> mesmo layout, sem "pulos"
+   * entre recalculos. Para assim que acomoda todas (early-stop) ou estoura o orcamento.
+   *
+   * Por que SA e nao um solver exato (ex.: OR-Tools/CP-SAT): container loading 3D com
+   * apoio fisico e NP-dificil e mal modelado em CP (sem geometria nativa, nao escala
+   * >100 itens). A metaheuristica parte da heuristica boa e acha o otimo em poucas
+   * dezenas de avaliacoes (~ms), no browser, sem backend.
+   */
+  function packOptimized(bay, motoList, options, budget) {
+    var opt = normalizeOptions(options);
+    budget = budget || {};
+    var maxIters = (typeof budget.maxIters === 'number') ? budget.maxIters : 160;
+    var maxMs = (typeof budget.maxMs === 'number') ? budget.maxMs : 1500;
+
+    var base = expandItems(motoList);
+    if (base.length > MAX_ITEMS) base = base.slice(0, MAX_ITEMS);
+    var total = base.length;
+
+    // Solucao inicial = heuristica altura-deitada asc (melhor passada unica).
+    var current = sortByLayingHeight(base.slice());
+    var currentRes = packItems(bay, current, opt);
+    var currentE = energy(currentRes);
+    var bestRes = currentRes, bestE = currentE;
+    if (bestRes.stats.posicionadas >= total) return bestRes; // ja cabe tudo
+
+    var rng = makeRng(0x9e3779b9);
+    var clock = (typeof performance !== 'undefined' && performance.now)
+      ? function () { return performance.now(); }
+      : function () { return Date.now(); };
+    var t0 = clock();
+    var T = 200000, cool = Math.pow(0.0005, 1 / Math.max(1, maxIters));
+
+    for (var it = 0; it < maxIters; it++) {
+      var cand = current.slice();
+      var rej = currentRes.rejected;
+      // Movimento dirigido: com 60% de chance, joga uma moto REJEITADA para perto
+      // do inicio da fila (onde pega os melhores lugares). Acelera muito a convergencia
+      // vs mover uma moto aleatoria. Senao, movimento aleatorio (diversifica).
+      if (rej.length > 0 && rng() < 0.6) {
+        var alvo = rej[Math.floor(rng() * rej.length)];
+        var idx = cand.indexOf(alvo);
+        if (idx >= 0) { cand.splice(idx, 1); cand.splice(Math.floor(rng() * Math.min(cand.length, 8)), 0, alvo); }
+      } else {
+        var from = Math.floor(rng() * cand.length);
+        var to = Math.floor(rng() * cand.length);
+        cand.splice(to, 0, cand.splice(from, 1)[0]);
+      }
+
+      var res = packItems(bay, cand, opt);
+      var e = energy(res);
+      if (e < currentE || rng() < Math.exp(-(e - currentE) / T)) {
+        current = cand; currentE = e; currentRes = res;
+        if (e < bestE) { bestE = e; bestRes = res; }
+      }
+      T *= cool;
+      if (bestRes.stats.posicionadas >= total) break;         // acomodou tudo
+      if ((it & 15) === 0 && clock() - t0 > maxMs) break;      // guarda de tempo
+    }
+    return bestRes;
+  }
+
+  /** Energia a minimizar: prioriza nº de motos; desempata por volume ocupado. */
+  function energy(res) {
+    return -(res.stats.posicionadas * 1e9 + res.stats.volumeOcupado);
+  }
+
+  /** PRNG deterministico (LCG) — resultado reproduzivel para os mesmos inputs. */
+  function makeRng(seedVal) {
+    var s = seedVal >>> 0;
+    return function () { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; };
+  }
+
+  /** Placement guloso Bottom-Left de uma sequencia JA ordenada de itens. */
+  function packItems(bay, items, opt) {
     var freeSpaces = [{ x: 0, y: 0, z: 0, w: bay.w, d: bay.d, h: bay.h }];
     var placed = [];
     var rejected = [];
 
     for (var i = 0; i < items.length; i++) {
       var item = items[i];
-      var orientations = getOrientations(item);
-      var best = findBestFit(orientations, freeSpaces, bay, placed, opt);
+      var best = findBestFit(getOrientations(item), freeSpaces, bay, placed, opt);
 
       if (best) {
         var p = {
@@ -93,11 +180,13 @@
     };
   }
 
-  function expandAndSort(motoList) {
+  // Expande as quantidades em itens individuais (1 moto = 1 item), sem ordenar.
+  function expandItems(motoList) {
     var items = [];
     for (var i = 0; i < motoList.length; i++) {
       var m = motoList[i];
-      for (var q = 0; q < (m.qty || 1); q++) {
+      var qty = (m.qty == null) ? 1 : m.qty; // qty=0 => 0 itens (nao 1)
+      for (var q = 0; q < qty; q++) {
         items.push({
           id: m.id, nome: m.nome,
           comprimento: m.comprimento, largura: m.largura, altura: m.altura,
@@ -106,8 +195,26 @@
         });
       }
     }
-    items.sort(function (a, b) { return b.volume - a.volume; });
     return items;
+  }
+
+  /**
+   * Ordena por altura-deitada (menor dimensao vertical possivel) ascendente:
+   * motos mais baixas primeiro formam camadas planas, que servem de base para
+   * empilhar denso. Desempate por volume desc (maiores antes na mesma faixa).
+   */
+  function sortByLayingHeight(items) {
+    items.sort(function (a, b) {
+      var ha = Math.min(a.largura, a.altura);
+      var hb = Math.min(b.largura, b.altura);
+      if (Math.abs(ha - hb) > 0.5) return ha - hb;
+      return b.volume - a.volume;
+    });
+    return items;
+  }
+
+  function expandAndSort(motoList) {
+    return sortByLayingHeight(expandItems(motoList));
   }
 
   /**
@@ -126,21 +233,18 @@
   }
 
   /**
-   * Best Short Side Fit com priorizacao de apoio fisico.
+   * Bottom-Left-Back Fill com validacao de apoio fisico.
    *
-   * Para Y=0 (chao): Best Short Side Fit puro.
-   * Para Y>0 (empilhada): prioriza APOIO TOTAL antes de encaixe justo.
-   *   1. Maior % de apoio (100% > 80% > 60%)
-   *   2. Menor short side (encaixe justo)
-   *   3. Menor long side
-   *   4. Menor Y, Z, X
+   * Entre todas as (posicao livre x orientacao) validas, escolhe a que minimiza
+   * lexicograficamente (Y, Z, X) — a moto "cai" para o fundo-baixo-esquerda do bau.
+   * Isso enche o chao primeiro e forma camadas planas (topos alinhados), o que
+   * viabiliza empilhar denso. Empate de posicao: menor folga lateral (shortSide).
+   *
+   * Chao (Y=0): apoio total. Empilhada (Y>0): exige supportPct >= opt.minSupport.
    */
   function findBestFit(orientations, freeSpaces, bay, placed, opt) {
     var best = null;
-    var bestSupport = -1;     // % apoio (0-100), so usado para Y>0
-    var bestShortSide = Infinity;
-    var bestLongSide = Infinity;
-    var bestY = Infinity;
+    var bestY = Infinity, bestZ = Infinity, bestX = Infinity, bestShort = Infinity;
 
     for (var s = 0; s < freeSpaces.length; s++) {
       var sp = freeSpaces[s];
@@ -153,44 +257,31 @@
         if (sp.z + ori.od > bay.d + 0.1) continue;
         if (sp.y + ori.oh > bay.h + 0.1) continue;
 
-        // Calcular apoio para empilhamento
-        var supportPct = 100; // chao = apoio total
+        // Empilhamento: exige apoio minimo da base sobre caixas abaixo.
         if (sp.y > 0.1) {
-          supportPct = getSupportPercentage(sp.x, sp.y, sp.z, ori.ow, ori.od, placed, opt);
-          if (supportPct < opt.minSupport * 100) continue; // rejeitar se < minimo
+          var supportPct = getSupportPercentage(sp.x, sp.y, sp.z, ori.ow, ori.od, placed, opt);
+          if (supportPct < opt.minSupport * 100) continue;
         }
 
-        var residuoW = sp.w - ori.ow;
-        var residuoD = sp.d - ori.od;
-        var shortSide = Math.min(residuoW, residuoD);
-        var longSide = Math.max(residuoW, residuoD);
-
-        var isBetter = false;
-
-        if (sp.y > 0.1 && best && best.y > 0.1) {
-          // Ambos empilhados: priorizar APOIO primeiro
-          if (supportPct > bestSupport + 1) {
-            isBetter = true;
-          } else if (Math.abs(supportPct - bestSupport) <= 1) {
-            // Apoio similar: desempatar por fit
-            isBetter = compareFit(shortSide, longSide, sp, bestShortSide, bestLongSide, bestY, best);
+        // Bottom-Left-Back: prioriza Y, depois Z, depois X; desempate por encaixe justo.
+        var shortSide = Math.min(sp.w - ori.ow, sp.d - ori.od);
+        var melhor = false;
+        if (sp.y < bestY - 0.1) {
+          melhor = true;
+        } else if (sp.y <= bestY + 0.1) {
+          if (sp.z < bestZ - 0.1) {
+            melhor = true;
+          } else if (sp.z <= bestZ + 0.1) {
+            if (sp.x < bestX - 0.1) {
+              melhor = true;
+            } else if (sp.x <= bestX + 0.1 && shortSide < bestShort - 0.1) {
+              melhor = true;
+            }
           }
-        } else if (sp.y < 0.1 && best && best.y > 0.1) {
-          // Chao vs empilhado: chao sempre melhor
-          isBetter = true;
-        } else if (sp.y > 0.1 && best && best.y < 0.1) {
-          // Empilhado vs chao: chao sempre melhor
-          isBetter = false;
-        } else {
-          // Ambos no chao ou primeiro candidato
-          isBetter = compareFit(shortSide, longSide, sp, bestShortSide, bestLongSide, bestY, best);
         }
 
-        if (isBetter) {
-          bestSupport = supportPct;
-          bestShortSide = shortSide;
-          bestLongSide = longSide;
-          bestY = sp.y;
+        if (melhor) {
+          bestY = sp.y; bestZ = sp.z; bestX = sp.x; bestShort = shortSide;
           best = {
             x: sp.x, y: sp.y, z: sp.z,
             ow: ori.ow, od: ori.od, oh: ori.oh,
@@ -200,24 +291,6 @@
       }
     }
     return best;
-  }
-
-  /** Compara fit entre dois candidatos (short side, long side, posicao). */
-  function compareFit(shortSide, longSide, sp, bestShortSide, bestLongSide, bestY, best) {
-    if (shortSide < bestShortSide - 0.1) return true;
-    if (Math.abs(shortSide - bestShortSide) > 0.1) return false;
-
-    if (longSide < bestLongSide - 0.1) return true;
-    if (Math.abs(longSide - bestLongSide) > 0.1) return false;
-
-    if (sp.y < bestY - 0.1) return true;
-    if (Math.abs(sp.y - bestY) > 0.1) return false;
-
-    if (!best) return true;
-    if (sp.z < best.z - 0.1) return true;
-    if (Math.abs(sp.z - best.z) > 0.1) return false;
-
-    return sp.x < best.x;
   }
 
   /**
@@ -447,5 +520,5 @@
     return keep;
   }
 
-  window.BinPacker = { pack: pack };
+  window.BinPacker = { pack: pack, packOptimized: packOptimized };
 })();

@@ -30,6 +30,7 @@
     colorMap: {}, // {modelo_id: '#hex'}
     debounceTimer: null,
     motoListEmbarque: [], // lista de motos do embarque (modo 'embarque'), p/ re-empacotar
+    packToken: 0, // descarta resultado de otimizacao obsoleto (input mudou)
   };
 
   function init() {
@@ -390,11 +391,33 @@
 
   function recalcularEmbarque() {
     if (!state.renderer || !state.veiculoSelecionado) return;
+    packAndRender(state.veiculoSelecionado, state.motoListEmbarque, state.colorMap);
+  }
+
+  /**
+   * Render em 2 fases: pack() instantaneo (feedback imediato) seguido de packOptimized
+   * (Simulated Annealing, ~100-350ms) que "sobe" o resultado. A otimizacao roda fora do
+   * frame atual (setTimeout) para nao atrasar o render preliminar; o packToken descarta
+   * o resultado se o usuario alterou a entrada nesse meio-tempo.
+   */
+  function packAndRender(bay, motoList, colorMap) {
     var options = getPackingOptions();
-    var result = BinPacker.pack(state.veiculoSelecionado, state.motoListEmbarque, options);
-    state.renderer.render(result, state.veiculoSelecionado, state.colorMap);
-    updateStats(result, state.veiculoSelecionado);
-    updateLegend(state.motoListEmbarque, state.colorMap);
+
+    var quick = BinPacker.pack(bay, motoList, options);
+    state.renderer.render(quick, bay, colorMap);
+    updateStats(quick, bay);
+    updateLegend(motoList, colorMap);
+
+    var token = ++state.packToken;
+    setTimeout(function () {
+      if (token !== state.packToken) return; // entrada mudou; descarta
+      var optimized = BinPacker.packOptimized(bay, motoList, options);
+      if (token !== state.packToken) return;
+      if (optimized.stats.posicionadas >= quick.stats.posicionadas) {
+        state.renderer.render(optimized, bay, colorMap);
+        updateStats(optimized, bay);
+      }
+    }, 0);
   }
 
   // ========== Recalc ==========
@@ -447,12 +470,7 @@
     }
 
     state.colorMap = colorMap;
-
-    var options = getPackingOptions();
-    var result = BinPacker.pack(bay, motoList, options);
-    state.renderer.render(result, bay, colorMap);
-    updateStats(result, bay);
-    updateLegend(motoList, colorMap);
+    packAndRender(bay, motoList, colorMap);
   }
 
   // ========== Opcoes de empacotamento (sliders) ==========
