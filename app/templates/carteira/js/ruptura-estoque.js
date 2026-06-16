@@ -6,10 +6,11 @@
 class RupturaEstoqueManager {
     constructor() {
         console.log('🚀 RupturaEstoqueManager: Iniciando...');
-        this.analisesEmAndamento = new Map(); // Map para armazenar AbortControllers
-        this.filaAnalises = []; // Fila de análises pendentes
-        this.processandoFila = false; // Flag para controlar processamento
-        this.pausado = false; // Flag para pausar completamente
+        this.analisesEmAndamento = new Map(); // numPedido -> AbortController (análises ativas)
+        this.pedidos = new Map();             // numPedido -> {numPedido, btn, row, status, visivel}
+        this.observerVisibilidade = null;     // IntersectionObserver: prioriza pedidos visíveis
+        this.CONCORRENCIA_MAX = 10;           // batch: até 10 análises simultâneas
+        this.pausado = false;                 // Flag para pausar completamente
         this.init();
     }
 
@@ -18,6 +19,9 @@ class RupturaEstoqueManager {
 
         // Configurar interceptadores ANTES de adicionar botões
         this.configurarInterceptadores();
+
+        // Observer que prioriza a análise dos pedidos visíveis no viewport
+        this.configurarObserverVisibilidade();
 
         // Aguardar um momento para garantir que todos os scripts carregaram
         setTimeout(() => {
@@ -78,12 +82,13 @@ class RupturaEstoqueManager {
      */
     pausarAnalises() {
         this.pausado = true;
-        this.processandoFila = false;
 
-        // Abortar todas as análises em andamento
-        this.analisesEmAndamento.forEach((controller, pedido) => {
-            console.log(`  → Abortando análise do pedido ${pedido}`);
+        // Abortar análises em andamento e devolvê-las à fila (status pendente)
+        this.analisesEmAndamento.forEach((controller, numPedido) => {
+            console.log(`  → Abortando análise do pedido ${numPedido}`);
             controller.abort();
+            const p = this.pedidos.get(numPedido);
+            if (p) p.status = 'pendente';
         });
         this.analisesEmAndamento.clear();
 
@@ -100,10 +105,8 @@ class RupturaEstoqueManager {
         this.pausado = false;
         this.atualizarIndicador('processando');
 
-        // Retomar processamento da fila
-        if (this.filaAnalises.length > 0) {
-            this.processarFilaAnalises();
-        }
+        // Retomar preenchimento do pool de análises
+        this.processarFila();
     }
 
     /**
@@ -116,57 +119,108 @@ class RupturaEstoqueManager {
             return;
         }
 
-        // Buscar todos os pedidos
+        // Registrar todos os pedidos no mapa de controle e observar visibilidade
         const rows = tabela.querySelectorAll('tbody tr.pedido-row');
 
         rows.forEach((row) => {
-            const numPedido = row.dataset.pedido;
+            const numPedido = row.dataset.pedido || row.dataset.numPedido;
             const btn = row.querySelector('.btn-analisar-ruptura');
 
-            if (numPedido && btn) {
-                // Adicionar à fila em vez de analisar imediatamente
-                this.filaAnalises.push({ numPedido, btn });
+            if (numPedido && btn && !this.pedidos.has(numPedido)) {
+                this.pedidos.set(numPedido, {
+                    numPedido,
+                    btn,
+                    row,
+                    status: 'pendente',
+                    // Sem observer (browser antigo) tratamos como visível p/ não travar
+                    visivel: !this.observerVisibilidade
+                });
+                if (this.observerVisibilidade) {
+                    this.observerVisibilidade.observe(row);
+                }
             }
         });
 
-        console.log(`📋 ${this.filaAnalises.length} análises na fila`);
+        console.log(`📋 ${this.pedidos.size} pedidos registrados para análise`);
 
         // Criar indicador de progresso
         this.criarIndicadorProgresso();
 
-        // Iniciar processamento da fila
-        this.processarFilaAnalises();
+        // Iniciar preenchimento do pool (até CONCORRENCIA_MAX simultâneas)
+        this.processarFila();
     }
 
     /**
-     * Processa a fila de análises
+     * Configura o IntersectionObserver que marca quais pedidos estão visíveis.
+     * Pedidos visíveis têm prioridade na fila ("ir explodindo os visíveis").
      */
-    async processarFilaAnalises() {
-        // Se está pausado ou já processando, sair
-        if (this.pausado || this.processandoFila) return;
-
-        // Se não há itens na fila
-        if (this.filaAnalises.length === 0) {
-            console.log('✅ Todas as análises concluídas');
-            this.removerIndicadorProgresso();
+    configurarObserverVisibilidade() {
+        if (typeof IntersectionObserver === 'undefined') {
+            console.warn('⚠️ IntersectionObserver indisponível — priorização de visíveis desativada');
+            this.observerVisibilidade = null;
             return;
         }
 
-        this.processandoFila = true;
+        this.observerVisibilidade = new IntersectionObserver((entries) => {
+            entries.forEach((entry) => {
+                const numPedido = entry.target.dataset.pedido || entry.target.dataset.numPedido;
+                const p = this.pedidos.get(numPedido);
+                if (p) p.visivel = entry.isIntersecting;
+            });
 
-        // Pegar próximo item da fila
-        const item = this.filaAnalises.shift();
+            // Recém-visíveis assumem prioridade nos próximos slots livres
+            if (!this.pausado) this.processarFila();
+        }, { root: null, rootMargin: '150px 0px', threshold: 0 });
 
-        if (item && !this.pausado) {
-            await this.analisarRupturaInicial(item.numPedido, item.btn);
+        console.log('✅ Observer de visibilidade configurado');
+    }
+
+    /**
+     * Seleciona o próximo pedido pendente, priorizando os visíveis no viewport.
+     */
+    selecionarProximoPedido() {
+        let naoVisivel = null;
+        for (const p of this.pedidos.values()) {
+            if (p.status !== 'pendente') continue;
+            if (p.visivel) return p;          // visível: prioridade máxima
+            if (!naoVisivel) naoVisivel = p;  // guarda o 1º não-visível como fallback
+        }
+        return naoVisivel;
+    }
+
+    /**
+     * Conta pedidos ainda pendentes (não iniciados).
+     */
+    contarPendentes() {
+        let n = 0;
+        for (const p of this.pedidos.values()) {
+            if (p.status === 'pendente') n++;
+        }
+        return n;
+    }
+
+    /**
+     * Preenche o pool de análises até CONCORRENCIA_MAX simultâneas,
+     * sempre escolhendo o próximo pedido pela prioridade de visibilidade.
+     */
+    processarFila() {
+        if (this.pausado) return;
+
+        while (this.analisesEmAndamento.size < this.CONCORRENCIA_MAX) {
+            const proximo = this.selecionarProximoPedido();
+            if (!proximo) break;
+
+            proximo.status = 'analisando';
+            // Dispara sem await: o controle de slot é feito no finally da análise
+            this.analisarRupturaInicial(proximo.numPedido, proximo.btn);
         }
 
-        this.processandoFila = false;
-
-        // Continuar processando se não estiver pausado
-        if (!this.pausado) {
-            // Pequeno delay entre análises
-            setTimeout(() => this.processarFilaAnalises(), 100);
+        // Atualizar/encerrar indicador conforme o estado atual
+        if (this.contarPendentes() === 0 && this.analisesEmAndamento.size === 0) {
+            console.log('✅ Todas as análises concluídas');
+            this.removerIndicadorProgresso();
+        } else {
+            this.atualizarIndicador('processando');
         }
     }
 
@@ -190,25 +244,30 @@ class RupturaEstoqueManager {
         const indicator = document.getElementById('ruptura-progresso');
         if (!indicator) return;
 
-        if (this.filaAnalises.length === 0 && !this.processandoFila) {
+        const pendentes = this.contarPendentes();
+        const ativos = this.analisesEmAndamento.size;
+
+        if (pendentes === 0 && ativos === 0) {
             indicator.style.display = 'none';
             return;
         }
 
         indicator.style.display = 'block';
 
+        const restantes = pendentes + ativos;
+
         if (status === 'pausado') {
             indicator.innerHTML = `
                 <div class="d-flex align-items-center">
                     <i class="fas fa-pause-circle text-warning me-2"></i>
-                    <span>Análises pausadas (${this.filaAnalises.length} pendentes)</span>
+                    <span>Análises pausadas (${restantes} pendentes)</span>
                 </div>
             `;
         } else {
             indicator.innerHTML = `
                 <div class="d-flex align-items-center">
                     <i class="fas fa-spinner fa-spin me-2"></i>
-                    <span>Analisando estoque (${this.filaAnalises.length} restantes)</span>
+                    <span>Analisando estoque (${restantes} restantes)</span>
                 </div>
             `;
         }
@@ -310,9 +369,11 @@ class RupturaEstoqueManager {
      * Analisa ruptura inicial (automática ao carregar)
      */
     async analisarRupturaInicial(numPedido, btnElement) {
-        // Se está pausado, adicionar de volta à fila
+        const pedido = this.pedidos.get(numPedido);
+
+        // Se está pausado, devolver à fila (status pendente)
         if (this.pausado) {
-            this.filaAnalises.unshift({ numPedido, btn: btnElement });
+            if (pedido) pedido.status = 'pendente';
             return;
         }
 
@@ -321,17 +382,13 @@ class RupturaEstoqueManager {
         this.analisesEmAndamento.set(numPedido, controller);
 
         try {
-            // Atualizar indicador
-            this.atualizarIndicador('processando');
-
             const response = await fetch(`/carteira/api/ruptura/sem-cache/analisar-pedido/${numPedido}`, {
                 signal: controller.signal
             });
 
             // Verificar se foi abortado
             if (controller.signal.aborted) {
-                // Adicionar de volta à fila
-                this.filaAnalises.push({ numPedido, btn: btnElement });
+                if (pedido) pedido.status = 'pendente';
                 return;
             }
 
@@ -339,6 +396,7 @@ class RupturaEstoqueManager {
 
             if (!data.success) {
                 btnElement.innerHTML = '<i class="fas fa-box me-1"></i>Verificar Estoque';
+                if (pedido) pedido.status = 'concluido';
                 return;
             }
 
@@ -373,19 +431,23 @@ class RupturaEstoqueManager {
                 `;
                 btnElement.title = `${data.resumo.qtd_itens_disponiveis} de ${data.resumo.total_itens} itens disponíveis`;
             }
+
+            if (pedido) pedido.status = 'concluido';
         } catch (error) {
-            // Se foi abortado, adicionar de volta à fila
+            // Se foi abortado, devolver à fila (status pendente)
             if (error.name === 'AbortError') {
                 console.log(`Análise de ${numPedido} interrompida`);
-                this.filaAnalises.push({ numPedido, btn: btnElement });
+                if (pedido) pedido.status = 'pendente';
                 btnElement.innerHTML = '<i class="fas fa-box me-1"></i>Verificar Estoque';
             } else {
                 console.error(`Erro na análise inicial do pedido ${numPedido}:`, error);
                 btnElement.innerHTML = '<i class="fas fa-box me-1"></i>Verificar Estoque';
+                if (pedido) pedido.status = 'concluido';
             }
         } finally {
-            // Remover do mapa de análises em andamento
+            // Liberar o slot e tentar preencher com o próximo pedido prioritário
             this.analisesEmAndamento.delete(numPedido);
+            if (!this.pausado) this.processarFila();
         }
     }
 
@@ -1039,10 +1101,11 @@ document.addEventListener('DOMContentLoaded', () => {
     window.rupturaManager = new RupturaEstoqueManager();
 });
 
-// Re-adicionar botões se tabela for atualizada via AJAX
+// Re-adicionar botões e re-registrar pedidos se tabela for atualizada via AJAX
 document.addEventListener('tabela-atualizada', () => {
     console.log('📊 Tabela atualizada, re-adicionando botões...');
     if (window.rupturaManager) {
         window.rupturaManager.adicionarBotoesRuptura();
+        window.rupturaManager.iniciarAnalisesAutomaticas();
     }
 });
