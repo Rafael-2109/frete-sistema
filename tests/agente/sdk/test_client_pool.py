@@ -11,6 +11,7 @@ entre testes (reseta module globals apos cada teste).
 import asyncio
 import time
 import threading
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -55,6 +56,11 @@ class TestPooledClient:
         assert isinstance(p1.lock, asyncio.Lock)
         assert isinstance(p2.lock, asyncio.Lock)
         assert p1.lock is not p2.lock
+
+    def test_pooled_client_model_default_none(self, pool_reset):
+        """Campo model default None (modelo da sessao — stickiness 2026-06-15)."""
+        p = PooledClient(client=MagicMock(), session_id='sess-m')
+        assert p.model is None
 
 
 # ─── 2. _ensure_pool_initialized ────────────────────────────────────
@@ -184,6 +190,23 @@ class TestGetOrCreateClient:
         mock_claude_sdk_client.connect.assert_awaited_once()
         # Deve estar no registry
         assert 'sess-new' in cp._registry
+
+    @patch('app.agente.config.feature_flags.USE_PERSISTENT_SDK_CLIENT', True)
+    def test_get_or_create_grava_model_das_options(self, pool_reset, mock_claude_sdk_client):
+        """get_or_create_client grava options.model em pooled.model — fonte do
+        modelo da sessao para o stickiness (bug 2026-06-15: nao trocar mid-sessao)."""
+        _ensure_pool_initialized()
+
+        mock_cls = MagicMock(return_value=mock_claude_sdk_client)
+        opts = SimpleNamespace(model='claude-opus-4-8')
+
+        with patch('claude_agent_sdk.ClaudeSDKClient', mock_cls, create=True):
+            future = submit_coroutine(
+                get_or_create_client('sess-model', options=opts, user_id=7)
+            )
+            pooled = future.result(timeout=5)
+
+        assert pooled.model == 'claude-opus-4-8'
 
     @patch('app.agente.config.feature_flags.USE_PERSISTENT_SDK_CLIENT', True)
     def test_get_or_create_reuses_existing(self, pool_reset):

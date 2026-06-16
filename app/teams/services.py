@@ -1195,13 +1195,14 @@ def _obter_resposta_agente(
     # o shutdown do worker indefinidamente.
     MAX_TEAMS_RESPONSE_SECONDS = 240  # 4 min (Sonnet tipicamente 30-120s)
 
+    from app.agente.config.feature_flags import TEAMS_EFFORT_LEVEL
     try:
         async def _get_response_with_timeout():
             return await asyncio.wait_for(
                 client.get_response(
                     prompt=prompt_completo,
                     user_name=usuario,
-                    effort_level="medium",
+                    effort_level=TEAMS_EFFORT_LEVEL,
                     sdk_session_id=sdk_session_id,
                     user_id=user_id,
                     model=model,
@@ -1603,11 +1604,12 @@ def _obter_resposta_agente_streaming(
 
             # Timeout por inatividade: cada chunk renova o deadline.
             # Se nenhum chunk chegar em INACTIVITY_TIMEOUT, dispara TimeoutError.
+            from app.agente.config.feature_flags import TEAMS_EFFORT_LEVEL
             stream_iter = client.stream_response(
                 prompt=prompt_completo,
                 user_name=usuario,
                 model=model,
-                effort_level="medium",
+                effort_level=TEAMS_EFFORT_LEVEL,
                 sdk_session_id=sdk_session_id,
                 can_use_tool=can_use_tool,
                 user_id=user_id,

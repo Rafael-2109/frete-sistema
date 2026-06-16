@@ -361,8 +361,12 @@ if AGENTE_PDF_STRATEGY not in _VALID_PDF_STRATEGIES:
 #   effort calibration, comportamento mais literal.
 # Opus 4.6 (legado): ~91s por resposta com tools.
 # Sonnet 4.6: ~15-25s por resposta com tools, custo $3/$15 per 1M tokens.
-# Rollback instantaneo: TEAMS_DEFAULT_MODEL=claude-opus-4-7 (ou =claude-opus-4-6)
-TEAMS_DEFAULT_MODEL = os.getenv("TEAMS_DEFAULT_MODEL", "claude-opus-4-8")
+# Teams roda em Sonnet FIXO + thinking high (diretriz Rafael 2026-06-16): o canal
+# e assincrono (sem UX de tempo real), as tarefas sao estruturadas/repetitivas e
+# Sonnet+high da qualidade suficiente — alem de eliminar o churn de cache ~4x que a
+# alternancia Sonnet<->Opus causava (memoria dev teams_cache_churn_model_routing).
+# Rollback p/ Opus+routing: TEAMS_DEFAULT_MODEL=claude-opus-4-8 + TEAMS_SMART_MODEL_ROUTING=true
+TEAMS_DEFAULT_MODEL = os.getenv("TEAMS_DEFAULT_MODEL", "claude-sonnet-4-6")
 
 # Modo assincrono para o bot do Teams
 # Quando true: retorna task_id imediatamente, processa em daemon thread, Azure Function faz polling
@@ -386,12 +390,17 @@ TEAMS_PROGRESSIVE_STREAMING = os.getenv("TEAMS_PROGRESSIVE_STREAMING", "true").l
 # Intervalo em segundos entre flushes de texto parcial ao DB
 TEAMS_STREAM_FLUSH_INTERVAL = float(os.getenv("TEAMS_STREAM_FLUSH_INTERVAL", "4.0"))
 
-# Smart model routing: mensagens simples usam Sonnet (15-25s), complexas Opus (60-90s)
-# Desativar para voltar ao comportamento anterior (tudo Opus)
-TEAMS_SMART_MODEL_ROUTING = os.getenv("TEAMS_SMART_MODEL_ROUTING", "true").lower() == "true"
+# Smart model routing no Teams: DESLIGADO desde 2026-06-16 (Teams e Sonnet fixo, nao
+# ha o que rotear; alternar modelo so trazia churn de cache). Religar so faz sentido
+# junto com TEAMS_DEFAULT_MODEL=claude-opus-4-8.
+TEAMS_SMART_MODEL_ROUTING = os.getenv("TEAMS_SMART_MODEL_ROUTING", "false").lower() == "true"
 
 # Modelo rápido para mensagens simples (usado quando SMART_MODEL_ROUTING=true)
 TEAMS_FAST_MODEL = os.getenv("TEAMS_FAST_MODEL", "claude-sonnet-4-6")
+
+# Thinking level do Teams (diretriz Rafael 2026-06-16): "high" com Sonnet fixo.
+# Valores: off|low|medium|high|max. Rollback: TEAMS_EFFORT_LEVEL=medium.
+TEAMS_EFFORT_LEVEL = os.getenv("TEAMS_EFFORT_LEVEL", "high")
 
 # Fase 1 (2026-04-21): routing programatico tambem no canal Web.
 # Patterns compartilhados via app/agente/sdk/model_router.py.

@@ -240,6 +240,53 @@ def select_model(
     return default_model, "default"
 
 
+def pick_warm_model(session_model: str | None, user_model: str | None) -> str | None:
+    """
+    Modelo do turno em sessao WEB "quente" (client reutilizado): a config do
+    usuario PERSISTE pela sessao.
+
+    Regra (diretriz Rafael, bug 2026-06-15): o modelo e decidido 1x por sessao.
+    Em sessao quente NAO se aplica smart routing — so troca se o usuario alterou
+    EXPLICITAMENTE o modelo no seletor (aí custa cache MODEL-SCOPED, mas e
+    consciente). Sem alteracao, mantem o modelo com que a sessao roda.
+
+    Antes (bug): o routing rebaixava Opus->Sonnet em follow-ups curtos
+    ("deu certo?") mid-sessao, matando o cache e fazendo o Sonnet rebaixado
+    responder sobre a propria troca de modelo em vez da tarefa. Capacidade extra
+    mid-sessao = DELEGAR a subagente, nao trocar o modelo do loop principal.
+
+    Args:
+        session_model: modelo com que a sessao roda (existing.model do pool).
+        user_model: modelo pedido pelo usuario no request (config do seletor;
+            None = nao informado).
+
+    Returns:
+        Modelo a usar no turno (user_model se troca explicita, senao session_model).
+    """
+    if user_model and user_model != session_model:
+        return user_model
+    return session_model
+
+
+def should_switch_model(requested_model: str | None, session_model: str | None) -> bool:
+    """
+    Decide se o client deve chamar set_model (troca real de modelo mid-sessao).
+
+    So troca quando o modelo pedido difere do atual da sessao — evita o churn
+    redundante que invalidaria o cache MODEL-SCOPED a toa. Como o caller nunca
+    rebaixa em sessao quente (pick_warm_model), so a troca EXPLICITA do usuario
+    chega aqui como diff real.
+
+    Args:
+        requested_model: modelo resolvido para este turno.
+        session_model: modelo atual do client da sessao (existing.model).
+
+    Returns:
+        True se deve trocar (set_model + atualizar existing.model).
+    """
+    return bool(requested_model) and requested_model != session_model
+
+
 def log_routing_decision(
     session_id: str,
     user_id: int | None,

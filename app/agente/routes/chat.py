@@ -154,34 +154,47 @@ def api_chat():
                 _ca.logger.debug(f"[STICKY] check ignorado: {_sticky_err}")
 
         # Fase 1 (2026-04-21): Smart model routing no canal Web.
-        # Se flag USE_WEB_SMART_MODEL_ROUTING ligada, analisa padroes do prompt
-        # e rebaixa Opus -> Sonnet para tarefas estruturadas/repetitivas.
-        # NUNCA promove Sonnet -> Opus (respeita escolha explicita do usuario).
+        # Modelo decidido 1x por sessao (bug 2026-06-15): em sessao QUENTE (client
+        # conectado no pool) a config do usuario PERSISTE — pick_warm_model so troca
+        # se o usuario alterou o seletor EXPLICITAMENTE (aí custa cache MODEL-SCOPED,
+        # consciente). So a PRIMEIRA mensagem passa pelo smart routing (rebaixa
+        # Opus->Sonnet em tarefa estruturada/repetitiva). NUNCA promove Sonnet->Opus.
+        # O routing nunca rebaixa mid-sessao (era o bug). should_switch_model
+        # (client.py) e a rede de seguranca: so chama set_model em troca real.
         try:
-            from app.agente.config.feature_flags import (
-                USE_WEB_SMART_MODEL_ROUTING, WEB_FAST_MODEL,
-            )
-            if USE_WEB_SMART_MODEL_ROUTING and message:
-                from app.agente.sdk.model_router import select_model, log_routing_decision
-                default_for_router = model or 'claude-opus-4-8'
-                # So rebaixa se caller escolheu Opus (ou deixou default)
-                if 'opus' in default_for_router.lower():
-                    chosen, reason = select_model(
-                        message,
-                        default_model=default_for_router,
-                        fast_model=WEB_FAST_MODEL,
-                    )
-                    if chosen != default_for_router:
-                        log_routing_decision(
-                            session_id=session_id or '',
-                            user_id=current_user.id if hasattr(current_user, 'id') else None,
-                            prompt_preview=message,
-                            chosen_model=chosen,
-                            reason=reason,
+            from app.agente.sdk.client_pool import get_pooled_client
+            _pc = get_pooled_client(session_id) if session_id else None
+            if _pc and _pc.connected and _pc.model:
+                # Sessao quente: a config do usuario PERSISTE. So troca se ele
+                # alterou EXPLICITAMENTE o seletor (pick_warm_model) — aí custa
+                # cache MODEL-SCOPED, mas e consciente. Routing NAO rebaixa aqui.
+                from app.agente.sdk.model_router import pick_warm_model
+                model = pick_warm_model(session_model=_pc.model, user_model=model)
+            else:
+                from app.agente.config.feature_flags import (
+                    USE_WEB_SMART_MODEL_ROUTING, WEB_FAST_MODEL,
+                )
+                if USE_WEB_SMART_MODEL_ROUTING and message:
+                    from app.agente.sdk.model_router import select_model, log_routing_decision
+                    default_for_router = model or 'claude-opus-4-8'
+                    # So rebaixa se caller escolheu Opus (ou deixou default)
+                    if 'opus' in default_for_router.lower():
+                        chosen, reason = select_model(
+                            message,
                             default_model=default_for_router,
                             fast_model=WEB_FAST_MODEL,
                         )
-                        model = chosen
+                        if chosen != default_for_router:
+                            log_routing_decision(
+                                session_id=session_id or '',
+                                user_id=current_user.id if hasattr(current_user, 'id') else None,
+                                prompt_preview=message,
+                                chosen_model=chosen,
+                                reason=reason,
+                                default_model=default_for_router,
+                                fast_model=WEB_FAST_MODEL,
+                            )
+                            model = chosen
         except Exception as _router_err:
             logger.warning(f"[AGENTE] model_router falhou (ignorado): {_router_err}")
 

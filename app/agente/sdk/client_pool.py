@@ -136,6 +136,9 @@ class PooledClient:
         connected: Se o client está conectado (após connect(), antes de disconnect())
         lock: asyncio.Lock para serializar operações no mesmo client
         sdk_session_id: UUID do SDK (nome do JSONL) — setado apos init message
+        model: Modelo com que a sessao foi CRIADA. Fonte do "modelo decidido 1x
+            por sessao" — o client.py fixa o turno neste valor e NUNCA troca
+            mid-sessao (cache MODEL-SCOPED; bug 2026-06-15). None = pooled legado.
     """
     client: Any  # ClaudeSDKClient — tipado como Any para evitar import circular
     session_id: str
@@ -145,6 +148,7 @@ class PooledClient:
     connected: bool = False
     lock: asyncio.Lock = field(default_factory=asyncio.Lock)
     sdk_session_id: Optional[str] = None
+    model: Optional[str] = None
 
 
 # =============================================================================
@@ -371,6 +375,8 @@ async def get_or_create_client(
             session_id=session_id,
             user_id=user_id,
             connected=True,
+            # Modelo de criacao = modelo da sessao (stickiness, bug 2026-06-15).
+            model=getattr(options, 'model', None),
         )
 
         with _registry_lock:

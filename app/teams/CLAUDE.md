@@ -292,10 +292,12 @@ O path async (`process_teams_task_async`, ATIVO) grava DUAS telemetrias logo ap�
   sintético `teams:{session}:{turn_seq}` (idempotente via UNIQUE), best-effort/INV-6,
   atrás da flag `USE_COST_TRACKER_PERSIST` (ON em PROD, OFF local).
 
-**Por quê importa:** o prompt cache é MODEL-SCOPED e o smart routing alterna
-Sonnet↔Opus por mensagem (`TEAMS_SMART_MODEL_ROUTING`) — cada troca invalida o cache
-inteiro. Medido em PROD: Teams re-escreve cache ~4x o web (34% vs 8,7% em <5min).
-Registrar model+cache na MESMA linha torna essa alternância mensurável.
+**Por quê importa:** o prompt cache é MODEL-SCOPED e trocar de modelo invalida o
+cache inteiro. Medido em PROD: Teams re-escrevia cache ~4x o web (34% vs 8,7% em
+<5min) pela alternância Sonnet↔Opus do smart routing. **Mitigado em 2026-06-16**:
+o Teams roda em **Sonnet FIXO + thinking high** (`TEAMS_DEFAULT_MODEL=claude-sonnet-4-6`,
+`TEAMS_SMART_MODEL_ROUTING=false`, `TEAMS_EFFORT_LEVEL=high`) — sem alternância de
+modelo. Registrar model+cache na MESMA linha mantém isso mensurável pós-fix.
 — FONTE: `services.py:_persist_cost_teams,_gravar_agent_step_teams` (chamados ~L2236);
 memória dev `teams_cache_churn_model_routing.md`
 
@@ -305,7 +307,9 @@ memória dev `teams_cache_churn_model_routing.md`
 
 | Flag | Default | Impacto |
 |------|---------|---------|
-| `TEAMS_DEFAULT_MODEL` | `claude-opus-4-8` | Modelo LLM (rollback: `claude-opus-4-7`) |
+| `TEAMS_DEFAULT_MODEL` | `claude-sonnet-4-6` | Modelo LLM — **Sonnet fixo** desde 2026-06-16 (rollback p/ Opus: `claude-opus-4-8`) |
+| `TEAMS_SMART_MODEL_ROUTING` | `false` | Routing dinâmico de modelo — **OFF** (Teams é Sonnet fixo; alternar só trazia churn de cache MODEL-SCOPED). Religar só faz sentido com `TEAMS_DEFAULT_MODEL=claude-opus-4-8` |
+| `TEAMS_EFFORT_LEVEL` | `high` | Thinking level (off\|low\|medium\|high\|max) aplicado em `services.py` get_response/stream_response. Rollback: `medium` |
 | `TEAMS_ASYNC_MODE` | `true` | Async (thread) vs sync |
 | `TEAMS_ASK_USER_TIMEOUT` | `600` | Timeout Adaptive Card (seg) — subido 180→600 em 2026-06-12 (humano demora p/ responder card; resposta tardia levava 400). SEGURO porque a espera virou ASSINCRONA (`permissions.py:async_wait_for_answer`) e nao bloqueia mais o event loop do pool |
 | `TEAMS_INACTIVITY_TIMEOUT` | `300` | Sem chunk por 5 min = timeout (DC-9, sem teto absoluto); env configuravel desde Fase C — era constante hardcoded |

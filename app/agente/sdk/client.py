@@ -2323,6 +2323,10 @@ Nunca invente informações."""
             if resume_id and not pooled.sdk_session_id:
                 pooled.sdk_session_id = resume_id
 
+            # current_model: o caller (chat.py web / Teams) ja aplicou a politica
+            # de "modelo 1x por sessao" (pick_warm_model: a config persiste, routing
+            # so na 1a msg). Aqui so materializamos o valor; a troca REAL e decidida
+            # logo abaixo por should_switch_model (bug 2026-06-15).
             current_model = model or self.settings.model
             permission_mode = "plan" if plan_mode else "acceptEdits"
 
@@ -2370,16 +2374,29 @@ Nunca invente informações."""
             async with pooled.lock:
                 pooled.last_used = time.time()
 
-                # set_model/set_permission_mode DENTRO do lock (2026-05-25):
-                # antes ficavam fora, causando race quando msg B chegava com
-                # modelo diferente durante stream de A — set_model afetava A.
+                # set_model/set_permission_mode DENTRO do lock (2026-05-25): antes
+                # ficavam fora, causando race quando msg B chegava durante stream de A.
                 if existing and existing.connected:
-                    try:
-                        await pooled.client.set_model(current_model)
-                    except Exception as model_err:
-                        logger.warning(
-                            f"[AGENT_SDK_PERSISTENT] set_model ignorado: {model_err}"
-                        )
+                    # set_model CONDICIONAL (bug 2026-06-15): so troca quando o modelo
+                    # difere do atual da sessao. O caller nunca rebaixa em sessao
+                    # quente (pick_warm_model), entao so a troca EXPLICITA do usuario
+                    # (mudou o seletor no web) chega aqui — e custa cache MODEL-SCOPED
+                    # conscientemente. Sem o guard, o churn era automatico e o modelo
+                    # rebaixado confundia o "Set model to X" do CLI com a tarefa.
+                    from .model_router import should_switch_model
+                    _session_model = getattr(existing, 'model', None)
+                    if should_switch_model(current_model, _session_model):
+                        try:
+                            await pooled.client.set_model(current_model)
+                            existing.model = current_model
+                            logger.info(
+                                f"[AGENT_SDK_PERSISTENT] modelo trocado "
+                                f"{_session_model} -> {current_model} (explicito)"
+                            )
+                        except Exception as model_err:
+                            logger.warning(
+                                f"[AGENT_SDK_PERSISTENT] set_model ignorado: {model_err}"
+                            )
                     try:
                         await pooled.client.set_permission_mode(permission_mode)
                     except Exception as perm_err:
