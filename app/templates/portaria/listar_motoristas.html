@@ -103,7 +103,7 @@
                 </small>
               </td>
               <td class="text-center">
-                {% set registros_count = motorista.registros_portaria.count() %}
+                {% set registros_count = registros_count_map.get(motorista.id, 0) %}
                 {% if registros_count > 0 %}
                   <span class="badge bg-primary">{{ registros_count }}</span>
                   <br><small class="text-muted">registros</small>
@@ -118,7 +118,7 @@
                     <i class="fas fa-edit"></i> Editar
                   </a>
                   
-                  {% if motorista.registros_portaria.count() == 0 %}
+                  {% if registros_count_map.get(motorista.id, 0) == 0 %}
                   <form method="POST" action="{{ url_for('portaria.excluir_motorista', id=motorista.id) }}" 
                         class="d-inline" onsubmit="return confirmarExclusao('{{ motorista.nome_completo }}')">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>

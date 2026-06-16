@@ -7,6 +7,50 @@ Exemplo: AGENT_BUDGET_CONTROL=true flask run --debug
 """
 import os
 
+# ---------------------------------------------------------------------------
+# Parsers tolerantes de env var (PYTHON-FLASK-XS/XT, 2026-06-16)
+# Valor com comentario inline ("5.0 # OK", colado direto no Render Dashboard)
+# quebrava float()/int() no nivel de modulo e DERRUBAVA o boot inteiro do
+# app.agente — e, em cascata por re-importacao, do agente_lojas (XT). Agora:
+# split('#') + strip + try/except -> fallback no default + warning. Booleans
+# com "# ok" deixam de inverter silenciosamente para False. O .env local NAO
+# dispara o bug (python-dotenv stripa comentario de valor sem aspas); so' o
+# Render Dashboard injeta a string crua em os.environ.
+# ---------------------------------------------------------------------------
+import logging as _ff_logging
+_ff_log = _ff_logging.getLogger('sistema_fretes')
+
+
+def _env_float(name, default):
+    """float() de env var tolerante a comentario inline e lixo (fallback no default)."""
+    fallback = float(default)
+    raw = os.getenv(name)
+    if raw is None:
+        return fallback
+    try:
+        return float(raw.split('#', 1)[0].strip())
+    except (ValueError, TypeError):
+        _ff_log.warning("[FEATURE_FLAGS] %s: float invalido %r -> usando %s", name, raw, fallback)
+        return fallback
+
+
+def _env_int(name, default):
+    """int() de env var tolerante a comentario inline e lixo (fallback no default)."""
+    fallback = int(default)
+    raw = os.getenv(name)
+    if raw is None:
+        return fallback
+    try:
+        return int(raw.split('#', 1)[0].strip())
+    except (ValueError, TypeError):
+        _ff_log.warning("[FEATURE_FLAGS] %s: int invalido %r -> usando %s", name, raw, fallback)
+        return fallback
+
+
+def _env_bool(name, default):
+    """bool de env var ('true'/'false') tolerante a comentario inline ('true # ok')."""
+    return os.getenv(name, default).split('#', 1)[0].strip().lower() == "true"
+
 # ====================================================================
 # Quick Wins
 # ====================================================================
@@ -16,11 +60,11 @@ import os
 # Opus 4.8/4.7: 1M ao preço padrão $5/$25 per MTok, sem long-context premium
 # Sonnet 4.5/4.0: precisam de beta header "context-1m-2025-08-07"
 # Flag mantida apenas para documentação — modelos atuais usam 1M automaticamente
-USE_EXTENDED_CONTEXT = os.getenv("AGENT_EXTENDED_CONTEXT", "false").lower() == "true"
+USE_EXTENDED_CONTEXT = _env_bool("AGENT_EXTENDED_CONTEXT", "false")
 
 # Controle de budget por request (disponivel desde SDK v0.1.6)
-USE_BUDGET_CONTROL = os.getenv("AGENT_BUDGET_CONTROL", "true").lower() == "true"
-MAX_BUDGET_USD = float(os.getenv("AGENT_MAX_BUDGET_USD", "5.0"))
+USE_BUDGET_CONTROL = _env_bool("AGENT_BUDGET_CONTROL", "true")
+MAX_BUDGET_USD = _env_float("AGENT_MAX_BUDGET_USD", "5.0")
 
 # Context Clearing automatico — remove thinking/tool_uses antigos
 # ATIVO por default: a Anthropic recomenda habilitar para conversas longas.
@@ -28,13 +72,13 @@ MAX_BUDGET_USD = float(os.getenv("AGENT_MAX_BUDGET_USD", "5.0"))
 # NOTA (2026-02): clear-thinking e clear-tool-uses foram promovidos a GA.
 #   Beta headers removidos — flag controla apenas log/documentação.
 # Para desativar: AGENT_CONTEXT_CLEARING=false
-USE_CONTEXT_CLEARING = os.getenv("AGENT_CONTEXT_CLEARING", "true").lower() == "true"
+USE_CONTEXT_CLEARING = _env_bool("AGENT_CONTEXT_CLEARING", "true")
 
 # Prompt Caching — economia de 50-90% tokens input
 # O system_prompt.md do agente e extenso (~8K tokens)
 # NOTA (2026-02): prompt-caching foi promovido a GA.
 #   Beta header removido — flag controla apenas log/documentação.
-USE_PROMPT_CACHING = os.getenv("AGENT_PROMPT_CACHING", "true").lower() == "true"
+USE_PROMPT_CACHING = _env_bool("AGENT_PROMPT_CACHING", "true")
 
 # ====================================================================
 # Architecture + Seguranca
@@ -45,14 +89,14 @@ USE_PROMPT_CACHING = os.getenv("AGENT_PROMPT_CACHING", "true").lower() == "true"
 # inconsistências aritméticas em respostas com tabelas numéricas (threshold 500 chars).
 # DESATIVADO: gerava observacoes que confundiam usuarios sem beneficio claro.
 # Para reativar: AGENT_SELF_CORRECTION=true
-USE_SELF_CORRECTION = os.getenv("AGENT_SELF_CORRECTION", "false").lower() == "true"
+USE_SELF_CORRECTION = _env_bool("AGENT_SELF_CORRECTION", "false")
 
 # Prompt Cache Optimization — extrai variáveis dinâmicas do system prompt
 # ({data_atual}, {usuario_nome}, {user_id}) para injeção via UserPromptSubmit hook.
 # System prompt fica estático entre usuários e turnos → prompt caching hits no CLI.
 # Depende de USE_CUSTOM_SYSTEM_PROMPT=true para ter efeito.
 # Rollback: AGENT_PROMPT_CACHE_OPTIMIZATION=false
-USE_PROMPT_CACHE_OPTIMIZATION = os.getenv("AGENT_PROMPT_CACHE_OPTIMIZATION", "true").lower() == "true"
+USE_PROMPT_CACHE_OPTIMIZATION = _env_bool("AGENT_PROMPT_CACHE_OPTIMIZATION", "true")
 
 # ====================================================================
 # Melhorias de Contexto e Memoria (P0)
@@ -61,20 +105,20 @@ USE_PROMPT_CACHE_OPTIMIZATION = os.getenv("AGENT_PROMPT_CACHE_OPTIMIZATION", "tr
 # Structured Pre-Compaction — salva contexto logistico detalhado antes de compactacao
 # Instrui modelo a salvar pedidos, decisoes, tarefas em formato XML estruturado
 # ATIVO por default: melhoria direta sem risco, substitui instrucao generica por estruturada
-USE_STRUCTURED_COMPACTION = os.getenv("AGENT_STRUCTURED_COMPACTION", "true").lower() == "true"
+USE_STRUCTURED_COMPACTION = _env_bool("AGENT_STRUCTURED_COMPACTION", "true")
 
 # Session Summary — gera resumo estruturado ao final de cada interacao
 # Usa Sonnet para extrair pedidos, decisoes, tarefas e alertas da conversa
 # Custo: ~$0.003 por resumo (Sonnet: $3/1M input + $15/1M output)
 # ATIVO por default: migration ja aplicada, implementacao estavel
-USE_SESSION_SUMMARY = os.getenv("AGENT_SESSION_SUMMARY", "true").lower() == "true"
+USE_SESSION_SUMMARY = _env_bool("AGENT_SESSION_SUMMARY", "true")
 
 # Threshold de mensagens para trigger de sumarizacao
 # Sumariza quando message_count >= threshold e summary esta stale (delta >= threshold)
 # Reduzido de 5→3 em 2026-04-12 (v2.2): auditoria mostrou que 57% das sessoes
 # em 30d tinham <5 msgs (especialmente Teams curto), perdendo rolling window.
 # Custo marginal: ~$0.36/mes. Sessoes 1-2 msgs continuam sem summary (trivial).
-SESSION_SUMMARY_THRESHOLD = int(os.getenv("AGENT_SESSION_SUMMARY_THRESHOLD", "3"))
+SESSION_SUMMARY_THRESHOLD = _env_int("AGENT_SESSION_SUMMARY_THRESHOLD", "3")
 
 # ====================================================================
 # Melhorias de UX (P1)
@@ -85,7 +129,7 @@ SESSION_SUMMARY_THRESHOLD = int(os.getenv("AGENT_SESSION_SUMMARY_THRESHOLD", "3"
 # Custo: ~$0.003 por chamada (~500 tokens input, ~200 output)
 # ATIVO por default: roda em background, nao bloqueia resposta.
 # Para desativar: AGENT_PROMPT_SUGGESTIONS=false
-USE_PROMPT_SUGGESTIONS = os.getenv("AGENT_PROMPT_SUGGESTIONS", "true").lower() == "true"
+USE_PROMPT_SUGGESTIONS = _env_bool("AGENT_PROMPT_SUGGESTIONS", "true")
 
 # Sentiment Detection — flag USE_SENTIMENT_DETECTION REMOVIDA (estrategia R1,
 # 2026-06-12, ESTRATEGIA_ATUADORES_2026-06-06.md). Ela gateava APENAS a injecao
@@ -101,11 +145,11 @@ USE_PROMPT_SUGGESTIONS = os.getenv("AGENT_PROMPT_SUGGESTIONS", "true").lower() =
 # Custo: ~$0.006 por analise (~4K tokens input, ~800 output Sonnet)
 # Trigger: a cada N sessoes do usuario (default 10)
 # Default false: requer historico suficiente de sessoes para ser util
-USE_PATTERN_LEARNING = os.getenv("AGENT_PATTERN_LEARNING", "true").lower() == "true"
+USE_PATTERN_LEARNING = _env_bool("AGENT_PATTERN_LEARNING", "true")
 
 # Numero de sessoes entre analises de padrao
 # Analisa quando total_sessions % threshold == 0
-PATTERN_LEARNING_THRESHOLD = int(os.getenv("AGENT_PATTERN_LEARNING_THRESHOLD", "10"))
+PATTERN_LEARNING_THRESHOLD = _env_int("AGENT_PATTERN_LEARNING_THRESHOLD", "10")
 
 # Behavioral Profile — gera user.xml (Tier 1) com perfil comportamental
 # Reutiliza mesma chamada Sonnet do patterns (zero custo adicional quando coincidem)
@@ -113,15 +157,15 @@ PATTERN_LEARNING_THRESHOLD = int(os.getenv("AGENT_PATTERN_LEARNING_THRESHOLD", "
 # Reduzido de 5→3 em 2026-04-12 (v2.2): auditoria mostrou que users low-freq
 # (Jessica, Thamires, Marcus Souza, Nicoly) tinham 2-4 sessoes desde ultimo
 # update mas nunca atingiam 5 — user.xml stale indefinidamente.
-USE_BEHAVIORAL_PROFILE = os.getenv("AGENT_BEHAVIORAL_PROFILE", "true").lower() == "true"
-BEHAVIORAL_PROFILE_THRESHOLD = int(os.getenv("AGENT_BEHAVIORAL_PROFILE_THRESHOLD", "3"))
+USE_BEHAVIORAL_PROFILE = _env_bool("AGENT_BEHAVIORAL_PROFILE", "true")
+BEHAVIORAL_PROFILE_THRESHOLD = _env_int("AGENT_BEHAVIORAL_PROFILE_THRESHOLD", "3")
 
 # Thresholds adaptativos para profile — disparam atualizacao mesmo com poucas sessoes
 # Sessao longa (>= N msgs) desde ultimo update de user.xml → trigger imediato
 # Sessao cara (>= $X) desde ultimo update → trigger imediato
 # Resolve: usuarios low-frequency com sessoes densas ficavam com profile stale
-PROFILE_LONG_SESSION_THRESHOLD = int(os.getenv("AGENT_PROFILE_LONG_SESSION_THRESHOLD", "20"))
-PROFILE_COST_THRESHOLD = float(os.getenv("AGENT_PROFILE_COST_THRESHOLD", "5.0"))
+PROFILE_LONG_SESSION_THRESHOLD = _env_int("AGENT_PROFILE_LONG_SESSION_THRESHOLD", "20")
+PROFILE_COST_THRESHOLD = _env_float("AGENT_PROFILE_COST_THRESHOLD", "5.0")
 
 # Extracao pos-sessao de conhecimento organizacional (PRD v2.1)
 # Analisa TODAS as mensagens via Sonnet para extrair: definicoes de termos,
@@ -129,15 +173,15 @@ PROFILE_COST_THRESHOLD = float(os.getenv("AGENT_PROFILE_COST_THRESHOLD", "5.0"))
 # Custo: ~$0.003 por execucao (Sonnet, contexto completo). Volume baixo (~4 sessoes/dia).
 # Trigger: a cada exchange (min 3 msgs OU cost >= $0.10), roda em daemon thread (background).
 # A ultima execucao de cada sessao contem toda a conversa (= extracao de fim de sessao).
-USE_POST_SESSION_EXTRACTION = os.getenv("AGENT_POST_SESSION_EXTRACTION", "true").lower() == "true"
+USE_POST_SESSION_EXTRACTION = _env_bool("AGENT_POST_SESSION_EXTRACTION", "true")
 
 # Minimo de mensagens para iniciar extracao (evita rodar em sessoes triviais)
-POST_SESSION_EXTRACTION_MIN_MESSAGES = int(os.getenv("AGENT_POST_SESSION_EXTRACTION_MIN_MESSAGES", "3"))
+POST_SESSION_EXTRACTION_MIN_MESSAGES = _env_int("AGENT_POST_SESSION_EXTRACTION_MIN_MESSAGES", "3")
 
 # Threshold de custo: sessoes com custo >= este valor disparam extracao
 # MESMO se message_count < threshold. Resolve sessoes curtas mas substantivas
 # (ex: 2 msgs + 40 tool calls = $0.54, message_count=2 mas conteudo rico).
-POST_SESSION_COST_THRESHOLD = float(os.getenv("AGENT_POST_SESSION_COST_THRESHOLD", "0.10"))
+POST_SESSION_COST_THRESHOLD = _env_float("AGENT_POST_SESSION_COST_THRESHOLD", "0.10")
 
 # Extracao pos-sessao de insights PESSOAIS (complementar a empresa)
 # Analisa mensagens via Sonnet para extrair: correcoes, preferencias, expertise do usuario.
@@ -146,8 +190,8 @@ POST_SESSION_COST_THRESHOLD = float(os.getenv("AGENT_POST_SESSION_COST_THRESHOLD
 # Custo: ~$0.003 por execucao (Sonnet). Volume baixo (~4 sessoes/dia).
 # Threshold maior que empresa (10 vs 3): insights pessoais precisam de mais contexto
 # e rodar a cada turno desperdicaria tokens em sessoes curtas.
-USE_POST_SESSION_PERSONAL_EXTRACTION = os.getenv("AGENT_POST_SESSION_PERSONAL_EXTRACTION", "true").lower() == "true"
-POST_SESSION_PERSONAL_EXTRACTION_MIN_MESSAGES = int(os.getenv("AGENT_POST_SESSION_PERSONAL_MIN_MESSAGES", "10"))
+USE_POST_SESSION_PERSONAL_EXTRACTION = _env_bool("AGENT_POST_SESSION_PERSONAL_EXTRACTION", "true")
+POST_SESSION_PERSONAL_EXTRACTION_MIN_MESSAGES = _env_int("AGENT_POST_SESSION_PERSONAL_MIN_MESSAGES", "10")
 
 # ====================================================================
 # Dashboard e Analytics (P2)
@@ -157,20 +201,20 @@ POST_SESSION_PERSONAL_EXTRACTION_MIN_MESSAGES = int(os.getenv("AGENT_POST_SESSIO
 # Mostra: top queries, custos por usuario, tools mais usadas, erros, duracao
 # Acesso: apenas usuarios com perfil 'administrador'
 # ATIVO por default: dashboard estavel, acesso restrito a admin
-USE_AGENT_INSIGHTS = os.getenv("AGENT_INSIGHTS", "true").lower() == "true"
+USE_AGENT_INSIGHTS = _env_bool("AGENT_INSIGHTS", "true")
 
 # Reversibility Check — classifica acoes por reversibilidade e pede confirmacao extra
 # Intercepta Skills e Bash que podem executar acoes destrutivas (criar separacao, modificar dados)
 # Emite evento SSE 'destructive_action_warning' para dialog de confirmacao no frontend
 # Default false: ativar apos validar que a classificacao nao gera falsos positivos
-USE_REVERSIBILITY_CHECK = os.getenv("AGENT_REVERSIBILITY_CHECK", "true").lower() == "true"
+USE_REVERSIBILITY_CHECK = _env_bool("AGENT_REVERSIBILITY_CHECK", "true")
 
 # Friction Analysis — analisa sessoes e identifica pontos de friccao
 # Detecta: queries repetidas (operador nao obteve resposta), mensagens curtas apos erro,
 # sessoes abandonadas, uso excessivo de tools sem resultado
 # Integrado ao Dashboard de Insights (P2-2)
 # ATIVO por default: historico suficiente acumulado, integrado ao Insights
-USE_FRICTION_ANALYSIS = os.getenv("AGENT_FRICTION_ANALYSIS", "true").lower() == "true"
+USE_FRICTION_ANALYSIS = _env_bool("AGENT_FRICTION_ANALYSIS", "true")
 
 # ====================================================================
 # Memoria Persistente (P0)
@@ -181,7 +225,7 @@ USE_FRICTION_ANALYSIS = os.getenv("AGENT_FRICTION_ANALYSIS", "true").lower() == 
 # Garante que o modelo SEMPRE tem contexto de memorias, mesmo se nao chamar tools
 # ATIVO por default: feature core do agente, kill switch para rollback
 # Para desativar: AGENT_AUTO_MEMORY_INJECTION=false
-USE_AUTO_MEMORY_INJECTION = os.getenv("AGENT_AUTO_MEMORY_INJECTION", "true").lower() == "true"
+USE_AUTO_MEMORY_INJECTION = _env_bool("AGENT_AUTO_MEMORY_INJECTION", "true")
 
 # Threshold minimo de similaridade para injecao de memorias semanticas
 # Memorias com score abaixo deste valor NAO sao injetadas (Tier 2)
@@ -192,7 +236,7 @@ USE_AUTO_MEMORY_INJECTION = os.getenv("AGENT_AUTO_MEMORY_INJECTION", "true").low
 # embedding — recalibrar com o harness do relatorio
 # precision_at_k_baseline_2026-06-10.md ao trocar VOYAGE_MEMORY_MODEL
 # (o 0.55 herdado matou o retrieval por semanas; nao repetir).
-MEMORY_INJECTION_MIN_SIMILARITY = float(os.getenv("AGENT_MEMORY_MIN_SIMILARITY", "0.40"))
+MEMORY_INJECTION_MIN_SIMILARITY = _env_float("AGENT_MEMORY_MIN_SIMILARITY", "0.40")
 
 # User.xml Pointer (v2.2, 2026-04-12) — Camada 2 da Mudanca 4
 # Quando user.xml > THRESHOLD e modelo tem budget finito (Sonnet/Haiku),
@@ -205,8 +249,8 @@ MEMORY_INJECTION_MIN_SIMILARITY = float(os.getenv("AGENT_MEMORY_MIN_SIMILARITY",
 # corretamente (verificar via logs [MEMORY_INJECT] e amostras reais).
 # Camada 1 (guidance no prompt gerador, em pattern_analyzer.py) e a
 # solucao de causa raiz — este ponteiro cobre periodo de transicao.
-USE_USER_XML_POINTER = os.getenv("AGENT_USER_XML_POINTER", "false").lower() == "true"
-USER_XML_POINTER_THRESHOLD = int(os.getenv("AGENT_USER_XML_POINTER_THRESHOLD", "3000"))
+USE_USER_XML_POINTER = _env_bool("AGENT_USER_XML_POINTER", "false")
+USER_XML_POINTER_THRESHOLD = _env_int("AGENT_USER_XML_POINTER_THRESHOLD", "3000")
 
 # F6 PAD-CTX (2026-06-10): cap de blocos FIXOS do hook (tier1 + user_rules).
 # Evidencia tripla PROD (users 1/18/82): user_rules 6.2K + tier1 7.6-9.1K
@@ -219,7 +263,7 @@ USER_XML_POINTER_THRESHOLD = int(os.getenv("AGENT_USER_XML_POINTER_THRESHOLD", "
 # os blocos fixos INTEGRAIS (sem destilado/ponteiro). NOTA (review F6): a
 # exclusao dos paths Tier 1 do canal <user_rules> (fix da dupla injecao) e
 # INCONDICIONAL — nao volta com a flag off; o conteudo segue integro no Tier 1.
-AGENT_FIXED_BLOCKS_CAP = os.getenv("AGENT_FIXED_BLOCKS_CAP", "true").lower() == "true"
+AGENT_FIXED_BLOCKS_CAP = _env_bool("AGENT_FIXED_BLOCKS_CAP", "true")
 
 # F6 PAD-CTX (2026-06-10, decisao Rafael "granularidade por necessidade"):
 # directives ORGANICAS (heuristicas/protocolos nivel 5 por effective_count)
@@ -229,7 +273,7 @@ AGENT_FIXED_BLOCKS_CAP = os.getenv("AGENT_FIXED_BLOCKS_CAP", "true").lower() == 
 # Constitucional FICA fixa. Tambem elimina por construcao a dupla injecao
 # directive×tier2 (mesma memoria podia entrar nos 2 canais no mesmo payload).
 # Kill-switch: AGENT_DIRECTIVES_INTENT_ONLY=false restaura o bloco completo.
-AGENT_DIRECTIVES_INTENT_ONLY = os.getenv("AGENT_DIRECTIVES_INTENT_ONLY", "true").lower() == "true"
+AGENT_DIRECTIVES_INTENT_ONLY = _env_bool("AGENT_DIRECTIVES_INTENT_ONLY", "true")
 
 # Operational Directives (v2.2, 2026-04-12) — Mudanca 1
 # Promove heuristicas empresa nivel 5 (importance >= 0.7) de contexto
@@ -242,65 +286,63 @@ AGENT_DIRECTIVES_INTENT_ONLY = os.getenv("AGENT_DIRECTIVES_INTENT_ONLY", "true")
 # a memoria aparece no prompt. Solucao deterministica (zero LLM).
 # Inspirado na arquitetura CLAUDE.md do Claude Code (setting_sources).
 # Default false: ativar apos revisao manual das candidatas filtradas.
-USE_OPERATIONAL_DIRECTIVES = os.getenv("AGENT_OPERATIONAL_DIRECTIVES", "false").lower() == "true"
-MANDATORY_IMPORTANCE_THRESHOLD = float(os.getenv("AGENT_MANDATORY_IMPORTANCE_THRESHOLD", "0.7"))
-MANDATORY_MAX_COUNT = int(os.getenv("AGENT_MANDATORY_MAX_COUNT", "5"))
+USE_OPERATIONAL_DIRECTIVES = _env_bool("AGENT_OPERATIONAL_DIRECTIVES", "false")
+MANDATORY_IMPORTANCE_THRESHOLD = _env_float("AGENT_MANDATORY_IMPORTANCE_THRESHOLD", "0.7")
+MANDATORY_MAX_COUNT = _env_int("AGENT_MANDATORY_MAX_COUNT", "5")
 
 # Consolidacao periodica de memorias via Sonnet
 # Quando usuario excede thresholds, consolida memorias redundantes em resumos compactos
 # Custo: ~$0.006 por consolidacao (~4K input + ~800 output Sonnet)
 # Frequencia: ~1x por semana por usuario ativo
 # ATIVO por default: mantem memorias compactas sem intervencao manual
-USE_MEMORY_CONSOLIDATION = os.getenv("AGENT_MEMORY_CONSOLIDATION", "true").lower() == "true"
+USE_MEMORY_CONSOLIDATION = _env_bool("AGENT_MEMORY_CONSOLIDATION", "true")
 
 # Thresholds para trigger de consolidacao
 # Consolida quando: total_arquivos > FILES OU total_chars > CHARS
-MEMORY_CONSOLIDATION_THRESHOLD_FILES = int(os.getenv("AGENT_MEMORY_CONSOLIDATION_FILES", "15"))
-MEMORY_CONSOLIDATION_THRESHOLD_CHARS = int(os.getenv("AGENT_MEMORY_CONSOLIDATION_CHARS", "6000"))
+MEMORY_CONSOLIDATION_THRESHOLD_FILES = _env_int("AGENT_MEMORY_CONSOLIDATION_FILES", "15")
+MEMORY_CONSOLIDATION_THRESHOLD_CHARS = _env_int("AGENT_MEMORY_CONSOLIDATION_CHARS", "6000")
 
 # Minimo de arquivos em um diretorio para ser candidato a consolidacao
-MEMORY_CONSOLIDATION_MIN_GROUP = int(os.getenv("AGENT_MEMORY_CONSOLIDATION_MIN_GROUP", "3"))
+MEMORY_CONSOLIDATION_MIN_GROUP = _env_int("AGENT_MEMORY_CONSOLIDATION_MIN_GROUP", "3")
 
 # Cold tier — sanitizacao automatica de memorias ineficazes
 # Move para cold (nao injetadas, mas buscaveis) memorias com eficacia abaixo do threshold
 # Eficacia = effective_count / usage_count (0.10 = 10%)
 # Criterio: usage >= MIN_USAGE E eficacia < MAX_EFFICACY
 # Rollback: AGENT_COLD_MOVE=false ou ajustar thresholds sem deploy
-USE_COLD_MOVE = os.getenv("AGENT_COLD_MOVE", "true").lower() == "true"
-COLD_MOVE_MIN_USAGE = int(os.getenv("AGENT_COLD_MOVE_MIN_USAGE", "20"))
-COLD_MOVE_MAX_EFFICACY = float(os.getenv("AGENT_COLD_MOVE_MAX_EFFICACY", "0.10"))
+USE_COLD_MOVE = _env_bool("AGENT_COLD_MOVE", "true")
+COLD_MOVE_MIN_USAGE = _env_int("AGENT_COLD_MOVE_MIN_USAGE", "20")
+COLD_MOVE_MAX_EFFICACY = _env_float("AGENT_COLD_MOVE_MAX_EFFICACY", "0.10")
 
 # Sanitizar memorias empresa (user_id=0) com mesmos criterios
 # Desativar se empresa mover memorias demais: AGENT_COLD_MOVE_EMPRESA=false
-USE_COLD_MOVE_EMPRESA = os.getenv("AGENT_COLD_MOVE_EMPRESA", "true").lower() == "true"
+USE_COLD_MOVE_EMPRESA = _env_bool("AGENT_COLD_MOVE_EMPRESA", "true")
 
 # Garbage collection de memorias cold > 90 dias (MEMORY_PROTOCOL.md)
 # Remove permanentemente memorias ja classificadas como cold sem atividade por 90+ dias
 # Independente de USE_COLD_MOVE — pausar classificacao nao impede limpeza de memorias ja frias
 # Rollback: AGENT_COLD_GC=false
-USE_COLD_GC = os.getenv("AGENT_COLD_GC", "true").lower() == "true"
-COLD_GC_MAX_AGE_DAYS = int(os.getenv("AGENT_COLD_GC_MAX_AGE_DAYS", "90"))
+USE_COLD_GC = _env_bool("AGENT_COLD_GC", "true")
+COLD_GC_MAX_AGE_DAYS = _env_int("AGENT_COLD_GC_MAX_AGE_DAYS", "90")
 
 # Merge inteligente de memorias empresa via Sonnet (substitui append cego)
 # Quando true: _try_enrich_existing() usa Sonnet para fundir old+new em versao unica
 # Quando false: fallback para append legado (old + "<!-- Enriquecido em -->" + new)
 # Custo: ~$0.002 por merge. Frequencia: ~1-3x/semana (so quando enrichment dispara)
 # Rollback instantaneo: AGENT_MERGE_ENRICHMENT=false
-USE_MERGE_ENRICHMENT = os.getenv("AGENT_MERGE_ENRICHMENT", "true").lower() == "true"
+USE_MERGE_ENRICHMENT = _env_bool("AGENT_MERGE_ENRICHMENT", "true")
 
 # Path deterministico da memoria empresa (T0.4 F0 arquitetura-conhecimento)
 # Quando true (default): valida dominio contra enum de 12 valores em _build_knowledge_path
 #   + dedup por embedding de TITULO antes de criar path novo em _save_conhecimentos_v3.
 # Quando false: comportamento legado (dominio texto-livre, sem dedup por titulo).
 # Rollback instantaneo: AGENT_DETERMINISTIC_MEMORY_PATH=false
-USE_DETERMINISTIC_MEMORY_PATH = os.getenv(
-    "AGENT_DETERMINISTIC_MEMORY_PATH", "true"
-).lower() == "true"
+USE_DETERMINISTIC_MEMORY_PATH = _env_bool("AGENT_DETERMINISTIC_MEMORY_PATH", "true")
 
 # Briefing Inter-Sessão — injeta eventos entre sessões (erros Odoo, imports, alertas de memória)
 # Queries SQL leves, zero custo LLM. Injetado como Tier 0b no início da sessão.
 # Default true (env AGENT_INTERSESSION_BRIEFING)
-USE_INTERSESSION_BRIEFING = os.getenv("AGENT_INTERSESSION_BRIEFING", "true").lower() == "true"
+USE_INTERSESSION_BRIEFING = _env_bool("AGENT_INTERSESSION_BRIEFING", "true")
 
 # ====================================================================
 # RAG Semantico (Fase 4)
@@ -316,7 +358,7 @@ USE_INTERSESSION_BRIEFING = os.getenv("AGENT_INTERSESSION_BRIEFING", "true").low
 # Ambas devem estar true para busca semântica de sessões funcionar end-to-end.
 # UNIFICADO (GAP 5): Usa mesma env var que config.py (SESSION_SEMANTIC_SEARCH) para evitar
 # dessincronização entre write e read path ao setar apenas uma env var.
-USE_SESSION_TURN_EMBEDDING = os.getenv("SESSION_SEMANTIC_SEARCH", "true").lower() == "true"
+USE_SESSION_TURN_EMBEDDING = _env_bool("SESSION_SEMANTIC_SEARCH", "true")
 
 # Alias legado (compatibilidade com código existente que importa USE_SESSION_SEMANTIC_SEARCH)
 USE_SESSION_SEMANTIC_SEARCH = USE_SESSION_TURN_EMBEDDING
@@ -371,7 +413,7 @@ TEAMS_DEFAULT_MODEL = os.getenv("TEAMS_DEFAULT_MODEL", "claude-sonnet-4-6")
 # Modo assincrono para o bot do Teams
 # Quando true: retorna task_id imediatamente, processa em daemon thread, Azure Function faz polling
 # Quando false: fluxo sincrono legado (resposta direta na mesma request)
-TEAMS_ASYNC_MODE = os.getenv("TEAMS_ASYNC_MODE", "true").lower() == "true"
+TEAMS_ASYNC_MODE = _env_bool("TEAMS_ASYNC_MODE", "true")
 
 # Timeout para AskUserQuestion no Teams (segundos)
 # O usuario tem este tempo para responder o Adaptive Card antes de timeout.
@@ -380,20 +422,20 @@ TEAMS_ASYNC_MODE = os.getenv("TEAMS_ASYNC_MODE", "true").lower() == "true"
 # -> subido para 600s (10 min). SEGURO porque a espera no Teams agora e ASSINCRONA
 # (permissions.py: async_wait_for_answer) e NAO bloqueia mais o event loop do pool
 # durante a espera. Teams nao tem teto absoluto de stream (DC-9).
-TEAMS_ASK_USER_TIMEOUT = int(os.getenv("TEAMS_ASK_USER_TIMEOUT", "600"))
+TEAMS_ASK_USER_TIMEOUT = _env_int("TEAMS_ASK_USER_TIMEOUT", "600")
 
 # Progressive streaming: flush texto parcial ao DB durante processamento
 # Quando true: polling retorna resposta_parcial enquanto status='processing'
 # Quando false: comportamento atual (resposta so no final)
-TEAMS_PROGRESSIVE_STREAMING = os.getenv("TEAMS_PROGRESSIVE_STREAMING", "true").lower() == "true"
+TEAMS_PROGRESSIVE_STREAMING = _env_bool("TEAMS_PROGRESSIVE_STREAMING", "true")
 
 # Intervalo em segundos entre flushes de texto parcial ao DB
-TEAMS_STREAM_FLUSH_INTERVAL = float(os.getenv("TEAMS_STREAM_FLUSH_INTERVAL", "4.0"))
+TEAMS_STREAM_FLUSH_INTERVAL = _env_float("TEAMS_STREAM_FLUSH_INTERVAL", "4.0")
 
 # Smart model routing no Teams: DESLIGADO desde 2026-06-16 (Teams e Sonnet fixo, nao
 # ha o que rotear; alternar modelo so trazia churn de cache). Religar so faz sentido
 # junto com TEAMS_DEFAULT_MODEL=claude-opus-4-8.
-TEAMS_SMART_MODEL_ROUTING = os.getenv("TEAMS_SMART_MODEL_ROUTING", "false").lower() == "true"
+TEAMS_SMART_MODEL_ROUTING = _env_bool("TEAMS_SMART_MODEL_ROUTING", "false")
 
 # Modelo rápido para mensagens simples (usado quando SMART_MODEL_ROUTING=true)
 TEAMS_FAST_MODEL = os.getenv("TEAMS_FAST_MODEL", "claude-sonnet-4-6")
@@ -406,9 +448,7 @@ TEAMS_EFFORT_LEVEL = os.getenv("TEAMS_EFFORT_LEVEL", "high")
 # Patterns compartilhados via app/agente/sdk/model_router.py.
 # Motivacao: 21 sessoes > $10 USD tinham padrao estruturado que podia ir pra Sonnet.
 # Desabilitar via env var: AGENT_WEB_SMART_MODEL_ROUTING=false
-USE_WEB_SMART_MODEL_ROUTING = os.getenv(
-    "AGENT_WEB_SMART_MODEL_ROUTING", "true"
-).lower() == "true"
+USE_WEB_SMART_MODEL_ROUTING = _env_bool("AGENT_WEB_SMART_MODEL_ROUTING", "true")
 
 # Modelo rapido para Web quando router decide rebaixar.
 # Default Sonnet 4.6 (mesmo do Teams). Rollback: deixar Opus setando igual.
@@ -421,9 +461,7 @@ WEB_FAST_MODEL = os.getenv("AGENT_WEB_FAST_MODEL", "claude-sonnet-4-6")
 # cai no fluxo normal do agente (R-EXEC-6 fallback). Implementacao:
 # app/agente/sdk/baseline_fastpath.py (Teams: services.py; Web: routes/chat.py).
 # Rollback total: AGENT_BASELINE_FASTPATH=false.
-AGENT_BASELINE_FASTPATH = os.getenv(
-    "AGENT_BASELINE_FASTPATH", "true"
-).lower() == "true"
+AGENT_BASELINE_FASTPATH = _env_bool("AGENT_BASELINE_FASTPATH", "true")
 
 # FASE 3 do mesmo plano (2026-06-08): "vincular/desvincular pedido X na nota Y"
 # (Gabriella, Teams) resolvido por roteamento DETERMINISTICO (regex N0 + Haiku N1)
@@ -432,18 +470,14 @@ AGENT_BASELINE_FASTPATH = os.getenv(
 # ambigua) ou falha cai no fluxo LLM normal (N2). Impl: app/agente/sdk/
 # vinculacao_fastpath.py + app/recebimento/services/vinculacao_rapida_service.py.
 # Rollback total: AGENT_VINCULACAO_FASTPATH=false.
-AGENT_VINCULACAO_FASTPATH = os.getenv(
-    "AGENT_VINCULACAO_FASTPATH", "true"
-).lower() == "true"
+AGENT_VINCULACAO_FASTPATH = _env_bool("AGENT_VINCULACAO_FASTPATH", "true")
 
 # Fase A teams-melhorias (2026-06-10): fast-path 'vincular CODIGO' — pareamento
 # de identidade Teams <-> Web por codigo de uso unico (TTL 10 min) gerado na
 # tela /auth/vincular-teams. Meta-comando: intercepta ANTES de criar sessao e
 # NAO chama LLM. Impl: app/agente/sdk/vincular_teams_fastpath.py (Teams only).
 # Rollback total: AGENT_TEAMS_VINCULO_FASTPATH=false.
-AGENT_TEAMS_VINCULO_FASTPATH = os.getenv(
-    "AGENT_TEAMS_VINCULO_FASTPATH", "true"
-).lower() == "true"
+AGENT_TEAMS_VINCULO_FASTPATH = _env_bool("AGENT_TEAMS_VINCULO_FASTPATH", "true")
 
 # Fase C teams-melhorias (2026-06-10): entrega PROATIVA de respostas do Teams.
 # Quando a task completa apos o polling da Azure Function morrer (5 min), o
@@ -451,9 +485,7 @@ AGENT_TEAMS_VINCULO_FASTPATH = os.getenv(
 # continue_conversation. Requer env TEAMS_FUNCTION_URL configurada (sem ela,
 # no-op com log). Claim atomico em teams_tasks.delivered_via evita duplicata.
 # Impl: app/teams/proactive.py. Rollback total: TEAMS_PROACTIVE_DELIVERY=false.
-TEAMS_PROACTIVE_DELIVERY = os.getenv(
-    "TEAMS_PROACTIVE_DELIVERY", "true"
-).lower() == "true"
+TEAMS_PROACTIVE_DELIVERY = _env_bool("TEAMS_PROACTIVE_DELIVERY", "true")
 
 # Reconciliador de entregas (2026-06-12): rede de seguranca que re-entrega tasks
 # finais (completed/error) que nunca chegaram ao Teams (delivered_via IS NULL).
@@ -463,12 +495,12 @@ TEAMS_PROACTIVE_DELIVERY = os.getenv(
 # scheduler a cada ~60s) re-tenta a entrega das orfas criadas entre [polling
 # morto] e [teto de idade], sem duplicar (claim atomico em delivered_via).
 # Rollback: TEAMS_RECONCILE_ENABLED=false.
-TEAMS_RECONCILE_ENABLED = os.getenv("TEAMS_RECONCILE_ENABLED", "true").lower() == "true"
+TEAMS_RECONCILE_ENABLED = _env_bool("TEAMS_RECONCILE_ENABLED", "true")
 # Teto de idade (min) da orfa para re-entrega: acima disso a resposta perde
 # contexto (e a conversation_reference pode estar velha) -> nao re-entrega.
-TEAMS_RECONCILE_MAX_AGE_MIN = int(os.getenv("TEAMS_RECONCILE_MAX_AGE_MIN", "360"))
+TEAMS_RECONCILE_MAX_AGE_MIN = _env_int("TEAMS_RECONCILE_MAX_AGE_MIN", "360")
 # Maximo de orfas processadas por ciclo (evita longo no scheduler).
-TEAMS_RECONCILE_LIMIT = int(os.getenv("TEAMS_RECONCILE_LIMIT", "50"))
+TEAMS_RECONCILE_LIMIT = _env_int("TEAMS_RECONCILE_LIMIT", "50")
 
 # ====================================================================
 # Session Lifecycle (Fase 2, 2026-04-21)
@@ -478,13 +510,13 @@ TEAMS_RECONCILE_LIMIT = int(os.getenv("TEAMS_RECONCILE_LIMIT", "50"))
 # sessoes de 9 dias (caso Marcus, $151.80) ou 7h (caso Gabriella, $27.88).
 # Usuario idle por > TTL: retomar cria nova session_id (cache reinicia limpo).
 # Rollback para comportamento anterior: TEAMS_SESSION_TTL_HOURS=4
-TEAMS_SESSION_TTL_HOURS = int(os.getenv("TEAMS_SESSION_TTL_HOURS", "2"))
+TEAMS_SESSION_TTL_HOURS = _env_int("TEAMS_SESSION_TTL_HOURS", "2")
 
 # Idle threshold para sessoes Web. Novo na Fase 2.
 # Diferente do Teams: Web nao rotaciona automaticamente — apenas emite SSE
 # 'session_rotated' com novo session_id; frontend troca no localStorage.
 # Disabled (valor 0): comportamento legado (sessao persiste indefinidamente).
-WEB_SESSION_IDLE_HOURS = int(os.getenv("AGENT_WEB_SESSION_IDLE_HOURS", "2"))
+WEB_SESSION_IDLE_HOURS = _env_int("AGENT_WEB_SESSION_IDLE_HOURS", "2")
 
 # Retomada ADAPTATIVA de sessao idle (caso conversa-nacom 2026-06-10):
 # transcript <= MAX_KB -> NAO rotaciona (resume real do SDK; cache write
@@ -492,13 +524,13 @@ WEB_SESSION_IDLE_HOURS = int(os.getenv("AGENT_WEB_SESSION_IDLE_HOURS", "2"))
 # mas leva <sessao_anterior_rotacionada> com resumo M1 + cauda das ultimas
 # mensagens (TAIL_CHARS total; TAIL_MSG_CHARS por mensagem).
 # ROTATION_RESUME_MAX_KB=0 desliga a retomada sem rotacao (sempre rotaciona).
-AGENT_ROTATION_RESUME_MAX_KB = int(os.getenv("AGENT_ROTATION_RESUME_MAX_KB", "250"))
-AGENT_ROTATION_TAIL_CHARS = int(os.getenv("AGENT_ROTATION_TAIL_CHARS", "12000"))
-AGENT_ROTATION_TAIL_MSG_CHARS = int(os.getenv("AGENT_ROTATION_TAIL_MSG_CHARS", "3000"))
+AGENT_ROTATION_RESUME_MAX_KB = _env_int("AGENT_ROTATION_RESUME_MAX_KB", "250")
+AGENT_ROTATION_TAIL_CHARS = _env_int("AGENT_ROTATION_TAIL_CHARS", "12000")
+AGENT_ROTATION_TAIL_MSG_CHARS = _env_int("AGENT_ROTATION_TAIL_MSG_CHARS", "3000")
 
 # Feedback visual de tool calls: mostra "Consultando dados..." durante execução de tools
 # Desativar se causar flickering ou problemas visuais no Teams
-TEAMS_TOOL_STATUS_FEEDBACK = os.getenv("TEAMS_TOOL_STATUS_FEEDBACK", "true").lower() == "true"
+TEAMS_TOOL_STATUS_FEEDBACK = _env_bool("TEAMS_TOOL_STATUS_FEEDBACK", "true")
 
 # ====================================================================
 # Hooks Expandidos (P3)
@@ -509,7 +541,7 @@ TEAMS_TOOL_STATUS_FEEDBACK = os.getenv("TEAMS_TOOL_STATUS_FEEDBACK", "true").low
 # UserPromptSubmit: pode enriquecer o prompt do usuario antes de processar
 # ATIVO por default: overhead minimo (apenas logging).
 # Para desativar: AGENT_EXPANDED_HOOKS=false
-USE_EXPANDED_HOOKS = os.getenv("AGENT_EXPANDED_HOOKS", "true").lower() == "true"
+USE_EXPANDED_HOOKS = _env_bool("AGENT_EXPANDED_HOOKS", "true")
 
 # ====================================================================
 # Stderr Callback (SDK Debug Output)
@@ -519,14 +551,14 @@ USE_EXPANDED_HOOKS = os.getenv("AGENT_EXPANDED_HOOKS", "true").lower() == "true"
 # para o debug panel no frontend (admin-only, requer debug_mode=true).
 # Quando false: stderr capturado apenas em ProcessError (comportamento original).
 # Desativar se causar overhead perceptível no streaming.
-USE_STDERR_CALLBACK = os.getenv("AGENT_STDERR_CALLBACK", "true").lower() == "true"
+USE_STDERR_CALLBACK = _env_bool("AGENT_STDERR_CALLBACK", "true")
 
 # ====================================================================
 # Async Streaming (migração incremental)
 # ====================================================================
 # Quando true: usa implementação async nativa para streaming SSE
 # Quando false: usa bridge Thread+Queue+asyncio.run (legado)
-USE_ASYNC_STREAMING = os.getenv("ASYNC_STREAMING", "true").lower() == "true"
+USE_ASYNC_STREAMING = _env_bool("ASYNC_STREAMING", "true")
 # ====================================================================
 # Persistent SDK Client (migração query() → ClaudeSDKClient)
 # ====================================================================
@@ -537,14 +569,14 @@ USE_ASYNC_STREAMING = os.getenv("ASYNC_STREAMING", "true").lower() == "true"
 # Quando false: usa query() standalone (status quo — spawn + destroy por turno)
 # Rollback instantâneo: AGENT_PERSISTENT_SDK_CLIENT=false + restart
 # Ref: .claude/references/ROADMAP_SDK_CLIENT.md
-USE_PERSISTENT_SDK_CLIENT = os.getenv("AGENT_PERSISTENT_SDK_CLIENT", "true").lower() == "true"
+USE_PERSISTENT_SDK_CLIENT = _env_bool("AGENT_PERSISTENT_SDK_CLIENT", "true")
 
 # Timeout em segundos para idle clients no pool (disconnect automático)
 # Libera recursos de clients sem atividade por este período
-PERSISTENT_CLIENT_IDLE_TIMEOUT = int(os.getenv("AGENT_CLIENT_IDLE_TIMEOUT", "900"))  # 15 min
+PERSISTENT_CLIENT_IDLE_TIMEOUT = _env_int("AGENT_CLIENT_IDLE_TIMEOUT", "900")  # 15 min
 
 # Intervalo em segundos entre limpezas de clients idle
-PERSISTENT_CLIENT_CLEANUP_INTERVAL = int(os.getenv("AGENT_CLIENT_CLEANUP_INTERVAL", "60"))  # 1 min
+PERSISTENT_CLIENT_CLEANUP_INTERVAL = _env_int("AGENT_CLIENT_CLEANUP_INTERVAL", "60")  # 1 min
 
 # ====================================================================
 # AskUserQuestion cross-worker (Redis-backed)
@@ -556,9 +588,7 @@ PERSISTENT_CLIENT_CLEANUP_INTERVAL = int(os.getenv("AGENT_CLIENT_CLEANUP_INTERVA
 # Quando true: usa Redis SETEX + PUBLISH/SUBSCRIBE para sincronizar workers.
 # Quando false: comportamento legacy (memory-only, falha cross-worker).
 # Rollback instantaneo: AGENT_REDIS_PENDING_QUESTIONS=false + restart.
-USE_REDIS_PENDING_QUESTIONS = os.getenv(
-    "AGENT_REDIS_PENDING_QUESTIONS", "true"
-).lower() == "true"
+USE_REDIS_PENDING_QUESTIONS = _env_bool("AGENT_REDIS_PENDING_QUESTIONS", "true")
 
 # ====================================================================
 # Custom System Prompt (Prompt Architecture v2)
@@ -569,7 +599,7 @@ USE_REDIS_PENDING_QUESTIONS = os.getenv(
 # Quando false: system_prompt = {preset: claude_code, append: system_prompt.md} (original)
 # ATIVO: preset_operacional.md substitui claude_code preset
 # Rollback instantaneo: AGENT_CUSTOM_SYSTEM_PROMPT=false
-USE_CUSTOM_SYSTEM_PROMPT = os.getenv("AGENT_CUSTOM_SYSTEM_PROMPT", "true").lower() == "true"
+USE_CUSTOM_SYSTEM_PROMPT = _env_bool("AGENT_CUSTOM_SYSTEM_PROMPT", "true")
 
 # ====================================================================
 # Debug Mode (Admin)
@@ -578,7 +608,7 @@ USE_CUSTOM_SYSTEM_PROMPT = os.getenv("AGENT_CUSTOM_SYSTEM_PROMPT", "true").lower
 # Debug Mode — permite admin desbloquear tabelas internas e memorias cross-user
 # Controlado por toggle na UI, validado server-side (perfil=administrador)
 # Default true: feature disponivel, mas requer ativacao explicita pelo admin
-USE_DEBUG_MODE = os.getenv("AGENT_DEBUG_MODE", "true").lower() == "true"
+USE_DEBUG_MODE = _env_bool("AGENT_DEBUG_MODE", "true")
 
 # ====================================================================
 # Improvement Dialogue (Loop Agent SDK <-> Claude Code)
@@ -589,17 +619,17 @@ USE_DEBUG_MODE = os.getenv("AGENT_DEBUG_MODE", "true").lower() == "true"
 # Claude Code (D8 cron diario) avalia, implementa e responde.
 # Agent SDK verifica respostas via intersession briefing.
 # Default false: ativacao gradual apos testes.
-USE_IMPROVEMENT_DIALOGUE = os.getenv("AGENT_IMPROVEMENT_DIALOGUE", "false").lower() == "true"
+USE_IMPROVEMENT_DIALOGUE = _env_bool("AGENT_IMPROVEMENT_DIALOGUE", "false")
 
 # F4.1 PAD-CTX (2026-06-09): controle SEPARADO para a INJECAO de
 # improvement_responses no briefing de boot (AGENT_IMPROVEMENT_DIALOGUE segue
 # governando apenas o DIALOGO D8). Default OFF — responses chegam ao agente
 # via excecao condicional por skill (F4.5, PreToolUse Skill) ou tela admin.
 # Lida via os.getenv no intersession_briefing (runtime, testavel via setenv).
-AGENT_IMPROVEMENT_INJECT_BOOT = os.getenv("AGENT_IMPROVEMENT_INJECT_BOOT", "false").lower() == "true"
+AGENT_IMPROVEMENT_INJECT_BOOT = _env_bool("AGENT_IMPROVEMENT_INJECT_BOOT", "false")
 
 # Minimo de mensagens na sessao para gerar sugestoes de melhoria
-IMPROVEMENT_DIALOGUE_MIN_MESSAGES = int(os.getenv("AGENT_IMPROVEMENT_MIN_MESSAGES", "3"))
+IMPROVEMENT_DIALOGUE_MIN_MESSAGES = _env_int("AGENT_IMPROVEMENT_MIN_MESSAGES", "3")
 
 # ====================================================================
 # User Rules Channel (Memory v3 — 3 canais de memoria)
@@ -612,52 +642,52 @@ IMPROVEMENT_DIALOGUE_MIN_MESSAGES = int(os.getenv("AGENT_IMPROVEMENT_MIN_MESSAGE
 # Default ON (2026-06-02): canal aditivo e quase inocuo ate a promocao (Fase 2 do
 # loop corretivo) encher o canal — quem promove a 'mandatory' passa pelo gate R9+A3.
 # Manter ON evita a feature virar zumbi (construida, desligada e esquecida).
-USE_USER_RULES_CHANNEL = os.getenv("AGENT_USER_RULES_CHANNEL", "true").lower() == "true"
+USE_USER_RULES_CHANNEL = _env_bool("AGENT_USER_RULES_CHANNEL", "true")
 
 # Cap de regras no canal duro <user_rules>, ordenado por correction_count DESC.
 # Adesao a instrucoes despenca >100-150 regras (IFScale arXiv:2507.11538) — o canal
 # duro deve ser pequeno e curado. Ver eixos/G-memoria-pessoal.md + plano loop corretivo.
-MANDATORY_RULES_MAX_COUNT = int(os.getenv("AGENT_MANDATORY_RULES_MAX_COUNT", "12"))
+MANDATORY_RULES_MAX_COUNT = _env_int("AGENT_MANDATORY_RULES_MAX_COUNT", "12")
 
 # Fase 2 do loop corretivo — promocao de correcao PESSOAL recorrente a 'mandatory'.
 # Roda no batch DIARIO (modulo 32 directive_promotion), nao em script one-shot — assim a
 # licao do usuario e promovida automaticamente e nao fica esquecida. Correcao vem do usuario
 # (feedback humano confiavel); o filtro e a REINCIDENCIA (correction_count >= threshold),
 # nao o gate Odoo. Default ON (evita feature zumbi) — seguro: idempotente + cap na injecao.
-AGENT_CORRECTION_PROMOTION = os.getenv("AGENT_CORRECTION_PROMOTION", "true").lower() == "true"
-AGENT_CORRECTION_PROMOTION_THRESHOLD = int(os.getenv("AGENT_CORRECTION_PROMOTION_THRESHOLD", "2"))
+AGENT_CORRECTION_PROMOTION = _env_bool("AGENT_CORRECTION_PROMOTION", "true")
+AGENT_CORRECTION_PROMOTION_THRESHOLD = _env_int("AGENT_CORRECTION_PROMOTION_THRESHOLD", "2")
 
 # Fase 3.4A do loop corretivo — posiciona <user_rules> no TOPO ABSOLUTO do contexto
 # injetado (antes de <user_memories>), nao mais na cauda (apos o footer). A Fase 0
 # (AgingBench) provou que a regra no topo rende muito mais (P3=89% vs P1=0%). Default ON:
 # e o coracao da cura de RETRIEVAL; aditivo (so reordena, nao adiciona/remove conteudo) e
 # reversivel por flag. OFF reproduz o comportamento legado (regras na cauda).
-USE_USER_RULES_TOP = os.getenv("AGENT_USER_RULES_TOP", "true").lower() == "true"
+USE_USER_RULES_TOP = _env_bool("AGENT_USER_RULES_TOP", "true")
 
 # Fase 3.4B do loop corretivo — soma um eixo de RECORRENCIA (correction_count) ao composite
 # score de ranking das memorias contextuais. Default OFF: hoje correction_count e ~0 em
 # quase todas as memorias (so o loop o popula com o tempo); ligar antes disso apenas
 # redistribuiria os pesos de decay/importance (regressao silenciosa). Ligar so depois que o
 # contador estiver populado. OFF = formula historica EXATA preservada.
-USE_RECURRENCE_SCORE = os.getenv("AGENT_RECURRENCE_SCORE", "false").lower() == "true"
+USE_RECURRENCE_SCORE = _env_bool("AGENT_RECURRENCE_SCORE", "false")
 
 # Fase 3.3 do loop corretivo — medicao POR OUTCOME (harmful/helpful), desacoplada do eco
 # textual (effective_count). harmful++ = regra 'mandatory' estava ativa e o MESMO erro
 # reincidiu (a regra dura falhou em prevenir); helpful++ = regra 'mandatory' ativa e SEM
 # reincidencia por K injecoes. Default ON: so escreve em colunas NOVAS (harmful_count/
 # helpful_count) — aditivo e seguro; alimenta o demote (3.6) e o painel de adesao (3.7).
-AGENT_OUTCOME_TRACKING = os.getenv("AGENT_OUTCOME_TRACKING", "true").lower() == "true"
+AGENT_OUTCOME_TRACKING = _env_bool("AGENT_OUTCOME_TRACKING", "true")
 # Nº de injecoes da regra dura SEM reincidencia (harmful_count==0) para creditar helpful_count
 # (1 credito a cada K injecoes limpas — bounded). Conservador por padrao.
-AGENT_OUTCOME_HELPFUL_K_SESSIONS = int(os.getenv("AGENT_OUTCOME_HELPFUL_K_SESSIONS", "3"))
+AGENT_OUTCOME_HELPFUL_K_SESSIONS = _env_int("AGENT_OUTCOME_HELPFUL_K_SESSIONS", "3")
 
 # Fase 3.6 do loop corretivo — DEMOTE de regra dura que reincidiu repetidas vezes mesmo
 # sendo 'mandatory' (harmful_count >= threshold). Rebaixa priority->'contextual' + is_cold=True
 # (puxa de circulacao pendente de reescrita humana). Flap-free: a promocao filtra is_cold==False.
 # Default OFF (DESVIO consciente da regra "flags ON"): demote REMOVE uma regra explicita do
 # usuario do canal duro — efeito potencialmente surpreendente; validar o criterio antes de ligar.
-AGENT_CORRECTION_DEMOTION = os.getenv("AGENT_CORRECTION_DEMOTION", "false").lower() == "true"
-AGENT_OUTCOME_HARMFUL_THRESHOLD = int(os.getenv("AGENT_OUTCOME_HARMFUL_THRESHOLD", "2"))
+AGENT_CORRECTION_DEMOTION = _env_bool("AGENT_CORRECTION_DEMOTION", "false")
+AGENT_OUTCOME_HARMFUL_THRESHOLD = _env_int("AGENT_OUTCOME_HARMFUL_THRESHOLD", "2")
 
 # Fase 3.5 do loop corretivo — HARD enforcement (PreToolUse) de invariantes DUROS FORMALIZADOS.
 # So bloqueia tool call cujo input contenha um token proibido declarado EXPLICITAMENTE por uma
@@ -667,7 +697,7 @@ AGENT_OUTCOME_HARMFUL_THRESHOLD = int(os.getenv("AGENT_OUTCOME_HARMFUL_THRESHOLD
 # fail-open e custo ~zero sem regras; hoje ha 0 regras com 'ENFORCE_DENY_SUBSTR:' em PROD,
 # entao ligar e NO-OP ate a 1a regra dura curada declarar um token. Expansao de deny-list
 # (ex: Odoo) CONDICIONADA a caso-prova. Rollback: AGENT_MANDATORY_HARD_ENFORCE=false.
-USE_MANDATORY_HARD_ENFORCE = os.getenv("AGENT_MANDATORY_HARD_ENFORCE", "true").lower() == "true"
+USE_MANDATORY_HARD_ENFORCE = _env_bool("AGENT_MANDATORY_HARD_ENFORCE", "true")
 
 # ====================================================================
 # Features SDK 0.1.60 — Subagent Transparency (2026-04-16)
@@ -676,37 +706,25 @@ USE_MANDATORY_HARD_ENFORCE = os.getenv("AGENT_MANDATORY_HARD_ENFORCE", "true").l
 # Rollback: setar AGENT_SUBAGENT_*=false + restart (sem redeploy).
 
 # #1 Endpoint admin debug forense — drill-down em subagentes de qualquer sessao
-USE_SUBAGENT_DEBUG_ENDPOINT = os.getenv(
-    "AGENT_SUBAGENT_DEBUG_ENDPOINT", "true"
-).lower() == "true"
+USE_SUBAGENT_DEBUG_ENDPOINT = _env_bool("AGENT_SUBAGENT_DEBUG_ENDPOINT", "true")
 
 # #3 Cost tracking granular por subagente — persiste em AgentSession.data JSONB
-USE_SUBAGENT_COST_GRANULAR = os.getenv(
-    "AGENT_SUBAGENT_COST_GRANULAR", "true"
-).lower() == "true"
+USE_SUBAGENT_COST_GRANULAR = _env_bool("AGENT_SUBAGENT_COST_GRANULAR", "true")
 
 # #5 Memory mining cross-subagent — pattern_analyzer inclui findings dos especialistas
-USE_SUBAGENT_MEMORY_MINING = os.getenv(
-    "AGENT_SUBAGENT_MEMORY_MINING", "true"
-).lower() == "true"
+USE_SUBAGENT_MEMORY_MINING = _env_bool("AGENT_SUBAGENT_MEMORY_MINING", "true")
 
 # #6 UI linha inline expansivel no chat
-USE_SUBAGENT_UI = os.getenv("AGENT_SUBAGENT_UI", "true").lower() == "true"
+USE_SUBAGENT_UI = _env_bool("AGENT_SUBAGENT_UI", "true")
 
 # #4 Validacao anti-alucinacao async (Haiku 4.5 score 0-100)
-USE_SUBAGENT_VALIDATION = os.getenv(
-    "AGENT_SUBAGENT_VALIDATION", "true"
-).lower() == "true"
+USE_SUBAGENT_VALIDATION = _env_bool("AGENT_SUBAGENT_VALIDATION", "true")
 
 # #4 Threshold de flag (score abaixo do qual dispara warning)
-SUBAGENT_VALIDATION_THRESHOLD = int(
-    os.getenv("AGENT_SUBAGENT_VALIDATION_THRESHOLD", "70")
-)
+SUBAGENT_VALIDATION_THRESHOLD = _env_int("AGENT_SUBAGENT_VALIDATION_THRESHOLD", "70")
 
 # #6 Admin override — permite admin ver PII raw em UI
-SUBAGENT_UI_RAW_FOR_ADMIN = os.getenv(
-    "AGENT_SUBAGENT_UI_RAW_FOR_ADMIN", "true"
-).lower() == "true"
+SUBAGENT_UI_RAW_FOR_ADMIN = _env_bool("AGENT_SUBAGENT_UI_RAW_FOR_ADMIN", "true")
 
 # ====================================================================
 # Subagent UI Enrichment (2026-05-14)
@@ -715,20 +733,20 @@ SUBAGENT_UI_RAW_FOR_ADMIN = os.getenv(
 # Rollback emergencial via env var no Render (sem redeploy).
 
 # P0.1 Modal de transcript (prompt + timeline + findings)
-USE_SUBAGENT_MODAL = os.getenv("USE_SUBAGENT_MODAL", "true").lower() == "true"
+USE_SUBAGENT_MODAL = _env_bool("USE_SUBAGENT_MODAL", "true")
 
 # P0.2 Estados visuais ricos (failed/stopped/validation_warning) +
 # P1.1 Correlacao parent_tool_use_id
-USE_SUBAGENT_RICH_STATES = os.getenv("USE_SUBAGENT_RICH_STATES", "true").lower() == "true"
+USE_SUBAGENT_RICH_STATES = _env_bool("USE_SUBAGENT_RICH_STATES", "true")
 
 # P0.3 Progresso ao vivo: tokens/duracao/last_tool no meta da linha
-USE_SUBAGENT_LIVE_PROGRESS = os.getenv("USE_SUBAGENT_LIVE_PROGRESS", "true").lower() == "true"
+USE_SUBAGENT_LIVE_PROGRESS = _env_bool("USE_SUBAGENT_LIVE_PROGRESS", "true")
 
 # P1.2 Rename/tag de subagent (Fase 2)
-USE_SUBAGENT_RENAME_TAG = os.getenv("USE_SUBAGENT_RENAME_TAG", "true").lower() == "true"
+USE_SUBAGENT_RENAME_TAG = _env_bool("USE_SUBAGENT_RENAME_TAG", "true")
 
 # P1.3 Download output_file JSONL (Fase 2)
-USE_SUBAGENT_OUTPUT_DOWNLOAD = os.getenv("USE_SUBAGENT_OUTPUT_DOWNLOAD", "true").lower() == "true"
+USE_SUBAGENT_OUTPUT_DOWNLOAD = _env_bool("USE_SUBAGENT_OUTPUT_DOWNLOAD", "true")
 
 # ====================================================================
 # SDK 0.1.64 — SessionStore (Fase B cutover: flag ON default)
@@ -754,16 +772,12 @@ USE_SUBAGENT_OUTPUT_DOWNLOAD = os.getenv("USE_SUBAGENT_OUTPUT_DOWNLOAD", "true")
 # injeta contexto das ultimas 10 msgs via hook.
 #
 # Ref: /tmp/subagent-findings/20260421-sessionstore-60ddbe70/phase3/plan-v2-final.md
-AGENT_SDK_SESSION_STORE_ENABLED = os.getenv(
-    "AGENT_SDK_SESSION_STORE_ENABLED", "true"
-).lower() == "true"
+AGENT_SDK_SESSION_STORE_ENABLED = _env_bool("AGENT_SDK_SESSION_STORE_ENABLED", "true")
 
 # Timeout em ms para store.load() / list_subkeys() durante materialize_resume_session.
 # Default SDK = 60000ms. Nosso p99 de query indexed < 100ms; 30000ms e folgado.
 # Se store ficar lento > 30s, resume falha — cai no fallback XML.
-AGENT_SDK_SESSION_STORE_LOAD_TIMEOUT_MS = int(
-    os.getenv("AGENT_SDK_SESSION_STORE_LOAD_TIMEOUT_MS", "30000")
-)
+AGENT_SDK_SESSION_STORE_LOAD_TIMEOUT_MS = _env_int("AGENT_SDK_SESSION_STORE_LOAD_TIMEOUT_MS", "30000")
 
 # ====================================================================
 # Session Store Flush Mode (claude-agent-sdk 0.1.73+)
@@ -808,12 +822,10 @@ if AGENT_SDK_SESSION_STORE_FLUSH not in ("batched", "eager"):
 # Rollback: AGENT_STICKY_SESSION_ENABLED=false. Fail-open se Redis off.
 #
 # Ref: https://github.com/anthropics/claude-code/issues/61862
-AGENT_STICKY_SESSION_ENABLED = os.getenv(
-    "AGENT_STICKY_SESSION_ENABLED", "false"
-).lower() == "true"
+AGENT_STICKY_SESSION_ENABLED = _env_bool("AGENT_STICKY_SESSION_ENABLED", "false")
 
 # TTL do ownership (segundos). Default 30min = mais que session idle típica.
-STICKY_SESSION_TTL_SEC = int(os.getenv("STICKY_SESSION_TTL_SEC", "1800"))
+STICKY_SESSION_TTL_SEC = _env_int("STICKY_SESSION_TTL_SEC", "1800")
 
 # ====================================================================
 # POST_SESSION jobs via RQ (2026-05-27)
@@ -833,9 +845,7 @@ STICKY_SESSION_TTL_SEC = int(os.getenv("STICKY_SESSION_TTL_SEC", "1800"))
 # Fallback: se RQ/Redis off, cai automaticamente em thread/sync.
 #
 # Rollback: AGENT_POST_SESSION_VIA_RQ=false. Sem deploy de codigo.
-AGENT_POST_SESSION_VIA_RQ = os.getenv(
-    "AGENT_POST_SESSION_VIA_RQ", "false"
-).lower() == "true"
+AGENT_POST_SESSION_VIA_RQ = _env_bool("AGENT_POST_SESSION_VIA_RQ", "false")
 
 # ====================================================================
 # Thinking Display (SDK 0.1.65+)
@@ -876,7 +886,7 @@ AGENT_THINKING_DISPLAY = os.getenv("AGENT_THINKING_DISPLAY", "omitted").lower()
 # Forward-compat via introspection em client.py — SDK < 0.1.74 ignora.
 #
 # Ref: claude-agent-sdk CHANGELOG 0.1.74, ClaudeAgentOptions.strict_mcp_config
-USE_STRICT_MCP_CONFIG = os.getenv("AGENT_STRICT_MCP_CONFIG", "false").lower() == "true"
+USE_STRICT_MCP_CONFIG = _env_bool("AGENT_STRICT_MCP_CONFIG", "false")
 
 # ====================================================================
 # F1 — Cache hit alert (Sentry)
@@ -892,7 +902,7 @@ USE_STRICT_MCP_CONFIG = os.getenv("AGENT_STRICT_MCP_CONFIG", "false").lower() ==
 # logam DEBUG mas nao vao para Sentry.
 #
 # Default true (observabilidade barata). Desativar: AGENT_CACHE_MISS_ALERT_ENABLED=false.
-USE_CACHE_MISS_ALERT = os.getenv("AGENT_CACHE_MISS_ALERT_ENABLED", "true").lower() == "true"
+USE_CACHE_MISS_ALERT = _env_bool("AGENT_CACHE_MISS_ALERT_ENABLED", "true")
 
 # ====================================================================
 # F7 — Browser (Playwright) lazy registration
@@ -905,7 +915,7 @@ USE_CACHE_MISS_ALERT = os.getenv("AGENT_CACHE_MISS_ALERT_ENABLED", "true").lower
 # Quando True, comportamento legado — playwright registrado no startup.
 #
 # Default false. Ativacao: AGENT_BROWSER_ENABLED=true.
-USE_BROWSER_TOOL = os.getenv("AGENT_BROWSER_ENABLED", "false").lower() == "true"
+USE_BROWSER_TOOL = _env_bool("AGENT_BROWSER_ENABLED", "false")
 
 # ====================================================================
 # F8 — cost_tracker persistente em DB
@@ -918,7 +928,7 @@ USE_BROWSER_TOOL = os.getenv("AGENT_BROWSER_ENABLED", "false").lower() == "true"
 # Routes/insights le da tabela quando flag ON, fallback para in-memory quando OFF.
 #
 # Default true (ativado em 2026-05-16). Desativar: AGENT_COST_TRACKER_PERSIST=false.
-USE_COST_TRACKER_PERSIST = os.getenv("AGENT_COST_TRACKER_PERSIST", "true").lower() == "true"
+USE_COST_TRACKER_PERSIST = _env_bool("AGENT_COST_TRACKER_PERSIST", "true")
 
 
 # A1 (2026-05-16) — Telemetria per-invocacao de subagent
@@ -934,9 +944,7 @@ USE_COST_TRACKER_PERSIST = os.getenv("AGENT_COST_TRACKER_PERSIST", "true").lower
 # Falha de DB nao quebra stream do agente (best-effort).
 #
 # Default true (ativado em 2026-05-16). Desativar: AGENT_INVOCATION_METRICS_PERSIST=false.
-USE_INVOCATION_METRICS_PERSIST = os.getenv(
-    "AGENT_INVOCATION_METRICS_PERSIST", "true"
-).lower() == "true"
+USE_INVOCATION_METRICS_PERSIST = _env_bool("AGENT_INVOCATION_METRICS_PERSIST", "true")
 
 
 # ====================================================================
@@ -955,9 +963,7 @@ USE_INVOCATION_METRICS_PERSIST = os.getenv(
 # Kill-switch: AGENT_ESTOQUE_RESTRICAO_ENFORCEMENT=false desliga completamente.
 # Whitelist: AGENT_ESTOQUE_RESTRICAO_ALLOWED_USER_IDS=1,55 (CSV de user_ids).
 # Default "1,55" cobre Rafael (web + Teams). Ajustar via env var sem deploy.
-USE_ESTOQUE_RESTRICAO_ENFORCEMENT = os.getenv(
-    "AGENT_ESTOQUE_RESTRICAO_ENFORCEMENT", "true"
-).lower() == "true"
+USE_ESTOQUE_RESTRICAO_ENFORCEMENT = _env_bool("AGENT_ESTOQUE_RESTRICAO_ENFORCEMENT", "true")
 
 
 # =============================================================================
@@ -977,7 +983,7 @@ USE_ESTOQUE_RESTRICAO_ENFORCEMENT = os.getenv(
 # vira codigo ANTES de o detalhe sair do prompt).
 #
 # Kill-switch: AGENT_ODOO_TAX_GATE=false desliga (rollback sem deploy).
-USE_ODOO_TAX_GATE = os.getenv("AGENT_ODOO_TAX_GATE", "true").lower() == "true"
+USE_ODOO_TAX_GATE = _env_bool("AGENT_ODOO_TAX_GATE", "true")
 
 
 def _parse_allowed_user_ids_csv(raw: str) -> set[int]:
@@ -1048,7 +1054,7 @@ def is_fable5_allowed(user_id) -> bool:
 # Whitelist de metodos: app/utils/odoo_audit_helpers.py METODOS_WRITE_AUDITADOS
 # Schema: scripts/migrations/2026_05_28_operacao_odoo_auditoria_session.{py,sql}
 # Ver app/odoo/CLAUDE.md secao P8.
-USE_ODOO_AUDIT_HOOK = os.getenv("AGENT_ODOO_AUDIT_HOOK", "false").lower() == "true"
+USE_ODOO_AUDIT_HOOK = _env_bool("AGENT_ODOO_AUDIT_HOOK", "false")
 
 
 # ====================================================================
@@ -1058,14 +1064,14 @@ USE_ODOO_AUDIT_HOOK = os.getenv("AGENT_ODOO_AUDIT_HOOK", "false").lower() == "tr
 # (planejador/skill-RAG). Nenhum runtime consome o registry ainda.
 # Ativar quando houver consumidor: AGENT_CAPABILITY_REGISTRY=true.
 # Default false — flag marca a fundacao como inerte ate onda futura.
-USE_CAPABILITY_REGISTRY = os.getenv("AGENT_CAPABILITY_REGISTRY", "false").lower() == "true"
+USE_CAPABILITY_REGISTRY = _env_bool("AGENT_CAPABILITY_REGISTRY", "false")
 
 # ====================================================================
 # Onda 1 — Quality Spine + Ontologia (todas OFF por default; ativam em deploy)
 # ====================================================================
-USE_AGENT_QUALITY_SPINE = os.getenv("AGENT_QUALITY_SPINE", "false").lower() == "true"
-USE_AGENT_STEP_JUDGE = os.getenv("AGENT_STEP_JUDGE", "false").lower() == "true"
-USE_AGENT_ONTOLOGY = os.getenv("AGENT_ONTOLOGY", "false").lower() == "true"
+USE_AGENT_QUALITY_SPINE = _env_bool("AGENT_QUALITY_SPINE", "false")
+USE_AGENT_STEP_JUDGE = _env_bool("AGENT_STEP_JUDGE", "false")
+USE_AGENT_ONTOLOGY = _env_bool("AGENT_ONTOLOGY", "false")
 
 # ====================================================================
 # Onda 2 — Planejador + Verify (OFF por default; ativar em deploy gradual)
@@ -1075,12 +1081,12 @@ USE_AGENT_ONTOLOGY = os.getenv("AGENT_ONTOLOGY", "false").lower() == "true"
 # AgentSession.data['plan'] (JSONB). Fundação do super-loop planejador.
 # Com flag OFF (default PROD): nenhum write em data['plan'] — comportamento
 # idêntico ao atual. Ativar com AGENT_PLANNER=true para habilitar.
-USE_AGENT_PLANNER = os.getenv("AGENT_PLANNER", "false").lower() == "true"
+USE_AGENT_PLANNER = _env_bool("AGENT_PLANNER", "false")
 
 # B2: Verify step — juiz pós-turno que avalia se o plano foi executado.
 # Depende de USE_AGENT_PLANNER. Planejado para Onda 2 fase posterior.
 # Rollback: AGENT_VERIFY=false.
-USE_AGENT_VERIFY = os.getenv("AGENT_VERIFY", "false").lower() == "true"
+USE_AGENT_VERIFY = _env_bool("AGENT_VERIFY", "false")
 
 # ====================================================================
 # Onda 3 — A3: Eval Gate — APOSENTADO (flag AGENT_EVAL_GATE removida)
@@ -1116,7 +1122,7 @@ USE_AGENT_VERIFY = os.getenv("AGENT_VERIFY", "false").lower() == "true"
 # spot-check humano calibra o judge no ponto onde ele de fato decide regressao
 # (commit do D8), nao no sanity-check periodico. Ligar esta flag NAO faz o batch
 # do cron gravar casos.
-USE_AGENT_EVAL_CALIBRATION = os.getenv("AGENT_EVAL_CALIBRATION", "false").lower() == "true"
+USE_AGENT_EVAL_CALIBRATION = _env_bool("AGENT_EVAL_CALIBRATION", "false")
 
 # ====================================================================
 # GATE-1 / E3 — Calibration Sampler do ONLINE judge (flag DEDICADA, T4.5)
@@ -1134,7 +1140,7 @@ USE_AGENT_EVAL_CALIBRATION = os.getenv("AGENT_EVAL_CALIBRATION", "false").lower(
 # gravado por step_judge) + rotulagem humana barata — zero LLM.
 #
 # Default false. Ativar (GATE-1): AGENT_CALIBRATION_SAMPLER=true. Rollback: =false.
-USE_AGENT_CALIBRATION_SAMPLER = os.getenv("AGENT_CALIBRATION_SAMPLER", "false").lower() == "true"
+USE_AGENT_CALIBRATION_SAMPLER = _env_bool("AGENT_CALIBRATION_SAMPLER", "false")
 
 # ====================================================================
 # Onda 4 — F4/F5: Skill Hints Advisory (flag-OFF por default)
@@ -1148,7 +1154,7 @@ USE_AGENT_CALIBRATION_SAMPLER = os.getenv("AGENT_CALIBRATION_SAMPLER", "false").
 #
 # Quando OFF (default): nenhum bloco adicionado — comportamento idêntico.
 # Ativar: AGENT_SKILL_RAG=true
-USE_AGENT_SKILL_RAG = os.getenv("AGENT_SKILL_RAG", "false").lower() == "true"
+USE_AGENT_SKILL_RAG = _env_bool("AGENT_SKILL_RAG", "false")
 
 # ====================================================================
 # Onda 4 — D5: World Model Injection via ontologia (flag-OFF por default)
@@ -1162,7 +1168,7 @@ USE_AGENT_SKILL_RAG = os.getenv("AGENT_SKILL_RAG", "false").lower() == "true"
 #
 # Quando OFF (default): nenhum bloco adicionado — comportamento idêntico.
 # Ativar: AGENT_WORLD_MODEL_INJECT=true
-USE_AGENT_WORLD_MODEL_INJECT = os.getenv("AGENT_WORLD_MODEL_INJECT", "false").lower() == "true"
+USE_AGENT_WORLD_MODEL_INJECT = _env_bool("AGENT_WORLD_MODEL_INJECT", "false")
 
 # ====================================================================
 # Onda 3 — A4: Promoção Automática de Diretriz (V1 offline, flag-OFF)
@@ -1187,7 +1193,7 @@ USE_AGENT_WORLD_MODEL_INJECT = os.getenv("AGENT_WORLD_MODEL_INJECT", "false").lo
 # diretrizes silenciosamente). Rodar a migration / wirar no build.sh ao mergear na main.
 #
 # Default false. Ativar: AGENT_DIRECTIVE_PROMOTION=true. Rollback: =false.
-AGENT_DIRECTIVE_PROMOTION = os.getenv("AGENT_DIRECTIVE_PROMOTION", "false").lower() == "true"
+AGENT_DIRECTIVE_PROMOTION = _env_bool("AGENT_DIRECTIVE_PROMOTION", "false")
 
 # Fonte 2 (JUDGE) do A4-batch — DESLIGADA pela estrategia R3 (2026-06-12,
 # ESTRATEGIA_ATUADORES_2026-06-06.md): promover diretriz por NOTA DE TURNO do
@@ -1199,13 +1205,13 @@ AGENT_DIRECTIVE_PROMOTION = os.getenv("AGENT_DIRECTIVE_PROMOTION", "false").lowe
 # So atua com AGENT_DIRECTIVE_PROMOTION=ON; fontes 1 (PLAN) e 3 (CORRECTION-
 # RECURRENCE) NAO sao afetadas por esta flag.
 # Default false. Religar (apos R9): AGENT_DIRECTIVE_JUDGE_SOURCE=true.
-AGENT_DIRECTIVE_JUDGE_SOURCE = os.getenv("AGENT_DIRECTIVE_JUDGE_SOURCE", "false").lower() == "true"
+AGENT_DIRECTIVE_JUDGE_SOURCE = _env_bool("AGENT_DIRECTIVE_JUDGE_SOURCE", "false")
 
 # A4-batch: parâmetros do varredor (módulo D8 32). Só atuam com AGENT_DIRECTIVE_PROMOTION=ON.
-AGENT_DIRECTIVE_LOOKBACK_HOURS = int(os.getenv("AGENT_DIRECTIVE_LOOKBACK_HOURS", "24"))
-AGENT_DIRECTIVE_BATCH_LIMIT = int(os.getenv("AGENT_DIRECTIVE_BATCH_LIMIT", "50"))
+AGENT_DIRECTIVE_LOOKBACK_HOURS = _env_int("AGENT_DIRECTIVE_LOOKBACK_HOURS", "24")
+AGENT_DIRECTIVE_BATCH_LIMIT = _env_int("AGENT_DIRECTIVE_BATCH_LIMIT", "50")
 # floor de qualidade da sessão de origem (baseline do gate; não há golden do agente principal).
-AGENT_DIRECTIVE_MIN_QUALITY = float(os.getenv("AGENT_DIRECTIVE_MIN_QUALITY", "0.7"))
+AGENT_DIRECTIVE_MIN_QUALITY = _env_float("AGENT_DIRECTIVE_MIN_QUALITY", "0.7")
 
 # =====================================================================
 # SQL-FIRST CANARY (Fix B, sessao #787) — tool consultar_sql
@@ -1233,35 +1239,35 @@ _SQL_FIRST_VALID = {"off", "shadow", "admin", "on"}
 # Aprendizado por efetividade de skill (Fase 1)
 # ====================================================================
 # Liga o gatilho + job de avaliacao pos-sessao. Default OFF (1 ciclo de smoke antes).
-AGENT_SKILL_EVAL = os.getenv("AGENT_SKILL_EVAL", "false").lower() == "true"
+AGENT_SKILL_EVAL = _env_bool("AGENT_SKILL_EVAL", "false")
 # Permite escalonar ao Sonnet (estagio 2). Se OFF, para no Haiku (modo observacao).
-AGENT_SKILL_EVAL_SONNET = os.getenv("AGENT_SKILL_EVAL_SONNET", "true").lower() == "true"
+AGENT_SKILL_EVAL_SONNET = _env_bool("AGENT_SKILL_EVAL_SONNET", "true")
 # Ramo lembrete_usuario aplica auto. Se OFF, vira shadow (vai p/ inbox tambem).
-AGENT_SKILL_EVAL_APPLY_USER = os.getenv("AGENT_SKILL_EVAL_APPLY_USER", "true").lower() == "true"
+AGENT_SKILL_EVAL_APPLY_USER = _env_bool("AGENT_SKILL_EVAL_APPLY_USER", "true")
 # Limiar de confidence (0-1) do Sonnet p/ auto-aplicar lembrete_usuario.
-AGENT_SKILL_EVAL_CONF_MIN = float(os.getenv("AGENT_SKILL_EVAL_CONF_MIN", "0.7"))
+AGENT_SKILL_EVAL_CONF_MIN = _env_float("AGENT_SKILL_EVAL_CONF_MIN", "0.7")
 # Cap de escalonamentos a Sonnet por sessao (anti-explosao de custo).
-AGENT_SKILL_EVAL_MAX_SONNET = int(os.getenv("AGENT_SKILL_EVAL_MAX_SONNET", "3"))
+AGENT_SKILL_EVAL_MAX_SONNET = _env_int("AGENT_SKILL_EVAL_MAX_SONNET", "3")
 
 # --- Fase 2 aprendizado ad-hoc -> skill (spec 2026-06-12) ---
 # Master da captura pos-sessao de Bash substantivo (best-effort; tabela
 # agent_adhoc_script precisa existir — migracao 2026_06_12).
-AGENT_ADHOC_CAPTURE = os.getenv("AGENT_ADHOC_CAPTURE", "true").lower() == "true"
+AGENT_ADHOC_CAPTURE = _env_bool("AGENT_ADHOC_CAPTURE", "true")
 # Similaridade cosine minima p/ herdar cluster do vizinho mais proximo.
-AGENT_ADHOC_SIM = float(os.getenv("AGENT_ADHOC_SIM", "0.85"))
+AGENT_ADHOC_SIM = _env_float("AGENT_ADHOC_SIM", "0.85")
 # Thresholds de demanda (C1) p/ disparar julgamento Sonnet.
-AGENT_ADHOC_THRESHOLD_USER = int(os.getenv("AGENT_ADHOC_THRESHOLD_USER", "3"))
-AGENT_ADHOC_THRESHOLD_GLOBAL = int(os.getenv("AGENT_ADHOC_THRESHOLD_GLOBAL", "5"))
+AGENT_ADHOC_THRESHOLD_USER = _env_int("AGENT_ADHOC_THRESHOLD_USER", "3")
+AGENT_ADHOC_THRESHOLD_GLOBAL = _env_int("AGENT_ADHOC_THRESHOLD_GLOBAL", "5")
 # Caps diarios (anti-explosao de custo): extracoes Haiku e julgamentos Sonnet.
-AGENT_ADHOC_MAX_HAIKU_DAY = int(os.getenv("AGENT_ADHOC_MAX_HAIKU_DAY", "100"))
-AGENT_ADHOC_MAX_SONNET_DAY = int(os.getenv("AGENT_ADHOC_MAX_SONNET_DAY", "2"))
+AGENT_ADHOC_MAX_HAIKU_DAY = _env_int("AGENT_ADHOC_MAX_HAIKU_DAY", "100")
+AGENT_ADHOC_MAX_SONNET_DAY = _env_int("AGENT_ADHOC_MAX_SONNET_DAY", "2")
 
 # Threshold do ramo FALLBACK do dedup de memorias (registros pre-migration sem
 # dedup_embedding, comparados via embedding contextual de retrieval). Incidente
 # 2026-06-12: 0.70 bloqueava memorias de assuntos DISTINTOS do mesmo dominio
 # (sim 0.80-0.81 medida em PROD, paths frete-direta-vs-fracionada ~ carvia).
 # 0.92 mantem o ramo pegando near-identical ate o backfill eliminar o estoque.
-AGENT_MEMORY_DEDUP_FALLBACK_SIM = float(os.getenv("AGENT_MEMORY_DEDUP_FALLBACK_SIM", "0.92"))
+AGENT_MEMORY_DEDUP_FALLBACK_SIM = _env_float("AGENT_MEMORY_DEDUP_FALLBACK_SIM", "0.92")
 
 
 def resolve_sql_first_mode(is_admin: bool) -> str:

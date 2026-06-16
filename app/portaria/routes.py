@@ -6,6 +6,7 @@ import os
 import traceback
 import logging
 from app import db
+from sqlalchemy import func
 from sqlalchemy.orm import joinedload
 # 🔒 Importar decoradores de permissão
 from app.utils.auth_decorators import require_portaria
@@ -577,14 +578,34 @@ def listar_motoristas():
     """
     page = request.args.get('page', 1, type=int)
     per_page = 20
-    
+
     motoristas = Motorista.query.order_by(Motorista.nome_completo).paginate(
-        page=page, 
-        per_page=per_page, 
+        page=page,
+        per_page=per_page,
         error_out=False
     )
-    
-    return render_template('portaria/listar_motoristas.html', motoristas=motoristas)
+
+    # PYTHON-FLASK-YH: agrega a contagem de registros dos motoristas da pagina em
+    # UMA query (GROUP BY), em vez de chamar motorista.registros_portaria.count()
+    # por linha no template (relationship lazy='dynamic' -> N+1: ~40 queries/pagina).
+    ids_pagina = [m.id for m in motoristas.items]
+    registros_count_map = {}
+    if ids_pagina:
+        registros_count_map = dict(
+            db.session.query(
+                ControlePortaria.motorista_id,
+                func.count(ControlePortaria.id),
+            )
+            .filter(ControlePortaria.motorista_id.in_(ids_pagina))
+            .group_by(ControlePortaria.motorista_id)
+            .all()
+        )
+
+    return render_template(
+        'portaria/listar_motoristas.html',
+        motoristas=motoristas,
+        registros_count_map=registros_count_map,
+    )
 
 @portaria_bp.route('/editar_motorista/<int:id>')
 @login_required

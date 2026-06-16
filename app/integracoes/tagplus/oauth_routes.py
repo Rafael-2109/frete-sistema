@@ -578,6 +578,7 @@ def index():
         status_type=status_type,
         datetime=datetime,
         timedelta=timedelta,
+        agora_utc_naive=agora_utc_naive,  # PYTHON-FLASK-XR: template usa {{ agora_utc_naive() }} no bloco tokens_notas
         csrf_token=generate_csrf  # ✅ CORRIGIDO: Adiciona função csrf_token para processar {{ csrf_token() }}
     )
 

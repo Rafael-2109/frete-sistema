@@ -288,6 +288,22 @@ class OdooConnection:
                         )
                         raise
 
+                # Fault de NEGOCIO Odoo (campo invalido, access denied, constraint):
+                # loga estruturado (faultCode + ultima linha do faultString = mensagem
+                # real, nao o traceback inteiro) para facilitar a triagem no Sentry,
+                # distinguindo-o do ruido de INFRA (auth/502/circuit) que o before_send
+                # (app/__init__.py filtro a2) suprime por string. PYTHON-FLASK-P5/P6/WN/WM.
+                # NAO altera o fluxo: re-levanta a Fault ORIGINAL — circuit_breaker e os
+                # 37+ callers continuam vendo a mesma excecao.
+                if isinstance(e, xmlrpc.client.Fault):
+                    _fault_linhas = (e.faultString or "").strip().splitlines()
+                    _fault_msg = _fault_linhas[-1].strip() if _fault_linhas else str(e)
+                    logger.error(
+                        f"❌ Fault Odoo de negocio em {model}.{method} "
+                        f"[faultCode={e.faultCode}]: {_fault_msg}"
+                    )
+                    raise
+
                 # Erro real - logar e propagar para Circuit Breaker detectar
                 logger.error(f"❌ Erro na execução de {model}.{method}: {e}")
                 raise
