@@ -1,6 +1,6 @@
 {
   "version": "2.0.0",
-  "total_relationships": 432,
+  "total_relationships": 433,
   "relationships": [
     {
       "from_table": "agendamentos_entrega",
@@ -396,6 +396,12 @@
       "from_table": "carvia_comissao_fechamentos",
       "from_column": "despesa_id",
       "to_table": "carvia_despesas",
+      "to_column": "id"
+    },
+    {
+      "from_table": "carvia_comprovante_vinculos",
+      "from_column": "comprovante_id",
+      "to_table": "carvia_comprovantes_pagamento",
       "to_column": "id"
     },
     {

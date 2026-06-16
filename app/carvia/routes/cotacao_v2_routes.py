@@ -151,9 +151,15 @@ def register_cotacao_v2_routes(bp):
         cot_ids = [c.id for c in cotacoes]
         docs_por_cotacao = coletar_documentos_cotacoes(cot_ids)
 
+        from app.carvia.services.documentos.comprovante_service import (
+            CarviaComprovanteService,
+        )
+        tem_comprovante = CarviaComprovanteService.tem_comprovante_batch('cotacao', cot_ids)
+
         return render_template(
             'carvia/cotacoes/listar.html',
             cotacoes=cotacoes,
+            tem_comprovante=tem_comprovante,
             status_filtro=status,
             cliente_id_filtro=cliente_id,
             alerta_filtro=alerta,
@@ -1500,9 +1506,15 @@ def register_cotacao_v2_routes(bp):
             cotacao_id, {'ctes': [], 'faturas': []}
         )
 
+        from app.carvia.services.documentos.comprovante_service import (
+            CarviaComprovanteService,
+        )
+        comprovantes_cotacao = CarviaComprovanteService.listar('cotacao', cotacao_id)
+
         return render_template(
             'carvia/cotacoes/detalhe.html',
             cotacao=cotacao,
+            comprovantes_cotacao=comprovantes_cotacao,
             motos=motos_raw,
             motos_list_json=motos_list_json,
             pedidos=pedidos,

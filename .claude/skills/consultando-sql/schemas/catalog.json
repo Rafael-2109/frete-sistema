@@ -105,7 +105,7 @@
     "vinculacao_carteira_separacao",
     "webhook_configs"
   ],
-  "total_tabelas": 320,
+  "total_tabelas": 322,
   "tabelas": [
     {
       "name": "agendamentos_entrega",
@@ -769,6 +769,26 @@
         "despesa_id",
         "data_inicio",
         "status"
+      ],
+      "dominio": "Carvia"
+    },
+    {
+      "name": "carvia_comprovante_vinculos",
+      "description": "Vinculo N:N polimorfico entre comprovante e documento da cadeia.",
+      "key_fields": [
+        "comprovante_id",
+        "entidade_id",
+        "entidade_tipo"
+      ],
+      "dominio": "Carvia"
+    },
+    {
+      "name": "carvia_comprovantes_pagamento",
+      "description": "Comprovante de pagamento (arquivo S3) — N:N com documentos via vinculo.",
+      "key_fields": [
+        "cnpj_pagador",
+        "data_pagamento",
+        "nome_original"
       ],
       "dominio": "Carvia"
     },

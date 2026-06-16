@@ -106,6 +106,12 @@ class CarviaCotacao(db.Model):
     percentual_remetente = db.Column(db.Numeric(5, 2), nullable=True)
     percentual_destinatario = db.Column(db.Numeric(5, 2), nullable=True)
 
+    # Pagamento antecipado (flag manual — sinal redundante ao comprovante
+    # anexado, mas util para conciliacao e visao rapida na listagem)
+    pago = db.Column(db.Boolean, nullable=False, default=False, server_default='false')
+    pago_em = db.Column(db.DateTime, nullable=True)
+    pago_por = db.Column(db.String(100), nullable=True)
+
     # Criacao tardia: cotacao criada a partir de NF que ja possui CTe CarVia
     criacao_tardia = db.Column(db.Boolean, nullable=False, default=False, server_default='false')
 

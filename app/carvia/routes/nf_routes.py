@@ -325,10 +325,18 @@ def register_nf_routes(bp):
                 for venda_id, transf_id, transf_num in rows_vinc
             }
 
+        from app.carvia.services.documentos.comprovante_service import (
+            CarviaComprovanteService,
+        )
+        tem_comprovante = CarviaComprovanteService.tem_comprovante_batch(
+            'nf', [nf.id for nf, _ in paginacao.items]
+        )
+
         return render_template(
             'carvia/nfs/listar.html',
             nfs=paginacao.items,
             paginacao=paginacao,
+            tem_comprovante=tem_comprovante,
             busca=busca,
             tipo_filtro=tipo_filtro,
             status_filtro=status_filtro,
@@ -602,9 +610,15 @@ def register_nf_routes(bp):
             .first()
         )
 
+        from app.carvia.services.documentos.comprovante_service import (
+            CarviaComprovanteService,
+        )
+        comprovantes_nf = CarviaComprovanteService.listar('nf', nf.id)
+
         return render_template(
             'carvia/nfs/detalhe.html',
             nf=nf,
+            comprovantes_nf=comprovantes_nf,
             itens=itens,
             veiculos=veiculos,
             operacoes=operacoes,

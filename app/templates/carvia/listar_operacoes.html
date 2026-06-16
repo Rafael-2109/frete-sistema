@@ -107,6 +107,7 @@
                 <table class="table table-hover mb-0 carvia-table">
                     <thead>
                         <tr>
+                            <th class="text-center" title="Tem comprovante de pagamento">💳</th>
                             <th>NFs</th>
                             {{ th_sort('cte_data_emissao', 'Data Emissão', sort, direction) }}
                             {{ th_sort('cte_numero', 'CTe CarVia', sort, direction) }}
@@ -124,6 +125,7 @@
                     <tbody>
                         {% for op, qtd_nfs in operacoes %}
                         <tr>
+                            <td class="text-center">{% if tem_comprovante.get(op.id) %}<span title="Tem comprovante de pagamento">💳</span>{% endif %}</td>
                             <td>
                                 {% set nfs = nfs_por_op.get(op.id, []) %}
                                 {% if nfs %}

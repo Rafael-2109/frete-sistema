@@ -107,6 +107,7 @@
                 <table class="table table-hover mb-0 carvia-table">
                     <thead>
                         <tr>
+                            <th class="text-center" title="Tem comprovante de pagamento">💳</th>
                             {{ th_sort('numero_nf', 'NF', sort, direction) }}
                             {{ th_sort('emitente', 'Emitente', sort, direction) }}
                             <th>Destinatario</th>
@@ -122,6 +123,7 @@
                     <tbody>
                         {% for nf, qtd_ctes in nfs %}
                         <tr{% if nf.status == 'CANCELADA' %} class="carvia-nf-cancelada"{% endif %}>
+                            <td class="text-center">{% if tem_comprovante.get(nf.id) %}<span title="Tem comprovante de pagamento">💳</span>{% endif %}</td>
                             <td>
                                 <strong>{{ nf.numero_nf }}</strong>
                                 {% if nf.id in ids_transf_efetivas %}

@@ -1,0 +1,196 @@
+{% extends "base.html" %}
+{#
+  Conciliacao p/ Comprovante (modo invertido) — DESTINO da feature de
+  comprovantes. Parte das faturas cliente COM comprovante e saldo em aberto,
+  mostra o comprovante (valor/data/cnpj_pagador) e busca a linha do extrato
+  candidata (api_matches_por_documento, com boost por cnpj_pagador). Concilia
+  reusando api_conciliar.
+#}
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-2">
+        <h2 class="mb-0"><i class="fas fa-receipt"></i> Conciliacao p/ Comprovante</h2>
+        <a href="{{ url_for('carvia.conciliacao') }}" class="btn btn-outline-secondary btn-sm">
+            <i class="fas fa-exchange-alt"></i> Conciliacao por Extrato
+        </a>
+    </div>
+    <p class="text-muted">
+        Inverte o fluxo: parte das <strong>faturas cliente com comprovante</strong> e
+        saldo em aberto. Selecione uma fatura para ver o comprovante e as linhas do
+        extrato candidatas — priorizadas pelo <strong>CNPJ de quem pagou</strong>
+        (resolve o caso de pagamento com CNPJ diferente da fatura).
+    </p>
+
+    <div class="row">
+        <div class="col-lg-5 mb-3">
+            <div class="card">
+                <div class="card-header py-2">
+                    <strong>Faturas com comprovante (<span id="cnt-faturas">{{ total_faturas }}</span>)</strong>
+                </div>
+                <div class="list-group list-group-flush" id="lista-faturas"
+                     style="max-height:72vh;overflow:auto"></div>
+            </div>
+        </div>
+        <div class="col-lg-7 mb-3">
+            <div id="painel-fatura" class="card">
+                <div class="card-body text-muted text-center py-5">
+                    <i class="fas fa-hand-pointer fa-2x mb-2 d-block"></i>
+                    Selecione uma fatura a esquerda.
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const FATURAS = {{ faturas_json|safe }};
+
+function csrf() {
+    var m = document.querySelector('meta[name="csrf-token"]');
+    return m ? m.getAttribute('content') : '';
+}
+function brl(v) {
+    if (v === null || v === undefined) return '-';
+    return 'R$ ' + Number(v).toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+}
+function esc(s) {
+    return (s == null ? '' : String(s)).replace(/[&<>"]/g, function (c) {
+        return {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c];
+    });
+}
+function badgeScore(label, isComp, isHist) {
+    var cls = label === 'ALTO' ? 'success' : (label === 'MEDIO' ? 'warning' : 'secondary');
+    var html = '<span class="badge bg-' + cls + '">' + esc(label || '-') + '</span>';
+    if (isComp) html += ' <span class="badge bg-success" title="CNPJ do pagador (comprovante) bate com a linha">💳 CNPJ pagador</span>';
+    if (isHist) html += ' <span class="badge bg-info" title="Historico de match aprendido">aprendido</span>';
+    return html;
+}
+
+function renderFaturas() {
+    var box = document.getElementById('lista-faturas');
+    if (!FATURAS.length) {
+        box.innerHTML = '<div class="list-group-item text-muted">Nenhuma fatura com comprovante e saldo em aberto.</div>';
+        return;
+    }
+    box.innerHTML = FATURAS.map(function (f, i) {
+        return '<button type="button" class="list-group-item list-group-item-action" data-idx="' + i + '">'
+            + '<div class="d-flex justify-content-between">'
+            + '<strong>' + esc(f.numero_fatura) + '</strong>'
+            + '<span class="text-danger">' + brl(f.saldo) + '</span></div>'
+            + '<div class="small text-muted">' + esc(f.nome_cliente || f.cnpj_cliente || '') + '</div>'
+            + '<div class="small"><span class="badge bg-light text-dark">'
+            + f.comprovantes.length + ' comprovante(s)</span></div>'
+            + '</button>';
+    }).join('');
+    box.querySelectorAll('button[data-idx]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            box.querySelectorAll('button').forEach(function (b) { b.classList.remove('active'); });
+            btn.classList.add('active');
+            selecionarFatura(parseInt(btn.getAttribute('data-idx'), 10));
+        });
+    });
+}
+
+function selecionarFatura(idx) {
+    var f = FATURAS[idx];
+    var painel = document.getElementById('painel-fatura');
+    var comps = f.comprovantes.map(function (c) {
+        return '<tr><td>' + esc(c.nome_original) + (c.descricao ? '<div class="small text-muted">' + esc(c.descricao) + '</div>' : '') + '</td>'
+            + '<td class="text-end">' + brl(c.valor) + '</td>'
+            + '<td>' + esc(c.data_pagamento || '-') + '</td>'
+            + '<td>' + esc(c.cnpj_pagador || '-') + '</td>'
+            + '<td class="text-end"><a class="btn btn-sm btn-outline-primary" href="/carvia/api/comprovante/' + c.id + '/download"><i class="fas fa-download"></i></a></td></tr>';
+    }).join('');
+    painel.innerHTML =
+        '<div class="card-header py-2 d-flex justify-content-between align-items-center">'
+        + '<strong>' + esc(f.numero_fatura) + ' — ' + esc(f.nome_cliente || f.cnpj_cliente || '') + '</strong>'
+        + '<span>Saldo: <strong class="text-danger">' + brl(f.saldo) + '</strong></span></div>'
+        + '<div class="card-body">'
+        + '<h6 class="text-muted">Comprovantes</h6>'
+        + '<div class="table-responsive mb-3"><table class="table table-sm table-hover mb-0">'
+        + '<thead><tr><th>Arquivo</th><th class="text-end">Valor</th><th>Data</th><th>CNPJ Pagador</th><th></th></tr></thead>'
+        + '<tbody>' + comps + '</tbody></table></div>'
+        + '<h6 class="text-muted">Linhas do extrato candidatas</h6>'
+        + '<div id="linhas-candidatas"><div class="text-muted py-3"><i class="fas fa-spinner fa-spin"></i> Buscando linhas...</div></div>'
+        + '</div>';
+
+    fetch('/carvia/api/conciliacao/matches-por-documento?tipo_doc=fatura_cliente&doc_id=' + f.id)
+        .then(function (r) { return r.json(); })
+        .then(function (data) { renderLinhas(f, data); })
+        .catch(function () {
+            document.getElementById('linhas-candidatas').innerHTML =
+                '<div class="text-danger">Erro ao buscar linhas de extrato.</div>';
+        });
+}
+
+function renderLinhas(f, data) {
+    var box = document.getElementById('linhas-candidatas');
+    if (data.erro) { box.innerHTML = '<div class="text-danger">' + esc(data.erro) + '</div>'; return; }
+    var linhas = data.linhas || [];
+    if (!linhas.length) {
+        box.innerHTML = '<div class="text-muted">' + esc(data.mensagem || 'Nenhuma linha de extrato pendente.') + '</div>';
+        return;
+    }
+    var rows = linhas.map(function (ln) {
+        var alocar = Math.min(f.saldo, ln.saldo_a_conciliar);
+        return '<tr>'
+            + '<td>' + esc(ln.data) + '</td>'
+            + '<td class="text-end">' + brl(ln.valor) + '</td>'
+            + '<td><div>' + esc(ln.razao_social || '') + '</div><div class="small text-muted">' + esc(ln.descricao) + '</div></td>'
+            + '<td>' + badgeScore(ln.score_label, ln.score_comprovante, ln.score_historico) + '</td>'
+            + '<td class="text-end"><button class="btn btn-sm btn-success btn-conciliar"'
+            + ' data-linha="' + ln.id + '" data-valor="' + alocar + '">'
+            + 'Conciliar ' + brl(alocar) + '</button></td>'
+            + '</tr>';
+    }).join('');
+    box.innerHTML = '<div class="table-responsive"><table class="table table-sm table-hover mb-0">'
+        + '<thead><tr><th>Data</th><th class="text-end">Valor</th><th>Pagador / Descricao</th><th>Score</th><th></th></tr></thead>'
+        + '<tbody>' + rows + '</tbody></table>'
+        + '<small class="text-muted">' + (data.total_pendentes || linhas.length) + ' linha(s) pendente(s).</small></div>';
+
+    box.querySelectorAll('.btn-conciliar').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            conciliar(f, parseInt(btn.getAttribute('data-linha'), 10),
+                      parseFloat(btn.getAttribute('data-valor')), btn);
+        });
+    });
+}
+
+function conciliar(f, linhaId, valor, btn) {
+    if (!confirm('Conciliar a fatura ' + f.numero_fatura + ' com esta linha por ' + brl(valor) + '?')) return;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+    fetch('/carvia/api/conciliacao/conciliar', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrf()},
+        body: JSON.stringify({
+            extrato_linha_id: linhaId,
+            documentos: [{
+                tipo_documento: 'fatura_cliente',
+                documento_id: f.id,
+                valor_alocado: valor
+            }]
+        })
+    })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+            if (data && (data.sucesso || data.conciliacoes || !data.erro)) {
+                location.reload();
+            } else {
+                alert((data && data.erro) || 'Erro ao conciliar');
+                btn.disabled = false;
+                btn.textContent = 'Conciliar';
+            }
+        })
+        .catch(function () {
+            alert('Erro de conexao ao conciliar');
+            btn.disabled = false;
+            btn.textContent = 'Conciliar';
+        });
+}
+
+document.addEventListener('DOMContentLoaded', renderFaturas);
+</script>
+{% endblock %}

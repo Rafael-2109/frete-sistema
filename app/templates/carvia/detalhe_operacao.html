@@ -3,6 +3,7 @@
 {% from 'carvia/_macros.html' import carvia_ref %}
 
 {% block content %}
+{% from 'carvia/_comprovantes_card.html' import comprovantes_card with context %}
 <div class="container-fluid py-4">
     <div class="d-flex justify-content-between align-items-center mb-4">
         <div>
@@ -993,6 +994,14 @@
 </div>
 {% endif %}
 
+{# Comprovantes de Pagamento (N:N) — propagados da cadeia (cotacao/NF/fatura) #}
+<div class="container-fluid pb-4">
+    {{ comprovantes_card(
+        'Comprovantes de Pagamento',
+        comprovantes_operacao,
+        url_for('carvia.upload_comprovante_carvia', entidade_tipo='operacao', entidade_id=operacao.id),
+        pode_editar=True) }}
+</div>
 {% endblock %}
 
 <!-- Modal: Vincular NF a Operacao -->
@@ -1073,6 +1082,7 @@
 </div>
 
 {% block scripts %}
+<script src="{{ url_for('static', filename='carvia/js/comprovantes_widget.js') }}"></script>
 <script>
 function downloadCteXml(operacaoId) {
     fetch(`/carvia/api/operacao/${operacaoId}/xml`)

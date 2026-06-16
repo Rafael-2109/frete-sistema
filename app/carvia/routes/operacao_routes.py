@@ -256,10 +256,18 @@ def register_operacao_routes(bp):
                     'num_nf_transf': num_nf,
                 })
 
+        from app.carvia.services.documentos.comprovante_service import (
+            CarviaComprovanteService,
+        )
+        tem_comprovante = CarviaComprovanteService.tem_comprovante_batch(
+            'operacao', [op.id for op, _ in paginacao.items]
+        )
+
         return render_template(
             'carvia/listar_operacoes.html',
             operacoes=paginacao.items,
             paginacao=paginacao,
+            tem_comprovante=tem_comprovante,
             status_filtro=status_filtro,
             tipo_filtro=tipo_filtro,
             uf_filtro=uf_filtro,
@@ -387,9 +395,15 @@ def register_operacao_routes(bp):
             .all()
         )
 
+        from app.carvia.services.documentos.comprovante_service import (
+            CarviaComprovanteService,
+        )
+        comprovantes_operacao = CarviaComprovanteService.listar('operacao', operacao.id)
+
         return render_template(
             'carvia/detalhe_operacao.html',
             operacao=operacao,
+            comprovantes_operacao=comprovantes_operacao,
             nfs=nfs,
             subcontratos=subcontratos,
             faturas_transportadora=faturas_transportadora,

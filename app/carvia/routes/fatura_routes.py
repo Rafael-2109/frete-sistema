@@ -154,10 +154,18 @@ def register_fatura_routes(bp):
         from app.carvia.services.clientes.cliente_service import CarviaClienteService
         clientes_por_fatura = CarviaClienteService.resolver_clientes_por_faturas_cliente(fat_ids)
 
+        from app.carvia.services.documentos.comprovante_service import (
+            CarviaComprovanteService,
+        )
+        tem_comprovante = CarviaComprovanteService.tem_comprovante_batch(
+            'fatura_cliente', [f.id for f, _ in paginacao.items]
+        )
+
         return render_template(
             'carvia/faturas_cliente/listar.html',
             faturas=paginacao.items,
             paginacao=paginacao,
+            tem_comprovante=tem_comprovante,
             status_filtro=status_filtro,
             busca=busca,
             cliente_filtro=cliente_filtro,
@@ -330,6 +338,22 @@ def register_fatura_routes(bp):
                 except Exception as _e:
                     logger.warning(
                         'Falha ao resolver pre-vinculos fatura %s: %s', fatura.id, _e
+                    )
+
+                # HERANCA DE COMPROVANTES: propaga para a fatura recem-criada os
+                # comprovantes ja anexados na cadeia (pagamento antecipado na
+                # cotacao/NF/CTe). SAVEPOINT isola erros do flush (igual previnculo).
+                try:
+                    from app.carvia.services.documentos.comprovante_service import (
+                        CarviaComprovanteService,
+                    )
+                    with db.session.begin_nested():
+                        CarviaComprovanteService.sincronizar_cadeia(
+                            'fatura_cliente', fatura.id, current_user.email,
+                        )
+                except Exception as _e:
+                    logger.warning(
+                        'Falha ao propagar comprovantes fatura %s: %s', fatura.id, _e
                     )
 
                 db.session.commit()
@@ -601,9 +625,15 @@ def register_fatura_routes(bp):
         from app.carvia.utils.papeis_frete import resolver_papeis_fatura_cliente
         papeis = resolver_papeis_fatura_cliente(fatura)
 
+        from app.carvia.services.documentos.comprovante_service import (
+            CarviaComprovanteService,
+        )
+        comprovantes_fatura = CarviaComprovanteService.listar('fatura_cliente', fatura.id)
+
         return render_template(
             'carvia/faturas_cliente/detalhe.html',
             fatura=fatura,
+            comprovantes_fatura=comprovantes_fatura,
             operacoes=operacoes,
             itens=itens,
             nfs=nfs,

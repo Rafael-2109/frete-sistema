@@ -93,6 +93,36 @@ def register_conciliacao_routes(bp):
         )
 
     # ===================================================================
+    # Modo 2: Conciliacao p/ Comprovante (invertido — fatura -> extrato)
+    # ===================================================================
+
+    @bp.route('/conciliacao/por-comprovante') # type: ignore
+    @login_required
+    def conciliacao_por_comprovante(): # type: ignore
+        """Conciliacao invertida (DESTINO da feature de comprovantes).
+
+        Parte das faturas cliente COM comprovante e saldo em aberto, exibe o
+        comprovante (valor/data/cnpj_pagador) e guia a busca da linha do
+        extrato — o scoring de linhas (api_matches_por_documento) ganha boost
+        pelo cnpj_pagador, resolvendo o caso "pagou com CNPJ != fatura".
+        Concilia reusando api_conciliar.
+        """
+        if not getattr(current_user, 'sistema_carvia', False):
+            flash('Acesso negado.', 'danger')
+            return redirect(url_for('main.dashboard'))
+
+        import json
+        from app.carvia.services.documentos.comprovante_service import (
+            CarviaComprovanteService,
+        )
+        faturas = CarviaComprovanteService.faturas_cliente_com_comprovante()
+        return render_template(
+            'carvia/conciliacao_comprovante.html',
+            faturas_json=json.dumps(faturas),
+            total_faturas=len(faturas),
+        )
+
+    # ===================================================================
     # Tela 2: Extrato Bancario
     # ===================================================================
 
@@ -735,6 +765,23 @@ def register_conciliacao_routes(bp):
         elif tipo_doc == 'custo_entrega':
             cnpj_doc = (getattr(doc, 'fornecedor_cnpj', None) or '').strip()
 
+        # Conciliacao invertida: CNPJ(s) de quem REALMENTE pagou (comprovantes
+        # da fatura). Guia o ranking de linhas pelo pagador real, que pode
+        # diferir do cnpj_cliente da fatura (caso central do recurso).
+        cnpjs_pagador = set()
+        if tipo_doc == 'fatura_cliente':
+            from app.carvia.services.documentos.comprovante_service import (
+                CarviaComprovanteService,
+            )
+            cnpjs_pagador = CarviaComprovanteService.cnpjs_pagadores(
+                'fatura_cliente', doc_id
+            )
+        raizes_pagador = {c[:8] for c in cnpjs_pagador if len(c) >= 8}
+        if cnpjs_pagador:
+            from app.carvia.services.financeiro.carvia_sugestao_service import (
+                extrair_cnpjs_da_descricao, extrair_raizes_cnpj_da_descricao,
+            )
+
         # REFATOR R17 (fix bug modal vazio): trazer TODAS as linhas
         # PENDENTE/PARCIAL da direcao correta. Filtro de valor (era +-30%)
         # foi REMOVIDO — agora o valor entra no scoring, nao como criterio
@@ -805,6 +852,19 @@ def register_conciliacao_routes(bp):
                     score = min(1.0, score * 1.4)
                     score_historico = True
 
+            # Boost por COMPROVANTE (conciliacao invertida): se a descricao da
+            # linha traz o CNPJ de quem efetivamente pagou (do comprovante da
+            # fatura), e match quase certo — mesmo que != cnpj_cliente.
+            score_comprovante = False
+            if cnpjs_pagador:
+                texto_ln = ' '.join(
+                    p for p in (ln.descricao, ln.memo, ln.razao_social) if p
+                )
+                if cnpjs_pagador & extrair_cnpjs_da_descricao(texto_ln):
+                    score, score_comprovante = max(score, 0.95), True
+                elif raizes_pagador & extrair_raizes_cnpj_da_descricao(texto_ln):
+                    score, score_comprovante = max(score, 0.82), True
+
             if score >= 0.80:
                 label = 'ALTO'
             elif score >= 0.50:
@@ -826,6 +886,7 @@ def register_conciliacao_routes(bp):
                 'score': round(score, 2),
                 'score_label': label,
                 'score_historico': score_historico,
+                'score_comprovante': score_comprovante,
             })
 
         # Ordenar por score desc — desempate natural vem da query

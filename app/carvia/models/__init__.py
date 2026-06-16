@@ -82,6 +82,11 @@ from app.carvia.models.frete import CarviaFrete, CarviaEmissaoCte  # noqa: F401
 # Anexos polimorficos (Frete + Subcontrato)
 from app.carvia.models.anexos import CarviaAnexo  # noqa: F401
 
+# Comprovantes de Pagamento (N:N com cotacao / NF / CTe CarVia / fatura cliente)
+from app.carvia.models.comprovante import (  # noqa: F401
+    CarviaComprovantePagamento, CarviaComprovanteVinculo,
+)
+
 # Comissao
 from app.carvia.models.comissao import (  # noqa: F401
     CarviaComissaoFechamento, CarviaComissaoFechamentoCte, CarviaComissaoAjuste,
@@ -131,6 +136,8 @@ __all__ = [
     'CarviaFrete', 'CarviaEmissaoCte',
     # Anexos polimorficos
     'CarviaAnexo',
+    # Comprovantes de Pagamento
+    'CarviaComprovantePagamento', 'CarviaComprovanteVinculo',
     # Comissao
     'CarviaComissaoFechamento', 'CarviaComissaoFechamentoCte', 'CarviaComissaoAjuste',
     # Aprovacao Fretes

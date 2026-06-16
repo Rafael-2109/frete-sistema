@@ -3,6 +3,7 @@
 {# modal_admin_excluir removido (Sprint 0 — NF nao suporta hard delete) #}
 
 {% block content %}
+{% from 'carvia/_comprovantes_card.html' import comprovantes_card with context %}
 <div class="container-fluid py-4">
     <div class="d-flex justify-content-between align-items-center mb-4">
         <div>
@@ -1029,9 +1030,19 @@
 {% endif %}
 
 {# modal_admin_excluir removido (Sprint 0) #}
+
+{# Comprovantes de Pagamento (N:N) — propagados da cadeia (cotacao/CTe/fatura) #}
+<div class="container-fluid pb-4">
+    {{ comprovantes_card(
+        'Comprovantes de Pagamento',
+        comprovantes_nf,
+        url_for('carvia.upload_comprovante_carvia', entidade_tipo='nf', entidade_id=nf.id),
+        pode_editar=True) }}
+</div>
 {% endblock %}
 
 {% block scripts %}
+<script src="{{ url_for('static', filename='carvia/js/comprovantes_widget.js') }}"></script>
 <script>
 function downloadArquivoNf(nfId, tipo) {
     fetch(`/carvia/api/nf/${nfId}/arquivo/${tipo}`)

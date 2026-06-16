@@ -1,0 +1,118 @@
+{# ============================================================================
+   Widget reutilizavel de Comprovantes de Pagamento CarVia (N:N).
+   Serve cotacao / NF / CTe CarVia (operacao) / fatura cliente.
+
+   Uso (no topo do template):
+     {% from 'carvia/_comprovantes_card.html' import comprovantes_card with context %}
+
+   Render (comprovantes = lista de pares (comprovante, vinculo) de
+   CarviaComprovanteService.listar(tipo, id)):
+     {{ comprovantes_card(
+          'Comprovantes de Pagamento',
+          comprovantes_cotacao,
+          url_for('carvia.upload_comprovante_carvia', entidade_tipo='cotacao', entidade_id=cotacao.id),
+          pode_editar=True) }}
+
+   Requer (uma vez por pagina, no bloco scripts):
+     <script src="{{ url_for('static', filename='carvia/js/comprovantes_widget.js') }}"></script>
+
+   O upload propaga automaticamente para NF, CTe e Fatura da cadeia.
+   ========================================================================== #}
+{% macro comprovantes_card(titulo, comprovantes, upload_url, pode_editar=True) %}
+<div class="card mt-3">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="mb-0"><i class="fas fa-receipt"></i> {{ titulo }} ({{ comprovantes|length }})</h5>
+    </div>
+    <div class="card-body">
+        {% if comprovantes %}
+        <div class="table-responsive">
+            <table class="table table-sm table-hover align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th>Arquivo</th>
+                        <th class="text-end col-nowrap">Valor</th>
+                        <th class="col-nowrap">Data Pgto</th>
+                        <th>CNPJ Pagador</th>
+                        <th>Origem</th>
+                        <th class="col-nowrap">Enviado</th>
+                        <th class="text-end">Acoes</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for comp, vinc in comprovantes %}
+                    <tr>
+                        <td>
+                            <strong>{{ comp.nome_original }}</strong>
+                            {% if comp.descricao %}<div class="small text-muted">{{ comp.descricao }}</div>{% endif %}
+                        </td>
+                        <td class="text-end col-nowrap">
+                            {% if comp.valor is not none %}R$ {{ comp.valor|valor_br }}{% else %}-{% endif %}
+                        </td>
+                        <td class="col-nowrap"><small>{{ comp.data_pagamento.strftime('%d/%m/%Y') if comp.data_pagamento else '-' }}</small></td>
+                        <td><small>{{ comp.cnpj_pagador or '-' }}</small></td>
+                        <td>
+                            {% if vinc.origem == 'PROPAGADO' %}
+                            <span class="badge bg-secondary" title="Herdado de outro documento da cadeia">Propagado</span>
+                            {% else %}
+                            <span class="badge bg-primary" title="Anexado neste documento">Manual</span>
+                            {% endif %}
+                        </td>
+                        <td class="col-nowrap"><small>{{ comp.criado_em.strftime('%d/%m/%Y %H:%M') if comp.criado_em else '-' }}<br>{{ comp.criado_por or '' }}</small></td>
+                        <td class="text-end col-nowrap">
+                            <a href="{{ url_for('carvia.download_comprovante_carvia', comprovante_id=comp.id) }}"
+                               class="btn btn-sm btn-outline-primary" title="Baixar comprovante">
+                                <i class="fas fa-download"></i>
+                            </a>
+                            {% if pode_editar %}
+                            <button type="button" class="btn btn-sm btn-outline-danger carvia-comprovante-excluir"
+                                    data-comprovante-id="{{ comp.id }}" title="Excluir comprovante">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="text-muted text-center mb-3">Nenhum comprovante.</p>
+        {% endif %}
+
+        {% if pode_editar %}
+        <hr>
+        <form class="carvia-comprovante-form" enctype="multipart/form-data" data-upload-url="{{ upload_url }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="row g-2 align-items-end">
+                <div class="col-md-3">
+                    <label class="form-label">Comprovante <span class="text-danger">*</span></label>
+                    <input type="file" class="form-control form-control-sm" name="arquivo" required>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Valor (R$)</label>
+                    <input type="text" class="form-control form-control-sm" name="valor" placeholder="0,00">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Data Pgto</label>
+                    <input type="date" class="form-control form-control-sm" name="data_pagamento">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">CNPJ Pagador</label>
+                    <input type="text" class="form-control form-control-sm" name="cnpj_pagador" placeholder="se != fatura">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Descricao</label>
+                    <input type="text" class="form-control form-control-sm" name="descricao" placeholder="Opcional">
+                </div>
+                <div class="col-md-1">
+                    <button type="submit" class="btn btn-sm btn-outline-success w-100" title="Enviar comprovante">
+                        <i class="fas fa-upload"></i>
+                    </button>
+                </div>
+            </div>
+            <small class="text-muted">pdf, jpg, jpeg, png, doc, docx, xls, xlsx, msg, eml (max 10MB). Propaga automaticamente para NF, CTe e Fatura da cadeia.</small>
+        </form>
+        {% endif %}
+    </div>
+</div>
+{% endmacro %}

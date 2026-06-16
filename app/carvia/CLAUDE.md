@@ -56,6 +56,7 @@ Sempre prefira ler o sub-doc correspondente ao topico ao inves de reconstruir co
 |---------|-------|
 | [CONFERENCIA.md](CONFERENCIA.md) | Bifurcacao venda/compra, lifecycle de status, conferencia `CarviaFrete` (Phase C), gates FT |
 | [FINANCEIRO.md](FINANCEIRO.md) | Conciliacao, propagacao FT→CE, pre-vinculo extrato↔cotacao (R16), historico de match (R17) |
+| [COMPROVANTES.md](COMPROVANTES.md) | Comprovantes de pagamento (N:N cotacao↔NF↔CTe↔fatura), propagacao, flag "Cotacao Paga", conciliacao invertida (WIP) |
 | [FLUXOS_CRIACAO.md](FLUXOS_CRIACAO.md) | Orquestrador `CarviaFreteService`, hook portaria, fluxo unico cotacao→embarque→NF, condicoes comerciais |
 | [IMPORTACAO.md](IMPORTACAO.md) | Pipeline upload → classificacao → parsing → matching → linking retroativo |
 | [COTACAO.md](COTACAO.md) | `CidadeAtendida`, categorias moto, cotacoes comerciais e de rotas |
@@ -285,6 +286,7 @@ Lista apenas **gotchas nao-obvios**. Para campos completos, consultar schemas JS
 | `CarviaHistoricoMatchExtrato` | Append-only log de aprendizado. **Sem UNIQUE** por design (1 descricao → N CNPJs). Ver [FINANCEIRO.md](FINANCEIRO.md) |
 | `CarviaAdminAudit` | `dados_snapshot` JSONB com serializacao completa ANTES da acao. Indices em `acao`, `(entidade_tipo, entidade_id)`, `executado_em`, `executado_por` |
 | `CarviaComissaoFechamento` / `CarviaComissaoFechamentoCte` / `CarviaComissaoAjuste` | Vendedor = FK `usuarios` (`vendedor_usuario_id`); `vendedor_nome/email` = snapshot. Junction congela o CTe (snapshot). Alterar/cancelar CTe ja comissionado gera `CarviaComissaoAjuste` (delta) abatido no proximo fechamento. `total_comissao` = CTes + `total_ajustes`; NUNCA negativo. Ver R21 |
+| `CarviaComprovantePagamento` / `CarviaComprovanteVinculo` | Comprovante de pagamento **N:N** (arquivo S3 1x via `get_file_storage` + vinculo polimorfico `entidade_tipo`∈`cotacao/nf/operacao/fatura_cliente`, sem FK fisica). `origem` `MANUAL`/`PROPAGADO`; `cnpj_pagador` pode != CNPJ da fatura. `sincronizar_cadeia` propaga pela cadeia (idempotente). Soft-delete via `ativo`. Conciliacao invertida usa `cnpj_pagador`. Ver [COMPROVANTES.md](COMPROVANTES.md) |
 
 ---
 

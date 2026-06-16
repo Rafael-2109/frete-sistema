@@ -83,6 +83,7 @@
                 <table class="table table-hover mb-0 carvia-table">
                     <thead>
                         <tr>
+                            <th class="text-center" title="Tem comprovante de pagamento">💳</th>
                             {{ th_sort('numero_fatura', 'Fatura', sort, direction) }}
                             {{ th_sort('nome_cliente', 'Pagador', sort, direction) }}
                             <th>CTes</th>
@@ -97,6 +98,7 @@
                     <tbody>
                         {% for f, qtd_ops in faturas %}
                         <tr>
+                            <td class="text-center">{% if tem_comprovante.get(f.id) %}<span title="Tem comprovante de pagamento">💳</span>{% endif %}</td>
                             <td>
                                 <a href="{{ url_for('carvia.detalhe_fatura_cliente', fatura_id=f.id) }}">
                                     <strong>{{ f.numero_fatura }}</strong>

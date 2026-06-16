@@ -6,6 +6,7 @@
 {% set _dis = '' if pode_editar_geral else 'disabled' %}
 
 {% block content %}
+{% from 'carvia/_comprovantes_card.html' import comprovantes_card with context %}
 <div class="container-fluid py-4">
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h2>
@@ -821,9 +822,35 @@
 
 {# Modal Backfill de modelos (B4) — usado ao anexar NF que traz modelo novo #}
 {% include 'carvia/_modal_backfill_modelos.html' %}
+
+{# Comprovantes de Pagamento (N:N) + flag "Cotacao Paga" — pagamento antecipado #}
+<div class="container-fluid pb-4">
+    <div class="card mt-3">
+        <div class="card-body d-flex justify-content-between align-items-center py-2">
+            <div>
+                <strong><i class="fas fa-hand-holding-usd"></i> Cotacao Paga</strong>
+                <div class="small text-muted">Sinal de pagamento antecipado (independe de anexar comprovante).</div>
+                {% if cotacao.pago and cotacao.pago_em %}
+                <div class="small text-success">Marcada por {{ cotacao.pago_por }} em {{ cotacao.pago_em.strftime('%d/%m/%Y %H:%M') }}</div>
+                {% endif %}
+            </div>
+            <div class="form-check form-switch">
+                <input class="form-check-input carvia-cotacao-pago-toggle" type="checkbox"
+                       role="switch" data-cotacao-id="{{ cotacao.id }}"
+                       {% if cotacao.pago %}checked{% endif %}>
+            </div>
+        </div>
+    </div>
+    {{ comprovantes_card(
+        'Comprovantes de Pagamento',
+        comprovantes_cotacao,
+        url_for('carvia.upload_comprovante_carvia', entidade_tipo='cotacao', entidade_id=cotacao.id),
+        pode_editar=True) }}
+</div>
 {% endblock %}
 
 {% block scripts %}
+<script src="{{ url_for('static', filename='carvia/js/comprovantes_widget.js') }}"></script>
 <script src="{{ url_for('static', filename='js/shared/viacep.js') }}"></script>
 {# Jinja context — dados para o JS #}
 <script>
