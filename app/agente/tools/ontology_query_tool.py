@@ -188,9 +188,20 @@ def query_ontology_entities(
     try:
         return _execute_with_context(_query)
     except Exception as e:
-        logger.error(
-            "[ONTOLOGY_QUERY] Erro ao consultar ontologia (user_id=%s, "
+        # Quando o erro vem de uma sessao herdada ja' poluida por um statement
+        # ANTERIOR (a tool e' VITIMA, nao causa), ela se auto-recupera abaixo
+        # (rollback + []), entao WARNING evita falso-positivo no Sentry
+        # (PYTHON-FLASK-XA). Erro genuino desta tool continua ERROR.
+        _msg_low = str(e).lower()
+        _sessao_herdada = (
+            "invalid transaction is rolled back" in _msg_low
+            or "can't reconnect" in _msg_low
+            or "rolled back due to a previous exception" in _msg_low
+        )
+        (logger.warning if _sessao_herdada else logger.error)(
+            "[ONTOLOGY_QUERY] %s ao consultar ontologia (user_id=%s, "
             "entity_type=%s, name_like=%s, key=%s): %s",
+            "Sessao herdada abortada" if _sessao_herdada else "Erro",
             user_id, entity_type, name_like, key, e,
         )
         # Best-effort rollback: se a sessao chegou aqui com uma transacao
