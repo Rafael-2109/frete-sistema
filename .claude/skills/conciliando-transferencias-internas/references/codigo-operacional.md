@@ -4,7 +4,7 @@ camada: L2
 sot_de: —
 hub: .claude/skills/conciliando-transferencias-internas/SKILL.md
 superseded_by: —
-atualizado: 2026-06-02
+atualizado: 2026-06-16
 -->
 # Codigo Operacional — Transferencias Internas
 
@@ -420,11 +420,62 @@ Valor do extrato (ex: R$14.999,99) sera conciliado parcialmente contra o payment
 ## Levantamento em Lote
 
 ```python
+# CACHE de journals bancarios company_id=1 (NACOM GOYA - FB).
+# Fonte de verdade = Odoo ao vivo (verificado 2026-06-16). Esta tabela DRIFTA —
+# para journal ausente/divergente, usar resolver_journal_id() (search dinamico).
+# Chaves em UPPER (nome canonico). Ambiguidades documentadas no rodape.
 JOURNAL_MAP = {
-    'GRAFENO': 883, 'SICOOB': 10, 'BRADESCO': 388,
+    'GRAFENO': 883,
+    'SICOOB': 10,
+    'BRADESCO': 388,
+    'CAIXA ECONOMICA': 389, 'CAIXA': 389,
     'AGIS GARANTIDA': 1046, 'AGIS': 1046,
-    'BRADESCO (COPIA)': 1054, 'VORTX GRAFENO': 1068, 'VORTX': 1068,
+    'VORTX AGIS': 1054,                    # 2026-06-16: era rotulado errado 'BRADESCO (COPIA)'
+    'SRM GARANTIDA': 1055,                 # bank
+    'VORTX GRAFENO': 1068,
+    'BRADESCO APLICACAO AUTOMATICA': 1018,
+    'SICOOB APLICACAO AUTOMATICA': 1076,
+    'CARTAO DE CREDITO - SICOOB': 1032,
+    # AMBIGUIDADES (NAO mapear forma curta — resolver dinamicamente por code/tipo):
+    #   'VORTX' -> 1054 (VORTX AGIS, bank) E 1068 (VORTX GRAFENO, bank)
+    #   'SRM'   -> 1055 (SRM GARANTIDA, bank) E 1067 (SRM, cash, code AGIS1)
 }
+
+
+def resolver_journal_id(odoo, termo, company_id=1, tipos=('bank', 'cash')):
+    """Resolve journal_id por nome OU code, consultando o Odoo AO VIVO.
+
+    Fonte de verdade (evita drift do JOURNAL_MAP hardcoded). Estrategia:
+      1. Se termo ja e ID numerico -> retorna int.
+      2. Atalho: match exato no cache JOURNAL_MAP (termo.upper()).
+      3. Search dinamico: account.journal por code OU name (ilike), company + tipos.
+
+    Returns:
+        int  -> journal_id quando ha 1 candidato (ou cache/ID exato)
+        None -> nenhum candidato
+        list -> [{'id','name','code','type'}, ...] quando AMBIGUO (>1). O agente
+                DEVE desambiguar por code/tipo — NUNCA chutar.
+    """
+    if termo is None:
+        return None
+    if isinstance(termo, int) or (isinstance(termo, str) and termo.isdigit()):
+        return int(termo)
+
+    chave = termo.strip().upper()
+    if chave in JOURNAL_MAP:
+        return JOURNAL_MAP[chave]
+
+    cands = odoo.execute_kw('account.journal', 'search_read', [[
+        ['company_id', '=', company_id],
+        ['type', 'in', list(tipos)],
+        '|', ['code', '=ilike', termo], ['name', 'ilike', termo],
+    ]], {'fields': ['id', 'name', 'code', 'type'], 'order': 'id asc'})
+
+    if not cands:
+        return None
+    if len(cands) == 1:
+        return cands[0]['id']
+    return cands  # ambiguo — desambiguar por code/tipo
 
 # Mapeamento codigo bancario (extraido do payment_ref) → journal_id
 # Usado por rastrear_cadeia_documental() para identificar journal destino
@@ -473,13 +524,16 @@ def levantar_pares_transferencia_interna(data_inicio=None, data_fim=None, valor=
 
     odoo = get_odoo_connection()
 
-    # Resolver journal por nome se necessario
+    # Resolver journal por nome/code/ID via Odoo ao vivo (fonte de verdade, anti-drift)
     journal_id = None
     if journal:
-        if isinstance(journal, str) and not journal.isdigit():
-            journal_id = JOURNAL_MAP.get(journal.upper())
-        else:
-            journal_id = int(journal)
+        journal_id = resolver_journal_id(odoo, journal)
+        if isinstance(journal_id, list):
+            # Ambiguo (>1 candidato): REPORTAR candidatos ao inves de chutar
+            return {'error': 'journal ambiguo — desambiguar por code/tipo',
+                    'candidatos': journal_id}
+        if journal_id is None:
+            return {'error': f'journal nao encontrado: {journal!r}'}
 
     # Montar domain base
     domain = [

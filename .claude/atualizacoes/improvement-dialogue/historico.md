@@ -42,6 +42,37 @@ Indice de execucoes do dialogo de melhoria Agent SDK <-> Claude Code.
 | 36 | 2026-06-12 | 10 | 6 | 2 | 2 | OK (2 skill_bug corrigidos: schema MCP sessions target_user_id/channel + rastrear.py campo 'name' invalido; multi-abas Excel exportar.py; tripla R9 system_prompt em 1 edicao; 2 rejeicoes por roteamento; 2 propostas CarVia/transferencia-saldo-codigo; 12 testes novos) |
 | 37 | 2026-06-13 | 9 | 4 | 2 | 3 | OK (exportar.py entrega codigo/texto .py via --formato texto + doc; I6.1 REGRAS_OUTPUT nao-expor-calculo; anti-gatilho roteamento rastreando-odoo->consultando-quant; 2 rejeicoes raiz "falta de ferramenta"; cluster 3 propostas industrializacao FB-LF contabil+arquitetural; 1 teste novo, suite export 18/18) |
 | 38 | 2026-06-14 | 0 | 0 | 0 | 0 | SKIP (sem backlog) |
+| 39 | 2026-06-16 | 3 | 1 | 1 | 1 | OK (skill_bug journals conciliando-transf-internas: 1054 era VORTX AGIS nao "BRADESCO copia" + 6 journals faltantes, corrigido ao vivo + resolver_journal_id dinamico; 1 rejeicao falso-positivo "beneficiario TED nao importado" refutado por 643 linhas SRM ilike NACOM GOYA; 1 proposta write-path CarVia via backfill existente; 3 F2 adhoc/skill-gap listadas p/ Rafael) |
+
+## 2026-06-16
+
+6 sugestoes na query; 3 sao **F2** (`adhoc-`/`skill-gap-`, gate humano, apenas listadas); 3 decididas.
+
+- **[IMPLEMENTADO] IMP-2026-06-15-001** (skill_bug, warning) — JOURNAL_MAP de
+  `conciliando-transferencias-internas` desatualizado. Confirmado AO VIVO no Odoo (company_id=1):
+  `1054` = **VORTX AGIS** (code VORTX), nao "BRADESCO copia"; faltavam `389` CAIXA, `1018` BRADESCO
+  APLIC, `1032` CARTAO SICOOB, `1055` SRM GARANTIDA (bank), `1067` SRM (cash), `1076` SICOOB APLIC.
+  Corrigidas 3 tabelas (`.md`) + adicionada `resolver_journal_id(odoo, termo)` que resolve via
+  `account.journal search_read` ao vivo (fonte de verdade, anti-drift), retornando candidatos em
+  ambiguidade (VORTX 1054/1068, SRM 1055/1067) — nunca chuta. `levantar_pares...` passou a usa-la.
+  Sintaxe validada. Persistido v2 id=183.
+- **[REJEITADO] IMP-2026-06-15-002** (skill_bug, info) — "beneficiario TED nao importado no SRM".
+  **Falso positivo** (matriz §2.1.1: dado oficial correto): SRM (journal 1055) tem **643 linhas** com
+  `payment_ref ilike 'NACOM GOYA'` (formato `...: ENVIO DE TED | NACOM GOYA COMERCIAL LTDA`). O dado
+  EXISTE — o `ilike 'NACOM GOYA'` retorna 643, nao 0. Aprendizado real (formato varia por banco:
+  GRAFENO inline+CNPJ vs SRM apos `|` sem CNPJ) incorporado na SKILL.md junto da IMP-001. Persistido v2 id=184.
+- **[PROPOSTO] IMP-2026-06-16-001** (skill_suggestion, warning) — write-path para registrar operacao
+  comercial CarVia. **NAO auto-implementado** (gate humano). Reconciliacao com R10-R13: o write-path
+  JA EXISTE via UI (`backfill_frete_carvia` + `api_cotar_backfill` -> `CarviaFreteService.lancar_frete_carvia()`);
+  criacao manual avulsa de CarviaOperacao e DEPRECATED. Gap real = expor o backfill como tool do agente.
+  Plano: extrair logica do POST backfill para metodo headless -> skill `registrando-operacao-carvia`
+  com dry-run+confirmar -> padrao-skill completo -> smoke browser. Decisao Rafael pendente (design +
+  escopo). Persistido v2 id=185.
+- **F2 aguardando Rafael+CC** (nao decididas/persistidas): `adhoc-cluster-642` (consulta contabil
+  parametrizada Odoo, 100 membros), `adhoc-cluster-877` (conciliacao transf. internas diagnostico, 9),
+  `skill-gap-conciliando-transferencias-internas-...` (filtro journal_id/payment_ref, 38). As 3 orbitam
+  `conciliando-transferencias-internas`; a correcao da IMP-001 ja reduz parte da friccao.
+- Persistencia DB: 3/3 OK (HTTP 200).
 
 ## 2026-06-14
 - **SKIP** — nenhuma sugestao pendente no banco (query principal retornou `[]`).

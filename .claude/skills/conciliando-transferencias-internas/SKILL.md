@@ -80,16 +80,29 @@ domain = [
 ]
 ```
 
-**Resolucao de journal por nome**:
+**Resolucao de journal por nome** (CACHE — fonte de verdade = Odoo ao vivo):
 
-| Nome | ID |
-|------|----|
-| GRAFENO | 883 |
-| SICOOB | 10 |
-| BRADESCO | 388 |
-| AGIS GARANTIDA / AGIS | 1046 |
-| BRADESCO (copia) | 1054 |
-| VORTX GRAFENO / VORTX | 1068 |
+| Nome | Code | ID | Tipo |
+|------|------|----|------|
+| GRAFENO | GRA1 | 883 | bank |
+| SICOOB | SIC | 10 | bank |
+| BRADESCO | BRAD | 388 | bank |
+| CAIXA ECONOMICA | CAIXA | 389 | bank |
+| AGIS GARANTIDA / AGIS | AGISG | 1046 | bank |
+| VORTX AGIS | VORTX | 1054 | bank |
+| SRM GARANTIDA | SRMG | 1055 | bank |
+| SRM | AGIS1 | 1067 | cash |
+| VORTX GRAFENO | VORT2 | 1068 | bank |
+| BRADESCO APLICACAO AUTOMATICA | BRAD1 | 1018 | bank |
+| SICOOB APLICACAO AUTOMATICA | SICAP | 1076 | bank |
+| CARTAO DE CREDITO - SICOOB | SIC1 | 1032 | bank |
+
+> **Fonte de verdade = Odoo ao vivo** (verificado 2026-06-16, company_id=1). Esta
+> tabela e CACHE e DRIFTA. Journal ausente/divergente: resolver dinamicamente via
+> `resolver_journal_id()` (ver [codigo-operacional.md](./references/codigo-operacional.md)).
+> **ID 1054 = VORTX AGIS** (corrigido 2026-06-16; antes rotulado erroneamente "BRADESCO copia").
+> **Ambiguidade**: "VORTX" sozinho casa 1054 (AGIS) E 1068 (GRAFENO); "SRM" casa 1055
+> (GARANTIDA/bank) E 1067 (cash) — desambiguar por code/tipo, NUNCA chutar.
 
 ---
 
@@ -222,14 +235,23 @@ inconsistencias, pode buscar janela ampliada, mas o match real e SEMPRE D+0.
 
 ## Journals Bancarios (NACOM GOYA - FB, company_id=1)
 
-| ID | Nome | Banco |
-|----|------|-------|
-| 883 | GRAFENO | Banco Grafeno |
-| 10 | SICOOB | Sicoob |
-| 388 | BRADESCO | Bradesco |
-| 1046 | AGIS GARANTIDA | Agis |
-| 1054 | BRADESCO (copia) | Bradesco |
-| 1068 | VORTX GRAFENO | Vortx |
+> Verificado ao vivo no Odoo em 2026-06-16. Lista completa de journals `type IN (bank, cash)`
+> usados em transferencia interna. Resolver journal NOVO via `resolver_journal_id()`.
+
+| ID | Code | Nome | Tipo |
+|----|------|------|------|
+| 883 | GRA1 | GRAFENO | bank |
+| 10 | SIC | SICOOB | bank |
+| 388 | BRAD | BRADESCO | bank |
+| 389 | CAIXA | CAIXA ECONOMICA | bank |
+| 1046 | AGISG | AGIS GARANTIDA | bank |
+| 1054 | VORTX | VORTX AGIS | bank |
+| 1055 | SRMG | SRM GARANTIDA | bank |
+| 1067 | AGIS1 | SRM | cash |
+| 1068 | VORT2 | VORTX GRAFENO | bank |
+| 1018 | BRAD1 | BRADESCO APLICACAO AUTOMATICA | bank |
+| 1076 | SICAP | SICOOB APLICACAO AUTOMATICA | bank |
+| 1032 | SIC1 | CARTAO DE CREDITO - SICOOB | bank |
 
 ## Banco → Journal (Codigo Bancario no payment_ref)
 
@@ -244,6 +266,21 @@ Usado por `rastrear_cadeia_documental()` para identificar journal destino a part
 
 Extraido via regex `Banco\s+(\d+)` do campo `payment_ref` dos extratos GRAFENO.
 Fallback: se codigo bancario nao esta no mapa, buscar nome do journal no payment_ref (JOURNAL_MAP).
+
+## Formato do payment_ref VARIA por banco (verificado ao vivo 2026-06-16)
+
+O nome do beneficiario/contraparte **ESTA** no `payment_ref` — mas o formato muda por journal:
+
+| Journal | Formato observado | Onde fica a contraparte |
+|---------|-------------------|--------------------------|
+| GRAFENO (883) | `: PIX Enviado - NACOM GOYA INDUSTRIA... - 61.724.241/0001-78 - Banco: 310...` | nome + CNPJ inline |
+| SRM GARANTIDA (1055) | `NACOM GOYA COMERCIAL LTDA: ENVIO DE TED \| NACOM GOYA COMERCIAL LTDA` | nome apos ` \| ` (**SEM CNPJ**) |
+
+**Implicacao para o domain de busca**: o SRM **nao contem** `61.724.241` no payment_ref
+(filtro por CNPJ retorna 0), mas `ilike 'NACOM GOYA'` casa (643 linhas em set/2025). Por isso
+o domain de `levantar_pares...` usa OR (`NACOM GOYA` | `61.724.241`) — o ramo `NACOM GOYA`
+cobre o SRM. **NUNCA** concluir "beneficiario nao importado" sem antes testar `ilike 'NACOM'`
+no journal especifico — o dado existe, apenas em formato diferente do GRAFENO.
 
 ---
 
