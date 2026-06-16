@@ -12,7 +12,7 @@ atualizado: 2026-06-03
 
 - [ACHADOS TÉCNICOS — Industrialização FB↔LF (Odoo / CIEL IT)](./ACHADOS_TECNICOS.md)
 - [MACRO — Reestruturação do estoque LF para "De Terceiros" (S1)](./MACRO_REESTRUTURACAO_DE_TERCEIROS_LF.md)
-- [DESENHO S2 — Execução wired da reestruturação LF "De Terceiros" (plano + investigação)](./DESENHO_S2_REESTRUTURACAO_DE_TERCEIROS_LF.md)
+- [DESENHO S2 — Reestruturação LF "De Terceiros": plano wired + investigação + **execução S3 concluída** (A1/A4/A2-A3, 0 SVL) + D4 (pré-S4)](./DESENHO_S2_REESTRUTURACAO_DE_TERCEIROS_LF.md)
 - [GOALS — Industrialização FB↔LF (metas com métrica de sucesso)](./GOALS.md)
 - [Material de decisão — fechamento contábil do RETORNO de industrialização (G4)](./MATERIAL_CONTADORA_G4.md)
 - [PROMPT — Próxima sessão (Industrialização FB↔LF)](./PROMPT_PROXIMA_SESSAO.md)
