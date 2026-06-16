@@ -154,10 +154,23 @@ class OdooConnection:
 
         except Exception as e:
             error_msg = str(e)
+            error_low = error_msg.lower()
 
-            # Mensagens amigáveis para diferentes estados do Circuit Breaker
-            if "Circuit Breaker ABERTO" in error_msg:
-                logger.warning(f"⚠️ Circuit Breaker bloqueou autenticação: Odoo indisponível")
+            # Indisponibilidade de infra (circuit aberto, 502/503/504/gateway/
+            # protocolerror) = Odoo fora do ar (best-effort, recupera quando volta).
+            # WARNING evita poluir o Sentry com erro nao-acionavel na fonte
+            # (PYTHON-FLASK-6J/TY/V5/V7/V8/H0/H3). Auth com credencial invalida
+            # (outra mensagem) continua ERROR.
+            indisponibilidade = (
+                "circuit breaker aberto" in error_low
+                or "502" in error_low or "bad gateway" in error_low
+                or "503" in error_low or "service unavailable" in error_low
+                or "504" in error_low or "gateway time-out" in error_low
+                or "gateway timeout" in error_low or "protocolerror" in error_low
+                or "timed out" in error_low or "connection refused" in error_low
+            )
+            if indisponibilidade:
+                logger.warning(f"⚠️ Odoo indisponível na autenticação (best-effort): {e}")
             else:
                 logger.error(f"Erro na autenticação: {e}")
 

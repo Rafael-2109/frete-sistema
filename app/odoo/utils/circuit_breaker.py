@@ -168,6 +168,10 @@ class OdooCircuitBreaker:
                     # de gateway para o circuit ABRIR e parar a cascata de re-logs ERROR
                     '502', 'bad gateway', '503', 'service unavailable',
                     '504', 'gateway time-out', 'gateway timeout', 'protocolerror',
+                    # A excecao propagada pelo execute_kw quando o login falha e'
+                    # "Falha na autenticacao com Odoo" (a causa 502 ja foi engolida
+                    # dentro de authenticate). Contar como seria para o circuit abrir.
+                    'falha na autentica', 'authentication',
                 ]
             )
 
