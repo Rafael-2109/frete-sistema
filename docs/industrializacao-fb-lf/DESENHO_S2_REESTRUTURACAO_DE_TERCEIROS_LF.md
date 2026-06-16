@@ -212,6 +212,8 @@ s83 --validar                              # gates pós-go
 # A5 (repoint L1): só após validação do Contador (CSV /tmp/s2_mapa_a5_...csv)
 ```
 
+> **🔧 Achado de execução (2026-06-16) — A4 canary BLOQUEADO:** com A1 já aplicado, o canary `s82 --migrar --canary-n 3 --confirmar` criou o picking `42→31092` mas o `action_assign` reservou **0 move_lines** → `button_validate` falhou (`Fault 2: sem quantidades reservadas`). Picking limpo (`s84_canary_recovery.py`). **Causa a fechar antes de re-tentar A4** (1 teste dirigido): (a) move **pai→filha** (31092 ⊂ 42 pós-reparent) pode não reservar; (b) `consolidar_move_lines` depende de reserva prévia; (c) **codificar `quantity` (qty_done) manual** no move.line em vez de depender de `action_assign` — caminho sugerido pelo próprio erro do Odoo. **A1 não reverte** (é o desenho aprovado).
+
 **Sequência (cada passo = dry-run → medir → go fresco do Rafael → executar → validar):** *ordem importa* — **A1 antes de A4** (senão o saldo migrado fica fora do `lot_stock` até o reparent); **A4 antes de A2/A3** (migração usa `dst` explícito 31092/31093, então não é redirecionada pela put-away; ativar put-away depois evita qualquer interação e só vale p/ fluxos futuros).
 1. **A1 reparent** 31092/31093 sob 42 (`s82 --reparent`) → validar: `child_of(42)` inclui ambas; on-hand do WH inalterado.
 2. **A4 migração** dos 442 livres (`s82 --migrar`, picking pt23, `dst` explícito por categoria, **excluindo açúcar lote 230326**) → validar: 31092 recebe 431 (5.655.181 un) / 31093 recebe 11 (978,7 un), 42 zera (exceto açúcar), lotes preservados, **0 SVL**, saldo por produto inalterado.

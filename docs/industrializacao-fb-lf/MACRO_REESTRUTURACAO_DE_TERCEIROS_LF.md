@@ -58,7 +58,7 @@ Locations-chave: `42` LF/Estoque · `53` LF/Pré-Produção · `31092` Mat. Terc
 |---|---|---|---|---|
 | **S1** | ✅ | Macro | As-Is/To-Be mapeado + plano + reservas LF/Estoque limpas (este doc) | feito |
 | **S2** | ✅ | Desenho + investigação ampla | Plano wired completo em **`DESENHO_S2_REESTRUTURACAO_DE_TERCEIROS_LF.md`** (investigação ao vivo `s72`–`s79`); decisões GATE tomadas (D1 terceiros contábil/L1 · D2 reparent 31092/31093 sob 42 · D3 açúcar depois) | **Rafael aprovou (GATE 15/06)** |
-| **S3** | ⏭️ **PRÓXIMA** | Implementação Odoo | A1 reparent + A2/A3 put-away (cat 6→31093, cat 1→31092) + A4 migração 442 livres + A5 repoint L1; **validado** (saldo, reserva, produção, entrega, neutralidade) | **go por escrita (dry-run-first, cada passo)** |
+| **S3** | 🔧 **EM EXECUÇÃO** | Implementação Odoo | **A1 reparent ✅ ESCRITO** (31092/31093 sob 42). **A4 migração ❌ BLOQUEADA no canary** (`action_assign` 0 reservas → `button_validate` falha; picking limpo). Falta: fechar causa da reserva → A4 → A2/A3 put-away → A5 repoint L1. Recovery `s84`. | **go por escrita (dry-run-first, cada passo)** |
 | **S4** | ⬜ | Automação (SA) | **Pré-condição (D4): endurecer a descoberta G1** (genealogia+entrada `child_of 42` + exigir SVL no voto/preço — `DESENHO_S2 §7.1`) **antes** de ligar o cron + canary READ/oráculo. Depois: crons G1/G2 ligados (domain data-de-corte "daqui pra frente") + G2 SEFAZ piloto, sobre o estado reestruturado (= **estágio 4** do RUNBOOK `fluxos/1.1.4`) | **go duplo** (SEFAZ irreversível) |
 
 ## Checklist de investigação da Sessão 2 — ✅ RESOLVIDO em `DESENHO_S2_REESTRUTURACAO_DE_TERCEIROS_LF.md` (scripts `s72`–`s79`)
