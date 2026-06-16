@@ -58,6 +58,9 @@ BYTES_POR_TOKEN = 3.5  # estimativa pt-BR + XML
 
 BASELINE_PATH = ROOT / "scripts/audits/prompt_size_baseline.json"
 CLAUDE_MD_PATH = ROOT / "app/agente/CLAUDE.md"
+# Baseline do tripwire de roteamento de subagente (skills <-> delegate_when). Ver
+# snapshot_routing / comparar_routing e o flag --check-routing.
+ROUTING_BASELINE_PATH = ROOT / "scripts/audits/subagent_routing_baseline.json"
 
 # Marcadores do bloco auto-medido no CLAUDE.md (T5.2). Conteudo entre eles e' gerado.
 MARK_INI = "<!-- prompt-size:start (auto: scripts/audits/prompt_size_audit.py --update-claude-md) -->"
@@ -647,6 +650,97 @@ def _agents_no_claude_md():
     return set(re.findall(r"^\| `([a-z0-9-]+)` \|", corpo, re.MULTILINE))
 
 
+# ------------------------------------------ tripwire de roteamento (skills <-> delegate_when)
+# Invariante: a CAPACIDADE de um subagente (skills do frontmatter) e' o gatilho de
+# QUANDO o principal delega (<delegate_when>/<capabilities> no system_prompt). Se a
+# capacidade muda mas o gatilho NAO e' revisado, a skill fica alcancavel pelo
+# subagente mas o principal nunca aprende a delegar -> improviso (bug real #164:
+# auditando-reclassificacao-odoo entrou no auditor-financeiro, delegate_when ficou
+# so' "reconciliacao" -> agente caia em Bash cru). Determinismo: --check-routing.
+
+def _norm_routing_text(s):
+    """Normaliza whitespace p/ o hash ser estavel a reformatacao cosmetica."""
+    import re
+    return re.sub(r"\s+", " ", (s or "")).strip()
+
+
+def _routing_hash(delegate_when, capabilities):
+    """Hash curto do gatilho de delegacao (delegate_when + capabilities)."""
+    import hashlib
+    base = _norm_routing_text(delegate_when) + "||" + _norm_routing_text(capabilities)
+    return hashlib.sha256(base.encode("utf-8")).hexdigest()[:16]
+
+
+def _routing_por_agent(txt=None):
+    """nome_agente -> {'delegate_when':..., 'capabilities':...} do <subagents> do system_prompt."""
+    import re
+    if txt is None:
+        txt = (ROOT / "app/agente/prompts/system_prompt.md").read_text(encoding="utf-8")
+    out = {}
+    for m in re.finditer(r'<agent name="([^"]+)"[^>]*>(.*?)</agent>', txt, re.DOTALL):
+        nome, corpo = m.group(1), m.group(2)
+        dw = re.search(r"<delegate_when>(.*?)</delegate_when>", corpo, re.DOTALL)
+        cap = re.search(r"<capabilities>(.*?)</capabilities>", corpo, re.DOTALL)
+        out[nome] = {
+            "delegate_when": dw.group(1).strip() if dw else "",
+            "capabilities": cap.group(1).strip() if cap else "",
+        }
+    return out
+
+
+def snapshot_routing():
+    """{agent: {skills:[sorted], routing_hash}} para agents presentes no system_prompt.
+
+    A fonte de capacidade e' o frontmatter `skills:` (.claude/agents/*.md); a fonte do
+    gatilho e' o <delegate_when>/<capabilities> do system_prompt. So' cobre agents que
+    EXISTEM no system_prompt (web-expostos) — dev-only (via Task) nao tem delegate_when.
+    """
+    sp = _agents_no_system_prompt()
+    skills_por = _skills_declaradas_em_agents()
+    routing = _routing_por_agent()
+    out = {}
+    for nome in sorted(sp):
+        r = routing.get(nome, {"delegate_when": "", "capabilities": ""})
+        out[nome] = {
+            "skills": sorted(skills_por.get(nome, set())),
+            "routing_hash": _routing_hash(r["delegate_when"], r["capabilities"]),
+        }
+    return out
+
+
+def comparar_routing(atual, baseline):
+    """Retorna (perigosos, drifts).
+
+    perigoso = as skills de um subagente mudaram MAS o routing_hash (delegate_when +
+      capabilities) NAO — gatilho de delegacao desatualizado (o bug do #164). BLOQUEIA.
+    drift = qualquer outra divergencia vs baseline (skill+routing mudaram juntos,
+      delegate_when revisado sozinho, agente add/remove) — mudanca consciente que exige
+      registrar o novo estado via --update-routing-baseline (mantem o baseline preciso).
+    """
+    perigosos, drifts = [], []
+    base = baseline or {}
+    for nome in sorted(atual):
+        a = atual[nome]
+        b = base.get(nome)
+        if b is None:
+            drifts.append(f"subagente novo no system_prompt sem baseline de roteamento: '{nome}'")
+            continue
+        skills_mudou = list(a.get("skills") or []) != list(b.get("skills") or [])
+        routing_mudou = a.get("routing_hash") != b.get("routing_hash")
+        if skills_mudou and not routing_mudou:
+            add = sorted(set(a.get("skills") or []) - set(b.get("skills") or []))
+            rem = sorted(set(b.get("skills") or []) - set(a.get("skills") or []))
+            perigosos.append(
+                f"'{nome}': skills mudaram (adicionadas={add or '-'} removidas={rem or '-'}) "
+                f"mas o <delegate_when>/<capabilities> NAO foi revisado"
+            )
+        elif skills_mudou or routing_mudou:
+            drifts.append(f"'{nome}': skills/roteamento mudaram vs baseline (registre com --update-routing-baseline)")
+    for nome in sorted(set(base) - set(atual)):
+        drifts.append(f"subagente '{nome}' estava no baseline mas sumiu do system_prompt")
+    return (perigosos, drifts)
+
+
 def check_consistencia():
     """Retorna (erros, avisos). Erros = divergencias que quebram routing/acesso."""
     erros, avisos = [], []
@@ -844,6 +938,13 @@ def main():
               f"(system_prompt={sp}L, total={snap['total']['linhas']}L)")
         return 0
 
+    if "--update-routing-baseline" in argv:
+        snap = snapshot_routing()
+        salvar_baseline(ROUTING_BASELINE_PATH, snap)
+        print(f"baseline de roteamento atualizado: {ROUTING_BASELINE_PATH.relative_to(ROOT)} "
+              f"({len(snap)} subagentes no system_prompt)")
+        return 0
+
     if "--update-claude-md" in argv:
         snap = snapshot()
         bloco = bloco_md(snap)
@@ -887,6 +988,39 @@ def main():
         print("  python scripts/audits/prompt_size_audit.py --update-baseline && \\", file=sys.stderr)
         print("  python scripts/audits/prompt_size_audit.py --update-claude-md && \\", file=sys.stderr)
         print("  git add scripts/audits/prompt_size_baseline.json app/agente/CLAUDE.md", file=sys.stderr)
+        print("\nBypass emergencial: git commit --no-verify", file=sys.stderr)
+        return 1
+
+    if "--check-routing" in argv:
+        base = carregar_baseline(ROUTING_BASELINE_PATH)
+        if base is None:
+            print(f"baseline de roteamento ausente ({ROUTING_BASELINE_PATH.relative_to(ROOT)}); "
+                  f"rode --update-routing-baseline para armar o gatilho. Sem bloqueio.",
+                  file=sys.stderr)
+            return 0  # no-op: nao bloqueia worktree sem baseline
+        atual = snapshot_routing()
+        perigosos, drifts = comparar_routing(atual, base)
+        if not perigosos and not drifts:
+            print(f"OK: roteamento de subagentes consistente com o baseline "
+                  f"({len(atual)} subagentes no system_prompt).")
+            return 0
+        if perigosos:
+            print("BLOQUEIO (PAD-CTX): capacidade de subagente mudou SEM revisar o gatilho de delegacao:",
+                  file=sys.stderr)
+            for m in perigosos:
+                print(f"  - {m}", file=sys.stderr)
+            print("\nFoi o bug do #164: a skill entrou no subagente, mas o <delegate_when> do", file=sys.stderr)
+            print("system_prompt nao cobria o caso -> o agente principal nunca aprendia a delegar.", file=sys.stderr)
+            print("ACAO: atualize <delegate_when>/<capabilities> do subagente no system_prompt para", file=sys.stderr)
+            print("refletir a nova capacidade. Se o roteamento JA cobre, registre conscientemente abaixo.", file=sys.stderr)
+        else:
+            print("baseline de roteamento desatualizado (mudanca consciente de skills/delegate_when):",
+                  file=sys.stderr)
+            for m in drifts:
+                print(f"  - {m}", file=sys.stderr)
+            print("\nApos revisar o <delegate_when>, registre o novo estado revisado:", file=sys.stderr)
+        print("  python scripts/audits/prompt_size_audit.py --update-routing-baseline && \\", file=sys.stderr)
+        print("  git add scripts/audits/subagent_routing_baseline.json", file=sys.stderr)
         print("\nBypass emergencial: git commit --no-verify", file=sys.stderr)
         return 1
 

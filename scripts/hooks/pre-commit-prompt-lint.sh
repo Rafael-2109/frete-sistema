@@ -7,7 +7,9 @@
 #    skills_whitelist, o CLAUDE.md raiz, o system_prompt, ROUTING_SKILLS.md,
 #    tool_skill_mapper.py ou qualquer SKILL.md, roda --check-consistency
 #    (bloqueia divergencia entre as 3 projecoes de subagentes, skill orfa na
-#    deny-list, anti-gatilhos mortos, contagens ROUTING erradas, budget subagente).
+#    deny-list, anti-gatilhos mortos, contagens ROUTING erradas, budget subagente)
+#    + --check-routing (tripwire skills<->delegate_when: bloqueia mudar a capacidade
+#    de um subagente sem revisar o gatilho de delegacao no system_prompt — bug #164).
 #    Padrao: .claude/references/ARQUITETURA_CONTEXTO_AGENTE.md.
 # 3. ORCAMENTO DO LISTING (F2.5): SKILL.md/whitelist tocados -> skills_listing_audit.
 # 4. ORCAMENTO DO HOOK (F6): pipeline de injecao tocado -> test_hook_budget.py.
@@ -70,6 +72,10 @@ fi
 
 if [ "$TOCOU_CONSISTENCIA" -eq 1 ]; then
     python3 scripts/audits/prompt_size_audit.py --check-consistency
+    # Tripwire skills<->delegate_when: bloqueia mudar a capacidade de um subagente
+    # (skills do frontmatter) sem revisar seu gatilho de delegacao no system_prompt
+    # (bug real #164). Registrar mudanca consciente: --update-routing-baseline.
+    python3 scripts/audits/prompt_size_audit.py --check-routing
 fi
 
 if [ "$TOCOU_LISTING" -eq 1 ]; then

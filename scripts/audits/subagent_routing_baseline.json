@@ -1,0 +1,114 @@
+{
+  "analista-carteira": {
+    "skills": [
+      "consultando-sql",
+      "gerindo-expedicao"
+    ],
+    "routing_hash": "270ee187ecda8688"
+  },
+  "analista-performance-logistica": {
+    "skills": [
+      "consultando-sql",
+      "exportando-arquivos",
+      "monitorando-entregas",
+      "resolvendo-entidades"
+    ],
+    "routing_hash": "8806a94cc72724e2"
+  },
+  "auditor-financeiro": {
+    "skills": [
+      "auditando-reclassificacao-odoo",
+      "conciliando-transferencias-internas",
+      "consultando-sql",
+      "executando-odoo-financeiro",
+      "lendo-arquivos",
+      "rastreando-odoo",
+      "resolvendo-entidades"
+    ],
+    "routing_hash": "3cf0cfbe6d6221f9"
+  },
+  "especialista-odoo": {
+    "skills": [
+      "conciliando-odoo-po",
+      "conciliando-transferencias-internas",
+      "descobrindo-odoo-estrutura",
+      "executando-odoo-financeiro",
+      "rastreando-odoo",
+      "razao-geral-odoo",
+      "recebimento-fisico-odoo",
+      "validacao-nf-po"
+    ],
+    "routing_hash": "898a3b4a47c400ef"
+  },
+  "gestor-carvia": {
+    "skills": [
+      "consultando-sql",
+      "cotando-frete",
+      "gerindo-carvia",
+      "monitorando-entregas",
+      "operando-ssw",
+      "resolvendo-entidades"
+    ],
+    "routing_hash": "69500d384fa4ebec"
+  },
+  "gestor-estoque-odoo": {
+    "skills": [
+      "ajustando-quant-odoo",
+      "auditando-cadastro-fiscal-odoo",
+      "consultando-quant-odoo",
+      "consultando-sql",
+      "escriturando-odoo",
+      "faturando-odoo",
+      "operando-mo-odoo",
+      "operando-picking-odoo",
+      "operando-reservas-odoo",
+      "planejando-pre-etapa-odoo",
+      "resolvendo-entidades",
+      "transferindo-interno-odoo"
+    ],
+    "routing_hash": "43ca2ab1397ff6be"
+  },
+  "gestor-estoque-producao": {
+    "skills": [
+      "consultando-sql",
+      "exportando-arquivos",
+      "gerindo-expedicao",
+      "resolvendo-entidades",
+      "visao-produto"
+    ],
+    "routing_hash": "565d546b8cf941c4"
+  },
+  "gestor-motos-assai": {
+    "skills": [
+      "acompanhando-pedido-compra-assai",
+      "acompanhando-saida-assai",
+      "carregando-motos-assai",
+      "conferindo-recibo-assai",
+      "consultando-estoque-assai",
+      "rastreando-chassi-assai",
+      "registrando-evento-moto-assai"
+    ],
+    "routing_hash": "44b79af9f25676f2"
+  },
+  "gestor-recebimento": {
+    "skills": [
+      "conciliando-odoo-po",
+      "consultando-sql",
+      "descobrindo-odoo-estrutura",
+      "recebimento-fisico-odoo",
+      "validacao-nf-po"
+    ],
+    "routing_hash": "121916f153bf7999"
+  },
+  "raio-x-pedido": {
+    "skills": [
+      "consultando-sql",
+      "cotando-frete",
+      "gerindo-expedicao",
+      "monitorando-entregas",
+      "rastreando-odoo",
+      "resolvendo-entidades"
+    ],
+    "routing_hash": "2abb438637e227f6"
+  }
+}
