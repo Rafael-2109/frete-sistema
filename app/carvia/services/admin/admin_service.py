@@ -184,7 +184,7 @@ class AdminService:
     def excluir_fatura_cliente(self, fatura_id, motivo, executado_por):
         """Hard delete de CarviaFaturaCliente + cascade (itens).
 
-        Revert: Operacoes → CONFIRMADO, CteComp → EMITIDO
+        Revert: Operacoes → RASCUNHO, CteComp → EMITIDO
         Nullify: Operacao.fatura_cliente_id, CteComp.fatura_cliente_id
         Bloqueio: conciliado=True
         Limpar: ContaMovimentacao + Conciliacao
@@ -208,12 +208,12 @@ class AdminService:
         itens = CarviaFaturaClienteItem.query.filter_by(fatura_cliente_id=fatura_id).all()
         relacionados = self.serializar_relacionados(fatura, {'itens': itens})
 
-        # 1. Revert operacoes vinculadas → CONFIRMADO
+        # 1. Revert operacoes vinculadas → RASCUNHO (CONFIRMADO deprecado 2026-06)
         ops_vinculadas = CarviaOperacao.query.filter_by(fatura_cliente_id=fatura_id).all()
         for op in ops_vinculadas:
             op.fatura_cliente_id = None
             if op.status == 'FATURADO':
-                op.status = 'CONFIRMADO'
+                op.status = 'RASCUNHO'
 
         # 2. Revert CTe complementares → EMITIDO
         ctes_comp = CarviaCteComplementar.query.filter_by(fatura_cliente_id=fatura_id).all()

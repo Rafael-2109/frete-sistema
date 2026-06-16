@@ -388,7 +388,8 @@ class CarviaOperacao(db.Model):
     # Tipo e status
     # IMPORTADO, MANUAL_SEM_CTE, MANUAL_FRETEIRO
     tipo_entrada = db.Column(db.String(30), nullable=False)
-    # RASCUNHO, COTADO, CONFIRMADO, FATURADO, CANCELADO
+    # RASCUNHO, FATURADO, CANCELADO (COTADO/CONFIRMADO deprecados 2026-06 — a
+    # operacao nao espelha mais status de subcontrato; ver app/carvia/CLAUDE.md R4)
     status = db.Column(db.String(20), nullable=False, default='RASCUNHO')
 
     # Fatura CarVia (ao cliente)

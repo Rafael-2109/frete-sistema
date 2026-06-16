@@ -46,13 +46,11 @@ def register_dashboard_routes(bp):
                 func.count(CarviaOperacao.id)
             ).filter(CarviaOperacao.status == 'RASCUNHO').scalar() or 0
 
-            stats['operacoes_cotadas'] = db.session.query(
+            # COTADO/CONFIRMADO deprecados (2026-06): operacao vai de RASCUNHO
+            # direto a FATURADO. Mostramos as faturadas no lugar.
+            stats['operacoes_faturadas'] = db.session.query(
                 func.count(CarviaOperacao.id)
-            ).filter(CarviaOperacao.status == 'COTADO').scalar() or 0
-
-            stats['operacoes_confirmadas'] = db.session.query(
-                func.count(CarviaOperacao.id)
-            ).filter(CarviaOperacao.status == 'CONFIRMADO').scalar() or 0
+            ).filter(CarviaOperacao.status == 'FATURADO').scalar() or 0
 
             # CTes Subcontrato
             stats['total_subcontratos'] = db.session.query(

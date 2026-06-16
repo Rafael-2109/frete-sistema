@@ -1019,9 +1019,9 @@ def register_operacao_routes(bp):
                 subcontrato.cte_numero = CarviaSubcontrato.gerar_numero_sub()
                 db.session.add(subcontrato)
 
-                # Atualizar status da operacao se necessario
-                if operacao.status == 'RASCUNHO' and cotacao.get('sucesso'):
-                    operacao.status = 'COTADO'
+                # COTADO/CONFIRMADO da operacao deprecados (2026-06): a operacao
+                # permanece RASCUNHO ate ser faturada. O status de cotacao vive no
+                # proprio subcontrato (sub.status acima).
 
                 db.session.commit()
 
@@ -1070,14 +1070,9 @@ def register_operacao_routes(bp):
         try:
             sub.status = 'CONFIRMADO'
 
-            # Atualizar operacao para CONFIRMADO se todos os subs estao confirmados
-            operacao = db.session.get(CarviaOperacao, operacao_id)
-            subs_ativos = operacao.subcontratos.filter(
-                CarviaSubcontrato.status != 'CANCELADO'
-            ).all()
-            todos_confirmados = all(s.status == 'CONFIRMADO' for s in subs_ativos)
-            if todos_confirmados and subs_ativos:
-                operacao.status = 'CONFIRMADO'
+            # Operacao NAO e mais promovida a CONFIRMADO (status deprecado 2026-06):
+            # permanece RASCUNHO ate ser faturada. A confirmacao vale para o sub —
+            # a elegibilidade da fatura transportadora usa sub.status (COTADO/CONFIRMADO).
 
             db.session.commit()
             flash('Subcontrato confirmado.', 'success')
@@ -1128,28 +1123,9 @@ def register_operacao_routes(bp):
                     usuario=current_user.email,
                 )
 
-            # GAP-03: Downgrade operacao se nao ha mais subs ativos
-            operacao = db.session.get(CarviaOperacao, operacao_id)
-            if operacao and operacao.status not in ('FATURADO', 'CANCELADO'):
-                subs_ativos = operacao.subcontratos.filter(
-                    CarviaSubcontrato.status != 'CANCELADO'
-                ).all()
-                if not subs_ativos:
-                    operacao.status = 'RASCUNHO'
-                    logger.info(
-                        f"Operacao #{operacao_id}: downgrade para RASCUNHO "
-                        f"(ultimo sub ativo cancelado por {current_user.email})"
-                    )
-                elif operacao.status == 'CONFIRMADO':
-                    todos_confirmados = all(
-                        s.status == 'CONFIRMADO' for s in subs_ativos
-                    )
-                    if not todos_confirmados:
-                        operacao.status = 'COTADO'
-                        logger.info(
-                            f"Operacao #{operacao_id}: downgrade para COTADO "
-                            f"(nem todos subs confirmados apos cancelamento)"
-                        )
+            # COTADO/CONFIRMADO da operacao deprecados (2026-06): a operacao nao
+            # espelha mais o status dos subs — permanece RASCUNHO ate ser faturada,
+            # entao nao ha downgrade a fazer ao cancelar um sub.
 
             db.session.commit()
             flash('Subcontrato cancelado.', 'success')
@@ -1226,7 +1202,7 @@ def register_operacao_routes(bp):
     def desvincular_fatura(operacao_id): # type: ignore
         """GAP-23: Desvincula fatura cliente de uma operacao FATURADO.
 
-        Reverte operacao para CONFIRMADO, remove fatura_cliente_id.
+        Reverte operacao para RASCUNHO, remove fatura_cliente_id.
         Itens de fatura mantidos (nao exclui fatura, apenas desvincula operacao).
         """
         if not getattr(current_user, 'sistema_carvia', False):
@@ -1249,9 +1225,10 @@ def register_operacao_routes(bp):
         try:
             fatura_id = operacao.fatura_cliente_id
 
-            # Remover FK da operacao e reverter status
+            # Remover FK da operacao e reverter status (RASCUNHO — CONFIRMADO
+            # deprecado 2026-06)
             operacao.fatura_cliente_id = None
-            operacao.status = 'CONFIRMADO'
+            operacao.status = 'RASCUNHO'
 
             # Limpar operacao_id nos itens de fatura (nao exclui itens)
             from app.carvia.models import CarviaFaturaClienteItem, CarviaFrete
@@ -1271,10 +1248,10 @@ def register_operacao_routes(bp):
 
             logger.info(
                 f"Operacao #{operacao_id}: fatura #{fatura_id} desvinculada, "
-                f"status revertido para CONFIRMADO por {current_user.email}"
+                f"status revertido para RASCUNHO por {current_user.email}"
             )
             flash(
-                f'Fatura #{fatura_id} desvinculada. Operacao revertida para CONFIRMADO.',
+                f'Fatura #{fatura_id} desvinculada. Operacao revertida para RASCUNHO.',
                 'success',
             )
         except Exception as e:

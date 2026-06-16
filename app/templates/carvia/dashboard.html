@@ -124,7 +124,7 @@
                 </div>
                 <div class="card-body py-2">
                     <div class="row g-2">
-                        <div class="col-4">
+                        <div class="col-6">
                             <a href="{{ url_for('carvia.listar_operacoes', status='RASCUNHO') }}" class="text-decoration-none">
                                 <div class="card stat-card stat-card-warning">
                                     <div class="card-body py-2 px-2">
@@ -134,22 +134,12 @@
                                 </div>
                             </a>
                         </div>
-                        <div class="col-4">
-                            <a href="{{ url_for('carvia.listar_operacoes', status='COTADO') }}" class="text-decoration-none">
-                                <div class="card stat-card">
-                                    <div class="card-body py-2 px-2">
-                                        <h5 class="mb-0 fw-bold">{{ stats.operacoes_cotadas }}</h5>
-                                        <span class="small text-muted">Cotadas</span>
-                                    </div>
-                                </div>
-                            </a>
-                        </div>
-                        <div class="col-4">
-                            <a href="{{ url_for('carvia.listar_operacoes', status='CONFIRMADO') }}" class="text-decoration-none">
+                        <div class="col-6">
+                            <a href="{{ url_for('carvia.listar_operacoes', status='FATURADO') }}" class="text-decoration-none">
                                 <div class="card stat-card stat-card-success">
                                     <div class="card-body py-2 px-2">
-                                        <h5 class="mb-0 fw-bold">{{ stats.operacoes_confirmadas }}</h5>
-                                        <span class="small text-muted">Confirmadas</span>
+                                        <h5 class="mb-0 fw-bold">{{ stats.operacoes_faturadas }}</h5>
+                                        <span class="small text-muted">Faturadas</span>
                                     </div>
                                 </div>
                             </a>
@@ -451,10 +441,6 @@
                             <td class="text-center">
                                 {% if op.status == 'RASCUNHO' %}
                                     <span class="badge carvia-badge-rascunho">Rascunho</span>
-                                {% elif op.status == 'COTADO' %}
-                                    <span class="badge carvia-badge-cotado">Cotado</span>
-                                {% elif op.status == 'CONFIRMADO' %}
-                                    <span class="badge carvia-badge-confirmado">Confirmado</span>
                                 {% elif op.status == 'FATURADO' %}
                                     <span class="badge carvia-badge-faturado">Faturado</span>
                                 {% elif op.status == 'CANCELADO' %}

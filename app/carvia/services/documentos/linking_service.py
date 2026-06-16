@@ -655,7 +655,7 @@ class LinkingService:
 
         Regra de negocio: fatura PDF e evidencia documental de faturamento
         consumado, entao e correto promover status para FATURADO
-        independente do status anterior (RASCUNHO/COTADO/CONFIRMADO).
+        independente do status anterior (tipicamente RASCUNHO).
 
         Returns:
             dict com: operacoes_vinculadas, operacoes_ja_vinculadas, total

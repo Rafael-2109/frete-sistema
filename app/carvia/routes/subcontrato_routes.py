@@ -212,9 +212,8 @@ def register_subcontrato_routes(bp):
                 )
                 db.session.add(subcontrato)
 
-                # Atualizar status da operacao se necessario
-                if operacao.status == 'RASCUNHO' and cotacao.get('sucesso'):
-                    operacao.status = 'COTADO'
+                # COTADO/CONFIRMADO da operacao deprecados (2026-06): permanece
+                # RASCUNHO ate ser faturada (o status de cotacao vive no sub).
 
                 db.session.commit()
 
@@ -460,29 +459,8 @@ def register_subcontrato_routes(bp):
                 sub.valor_cotado = cotacao['valor_cotado']
                 sub.tabela_frete_id = cotacao.get('tabela_frete_id')
 
-            # GAP-15: Verificar se operacao anterior precisa downgrade (GAP-03 composto)
-            if operacao_anterior_id:
-                operacao_anterior = db.session.get(CarviaOperacao, operacao_anterior_id)
-                if operacao_anterior and operacao_anterior.status not in ('FATURADO', 'CANCELADO'):
-                    subs_ativos = operacao_anterior.subcontratos.filter(
-                        CarviaSubcontrato.status != 'CANCELADO'
-                    ).all()
-                    if not subs_ativos:
-                        operacao_anterior.status = 'RASCUNHO'
-                        logger.info(
-                            f"Operacao #{operacao_anterior_id}: downgrade para RASCUNHO "
-                            f"(sub #{sub_id} re-vinculado, sem subs restantes)"
-                        )
-                    elif operacao_anterior.status == 'CONFIRMADO':
-                        todos_confirmados = all(
-                            s.status == 'CONFIRMADO' for s in subs_ativos
-                        )
-                        if not todos_confirmados:
-                            operacao_anterior.status = 'COTADO'
-                            logger.info(
-                                f"Operacao #{operacao_anterior_id}: downgrade para COTADO "
-                                f"(nem todos subs confirmados apos re-vinculacao)"
-                            )
+            # Operacao anterior nao espelha mais status de sub (COTADO/CONFIRMADO
+            # deprecados 2026-06): permanece RASCUNHO ate ser faturada — sem downgrade.
 
             db.session.commit()
 

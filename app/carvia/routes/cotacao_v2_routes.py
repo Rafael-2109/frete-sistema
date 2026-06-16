@@ -333,35 +333,13 @@ def register_cotacao_v2_routes(bp):
                         'status': _dup_ped.cotacao.status,
                     }
 
-            # 2. Verificar cliente existente: PRIMEIRO pelo CNPJ destinatario
-            #    (endereco tipo=DESTINO), depois pelo CNPJ emitente (endereco
-            #    tipo=ORIGEM). Filtrar por tipo evita falso-match quando o mesmo
-            #    CNPJ aparece em enderecos de papeis diferentes.
-            cliente_id = None
-            cliente_nome = None
-            if cnpj_dest_limpo:
-                enderecos_dest = CarviaClienteEndereco.query.filter(
-                    CarviaClienteEndereco.cnpj == cnpj_dest_limpo,
-                    CarviaClienteEndereco.tipo == 'DESTINO',
-                    CarviaClienteEndereco.cliente_id.isnot(None),
-                ).all()
-                for end in enderecos_dest:
-                    if end.cliente:
-                        cliente_id = end.cliente_id
-                        cliente_nome = end.cliente.nome_comercial
-                        break
-
-            if not cliente_id and cnpj_emit_limpo:
-                enderecos_orig = CarviaClienteEndereco.query.filter(
-                    CarviaClienteEndereco.cnpj == cnpj_emit_limpo,
-                    CarviaClienteEndereco.tipo == 'ORIGEM',
-                    CarviaClienteEndereco.cliente_id.isnot(None),
-                ).all()
-                for end in enderecos_orig:
-                    if end.cliente:
-                        cliente_id = end.cliente_id
-                        cliente_nome = end.cliente.nome_comercial
-                        break
+            # 2. Resolver cliente comercial SO pelo CNPJ destinatario (tipo=DESTINO).
+            #    NUNCA cair no emitente: cliente comercial != remetente da NF. Se o
+            #    destinatario nao estiver cadastrado, cliente_id=None e o vendedor
+            #    seleciona/cria o cliente direto na tela (o emitente vira so origem).
+            cliente_id, cliente_nome = CarviaClienteService.resolver_cliente_por_destinatario(
+                cnpj_dest_limpo
+            )
 
             # 3. Verificar enderecos ORIGEM e DESTINO
             endereco_origem_id = None
@@ -547,7 +525,7 @@ def register_cotacao_v2_routes(bp):
         cnpj_dest_limpo = _re.sub(r'\D', '', nf.cnpj_destinatario or '')
 
         if not cnpj_emit_limpo:
-            return jsonify({'erro': 'NF sem CNPJ emitente — nao e possivel identificar o cliente.'}), 400
+            return jsonify({'erro': 'NF sem CNPJ emitente — nao e possivel identificar a origem do frete.'}), 400
 
         try:
             # 1. Verificar cotacao existente via pedido
@@ -577,36 +555,11 @@ def register_cotacao_v2_routes(bp):
                     'status': existing_pedido.cotacao.status,
                 }
 
-            # 2. Buscar cliente existente: PRIMEIRO pelo CNPJ destinatario
-            #    (endereco tipo=DESTINO), depois pelo CNPJ emitente (endereco
-            #    tipo=ORIGEM). Mesma regra do api_setup_nf.
-            cliente_id = None
-            cliente_nome = None
-            if cnpj_dest_limpo:
-                enderecos_dest = CarviaClienteEndereco.query.filter(
-                    CarviaClienteEndereco.cnpj == cnpj_dest_limpo,
-                    CarviaClienteEndereco.tipo == 'DESTINO',
-                    CarviaClienteEndereco.cliente_id.isnot(None),
-                    CarviaClienteEndereco.ativo == True,
-                ).all()
-                for end in enderecos_dest:
-                    if end.cliente:
-                        cliente_id = end.cliente_id
-                        cliente_nome = end.cliente.nome_comercial
-                        break
-
-            if not cliente_id and cnpj_emit_limpo:
-                enderecos_orig = CarviaClienteEndereco.query.filter(
-                    CarviaClienteEndereco.cnpj == cnpj_emit_limpo,
-                    CarviaClienteEndereco.tipo == 'ORIGEM',
-                    CarviaClienteEndereco.cliente_id.isnot(None),
-                    CarviaClienteEndereco.ativo == True,
-                ).all()
-                for end in enderecos_orig:
-                    if end.cliente:
-                        cliente_id = end.cliente_id
-                        cliente_nome = end.cliente.nome_comercial
-                        break
+            # 2. Resolver cliente comercial SO pelo CNPJ destinatario (tipo=DESTINO).
+            #    NUNCA cair no emitente — mesma regra do api_setup_nf.
+            cliente_id, cliente_nome = CarviaClienteService.resolver_cliente_por_destinatario(
+                cnpj_dest_limpo
+            )
 
             # 3. Verificar enderecos ORIGEM e DESTINO
             endereco_origem_id = None
@@ -819,42 +772,23 @@ def register_cotacao_v2_routes(bp):
                 )
             else:
                 # Guard: verificar se cliente ja existe — busca em ORDEM:
-                #   1. CNPJ ORIGEM (emitente da NF)
-                #   2. CNPJ DESTINO (destinatario — canonico para identificar
-                #      o cliente comercial, regra R19 SOT)
-                #   3. Nome comercial (case-insensitive) — ultima linha de
+                #   1. CNPJ DESTINO (destinatario — canonico para identificar o
+                #      cliente comercial; NUNCA pelo emitente/origem)
+                #   2. Nome comercial (case-insensitive) — ultima linha de
                 #      defesa antes de cair na constraint UNIQUE do nome
-                import re as _re
                 from app.carvia.models import CarviaCliente
 
                 cliente_existente = None
 
-                # 1. CNPJ ORIGEM
-                orig_data_guard = data.get('origem', {})
-                cnpj_orig = orig_data_guard.get('cnpj', '')
-                if cnpj_orig:
-                    cnpj_orig_limpo = _re.sub(r'\D', '', cnpj_orig)
-                    if cnpj_orig_limpo:
-                        for end in CarviaClienteService.buscar_enderecos_por_cnpj(cnpj_orig_limpo):
-                            if end.cliente_id:
-                                cliente_existente = db.session.get(CarviaCliente, end.cliente_id)
-                                if cliente_existente:
-                                    break
+                # 1. CNPJ DESTINO (canonico — resolve so por endereco tipo=DESTINO)
+                dest_data_guard = data.get('destino', {})
+                cliente_dest_id, _ = CarviaClienteService.resolver_cliente_por_destinatario(
+                    dest_data_guard.get('cnpj', '')
+                )
+                if cliente_dest_id:
+                    cliente_existente = db.session.get(CarviaCliente, cliente_dest_id)
 
-                # 2. CNPJ DESTINO (canonico)
-                if not cliente_existente:
-                    dest_data_guard = data.get('destino', {})
-                    cnpj_dest = dest_data_guard.get('cnpj', '')
-                    if cnpj_dest:
-                        cnpj_dest_limpo = _re.sub(r'\D', '', cnpj_dest)
-                        if cnpj_dest_limpo:
-                            for end in CarviaClienteService.buscar_enderecos_por_cnpj(cnpj_dest_limpo):
-                                if end.cliente_id:
-                                    cliente_existente = db.session.get(CarviaCliente, end.cliente_id)
-                                    if cliente_existente:
-                                        break
-
-                # 3. Nome comercial (defense in depth contra UNIQUE)
+                # 2. Nome comercial (defense in depth contra UNIQUE)
                 if not cliente_existente:
                     cliente_existente = CarviaCliente.query.filter(
                         db.func.lower(CarviaCliente.nome_comercial) == nome.lower(),

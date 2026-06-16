@@ -81,7 +81,7 @@
                 <i class="fas fa-unlink"></i> Desvincular Fatura
             </button>
             {% endif %}
-            {% if operacao.status in ('RASCUNHO', 'COTADO', 'CONFIRMADO') and not operacao.fatura_cliente_id and operacao.cte_valor and operacao.cte_valor > 0 %}
+            {% if operacao.status not in ('FATURADO', 'CANCELADO') and not operacao.fatura_cliente_id and operacao.cte_valor and operacao.cte_valor > 0 %}
             <button type="button" class="btn btn-success btn-sm"
                     data-bs-toggle="modal" data-bs-target="#modalCriarFaturaRapida">
                 <i class="fas fa-file-invoice-dollar"></i> Criar Fatura
@@ -644,7 +644,7 @@
                         <p>Esta acao ira:</p>
                         <ul>
                             <li>Remover a vinculacao com a fatura <strong>{{ operacao.fatura_cliente.numero_fatura }}</strong></li>
-                            <li>Reverter o status da operacao para <strong>CONFIRMADO</strong></li>
+                            <li>Reverter o status da operacao para <strong>RASCUNHO</strong></li>
                             <li>Limpar a referencia desta operacao nos itens da fatura</li>
                         </ul>
                         <div class="alert alert-warning mb-0">
@@ -700,7 +700,7 @@
     {% endif %}
 
     {# Modal para criar fatura rapida #}
-    {% if operacao.status in ('RASCUNHO', 'COTADO', 'CONFIRMADO') and not operacao.fatura_cliente_id and operacao.cte_valor and operacao.cte_valor > 0 %}
+    {% if operacao.status not in ('FATURADO', 'CANCELADO') and not operacao.fatura_cliente_id and operacao.cte_valor and operacao.cte_valor > 0 %}
     <div class="modal fade" id="modalCriarFaturaRapida" tabindex="-1">
         <div class="modal-dialog">
             <div class="modal-content">

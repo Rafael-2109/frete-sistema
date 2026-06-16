@@ -162,6 +162,34 @@ class CarviaClienteService:
     # com o incoterm (FOB=remetente paga, CIF=destinatario paga).
 
     @staticmethod
+    def resolver_cliente_por_destinatario(cnpj_destinatario) -> Tuple[Optional[int], Optional[str]]:
+        """Resolve o cliente comercial de UMA NF pelo CNPJ DESTINATARIO.
+
+        Considera apenas enderecos tipo=DESTINO, ativos e com cliente_id. NUNCA
+        usa o emitente (tipo=ORIGEM) — cliente comercial != remetente. Fonte
+        unica usada pelo setup da cotacao (api_setup_nf / setup-nf-existente).
+
+        Retorna (cliente_id, nome_comercial) ou (None, None) se nao cadastrado —
+        nesse caso o vendedor seleciona/cria o cliente manualmente na tela.
+        """
+        from app.carvia.models import CarviaClienteEndereco
+
+        cnpj_limpo = CarviaClienteService._limpar_cnpj(cnpj_destinatario or '')
+        if not cnpj_limpo:
+            return None, None
+
+        enderecos = CarviaClienteEndereco.query.filter(
+            CarviaClienteEndereco.cnpj == cnpj_limpo,
+            CarviaClienteEndereco.tipo == 'DESTINO',
+            CarviaClienteEndereco.cliente_id.isnot(None),
+            CarviaClienteEndereco.ativo == True,
+        ).all()
+        for end in enderecos:
+            if end.cliente:
+                return end.cliente_id, end.cliente.nome_comercial
+        return None, None
+
+    @staticmethod
     def resolver_clientes_por_operacoes(operacao_ids) -> Dict[int, Dict]:
         """Mapeia {operacao_id: {id, nome_comercial, cnpj_destinatario}} via
         primeira NF da operacao -> CarviaClienteEndereco (cnpj_destinatario,

@@ -133,10 +133,12 @@ Apos alterar `peso_bruto` ou `peso_cubado`, OBRIGATORIO chamar `operacao.calcula
 **Distribuicao de peso entre itens e PROPORCIONAL**, NAO exata por unidade. Detalhes: [CONFERENCIA.md](CONFERENCIA.md).
 
 ### R4: Fluxo de status e irreversivel (exceto cancelamento)
-NUNCA mover status para tras (CONFIRMADO → COTADO e PROIBIDO). Cancelar e criar novo. CarVia opera em **2 dominios independentes** (venda/compra) com conferencia assimetrica (auto no custo, manual na venda). Detalhes completos: [CONFERENCIA.md](CONFERENCIA.md).
+NUNCA mover status para tras. Cancelar e criar novo. CarVia opera em **2 dominios independentes** (venda/compra) com conferencia assimetrica (auto no custo, manual na venda). Detalhes completos: [CONFERENCIA.md](CONFERENCIA.md).
+
+**CTe CarVia (`CarviaOperacao`) — ciclo `RASCUNHO → FATURADO → CANCELADO`** (2026-06): os status intermediarios `COTADO`/`CONFIRMADO` da operacao foram DEPRECADOS — a operacao nao espelha mais o ciclo dos subcontratos (permanece RASCUNHO ate ser faturada; desvincular/excluir fatura reverte a RASCUNHO, nao a CONFIRMADO). `CarviaSubcontrato` e `CarviaPedido` MANTEM seus proprios `COTADO`/`CONFIRMADO` (entidades distintas). Migracao de dados unica: `scripts/migrations/carvia_operacao_deprecar_cotado_confirmado.sql`.
 
 ### R5: Fatura vincula por status elegivel + fatura_id IS NULL
-- Faturas CarVia: operacoes `status IN (RASCUNHO, COTADO, CONFIRMADO), fatura_cliente_id IS NULL`
+- Faturas CarVia: operacoes `status NOT IN (FATURADO, CANCELADO), fatura_cliente_id IS NULL` (2026-06: era `RASCUNHO/COTADO/CONFIRMADO`; COTADO/CONFIRMADO da operacao deprecados — ver R4)
 - CTe Complementares tambem elegiveis: `status IN (RASCUNHO, EMITIDO), fatura_cliente_id IS NULL`
 - Fatura Subcontrato: subs `status IN (COTADO, CONFIRMADO), fatura_transportadora_id IS NULL`
 - **NUNCA desvincular operacao apos faturamento**. Subcontratos desanexaveis apenas enquanto FT nao CONFERIDO

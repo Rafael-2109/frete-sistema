@@ -213,7 +213,7 @@ def register_fatura_routes(bp):
                     ).filter(
                         CarviaOperacao.id.in_(operacao_ids),
                         CarviaOperacao.cnpj_cliente == cnpj_cliente,
-                        CarviaOperacao.status.in_(['RASCUNHO', 'COTADO', 'CONFIRMADO']),
+                        CarviaOperacao.status.notin_(['FATURADO', 'CANCELADO']),
                         CarviaOperacao.fatura_cliente_id.is_(None),
                     ).with_for_update().all()
 
@@ -359,7 +359,7 @@ def register_fatura_routes(bp):
             db.func.count(CarviaOperacao.id).label('qtd_operacoes'),
             db.func.sum(CarviaOperacao.cte_valor).label('valor_total'),
         ).filter(
-            CarviaOperacao.status.in_(['RASCUNHO', 'COTADO', 'CONFIRMADO']),
+            CarviaOperacao.status.notin_(['FATURADO', 'CANCELADO']),
             CarviaOperacao.fatura_cliente_id.is_(None),
         ).group_by(
             CarviaOperacao.cnpj_cliente,
@@ -414,7 +414,7 @@ def register_fatura_routes(bp):
         if cnpj_selecionado:
             operacoes_disponiveis = db.session.query(CarviaOperacao).filter(
                 CarviaOperacao.cnpj_cliente == cnpj_selecionado,
-                CarviaOperacao.status.in_(['RASCUNHO', 'COTADO', 'CONFIRMADO']),
+                CarviaOperacao.status.notin_(['FATURADO', 'CANCELADO']),
                 CarviaOperacao.fatura_cliente_id.is_(None),
             ).order_by(CarviaOperacao.cte_data_emissao.desc().nullslast()).all()
 
@@ -1258,7 +1258,7 @@ def register_fatura_routes(bp):
                 lazyload('*')
             ).filter(
                 CarviaOperacao.id == operacao_id,
-                CarviaOperacao.status.in_(['RASCUNHO', 'COTADO', 'CONFIRMADO']),
+                CarviaOperacao.status.notin_(['FATURADO', 'CANCELADO']),
                 CarviaOperacao.fatura_cliente_id.is_(None),
             ).with_for_update().first()
 
@@ -2707,7 +2707,7 @@ def register_fatura_routes(bp):
                 lazyload('*')
             ).filter(
                 CarviaOperacao.id == operacao_id,
-                CarviaOperacao.status.in_(['RASCUNHO', 'COTADO', 'CONFIRMADO']),
+                CarviaOperacao.status.notin_(['FATURADO', 'CANCELADO']),
                 CarviaOperacao.fatura_cliente_id.is_(None),
             ).with_for_update().first()
 
@@ -2802,7 +2802,7 @@ def register_fatura_routes(bp):
                 return jsonify({'sucesso': False, 'erro': 'Operacao nao encontrada nesta fatura.'}), 404
 
             operacao.fatura_cliente_id = None
-            operacao.status = 'CONFIRMADO'
+            operacao.status = 'RASCUNHO'  # CONFIRMADO deprecado 2026-06
             # Retroativo: limpar CarviaFrete.fatura_cliente_id
             CarviaFrete.query.filter_by(operacao_id=operacao.id).update(
                 {'fatura_cliente_id': None}
@@ -2842,7 +2842,7 @@ def register_fatura_routes(bp):
         cnpj_cliente = request.args.get('cnpj_cliente', '')
 
         query = db.session.query(CarviaOperacao).filter(
-            CarviaOperacao.status.in_(['RASCUNHO', 'COTADO', 'CONFIRMADO']),
+            CarviaOperacao.status.notin_(['FATURADO', 'CANCELADO']),
             CarviaOperacao.fatura_cliente_id.is_(None),
         )
 

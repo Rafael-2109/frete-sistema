@@ -719,6 +719,16 @@ function toggleModoDestinoManual() {
 document.getElementById('formCotacao').addEventListener('submit', async function(e) {
     e.preventDefault();
 
+    // Validar cliente ANTES do this.submit() final — que e programatico e
+    // bypassa a validacao HTML5 'required' do <select>. Sem isto, na criacao
+    // tardia (cliente nem sempre pre-selecionado) o form ia com cliente vazio
+    // e o servidor respondia "Cliente nao encontrado". Forca a selecao na tela.
+    if (!(parseInt(document.getElementById('selCliente').value) || 0)) {
+        alert('Selecione o cliente da cotacao antes de gravar.');
+        document.getElementById('selCliente').focus();
+        return;
+    }
+
     // Se modo manual: criar destino provisorio via API
     if (_modoDestinoManual) {
         const cidade = (document.getElementById('manDestCidade').value || '').trim();
@@ -1038,13 +1048,28 @@ function aplicarRestricoesTardia() {
             '</div>';
     }
 
-    // Desabilitar campos que nao podem ser alterados na criacao tardia
-    const camposReadonly = [
-        'selCliente', 'selTipoMaterial',
-    ];
-    camposReadonly.forEach(id => {
+    // Cliente permanece EDITAVEL na criacao tardia: o vendedor precisa poder
+    // escolher/criar o cliente direto na tela. (Bug: campo <select> com disabled
+    // NAO e enviado no POST -> o form ia com cliente_id vazio e o servidor
+    // respondia "Cliente nao encontrado" mesmo com o cliente pre-preenchido.)
+    // selTipoMaterial fica travado (vem do CTe); como campos disabled nao vao no
+    // POST, espelhamos o valor num hidden input para nao perder o tipo.
+    const camposTravados = ['selTipoMaterial'];
+    camposTravados.forEach(id => {
         const el = document.getElementById(id);
-        if (el) { el.disabled = true; }
+        if (!el) return;
+        el.disabled = true;
+        if (el.name) {
+            let hidden = document.getElementById('hid_' + id);
+            if (!hidden) {
+                hidden = document.createElement('input');
+                hidden.type = 'hidden';
+                hidden.id = 'hid_' + id;
+                hidden.name = el.name;
+                el.parentNode.appendChild(hidden);
+            }
+            hidden.value = el.value;
+        }
     });
 
     // Esconder secao de upload de NF adicional (nao faz sentido na tardia)
