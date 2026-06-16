@@ -55,6 +55,17 @@
       "default": 0
     },
     {
+      "name": "total_ajustes",
+      "type": "numeric(15,2)",
+      "nullable": false,
+      "default": 0
+    },
+    {
+      "name": "vendedor_usuario_id",
+      "type": "integer",
+      "description": "FK → usuarios.id"
+    },
+    {
       "name": "status",
       "type": "varchar(20)",
       "nullable": false,
@@ -100,6 +111,10 @@
   ],
   "foreign_keys": [
     {
+      "column": "vendedor_usuario_id",
+      "references": "usuarios.id"
+    },
+    {
       "column": "despesa_id",
       "references": "carvia_despesas.id"
     }
@@ -116,6 +131,13 @@
       "name": "ix_carvia_comissao_fechamentos_status",
       "columns": [
         "status"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carvia_comissao_fechamentos_vendedor_usuario_id",
+      "columns": [
+        "vendedor_usuario_id"
       ],
       "unique": false
     }

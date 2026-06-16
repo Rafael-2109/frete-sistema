@@ -105,7 +105,7 @@
     "vinculacao_carteira_separacao",
     "webhook_configs"
   ],
-  "total_tabelas": 319,
+  "total_tabelas": 320,
   "tabelas": [
     {
       "name": "agendamentos_entrega",
@@ -740,6 +740,17 @@
       "dominio": "Carvia"
     },
     {
+      "name": "carvia_comissao_ajustes",
+      "description": "Ajuste (debito/credito) de comissao gerado quando o cte_valor de um CTe",
+      "key_fields": [
+        "operacao_id",
+        "fechamento_origem_id",
+        "vendedor_usuario_id",
+        "status"
+      ],
+      "dominio": "Carvia"
+    },
+    {
       "name": "carvia_comissao_fechamento_ctes",
       "description": "Junction entre fechamento e CTes CarVia — com snapshots de valor",
       "key_fields": [
@@ -754,6 +765,7 @@
       "description": "Fechamento de comissao por periodo — agrupa N CTes CarVia",
       "key_fields": [
         "numero_fechamento",
+        "vendedor_usuario_id",
         "despesa_id",
         "data_inicio",
         "status"
