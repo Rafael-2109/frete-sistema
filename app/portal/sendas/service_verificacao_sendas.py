@@ -166,58 +166,62 @@ class VerificacaoSendasService:
         # Como um protocolo pode ter múltiplos produtos, pegar o primeiro de cada protocolo
         from app.separacao.models import Separacao
         from app.monitoramento.models import AgendamentoEntrega, EntregaMonitorada
-        from sqlalchemy import distinct
 
-        # Buscar protocolos distintos primeiro
-        # IMPORTANTE: Apenas sincronizado_nf=False (não faturados) devem ser verificados
-        protocolos_distintos = db.session.query(
-            distinct(Separacao.protocolo)
-        ).filter(
+        # IMPORTANTE: Apenas sincronizado_nf=False (não faturados) devem ser verificados.
+        # PERF (2026-06-16): uma unica query traz todas as Separacoes candidatas
+        # (antes: 1 query distinct + N+1 `.first()` por protocolo).
+        seps_candidatas = Separacao.query.filter(
             Separacao.protocolo.isnot(None),
             Separacao.protocolo != '',
             Separacao.agendamento_confirmado == False,
-            Separacao.sincronizado_nf == False  # ✅ CRÍTICO: Apenas não faturados
+            Separacao.sincronizado_nf == False,  # ✅ CRÍTICO: Apenas não faturados
         ).all()
 
-        # 🆕 FIX BUG 6c: Pre-carregar set de NFs ja entregues para excluir do resultado
+        # Primeiro registro de cada protocolo (mantem o comportamento do `.first()`)
+        sep_por_protocolo = {}
+        for sep in seps_candidatas:
+            if sep.protocolo not in sep_por_protocolo:
+                sep_por_protocolo[sep.protocolo] = sep
+
+        # 🆕 FIX BUG 6c: excluir protocolos cuja NF ja foi entregue.
+        # PERF (2026-06-16): consulta APENAS as NFs candidatas (poucas) em vez de
+        # carregar TODAS as NFs entregues do sistema em memoria (~17k linhas).
+        nfs_candidatas = {
+            s.numero_nf for s in sep_por_protocolo.values() if s.numero_nf
+        }
         nfs_entregues = set()
-        try:
-            entregues_rows = db.session.query(EntregaMonitorada.numero_nf).filter(
-                db.or_(
-                    EntregaMonitorada.entregue == True,
-                    EntregaMonitorada.status_finalizacao == 'Entregue'
-                )
-            ).all()
-            nfs_entregues = {row.numero_nf for row in entregues_rows if row.numero_nf}
-        except Exception as e:
-            logger.warning(f"Falha ao carregar NFs entregues: {e}")
+        if nfs_candidatas:
+            try:
+                entregues_rows = db.session.query(EntregaMonitorada.numero_nf).filter(
+                    EntregaMonitorada.numero_nf.in_(nfs_candidatas),
+                    db.or_(
+                        EntregaMonitorada.entregue == True,
+                        EntregaMonitorada.status_finalizacao == 'Entregue',
+                    ),
+                ).all()
+                nfs_entregues = {row.numero_nf for row in entregues_rows if row.numero_nf}
+            except Exception as e:
+                logger.warning(f"Falha ao carregar NFs entregues: {e}")
 
-        # Para cada protocolo, buscar os dados do primeiro registro
-        for (protocolo_valor,) in protocolos_distintos:
-            sep = Separacao.query.filter_by(
-                protocolo=protocolo_valor,
-                agendamento_confirmado=False,
-                sincronizado_nf=False  # ✅ CRÍTICO: Apenas não faturados
-            ).first()
+        # Montar resultado (primeiro registro de cada protocolo)
+        for sep in sep_por_protocolo.values():
+            # 🆕 FIX BUG 6c: Se a Separacao tem NF associada e a NF ja foi entregue,
+            # nao adicionar (nao precisa mais verificar agenda).
+            if sep.numero_nf and sep.numero_nf in nfs_entregues:
+                continue
 
-            if sep:
-                # 🆕 FIX BUG 6c: Se a Separacao tem NF associada e a NF ja foi entregue,
-                # nao adicionar (nao precisa mais verificar agenda).
-                if sep.numero_nf and sep.numero_nf in nfs_entregues:
-                    continue
-
-                protocolos.append({
-                    'protocolo': sep.protocolo,
-                    'tipo_origem': 'separacao',
-                    'documento_origem': sep.separacao_lote_id,
-                    'cnpj': sep.cnpj_cpf,
-                    'cliente': sep.raz_social_red or sep.cnpj_cpf,
-                    # 🆕 FIX BUG 6a: dados de endereco
-                    'raz_social': sep.raz_social_red,
-                    'nome_cidade': sep.nome_cidade,
-                    'cod_uf': sep.cod_uf,
-                    'data_agendamento': sep.agendamento,
-                })
+            protocolos.append({
+                'protocolo': sep.protocolo,
+                'tipo_origem': 'separacao',
+                'documento_origem': sep.separacao_lote_id,
+                'cnpj': sep.cnpj_cpf,
+                'cliente': sep.raz_social_red or sep.cnpj_cpf,
+                # 🆕 FIX BUG 6a: dados de endereco
+                'raz_social': sep.raz_social_red,
+                'nome_cidade': sep.nome_cidade,
+                'cod_uf': sep.cod_uf,
+                'data_agendamento': sep.agendamento,
+            })
 
         # 2. Buscar em AgendamentoEntrega (status != 'confirmado')
         # ✅ FILTRO: Excluir NFs com status_finalizacao='Entregue' OU entregue=True
