@@ -4,10 +4,11 @@
 # legadas ja quebradas; so achado NOVO em .py staged bloqueia.
 # Bypass emergencial: git commit --no-verify
 #
-# NOTA (WSL2): route_template_audit.py importa `app` e carrega libs nativas
-# (numpy/pandas/lxml/rapidfuzz). Nesse ambiente isso pode dar Segmentation fault
-# (exit 139) INTERMITENTE que, com `set -e`, aborta o commit sem violacao real.
-# Se acontecer: RE-TENTE o commit (e' intermitente); use --no-verify SO quando o
+# NOTA (WSL2): este audit e' ESTATICO/leve (regex + rglob; NAO importa `app` nem
+# libs nativas — verificado: o import carrega 0 modulos pesados e roda 5/5 EXIT=0).
+# Um Segmentation fault (exit 139) aqui e' crash PONTUAL de ambiente, NAO defeito
+# do audit; mas com `set -e` aborta o commit sem violacao real. Se acontecer:
+# RE-TENTE o commit (nao se reproduz); --no-verify so' em ultimo caso e quando o
 # commit NAO tocar rota/template, validando depois com:
 #   python3 scripts/audits/route_template_audit.py
 # Detalhes: .claude/references/REGRAS_DEV_LOCAL.md (REGRAS DEV ADICIONAIS, item 6).
