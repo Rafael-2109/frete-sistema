@@ -499,8 +499,15 @@ def lancar_cte():
     frete_para_processar = None  # Frete selecionado pelo usuário
 
     # Busca faturas disponíveis
+    # PYTHON-FLASK-YA: eager load da transportadora evita N+1 (o template itera
+    # fatura.transportadora.razao_social por fatura PENDENTE).
+    from sqlalchemy.orm import joinedload
     faturas_disponiveis = (
-        FaturaFrete.query.filter_by(status_conferencia="PENDENTE").order_by(desc(FaturaFrete.criado_em)).all()
+        FaturaFrete.query
+        .options(joinedload(FaturaFrete.transportadora))
+        .filter_by(status_conferencia="PENDENTE")
+        .order_by(desc(FaturaFrete.criado_em))
+        .all()
     )
 
     # ✅ CAPTURA FATURA PRÉ-SELECIONADA DO GET (quando vem de /fretes/lancar_cte?fatura_id=4)

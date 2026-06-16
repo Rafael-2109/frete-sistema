@@ -119,7 +119,11 @@ def build_artifact_job(artifact_id: int) -> dict:
         artifact.status = AgenteArtifact.STATUS_BUILDING
         artifact.build_started_at = agora_utc_naive()
         db.session.commit()
-        logger.info(f"[ARTIFACT_WORKER] iniciando build uuid={artifact.uuid[:8]}")
+        # PYTHON-FLASK-Y7: snapshot do uuid p/ logs/except sem tocar o ORM. Se o
+        # commit final falhar por SSL drop, o objeto fica expirado e acessá-lo
+        # dispararia PendingRollbackError, mascarando a causa real.
+        art_uuid = artifact.uuid
+        logger.info(f"[ARTIFACT_WORKER] iniciando build uuid={art_uuid[:8]}")
 
         project_dir = BUILD_BASE_DIR / artifact.uuid
 
@@ -176,15 +180,25 @@ def build_artifact_job(artifact_id: int) -> dict:
             # 2000 chars alinhado com truncamento do RuntimeError em _run_bundle.
             # Coluna error_message no BD e TEXT sem limite — custo zero.
             err_msg = str(e)[:2000]
+            # PYTHON-FLASK-Y7: rollback ANTES de tocar qualquer atributo ORM. Se a
+            # causa foi SSL drop no commit, `artifact` está expirado e acessá-lo
+            # dispara PendingRollbackError, que mascara o erro real e deixa a linha
+            # presa em 'building'. Re-busca com a sessão limpa para gravar o erro.
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
             logger.error(
-                f"[ARTIFACT_WORKER] FALHA uuid={artifact.uuid[:8]}: {err_msg}",
+                f"[ARTIFACT_WORKER] FALHA uuid={art_uuid[:8]}: {err_msg}",
                 exc_info=True,
             )
             try:
-                artifact.status = AgenteArtifact.STATUS_ERROR
-                artifact.error_message = err_msg
-                artifact.build_completed_at = agora_utc_naive()
-                db.session.commit()
+                art = db.session.get(AgenteArtifact, artifact_id)
+                if art is not None:
+                    art.status = AgenteArtifact.STATUS_ERROR
+                    art.error_message = err_msg
+                    art.build_completed_at = agora_utc_naive()
+                    db.session.commit()
             except Exception as commit_err:
                 logger.error(
                     f"[ARTIFACT_WORKER] falha ao salvar erro: {commit_err}"
@@ -192,7 +206,7 @@ def build_artifact_job(artifact_id: int) -> dict:
                 db.session.rollback()
             return {
                 'success': False,
-                'uuid': artifact.uuid,
+                'uuid': art_uuid,
                 'status': AgenteArtifact.STATUS_ERROR,
                 'error': err_msg,
             }

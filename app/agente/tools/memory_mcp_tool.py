@@ -549,7 +549,9 @@ def _run_with_session_guard(func):
     de transação inválida — no caminho normal é uma chamada direta a `func()`,
     sem overhead nem descarte de estado pendente.
     """
-    from sqlalchemy.exc import PendingRollbackError, InvalidRequestError
+    from sqlalchemy.exc import (
+        PendingRollbackError, InvalidRequestError, OperationalError,
+    )
     try:
         return func()
     except Exception as e:
@@ -561,15 +563,31 @@ def _run_with_session_guard(func):
                 or "can't reconnect" in msg
             )
         )
-        if not aborted:
+        # SSL drop / conexão morta (PYTHON-FLASK-Y5/HW/Y7): o Postgres do Render
+        # derruba a conexão JÁ checked-out em turnos longos do Teams; pool_pre_ping
+        # NÃO cobre (só testa no checkout). Descarta as conexões mortas do pool e
+        # re-tenta — o próximo checkout pega uma saudável.
+        disconnected = isinstance(e, OperationalError) and any(
+            s in msg for s in (
+                "ssl connection has been closed",
+                "server closed the connection",
+                "closed unexpectedly",
+                "eof detected",
+                "connection already closed",
+            )
+        )
+        if not aborted and not disconnected:
             raise
         logger.warning(
-            "[MEMORY_MCP] Sessão abortada detectada — rollback defensivo + "
-            "retry único (BUG-2): %s", e
+            "[MEMORY_MCP] Sessão %s — rollback defensivo + retry único: %s",
+            "abortada (BUG-2)" if aborted else "com conexão SSL morta",
+            e,
         )
         try:
             from app import db
             db.session.rollback()
+            if disconnected:
+                db.engine.dispose()  # descarta conexões mortas do pool
         except Exception:
             pass
         return func()  # retry único com a sessão limpa
@@ -2414,17 +2432,49 @@ try:
                 content = memory.content or ""
                 count = content.count(old_str)
 
-                if count == 0:
-                    preview = content[:3000] if len(content) > 3000 else content
-                    truncated = " (truncado, conteúdo total tem {} chars)".format(len(content)) if len(content) > 3000 else ""
-                    raise ValueError(
-                        f"Texto não encontrado em {path}. "
-                        f"Conteúdo atual{truncated}:\n\n{preview}"
-                    )
                 if count > 1:
                     raise ValueError(f"Texto aparece {count} vezes. Deve ser único.")
 
-                # Versão anterior
+                if count == 1:
+                    novo_content = content.replace(old_str, new_str)
+                else:
+                    # count == 0 — PYTHON-FLASK-E7: o old_str costuma estar stale
+                    # (conteúdo já mudou) ou diferir só em whitespace. Damos 2
+                    # saídas em vez de despejar 3000 chars crus:
+                    # 1) match tolerante a whitespace por linha (indentação/CRLF/
+                    #    trailing) — só aplica se houver EXATAMENTE 1 ocorrência;
+                    # 2) mensagem auto-corretiva com o trecho mais próximo.
+                    _content_lines = content.split("\n")
+                    _old_lines = [ln.strip() for ln in old_str.split("\n")]
+                    _janelas = []
+                    if _old_lines:
+                        _n = len(_old_lines)
+                        for _i in range(len(_content_lines) - _n + 1):
+                            if [_content_lines[_j].strip()
+                                    for _j in range(_i, _i + _n)] == _old_lines:
+                                _janelas.append((_i, _i + _n))
+                    if len(_janelas) == 1:
+                        _ini, _fim = _janelas[0]
+                        novo_content = "\n".join(
+                            _content_lines[:_ini] + [new_str] + _content_lines[_fim:]
+                        )
+                    else:
+                        import difflib
+                        _proximas = difflib.get_close_matches(
+                            old_str.split("\n")[0], _content_lines, n=3, cutoff=0.5
+                        )
+                        _dica = (
+                            "\n\nTrecho(s) mais próximo(s) no arquivo atual:\n"
+                            + "\n".join(f"  > {ln}" for ln in _proximas)
+                        ) if _proximas else ""
+                        raise ValueError(
+                            f"Texto não encontrado em {path} — o conteúdo provavelmente "
+                            f"já mudou desde a última edição (old_str desatualizado). "
+                            f"AÇÃO: releia com view_memories('{path}') e reenvie o old_str "
+                            f"EXATO, ou use save_memory para reescrever o arquivo.{_dica}"
+                        )
+
+                # Versão anterior (backup)
                 if content:
                     AgentMemoryVersion.save_version(
                         memory_id=memory.id,
@@ -2432,7 +2482,7 @@ try:
                         changed_by='claude'
                     )
 
-                memory.content = content.replace(old_str, new_str)
+                memory.content = novo_content
                 # FRENTE 2 (2026-06-10): meta NAO pode ficar stale pos-edicao
                 _rederive_meta_after_content_change(memory)
                 # F5.2: update renova frescor; origem imutavel

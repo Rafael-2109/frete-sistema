@@ -1149,6 +1149,14 @@ class MatchService:
                     f"   ✓ NF remessa #{nf_remessa_id} vinculada ({quantidade} pallets)"
                 )
 
+            except ValueError as e:
+                # Validação de negócio (ex.: quantidade > pendente) — não é bug,
+                # é tentativa inválida do usuário. WARNING evita ruído no Sentry
+                # (PYTHON-FLASK-2A); o route trata o raise e responde ao usuário.
+                logger.warning(
+                    f"   ✗ Vínculo rejeitado NF remessa #{nf_remessa_id}: {e}"
+                )
+                raise
             except Exception as e:
                 logger.error(
                     f"   ✗ Erro ao vincular NF remessa #{nf_remessa_id}: {e}"

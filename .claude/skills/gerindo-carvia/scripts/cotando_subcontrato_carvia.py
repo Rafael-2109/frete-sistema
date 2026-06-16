@@ -28,10 +28,26 @@ def listar_opcoes(operacao_id):
         return {'sucesso': False, 'erro': f'Operacao {operacao_id} nao encontrada'}
 
     service = CotacaoService()
-    opcoes = service.listar_opcoes_transportadora(
+    # cotar_todas_opcoes substitui o antigo listar_opcoes_transportadora
+    # (removido em 22/03/2026); retorna ja as opcoes cotadas+ordenadas por valor.
+    opcoes = service.cotar_todas_opcoes(
+        peso=float(op.peso_utilizado or 0),
+        valor_mercadoria=float(op.valor_mercadoria or 0),
         uf_destino=op.uf_destino,
         cidade_destino=op.cidade_destino,
+        uf_origem=op.uf_origem,
     )
+
+    transportadoras = [
+        {
+            'id': o['transportadora_id'],
+            'nome': o['transportadora_nome'],
+            'tabela_nome': o.get('tabela_nome'),
+            'valor_frete': o.get('valor_frete'),
+            'lead_time': o.get('lead_time'),
+        }
+        for o in opcoes
+    ]
 
     return {
         'sucesso': True,
@@ -40,8 +56,8 @@ def listar_opcoes(operacao_id):
         'destino': f'{op.cidade_destino}/{op.uf_destino}',
         'peso_utilizado': float(op.peso_utilizado or 0),
         'valor_mercadoria': float(op.valor_mercadoria or 0),
-        'total_opcoes': len(opcoes),
-        'transportadoras': opcoes,
+        'total_opcoes': len(transportadoras),
+        'transportadoras': transportadoras,
     }
 
 
@@ -112,36 +128,36 @@ def cotar_todas(operacao_id):
         return {'sucesso': False, 'erro': f'Operacao {operacao_id} nao encontrada'}
 
     service = CotacaoService()
-    opcoes = service.listar_opcoes_transportadora(
+    # cotar_todas_opcoes ja calcula e ordena por valor todas as opcoes
+    # (transportadora x tabela). Substitui o antigo listar_opcoes_transportadora
+    # (removido em 22/03/2026) + loop de cotar_subcontrato por transportadora.
+    opcoes = service.cotar_todas_opcoes(
+        peso=float(op.peso_utilizado or 0),
+        valor_mercadoria=float(op.valor_mercadoria or 0),
         uf_destino=op.uf_destino,
         cidade_destino=op.cidade_destino,
+        uf_origem=op.uf_origem,
     )
 
     if not opcoes:
         return {
             'sucesso': False,
-            'erro': f'Nenhuma transportadora com tabela ativa para {op.uf_destino}',
+            'erro': f'Nenhuma transportadora com tabela ativa para {op.cidade_destino}/{op.uf_destino}',
         }
 
-    cotacoes = []
-    for t in opcoes:
-        resultado = service.cotar_subcontrato(operacao_id, t['id'])
-        cotacoes.append({
-            'transportadora_id': t['id'],
-            'transportadora': t['nome'],
-            'freteiro': t['freteiro'],
-            'sucesso': resultado.get('sucesso', False),
-            'valor_cotado': resultado.get('valor_cotado'),
-            'tabela_frete_id': resultado.get('tabela_frete_id'),
-            'tabela_nome': resultado.get('tabela_nome'),
-            'erro': resultado.get('erro'),
-        })
-
-    # Ordenar por valor (menor primeiro), erros no final
-    cotacoes.sort(key=lambda x: (
-        0 if x['sucesso'] else 1,
-        x.get('valor_cotado') or float('inf'),
-    ))
+    cotacoes = [
+        {
+            'transportadora_id': o['transportadora_id'],
+            'transportadora': o['transportadora_nome'],
+            'sucesso': True,
+            'valor_cotado': o.get('valor_frete'),
+            'tabela_frete_id': o.get('tabela_frete_id'),
+            'tabela_nome': o.get('tabela_nome'),
+            'lead_time': o.get('lead_time'),
+            'descritivo': o.get('descritivo'),
+        }
+        for o in opcoes
+    ]
 
     return {
         'sucesso': True,

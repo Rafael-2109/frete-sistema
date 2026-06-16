@@ -181,6 +181,18 @@ class OdooConnection:
         # 🔧 CORREÇÃO 15/12/2025: Determinar timeout efetivo ANTES da execução
         # O timeout_override SEMPRE deve ser aplicado quando especificado,
         # independentemente de ser maior ou menor que o padrão
+        # Guard de tipo (PYTHON-FLASK-Y8): chamadas ad-hoc as vezes passam o
+        # context Odoo ({'context': {...}}) no slot posicional de timeout_override,
+        # o que estoura TypeError obscuro em socket.setdefaulttimeout(dict).
+        # Converte num erro acionavel apontando o slot correto (4o arg = kwargs).
+        if timeout_override is not None and not isinstance(timeout_override, (int, float)):
+            raise TypeError(
+                f"timeout_override deve ser int|None, recebido "
+                f"{type(timeout_override).__name__}: {timeout_override!r}. "
+                f"Passe o context Odoo como 4o argumento (kwargs): "
+                f"execute_kw(model, method, args, {{'context': ctx}})"
+            )
+
         timeout_efetivo = timeout_override if timeout_override else self.timeout
         usar_timeout_customizado = timeout_override is not None
 

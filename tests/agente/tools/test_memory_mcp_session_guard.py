@@ -9,7 +9,9 @@ Sintoma original: Sentry PYTHON-FLASK-EG ("Can't reconnect until invalid
 transaction is rolled back", regressed, 3 usuários) em list_memories no Teams.
 """
 import pytest
-from sqlalchemy.exc import PendingRollbackError, InvalidRequestError
+from sqlalchemy.exc import (
+    PendingRollbackError, InvalidRequestError, OperationalError,
+)
 
 from app import create_app
 from app.agente.tools.memory_mcp_tool import _run_with_session_guard
@@ -93,3 +95,42 @@ def test_guard_caminho_normal_chama_func_uma_vez(app_ctx):
 
     assert _run_with_session_guard(func) == 123
     assert len(chamadas) == 1
+
+
+def test_guard_recupera_conexao_ssl_morta(app_ctx, monkeypatch):
+    """PYTHON-FLASK-Y5/HW/Y7: OperationalError de SSL drop -> rollback +
+    engine.dispose() + retry único -> sucesso."""
+    from app import db
+    dispostos = []
+    monkeypatch.setattr(db.engine, "dispose", lambda *a, **k: dispostos.append(1))
+    chamadas = []
+
+    def func():
+        chamadas.append(1)
+        if len(chamadas) == 1:
+            raise OperationalError(
+                "SELECT 1", {},
+                Exception("SSL connection has been closed unexpectedly"),
+            )
+        return "reconectado"
+
+    assert _run_with_session_guard(func) == "reconectado"
+    assert len(chamadas) == 2       # falhou 1x, re-tentou após descartar o pool
+    assert dispostos == [1]         # engine.dispose() chamado no SSL drop
+
+
+def test_guard_nao_retenta_operational_error_nao_conexao(app_ctx):
+    """OperationalError que NÃO é SSL drop/conexão morta propaga SEM retry
+    (ex: serialization failure não é o caso de reconexão)."""
+    chamadas = []
+
+    def func():
+        chamadas.append(1)
+        raise OperationalError(
+            "SELECT 1", {},
+            Exception("could not serialize access due to concurrent update"),
+        )
+
+    with pytest.raises(OperationalError):
+        _run_with_session_guard(func)
+    assert len(chamadas) == 1       # NÃO re-tentou
