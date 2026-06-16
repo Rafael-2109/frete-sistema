@@ -32,6 +32,8 @@ atualizado: 2026-06-16
 ## 🔑 GATILHO DE RETOMADA (colar para retomar)
 > **Retomar industrialização FB↔LF — rumo ao OBJETIVO FINAL (automação 100% fechada). Reestruturação física LF→"De Terceiros" CONCLUÍDA (S3 ✅ A1+A4+A2/A3, gates OK); foco agora = AUTOMAÇÃO (D4 → S4).**
 >
+> **Postura (Rafael):** **goal-oriented** — mire os 8 critérios do OBJETIVO FINAL, não o micro-passo; **proativo** — encadeie dry→executa→valida sem pedir confirmação cosmética, pare só na barreira real (escrita Odoo/SEFAZ exige go; ambiguidade de regra de negócio); **conciso** — sem narração, aja/valide/reporte só feito + próximo. Investigue antes de perguntar; registre o estado nos docs ao concluir.
+>
 > **Ler nesta ordem:** (1) este `PROMPT_PROXIMA_SESSAO.md` (banner ✅ 2026-06-16 + NORTE 8 critérios); (2) `SOT_OPERACOES.md §"OBJETIVO FINAL"` (8 critérios) + `§6.3` (arquitetura SA durável G1/G2); (3) `DESENHO_S2_REESTRUTURACAO_DE_TERCEIROS_LF.md §7.1-D4` (endurecer descoberta G1) + `app/odoo/estoque/fluxos/1.1.4` (RUNBOOK canary estágios 0–4); (4) `MACRO_REESTRUTURACAO_DE_TERCEIROS_LF.md` (S3 ✅ físico, S4 = automação).
 >
 > **Estado:** estoque LF segregado em `31092` (MP/EMB) / `31093` (PA) sob `42`; put-away ativo (rules 3,4); 439 quants migrados (0 SVL, saldo conservado, `s83 --validar`=gates OK). Automação G1/G2 provisionada (SAs 2029/2030) mas **cron OFF** (canary estágios 0–3 OK).
@@ -42,7 +44,7 @@ atualizado: 2026-06-16
 > 3. **A5 (paralelo, contábil — Contador):** repoint L1 terceiros (`1150200001`) + reclassificação dos 125 quants próprios; CSV `/tmp/s2_mapa_a5_categorias_repoint.csv`. **Validar valores com Contador** antes do go; medir pelo ciclo.
 > 4. **Limpeza S3:** açúcar ✅ + 3 sem-lote ✅ **RESOLVIDOS** (`s86`, 2026-06-16). Resta **smoke put-away** no próximo recebimento real (+ 2 resíduos `qty≈1e-6` em 42, desprezíveis).
 >
-> **INVIOLÁVEL:** dry-run + go fresco em CADA escrita Odoo; 1 comando por escrita; NF SEFAZ só com go explícito; limpar rabo de experimentos (recovery `s84`). **Scripts:** builder `s82` · validador `s83` · recovery `s84` · teste `s85` · investigação READ `s72`–`s81`. Branch `feat/wire-r2-industrializacao`.
+> **INVIOLÁVEL:** dry-run + go fresco em CADA escrita Odoo; 1 comando por escrita; NF SEFAZ só com go explícito; limpar rabo de experimentos (recovery `s84`). **Scripts:** builder `s82` · validador `s83` · recovery `s84` (`--diag`/`--limpar`/`--finalizar`) · teste `s85` · exceções `s86` · investigação READ `s72`–`s81`. Branch `feat/wire-r2-industrializacao`.
 >
 > ⬇️ **(gatilho anterior — WIRE/SA, superado pela reestruturação; mantido como histórico):**
 > **Retomar industrialização FB↔LF — WIRE do R2 (compor o FLUXO L3 1.2.4) + SA DURÁVEL da saída (G1+G2) = objetivo final.** Ler `docs/industrializacao-fb-lf/`: `README.md` (estado) → este handoff (FOCO acima) → `app/odoo/estoque/fluxos/1.2.4-entrada-retorno-industrializacao.md` (desenho do R2, átomos prontos) → `ACHADOS_TECNICOS.md §"R2.3b"` (gate contábil) + §"FASE B" (saída via SA). Desenho/decisões: `SOT_OPERACOES.md §6.2`. **Átomos prontos:** `descoberta_industrializacao.py` (READ) · `escrituracao.py::montar_invoice_entrada_direta` · `revaloracao.py` · Skill 5 picking C9.
