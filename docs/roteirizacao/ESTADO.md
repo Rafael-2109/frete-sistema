@@ -105,6 +105,45 @@ Cruzamento item a item da spec/planos contra o codigo em PROD. **Foco em UI** (v
 
 **Conclusao:** 100% dos itens de UI propostos estao implementados e validados; nenhuma lacuna funcional. Divergencias sao simplificacoes/cosmeticas.
 
+## Melhorias operacionais (Onda 17/06/2026) — branch `feat/roteirizacao-mapa-melhorias`
+
+14 ajustes pedidos pela operacao + 1 recurso novo, sobre a base ja entregue.
+**Raiz arquitetural corrigida:** desenho e custo passaram a vir do MESMO motor
+(`/api/rota/otimizar` enriquecido com `legs`/`bounds`/`ordem_clientes`); o backend
+ganhou `respeitar_ordem` (medir ordem manual sem reotimizar) e os backends expoem
+`legs` (segundos/metros reais) + `bounds`.
+
+| # | Item | Como |
+|---|------|------|
+| 1 | Volta ao CD ignorada no desenho | `inclui_volta` agora chega ao motor unico; checkbox redesenha o tracado |
+| 2 | Erro ao analisar densidade | densidade calculada no front (clientesData) + `NULLIF(palletizacao,0)` no backend |
+| 3 | Matriz nao abria | `pedidosData` (inexistente) -> `clientesData`; novo `/api/matriz-clientes` (coords, fluxo lotes/CarVia) |
+| 4 | Drag-and-drop mede ordem manual | `recalcularRota({otimizar:false})` respeita a sequencia arrastada e redesenha km/tempo/pedagio/custo |
+| 5 | Parada extra por endereco/CNPJ | `/api/parada-extra` (ReceitaWS/geocode); placeholder afeta rota/custo mas nao e cotavel |
+| 6 | Acumular rota de lista_pedidos | `/api/rota/acumular` (nova/existente) + resgate `?rota_id=`; botao na lista_pedidos |
+| 7 | Modal de busca no mapa | `/api/rota/buscar-pendentes` (sem data_embarque OU nf_cd) + filtros + select sub-rota |
+| 8 | Remover entrega da lista | botao de remover por cliente |
+| 9 | Checkbox nao reseta ao otimizar | `Set clientesDesmarcados` preserva selecao entre re-renders |
+| 10 | X do InfoWindow invisivel | `.gm-ui-hover-effect>span` em `utilities/_legacy.css` (link no template) |
+| 11 | Exp/agend sempre visiveis | helper DRY `renderPedidoSubItem` (formato unico) |
+| 12 | "Tempo ate aqui" correto | usa `legs[].duracao_s` (fim do parse regex que pegava so o 1o numero) |
+| 13 | Lista compacta | densidade visual + respiro entre cards |
+| 14 | Peso sem casas decimais | `formatarPeso` unico (kg sem decimais / t com 1 casa) |
+| + | **Romaneio LIFO imprimivel** | botao "Romaneio": ordem de carga (inversa) + ordem de entrega, com agendamento/protocolo |
+
+Limpeza: removida a funcao legada `exibirRotaOtimizada` (199 linhas mortas, usava
+`pedidosData`). **+20 testes** novos (motor unificado, matriz-clientes, acumular,
+parada-extra, busca-pendentes); **58 testes carteira verdes**; `node --check` no JS
+do template + render 200.
+
+**Pendente desta onda:**
+- **Vinculo Romaneio <-> Embarque:** quando a rota do mapa vira embarque (via Cotar
+  Frete -> wizard), persistir a ordem/`rota_id` no Embarque e expor o romaneio a
+  partir dele. Atravessa `cotacao`/`embarques` (model + fluxo de criacao) — sessao
+  propria. Hoje o romaneio e client-side da rota atual no mapa.
+- Smoke browser em PROD (todas as interacoes).
+- Migration: nenhuma coluna nova (RotaSalva ja existe; `status='rascunho'` usa coluna existente).
+
 ## Pendencias
 
 - **R1 — Route Optimization API:** RESOLVIDO (17/06/2026). `route_optimization_backend` implementado (optimizeTours via service account / google-auth) e **validado contra a API real** (ordem otimizada + distancia/tempo/polyline; ex.: 3 paradas SP = 72,34 km / 107,6 min). `default_backend` usa Route Optimization quando `ROUTE_OPTIMIZATION_PROJECT` esta setado; senao cai para Directions+chunking (fallback automatico em erro). Projeto = `dynamic-heading-434921-q5`; SA = `sistema-fretes-routes-api@...` (role Route Optimization Editor). Janela global = 7 dias; metrica = `travelDuration`. Credencial: `_ro_token()` prioriza `GOOGLE_CREDENTIALS_JSON` (conteudo do JSON da SA na env var) e cai para ADC padrao (`GOOGLE_APPLICATION_CREDENTIALS`) se ausente — ambos os caminhos cobertos por teste.
