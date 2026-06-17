@@ -617,3 +617,26 @@ def rota_excluir(rota_id):
     db.session.delete(rota)
     db.session.commit()
     return jsonify({'sucesso': True})
+
+
+@bp.route('/api/rota/adicionar-cliente', methods=['POST'])
+@login_required
+def rota_adicionar_cliente():
+    """Busca cliente(s) por lote/pedido p/ incluir on-demand no mapa.
+
+    Retorna no MESMO formato de /api/clientes (o front faz push em clientesData,
+    re-plota e re-otimiza). Reaproveita obter_clientes_para_mapa (sem duplicar).
+    """
+    try:
+        data = request.get_json() or {}
+        lotes = data.get('lotes', []) or []
+        pedidos = data.get('pedidos', []) or []
+        if not lotes and not pedidos:
+            return jsonify({'erro': 'Informe lotes ou pedidos'}), 400
+        clientes = mapa_service.obter_clientes_para_mapa(pedidos, lotes=lotes)
+        if not clientes:
+            return jsonify({'erro': 'Nenhum cliente encontrado'}), 404
+        return jsonify({'sucesso': True, 'clientes': clientes})
+    except Exception as e:
+        logger.error(f"Erro ao adicionar cliente: {e}")
+        return jsonify({'erro': str(e)}), 500
