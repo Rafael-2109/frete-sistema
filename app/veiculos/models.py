@@ -13,6 +13,16 @@ class Veiculo(db.Model):
     tipo_veiculo = db.Column(db.String(20), nullable=True)  # COMERCIAL ou PASSEIO
     multiplicador_pedagio = db.Column(db.Float, default=1.0)  # Multiplicador para cálculo de pedágio
 
+    # Parametros de custo (fonte da roteirizacao — custo por TIPO de veiculo)
+    custo_km = db.Column(db.Numeric(10, 2), nullable=True)             # R$/km rodado
+    custo_motorista_dia = db.Column(db.Numeric(10, 2), nullable=True)  # diaria motorista
+    custo_fixo_dia = db.Column(db.Numeric(10, 2), nullable=True)       # seguro/rastreador/dia
+    depreciacao_mensal = db.Column(db.Numeric(15, 2), nullable=True)   # /30 no calculo
+    capacidade_pallets = db.Column(db.Integer, nullable=True)
+    capacidade_m3 = db.Column(db.Float, nullable=True)
+    velocidade_media_kmh = db.Column(db.Float, nullable=True)
+    ativo = db.Column(db.Boolean, nullable=False, default=True)
+
     # Dimensoes internas do bau (em centimetros) — para simulador de carga 3D
     comprimento_bau = db.Column(db.Float, nullable=True)
     largura_bau = db.Column(db.Float, nullable=True)

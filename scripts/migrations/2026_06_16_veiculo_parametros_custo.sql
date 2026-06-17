@@ -1,0 +1,8 @@
+ALTER TABLE veiculos ADD COLUMN IF NOT EXISTS custo_km             NUMERIC(10,2);
+ALTER TABLE veiculos ADD COLUMN IF NOT EXISTS custo_motorista_dia  NUMERIC(10,2);
+ALTER TABLE veiculos ADD COLUMN IF NOT EXISTS custo_fixo_dia       NUMERIC(10,2);
+ALTER TABLE veiculos ADD COLUMN IF NOT EXISTS depreciacao_mensal   NUMERIC(15,2);
+ALTER TABLE veiculos ADD COLUMN IF NOT EXISTS capacidade_pallets   INTEGER;
+ALTER TABLE veiculos ADD COLUMN IF NOT EXISTS capacidade_m3        DOUBLE PRECISION;
+ALTER TABLE veiculos ADD COLUMN IF NOT EXISTS velocidade_media_kmh DOUBLE PRECISION;
+ALTER TABLE veiculos ADD COLUMN IF NOT EXISTS ativo                BOOLEAN NOT NULL DEFAULT TRUE;
