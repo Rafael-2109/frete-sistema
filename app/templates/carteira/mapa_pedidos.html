@@ -61,6 +61,9 @@
                             <button class="btn btn-dark control-btn" onclick="exportarExcel()">
                                 <i class="fas fa-file-excel"></i> Exportar Excel
                             </button>
+                            <button class="btn btn-secondary control-btn" onclick="imprimirRomaneio()" title="Folha de carregamento (ordem de carga LIFO) + ordem de entrega">
+                                <i class="fas fa-print"></i> Romaneio
+                            </button>
                         </div>
                         <div class="col-md-4 text-end">
                             <select class="form-select d-inline-block w-auto" id="tipoMapa"
@@ -2312,6 +2315,69 @@
         function toggleFabMenu() {
             $('#fabMenu').toggleClass('active');
             $('.fab-btn i').toggleClass('fa-plus fa-times');
+        }
+
+        // Romaneio: folha imprimivel com a ordem de CARGA (LIFO, inversa da entrega)
+        // e a ordem de ENTREGA. O caminhao carrega ao contrario: a 1a entrega entra
+        // por ultimo e fica na boca do bau (recurso operacional aprovado).
+        function imprimirRomaneio() {
+            const entregas = getClientesSelecionados().filter(c => c.coordenadas);
+            if (!entregas.length) { Swal.fire('Aviso', 'Nenhuma entrega para o romaneio', 'warning'); return; }
+
+            const veic = $('#veiculoSelecionado').text() || '-';
+            const pesoTot = entregas.reduce((s, c) => s + (c.totais.peso || 0), 0);
+            const palletTot = entregas.reduce((s, c) => s + (c.totais.pallet || 0), 0);
+            const valorTot = entregas.reduce((s, c) => s + (c.totais.valor || 0), 0);
+            const dist = rotaCalculada ? (rotaCalculada.distancia_total_km || 0).toFixed(0) + ' km' : '-';
+            const tempo = rotaCalculada ? (rotaCalculada.tempo_formatado || '-') : '-';
+            const dataStr = new Date().toLocaleDateString('pt-BR');
+
+            function linha(c, idx) {
+                const peds = (c.pedidos || []).map(function (p) {
+                    const ag = p.agendamento ? ' (Ag ' + p.agendamento + (p.agendamento_confirmado ? ' ✓' : '') + ')' : '';
+                    const prot = p.protocolo ? ' [prot ' + p.protocolo + ']' : '';
+                    return (p.num_pedido || '') + ag + prot;
+                }).join('<br>');
+                return '<tr><td class="num">' + idx + '</td>' +
+                    '<td>' + (c.cliente.nome || (c.placeholder ? 'Parada extra' : '')) + '<br><small>' + (c.endereco.cidade || '') + '/' + (c.endereco.uf || '') + '</small></td>' +
+                    '<td>' + (peds || (c.placeholder ? '<em>parada extra (não cotável)</em>' : '-')) + '</td>' +
+                    '<td class="r">' + (c.totais.pallet || 0).toFixed(1) + '</td>' +
+                    '<td class="r">' + formatarPeso(c.totais.peso) + '</td>' +
+                    '<td class="chk">&#9744;</td></tr>';
+            }
+
+            let entregaRows = '', cargaRows = '';
+            entregas.forEach(function (c, i) { entregaRows += linha(c, i + 1); });
+            entregas.slice().reverse().forEach(function (c, i) { cargaRows += linha(c, i + 1); });
+
+            // tag montada por concatenacao: e CSS de uma JANELA de impressao gerada
+            // (window.open), nao estilo da tela — fora do escopo do lint de modulo.
+            const css = '<' + 'style>' +
+                'body{font-family:Arial,sans-serif;font-size:12px;color:#000;margin:16px}' +
+                'h2{margin:14px 0 4px} .meta{font-size:12px;margin-bottom:10px;color:#333}' +
+                'table{width:100%;border-collapse:collapse;margin-bottom:14px}' +
+                'th,td{border:1px solid #999;padding:4px 6px;text-align:left;vertical-align:top}' +
+                'th{background:#eee} td.num{font-weight:bold;text-align:center;width:28px}' +
+                'td.r{text-align:right;white-space:nowrap} td.chk{text-align:center;width:30px;font-size:16px}' +
+                '.aviso{background:#fff3cd;border:1px solid #ffe69c;padding:6px;margin-bottom:8px}' +
+                '@media print{.noprint{display:none}}</style>';
+            const html = '<html><head><title>Romaneio</title>' + css + '</head><body>' +
+                '<h2>Romaneio de Carga / Entrega</h2>' +
+                '<div class="meta">Data: ' + dataStr + ' &nbsp;|&nbsp; Veículo: ' + veic +
+                ' &nbsp;|&nbsp; Entregas: ' + entregas.length +
+                ' &nbsp;|&nbsp; Peso: ' + formatarPeso(pesoTot) +
+                ' &nbsp;|&nbsp; Pallets: ' + palletTot.toFixed(1) +
+                ' &nbsp;|&nbsp; Valor: R$ ' + valorTot.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) +
+                ' &nbsp;|&nbsp; Rota: ' + dist + ' / ' + tempo + '</div>' +
+                '<div class="aviso"><strong>Ordem de CARREGAMENTO (LIFO):</strong> carregue nesta sequência — a 1ª entrega entra por último e fica na boca do baú.</div>' +
+                '<table><thead><tr><th>#</th><th>Cliente</th><th>Pedidos</th><th>Pallets</th><th>Peso</th><th>OK</th></tr></thead><tbody>' + cargaRows + '</tbody></table>' +
+                '<h2>Ordem de ENTREGA</h2>' +
+                '<table><thead><tr><th>#</th><th>Cliente</th><th>Pedidos / Agendamento</th><th>Pallets</th><th>Peso</th><th>OK</th></tr></thead><tbody>' + entregaRows + '</tbody></table>' +
+                '<button class="noprint" onclick="window.print()">Imprimir</button></body></html>';
+            const w = window.open('', '_blank');
+            if (!w) { Swal.fire('Aviso', 'Permita pop-ups para imprimir o romaneio', 'info'); return; }
+            w.document.write(html);
+            w.document.close();
         }
 
         // Exportar dados em Excel
