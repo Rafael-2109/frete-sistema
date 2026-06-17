@@ -81,6 +81,12 @@
                                 <input type="checkbox" class="form-check-input" id="rotaVolta" onchange="atualizarCustoRota()">
                                 <label class="form-check-label small" for="rotaVolta">Considerar volta ao CD</label>
                             </div>
+                            <span class="border-start ms-3 ps-3">
+                                <input type="text" id="addPedidoInput" class="form-control form-control-sm d-inline-block" style="width:150px" placeholder="nº pedido / lote">
+                                <button class="btn btn-sm btn-outline-primary" onclick="adicionarPedidoMapa()" title="Incluir pedido no mapa"><i class="fas fa-plus"></i> Incluir</button>
+                                <button class="btn btn-sm btn-outline-success ms-2" onclick="salvarRota()" title="Salvar esta rota"><i class="fas fa-save"></i> Salvar rota</button>
+                                <button class="btn btn-sm btn-outline-secondary ms-1" onclick="abrirRotasSalvas()" title="Rotas salvas"><i class="fas fa-folder-open"></i> Rotas salvas</button>
+                            </span>
                         </div>
                     </div>
                 </div>
@@ -887,7 +893,7 @@
                             <input type="checkbox" class="cliente-checkbox me-2 mt-1"
                                    data-cliente-id="${cliente.cliente_id}"
                                    checked
-                                   onchange="recalcularTotais()">
+                                   onchange="recalcularTotais(); atualizarCustoRota();">
                             <div class="flex-grow-1" onclick="focusCliente(${index})">
                                 <div class="d-flex justify-content-between align-items-center">
                                     <strong>${index + 1}. ${cliente.cliente.nome || 'Cliente'}</strong>
@@ -1096,6 +1102,129 @@
 
         // Popular select de veiculos ao abrir a pagina
         $(function () { carregarVeiculosSelect(); });
+
+        // ===== Fase 2: incluir on-demand + salvar/carregar rotas =====
+        function adicionarPedidoMapa() {
+            const termo = ($('#addPedidoInput').val() || '').trim();
+            if (!termo) { Swal.fire('Aviso', 'Informe um nº de pedido ou lote', 'warning'); return; }
+            showLoading();
+            $.ajax({
+                url: '/carteira/mapa/api/rota/adicionar-cliente',
+                method: 'POST', contentType: 'application/json',
+                headers: { 'X-CSRFToken': getCSRFToken() },
+                data: JSON.stringify({ lotes: [termo], pedidos: [termo] }),
+                success: function (resp) {
+                    hideLoading();
+                    if (!resp.sucesso || !resp.clientes || !resp.clientes.length) {
+                        Swal.fire('Aviso', 'Pedido nao encontrado', 'info'); return;
+                    }
+                    let adicionados = 0;
+                    resp.clientes.forEach(function (c) {
+                        if (!clientesData.find(function (x) { return x.cliente_id === c.cliente_id; })) {
+                            clientesData.push(c); adicionados++;
+                        }
+                    });
+                    plotarClientesNoMapa(clientesData);
+                    atualizarListaClientes(clientesData);
+                    recalcularTotais();
+                    atualizarCustoRota();
+                    $('#addPedidoInput').val('');
+                    Swal.fire('OK', adicionados + ' entrega(s) adicionada(s)', 'success');
+                },
+                error: function (xhr) {
+                    hideLoading();
+                    Swal.fire('Aviso', xhr.responseJSON?.erro || 'Pedido nao encontrado', 'info');
+                }
+            });
+        }
+
+        function _lotesSelecionados() {
+            return getClientesSelecionados()
+                .flatMap(function (c) { return (c.pedidos || []).map(function (p) { return p.separacao_lote_id; }); })
+                .filter(Boolean);
+        }
+
+        function _numTxt(sel) {
+            const t = ($(sel).text() || '').replace(/[^0-9,.-]/g, '').replace(/\./g, '').replace(',', '.');
+            const v = parseFloat(t);
+            return isNaN(v) ? 0 : v;
+        }
+
+        function salvarRota() {
+            const selecionados = getClientesSelecionados();
+            const lotes = _lotesSelecionados();
+            if (!lotes.length) { Swal.fire('Aviso', 'Selecione ao menos 1 entrega', 'warning'); return; }
+            Swal.fire({
+                title: 'Salvar rota', input: 'text', inputLabel: 'Nome (opcional)',
+                showCancelButton: true, confirmButtonText: 'Salvar'
+            }).then(function (res) {
+                if (!res.isConfirmed) return;
+                const custo = {
+                    combustivel: _numTxt('#custoCombustivel'), motorista: _numTxt('#custoMotorista'),
+                    fixo: _numTxt('#custoFixo'), depreciacao: _numTxt('#custoDepreciacao'),
+                    pedagio: _numTxt('#pedagioEstimado'), total: _numTxt('#custoTotal')
+                };
+                const payload = {
+                    nome: res.value || null,
+                    veiculo_id: $('#rotaVeiculo').val() ? parseInt($('#rotaVeiculo').val(), 10) : null,
+                    inclui_volta: $('#rotaVolta').is(':checked'),
+                    dias_viagem: parseInt($('#rotaDias').val() || '0', 10),
+                    lotes: lotes,
+                    ordem_otimizada: (rotaCalculada && rotaCalculada.ordem_clientes) || [],
+                    distancia_km: rotaCalculada ? rotaCalculada.distancia_total_km : null,
+                    peso_total: selecionados.reduce(function (s, c) { return s + (c.totais ? c.totais.peso : 0); }, 0),
+                    pallet_total: selecionados.reduce(function (s, c) { return s + (c.totais ? c.totais.pallet : 0); }, 0),
+                    valor_total: selecionados.reduce(function (s, c) { return s + (c.totais ? c.totais.valor : 0); }, 0),
+                    custo: custo
+                };
+                $.ajax({
+                    url: '/carteira/mapa/api/rota/salvar', method: 'POST',
+                    contentType: 'application/json', headers: { 'X-CSRFToken': getCSRFToken() },
+                    data: JSON.stringify(payload),
+                    success: function (r) { if (r.sucesso) Swal.fire('OK', 'Rota salva (#' + r.id + ')', 'success'); },
+                    error: function (xhr) { Swal.fire('Erro', xhr.responseJSON?.erro || 'Falha ao salvar', 'error'); }
+                });
+            });
+        }
+
+        function abrirRotasSalvas() {
+            $.getJSON('/carteira/mapa/api/rotas', function (resp) {
+                const rotas = (resp && resp.rotas) || [];
+                let html = rotas.length ? '<div class="list-group text-start">' : '<p class="text-muted">Nenhuma rota salva.</p>';
+                rotas.forEach(function (r) {
+                    html += '<div class="list-group-item d-flex justify-content-between align-items-center">' +
+                        '<div><strong>' + (r.nome || ('Rota #' + r.id)) + '</strong>' +
+                        '<br><small class="text-muted">' + (r.lotes ? r.lotes.length : 0) + ' lote(s)' +
+                        (r.custo_total ? ' · R$ ' + r.custo_total.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : '') +
+                        ' · ' + (r.criado_em || '') + '</small></div>' +
+                        '<div><button class="btn btn-sm btn-primary me-1" onclick="carregarRota(' + r.id + ')">Abrir</button>' +
+                        '<button class="btn btn-sm btn-outline-danger" onclick="excluirRota(' + r.id + ')">Excluir</button></div></div>';
+                });
+                if (rotas.length) html += '</div>';
+                Swal.fire({ title: 'Rotas salvas', html: html, width: 600, showConfirmButton: false, showCloseButton: true });
+            });
+        }
+
+        function carregarRota(id) {
+            $.getJSON('/carteira/mapa/api/rota/' + id, function (resp) {
+                if (!resp.sucesso) { Swal.fire('Erro', 'Rota nao encontrada', 'error'); return; }
+                const lotes = resp.rota.lotes || [];
+                const params = lotes.map(function (l) { return 'lotes[]=' + encodeURIComponent(l); }).join('&');
+                window.location.href = '/carteira/mapa/visualizar?' + params;
+            });
+        }
+
+        function excluirRota(id) {
+            Swal.fire({ title: 'Excluir rota?', icon: 'warning', showCancelButton: true, confirmButtonText: 'Excluir' })
+                .then(function (res) {
+                    if (!res.isConfirmed) return;
+                    $.ajax({
+                        url: '/carteira/mapa/api/rota/' + id, method: 'DELETE',
+                        headers: { 'X-CSRFToken': getCSRFToken() },
+                        success: function () { abrirRotasSalvas(); }
+                    });
+                });
+        }
 
         // Reordenar painel lateral conforme ordem da rota otimizada
         function reordenarPainelLateral(ordemClientes) {
