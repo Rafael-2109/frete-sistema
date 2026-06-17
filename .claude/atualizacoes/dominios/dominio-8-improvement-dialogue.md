@@ -10,7 +10,7 @@ DATA: usar output de `date +%Y-%m-%d`
 
 - Modelo: Opus (obrigatorio)
 - Workflow: feature-dev para CADA implementacao
-- **Branch: `main` — commitar DIRETO em main, NAO criar branch dedicada** (preferencia do usuario 2026-04-14)
+- **Branch: `cron/manutencao` (worktree dedicada `frete_sistema_manutencao`) — commitar NELA, SEM push** (2026-06-17). O wrapper `run_d8_cron.sh` ja preparou a worktree e fez `cd` para ela; voce JA esta na branch `cron/manutencao` sincronizada com `origin/main`. NAO trocar de branch, NAO `git checkout main`, NAO pushar. Os commits acumulam na branch para o Rafael revisar e integrar manualmente (fluxo 4-maos). A persistencia das respostas no banco (curl) continua normal — independe do git.
 - PODE auto-implementar: qualquer arquivo EXCETO models.py, routes.py, client.py
 - APENAS propor (sem modificar): models.py, routes.py, client.py — escrever plano em implementation_notes
 - Gerar relatorio em `.claude/atualizacoes/improvement-dialogue/dialogue-{DATA}.md`
@@ -57,7 +57,16 @@ Query no Render Postgres:
 
 ```sql
 SELECT a.id, a.suggestion_key, a.version, a.category, a.severity, a.title,
-       a.description, a.evidence_json, a.source_session_ids, a.created_at
+       a.description, a.evidence_json, a.source_session_ids, a.created_at,
+       (
+           SELECT string_agg(
+                      DISTINCT COALESCE(u.nome, '?') || ' (id ' || s.user_id || ')',
+                      ', '
+                  )
+           FROM agent_sessions s
+           LEFT JOIN usuarios u ON u.id = s.user_id
+           WHERE s.session_id = ANY(a.source_session_ids)
+       ) AS origem_usuarios
 FROM agent_improvement_dialogue a
 WHERE a.status = 'proposed'
   AND a.author = 'agent_sdk'
@@ -76,6 +85,11 @@ ORDER BY
     a.created_at ASC
 LIMIT 10
 ```
+
+**`origem_usuarios`** identifica o(s) usuario(s) cuja sessao o Agent SDK observou para
+gerar a sugestao (resolve `source_session_ids` -> `agent_sessions.user_id` -> `usuarios.nome`).
+REGISTRAR SEMPRE no relatorio (PASSO 5.1) e no status.json (CONTRATO DE OUTPUT). Se a
+sugestao nao tiver `source_session_ids` ou a sessao nao existir mais, usar `origem desconhecida`.
 
 Se nao houver sugestoes pendentes: escrever status SKIP e encerrar.
 
@@ -162,11 +176,9 @@ Para cada sugestao, decidir UMA das opcoes:
 
 CRITICO: Para cada sugestao que requer implementacao (opcao B):
 
-1. Garantir que esta em `main` atualizado (commit direto, sem branch dedicada):
-```bash
-git checkout main
-git pull --rebase origin main
-```
+1. Voce JA esta na worktree dedicada, na branch `cron/manutencao` sincronizada com
+   `origin/main` pelo wrapper. NAO trocar de branch, NAO `git checkout main`, NAO `git pull`.
+   Trabalhe a partir do estado atual da worktree.
 
 2. Invocar o workflow feature-dev com prompt estruturado:
 ```
@@ -235,9 +247,9 @@ IMPORTANTE: Substituir `VALOR_DA_CRON_API_KEY_OBTIDO_ANTERIORMENTE` pelo valor R
 
 ---
 
-## PASSO 5: RELATORIO, COMMIT E PUSH
+## PASSO 5: RELATORIO E COMMIT (SEM PUSH)
 
-CRITICO: **ordem correta** — primeiro gerar os arquivos (relatorio + historico), depois commitar tudo junto, depois pushar. Commit em `main` direto, sem branch dedicada.
+CRITICO: **ordem correta** — primeiro gerar os arquivos (relatorio + historico), depois commitar tudo junto na branch `cron/manutencao` (worktree). NAO pushar.
 
 ### 5.1 Gerar relatorio
 
@@ -259,6 +271,7 @@ proposed: Z
 ### [{STATUS}] {suggestion_key}: {titulo}
 - **Categoria**: {category}
 - **Severidade**: {severity}
+- **Usuario de origem**: {origem_usuarios da query do PASSO 1, ou 'origem desconhecida'}
 - **Decisao**: respondido/rejeitado
 - **Implementado**: sim/nao
 - **Arquivos afetados**: lista
@@ -279,15 +292,11 @@ Adicionar entrada em `.claude/atualizacoes/improvement-dialogue/historico.md` (E
 1. Nova linha na tabela indice com formato: `| N | {DATA} | {avaliadas} | {implementadas} | {rejeitadas} | {propostas} | {status} |`
 2. Nova secao `## {DATA}` com detalhes (uma por sugestao)
 
-### 5.3 Commit em main (direto, sem branch)
+### 5.3 Commit na branch cron/manutencao (worktree, SEM push)
 
-**CRITICO:** listar arquivos explicitamente em `git add` — nao usar `-A` para evitar pegar WIP nao relacionado.
+**CRITICO:** listar arquivos explicitamente em `git add` — nao usar `-A` para evitar pegar WIP nao relacionado. Voce JA esta na branch `cron/manutencao`; NAO trocar de branch, NAO `git checkout main`, NAO `git pull`.
 
 ```bash
-# Garantir main atualizado
-git checkout main
-git pull --rebase origin main
-
 # Adicionar APENAS os arquivos modificados nesta execucao
 git add .claude/atualizacoes/improvement-dialogue/dialogue-{DATA}.md \
         .claude/atualizacoes/improvement-dialogue/historico.md \
@@ -301,13 +310,14 @@ Rejeitadas: Y
 Propostas: Z" || true
 ```
 
-### 5.4 Push para origin/main
+### 5.4 SEM push
+
+NAO pushar. Os commits ficam na branch `cron/manutencao` da worktree `frete_sistema_manutencao`
+para o Rafael revisar e integrar manualmente (fluxo 4-maos). Apenas confirme o commit local:
 
 ```bash
-git push origin main
+git log --oneline -1
 ```
-
-Se push falhar (conflito com semanal ou outro commit), registrar em `erros` do status.json e **nao abortar** — o commit local ja esta feito e sera pushed manualmente.
 
 ---
 
@@ -325,17 +335,23 @@ AO CONCLUIR, escrever `/tmp/manutencao-{DATA}/dominio-8-status.json`:
   "rejected": 0,
   "proposed": 0,
   "persisted_to_db": true,
-  "branch": "main",
-  "pushed_to_origin": true,
+  "branch": "cron/manutencao",
+  "pushed_to_origin": false,
   "commit_sha": "abc1234",
+  "source_users": [
+    {"suggestion_key": "IMP-YYYY-MM-DD-NNN", "origem_usuarios": "Nome (id N)"}
+  ],
   "relatorio": ".claude/atualizacoes/improvement-dialogue/dialogue-{DATA}.md",
   "resumo": "Descricao curta do que foi feito",
   "erros": []
 }
 ```
 
+> `source_users`: um item por sugestao avaliada, com o `origem_usuarios` resolvido no
+> PASSO 1 (ou `"origem desconhecida"`). E o registro SEMPRE-presente do usuario da sessao.
+
 Status:
-- **OK**: sugestoes avaliadas, respostas persistidas, relatorio gerado, commit em main pushed
-- **PARCIAL**: sugestoes avaliadas, mas persistencia no banco falhou OU push falhou
+- **OK**: sugestoes avaliadas, respostas persistidas, relatorio gerado, commit na branch `cron/manutencao` (sem push)
+- **PARCIAL**: sugestoes avaliadas, mas persistencia no banco falhou OU commit local falhou
 - **SKIP**: nenhuma sugestao pendente
 - **FAILED**: erro critico no acesso ao Render Postgres ou falha em escrever `.claude/atualizacoes/`

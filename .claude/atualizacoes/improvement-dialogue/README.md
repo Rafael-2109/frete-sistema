@@ -31,12 +31,14 @@ Cada suggestion_key tem max 3 versoes (turnos do dialogo):
 
 ## Scheduling
 
-### Crontab local (Claude Code CLI)
-- Cron: `3 11 * * *` (diario 11:03 BRT)
+### systemd-timer (Claude Code CLI)
+- Timer: `claude-d8.timer` — `OnCalendar=*-*-* 11:03:00` (diario 11:03 BRT, catch-up via `Persistent=true`)
+- Wrapper: `scripts/maintenance/run_d8_cron.sh` (prepara worktree compartilhada + `cd` + `claude -p`)
 - Modelo: Opus + workflow feature-dev
-- Branch: `improvement/D8-{DATA}`
+- Branch: `cron/manutencao` (worktree `frete_sistema_manutencao`, **SEM push** — commits aguardam revisao/integracao manual do Rafael, fluxo 4-maos)
+- Usuario de origem: o D8 resolve `source_session_ids` -> `agent_sessions.user_id` -> `usuarios.nome` e registra (`origem_usuarios`) no relatorio e no status.json
 - Log: `/tmp/claude-cron-d8-YYYY-MM-DD.log`
-- Verificar: `sudo crontab -u rafaelnascimento -l`
+- Verificar: `systemctl --user list-timers claude-d8.timer`
 
 ### APScheduler (batch de sugestoes)
 - Modulo 25 em `sincronizacao_incremental_definitiva.py`

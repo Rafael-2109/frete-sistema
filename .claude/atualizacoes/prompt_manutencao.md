@@ -108,8 +108,9 @@ Para cada dominio:
 Verificar se ha mudancas com `git status`. Se sim:
 
 ```bash
-# Criar branch (ou usar existente se re-run no mesmo dia)
-git checkout -b manutencao/semanal-$DATA 2>/dev/null || git checkout manutencao/semanal-$DATA
+# Voce JA esta na worktree dedicada (frete_sistema_manutencao), na branch
+# cron/manutencao sincronizada com origin/main pelo wrapper run_semanal_cron.sh.
+# NAO criar branch, NAO `git checkout`, NAO trocar de branch. Apenas commitar.
 
 # Commits atomicos por dominio
 # D1 (CLAUDE.md)
@@ -212,39 +213,20 @@ git add .claude/atualizacoes/atualizacao-$DATA-consolidado.md
 git commit -m "maint: relatorio consolidado semanal $DATA" || true
 ```
 
-### 3.5 Push e PR
+### 3.5 SEM push (revisao manual)
+
+NAO pushar e NAO criar PR. Os commits ficam na branch `cron/manutencao` da worktree
+`frete_sistema_manutencao` para o Rafael revisar e integrar manualmente (fluxo 4-maos).
+Apenas confirmar os commits locais desta execucao:
 
 ```bash
-git push origin manutencao/semanal-$DATA
+git log --oneline origin/main..HEAD
 ```
-
-Criar PR:
-```bash
-gh pr create \
-  --title "maint: manutencao semanal $DATA" \
-  --body "## Manutencao Semanal Automatizada
-
-Relatorio consolidado: \`.claude/atualizacoes/atualizacao-$DATA-consolidado.md\`
-
-### Dominios Executados
-- D1: CLAUDE.md Audit
-- D2: References Audit
-- D3: Memorias Cleanup
-- D4: Sentry Triage + Fixes
-- D5: Test Runner
-- D6: Memory Eval (Producao)
-- D7: Agent Intelligence Report (Bridge)
-
-Gerado automaticamente pelo Orquestrador de Manutencao." \
-  --base main
-```
-
-Se `git push` ou `gh pr create` falhar, registrar no log e continuar (commits ficam locais).
 
 ### 3.6 Finalizar
 
 Informar resultado final:
 - Quantos dominios OK/PARCIAL/FAILED
-- URL do PR (se criado)
+- Branch local `cron/manutencao` (worktree `frete_sistema_manutencao`, SEM push) — commits aguardando revisao/integracao manual do Rafael
 - Caminho do relatorio consolidado
 - Caminho do log em /tmp/

@@ -39,7 +39,9 @@ cd "$PROJECT_DIR" || {
 # 4. Log com data
 DATA="$(date +%Y-%m-%d)"
 LOG_FILE="/tmp/claude-cron-semanal-${DATA}.log"
-PROMPT_FILE=".claude/atualizacoes/prompt_manutencao.md"
+# Prompt lido da ARVORE PRINCIPAL (canonico) — a execucao do claude ocorre na
+# worktree dedicada (cd adiante). Assim editar o prompt vale na hora, sem push.
+PROMPT_FILE="$PROJECT_DIR/.claude/atualizacoes/prompt_manutencao.md"
 
 # 5. Validacoes antes de disparar o claude -p
 {
@@ -64,7 +66,38 @@ if ! command -v claude > /dev/null 2>&1; then
     exit 3
 fi
 
-# 6. Executar a manutencao semanal com o prompt orquestrador completo
+# 5.5 Lock exclusivo + worktree dedicada
+# D8 e semanal compartilham a worktree de manutencao — flock impede execucao
+# concorrente (corromperia o working tree / cruzaria commits).
+LOCKFILE="/tmp/claude-manutencao-worktree.lock"
+exec 9>"$LOCKFILE"
+if ! flock -w 1800 9; then
+    echo "ERRO: timeout (1800s) aguardando lock da worktree — outro fluxo de manutencao em execucao" >> "$LOG_FILE"
+    exit 4
+fi
+
+# Preparar/sincronizar a worktree compartilhada (branch cron/manutencao, SEM push).
+# shellcheck source=_setup_worktree.sh
+source "$PROJECT_DIR/scripts/maintenance/_setup_worktree.sh"
+
+if [ -z "${WORKTREE_DIR:-}" ] || [ ! -d "$WORKTREE_DIR" ]; then
+    echo "ERRO: worktree de manutencao indisponivel — abortando" >> "$LOG_FILE"
+    exit 5
+fi
+
+cd "$WORKTREE_DIR" || {
+    echo "ERRO: nao foi possivel cd para worktree $WORKTREE_DIR" >> "$LOG_FILE"
+    exit 6
+}
+
+{
+    echo ""
+    echo "Worktree de execucao: $PWD"
+    echo "Branch: $(git rev-parse --abbrev-ref HEAD 2>/dev/null)"
+    echo ""
+} >> "$LOG_FILE"
+
+# 6. Executar a manutencao semanal com o prompt orquestrador (cwd = worktree)
 claude -p "$(cat "$PROMPT_FILE")" \
     --model opus \
     --permission-mode bypassPermissions \

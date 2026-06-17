@@ -34,8 +34,9 @@ RemoteTrigger cloud desabilitado — nao tem acesso a MCP servers locais (Render
 ## Arquitetura
 
 ```
-OpenClaw cron (seg 10:00)
-  └── claude -p "$(cat prompt_manutencao.md)" --model opus --permission-mode bypassPermissions
+systemd-timer claude-semanal (seg 10:00 BRT)
+  └── run_semanal_cron.sh → worktree frete_sistema_manutencao (branch cron/manutencao)
+        └── claude -p "$(cat prompt_manutencao.md)" --model opus --permission-mode bypassPermissions
         │
         ├── SETUP: mkdir /tmp/manutencao-{DATA}/, ler 6 domain prompts
         │
@@ -51,9 +52,9 @@ OpenClaw cron (seg 10:00)
         │   └── D7: Agent Intelligence Report (Render Postgres + API POST)
         │
         └── ESTAGIO 3 — Consolidacao:
-            ├── Commits atomicos por dominio
+            ├── Commits atomicos por dominio (branch cron/manutencao)
             ├── Relatorio consolidado
-            └── git push + gh pr create
+            └── SEM push (commits aguardam revisao/integracao manual do Rafael)
 ```
 
 ### Coordenacao
@@ -135,35 +136,42 @@ ESTAGIO 2 (paralelo):
   D7 Agent Report    ─┘
 
 ESTAGIO 3 (sequencial):
-  Consolidar → Commit → Push → PR
+  Consolidar → Commit (branch cron/manutencao, SEM push)
 ```
 
 Cada dominio segue o ciclo: **Avaliar → Atualizar → Relatorio → Status JSON**
 
 ---
 
-## Configuracao Crontab
+## Configuracao (systemd-timer)
 
-Gerenciado via `sudo crontab -u rafaelnascimento -l`. Logs em `/tmp/claude-cron-*.log`.
+Migrado de crontab para systemd-timer de usuario em 2026-06-12 (catch-up via `Persistent=true`).
+Units em `~/.config/systemd/user/`. Logs em `/tmp/claude-cron-*.log`.
+
+Ambos os fluxos rodam numa **worktree compartilhada** `frete_sistema_manutencao` (branch
+`cron/manutencao`), preparada pelo wrapper via `scripts/maintenance/_setup_worktree.sh`:
+fetch+rebase em `origin/main`, symlink `.venv`, copia `.env`. **Sem push** — os commits acumulam
+na branch para revisao/integracao manual do Rafael (fluxo 4-maos). Um `flock` em
+`/tmp/claude-manutencao-worktree.lock` impede execucao concorrente na worktree compartilhada.
 
 ### D1-D7: Manutencao Semanal
 
 | Campo | Valor |
 |-------|-------|
-| Cron | `0 10 * * 1` (segundas 10:00 BRT) |
-| Comando | `claude -p "$(cat .claude/atualizacoes/prompt_manutencao.md)" --model opus --permission-mode bypassPermissions` |
+| Timer | `claude-semanal.timer` — `OnCalendar=Mon *-*-* 10:00:00` (segundas 10:00 BRT) |
+| Wrapper | `scripts/maintenance/run_semanal_cron.sh` → prepara worktree → `claude -p "$(cat prompt_manutencao.md)" --model opus --permission-mode bypassPermissions` |
+| Branch | `cron/manutencao` (worktree `frete_sistema_manutencao`, SEM push) |
 | Log | `/tmp/claude-cron-semanal-YYYY-MM-DD.log` |
 
 ### D8: Improvement Dialogue (diario)
 
 | Campo | Valor |
 |-------|-------|
-| Cron | `3 11 * * *` (diario 11:03 BRT) |
-| Comando | `/home/rafaelnascimento/projetos/frete_sistema/scripts/maintenance/run_d8_cron.sh` |
-| Wrapper | `scripts/maintenance/run_d8_cron.sh` — source `.profile` (CRON_API_KEY), cd no projeto, valida CLI, log em `/tmp/claude-cron-d8-YYYY-MM-DD.log` |
+| Timer | `claude-d8.timer` — `OnCalendar=*-*-* 11:03:00` (diario 11:03 BRT) |
+| Wrapper | `scripts/maintenance/run_d8_cron.sh` — source `.profile` (CRON_API_KEY), prepara worktree, cd, valida CLI |
+| Branch | `cron/manutencao` (worktree `frete_sistema_manutencao`, SEM push — 2026-06-17) |
 | Log | `/tmp/claude-cron-d8-YYYY-MM-DD.log` (auto pelo wrapper) |
 | Workflow | `feature-dev` para implementacoes |
-| Branch | `main` (commit direto, sem branch dedicada — preferencia usuario 2026-04-14) |
 
 ### RemoteTriggers (DESABILITADOS)
 
@@ -187,3 +195,4 @@ Gerenciar: https://claude.ai/code/scheduled
 | 28/03/2026 | v3 | Agent Intelligence Report — D7 adicionado (bridge Agent SDK <-> Claude Code), Estagio 2 de 2→3 agentes |
 | 31/03/2026 | v4 | Improvement Dialogue — D8 adicionado + migracao de OpenClaw/RemoteTrigger para crontab local (WSL2) |
 | 14/04/2026 | v5 | D8 fix cronico — wrapper `run_d8_cron.sh` (CRON_API_KEY via .profile), commit D8 direto em main (sem branch dedicada), PASSO 5 reordenado (relatorio antes de commit), push automatico |
+| 17/06/2026 | v6 | Worktree dedicada — D8 e semanal rodam na worktree compartilhada `frete_sistema_manutencao` (branch `cron/manutencao`), SEM push (revisao/integracao manual 4-maos); helper `_setup_worktree.sh` + `flock`. Fim do `git checkout -b` na arvore principal (semanal) e do commit-direto-em-main (D8). D8 passa a registrar o usuario da sessao de origem (`origem_usuarios`) no relatorio e no status.json |
