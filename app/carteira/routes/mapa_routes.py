@@ -723,6 +723,27 @@ def rota_cotar(rota_id):
         return jsonify({'erro': str(e)}), 500
 
 
+@bp.route('/api/rota/buscar-pendentes', methods=['POST'])
+@login_required
+def rota_buscar_pendentes():
+    """Busca Separacoes pendentes de embarque com filtros (modal do mapa, item #7).
+    Retorna lotes para o usuario escolher e incluir via /api/rota/adicionar-cliente."""
+    try:
+        filtros = request.get_json() or {}
+        resultados = mapa_service.buscar_separacoes_pendentes(filtros)
+        return jsonify({'sucesso': True, 'resultados': resultados, 'total': len(resultados)})
+    except Exception as e:
+        logger.error(f"Erro ao buscar pendentes: {e}")
+        return jsonify({'erro': str(e)}), 500
+
+
+@bp.route('/api/rota/sub-rotas-pendentes', methods=['GET'])
+@login_required
+def rota_sub_rotas_pendentes():
+    """Sub-rotas distintas das Separacoes pendentes — popula o select do modal."""
+    return jsonify({'sucesso': True, 'sub_rotas': mapa_service.sub_rotas_pendentes()})
+
+
 @bp.route('/api/parada-extra', methods=['POST'])
 @login_required
 def parada_extra():

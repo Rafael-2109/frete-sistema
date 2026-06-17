@@ -1427,3 +1427,72 @@ class MapaService:
         except Exception as e:
             logger.error(f"Erro ao calcular matriz de clientes: {str(e)}")
             return {'erro': str(e)}
+
+    def buscar_separacoes_pendentes(self, filtros: Dict[str, Any], limite: int = 100) -> List[Dict[str, Any]]:
+        """Busca Separacoes 'pendentes de embarque' (sem data_embarque OU nf_cd=True)
+        com filtros, retornando 1 linha por separacao_lote_id para alimentar o modal
+        de busca do mapa (item #7). Filtros: cidade, uf, cliente (raz_social_red),
+        num_pedido, sub_rota, expedicao_de, expedicao_ate.
+        """
+        try:
+            f = filtros or {}
+            q = db.session.query(
+                Separacao.separacao_lote_id, Separacao.num_pedido, Separacao.raz_social_red,
+                Separacao.nome_cidade, Separacao.cod_uf, Separacao.sub_rota, Separacao.expedicao,
+            ).filter(
+                Separacao.separacao_lote_id.isnot(None),
+                or_(Separacao.qtd_saldo > 0, Separacao.nf_cd == True),
+                or_(Separacao.data_embarque.is_(None), Separacao.nf_cd == True),
+            )
+            if f.get('cidade'):
+                q = q.filter(Separacao.nome_cidade.ilike(f"%{f['cidade']}%"))
+            if f.get('uf'):
+                q = q.filter(Separacao.cod_uf == str(f['uf']).upper()[:2])
+            if f.get('cliente'):
+                q = q.filter(Separacao.raz_social_red.ilike(f"%{f['cliente']}%"))
+            if f.get('num_pedido'):
+                q = q.filter(Separacao.num_pedido.ilike(f"%{f['num_pedido']}%"))
+            if f.get('sub_rota'):
+                q = q.filter(Separacao.sub_rota == f['sub_rota'])
+            if f.get('expedicao_de'):
+                q = q.filter(Separacao.expedicao >= f['expedicao_de'])
+            if f.get('expedicao_ate'):
+                q = q.filter(Separacao.expedicao <= f['expedicao_ate'])
+
+            q = q.distinct().order_by(Separacao.expedicao.asc().nullslast(),
+                                      Separacao.nome_cidade.asc()).limit(limite * 5)
+
+            resultado, vistos = [], set()
+            for r in q.all():
+                if r.separacao_lote_id in vistos:
+                    continue
+                vistos.add(r.separacao_lote_id)
+                resultado.append({
+                    'separacao_lote_id': r.separacao_lote_id,
+                    'num_pedido': r.num_pedido,
+                    'raz_social_red': r.raz_social_red,
+                    'cidade': r.nome_cidade, 'uf': r.cod_uf,
+                    'sub_rota': r.sub_rota,
+                    'expedicao': r.expedicao.strftime('%d/%m/%Y') if r.expedicao else None,
+                })
+                if len(resultado) >= limite:
+                    break
+            return resultado
+
+        except Exception as e:
+            logger.error(f"Erro ao buscar separacoes pendentes: {str(e)}")
+            return []
+
+    def sub_rotas_pendentes(self) -> List[str]:
+        """Sub-rotas distintas entre as Separacoes pendentes de embarque (popula o
+        select do modal de busca — item #7)."""
+        try:
+            rows = db.session.query(Separacao.sub_rota).filter(
+                Separacao.sub_rota.isnot(None),
+                or_(Separacao.qtd_saldo > 0, Separacao.nf_cd == True),
+                or_(Separacao.data_embarque.is_(None), Separacao.nf_cd == True),
+            ).distinct().order_by(Separacao.sub_rota.asc()).all()
+            return [r.sub_rota for r in rows if r.sub_rota]
+        except Exception as e:
+            logger.error(f"Erro ao listar sub-rotas pendentes: {str(e)}")
+            return []

@@ -91,6 +91,7 @@
                                 <button class="btn btn-sm btn-outline-primary" onclick="adicionarPedidoMapa()" title="Incluir pedido no mapa"><i class="fas fa-plus"></i> Incluir</button>
                                 <input type="text" id="addParadaInput" class="form-control form-control-sm d-inline-block ms-2" style="width:170px" placeholder="endereço ou CNPJ" title="Parada extra: afeta a rota/custo mas não é cotável">
                                 <button class="btn btn-sm btn-outline-info" onclick="adicionarParadaExtra()" title="Adicionar parada extra (endereço/CNPJ) — não cotável"><i class="fas fa-map-pin"></i> Parada extra</button>
+                                <button class="btn btn-sm btn-outline-primary ms-2" onclick="abrirBuscaPendentes()" title="Buscar pedidos pendentes de embarque para incluir"><i class="fas fa-search"></i> Buscar p/ incluir</button>
                                 <button class="btn btn-sm btn-outline-success ms-2" onclick="salvarRota()" title="Salvar esta rota"><i class="fas fa-save"></i> Salvar rota</button>
                                 <button class="btn btn-sm btn-outline-secondary ms-1" onclick="abrirRotasSalvas()" title="Rotas salvas"><i class="fas fa-folder-open"></i> Rotas salvas</button>
                             </span>
@@ -340,6 +341,49 @@
                     <button type="button" class="btn btn-warning" id="btnProsseguirCotacaoMapa">
                         <i class="fas fa-arrow-right me-1"></i>Prosseguir mesmo assim
                     </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Buscar pedidos pendentes de embarque para incluir no mapa (#7) -->
+    <div class="modal fade" id="modalBuscaPendentes" tabindex="-1">
+        <div class="modal-dialog modal-xl modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header py-2">
+                    <h5 class="modal-title mb-0"><i class="fas fa-search me-2"></i>Incluir pedidos no mapa</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="small text-muted">Busca em Separações <strong>pendentes de embarque</strong> (sem data de embarque ou NF no CD). Combine os filtros para achar pedidos de diferentes rotas/datas.</p>
+                    <div class="row g-2 align-items-end mb-2">
+                        <div class="col-md-2 col-6"><label class="form-label small mb-1">Cidade</label><input id="bpCidade" class="form-control form-control-sm" placeholder="contém..."></div>
+                        <div class="col-md-1 col-6"><label class="form-label small mb-1">UF</label><input id="bpUf" class="form-control form-control-sm" maxlength="2" placeholder="SP"></div>
+                        <div class="col-md-3 col-6"><label class="form-label small mb-1">Cliente</label><input id="bpCliente" class="form-control form-control-sm" placeholder="razão social..."></div>
+                        <div class="col-md-2 col-6"><label class="form-label small mb-1">Pedido</label><input id="bpPedido" class="form-control form-control-sm" placeholder="VCD..."></div>
+                        <div class="col-md-2 col-6"><label class="form-label small mb-1">Sub-rota</label><select id="bpSubRota" class="form-select form-select-sm"><option value="">Todas</option></select></div>
+                        <div class="col-md-2 col-6 text-end"><button class="btn btn-sm btn-primary w-100" onclick="executarBuscaPendentes()"><i class="fas fa-search"></i> Buscar</button></div>
+                    </div>
+                    <div class="row g-2 align-items-end mb-3">
+                        <div class="col-md-2 col-6"><label class="form-label small mb-1">Expedição de</label><input type="date" id="bpExpDe" class="form-control form-control-sm"></div>
+                        <div class="col-md-2 col-6"><label class="form-label small mb-1">Expedição até</label><input type="date" id="bpExpAte" class="form-control form-control-sm"></div>
+                    </div>
+                    <div class="table-responsive" style="max-height: 360px; overflow-y: auto;">
+                        <table class="table table-sm table-hover align-middle">
+                            <thead class="table-light sticky-top" style="z-index:1;">
+                                <tr>
+                                    <th><input type="checkbox" id="bpSelAll" onchange="document.querySelectorAll('.bp-chk').forEach(c=>c.checked=this.checked)"></th>
+                                    <th>Pedido</th><th>Cliente</th><th>Cidade/UF</th><th>Sub-rota</th><th>Expedição</th>
+                                </tr>
+                            </thead>
+                            <tbody id="bpResultados"><tr><td colspan="6" class="text-muted text-center py-3">Use os filtros e clique em Buscar.</td></tr></tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="modal-footer py-2">
+                    <span class="me-auto small text-muted" id="bpContador"></span>
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-success" onclick="adicionarSelecionadosBusca()"><i class="fas fa-plus me-1"></i>Adicionar selecionados</button>
                 </div>
             </div>
         </div>
@@ -1236,6 +1280,94 @@
                 error: function (xhr) {
                     hideLoading();
                     Swal.fire('Aviso', xhr.responseJSON?.erro || 'Não localizado', 'info');
+                }
+            });
+        }
+
+        // ===== Modal de busca: incluir pedidos pendentes de embarque (#7) =====
+        function abrirBuscaPendentes() {
+            $.getJSON('/carteira/mapa/api/rota/sub-rotas-pendentes', function (resp) {
+                const sel = $('#bpSubRota');
+                sel.find('option:not(:first)').remove();
+                ((resp && resp.sub_rotas) || []).forEach(function (s) {
+                    sel.append('<option value="' + s + '">' + s + '</option>');
+                });
+            });
+            $('#bpResultados').html('<tr><td colspan="6" class="text-muted text-center py-3">Use os filtros e clique em Buscar.</td></tr>');
+            $('#bpContador').text('');
+            new bootstrap.Modal(document.getElementById('modalBuscaPendentes')).show();
+        }
+
+        function executarBuscaPendentes() {
+            const filtros = {
+                cidade: ($('#bpCidade').val() || '').trim(),
+                uf: ($('#bpUf').val() || '').trim(),
+                cliente: ($('#bpCliente').val() || '').trim(),
+                num_pedido: ($('#bpPedido').val() || '').trim(),
+                sub_rota: $('#bpSubRota').val() || '',
+                expedicao_de: $('#bpExpDe').val() || '',
+                expedicao_ate: $('#bpExpAte').val() || ''
+            };
+            $('#bpResultados').html('<tr><td colspan="6" class="text-center py-3"><i class="fas fa-spinner fa-spin"></i></td></tr>');
+            $.ajax({
+                url: '/carteira/mapa/api/rota/buscar-pendentes', method: 'POST',
+                contentType: 'application/json', headers: { 'X-CSRFToken': getCSRFToken() },
+                data: JSON.stringify(filtros),
+                success: function (resp) {
+                    const rows = (resp && resp.resultados) || [];
+                    if (!rows.length) {
+                        $('#bpResultados').html('<tr><td colspan="6" class="text-muted text-center py-3">Nenhum pedido pendente encontrado.</td></tr>');
+                        $('#bpContador').text(''); return;
+                    }
+                    let html = '';
+                    rows.forEach(function (r) {
+                        html += '<tr>' +
+                            '<td><input type="checkbox" class="bp-chk" value="' + r.separacao_lote_id + '"></td>' +
+                            '<td class="text-nowrap">' + (r.num_pedido || '') + '</td>' +
+                            '<td>' + (r.raz_social_red || '') + '</td>' +
+                            '<td class="text-nowrap">' + (r.cidade || '') + '/' + (r.uf || '') + '</td>' +
+                            '<td>' + (r.sub_rota || '') + '</td>' +
+                            '<td class="text-nowrap">' + (r.expedicao || '-') + '</td>' +
+                            '</tr>';
+                    });
+                    $('#bpResultados').html(html);
+                    $('#bpContador').text(rows.length + ' pedido(s)' + (rows.length >= 100 ? ' (mostrando os 100 primeiros)' : ''));
+                    $('#bpSelAll').prop('checked', false);
+                },
+                error: function () {
+                    $('#bpResultados').html('<tr><td colspan="6" class="text-danger text-center py-3">Erro ao buscar.</td></tr>');
+                }
+            });
+        }
+
+        function adicionarSelecionadosBusca() {
+            const lotes = $('.bp-chk:checked').map(function () { return this.value; }).get();
+            if (!lotes.length) { Swal.fire('Aviso', 'Marque ao menos um pedido', 'warning'); return; }
+            showLoading();
+            $.ajax({
+                url: '/carteira/mapa/api/rota/adicionar-cliente', method: 'POST',
+                contentType: 'application/json', headers: { 'X-CSRFToken': getCSRFToken() },
+                data: JSON.stringify({ lotes: lotes }),
+                success: function (resp) {
+                    hideLoading();
+                    if (!resp.sucesso || !resp.clientes) { Swal.fire('Aviso', 'Nenhum pedido adicionado', 'info'); return; }
+                    let add = 0;
+                    resp.clientes.forEach(function (c) {
+                        if (!clientesData.find(function (x) { return x.cliente_id === c.cliente_id; })) {
+                            clientesData.push(c); add++;
+                        }
+                    });
+                    plotarClientesNoMapa(clientesData);
+                    atualizarListaClientes(clientesData);
+                    recalcularTotais();
+                    atualizarCustoRota();
+                    const m = bootstrap.Modal.getInstance(document.getElementById('modalBuscaPendentes'));
+                    if (m) m.hide();
+                    Swal.fire('OK', add + ' entrega(s) adicionada(s)', 'success');
+                },
+                error: function (xhr) {
+                    hideLoading();
+                    Swal.fire('Erro', xhr.responseJSON?.erro || 'Falha ao adicionar', 'error');
                 }
             });
         }
