@@ -39,3 +39,24 @@ def calcular_custo_operacional(distancia_km, tempo_min, veiculo,
         'custo_depreciacao': custo_depreciacao,
         'custo_operacional': custo_operacional,
     }
+
+
+def selecionar_veiculo(peso, pallets=0, m3=0):
+    """Menor veiculo ativo que comporta peso + pallets + m3. Capacidade None
+    = dimensao nao restringe. Fallback: maior por peso entre os ativos."""
+    from app.veiculos.models import Veiculo
+
+    candidatos = (
+        Veiculo.query.filter(Veiculo.ativo.is_(True))
+        .order_by(Veiculo.peso_maximo.asc())
+        .all()
+    )
+    for v in candidatos:
+        if v.peso_maximo < (peso or 0):
+            continue
+        if pallets and v.capacidade_pallets is not None and v.capacidade_pallets < pallets:
+            continue
+        if m3 and v.capacidade_m3 is not None and v.capacidade_m3 < m3:
+            continue
+        return v
+    return candidatos[-1] if candidatos else None
