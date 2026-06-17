@@ -675,3 +675,53 @@ class GeocodeCache(db.Model):
     lng = db.Column(db.Float, nullable=False)
     fonte = db.Column(db.String(20), default='google')
     geocodificado_em = db.Column(db.DateTime, default=agora_utc_naive)
+
+
+class RotaSalva(db.Model):
+    """Rota de entrega salva (mono-veiculo) — agrupamento nomeado de lotes +
+    parametros (veiculo/volta/dias) + snapshot de metricas e custo."""
+    __tablename__ = 'rota_salva'
+
+    id = db.Column(db.Integer, primary_key=True)
+    nome = db.Column(db.String(100), nullable=True)
+    criado_por = db.Column(db.Integer, index=True, nullable=True)  # usuarios.id
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive)
+    atualizado_em = db.Column(db.DateTime, default=agora_utc_naive, onupdate=agora_utc_naive)
+    veiculo_id = db.Column(db.Integer, db.ForeignKey('veiculos.id'), nullable=True)
+    origem_endereco = db.Column(db.Text, nullable=True)
+    inclui_volta = db.Column(db.Boolean, default=False)
+    dias_viagem = db.Column(db.Integer, default=0)
+    lotes = db.Column(db.JSON, nullable=False)
+    ordem_otimizada = db.Column(db.JSON, nullable=True)
+    distancia_km = db.Column(db.Float)
+    tempo_min = db.Column(db.Float)
+    peso_total = db.Column(db.Float)
+    pallet_total = db.Column(db.Float)
+    valor_total = db.Column(db.Float)
+    custo_combustivel = db.Column(db.Numeric(12, 2))
+    custo_motorista = db.Column(db.Numeric(12, 2))
+    custo_fixo = db.Column(db.Numeric(12, 2))
+    custo_depreciacao = db.Column(db.Numeric(12, 2))
+    custo_pedagio = db.Column(db.Numeric(12, 2))
+    custo_total = db.Column(db.Numeric(12, 2))
+    polyline = db.Column(db.Text)
+    status = db.Column(db.String(20), default='salva')
+
+    def to_dict(self):
+        def _f(v):
+            return float(v) if v is not None else None
+        return {
+            'id': self.id, 'nome': self.nome, 'veiculo_id': self.veiculo_id,
+            'inclui_volta': self.inclui_volta, 'dias_viagem': self.dias_viagem,
+            'lotes': self.lotes or [], 'ordem_otimizada': self.ordem_otimizada or [],
+            'distancia_km': self.distancia_km, 'tempo_min': self.tempo_min,
+            'peso_total': self.peso_total, 'pallet_total': self.pallet_total,
+            'valor_total': self.valor_total,
+            'custo_combustivel': _f(self.custo_combustivel),
+            'custo_motorista': _f(self.custo_motorista),
+            'custo_fixo': _f(self.custo_fixo),
+            'custo_depreciacao': _f(self.custo_depreciacao),
+            'custo_pedagio': _f(self.custo_pedagio),
+            'custo_total': _f(self.custo_total),
+            'criado_em': self.criado_em.strftime('%d/%m/%Y %H:%M') if self.criado_em else None,
+        }

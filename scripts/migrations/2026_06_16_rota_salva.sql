@@ -1,0 +1,27 @@
+CREATE TABLE IF NOT EXISTS rota_salva (
+    id                SERIAL PRIMARY KEY,
+    nome              VARCHAR(100),
+    criado_por        INTEGER,
+    criado_em         TIMESTAMP,
+    atualizado_em     TIMESTAMP,
+    veiculo_id        INTEGER REFERENCES veiculos(id),
+    origem_endereco   TEXT,
+    inclui_volta      BOOLEAN DEFAULT FALSE,
+    dias_viagem       INTEGER DEFAULT 0,
+    lotes             JSONB NOT NULL,
+    ordem_otimizada   JSONB,
+    distancia_km      DOUBLE PRECISION,
+    tempo_min         DOUBLE PRECISION,
+    peso_total        DOUBLE PRECISION,
+    pallet_total      DOUBLE PRECISION,
+    valor_total       DOUBLE PRECISION,
+    custo_combustivel NUMERIC(12,2),
+    custo_motorista   NUMERIC(12,2),
+    custo_fixo        NUMERIC(12,2),
+    custo_depreciacao NUMERIC(12,2),
+    custo_pedagio     NUMERIC(12,2),
+    custo_total       NUMERIC(12,2),
+    polyline          TEXT,
+    status            VARCHAR(20) DEFAULT 'salva'
+);
+CREATE INDEX IF NOT EXISTS ix_rota_salva_criado_por ON rota_salva (criado_por);
