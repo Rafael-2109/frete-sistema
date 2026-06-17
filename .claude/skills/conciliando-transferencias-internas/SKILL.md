@@ -24,7 +24,8 @@ allowed-tools: Read, Bash, Glob, Grep
 # Conciliando Transferencias Internas — NACOM GOYA
 
 Concilia transferencias internas entre contas bancarias da NACOM GOYA no Odoo.
-Cobre **2 situacoes** mutuamente exclusivas por par de extrato.
+Cobre **3 situacoes**: (1/2/2b) conciliar pares pendentes e (3) corrigir uma
+perna JA conciliada no journal ERRADO (substituicao destrutiva — ver Situacao 3).
 
 ## Parametros (args)
 
@@ -114,6 +115,7 @@ domain = [
 | Recebimento conciliado, pagamento pendente | `conciliar_pagamento_transferencia_existente()` | stmt_pag_id, amount, date, journal_pag_id — **auto-escala para 2b se busca direta falhar** |
 | Diagnostico de cadeia (chamado automaticamente por Sit 2) | `rastrear_cadeia_documental()` | stmt_pag_id — retorna diagnostico, NAO executa |
 | Levantar todos os pares pendentes | `levantar_pares_transferencia_interna()` | filtros opcionais: `data_inicio`, `data_fim`, `valor`, `journal` (nome/code/ID), `payment_ref` |
+| **Perna JA conciliada em journal ERRADO** (corrigir) | `substituir_perna_journal_errado()` | payment_id, perna (`pag`/`rec`), journal_correto_id, stmt_correto_id — **DESTRUTIVO; `dry_run=True` por default, so executa com `dry_run=False` + confirmacao** |
 
 > `levantar_pares_transferencia_interna` retorna **list de pares**; ou `dict {'error': ...}`
 > quando o `journal` informado e ambiguo (com `candidatos`) ou nao-encontrado — checar o
@@ -164,8 +166,10 @@ Linha de extrato com NACOM GOYA / 61.724.241
 ├── Filtros de exclusao:
 │   ├── payment_ref contendo "FAV" → EXCLUIR (pagamento a terceiro)
 │   └── payment_ref contendo "Movimentação" → EXCLUIR (sem par no destino)
-└── Pos-conciliacao:
-    └── Verificar: payment.date != stmt.date? → REPORTAR INCONSISTENCIA
+├── Pos-conciliacao:
+│   └── Verificar: payment.date != stmt.date? → REPORTAR INCONSISTENCIA
+└── Par JA conciliado, mas perna no JOURNAL ERRADO (banco trocado)?
+    └── SIM → SITUACAO 3 (estornar perna errada + recriar no journal correto — DESTRUTIVO, exige confirmacao)
 ```
 
 ## Situacao 1 — Ambos extratos nao conciliados
@@ -218,6 +222,43 @@ Depositos creditam em D+0 por regra operacional. Se o agente quiser investigar
 inconsistencias, pode buscar janela ampliada, mas o match real e SEMPRE D+0.
 
 > Ver [codigo-operacional.md](./references/codigo-operacional.md) secao "Situacao 2b"
+
+## Situacao 3 — Substituir perna conciliada em JOURNAL ERRADO (DESTRUTIVO)
+
+**Quando**: o par de transferencia interna JA foi conciliado, mas uma das pernas
+(pagamento OU recebimento) ficou reconhecida no **journal errado** — ex.: o
+`account.payment is_internal_transfer` foi postado com `journal_id`/
+`destination_journal_id` trocado, ou o extrato foi conciliado contra a perna do
+banco errado. O saldo bate, mas o banco/journal esta incorreto.
+
+**Por que e DESTRUTIVA mas COMPATIVEL**: usa so operacoes NATIVAS reversiveis do
+Odoo (`button_draft`, remover reconciliacao, `action_cancel` do payment, recriar
++ `action_post`). **Nao quebra o Odoo** — o risco e de DADO (desfazer uma
+conciliacao). Por isso exige `dry_run` + confirmacao, nunca auto-executa.
+
+**Fluxo** (`substituir_perna_journal_errado`):
+1. Diagnostico: localizar o `account.payment` (e o paired payment), as 2
+   statement_lines conciliadas e confirmar qual perna esta no journal errado.
+2. `button_draft` no move do extrato errado → desfazer a reconciliacao da perna.
+3. `action_cancel` (ou `button_draft`) do `account.payment` errado — desfaz o
+   paired payment junto.
+4. Recriar a transferencia interna no journal CORRETO (`criar_transferencia_interna_e_conciliar`
+   da Situacao 1) ou recriar so a perna, conforme o caso.
+5. Reconciliar a statement_line correta — **ordem de writes: `account_id` por ULTIMO**
+   (mesmo gotcha da Preparacao do Extrato).
+6. Verificar `is_reconciled` nas DUAS pernas + `payment.journal_id` correto.
+
+> **GOTCHA — app_context obrigatorio**: writes XML-RPC dentro do app exigem
+> `app_context` Flask ativo; sem ele o `odoo_audit_hook` (flag `AGENT_ODOO_AUDIT_HOOK`,
+> `app/odoo/utils/connection.py:319`, registra em `operacao_odoo_auditoria`) pode
+> derrubar a transacao. Rodar via `get_odoo_connection()` dentro de `with app.app_context()`.
+
+> **STATUS — NAO validada em PROD ainda.** `action_cancel` em `account.payment
+> is_internal_transfer` nao foi exercitado nesta instalacao CIEL IT. **Validar em
+> staging com 1 caso antes do uso real** (candidato: PAGIS1/2025/00003, payment 50365).
+> Escopo conhecido: ~54 lancamentos. Ate validar, usar so `dry_run=True` (diagnostico).
+
+> Ver [codigo-operacional.md](./references/codigo-operacional.md) secao "Situacao 3"
 
 ---
 

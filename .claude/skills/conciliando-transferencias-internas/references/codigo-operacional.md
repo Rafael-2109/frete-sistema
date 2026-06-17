@@ -417,6 +417,80 @@ Valor do extrato (ex: R$14.999,99) sera conciliado parcialmente contra o payment
 
 ---
 
+## Situacao 3: Substituir perna conciliada em journal errado (DESTRUTIVO)
+
+> **Operacoes NATIVAS reversiveis do Odoo** (nao quebram o ERP — risco e de DADO).
+> **`dry_run=True` por default** = so diagnostica e monta o plano. Execucao real
+> (`dry_run=False`) **ainda NAO validada em PROD nesta instalacao CIEL IT** —
+> validar em staging com 1 caso (PAGIS1/2025/00003, payment 50365) antes do uso real.
+> **Todo write exige `with app.app_context()`** senao o `odoo_audit_hook`
+> (`app/odoo/utils/connection.py:319`) pode derrubar a transacao.
+
+```python
+def substituir_perna_journal_errado(
+    payment_id,            # account.payment is_internal_transfer a corrigir
+    perna,                 # 'pag' (pagamento) ou 'rec' (recebimento) — qual perna esta errada
+    journal_correto_id,    # journal_id correto da perna
+    stmt_correto_id,       # statement_line correta (no journal correto) a reconciliar
+    amount, date,
+    journal_outra_perna_id,  # journal_id da perna que esta CORRETA (a contraparte)
+    dry_run=True,
+):
+    """Sit 3: estorna a perna conciliada no journal ERRADO e recria no correto.
+
+    PASSO A PASSO (so executa com dry_run=False):
+      1. DIAGNOSTICO: le o payment + paired + as 2 statement_lines conciliadas;
+         confere journal atual da perna vs journal_correto_id.
+      2. button_draft no move do extrato errado -> remove a reconciliacao.
+      3. action_cancel do account.payment errado (desfaz o paired payment junto).
+      4. Recria a transferencia interna no journal correto via
+         criar_transferencia_interna_e_conciliar() (Situacao 1).
+      5. Verifica is_reconciled nas 2 pernas + payment.journal_id correto.
+    Retorna dict com {plano, executado, journal_antes, journal_depois, ...}.
+    """
+    odoo = get_odoo_connection()
+    pay = odoo.execute_kw('account.payment', 'read', [[payment_id]],
+        {'fields': ['name', 'journal_id', 'destination_journal_id', 'state',
+                    'is_internal_transfer', 'amount', 'date', 'move_id']})
+    if not pay:
+        return {'error': f'payment {payment_id} nao encontrado'}
+    pay = pay[0]
+    journal_atual = pay['journal_id'][0] if perna == 'pag' else \
+        (pay['destination_journal_id'][0] if pay.get('destination_journal_id') else None)
+
+    plano = {
+        'payment': pay['name'], 'perna': perna,
+        'journal_antes': journal_atual, 'journal_depois': journal_correto_id,
+        'state': pay['state'],
+        'passos': [
+            'button_draft(move_extrato_errado)',
+            f'action_cancel(account.payment {payment_id})',
+            'criar_transferencia_interna_e_conciliar(... journal correto ...)',
+            'verificar is_reconciled (2 pernas) + journal_id correto',
+        ],
+    }
+    if journal_atual == journal_correto_id:
+        return {'noop': True, 'motivo': 'perna ja esta no journal correto', 'plano': plano}
+
+    if dry_run:
+        return {'dry_run': True, 'plano': plano,
+                'aviso': 'Execucao NAO validada em PROD — validar staging 1 caso antes.'}
+
+    # --- EXECUCAO REAL (dry_run=False) — operacoes nativas reversiveis ---
+    # GOTCHA: rodar dentro de with app.app_context() (audit_hook). account_id por ULTIMO.
+    odoo.execute_kw('account.payment', 'action_cancel', [[payment_id]])
+    novo = criar_transferencia_interna_e_conciliar(
+        stmt_pag_id=stmt_correto_id if perna == 'pag' else None,
+        stmt_rec_id=stmt_correto_id if perna == 'rec' else None,
+        journal_pag_id=journal_correto_id if perna == 'pag' else journal_outra_perna_id,
+        journal_rec_id=journal_correto_id if perna == 'rec' else journal_outra_perna_id,
+        amount=amount, date=date,
+    )
+    return {'executado': True, 'plano': plano, 'resultado_recriacao': novo}
+```
+
+---
+
 ## Levantamento em Lote
 
 ```python
