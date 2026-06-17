@@ -41,6 +41,45 @@ def calcular_custo_operacional(distancia_km, tempo_min, veiculo,
     }
 
 
+def _chunk_waypoints(paradas, tam=23):
+    """Divide paradas em blocos de ate `tam` com overlap de 1 ponto entre blocos
+    (fim de um = inicio do proximo), para concatenar trechos sem buraco. Limite
+    Directions = 25 waypoints (origin+destination+23 intermediarios)."""
+    if len(paradas) <= tam:
+        return [list(paradas)]
+    chunks, i = [], 0
+    while i < len(paradas):
+        bloco = paradas[i:i + tam]
+        chunks.append(bloco)
+        if i + tam >= len(paradas):
+            break
+        i = i + tam - 1  # overlap de 1
+    return chunks
+
+
+def otimizar_rota(paradas, origem, inclui_volta=False, backend=None):
+    """Otimiza a ordem das paradas e mede a rota. `backend(origem, destino,
+    waypoints, inclui_volta) -> {ordem_indices, distancia_km, tempo_min, polyline, trechos}`.
+    Default backend = Directions+chunking (roteirizacao_backends)."""
+    if not paradas:
+        return {'ordem': [], 'distancia_km': 0.0, 'tempo_min': 0.0,
+                'polyline': '', 'trechos': 0}
+    if backend is None:
+        from app.carteira.services.roteirizacao_backends import directions_chunking_backend
+        backend = directions_chunking_backend
+
+    destino = origem if inclui_volta else None
+    res = backend(origem, destino, paradas, inclui_volta)
+    ordem = [paradas[i]['id'] for i in res['ordem_indices']]
+    return {
+        'ordem': ordem,
+        'distancia_km': round(res.get('distancia_km', 0.0), 2),
+        'tempo_min': round(res.get('tempo_min', 0.0), 1),
+        'polyline': res.get('polyline', ''),
+        'trechos': res.get('trechos', 1),
+    }
+
+
 def selecionar_veiculo(peso, pallets=0, m3=0):
     """Menor veiculo ativo que comporta peso + pallets + m3. Capacidade None
     = dimensao nao restringe. Fallback: maior por peso entre os ativos."""
