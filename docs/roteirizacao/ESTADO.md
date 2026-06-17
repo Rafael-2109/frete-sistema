@@ -26,30 +26,36 @@ atualizado: 2026-06-16
 
 ## Estado atual
 
-Design aprovado e plano da Fase 1 escrito (7 tasks TDD). Execucao ainda NAO iniciada — nenhum codigo de producao tocado.
+Fase 1 IMPLEMENTADA no branch `worktree-roteirizacao-ver-no-mapa` (8 commits). 20 testes verdes (PostgreSQL local); migration aplicada no banco local; smoke de render dos 2 templates = 200. PENDENTE: smoke VISUAL no browser, push/PR e habilitar Route Optimization (R1).
 
 | Fase | Escopo | Status |
 |------|--------|--------|
-| **1 — Fundacao de custo + motor** | migration `veiculos` (8 campos) + CRUD; service custo/selecao/motor (chunking 25); API `/api/rota/otimizar`; UI parametros + card de custo | PLANEJADA (plano escrito; execucao nao iniciada) |
+| **1 — Fundacao de custo + motor** | migration `veiculos` (8 campos) + CRUD; service custo/selecao/motor (chunking 25); API `/api/rota/otimizar`; UI parametros + card de custo | IMPLEMENTADA (branch worktree; 20 testes verdes; falta smoke browser + push) |
 | **2 — Interatividade + persistencia** | incluir/remover on-demand; tabela `rota_salva` (salvar/nomear/listar); `geocode_cache` persistente | A FAZER (plano a escrever) |
 | **3 — Cotacao por rota + extras** | cotar a partir de rota salva (reusa wizard); reordenar drag-and-drop; origem configuravel | A FAZER (plano a escrever) |
 
-Tasks da Fase 1 (marcar ao concluir):
+Tasks da Fase 1:
 
-- [ ] T1 — Migration `veiculos` (8 colunas) + model + schema JSON
-- [ ] T2 — `calcular_custo_operacional` (funcao pura, TDD)
-- [ ] T3 — `selecionar_veiculo` multidimensional (TDD)
-- [ ] T4 — Motor `otimizar_rota` + `_chunk_waypoints` (TDD)
-- [ ] T5 — Backend Directions+chunking + plug Route Optimization (TDD)
-- [ ] T6 — API `POST /api/rota/otimizar` (TDD)
-- [ ] T7 — Frontend: painel de parametros + card de custo (smoke)
+- [x] T1 — Migration `veiculos` (8 colunas) + model + schema JSON
+- [x] T2 — `calcular_custo_operacional` (funcao pura, TDD)
+- [x] T3 — `selecionar_veiculo` multidimensional (TDD)
+- [x] T4 — Motor `otimizar_rota` + `_chunk_waypoints` (TDD)
+- [x] T5 — Backend Directions+chunking + plug Route Optimization (TDD)
+- [x] T6 — API `POST /api/rota/otimizar` (TDD)
+- [x] T7 — Frontend: CRUD custos + painel de parametros + card de custo (render OK; smoke browser pendente)
+
+Ajustes vs plano (durante a execucao TDD): (a) fixture `_isola_veiculos` desativa os 10 veiculos pre-existentes do banco em `test_roteirizacao_selecao` (savepoint reverte); (b) `otimizar_rota` checa lista vazia ANTES de importar o backend (bug pego pelo teste); (c) backend adiciona o ponto que vira destino na ordem quando nao ha volta (espelha `mapa_service` original); (d) `api/lista` converte `Numeric`->float (jsonify nao serializa Decimal).
 
 ## Pendencias
 
 - **R1 — Auth do Route Optimization API:** pode exigir service account/OAuth2 (Google Cloud), nao a `GOOGLE_MAPS_API_KEY` atual. A Fase 1 entrega o backend **Directions+chunking** (funcional com a key atual, supera o limite de 25 no desenho); o backend Route Optimization fica plugavel (`_route_optimization_backend`, stub). **Acao do Rafael quando quiser otimizacao global real >25:** criar service account no GCP + habilitar a API.
 - **R4 — Geocoding sem persistencia:** ainda re-geocodifica enderecos novos a cada otimizacao na Fase 1; `geocode_cache` resolve na Fase 2.
-- **Proximo passo:** executar a Fase 1 task-a-task (TDD), marcando o status por task acima a cada conclusao.
+- **Smoke visual (browser):** validar no navegador o painel de parametros + card de custo no mapa e o cadastro de custos no admin de veiculos (nao automatizado nesta sessao).
+- **Push/PR:** branch `worktree-roteirizacao-ver-no-mapa` ainda nao pushado; integrar quando o Rafael aprovar.
+- **Custo Google na Fase 1:** o card chama `/api/rota/otimizar` (1 request Directions) ALEM do desenho via `/api/rota-clientes` — 2 roteirizacoes por calculo. Unificar na Fase 2/3 (aceitavel agora; Directions optimize dentro do free tier).
+- **Proximo passo:** smoke browser -> push/PR (aprovacao Rafael) -> escrever plano da Fase 2.
 
 ## Atualizado
 
-- **2026-06-16:** criado o ESTADO; spec e plano da Fase 1 escritos e registrados nos indices. Execucao pendente.
+- **2026-06-16 (1):** criado o ESTADO; spec e plano da Fase 1 escritos e registrados nos indices.
+- **2026-06-16 (2):** Fase 1 IMPLEMENTADA no branch worktree (8 commits, T1-T7); 20 testes verdes; migration aplicada no banco local; render 200 nos 2 templates. Pendente: smoke browser + push/PR + R1.
