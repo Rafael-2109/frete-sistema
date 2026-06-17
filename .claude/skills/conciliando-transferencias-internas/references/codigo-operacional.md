@@ -4,7 +4,7 @@ camada: L2
 sot_de: —
 hub: .claude/skills/conciliando-transferencias-internas/SKILL.md
 superseded_by: —
-atualizado: 2026-06-16
+atualizado: 2026-06-17
 -->
 # Codigo Operacional — Transferencias Internas
 
