@@ -65,8 +65,8 @@ def otimizar_rota(paradas, origem, inclui_volta=False, backend=None):
         return {'ordem': [], 'distancia_km': 0.0, 'tempo_min': 0.0,
                 'polyline': '', 'trechos': 0}
     if backend is None:
-        from app.carteira.services.roteirizacao_backends import directions_chunking_backend
-        backend = directions_chunking_backend
+        from app.carteira.services.roteirizacao_backends import default_backend
+        backend = default_backend
 
     destino = origem if inclui_volta else None
     res = backend(origem, destino, paradas, inclui_volta)

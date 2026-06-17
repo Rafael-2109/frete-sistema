@@ -2,8 +2,12 @@
 
 - directions_chunking_backend: usa Google Directions (key atual). <=23
   intermediarios = 1 request com optimize:true. Acima = chunking sequencial.
-- _route_optimization_backend: PLUG do Google Route Optimization API
-  (SKU Single Vehicle). Requer service account/OAuth2 (risco R1). Stub ate habilitar.
+- route_optimization_backend: Google Route Optimization API (optimizeTours,
+  SKU Single Vehicle). Otimizacao GLOBAL real, sem teto de 25 paradas. Requer
+  service account via ADC (env GOOGLE_APPLICATION_CREDENTIALS) + projeto
+  (env ROUTE_OPTIMIZATION_PROJECT).
+- default_backend: usa Route Optimization se configurado; senao (ou em erro)
+  cai para directions_chunking_backend.
 """
 import os
 import logging
@@ -11,10 +15,50 @@ import requests
 
 logger = logging.getLogger(__name__)
 _BASE_DIRECTIONS = "https://maps.googleapis.com/maps/api/directions/json"
+_RO_SCOPE = "https://www.googleapis.com/auth/cloud-platform"
+# Janela global (sem time windows nos shipments) — 7 dias cobrem o tempo de
+# viagem de qualquer rota de entrega e ficam dentro do maximo da API.
+_RO_GLOBAL_START = "2024-01-01T00:00:00Z"
+_RO_GLOBAL_END = "2024-01-08T00:00:00Z"
 
 
 def _api_key():
     return os.getenv('GOOGLE_MAPS_API_KEY', '')
+
+
+def _ro_project():
+    return os.getenv('ROUTE_OPTIMIZATION_PROJECT') or os.getenv('GOOGLE_CLOUD_PROJECT')
+
+
+def _route_optimization_ativo():
+    """True se ha projeto GCP configurado (a credencial vem via ADC/google-auth)."""
+    return bool(_ro_project())
+
+
+def _parse_latlng(s):
+    """'lat,lng' -> (float, float). Lanca ValueError se nao for coordenada."""
+    lat, lng = str(s).split(',')
+    return float(lat), float(lng)
+
+
+def _parse_duration_s(dur):
+    """'1800s' -> 1800.0; aceita None/numero."""
+    if dur is None:
+        return 0.0
+    s = str(dur).strip().rstrip('s')
+    try:
+        return float(s)
+    except ValueError:
+        return 0.0
+
+
+def _ro_token():
+    """Access token OAuth2 da service account (ADC) com scope cloud-platform."""
+    import google.auth
+    from google.auth.transport.requests import Request as GoogleAuthRequest
+    creds, _ = google.auth.default(scopes=[_RO_SCOPE])
+    creds.refresh(GoogleAuthRequest())
+    return creds.token
 
 
 def directions_chunking_backend(origem, destino, waypoints, inclui_volta=False):
@@ -80,7 +124,79 @@ def directions_chunking_backend(origem, destino, waypoints, inclui_volta=False):
     }
 
 
-def _route_optimization_backend(origem, destino, waypoints, inclui_volta=False):
-    """PLUG futuro: Google Route Optimization API (Single Vehicle). Requer
-    service account/OAuth2 (R1). Habilitar quando credencial existir."""
-    raise NotImplementedError("Route Optimization API pendente de service account (R1)")
+def route_optimization_backend(origem, destino, waypoints, inclui_volta=False):
+    """Google Route Optimization API (optimizeTours, 1 veiculo). origem/destino
+    sao 'lat,lng'. Otimiza a ordem GLOBAL das paradas (sem teto de 25)."""
+    project = _ro_project()
+    if not project:
+        raise RuntimeError("ROUTE_OPTIMIZATION_PROJECT nao configurado")
+    o_lat, o_lng = _parse_latlng(origem)
+
+    shipments = [{
+        'label': str(i),
+        'deliveries': [{
+            'arrivalWaypoint': {'location': {'latLng': {
+                'latitude': p['lat'], 'longitude': p['lng']}}}
+        }],
+    } for i, p in enumerate(waypoints)]
+
+    vehicle = {'startWaypoint': {'location': {'latLng': {
+        'latitude': o_lat, 'longitude': o_lng}}}}
+    if inclui_volta:
+        vehicle['endWaypoint'] = {'location': {'latLng': {
+            'latitude': o_lat, 'longitude': o_lng}}}
+
+    body = {
+        'timeout': '20s',
+        'model': {
+            'shipments': shipments,
+            'vehicles': [vehicle],
+            'globalStartTime': _RO_GLOBAL_START,
+            'globalEndTime': _RO_GLOBAL_END,
+        },
+        'populatePolylines': True,
+    }
+    url = f"https://routeoptimization.googleapis.com/v1/projects/{project}:optimizeTours"
+    headers = {'Authorization': f'Bearer {_ro_token()}', 'Content-Type': 'application/json'}
+    resp = requests.post(url, json=body, headers=headers, timeout=90)
+    if resp.status_code != 200:
+        raise RuntimeError(f"RouteOptimization HTTP {resp.status_code}: {resp.text[:200]}")
+    data = resp.json()
+    routes = data.get('routes') or []
+    if not routes:
+        raise RuntimeError("RouteOptimization sem routes")
+    route = routes[0]
+
+    # ordem = sequencia de visits (deliveries); shipmentIndex omitido = 0 (proto JSON)
+    ordem_indices, visto = [], set()
+    for v in route.get('visits', []):
+        idx = v.get('shipmentIndex', 0)
+        if idx not in visto:
+            visto.add(idx)
+            ordem_indices.append(idx)
+    # paradas nao roteadas (skipped) — anexa no fim para nao sumir
+    for i in range(len(waypoints)):
+        if i not in visto:
+            ordem_indices.append(i)
+
+    metrics = route.get('metrics', {}) or {}
+    dist_km = (metrics.get('travelDistanceMeters', 0) or 0) / 1000.0
+    tempo_min = _parse_duration_s(metrics.get('travelDuration') or metrics.get('totalDuration')) / 60.0
+    polyline = (route.get('routePolyline') or {}).get('points', '')
+    return {
+        'ordem_indices': ordem_indices,
+        'distancia_km': round(dist_km, 2),
+        'tempo_min': round(tempo_min, 1),
+        'polyline': polyline,
+        'trechos': 1,
+    }
+
+
+def default_backend(origem, destino, waypoints, inclui_volta=False):
+    """Route Optimization se configurado; senao (ou em erro) Directions+chunking."""
+    if _route_optimization_ativo():
+        try:
+            return route_optimization_backend(origem, destino, waypoints, inclui_volta)
+        except Exception as e:
+            logger.warning("Route Optimization falhou (%s) — fallback Directions+chunking", e)
+    return directions_chunking_backend(origem, destino, waypoints, inclui_volta)

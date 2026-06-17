@@ -501,9 +501,17 @@ def rota_otimizar():
         if not clientes:
             return jsonify({'erro': 'Nenhuma parada informada'}), 400
 
-        origem = data.get('origem') or mapa_service.endereco_cd
         inclui_volta = bool(data.get('inclui_volta'))
         dias_viagem = int(data.get('dias_viagem') or 0)
+
+        # Origem como 'lat,lng' (Route Optimization exige coordenadas; Directions tambem aceita)
+        origem_in = data.get('origem')
+        if origem_in:
+            o_lat, o_lng = mapa_service.geocodificar_endereco(origem_in)
+            origem = f"{o_lat},{o_lng}" if o_lat is not None else origem_in
+        else:
+            cd = mapa_service.coordenadas_cd
+            origem = f"{cd['lat']},{cd['lng']}"
 
         paradas = [{'id': c['id'], 'lat': c['lat'], 'lng': c['lng']} for c in clientes]
         rota = otimizar_rota(paradas, origem=origem, inclui_volta=inclui_volta)

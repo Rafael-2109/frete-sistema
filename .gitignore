@@ -50,6 +50,11 @@ coverage.xml
 .env
 .venv
 env/
+
+# Service account keys / segredos (nunca commitar)
+.secrets/
+*-sa.json
+route-optimization-sa.json
 venv/
 ENV/
 env.bak/

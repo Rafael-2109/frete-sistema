@@ -186,3 +186,8 @@ bleach==6.3.0              # Sanitizacao HTML + linkify seguro (XSS prevention)
 # APPLICATION MONITORING (APM)
 # ==========================================
 sentry-sdk[flask]==2.54.0  # Error tracking, performance monitoring, distributed tracing
+
+# ==========================================
+# GOOGLE ROUTE OPTIMIZATION API (roteirizacao "Ver no Mapa")
+# ==========================================
+google-auth==2.55.0  # OAuth2 service account (ADC) p/ Route Optimization API (optimizeTours)
