@@ -124,6 +124,11 @@ Consultar CTRC / CT-e (101)?
   → consultar_ctrc_101.py --ctrc 94 [--baixar-xml] [--baixar-dacte]
   → OU: consultar_ctrc_101.py --nf 35714 [--baixar-xml] [--baixar-dacte]
   → READ-ONLY: executar diretamente, sem --dry-run nem confirmacao
+  → ENTREGAR o XML/DACTE ao usuario (link de download): o JSON retorna
+    `xml: <path>` (e `dacte: <path>`) salvos em /tmp. Passar esse path a
+    `exportando-arquivos` para gerar a URL clicavel:
+    `python .claude/skills/exportando-arquivos/scripts/exportar.py --formato texto --arquivo <xml_path> --nome cte_nf_<numero>`
+    → responder com o `arquivo.url_completa` retornado (NAO o path /tmp).
   → Detalhes: [SCRIPTS.md](SCRIPTS.md)
 Emitir CT-e complementar (222)?
   → Perguntar: CTRC pai (formato FILIAL-NUM-DV, ex: CAR-113-9), motivo (C/D/V/E/R), valor (bruto ou final)

@@ -507,8 +507,10 @@ class StockPickingService:
         vazio com contexto), executa `create_returns`, seta `qty_done`
         nas move_lines do novo picking e valida.
 
-        Idempotencia: se ja existe picking com `origin ilike "Devolução
-        de {name}"`, retorna esse id sem criar duplicado.
+        Idempotencia: se ja existe picking VIVO com `origin ilike "Devolução
+        de {name}"`, retorna esse id sem criar duplicado. Devolucoes em
+        state=cancel sao IGNORADAS (G-AUDIT-3/N23) — move qty=0 nao restaura
+        saldo; se so existem canceladas, cria uma nova.
 
         G019 pattern: re-le state do novo picking apos button_validate;
         raise se != 'done'.
@@ -536,17 +538,36 @@ class StockPickingService:
             )
 
         # Idempotencia: ja existe devolucao?
-        ja = self.odoo.search_read(
+        # G-AUDIT-3 (N23): NUNCA reaproveitar devolucao em state=cancel — o
+        # move da devolucao cancelada tem qty=0 e NAO restaura saldo. Estados
+        # validos para reaproveitar: draft/confirmed/assigned/done. Se TODAS
+        # as devolucoes existentes (por origin) sao cancel, prossegue para
+        # criar uma NOVA funcional; se ha mistura, prefere a viva. Espelha o
+        # fix de `criar_picking_inter_company` (mesma licao atemporal:
+        # idempotencia por chave externa SEMPRE filtra registro morto).
+        existentes = self.odoo.search_read(
             'stock.picking',
             [['origin', 'ilike', f'Devolução de {pk[0]["name"]}']],
-            ['id'], limit=1,
+            ['id', 'state'],
         )
-        if ja:
+        vivas = [p for p in existentes if (p.get('state') or '') != 'cancel']
+        if vivas:
+            canceladas = [
+                p for p in existentes if (p.get('state') or '') == 'cancel'
+            ]
             logger.info(
                 f'Picking {picking_id} ({pk[0]["name"]}): devolucao ja '
-                f'existe (id={ja[0]["id"]}). Retornando sem criar.'
+                f'existe (id={vivas[0]["id"]}, state={vivas[0].get("state")!r}). '
+                'Retornando sem criar.'
+                + (
+                    f' (G-AUDIT-3: ignorando {len(canceladas)} devolucao(oes) '
+                    f'cancelada(s) ids={[p["id"] for p in canceladas]}.)'
+                    if canceladas else ''
+                )
             )
-            return ja[0]['id']
+            return vivas[0]['id']
+        # G-AUDIT-3: nenhuma devolucao viva (todas cancel ou inexistente) —
+        # prossegue para criar uma NOVA.
 
         # Criar wizard stock.return.picking
         ctx = {

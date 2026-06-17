@@ -43,6 +43,51 @@ Indice de execucoes do dialogo de melhoria Agent SDK <-> Claude Code.
 | 37 | 2026-06-13 | 9 | 4 | 2 | 3 | OK (exportar.py entrega codigo/texto .py via --formato texto + doc; I6.1 REGRAS_OUTPUT nao-expor-calculo; anti-gatilho roteamento rastreando-odoo->consultando-quant; 2 rejeicoes raiz "falta de ferramenta"; cluster 3 propostas industrializacao FB-LF contabil+arquitetural; 1 teste novo, suite export 18/18) |
 | 38 | 2026-06-14 | 0 | 0 | 0 | 0 | SKIP (sem backlog) |
 | 39 | 2026-06-16 | 3 | 1 | 1 | 1 | OK (skill_bug journals conciliando-transf-internas: 1054 era VORTX AGIS nao "BRADESCO copia" + 6 journals faltantes, corrigido ao vivo + resolver_journal_id dinamico; 1 rejeicao falso-positivo "beneficiario TED nao importado" refutado por 643 linhas SRM ilike NACOM GOYA; 1 proposta write-path CarVia via backfill existente; 3 F2 adhoc/skill-gap listadas p/ Rafael) |
+| 40 | 2026-06-17 | 4 | 2 | 0 | 2 | OK (skill_bug operando-picking-odoo 'devolver' reutilizava devolucao state=cancel — aplicado padrao G-AUDIT-3/N23 em picking.py+operar_picking.py, 2 TDD, 72 passed; IMP-2026-06-17-001 XML CT-e ja existia no consultar_ctrc_101.py --nf --baixar-xml, so faltava entrega → nota exportando-arquivos; 2 propostas: add separacao em embarque toca routes.py + Situacao 3 journal errado destrutivo Odoo PROD) |
+
+## 2026-06-17
+
+4 sugestoes na query (todas `warning`), nenhuma F2 (`adhoc-`/`skill-gap-`). 2 implementadas, 2 propostas.
+
+- **[IMPLEMENTADO] IMP-2026-06-16-002** (skill_bug, warning) — `operando-picking-odoo`
+  modo `devolver`: idempotencia reutilizava picking de devolucao em `state=cancel`.
+  **BUG REAL** (matriz §2.1.1: codigo do fluxo oficial ERRA → soberano). A busca
+  `origin ilike "Devolução de NAME"` nao filtrava `state`; devolucao cancelada
+  (move qty=0) era reutilizada → `reutilizado_idempotente=true` no dry-run e
+  `DEVOLUCAO_REUTILIZADA` no real-run SEM restaurar saldo. Incidente: picking
+  325359, devolucao cancelada 325674, travou reversao de 5.000 un lote 26329.
+  Aplicado o MESMO padrao ja codificado em `criar_picking_inter_company`
+  (G-AUDIT-3/N23): segrega vivas vs canceladas, reutiliza a viva, cria NOVA se so
+  houver canceladas. Corrigido em 2 pontos: `picking.py` `devolver()` (real-run) +
+  `operar_picking.py` `devolver_single()` (dry-run). 2 TDD novos
+  (`test_devolver_ignora_devolucao_cancelada_cria_nova` +
+  `test_devolver_prefere_viva_sobre_cancelada`). Suite **72 passed** (70+2),
+  py_compile OK. Persistido v2 id=193.
+- **[PROPOSTO] IMP-2026-06-16-003** (skill_suggestion, warning) — skill para
+  "adicionar separacao em embarque existente". **NAO auto-implementada**: caminho
+  recomendado (estender `novo_item`, `app/embarques/routes.py:1163`, hoje incompleta)
+  toca `routes.py` (core file restrito = apenas propor); criar skill WRITE dedicada
+  e feature grande; frequencia = 1 sessao. Plano em implementation_notes: preencher
+  `EmbarqueItem` da `Separacao` + UF/cidade via
+  `LocalizacaoService.obter_cidade_destino_embarque()` +
+  `sincronizar_totais_embarque()` (nao UPDATE manual). Persistido v2 id=194.
+- **[PROPOSTO] IMP-2026-06-16-004** (skill_suggestion, warning) — `conciliando-transferencias-internas`
+  "Situacao 3 — corrigir perna em journal errado". **NAO auto-implementada**: fluxo
+  envolve operacoes financeiras DESTRUTIVAS Odoo PROD nao testadas (desfazer
+  `full_reconcile`, `action_cancel` de payment postado, re-reconciliar) → revisao
+  humana + staging. Gotcha citado e REAL: `odoo_audit_hook` existe em
+  `app/odoo/utils/connection.py` (P8, `AGENT_ODOO_AUDIT_HOOK`) — documentar.
+  Escopo: 54 lancamentos; caso de teste PAGIS1/2025/00003 (payment 50365).
+  Persistido v2 id=195.
+- **[IMPLEMENTADO] IMP-2026-06-17-001** (skill_suggestion, warning) — baixar XML do
+  CT-e no SSW por numero da NF. **Capacidade-nucleo JA EXISTIA**: `consultar_ctrc_101.py`
+  ja aceita `--nf <numero> --baixar-xml` (opcao 101 READ-ONLY Playwright), baixa o
+  ZIP, extrai o XML e retorna o path no JSON `xml` (linhas 247-348). Gap real = so a
+  ENTREGA. Adicionada nota no Decision Tree de `operando-ssw/SKILL.md` ligando o
+  `xml_path` a `exportando-arquivos` (`exportar.py --formato texto --arquivo
+  <xml_path>`, aceita `.xml`) → responder com `arquivo.url_completa`. Sem codigo
+  novo. Persistido v2 id=196.
+- Persistencia DB: 4/4 OK (HTTP 200, ids 193-196).
 
 ## 2026-06-16
 

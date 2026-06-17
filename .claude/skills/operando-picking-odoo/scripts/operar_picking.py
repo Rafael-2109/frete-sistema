@@ -263,22 +263,38 @@ def devolver_single(svc: StockPickingService, picking_id: int,
         out['tempo_ms'] = int((time.time() - t0) * 1000)
         return out
 
-    # Idempotência: checar se já existe
-    ja = svc.odoo.search_read(
+    # Idempotência: checar se já existe devolução VIVA.
+    # G-AUDIT-3 (N23): devolução em state=cancel (move qty=0) NÃO restaura
+    # saldo — ignorá-la e criar uma nova funcional. Só reutiliza estados
+    # vivos (draft/confirmed/assigned/done). Espelha o service devolver().
+    existentes = svc.odoo.search_read(
         'stock.picking',
         [['origin', 'ilike', f'Devolução de {pk[0]["name"]}']],
-        ['id'], limit=1,
+        ['id', 'state'],
     )
-    if ja:
-        out['picking_id_devolucao'] = ja[0]['id']
+    vivas = [p for p in existentes if (p.get('state') or '') != 'cancel']
+    canceladas = [p for p in existentes if (p.get('state') or '') == 'cancel']
+    if vivas:
+        out['picking_id_devolucao'] = vivas[0]['id']
+        out['state_devolucao'] = vivas[0].get('state')
         out['reutilizado_idempotente'] = True
+        if canceladas:
+            out['devolucoes_canceladas_ignoradas'] = [
+                p['id'] for p in canceladas
+            ]
         if dry_run:
             out['status'] = 'DRY_RUN_OK'
-            out['plano'] = 'Devolução já existe; idempotente — retornaria id existente.'
+            out['plano'] = (
+                'Devolução viva já existe; idempotente — retornaria id '
+                'existente.'
+            )
         else:
             out['status'] = 'DEVOLUCAO_REUTILIZADA'
         out['tempo_ms'] = int((time.time() - t0) * 1000)
         return out
+    if canceladas:
+        # G-AUDIT-3: só existe(m) devolução(ões) cancelada(s) — criar NOVA.
+        out['devolucoes_canceladas_ignoradas'] = [p['id'] for p in canceladas]
 
     if dry_run:
         out['status'] = 'DRY_RUN_OK'

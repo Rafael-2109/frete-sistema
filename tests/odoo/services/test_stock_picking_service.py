@@ -675,6 +675,54 @@ def test_devolver_create_returns_int_retorna_pid_direto():
     assert result == 8888
 
 
+def test_devolver_ignora_devolucao_cancelada_cria_nova():
+    """G-AUDIT-3 (N23): devolucao existente em state=cancel NAO e reutilizada.
+
+    Move da devolucao cancelada tem qty=0 e nao restaura saldo. O fix segrega
+    cancelados da idempotencia: como TODAS as existentes sao cancel, cria uma
+    NOVA funcional (regressao do incidente IMP-2026-06-16-002, picking 325359 /
+    devolucao cancelada 325674).
+    """
+    odoo = MagicMock()
+    odoo.read.side_effect = [
+        [{'name': 'PICK-001', 'state': 'done'}],
+        [{'state': 'done'}],  # novo picking validado
+    ]
+    odoo.search_read.side_effect = [
+        [{'id': 7777, 'state': 'cancel'}],  # so devolucao cancelada
+        [{'id': 5001, 'quantity': 5.0, 'qty_done': 0}],  # MLs do novo picking
+    ]
+    odoo.execute_kw.side_effect = [1234, True, {'res_id': 8888}, True]
+    svc = StockPickingService(odoo=odoo)
+    result = svc.devolver(picking_id=9999)
+    assert result == 8888  # NOVA devolucao, nao a cancelada 7777
+    # Criou o wizard (nao reutilizou o cancelado)
+    create_calls = [
+        c for c in odoo.execute_kw.call_args_list
+        if c.args[0] == 'stock.return.picking' and c.args[1] == 'create'
+    ]
+    assert len(create_calls) == 1
+
+
+def test_devolver_prefere_viva_sobre_cancelada():
+    """G-AUDIT-3 (N23): havendo mistura (cancelada + viva), reutiliza a viva."""
+    odoo = MagicMock()
+    odoo.read.return_value = [{'name': 'PICK-001', 'state': 'done'}]
+    odoo.search_read.return_value = [
+        {'id': 7777, 'state': 'cancel'},
+        {'id': 9001, 'state': 'done'},  # devolucao viva
+    ]
+    svc = StockPickingService(odoo=odoo)
+    result = svc.devolver(picking_id=9999)
+    assert result == 9001  # a viva, nao a cancelada 7777
+    # Nao cria wizard (idempotencia saudavel)
+    for call in odoo.execute_kw.call_args_list:
+        assert not (
+            call.args[0] == 'stock.return.picking'
+            and call.args[1] == 'create'
+        )
+
+
 # ============================================================================
 # v15a — aplicar_peso_volumes_fallback (G018 v2)
 # ============================================================================
