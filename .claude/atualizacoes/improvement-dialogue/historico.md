@@ -89,6 +89,27 @@ Indice de execucoes do dialogo de melhoria Agent SDK <-> Claude Code.
   novo. Persistido v2 id=196.
 - Persistencia DB: 4/4 OK (HTTP 200, ids 193-196).
 
+### Atualizacao pos-revisao (2026-06-17, sessao de avaliacao 4-maos)
+
+Avaliacao adversarial do D8 #40 (commits `b511f10d4`, `7c13865f0`, `3e8019898`, `bb8d49422`):
+- **IMP-2026-06-16-004 → IMPLEMENTADA**: a "Situacao 3" foi codificada em
+  `conciliando-transferencias-internas` (SKILL.md 2→3 situacoes + decision tree +
+  `references/codigo-operacional.md` `substituir_perna_journal_errado()`). Avaliada
+  como destrutiva-PORÉM-compativel (operacoes nativas reversiveis do Odoo); `dry_run=True`
+  default, execucao real marcada **NAO validada em PROD** (validar staging
+  PAGIS1/2025/00003 antes). Gotcha `app_context`/`odoo_audit_hook` documentado. Commit `7c13865f0`.
+- **IMP-2026-06-17-001 → complementada**: o D8 corrigiu a *entrega*, mas o gap real
+  era de *roteamento/descoberta* (a capacidade READ vivia so na `operando-ssw`, rotulada
+  ESCRITA, inacessivel a quem buscava consulta). Adicionado cross-ref no Decision Tree de
+  `acessando-ssw` (commit `3e8019898`). **Ressalva (Rafael)**: CT-e NAO trafegam via SSW —
+  as skills SSW terao plano separado; o cross-ref fica como ponto de partida.
+- **IMP-2026-06-16-002 → follow-up**: o fix testou so o service `devolver()`; o CLI
+  `devolver_single` (caminho do agente web, ramo dry-run = sintoma do incidente) ficou
+  sem cobertura — adicionados 3 TDD + atualizado o contrato na SKILL.md. Commit `b511f10d4`.
+- **IMP-2026-06-16-003**: mantida como proposta — script "adicionar pedido em embarque"
+  planejado (paridade com `incluir_em_embarque`, reusando funcoes utilitarias, sem tocar a
+  rota web), ainda NAO iniciado.
+
 ## 2026-06-16
 
 6 sugestoes na query; 3 sao **F2** (`adhoc-`/`skill-gap-`, gate humano, apenas listadas); 3 decididas.
