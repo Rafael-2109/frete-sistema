@@ -202,3 +202,75 @@ function resetStatusPedido(loteId) {
 function cancelarSeparacao(loteId) {
     abrirModalMotivoExclusao(loteId);
 }
+
+// Acumula os pedidos selecionados numa rota (nova ou existente) para abrir no
+// mapa depois — permite somar pedidos de filtros diferentes (roteirizacao #6).
+function adicionarPedidosARota() {
+    const selecionados = document.querySelectorAll('input[name="separacao_lote_ids"]:checked');
+    if (selecionados.length === 0) {
+        alert('Por favor, selecione pelo menos um pedido.');
+        return;
+    }
+    const lotes = Array.from(selecionados).map(cb => cb.value);
+    const csrf = document.querySelector('input[name="csrf_token"]').value;
+
+    fetch('/carteira/mapa/api/rotas')
+        .then(r => r.json())
+        .then(data => {
+            const rotas = (data && data.rotas) || [];
+            const opcoes = rotas.map(r =>
+                '<option value="' + r.id + '">' + (r.nome || ('Rota #' + r.id)) +
+                ' — ' + (r.lotes ? r.lotes.length : 0) + ' lote(s)</option>').join('');
+
+            const modalId = 'modalAddRota';
+            const existente = document.getElementById(modalId);
+            if (existente) existente.remove();
+
+            const html =
+                '<div class="modal fade" id="' + modalId + '" tabindex="-1"><div class="modal-dialog">' +
+                '<div class="modal-content"><div class="modal-header">' +
+                '<h5 class="modal-title"><i class="fas fa-route"></i> Adicionar ' + lotes.length + ' pedido(s) à rota</h5>' +
+                '<button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>' +
+                '<div class="modal-body">' +
+                '<div class="mb-3"><label class="form-label">Rota</label>' +
+                '<select id="addRotaSelect" class="form-select"><option value="">➕ Nova rota</option>' + opcoes + '</select></div>' +
+                '<div class="mb-3" id="addRotaNomeWrap"><label class="form-label">Nome da nova rota (opcional)</label>' +
+                '<input id="addRotaNome" class="form-control" placeholder="ex: SP Capital 18/06"></div>' +
+                '</div><div class="modal-footer">' +
+                '<button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>' +
+                '<button type="button" class="btn btn-success" id="addRotaConfirmar">Adicionar</button>' +
+                '</div></div></div></div>';
+            document.body.insertAdjacentHTML('beforeend', html);
+
+            const modalEl = document.getElementById(modalId);
+            const modal = new bootstrap.Modal(modalEl);
+            const sel = document.getElementById('addRotaSelect');
+            const nomeWrap = document.getElementById('addRotaNomeWrap');
+            sel.addEventListener('change', function () {
+                nomeWrap.style.display = sel.value ? 'none' : 'block';
+            });
+            document.getElementById('addRotaConfirmar').addEventListener('click', function () {
+                const body = { lotes: lotes };
+                if (sel.value) body.rota_id = parseInt(sel.value, 10);
+                else body.nome = (document.getElementById('addRotaNome').value || '').trim() || null;
+                fetch('/carteira/mapa/api/rota/acumular', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrf },
+                    body: JSON.stringify(body)
+                }).then(r => r.json()).then(function (resp) {
+                    modal.hide();
+                    if (resp.sucesso) {
+                        const nome = resp.nome || ('Rota #' + resp.id);
+                        if (confirm('Rota "' + nome + '" agora tem ' + resp.total_lotes + ' lote(s).\n\nAbrir no mapa agora?')) {
+                            window.open('/carteira/mapa/visualizar?rota_id=' + resp.id, '_blank');
+                        }
+                    } else {
+                        alert('Erro: ' + (resp.erro || 'falha ao adicionar à rota'));
+                    }
+                }).catch(function () { alert('Erro ao adicionar à rota'); });
+            });
+            modalEl.addEventListener('hidden.bs.modal', function () { modalEl.remove(); });
+            modal.show();
+        })
+        .catch(function () { alert('Erro ao buscar rotas salvas'); });
+}

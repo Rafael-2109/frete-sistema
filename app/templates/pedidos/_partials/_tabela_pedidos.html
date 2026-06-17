@@ -63,6 +63,10 @@
                         <button type="button" class="btn btn-success btn-sm" onclick="abrirMapaPedidos()" id="btnVerMapa" disabled>
                             <i class="fas fa-map-marked-alt"></i> Ver no Mapa
                         </button>
+                        <button type="button" class="btn btn-outline-success btn-sm" onclick="adicionarPedidosARota()" id="btnAddRota" disabled
+                                title="Acumular os pedidos selecionados numa rota (nova ou existente) para abrir no mapa depois">
+                            <i class="fas fa-route"></i> Adicionar à rota
+                        </button>
                         <a href="{{ url_for('pedidos.atualizar_status') }}" class="btn btn-outline-warning btn-sm" onclick="return confirm('Confirma a atualização de todos os status dos pedidos?')">
                             <i class="fas fa-sync-alt"></i> Atualizar Status
                         </a>

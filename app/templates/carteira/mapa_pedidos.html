@@ -1262,12 +1262,8 @@
         }
 
         function carregarRota(id) {
-            $.getJSON('/carteira/mapa/api/rota/' + id, function (resp) {
-                if (!resp.sucesso) { Swal.fire('Erro', 'Rota nao encontrada', 'error'); return; }
-                const lotes = resp.rota.lotes || [];
-                const params = lotes.map(function (l) { return 'lotes[]=' + encodeURIComponent(l); }).join('&');
-                window.location.href = '/carteira/mapa/visualizar?' + params;
-            });
+            // Resgata por rota_id (preserva a ordem salva e nao estoura a URL) — #6
+            window.location.href = '/carteira/mapa/visualizar?rota_id=' + id;
         }
 
         function excluirRota(id) {

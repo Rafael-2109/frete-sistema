@@ -75,6 +75,14 @@ function updateCotarButton() {
             verMapaButton.innerHTML = '<i class="fas fa-map-marked-alt"></i> Ver no Mapa';
         }
     }
+
+    const addRotaButton = document.getElementById('btnAddRota');
+    if (addRotaButton) {
+        addRotaButton.disabled = count === 0;
+        addRotaButton.innerHTML = count > 0
+            ? '<i class="fas fa-route"></i> Adicionar à rota (' + count + ')'
+            : '<i class="fas fa-route"></i> Adicionar à rota';
+    }
 }
 
 function abrirCotacaoManual() {

@@ -44,6 +44,14 @@ def visualizar_mapa():
         # Compat: aceitar pedidos[] (legado, num_pedido)
         pedidos_selecionados = request.args.getlist('pedidos[]')
 
+        # Resgatar uma rota salva por ?rota_id= (preserva a ordem e nao estoura a
+        # URL; usado pelo acumulo a partir de lista_pedidos — item #6)
+        rota_id = request.args.get('rota_id')
+        if rota_id:
+            rota = RotaSalva.query.get(rota_id)
+            if rota and rota.lotes:
+                lotes_selecionados = list(rota.lotes)
+
         if not lotes_selecionados and not pedidos_selecionados:
             # Tentar obter da sessão
             lotes_selecionados = session.get('lotes_selecionados_mapa', [])
@@ -712,4 +720,45 @@ def rota_cotar(rota_id):
         })
     except Exception as e:
         logger.error(f"Erro ao cotar rota salva: {e}")
+        return jsonify({'erro': str(e)}), 500
+
+
+@bp.route('/api/rota/acumular', methods=['POST'])
+@login_required
+def rota_acumular():
+    """Acumula lotes numa rota salva SEM abrir o mapa (chamado de lista_pedidos).
+
+    Com `rota_id` anexa os lotes (deduplicando) a uma rota existente; sem ele cria
+    uma nova RotaSalva 'rascunho'. Permite somar pedidos de filtros diferentes e
+    depois resgatar tudo no mapa via ?rota_id= (item #6)."""
+    try:
+        data = request.get_json() or {}
+        lotes_novos = [l for l in (data.get('lotes') or []) if l]
+        if not lotes_novos:
+            return jsonify({'erro': 'Nenhum lote informado'}), 400
+
+        rota_id = data.get('rota_id')
+        if rota_id:
+            rota = RotaSalva.query.get(rota_id)
+            if not rota:
+                return jsonify({'erro': 'Rota nao encontrada'}), 404
+            atuais = list(rota.lotes or [])
+            for l in lotes_novos:
+                if l not in atuais:
+                    atuais.append(l)
+            rota.lotes = atuais  # reatribui (JSON) p/ o SQLAlchemy detectar a mudanca
+        else:
+            rota = RotaSalva(
+                nome=(data.get('nome') or None),
+                criado_por=getattr(current_user, 'id', None),
+                lotes=lotes_novos,
+                status='rascunho',
+            )
+            db.session.add(rota)
+        db.session.commit()
+        return jsonify({'sucesso': True, 'id': rota.id, 'nome': rota.nome,
+                        'total_lotes': len(rota.lotes or [])})
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Erro ao acumular rota: {e}")
         return jsonify({'erro': str(e)}), 500
