@@ -700,11 +700,18 @@ class MapaService:
             Tupla com latitude e longitude, ou (None, None) se falhar
         """
         try:
-            # Verificar cache
+            # Verificar cache (L1 memoria)
             cache_key = hashlib.md5(endereco.encode()).hexdigest()
             if cache_key in self.geocoding_cache:
                 return self.geocoding_cache[cache_key]
-                
+
+            # Verificar cache (L2 banco — persistente entre restarts)
+            from app.carteira.models import GeocodeCache
+            row = GeocodeCache.query.filter_by(endereco_hash=cache_key).first()
+            if row:
+                self.geocoding_cache[cache_key] = (row.lat, row.lng)
+                return row.lat, row.lng
+
             # Fazer requisição para API
             params = {
                 'address': endereco,
@@ -723,9 +730,16 @@ class MapaService:
                     lat = location['lat']
                     lng = location['lng']
                     
-                    # Salvar no cache
+                    # Salvar no cache (L1 memoria + L2 banco persistente)
                     self.geocoding_cache[cache_key] = (lat, lng)
-                    
+                    try:
+                        db.session.add(GeocodeCache(
+                            endereco_hash=cache_key, endereco=endereco,
+                            lat=lat, lng=lng, fonte='google'))
+                        db.session.commit()
+                    except Exception:
+                        db.session.rollback()
+
                     return lat, lng
                     
             return None, None

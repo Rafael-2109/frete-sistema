@@ -657,3 +657,21 @@ try:
 except ImportError as e:
     boot_log(f"⚠️ Adapter não pôde ser carregado: {e}", force=True)
     # Mantém a classe original se o adapter não estiver disponível
+
+
+# ============================================================================
+# ROTEIRIZACAO "Ver no Mapa" — cache de geocoding + rotas salvas (Fase 2)
+# ============================================================================
+
+class GeocodeCache(db.Model):
+    """Cache persistente de geocoding (L2). Evita re-chamar a API Google a cada
+    abertura do mapa; complementa o TTLCache em memoria (L1) do MapaService."""
+    __tablename__ = 'geocode_cache'
+
+    id = db.Column(db.Integer, primary_key=True)
+    endereco_hash = db.Column(db.String(32), unique=True, nullable=False, index=True)
+    endereco = db.Column(db.Text, nullable=False)
+    lat = db.Column(db.Float, nullable=False)
+    lng = db.Column(db.Float, nullable=False)
+    fonte = db.Column(db.String(20), default='google')
+    geocodificado_em = db.Column(db.DateTime, default=agora_utc_naive)
