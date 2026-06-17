@@ -41,6 +41,13 @@
       "description": "FK → embarques.id"
     },
     {
+      "name": "local_cd",
+      "type": "varchar(20)",
+      "description": "Portaria/CD do registro: VICTORIO_MARCHEZINE | TENENTE_MARQUES",
+      "nullable": false,
+      "default": "VICTORIO_MARCHEZINE"
+    },
+    {
       "name": "data_chegada",
       "type": "date"
     },
@@ -105,6 +112,15 @@
     {
       "column": "atualizado_por_id",
       "references": "usuarios.id"
+    }
+  ],
+  "indices": [
+    {
+      "name": "ix_controle_portaria_local_cd",
+      "columns": [
+        "local_cd"
+      ],
+      "unique": false
     }
   ]
 }

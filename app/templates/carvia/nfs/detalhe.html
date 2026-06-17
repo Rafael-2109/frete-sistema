@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% from "carvia/_macros.html" import badge_nf_transferencia, badge_nf_veio_de_transferencia %}
+{% from "shared/_macros_badges.html" import badge_local_cd %}
 {# modal_admin_excluir removido (Sprint 0 — NF nao suporta hard delete) #}
 
 {% block content %}
@@ -9,6 +10,7 @@
         <div>
             <h2>
                 <i class="fas fa-file-alt"></i> NF {{ nf.numero_nf }}
+                {{ badge_local_cd(nf.local_cd, curto=False) }}
                 <span class="badge bg-secondary">{{ nf.tipo_fonte }}</span>
                 <span class="badge carvia-badge-{{ nf.status|lower }}">{{ nf.status }}</span>
                 {% if tem_frete %}

@@ -61,6 +61,13 @@ class ControlePortaria(db.Model):
     tipo_carga = db.Column(db.String(50), nullable=False)  # Coleta / Coleta + Devolução / Devolução / Entrega
     empresa = db.Column(db.String(255), nullable=False)
     embarque_id = db.Column(db.Integer, db.ForeignKey('embarques.id'), nullable=True)
+
+    # 🏭 Portaria do CD (Victorio Marchezine / Tenente Marques). Cada registro pertence a UMA
+    # portaria; um embarque pode ter 2 registros (1 por CD). O seletor de contexto da tela
+    # define qual local o porteiro esta operando. Constantes em app/utils/local_cd.py.
+    local_cd = db.Column(db.String(20), nullable=False, default='VICTORIO_MARCHEZINE',
+                         server_default='VICTORIO_MARCHEZINE', index=True,
+                         info={'description': 'Portaria/CD do registro: VICTORIO_MARCHEZINE | TENENTE_MARQUES'})
     
     # Horários de controle
     data_chegada = db.Column(db.Date, nullable=True)
@@ -134,8 +141,12 @@ class ControlePortaria(db.Model):
         self.hora_saida = agora.time()
     
     @staticmethod
-    def veiculos_do_dia():
-        """Retorna veículos do dia + não finalizados, ordenados: DENTRO, AGUARDANDO, SAIU"""
+    def veiculos_do_dia(local_cd=None):
+        """Retorna veículos do dia + não finalizados, ordenados: DENTRO, AGUARDANDO, SAIU.
+
+        local_cd: se fornecido (VICTORIO_MARCHEZINE | TENENTE_MARQUES), filtra apenas os
+        registros daquele CD/portaria. None = comportamento historico (sem filtro).
+        """
         hoje = agora_utc_naive().date()
 
         from sqlalchemy.orm import joinedload
@@ -145,7 +156,7 @@ class ControlePortaria(db.Model):
         # Veículos que chegaram hoje OU que não finalizaram (sem saída registrada).
         # Cadeia 2 niveis: embarque.transportadora — template acessa
         # registro.embarque.transportadora.razao_social. Sentry PYTHON-FLASK-J1.
-        registros = ControlePortaria.query.options(
+        query = ControlePortaria.query.options(
             joinedload(ControlePortaria.motorista_obj),
             joinedload(ControlePortaria.embarque).joinedload(Embarque.transportadora),
             joinedload(ControlePortaria.tipo_veiculo),
@@ -154,7 +165,13 @@ class ControlePortaria(db.Model):
                 ControlePortaria.data_chegada == hoje,
                 ControlePortaria.data_saida.is_(None)
             )
-        ).all()
+        )
+
+        # 🏭 Filtro por CD/portaria ativo (seletor de contexto da tela)
+        if local_cd:
+            query = query.filter(ControlePortaria.local_cd == local_cd)
+
+        registros = query.all()
         
         # Separa em três grupos por prioridade
         dentro = []       # Status DENTRO (entrada registrada, sem saída) - Prioridade 1
@@ -188,9 +205,13 @@ class ControlePortaria(db.Model):
     @staticmethod
     def historico(data_inicio=None, data_fim=None, embarque_numero=None, tem_embarque=None,
                  tipo_carga=None, tipo_veiculo_id=None, status=None,
-                 motorista_nome=None, placa=None, empresa=None,
+                 motorista_nome=None, placa=None, empresa=None, local_cd=None,
                  page=1, per_page=25):
-        """Retorna histórico de registros com filtros opcionais e paginação"""
+        """Retorna histórico de registros com filtros opcionais e paginação.
+
+        local_cd: se fornecido (VICTORIO_MARCHEZINE | TENENTE_MARQUES), filtra apenas os
+        registros daquele CD/portaria. None = comportamento historico (sem filtro).
+        """
 
         from sqlalchemy.orm import joinedload
         from sqlalchemy import or_
@@ -200,6 +221,10 @@ class ControlePortaria(db.Model):
             joinedload(ControlePortaria.embarque),
             joinedload(ControlePortaria.tipo_veiculo),
         ).join(Motorista)
+
+        # 🏭 Filtro por CD/portaria
+        if local_cd:
+            query = query.filter(ControlePortaria.local_cd == local_cd)
 
         # Filtros de data
         if data_inicio:

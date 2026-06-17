@@ -119,6 +119,24 @@
       "description": "VARCHAR ex: LOTE_20251004_032844_195 (NAO e integer)"
     },
     {
+      "name": "local_cd",
+      "type": "varchar(20)",
+      "description": "CD de expedicao: VICTORIO_MARCHEZINE | TENENTE_MARQUES",
+      "nullable": false,
+      "default": "VICTORIO_MARCHEZINE"
+    },
+    {
+      "name": "chegada_filial",
+      "type": "boolean",
+      "nullable": false,
+      "default": false
+    },
+    {
+      "name": "chegada_filial_em",
+      "type": "timestamp",
+      "description": "data/hora da chegada na filial (BRT naive)"
+    },
+    {
       "name": "finalizado_por",
       "type": "varchar(100)"
     },

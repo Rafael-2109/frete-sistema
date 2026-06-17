@@ -30,6 +30,12 @@ class CarviaNf(db.Model):
     uf_destinatario = db.Column(db.String(2))
     cidade_destinatario = db.Column(db.String(100))
 
+    # 🏭 CD de expedicao (Victorio Marchezine / Tenente Marques). Definido pela Coleta
+    # (stream Coletas); default VM ate a coleta atribuir. Constantes em app/utils/local_cd.py.
+    local_cd = db.Column(db.String(20), nullable=False, default='VICTORIO_MARCHEZINE',
+                         server_default='VICTORIO_MARCHEZINE',
+                         info={'description': 'CD de expedicao: VICTORIO_MARCHEZINE | TENENTE_MARQUES'})
+
     # Valores e pesos
     valor_total = db.Column(db.Numeric(15, 2))
     peso_bruto = db.Column(db.Numeric(15, 3))

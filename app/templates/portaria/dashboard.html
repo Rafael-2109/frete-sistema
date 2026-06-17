@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from 'shared/_macros_badges.html' import badge_local_cd %}
 
 {% block content %}
 <div class="container-fluid mt-4">
@@ -13,6 +14,21 @@
       </a>
     </div>
   </div>
+
+  {# 🏭 Seletor de contexto: CD/portaria ativo. Navega por ?local_cd=... — o card de
+     veiculos/embarques abaixo reflete o local ativo, e o form de chegada envia o hidden
+     local_cd correspondente. Cores padronizadas: VM amarelo/preto, TM roxo/branco. #}
+  <ul class="nav nav-tabs mb-4" id="seletor-local-cd">
+    {% for valor, rotulo in local_cd_choices %}
+      {% set ativo = (valor == local_cd_ativo) %}
+      <li class="nav-item">
+        <a class="nav-link {{ 'active' if ativo }} {{ 'badge-local-cd-victorio' if (ativo and valor == 'VICTORIO_MARCHEZINE') }} {{ 'badge-local-cd-tenente' if (ativo and valor == 'TENENTE_MARQUES') }}"
+           href="{{ url_for('portaria.dashboard', local_cd=valor) }}">
+          <i class="fas fa-warehouse me-1"></i> {{ rotulo }}
+        </a>
+      </li>
+    {% endfor %}
+  </ul>
 
   <div class="row">
     <!-- Formulário de Busca/Cadastro de Motorista -->
@@ -66,6 +82,8 @@
       <form method="POST" action="{{ url_for('portaria.registrar_movimento') }}" id="form-controle">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
         {{ form_controle.motorista_id(id="motorista_id") }}
+        {# 🏭 CD ativo: a chegada e registrada no local selecionado no seletor de contexto #}
+        {{ form_controle.local_cd(id="local_cd", value=local_cd_ativo) }}
         
         <!-- Dados do Veículo -->
         <div class="card mb-4">
@@ -136,7 +154,7 @@
   <!-- Embarques Pendentes -->
   <div class="card mt-4">
     <div class="card-header">
-      <h5 class="mb-0"><i class="fas fa-truck me-2"></i>Embarques Pendentes (sem data de embarque)</h5>
+      <h5 class="mb-0"><i class="fas fa-truck me-2"></i>Embarques Pendentes — {{ local_cd_labels.get(local_cd_ativo, '') }} {{ badge_local_cd(local_cd_ativo, curto=True) }}</h5>
     </div>
     <div class="card-body">
       {% if embarques_pendentes %}
@@ -190,7 +208,7 @@
   <!-- Card dos Veículos do Dia + Pendentes -->
   <div class="card mt-4">
     <div class="card-header">
-      <h5 class="mb-0"><i class="fas fa-list me-2"></i>Veículos de Hoje e Pendentes</h5>
+      <h5 class="mb-0"><i class="fas fa-list me-2"></i>Veículos de Hoje e Pendentes — {{ local_cd_labels.get(local_cd_ativo, '') }} {{ badge_local_cd(local_cd_ativo, curto=True) }}</h5>
     </div>
     <div class="card-body p-0">
       {% if veiculos_hoje %}
@@ -201,6 +219,7 @@
               <th>Nome do Motorista</th>
               <th>Empresa</th>
               <th>Tipo da Carga</th>
+              <th>CD</th>
               <th>Embarque</th>
               <th>Data Chegada</th>
               <th>Hora Chegada</th>
@@ -221,6 +240,7 @@
               <td>{{ registro.motorista_obj.nome_completo }}</td>
               <td>{{ registro.empresa }}</td>
               <td>{{ registro.tipo_carga }}</td>
+              <td>{{ badge_local_cd(registro.local_cd, curto=True) }}</td>
               <td>
                 {% if registro.embarque %}
                   <a href="{{ url_for('embarques.visualizar_embarque', id=registro.embarque.id) }}" 
@@ -244,7 +264,9 @@
                 <form method="POST" action="{{ url_for('portaria.registrar_movimento') }}" class="d-inline">
                   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
                   <input type="hidden" name="registro_id" value="{{ registro.id }}">
-                  
+                  {# Preserva o CD ativo no redirect apos entrada/saida #}
+                  <input type="hidden" name="local_cd" value="{{ local_cd_ativo }}">
+
                   {% if registro.pode_registrar_entrada %}
                     <input type="hidden" name="acao" value="entrada">
                     <button type="submit" class="btn btn-sm btn-success me-1">

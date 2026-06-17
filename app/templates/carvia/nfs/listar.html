@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% from "carvia/_macros.html" import th_sort, badge_nf_transferencia, badge_nf_veio_de_transferencia %}
+{% from "shared/_macros_badges.html" import badge_local_cd %}
 
 {% block content %}
 <div class="container-fluid py-4">
@@ -138,6 +139,7 @@
                                     {{ badge_nf_veio_de_transferencia(_tref.numero, _tref.id) }}
                                 </div>
                                 {% endif %}
+                                <div class="mt-1">{{ badge_local_cd(nf.local_cd, curto=True) }}</div>
                                 <small class="text-muted d-block">{{ nf.data_emissao.strftime('%d/%m/%Y') if nf.data_emissao else '' }}</small>
                             </td>
                             <td>

@@ -1,0 +1,126 @@
+{
+  "name": "rota_salva",
+  "description": "Rota de entrega salva (mono-veiculo) — agrupamento nomeado de lotes +",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "nome",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "criado_por",
+      "type": "integer",
+      "description": "usuarios.id"
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação"
+    },
+    {
+      "name": "atualizado_em",
+      "type": "timestamp",
+      "description": "Última atualização"
+    },
+    {
+      "name": "veiculo_id",
+      "type": "integer",
+      "description": "FK → veiculos.id"
+    },
+    {
+      "name": "origem_endereco",
+      "type": "text"
+    },
+    {
+      "name": "inclui_volta",
+      "type": "boolean",
+      "default": false
+    },
+    {
+      "name": "dias_viagem",
+      "type": "integer",
+      "default": 0
+    },
+    {
+      "name": "lotes",
+      "type": "json",
+      "nullable": false
+    },
+    {
+      "name": "ordem_otimizada",
+      "type": "json"
+    },
+    {
+      "name": "distancia_km",
+      "type": "float"
+    },
+    {
+      "name": "tempo_min",
+      "type": "float"
+    },
+    {
+      "name": "peso_total",
+      "type": "float"
+    },
+    {
+      "name": "pallet_total",
+      "type": "float"
+    },
+    {
+      "name": "valor_total",
+      "type": "float"
+    },
+    {
+      "name": "custo_combustivel",
+      "type": "numeric(12,2)"
+    },
+    {
+      "name": "custo_motorista",
+      "type": "numeric(12,2)"
+    },
+    {
+      "name": "custo_fixo",
+      "type": "numeric(12,2)"
+    },
+    {
+      "name": "custo_depreciacao",
+      "type": "numeric(12,2)"
+    },
+    {
+      "name": "custo_pedagio",
+      "type": "numeric(12,2)"
+    },
+    {
+      "name": "custo_total",
+      "type": "numeric(12,2)"
+    },
+    {
+      "name": "polyline",
+      "type": "text"
+    },
+    {
+      "name": "status",
+      "type": "varchar(20)",
+      "default": "salva"
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "veiculo_id",
+      "references": "veiculos.id"
+    }
+  ],
+  "indices": [
+    {
+      "name": "ix_rota_salva_criado_por",
+      "columns": [
+        "criado_por"
+      ],
+      "unique": false
+    }
+  ]
+}

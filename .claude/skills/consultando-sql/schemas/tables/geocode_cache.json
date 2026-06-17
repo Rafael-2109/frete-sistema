@@ -1,0 +1,49 @@
+{
+  "name": "geocode_cache",
+  "description": "Cache persistente de geocoding (L2). Evita re-chamar a API Google a cada",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "endereco_hash",
+      "type": "varchar(32)",
+      "nullable": false
+    },
+    {
+      "name": "endereco",
+      "type": "text",
+      "nullable": false
+    },
+    {
+      "name": "lat",
+      "type": "float",
+      "nullable": false
+    },
+    {
+      "name": "lng",
+      "type": "float",
+      "nullable": false
+    },
+    {
+      "name": "fonte",
+      "type": "varchar(20)",
+      "default": "google"
+    },
+    {
+      "name": "geocodificado_em",
+      "type": "timestamp"
+    }
+  ],
+  "indices": [
+    {
+      "name": "ix_geocode_cache_endereco_hash",
+      "columns": [
+        "endereco_hash"
+      ],
+      "unique": true
+    }
+  ]
+}

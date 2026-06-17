@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% from 'shared/_macros_badges.html' import badge_local_cd %}
 
 {% block content %}
 
@@ -533,6 +534,27 @@
             {% endif %}
             <span title="{{ e.transportadora }}">{{ e.transportadora|truncate(50, True) if e.transportadora else '' }}</span><br>
             <small class="text-muted">{{ e.uf }} - {{ e.municipio }}</small>
+            {% if e.origem != 'NACOM' %}
+              {# 🏭 CD de expedicao (topico 4J) — SO p/ origem != NACOM #}
+              {% if e.local_cd %}<br>{{ badge_local_cd(e.local_cd, curto=True) }}{% endif %}
+              {# 📍 Chegada na filial (topico 6) — registro manual, SO p/ origem != NACOM #}
+              <div class="mt-1" id="chegada-filial-cell-{{ e.id }}">
+                {% if e.chegada_filial %}
+                  <span class="badge bg-success" title="Recebido na filial de entrega"
+                        id="chegada-filial-badge-{{ e.id }}">
+                    📍 Filial: {{ e.chegada_filial_em | formatar_data_hora_brasil if e.chegada_filial_em else 'OK' }}
+                  </span>
+                {% else %}
+                  <button type="button"
+                          class="btn btn-sm btn-outline-success chegada-filial-btn"
+                          id="chegada-filial-btn-{{ e.id }}"
+                          onclick="registrarChegadaFilial({{ e.id }})"
+                          title="Registrar chegada na filial de entrega">
+                    📍 Registrar chegada filial
+                  </button>
+                {% endif %}
+              </div>
+            {% endif %}
           </td>
           <td>
             {{ e.data_faturamento | formatar_data_segura if e.data_faturamento else '-' }}
@@ -1254,6 +1276,38 @@ document.addEventListener('DOMContentLoaded', function() {
       }
     });
   }
+
+  // ===========================
+  // CHEGADA NA FILIAL (topico 6) — registro/desfaz manual (origem != NACOM)
+  // ===========================
+  window.registrarChegadaFilial = function(entregaId) {
+    const btn = document.getElementById('chegada-filial-btn-' + entregaId);
+    const token = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+    if (btn) { btn.disabled = true; }
+
+    fetch(`/monitoramento/${entregaId}/chegada-filial`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': token
+      }
+    })
+    .then(response => response.json())
+    .then(data => {
+      if (data.success) {
+        // Recarrega para refletir o badge/botao no estado correto (mantem filtros)
+        location.reload();
+      } else {
+        alert(data.message || 'Erro ao registrar chegada na filial.');
+        if (btn) { btn.disabled = false; }
+      }
+    })
+    .catch(error => {
+      console.error('Erro ao registrar chegada na filial:', error);
+      alert('Erro ao registrar chegada na filial.');
+      if (btn) { btn.disabled = false; }
+    });
+  };
 </script>
 <!-- ===========================
      SCRIPTS ESPECÍFICOS

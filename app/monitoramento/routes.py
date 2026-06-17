@@ -1,7 +1,7 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, session, send_from_directory, send_file, jsonify, current_app
 from flask_login import login_required, current_user
 from datetime import datetime, date, timedelta
-from app.utils.timezone import agora_utc_naive
+from app.utils.timezone import agora_utc_naive, formatar_data_hora_brasil
 import os
 import time
 import tempfile
@@ -1981,6 +1981,62 @@ def atualizar_observacao_rapida(id):
     except Exception as e:
         db.session.rollback()
         return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@monitoramento_bp.route('/<int:id>/chegada-filial', methods=['POST'])
+@login_required
+def registrar_chegada_filial(id):
+    """Registra/desfaz a chegada da entrega na filial (topico 6 redesign CarVia).
+
+    Campo manual, exclusivo de entregas com origem != 'NACOM' (CarVia / OP_ASSAI).
+    Toggle: se ainda nao chegou -> seta chegada_filial=True + chegada_filial_em=agora;
+    se ja chegou -> desfaz (chegada_filial=False, chegada_filial_em=None).
+
+    Retorna jsonify()+status (NUNCA abort()). CSRF garantido pelo CSRFProtect global
+    via header X-CSRFToken (mesma convencao das demais rotas POST AJAX da tela).
+    """
+    entrega = EntregaMonitorada.query.get_or_404(id)
+
+    # Permissao de vendedor (mesmo guard das demais acoes da tela)
+    if current_user.perfil == 'vendedor':
+        if not check_vendedor_permission(vendedor_nome=entrega.vendedor, numero_nf=entrega.numero_nf):
+            return jsonify({'success': False, 'message': 'Acesso negado'}), 403
+
+    # So aplica a entregas que NAO sao do fluxo principal Nacom.
+    if (getattr(entrega, 'origem', '') or 'NACOM') == 'NACOM':
+        return jsonify({
+            'success': False,
+            'message': 'Chegada na filial nao se aplica a entregas Nacom.'
+        }), 400
+
+    try:
+        if entrega.chegada_filial:
+            # Desfazer (toggle off)
+            entrega.chegada_filial = False
+            entrega.chegada_filial_em = None
+        else:
+            entrega.chegada_filial = True
+            entrega.chegada_filial_em = agora_utc_naive()
+
+        db.session.commit()
+
+        return jsonify({
+            'success': True,
+            'chegada_filial': entrega.chegada_filial,
+            'chegada_filial_em': (
+                formatar_data_hora_brasil(entrega.chegada_filial_em)
+                if entrega.chegada_filial_em else None
+            ),
+            'message': (
+                'Chegada na filial registrada.' if entrega.chegada_filial
+                else 'Registro de chegada na filial desfeito.'
+            ),
+        })
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'message': str(e)}), 500
+
 
 @monitoramento_bp.route('/<int:id>/historico_data_prevista')
 @login_required

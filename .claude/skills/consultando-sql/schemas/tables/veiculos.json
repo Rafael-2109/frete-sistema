@@ -36,43 +36,41 @@
     {
       "name": "custo_km",
       "type": "numeric(10,2)",
-      "description": "R$/km rodado (combustivel+manutencao) — roteirizacao"
+      "description": "R$/km rodado"
     },
     {
       "name": "custo_motorista_dia",
       "type": "numeric(10,2)",
-      "description": "Diaria do motorista — roteirizacao"
+      "description": "diaria motorista"
     },
     {
       "name": "custo_fixo_dia",
       "type": "numeric(10,2)",
-      "description": "Custos fixos/dia (seguro, rastreador) — roteirizacao"
+      "description": "seguro/rastreador/dia"
     },
     {
       "name": "depreciacao_mensal",
       "type": "numeric(15,2)",
-      "description": "Depreciacao do tipo/mes (/30 no calculo) — roteirizacao"
+      "description": "/30 no calculo"
     },
     {
       "name": "capacidade_pallets",
-      "type": "integer",
-      "description": "Capacidade em pallets — selecao de veiculo"
+      "type": "integer"
     },
     {
       "name": "capacidade_m3",
-      "type": "float",
-      "description": "Capacidade volumetrica em m3 — selecao de veiculo"
+      "type": "float"
     },
     {
       "name": "velocidade_media_kmh",
-      "type": "float",
-      "description": "Velocidade media p/ estimar dias de viagem"
+      "type": "float"
     },
     {
       "name": "ativo",
       "type": "boolean",
-      "default": true,
-      "description": "True = veiculo listavel na roteirizacao"
+      "description": "True = registro ativo",
+      "nullable": false,
+      "default": true
     },
     {
       "name": "comprimento_bau",

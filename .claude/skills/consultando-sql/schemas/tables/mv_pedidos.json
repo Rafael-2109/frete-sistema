@@ -58,6 +58,11 @@
     {
       "name": "cotacao_id",
       "type": "integer"
+    },
+    {
+      "name": "local_cd",
+      "type": "varchar(20)",
+      "description": "CD de expedicao (facetas/contadores futuros)"
     }
   ]
 }

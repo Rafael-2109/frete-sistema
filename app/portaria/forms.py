@@ -5,6 +5,7 @@ from wtforms.validators import DataRequired, Length, Regexp, Optional
 from wtforms.widgets import TextArea
 from app.veiculos.models import Veiculo
 from app.embarques.models import Embarque
+from app.utils.local_cd import LOCAL_CD_DEFAULT, LOCAL_CD_CHOICES, normalizar_local_cd
 
 def coerce_int_or_none(value):
     """Converte para int ou retorna None se vazio"""
@@ -92,6 +93,17 @@ class ControlePortariaForm(FlaskForm):
     """
     # Campos do motorista (preenchidos após busca)
     motorista_id = HiddenField(validators=[Optional()])
+
+    # 🏭 CD/portaria ativo (Victorio Marchezine / Tenente Marques). Hidden field cujo valor
+    # vem do seletor de contexto da tela. populate_obj(registro) grava registro.local_cd.
+    # O filtro normaliza qualquer entrada para um valor canonico (VM/TM); entrada
+    # invalida/vazia cai no default VM (Nacom). Constantes em app/utils/local_cd.py.
+    local_cd = HiddenField(
+        validators=[Optional()],
+        filters=[lambda v: normalizar_local_cd(v) or LOCAL_CD_DEFAULT],
+        default=LOCAL_CD_DEFAULT,
+    )
+
     nome_completo = StringField('Nome Completo', render_kw={'readonly': True})
     rg = StringField('RG', render_kw={'readonly': True})
     telefone = StringField('Telefone', render_kw={'readonly': True})
@@ -258,6 +270,14 @@ class FiltroHistoricoForm(FlaskForm):
             ('DENTRO', 'Carregando'),
             ('SAIU', 'Saiu para entrega')
         ],
+        validators=[Optional()],
+        render_kw={'class': 'form-control'}
+    )
+
+    # 🏭 Filtro por CD/portaria (Victorio Marchezine / Tenente Marques / todos)
+    local_cd = SelectField(
+        'CD / Portaria',
+        choices=[('', 'Todos os CDs')] + LOCAL_CD_CHOICES,
         validators=[Optional()],
         render_kw={'class': 'form-control'}
     )

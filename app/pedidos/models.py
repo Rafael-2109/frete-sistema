@@ -49,6 +49,10 @@ class Pedido(db.Model):
     # 🏷️ Tags do pedido (de Separacao, via VIEW)
     tags_pedido = db.Column(db.Text, nullable=True)  # JSON: [{"name": "VIP", "color": 5}]
 
+    # 🏭 CD de expedicao (badge na lista_pedidos, topico 4B). Nacom = VM (de Separacao.local_cd);
+    # CarVia = NULL na VIEW ate a Coleta atribuir (stream Coletas). Constantes em app/utils/local_cd.py.
+    local_cd = db.Column(db.String(20), nullable=True)  # Vem de Separacao.local_cd (Nacom) ou NULL (CarVia)
+
     # Campos de transporte (virão NULL da VIEW, precisam JOIN com cotacao)
     transportadora = db.Column(db.String(100))
     valor_frete = db.Column(db.Float)
@@ -315,6 +319,7 @@ class PedidoMV(db.Model):
     status = db.Column(db.String(50))
     nf_cd = db.Column(db.Boolean)
     cotacao_id = db.Column(db.Integer)
+    local_cd = db.Column(db.String(20))  # CD de expedicao (facetas/contadores futuros)
 
     def __repr__(self):
         return f'<PedidoMV {self.separacao_lote_id}>'

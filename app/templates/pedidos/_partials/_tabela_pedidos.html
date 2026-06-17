@@ -1,5 +1,6 @@
 {# _tabela_pedidos.html — Tabela de pedidos + paginacao + form cotacao #}
 {# Variaveis de contexto: pedidos, paginacao, cotar_form, contadores_status, filtro_args, sort_url, sort_by, sort_order #}
+{% from "shared/_macros_badges.html" import badge_local_cd %}
 
     <div class="card mb-4">
         <div class="card-header">
@@ -313,6 +314,10 @@
                   {# Op. Assai: badge laranja claro (separacao espelhada de assai_separacao) #}
                   {% if p.eh_op_assai %}
                     <br><span class="badge bg-warning text-dark" style="font-size: 0.65rem;">OP. ASSAÍ</span>
+                  {% endif %}
+                  {# CD de expedicao (topico 4B): Nacom = V. Marchezine; CarVia = NULL (macro nao renderiza) #}
+                  {% if p.local_cd %}
+                    <br>{{ badge_local_cd(p.local_cd, curto=True) }}
                   {% endif %}
                   {% if p.ultimo_embarque %}
                     <br><a href="{{ url_for('embarques.visualizar_embarque', id=p.ultimo_embarque.id) }}"

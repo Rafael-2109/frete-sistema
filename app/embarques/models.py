@@ -385,6 +385,13 @@ class EmbarqueItem(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     embarque_id = db.Column(db.Integer, db.ForeignKey('embarques.id'), nullable=False)
     separacao_lote_id = db.Column(db.String(50), nullable=True, index=True)  # VARCHAR ex: LOTE_20251004_032844_195 (NAO e integer)
+
+    # 🏭 CD de expedicao do ITEM (Victorio Marchezine / Tenente Marques). Um embarque pode
+    # ter itens dos 2 CDs (topico 4 + Etapas 5-7): a portaria de cada CD preenche a saida
+    # SOMENTE dos itens do seu local. Nacom = VM. Constantes em app/utils/local_cd.py.
+    local_cd = db.Column(db.String(20), nullable=False, default='VICTORIO_MARCHEZINE',
+                         server_default='VICTORIO_MARCHEZINE',
+                         info={'description': 'CD de expedicao do item: VICTORIO_MARCHEZINE | TENENTE_MARQUES'})
     cnpj_cliente = db.Column(db.String(20), nullable=True, info={'description': 'CNPJ do cliente — fonte de dedup na cotação e no rateio do frete'})
     cliente = db.Column(db.String(120), nullable=False, info={'description': 'Nome fantasia do cliente'})
     pedido = db.Column(db.String(50), nullable=False, info={'description': 'Nosso número do pedido'})

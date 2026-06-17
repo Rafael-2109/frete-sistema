@@ -57,7 +57,13 @@ class Separacao(db.Model):
     status = db.Column(db.String(20), default='ABERTO', nullable=False, index=True)  # PREVISAO, ABERTO, FATURADO
     nf_cd = db.Column(db.Boolean, default=False, nullable=False)  # NF voltou para o CD
     data_embarque = db.Column(db.Date, nullable=True)  # Data de embarque
-    
+
+    # 🏭 CD de expedicao (Victorio Marchezine / Tenente Marques). Nacom = SEMPRE VM.
+    # Constantes/labels/cores em app/utils/local_cd.py. Backfill historico = VM (default).
+    local_cd = db.Column(db.String(20), nullable=False, default='VICTORIO_MARCHEZINE',
+                         server_default='VICTORIO_MARCHEZINE',
+                         info={'description': 'CD de expedicao: VICTORIO_MARCHEZINE | TENENTE_MARQUES'})
+
     # Campos de normalização (para cotação e agrupamento)
     cidade_normalizada = db.Column(db.String(120), nullable=True, info={'description': 'Cidade normalizada (para cotacao e agrupamento)'})
     uf_normalizada = db.Column(db.String(2), nullable=True, info={'description': 'UF normalizada (para cotacao e agrupamento)'})

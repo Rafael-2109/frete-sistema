@@ -12,11 +12,17 @@ from sqlalchemy.orm import joinedload
 from app.utils.auth_decorators import require_portaria
 from app.portaria.models import Motorista, ControlePortaria
 from app.portaria.forms import CadastroMotoristaForm, BuscarMotoristaForm, ControlePortariaForm, FiltroHistoricoForm
-from app.embarques.models import Embarque
+from app.embarques.models import Embarque, EmbarqueItem
 from app.separacao.models import Separacao
 from app.monitoramento.models import EntregaMonitorada
 from app.utils.sincronizar_entregas import sincronizar_entrega_por_nf
 from app.utils.file_storage import get_file_storage
+from app.utils.local_cd import (
+    LOCAL_CD_DEFAULT,
+    LOCAL_CD_CHOICES,
+    LOCAL_CD_LABELS,
+    normalizar_local_cd,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -53,25 +59,54 @@ def dashboard():
     """
     form_buscar = BuscarMotoristaForm()
     form_controle = ControlePortariaForm()
-    
-    # Busca veículos do dia ordenados conforme especificação
-    veiculos_hoje = ControlePortaria.veiculos_do_dia()
-    
-    # Busca embarques pendentes (sem data de embarque)
+
+    # 🏭 CD/portaria ativo: vem do seletor de contexto (?local_cd=...). Default = VM (Nacom).
+    # Normaliza para garantir valor canonico; entrada invalida cai no default.
+    local_cd_ativo = normalizar_local_cd(request.args.get('local_cd')) or LOCAL_CD_DEFAULT
+
+    # Busca veículos do dia ordenados conforme especificação (do CD ativo)
+    veiculos_hoje = ControlePortaria.veiculos_do_dia(local_cd=local_cd_ativo)
+
+    # Busca embarques pendentes do CD ativo.
+    #
+    # "Pendente do CD ativo" = embarque ativo que (1) tem >=1 EmbarqueItem ativo daquele
+    # local E (2) ainda nao teve a SAIDA registrada por uma portaria daquele local.
+    # Embarque.data_embarque e agregado (cabecalho), entao NAO basta filtrar por ele:
+    # um embarque misto VM+TM pode ja ter data_embarque preenchida pela saida VM e ainda
+    # ter itens TM pendentes. Por isso:
+    #   - EXISTS em EmbarqueItem (status ativo, local_cd == ativo) -> tem carga deste CD;
+    #   - NOT EXISTS em ControlePortaria (mesmo embarque, mesmo local, com data_saida) ->
+    #     este CD ainda nao despachou. (2 registros por embarque sao permitidos: 1 por CD.)
+    tem_item_do_local = EmbarqueItem.query.filter(
+        EmbarqueItem.embarque_id == Embarque.id,
+        EmbarqueItem.status == 'ativo',
+        EmbarqueItem.local_cd == local_cd_ativo,
+    ).exists()
+
+    saida_do_local_registrada = ControlePortaria.query.filter(
+        ControlePortaria.embarque_id == Embarque.id,
+        ControlePortaria.local_cd == local_cd_ativo,
+        ControlePortaria.data_saida.isnot(None),
+    ).exists()
+
     # joinedload evita N+1 ao acessar embarque.transportadora no template
     embarques_pendentes = Embarque.query.options(
         joinedload(Embarque.transportadora)
     ).filter(
         Embarque.status == 'ativo',
-        Embarque.data_embarque.is_(None)
+        tem_item_do_local,
+        ~saida_do_local_registrada,
     ).order_by(Embarque.numero.desc()).all()
-    
+
     return render_template(
         'portaria/dashboard.html',
         form_buscar=form_buscar,
         form_controle=form_controle,
         veiculos_hoje=veiculos_hoje,
-        embarques_pendentes=embarques_pendentes
+        embarques_pendentes=embarques_pendentes,
+        local_cd_ativo=local_cd_ativo,
+        local_cd_choices=LOCAL_CD_CHOICES,
+        local_cd_labels=LOCAL_CD_LABELS,
     )
 
 @portaria_bp.route('/buscar_motorista', methods=['POST'])
@@ -284,47 +319,65 @@ def registrar_movimento():
                     # Atualiza data_embarque do embarque vinculado automaticamente
                     if registro.embarque_id and registro.embarque:
                         embarque = registro.embarque
-                        if not embarque.data_embarque:  # Só atualiza se não estiver preenchida
+
+                        # 🏭 SAIDA POR CD: cada portaria (registro) despacha SOMENTE os itens
+                        # do SEU local. Um embarque pode ter 2 registros (1 por CD).
+                        local = registro.local_cd or LOCAL_CD_DEFAULT
+                        itens_do_local = [
+                            it for it in embarque.itens
+                            if (it.local_cd or LOCAL_CD_DEFAULT) == local
+                        ]
+
+                        # 1) Embarque.data_embarque (cabecalho/agregado): "preenche se vazio"
+                        #    por QUALQUER local — a 1a saida (de qualquer CD) carimba a data.
+                        #    Sem regressao p/ Nacom puro (1 saida VM preenche tudo).
+                        if not embarque.data_embarque:
                             embarque.data_embarque = registro.data_saida
                             print(f"[DEBUG] Data embarque atualizada para {registro.data_saida}")
                             flash(f'Data de embarque do Embarque #{embarque.numero} atualizada para {registro.data_saida.strftime("%d/%m/%Y")}!', 'info')
-                            
-                            # ✅ PROPAGAR data_embarque para tabela Separacao (apenas Nacom, CarVia nao tem Separacao)
-                            for item in embarque.itens:
-                                if item.separacao_lote_id and not str(item.separacao_lote_id).startswith('CARVIA-'):
-                                    num_atualizados = Separacao.query.filter_by(
-                                        separacao_lote_id=item.separacao_lote_id
-                                    ).update({'data_embarque': registro.data_saida}, synchronize_session='fetch')
 
-                                    if num_atualizados > 0:
-                                        print(f"[DEBUG] Separacao lote {item.separacao_lote_id}: {num_atualizados} registro(s) atualizado(s) com data_embarque")
-                                    else:
-                                        print(f"[AVISO] Separacao lote {item.separacao_lote_id}: NENHUM registro encontrado para atualizar!")
-                                        flash(f'⚠️ Lote {item.separacao_lote_id} não encontrado na tabela Separação!', 'warning')
-                            
-                            # Sincroniza com sistema de entregas para cada item do embarque
-                            # Skip CarVia (hook proprio abaixo) e Op. Assai (hook proprio abaixo) —
-                            # ambos tem service dedicado (NFs nao estao em RelatorioFaturamentoImportado).
-                            if embarque.itens:
-                                print(f"[DEBUG] Sincronizando {len(embarque.itens)} itens com sistema de entregas...")
+                        # 2) Propagacao POR-ITEM-DO-LOCAL: roda SEMPRE que ha saida (idempotente),
+                        #    restrita aos itens deste CD. Assim o 2o local (TM) tambem propaga,
+                        #    mesmo que o cabecalho ja tivesse data (preenchido pela saida VM).
+                        #    Nacom puro (1 registro VM, todos itens VM) -> itens_do_local == todos
+                        #    os itens -> efeito IDENTICO ao codigo anterior.
 
-                                for item in embarque.itens:
-                                    if not item.nota_fiscal:
-                                        continue
-                                    lote = str(item.separacao_lote_id or '')
-                                    if lote.startswith('CARVIA-') or lote.startswith('ASSAI-'):
-                                        continue  # CarVia/Op. Assai tem hook proprio
-                                    try:
-                                        sincronizar_entrega_por_nf(item.nota_fiscal)
-                                        # 🔒 NOVO: Reseta flag de NF no CD diretamente em Separacao
-                                        Separacao.query.filter_by(numero_nf=item.nota_fiscal).update({'nf_cd': False})
-                                        print(f"[DEBUG] NF {item.nota_fiscal} sincronizada com entregas")
-                                    except Exception as e:
-                                        print(f"[DEBUG] Erro ao sincronizar NF {item.nota_fiscal}: {str(e)}")
-                                        print(f"[DEBUG] Tipo do erro: {type(e)}")
-                                        # Não interrompe o processo por erro de sincronização
+                        # ✅ PROPAGAR data_embarque para tabela Separacao (apenas Nacom, CarVia nao tem Separacao)
+                        for item in itens_do_local:
+                            if item.separacao_lote_id and not str(item.separacao_lote_id).startswith('CARVIA-'):
+                                num_atualizados = Separacao.query.filter_by(
+                                    separacao_lote_id=item.separacao_lote_id
+                                ).update({'data_embarque': registro.data_saida}, synchronize_session='fetch')
 
-                                flash(f'Sistema de entregas sincronizado para {len(embarque.itens)} nota(s) fiscal(is)!', 'success')
+                                if num_atualizados > 0:
+                                    print(f"[DEBUG] Separacao lote {item.separacao_lote_id}: {num_atualizados} registro(s) atualizado(s) com data_embarque")
+                                else:
+                                    print(f"[AVISO] Separacao lote {item.separacao_lote_id}: NENHUM registro encontrado para atualizar!")
+                                    flash(f'⚠️ Lote {item.separacao_lote_id} não encontrado na tabela Separação!', 'warning')
+
+                        # Sincroniza com sistema de entregas para cada item DO LOCAL
+                        # Skip CarVia (hook proprio abaixo) e Op. Assai (hook proprio abaixo) —
+                        # ambos tem service dedicado (NFs nao estao em RelatorioFaturamentoImportado).
+                        if itens_do_local:
+                            print(f"[DEBUG] Sincronizando {len(itens_do_local)} item(ns) do CD {local} com sistema de entregas...")
+
+                            for item in itens_do_local:
+                                if not item.nota_fiscal:
+                                    continue
+                                lote = str(item.separacao_lote_id or '')
+                                if lote.startswith('CARVIA-') or lote.startswith('ASSAI-'):
+                                    continue  # CarVia/Op. Assai tem hook proprio
+                                try:
+                                    sincronizar_entrega_por_nf(item.nota_fiscal)
+                                    # 🔒 NOVO: Reseta flag de NF no CD diretamente em Separacao
+                                    Separacao.query.filter_by(numero_nf=item.nota_fiscal).update({'nf_cd': False})
+                                    print(f"[DEBUG] NF {item.nota_fiscal} sincronizada com entregas")
+                                except Exception as e:
+                                    print(f"[DEBUG] Erro ao sincronizar NF {item.nota_fiscal}: {str(e)}")
+                                    print(f"[DEBUG] Tipo do erro: {type(e)}")
+                                    # Não interrompe o processo por erro de sincronização
+
+                            flash(f'Sistema de entregas sincronizado para {len(itens_do_local)} nota(s) fiscal(is)!', 'success')
 
                         # ⚠️ ALERTA DE PALLETS PENDENTES
                         if embarque.pallets_pendentes:
@@ -488,8 +541,11 @@ def registrar_movimento():
         
         db.session.rollback()
         flash(f'Erro ao registrar movimento: {str(e)}', 'danger')
-    
-    return redirect(url_for('portaria.dashboard'))
+
+    # Preserva o CD/portaria ativo no redirect (seletor de contexto da tela)
+    local_cd_redirect = normalizar_local_cd(request.form.get('local_cd'))
+    return redirect(url_for('portaria.dashboard', local_cd=local_cd_redirect) if local_cd_redirect
+                    else url_for('portaria.dashboard'))
 
 @portaria_bp.route('/historico')
 @login_required
@@ -513,6 +569,8 @@ def historico():
     motorista_nome = request.args.get('motorista_nome', '').strip()
     placa = request.args.get('placa', '').strip()
     empresa = request.args.get('empresa', '').strip()
+    # 🏭 Filtro por CD/portaria (normalizado p/ valor canonico; vazio = todos)
+    local_cd_ativo = normalizar_local_cd(request.args.get('local_cd'))
 
     # Converte datas
     data_inicio_str = request.args.get('data_inicio')
@@ -541,7 +599,7 @@ def historico():
             pass
 
     # Verifica se há filtros aplicados
-    if embarque_numero or tem_embarque or tipo_carga or status or motorista_nome or placa or empresa:
+    if embarque_numero or tem_embarque or tipo_carga or status or motorista_nome or placa or empresa or local_cd_ativo:
         filtros_aplicados = True
 
     # Busca registros com todos os filtros (retorna objeto Pagination)
@@ -556,6 +614,7 @@ def historico():
         motorista_nome=motorista_nome if motorista_nome else None,
         placa=placa if placa else None,
         empresa=empresa if empresa else None,
+        local_cd=local_cd_ativo if local_cd_ativo else None,
         page=page,
         per_page=per_page
     )
@@ -567,7 +626,9 @@ def historico():
         registros=paginacao.items,
         data_inicio=data_inicio,
         data_fim=data_fim,
-        filtros_aplicados=filtros_aplicados
+        filtros_aplicados=filtros_aplicados,
+        local_cd_ativo=local_cd_ativo,
+        local_cd_choices=LOCAL_CD_CHOICES,
     )
 
 @portaria_bp.route('/listar_motoristas')

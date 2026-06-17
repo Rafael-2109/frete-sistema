@@ -58,6 +58,13 @@
       "type": "varchar(100)"
     },
     {
+      "name": "local_cd",
+      "type": "varchar(20)",
+      "description": "CD de expedicao: VICTORIO_MARCHEZINE | TENENTE_MARQUES",
+      "nullable": false,
+      "default": "VICTORIO_MARCHEZINE"
+    },
+    {
       "name": "valor_total",
       "type": "numeric(15,2)"
     },

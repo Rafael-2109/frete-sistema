@@ -1,0 +1,25 @@
+{#
+  _macros_badges.html — Badges compartilhados (cross-modulo).
+
+  badge_local_cd(local_cd, curto=True)
+    Renderiza o badge da flag `local_cd` (CD de expedicao) com as cores
+    PADRONIZADAS do design system (consumido por pedidos, monitoramento,
+    carvia, embarques, portaria, ...):
+      * VICTORIO_MARCHEZINE -> fundo amarelo (--amber-50), texto preto
+      * TENENTE_MARQUES     -> fundo roxo   (--semantic-info), texto branco
+    Valores desconhecidos / None / vazio NAO renderizam nada.
+
+    Constantes canonicas: app/utils/local_cd.py
+    Classes CSS: app/static/css/components/_badges.css (@layer components)
+
+    Uso:
+      {% from 'shared/_macros_badges.html' import badge_local_cd %}
+      {{ badge_local_cd(obj.local_cd, curto=True) }}
+#}
+{%- macro badge_local_cd(local_cd, curto=True) -%}
+  {%- if local_cd == 'TENENTE_MARQUES' -%}
+    <span class="badge badge-local-cd-tenente" title="CD Tenente Marques">{{ 'T. Marques' if curto else 'Tenente Marques' }}</span>
+  {%- elif local_cd == 'VICTORIO_MARCHEZINE' -%}
+    <span class="badge badge-local-cd-victorio" title="CD Victorio Marchezine">{{ 'V. Marchezine' if curto else 'Victorio Marchezine' }}</span>
+  {%- endif -%}
+{%- endmacro -%}

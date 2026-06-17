@@ -19,6 +19,13 @@
       "description": "VARCHAR ex: LOTE_20251004_032844_195 (NAO e integer)"
     },
     {
+      "name": "local_cd",
+      "type": "varchar(20)",
+      "description": "CD de expedicao do item: VICTORIO_MARCHEZINE | TENENTE_MARQUES",
+      "nullable": false,
+      "default": "VICTORIO_MARCHEZINE"
+    },
+    {
       "name": "cnpj_cliente",
       "type": "varchar(20)",
       "description": "CNPJ do cliente — fonte de dedup na cotação e no rateio do frete"

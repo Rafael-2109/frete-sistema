@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from 'shared/_macros_badges.html' import badge_local_cd %}
 
 {% block content %}
 <div class="container-fluid mt-4 premium-page">
@@ -64,7 +65,15 @@
             {{ form.status.label(class="form-label") }}
             {{ form.status() }}
           </div>
-          <div class="col-md-2 d-flex align-items-end">
+          <div class="col-md-2">
+            {{ form.local_cd.label(class="form-label") }}
+            {{ form.local_cd() }}
+          </div>
+        </div>
+
+        <!-- Terceira linha: Ações -->
+        <div class="row g-3 mb-3">
+          <div class="col-md-3 ms-auto d-flex align-items-end">
             <div class="btn-group w-100">
               {{ form.filtrar(class="btn btn-primary") }}
               <a href="{{ url_for('portaria.historico') }}" class="btn btn-outline-secondary">
@@ -138,6 +147,7 @@
               <th>Data</th>
               <th>Motorista</th>
               <th>Placa</th>
+              <th>CD</th>
               <th>Empresa</th>
               <th>Tipo da Carga</th>
               <th>Embarque</th>
@@ -171,6 +181,7 @@
                   <br><small class="text-muted">{{ registro.tipo_veiculo.nome }}</small>
                 {% endif %}
               </td>
+              <td>{{ badge_local_cd(registro.local_cd, curto=True) }}</td>
               <td>{{ registro.empresa }}</td>
               <td>
                 <span class="badge

@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% from 'shared/_macros_badges.html' import badge_local_cd %}
 {% block content %}
 <div class="container mt-4 monitoramento-page">
   <div class="d-flex flex-column mb-3">
@@ -62,6 +63,35 @@
         </h6>
       {% else %}
         <h6>Transportadora: —</h6>
+      {% endif %}
+
+      {% if entrega.origem != 'NACOM' %}
+        {# 🏭 CD de expedicao (topico 4J) + 📍 Chegada na filial (topico 6) — SO p/ origem != NACOM #}
+        <div class="d-flex align-items-center flex-wrap gap-2 mt-1">
+          {% if entrega.local_cd %}
+            <span>CD: {{ badge_local_cd(entrega.local_cd, curto=False) }}</span>
+          {% endif %}
+          <div id="chegada-filial-wrapper">
+            {% if entrega.chegada_filial %}
+              <span class="badge bg-success" id="chegada-filial-badge"
+                    title="Recebido na filial de entrega">
+                📍 Chegou na filial em {{ entrega.chegada_filial_em | formatar_data_hora_brasil if entrega.chegada_filial_em else '—' }}
+              </span>
+              <button type="button" class="btn btn-sm btn-outline-secondary ms-1"
+                      onclick="registrarChegadaFilial({{ entrega.id }})"
+                      title="Desfazer registro de chegada na filial">
+                Desfazer
+              </button>
+            {% else %}
+              <button type="button" class="btn btn-sm btn-outline-success"
+                      id="chegada-filial-btn"
+                      onclick="registrarChegadaFilial({{ entrega.id }})"
+                      title="Registrar chegada na filial de entrega">
+                📍 Registrar chegada na filial
+              </button>
+            {% endif %}
+          </div>
+        </div>
       {% endif %}
     </div>
 
@@ -313,6 +343,26 @@
         document.body.appendChild(form);
         form.submit();
       }
+
+      // Chegada na filial (topico 6) — registro/desfaz manual (origem != NACOM)
+      window.registrarChegadaFilial = function(entregaId) {
+        const meta = document.querySelector('meta[name="csrf-token"]');
+        const inp = document.querySelector('input[name="csrf_token"]');
+        const csrfToken = meta ? meta.getAttribute('content') : (inp ? inp.value : '');
+        fetch(`/monitoramento/${entregaId}/chegada-filial`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken }
+        })
+        .then(r => r.json())
+        .then(data => {
+          if (data.success) {
+            location.reload();
+          } else {
+            alert(data.message || 'Erro ao registrar chegada na filial.');
+          }
+        })
+        .catch(err => { alert('Erro: ' + err.message); });
+      };
     </script>
 
     <!-- LOG -->

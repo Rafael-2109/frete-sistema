@@ -387,6 +387,27 @@
   }
 
   /* ═══════════════════════════════════════════════════════════════════════════
+     LOCAL_CD — CD de expedicao (flag cross-modulo)
+     Cores PADRONIZADAS, identicas em todo lugar (macro
+     shared/_macros_badges.html -> badge_local_cd). Consumido por 5+ modulos:
+     pedidos, monitoramento, carvia, embarques, portaria.
+       - VICTORIO_MARCHEZINE -> amarelo (--amber-50) + texto escuro (espelha .badge-warning)
+       - TENENTE_MARQUES     -> roxo    (--semantic-info) + texto branco
+     ═══════════════════════════════════════════════════════════════════════════ */
+
+  /* VICTORIO MARCHEZINE — amarelo + escuro (espelha .badge-warning, passa AAA) */
+  .badge-local-cd-victorio {
+    --_badge-bg: var(--amber-50);
+    --_badge-color: hsl(0 0% 10%);
+  }
+
+  /* TENENTE MARQUES — roxo + branco (--semantic-info passa AA com branco em ambos os temas) */
+  .badge-local-cd-tenente {
+    --_badge-bg: var(--semantic-info);
+    --_badge-color: hsl(0 0% 100%);
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
      STATUS BADGES - LIGHT MODE ADJUSTMENTS
      ═══════════════════════════════════════════════════════════════════════════ */
 
@@ -461,6 +482,14 @@
   [data-theme="light"] .badge-status-em_recebimento,
   [data-theme="light"] .badge-em_recebimento {
     --_badge-bg: hsl(0 0% 40%);
+  }
+
+  /* LOCAL_CD TENENTE — light mode: roxo levemente mais escuro para contraste
+     (espelha o ajuste de .badge.bg-info no light mode). Victorio (amarelo +
+     texto escuro) ja passa AAA em ambos os temas, nao precisa de override. */
+  [data-bs-theme="light"] .badge-local-cd-tenente,
+  [data-theme="light"] .badge-local-cd-tenente {
+    --_badge-bg: hsl(250 40% 40%);
   }
 
   /* ═══════════════════════════════════════════════════════════════════════════

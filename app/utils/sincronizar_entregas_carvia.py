@@ -7,10 +7,12 @@ e criar/atualizar registros `EntregaMonitorada` com `origem='CARVIA'`.
 ## Regras centrais
 
 1. **Upsert parcial**: campos TECNICOS (cliente, transportadora, data_embarque,
-   valor_nf, municipio, uf) sao sempre atualizados; campos OPERACIONAIS preenchidos
-   pelo operador (data_agenda, canhoto_arquivo, status_finalizacao, entregue,
-   data_hora_entrega_realizada, observacao_operacional, reagendar) NAO sao
-   sobrescritos apos terem valor.
+   valor_nf, municipio, uf, local_cd) sao sempre atualizados a partir da fonte
+   (local_cd vem de CarviaNf.local_cd, definido pela Coleta); campos OPERACIONAIS
+   preenchidos pelo operador (data_agenda, canhoto_arquivo, status_finalizacao,
+   entregue, data_hora_entrega_realizada, observacao_operacional, reagendar,
+   chegada_filial, chegada_filial_em) NAO sao sobrescritos — o re-sync nunca toca
+   chegada_filial/chegada_filial_em.
 
 2. **Match exato CSV**: busca de CarviaFrete por NF usa 4 patterns exatos (==,
    prefixo, meio, sufixo) para evitar falso-positivo com `contains()` que trata
@@ -128,6 +130,15 @@ def sincronizar_entrega_carvia_por_nf(
     entrega.data_faturamento = carvia_nf.data_emissao
     # CarVia nao tem conceito de vendedor Nacom
     entrega.vendedor = entrega.vendedor  # preserva valor manual se existir
+
+    # ------------------------------------------------------------------ #
+    # local_cd — campo TECNICO de origem (CarviaNf.local_cd, definido na Coleta).
+    # PODE ser atualizado a cada re-sync a partir da fonte. NAO e operacional:
+    # nao e o operador do monitoramento que o define, e sim a Coleta CarVia.
+    # So sobrescreve com valor valido da fonte (nunca apaga p/ None).
+    # ------------------------------------------------------------------ #
+    if getattr(carvia_nf, 'local_cd', None):
+        entrega.local_cd = carvia_nf.local_cd
 
     # ------------------------------------------------------------------ #
     # CarviaFrete (pode nao existir ainda: NF recem-importada sem embarque)
@@ -319,8 +330,13 @@ def sincronizar_entrega_carvia_por_nf(
     # Campos OPERACIONAIS protegidos (nao tocados neste fluxo):
     #   data_agenda (tratado acima com guarda), reagendar, motivo_reagendamento,
     #   observacao_operacional, canhoto_arquivo, entregue, data_hora_entrega_realizada,
-    #   status_finalizacao (exceto status_inicial em NF nova e desflag acima)
+    #   status_finalizacao (exceto status_inicial em NF nova e desflag acima),
+    #   chegada_filial, chegada_filial_em (topico 6 — registro MANUAL do operador
+    #     pela tela de monitoramento; este re-sync NUNCA os escreve/zera).
     # Operador mantem controle via endpoints do proprio monitoramento.
+    #
+    # NB: local_cd NAO e operacional — e TECNICO (origem CarviaNf.local_cd, definido
+    # pela Coleta). E atualizado a partir da fonte mais acima neste mesmo fluxo.
     # ------------------------------------------------------------------ #
 
     db.session.commit()

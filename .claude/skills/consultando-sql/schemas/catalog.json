@@ -105,7 +105,7 @@
     "vinculacao_carteira_separacao",
     "webhook_configs"
   ],
-  "total_tabelas": 322,
+  "total_tabelas": 324,
   "tabelas": [
     {
       "name": "agendamentos_entrega",
@@ -1732,6 +1732,16 @@
       "dominio": "Fretes"
     },
     {
+      "name": "geocode_cache",
+      "description": "Cache persistente de geocoding (L2). Evita re-chamar a API Google a cada",
+      "key_fields": [
+        "endereco_hash",
+        "endereco",
+        "lat"
+      ],
+      "dominio": "Carteira"
+    },
+    {
       "name": "grupo_empresarial",
       "description": "Grupos empresariais.",
       "key_fields": [
@@ -3264,6 +3274,16 @@
         "status"
       ],
       "dominio": "Manufatura"
+    },
+    {
+      "name": "rota_salva",
+      "description": "Rota de entrega salva (mono-veiculo) — agrupamento nomeado de lotes +",
+      "key_fields": [
+        "veiculo_id",
+        "status",
+        "nome"
+      ],
+      "dominio": "Carteira"
     },
     {
       "name": "route_template_embeddings",

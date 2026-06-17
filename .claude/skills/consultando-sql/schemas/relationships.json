@@ -1,6 +1,6 @@
 {
   "version": "2.0.0",
-  "total_relationships": 433,
+  "total_relationships": 434,
   "relationships": [
     {
       "from_table": "agendamentos_entrega",
@@ -2484,6 +2484,12 @@
       "from_table": "requisicao_compra_alocacao",
       "from_column": "requisicao_compra_id",
       "to_table": "requisicao_compras",
+      "to_column": "id"
+    },
+    {
+      "from_table": "rota_salva",
+      "from_column": "veiculo_id",
+      "to_table": "veiculos",
       "to_column": "id"
     },
     {

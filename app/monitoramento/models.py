@@ -49,6 +49,17 @@ class EntregaMonitorada(db.Model):
     nf_cd = db.Column(db.Boolean, default=False)  # Indica se está no CD
     separacao_lote_id = db.Column(db.String(50), nullable=True, index=True)  # VARCHAR ex: LOTE_20251004_032844_195 (NAO e integer)
 
+    # 🏭 CD de expedicao (Victorio Marchezine / Tenente Marques). Exibido SO p/ origem != NACOM
+    # (topico 4J). Nacom = VM (default). Constantes em app/utils/local_cd.py.
+    local_cd = db.Column(db.String(20), nullable=False, default='VICTORIO_MARCHEZINE',
+                         server_default='VICTORIO_MARCHEZINE',
+                         info={'description': 'CD de expedicao: VICTORIO_MARCHEZINE | TENENTE_MARQUES'})
+
+    # 📍 "Recebido Filial Entrega" (portal CarVia, topico 6) — registrado manualmente
+    # pelo operador na tela de monitoramento. So faz sentido p/ CarVia; FALSE/NULL p/ Nacom.
+    chegada_filial = db.Column(db.Boolean, nullable=False, default=False, server_default='false')
+    chegada_filial_em = db.Column(db.DateTime, nullable=True)  # data/hora da chegada na filial (BRT naive)
+
     finalizado_por = db.Column(db.String(100))
     finalizado_em = db.Column(db.DateTime)
     comentarios = db.relationship('ComentarioNF', backref='entrega', lazy='dynamic')
