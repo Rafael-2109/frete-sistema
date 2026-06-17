@@ -76,4 +76,17 @@
     overflow: visible;
 }
 
+/* Google Maps InfoWindow: o botao de fechar (X) e renderizado com style INLINE
+   pelo Google e fica invisivel sobre o header colorido (e em telas dark). Exige
+   !important para sobrepor o inline; por isso vive aqui (utilities/_legacy.css).
+   Roteirizacao "Ver no Mapa" item #10. */
+.gm-ui-hover-effect {
+    opacity: 1 !important;
+}
+
+.gm-ui-hover-effect > span {
+    background-color: var(--bs-dark) !important;
+    opacity: 1 !important;
+}
+
 } /* End @layer utilities */

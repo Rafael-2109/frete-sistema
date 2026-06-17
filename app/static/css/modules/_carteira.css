@@ -298,6 +298,21 @@
     border-left-color: var(--semantic-danger);
   }
 
+  /* Card de cliente na lista lateral — densidade compacta + respiro entre cards.
+     Base declarada ANTES das variantes (na-rota/selected) para a cascata correta. */
+  .cliente-item {
+    position: relative;
+    padding: 6px 8px;
+    margin-bottom: 6px;
+    border-radius: 4px;
+    border-left: 3px solid var(--bs-border-color);
+    background: var(--bs-tertiary-bg);
+  }
+
+  .cliente-item.selected {
+    background: var(--bs-secondary-bg);
+  }
+
   /* Client in route (green) */
   .cliente-item.na-rota {
     border-left-color: var(--semantic-success);
@@ -307,23 +322,44 @@
   .cliente-item.na-rota::before {
     content: '\2713';
     position: absolute;
-    right: 10px;
-    top: 10px;
+    right: 8px;
+    top: 6px;
     color: var(--semantic-success);
     font-weight: bold;
   }
 
-  .cliente-item {
-    position: relative;
+  /* Sub-itens dos pedidos (sempre visiveis, compactos) */
+  .cliente-pedidos {
+    border-top: 1px dashed var(--bs-border-color);
+    margin-top: 4px;
+    padding-top: 4px;
   }
 
-  /* Sub-items */
   .pedido-sub-item {
-    border-left-color: var(--text-muted);
+    font-size: 0.78rem;
+    padding: 1px 0;
+  }
+
+  .pedido-sub-datas {
+    font-size: 0.72rem;
   }
 
   .pedido-sub-item:hover {
     background: hsla(0 0% 0% / 0.05);
+  }
+
+  /* Botao de remover entrega da lista */
+  .btn-remover-entrega {
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    padding: 0 4px;
+    line-height: 1;
+    cursor: pointer;
+  }
+
+  .btn-remover-entrega:hover {
+    color: var(--semantic-danger);
   }
 
   /* InfoWindow */

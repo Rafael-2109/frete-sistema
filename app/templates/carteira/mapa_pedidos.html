@@ -16,6 +16,9 @@
 
     <!-- Styles in modules/_carteira.css (mapa pedidos section) -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/modules/_carteira.css') }}">
+    <!-- utilities/_legacy.css: override do X do InfoWindow do Google (precisa de
+         !important p/ sobrepor o style inline do Google) — item #10. -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/utilities/_legacy.css') }}">
 </head>
 
 <body>
@@ -76,11 +79,11 @@
                                 <option value="">Automático (por capacidade)</option>
                             </select>
                             <label class="me-1 small fw-bold">Origem:</label>
-                            <input type="text" id="rotaOrigem" class="form-control form-control-sm d-inline-block me-3" style="width:160px" placeholder="vazio = CD Nacom" title="Endereço de origem (default: CD Nacom Goya)">
+                            <input type="text" id="rotaOrigem" class="form-control form-control-sm d-inline-block me-3" style="width:160px" placeholder="vazio = CD Nacom" title="Endereço de origem (default: CD Nacom Goya)" onchange="recalcularRotaSeDesenhada()">
                             <label class="me-1 small fw-bold">Dias de viagem:</label>
                             <input type="number" id="rotaDias" class="form-control form-control-sm d-inline-block me-3" min="0" value="0" style="width:80px" title="0 = estimar pelo tempo de viagem" onchange="atualizarCustoRota()">
                             <div class="form-check form-check-inline">
-                                <input type="checkbox" class="form-check-input" id="rotaVolta" onchange="atualizarCustoRota()">
+                                <input type="checkbox" class="form-check-input" id="rotaVolta" onchange="recalcularRotaSeDesenhada()">
                                 <label class="form-check-label small" for="rotaVolta">Considerar volta ao CD</label>
                             </div>
                             <span class="border-start ms-3 ps-3">
@@ -356,6 +359,9 @@
         let directionsRenderer;
         let infoWindow;
         let clientesData = [];  // Renomeado de pedidosData para clientesData
+        // Seleção desmarcada pelo usuário (por cliente_id). Persiste entre re-renders
+        // da lista para que "Rota Otimizada"/incluir/arrastar não resetem os checkboxes.
+        let clientesDesmarcados = new Set();
         let rotaPolyline;
         let rotaCalculada = null;  // Armazenar última rota calculada
         let heatmap;
@@ -477,6 +483,7 @@
                 success: function (response) {
                     if (response.sucesso) {
                         clientesData = response.clientes;
+                        clientesDesmarcados.clear();  // nova base = tudo marcado
                         cdData = response.cd;
                         plotarClientesNoMapa(clientesData);
                         if (cdData) {
@@ -624,12 +631,23 @@
             }
         }
 
-        // Formatar peso para exibição compacta
+        // Formatar peso para exibição compacta (kg sem decimais, t com 1 casa).
+        // Fonte unica de formatacao de peso na tela (item #14).
         function formatarPeso(peso) {
+            peso = peso || 0;
             if (peso >= 1000) {
-                return (peso / 1000).toFixed(1) + 't';
+                return (peso / 1000).toFixed(1).replace('.', ',') + ' t';
             }
-            return peso.toFixed(0) + 'kg';
+            return Math.round(peso).toLocaleString('pt-BR') + ' kg';
+        }
+
+        // Formatar duração a partir de SEGUNDOS ("1h 14min" / "14 min").
+        function formatarDuracao(seg) {
+            const min = Math.round((seg || 0) / 60);
+            if (min >= 60) {
+                return Math.floor(min / 60) + 'h ' + String(min % 60).padStart(2, '0') + 'min';
+            }
+            return min + ' min';
         }
 
         // Obter cor hexadecimal do marker baseado no status
@@ -697,7 +715,7 @@
                         </div>
                         <div class="small text-muted">
                             R$ ${(pedido.valor || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} |
-                            ${(pedido.peso || 0).toFixed(2)} kg
+                            ${formatarPeso(pedido.peso)}
                         </div>
                         ${pedido.expedicao ? `<div class="small">Exp: ${pedido.expedicao}</div>` : ''}
                         ${pedido.agendamento ? `<div class="small">Agend: ${pedido.agendamento}</div>` : ''}
@@ -736,7 +754,7 @@
                                 <div class="text-muted">Valor</div>
                             </div>
                             <div class="col-4">
-                                <div class="fw-bold text-success">${cliente.totais.peso.toFixed(2)} kg</div>
+                                <div class="fw-bold text-success">${formatarPeso(cliente.totais.peso)}</div>
                                 <div class="text-muted">Peso</div>
                             </div>
                             <div class="col-4">
@@ -810,8 +828,8 @@
             const totalPedidos = resumo.total_pedidos || clientesData.reduce((acc, c) => acc + (c.totais?.qtd_pedidos || 1), 0);
             $('#totalPedidos').text(totalPedidos);
             $('#valorTotal').text('R$ ' + (resumo.valor_total || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 }));
-            $('#pesoTotal').text((resumo.peso_total || 0).toFixed(2) + ' kg');
-            $('#palletTotal').text((resumo.pallet_total || 0).toFixed(2));
+            $('#pesoTotal').text(Math.round(resumo.peso_total || 0).toLocaleString('pt-BR') + ' kg');
+            $('#palletTotal').text((resumo.pallet_total || 0).toFixed(1));
         }
 
         // Recalcular totais baseado nos clientes selecionados (checkboxes)
@@ -828,8 +846,8 @@
 
             $('#totalPedidos').text(totalPedidos);
             $('#valorTotal').text('R$ ' + valorTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 }));
-            $('#pesoTotal').text(pesoTotal.toFixed(2) + ' kg');
-            $('#palletTotal').text(palletTotal.toFixed(2));
+            $('#pesoTotal').text(Math.round(pesoTotal).toLocaleString('pt-BR') + ' kg');
+            $('#palletTotal').text(palletTotal.toFixed(1));
         }
 
         // Obter clientes selecionados (todos os marcados no checkbox)
@@ -849,13 +867,35 @@
             return selecionados;
         }
 
+        // Sub-item de pedido (formato unico, sempre com expedicao/agendamento).
+        // Usado na lista lateral E na InfoWindow (DRY) — itens #11/#13.
+        function renderPedidoSubItem(pedido) {
+            const agend = pedido.agendamento_confirmado
+                ? '<i class="fas fa-check-circle text-success" title="Confirmado"></i>'
+                : (pedido.agendamento ? '<i class="fas fa-clock text-warning" title="Aguardando"></i>' : '');
+            const valor = 'R$ ' + (pedido.valor || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+            const exp = pedido.expedicao ? `Exp ${pedido.expedicao}` : '';
+            const ag = pedido.agendamento ? `Ag ${pedido.agendamento}` : '';
+            const datas = [exp, ag].filter(Boolean).join(' · ');
+            return `
+                <div class="pedido-sub-item small">
+                    <div class="d-flex justify-content-between">
+                        <span>${pedido.num_pedido} ${agend}</span>
+                        <span class="text-nowrap">${valor}</span>
+                    </div>
+                    ${datas ? `<div class="pedido-sub-datas text-muted">${datas}</div>` : ''}
+                </div>`;
+        }
+
         // Atualizar lista de clientes (agrupados)
         function atualizarListaClientes(clientes) {
+            const todosMarcados = clientes.length > 0 &&
+                clientes.every(c => !clientesDesmarcados.has(c.cliente_id));
             let html = `
-                <div class="mb-3 border-bottom pb-2">
+                <div class="mb-2 border-bottom pb-2">
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
-                            <input type="checkbox" id="selectAllClientes" checked onchange="toggleSelectAll(this)">
+                            <input type="checkbox" id="selectAllClientes" ${todosMarcados ? 'checked' : ''} onchange="toggleSelectAll(this)">
                             <label for="selectAllClientes" class="ms-1 small">Selecionar Todos</label>
                         </div>
                         <span class="badge bg-secondary">${clientes.length} entregas</span>
@@ -865,29 +905,10 @@
 
             clientes.forEach((cliente, index) => {
                 const statusClass = cliente.status || 'pendente';
-                const statusBadge = cliente.status === 'agendado'
-                    ? '<span class="badge bg-success">Agendado</span>'
-                    : (cliente.status === 'urgente'
-                        ? '<span class="badge bg-warning">Urgente</span>'
-                        : '<span class="badge bg-secondary">Pendente</span>');
+                const isChecked = !clientesDesmarcados.has(cliente.cliente_id);
 
-                // Lista de pedidos do cliente
-                let pedidosHtml = '';
-                cliente.pedidos.forEach(pedido => {
-                    const agendStatus = pedido.agendamento_confirmado
-                        ? '<i class="fas fa-check-circle text-success" title="Confirmado"></i>'
-                        : (pedido.agendamento ? '<i class="fas fa-clock text-warning" title="Aguardando"></i>' : '');
-
-                    pedidosHtml += `
-                        <div class="pedido-sub-item small py-1 ps-3 border-start">
-                            <div class="d-flex justify-content-between">
-                                <span>${pedido.num_pedido}</span>
-                                ${agendStatus}
-                            </div>
-                            <div class="text-muted">R$ ${(pedido.valor || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
-                        </div>
-                    `;
-                });
+                // Sub-itens dos pedidos (sempre visiveis — formato unico)
+                const pedidosHtml = cliente.pedidos.map(renderPedidoSubItem).join('');
 
                 html += `
                     <div class="cliente-item ${statusClass} ${cliente.na_rota ? 'na-rota' : ''}" data-cliente-id="${cliente.cliente_id}"
@@ -895,30 +916,27 @@
                         <div class="d-flex align-items-start">
                             <input type="checkbox" class="cliente-checkbox me-2 mt-1"
                                    data-cliente-id="${cliente.cliente_id}"
-                                   checked
-                                   onchange="recalcularTotais(); atualizarCustoRota();">
-                            <div class="flex-grow-1" onclick="focusCliente(${index})">
-                                <div class="d-flex justify-content-between align-items-center">
-                                    <strong>${index + 1}. ${cliente.cliente.nome || 'Cliente'}</strong>
-                                    <span class="badge bg-info">${cliente.totais.qtd_pedidos} ped.</span>
+                                   ${isChecked ? 'checked' : ''}
+                                   onchange="toggleClienteSelecao(this);">
+                            <div class="flex-grow-1">
+                                <div class="d-flex justify-content-between align-items-start">
+                                    <strong style="cursor:pointer" onclick="focusCliente(${index})">${index + 1}. ${cliente.cliente.nome || 'Cliente'}</strong>
+                                    <span class="d-flex align-items-center">
+                                        <span class="badge bg-info me-1">${cliente.totais.qtd_pedidos} ped.</span>
+                                        <button class="btn-remover-entrega" title="Remover do mapa"
+                                                onclick="event.stopPropagation(); removerEntrega('${cliente.cliente_id}')">
+                                            <i class="fas fa-times"></i>
+                                        </button>
+                                    </span>
                                 </div>
-                                <div class="small mt-1">
-                                    <div class="text-muted">${cliente.endereco.cidade || ''}/${cliente.endereco.uf || ''}</div>
-                                    <div class="d-flex justify-content-between">
+                                <div style="cursor:pointer" onclick="focusCliente(${index})">
+                                    <div class="small text-muted">${cliente.endereco.cidade || ''}/${cliente.endereco.uf || ''}</div>
+                                    <div class="small d-flex justify-content-between">
                                         <span>R$ ${cliente.totais.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
-                                        <span>${cliente.totais.peso.toFixed(0)} kg</span>
+                                        <span>${formatarPeso(cliente.totais.peso)}</span>
                                     </div>
                                 </div>
-                                ${cliente.totais.qtd_pedidos > 1 ? `
-                                <div class="mt-2">
-                                    <a class="small text-primary" data-bs-toggle="collapse" href="#pedidos-${cliente.cliente_id}" role="button">
-                                        <i class="fas fa-chevron-down"></i> Ver pedidos
-                                    </a>
-                                    <div class="collapse mt-2" id="pedidos-${cliente.cliente_id}">
-                                        ${pedidosHtml}
-                                    </div>
-                                </div>
-                                ` : ''}
+                                <div class="cliente-pedidos mt-1">${pedidosHtml}</div>
                             </div>
                         </div>
                     </div>
@@ -928,10 +946,34 @@
             $('#pedidosList').html(html);
         }
 
-        // Toggle selecionar todos os clientes
+        // Marca/desmarca uma entrega, persistindo no Set (item #9) e recalculando.
+        function toggleClienteSelecao(cb) {
+            const id = $(cb).data('cliente-id');
+            if (cb.checked) clientesDesmarcados.delete(id);
+            else clientesDesmarcados.add(id);
+            recalcularTotais();
+            atualizarCustoRota();
+        }
+
+        // Toggle selecionar todos os clientes (mantem o Set coerente)
         function toggleSelectAll(checkbox) {
             $('.cliente-checkbox').prop('checked', checkbox.checked);
+            if (checkbox.checked) clientesDesmarcados.clear();
+            else clientesData.forEach(c => clientesDesmarcados.add(c.cliente_id));
             recalcularTotais();
+            atualizarCustoRota();
+        }
+
+        // Remover uma entrega do mapa (item #8): tira de clientesData e re-plota.
+        function removerEntrega(clienteId) {
+            const i = clientesData.findIndex(c => c.cliente_id === clienteId);
+            if (i < 0) return;
+            clientesData.splice(i, 1);
+            clientesDesmarcados.delete(clienteId);
+            plotarClientesNoMapa(clientesData);
+            atualizarListaClientes(clientesData);
+            recalcularTotais();
+            atualizarCustoRota();
         }
 
         // Manter função antiga para compatibilidade
@@ -984,60 +1026,112 @@
             focusCliente(index);
         }
 
-        // Calcular rota otimizada (usando clientes agrupados)
+        // Calcular rota OTIMIZADA (botao "Rota Otimizada"): otimiza a ordem,
+        // redesenha e mostra o resumo. Desenho e custo vem da MESMA chamada (R1).
         function calcularRotaOtimizada() {
             const clientesSelecionados = getClientesSelecionados();
-
             if (clientesSelecionados.length < 1) {
                 Swal.fire('Aviso', 'Selecione pelo menos 1 entrega para calcular a rota', 'warning');
                 return;
             }
-
-            showLoading();
-
-            $.ajax({
-                url: '/carteira/mapa/api/rota-clientes',
-                method: 'POST',
-                contentType: 'application/json',
-                headers: {
-                    'X-CSRFToken': getCSRFToken()
-                },
-                data: JSON.stringify({ clientes: clientesSelecionados, origem: ($('#rotaOrigem').val() || '').trim() || undefined }),
-                success: function (response) {
-                    if (response.sucesso) {
-                        // Armazenar rota calculada para exportação
-                        rotaCalculada = response.rota;
-
-                        exibirRotaOtimizadaClientes(response.rota, clientesSelecionados);
-
-                        // Atualizar informações do veículo e pedágio
-                        if (response.veiculo) {
-                            $('#veiculoSelecionado').text(response.veiculo.nome);
-                            $('#veiculoSelecionado').attr('title',
-                                `Capacidade: ${response.veiculo.peso_maximo} kg | ${response.veiculo.tipo} | ${response.veiculo.eixos} eixos`);
-                        }
-
-                        if (response.pedagio) {
-                            $('#pedagioEstimado').text(`R$ ${response.pedagio.valor_total.toFixed(2)}`);
-                            $('#pedagioEstimado').attr('title',
-                                `${response.pedagio.num_pracas_estimado} praça(s) × R$ ${response.pedagio.valor_medio_praca.toFixed(2)}`);
-                        }
-
-                        // Reordenar painel lateral conforme ordem da rota
-                        reordenarPainelLateral(response.rota.ordem_clientes);
-
-                        mostrarEstatisticasRotaCompleta(response.rota, response.estatisticas, response.veiculo, response.pedagio);
-
-                        // Custo parametrico por tipo de veiculo (usa parametros da UI)
-                        atualizarCustoRota();
-                    }
-                    hideLoading();
-                },
-                error: function (xhr) {
-                    hideLoading();
-                    Swal.fire('Erro', xhr.responseJSON?.erro || 'Erro ao calcular rota', 'error');
+            recalcularRota({
+                otimizar: true, redesenhar: true,
+                onDone: function (resp) {
+                    const sel = getClientesSelecionados();
+                    const est = {
+                        total_clientes: sel.length,
+                        total_pedidos: sel.reduce((s, c) => s + (c.totais.qtd_pedidos || 0), 0),
+                        valor_total: sel.reduce((s, c) => s + (c.totais.valor || 0), 0),
+                        peso_total: sel.reduce((s, c) => s + (c.totais.peso || 0), 0),
+                        pallet_total: sel.reduce((s, c) => s + (c.totais.pallet || 0), 0),
+                        custo_estimado_km: (resp.custo && resp.custo.combustivel) || 0
+                    };
+                    mostrarEstatisticasRotaCompleta(resp.rota, est, resp.veiculo, resp.pedagio);
                 }
             });
+        }
+
+        // Motor unico de roteirizacao no front (R1): UMA chamada a /api/rota/otimizar
+        // produz desenho + custo coerentes. otimizar=false respeita a ordem manual
+        // (drag-and-drop). redesenhar=false so atualiza o card de custo.
+        function recalcularRota(opts) {
+            opts = opts || {};
+            const otimizar = opts.otimizar !== false;   // default: otimiza
+            const redesenhar = !!opts.redesenhar;
+            const selecionados = getClientesSelecionados();
+            const clientes = selecionados.filter(c => c.coordenadas).map(c => ({
+                id: c.cliente_id, lat: c.coordenadas.lat, lng: c.coordenadas.lng,
+                peso: c.totais ? c.totais.peso : 0,
+                pallet: c.totais ? c.totais.pallet : 0, m3: 0
+            }));
+            if (clientes.length < 1) return;
+            const payload = {
+                clientes: clientes,
+                otimizar: otimizar,
+                inclui_volta: $('#rotaVolta').is(':checked'),
+                dias_viagem: parseInt($('#rotaDias').val() || '0', 10)
+            };
+            const origem = ($('#rotaOrigem').val() || '').trim();
+            if (origem) payload.origem = origem;
+            const veiculoId = $('#rotaVeiculo').val();
+            if (veiculoId) payload.veiculo_id = parseInt(veiculoId, 10);
+
+            if (redesenhar) showLoading();
+            $.ajax({
+                url: '/carteira/mapa/api/rota/otimizar',
+                method: 'POST', contentType: 'application/json',
+                headers: { 'X-CSRFToken': getCSRFToken() },
+                data: JSON.stringify(payload),
+                success: function (resp) {
+                    if (redesenhar) hideLoading();
+                    if (!resp || !resp.sucesso) return;
+                    preencherCardCusto(resp);
+                    if (redesenhar && resp.rota) {
+                        rotaCalculada = resp.rota;
+                        if (otimizar && resp.rota.ordem_clientes) {
+                            reordenarPainelLateral(resp.rota.ordem_clientes);
+                        }
+                        exibirRotaOtimizadaClientes(resp.rota, getClientesSelecionados());
+                    }
+                    if (opts.onDone) opts.onDone(resp);
+                },
+                error: function (xhr) {
+                    if (redesenhar) {
+                        hideLoading();
+                        Swal.fire('Erro', xhr.responseJSON?.erro || 'Erro ao calcular rota', 'error');
+                    }
+                }
+            });
+        }
+
+        // Preenche o card de custo + veiculo + pedagio a partir da resposta unificada
+        function preencherCardCusto(resp) {
+            const c = resp.custo || {};
+            const fmt = v => 'R$ ' + (v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+            $('#custoCombustivel').text(fmt(c.combustivel));
+            $('#custoMotorista').text(fmt(c.motorista));
+            $('#custoFixo').text(fmt(c.fixo));
+            $('#custoDepreciacao').text(fmt(c.depreciacao));
+            $('#custoDias').text(c.dias || 0);
+            $('#custoTotal').text(fmt(c.total));
+            $('#pedagioEstimado').text(fmt(c.pedagio));
+            if (resp.veiculo) {
+                $('#veiculoSelecionado').text(resp.veiculo.nome);
+                $('#veiculoSelecionado').attr('title',
+                    `Capacidade: ${resp.veiculo.peso_maximo} kg | ${resp.veiculo.tipo || ''} | ${resp.veiculo.eixos || ''} eixos`);
+            }
+            if (resp.pedagio) {
+                $('#pedagioEstimado').attr('title',
+                    `${resp.pedagio.num_pracas_estimado} praça(s) × R$ ${resp.pedagio.valor_medio_praca.toFixed(2)}`);
+            }
+            $('#custoRotaRow').show();
+        }
+
+        // Redesenha a rota se ela ja estiver tracada; senao so recalcula o custo.
+        // Usado por parametros que mudam a geometria (volta ao CD, origem).
+        function recalcularRotaSeDesenhada() {
+            if (rotaCalculada) recalcularRota({ otimizar: true, redesenhar: true });
+            else atualizarCustoRota();
         }
 
         // Carrega o select de veiculos (tipos) com parametros de custo
@@ -1055,54 +1149,10 @@
             });
         }
 
-        // Calcula o custo parametrico da rota (API /api/rota/otimizar) e preenche o card
+        // Atualiza apenas o card de custo (sem redesenhar a rota). Usado pelos
+        // parametros que so afetam custo (veiculo, dias). Delega ao motor unico.
         function atualizarCustoRota() {
-            const selecionados = getClientesSelecionados();
-            if (!selecionados || selecionados.length < 1) return;
-            const clientes = selecionados.filter(function (c) { return c.coordenadas; }).map(function (c) {
-                return {
-                    id: c.cliente_id,
-                    lat: c.coordenadas.lat,
-                    lng: c.coordenadas.lng,
-                    peso: c.totais ? c.totais.peso : 0,
-                    pallet: c.totais ? c.totais.pallet : 0,
-                    m3: 0
-                };
-            });
-            if (clientes.length < 1) return;
-            const payload = {
-                clientes: clientes,
-                inclui_volta: $('#rotaVolta').is(':checked'),
-                dias_viagem: parseInt($('#rotaDias').val() || '0', 10)
-            };
-            const origem = ($('#rotaOrigem').val() || '').trim();
-            if (origem) payload.origem = origem;
-            const veiculoId = $('#rotaVeiculo').val();
-            if (veiculoId) payload.veiculo_id = parseInt(veiculoId, 10);
-
-            $.ajax({
-                url: '/carteira/mapa/api/rota/otimizar',
-                method: 'POST',
-                contentType: 'application/json',
-                headers: { 'X-CSRFToken': getCSRFToken() },
-                data: JSON.stringify(payload),
-                success: function (resp) {
-                    if (!resp || !resp.sucesso) return;
-                    const c = resp.custo || {};
-                    const fmt = function (v) {
-                        return 'R$ ' + (v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
-                    };
-                    $('#custoCombustivel').text(fmt(c.combustivel));
-                    $('#custoMotorista').text(fmt(c.motorista));
-                    $('#custoFixo').text(fmt(c.fixo));
-                    $('#custoDepreciacao').text(fmt(c.depreciacao));
-                    $('#custoDias').text(c.dias || 0);
-                    $('#custoTotal').text(fmt(c.total));
-                    $('#pedagioEstimado').text(fmt(c.pedagio));
-                    if (resp.veiculo) $('#veiculoSelecionado').text(resp.veiculo.nome);
-                    $('#custoRotaRow').show();
-                }
-            });
+            recalcularRota({ otimizar: true, redesenhar: false });
         }
 
         // Popular select de veiculos ao abrir a pagina
@@ -1258,7 +1308,9 @@
             clientesData.forEach(function (c) { c.na_rota = true; });
             atualizarListaClientes(clientesData);
             recalcularTotais();
-            atualizarCustoRota();
+            // Mede a NOVA ordem manual (sem re-otimizar) e redesenha o tracado/km/
+            // tempo/pedagio/custo conforme a sequencia arrastada (item #4).
+            recalcularRota({ otimizar: false, redesenhar: true });
         }
 
         // Reordenar painel lateral conforme ordem da rota otimizada
@@ -1315,8 +1367,11 @@
                 }
             });
 
-            // Decodificar polyline
-            const path = google.maps.geometry.encoding.decodePath(rota.polyline);
+            // Decodificar polyline. O motor pode devolver multiplos segmentos
+            // separados por '|' (fallback Directions com chunking > 23 paradas);
+            // decodifica cada um e concatena.
+            const path = (rota.polyline || '').split('|').filter(Boolean)
+                .flatMap(seg => google.maps.geometry.encoding.decodePath(seg));
 
             // Criar nova polyline com cor personalizada
             rotaPolyline = new google.maps.Polyline({
@@ -1342,17 +1397,14 @@
 
             // Adicionar marcadores de ordem para cada cliente
             if (rota.ordem_clientes && rota.legs) {
+                // Tempo acumulado em SEGUNDOS reais (legs[i].duracao_s = trecho que
+                // antecede a parada i; legs[0] = origem->1a parada). Antes lia o
+                // TEXTO via regex \d+ e "1 hora 14 min" virava 1 (item #12).
                 const temposAcumulados = [];
-                let tempoTotal = 0;
-
-                // Calcular tempo acumulado para cada ponto
-                for (let i = 0; i <= rota.ordem_clientes.length && i < rota.legs.length; i++) {
-                    const duracaoTexto = rota.legs[i]?.duracao || '0 min';
-                    const match = duracaoTexto.match(/\d+/);
-                    if (match) {
-                        tempoTotal += parseInt(match[0]);
-                    }
-                    temposAcumulados.push(tempoTotal);
+                let tempoTotalSeg = 0;
+                for (let i = 0; i < rota.ordem_clientes.length; i++) {
+                    tempoTotalSeg += (rota.legs[i] && rota.legs[i].duracao_s) || 0;
+                    temposAcumulados.push(tempoTotalSeg);
                 }
 
                 rota.ordem_clientes.forEach((clienteId, index) => {
@@ -1404,7 +1456,7 @@
                                     <svg xmlns="http://www.w3.org/2000/svg" width="70" height="22">
                                         <rect x="3" y="2" width="64" height="18" rx="9" fill="#1e40af" stroke="#ffffff" stroke-width="1" opacity="0.85"/>
                                         <text x="35" y="14" font-family="Arial, sans-serif" font-size="10" fill="white" text-anchor="middle" font-weight="bold">
-                                            ${tempoAcumulado > 0 ? `${tempoAcumulado} min` : 'PARTIDA'}
+                                            ${tempoAcumulado > 0 ? formatarDuracao(tempoAcumulado) : 'PARTIDA'}
                                         </text>
                                     </svg>
                                 `),
@@ -1417,6 +1469,7 @@
                         ordemLabel.addListener('click', () => {
                             // Listar todos os pedidos deste cliente
                             const pedidosStr = cliente.pedidos.map(p => p.num_pedido).join(', ');
+                            const proximo = rota.legs[index + 1];  // trecho que SAI desta parada
 
                             const infoContent = `
                                 <div style="padding: 10px;">
@@ -1425,9 +1478,9 @@
                                     <p class="mb-1"><strong>CNPJ:</strong> ${cliente.cliente.cnpj || '-'}</p>
                                     <p class="mb-1"><strong>Pedidos (${cliente.totais.qtd_pedidos}):</strong> ${pedidosStr}</p>
                                     <p class="mb-1"><strong>Valor Total:</strong> R$ ${cliente.totais.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
-                                    <p class="mb-1"><strong>Peso Total:</strong> ${cliente.totais.peso.toFixed(2)} kg</p>
-                                    <p class="mb-1"><strong>Tempo até aqui:</strong> ${tempoAcumulado > 0 ? `${tempoAcumulado} minutos` : 'Ponto de partida'}</p>
-                                    ${index < rota.legs.length ? `<p class="mb-1"><strong>Próximo trecho:</strong> ${rota.legs[index].distancia} - ${rota.legs[index].duracao}</p>` : ''}
+                                    <p class="mb-1"><strong>Peso Total:</strong> ${formatarPeso(cliente.totais.peso)}</p>
+                                    <p class="mb-1"><strong>Tempo até aqui:</strong> ${tempoAcumulado > 0 ? formatarDuracao(tempoAcumulado) : 'Ponto de partida'}</p>
+                                    ${proximo ? `<p class="mb-1"><strong>Próximo trecho:</strong> ${proximo.distancia} - ${proximo.duracao}</p>` : ''}
                                 </div>
                             `;
 
@@ -1451,210 +1504,13 @@
             // Adicionar marcadores de pedágio estimados
             adicionarMarcadoresPedagio(path, rota.distancia_total_km);
 
-            // Ajustar bounds
-            const bounds = new google.maps.LatLngBounds();
-            bounds.extend(new google.maps.LatLng(rota.bounds.southwest.lat, rota.bounds.southwest.lng));
-            bounds.extend(new google.maps.LatLng(rota.bounds.northeast.lat, rota.bounds.northeast.lng));
-            map.fitBounds(bounds);
-        }
-
-        // Função antiga mantida para compatibilidade
-        function exibirRotaOtimizada(rota) {
-            // Limpar rota anterior
-            if (rotaPolyline) {
-                rotaPolyline.setMap(null);
+            // Ajustar bounds (defensivo: motor pode nao retornar bounds)
+            if (rota.bounds && rota.bounds.southwest && rota.bounds.northeast) {
+                const bounds = new google.maps.LatLngBounds();
+                bounds.extend(new google.maps.LatLng(rota.bounds.southwest.lat, rota.bounds.southwest.lng));
+                bounds.extend(new google.maps.LatLng(rota.bounds.northeast.lat, rota.bounds.northeast.lng));
+                map.fitBounds(bounds);
             }
-
-            // Limpar marcadores de ordem anteriores
-            ordemMarkers.forEach(marker => marker.setMap(null));
-            ordemMarkers = [];
-
-            // Limpar marcadores de pedágio anteriores
-            pedagioMarkers.forEach(marker => marker.setMap(null));
-            pedagioMarkers = [];
-
-            // Decodificar polyline
-            const path = google.maps.geometry.encoding.decodePath(rota.polyline);
-
-            // Criar nova polyline com cor personalizada
-            rotaPolyline = new google.maps.Polyline({
-                path: path,
-                geodesic: true,
-                strokeColor: '#10b981',  // Verde esmeralda
-                strokeOpacity: 0.9,
-                strokeWeight: 5,
-                icons: [{
-                    icon: {
-                        path: google.maps.SymbolPath.FORWARD_CLOSED_ARROW,
-                        scale: 3,
-                        strokeColor: '#065f46',
-                        strokeWeight: 2,
-                        fillColor: '#10b981',
-                        fillOpacity: 1
-                    },
-                    offset: '100%',
-                    repeat: '150px'  // Setas a cada 150px
-                }],
-                map: map
-            });
-
-            // Adicionar marcadores de ordem e tempo para cada pedido
-            if (rota.ordem_pedidos && rota.legs) {
-                // Array para armazenar tempos acumulados para cada pedido
-                const temposAcumulados = [];
-                let tempoTotal = 0;
-
-                // Calcular tempo acumulado para cada ponto
-                for (let i = 0; i <= rota.ordem_pedidos.length && i < rota.legs.length; i++) {
-                    if (i === 0) {
-                        // Tempo do CD até o primeiro pedido
-                        const duracaoTexto = rota.legs[0].duracao;
-                        const match = duracaoTexto.match(/\d+/);
-                        if (match) {
-                            tempoTotal = parseInt(match[0]);
-                        }
-                        temposAcumulados.push(tempoTotal);
-                    } else {
-                        // Tempo entre pedidos
-                        const duracaoTexto = rota.legs[i].duracao;
-                        const match = duracaoTexto.match(/\d+/);
-                        if (match) {
-                            tempoTotal += parseInt(match[0]);
-                        }
-                        temposAcumulados.push(tempoTotal);
-                    }
-                }
-
-                rota.ordem_pedidos.forEach((numPedido, index) => {
-                    // Encontrar o pedido nos dados
-                    const pedido = pedidosData.find(p => p.num_pedido === numPedido);
-
-                    if (pedido) {
-                        // Usar o tempo acumulado calculado
-                        const tempoAcumulado = temposAcumulados[index] || 0;
-
-                        // Verificar se há outro pedido no mesmo local (mesmo cliente)
-                        let offsetLat = 0;
-                        let offsetLng = 0;
-                        let pedidosNoMesmoLocal = 0;
-
-                        // Verificar pedidos anteriores no mesmo CNPJ ou coordenadas muito próximas
-                        for (let j = 0; j < index; j++) {
-                            const outroPedido = pedidosData.find(p => p.num_pedido === rota.ordem_pedidos[j]);
-                            if (outroPedido) {
-                                // Verificar se é o mesmo cliente (CNPJ) ou coordenadas muito próximas
-                                const mesmoCNPJ = outroPedido.cliente.cnpj === pedido.cliente.cnpj;
-                                const distanciaLat = Math.abs(outroPedido.coordenadas.lat - pedido.coordenadas.lat);
-                                const distanciaLng = Math.abs(outroPedido.coordenadas.lng - pedido.coordenadas.lng);
-                                const muitoProximo = distanciaLat < 0.0001 && distanciaLng < 0.0001;
-
-                                if (mesmoCNPJ && muitoProximo) {  // Só aplicar offset se for mesmo CNPJ E mesmo local
-                                    pedidosNoMesmoLocal++;
-                                    // Aplicar offset diagonal para separar visualmente
-                                    offsetLat = pedidosNoMesmoLocal * 0.0004;
-                                    offsetLng = pedidosNoMesmoLocal * 0.0004;
-                                }
-                            }
-                        }
-
-                        // Criar marcador customizado com ordem (DESTAQUE PRINCIPAL)
-                        const ordemLabel = new google.maps.Marker({
-                            position: {
-                                lat: pedido.coordenadas.lat + offsetLat,
-                                lng: pedido.coordenadas.lng + offsetLng
-                            },
-                            map: map,
-                            icon: {
-                                path: google.maps.SymbolPath.CIRCLE,
-                                scale: 18,  // Aumentado para destaque
-                                fillColor: '#dc2626',  // Vermelho
-                                fillOpacity: 0.95,
-                                strokeColor: '#ffffff',
-                                strokeWeight: 3
-                            },
-                            label: {
-                                text: String(index + 1),
-                                color: '#ffffff',
-                                fontSize: '14px',  // Aumentado para visibilidade
-                                fontWeight: 'bold'
-                            },
-                            title: `${index + 1}º - ${pedido.num_pedido}`,
-                            zIndex: 1200 + index  // zIndex mais alto para ficar acima de tudo
-                        });
-
-                        // Criar label com tempo estimado (posicionado ACIMA do marcador - menos destaque)
-                        const tempoLabel = new google.maps.Marker({
-                            position: {
-                                lat: pedido.coordenadas.lat + offsetLat + 0.0025,  // Bem acima do marcador
-                                lng: pedido.coordenadas.lng + offsetLng
-                            },
-                            map: map,
-                            icon: {
-                                url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(`
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="70" height="22">
-                                        <rect x="3" y="2" width="64" height="18" rx="9" fill="#1e40af" stroke="#ffffff" stroke-width="1" opacity="0.85"/>
-                                        <text x="35" y="14" font-family="Arial, sans-serif" font-size="10" fill="white" text-anchor="middle" font-weight="bold">
-                                            ${tempoAcumulado > 0 ? `${tempoAcumulado} min` : 'PARTIDA'}
-                                        </text>
-                                    </svg>
-                                `),
-                                anchor: new google.maps.Point(35, 22)  // Ancorar na parte inferior do SVG
-                            },
-                            zIndex: 1000 + index  // zIndex menor que o marcador de ordem
-                        });
-
-                        // InfoWindow ao clicar
-                        ordemLabel.addListener('click', () => {
-                            // Verificar se há outros pedidos do mesmo cliente nesta rota
-                            const pedidosMesmoCliente = rota.ordem_pedidos.filter(numPed => {
-                                const p = pedidosData.find(pd => pd.num_pedido === numPed);
-                                return p && p.cliente.cnpj === pedido.cliente.cnpj;
-                            });
-
-                            let pedidosInfo = '';
-                            if (pedidosMesmoCliente.length > 1) {
-                                pedidosInfo = `<p class="mb-1"><strong>Pedidos neste local:</strong> ${pedidosMesmoCliente.join(', ')}</p>`;
-                            }
-
-                            const infoContent = `
-                                <div style="padding: 10px;">
-                                    <h6 class="mb-2"><strong>${index + 1}ª Entrega</strong></h6>
-                                    <p class="mb-1"><strong>Pedido:</strong> ${pedido.num_pedido}</p>
-                                    <p class="mb-1"><strong>Cliente:</strong> ${pedido.cliente.nome}</p>
-                                    <p class="mb-1"><strong>CNPJ:</strong> ${pedido.cliente.cnpj}</p>
-                                    ${pedidosInfo}
-                                    <p class="mb-1"><strong>Endereço:</strong> ${pedido.endereco.rua}, ${pedido.endereco.numero}</p>
-                                    <p class="mb-1"><strong>Tempo até aqui:</strong> ${tempoAcumulado > 0 ? `${tempoAcumulado} minutos` : 'Ponto de partida'}</p>
-                                    ${index < rota.legs.length ? `<p class="mb-1"><strong>Próximo trecho:</strong> ${rota.legs[index].distancia} - ${rota.legs[index].duracao}</p>` : ''}
-                                    ${pedidosNoMesmoLocal > 0 ? `<div class="alert alert-info mt-2 mb-0"><small>⚠️ Múltiplas entregas neste endereço</small></div>` : ''}
-                                </div>
-                            `;
-
-                            if (infoWindow) {
-                                infoWindow.close();
-                            }
-
-                            infoWindow = new google.maps.InfoWindow({
-                                content: infoContent
-                            });
-
-                            infoWindow.open(map, ordemLabel);
-                        });
-
-                        ordemMarkers.push(ordemLabel);
-                        ordemMarkers.push(tempoLabel);
-                    }
-                });
-            }
-
-            // Adicionar marcadores de pedágio estimados
-            adicionarMarcadoresPedagio(path, rota.distancia_total_km);
-
-            // Ajustar bounds
-            const bounds = new google.maps.LatLngBounds();
-            bounds.extend(new google.maps.LatLng(rota.bounds.southwest.lat, rota.bounds.southwest.lng));
-            bounds.extend(new google.maps.LatLng(rota.bounds.northeast.lat, rota.bounds.northeast.lng));
-            map.fitBounds(bounds);
         }
 
         // Função para adicionar marcadores de pedágio
@@ -1776,7 +1632,7 @@
                             <div class="small text-muted mt-1">
                                 <div>📍 ${cliente.endereco.cidade || ''}/${cliente.endereco.uf || ''}</div>
                                 <div>📦 Pedidos: ${pedidosStr}</div>
-                                <div>💰 R$ ${cliente.totais.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} | ⚖️ ${cliente.totais.peso.toFixed(2)} kg</div>
+                                <div>💰 R$ ${cliente.totais.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} | ⚖️ ${formatarPeso(cliente.totais.peso)}</div>
                             </div>
                         </div>
                     `;
