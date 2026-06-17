@@ -640,3 +640,29 @@ def rota_adicionar_cliente():
     except Exception as e:
         logger.error(f"Erro ao adicionar cliente: {e}")
         return jsonify({'erro': str(e)}), 500
+
+
+@bp.route('/api/rota/<int:rota_id>/cotar', methods=['POST'])
+@login_required
+def rota_cotar(rota_id):
+    """Cota o frete a partir de uma rota salva: popula a sessao de cotacao com os
+    lotes da rota e redireciona para o wizard (mesmo contrato de cotar_frete_mapa)."""
+    try:
+        rota = RotaSalva.query.get(rota_id)
+        if not rota:
+            return jsonify({'erro': 'Rota nao encontrada'}), 404
+        lotes = list(rota.lotes or [])
+        if not lotes:
+            return jsonify({'erro': 'Rota sem lotes'}), 400
+        session['cotacao_lotes'] = lotes
+        session['cotacao_pedidos'] = lotes  # retrocompat
+        session.pop('alterando_embarque', None)
+        return jsonify({
+            'sucesso': True,
+            'total_lotes': len(lotes),
+            'lotes': lotes,
+            'redirect': url_for('cotacao.tela_cotacao'),
+        })
+    except Exception as e:
+        logger.error(f"Erro ao cotar rota salva: {e}")
+        return jsonify({'erro': str(e)}), 500
