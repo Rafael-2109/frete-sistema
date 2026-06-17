@@ -12,6 +12,10 @@ from app.carteira.services.mapa_service import MapaService
 import logging
 import pandas as pd
 from app.utils.timezone import agora_utc_naive
+from app.carteira.services.roteirizacao_service import (
+    otimizar_rota, selecionar_veiculo, calcular_custo_operacional,
+)
+from app.veiculos.models import Veiculo
 logger = logging.getLogger(__name__)
 
 # Criar blueprint
@@ -479,6 +483,61 @@ def cotar_frete_mapa():
 
     except Exception as e:
         logger.error(f"Erro ao preparar cotação do mapa: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return jsonify({'erro': str(e)}), 500
+
+
+@bp.route('/api/rota/otimizar', methods=['POST'])
+@login_required
+def rota_otimizar():
+    """Otimiza a rota das paradas + custo parametrico por tipo de veiculo."""
+    try:
+        data = request.get_json() or {}
+        clientes = data.get('clientes', [])
+        if not clientes:
+            return jsonify({'erro': 'Nenhuma parada informada'}), 400
+
+        origem = data.get('origem') or mapa_service.endereco_cd
+        inclui_volta = bool(data.get('inclui_volta'))
+        dias_viagem = int(data.get('dias_viagem') or 0)
+
+        paradas = [{'id': c['id'], 'lat': c['lat'], 'lng': c['lng']} for c in clientes]
+        rota = otimizar_rota(paradas, origem=origem, inclui_volta=inclui_volta)
+
+        peso = sum(float(c.get('peso') or 0) for c in clientes)
+        pallets = sum(float(c.get('pallet') or 0) for c in clientes)
+        m3 = sum(float(c.get('m3') or 0) for c in clientes)
+
+        veiculo = (Veiculo.query.get(data['veiculo_id'])
+                   if data.get('veiculo_id') else selecionar_veiculo(peso, pallets, m3))
+
+        custo = (calcular_custo_operacional(rota['distancia_km'], rota['tempo_min'],
+                                            veiculo, dias_viagem=dias_viagem)
+                 if veiculo else {})
+        pedagio = mapa_service._calcular_pedagio_estimado(rota['distancia_km'], veiculo)
+        valor_pedagio = pedagio.get('valor_total', 0) if isinstance(pedagio, dict) else 0
+        total = round(custo.get('custo_operacional', 0) + valor_pedagio, 2)
+
+        return jsonify({
+            'sucesso': True,
+            'rota': rota,
+            'veiculo': {
+                'id': veiculo.id, 'nome': veiculo.nome,
+                'peso_maximo': veiculo.peso_maximo,
+            } if veiculo else None,
+            'custo': {
+                'dias': custo.get('dias', dias_viagem),
+                'combustivel': custo.get('custo_combustivel', 0),
+                'motorista': custo.get('custo_motorista', 0),
+                'fixo': custo.get('custo_fixo', 0),
+                'depreciacao': custo.get('custo_depreciacao', 0),
+                'pedagio': valor_pedagio,
+                'total': total,
+            },
+        })
+    except Exception as e:
+        logger.error(f"Erro em rota_otimizar: {e}")
         import traceback
         logger.error(traceback.format_exc())
         return jsonify({'erro': str(e)}), 500
