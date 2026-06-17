@@ -136,6 +136,82 @@ def converter_projecao_para_resumo(projecao):
         'dias_disponivel': dias_disponivel
     }
 
+
+def _aplicar_filtros_base(produtos, codigo_produto='', categoria='', embalagem='',
+                          materia_prima='', linha_producao=''):
+    """Aplica filtros que NÃO dependem da projeção (código/nome e subcategorias).
+
+    Opera sobre a lista de dicts retornada por SaldoEstoque.obter_produtos_com_estoque().
+    Compartilhado pela tela de saldo e pela exportação para Excel.
+    """
+    if codigo_produto:
+        cp = codigo_produto.lower()
+        produtos = [
+            p for p in produtos
+            if cp in str(p.get('cod_produto', '')).lower()
+            or cp in str(p.get('nome_produto', '')).lower()
+        ]
+
+    if categoria or embalagem or materia_prima or linha_producao:
+        codes = [p.get('cod_produto') for p in produtos]
+        query = CadastroPalletizacao.query.filter(
+            CadastroPalletizacao.cod_produto.in_(codes)
+        )
+        if categoria:
+            query = query.filter(CadastroPalletizacao.categoria_produto == categoria)
+        if embalagem:
+            query = query.filter(CadastroPalletizacao.tipo_embalagem == embalagem)
+        if materia_prima:
+            query = query.filter(CadastroPalletizacao.tipo_materia_prima == materia_prima)
+        if linha_producao:
+            query = query.filter(CadastroPalletizacao.linha_producao == linha_producao)
+
+        codes_ok = {p.cod_produto for p in query.all()}
+        produtos = [p for p in produtos if p.get('cod_produto') in codes_ok]
+
+    return produtos
+
+
+def _montar_resumo(cod_produto, dias=28):
+    """Computa a projeção e converte para o resumo usado nas telas (ou None)."""
+    projecao = ServicoEstoqueSimples.get_projecao_completa(cod_produto, dias=dias)
+    return converter_projecao_para_resumo(projecao) if projecao else None
+
+
+def _ordenar_resumos_saldo(produtos_resumo, ordem_coluna, ordem_direcao):
+    """Ordena (in place) a lista de resumos pela coluna/direção informadas."""
+    reverse = (ordem_direcao == 'desc')
+
+    if ordem_coluna == 'codigo':
+        produtos_resumo.sort(key=lambda x: x['cod_produto'], reverse=reverse)
+    elif ordem_coluna == 'produto':
+        produtos_resumo.sort(key=lambda x: x['nome_produto'], reverse=reverse)
+    elif ordem_coluna == 'estoque':
+        produtos_resumo.sort(key=lambda x: x.get('estoque_inicial', 0) or 0, reverse=reverse)
+    elif ordem_coluna == 'carteira':
+        produtos_resumo.sort(key=lambda x: x.get('qtd_total_carteira', 0) or 0, reverse=reverse)
+    elif ordem_coluna == 'producao':
+        produtos_resumo.sort(key=lambda x: x.get('qtd_total_producao', 0) or 0, reverse=reverse)
+    elif ordem_coluna == 'disponivel':
+        def sort_key_disponivel(x):
+            dias = x.get('dias_disponivel')
+            qtd = x.get('qtd_disponivel', 0) or 0
+            if dias is None:
+                return (999999, 0) if ordem_direcao == 'asc' else (-999999, 0)
+            return (dias, -qtd) if ordem_direcao == 'asc' else (-dias, qtd)
+        produtos_resumo.sort(key=sort_key_disponivel)
+    elif ordem_coluna == 'ruptura':
+        produtos_resumo.sort(
+            key=lambda x: x['previsao_ruptura'] if x['previsao_ruptura'] is not None else float('inf'),
+            reverse=reverse,
+        )
+    elif ordem_coluna == 'status':
+        status_ordem = {'CRÍTICO': 0, 'ATENÇÃO': 1, 'OK': 2}
+        produtos_resumo.sort(key=lambda x: status_ordem.get(x['status_ruptura'], 3), reverse=reverse)
+
+    return produtos_resumo
+
+
 # 📦 Blueprint do estoque (seguindo padrão dos outros módulos)
 # Filtros globais (valor_br, numero_br, peso_br) definidos em app/utils/template_filters.py
 
@@ -1326,130 +1402,80 @@ def saldo_estoque():
         
         # Obter todos os produtos com movimentação de estoque
         produtos = SaldoEstoque.obter_produtos_com_estoque()
-        
-        # Filtrar por código se especificado
-        if codigo_produto:
-            produtos = [p for p in produtos if codigo_produto.lower() in str(p.get('cod_produto', '')).lower() or 
-                       codigo_produto.lower() in str(p.get('nome_produto', '')).lower()]
-        
-        # NOVO: Aplicar filtros de subcategorias se houver
-        produtos_codigos = [p.get('cod_produto') for p in produtos]
-        if categoria_filtro or embalagem_filtro or materia_prima_filtro or linha_producao_filtro:
-            # Buscar produtos com as categorias especificadas
-            query = CadastroPalletizacao.query.filter(
-                CadastroPalletizacao.cod_produto.in_(produtos_codigos)
-            )
-            
-            if categoria_filtro:
-                query = query.filter(CadastroPalletizacao.categoria_produto == categoria_filtro)
-            if embalagem_filtro:
-                query = query.filter(CadastroPalletizacao.tipo_embalagem == embalagem_filtro)
-            if materia_prima_filtro:
-                query = query.filter(CadastroPalletizacao.tipo_materia_prima == materia_prima_filtro)
-            if linha_producao_filtro:
-                query = query.filter(CadastroPalletizacao.linha_producao == linha_producao_filtro)
-            
-            produtos_filtrados_codes = [p.cod_produto for p in query.all()]
-            produtos = [p for p in produtos if p.get('cod_produto') in produtos_filtrados_codes]
-        
-        # Para melhorar performance, processar apenas uma amostra para estatísticas
-        # e processar apenas os necessários para exibição
-        total_produtos = len(produtos)
-        
-        # Se houver muitos produtos, fazer amostragem para estatísticas
-        if total_produtos > 200:
-            # Amostrar 200 produtos para estatísticas rápidas
-            produtos_amostra = random.sample(produtos, min(200, total_produtos))
-        else:
-            produtos_amostra = produtos
-        
-        # Estatísticas aproximadas baseadas na amostra
-        produtos_criticos = 0
-        produtos_atencao = 0
-        produtos_ok = 0
-        
-        # Processar apenas produtos da página atual + amostra para estatísticas
-        produtos_com_resumo = []
-        
-        # Primeiro processar a amostra para estatísticas
-        for produto in produtos_amostra[:50]:  # Limitar ainda mais para performance
-            # USAR NOVO SISTEMA DE ESTOQUE EM TEMPO REAL
-            projecao = ServicoEstoqueSimples.get_projecao_completa(produto.get('cod_produto'), dias=7)
-            # Converter para formato compatível
-            resumo = converter_projecao_para_resumo(projecao) if projecao else None
-            if resumo:
-                # Contadores de status
-                if resumo['status_ruptura'] == 'CRÍTICO':
-                    produtos_criticos += 1
-                elif resumo['status_ruptura'] == 'ATENÇÃO':
-                    produtos_atencao += 1
-                else:
-                    produtos_ok += 1
-        
-        # Estimar estatísticas para o total se foi amostrado
-        if total_produtos > 50:
-            fator = total_produtos / 50
-            produtos_criticos = int(produtos_criticos * fator)
-            produtos_atencao = int(produtos_atencao * fator)
-            produtos_ok = int(produtos_ok * fator)
-        
-        # Agora processar apenas os produtos da página atual
+
+        # Filtros que NÃO dependem da projeção (código/nome e subcategorias)
+        produtos = _aplicar_filtros_base(
+            produtos,
+            codigo_produto=codigo_produto,
+            categoria=categoria_filtro,
+            embalagem=embalagem_filtro,
+            materia_prima=materia_prima_filtro,
+            linha_producao=linha_producao_filtro,
+        )
+
         inicio = (page - 1) * limite
         fim = inicio + limite
-        produtos_pagina = produtos[inicio:fim]
-        
-        produtos_resumo = []
-        for produto in produtos_pagina:
-            # USAR NOVO SISTEMA DE ESTOQUE EM TEMPO REAL
-            projecao = ServicoEstoqueSimples.get_projecao_completa(produto.get('cod_produto'), dias=28)
-            # Converter para formato compatível
-            resumo = converter_projecao_para_resumo(projecao) if projecao else None
-            if resumo:
-                produtos_resumo.append(resumo)
-        
-        # Aplicar ordenação server-side nos resultados da página
-        if ordem_coluna == 'codigo':
-            produtos_resumo.sort(key=lambda x: x['cod_produto'], reverse=(ordem_direcao == 'desc'))
-        elif ordem_coluna == 'produto':
-            produtos_resumo.sort(key=lambda x: x['nome_produto'], reverse=(ordem_direcao == 'desc'))
-        elif ordem_coluna == 'estoque':
-            produtos_resumo.sort(key=lambda x: x.get('estoque_inicial', 0) if x.get('estoque_inicial') is not None else 0, reverse=(ordem_direcao == 'desc'))
-        elif ordem_coluna == 'carteira':
-            produtos_resumo.sort(key=lambda x: x.get('qtd_total_carteira', 0) if x.get('qtd_total_carteira') is not None else 0, reverse=(ordem_direcao == 'desc'))
-        elif ordem_coluna == 'producao':
-            # Ordenação para coluna Produção
-            produtos_resumo.sort(key=lambda x: x.get('qtd_total_producao', 0) if x.get('qtd_total_producao') is not None else 0, reverse=(ordem_direcao == 'desc'))
-        elif ordem_coluna == 'disponivel':
-            # Ordenação especial para Disponível
-            # Se ASC: ordena D+ crescente, mas dentro de cada D+ ordena qtd decrescente
-            # Se DESC: ordena D+ decrescente, mas dentro de cada D+ ordena qtd crescente
-            def sort_key_disponivel(x):
-                dias = x.get('dias_disponivel')
-                qtd = x.get('qtd_disponivel', 0) if x.get('qtd_disponivel') else 0
-                
-                # Se não tem disponibilidade, vai pro final
-                if dias is None:
-                    return (999999, 0) if ordem_direcao == 'asc' else (-999999, 0)
-                
-                # Para ASC: ordena por dias crescente, qtd decrescente
-                if ordem_direcao == 'asc':
-                    return (dias, -qtd)
-                # Para DESC: ordena por dias decrescente, qtd crescente  
-                else:
-                    return (-dias, qtd)
-                    
-            produtos_resumo.sort(key=sort_key_disponivel)
-        elif ordem_coluna == 'ruptura':
-            produtos_resumo.sort(key=lambda x: x['previsao_ruptura'] if x['previsao_ruptura'] is not None else float('inf'), reverse=(ordem_direcao == 'desc'))
-        elif ordem_coluna == 'status':
-            # Ordenar por prioridade: CRÍTICO > ATENÇÃO > OK
-            status_ordem = {'CRÍTICO': 0, 'ATENÇÃO': 1, 'OK': 2}
-            produtos_resumo.sort(key=lambda x: status_ordem.get(x['status_ruptura'], 3), reverse=(ordem_direcao == 'desc'))
-        
+
+        if status_ruptura:
+            # O status de ruptura só é conhecido APÓS a projeção. Quando o filtro
+            # de status é acionado, computamos o resumo de TODOS os produtos já
+            # filtrados (por código/subcategoria) e então filtramos por status.
+            # Caminho mais caro, usado apenas neste cenário.
+            resumos = []
+            for produto in produtos:
+                resumo = _montar_resumo(produto.get('cod_produto'))
+                if resumo and resumo['status_ruptura'] == status_ruptura:
+                    resumos.append(resumo)
+
+            total_produtos = len(resumos)
+            produtos_criticos = sum(1 for r in resumos if r['status_ruptura'] == 'CRÍTICO')
+            produtos_atencao = sum(1 for r in resumos if r['status_ruptura'] == 'ATENÇÃO')
+            produtos_ok = sum(1 for r in resumos if r['status_ruptura'] == 'OK')
+
+            _ordenar_resumos_saldo(resumos, ordem_coluna, ordem_direcao)
+            produtos_resumo = resumos[inicio:fim]
+        else:
+            total_produtos = len(produtos)
+
+            # Estatísticas aproximadas por amostragem (performance)
+            if total_produtos > 200:
+                produtos_amostra = random.sample(produtos, min(200, total_produtos))
+            else:
+                produtos_amostra = produtos
+
+            produtos_criticos = 0
+            produtos_atencao = 0
+            produtos_ok = 0
+            for produto in produtos_amostra[:50]:  # Limitar para performance
+                resumo = _montar_resumo(produto.get('cod_produto'), dias=7)
+                if resumo:
+                    if resumo['status_ruptura'] == 'CRÍTICO':
+                        produtos_criticos += 1
+                    elif resumo['status_ruptura'] == 'ATENÇÃO':
+                        produtos_atencao += 1
+                    else:
+                        produtos_ok += 1
+
+            # Estimar estatísticas para o total se foi amostrado
+            if total_produtos > 50:
+                fator = total_produtos / 50
+                produtos_criticos = int(produtos_criticos * fator)
+                produtos_atencao = int(produtos_atencao * fator)
+                produtos_ok = int(produtos_ok * fator)
+
+            # Processar apenas os produtos da página atual
+            produtos_resumo = []
+            for produto in produtos[inicio:fim]:
+                resumo = _montar_resumo(produto.get('cod_produto'))
+                if resumo:
+                    produtos_resumo.append(resumo)
+
+            _ordenar_resumos_saldo(produtos_resumo, ordem_coluna, ordem_direcao)
+
         # Calcular total de páginas
         total_filtrado = total_produtos
-        total_paginas = (total_filtrado + limite - 1) // limite
-        
+        total_paginas = (total_filtrado + limite - 1) // limite if total_filtrado else 1
+
         # Estatísticas
         estatisticas = {
             'total_produtos': total_produtos,
@@ -1636,7 +1662,111 @@ def filtrar_saldo_estoque():
         
     except Exception as e:
         logger.error(f"Erro ao filtrar saldo estoque: {str(e)}")
-        return jsonify({'error': str(e)}), 500 
+        return jsonify({'error': str(e)}), 500
+
+@estoque_bp.route('/saldo-estoque/exportar')
+@login_required
+def exportar_saldo_estoque():
+    """Exporta a listagem de saldo de estoque (respeitando os filtros) para Excel."""
+    import pandas as pd  # Lazy import
+    try:
+        # Mesmos filtros da tela
+        codigo_produto = request.args.get('codigo_produto', '').strip()
+        status_ruptura = request.args.get('status_ruptura', '').strip()
+        categoria_filtro = request.args.get('categoria', '').strip()
+        embalagem_filtro = request.args.get('embalagem', '').strip()
+        materia_prima_filtro = request.args.get('materia_prima', '').strip()
+        linha_producao_filtro = request.args.get('linha_producao', '').strip()
+        ordem_coluna = request.args.get('ordem', 'codigo')
+        ordem_direcao = request.args.get('dir', 'asc')
+
+        # Base + filtros que não dependem de projeção
+        produtos = SaldoEstoque.obter_produtos_com_estoque()
+        produtos = _aplicar_filtros_base(
+            produtos,
+            codigo_produto=codigo_produto,
+            categoria=categoria_filtro,
+            embalagem=embalagem_filtro,
+            materia_prima=materia_prima_filtro,
+            linha_producao=linha_producao_filtro,
+        )
+
+        # Computar resumo de todos os filtrados e aplicar filtro de status
+        resumos = []
+        for produto in produtos:
+            resumo = _montar_resumo(produto.get('cod_produto'))
+            if not resumo:
+                continue
+            if status_ruptura and resumo['status_ruptura'] != status_ruptura:
+                continue
+            resumos.append(resumo)
+
+        _ordenar_resumos_saldo(resumos, ordem_coluna, ordem_direcao)
+
+        # Montar linhas (mesmas colunas da listagem)
+        dados = []
+        for r in resumos:
+            dias_disp = r.get('dias_disponivel')
+            dados.append({
+                'Código': str(r.get('cod_produto', '')),
+                'Produto': r.get('nome_produto', ''),
+                'Est. Inicial (D0)': round(r.get('estoque_inicial', 0) or 0),
+                'Ruptura 7d': round(r.get('previsao_ruptura', 0) or 0),
+                'Disponível (qtd)': round(r.get('qtd_disponivel') or 0),
+                'Disponível em': f'D+{dias_disp}' if dias_disp is not None else '',
+                'Carteira': round(r.get('qtd_total_carteira', 0) or 0),
+                'Produção': round(r.get('qtd_total_producao', 0) or 0),
+                'Status': r.get('status_ruptura', ''),
+            })
+
+        df = pd.DataFrame(dados)
+
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            df.to_excel(writer, index=False, sheet_name='Saldo de Estoque')
+
+            # Aba de resumo com filtros aplicados
+            filtros_aplicados = []
+            if codigo_produto:
+                filtros_aplicados.append(f'Código/Nome: {codigo_produto}')
+            if status_ruptura:
+                filtros_aplicados.append(f'Status: {status_ruptura}')
+            if categoria_filtro:
+                filtros_aplicados.append(f'Categoria: {categoria_filtro}')
+            if embalagem_filtro:
+                filtros_aplicados.append(f'Embalagem: {embalagem_filtro}')
+            if materia_prima_filtro:
+                filtros_aplicados.append(f'Matéria-prima: {materia_prima_filtro}')
+            if linha_producao_filtro:
+                filtros_aplicados.append(f'Linha de produção: {linha_producao_filtro}')
+
+            resumo_data = [
+                f'Total de produtos: {len(dados)}',
+                f'Exportado em: {agora_utc_naive().strftime("%d/%m/%Y %H:%M:%S")}',
+                'Sistema de Fretes — Saldo de Estoque (projeção D0-D28)',
+                '',
+                'Filtros aplicados:',
+            ] + (filtros_aplicados if filtros_aplicados else ['Nenhum filtro aplicado'])
+
+            pd.DataFrame({'Resumo': resumo_data}).to_excel(
+                writer, index=False, sheet_name='Resumo'
+            )
+
+        output.seek(0)
+
+        response = make_response(output.read())
+        response.headers['Content-Disposition'] = (
+            f'attachment; filename=saldo_estoque_{agora_utc_naive().strftime("%Y%m%d_%H%M%S")}.xlsx'
+        )
+        response.headers['Content-Type'] = (
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+        return response
+
+    except Exception as e:
+        logger.error(f"Erro ao exportar saldo de estoque: {str(e)}")
+        flash(f'Erro ao exportar saldo de estoque: {str(e)}', 'error')
+        return redirect(url_for('estoque.saldo_estoque'))
 
 @estoque_bp.route('/movimentacoes/baixar-modelo')
 @login_required

@@ -22,6 +22,9 @@
                             <button type="button" class="btn btn-outline-light" onclick="filtrarProdutos()">
                                 <i class="fas fa-filter"></i> Filtros
                             </button>
+                            <button type="button" class="btn btn-outline-light" onclick="exportarExcel()">
+                                <i class="fas fa-file-excel"></i> Exportar Excel
+                            </button>
                             <button type="button" class="btn btn-outline-light" onclick="recarregarDados()">
                                 <i class="fas fa-sync-alt"></i> Atualizar
                             </button>
@@ -565,85 +568,16 @@ function recarregarDados() {
     location.reload();
 }
 
-// Eventos
-$(document).ready(function() {
-    $('#formAjuste').on('submit', function(e) {
-    e.preventDefault();
-    
-    const codProduto = $('#ajusteCodProduto').val();
-    const quantidade = parseFloat($('#ajusteQuantidade').val());
-    const motivo = $('#ajusteMotivo').val();
-    
-    if (!quantidade || quantidade === 0) {
-        alert('Quantidade deve ser diferente de zero!');
-        return;
-    }
-    
-    if (!motivo.trim()) {
-        alert('Motivo é obrigatório!');
-        return;
-    }
-    
-    // Confirmar ajuste
-    const tipoAjuste = quantidade > 0 ? 'ENTRADA' : 'SAÍDA';
-    const confirmacao = confirm(`Confirma o ajuste de ${tipoAjuste} de ${Math.abs(quantidade)} unidades?\n\nMotivo: ${motivo}`);
-    
-    if (!confirmacao) return;
-    
-    // Enviar ajuste
-    fetch('/estoque/saldo-estoque/processar-ajuste', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': '{{ csrf_token() }}'
-        },
-        body: JSON.stringify({
-            cod_produto: codProduto,
-            qtd_ajuste: quantidade,
-            motivo: motivo
-        })
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            alert(data.message);
-            $('#modalAjuste').modal('hide');
-            recarregarDados();
-        } else {
-            alert('Erro: ' + data.error);
-        }
-    })
-    .catch(error => {
-        alert('Erro de conexão: ' + error.message);
-    });
-    });
-});
+// Exporta a listagem atual para Excel, preservando os filtros/ordenação da URL
+function exportarExcel() {
+    const params = new URLSearchParams(window.location.search);
+    params.delete('page');
+    window.location.href = '/estoque/saldo-estoque/exportar?' + params.toString();
+}
 
-$(document).ready(function() {
-    $('#formFiltros').on('submit', function(e) {
-        e.preventDefault();
-        
-        const codigo = $('#filtroCodigo').val();
-        const status = $('#filtroStatus').val();
-        const categoria = $('#filtroCategoria').val();
-        const embalagem = $('#filtroEmbalagem').val();
-        const materiaPrima = $('#filtroMateriaPrima').val();
-        const linhaProducao = $('#filtroLinhaProducao').val();
-        const limite = $('#filtroLimite').val();
-        
-        const params = new URLSearchParams();
-        if (codigo) params.append('codigo_produto', codigo);
-        if (status) params.append('status_ruptura', status);
-        if (categoria) params.append('categoria', categoria);
-        if (embalagem) params.append('embalagem', embalagem);
-        if (materiaPrima) params.append('materia_prima', materiaPrima);
-        if (linhaProducao) params.append('linha_producao', linhaProducao);
-        if (limite) params.append('limite', limite);
-        
-        // Redirecionar com parâmetros
-        window.location.href = '/estoque/saldo-estoque?' + params.toString();
-    });
-});
+// Eventos: os handlers de submit (#formAjuste e #formFiltros) foram movidos para
+// o bloco "scripts" (no fim do arquivo), pois precisam que o jQuery já esteja
+// carregado — o bloco de conteúdo é renderizado ANTES do jQuery na base.html.
 
 // Função de ordenação server-side
 function serverSort(coluna) {
@@ -1008,5 +942,89 @@ function formatarData(dataStr) {
         year: '2-digit'
     });
 }
+</script>
+{% endblock %}
+
+{# Handlers que dependem do jQuery ficam aqui: este bloco é renderizado APÓS o
+   carregamento das bibliotecas (jQuery/Bootstrap) na base.html. #}
+{% block scripts %}
+<script>
+$(document).ready(function() {
+    // Submit do formulário de ajuste de estoque
+    $('#formAjuste').on('submit', function(e) {
+        e.preventDefault();
+
+        const codProduto = $('#ajusteCodProduto').val();
+        const quantidade = parseFloat($('#ajusteQuantidade').val());
+        const motivo = $('#ajusteMotivo').val();
+
+        if (!quantidade || quantidade === 0) {
+            alert('Quantidade deve ser diferente de zero!');
+            return;
+        }
+
+        if (!motivo.trim()) {
+            alert('Motivo é obrigatório!');
+            return;
+        }
+
+        // Confirmar ajuste
+        const tipoAjuste = quantidade > 0 ? 'ENTRADA' : 'SAÍDA';
+        const confirmacao = confirm(`Confirma o ajuste de ${tipoAjuste} de ${Math.abs(quantidade)} unidades?\n\nMotivo: ${motivo}`);
+
+        if (!confirmacao) return;
+
+        // Enviar ajuste
+        fetch('/estoque/saldo-estoque/processar-ajuste', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': '{{ csrf_token() }}'
+            },
+            body: JSON.stringify({
+                cod_produto: codProduto,
+                qtd_ajuste: quantidade,
+                motivo: motivo
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert(data.message);
+                $('#modalAjuste').modal('hide');
+                recarregarDados();
+            } else {
+                alert('Erro: ' + data.error);
+            }
+        })
+        .catch(error => {
+            alert('Erro de conexão: ' + error.message);
+        });
+    });
+
+    // Submit do formulário de filtros — monta a query string e recarrega
+    $('#formFiltros').on('submit', function(e) {
+        e.preventDefault();
+
+        const codigo = $('#filtroCodigo').val();
+        const status = $('#filtroStatus').val();
+        const categoria = $('#filtroCategoria').val();
+        const embalagem = $('#filtroEmbalagem').val();
+        const materiaPrima = $('#filtroMateriaPrima').val();
+        const linhaProducao = $('#filtroLinhaProducao').val();
+        const limite = $('#filtroLimite').val();
+
+        const params = new URLSearchParams();
+        if (codigo) params.append('codigo_produto', codigo);
+        if (status) params.append('status_ruptura', status);
+        if (categoria) params.append('categoria', categoria);
+        if (embalagem) params.append('embalagem', embalagem);
+        if (materiaPrima) params.append('materia_prima', materiaPrima);
+        if (linhaProducao) params.append('linha_producao', linhaProducao);
+        if (limite) params.append('limite', limite);
+
+        window.location.href = '/estoque/saldo-estoque?' + params.toString();
+    });
+});
 </script>
 {% endblock %} 
