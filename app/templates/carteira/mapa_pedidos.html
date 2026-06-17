@@ -75,6 +75,8 @@
                             <select id="rotaVeiculo" class="form-select form-select-sm d-inline-block w-auto me-3" onchange="atualizarCustoRota()">
                                 <option value="">Automático (por capacidade)</option>
                             </select>
+                            <label class="me-1 small fw-bold">Origem:</label>
+                            <input type="text" id="rotaOrigem" class="form-control form-control-sm d-inline-block me-3" style="width:160px" placeholder="vazio = CD Nacom" title="Endereço de origem (default: CD Nacom Goya)">
                             <label class="me-1 small fw-bold">Dias de viagem:</label>
                             <input type="number" id="rotaDias" class="form-control form-control-sm d-inline-block me-3" min="0" value="0" style="width:80px" title="0 = estimar pelo tempo de viagem" onchange="atualizarCustoRota()">
                             <div class="form-check form-check-inline">
@@ -888,7 +890,8 @@
                 });
 
                 html += `
-                    <div class="cliente-item ${statusClass} ${cliente.na_rota ? 'na-rota' : ''}" data-cliente-id="${cliente.cliente_id}">
+                    <div class="cliente-item ${statusClass} ${cliente.na_rota ? 'na-rota' : ''}" data-cliente-id="${cliente.cliente_id}"
+                         draggable="true" ondragstart="dndStart(event, ${index})" ondragover="dndOver(event)" ondrop="dndDrop(event, ${index})" title="Arraste para reordenar a rota">
                         <div class="d-flex align-items-start">
                             <input type="checkbox" class="cliente-checkbox me-2 mt-1"
                                    data-cliente-id="${cliente.cliente_id}"
@@ -999,7 +1002,7 @@
                 headers: {
                     'X-CSRFToken': getCSRFToken()
                 },
-                data: JSON.stringify({ clientes: clientesSelecionados }),
+                data: JSON.stringify({ clientes: clientesSelecionados, origem: ($('#rotaOrigem').val() || '').trim() || undefined }),
                 success: function (response) {
                     if (response.sucesso) {
                         // Armazenar rota calculada para exportação
@@ -1072,6 +1075,8 @@
                 inclui_volta: $('#rotaVolta').is(':checked'),
                 dias_viagem: parseInt($('#rotaDias').val() || '0', 10)
             };
+            const origem = ($('#rotaOrigem').val() || '').trim();
+            if (origem) payload.origem = origem;
             const veiculoId = $('#rotaVeiculo').val();
             if (veiculoId) payload.veiculo_id = parseInt(veiculoId, 10);
 
@@ -1197,7 +1202,8 @@
                         '<br><small class="text-muted">' + (r.lotes ? r.lotes.length : 0) + ' lote(s)' +
                         (r.custo_total ? ' · R$ ' + r.custo_total.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : '') +
                         ' · ' + (r.criado_em || '') + '</small></div>' +
-                        '<div><button class="btn btn-sm btn-primary me-1" onclick="carregarRota(' + r.id + ')">Abrir</button>' +
+                        '<div><button class="btn btn-sm btn-success me-1" onclick="cotarRotaSalva(' + r.id + ')">Cotar</button>' +
+                        '<button class="btn btn-sm btn-primary me-1" onclick="carregarRota(' + r.id + ')">Abrir</button>' +
                         '<button class="btn btn-sm btn-outline-danger" onclick="excluirRota(' + r.id + ')">Excluir</button></div></div>';
                 });
                 if (rotas.length) html += '</div>';
@@ -1224,6 +1230,35 @@
                         success: function () { abrirRotasSalvas(); }
                     });
                 });
+        }
+
+        // Cotar frete a partir de uma rota salva (reusa o wizard de cotacao)
+        function cotarRotaSalva(id) {
+            $.ajax({
+                url: '/carteira/mapa/api/rota/' + id + '/cotar', method: 'POST',
+                headers: { 'X-CSRFToken': getCSRFToken() },
+                success: function (resp) {
+                    if (resp.sucesso && resp.redirect) window.location.href = resp.redirect;
+                    else Swal.fire('Erro', resp.erro || 'Falha ao cotar', 'error');
+                },
+                error: function (xhr) { Swal.fire('Erro', xhr.responseJSON?.erro || 'Falha ao cotar', 'error'); }
+            });
+        }
+
+        // ===== Drag-and-drop: reordenar manualmente a sequencia da rota =====
+        let _dndFrom = null;
+        function dndStart(ev, idx) { _dndFrom = idx; ev.dataTransfer.effectAllowed = 'move'; }
+        function dndOver(ev) { ev.preventDefault(); ev.dataTransfer.dropEffect = 'move'; }
+        function dndDrop(ev, idx) {
+            ev.preventDefault();
+            if (_dndFrom === null || _dndFrom === idx) { _dndFrom = null; return; }
+            const item = clientesData.splice(_dndFrom, 1)[0];
+            clientesData.splice(idx, 0, item);
+            _dndFrom = null;
+            clientesData.forEach(function (c) { c.na_rota = true; });
+            atualizarListaClientes(clientesData);
+            recalcularTotais();
+            atualizarCustoRota();
         }
 
         // Reordenar painel lateral conforme ordem da rota otimizada
