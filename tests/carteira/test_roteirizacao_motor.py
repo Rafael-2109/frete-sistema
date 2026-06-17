@@ -19,7 +19,7 @@ def test_otimizar_usa_backend_injetado():
     paradas = [{'id': 'A', 'lat': -23.4, 'lng': -46.8},
                {'id': 'B', 'lat': -23.5, 'lng': -46.6}]
 
-    def fake_backend(origem, destino, waypoints, inclui_volta):
+    def fake_backend(origem, destino, waypoints, inclui_volta, respeitar_ordem=False):
         return {'ordem_indices': list(range(len(waypoints))),
                 'distancia_km': 42.0, 'tempo_min': 60.0, 'polyline': 'xyz', 'trechos': 1}
 

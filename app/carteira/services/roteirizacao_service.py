@@ -57,19 +57,24 @@ def _chunk_waypoints(paradas, tam=23):
     return chunks
 
 
-def otimizar_rota(paradas, origem, inclui_volta=False, backend=None):
-    """Otimiza a ordem das paradas e mede a rota. `backend(origem, destino,
-    waypoints, inclui_volta) -> {ordem_indices, distancia_km, tempo_min, polyline, trechos}`.
-    Default backend = Directions+chunking (roteirizacao_backends)."""
+def otimizar_rota(paradas, origem, inclui_volta=False, respeitar_ordem=False, backend=None):
+    """Otimiza (ou apenas mede, se `respeitar_ordem`) a sequencia das paradas.
+
+    `backend(origem, destino, waypoints, inclui_volta, respeitar_ordem) ->
+     {ordem_indices, distancia_km, tempo_min, polyline, trechos, legs, bounds}`.
+    Default backend = default_backend (Route Optimization/Directions+chunking).
+    `respeitar_ordem=True` mede a ordem recebida sem reordenar (drag-and-drop).
+    Retorna tambem `legs` (trechos com duracao_s/distancia_m) e `bounds`, que
+    alimentam o desenho da rota e o "tempo ate aqui" — unificando desenho+custo."""
     if not paradas:
         return {'ordem': [], 'distancia_km': 0.0, 'tempo_min': 0.0,
-                'polyline': '', 'trechos': 0}
+                'polyline': '', 'trechos': 0, 'legs': [], 'bounds': None}
     if backend is None:
         from app.carteira.services.roteirizacao_backends import default_backend
         backend = default_backend
 
     destino = origem if inclui_volta else None
-    res = backend(origem, destino, paradas, inclui_volta)
+    res = backend(origem, destino, paradas, inclui_volta, respeitar_ordem=respeitar_ordem)
     ordem = [paradas[i]['id'] for i in res['ordem_indices']]
     return {
         'ordem': ordem,
@@ -77,6 +82,8 @@ def otimizar_rota(paradas, origem, inclui_volta=False, backend=None):
         'tempo_min': round(res.get('tempo_min', 0.0), 1),
         'polyline': res.get('polyline', ''),
         'trechos': res.get('trechos', 1),
+        'legs': res.get('legs', []),
+        'bounds': res.get('bounds'),
     }
 
 

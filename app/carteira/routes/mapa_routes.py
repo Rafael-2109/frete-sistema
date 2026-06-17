@@ -503,6 +503,8 @@ def rota_otimizar():
 
         inclui_volta = bool(data.get('inclui_volta'))
         dias_viagem = int(data.get('dias_viagem') or 0)
+        # otimizar=False => respeita a ordem recebida (drag-and-drop manual)
+        respeitar_ordem = not bool(data.get('otimizar', True))
 
         # Origem como 'lat,lng' (Route Optimization exige coordenadas; Directions tambem aceita)
         origem_in = data.get('origem')
@@ -514,7 +516,18 @@ def rota_otimizar():
             origem = f"{cd['lat']},{cd['lng']}"
 
         paradas = [{'id': c['id'], 'lat': c['lat'], 'lng': c['lng']} for c in clientes]
-        rota = otimizar_rota(paradas, origem=origem, inclui_volta=inclui_volta)
+        rota = otimizar_rota(paradas, origem=origem, inclui_volta=inclui_volta,
+                             respeitar_ordem=respeitar_ordem)
+
+        # Enriquecer a rota para o DESENHO no mapa (unificacao R1: desenho + custo
+        # vem da MESMA chamada — aliases p/ o formato que o front ja consome).
+        seg = int(round((rota.get('tempo_min') or 0) * 60))
+        rota_out = dict(rota)
+        rota_out['ordem_clientes'] = rota.get('ordem', [])
+        rota_out['ordem_pedidos'] = rota.get('ordem', [])
+        rota_out['distancia_total_km'] = rota.get('distancia_km', 0.0)
+        rota_out['tempo_total_minutos'] = rota.get('tempo_min', 0.0)
+        rota_out['tempo_formatado'] = mapa_service._formatar_tempo(seg)
 
         peso = sum(float(c.get('peso') or 0) for c in clientes)
         pallets = sum(float(c.get('pallet') or 0) for c in clientes)
@@ -532,10 +545,15 @@ def rota_otimizar():
 
         return jsonify({
             'sucesso': True,
-            'rota': rota,
+            'rota': rota_out,
             'veiculo': {
                 'id': veiculo.id, 'nome': veiculo.nome,
                 'peso_maximo': veiculo.peso_maximo,
+                'tipo': veiculo.tipo_veiculo,
+                'eixos': veiculo.qtd_eixos,
+                'capacidade_pallets': veiculo.capacidade_pallets,
+                'capacidade_m3': veiculo.capacidade_m3,
+                'multiplicador_pedagio': veiculo.multiplicador_pedagio,
             } if veiculo else None,
             'custo': {
                 'dias': custo.get('dias', dias_viagem),
@@ -546,6 +564,7 @@ def rota_otimizar():
                 'pedagio': valor_pedagio,
                 'total': total,
             },
+            'pedagio': pedagio if isinstance(pedagio, dict) else None,
         })
     except Exception as e:
         logger.error(f"Erro em rota_otimizar: {e}")

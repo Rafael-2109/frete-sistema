@@ -2,6 +2,9 @@
 
 - directions_chunking_backend: usa Google Directions (key atual). <=23
   intermediarios = 1 request com optimize:true. Acima = chunking sequencial.
+  `respeitar_ordem=True` desliga o optimize:true (mede a sequencia dada, usado
+  pelo drag-and-drop manual). Expoe `legs` (trechos com segundos/metros reais) e
+  `bounds` para o desenho no mapa.
 - route_optimization_backend: Google Route Optimization API (optimizeTours,
   SKU Single Vehicle). Otimizacao GLOBAL real, sem teto de 25 paradas. Requer
   projeto (env ROUTE_OPTIMIZATION_PROJECT) + credencial da service account, por
@@ -9,7 +12,8 @@
   env var — usado no Render) ou ADC padrao (GOOGLE_APPLICATION_CREDENTIALS
   apontando um arquivo/Secret File). GOOGLE_CREDENTIALS_JSON tem prioridade.
 - default_backend: usa Route Optimization se configurado; senao (ou em erro)
-  cai para directions_chunking_backend.
+  cai para directions_chunking_backend. Com respeitar_ordem=True usa SEMPRE
+  Directions (Route Optimization nao fixa ordem barata).
 """
 import os
 import logging
@@ -54,6 +58,47 @@ def _parse_duration_s(dur):
         return 0.0
 
 
+def _fmt_min(segundos):
+    """Segundos -> texto curto de tempo ('1h 14min' / '14 min')."""
+    m = int(round((segundos or 0) / 60.0))
+    if m >= 60:
+        return f"{m // 60}h {m % 60:02d}min"
+    return f"{m} min"
+
+
+def _fmt_km(metros):
+    """Metros -> texto curto de distancia ('12,3 km')."""
+    return f"{(metros or 0) / 1000.0:.1f} km".replace('.', ',')
+
+
+def _merge_bounds(acc, rb):
+    """Une o bounds {northeast,southwest} de um trecho ao acumulado."""
+    if not rb or 'northeast' not in rb or 'southwest' not in rb:
+        return acc
+    ne, sw = rb['northeast'], rb['southwest']
+    if acc is None:
+        return {'northeast': dict(ne), 'southwest': dict(sw)}
+    acc['northeast']['lat'] = max(acc['northeast']['lat'], ne['lat'])
+    acc['northeast']['lng'] = max(acc['northeast']['lng'], ne['lng'])
+    acc['southwest']['lat'] = min(acc['southwest']['lat'], sw['lat'])
+    acc['southwest']['lng'] = min(acc['southwest']['lng'], sw['lng'])
+    return acc
+
+
+def _leg_de_directions(l):
+    """Trecho Directions -> formato unificado (segundos/metros reais + texto)."""
+    dur_s = l['duration']['value']
+    dist_m = l['distance']['value']
+    return {
+        'duracao_s': dur_s,
+        'distancia_m': dist_m,
+        'duracao': l['duration'].get('text') or _fmt_min(dur_s),
+        'distancia': l['distance'].get('text') or _fmt_km(dist_m),
+        'inicio': l.get('start_address'),
+        'fim': l.get('end_address'),
+    }
+
+
 def _ro_token():
     """Access token OAuth2 da service account com scope cloud-platform.
 
@@ -74,8 +119,12 @@ def _ro_token():
     return creds.token
 
 
-def directions_chunking_backend(origem, destino, waypoints, inclui_volta=False):
-    """Retorna ordem otimizada + metricas via Directions API, com chunking de 23."""
+def directions_chunking_backend(origem, destino, waypoints, inclui_volta=False,
+                                respeitar_ordem=False):
+    """Ordem + metricas via Directions API, com chunking de 23.
+
+    respeitar_ordem=True: nao envia optimize:true (mede a sequencia recebida).
+    Retorna tambem `legs` (trechos com duracao_s/distancia_m) e `bounds`."""
     from app.carteira.services.roteirizacao_service import _chunk_waypoints
 
     pontos = list(waypoints)
@@ -83,6 +132,7 @@ def directions_chunking_backend(origem, destino, waypoints, inclui_volta=False):
 
     blocos = _chunk_waypoints(pontos, tam=23)
     ordem_indices, dist_total, tempo_total, polylines = [], 0.0, 0.0, []
+    legs_out, bounds_acc = [], None
     cursor_origem = origem
 
     for bi, bloco in enumerate(blocos):
@@ -104,7 +154,7 @@ def directions_chunking_backend(origem, destino, waypoints, inclui_volta=False):
             'avoid': 'ferries', 'language': 'pt-BR',
         }
         if wp:
-            params['waypoints'] = 'optimize:true|' + wp
+            params['waypoints'] = (wp if respeitar_ordem else 'optimize:true|' + wp)
         resp = requests.get(_BASE_DIRECTIONS, params=params, timeout=30)
         if resp.status_code != 200:
             raise RuntimeError(f"Directions HTTP {resp.status_code}")
@@ -114,8 +164,13 @@ def directions_chunking_backend(origem, destino, waypoints, inclui_volta=False):
         route = data['routes'][0]
         dist_total += sum(l['distance']['value'] for l in route['legs']) / 1000.0
         tempo_total += sum(l['duration']['value'] for l in route['legs']) / 60.0
+        legs_out.extend(_leg_de_directions(l) for l in route['legs'])
+        bounds_acc = _merge_bounds(bounds_acc, route.get('bounds'))
         polylines.append(route['overview_polyline']['points'])
-        order = route.get('waypoint_order', list(range(len(intermediarios))))
+        if respeitar_ordem:
+            order = list(range(len(intermediarios)))
+        else:
+            order = route.get('waypoint_order', list(range(len(intermediarios))))
         ordem_indices.extend(base + idx for idx in order)
         if ponto_destino_idx is not None:
             ordem_indices.append(ponto_destino_idx)  # ponto que virou destino do bloco
@@ -134,12 +189,17 @@ def directions_chunking_backend(origem, destino, waypoints, inclui_volta=False):
         'tempo_min': round(tempo_total, 1),
         'polyline': polylines[0] if len(polylines) == 1 else '|'.join(polylines),
         'trechos': len(blocos),
+        'legs': legs_out,
+        'bounds': bounds_acc,
     }
 
 
-def route_optimization_backend(origem, destino, waypoints, inclui_volta=False):
+def route_optimization_backend(origem, destino, waypoints, inclui_volta=False,
+                               respeitar_ordem=False):
     """Google Route Optimization API (optimizeTours, 1 veiculo). origem/destino
-    sao 'lat,lng'. Otimiza a ordem GLOBAL das paradas (sem teto de 25)."""
+    sao 'lat,lng'. Otimiza a ordem GLOBAL das paradas (sem teto de 25).
+    `respeitar_ordem` e ignorado (a API nao fixa ordem barata; o default_backend
+    encaminha esse modo ao Directions)."""
     project = _ro_project()
     if not project:
         raise RuntimeError("ROUTE_OPTIMIZATION_PROJECT nao configurado")
@@ -168,6 +228,7 @@ def route_optimization_backend(origem, destino, waypoints, inclui_volta=False):
             'globalEndTime': _RO_GLOBAL_END,
         },
         'populatePolylines': True,
+        'populateTransitionPolylines': True,
     }
     url = f"https://routeoptimization.googleapis.com/v1/projects/{project}:optimizeTours"
     headers = {'Authorization': f'Bearer {_ro_token()}', 'Content-Type': 'application/json'}
@@ -192,6 +253,24 @@ def route_optimization_backend(origem, destino, waypoints, inclui_volta=False):
         if i not in visto:
             ordem_indices.append(i)
 
+    # legs por trecho a partir das transitions (alinhadas a sequencia de visits:
+    # transitions[i] antecede visits[i]); usado pelo "tempo ate aqui".
+    legs_out = []
+    for t in route.get('transitions', []):
+        ds = _parse_duration_s(t.get('travelDuration'))
+        dm = t.get('travelDistanceMeters', 0) or 0
+        legs_out.append({
+            'duracao_s': ds, 'distancia_m': dm,
+            'duracao': _fmt_min(ds), 'distancia': _fmt_km(dm),
+            'inicio': None, 'fim': None,
+        })
+
+    # bounds a partir das coordenadas (origem + paradas)
+    lats = [o_lat] + [p['lat'] for p in waypoints]
+    lngs = [o_lng] + [p['lng'] for p in waypoints]
+    bounds = {'northeast': {'lat': max(lats), 'lng': max(lngs)},
+              'southwest': {'lat': min(lats), 'lng': min(lngs)}}
+
     metrics = route.get('metrics', {}) or {}
     dist_km = (metrics.get('travelDistanceMeters', 0) or 0) / 1000.0
     tempo_min = _parse_duration_s(metrics.get('travelDuration') or metrics.get('totalDuration')) / 60.0
@@ -202,11 +281,17 @@ def route_optimization_backend(origem, destino, waypoints, inclui_volta=False):
         'tempo_min': round(tempo_min, 1),
         'polyline': polyline,
         'trechos': 1,
+        'legs': legs_out,
+        'bounds': bounds,
     }
 
 
-def default_backend(origem, destino, waypoints, inclui_volta=False):
-    """Route Optimization se configurado; senao (ou em erro) Directions+chunking."""
+def default_backend(origem, destino, waypoints, inclui_volta=False, respeitar_ordem=False):
+    """Route Optimization se configurado; senao (ou em erro) Directions+chunking.
+    No modo `respeitar_ordem` usa SEMPRE Directions (Route Optimization reordena)."""
+    if respeitar_ordem:
+        return directions_chunking_backend(origem, destino, waypoints, inclui_volta,
+                                           respeitar_ordem=True)
     if _route_optimization_ativo():
         try:
             return route_optimization_backend(origem, destino, waypoints, inclui_volta)
