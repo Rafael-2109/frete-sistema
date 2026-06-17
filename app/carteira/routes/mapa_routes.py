@@ -16,6 +16,9 @@ from app.carteira.services.roteirizacao_service import (
     otimizar_rota, selecionar_veiculo, calcular_custo_operacional,
 )
 from app.veiculos.models import Veiculo
+from app.carteira.models import RotaSalva
+from app import db
+from sqlalchemy import or_
 logger = logging.getLogger(__name__)
 
 # Criar blueprint
@@ -541,3 +544,76 @@ def rota_otimizar():
         import traceback
         logger.error(traceback.format_exc())
         return jsonify({'erro': str(e)}), 500
+
+
+@bp.route('/api/rota/salvar', methods=['POST'])
+@login_required
+def rota_salvar():
+    """Persiste uma rota (agrupamento de lotes + parametros + custo snapshot)."""
+    try:
+        data = request.get_json() or {}
+        if not data.get('lotes'):
+            return jsonify({'erro': 'Rota sem lotes'}), 400
+        custo = data.get('custo') or {}
+        rota = RotaSalva(
+            nome=(data.get('nome') or None),
+            criado_por=getattr(current_user, 'id', None),
+            veiculo_id=data.get('veiculo_id'),
+            origem_endereco=data.get('origem'),
+            inclui_volta=bool(data.get('inclui_volta')),
+            dias_viagem=int(data.get('dias_viagem') or 0),
+            lotes=data.get('lotes'),
+            ordem_otimizada=data.get('ordem_otimizada'),
+            distancia_km=data.get('distancia_km'),
+            tempo_min=data.get('tempo_min'),
+            peso_total=data.get('peso_total'),
+            pallet_total=data.get('pallet_total'),
+            valor_total=data.get('valor_total'),
+            custo_combustivel=custo.get('combustivel'),
+            custo_motorista=custo.get('motorista'),
+            custo_fixo=custo.get('fixo'),
+            custo_depreciacao=custo.get('depreciacao'),
+            custo_pedagio=custo.get('pedagio'),
+            custo_total=custo.get('total'),
+            polyline=data.get('polyline'),
+            status='salva',
+        )
+        db.session.add(rota)
+        db.session.commit()
+        return jsonify({'sucesso': True, 'id': rota.id})
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Erro ao salvar rota: {e}")
+        return jsonify({'erro': str(e)}), 500
+
+
+@bp.route('/api/rotas', methods=['GET'])
+@login_required
+def rota_listar():
+    """Lista as rotas salvas do usuario (inclui rotas sem dono)."""
+    uid = getattr(current_user, 'id', None)
+    q = RotaSalva.query
+    if uid is not None:
+        q = q.filter(or_(RotaSalva.criado_por == uid, RotaSalva.criado_por.is_(None)))
+    rotas = q.order_by(RotaSalva.criado_em.desc()).limit(200).all()
+    return jsonify({'sucesso': True, 'rotas': [r.to_dict() for r in rotas]})
+
+
+@bp.route('/api/rota/<int:rota_id>', methods=['GET'])
+@login_required
+def rota_carregar(rota_id):
+    rota = RotaSalva.query.get(rota_id)
+    if not rota:
+        return jsonify({'erro': 'Rota nao encontrada'}), 404
+    return jsonify({'sucesso': True, 'rota': rota.to_dict()})
+
+
+@bp.route('/api/rota/<int:rota_id>', methods=['DELETE'])
+@login_required
+def rota_excluir(rota_id):
+    rota = RotaSalva.query.get(rota_id)
+    if not rota:
+        return jsonify({'erro': 'Rota nao encontrada'}), 404
+    db.session.delete(rota)
+    db.session.commit()
+    return jsonify({'sucesso': True})
