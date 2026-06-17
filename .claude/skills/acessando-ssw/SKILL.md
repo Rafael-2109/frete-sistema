@@ -44,6 +44,7 @@ Se ambiguo → perguntar: "Voce quer no SSW (CarVia) ou no sistema interno (Naco
 |---------------------------|----------|---------|
 | "como fazer X no SSW" / passo a passo | POP correspondente | ROUTING_SSW.md → secao "Mapa Intencao→POP" |
 | "o que e opcao NNN" | Doc de opcao | ROUTING_SSW.md → secao "Mapa Intencao→Opcao" |
+| **BAIXAR o XML / DACTE de um CT-e** (por NF, CTRC ou CTe) — download real, nao a doc | **operando-ssw** (capacidade READ-ONLY, opcao 101) | `consultar_ctrc_101.py --nf <numero> --baixar-xml [--baixar-dacte]` → entregar via `exportando-arquivos` |
 | "fluxo completo de X" | Fluxo end-to-end | `fluxos/INDEX.md` → identificar FNN → ler `fluxos/FNN.md` |
 | "CarVia faz X?" | Status de adocao | CARVIA_STATUS.md |
 | "visao geral do modulo X" | Visao geral | visao-geral/NN-modulo.md |
