@@ -28,13 +28,13 @@ atualizado: 2026-06-17
 
 ## Estado atual
 
-As 3 FASES IMPLEMENTADAS + Route Optimization API REAL, **mergeadas na `main`** (origem: branch `worktree-roteirizacao-ver-no-mapa`). **38 testes verdes** (PostgreSQL local); migrations aplicadas no banco local **e em PROD** (`veiculos`+8 campos, `geocode_cache`, `rota_salva`) — ver nota de incidente abaixo; smoke de render dos templates = 200. Toda a demanda original coberta + R1 resolvido (Route Optimization validado contra a API real). **Credenciais GCP gravadas no Render PROD** (`ROUTE_OPTIMIZATION_PROJECT` + `GOOGLE_CREDENTIALS_JSON`) — Route Optimization fica ativo no proximo deploy. PENDENTE: smoke VISUAL no browser; validar Route Optimization ativo em PROD apos o deploy do push.
+**PROJETO CONCLUIDO (17/06/2026).** As 3 FASES + Route Optimization API REAL **em PROD e VALIDADAS**. **38 testes verdes** (PostgreSQL local); migrations aplicadas no banco local **e em PROD** (`veiculos`+8 campos, `geocode_cache`, `rota_salva`); render dos templates = 200. R1 resolvido (Route Optimization validado contra a API real). Credenciais GCP em PROD (`ROUTE_OPTIMIZATION_PROJECT` + `GOOGLE_CREDENTIALS_JSON`). **Smoke real em PROD (17/06):** `POST /carteira/mapa/api/rota/otimizar` = 200 (1.2-1.8s), sem warning de fallback → Route Optimization ativo de fato. Conformidade proposto×implementado verificada item a item (ver "Validacao final" abaixo).
 
 | Fase | Escopo | Status |
 |------|--------|--------|
-| **1 — Fundacao de custo + motor** | migration `veiculos` (8 campos) + CRUD; service custo/selecao/motor (chunking 25); API `/api/rota/otimizar`; UI parametros + card de custo | IMPLEMENTADA (branch worktree; 20 testes verdes; falta smoke browser + push) |
-| **2 — Interatividade + persistencia** | incluir/remover on-demand; tabela `rota_salva` (salvar/nomear/listar); `geocode_cache` persistente | IMPLEMENTADA (branch worktree; 11 testes F2 verdes; falta smoke browser + push) |
-| **3 — Cotacao por rota + extras** | cotar a partir de rota salva (reusa wizard); reordenar drag-and-drop; origem configuravel | IMPLEMENTADA (branch worktree; 3 testes F3 verdes; falta smoke browser + push) |
+| **1 — Fundacao de custo + motor** | migration `veiculos` (8 campos) + CRUD; service custo/selecao/motor (chunking 25); API `/api/rota/otimizar`; UI parametros + card de custo | ✅ CONCLUIDA — em PROD, smoke real OK |
+| **2 — Interatividade + persistencia** | incluir/remover on-demand; tabela `rota_salva` (salvar/nomear/listar); `geocode_cache` persistente | ✅ CONCLUIDA — em PROD |
+| **3 — Cotacao por rota + extras** | cotar a partir de rota salva (reusa wizard); reordenar drag-and-drop; origem configuravel | ✅ CONCLUIDA — em PROD |
 
 Tasks da Fase 1:
 
@@ -61,15 +61,61 @@ Tasks da Fase 3:
 
 Ajustes vs plano (durante a execucao TDD): (a) fixture `_isola_veiculos` desativa os 10 veiculos pre-existentes do banco em `test_roteirizacao_selecao` (savepoint reverte); (b) `otimizar_rota` checa lista vazia ANTES de importar o backend (bug pego pelo teste); (c) backend adiciona o ponto que vira destino na ordem quando nao ha volta (espelha `mapa_service` original); (d) `api/lista` converte `Numeric`->float (jsonify nao serializa Decimal).
 
+## Validacao final (proposto × implementado) — 17/06/2026
+
+Cruzamento item a item da spec/planos contra o codigo em PROD. **Foco em UI** (validado lendo `mapa_pedidos.html` + `admin_veiculos.html`); backend coberto por 38 testes + smoke real.
+
+### UI — painel de parametros (Fase 1 T7)
+| Proposto | Implementado | Evidencia |
+|----------|--------------|-----------|
+| `<select id="rotaVeiculo">` + opcao "Automatico" | ✅ | `mapa_pedidos.html:75-77` (`onchange=atualizarCustoRota`) |
+| input dias de viagem | ✅ | `:80-81` (`#rotaDias`, min 0, default 0) |
+| checkbox "considerar volta" | ✅ | `:82-84` (`#rotaVolta`) |
+| origem configuravel (vazio = CD) | ✅ | `:78-79` (`#rotaOrigem`) — Fase 3 |
+
+### UI — card de custo (Fase 1 T7)
+| Proposto | Implementado | Evidencia |
+|----------|--------------|-----------|
+| combustivel / motorista / fixo / depreciacao / total | ✅ | `:140-145` (`#custoCombustivel..#custoTotal`) |
+| dias + pedagio | ✅ | `:144` (`#custoDias`), `:132` (`#pedagioEstimado`) |
+| recalcula ao mudar parametro | ✅ | `atualizarCustoRota()` `:1059-1106`; onchange em veiculo/dias/volta |
+
+### UI — interatividade e persistencia (Fase 2 T5 / Fase 3 T2)
+| Proposto | Implementado | Evidencia |
+|----------|--------------|-----------|
+| incluir pedido on-demand (input + botao) | ✅ | `:86-88` (`#addPedidoInput`), `adicionarPedidoMapa()` `:1112` |
+| remover recalcula custo | ✅ | checkbox cliente `onchange="recalcularTotais(); atualizarCustoRota()"` `:896-899` |
+| salvar/nomear rota | ✅ | botao `:89`, `salvarRota()` `:1158` |
+| listar rotas salvas (modal) | ✅ | botao `:90`, `abrirRotasSalvas()` `:1195` |
+| carregar / excluir rota | ✅ | `carregarRota()` `:1214`, `excluirRota()` `:1223` |
+| cotar frete da rota | ✅ | botao "Cotar" `:1205`, `cotarRotaSalva()` `:1236` → redirect wizard |
+| drag-and-drop reordenar | ✅ | `draggable` `:894`, `dndStart/dndOver/dndDrop` `:1249-1262` |
+
+### UI — CRUD de custos no admin de veiculos (Fase 1 T7)
+| Proposto | Implementado | Evidencia |
+|----------|--------------|-----------|
+| inputs dos 7 campos custo/capacidade (criar) | ✅ | `admin_veiculos.html:267-280` |
+| idem (editar) + populados | ✅ | `:377-390` + `:458-464` (data-attrs) |
+| checkbox `ativo` | ✅ editar (`:393`) / ⚠️ ausente no CRIAR (nasce `ativo=true` por default da migration) |
+
+### Divergencias vs plano (todas aceitaveis)
+- **`/api/rota/recalcular`** (proposto na spec, Fase 2) NAO virou endpoint separado: `atualizarCustoRota()` reusa `POST /api/rota/otimizar`. Equivalente funcional, menos superficie de API.
+- **Pedagio** e exibido no card de estatisticas (`#pedagioEstimado`), nao numa celula do card de custo dedicado; atualizado no mesmo fluxo e salvo na rota. Cosmetico.
+- **Checkbox `ativo`** presente no form EDITAR, ausente no CRIAR (default `TRUE` no banco cobre). Menor.
+
+**Conclusao:** 100% dos itens de UI propostos estao implementados e validados; nenhuma lacuna funcional. Divergencias sao simplificacoes/cosmeticas.
+
 ## Pendencias
 
 - **R1 — Route Optimization API:** RESOLVIDO (17/06/2026). `route_optimization_backend` implementado (optimizeTours via service account / google-auth) e **validado contra a API real** (ordem otimizada + distancia/tempo/polyline; ex.: 3 paradas SP = 72,34 km / 107,6 min). `default_backend` usa Route Optimization quando `ROUTE_OPTIMIZATION_PROJECT` esta setado; senao cai para Directions+chunking (fallback automatico em erro). Projeto = `dynamic-heading-434921-q5`; SA = `sistema-fretes-routes-api@...` (role Route Optimization Editor). Janela global = 7 dias; metrica = `travelDuration`. Credencial: `_ro_token()` prioriza `GOOGLE_CREDENTIALS_JSON` (conteudo do JSON da SA na env var) e cai para ADC padrao (`GOOGLE_APPLICATION_CREDENTIALS`) se ausente — ambos os caminhos cobertos por teste.
 - **PROD (Render) — Route Optimization ATIVADO:** env vars gravadas em PROD (`sistema-fretes` / `srv-d13m38vfte5s738t6p60`) via Render API em 17/06/2026: `ROUTE_OPTIMIZATION_PROJECT=dynamic-heading-434921-q5` + `GOOGLE_CREDENTIALS_JSON` (JSON da SA, 2373 bytes). Optou-se por env var JSON em vez de Secret File pois o MCP/automacao so grava env vars; o token OAuth2 foi validado localmente lendo a credencial pela env var. A chave NAO esta no git (vive em `.secrets/route-optimization-sa.json` no dev, gitignorada). Fica efetivo no proximo deploy (o do push desta entrega — gravar env var nao disparou redeploy).
 - **R4 — Geocoding sem persistencia:** RESOLVIDO na Fase 2 (`geocode_cache` L2 no banco; L1 memoria -> L2 banco -> Google).
-- **Smoke visual (browser):** validar no navegador o painel de parametros + card de custo no mapa e o cadastro de custos no admin de veiculos (nao automatizado nesta sessao).
-- **Push/PR:** CONCLUIDO (17/06/2026) — merge fast-forward na `main` + push. Worktree `worktree-roteirizacao-ver-no-mapa` pode ser removida.
-- **Custo Google na Fase 1:** o card chama `/api/rota/otimizar` (1 request Directions) ALEM do desenho via `/api/rota-clientes` — 2 roteirizacoes por calculo. Unificar na Fase 2/3 (aceitavel agora; Directions optimize dentro do free tier).
-- **Proximo passo:** apos o deploy do push concluir em PROD, validar Route Optimization ativo (1 calculo real no mapa -> conferir `trechos=1` e ausencia de warning de fallback nos logs) + smoke VISUAL no browser. Roadmap das 3 fases + R1 entregue e credencial PROD configurada.
+- **Smoke (browser/PROD):** CONCLUIDO (17/06/2026) — Rafael fez o smoke real; `/carteira/mapa/api/rota/otimizar` = 200 sem fallback. Validacao UI item a item registrada acima.
+- **Push/PR:** CONCLUIDO (17/06/2026) — merge fast-forward na `main` + push; worktree removida.
+- **Backlog (nao bloqueia):**
+  - Card chama `/api/rota/otimizar` ALEM do desenho via `/api/rota-clientes` — 2 roteirizacoes por calculo. Unificar (aceitavel; dentro do free tier).
+  - Adicionar checkbox `ativo` ao form de CRIAR veiculo (hoje so no editar; novo veiculo nasce `ativo=true`).
+  - Empacotador 3D de motos / multi-veiculo (VRP) / comparativo custo real — fora de escopo desta entrega (outra sessao).
 
 ## Atualizado
 
@@ -80,3 +126,4 @@ Ajustes vs plano (durante a execucao TDD): (a) fixture `_isola_veiculos` desativ
 - **2026-06-17 (5):** R1 RESOLVIDO — Route Optimization API real (optimizeTours via service account) implementada e VALIDADA contra a API ao vivo; fallback Directions automatico; google-auth==2.55.0; credencial em `.secrets/` (gitignore). **36 testes verdes**. Pendente: smoke browser + push/PR + credenciais no Render.
 - **2026-06-17 (6):** ENTREGA — `_ro_token()` passa a aceitar `GOOGLE_CREDENTIALS_JSON` (credencial via env var, p/ Render) alem de ADC, com 2 testes novos (**38 testes verdes**). Env vars gravadas em PROD via Render API (`ROUTE_OPTIMIZATION_PROJECT` + `GOOGLE_CREDENTIALS_JSON`, ambos HTTP 200). Merge fast-forward na `main` + push. Route Optimization ativo no proximo deploy. Pendente: validar em PROD pos-deploy + smoke browser.
 - **2026-06-17 (7):** INCIDENTE PROD + FIX — apos o deploy, `/pedidos/lista_pedidos` deu 500 (`UndefinedColumn: veiculos.custo_km`): a migration `2026_06_16_veiculo_parametros_custo.sql` (8 colunas em `veiculos`) nao havia sido aplicada em PROD. O boot (`create_all`) cria TABELAS novas (`geocode_cache`/`rota_salva` ja existiam) mas NAO adiciona colunas a tabela existente — colunas novas exigem rodar o `.sql` em PROD. Apliquei as 3 migrations idempotentes via `DATABASE_URL_PROD`; `lista_pedidos` voltou a 200. LICAO: aplicar migration de coluna em PROD ANTES/junto do push (o deploy do Render nao roda `scripts/migrations/*.sql`).
+- **2026-06-17 (8):** PROJETO CONCLUIDO — smoke real em PROD pelo Rafael (`/carteira/mapa/api/rota/otimizar` = 200, Route Optimization ativo sem fallback). Resgate proposto×implementado + validacao UI item a item (painel, card de custo, incluir/remover, salvar/listar/carregar/excluir/cotar, drag-and-drop, CRUD admin veiculos): 100% coberto, 0 lacuna funcional; 3 divergencias menores documentadas (recalcular reusa otimizar; pedagio no card de stats; `ativo` so no editar). Encerrado.
