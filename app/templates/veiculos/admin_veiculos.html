@@ -147,6 +147,14 @@
                           data-veiculo-comp-bau="{{ veiculo.comprimento_bau or '' }}"
                           data-veiculo-larg-bau="{{ veiculo.largura_bau or '' }}"
                           data-veiculo-alt-bau="{{ veiculo.altura_bau or '' }}"
+                          data-veiculo-custo-km="{{ veiculo.custo_km if veiculo.custo_km is not none else '' }}"
+                          data-veiculo-custo-mot="{{ veiculo.custo_motorista_dia if veiculo.custo_motorista_dia is not none else '' }}"
+                          data-veiculo-custo-fixo="{{ veiculo.custo_fixo_dia if veiculo.custo_fixo_dia is not none else '' }}"
+                          data-veiculo-deprec="{{ veiculo.depreciacao_mensal if veiculo.depreciacao_mensal is not none else '' }}"
+                          data-veiculo-cap-pallets="{{ veiculo.capacidade_pallets if veiculo.capacidade_pallets is not none else '' }}"
+                          data-veiculo-cap-m3="{{ veiculo.capacidade_m3 if veiculo.capacidade_m3 is not none else '' }}"
+                          data-veiculo-vel="{{ veiculo.velocidade_media_kmh if veiculo.velocidade_media_kmh is not none else '' }}"
+                          data-veiculo-ativo="{{ 'true' if veiculo.ativo else 'false' }}"
                           title="Editar Veículo">
                     <i class="fas fa-edit"></i>
                   </button>
@@ -252,6 +260,26 @@
             </div>
           </div>
           <small class="text-muted">Dimensões internas do baú para cálculo de capacidade de motos.</small>
+
+          <hr>
+          <h6 class="mb-3"><i class="fas fa-dollar-sign me-1"></i> Custos e capacidade (roteirização)</h6>
+          <div class="row g-2">
+            <div class="col-6"><label class="form-label"><small>Custo R$/km</small></label>
+              <input type="number" step="0.01" min="0" class="form-control form-control-sm" name="custo_km" id="custo_km" placeholder="R$/km"></div>
+            <div class="col-6"><label class="form-label"><small>Motorista R$/dia</small></label>
+              <input type="number" step="0.01" min="0" class="form-control form-control-sm" name="custo_motorista_dia" id="custo_motorista_dia" placeholder="R$/dia"></div>
+            <div class="col-6"><label class="form-label"><small>Fixo R$/dia</small></label>
+              <input type="number" step="0.01" min="0" class="form-control form-control-sm" name="custo_fixo_dia" id="custo_fixo_dia" placeholder="R$/dia"></div>
+            <div class="col-6"><label class="form-label"><small>Depreciação R$/mês</small></label>
+              <input type="number" step="0.01" min="0" class="form-control form-control-sm" name="depreciacao_mensal" id="depreciacao_mensal" placeholder="R$/mês"></div>
+            <div class="col-4"><label class="form-label"><small>Cap. pallets</small></label>
+              <input type="number" step="1" min="0" class="form-control form-control-sm" name="capacidade_pallets" id="capacidade_pallets"></div>
+            <div class="col-4"><label class="form-label"><small>Cap. m³</small></label>
+              <input type="number" step="0.1" min="0" class="form-control form-control-sm" name="capacidade_m3" id="capacidade_m3"></div>
+            <div class="col-4"><label class="form-label"><small>Vel. média km/h</small></label>
+              <input type="number" step="1" min="0" class="form-control form-control-sm" name="velocidade_media_kmh" id="velocidade_media_kmh"></div>
+          </div>
+          <small class="text-muted">Usados no cálculo de custo da rota (Ver no Mapa).</small>
         </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
@@ -342,6 +370,30 @@
             </div>
           </div>
           <small class="text-muted">Dimensões internas do baú para cálculo de capacidade de motos.</small>
+
+          <hr>
+          <h6 class="mb-3"><i class="fas fa-dollar-sign me-1"></i> Custos e capacidade (roteirização)</h6>
+          <div class="row g-2">
+            <div class="col-6"><label class="form-label"><small>Custo R$/km</small></label>
+              <input type="number" step="0.01" min="0" class="form-control form-control-sm" name="custo_km" id="edit_custo_km" placeholder="R$/km"></div>
+            <div class="col-6"><label class="form-label"><small>Motorista R$/dia</small></label>
+              <input type="number" step="0.01" min="0" class="form-control form-control-sm" name="custo_motorista_dia" id="edit_custo_motorista_dia" placeholder="R$/dia"></div>
+            <div class="col-6"><label class="form-label"><small>Fixo R$/dia</small></label>
+              <input type="number" step="0.01" min="0" class="form-control form-control-sm" name="custo_fixo_dia" id="edit_custo_fixo_dia" placeholder="R$/dia"></div>
+            <div class="col-6"><label class="form-label"><small>Depreciação R$/mês</small></label>
+              <input type="number" step="0.01" min="0" class="form-control form-control-sm" name="depreciacao_mensal" id="edit_depreciacao_mensal" placeholder="R$/mês"></div>
+            <div class="col-4"><label class="form-label"><small>Cap. pallets</small></label>
+              <input type="number" step="1" min="0" class="form-control form-control-sm" name="capacidade_pallets" id="edit_capacidade_pallets"></div>
+            <div class="col-4"><label class="form-label"><small>Cap. m³</small></label>
+              <input type="number" step="0.1" min="0" class="form-control form-control-sm" name="capacidade_m3" id="edit_capacidade_m3"></div>
+            <div class="col-4"><label class="form-label"><small>Vel. média km/h</small></label>
+              <input type="number" step="1" min="0" class="form-control form-control-sm" name="velocidade_media_kmh" id="edit_velocidade_media_kmh"></div>
+          </div>
+          <div class="form-check mt-2">
+            <input type="checkbox" class="form-check-input" id="edit_ativo" name="ativo">
+            <label class="form-check-label" for="edit_ativo">Ativo (listável na roteirização)</label>
+          </div>
+          <small class="text-muted">Usados no cálculo de custo da rota (Ver no Mapa).</small>
         </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
@@ -401,6 +453,16 @@ document.getElementById('modalEditarVeiculo').addEventListener('show.bs.modal', 
     document.getElementById('edit_comprimento_bau').value = button.getAttribute('data-veiculo-comp-bau') || '';
     document.getElementById('edit_largura_bau').value = button.getAttribute('data-veiculo-larg-bau') || '';
     document.getElementById('edit_altura_bau').value = button.getAttribute('data-veiculo-alt-bau') || '';
+
+    // Custos e capacidade (roteirizacao)
+    document.getElementById('edit_custo_km').value = button.getAttribute('data-veiculo-custo-km') || '';
+    document.getElementById('edit_custo_motorista_dia').value = button.getAttribute('data-veiculo-custo-mot') || '';
+    document.getElementById('edit_custo_fixo_dia').value = button.getAttribute('data-veiculo-custo-fixo') || '';
+    document.getElementById('edit_depreciacao_mensal').value = button.getAttribute('data-veiculo-deprec') || '';
+    document.getElementById('edit_capacidade_pallets').value = button.getAttribute('data-veiculo-cap-pallets') || '';
+    document.getElementById('edit_capacidade_m3').value = button.getAttribute('data-veiculo-cap-m3') || '';
+    document.getElementById('edit_velocidade_media_kmh').value = button.getAttribute('data-veiculo-vel') || '';
+    document.getElementById('edit_ativo').checked = button.getAttribute('data-veiculo-ativo') === 'true';
 
     // Atualizar fator de pedágio
     atualizarFatorPedagioEdit();

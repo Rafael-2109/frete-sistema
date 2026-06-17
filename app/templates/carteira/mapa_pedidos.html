@@ -69,6 +69,20 @@
                             </select>
                         </div>
                     </div>
+                    <div class="row align-items-center mt-2">
+                        <div class="col-12">
+                            <label class="me-1 small fw-bold">Veículo:</label>
+                            <select id="rotaVeiculo" class="form-select form-select-sm d-inline-block w-auto me-3" onchange="atualizarCustoRota()">
+                                <option value="">Automático (por capacidade)</option>
+                            </select>
+                            <label class="me-1 small fw-bold">Dias de viagem:</label>
+                            <input type="number" id="rotaDias" class="form-control form-control-sm d-inline-block me-3" min="0" value="0" style="width:80px" title="0 = estimar pelo tempo de viagem" onchange="atualizarCustoRota()">
+                            <div class="form-check form-check-inline">
+                                <input type="checkbox" class="form-check-input" id="rotaVolta" onchange="atualizarCustoRota()">
+                                <label class="form-check-label small" for="rotaVolta">Considerar volta ao CD</label>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -111,6 +125,16 @@
                     <div class="stat-label">Pedágio Estimado</div>
                 </div>
             </div>
+        </div>
+
+        <!-- Custo da rota (parametrico por tipo de veiculo) -->
+        <div class="row mb-3" id="custoRotaRow" style="display: none;">
+            <div class="col-md-2"><div class="stats-card"><div class="stat-value" id="custoCombustivel">R$ 0</div><div class="stat-label">Combustível</div></div></div>
+            <div class="col-md-2"><div class="stats-card"><div class="stat-value" id="custoMotorista">R$ 0</div><div class="stat-label">Motorista</div></div></div>
+            <div class="col-md-2"><div class="stats-card"><div class="stat-value" id="custoFixo">R$ 0</div><div class="stat-label">Fixo</div></div></div>
+            <div class="col-md-2"><div class="stats-card"><div class="stat-value" id="custoDepreciacao">R$ 0</div><div class="stat-label">Depreciação</div></div></div>
+            <div class="col-md-2"><div class="stats-card"><div class="stat-value" id="custoDias">0</div><div class="stat-label">Dias</div></div></div>
+            <div class="col-md-2"><div class="stats-card bg-success text-white"><div class="stat-value" id="custoTotal">R$ 0</div><div class="stat-label">Custo Total</div></div></div>
         </div>
 
         <!-- Mapa Container -->
@@ -994,6 +1018,9 @@
                         reordenarPainelLateral(response.rota.ordem_clientes);
 
                         mostrarEstatisticasRotaCompleta(response.rota, response.estatisticas, response.veiculo, response.pedagio);
+
+                        // Custo parametrico por tipo de veiculo (usa parametros da UI)
+                        atualizarCustoRota();
                     }
                     hideLoading();
                 },
@@ -1003,6 +1030,72 @@
                 }
             });
         }
+
+        // Carrega o select de veiculos (tipos) com parametros de custo
+        let veiculosCusto = [];
+        function carregarVeiculosSelect() {
+            $.getJSON('/veiculos/api/lista', function (lista) {
+                veiculosCusto = lista || [];
+                const sel = $('#rotaVeiculo');
+                sel.find('option:not(:first)').remove();
+                veiculosCusto.forEach(function (v) {
+                    if (v.ativo === false) return;
+                    sel.append('<option value="' + v.id + '">' + v.nome +
+                        ' (' + (v.peso_maximo || 0).toLocaleString('pt-BR') + ' kg)</option>');
+                });
+            });
+        }
+
+        // Calcula o custo parametrico da rota (API /api/rota/otimizar) e preenche o card
+        function atualizarCustoRota() {
+            const selecionados = getClientesSelecionados();
+            if (!selecionados || selecionados.length < 1) return;
+            const clientes = selecionados.filter(function (c) { return c.coordenadas; }).map(function (c) {
+                return {
+                    id: c.cliente_id,
+                    lat: c.coordenadas.lat,
+                    lng: c.coordenadas.lng,
+                    peso: c.totais ? c.totais.peso : 0,
+                    pallet: c.totais ? c.totais.pallet : 0,
+                    m3: 0
+                };
+            });
+            if (clientes.length < 1) return;
+            const payload = {
+                clientes: clientes,
+                inclui_volta: $('#rotaVolta').is(':checked'),
+                dias_viagem: parseInt($('#rotaDias').val() || '0', 10)
+            };
+            const veiculoId = $('#rotaVeiculo').val();
+            if (veiculoId) payload.veiculo_id = parseInt(veiculoId, 10);
+
+            $.ajax({
+                url: '/carteira/mapa/api/rota/otimizar',
+                method: 'POST',
+                contentType: 'application/json',
+                headers: { 'X-CSRFToken': getCSRFToken() },
+                data: JSON.stringify(payload),
+                success: function (resp) {
+                    if (!resp || !resp.sucesso) return;
+                    const c = resp.custo || {};
+                    const fmt = function (v) {
+                        return 'R$ ' + (v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+                    };
+                    $('#custoCombustivel').text(fmt(c.combustivel));
+                    $('#custoMotorista').text(fmt(c.motorista));
+                    $('#custoFixo').text(fmt(c.fixo));
+                    $('#custoDepreciacao').text(fmt(c.depreciacao));
+                    $('#custoDias').text(c.dias || 0);
+                    $('#custoTotal').text(fmt(c.total));
+                    $('#pedagioEstimado').text(fmt(c.pedagio));
+                    if (resp.veiculo) $('#veiculoSelecionado').text(resp.veiculo.nome);
+                    $('#custoRotaRow').show();
+                }
+            });
+        }
+
+        // Popular select de veiculos ao abrir a pagina
+        $(function () { carregarVeiculosSelect(); });
 
         // Reordenar painel lateral conforme ordem da rota otimizada
         function reordenarPainelLateral(ordemClientes) {
