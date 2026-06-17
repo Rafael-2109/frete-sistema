@@ -1,4 +1,4 @@
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 from app.carteira.services import roteirizacao_backends as b
 
 PARADAS = [{'lat': -23.1, 'lng': -46.1}, {'lat': -23.2, 'lng': -46.2}, {'lat': -23.3, 'lng': -46.3}]
@@ -77,3 +77,28 @@ def test_default_backend_fallback_em_erro(monkeypatch):
         r = b.default_backend('-23,-46', None, PARADAS, False)
     assert mock_dir.called
     assert r['polyline'] == 'd'
+
+
+def test_ro_token_usa_credentials_json_quando_setado(monkeypatch):
+    """GOOGLE_CREDENTIALS_JSON (conteudo do JSON da SA, p/ Render) tem prioridade sobre ADC."""
+    monkeypatch.setenv('GOOGLE_CREDENTIALS_JSON',
+                       '{"type": "service_account", "project_id": "p", "private_key": "k"}')
+    fake_creds = MagicMock(token='tok-json')
+    with patch('google.oauth2.service_account.Credentials.from_service_account_info',
+               return_value=fake_creds) as mk_info, \
+         patch('google.auth.transport.requests.Request'):
+        tok = b._ro_token()
+    assert tok == 'tok-json'
+    info = mk_info.call_args.args[0]
+    assert info['type'] == 'service_account' and info['project_id'] == 'p'
+
+
+def test_ro_token_cai_para_adc_sem_credentials_json(monkeypatch):
+    """Sem GOOGLE_CREDENTIALS_JSON, mantem ADC (google.auth.default) — retrocompativel."""
+    monkeypatch.delenv('GOOGLE_CREDENTIALS_JSON', raising=False)
+    fake_creds = MagicMock(token='tok-adc')
+    with patch('google.auth.default', return_value=(fake_creds, 'proj')) as mk_default, \
+         patch('google.auth.transport.requests.Request'):
+        tok = b._ro_token()
+    assert tok == 'tok-adc'
+    assert mk_default.called

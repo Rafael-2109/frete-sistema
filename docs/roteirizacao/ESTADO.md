@@ -4,7 +4,7 @@ camada: L1
 sot_de: estado vivo do projeto de ampliacao da roteirizacao "Ver no Mapa" (fonte unica de progresso das 3 fases)
 hub: docs/INDEX.md
 superseded_by: —
-atualizado: 2026-06-16
+atualizado: 2026-06-17
 -->
 # Roteirizacao "Ver no Mapa" — ESTADO
 
@@ -28,7 +28,7 @@ atualizado: 2026-06-16
 
 ## Estado atual
 
-As 3 FASES IMPLEMENTADAS + Route Optimization API REAL no branch `worktree-roteirizacao-ver-no-mapa`. **36 testes verdes** (PostgreSQL local); migrations aplicadas no banco local (`veiculos`+8 campos, `geocode_cache`, `rota_salva`); smoke de render dos templates = 200. Toda a demanda original coberta + R1 resolvido (Route Optimization validado contra a API real). PENDENTE: smoke VISUAL no browser, push/PR e configurar credenciais GCP no Render (PROD).
+As 3 FASES IMPLEMENTADAS + Route Optimization API REAL, **mergeadas na `main`** (origem: branch `worktree-roteirizacao-ver-no-mapa`). **38 testes verdes** (PostgreSQL local); migrations aplicadas no banco local (`veiculos`+8 campos, `geocode_cache`, `rota_salva`); smoke de render dos templates = 200. Toda a demanda original coberta + R1 resolvido (Route Optimization validado contra a API real). **Credenciais GCP gravadas no Render PROD** (`ROUTE_OPTIMIZATION_PROJECT` + `GOOGLE_CREDENTIALS_JSON`) — Route Optimization fica ativo no proximo deploy. PENDENTE: smoke VISUAL no browser; validar Route Optimization ativo em PROD apos o deploy do push.
 
 | Fase | Escopo | Status |
 |------|--------|--------|
@@ -63,13 +63,13 @@ Ajustes vs plano (durante a execucao TDD): (a) fixture `_isola_veiculos` desativ
 
 ## Pendencias
 
-- **R1 — Route Optimization API:** RESOLVIDO (17/06/2026). `route_optimization_backend` implementado (optimizeTours via service account / google-auth ADC) e **validado contra a API real** (ordem otimizada + distancia/tempo/polyline; ex.: 3 paradas SP = 72,34 km / 107,6 min). `default_backend` usa Route Optimization quando `ROUTE_OPTIMIZATION_PROJECT` esta setado; senao cai para Directions+chunking (fallback automatico em erro). Projeto = `dynamic-heading-434921-q5`; SA = `sistema-fretes-routes-api@...` (role Route Optimization Editor). Janela global = 7 dias; metrica = `travelDuration`.
-- **PROD (Render) — configurar p/ ativar Route Optimization:** (1) `ROUTE_OPTIMIZATION_PROJECT=dynamic-heading-434921-q5`; (2) subir o JSON da SA como **Secret File** no Render e apontar `GOOGLE_APPLICATION_CREDENTIALS` para o path dele. Sem isso, PROD opera em Directions+chunking (sem quebrar). A chave NAO esta no git (vive em `.secrets/` no dev local, gitignorada).
+- **R1 — Route Optimization API:** RESOLVIDO (17/06/2026). `route_optimization_backend` implementado (optimizeTours via service account / google-auth) e **validado contra a API real** (ordem otimizada + distancia/tempo/polyline; ex.: 3 paradas SP = 72,34 km / 107,6 min). `default_backend` usa Route Optimization quando `ROUTE_OPTIMIZATION_PROJECT` esta setado; senao cai para Directions+chunking (fallback automatico em erro). Projeto = `dynamic-heading-434921-q5`; SA = `sistema-fretes-routes-api@...` (role Route Optimization Editor). Janela global = 7 dias; metrica = `travelDuration`. Credencial: `_ro_token()` prioriza `GOOGLE_CREDENTIALS_JSON` (conteudo do JSON da SA na env var) e cai para ADC padrao (`GOOGLE_APPLICATION_CREDENTIALS`) se ausente — ambos os caminhos cobertos por teste.
+- **PROD (Render) — Route Optimization ATIVADO:** env vars gravadas em PROD (`sistema-fretes` / `srv-d13m38vfte5s738t6p60`) via Render API em 17/06/2026: `ROUTE_OPTIMIZATION_PROJECT=dynamic-heading-434921-q5` + `GOOGLE_CREDENTIALS_JSON` (JSON da SA, 2373 bytes). Optou-se por env var JSON em vez de Secret File pois o MCP/automacao so grava env vars; o token OAuth2 foi validado localmente lendo a credencial pela env var. A chave NAO esta no git (vive em `.secrets/route-optimization-sa.json` no dev, gitignorada). Fica efetivo no proximo deploy (o do push desta entrega — gravar env var nao disparou redeploy).
 - **R4 — Geocoding sem persistencia:** RESOLVIDO na Fase 2 (`geocode_cache` L2 no banco; L1 memoria -> L2 banco -> Google).
 - **Smoke visual (browser):** validar no navegador o painel de parametros + card de custo no mapa e o cadastro de custos no admin de veiculos (nao automatizado nesta sessao).
-- **Push/PR:** branch `worktree-roteirizacao-ver-no-mapa` ainda nao pushado; integrar quando o Rafael aprovar.
+- **Push/PR:** CONCLUIDO (17/06/2026) — merge fast-forward na `main` + push. Worktree `worktree-roteirizacao-ver-no-mapa` pode ser removida.
 - **Custo Google na Fase 1:** o card chama `/api/rota/otimizar` (1 request Directions) ALEM do desenho via `/api/rota-clientes` — 2 roteirizacoes por calculo. Unificar na Fase 2/3 (aceitavel agora; Directions optimize dentro do free tier).
-- **Proximo passo:** smoke VISUAL no browser -> push/PR (aprovacao Rafael) -> configurar credenciais GCP no Render p/ ativar Route Optimization em PROD. Roadmap das 3 fases + R1 entregue.
+- **Proximo passo:** apos o deploy do push concluir em PROD, validar Route Optimization ativo (1 calculo real no mapa -> conferir `trechos=1` e ausencia de warning de fallback nos logs) + smoke VISUAL no browser. Roadmap das 3 fases + R1 entregue e credencial PROD configurada.
 
 ## Atualizado
 
@@ -78,3 +78,4 @@ Ajustes vs plano (durante a execucao TDD): (a) fixture `_isola_veiculos` desativ
 - **2026-06-16 (3):** Fase 2 IMPLEMENTADA (T1-T5): `geocode_cache` (L2) + `RotaSalva` + APIs salvar/listar/carregar/excluir + adicionar pedido on-demand + UI. 28 testes verdes no total; tabelas criadas no banco local; render 200. Pendente: smoke browser + push/PR.
 - **2026-06-16 (4):** Fase 3 IMPLEMENTADA (T1-T2): API cotar frete por rota salva (reusa wizard) + origem configuravel + drag-and-drop. **31 testes verdes**; render 200. As 3 fases concluidas. Pendente: smoke browser + push/PR.
 - **2026-06-17 (5):** R1 RESOLVIDO — Route Optimization API real (optimizeTours via service account) implementada e VALIDADA contra a API ao vivo; fallback Directions automatico; google-auth==2.55.0; credencial em `.secrets/` (gitignore). **36 testes verdes**. Pendente: smoke browser + push/PR + credenciais no Render.
+- **2026-06-17 (6):** ENTREGA — `_ro_token()` passa a aceitar `GOOGLE_CREDENTIALS_JSON` (credencial via env var, p/ Render) alem de ADC, com 2 testes novos (**38 testes verdes**). Env vars gravadas em PROD via Render API (`ROUTE_OPTIMIZATION_PROJECT` + `GOOGLE_CREDENTIALS_JSON`, ambos HTTP 200). Merge fast-forward na `main` + push. Route Optimization ativo no proximo deploy. Pendente: validar em PROD pos-deploy + smoke browser.

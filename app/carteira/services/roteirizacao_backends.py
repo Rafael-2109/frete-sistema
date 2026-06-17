@@ -4,8 +4,10 @@
   intermediarios = 1 request com optimize:true. Acima = chunking sequencial.
 - route_optimization_backend: Google Route Optimization API (optimizeTours,
   SKU Single Vehicle). Otimizacao GLOBAL real, sem teto de 25 paradas. Requer
-  service account via ADC (env GOOGLE_APPLICATION_CREDENTIALS) + projeto
-  (env ROUTE_OPTIMIZATION_PROJECT).
+  projeto (env ROUTE_OPTIMIZATION_PROJECT) + credencial da service account, por
+  uma de duas vias: GOOGLE_CREDENTIALS_JSON (conteudo do JSON da SA na propria
+  env var — usado no Render) ou ADC padrao (GOOGLE_APPLICATION_CREDENTIALS
+  apontando um arquivo/Secret File). GOOGLE_CREDENTIALS_JSON tem prioridade.
 - default_backend: usa Route Optimization se configurado; senao (ou em erro)
   cai para directions_chunking_backend.
 """
@@ -53,10 +55,21 @@ def _parse_duration_s(dur):
 
 
 def _ro_token():
-    """Access token OAuth2 da service account (ADC) com scope cloud-platform."""
-    import google.auth
+    """Access token OAuth2 da service account com scope cloud-platform.
+
+    Prioriza GOOGLE_CREDENTIALS_JSON (conteudo do JSON da SA como env var — usado
+    no Render, onde nao subimos Secret File); senao cai para ADC padrao
+    (GOOGLE_APPLICATION_CREDENTIALS apontando arquivo, ou metadata server)."""
     from google.auth.transport.requests import Request as GoogleAuthRequest
-    creds, _ = google.auth.default(scopes=[_RO_SCOPE])
+    cred_json = os.getenv('GOOGLE_CREDENTIALS_JSON')
+    if cred_json:
+        import json
+        from google.oauth2 import service_account
+        creds = service_account.Credentials.from_service_account_info(
+            json.loads(cred_json), scopes=[_RO_SCOPE])
+    else:
+        import google.auth
+        creds, _ = google.auth.default(scopes=[_RO_SCOPE])
     creds.refresh(GoogleAuthRequest())
     return creds.token
 
