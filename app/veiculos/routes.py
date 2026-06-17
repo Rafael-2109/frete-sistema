@@ -5,6 +5,18 @@ from flask_login import login_required
 
 veiculos_bp = Blueprint('veiculos', __name__, url_prefix='/veiculos')
 
+
+def _num_opt(valor):
+    """Converte string de form em float (vazio/None -> None)."""
+    valor = (valor or '').strip()
+    return float(valor) if valor else None
+
+
+def _int_opt(valor):
+    """Converte string de form em int (vazio/None -> None)."""
+    valor = (valor or '').strip()
+    return int(valor) if valor else None
+
 @veiculos_bp.route('/consulta')
 @veiculos_bp.route('/admin')
 @login_required
@@ -47,6 +59,14 @@ def criar_veiculo():
             comprimento_bau=float(comprimento_bau) if comprimento_bau else None,
             largura_bau=float(largura_bau) if largura_bau else None,
             altura_bau=float(altura_bau) if altura_bau else None,
+            # Parametros de custo/capacidade (roteirizacao)
+            custo_km=_num_opt(request.form.get('custo_km')),
+            custo_motorista_dia=_num_opt(request.form.get('custo_motorista_dia')),
+            custo_fixo_dia=_num_opt(request.form.get('custo_fixo_dia')),
+            depreciacao_mensal=_num_opt(request.form.get('depreciacao_mensal')),
+            capacidade_pallets=_int_opt(request.form.get('capacidade_pallets')),
+            capacidade_m3=_num_opt(request.form.get('capacidade_m3')),
+            velocidade_media_kmh=_num_opt(request.form.get('velocidade_media_kmh')),
         )
         
         db.session.add(veiculo)
@@ -111,7 +131,17 @@ def editar_veiculo():
         veiculo.comprimento_bau = float(comp_bau) if comp_bau else None
         veiculo.largura_bau = float(larg_bau) if larg_bau else None
         veiculo.altura_bau = float(alt_bau) if alt_bau else None
-        
+
+        # Parametros de custo/capacidade (roteirizacao)
+        veiculo.custo_km = _num_opt(request.form.get('custo_km'))
+        veiculo.custo_motorista_dia = _num_opt(request.form.get('custo_motorista_dia'))
+        veiculo.custo_fixo_dia = _num_opt(request.form.get('custo_fixo_dia'))
+        veiculo.depreciacao_mensal = _num_opt(request.form.get('depreciacao_mensal'))
+        veiculo.capacidade_pallets = _int_opt(request.form.get('capacidade_pallets'))
+        veiculo.capacidade_m3 = _num_opt(request.form.get('capacidade_m3'))
+        veiculo.velocidade_media_kmh = _num_opt(request.form.get('velocidade_media_kmh'))
+        veiculo.ativo = ('ativo' in request.form)
+
         # Calcular multiplicador baseado no tipo
         if tipo_veiculo == 'Carro':
             veiculo.multiplicador_pedagio = 1.0
@@ -184,6 +214,14 @@ def api_lista_veiculos():
             'largura_bau': v.largura_bau,
             'altura_bau': v.altura_bau,
             'tem_dimensoes_bau': v.tem_dimensoes_bau(),
+            'custo_km': float(v.custo_km) if v.custo_km is not None else None,
+            'custo_motorista_dia': float(v.custo_motorista_dia) if v.custo_motorista_dia is not None else None,
+            'custo_fixo_dia': float(v.custo_fixo_dia) if v.custo_fixo_dia is not None else None,
+            'depreciacao_mensal': float(v.depreciacao_mensal) if v.depreciacao_mensal is not None else None,
+            'capacidade_pallets': v.capacidade_pallets,
+            'capacidade_m3': v.capacidade_m3,
+            'velocidade_media_kmh': v.velocidade_media_kmh,
+            'ativo': v.ativo,
         } for v in veiculos
     ])
 
