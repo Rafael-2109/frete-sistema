@@ -72,7 +72,7 @@ class MapaService:
                 # Totais usando CadastroPalletizacao para peso e pallet corretos
                 func.coalesce(func.sum(CarteiraPrincipal.qtd_saldo_produto_pedido * CarteiraPrincipal.preco_produto_pedido), 0).label('valor_total'),
                 func.coalesce(func.sum(CarteiraPrincipal.qtd_saldo_produto_pedido * CadastroPalletizacao.peso_bruto), 0).label('peso_total'),
-                func.coalesce(func.sum(CarteiraPrincipal.qtd_saldo_produto_pedido / CadastroPalletizacao.palletizacao), 0).label('pallet_total'),
+                func.coalesce(func.sum(CarteiraPrincipal.qtd_saldo_produto_pedido / func.nullif(CadastroPalletizacao.palletizacao, 0)), 0).label('pallet_total'),
                 func.count(CarteiraPrincipal.cod_produto).label('total_itens')
             ).outerjoin(
                 CadastroPalletizacao,
@@ -1119,7 +1119,7 @@ class MapaService:
                 func.count(func.distinct(CarteiraPrincipal.num_pedido)).label('total_pedidos'),
                 func.coalesce(func.sum(CarteiraPrincipal.qtd_saldo_produto_pedido * CarteiraPrincipal.preco_produto_pedido), 0).label('valor_total'),
                 func.coalesce(func.sum(CarteiraPrincipal.qtd_saldo_produto_pedido * CadastroPalletizacao.peso_bruto), 0).label('peso_total'),
-                func.coalesce(func.sum(CarteiraPrincipal.qtd_saldo_produto_pedido / CadastroPalletizacao.palletizacao), 0).label('pallet_total')
+                func.coalesce(func.sum(CarteiraPrincipal.qtd_saldo_produto_pedido / func.nullif(CadastroPalletizacao.palletizacao, 0)), 0).label('pallet_total')
             ).outerjoin(
                 CadastroPalletizacao,
                 CarteiraPrincipal.cod_produto == CadastroPalletizacao.cod_produto
@@ -1355,7 +1355,75 @@ class MapaService:
                     return matriz
                     
             return {'erro': 'Não foi possível calcular matriz de distâncias'}
-            
+
         except Exception as e:
             logger.error(f"Erro ao calcular matriz de distâncias: {str(e)}")
+            return {'erro': str(e)}
+
+    def calcular_matriz_clientes(self, clientes: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Matriz de distancias/tempos par-a-par entre as PARADAS do mapa.
+
+        Recebe clientes ja agrupados (com coordenadas e nome) — alinha com o fluxo
+        por lotes/CarVia (nao depende de num_pedido). Labels = nome do cliente.
+        Limita a 10 paradas (teto da Distance Matrix API).
+        """
+        try:
+            if not clientes or len(clientes) < 2:
+                return {'erro': 'Necessário pelo menos 2 paradas para calcular matriz'}
+
+            clientes = clientes[:10]
+            labels = [c.get('nome') or str(c.get('id')) for c in clientes]
+            locations = [f"{c['lat']},{c['lng']}" for c in clientes]
+
+            params = {
+                'origins': '|'.join(locations),
+                'destinations': '|'.join(locations),
+                'key': self.api_key,
+                'language': 'pt-BR',
+                'mode': 'driving',
+                'units': 'metric',
+            }
+            response = requests.get(self.base_distance_matrix_url, params=params, timeout=30)
+            if response.status_code != 200:
+                return {'erro': f'Distance Matrix HTTP {response.status_code}'}
+            data = response.json()
+            if data.get('status') != 'OK':
+                return {'erro': f"Distance Matrix status {data.get('status')}"}
+
+            matriz = {
+                'pedidos': labels,
+                'distancias': [], 'tempos': [],
+                'resumo': {'distancia_media_km': 0, 'tempo_medio_min': 0,
+                           'pares_proximos': [], 'pares_distantes': []},
+            }
+            total_distancia, total_tempo, pares = 0.0, 0.0, []
+            for i, row in enumerate(data['rows']):
+                dist_row, tempo_row = [], []
+                for j, el in enumerate(row['elements']):
+                    if el.get('status') == 'OK':
+                        d = el['distance']['value'] / 1000.0
+                        t = el['duration']['value'] / 60.0
+                        dist_row.append(round(d, 1))
+                        tempo_row.append(round(t, 0))
+                        if i != j:
+                            total_distancia += d
+                            total_tempo += t
+                            pares.append({'origem': labels[i], 'destino': labels[j],
+                                          'distancia': d, 'tempo': t})
+                    else:
+                        dist_row.append(None)
+                        tempo_row.append(None)
+                matriz['distancias'].append(dist_row)
+                matriz['tempos'].append(tempo_row)
+
+            if pares:
+                matriz['resumo']['distancia_media_km'] = round(total_distancia / len(pares), 1)
+                matriz['resumo']['tempo_medio_min'] = round(total_tempo / len(pares), 0)
+                ordenados = sorted(pares, key=lambda x: x['distancia'])
+                matriz['resumo']['pares_proximos'] = ordenados[:3]
+                matriz['resumo']['pares_distantes'] = ordenados[-3:]
+            return matriz
+
+        except Exception as e:
+            logger.error(f"Erro ao calcular matriz de clientes: {str(e)}")
             return {'erro': str(e)}

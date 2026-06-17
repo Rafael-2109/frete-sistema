@@ -1792,30 +1792,49 @@
             });
         }
 
-        // Mostrar densidade regional
+        // Mostrar densidade regional — calculada no FRONT a partir das entregas
+        // selecionadas (clientesData). Antes dependia de pedidosSelecionados, que
+        // vinha vazio no fluxo por lotes, e o backend quebrava por divisao por
+        // palletizacao=0 (item #2). Agora e robusto e cobre NACOM + CarVia.
         function mostrarDensidade() {
-            showLoading();
+            const selecionados = getClientesSelecionados();
+            if (!selecionados.length) {
+                Swal.fire('Aviso', 'Nenhuma entrega no mapa para analisar', 'warning');
+                return;
+            }
+            const densidade = calcularDensidadeLocal(selecionados);
+            exibirDensidadeNoMapa(densidade);
+            mostrarEstatisticasDensidade(densidade);
+        }
 
-            $.ajax({
-                url: '/carteira/mapa/api/densidade-regional',
-                method: 'POST',
-                contentType: 'application/json',
-                headers: {
-                    'X-CSRFToken': getCSRFToken()
-                },
-                data: JSON.stringify({ pedidos: pedidosSelecionados }),
-                success: function (response) {
-                    if (response.sucesso) {
-                        exibirDensidadeNoMapa(response.densidade);
-                        mostrarEstatisticasDensidade(response.densidade);
-                    }
-                    hideLoading();
-                },
-                error: function (xhr) {
-                    hideLoading();
-                    Swal.fire('Erro', 'Erro ao analisar densidade', 'error');
-                }
+        // Agrega entregas por UF e cidade (mesma estrutura que o backend devolvia).
+        function calcularDensidadeLocal(clientes) {
+            const porEstado = {}, porCidadeMap = {};
+            const resumo = { total_estados: 0, total_cidades: 0, total_pedidos: 0,
+                             valor_total: 0, peso_total: 0, pallet_total: 0 };
+            clientes.forEach(c => {
+                const uf = (c.endereco && c.endereco.uf) || 'ND';
+                const cidade = (c.endereco && c.endereco.cidade) || 'Não definida';
+                const t = c.totais || {};
+                const qtd = t.qtd_pedidos || 0, val = t.valor || 0, pes = t.peso || 0, pal = t.pallet || 0;
+                if (!porEstado[uf]) porEstado[uf] = { total_pedidos: 0, valor_total: 0, peso_total: 0, pallet_total: 0 };
+                porEstado[uf].total_pedidos += qtd; porEstado[uf].valor_total += val;
+                porEstado[uf].peso_total += pes; porEstado[uf].pallet_total += pal;
+                const ck = uf + '|' + cidade;
+                if (!porCidadeMap[ck]) porCidadeMap[ck] = { cidade, uf, total_pedidos: 0, valor_total: 0, peso_total: 0, pallet_total: 0 };
+                porCidadeMap[ck].total_pedidos += qtd; porCidadeMap[ck].valor_total += val;
+                porCidadeMap[ck].peso_total += pes; porCidadeMap[ck].pallet_total += pal;
+                resumo.total_pedidos += qtd; resumo.valor_total += val;
+                resumo.peso_total += pes; resumo.pallet_total += pal;
             });
+            const porCidade = Object.values(porCidadeMap).sort((a, b) => b.total_pedidos - a.total_pedidos);
+            resumo.total_estados = Object.keys(porEstado).length;
+            resumo.total_cidades = porCidade.length;
+            const sugestoes = [];
+            const cidadesAlta = porCidade.filter(c => c.total_pedidos >= 5);
+            if (cidadesAlta.length) sugestoes.push({ descricao: `Consolidar cargas em ${cidadesAlta.length} cidade(s) de alta demanda: ${cidadesAlta.slice(0, 5).map(c => c.cidade).join(', ')}` });
+            if (resumo.pallet_total > 20) sugestoes.push({ descricao: 'Volume suficiente para considerar carga fechada' });
+            return { por_estado: porEstado, por_cidade: porCidade, resumo, analises: { sugestoes } };
         }
 
         // Exibir densidade no mapa (heatmap)
@@ -1953,28 +1972,33 @@
             });
         }
 
-        // Calcular matriz de distâncias
+        // Calcular matriz de distancias par-a-par entre as paradas selecionadas.
+        // Usa clientesData (coordenadas reais) — antes referenciava pedidosData,
+        // que nao existe mais, e a funcao morria com ReferenceError (item #3).
         function calcularMatrizDistancias() {
-            if (pedidosData.length < 2) {
-                Swal.fire('Aviso', 'Selecione pelo menos 2 pedidos para calcular a matriz', 'warning');
+            const selecionados = getClientesSelecionados().filter(c => c.coordenadas);
+            if (selecionados.length < 2) {
+                Swal.fire('Aviso', 'Selecione pelo menos 2 entregas para calcular a matriz', 'warning');
                 return;
+            }
+            const clientes = selecionados.slice(0, 10).map(c => ({
+                id: c.cliente_id, lat: c.coordenadas.lat, lng: c.coordenadas.lng,
+                nome: (c.cliente && c.cliente.nome) || (c.endereco && c.endereco.cidade) || c.cliente_id
+            }));
+            if (selecionados.length > 10) {
+                Swal.fire({ icon: 'info', title: 'Matriz', timer: 1800, showConfirmButton: false,
+                    text: 'A matriz usa as 10 primeiras paradas (limite da API).' });
             }
 
             showLoading();
-
             $.ajax({
-                url: '/carteira/mapa/api/matriz-distancias',
-                method: 'POST',
-                contentType: 'application/json',
-                headers: {
-                    'X-CSRFToken': getCSRFToken()
-                },
-                data: JSON.stringify({ pedidos: pedidosSelecionados.slice(0, 10) }),
+                url: '/carteira/mapa/api/matriz-clientes',
+                method: 'POST', contentType: 'application/json',
+                headers: { 'X-CSRFToken': getCSRFToken() },
+                data: JSON.stringify({ clientes: clientes }),
                 success: function (response) {
-                    if (response.sucesso) {
-                        mostrarMatrizDistancias(response.matriz);
-                    }
                     hideLoading();
+                    if (response.sucesso) mostrarMatrizDistancias(response.matriz);
                 },
                 error: function (xhr) {
                     hideLoading();
@@ -2027,6 +2051,7 @@
                 title: 'Matriz de Distâncias',
                 html: `
                     <div class="text-start">
+                        <p class="small text-muted mb-2">Distância e tempo de carro entre cada par de paradas — útil para decidir agrupamento de carga e quais entregas valem juntas na mesma rota.</p>
                         <div class="alert alert-info">
                             <strong>Distância Média:</strong> ${matriz.resumo.distancia_media_km} km<br>
                             <strong>Tempo Médio:</strong> ${matriz.resumo.tempo_medio_min} minutos

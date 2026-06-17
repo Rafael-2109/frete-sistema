@@ -254,7 +254,27 @@ def calcular_matriz():
     except Exception as e:
         logger.error(f"Erro ao calcular matriz: {str(e)}")
         return jsonify({'erro': str(e)}), 500
-        
+
+
+@bp.route('/api/matriz-clientes', methods=['POST'])
+@login_required
+def calcular_matriz_clientes_route():
+    """Matriz de distancias par-a-par entre as paradas selecionadas no mapa
+    (clientes agrupados com coordenadas). Alinha com o fluxo por lotes/CarVia."""
+    try:
+        data = request.get_json() or {}
+        clientes = data.get('clientes', [])
+        if len(clientes) < 2:
+            return jsonify({'erro': 'Selecione pelo menos 2 entregas'}), 400
+        matriz = mapa_service.calcular_matriz_clientes(clientes)
+        if 'erro' in matriz:
+            return jsonify(matriz), 400
+        return jsonify({'sucesso': True, 'matriz': matriz})
+    except Exception as e:
+        logger.error(f"Erro ao calcular matriz de clientes: {str(e)}")
+        return jsonify({'erro': str(e)}), 500
+
+
 @bp.route('/api/geocodificar', methods=['POST'])
 @login_required
 def geocodificar():
