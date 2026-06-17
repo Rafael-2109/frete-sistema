@@ -56,7 +56,7 @@ picking Z (NF errada)", "estoque voltou pra Em Trânsito Industrialização — 
 1. **`--dry-run` é o DEFAULT.** Sem `--confirmar`, só calcula e mostra o plano (exit 4).
 2. **Verificar no Odoo** após efetivar — operação viva (G019/G020 protegem contra false-positive mas `quant` pós-validate só o usuário confirma).
 3. **`cancelar` é IRREVERSÍVEL** no Odoo (precisa recriar manualmente se errar) — Skill 2.4 `operando-reservas-odoo` é alternativa cirúrgica quando só algumas MLs estão erradas.
-4. **`devolver` é IDEMPOTENTE**: se `origin ilike "Devolução de NAME"` já existe, retorna esse id sem criar duplicado.
+4. **`devolver` é IDEMPOTENTE (só por devolução VIVA)**: se já existe devolução por `origin ilike "Devolução de NAME"` em estado vivo (draft/confirmed/assigned/done), retorna esse id sem duplicar. Devoluções `state=cancel` são IGNORADAS (G-AUDIT-3/N23 — move qty=0 não restaura saldo): se só houver canceladas, cria uma NOVA funcional e lista as ignoradas em `devolucoes_canceladas_ignoradas`.
 5. **`validar` com `linhas_esperadas=`** consolida MLs ANTES de `button_validate` (G023 — descarta reservas em lotes não esperados).
 
 ## Contrato — `cancelar` (átomo 1)
@@ -107,11 +107,13 @@ status:        VALIDADO · DRY_RUN_OK · FALSE_POSITIVE_G019 · FALHA_PICKING_NA
 objeto:        stock.return.picking (wizard) -> stock.picking novo
 input:         --modo devolver --picking-id <id>
 output (JSON): {status, picking_id_origem, picking_id_devolucao, state_devolucao,
-                 reutilizado_idempotente, mls_qty_done_setadas, tempo_ms}
+                 reutilizado_idempotente, devolucoes_canceladas_ignoradas,
+                 mls_qty_done_setadas, tempo_ms}
 pré-condições: picking existe; state='done' (não dá pra devolver picking não-feito)
 pós-condições: novo stock.picking criado com origin="Devolução de NAME";
                 state='done'; saldo restaurado ao lote/loc original;
-                idempotente (se já existe devolução por origin ilike, retorna esse id)
+                idempotente APENAS por devolução VIVA (G-AUDIT-3/N23): devolução
+                state=cancel é ignorada (não restaura saldo) — só canceladas ⇒ cria nova
 gotchas-invariante: stock.return.picking wizard exige write({}) com context
                     contendo active_id/model/ids p/ default_get popular
                     product_return_moves; G019 pattern aplicado no validate
@@ -256,7 +258,7 @@ demanda real:  Skill 8 ETAPA F — pickings 317306/317316 LF/IN/01733-01734
 - **`stock.return.picking.write({}, context)`** é OBRIGATÓRIO antes de `create_returns` — o write vazio com context dispara `default_get` que popula `product_return_moves` (sem isso, devolução fica com 0 linhas).
 - **`create_returns` retorna `dict` em alguns Odoo, `int` em outros** — código testa ambos e raise se nenhum.
 - **G023 `linhas_esperadas`**: passar `quantity=0` ou negativa = ignorada (não vira chave); útil para "zerar tudo de um produto" passando lote inválido + qty=0 → loga warning mas não bloqueia.
-- **`origin ilike "Devolução de NAME"`** depende de naming convention do Odoo CIEL IT — se mudar, idempotência quebra (devolução duplicada).
+- **`origin ilike "Devolução de NAME"`** depende de naming convention do Odoo CIEL IT — se mudar, idempotência quebra (devolução duplicada). A busca filtra `state`: reutiliza só vivas; `state=cancel` é descartada (G-AUDIT-3/N23 — move qty=0 não restaura saldo). Incidente que motivou o fix: picking 325359, devolução cancelada 325674 reutilizada travou reversão de 5.000 un lote 26329.
 - **G011 `preencher_qty_done` é PRÉ-REQUISITO** de `validar()` em pickings criados via `criar_transferencia` — sem isso, qty_done=0 → button_validate falha com "Nao e possivel validar transferencia sem quantidades reservadas". A CLI da Skill 5 **NÃO** preenche qty_done (chamador faz isso antes — pipeline Skill 8).
 
 ## Exemplos
