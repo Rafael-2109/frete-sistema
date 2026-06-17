@@ -723,6 +723,49 @@ def rota_cotar(rota_id):
         return jsonify({'erro': str(e)}), 500
 
 
+@bp.route('/api/parada-extra', methods=['POST'])
+@login_required
+def parada_extra():
+    """Geocodifica uma parada extra por CNPJ (ReceitaWS) ou endereco livre, para
+    incluir no mapa um ponto que afeta a rota/custo mas NAO entra na cotacao
+    (placeholder no front, sem lote/pedido) — item #5."""
+    try:
+        data = request.get_json() or {}
+        cnpj = (data.get('cnpj') or '').strip()
+        endereco_in = (data.get('endereco') or '').strip()
+        nome, cidade, uf = 'Parada extra', '', ''
+
+        if cnpj:
+            from app.utils.api_receita import APIReceita
+            dados = APIReceita.buscar_cnpj(cnpj)
+            if not dados:
+                return jsonify({'erro': 'CNPJ nao encontrado'}), 404
+            nome = dados.get('nome') or dados.get('fantasia') or 'Parada extra'
+            cidade = dados.get('municipio') or ''
+            uf = dados.get('uf') or ''
+            partes = [dados.get('logradouro'), dados.get('numero'), dados.get('bairro'),
+                      cidade, uf, dados.get('cep'), 'Brasil']
+            endereco_str = ', '.join(str(p) for p in partes if p)
+        elif endereco_in:
+            endereco_str = endereco_in
+        else:
+            return jsonify({'erro': 'Informe um CNPJ ou endereco'}), 400
+
+        lat, lng = mapa_service.geocodificar_endereco(endereco_str)
+        if lat is None or lng is None:
+            return jsonify({'erro': 'Nao foi possivel localizar o endereco'}), 400
+
+        return jsonify({
+            'sucesso': True,
+            'coordenadas': {'lat': lat, 'lng': lng},
+            'endereco': endereco_str, 'cidade': cidade, 'uf': uf,
+            'nome': nome, 'cnpj': cnpj or None,
+        })
+    except Exception as e:
+        logger.error(f"Erro em parada_extra: {e}")
+        return jsonify({'erro': str(e)}), 500
+
+
 @bp.route('/api/rota/acumular', methods=['POST'])
 @login_required
 def rota_acumular():

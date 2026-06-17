@@ -89,6 +89,8 @@
                             <span class="border-start ms-3 ps-3">
                                 <input type="text" id="addPedidoInput" class="form-control form-control-sm d-inline-block" style="width:150px" placeholder="nº pedido / lote">
                                 <button class="btn btn-sm btn-outline-primary" onclick="adicionarPedidoMapa()" title="Incluir pedido no mapa"><i class="fas fa-plus"></i> Incluir</button>
+                                <input type="text" id="addParadaInput" class="form-control form-control-sm d-inline-block ms-2" style="width:170px" placeholder="endereço ou CNPJ" title="Parada extra: afeta a rota/custo mas não é cotável">
+                                <button class="btn btn-sm btn-outline-info" onclick="adicionarParadaExtra()" title="Adicionar parada extra (endereço/CNPJ) — não cotável"><i class="fas fa-map-pin"></i> Parada extra</button>
                                 <button class="btn btn-sm btn-outline-success ms-2" onclick="salvarRota()" title="Salvar esta rota"><i class="fas fa-save"></i> Salvar rota</button>
                                 <button class="btn btn-sm btn-outline-secondary ms-1" onclick="abrirRotasSalvas()" title="Rotas salvas"><i class="fas fa-folder-open"></i> Rotas salvas</button>
                             </span>
@@ -922,7 +924,9 @@
                                 <div class="d-flex justify-content-between align-items-start">
                                     <strong style="cursor:pointer" onclick="focusCliente(${index})">${index + 1}. ${cliente.cliente.nome || 'Cliente'}</strong>
                                     <span class="d-flex align-items-center">
-                                        <span class="badge bg-info me-1">${cliente.totais.qtd_pedidos} ped.</span>
+                                        ${cliente.placeholder
+                                            ? '<span class="badge bg-info me-1" title="Parada extra (não cotável)"><i class=\'fas fa-map-pin\'></i> extra</span>'
+                                            : `<span class="badge bg-info me-1">${cliente.totais.qtd_pedidos} ped.</span>`}
                                         <button class="btn-remover-entrega" title="Remover do mapa"
                                                 onclick="event.stopPropagation(); removerEntrega('${cliente.cliente_id}')">
                                             <i class="fas fa-times"></i>
@@ -1193,8 +1197,52 @@
             });
         }
 
+        // Parada extra por endereço ou CNPJ (ReceitaWS). Entra como PLACEHOLDER:
+        // afeta a rota/custo mas nao tem pedido/lote, entao nunca e cotada nem
+        // salva como lote (item #5). 14 dígitos = CNPJ; senão, endereço livre.
+        let _paradaExtraSeq = 0;
+        function adicionarParadaExtra() {
+            const termo = ($('#addParadaInput').val() || '').trim();
+            if (!termo) { Swal.fire('Aviso', 'Informe um endereço ou CNPJ', 'warning'); return; }
+            const soDigitos = termo.replace(/\D/g, '');
+            const payload = (soDigitos.length === 14) ? { cnpj: soDigitos } : { endereco: termo };
+            showLoading();
+            $.ajax({
+                url: '/carteira/mapa/api/parada-extra', method: 'POST',
+                contentType: 'application/json', headers: { 'X-CSRFToken': getCSRFToken() },
+                data: JSON.stringify(payload),
+                success: function (resp) {
+                    hideLoading();
+                    if (!resp || !resp.sucesso) { Swal.fire('Aviso', (resp && resp.erro) || 'Não localizado', 'info'); return; }
+                    _paradaExtraSeq += 1;
+                    const placeholder = {
+                        cliente_id: 'PLACEHOLDER-' + _paradaExtraSeq,
+                        placeholder: true,
+                        cliente: { nome: resp.nome || 'Parada extra', cnpj: resp.cnpj || '' },
+                        endereco: { completo: resp.endereco || termo, cidade: resp.cidade || '', uf: resp.uf || '' },
+                        coordenadas: { lat: resp.coordenadas.lat, lng: resp.coordenadas.lng },
+                        pedidos: [],
+                        totais: { valor: 0, peso: 0, pallet: 0, qtd_pedidos: 0, itens: 0 },
+                        status: 'pendente', na_rota: false
+                    };
+                    clientesData.push(placeholder);
+                    plotarClientesNoMapa(clientesData);
+                    atualizarListaClientes(clientesData);
+                    recalcularTotais();
+                    atualizarCustoRota();
+                    $('#addParadaInput').val('');
+                    Swal.fire('OK', 'Parada extra adicionada: ' + (resp.nome || resp.endereco), 'success');
+                },
+                error: function (xhr) {
+                    hideLoading();
+                    Swal.fire('Aviso', xhr.responseJSON?.erro || 'Não localizado', 'info');
+                }
+            });
+        }
+
         function _lotesSelecionados() {
             return getClientesSelecionados()
+                .filter(function (c) { return !c.placeholder; })
                 .flatMap(function (c) { return (c.pedidos || []).map(function (p) { return p.separacao_lote_id; }); })
                 .filter(Boolean);
         }
@@ -2184,16 +2232,17 @@
 
         // Cotar frete para clientes selecionados (com verificação NF CD)
         function cotarFrete() {
-            const selecionados = getClientesSelecionados();
+            // Paradas extras (placeholder) entram na rota mas nao sao cotaveis (#5)
+            const selecionados = getClientesSelecionados().filter(c => !c.placeholder);
             if (selecionados.length === 0) {
-                Swal.fire('Aviso', 'Selecione ao menos um cliente para cotar frete', 'warning');
+                Swal.fire('Aviso', 'Selecione ao menos um pedido cotável para cotar frete', 'warning');
                 return;
             }
 
             // Coletar todos os num_pedido dos clientes selecionados
             const pedidos = [];
             selecionados.forEach(c => {
-                c.pedidos.forEach(p => pedidos.push(p.num_pedido));
+                (c.pedidos || []).forEach(p => pedidos.push(p.num_pedido));
             });
 
             showLoading();
