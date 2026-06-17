@@ -14,6 +14,7 @@ atualizado: 2026-06-16
 
 - **Spec (design):** [docs/superpowers/specs/2026-06-16-roteirizacao-ver-no-mapa-design.md](docs/superpowers/specs/2026-06-16-roteirizacao-ver-no-mapa-design.md)
 - **Plano Fase 1:** [docs/superpowers/plans/2026-06-16-roteirizacao-ver-no-mapa-fase1.md](docs/superpowers/plans/2026-06-16-roteirizacao-ver-no-mapa-fase1.md)
+- **Plano Fase 2:** [docs/superpowers/plans/2026-06-16-roteirizacao-ver-no-mapa-fase2.md](docs/superpowers/plans/2026-06-16-roteirizacao-ver-no-mapa-fase2.md)
 
 ## Decisoes fechadas (Rafael, 16/06/2026)
 
@@ -31,7 +32,7 @@ Fase 1 IMPLEMENTADA no branch `worktree-roteirizacao-ver-no-mapa` (8 commits). 2
 | Fase | Escopo | Status |
 |------|--------|--------|
 | **1 — Fundacao de custo + motor** | migration `veiculos` (8 campos) + CRUD; service custo/selecao/motor (chunking 25); API `/api/rota/otimizar`; UI parametros + card de custo | IMPLEMENTADA (branch worktree; 20 testes verdes; falta smoke browser + push) |
-| **2 — Interatividade + persistencia** | incluir/remover on-demand; tabela `rota_salva` (salvar/nomear/listar); `geocode_cache` persistente | A FAZER (plano a escrever) |
+| **2 — Interatividade + persistencia** | incluir/remover on-demand; tabela `rota_salva` (salvar/nomear/listar); `geocode_cache` persistente | EM EXECUCAO (plano escrito; 5 tasks TDD) |
 | **3 — Cotacao por rota + extras** | cotar a partir de rota salva (reusa wizard); reordenar drag-and-drop; origem configuravel | A FAZER (plano a escrever) |
 
 Tasks da Fase 1:
@@ -43,6 +44,14 @@ Tasks da Fase 1:
 - [x] T5 — Backend Directions+chunking + plug Route Optimization (TDD)
 - [x] T6 — API `POST /api/rota/otimizar` (TDD)
 - [x] T7 — Frontend: CRUD custos + painel de parametros + card de custo (render OK; smoke browser pendente)
+
+Tasks da Fase 2:
+
+- [ ] T1 — `GeocodeCache` (L2 persistente) no `geocodificar_endereco`
+- [ ] T2 — model `RotaSalva` + migration
+- [ ] T3 — APIs salvar/listar/carregar/excluir rota
+- [ ] T4 — API adicionar pedido on-demand
+- [ ] T5 — UI incluir/remover on-demand + salvar/carregar rotas (smoke render)
 
 Ajustes vs plano (durante a execucao TDD): (a) fixture `_isola_veiculos` desativa os 10 veiculos pre-existentes do banco em `test_roteirizacao_selecao` (savepoint reverte); (b) `otimizar_rota` checa lista vazia ANTES de importar o backend (bug pego pelo teste); (c) backend adiciona o ponto que vira destino na ordem quando nao ha volta (espelha `mapa_service` original); (d) `api/lista` converte `Numeric`->float (jsonify nao serializa Decimal).
 

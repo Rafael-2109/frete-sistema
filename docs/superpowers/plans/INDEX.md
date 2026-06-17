@@ -10,6 +10,7 @@ atualizado: 2026-06-04
 > **Papel:** mapa dos planos de implementacao. So ponteiros.
 
 - [Roteirizacao "Ver no Mapa" — Fase 1](2026-06-16-roteirizacao-ver-no-mapa-fase1.md) — migration custo em veiculos + service custo/selecao/motor (chunking 25) + API /api/rota/otimizar + UI custo (7 tasks TDD)
+- [Roteirizacao "Ver no Mapa" — Fase 2](2026-06-16-roteirizacao-ver-no-mapa-fase2.md) — geocode_cache persistente + model RotaSalva + APIs salvar/listar/carregar/excluir + adicionar pedido on-demand + UI (5 tasks TDD)
 - [PAD-A Onda 0 — Fundacao](2026-06-01-pad-a-onda-0-fundacao.md) — lints+hooks+scaffold+skill+SOT
 - [PAD-A Onda 1 — Indice mestre](2026-06-02-pad-a-onda-1-indice-mestre.md) — hubs + ligar docs/ ao CLAUDE.md + check C8
 - [PAD-A Onda 2 — Conflitos diagnosticados](2026-06-02-pad-a-onda-2-conflitos.md) — reconcilia 6 conflitos doc/memoria + 1 bug worker-RQ + aposenta gold-script
