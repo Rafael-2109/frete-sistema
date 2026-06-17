@@ -28,7 +28,7 @@ atualizado: 2026-06-16
 
 ## Estado atual
 
-As 3 FASES IMPLEMENTADAS no branch `worktree-roteirizacao-ver-no-mapa`. **31 testes verdes** (PostgreSQL local); migrations aplicadas no banco local (`veiculos`+8 campos, `geocode_cache`, `rota_salva`); smoke de render dos templates = 200. Toda a demanda original coberta (cotacao por rota salva fechada). PENDENTE: smoke VISUAL no browser, push/PR e habilitar Route Optimization (R1).
+As 3 FASES IMPLEMENTADAS + Route Optimization API REAL no branch `worktree-roteirizacao-ver-no-mapa`. **36 testes verdes** (PostgreSQL local); migrations aplicadas no banco local (`veiculos`+8 campos, `geocode_cache`, `rota_salva`); smoke de render dos templates = 200. Toda a demanda original coberta + R1 resolvido (Route Optimization validado contra a API real). PENDENTE: smoke VISUAL no browser, push/PR e configurar credenciais GCP no Render (PROD).
 
 | Fase | Escopo | Status |
 |------|--------|--------|
@@ -63,12 +63,13 @@ Ajustes vs plano (durante a execucao TDD): (a) fixture `_isola_veiculos` desativ
 
 ## Pendencias
 
-- **R1 — Auth do Route Optimization API:** pode exigir service account/OAuth2 (Google Cloud), nao a `GOOGLE_MAPS_API_KEY` atual. A Fase 1 entrega o backend **Directions+chunking** (funcional com a key atual, supera o limite de 25 no desenho); o backend Route Optimization fica plugavel (`_route_optimization_backend`, stub). **Acao do Rafael quando quiser otimizacao global real >25:** criar service account no GCP + habilitar a API.
+- **R1 — Route Optimization API:** RESOLVIDO (17/06/2026). `route_optimization_backend` implementado (optimizeTours via service account / google-auth ADC) e **validado contra a API real** (ordem otimizada + distancia/tempo/polyline; ex.: 3 paradas SP = 72,34 km / 107,6 min). `default_backend` usa Route Optimization quando `ROUTE_OPTIMIZATION_PROJECT` esta setado; senao cai para Directions+chunking (fallback automatico em erro). Projeto = `dynamic-heading-434921-q5`; SA = `sistema-fretes-routes-api@...` (role Route Optimization Editor). Janela global = 7 dias; metrica = `travelDuration`.
+- **PROD (Render) — configurar p/ ativar Route Optimization:** (1) `ROUTE_OPTIMIZATION_PROJECT=dynamic-heading-434921-q5`; (2) subir o JSON da SA como **Secret File** no Render e apontar `GOOGLE_APPLICATION_CREDENTIALS` para o path dele. Sem isso, PROD opera em Directions+chunking (sem quebrar). A chave NAO esta no git (vive em `.secrets/` no dev local, gitignorada).
 - **R4 — Geocoding sem persistencia:** RESOLVIDO na Fase 2 (`geocode_cache` L2 no banco; L1 memoria -> L2 banco -> Google).
 - **Smoke visual (browser):** validar no navegador o painel de parametros + card de custo no mapa e o cadastro de custos no admin de veiculos (nao automatizado nesta sessao).
 - **Push/PR:** branch `worktree-roteirizacao-ver-no-mapa` ainda nao pushado; integrar quando o Rafael aprovar.
 - **Custo Google na Fase 1:** o card chama `/api/rota/otimizar` (1 request Directions) ALEM do desenho via `/api/rota-clientes` — 2 roteirizacoes por calculo. Unificar na Fase 2/3 (aceitavel agora; Directions optimize dentro do free tier).
-- **Proximo passo:** smoke VISUAL no browser (3 fases) -> push/PR (aprovacao Rafael). Opcional: habilitar Route Optimization API (R1). Roadmap das 3 fases entregue.
+- **Proximo passo:** smoke VISUAL no browser -> push/PR (aprovacao Rafael) -> configurar credenciais GCP no Render p/ ativar Route Optimization em PROD. Roadmap das 3 fases + R1 entregue.
 
 ## Atualizado
 
@@ -76,3 +77,4 @@ Ajustes vs plano (durante a execucao TDD): (a) fixture `_isola_veiculos` desativ
 - **2026-06-16 (2):** Fase 1 IMPLEMENTADA no branch worktree (8 commits, T1-T7); 20 testes verdes; migration aplicada no banco local; render 200 nos 2 templates. Pendente: smoke browser + push/PR + R1.
 - **2026-06-16 (3):** Fase 2 IMPLEMENTADA (T1-T5): `geocode_cache` (L2) + `RotaSalva` + APIs salvar/listar/carregar/excluir + adicionar pedido on-demand + UI. 28 testes verdes no total; tabelas criadas no banco local; render 200. Pendente: smoke browser + push/PR.
 - **2026-06-16 (4):** Fase 3 IMPLEMENTADA (T1-T2): API cotar frete por rota salva (reusa wizard) + origem configuravel + drag-and-drop. **31 testes verdes**; render 200. As 3 fases concluidas. Pendente: smoke browser + push/PR.
+- **2026-06-17 (5):** R1 RESOLVIDO — Route Optimization API real (optimizeTours via service account) implementada e VALIDADA contra a API ao vivo; fallback Directions automatico; google-auth==2.55.0; credencial em `.secrets/` (gitignore). **36 testes verdes**. Pendente: smoke browser + push/PR + credenciais no Render.
