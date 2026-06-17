@@ -16,6 +16,9 @@ atualizado: 2026-06-02
 - `docs/inventario-2026-05/INDEX.md` — ciclo de inventario NACOM/LF/CD/FB
 - `docs/industrializacao-fb-lf/README.md` — remessa de industrializacao (indice no proprio README)
 
+## Roteirizacao (Ver no Mapa)
+- `docs/roteirizacao/ESTADO.md` — estado vivo da ampliacao da roteirizacao (3 fases; fonte unica de progresso)
+
 ## Agente (blueprint)
 - `docs/blueprint-agente/INDEX.md` — indice do blueprint do agente (BLUEPRINT_MESTRE, eixos A-G, criticas)
 

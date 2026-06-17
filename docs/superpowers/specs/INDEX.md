@@ -9,6 +9,7 @@ atualizado: 2026-06-03
 # Specs — indice
 > **Papel:** mapa das specs de design. So ponteiros.
 
+- [Roteirizacao "Ver no Mapa" — Ampliacao](2026-06-16-roteirizacao-ver-no-mapa-design.md) — custo parametrico por tipo de veiculo (custo_km/motorista/fixo/depreciacao), motor Route Optimization API (sem limite 25), flag volta, dias, incluir/remover on-demand, rotas salvas + cotacao por rota; mono-veiculo; bin-packer fora
 - [PAD-A — Arquitetura de Artefatos](2026-06-01-arquitetura-de-artefatos-design.md) — padrao deterministico docs+scripts
 - [Onda D — Consolidacao de resolvedores em app/resolvedores](2026-06-01-consolidacao-resolvedores-design.md) — spec da consolidacao dos 7 resolvedores de entidades (Caminho C); EXECUTADA
 - [Onda D — Fase 2: resultado do baseline golden-set](2026-06-01-fase2-baseline-resultado.md) — CLIs antigos vs app.resolvedores no mesmo banco (gate da consolidacao); registro historico
