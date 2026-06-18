@@ -76,6 +76,25 @@ def test_chassi_duplicado_bloqueia(db):
         CarviaColetaRecebimentoService.conferir_chassi(coleta, 'dup1', usuario='conf')  # normaliza p/ maiusc
 
 
+def test_chassis_esperados_autocomplete(db):
+    coleta = CarviaColetaService.criar_coleta(usuario='test@bot')
+    nf = _nf_com_chassis(db, '700', ['9C2AAA00', '9C2BBB00'])
+    linha = CarviaColetaService.adicionar_linha(coleta, numero_nf='700')
+    CarviaColetaService.vincular_nf(linha, nf.id)
+
+    esperados = CarviaColetaRecebimentoService.chassis_esperados(coleta)
+    chassis = {e['chassi'] for e in esperados}
+    assert chassis == {'9C2AAA00', '9C2BBB00'}
+
+    # confere um -> sai do esperado
+    CarviaColetaRecebimentoService.conferir_chassi(coleta, '9C2AAA00', usuario='conf')
+    esperados = CarviaColetaRecebimentoService.chassis_esperados(coleta)
+    assert {e['chassi'] for e in esperados} == {'9C2BBB00'}
+    # filtro por q
+    assert CarviaColetaRecebimentoService.chassis_esperados(coleta, q='BBB')[0]['chassi'] == '9C2BBB00'
+    assert CarviaColetaRecebimentoService.chassis_esperados(coleta, q='ZZZ') == []
+
+
 def test_finalizar_status(db):
     coleta = CarviaColetaService.criar_coleta(usuario='test@bot')
     nf = _nf_com_chassis(db, '400', ['OK1'])

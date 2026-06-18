@@ -30,7 +30,11 @@
                 <hr>
                 <p class="small text-muted mb-2">Ou digite/cole o chassi (foto opcional):</p>
                 <div class="row g-2">
-                    <div class="col-12"><input id="chassiInput" class="form-control" placeholder="Chassi" autocomplete="off"></div>
+                    <div class="col-12">
+                        <input id="chassiInput" class="form-control" placeholder="Chassi" autocomplete="off" list="chassisEsperados">
+                        <datalist id="chassisEsperados"></datalist>
+                        <small class="text-muted">Digite para autocompletar os chassis esperados desta coleta.</small>
+                    </div>
                     <div class="col-7"><input id="modeloInput" class="form-control form-control-sm" placeholder="Modelo (opcional)"></div>
                     <div class="col-5"><input id="fotoInput" type="file" accept="image/*" capture="environment" class="form-control form-control-sm"></div>
                     <div class="col-12"><button id="btnConferir" class="btn btn-success w-100"><i class="fas fa-check"></i> Conferir chassi</button></div>
@@ -101,6 +105,9 @@
 <script>
 (function() {
     const CONFERIR_URL = "{{ url_for('carvia.conferir_chassi', coleta_id=coleta.id) }}";
+    const ESPERADOS_URL = "{{ url_for('carvia.chassis_esperados', coleta_id=coleta.id) }}";
+    const datalist = document.getElementById('chassisEsperados');
+    const modeloPorChassi = {};
     const CSRF = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
     const chassiInput = document.getElementById('chassiInput');
     const modeloInput = document.getElementById('modeloInput');
@@ -155,6 +162,31 @@
     });
     chassiInput.addEventListener('keydown', function(e) {
         if (e.key === 'Enter') { e.preventDefault(); const v = chassiInput.value.trim(); if (v) conferir(v, false); }
+    });
+
+    // Autocomplete: busca os chassis ESPERADOS (ainda nao conferidos) conforme digita.
+    let acTimer = null;
+    chassiInput.addEventListener('input', function() {
+        const q = chassiInput.value.trim();
+        // auto-preenche o modelo se o chassi ja for conhecido
+        if (modeloPorChassi[q.toUpperCase()] && !modeloInput.value) modeloInput.value = modeloPorChassi[q.toUpperCase()];
+        if (q.length < 2) return;
+        clearTimeout(acTimer);
+        acTimer = setTimeout(function() {
+            fetch(ESPERADOS_URL + '?q=' + encodeURIComponent(q))
+                .then(r => r.json())
+                .then(d => {
+                    if (!d.success) return;
+                    datalist.innerHTML = '';
+                    d.sugestoes.forEach(s => {
+                        modeloPorChassi[s.chassi] = s.modelo || '';
+                        const opt = document.createElement('option');
+                        opt.value = s.chassi;
+                        opt.label = (s.modelo || '') + (s.numero_nf ? ' · NF ' + s.numero_nf : '');
+                        datalist.appendChild(opt);
+                    });
+                }).catch(() => {});
+        }, 250);
     });
 
     document.getElementById('btnStart').addEventListener('click', function() {

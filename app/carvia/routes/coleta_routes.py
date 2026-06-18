@@ -258,6 +258,21 @@ def register_coleta_routes(bp):
         return render_template('carvia/coletas/recebimento.html',
                                coleta=coleta, recebimento=receb, chassis=chassis, resumo_nf=resumo)
 
+    @bp.route('/coletas/<int:coleta_id>/recebimento/chassis-esperados')  # type: ignore
+    @login_required
+    def chassis_esperados(coleta_id):  # type: ignore
+        """AJAX: autocomplete de chassi (esperados ainda nao conferidos)."""
+        if not _guard():
+            return jsonify({'success': False, 'message': 'Acesso negado'}), 403
+        from app.carvia.models.coleta import CarviaColeta
+        from app.carvia.services.documentos.coleta_recebimento_service import CarviaColetaRecebimentoService
+        coleta = db.session.get(CarviaColeta, coleta_id)
+        if coleta is None:
+            return jsonify({'success': False, 'message': 'Coleta nao encontrada'}), 404
+        sugestoes = CarviaColetaRecebimentoService.chassis_esperados(
+            coleta, q=request.args.get('q'))
+        return jsonify({'success': True, 'sugestoes': sugestoes})
+
     @bp.route('/coletas/<int:coleta_id>/recebimento/conferir', methods=['POST'])  # type: ignore
     @login_required
     def conferir_chassi(coleta_id):  # type: ignore

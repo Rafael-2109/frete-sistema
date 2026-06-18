@@ -59,6 +59,35 @@ class CarviaColetaRecebimentoService:
             return veic
         return None
 
+    # ------------------------------------------------------- autocomplete
+    @staticmethod
+    def chassis_esperados(coleta, q=None, limite=10):
+        """Chassis ESPERADOS (CarviaNfVeiculo das NFs vinculadas) ainda NAO conferidos.
+
+        Alimenta o autocomplete do recebimento (digitacao a mao). Filtra por substring `q`.
+        """
+        from app.carvia.models.documentos import CarviaNfVeiculo, CarviaNf
+        nf_ids = CarviaColetaRecebimentoService._nf_ids_da_coleta(coleta)
+        if not nf_ids:
+            return []
+        receb = CarviaColetaRecebimentoService._get_recebimento(coleta)
+        ja_conferidos = set()
+        if receb is not None:
+            ja_conferidos = {c.chassi for c in receb.chassis.all()}
+        query = CarviaNfVeiculo.query.filter(CarviaNfVeiculo.nf_id.in_(nf_ids))
+        if q and q.strip():
+            query = query.filter(CarviaNfVeiculo.chassi.ilike(f'%{q.strip().upper()}%'))
+        out = []
+        for v in query.order_by(CarviaNfVeiculo.chassi).limit(limite * 3).all():
+            if v.chassi in ja_conferidos:
+                continue
+            nf = db.session.get(CarviaNf, v.nf_id)
+            out.append({'chassi': v.chassi, 'modelo': v.modelo,
+                        'numero_nf': nf.numero_nf if nf else None})
+            if len(out) >= limite:
+                break
+        return out
+
     # ------------------------------------------------------------ conferir
     @staticmethod
     def conferir_chassi(coleta, chassi, *, modelo=None, qr_code_lido=False,

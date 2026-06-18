@@ -95,7 +95,7 @@ def test_backfill_sem_nulos(db, tabela):
 # --------------------------------------------------------------------------- #
 # 4. VIEW pedidos: Nacom = VM; CarVia = NULL (ate a Coleta atribuir)
 # --------------------------------------------------------------------------- #
-def test_view_nacom_vm_carvia_null(db):
+def test_view_nacom_e_carvia_default_vm(db):
     # Nacom (lote NAO 'CARVIA-%') que tenha local_cd preenchido -> tem que ser VM
     nacom_nao_vm = db.session.execute(text(
         "SELECT COUNT(*) FROM pedidos "
@@ -104,9 +104,9 @@ def test_view_nacom_vm_carvia_null(db):
     )).scalar()
     assert nacom_nao_vm == 0, 'Pedido Nacom com local_cd != VM na VIEW'
 
-    # CarVia: na fundacao a VIEW expoe NULL (origem virah da Coleta no stream 3)
-    carvia_nao_null = db.session.execute(text(
+    # CarVia: VIEW v11 (4B) expoe default VICTORIO_MARCHEZINE (nao mais NULL)
+    carvia_null = db.session.execute(text(
         "SELECT COUNT(*) FROM pedidos "
-        "WHERE separacao_lote_id LIKE 'CARVIA-%' AND local_cd IS NOT NULL"
+        "WHERE separacao_lote_id LIKE 'CARVIA-%' AND local_cd IS NULL"
     )).scalar()
-    assert carvia_nao_null == 0, 'Pedido CarVia ja com local_cd na VIEW (esperado NULL na fundacao)'
+    assert carvia_null == 0, 'Pedido CarVia com local_cd NULL (esperado VM default na v11)'

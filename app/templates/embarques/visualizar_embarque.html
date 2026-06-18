@@ -314,6 +314,13 @@
       <!-- TABELA DOS ITENS - Para ajustar larguras das colunas,       -->
       <!-- edite a seção CSS no topo do arquivo (linhas 5-72)          -->
       <!-- ============================================================ -->
+      {# Etapa 6: filtro por CD de expedicao (local_cd) — embarque pode ter os 2 CDs #}
+      <div class="mb-2 d-flex align-items-center gap-2 flex-wrap" id="filtroLocalCd">
+        <span class="small text-muted"><i class="fas fa-warehouse"></i> Filtrar por CD:</span>
+        <button type="button" class="btn btn-sm btn-primary" data-filter-local="">Todos</button>
+        <button type="button" class="btn btn-sm badge-local-cd-victorio border-0" data-filter-local="VICTORIO_MARCHEZINE">Victorio Marchezine</button>
+        <button type="button" class="btn btn-sm badge-local-cd-tenente border-0" data-filter-local="TENENTE_MARQUES">Tenente Marques</button>
+      </div>
       <div class="table-responsive">
         <table class="table table-striped table-bordered itens-embarque-table">
             <thead class="table-thead-theme">
@@ -350,7 +357,7 @@
                   {% endif %}
                 {% endif %}
               {% endif %}
-              <tr class="item-form{% if item and item.status == 'cancelado' %} table-danger{% endif %}"{% if item and item.status == 'cancelado' %} style="opacity: 0.6; text-decoration: line-through;"{% endif %}>
+              <tr class="item-form{% if item and item.status == 'cancelado' %} table-danger{% endif %}"{% if item %} data-local-cd="{{ item.local_cd or 'VICTORIO_MARCHEZINE' }}"{% endif %}{% if item and item.status == 'cancelado' %} style="opacity: 0.6; text-decoration: line-through;"{% endif %}>
                 {# ✅ CORREÇÃO: Renderizar ID diretamente do objeto item, não do WTForms #}
                 <input type="hidden" name="itens-{{ loop_index }}-id" value="{{ item.id if item else '' }}">
                 <td title="{{ item.cliente if item else '' }}">
@@ -1288,6 +1295,27 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 });
+</script>
+
+<script>
+// Etapa 6: filtra os itens do embarque pelo CD de expedicao (local_cd).
+(function() {
+    const box = document.getElementById('filtroLocalCd');
+    if (!box) return;
+    box.querySelectorAll('[data-filter-local]').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            const alvo = this.dataset.filterLocal;
+            box.querySelectorAll('[data-filter-local]').forEach(function(b) {
+                b.classList.toggle('btn-primary', b === btn && alvo === '');
+            });
+            document.querySelectorAll('tr.item-form').forEach(function(tr) {
+                const loc = tr.getAttribute('data-local-cd');
+                // linhas sem local (form vazio) permanecem; senao mostra so o CD alvo
+                tr.style.display = (!alvo || loc === null || loc === alvo) ? '' : 'none';
+            });
+        });
+    });
+})();
 </script>
 
 {% endblock %}
