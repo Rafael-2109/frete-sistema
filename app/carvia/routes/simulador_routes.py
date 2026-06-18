@@ -211,6 +211,56 @@ def register_simulador_routes(bp):
             'items_sem_modelo': items_sem_modelo,
         })
 
+    @bp.route('/api/simulador-carga/veiculo/<int:veiculo_id>/dimensoes', methods=['POST'])
+    @login_required
+    def api_simulador_salvar_dimensoes(veiculo_id):
+        """Persiste as dimensoes do bau editadas no simulador no cadastro do Veiculo.
+
+        O override de dimensoes do simulador e' so client-side; este endpoint grava
+        comprimento/largura/altura_bau (cm) no `Veiculo` para reuso em proximas cargas.
+        """
+        if not getattr(current_user, 'sistema_carvia', False):
+            return jsonify({'erro': 'Acesso negado'}), 403
+
+        from app import db
+        from app.veiculos.models import Veiculo
+
+        veiculo = Veiculo.query.get_or_404(veiculo_id)
+        data = request.get_json(silent=True) or {}
+
+        def _positivo(valor):
+            try:
+                num = float(valor)
+            except (TypeError, ValueError):
+                return None
+            return num if num > 0 else None
+
+        comp = _positivo(data.get('comprimento_bau'))
+        larg = _positivo(data.get('largura_bau'))
+        alt = _positivo(data.get('altura_bau'))
+        if not (comp and larg and alt):
+            return jsonify({
+                'erro': 'Dimensões inválidas — informe comprimento, largura e altura (> 0).'
+            }), 400
+
+        veiculo.comprimento_bau = comp
+        veiculo.largura_bau = larg
+        veiculo.altura_bau = alt
+        db.session.commit()
+
+        return jsonify({
+            'sucesso': True,
+            'veiculo': {
+                'id': veiculo.id,
+                'nome': veiculo.nome,
+                'peso_maximo': veiculo.peso_maximo,
+                'comprimento_bau': veiculo.comprimento_bau,
+                'largura_bau': veiculo.largura_bau,
+                'altura_bau': veiculo.altura_bau,
+                'tem_dimensoes_bau': veiculo.tem_dimensoes_bau(),
+            },
+        })
+
 
 def _resolver_dados_embarque(embarque):
     """Resolve veiculo e motos de um embarque para o simulador.
@@ -260,11 +310,22 @@ def _resolver_prefill_rota(lotes, veiculo_id=None):
     """Resolve veiculo + motos para pre-preencher o simulador a partir dos
     lotes de uma rota do mapa.
 
-    Lotes CarVia tem o formato 'CARVIA-NF-{nf_id}' (extrai o id direto).
-    Lotes NACOM (separacao_lote_id) resolvem a NF via Separacao.numero_nf.
+    Formatos de lote suportados (o mapa monta CarVia via cotacao/pedido,
+    NAO via NF — ver app/carteira/services/mapa_service.py):
+      - 'CARVIA-NF-{nf_id}'  -> id de CarviaNf direto
+      - 'CARVIA-PED-{ped_id}' -> CarviaPedido -> itens (numero_nf / modelo)
+      - 'CARVIA-{cot_id}'    -> CarviaCotacao -> pedidos -> itens
+      - separacao_lote_id NACOM -> NF via Separacao.numero_nf
+
+    Pedidos CarVia faturados resolvem as motos REAIS pelas NFs
+    (CarviaPedidoItem.numero_nf -> CarviaNfVeiculo / chassi). Itens ainda
+    sem NF caem no fallback direto (modelo_moto_id + quantidade) para o
+    simulador abrir preenchido mesmo antes do faturamento.
     """
     nf_ids = set()
     numeros_nf = set()
+    pedido_ids = set()
+    cotacao_ids = set()
     lotes_nacom = []
 
     for lote in lotes or []:
@@ -274,8 +335,40 @@ def _resolver_prefill_rota(lotes, veiculo_id=None):
                 nf_ids.add(int(texto.rsplit('-', 1)[1]))
             except (ValueError, IndexError):
                 pass
+        elif texto.startswith('CARVIA-PED-'):
+            try:
+                pedido_ids.add(int(texto.rsplit('-', 1)[1]))
+            except (ValueError, IndexError):
+                pass
+        elif texto.startswith('CARVIA-'):
+            try:
+                cotacao_ids.add(int(texto.rsplit('-', 1)[1]))
+            except (ValueError, IndexError):
+                pass
         else:
             lotes_nacom.append(texto)
+
+    # Pedidos/cotacoes CarVia -> itens (numero_nf faturado OU modelo direto)
+    itens_diretos = []  # [(modelo_moto_id, quantidade)] de itens ainda sem NF
+    if pedido_ids or cotacao_ids:
+        from app.carvia.models.cotacao import CarviaPedido, CarviaPedidoItem
+
+        ped_ids = set(pedido_ids)
+        if cotacao_ids:
+            rows = CarviaPedido.query.filter(
+                CarviaPedido.cotacao_id.in_(list(cotacao_ids))
+            ).with_entities(CarviaPedido.id).all()
+            ped_ids.update(r[0] for r in rows)
+
+        if ped_ids:
+            itens = CarviaPedidoItem.query.filter(
+                CarviaPedidoItem.pedido_id.in_(list(ped_ids))
+            ).all()
+            for it in itens:
+                if it.numero_nf and str(it.numero_nf).strip():
+                    numeros_nf.add(str(it.numero_nf).strip())
+                elif it.modelo_moto_id:
+                    itens_diretos.append((it.modelo_moto_id, it.quantidade or 0))
 
     if lotes_nacom:
         from app.separacao.models import Separacao
@@ -286,7 +379,7 @@ def _resolver_prefill_rota(lotes, veiculo_id=None):
         numeros_nf.update(r[0] for r in rows if r[0])
 
     motos, peso_total, items_sem_modelo = _resolver_motos_de_nfs(
-        numeros_nf=numeros_nf, nf_ids=nf_ids
+        numeros_nf=numeros_nf, nf_ids=nf_ids, itens_diretos=itens_diretos
     )
     return {
         'veiculo': _veiculo_data_por_id(veiculo_id),
@@ -296,19 +389,28 @@ def _resolver_prefill_rota(lotes, veiculo_id=None):
     }
 
 
-def _resolver_motos_de_nfs(numeros_nf=None, nf_ids=None):
+def _resolver_motos_de_nfs(numeros_nf=None, nf_ids=None, itens_diretos=None):
     """Resolve a contagem de motos por modelo a partir de numeros de NF e/ou
-    ids de CarviaNf.
+    ids de CarviaNf. Devolve (lista_motos, peso_total, items_sem_modelo).
 
-    Reune os CarviaNfVeiculo das NFs, casa cada modelo textual (chassi) contra
-    CarviaModeloMoto e devolve (lista_motos, peso_total, items_sem_modelo).
+    Por NF, a fonte das motos e (nesta ordem, sem dupla contagem):
+      1. `carvia_nf_veiculos` (1 chassi por linha, match textual do modelo) —
+         contagem exata; preserva NFs que ja tem chassis.
+      2. `carvia_nf_itens.modelo_moto_id` + `quantidade` — fonte do peso cubado
+         (MotoRecognitionService). SO para NFs SEM chassi (PDF_DANFE: tem o item
+         com modelo, sem chassis). Itens sem modelo sao ignorados.
+
     Helper unico compartilhado por embarque (numeros_nf), simulador livre
     (NF nao entregue) e rota do mapa (nf_ids diretos + numeros_nf NACOM).
+
+    `itens_diretos` = [(modelo_moto_id, quantidade)] de itens de pedido CarVia
+    ainda sem NF (fallback pre-faturamento) — somados a contagem por modelo.
     """
     from app.carvia.models.config_moto import CarviaModeloMoto
-    from app.carvia.models.documentos import CarviaNf, CarviaNfVeiculo
+    from app.carvia.models.documentos import CarviaNf, CarviaNfItem, CarviaNfVeiculo
 
     modelos_ativos = CarviaModeloMoto.query.filter_by(ativo=True).all()
+    modelos_dict = {m.id: m for m in modelos_ativos}
     contagem_modelos = defaultdict(int)  # {modelo_id: quantidade}
     items_sem_modelo = 0
     peso_total = 0.0
@@ -322,10 +424,15 @@ def _resolver_motos_de_nfs(numeros_nf=None, nf_ids=None):
         ids.update(nf.id for nf in carvia_nfs)
 
     if ids:
+        ids_list = list(ids)
+        # FONTE PRIMARIA: chassis (carvia_nf_veiculos) — 1 linha por moto fisica,
+        # contagem exata. Preserva o comportamento das NFs que ja tem chassis.
         veiculos_nf = CarviaNfVeiculo.query.filter(
-            CarviaNfVeiculo.nf_id.in_(list(ids))
+            CarviaNfVeiculo.nf_id.in_(ids_list)
         ).all()
+        nfs_com_chassi = set()
         for veiculo_nf in veiculos_nf:
+            nfs_com_chassi.add(veiculo_nf.nf_id)
             modelo_match = _match_modelo_veiculo(veiculo_nf.modelo, modelos_ativos)
             if modelo_match:
                 contagem_modelos[modelo_match.id] += 1
@@ -334,7 +441,41 @@ def _resolver_motos_de_nfs(numeros_nf=None, nf_ids=None):
             else:
                 items_sem_modelo += 1
 
-    modelos_dict = {m.id: m for m in modelos_ativos}
+        # FONTE ALTERNATIVA: carvia_nf_itens (modelo_moto_id + quantidade) — mesma
+        # fonte do peso cubado (MotoRecognitionService). SO p/ NFs SEM chassi (a
+        # maioria, importadas por PDF_DANFE: tem o item com modelo, sem chassis).
+        # Itens sem modelo sao ignorados (consistente com calcular_peso_cubado_nf).
+        itens_nf = CarviaNfItem.query.filter(
+            CarviaNfItem.nf_id.in_(ids_list),
+            CarviaNfItem.modelo_moto_id.isnot(None),
+        ).all()
+        for it in itens_nf:
+            if it.nf_id in nfs_com_chassi:
+                continue  # ja contada (exata) pelos chassis
+            qtd = int(round(float(it.quantidade or 0)))
+            if qtd <= 0:
+                continue
+            m = modelos_dict.get(it.modelo_moto_id)
+            if m:
+                contagem_modelos[m.id] += qtd
+                if m.peso_medio:
+                    peso_total += float(m.peso_medio) * qtd
+            else:
+                items_sem_modelo += qtd  # modelo inativo
+
+    # Fallback: itens de pedido CarVia sem NF (modelo_moto_id + quantidade)
+    for modelo_id, qtd in (itens_diretos or []):
+        qtd = int(qtd or 0)
+        if qtd <= 0:
+            continue
+        m = modelos_dict.get(modelo_id)
+        if m:
+            contagem_modelos[m.id] += qtd
+            if m.peso_medio:
+                peso_total += float(m.peso_medio) * qtd
+        else:
+            items_sem_modelo += qtd
+
     motos = []
     for modelo_id, qtd in contagem_modelos.items():
         m = modelos_dict[modelo_id]

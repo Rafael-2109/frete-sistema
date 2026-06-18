@@ -32,7 +32,7 @@
     motoListEmbarque: [], // lista de motos do embarque (modo 'embarque'), p/ re-empacotar
     packToken: 0, // descarta resultado de otimizacao obsoleto (input mudou)
     nfsPendentes: null, // cache das NFs CarVia nao entregues (lazy, modo livre)
-    nfsAdicionadas: {}, // {numero_nf: true} ja puxadas para o simulador
+    nfsAdicionadas: {}, // {numero_nf: [{modelo_id, quantidade}]} — motos puxadas por NF (p/ remover)
     pallets: [], // pallets de conservas Nacom (Camada 1) empacotados junto das motos
     loteSeparacao: null, // separacao_lote_id ativo (modo livre)
   };
@@ -70,6 +70,7 @@
         bindEvents();
         bindPackControls(scheduleRecalc);
         setupNfSelector();
+        setupSalvarDimensoes();
         setupPalletControls();
 
         // Prefill (rota do mapa) tem prioridade na selecao do veiculo + motos
@@ -293,6 +294,7 @@
     }
     var opt = select.options[select.selectedIndex];
     state.veiculoSelecionado = {
+      id: parseInt(select.value, 10),
       w: parseFloat(opt.dataset.comprimento),
       d: parseFloat(opt.dataset.largura),
       h: parseFloat(opt.dataset.altura),
@@ -447,18 +449,22 @@
 
   function addNf(nf) {
     if (state.nfsAdicionadas[nf.numero_nf]) return;
-    state.nfsAdicionadas[nf.numero_nf] = true;
+    state.nfsAdicionadas[nf.numero_nf] = []; // placeholder anti duplo-clique
 
     fetch('/carvia/api/simulador-carga/motos-por-nf?nfs=' + encodeURIComponent(nf.numero_nf))
       .then(function (r) { return r.json(); })
       .then(function (data) {
         var motos = data.motos || [];
+        state.nfsAdicionadas[nf.numero_nf] = motos; // guarda p/ remover depois
         for (var i = 0; i < motos.length; i++) {
           addOrIncrementMoto(motos[i].modelo_id, motos[i].quantidade);
         }
         addNfChip(nf, motos);
+        // Fecha a listagem ao selecionar: limpa busca + resultados (chips ficam visiveis).
         var search = document.getElementById('simulador-nf-search');
-        renderNfResults(search ? search.value : '');
+        if (search) search.value = '';
+        var results = document.getElementById('simulador-nf-results');
+        if (results) results.innerHTML = '';
       })
       .catch(function (err) {
         console.error('Erro ao resolver motos da NF:', err);
@@ -473,10 +479,64 @@
     for (var i = 0; i < motos.length; i++) total += (motos[i].quantidade || 0);
 
     var chip = document.createElement('span');
-    chip.className = 'badge bg-secondary';
+    chip.className = 'badge bg-secondary d-inline-flex align-items-center gap-1';
     chip.dataset.nf = nf.numero_nf;
-    chip.textContent = 'NF ' + nf.numero_nf + ' (' + total + (total === 1 ? ' moto)' : ' motos)');
+
+    var label = document.createElement('span');
+    label.textContent = 'NF ' + nf.numero_nf + ' (' + total + (total === 1 ? ' moto)' : ' motos)');
+    chip.appendChild(label);
+
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'btn-close btn-close-white';
+    btn.style.fontSize = '0.55rem';
+    btn.setAttribute('aria-label', 'Remover NF ' + nf.numero_nf);
+    btn.addEventListener('click', function () { removeNf(nf.numero_nf); });
+    chip.appendChild(btn);
+
     chips.appendChild(chip);
+  }
+
+  /** Remove uma NF adicionada: decrementa as motos que ela injetou e tira o chip. */
+  function removeNf(numeroNf) {
+    var motos = state.nfsAdicionadas[numeroNf];
+    if (Array.isArray(motos)) {
+      for (var i = 0; i < motos.length; i++) {
+        decrementMoto(motos[i].modelo_id, motos[i].quantidade);
+      }
+    }
+    delete state.nfsAdicionadas[numeroNf];
+
+    var chips = document.getElementById('simulador-nf-chips');
+    if (chips) {
+      var chip = chips.querySelector('[data-nf="' + numeroNf + '"]');
+      if (chip) chip.remove();
+    }
+    // NF volta a ficar disponivel na busca
+    var search = document.getElementById('simulador-nf-search');
+    renderNfResults(search ? search.value : '');
+    scheduleRecalc();
+  }
+
+  /** Subtrai qty da linha do modelo; remove a linha se zerar. */
+  function decrementMoto(modeloId, qty) {
+    if (!modeloId || qty <= 0) return;
+    var rows = document.querySelectorAll('.simulador-moto-row');
+    for (var i = 0; i < rows.length; i++) {
+      var sel = rows[i].querySelector('.simulador-modelo-select');
+      if (sel && parseInt(sel.value) === parseInt(modeloId)) {
+        var qi = rows[i].querySelector('.simulador-qty-input');
+        var novo = (parseInt(qi.value) || 0) - qty;
+        if (novo > 0) {
+          qi.value = novo;
+        } else {
+          rows[i].remove();
+          updateRowColors();
+        }
+        scheduleRecalc();
+        return;
+      }
+    }
   }
 
   function escapeHtml(s) {
@@ -484,6 +544,100 @@
     return String(s).replace(/[&<>"']/g, function (c) {
       return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
     });
+  }
+
+  // ========== Persistir dimensoes do veiculo (override -> cadastro) ==========
+
+  function setupSalvarDimensoes() {
+    var btn = document.getElementById('simulador-salvar-dims');
+    if (btn) btn.addEventListener('click', salvarDimensoesVeiculo);
+  }
+
+  function getCsrfToken() {
+    var meta = document.querySelector('meta[name="csrf-token"]');
+    return meta ? meta.getAttribute('content') : '';
+  }
+
+  function notificarDims(msg, tipo) {
+    var el = document.getElementById('simulador-dims-status');
+    if (!el) return;
+    el.textContent = msg;
+    el.className = 'd-block mt-1 ' + (tipo === 'erro' ? 'text-danger' : 'text-success');
+    el.style.fontSize = '0.7rem';
+  }
+
+  function salvarDimensoesVeiculo() {
+    var select = document.getElementById('simulador-veiculo');
+    var veiculoId = select && select.value ? parseInt(select.value, 10) : null;
+    if (!veiculoId) {
+      notificarDims('Selecione um veículo primeiro.', 'erro');
+      return;
+    }
+    var comp = parseFloat((document.getElementById('simulador-override-comp') || {}).value);
+    var larg = parseFloat((document.getElementById('simulador-override-larg') || {}).value);
+    var alt = parseFloat((document.getElementById('simulador-override-alt') || {}).value);
+    if (!(comp > 0 && larg > 0 && alt > 0)) {
+      notificarDims('Informe comprimento, largura e altura (> 0).', 'erro');
+      return;
+    }
+
+    var btn = document.getElementById('simulador-salvar-dims');
+    if (btn) btn.disabled = true;
+    notificarDims('Salvando…', 'ok');
+
+    fetch('/carvia/api/simulador-carga/veiculo/' + veiculoId + '/dimensoes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrfToken() },
+      body: JSON.stringify({ comprimento_bau: comp, largura_bau: larg, altura_bau: alt }),
+    })
+      .then(function (r) {
+        return r.json().then(function (j) { return { ok: r.ok, body: j }; });
+      })
+      .then(function (res) {
+        if (btn) btn.disabled = false;
+        if (!res.ok || !res.body.sucesso) {
+          notificarDims((res.body && res.body.erro) || 'Falha ao salvar dimensões.', 'erro');
+          return;
+        }
+        atualizarVeiculoNoCatalogo(res.body.veiculo);
+        notificarDims('Dimensões salvas no veículo.', 'ok');
+      })
+      .catch(function (err) {
+        if (btn) btn.disabled = false;
+        console.error('Erro ao salvar dimensões:', err);
+        notificarDims('Erro de rede ao salvar.', 'erro');
+      });
+  }
+
+  /** Reflete as dimensoes salvas no cache, no <option> e no veiculo selecionado. */
+  function atualizarVeiculoNoCatalogo(v) {
+    if (!v) return;
+    for (var i = 0; i < state.veiculos.length; i++) {
+      if (state.veiculos[i].id === v.id) {
+        state.veiculos[i].comprimento_bau = v.comprimento_bau;
+        state.veiculos[i].largura_bau = v.largura_bau;
+        state.veiculos[i].altura_bau = v.altura_bau;
+        state.veiculos[i].tem_dimensoes_bau = v.tem_dimensoes_bau;
+        break;
+      }
+    }
+    var select = document.getElementById('simulador-veiculo');
+    if (select) {
+      var opt = select.querySelector('option[value="' + v.id + '"]');
+      if (opt) {
+        opt.dataset.comprimento = v.comprimento_bau;
+        opt.dataset.largura = v.largura_bau;
+        opt.dataset.altura = v.altura_bau;
+        opt.textContent = v.nome + ' — ' + formatNumber(v.peso_maximo) + 'kg (' +
+          Math.round(v.comprimento_bau) + '×' + Math.round(v.largura_bau) +
+          '×' + Math.round(v.altura_bau) + 'cm)';
+      }
+    }
+    if (state.veiculoSelecionado && state.veiculoSelecionado.id === v.id) {
+      state.veiculoSelecionado.w = v.comprimento_bau;
+      state.veiculoSelecionado.d = v.largura_bau;
+      state.veiculoSelecionado.h = v.altura_bau;
+    }
   }
 
   // ========== Conservas Nacom (pallets) ==========

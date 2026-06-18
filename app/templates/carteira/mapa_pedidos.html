@@ -2311,13 +2311,13 @@
             window.open(`/carteira/pedido/${numPedido}`, '_blank');
         }
 
-        // Abrir o Simulador 3D de carga com as motos dos lotes carregados no mapa (CarVia)
+        // Abrir o Simulador 3D de carga com as motos dos lotes SELECIONADOS no mapa (CarVia).
+        // Usa _lotesSelecionados() (selecao viva), igual salvarRota()/mostrarDensidade() — a
+        // variavel estatica lotesSelecionados vem vazia no fluxo interativo por lotes.
         function abrirSimulador3D() {
-            let lotes = (typeof lotesSelecionados !== 'undefined' && lotesSelecionados.length)
-                ? lotesSelecionados
-                : (typeof pedidosSelecionados !== 'undefined' ? pedidosSelecionados : []);
+            let lotes = _lotesSelecionados();
             if (!lotes || !lotes.length) {
-                alert('Nenhum pedido/lote carregado no mapa para simular.');
+                alert('Selecione ao menos 1 entrega no mapa para simular.');
                 return;
             }
             let url = "{{ url_for('carvia.simulador_carga_rota') }}?" +
