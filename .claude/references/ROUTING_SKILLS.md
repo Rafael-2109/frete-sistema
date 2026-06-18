@@ -160,6 +160,7 @@ Se a resposta esta no reference -> NAO usar skill.
 | executando-odoo-financeiro vs conciliando-transferencias-internas | Extrato de cliente/fornecedor (CNPJ terceiro) -> executando-odoo-financeiro. Extrato NACOM GOYA/61.724.241 (propria empresa) com par espelhado em outro journal -> conciliando-transferencias-internas. Sinal: "is_internal_transfer", "NACOM GOYA no extrato", "transferencia entre bancos proprios" -> conciliando-transferencias-internas |
 | gerando-baseline-conciliacao vs executando-odoo-financeiro | **Relatorio agregado** de pendentes por Mes x Journal (4 abas travadas) -> gerando-baseline-conciliacao. **Operacao** sobre linha individual (criar pagamento, reconciliar 1 extrato) -> executando-odoo-financeiro. Sinal: "atualizar baseline", "foto das conciliacoes", "extratos pendentes por mes" -> gerando-baseline-conciliacao. "reconcilie stmt X" -> executando-odoo-financeiro |
 | gerando-baseline-conciliacao vs razao-geral-odoo | **Extratos pendentes** de conciliacao (account.bank.statement.line is_reconciled=False) -> gerando-baseline-conciliacao. **Razao geral contabil** (account.move.line com saldo acumulado) -> razao-geral-odoo. Sinal: "baseline", "pendentes" -> baseline. "razao geral", "balancete" -> razao |
+| gerando-controle-recebiveis vs executando-odoo-financeiro / auditor-financeiro | **Gerar a PLANILHA de controle de titulos a receber** (situacao CONFIRMADO/Vencido/Em Aberto + vencidos por gestor, READ do contas_a_receber) -> gerando-controle-recebiveis. **Baixar/conciliar** um titulo no Odoo -> executando-odoo-financeiro. **Auditar inconsistencia/SEM_MATCH** local x Odoo -> auditor-financeiro. Sinal: "controle/planilha de recebiveis", "vencidos por gestor", "minha carteira de cobranca" -> gerando-controle-recebiveis |
 | razao-geral-odoo vs auditando-reclassificacao-odoo | **Razao/balancete completo** (todas as contas, saldo acumulado, export Excel) -> razao-geral-odoo. **Auditoria de reclassificacao** (UM par origem→destino: medir saldos por conta/periodo, validar lote-alvo, monitorar % migrado) READ-only -> auditando-reclassificacao-odoo. Sinal: "razao geral", "balancete" -> razao. "reclassificacao", "CPV/VarNeg", "lote-alvo", "quanto migrou" -> auditando-reclassificacao |
 | Nao sei qual skill Odoo usar | -> Subagente `especialista-odoo` (orquestra todas) |
 | Teams tasks vs diagnostico agente | **TeamsTask** (status task, stale cleanup) → `consultando-sql` direto. **Sessoes/memorias Teams** (filtro `--channel teams`, flags) → `gerindo-agente`. **Teams SSO** (config, webhook) → dev manual |
@@ -194,7 +195,7 @@ Se a resposta esta no reference -> NAO usar skill.
 
 ---
 
-## Skills — Inventario Completo (54 invocaveis em `.claude/skills/`)
+## Skills — Inventario Completo (56 invocaveis em `.claude/skills/`)
 
 Cada skill tem `SKILL.md` em `.claude/skills/<nome>/`. `consultando-sql` e invocavel mas expoe data folder (schemas/queries) descoberto via filesystem.
 `SKILL_IMPROVEMENT_ROADMAP.md` na raiz de `.claude/skills/` e DOC, nao skill (nao conta no inventario).
@@ -204,7 +205,7 @@ Cada skill tem `SKILL.md` em `.claude/skills/<nome>/`. `consultando-sql` e invoc
 `mcp__sessions__*` (2 tools), `mcp__render__*` (3 tools: logs, erros, status),
 `mcp__routes__search_routes` (1 tool: busca semantica rotas)
 
-### Skills Odoo (20)
+### Skills Odoo (21)
 `rastreando-odoo`, `executando-odoo-financeiro`, `descobrindo-odoo-estrutura`,
 `validacao-nf-po`, `conciliando-odoo-po`, `recebimento-fisico-odoo`, `razao-geral-odoo`,
 `conciliando-transferencias-internas`, `gerando-baseline-conciliacao`,
@@ -218,7 +219,8 @@ Cada skill tem `SKILL.md` em `.claude/skills/<nome>/`. `consultando-sql` e invoc
 `consultando-quant-odoo` (READ-only AO VIVO — auditoria pos-WRITE, snapshots de quants),
 `auditando-cadastro-fiscal-odoo` (PRE-FLIGHT V1 inventario — G017/G018/G035/G014 + D-OPS-2/3; READ-only + WRITE opcional G035 fix),
 `faturando-odoo` (WRITE Skill 8 — faturamento de NF SAIDA inter-company: 5 atomos sobre account.move + orchestrator pipeline A-F + recovery + FLUXO L3 1.2.x; dry-run default, SEFAZ via Playwright IRREVERSIVEL exige confirmar_sefaz=True),
-`auditando-reclassificacao-odoo` (READ-only — auditoria de reclassificacao contabil em lote: 3 modos sobre account.move.line (medir-saldos / validar-lote / monitorar-andamento); origem cluster 4 #164; NAO escreve; **delegada ao subagente auditor-financeiro** — fora do listing do principal por budget PAD-CTX)
+`auditando-reclassificacao-odoo` (READ-only — auditoria de reclassificacao contabil em lote: 3 modos sobre account.move.line (medir-saldos / validar-lote / monitorar-andamento); origem cluster 4 #164; NAO escreve; **delegada ao subagente auditor-financeiro** — fora do listing do principal por budget PAD-CTX),
+`baixando-credores-lote-odoo` (baixa de credores em lote a partir de planilha — par SICOOB+DESAGIO por vencimento sobre account.payment/move; HOJE so' passo 1a PREVIEW READ-only (WRITE 1b pendente, --confirmar recusado); escopo FB/LF, SC/CD=cross-company; **delegada ao subagente auditor-financeiro** — fora do listing do principal por budget PAD-CTX)
 
 ### Skills SSW (2)
 `acessando-ssw`, `operando-ssw`
@@ -235,10 +237,11 @@ Cada skill tem `SKILL.md` em `.claude/skills/<nome>/`. `consultando-sql` e invoc
 ### Sentry — monitoramento de erros (1)
 `consultando-sentry` (MCP-first, 20 tools, Seer AI)
 
-### Utilitarios compartilhados (11)
+### Utilitarios compartilhados (12)
 `exportando-arquivos`, `lendo-arquivos` (planilhas + documentos; consolidou `lendo-documentos` 2026-06-09), `consultando-sql`,
 `cotando-frete`, `visao-produto`, `resolvendo-entidades`, `gerindo-expedicao`,
 `monitorando-entregas`, `diagnosticando-banco`,
+`gerando-controle-recebiveis` (gera a planilha de controle de titulos a receber DO SISTEMA — contas_a_receber, situacao CONFIRMADO/Vencido/Em Aberto + vencidos por gestor; financeiro/cobranca. NAO recebe upload),
 `gerando-artifact` (chat web APENAS — bundle.html via React+Tailwind+Parcel, renderizado em modal sandboxed),
 `padronizando-docs` (CRIAR/EDITAR doc ou script conforme padrao PAD-A — header doc:meta, tipo/camada, registro no hub, doc_audit; ver `ARQUITETURA_DE_ARTEFATOS.md`)
 
@@ -266,6 +269,7 @@ NAO invocar do agente principal — fluxo orquestrado dentro do subagent.
 
 
 <!-- CHANGELOG DO INVENTARIO (movido da linha "Ultima Atualizacao" em 2026-06-09 — F0.4 do plano PAD-CTX; ~3.8K chars de historico dev que diluiam a leitura do agente):
+2026-06-18 (56 skills invocaveis — +1 Odoo: `baixando-credores-lote-odoo` baixa de credores em lote via planilha (par SICOOB+DESAGIO); HOJE so' passo 1a PREVIEW READ-only (WRITE 1b pendente); Skills Odoo 20→21; delegada ao subagente `auditor-financeiro` (budget PAD-CTX, mesmo motivo da Skill F). Nota: header passou de 55→56 — a Skill F `gerando-controle-recebiveis` (2026-06-18) ja contava no FS mas o header nao fora bumpado.)
 2026-06-13 (54 skills invocaveis — +1 Odoo: `auditando-reclassificacao-odoo` READ-only de auditoria de reclassificacao contabil em lote (medir-saldos / validar-lote / monitorar-andamento sobre account.move.line); origem cluster 4 #164 decisao 4-maos; Skills Odoo 19→20; NAO escreve — irma #163 write em massa rejeitada)
 2026-06-11 (53 skills invocaveis — correcao de contagem: 54 contava o arquivo SKILL_IMPROVEMENT_ROADMAP.md como skill; Utilitarios 12→11 pela consolidacao lendo-documentos→lendo-arquivos de 2026-06-09 nao refletida no header)
 **Ultima Atualizacao**: 08/06/2026 (54 skills invocaveis — 3 novas em 2026-06-02: `carregando-motos-assai` (motos_assai 6->7), `consultando-venda-loja` (Lojas HORA 5->6), `padronizando-docs` (util docs/dev, padrao PAD-A — antes ausente do inventario). 2026-05-30 (51 skills): `faturando-odoo` adicionada ao inventario; estendida em 2026-05-26 v19+: `escriturando-odoo` virou ABRANGENTE com 7 atomos sobre `account.move`+DFe/PO/invoice (`buscar_dfe`, `criar_dfe_a_partir_do_invoice_saida`, `escriturar_dfe`, `gerar_po_from_dfe`, `preencher_po`, `confirmar_po`, `criar_invoice_from_po`); compostos via FLUXOS L3 1.2.1 caminho A (DFe ja veio via SEFAZ) e 1.2.2 caminho B (DFe ausente — upload XML da SAIDA); dispatch `FaturamentoPipelineExecutor.executar_fluxo_l3_1_2_x` no orchestrator decide caminho A vs B via `buscar_dfe`; wrapper V1 STRICT `criar_recebimento_orchestrado` LF→FB deprecado v20+; `operando-picking-odoo` ganhou atomo `preencher_lotes_picking` (Skill 5 atomo S2 reusado pelos fluxos L3 1.2.x); `criar_picking_entrada_destino_manual` DEPRECATED docblock (museum vivo ate canary v20+); 555 baseline pytest Odoo. Em 2026-05-25 v15a: `operando-picking-odoo` ganhou 3 atomos inter-company para Skill 8 (`criar_picking_inter_company` codifica D-OPS-3 tracking='none' · `validar_picking_inter_company` fluxo F5b completo + G018 peso/volumes · `criar_picking_entrada_destino_manual` ETAPA F com G023 company_id forcado + idempotencia origin); +19 pytest verdes (42→61 stock_picking_service); centralizadas constants ETAPA F (`PICKING_TYPE_ENTRADA_DESTINO_MANUAL`, `COMPANY_LABEL_ENTRADA`, `ACOES_ENTRADA_DESTINO_MANUAL`, `LOCATION_ORIGEM_ENTRADA_INDUSTR`) em `app/odoo/constants/picking_types.py`; smoke PROD validou D-OPS-3 detection em 6 cods v14a-ops; 435 baseline pytest Odoo. Adicionada em 2026-05-25 v14b: `auditando-cadastro-fiscal-odoo` (PRE-FLIGHT perfil V1 'inventario'; sub-skill delegada pela Skill 8 'faturando-odoo' v15+; cobre G017/G018/G035/G014 + D-OPS-2/3; service `app/odoo/estoque/scripts/cadastro_fiscal_audit.py` ~430 LOC; 14 testes pytest verdes; smoke PROD em 6 cods v14a-ops detectou 2 G014 + 1 D-OPS-3 em 987ms). 2026-05-24 v6: `planejando-pre-etapa-odoo` (READ Odoo + WRITE banco local — planejador da pre-etapa D007 do inventario CD/FB; substitui NFs inter-filial CD↔FB R$ 32,9 mi + INDISPONIBILIZAR_* R$ 60,5 mi por transferencias INTERNAS na company + residual minimo CFOP 5152; 4 modos: planejar/propor/listar-onda/aprovar-onda; service `app/odoo/estoque/scripts/pre_etapa.py` capinado de services/; hash sha256 anti-replay no workflow de aprovacao; 19 testes pytest verdes — 13 originais + 6 helpers novos). 2026-05-24 v5: `operando-mo-odoo` (WRITE cancelar Manufacturing Order single ou batch; service novo `app/odoo/estoque/scripts/mo.py`; guard G-MO-01 furo contabil — bloqueia consumo>0; idempotencia validada AO VIVO em MO state=cancel). 2026-05-24 v3: `operando-picking-odoo` (WRITE cancelar/validar/devolver picking; capina StockPickingService para `app/odoo/estoque/scripts/picking.py`; invariante G019/G020 fechada no codigo — re-leitura de state pos-button_validate; novo atomo `devolver` cria stock.return.picking idempotente). 2026-05-24 v2: `transferindo-interno-odoo` (WRITE transferencia interna intra-empresa: lote→lote mesma loc OU loc→loc mesmo lote; composicao de ajustar_quant 2x com delta_esperado propagado, G021/G022/G027 codificados). 2026-05-23: `ajustando-quant-odoo` (WRITE 1 stock.quant), `operando-reservas-odoo` (WRITE cirurgia/cancelamento de pickings com MLs orfas), `consultando-quant-odoo` (READ ao vivo no Odoo — auditoria pos-WRITE). 2026-05-16: `parseando-sped-ecd`, `auditando-sped-contabil`, `auditando-sped-vs-manual`, `comparando-sped-ground-truth` — pipeline de auditoria SPED ECD usado exclusivamente pelo subagent `auditor-sped-ecd`)

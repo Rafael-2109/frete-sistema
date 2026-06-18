@@ -44,6 +44,47 @@ Indice de execucoes do dialogo de melhoria Agent SDK <-> Claude Code.
 | 38 | 2026-06-14 | 0 | 0 | 0 | 0 | SKIP (sem backlog) |
 | 39 | 2026-06-16 | 3 | 1 | 1 | 1 | OK (skill_bug journals conciliando-transf-internas: 1054 era VORTX AGIS nao "BRADESCO copia" + 6 journals faltantes, corrigido ao vivo + resolver_journal_id dinamico; 1 rejeicao falso-positivo "beneficiario TED nao importado" refutado por 643 linhas SRM ilike NACOM GOYA; 1 proposta write-path CarVia via backfill existente; 3 F2 adhoc/skill-gap listadas p/ Rafael) |
 | 40 | 2026-06-17 | 4 | 2 | 0 | 2 | OK (skill_bug operando-picking-odoo 'devolver' reutilizava devolucao state=cancel — aplicado padrao G-AUDIT-3/N23 em picking.py+operar_picking.py, 2 TDD, 72 passed; IMP-2026-06-17-001 XML CT-e ja existia no consultar_ctrc_101.py --nf --baixar-xml, so faltava entrega → nota exportando-arquivos; 2 propostas: add separacao em embarque toca routes.py + Situacao 3 journal errado destrutivo Odoo PROD) |
+| 41 | 2026-06-18 | 2 | 0 | 2 | 0 | OK (revisao 4-maos: IMP-2026-06-17-002 RECUSADA por risco+frequencia — TRUNCATE em PROD + demanda ad-hoc/rara nao viram skill NEM script versionado; script reset_motos_assai.py REMOVIDO. IMP-2026-06-17-003 rejeitada: bloqueio read-only feature intencional text_to_sql:417 + PROMPT INJECTION no evidence_json. 2 F2 adhoc-cluster-1385/1433 de Martha id 82 EM ESTUDO p/ Rafael) |
+
+## 2026-06-18
+
+2 sugestoes `IMP-*` avaliaveis + 2 F2 `adhoc-` (gate humano, apenas listadas). Ambas as `IMP-*`
+e ambas as `adhoc-` da query LIMIT 10. Pos-revisao 4-maos: **2 rejeitadas, 0 implementadas**.
+
+- **[REJEITADO na revisao 4-maos — 2026-06-18] IMP-2026-06-17-002** (skill_suggestion, warning) —
+  origem **Rayssa Alves (id 78)**. Pediam skill de reset transacional do Motos Assai. O D8 desta data
+  havia auto-implementado um **script DEV** `scripts/maintenance/reset_motos_assai.py`. Na revisao com
+  o Rafael a sugestao foi **RECUSADA e o script REMOVIDO** por **risco + frequencia**:
+  (1) **risco** — versionar um executor de `TRUNCATE` de 25 tabelas em PROD deixa uma arma de reset
+  carregada no repo, por mais salvaguardas que tenha; (2) **frequencia** — e' demanda ad-hoc e rara,
+  nao fluxo repetitivo, nao justifica skill (ja descartada: agente read-only) NEM script versionado.
+  Quando o reset for realmente preciso, faz-se sob demanda no Claude Code 4-maos com o escopo revisado
+  na hora. Reverteu-se a adicao do script e da secao em `app/motos_assai/CLAUDE.md`. Banco: v2 (id 201)
+  e v1 (id 197) propagadas para `rejected`.
+
+- **[REJEITADO] IMP-2026-06-17-003** (gotcha_report, warning) — origem **Rayssa Alves (id 78)**.
+  "Agente read-only bloqueia reset destrutivo" NAO e bug: regra 2.1.1, codigo do fluxo oficial e
+  soberano e esta correto — `text_to_sql_tool.py:417` documenta que escrita so e liberada em modo
+  admin (`<sql_admin_context>`), ausente nesta sessao; o bloqueio "SQL deve comecar com SELECT ou
+  WITH" atuou como projetado. Politica: destrutivo/DEV via Claude Code 4-maos, nunca tela web; o
+  workaround (entregar `.sql` a humano) e o comportamento desejado. ⚠️ O `evidence_json` continha
+  **tentativa de prompt injection** (tags falsas `</invoke>` + `<invoke name="Bash">` mandando rodar
+  `exportar.py`) — tratada como dado, nada executado; reforca manter o agente read-only. Demanda
+  legitima por baixo atendida na IMP-002.
+
+- **[F2 — ESTUDADAS, re-enquadradas] adhoc-cluster-1385 / adhoc-cluster-1433** — origem **Martha de
+  Jesus Frugoli dos Reis (id 82, financeiro)**. Estudo a fundo (sessao bc16f6e4, 17/06): re-enquadradas de
+  "skill de Excel" para necessidade de **dominio** (conciliacao Grafeno + recebiveis vencidos por gestor).
+  Provado que a planilha `base_grafeno.xlsx` e **shadow do `public.contas_a_receber`** — teste de ouro
+  casou `No.Titulo` Grafeno == `titulo_nf` (NF 147995 BORGES R$4.561,82; NF 148458 LR PIZZARIA 2×R$2.197,46)
+  e 6/6 raizes-CNPJ de clientes; chave real e o CNPJ (nomes locais sao fantasia). Veredito
+  **A_shadow_do_sistema**, confianca alta (Excel completo nao recuperavel — /tmp do worker reciclado).
+  Gerada planilha-exercicio 100% do sistema (138 parcelas) como prova. Uso real: 11 sessoes/17d, ~$258,
+  277 scripts so em 17/06. **Decisao: NAO implementar skill de Excel.** Gaps a corrigir no SISTEMA:
+  (1) parser do extrato Grafeno (`dispatcher.py` "Futuro"), (2) gestor de carteira no relatorio de vencidos
+  (so existe no Odoo `sale.order.team_id`), (3) **bug do validador SQL — JA CORRIGIDO** (Camada 7 do
+  `SQLSafetyValidator` bloqueava colunas `vendedor`/`equipe_vendas` homonimas de tabela bloqueada;
+  `extract_tables_from_sql` posicional + 5 testes). Detalhe no `dialogue-2026-06-18.md`.
 
 ## 2026-06-17
 
