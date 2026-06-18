@@ -53,6 +53,14 @@ Hook em `portaria/routes.py` chama `CarviaFreteService.lancar_frete_carvia()` â€
 
 Unique constraint `(embarque_id, cnpj_emitente, cnpj_destino)` no banco previne dupla gravacao.
 
+### Gate da ultima saida (embarque bifurcado VM/TM)
+
+Em embarque MISTO (itens ativos em >1 `local_cd`), `_processar` aborta cedo (retorna `[]`)
+enquanto algum CD ainda nao deu saida â€” o frete CarVia so e gerado na **ULTIMA saida**, senao
+nasceria sem os itens do CD pendente. Embarque de 1 unico CD = comportamento legado (a unica
+saida ja satisfaz). Helper `app.utils.local_cd.cds_pendentes_de_saida(embarque)`, espelhando o
+gate Nacom em `fretes.verificar_requisitos_para_lancamento_frete` (REQUISITO 0.1). Frente C, 2026-06-18.
+
 ### NF tardia
 
 Se o `CarviaFrete` ja existe para aquele grupo, o orquestrador **ATUALIZA** totais (nao duplica).
