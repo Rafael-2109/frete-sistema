@@ -124,6 +124,8 @@ Excecoes permitidas: `app/transportadoras/models.py`, `app/tabelas/models.py`, `
 
 **Excecao do Simulador 3D** (`routes/simulador_routes.py`): le (LAZY, READ-ONLY) `app/embarques` (Embarque/EmbarqueItem), `app/separacao` (Separacao), `app/carteira` (RotaSalva) e `app/monitoramento` (EntregaMonitorada) APENAS para pre-preencher a simulacao de carga — resolve NFs do embarque / da rota do mapa / nao entregues -> `CarviaNf` -> `CarviaNfVeiculo` -> `CarviaModeloMoto`. Sem escrita; helper unico `_resolver_motos_de_nfs(numeros_nf, nf_ids)`. NAO replicar esse cruzamento em services de negocio.
 
+> **Conservas Nacom (carga mista, 2026-06-18)**: o mesmo simulador tambem monta pallets PBR de conservas Nacom e os arranja no baú junto das motos (pallets no piso, motos por cima — caminho critico). A montagem (regras 1-3, modos A-D, overbooking, folga 5cm) vive em `app/carteira/services/palletizacao_service.py` (Camada 1, Python testavel); o arranjo 3D (perfil multi-slab estrado+coluna, empacotamento em 2 fases) em `app/static/js/simulador-carga/bin-packer.js` (Camada 2). Rotas: `api/simulador-carga/pallets-por-separacao` + pallets Nacom (LOTE_*) no modo embarque (`_resolver_dados_embarque`). LAZY read-only de `app/separacao`+`app/producao` (CadastroPalletizacao). Spec/plano: `docs/superpowers/{specs,plans}/2026-06-18-simulador-3d-conservas-nacom*`.
+
 ### R2: Lazy imports nos routes e services
 Imports de services e models de outros modulos sao LAZY (dentro de funcoes). NAO mover para module-level — causa circular imports e startup overhead.
 
