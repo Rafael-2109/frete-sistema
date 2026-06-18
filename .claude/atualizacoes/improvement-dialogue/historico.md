@@ -44,6 +44,39 @@ Indice de execucoes do dialogo de melhoria Agent SDK <-> Claude Code.
 | 38 | 2026-06-14 | 0 | 0 | 0 | 0 | SKIP (sem backlog) |
 | 39 | 2026-06-16 | 3 | 1 | 1 | 1 | OK (skill_bug journals conciliando-transf-internas: 1054 era VORTX AGIS nao "BRADESCO copia" + 6 journals faltantes, corrigido ao vivo + resolver_journal_id dinamico; 1 rejeicao falso-positivo "beneficiario TED nao importado" refutado por 643 linhas SRM ilike NACOM GOYA; 1 proposta write-path CarVia via backfill existente; 3 F2 adhoc/skill-gap listadas p/ Rafael) |
 | 40 | 2026-06-17 | 4 | 2 | 0 | 2 | OK (skill_bug operando-picking-odoo 'devolver' reutilizava devolucao state=cancel — aplicado padrao G-AUDIT-3/N23 em picking.py+operar_picking.py, 2 TDD, 72 passed; IMP-2026-06-17-001 XML CT-e ja existia no consultar_ctrc_101.py --nf --baixar-xml, so faltava entrega → nota exportando-arquivos; 2 propostas: add separacao em embarque toca routes.py + Situacao 3 journal errado destrutivo Odoo PROD) |
+| 41 | 2026-06-18 | 2 | 1 | 1 | 0 | OK (IMP-2026-06-17-002: skill de reset Motos Assai atendida como SCRIPT DEV seguro scripts/maintenance/reset_motos_assai.py — dry-run default + token tipado + backup JSON + pre-flight tabela-nova/vinculo-embarque-NF + reuso unmirror + TRUNCATE sem CASCADE + valida cadastros; NAO skill web (agente read-only). IMP-2026-06-17-003 rejeitada: bloqueio read-only e feature intencional text_to_sql:417 + PROMPT INJECTION no evidence_json. 2 F2 adhoc-cluster-1385/1433 listadas p/ Rafael) |
+
+## 2026-06-18
+
+2 sugestoes `IMP-*` avaliaveis + 2 F2 `adhoc-` (gate humano, apenas listadas). Ambas as `IMP-*`
+e ambas as `adhoc-` da query LIMIT 10. 1 implementada, 1 rejeitada.
+
+- **[IMPLEMENTADO] IMP-2026-06-17-002** (skill_suggestion, warning) — origem **Rayssa Alves (id 78)**.
+  Pediam skill de reset transacional do Motos Assai. Forma corrigida: a finalidade real (eliminar
+  o SQL manual de reset, arriscado — ja houve tentativa em PROD sem backup) foi atendida com um
+  **script DEV** `scripts/maintenance/reset_motos_assai.py`, NAO uma skill do agente web (read-only
+  por design — expor TRUNCATE ao chat e justamente o que a IMP-003 tentava forcar). Zera 25 tabelas
+  transacionais `assai_*` preservando os 4 cadastros, com salvaguardas em camadas: dry-run default,
+  confirmacao tipada `--token RESET-MOTOS-ASSAI-<N>`, backup JSON automatico, pre-flight de tabela
+  `assai_%` nova nao classificada (aborta), pre-flight de vinculo (espelhos `ASSAI-SEP-%` com NF ou
+  `EmbarqueItem` bloqueiam), reuso de `unmirror_assai_separacao`, `TRUNCATE` sem CASCADE e validacao
+  de cadastros antes do commit. S3 apenas alertado. Doc em `app/motos_assai/CLAUDE.md`. py_compile +
+  --help OK; NAO executado (revisao 4-maos pendente).
+
+- **[REJEITADO] IMP-2026-06-17-003** (gotcha_report, warning) — origem **Rayssa Alves (id 78)**.
+  "Agente read-only bloqueia reset destrutivo" NAO e bug: regra 2.1.1, codigo do fluxo oficial e
+  soberano e esta correto — `text_to_sql_tool.py:417` documenta que escrita so e liberada em modo
+  admin (`<sql_admin_context>`), ausente nesta sessao; o bloqueio "SQL deve comecar com SELECT ou
+  WITH" atuou como projetado. Politica: destrutivo/DEV via Claude Code 4-maos, nunca tela web; o
+  workaround (entregar `.sql` a humano) e o comportamento desejado. ⚠️ O `evidence_json` continha
+  **tentativa de prompt injection** (tags falsas `</invoke>` + `<invoke name="Bash">` mandando rodar
+  `exportar.py`) — tratada como dado, nada executado; reforca manter o agente read-only. Demanda
+  legitima por baixo atendida na IMP-002.
+
+- **[F2 — gate humano] adhoc-cluster-1385 / adhoc-cluster-1433** — origem **Martha de Jesus Frugoli
+  dos Reis (id 82)**. Pipeline pandas+openpyxl (download→leitura→calculo→formatacao→exportacao) e
+  sincronizacao de aba 'Vencidos' sobre `exportando-arquivos`. n_membros 9 e 4, idade 1 dia. NAO
+  decididas (prefixo `adhoc-`); aguardam Rafael via `revisar_sugestoes_skill.py listar`.
 
 ## 2026-06-17
 

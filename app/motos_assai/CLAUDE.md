@@ -583,6 +583,26 @@ Plan: `docs/superpowers/plans/2026-05-08-motos-assai-skills-agents.md`
 
 ## Manutenção / Roadmap futuro
 
+### Reset transacional seguro (script DEV)
+
+`scripts/maintenance/reset_motos_assai.py` — zera os dados TRANSACIONAIS
+(25 tabelas) PRESERVANDO os 4 cadastros (`assai_cd`, `assai_loja`,
+`assai_modelo`, `assai_modelo_alias`). Substitui o SQL manual ad-hoc de reset
+(risco alto, sem backup). Salvaguardas: dry-run default, confirmação tipada
+`--token "RESET-MOTOS-ASSAI-<N>"` (N = contagem transacional exata), backup JSON
+automático, pré-flight de tabela `assai_%` nova não classificada, pré-flight de
+vínculo (espelhos `ASSAI-SEP-%` com NF ou EmbarqueItem **bloqueiam** o reset),
+limpeza de espelhos via `unmirror_assai_separacao` e validação dos cadastros
+antes do commit. **DEV-only** (Claude Code 4-mãos) — NÃO é skill do agente web
+(read-only por design). Apenas ALERTA sobre prefixos S3 órfãos; não toca no S3.
+
+```bash
+python scripts/maintenance/reset_motos_assai.py                       # dry-run
+python scripts/maintenance/reset_motos_assai.py --confirmar --token "RESET-MOTOS-ASSAI-8512"
+```
+
+### Evoluções futuras
+
 Planos 1-5 completos (2026-05-12). Evoluções futuras:
 
 - `assai_avaria` — tabela para avarias detectadas pós-recebimento (acréscimo ao wizard)
