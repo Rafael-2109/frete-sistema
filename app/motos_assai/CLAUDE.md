@@ -65,6 +65,7 @@ atualizado: 2026-06-06
   - [Arquivos](#arquivos)
   - [Gotchas](#gotchas)
 - [Onboarding Tours (2026-05-08)](#onboarding-tours-2026-05-08)
+- [Fix parser zero-padding + edição manual (2026-06-18)](#fix-parser-zero-padding--edição-manual-2026-06-18)
 - [Referências](#referências)
 
 ## Contexto
@@ -763,6 +764,9 @@ A "perda do início" foi coincidência: o PDF vem ordenado por número.
 3. `assai_pedido_venda.import_resumo` (JSONB, **Migration 32**) registra
    `lojas_extraidas/gravadas`, `itens_extraidos/gravados` e lista de `pulados`
    — exibido como alerta em `pedidos/detalhe.html` e flash no upload.
+   ⚠️ A Migration 32 **NÃO consta no build.sh**: foi aplicada manualmente em
+   prod via `DATABASE_URL_PROD` (e no schema JSON via `generate_schemas.py`); os
+   arquivos `scripts/migrations/motos_assai_32_*` ficam só como registro do DDL.
 
 **Edição manual** (IMP-003/-004 — fallback do parser, só em pedido `ABERTO`):
 - Service: `adicionar_item_manual` / `editar_item_manual` / `remover_item_manual`
