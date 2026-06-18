@@ -39,6 +39,7 @@ def register_routes(bp):
     from app.carvia.routes.anexo_routes import register_anexo_routes
     from app.carvia.routes.comprovante_routes import register_comprovante_routes
     from app.carvia.routes.coleta_routes import register_coleta_routes
+    from app.carvia.routes.portal_admin_routes import register_portal_admin_routes
 
     register_dashboard_routes(bp)
     register_importacao_routes(bp)
@@ -72,3 +73,4 @@ def register_routes(bp):
     register_anexo_routes(bp)
     register_comprovante_routes(bp)
     register_coleta_routes(bp)
+    register_portal_admin_routes(bp)

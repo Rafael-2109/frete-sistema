@@ -116,6 +116,13 @@ from app.carvia.models.coleta_recebimento import (  # noqa: F401
     RECEB_STATUSES, CHASSI_STATUS_VINCULADO, CHASSI_STATUS_ALERTA, normalizar_chassi,
 )
 
+# Portal do Cliente — usuario externo (stream 5)
+from app.carvia.models.portal import (  # noqa: F401
+    CarviaPortalUsuario, CarviaPortalUsuarioCnpj,
+    PORTAL_STATUS_PENDENTE, PORTAL_STATUS_ATIVO, PORTAL_STATUS_REJEITADO, PORTAL_STATUS_BLOQUEADO,
+    PORTAL_STATUSES, PORTAL_ESCOPO_CNPJ_DIRETO, PORTAL_ESCOPO_CLIENTE_COMERCIAL, PORTAL_ESCOPOS,
+)
+
 
 __all__ = [
     # Documentos
@@ -166,4 +173,8 @@ __all__ = [
     'CarviaColetaRecebimento', 'CarviaColetaRecebimentoChassi',
     'RECEB_STATUS_EM_RECEBIMENTO', 'RECEB_STATUS_CONCLUIDO', 'RECEB_STATUS_COM_DIVERGENCIA',
     'RECEB_STATUSES', 'CHASSI_STATUS_VINCULADO', 'CHASSI_STATUS_ALERTA', 'normalizar_chassi',
+    # Portal do Cliente (stream 5)
+    'CarviaPortalUsuario', 'CarviaPortalUsuarioCnpj',
+    'PORTAL_STATUS_PENDENTE', 'PORTAL_STATUS_ATIVO', 'PORTAL_STATUS_REJEITADO', 'PORTAL_STATUS_BLOQUEADO',
+    'PORTAL_STATUSES', 'PORTAL_ESCOPO_CNPJ_DIRETO', 'PORTAL_ESCOPO_CLIENTE_COMERCIAL', 'PORTAL_ESCOPOS',
 ]

@@ -47,3 +47,8 @@ def init_app(app):
         register_routes(carvia_bp)
         _routes_registered = True
     app.register_blueprint(carvia_bp)
+
+    # Portal do Cliente — blueprint EXTERNO isolado (auth propria por sessao). stream 5.
+    from app.carvia.portal_cliente import portal_cliente_bp
+    if 'portal_cliente' not in app.blueprints:
+        app.register_blueprint(portal_cliente_bp)

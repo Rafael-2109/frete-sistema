@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container py-3">
+    {% set active = 'nfs' %}{% include 'carvia/portal/_header.html' %}
+
+    <form method="GET" class="row g-2 mb-3">
+        <div class="col-md-4"><input name="busca" class="form-control form-control-sm" placeholder="Buscar nº da NF" value="{{ busca }}"></div>
+        <div class="col-md-2"><button class="btn btn-outline-primary btn-sm w-100"><i class="fas fa-search"></i> Buscar</button></div>
+    </form>
+
+    <div class="card"><div class="table-responsive"><table class="table table-hover align-middle mb-0">
+        <thead class="table-light"><tr><th>NF</th><th>Emissão</th><th>Destino</th><th>Status atual</th><th></th></tr></thead>
+        <tbody>
+        {% for item in nfs %}
+            {% set nf = item.nf %}
+            <tr>
+                <td><a href="{{ url_for('portal_cliente.detalhe_nf', numero=nf.numero_nf) }}">{{ nf.numero_nf }}</a></td>
+                <td>{{ nf.data_emissao.strftime('%d/%m/%Y') if nf.data_emissao else '—' }}</td>
+                <td>{{ nf.cidade_destinatario or '—' }}{{ '/' ~ nf.uf_destinatario if nf.uf_destinatario }}</td>
+                <td>
+                    {% if item.atual_key == 'ENTREGUE' %}<span class="badge bg-success">{{ item.atual_label }}</span>
+                    {% elif item.atual_key %}<span class="badge bg-info">{{ item.atual_label }}</span>
+                    {% else %}<span class="badge bg-secondary">{{ item.atual_label }}</span>{% endif %}
+                </td>
+                <td class="text-end"><a href="{{ url_for('portal_cliente.detalhe_nf', numero=nf.numero_nf) }}" class="btn btn-sm btn-outline-primary">Acompanhar</a></td>
+            </tr>
+        {% else %}
+            <tr><td colspan="5" class="text-center text-muted py-4">Nenhuma nota encontrada para o seu acesso.</td></tr>
+        {% endfor %}
+        </tbody>
+    </table></div></div>
+</div>
+{% endblock %}

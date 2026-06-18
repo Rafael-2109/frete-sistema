@@ -1,0 +1,55 @@
+{
+  "name": "carvia_portal_usuario_cnpjs",
+  "description": "CNPJ destino autorizado para um usuario do portal (modo CNPJ_DIRETO, 8A).",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "portal_usuario_id",
+      "type": "integer",
+      "description": "FK → carvia_portal_usuarios.id",
+      "nullable": false
+    },
+    {
+      "name": "cnpj",
+      "type": "varchar(20)",
+      "nullable": false
+    },
+    {
+      "name": "nome_referencia",
+      "type": "varchar(255)",
+      "description": "rotulo opcional (filial/loja)"
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "portal_usuario_id",
+      "references": "carvia_portal_usuarios.id"
+    }
+  ],
+  "unique_constraints": [
+    [
+      "portal_usuario_id",
+      "cnpj"
+    ]
+  ],
+  "indices": [
+    {
+      "name": "ix_carvia_portal_usuario_cnpjs_cnpj",
+      "columns": [
+        "cnpj"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carvia_portal_usuario_cnpjs_portal_usuario_id",
+      "columns": [
+        "portal_usuario_id"
+      ],
+      "unique": false
+    }
+  ]
+}

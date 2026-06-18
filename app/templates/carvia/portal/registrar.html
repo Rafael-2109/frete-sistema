@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container py-5" style="max-width:460px;">
+    <div class="text-center mb-4"><h3><i class="fas fa-user-plus"></i> Criar conta — Portal CarVia</h3></div>
+    <div class="card"><div class="card-body">
+        <p class="small text-muted">Após o cadastro, a CarVia libera seu acesso (define quais CNPJs você vê).</p>
+        <form method="POST" action="{{ url_for('portal_cliente.registrar') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="mb-2"><label class="form-label">Nome</label><input name="nome" class="form-control" required></div>
+            <div class="mb-2"><label class="form-label">Email</label><input type="email" name="email" class="form-control" required></div>
+            <div class="mb-2"><label class="form-label">Telefone</label><input name="telefone" class="form-control"></div>
+            <div class="mb-3"><label class="form-label">Senha (mín. 6)</label><input type="password" name="senha" class="form-control" minlength="6" required></div>
+            <button class="btn btn-success w-100"><i class="fas fa-paper-plane"></i> Enviar cadastro</button>
+        </form>
+        <hr><div class="text-center"><a href="{{ url_for('portal_cliente.login') }}">Já tenho conta</a></div>
+    </div></div>
+</div>
+{% endblock %}

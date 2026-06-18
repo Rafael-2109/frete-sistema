@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% macro escopo_form(u, action, label) %}
+<form method="POST" action="{{ action }}" class="row g-1 align-items-end">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="col-md-3">
+        <select name="tipo_escopo" class="form-select form-select-sm" onchange="this.closest('form').querySelectorAll('[data-esc]').forEach(e=>e.style.display=(e.dataset.esc==this.value?'block':'none'))">
+            <option value="CNPJ_DIRETO" {{ 'selected' if u.tipo_escopo=='CNPJ_DIRETO' }}>CNPJs diretos (cliente)</option>
+            <option value="CLIENTE_COMERCIAL" {{ 'selected' if u.tipo_escopo=='CLIENTE_COMERCIAL' }}>Cliente Comercial (vendedor)</option>
+        </select>
+    </div>
+    <div class="col-md-5" data-esc="CNPJ_DIRETO" style="{{ '' if u.tipo_escopo=='CNPJ_DIRETO' else 'display:none' }}">
+        <textarea name="cnpjs" class="form-control form-control-sm" rows="1" placeholder="CNPJs (1 por linha / vírgula)">{% for c in u.cnpjs %}{{ c.cnpj }}
+{% endfor %}</textarea>
+    </div>
+    <div class="col-md-5" data-esc="CLIENTE_COMERCIAL" style="{{ '' if u.tipo_escopo=='CLIENTE_COMERCIAL' else 'display:none' }}">
+        <select name="cliente_comercial_id" class="form-select form-select-sm">
+            <option value="">— selecione o cliente comercial —</option>
+            {% for cli in clientes %}<option value="{{ cli.id }}" {{ 'selected' if u.cliente_comercial_id==cli.id }}>{{ cli.nome_comercial }}</option>{% endfor %}
+        </select>
+    </div>
+    <div class="col-md-2"><button class="btn btn-sm btn-success w-100">{{ label }}</button></div>
+</form>
+{% endmacro %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2><i class="fas fa-users-cog"></i> Portal do Cliente — Usuários</h2>
+        <a href="{{ url_for('carvia.dashboard') }}" class="btn btn-outline-secondary btn-sm"><i class="fas fa-arrow-left"></i> Dashboard</a>
+    </div>
+    {% set carvia_active = 'portal_usuarios' %}{% include 'carvia/_quick_nav.html' ignore missing %}
+
+    <form method="GET" class="mb-3"><select name="status" class="form-select form-select-sm w-auto d-inline" onchange="this.form.submit()">
+        <option value="">Todos status</option>
+        {% for s in statuses %}<option value="{{ s }}" {{ 'selected' if status_filtro==s }}>{{ s }}</option>{% endfor %}
+    </select></form>
+
+    <div class="card"><div class="table-responsive"><table class="table align-middle mb-0">
+        <thead class="table-light"><tr><th>Usuário</th><th>Status</th><th>Escopo / Ação</th><th></th></tr></thead>
+        <tbody>
+        {% for u in usuarios %}
+        <tr>
+            <td><strong>{{ u.nome }}</strong><br><small class="text-muted">{{ u.email }}</small></td>
+            <td>
+                {% if u.status=='ATIVO' %}<span class="badge bg-success">ATIVO</span>
+                {% elif u.status=='PENDENTE' %}<span class="badge bg-warning text-dark">PENDENTE</span>
+                {% elif u.status=='REJEITADO' %}<span class="badge bg-secondary">REJEITADO</span>
+                {% else %}<span class="badge bg-dark">{{ u.status }}</span>{% endif %}
+            </td>
+            <td>
+                {% if u.status=='PENDENTE' %}
+                    {{ escopo_form(u, url_for('carvia.aprovar_portal_usuario', uid=u.id), 'Aprovar') }}
+                {% elif u.status=='ATIVO' %}
+                    {{ escopo_form(u, url_for('carvia.escopo_portal_usuario', uid=u.id), 'Salvar escopo') }}
+                    <small class="text-muted">CNPJs: {{ u.cnpjs_permitidos()|join(', ') or '—' }}</small>
+                {% else %}<span class="text-muted">—</span>{% endif %}
+            </td>
+            <td class="text-nowrap">
+                {% if u.status=='PENDENTE' %}
+                <form method="POST" action="{{ url_for('carvia.rejeitar_portal_usuario', uid=u.id) }}" class="d-inline" onsubmit="return confirm('Rejeitar?');">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn btn-sm btn-outline-danger">Rejeitar</button></form>
+                {% elif u.status=='ATIVO' %}
+                <form method="POST" action="{{ url_for('carvia.status_portal_usuario', uid=u.id) }}" class="d-inline">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="status" value="BLOQUEADO">
+                    <button class="btn btn-sm btn-outline-warning">Bloquear</button></form>
+                {% elif u.status in ['BLOQUEADO','REJEITADO'] %}
+                <form method="POST" action="{{ url_for('carvia.status_portal_usuario', uid=u.id) }}" class="d-inline">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="status" value="ATIVO">
+                    <button class="btn btn-sm btn-outline-success">Reativar</button></form>
+                {% endif %}
+            </td>
+        </tr>
+        {% else %}<tr><td colspan="4" class="text-center text-muted py-4">Nenhum usuário do portal.</td></tr>
+        {% endfor %}
+        </tbody>
+    </table></div></div>
+</div>
+{% endblock %}

@@ -105,7 +105,7 @@
     "vinculacao_carteira_separacao",
     "webhook_configs"
   ],
-  "total_tabelas": 328,
+  "total_tabelas": 330,
   "tabelas": [
     {
       "name": "agendamentos_entrega",
@@ -1179,6 +1179,26 @@
         "cotacao_id",
         "tipo_separacao",
         "status"
+      ],
+      "dominio": "Carvia"
+    },
+    {
+      "name": "carvia_portal_usuario_cnpjs",
+      "description": "CNPJ destino autorizado para um usuario do portal (modo CNPJ_DIRETO, 8A).",
+      "key_fields": [
+        "cnpj",
+        "portal_usuario_id",
+        "nome_referencia"
+      ],
+      "dominio": "Carvia"
+    },
+    {
+      "name": "carvia_portal_usuarios",
+      "description": "Usuario EXTERNO do Portal do Cliente CarVia (isolado do Usuario interno).",
+      "key_fields": [
+        "cliente_comercial_id",
+        "status",
+        "tipo_escopo"
       ],
       "dominio": "Carvia"
     },

@@ -41,9 +41,9 @@ atualizado: 2026-06-15
 
 ## Contexto
 
-116 arquivos, ~70.2K LOC, 116 templates. Importa NF PDFs/XMLs + CTe XMLs, faz match NF-CTe, subcontrata com cotacao via tabelas existentes, gera faturas de cliente e transportadora e emite CTe direto no SSW via Playwright. Detalhe por topico nos sub-docs (CONFERENCIA, FINANCEIRO, COMPROVANTES, IMPORTACAO, etc.) — prefira ler o sub-doc a reconstruir o contexto a partir do codigo.
+121 arquivos, ~71.0K LOC, 123 templates. Importa NF PDFs/XMLs + CTe XMLs, faz match NF-CTe, subcontrata com cotacao via tabelas existentes, gera faturas de cliente e transportadora e emite CTe direto no SSW via Playwright. Detalhe por topico nos sub-docs (CONFERENCIA, FINANCEIRO, COMPROVANTES, IMPORTACAO, etc.) — prefira ler o sub-doc a reconstruir o contexto a partir do codigo.
 
-**116 arquivos** | **~70.2K LOC** | **116 templates** | **Atualizado**: 2026-06-17
+**121 arquivos** | **~71.0K LOC** | **123 templates** | **Atualizado**: 2026-06-17
 
 Gestao de frete subcontratado: importar NF PDFs/XMLs + CTe XMLs, matchear NF-CTe, subcontratar transportadoras com cotacao via tabelas existentes, gerar faturas cliente e transportadora. Tambem emite CTe diretamente no SSW via Playwright.
 
@@ -110,7 +110,7 @@ app/carvia/
                    #   documentos, faturas, financeiro, frete, tabelas
   forms.py         # 4 forms WTForms
 
-app/templates/carvia/  # 116 templates (dashboard, listagens, detalhes, wizards, modais)
+app/templates/carvia/  # 123 templates (dashboard, listagens, detalhes, wizards, modais)
 ```
 
 ---
@@ -315,6 +315,7 @@ Lista apenas **gotchas nao-obvios**. Para campos completos, consultar schemas JS
 | `CarviaComprovantePagamento` / `CarviaComprovanteVinculo` | Comprovante de pagamento **N:N** (arquivo S3 1x via `get_file_storage` + vinculo polimorfico `entidade_tipo`∈`cotacao/nf/operacao/fatura_cliente`, sem FK fisica). `origem` `MANUAL`/`PROPAGADO`; `cnpj_pagador` pode != CNPJ da fatura. `sincronizar_cadeia` propaga pela cadeia (idempotente). Soft-delete via `ativo`. Conciliacao invertida usa `cnpj_pagador`. Ver [COMPROVANTES.md](COMPROVANTES.md) |
 | `CarviaColeta` / `CarviaColetaNf` | **Coleta "papel de pao"** (redesign stream 3): agrupa N NFs (rascunho: numero+cliente livre) em 1 veiculo (contratado texto+FK opcional, placa, valor, **destino `local_cd` VM/TM**). `CarviaColetaService.vincular_nf` consolida rascunho->NF real **e propaga `coleta.local_cd` -> `CarviaNf.local_cd`** (= fonte CarVia da flag de CD, redesign stream 1). `marcar_coletada` cria `CarviaDespesa` tipo `COLETA` a conciliar. Congela apos COLETADA; sem delete (GAP-20). Rotas `coleta_routes.py`, templates `carvia/coletas/`. |
 | `CarviaColetaRecebimento` / `CarviaColetaRecebimentoChassi` | **Recebimento por chassi** (redesign stream 4): confere a coleta MOTO A MOTO (`qr_code_lido`+`foto_s3_key` opcional, padrao HORA/Assai REPLICADO — R1). Escaneio LIVRE: chassi casa com `CarviaNfVeiculo` das NFs vinculadas -> VINCULADO, senao ALERTA. **`CarviaColetaRecebimentoService.reconciliar` faz BACKFILL** (chamado por `vincular_nf`) — conferir antes da NF vinculada nao quebra; ao vincular, retro-vincula. NF "recebida" = todos os seus chassis VINCULADO. Scanner em `coletas/recebimento.html`. |
+| `CarviaPortalUsuario` / `CarviaPortalUsuarioCnpj` | **Portal do Cliente** (redesign stream 5): usuario EXTERNO ISOLADO do `Usuario` interno (login proprio por sessao em `app/carvia/portal_cliente.py`, blueprint `/portal-cliente` — NUNCA usa Flask-Login interno). Auto-registro PENDENTE -> admin aprova (define escopo). Escopo (topico 8) = conjunto de CNPJs destino: CNPJ_DIRETO (lista em `CarviaPortalUsuarioCnpj`) ou CLIENTE_COMERCIAL (FK `CarviaCliente`, CNPJs via `CarviaClienteEndereco`). `CarviaPortalStatusService` computa as 5 etapas (Coletado->Recebido Matriz->Embarcado->Recebido Filial->Entregue) e ESCOPA toda query por CNPJ (seguranca). Gestao interna: `routes/portal_admin_routes.py`. |
 
 ---
 

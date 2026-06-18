@@ -1,0 +1,94 @@
+{
+  "name": "carvia_portal_usuarios",
+  "description": "Usuario EXTERNO do Portal do Cliente CarVia (isolado do Usuario interno).",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "nome",
+      "type": "varchar(255)",
+      "nullable": false
+    },
+    {
+      "name": "email",
+      "type": "varchar(255)",
+      "nullable": false
+    },
+    {
+      "name": "senha_hash",
+      "type": "varchar(255)",
+      "nullable": false
+    },
+    {
+      "name": "telefone",
+      "type": "varchar(20)"
+    },
+    {
+      "name": "status",
+      "type": "varchar(20)",
+      "nullable": false,
+      "default": "PENDENTE"
+    },
+    {
+      "name": "tipo_escopo",
+      "type": "varchar(20)",
+      "nullable": false,
+      "default": "CNPJ_DIRETO"
+    },
+    {
+      "name": "cliente_comercial_id",
+      "type": "integer",
+      "description": "FK → carvia_clientes.id"
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação"
+    },
+    {
+      "name": "aprovado_por",
+      "type": "varchar(150)",
+      "description": "email do operador interno"
+    },
+    {
+      "name": "aprovado_em",
+      "type": "timestamp"
+    },
+    {
+      "name": "ultimo_login_em",
+      "type": "timestamp"
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "cliente_comercial_id",
+      "references": "carvia_clientes.id"
+    }
+  ],
+  "indices": [
+    {
+      "name": "ix_carvia_portal_usuarios_cliente_comercial_id",
+      "columns": [
+        "cliente_comercial_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carvia_portal_usuarios_email",
+      "columns": [
+        "email"
+      ],
+      "unique": true
+    },
+    {
+      "name": "ix_carvia_portal_usuarios_status",
+      "columns": [
+        "status"
+      ],
+      "unique": false
+    }
+  ]
+}

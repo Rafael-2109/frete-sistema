@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container py-3" style="max-width:820px;">
+    {% set active = 'cotar' %}{% include 'carvia/portal/_header.html' %}
+    <h4><i class="fas fa-calculator"></i> Cotar frete</h4>
+
+    <div class="card mb-3"><div class="card-body">
+        <form method="POST" action="{{ url_for('portal_cliente.cotar') }}" class="row g-2">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="col-md-3"><label class="form-label small">UF origem</label><input name="uf_origem" class="form-control" value="{{ request.form.get('uf_origem','SP') }}" maxlength="2"></div>
+            <div class="col-md-3"><label class="form-label small">UF destino *</label><input name="uf_destino" class="form-control" value="{{ request.form.get('uf_destino','') }}" maxlength="2" required></div>
+            <div class="col-md-6"><label class="form-label small">Cidade destino</label><input name="cidade_destino" class="form-control" value="{{ request.form.get('cidade_destino','') }}"></div>
+            <div class="col-md-3"><label class="form-label small">Peso (kg)</label><input name="peso" class="form-control" value="{{ request.form.get('peso','') }}"></div>
+            <div class="col-md-3"><label class="form-label small">Valor mercadoria (R$)</label><input name="valor_mercadoria" class="form-control" value="{{ request.form.get('valor_mercadoria','') }}"></div>
+            <div class="col-md-3 d-flex align-items-end"><button class="btn btn-primary w-100"><i class="fas fa-search-dollar"></i> Cotar</button></div>
+        </form>
+    </div></div>
+
+    {% if erro %}<div class="alert alert-warning">{{ erro }}</div>{% endif %}
+
+    {% if resultado %}
+    <div class="card"><div class="card-header"><strong>Opções de frete</strong></div>
+    <div class="table-responsive"><table class="table table-sm mb-0">
+        <thead class="table-light"><tr><th>Tabela</th><th>Modalidade</th><th>Lead time</th><th class="text-end">Valor</th></tr></thead>
+        <tbody>
+        {% for opt in resultado %}
+            <tr>
+                <td>{{ opt.nome_tabela or opt.tabela or opt.nome or '—' }}</td>
+                <td>{{ opt.modalidade or '—' }}</td>
+                <td>{{ (opt.lead_time ~ ' dia(s)') if opt.lead_time else '—' }}</td>
+                <td class="text-end"><strong>{{ 'R$ %.2f'|format(opt.valor_frete) if opt.valor_frete is not none else '—' }}</strong></td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table></div></div>
+    {% endif %}
+</div>
+{% endblock %}

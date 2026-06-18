@@ -1,6 +1,6 @@
 {
   "version": "2.0.0",
-  "total_relationships": 441,
+  "total_relationships": 443,
   "relationships": [
     {
       "from_table": "agendamentos_entrega",
@@ -804,6 +804,18 @@
       "from_table": "carvia_pedidos",
       "from_column": "cotacao_id",
       "to_table": "carvia_cotacoes",
+      "to_column": "id"
+    },
+    {
+      "from_table": "carvia_portal_usuario_cnpjs",
+      "from_column": "portal_usuario_id",
+      "to_table": "carvia_portal_usuarios",
+      "to_column": "id"
+    },
+    {
+      "from_table": "carvia_portal_usuarios",
+      "from_column": "cliente_comercial_id",
+      "to_table": "carvia_clientes",
       "to_column": "id"
     },
     {
