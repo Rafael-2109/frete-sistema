@@ -37,6 +37,10 @@
       "type": "numeric(3,2)"
     },
     {
+      "name": "import_resumo",
+      "type": "json"
+    },
+    {
       "name": "status",
       "type": "varchar(30)",
       "nullable": false,
