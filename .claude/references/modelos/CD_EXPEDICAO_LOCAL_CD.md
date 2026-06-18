@@ -1,0 +1,99 @@
+<!-- doc:meta
+tipo: reference
+camada: L2
+sot_de: CD de Expedicao (flag local_cd)
+hub: .claude/references/INDEX.md
+superseded_by: —
+atualizado: 2026-06-18
+-->
+# CD de Expedicao (flag local_cd)
+
+> **Papel:** SOT da flag `local_cd` (Victorio Marchezine / Tenente Marques) — significado, todos os locais que a armazenam, quem e a FONTE, como propaga e a invariante de consistencia. **Abra quando:** for ler/gravar `local_cd`, debugar divergencia de CD, ou mexer na solicitacao de coleta por CD.
+
+## Indice
+
+- [O que e](#o-que-e)
+- [Onde vive (tabelas)](#onde-vive-tabelas)
+- [Fonte e propagacao](#fonte-e-propagacao)
+- [Invariante de consistencia](#invariante-de-consistencia)
+- [Mensagem de solicitacao de coleta por CD](#mensagem-de-solicitacao-de-coleta-por-cd)
+- [Constantes e helpers](#constantes-e-helpers)
+
+## O que e
+
+`local_cd` identifica em qual CD fisico um pedido/NF/embarque/entrega e expedido. Dois valores canonicos (VARCHAR(20)):
+
+| Valor | Rotulo | Endereco de coleta |
+|-------|--------|--------------------|
+| `VICTORIO_MARCHEZINE` | Victorio Marchezine | Rua Victorio Marchezine, nº 61 – Santana de Parnaíba/SP |
+| `TENENTE_MARQUES` | Tenente Marques | Est. Tenente Marques, nº 6609 – Santana de Parnaíba/SP |
+
+- **Default universal** = `VICTORIO_MARCHEZINE` (Nacom e historico). Pedidos Nacom sao SEMPRE VM.
+- **Pedidos CarVia** podem ter os dois CDs — a flag nasce na **Coleta** (stream Coletas do redesign CarVia).
+- Cores padronizadas (macro `badge_local_cd` em `app/templates/shared/_macros_badges.html`): VM = fundo amarelo/texto preto; TM = fundo roxo/texto branco.
+
+## Onde vive (tabelas)
+
+Colunas `local_cd` (`VARCHAR(20)`, `NOT NULL` default VM, exceto onde indicado):
+
+| Tabela | Model | Papel |
+|--------|-------|-------|
+| `carvia_coletas` | `CarviaColeta` | **FONTE CarVia** — definido na coleta |
+| `carvia_nfs` | `CarviaNf` | propagado da coleta |
+| `carvia_pedidos` | `CarviaPedido` | propagado da coleta (so LEITURA na VIEW pedidos 2A/2B) |
+| `carvia_cotacoes` | `CarviaCotacao` | propagado da coleta |
+| `embarque_itens` | `EmbarqueItem` | propagado da coleta (CarVia) / da separacao (Nacom). Usado por badge, **portaria por CD** e impressao VM/TM |
+| `entregas_monitoradas` | `EntregaMonitorada` | propagado da coleta (CarVia) / sincronizado (Nacom) |
+| `separacao` | `Separacao` | **FONTE Nacom** (sempre VM) |
+| `pedidos` | `Pedido` | nullable — vem de `Separacao.local_cd` (Nacom) ou NULL (CarVia) |
+| `controle_portaria` | `ControlePortaria` | **NAO** e copia da NF: 1 registro por CD, input do operador na saida (gate "frete dispara na ultima saida") |
+
+## Fonte e propagacao
+
+**Cadeia CarVia** (uma NF de moto): a **Coleta** e a fonte unica. Ao vincular a NF / editar destino / marcar coletada, `local_cd` propaga para todos os locais da NF.
+
+- Ponto unico: `CarviaColetaService._propagar_local_cd_para_documentos(numero_nf, local_cd)` (`app/carvia/services/documentos/coleta_service.py`). Cobre os 3 gatilhos: **vincular NF**, **editar coleta** (re-propaga ao mudar destino), **marcar coletada**.
+  - Documentos CarVia (`carvia_pedidos`/`carvia_cotacoes`): match por `CarviaPedidoItem.numero_nf` normalizado.
+  - Destinos externos ao CarVia (`embarque_itens` CARVIA-% + `entregas_monitoradas` origem CARVIA): via helper R1-safe `app/utils/propagacao_local_cd.py:propagar_local_cd_carvia` (CarVia nao importa `app/embarques`/`app/monitoramento` direto — ver `app/carvia/CLAUDE.md` R1).
+- `EmbarqueItem` CarVia **nasce** com `local_cd` herdado da NF/cotacao (`embarque_carvia_service.expandir_provisorio` + provisorios em `pedido_routes`), em vez do default VM — defesa em profundidade (a coleta re-propaga se o destino mudar depois).
+
+**Cadeia Nacom**: `Separacao` (sempre VM) -> `Pedido.local_cd` / `EmbarqueItem.local_cd` / `EntregaMonitorada`. Sem TM.
+
+## Invariante de consistencia
+
+Para uma mesma NF, `local_cd` **NAO pode divergir** entre os locais que o copiam da fonte (carvia_nfs, carvia_pedidos, carvia_cotacoes, embarque_itens, entregas_monitoradas). Divergencia = bug de propagacao.
+
+- **NAO** setar `local_cd` de `EmbarqueItem`/`EntregaMonitorada` por fora do ponto unico — cria divergencia silenciosa (badge/portaria/impressao no CD errado).
+- `controle_portaria.local_cd` esta FORA da invariante (e input do operador por CD, nao copia da NF).
+- Backfill historico (corrige passado): `scripts/migrations/2026_06_18_backfill_local_cd_embarque_entrega.py` — idempotente, reusa o helper. Rodar em prod: `SKIP_DB_CREATE=true DATABASE_URL=$DATABASE_URL_PROD python <script> --apply`.
+- Origem do bug (2026-06-18): EmbarqueItem nascia default VM e nunca era re-propagado; EntregaMonitorada so era reescrita pelo sincronizador -> 36 embarque_itens + 15 entregas divergentes em prod (corrigido).
+
+## Mensagem de solicitacao de coleta por CD
+
+`app/embarques/routes.py:api_gerar_solicitacao_coleta` (botoes "Solicitar Coleta" / "c/ Endereco" em `visualizar_embarque.html`):
+
+- **Cabecalho geral (1x)**: saudacao, data, embarque, total de pallets/peso/valor, horario, ATENCAO, observacoes.
+- **Uma secao por CD com itens** (ordem VM -> TM): nome do CD + endereco explicito + subtotal pallets/peso/valor do CD + tabela de pedidos **apenas daquele CD** (com/sem endereco de entrega).
+- Itens agrupados por `EmbarqueItem.local_cd` — por isso a propagacao correta da flag e pre-requisito da mensagem classificar certo. Embarque de 1 CD -> 1 secao nomeada.
+
+## Constantes e helpers
+
+`app/utils/local_cd.py` (modulo importavel por TODOS, inclusive CarVia — R1):
+
+- `LOCAL_CD_VICTORIO_MARCHEZINE` / `LOCAL_CD_TENENTE_MARQUES` / `LOCAL_CD_DEFAULT`.
+- `LOCAL_CD_LABELS` / `LOCAL_CD_LABELS_CURTO` / `LOCAL_CD_ENDERECOS` (+ `LOCAL_CD_CHOICES` p/ WTForms).
+- `normalizar_local_cd(valor)` — entrada livre (form/planilha/import) -> canonico ou None (aceita VM/TM, nome por extenso com/sem acento).
+- `label_local_cd(valor, curto=False)` / `endereco_local_cd(valor)`.
+- Gate "frete dispara na ULTIMA saida" (embarque misto): `locais_cd_com_itens_ativos` / `locais_cd_com_saida` / `cds_pendentes_de_saida` (duck-typing sobre Embarque, sem importar embarques/portaria).
+
+## Fontes
+
+- Constantes/helpers: `app/utils/local_cd.py`
+- Helper de propagacao externa (R1-safe): `app/utils/propagacao_local_cd.py`
+- Propagacao da Coleta (ponto unico): `app/carvia/services/documentos/coleta_service.py`
+- Heranca na criacao do EmbarqueItem: `app/carvia/services/documentos/embarque_carvia_service.py`, `app/carvia/routes/pedido_routes.py`
+- Sincronizacao de entregas CarVia: `app/utils/sincronizar_entregas_carvia.py`
+- Mensagem de coleta por CD: `app/embarques/routes.py` (`api_gerar_solicitacao_coleta`), `app/templates/embarques/visualizar_embarque.html`
+- Backfill: `scripts/migrations/2026_06_18_backfill_local_cd_embarque_entrega.py`
+- Regra de modulo CarVia: `app/carvia/CLAUDE.md` (entrada `CarviaColeta` / R1)
+- Testes: `tests/carvia/test_coleta_propaga_documentos.py`, `tests/test_local_cd_foundation.py`

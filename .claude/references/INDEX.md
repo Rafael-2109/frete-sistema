@@ -23,6 +23,7 @@ atualizado: 2026-06-08
 | Campos e tipos de QUALQUER tabela | Schemas auto-gerados: `skills/consultando-sql/schemas/tables/{tabela}.json` |
 | Queries SQL / JOINs | [modelos/QUERIES_MAPEAMENTO.md](./modelos/QUERIES_MAPEAMENTO.md) |
 | Cadeia Pedido -> Entrega (JOINs, estados, formulas) | [modelos/CADEIA_PEDIDO_ENTREGA.md](./modelos/CADEIA_PEDIDO_ENTREGA.md) |
+| CD de Expedicao (flag `local_cd` VM/TM): tabelas, propagacao, invariante, msg coleta | [modelos/CD_EXPEDICAO_LOCAL_CD.md](./modelos/CD_EXPEDICAO_LOCAL_CD.md) |
 | Regras de negocio | [negocio/REGRAS_NEGOCIO.md](./negocio/REGRAS_NEGOCIO.md) |
 | Frete Real vs Teorico (4 valores, divergencias, conta corrente) | [negocio/FRETE_REAL_VS_TEORICO.md](./negocio/FRETE_REAL_VS_TEORICO.md) |
 | Margem e Custeio (formula margem, tabelas de custo) | [negocio/MARGEM_CUSTEIO.md](./negocio/MARGEM_CUSTEIO.md) |
