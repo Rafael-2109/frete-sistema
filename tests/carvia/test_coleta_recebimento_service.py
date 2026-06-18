@@ -105,8 +105,20 @@ def test_finalizar_status(db):
     receb = CarviaColetaRecebimentoService.finalizar(coleta, usuario='conf')
     assert receb.status == 'COM_DIVERGENCIA'  # tem ALERTA
 
-    # remove o alerta e re-finaliza -> CONCLUIDO
+    # remover chassi de um recebimento finalizado exige reabrir antes (guard)
     alerta = receb.chassis.filter_by(status='ALERTA').first()
+    with pytest.raises(RecebimentoError):
+        CarviaColetaRecebimentoService.remover_chassi(alerta)
+
+    # reabre, remove o alerta e re-finaliza -> CONCLUIDO
+    CarviaColetaRecebimentoService.reabrir(coleta)
     CarviaColetaRecebimentoService.remover_chassi(alerta)
     receb = CarviaColetaRecebimentoService.finalizar(coleta, usuario='conf')
     assert receb.status == 'CONCLUIDO'
+
+
+def test_conferir_em_coleta_cancelada_bloqueia(db):
+    coleta = CarviaColetaService.criar_coleta(usuario='test@bot')
+    CarviaColetaService.cancelar_coleta(coleta)
+    with pytest.raises(RecebimentoError):
+        CarviaColetaRecebimentoService.conferir_chassi(coleta, 'CHX', usuario='conf')

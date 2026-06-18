@@ -16,11 +16,23 @@ logger = logging.getLogger(__name__)
 
 
 def _parse_decimal(valor_str):
-    """Aceita virgula ou ponto como separador decimal; '' -> None."""
+    """Converte entrada monetaria BR/US para float; '' -> None.
+
+    Regras (evita o bug "1.500" -> 1.5):
+    - virgula presente  -> virgula e o decimal; pontos sao milhar  ("1.500,00" -> 1500.0)
+    - so ponto, 1 ocorrencia, exatamente 2 casas depois -> decimal  ("10.50"   -> 10.5)
+    - demais casos com ponto -> pontos sao separador de milhar       ("1.500"   -> 1500.0)
+    """
     valor_str = (valor_str or '').strip()
     if not valor_str:
         return None
-    return float(valor_str.replace('.', '').replace(',', '.')) if ',' in valor_str else float(valor_str)
+    if ',' in valor_str:
+        return float(valor_str.replace('.', '').replace(',', '.'))
+    if '.' in valor_str:
+        if valor_str.count('.') == 1 and len(valor_str.rsplit('.', 1)[1]) == 2:
+            return float(valor_str)            # decimal real: 10.50
+        return float(valor_str.replace('.', ''))  # milhar BR: 1.500 / 1.234.567
+    return float(valor_str)
 
 
 def _parse_int(valor_str):
@@ -327,7 +339,8 @@ def register_coleta_routes(bp):
         if not _guard():
             return _negado()
         from app.carvia.models.coleta_recebimento import CarviaColetaRecebimentoChassi
-        from app.carvia.services.documentos.coleta_recebimento_service import CarviaColetaRecebimentoService
+        from app.carvia.services.documentos.coleta_recebimento_service import (
+            CarviaColetaRecebimentoService, RecebimentoError)
         linha = db.session.get(CarviaColetaRecebimentoChassi, linha_id)
         if linha is None:
             flash('Chassi nao encontrado.', 'warning')
@@ -337,6 +350,9 @@ def register_coleta_routes(bp):
             CarviaColetaRecebimentoService.remover_chassi(linha)
             db.session.commit()
             flash('Chassi removido.', 'success')
+        except RecebimentoError as e:
+            db.session.rollback()
+            flash(str(e), 'warning')
         except Exception as e:
             db.session.rollback()
             flash(f'Erro: {e}', 'danger')

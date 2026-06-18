@@ -114,6 +114,10 @@ class CarviaColeta(db.Model):
 class CarviaColetaNf(db.Model):
     """Linha do papel de pao: uma NF (rascunho ou real) dentro de uma coleta."""
     __tablename__ = 'carvia_coleta_nfs'
+    # Uma CarviaNf real pertence a no maximo 1 linha de coleta (NULL = rascunho, multiplos ok).
+    __table_args__ = (
+        db.UniqueConstraint('carvia_nf_id', name='uq_carvia_coleta_nf'),
+    )
 
     id = db.Column(db.Integer, primary_key=True)
     coleta_id = db.Column(

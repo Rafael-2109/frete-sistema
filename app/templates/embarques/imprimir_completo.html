@@ -329,7 +329,10 @@
         <tbody>
             {% for item in itens_carvia %}
             <tr{% if item.provisorio %} style="background-color: #fff3cd;"{% endif %}>
-                <td>{{ item.cliente }}</td>
+                <td>{{ item.cliente }}
+                    {% if item.local_cd == 'TENENTE_MARQUES' %}<span style="background:#5b3fb5;color:#fff;padding:1px 5px;border-radius:3px;font-size:9px;font-weight:bold;">TM</span>
+                    {% elif item.local_cd %}<span style="background:#ffe08a;color:#1a1a1a;padding:1px 5px;border-radius:3px;font-size:9px;font-weight:bold;">VM</span>{% endif %}
+                </td>
                 <td>
                     {{ item.pedido or item.separacao_lote_id }}
                     {% if filial_por_lote is defined and filial_por_lote.get(item.separacao_lote_id) %}

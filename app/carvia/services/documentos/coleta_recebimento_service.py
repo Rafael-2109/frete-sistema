@@ -98,6 +98,10 @@ class CarviaColetaRecebimentoService:
         from app.carvia.models.coleta_recebimento import (
             CarviaColetaRecebimentoChassi, normalizar_chassi,
             CHASSI_STATUS_VINCULADO, CHASSI_STATUS_ALERTA, RECEB_STATUS_EM_RECEBIMENTO)
+        from app.carvia.models.coleta import COLETA_STATUS_CANCELADA
+
+        if coleta.status == COLETA_STATUS_CANCELADA:
+            raise RecebimentoError('Coleta cancelada — recebimento bloqueado.')
 
         norm = normalizar_chassi(chassi)
         if not norm:
@@ -132,6 +136,13 @@ class CarviaColetaRecebimentoService:
 
     @staticmethod
     def remover_chassi(linha):
+        """Remove um chassi conferido. So permitido enquanto o recebimento esta EM_RECEBIMENTO
+        — apos finalizado, exige reabrir antes (evita alterar silenciosamente um recebimento
+        CONCLUIDO/COM_DIVERGENCIA e fazer uma NF voltar a 'nao recebida' sem rastro)."""
+        from app.carvia.models.coleta_recebimento import RECEB_STATUS_EM_RECEBIMENTO
+        receb = linha.recebimento
+        if receb is not None and receb.status != RECEB_STATUS_EM_RECEBIMENTO:
+            raise RecebimentoError('Recebimento finalizado — reabra antes de remover um chassi.')
         db.session.delete(linha)
         db.session.flush()
 

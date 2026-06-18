@@ -63,12 +63,29 @@ class CarviaColetaService:
         coleta.transportadora_id = transportadora_id
         coleta.placa = (placa or '').strip() or None
         coleta.valor_coleta = valor_coleta
+        local_cd_antes = coleta.local_cd
         if local_cd is not None:
             coleta.local_cd = normalizar_local_cd(local_cd) or coleta.local_cd
         coleta.data_prevista = data_prevista
         coleta.observacoes = (observacoes or '').strip() or None
+        # Se o destino (local_cd) mudou, re-propaga para as NFs ja vinculadas — senao o
+        # badge/portaria/VIEW pedidos ficariam com o CD antigo (inconsistencia silenciosa).
+        if coleta.local_cd != local_cd_antes:
+            CarviaColetaService._propagar_local_cd(coleta)
         db.session.flush()
         return coleta
+
+    @staticmethod
+    def _propagar_local_cd(coleta):
+        """Propaga `coleta.local_cd` para TODAS as CarviaNf reais vinculadas (Stream 1)."""
+        if not coleta.local_cd:
+            return
+        from app.carvia.models.documentos import CarviaNf
+        for linha in coleta.nfs:
+            if linha.carvia_nf_id:
+                nf = db.session.get(CarviaNf, linha.carvia_nf_id)
+                if nf is not None:
+                    nf.local_cd = coleta.local_cd
 
     @staticmethod
     def cancelar_coleta(coleta, usuario=None):
@@ -128,17 +145,22 @@ class CarviaColetaService:
     def sugerir_nf(linha, limite=5):
         """Sugere CarviaNf candidatas por numero_nf normalizado (lstrip zeros).
 
-        Retorna lista de CarviaNf ATIVAS ainda nao vinculadas a outra linha desta coleta.
+        Retorna lista de CarviaNf ATIVAS ainda nao vinculadas a NENHUMA linha de coleta
+        (uma NF pertence a no maximo 1 coleta — UNIQUE uq_carvia_coleta_nf).
         """
         from app.carvia.models.documentos import CarviaNf
+        from app.carvia.models.coleta import CarviaColetaNf
         from sqlalchemy import func
         alvo = _norm_nf(linha.numero_nf)
         if not alvo:
             return []
         # normaliza numero_nf no banco: remove nao-digitos e zeros a esquerda
         norm_sql = func.ltrim(func.regexp_replace(CarviaNf.numero_nf, r'\D', '', 'g'), '0')
+        ja_vinculadas = db.session.query(CarviaColetaNf.carvia_nf_id).filter(
+            CarviaColetaNf.carvia_nf_id.isnot(None))
         return (CarviaNf.query
-                .filter(CarviaNf.status == 'ATIVA', norm_sql == alvo)
+                .filter(CarviaNf.status == 'ATIVA', norm_sql == alvo,
+                        CarviaNf.id.notin_(ja_vinculadas))
                 .order_by(CarviaNf.id.desc())
                 .limit(limite)
                 .all())
@@ -147,11 +169,19 @@ class CarviaColetaService:
     def vincular_nf(linha, carvia_nf_id):
         """Vincula a linha a uma CarviaNf real e PROPAGA o local_cd da coleta para a NF."""
         from app.carvia.models.documentos import CarviaNf
+        from app.carvia.models.coleta import CarviaColetaNf
         if not linha.coleta.pode_editar():
             raise ColetaError('Coleta nao e editavel.')
         nf = db.session.get(CarviaNf, carvia_nf_id)
         if nf is None:
             raise ColetaError('NF nao encontrada.')
+        # Uma CarviaNf pertence a no maximo 1 linha de coleta (UNIQUE uq_carvia_coleta_nf):
+        # erro amigavel ANTES do IntegrityError do banco.
+        ja = CarviaColetaNf.query.filter(
+            CarviaColetaNf.carvia_nf_id == nf.id, CarviaColetaNf.id != linha.id).first()
+        if ja is not None:
+            raise ColetaError(
+                f'NF {nf.numero_nf} ja esta vinculada a coleta {ja.coleta.numero_coleta}.')
         linha.carvia_nf_id = nf.id
         # Stream 1: o destino (local_cd) da coleta passa a valer para a NF real.
         if linha.coleta.local_cd:
@@ -177,10 +207,12 @@ class CarviaColetaService:
         """Marca a coleta como coletada, cria a CarviaDespesa (tipo COLETA) a conciliar e
         propaga o local_cd da coleta para todas as NFs vinculadas. Idempotente quanto a despesa.
         """
-        from app.carvia.models.coleta import COLETA_STATUS_COLETADA, COLETA_TIPO_DESPESA
+        from app.carvia.models.coleta import (
+            COLETA_STATUS_COLETADA, COLETA_STATUS_CANCELADA, COLETA_TIPO_DESPESA)
         from app.carvia.models.financeiro import CarviaDespesa
-        from app.carvia.models.documentos import CarviaNf
 
+        if coleta.status == COLETA_STATUS_CANCELADA:
+            raise ColetaError('Coleta cancelada nao pode ser marcada como coletada.')
         if coleta.status == COLETA_STATUS_COLETADA:
             return coleta  # idempotente
 
@@ -189,13 +221,8 @@ class CarviaColetaService:
         coleta.data_coletada_em = agora
         coleta.status = COLETA_STATUS_COLETADA
 
-        # Propaga local_cd para todas as NFs vinculadas
-        if coleta.local_cd:
-            for linha in coleta.nfs:
-                if linha.carvia_nf_id:
-                    nf = db.session.get(CarviaNf, linha.carvia_nf_id)
-                    if nf is not None:
-                        nf.local_cd = coleta.local_cd
+        # Propaga local_cd para todas as NFs vinculadas (Stream 1)
+        CarviaColetaService._propagar_local_cd(coleta)
 
         # Cria a despesa a conciliar (so se houver valor e ainda nao existir)
         if coleta.despesa_id is None and coleta.valor_coleta and float(coleta.valor_coleta) > 0:

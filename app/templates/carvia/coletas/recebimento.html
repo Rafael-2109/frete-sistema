@@ -65,10 +65,14 @@
             <div class="card"><div class="card-header d-flex justify-content-between">
                 <strong>Chassis conferidos (<span id="contChassi">{{ chassis|length }}</span>)</strong>
                 <div>
+                    {% set n_alerta = chassis | selectattr('status', 'equalto', 'ALERTA') | list | length %}
                     {% if recebimento and recebimento.status == 'EM_RECEBIMENTO' %}
-                    <form method="POST" action="{{ url_for('carvia.finalizar_recebimento', coleta_id=coleta.id) }}" class="d-inline">
+                    <form method="POST" action="{{ url_for('carvia.finalizar_recebimento', coleta_id=coleta.id) }}" class="d-inline"
+                          onsubmit="return {{ 'confirm(\'Ha ' ~ n_alerta ~ ' chassi(s) em ALERTA. Finalizar mesmo assim deixa o recebimento COM DIVERGENCIA. Continuar?\')' if n_alerta else 'true' }};">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                        <button class="btn btn-success btn-sm"><i class="fas fa-flag-checkered"></i> Finalizar</button>
+                        <button class="btn btn-success btn-sm">
+                            <i class="fas fa-flag-checkered"></i> Finalizar{% if n_alerta %} <span class="badge bg-warning text-dark">{{ n_alerta }} alerta</span>{% endif %}
+                        </button>
                     </form>
                     {% elif recebimento %}
                     <form method="POST" action="{{ url_for('carvia.reabrir_recebimento', coleta_id=coleta.id) }}" class="d-inline">
@@ -125,7 +129,7 @@
         fd.append('chassi', chassi);
         fd.append('modelo', modeloInput.value || '');
         fd.append('qr_code_lido', qrLido ? '1' : '0');
-        if (!qrLido && fotoInput.files[0]) fd.append('foto', fotoInput.files[0]);
+        if (fotoInput.files[0]) fd.append('foto', fotoInput.files[0]);  // foto anexa em ambos (QR e manual)
         fetch(CONFERIR_URL, { method: 'POST', headers: { 'X-CSRFToken': CSRF }, body: fd })
             .then(r => r.json())
             .then(d => {
@@ -203,6 +207,9 @@
     document.getElementById('btnStop').addEventListener('click', function() {
         if (html5Qr) html5Qr.stop().then(() => { document.getElementById('btnStart').disabled = false; document.getElementById('btnStop').disabled = true; });
     });
+
+    // Encerra a camera ao sair da pagina (evita camera presa no mobile).
+    window.addEventListener('pagehide', function() { try { if (html5Qr) html5Qr.stop(); } catch (e) {} });
 })();
 </script>
 {% endblock %}

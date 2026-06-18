@@ -109,3 +109,62 @@ def test_sugerir_nf_normaliza_numero(db):
     nf = _criar_nf(db, numero='123')
     sugestoes = CarviaColetaService.sugerir_nf(linha)
     assert nf.id in [s.id for s in sugestoes]
+
+
+def test_nf_nao_vincula_a_duas_coletas(db):
+    """Bug 🔴: uma CarviaNf pertence a no maximo 1 coleta (UNIQUE uq_carvia_coleta_nf)."""
+    nf = _criar_nf(db, numero='999')
+    c1 = CarviaColetaService.criar_coleta(usuario='test@bot')
+    l1 = CarviaColetaService.adicionar_linha(c1, numero_nf='999')
+    CarviaColetaService.vincular_nf(l1, nf.id)
+
+    c2 = CarviaColetaService.criar_coleta(usuario='test@bot')
+    l2 = CarviaColetaService.adicionar_linha(c2, numero_nf='999')
+    with pytest.raises(ColetaError):
+        CarviaColetaService.vincular_nf(l2, nf.id)
+
+
+def test_sugerir_nf_exclui_ja_vinculada(db):
+    """Bug 🔴: NF ja vinculada a qualquer coleta nao deve ser sugerida de novo."""
+    nf = _criar_nf(db, numero='123')
+    c1 = CarviaColetaService.criar_coleta(usuario='test@bot')
+    l1 = CarviaColetaService.adicionar_linha(c1, numero_nf='123')
+    assert nf.id in [s.id for s in CarviaColetaService.sugerir_nf(l1)]  # antes de vincular: sugere
+
+    CarviaColetaService.vincular_nf(l1, nf.id)
+    c2 = CarviaColetaService.criar_coleta(usuario='test@bot')
+    l2 = CarviaColetaService.adicionar_linha(c2, numero_nf='123')
+    assert nf.id not in [s.id for s in CarviaColetaService.sugerir_nf(l2)]  # depois: excluida
+
+
+def test_editar_coleta_repropaga_local_cd(db):
+    """Bug 🔴: mudar o destino da coleta re-propaga para as NFs ja vinculadas."""
+    coleta = CarviaColetaService.criar_coleta(local_cd='VICTORIO_MARCHEZINE', usuario='test@bot')
+    nf = _criar_nf(db, numero='321', local_cd='VICTORIO_MARCHEZINE')
+    linha = CarviaColetaService.adicionar_linha(coleta, numero_nf='321')
+    CarviaColetaService.vincular_nf(linha, nf.id)
+    assert nf.local_cd == 'VICTORIO_MARCHEZINE'
+
+    CarviaColetaService.editar_coleta(coleta, local_cd='TENENTE_MARQUES')
+    assert coleta.local_cd == 'TENENTE_MARQUES'
+    assert nf.local_cd == 'TENENTE_MARQUES'  # re-propagado
+
+
+def test_marcar_coletada_cancelada_bloqueia(db):
+    """Edge 🟠: coleta CANCELADA nao pode ser marcada como coletada (bypass via POST)."""
+    coleta = CarviaColetaService.criar_coleta(valor_coleta=Decimal('10'), usuario='test@bot')
+    CarviaColetaService.cancelar_coleta(coleta)
+    with pytest.raises(ColetaError):
+        CarviaColetaService.marcar_coletada(coleta, usuario='test@bot')
+
+
+def test_parse_decimal_br():
+    """Edge 🟠: entrada BR de milhar sem centavos nao vira 1,5."""
+    from app.carvia.routes.coleta_routes import _parse_decimal
+    assert _parse_decimal('1.500,00') == 1500.0
+    assert _parse_decimal('1.500') == 1500.0       # milhar BR (era 1.5 antes do fix)
+    assert _parse_decimal('1.234.567') == 1234567.0
+    assert _parse_decimal('10.50') == 10.5         # decimal real (2 casas)
+    assert _parse_decimal('1234,56') == 1234.56
+    assert _parse_decimal('500') == 500.0
+    assert _parse_decimal('') is None

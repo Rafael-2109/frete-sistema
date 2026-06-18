@@ -2216,6 +2216,10 @@ def gerar_excel_monitoramento(entregas, formato='multiplas_abas'):
             'transportadora': entrega.transportadora,
             'vendedor': entrega.vendedor,
             'valor_nf': entrega.valor_nf,
+            # CD de expedicao + chegada na filial — so para CarVia (Nacom = sempre VM, sem chegada_filial)
+            'local_cd': entrega.local_cd if entrega.origem != 'NACOM' else None,
+            'chegada_filial': entrega.chegada_filial if entrega.origem != 'NACOM' else None,
+            'chegada_filial_em': limpar_timezone(entrega.chegada_filial_em) if entrega.origem != 'NACOM' else None,
             'data_embarque': limpar_timezone(entrega.data_embarque),
             'data_entrega_prevista': limpar_timezone(entrega.data_entrega_prevista),
             'data_agenda': limpar_timezone(entrega.data_agenda),
