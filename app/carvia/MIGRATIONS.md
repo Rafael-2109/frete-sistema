@@ -34,3 +34,20 @@ Todas em `scripts/migrations/`. Regra CLAUDE.md: DDL requer `.py` + `.sql` (exce
 - `remove_subcontrato_id_custo_entrega.py` + `.sql` — **DESTRUCTIVE (pos-deploy)**: DROP COLUMN `subcontrato_id` de `carvia_custos_entrega` apos validar que todo o codigo ja migrou para `fatura_transportadora_id`. Executar apenas apos Fase 1-6 em producao estavel. NAO CRIADA AINDA — sera Fase 7.
 - `add_previnculos_extrato_cotacao.py` + `.sql` — Tabela `carvia_previnculos_extrato_cotacao` (feature frete pre-pago — regra R16). 15 colunas, 2 CHECK constraints (`ck_previnculo_valor_positivo`, `ck_previnculo_status`), 5 indices + UNIQUE PARCIAL `(extrato_linha_id, cotacao_id) WHERE status='ATIVO'`. FKs: `extrato_linha_id` (CASCADE), `cotacao_id` (CASCADE), `conciliacao_id` (SET NULL), `fatura_cliente_id` (SET NULL). Idempotente via `IF NOT EXISTS` + DO blocks para check constraints.
 - `carvia_comissao_ajustes.py` + `.sql` — Consistencia de comissoes (R21). (1) ADD COLUMN `vendedor_usuario_id` (FK `usuarios`, indexed) + `total_ajustes` NUMERIC(15,2) em `carvia_comissao_fechamentos`; (2) tabela `carvia_comissao_ajustes` (delta debito/credito por CTe alterado/cancelado: 4 indices, 2 CHECK constraints `status`/`motivo`, FKs `operacao_id`, `fechamento_origem_id`, `vendedor_usuario_id`, `fechamento_aplicado_id` SET NULL); (3) backfill `vendedor_usuario_id` por lower(email). Idempotente (DO blocks + `IF NOT EXISTS`). A tabela tambem nasce via `create_all` no boot — o `.sql` cobre PROD.
+
+### Redesign CarVia 2026-06 (coletas papel-de-pao / recebimento por chassi / portal cliente / flag local_cd)
+
+> Aplicadas no PROD via `SKIP_DB_CREATE=true DATABASE_URL=$DATABASE_URL_PROD python <mig>.py`.
+> GOTCHA: `create_all` cria tabela nova no boot mas NAO altera tabela existente nem cria VIEW —
+> ALTER/VIEW exigem a migration ANTES do push (model carregado em toda request; deploy falha sem a coluna).
+> mig CREATE TABLE muitas vezes ja existem via `create_all` (indices `ix_*` SQLAlchemy, NAO `idx_*` do .sql) — NAO re-rodar o .sql.
+
+- `2026_06_17_local_cd_e_chegada_filial.py` + `.sql` — flag `local_cd` VARCHAR(20) NOT NULL DEFAULT 'VICTORIO_MARCHEZINE' em `separacao`, `embarque_itens`, `controle_portaria`, `carvia_nfs`, `entregas_monitoradas` + `chegada_filial` (bool) + `chegada_filial_em` em `entregas_monitoradas` + 6 indices parciais. Backfill VM automatico.
+- `2026_06_17_carvia_coletas.py` + `.sql` — tabelas `carvia_coletas` (cabecalho coleta "papel de pao") + `carvia_coleta_nfs` (linhas NF rascunho).
+- `2026_06_17_carvia_coleta_recebimento.py` + `.sql` — tabelas `carvia_coleta_recebimentos` (1:1 coleta) + `carvia_coleta_recebimento_chassis` (1 linha/moto) — recebimento por chassi.
+- `2026_06_17_carvia_portal_cliente.py` + `.sql` — tabelas `carvia_portal_usuarios` (usuario EXTERNO isolado) + `carvia_portal_usuario_cnpjs` (escopo CNPJ_DIRETO).
+- `alterar_view_pedidos_v10_local_cd.py` + `.sql` — VIEW `pedidos` + MV `mv_pedidos` v10 = v9 + coluna `local_cd` (Nacom `min(s.local_cd)`; CarVia NULL) + indice `idx_mv_pedidos_local_cd`. DROP+CREATE atomico; REFRESH CONCURRENTLY preservado.
+- `alterar_view_pedidos_v11_carvia_local_cd.py` + `.sql` — v11 = v10 com CarVia `local_cd` = default 'VICTORIO_MARCHEZINE' (4B). (v12 — derivar TM da Coleta — DEFERIDO: branches CarVia da view saem de cotacoes/pedidos, sem link a Coleta.)
+- `2026_06_18_carvia_coleta_nf_unique.py` + `.sql` — UNIQUE(`carvia_nf_id`) em `carvia_coleta_nfs` (uma NF pertence a no max 1 coleta; fix de status ambiguo no portal). DO block idempotente.
+- `2026_06_18_carvia_recebimento_flag_e_chegada.py` + `.sql` — `usuarios.acesso_recebimento_carvia` (BOOL — operador so-recebimento, sem valores) + `carvia_coletas.data_prevista_chegada` (DATE).
+- `2026_06_18_carvia_portal_grupo_empresa.py` + `.sql` — `carvia_portal_usuarios.grupo_empresa` (VARCHAR — grupo/empresa que o cliente declara no cadastro; hint de vinculo).
