@@ -37,6 +37,12 @@
       "default": "ABERTO"
     },
     {
+      "name": "local_cd",
+      "type": "varchar(20)",
+      "nullable": false,
+      "default": "VICTORIO_MARCHEZINE"
+    },
+    {
       "name": "observacoes",
       "type": "text"
     },

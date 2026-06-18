@@ -101,6 +101,19 @@ class CarviaFreteService:
             logger.warning("Embarque %s sem transportadora vinculada", embarque_id)
             return []
 
+        # Gate "ultima saida": embarque bifurcado (VM + TM) so gera frete quando
+        # TODOS os CDs com itens ativos ja sairam — senao o frete CarVia nasceria
+        # sem os itens do CD que ainda nao saiu. Embarque de 1 CD: sem restricao
+        # (comportamento legado). Helper em app/utils (importavel pelo CarVia — R1).
+        from app.utils.local_cd import cds_pendentes_de_saida
+        pendentes = cds_pendentes_de_saida(embarque)
+        if pendentes:
+            logger.info(
+                "Frete CarVia adiado para embarque %s — CDs sem saida: %s",
+                embarque_id, sorted(pendentes),
+            )
+            return []
+
         # Buscar itens CarVia ativos com NF preenchida (nao provisorios)
         itens_carvia = EmbarqueItem.query.filter(
             EmbarqueItem.embarque_id == embarque_id,

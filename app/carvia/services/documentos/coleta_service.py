@@ -80,7 +80,8 @@ class CarviaColetaService:
 
     @staticmethod
     def _propagar_local_cd(coleta):
-        """Propaga `coleta.local_cd` para TODAS as CarviaNf reais vinculadas (Stream 1)."""
+        """Propaga `coleta.local_cd` para TODAS as CarviaNf reais vinculadas (Stream 1) e,
+        via numero_nf, para os CarviaPedido/CarviaCotacao que as referenciam (Frente A)."""
         if not coleta.local_cd:
             return
         from app.carvia.models.documentos import CarviaNf
@@ -89,6 +90,36 @@ class CarviaColetaService:
                 nf = db.session.get(CarviaNf, linha.carvia_nf_id)
                 if nf is not None:
                     nf.local_cd = coleta.local_cd
+                    CarviaColetaService._propagar_local_cd_para_documentos(
+                        nf.numero_nf, coleta.local_cd)
+
+    @staticmethod
+    def _propagar_local_cd_para_documentos(numero_nf, local_cd):
+        """Propaga local_cd para o CarviaPedido + CarviaCotacao que referenciam a NF
+        (via CarviaPedidoItem.numero_nf, match normalizado = mesmo _norm_nf do vinculo).
+
+        A Coleta e a FONTE da flag de CD; a VIEW pedidos (Partes 2A/2B) so LE essas
+        colunas. Sem item de pedido correspondente -> no-op (NF sem pedido CarVia)."""
+        if not local_cd or not numero_nf:
+            return
+        from app.carvia.models.cotacao import CarviaPedidoItem
+        from sqlalchemy import func
+        alvo = _norm_nf(numero_nf)
+        if not alvo:
+            return
+        norm_sql = func.ltrim(func.regexp_replace(CarviaPedidoItem.numero_nf, r'\D', '', 'g'), '0')
+        itens = (CarviaPedidoItem.query
+                 .filter(CarviaPedidoItem.numero_nf.isnot(None),
+                         CarviaPedidoItem.numero_nf != '',
+                         norm_sql == alvo)
+                 .all())
+        for item in itens:
+            pedido = item.pedido
+            if pedido is None:
+                continue
+            pedido.local_cd = local_cd
+            if pedido.cotacao is not None:
+                pedido.cotacao.local_cd = local_cd
 
     @staticmethod
     def cancelar_coleta(coleta, usuario=None):
@@ -289,8 +320,11 @@ class CarviaColetaService:
                 f'NF {nf.numero_nf} ja esta vinculada a coleta {ja.coleta.numero_coleta}.')
         linha.carvia_nf_id = nf.id
         # Stream 1: o destino (local_cd) da coleta passa a valer para a NF real.
+        # Frente A: e tambem para o CarviaPedido/CarviaCotacao que referenciam a NF.
         if linha.coleta.local_cd:
             nf.local_cd = linha.coleta.local_cd
+            CarviaColetaService._propagar_local_cd_para_documentos(
+                nf.numero_nf, linha.coleta.local_cd)
         # Consolida destino: a NF real e a fonte de verdade de cidade/UF (so sobrescreve
         # quando a NF tem o dado — nunca apaga um rascunho com NF vazia).
         if nf.cidade_destinatario:

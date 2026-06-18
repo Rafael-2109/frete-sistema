@@ -51,6 +51,12 @@ class CarviaCotacao(db.Model):
     tipo_material = db.Column(db.String(20), nullable=False)  # CARGA_GERAL | MOTO
     tipo_carga = db.Column(db.String(20), nullable=True)  # DIRETA | FRACIONADA
 
+    # CD de expedicao (VICTORIO_MARCHEZINE | TENENTE_MARQUES). Propagado a partir da
+    # Coleta (CarviaColeta.local_cd -> CarviaNf -> aqui via numero_nf). So leitura na
+    # VIEW pedidos (Parte 2A). Ver app/carvia/services/documentos/coleta_service.py.
+    local_cd = db.Column(db.String(20), nullable=False, default='VICTORIO_MARCHEZINE',
+                         server_default='VICTORIO_MARCHEZINE')
+
     # Dados carga geral
     peso = db.Column(db.Numeric(15, 3), nullable=True)
     valor_mercadoria = db.Column(db.Numeric(15, 2), nullable=True)
@@ -294,6 +300,11 @@ class CarviaPedido(db.Model):
     filial = db.Column(db.String(5), nullable=False)  # SP | RJ
     tipo_separacao = db.Column(db.String(20), nullable=False)  # ESTOQUE | CROSSDOCK
     status = db.Column(db.String(20), nullable=False, default='ABERTO', index=True)
+
+    # CD de expedicao (VICTORIO_MARCHEZINE | TENENTE_MARQUES). Propagado a partir da
+    # Coleta via numero_nf. So leitura na VIEW pedidos (Parte 2B).
+    local_cd = db.Column(db.String(20), nullable=False, default='VICTORIO_MARCHEZINE',
+                         server_default='VICTORIO_MARCHEZINE')
     observacoes = db.Column(db.Text, nullable=True)
     criado_por = db.Column(db.String(100), nullable=False)
     criado_em = db.Column(db.DateTime, nullable=False, default=agora_utc_naive)

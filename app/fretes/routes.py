@@ -3606,6 +3606,15 @@ def verificar_requisitos_para_lancamento_frete(embarque_id, cnpj_cliente):
     if not embarque or not embarque.data_embarque:
         return False, "Aguardando saída da portaria para lançamento de frete"
 
+    # REQUISITO 0.1: em embarque MISTO (VM + TM), TODOS os CDs com itens ativos
+    # devem ter dado saída. A 1a saída carimba `data_embarque`, mas o frete só pode
+    # disparar na ÚLTIMA saída — senão nasceria sem os itens do CD que ainda não saiu.
+    # Embarque de 1 só CD (Nacom puro / Op. Assai): sem restrição (comportamento legado).
+    from app.utils.local_cd import cds_pendentes_de_saida
+    faltam = cds_pendentes_de_saida(embarque)
+    if faltam:
+        return False, f"Aguardando saída dos CDs: {', '.join(sorted(faltam))}"
+
     # Verifica se já existe frete
     frete_existente = Frete.query.filter(
         and_(Frete.embarque_id == embarque_id, Frete.cnpj_cliente == cnpj_cliente)

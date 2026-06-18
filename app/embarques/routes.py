@@ -850,6 +850,22 @@ def listar_embarques():
         form_filtros.buscar_texto.data = buscar_texto
         filtros_aplicados = True
 
+    # Filtro por CD de expedicao (local_cd) — acessos "Embarques VM"/"Embarques TM" do
+    # sidebar. Seleciona embarques que tenham >=1 EmbarqueItem ativo do CD; a tela segue
+    # exibindo TODOS os itens de cada embarque (o filtro decide QUAIS embarques aparecem).
+    from app.utils.local_cd import normalizar_local_cd
+    local_cd_filtro = normalizar_local_cd(request.args.get('local_cd', '').strip())
+    if local_cd_filtro:
+        query = query.filter(
+            Embarque.id.in_(
+                db.session.query(EmbarqueItem.embarque_id).filter(
+                    EmbarqueItem.local_cd == local_cd_filtro,
+                    EmbarqueItem.status == 'ativo',
+                )
+            )
+        )
+        filtros_aplicados = True
+
     # Ordenação padrão (mais recente primeiro)
     query = query.order_by(Embarque.numero.desc())
 
@@ -920,7 +936,8 @@ def listar_embarques():
         paginacao=paginacao,
         form_filtros=form_filtros,
         filtros_aplicados=filtros_aplicados,
-        mostrar_todos=mostrar_todos
+        mostrar_todos=mostrar_todos,
+        local_cd_atual=local_cd_filtro,
     )
 
 @embarques_bp.route('/<int:id>/editar', methods=['GET', 'POST'])
@@ -1470,6 +1487,11 @@ def imprimir_embarque(embarque_id):
             except (ValueError, TypeError):
                 pass
 
+    # Impressao por filial (acessos VM/TM): a pagina/capa se mantem, mas a listagem de
+    # itens imprime APENAS os do CD informado (decisao Rafael). Sem o param = todos.
+    from app.utils.local_cd import normalizar_local_cd
+    local_cd_atual = normalizar_local_cd(request.args.get('local_cd', '').strip())
+
     # Renderiza template específico para impressão do embarque
     html = render_template(
         'embarques/imprimir_embarque.html',
@@ -1477,7 +1499,8 @@ def imprimir_embarque(embarque_id):
         filial_por_lote=filial_por_lote,
         data_impressao=agora_utc_naive(),
         current_user=current_user,
-        qrcode_base64=qrcode_base64
+        qrcode_base64=qrcode_base64,
+        local_cd_atual=local_cd_atual,
     )
     
     response = make_response(html)
@@ -1493,9 +1516,14 @@ def imprimir_embarque_completo(embarque_id):
     from app.separacao.models import Separacao
     from app.pedidos.models import Pedido
     from flask import make_response
-    
+
     embarque = Embarque.query.get_or_404(embarque_id)
-    
+
+    # Impressao por filial (acessos VM/TM): a pagina se mantem, mas as separacoes/itens
+    # impressos sao APENAS os do CD informado (decisao Rafael). Sem o param = todos.
+    from app.utils.local_cd import normalizar_local_cd
+    local_cd_atual = normalizar_local_cd(request.args.get('local_cd', '').strip())
+
     # Verificar se a data prevista de embarque está preenchida
     if not embarque.data_prevista_embarque:
         flash('⚠️ A Data Prevista de Embarque deve ser preenchida antes de imprimir o relatório completo.', 'warning')
@@ -1523,11 +1551,14 @@ def imprimir_embarque_completo(embarque_id):
     db.session.commit()
 
     # Busca todos os lotes únicos de separação vinculados a este embarque (apenas ativos)
-    lotes_separacao = db.session.query(EmbarqueItem.separacao_lote_id).filter(
+    lotes_q = db.session.query(EmbarqueItem.separacao_lote_id).filter(
         EmbarqueItem.embarque_id == embarque_id,
         EmbarqueItem.separacao_lote_id.isnot(None),
         EmbarqueItem.status == 'ativo',
-    ).distinct().all()
+    )
+    if local_cd_atual:  # impressao por filial: so os lotes do CD
+        lotes_q = lotes_q.filter(EmbarqueItem.local_cd == local_cd_atual)
+    lotes_separacao = lotes_q.distinct().all()
 
     # Particionar lotes: Nacom vs CarVia
     lotes_nacom = []
@@ -1621,9 +1652,10 @@ def imprimir_embarque_completo(embarque_id):
         filial_por_lote=filial_por_lote,
         data_impressao=agora_utc_naive(),
         current_user=current_user,
-        qrcode_base64=qrcode_base64
+        qrcode_base64=qrcode_base64,
+        local_cd_atual=local_cd_atual,
     )
-    
+
     response = make_response(html)
     response.headers['Content-Type'] = 'text/html; charset=utf-8'
     return response

@@ -166,14 +166,17 @@
         {% endif %}
     </div>
 
-    {# Separar itens Nacom e CarVia #}
+    {# Separar itens Nacom e CarVia. Impressao por filial (local_cd_atual): lista
+       APENAS os itens do CD informado; sem o param, lista todos. #}
     {% set itens_nacom = [] %}
     {% set itens_carvia = [] %}
     {% for item in embarque.itens_ativos %}
-      {% if item.separacao_lote_id and item.separacao_lote_id.startswith('CARVIA-') %}
-        {% if itens_carvia.append(item) %}{% endif %}
-      {% else %}
-        {% if itens_nacom.append(item) %}{% endif %}
+      {% if not local_cd_atual or (item.local_cd or 'VICTORIO_MARCHEZINE') == local_cd_atual %}
+        {% if item.separacao_lote_id and item.separacao_lote_id.startswith('CARVIA-') %}
+          {% if itens_carvia.append(item) %}{% endif %}
+        {% else %}
+          {% if itens_nacom.append(item) %}{% endif %}
+        {% endif %}
       {% endif %}
     {% endfor %}
 

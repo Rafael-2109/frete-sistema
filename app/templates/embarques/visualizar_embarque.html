@@ -627,11 +627,25 @@
       <a href="{{ url_for('embarques.listar_embarques') }}" class="btn btn-light">
         Voltar
       </a>
-      <!-- Botão Imprimir -->
-      <a href="{{ url_for('embarques.imprimir_embarque', embarque_id=embarque.id) }}" 
-         class="btn btn-outline-secondary" target="_blank">
-        <i class="fas fa-print"></i> Imprimir
-      </a>
+      <!-- Botão Imprimir (com opcoes por filial se embarque misto VM+TM) -->
+      {% set ns_cd = namespace(vm=false, tm=false) %}
+      {% for it in embarque.itens_ativos %}
+        {% if (it.local_cd or 'VICTORIO_MARCHEZINE') == 'TENENTE_MARQUES' %}{% set ns_cd.tm = true %}{% else %}{% set ns_cd.vm = true %}{% endif %}
+      {% endfor %}
+      <div class="btn-group" role="group">
+        <a href="{{ url_for('embarques.imprimir_embarque', embarque_id=embarque.id) }}"
+           class="btn btn-outline-secondary" target="_blank">
+          <i class="fas fa-print"></i> Imprimir{% if ns_cd.vm and ns_cd.tm %} (Todos){% endif %}
+        </a>
+        {% if ns_cd.vm and ns_cd.tm %}
+        <a href="{{ url_for('embarques.imprimir_embarque', embarque_id=embarque.id, local_cd='VICTORIO_MARCHEZINE') }}"
+           class="btn badge-local-cd-victorio border-0" target="_blank"
+           title="Imprimir somente itens de Victorio Marchezine">VM</a>
+        <a href="{{ url_for('embarques.imprimir_embarque', embarque_id=embarque.id, local_cd='TENENTE_MARQUES') }}"
+           class="btn badge-local-cd-tenente border-0" target="_blank"
+           title="Imprimir somente itens de Tenente Marques">TM</a>
+        {% endif %}
+      </div>
       <!-- Botão Ver Dados da Tabela -->
       <a href="{{ url_for('embarques.dados_tabela_embarque', id=embarque.id) }}" class="btn btn-info">
         Ver Dados da Tabela
@@ -653,12 +667,20 @@
         {% endif %}
       {% endif %}
       
-      <!-- Botão Imprimir Completo -->
+      <!-- Botão Imprimir Completo (com opcoes por filial se embarque misto VM+TM) -->
       {% if embarque.data_prevista_embarque %}
-        <a href="{{ url_for('embarques.imprimir_embarque_completo', embarque_id=embarque.id) }}"
-           class="btn btn-success" target="_blank" id="btn-imprimir-completo">
-          <i class="fas fa-print"></i> Imprimir Completo
-        </a>
+        <div class="btn-group" role="group">
+          <a href="{{ url_for('embarques.imprimir_embarque_completo', embarque_id=embarque.id) }}"
+             class="btn btn-success" target="_blank" id="btn-imprimir-completo">
+            <i class="fas fa-print"></i> Imprimir Completo{% if ns_cd.vm and ns_cd.tm %} (Todos){% endif %}
+          </a>
+          {% if ns_cd.vm and ns_cd.tm %}
+          <a href="{{ url_for('embarques.imprimir_embarque_completo', embarque_id=embarque.id, local_cd='VICTORIO_MARCHEZINE') }}"
+             class="btn btn-success" target="_blank" title="Completo somente Victorio Marchezine">VM</a>
+          <a href="{{ url_for('embarques.imprimir_embarque_completo', embarque_id=embarque.id, local_cd='TENENTE_MARQUES') }}"
+             class="btn btn-success" target="_blank" title="Completo somente Tenente Marques">TM</a>
+          {% endif %}
+        </div>
       {% else %}
         <button type="button" class="btn btn-secondary" disabled title="Preencha a Data Prevista de Embarque para habilitar">
           <i class="fas fa-print"></i> Imprimir Completo

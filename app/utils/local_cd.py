@@ -68,3 +68,64 @@ def label_local_cd(valor, curto=False):
     if curto:
         return LOCAL_CD_LABELS_CURTO.get(valor, '')
     return LOCAL_CD_LABELS.get(valor, '')
+
+
+# ---------------------------------------------------------------------------
+# Saida por CD — gate do "frete dispara na ULTIMA saida"
+# ---------------------------------------------------------------------------
+# Um Embarque pode ter itens dos 2 CDs (VM + TM); a portaria de cada CD da saida
+# SOMENTE dos seus itens (1 ControlePortaria por CD). O frete (Nacom E CarVia) so
+# pode disparar quando TODOS os CDs com itens ativos ja registraram saida — senao
+# o frete nasceria sem os itens do CD que ainda nao saiu.
+#
+# As funcoes operam por duck-typing sobre o objeto Embarque (atributos `.itens` e
+# `.registros_portaria`), sem importar app/embarques nem app/portaria — assim o
+# modulo permanece importavel por TODOS (inclusive CarVia, que so pode importar de
+# app/utils — ver app/carvia/CLAUDE.md R1).
+
+def locais_cd_com_itens_ativos(embarque):
+    """Conjunto de local_cd dos EmbarqueItem ATIVOS do embarque.
+
+    Itens sem flag contam como `LOCAL_CD_DEFAULT` (VM). Itens nao-ativos ignorados.
+    """
+    return {
+        (getattr(it, 'local_cd', None) or LOCAL_CD_DEFAULT)
+        for it in (getattr(embarque, 'itens', None) or [])
+        if getattr(it, 'status', None) == 'ativo'
+    }
+
+
+def locais_cd_com_saida(embarque):
+    """Conjunto de local_cd dos ControlePortaria do embarque que JA deram saida.
+
+    Considera "saiu" quando `data_saida` esta preenchido. Registro sem flag conta
+    como `LOCAL_CD_DEFAULT` (VM).
+    """
+    return {
+        (getattr(cp, 'local_cd', None) or LOCAL_CD_DEFAULT)
+        for cp in (getattr(embarque, 'registros_portaria', None) or [])
+        if getattr(cp, 'data_saida', None) is not None
+    }
+
+
+def cds_pendentes_de_saida(embarque):
+    """CDs com itens ativos que AINDA NAO deram saida — gate do disparo de frete.
+
+    Regra de negocio (item 2, decisao Rafael 2026-06-18): o frete so muda de
+    comportamento para embarque MISTO (itens em >1 CD). Nesse caso, retorna os CDs
+    cuja saida ainda falta — conjunto NAO-vazio significa "aguardar a ultima saida".
+
+    Para embarque de 1 unico CD (Nacom puro / Op. Assai / CarVia 1 destino), retorna
+    sempre conjunto VAZIO: mantem o comportamento legado (o `data_embarque`, checado a
+    montante, ja garante a saida desse CD) e NAO exige registro de portaria — evita
+    regressao em embarques cujo `data_embarque` foi preenchido sem ControlePortaria.
+
+    Embarque None / sem itens ativos: conjunto vazio (nao restringe; os requisitos
+    seguintes do fluxo tratam a ausencia de itens).
+    """
+    if embarque is None:
+        return set()
+    locais_itens = locais_cd_com_itens_ativos(embarque)
+    if len(locais_itens) <= 1:
+        return set()  # nao-misto: comportamento legado, sem restricao por CD
+    return locais_itens - locais_cd_com_saida(embarque)
