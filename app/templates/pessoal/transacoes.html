@@ -701,7 +701,9 @@
     </button>
   </div>
 </div>
+{% endblock %}
 
+{% block scripts %}
 <script>
 $(function() {
   const csrfToken = $('meta[name="csrf-token"]').attr('content');
