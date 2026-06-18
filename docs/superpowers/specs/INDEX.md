@@ -4,11 +4,12 @@ camada: L1
 sot_de: —
 hub: docs/superpowers/specs/INDEX.md
 superseded_by: —
-atualizado: 2026-06-03
+atualizado: 2026-06-18
 -->
 # Specs — indice
 > **Papel:** mapa das specs de design. So ponteiros.
 
+- [Simulador 3D — Expansão para Conservas Nacom (carga mista pallet + moto)](2026-06-18-simulador-3d-conservas-nacom-design.md) — expande o simulador de motos para conservas palletizadas no mesmo baú; Camada 1 monta pallets PBR (regras 1–4, folga 5cm, overbooking 50%, modos A–D) em Python; Camada 2 estende o bin-packer com perfil multi-slab (estrado+coluna) p/ caminho crítico e empacotamento em 2 fases (Nacom embaixo); sem migration
 - [Roteirizacao "Ver no Mapa" — Ampliacao](2026-06-16-roteirizacao-ver-no-mapa-design.md) — custo parametrico por tipo de veiculo (custo_km/motorista/fixo/depreciacao), motor Route Optimization API (sem limite 25), flag volta, dias, incluir/remover on-demand, rotas salvas + cotacao por rota; mono-veiculo; bin-packer fora
 - [PAD-A — Arquitetura de Artefatos](2026-06-01-arquitetura-de-artefatos-design.md) — padrao deterministico docs+scripts
 - [Onda D — Consolidacao de resolvedores em app/resolvedores](2026-06-01-consolidacao-resolvedores-design.md) — spec da consolidacao dos 7 resolvedores de entidades (Caminho C); EXECUTADA
