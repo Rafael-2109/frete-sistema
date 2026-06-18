@@ -27,6 +27,10 @@
       "type": "varchar(20)"
     },
     {
+      "name": "grupo_empresa",
+      "type": "varchar(255)"
+    },
+    {
       "name": "status",
       "type": "varchar(20)",
       "nullable": false,

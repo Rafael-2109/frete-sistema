@@ -27,14 +27,85 @@ def register_portal_admin_routes(bp):
         from app.carvia.models.portal import CarviaPortalUsuario, PORTAL_STATUSES, PORTAL_ESCOPOS
         from app.carvia.models.clientes import CarviaCliente
         status_filtro = request.args.get('status', '')
+        grupo_filtro = request.args.get('grupo', '')
+        busca = request.args.get('busca', '')
         q = CarviaPortalUsuario.query
         if status_filtro:
             q = q.filter(CarviaPortalUsuario.status == status_filtro)
+        if grupo_filtro:
+            q = q.filter(CarviaPortalUsuario.grupo_empresa.ilike(f'%{grupo_filtro}%'))
+        if busca:
+            like = f'%{busca}%'
+            q = q.filter(db.or_(
+                CarviaPortalUsuario.nome.ilike(like),
+                CarviaPortalUsuario.email.ilike(like),
+                CarviaPortalUsuario.grupo_empresa.ilike(like)))
         usuarios = q.order_by(CarviaPortalUsuario.status, CarviaPortalUsuario.criado_em.desc().nullslast()).all()
         clientes = CarviaCliente.query.filter_by(ativo=True).order_by(CarviaCliente.nome_comercial).all()
         return render_template('carvia/portal_admin/listar.html',
                                usuarios=usuarios, clientes=clientes,
-                               statuses=PORTAL_STATUSES, escopos=PORTAL_ESCOPOS, status_filtro=status_filtro)
+                               statuses=PORTAL_STATUSES, escopos=PORTAL_ESCOPOS,
+                               status_filtro=status_filtro, grupo_filtro=grupo_filtro, busca=busca)
+
+    # ---- Acesso INTERNO ao portal (CarVia ve a MESMA tela do cliente, read-only) ----
+    def _portal_user_ativo(uid):
+        from app.carvia.models.portal import CarviaPortalUsuario
+        return db.session.get(CarviaPortalUsuario, uid)
+
+    @bp.route('/portal-usuarios/<int:uid>/ver')  # type: ignore
+    @login_required
+    def ver_portal(uid):  # type: ignore
+        if not _guard():
+            flash('Acesso negado.', 'danger'); return redirect(url_for('main.dashboard'))
+        from app.carvia.services.documentos.portal_status_service import CarviaPortalStatusService, ETAPAS
+        cliente = _portal_user_ativo(uid)
+        if cliente is None:
+            flash('Usuario do portal nao encontrado.', 'warning')
+            return redirect(url_for('carvia.listar_portal_usuarios'))
+        busca = request.args.get('busca', '')
+        status_filtro = request.args.get('status', '')
+        nfs = CarviaPortalStatusService.listar_nfs(cliente, busca=busca or None)
+        if status_filtro:
+            nfs = [n for n in nfs if n['atual_key'] == status_filtro]
+        return render_template('carvia/portal/dashboard.html', interno=True, cliente=cliente,
+                               nfs=nfs, etapas=ETAPAS, busca=busca, status_filtro=status_filtro)
+
+    @bp.route('/portal-usuarios/<int:uid>/nf/<numero>')  # type: ignore
+    @login_required
+    def ver_portal_nf(uid, numero):  # type: ignore
+        if not _guard():
+            flash('Acesso negado.', 'danger'); return redirect(url_for('main.dashboard'))
+        from app.carvia.services.documentos.portal_status_service import CarviaPortalStatusService
+        cliente = _portal_user_ativo(uid)
+        if cliente is None:
+            flash('Usuario do portal nao encontrado.', 'warning')
+            return redirect(url_for('carvia.listar_portal_usuarios'))
+        nf = CarviaPortalStatusService.get_nf_escopada(cliente, numero)
+        if nf is None:
+            flash('NF fora do escopo deste cliente.', 'warning')
+            return redirect(url_for('carvia.ver_portal', uid=uid))
+        status = CarviaPortalStatusService.status_nf(nf)
+        dados = CarviaPortalStatusService.dados_detalhe(nf)
+        return render_template('carvia/portal/detalhe_nf.html', interno=True, cliente=cliente,
+                               nf=nf, status=status, dados=dados)
+
+    @bp.route('/portal-usuarios/<int:uid>/nf/<numero>/arquivo/<tipo>')  # type: ignore
+    @login_required
+    def ver_portal_arquivo(uid, numero, tipo):  # type: ignore
+        if not _guard():
+            flash('Acesso negado.', 'danger'); return redirect(url_for('main.dashboard'))
+        from app.carvia.services.documentos.portal_status_service import CarviaPortalStatusService
+        cliente = _portal_user_ativo(uid)
+        if cliente is None:
+            return redirect(url_for('carvia.listar_portal_usuarios'))
+        nf = CarviaPortalStatusService.get_nf_escopada(cliente, numero)
+        path = CarviaPortalStatusService.arquivo_path(nf, tipo) if nf else None
+        if not path:
+            flash('Arquivo indisponivel.', 'warning')
+            return redirect(url_for('carvia.ver_portal_nf', uid=uid, numero=numero))
+        from app.utils.file_storage import get_file_storage
+        url = get_file_storage().get_file_url(path)
+        return redirect(url) if url else redirect(url_for('carvia.ver_portal_nf', uid=uid, numero=numero))
 
     @bp.route('/portal-usuarios/<int:uid>/aprovar', methods=['POST'])  # type: ignore
     @login_required

@@ -34,7 +34,13 @@
     },
     {
       "name": "data_prevista",
-      "type": "date"
+      "type": "date",
+      "description": "previsao de COLETA"
+    },
+    {
+      "name": "data_prevista_chegada",
+      "type": "date",
+      "description": "previsao de CHEGADA na matriz/CD"
     },
     {
       "name": "data_coletada",

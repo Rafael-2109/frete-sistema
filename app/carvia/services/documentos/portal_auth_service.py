@@ -16,7 +16,7 @@ class CarviaPortalAuthService:
 
     # ------------------------------------------------------------ registro
     @staticmethod
-    def registrar(*, nome, email, senha, telefone=None):
+    def registrar(*, nome, email, senha, telefone=None, grupo_empresa=None):
         from app.carvia.models.portal import CarviaPortalUsuario, PORTAL_STATUS_PENDENTE
         nome = (nome or '').strip()
         email = (email or '').strip().lower()
@@ -30,6 +30,7 @@ class CarviaPortalAuthService:
             raise PortalAuthError('Ja existe uma conta com esse email.')
         u = CarviaPortalUsuario(
             nome=nome, email=email, telefone=(telefone or '').strip() or None,
+            grupo_empresa=(grupo_empresa or '').strip() or None,
             status=PORTAL_STATUS_PENDENTE, criado_em=agora_utc_naive())
         u.set_senha(senha)
         db.session.add(u)

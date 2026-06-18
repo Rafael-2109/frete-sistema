@@ -163,6 +163,27 @@ def test_render_portal_publico(db, client):
     assert client.get('/portal-cliente/').status_code in (301, 302)
 
 
+def test_registrar_com_grupo_empresa(db):
+    u = CarviaPortalAuthService.registrar(nome='Cli', email='g@mail.com', senha='segredo1',
+                                          grupo_empresa='Grupo Atacado Norte')
+    assert u.grupo_empresa == 'Grupo Atacado Norte'
+
+
 def test_render_admin_portal(db, client):
     with patch('flask_login.utils._get_user', return_value=_admin()):
         assert client.get('/carvia/portal-usuarios').status_code == 200
+
+
+def test_ver_portal_interno_renderiza(db, client):
+    """Usuario CarVia (interno) ve a MESMA tela do cliente (read-only), escopada ao usuario."""
+    nf = _nf(db, 'NFI', '77777777000177')
+    u = CarviaPortalAuthService.registrar(nome='ClienteVis', email='vis@mail.com', senha='segredo1',
+                                          grupo_empresa='Grupo Vis')
+    CarviaPortalAuthService.aprovar(u, operador='op', tipo_escopo='CNPJ_DIRETO', cnpjs=['77777777000177'])
+    db.session.commit()
+    with patch('flask_login.utils._get_user', return_value=_admin()):
+        r = client.get(f'/carvia/portal-usuarios/{u.id}/ver')
+        assert r.status_code == 200
+        assert b'NFI' in r.data  # ve a NF do escopo do cliente
+        r2 = client.get(f'/carvia/portal-usuarios/{u.id}/nf/NFI')
+        assert r2.status_code == 200

@@ -105,6 +105,13 @@
       "default": false
     },
     {
+      "name": "acesso_recebimento_carvia",
+      "type": "boolean",
+      "description": "Acesso SO ao recebimento por chassi das Coletas CarVia (operador, sem valores)",
+      "nullable": false,
+      "default": false
+    },
+    {
       "name": "sistema_remessa_vortx",
       "type": "boolean",
       "description": "Acesso a geracao de remessa VORTX",

@@ -6,7 +6,18 @@
 
 {% block content %}
 <div class="container py-3 cvp-page">
+    {% set interno = interno | default(false) %}
+    {% if interno %}
+    <div class="d-flex justify-content-between align-items-center py-3 border-bottom mb-3 flex-wrap gap-2">
+        <div>
+            <strong><i class="fas fa-user-shield"></i> Portal do cliente — visão CarVia</strong>
+            <span class="text-muted">— {{ cliente.nome }}{% if cliente.grupo_empresa %} · {{ cliente.grupo_empresa }}{% endif %}</span>
+        </div>
+        <a href="{{ url_for('carvia.listar_portal_usuarios') }}" class="btn btn-sm btn-outline-secondary"><i class="fas fa-arrow-left"></i> Voltar à gestão</a>
+    </div>
+    {% else %}
     {% set active = 'nfs' %}{% include 'carvia/portal/_header.html' %}
+    {% endif %}
 
     <form method="GET" class="row g-2 mb-3 cvp-anim">
         <div class="col-md-5">
@@ -27,7 +38,8 @@
         {% for item in nfs %}
         {% set nf = item.nf %}
         {% set cur = (item.etapas | selectattr('key', 'equalto', item.atual_key) | first) if item.atual_key else none %}
-        <a class="cvp-nf-card cvp-anim" href="{{ url_for('portal_cliente.detalhe_nf', numero=nf.numero_nf) }}">
+        {% set det_url = url_for('carvia.ver_portal_nf', uid=cliente.id, numero=nf.numero_nf) if interno else url_for('portal_cliente.detalhe_nf', numero=nf.numero_nf) %}
+        <a class="cvp-nf-card cvp-anim" href="{{ det_url }}">
             <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
                 <div>
                     <strong>NF {{ nf.numero_nf }}</strong>

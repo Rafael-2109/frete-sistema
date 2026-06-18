@@ -44,6 +44,9 @@ class CarviaPortalUsuario(db.Model):
     email = db.Column(db.String(255), nullable=False, unique=True, index=True)
     senha_hash = db.Column(db.String(255), nullable=False)
     telefone = db.Column(db.String(20))
+    # Grupo/Empresa que o proprio cliente declara no cadastro — hint p/ o admin vincular ao
+    # CarviaCliente/grupo correto (melhora a compatibilidade de nomes na aprovacao).
+    grupo_empresa = db.Column(db.String(255))
 
     status = db.Column(
         db.String(20), nullable=False, default=PORTAL_STATUS_PENDENTE,

@@ -71,7 +71,8 @@ def registrar():
         try:
             CarviaPortalAuthService.registrar(
                 nome=request.form.get('nome'), email=request.form.get('email'),
-                senha=request.form.get('senha'), telefone=request.form.get('telefone'))
+                senha=request.form.get('senha'), telefone=request.form.get('telefone'),
+                grupo_empresa=request.form.get('grupo_empresa'))
             db.session.commit()
             flash('Cadastro enviado! Sua conta sera liberada apos aprovacao da CarVia.', 'success')
             return redirect(url_for('portal_cliente.login'))
