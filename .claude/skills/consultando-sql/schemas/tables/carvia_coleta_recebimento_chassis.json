@@ -1,0 +1,96 @@
+{
+  "name": "carvia_coleta_recebimento_chassis",
+  "description": "Um chassi (moto) conferido fisicamente no recebimento de uma coleta.",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "recebimento_id",
+      "type": "integer",
+      "description": "FK → carvia_coleta_recebimentos.id",
+      "nullable": false
+    },
+    {
+      "name": "chassi",
+      "type": "varchar(30)",
+      "nullable": false
+    },
+    {
+      "name": "modelo",
+      "type": "varchar(100)",
+      "description": "opcional (lido/informado) — cor NAO e validada"
+    },
+    {
+      "name": "qr_code_lido",
+      "type": "boolean",
+      "nullable": false,
+      "default": false
+    },
+    {
+      "name": "foto_s3_key",
+      "type": "varchar(500)",
+      "description": "SEMPRE opcional"
+    },
+    {
+      "name": "carvia_nf_veiculo_id",
+      "type": "integer",
+      "description": "FK → carvia_nf_veiculos.id"
+    },
+    {
+      "name": "status",
+      "type": "varchar(20)",
+      "nullable": false,
+      "default": "ALERTA"
+    },
+    {
+      "name": "conferido_por",
+      "type": "varchar(150)"
+    },
+    {
+      "name": "conferido_em",
+      "type": "timestamp"
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "recebimento_id",
+      "references": "carvia_coleta_recebimentos.id"
+    },
+    {
+      "column": "carvia_nf_veiculo_id",
+      "references": "carvia_nf_veiculos.id"
+    }
+  ],
+  "unique_constraints": [
+    [
+      "recebimento_id",
+      "chassi"
+    ]
+  ],
+  "indices": [
+    {
+      "name": "ix_carvia_coleta_recebimento_chassis_carvia_nf_veiculo_id",
+      "columns": [
+        "carvia_nf_veiculo_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carvia_coleta_recebimento_chassis_recebimento_id",
+      "columns": [
+        "recebimento_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carvia_coleta_recebimento_chassis_status",
+      "columns": [
+        "status"
+      ],
+      "unique": false
+    }
+  ]
+}

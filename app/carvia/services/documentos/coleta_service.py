@@ -157,6 +157,11 @@ class CarviaColetaService:
         if linha.coleta.local_cd:
             nf.local_cd = linha.coleta.local_cd
         db.session.flush()
+        # Stream 4 (backfill): se ja ha recebimento, reconcilia chassis em ALERTA que agora
+        # batem com os chassis desta NF — a ordem NF<->chassi nao impacta a vinculacao.
+        from app.carvia.services.documentos.coleta_recebimento_service import (
+            CarviaColetaRecebimentoService)
+        CarviaColetaRecebimentoService.reconciliar(linha.coleta)
         return nf
 
     @staticmethod

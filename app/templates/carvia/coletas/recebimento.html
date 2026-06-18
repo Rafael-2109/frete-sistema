@@ -1,0 +1,176 @@
+{% extends "base.html" %}
+{% from "shared/_macros_badges.html" import badge_local_cd %}
+
+{% block content %}
+<div class="container-fluid py-3">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h4 class="mb-0">
+            <i class="fas fa-qrcode"></i> Recebimento {{ coleta.numero_coleta }}
+            {{ badge_local_cd(coleta.local_cd, curto=True) }}
+            {% if recebimento %}
+                {% if recebimento.status == 'CONCLUIDO' %}<span class="badge bg-success">CONCLUIDO</span>
+                {% elif recebimento.status == 'COM_DIVERGENCIA' %}<span class="badge bg-warning text-dark">COM DIVERGENCIA</span>
+                {% else %}<span class="badge bg-info">EM RECEBIMENTO</span>{% endif %}
+            {% endif %}
+        </h4>
+        <a href="{{ url_for('carvia.detalhe_coleta', coleta_id=coleta.id) }}" class="btn btn-outline-secondary btn-sm">
+            <i class="fas fa-arrow-left"></i> Coleta
+        </a>
+    </div>
+
+    <div class="row g-3">
+        <!-- Scanner -->
+        <div class="col-lg-5">
+            <div class="card"><div class="card-body">
+                <div id="reader" style="width:100%;max-width:360px;margin:auto;"></div>
+                <div class="d-flex gap-2 my-2">
+                    <button id="btnStart" class="btn btn-primary btn-sm flex-fill"><i class="fas fa-camera"></i> Ligar camera</button>
+                    <button id="btnStop" class="btn btn-outline-secondary btn-sm flex-fill" disabled><i class="fas fa-stop"></i> Parar</button>
+                </div>
+                <hr>
+                <p class="small text-muted mb-2">Ou digite/cole o chassi (foto opcional):</p>
+                <div class="row g-2">
+                    <div class="col-12"><input id="chassiInput" class="form-control" placeholder="Chassi" autocomplete="off"></div>
+                    <div class="col-7"><input id="modeloInput" class="form-control form-control-sm" placeholder="Modelo (opcional)"></div>
+                    <div class="col-5"><input id="fotoInput" type="file" accept="image/*" capture="environment" class="form-control form-control-sm"></div>
+                    <div class="col-12"><button id="btnConferir" class="btn btn-success w-100"><i class="fas fa-check"></i> Conferir chassi</button></div>
+                </div>
+                <div id="msg" class="mt-2 small"></div>
+            </div></div>
+        </div>
+
+        <!-- Resumo por NF -->
+        <div class="col-lg-7">
+            <div class="card mb-3"><div class="card-header"><strong>NFs da coleta</strong> <span class="small text-muted">(recebida quando todos os chassis batem)</span></div>
+            <div class="table-responsive"><table class="table table-sm mb-0">
+                <thead class="table-light"><tr><th>NF</th><th class="text-center">Esperados</th><th class="text-center">Recebidos</th><th>Status</th></tr></thead>
+                <tbody id="resumoNf">
+                    {% for r in resumo_nf %}
+                    <tr data-nf="{{ r.carvia_nf_id }}">
+                        <td>{{ r.numero_nf }}</td>
+                        <td class="text-center">{{ r.esperados }}</td>
+                        <td class="text-center recebidos">{{ r.recebidos }}</td>
+                        <td class="statuscol">{% if r.recebida %}<span class="badge bg-success">recebida</span>{% else %}<span class="badge bg-secondary">parcial</span>{% endif %}</td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="4" class="text-muted text-center py-2">Nenhuma NF vinculada ainda (vincule na coleta).</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table></div></div>
+
+            <div class="card"><div class="card-header d-flex justify-content-between">
+                <strong>Chassis conferidos (<span id="contChassi">{{ chassis|length }}</span>)</strong>
+                <div>
+                    {% if recebimento and recebimento.status == 'EM_RECEBIMENTO' %}
+                    <form method="POST" action="{{ url_for('carvia.finalizar_recebimento', coleta_id=coleta.id) }}" class="d-inline">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button class="btn btn-success btn-sm"><i class="fas fa-flag-checkered"></i> Finalizar</button>
+                    </form>
+                    {% elif recebimento %}
+                    <form method="POST" action="{{ url_for('carvia.reabrir_recebimento', coleta_id=coleta.id) }}" class="d-inline">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button class="btn btn-outline-warning btn-sm"><i class="fas fa-unlock"></i> Reabrir</button>
+                    </form>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="table-responsive"><table class="table table-sm mb-0">
+                <thead class="table-light"><tr><th>Chassi</th><th>Modelo</th><th>QR</th><th>Foto</th><th>Status</th><th></th></tr></thead>
+                <tbody id="listaChassi">
+                    {% for c in chassis %}
+                    <tr>
+                        <td>{{ c.chassi }}</td><td>{{ c.modelo or '—' }}</td>
+                        <td>{% if c.qr_code_lido %}<i class="fas fa-qrcode text-success"></i>{% else %}<i class="fas fa-keyboard text-muted"></i>{% endif %}</td>
+                        <td>{% if c.foto_s3_key %}<i class="fas fa-image text-success"></i>{% else %}—{% endif %}</td>
+                        <td>{% if c.status == 'VINCULADO' %}<span class="badge bg-success">vinculado</span>{% else %}<span class="badge bg-warning text-dark">alerta</span>{% endif %}</td>
+                        <td>
+                            <form method="POST" action="{{ url_for('carvia.remover_chassi', linha_id=c.id) }}" class="d-inline" onsubmit="return confirm('Remover chassi?');">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <button class="btn btn-link btn-sm text-danger p-0"><i class="fas fa-trash"></i></button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table></div></div>
+        </div>
+    </div>
+</div>
+
+<script src="{{ url_for('static', filename='js/vendor/html5-qrcode-2.3.8.min.js') }}"></script>
+<script>
+(function() {
+    const CONFERIR_URL = "{{ url_for('carvia.conferir_chassi', coleta_id=coleta.id) }}";
+    const CSRF = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+    const chassiInput = document.getElementById('chassiInput');
+    const modeloInput = document.getElementById('modeloInput');
+    const fotoInput = document.getElementById('fotoInput');
+    const msg = document.getElementById('msg');
+    let html5Qr = null, ultimoLido = null, ultimoTs = 0;
+
+    function flash(text, ok) {
+        msg.innerHTML = '<span class="badge bg-' + (ok ? 'success' : 'danger') + '">' + text + '</span>';
+    }
+
+    function conferir(chassi, qrLido) {
+        const fd = new FormData();
+        fd.append('csrf_token', CSRF);
+        fd.append('chassi', chassi);
+        fd.append('modelo', modeloInput.value || '');
+        fd.append('qr_code_lido', qrLido ? '1' : '0');
+        if (!qrLido && fotoInput.files[0]) fd.append('foto', fotoInput.files[0]);
+        fetch(CONFERIR_URL, { method: 'POST', headers: { 'X-CSRFToken': CSRF }, body: fd })
+            .then(r => r.json())
+            .then(d => {
+                if (!d.success) { flash(d.message || 'Erro', false); return; }
+                const c = d.chassi;
+                const tr = document.createElement('tr');
+                tr.innerHTML = '<td>' + c.chassi + '</td><td>' + (c.modelo || '—') + '</td>' +
+                    '<td>' + (c.qr_code_lido ? '<i class="fas fa-qrcode text-success"></i>' : '<i class="fas fa-keyboard text-muted"></i>') + '</td>' +
+                    '<td>' + (c.tem_foto ? '<i class="fas fa-image text-success"></i>' : '—') + '</td>' +
+                    '<td>' + (c.status === 'VINCULADO' ? '<span class="badge bg-success">vinculado</span>' : '<span class="badge bg-warning text-dark">alerta</span>') + '</td><td></td>';
+                document.getElementById('listaChassi').prepend(tr);
+                document.getElementById('contChassi').textContent = parseInt(document.getElementById('contChassi').textContent) + 1;
+                atualizarResumo(d.resumo_nf);
+                flash(c.chassi + ' — ' + c.status, c.status === 'VINCULADO');
+                chassiInput.value = ''; modeloInput.value = ''; fotoInput.value = '';
+            })
+            .catch(() => flash('Falha de rede', false));
+    }
+
+    function atualizarResumo(resumo) {
+        (resumo || []).forEach(r => {
+            const tr = document.querySelector('#resumoNf tr[data-nf="' + r.carvia_nf_id + '"]');
+            if (!tr) return;
+            tr.querySelector('.recebidos').textContent = r.recebidos;
+            tr.querySelector('.statuscol').innerHTML = r.recebida
+                ? '<span class="badge bg-success">recebida</span>'
+                : '<span class="badge bg-secondary">parcial</span>';
+        });
+    }
+
+    document.getElementById('btnConferir').addEventListener('click', function() {
+        const v = (chassiInput.value || '').trim();
+        if (v) conferir(v, false);
+    });
+    chassiInput.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') { e.preventDefault(); const v = chassiInput.value.trim(); if (v) conferir(v, false); }
+    });
+
+    document.getElementById('btnStart').addEventListener('click', function() {
+        if (!window.isSecureContext) { flash('Camera exige HTTPS', false); return; }
+        html5Qr = new Html5Qrcode('reader');
+        html5Qr.start({ facingMode: 'environment' }, { fps: 10, qrbox: 240 }, function(text) {
+            const now = Date.now();
+            if (text === ultimoLido && now - ultimoTs < 2500) return;  // debounce mesma leitura
+            ultimoLido = text; ultimoTs = now;
+            conferir(text.trim(), true);  // QR lido -> qr_code_lido=1
+        }).then(() => { document.getElementById('btnStart').disabled = true; document.getElementById('btnStop').disabled = false; })
+          .catch(() => flash('Nao foi possivel abrir a camera', false));
+    });
+    document.getElementById('btnStop').addEventListener('click', function() {
+        if (html5Qr) html5Qr.stop().then(() => { document.getElementById('btnStart').disabled = false; document.getElementById('btnStop').disabled = true; });
+    });
+})();
+</script>
+{% endblock %}

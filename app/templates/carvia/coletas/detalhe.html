@@ -43,6 +43,9 @@
             </div>
             <div class="col-md-4 text-md-end">
                 <div class="d-grid gap-2">
+                    <a href="{{ url_for('carvia.recebimento_coleta', coleta_id=coleta.id) }}" class="btn btn-info btn-sm">
+                        <i class="fas fa-qrcode"></i> Receber por chassi
+                    </a>
                     {% if editavel %}
                     <button class="btn btn-outline-primary btn-sm" type="button" data-bs-toggle="collapse" data-bs-target="#editarHeader">
                         <i class="fas fa-edit"></i> Editar cabeçalho

@@ -1,0 +1,61 @@
+{
+  "name": "carvia_coleta_recebimentos",
+  "description": "Recebimento fisico (Matriz SP) de uma coleta — 1:1 com CarviaColeta.",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "coleta_id",
+      "type": "integer",
+      "description": "FK → carvia_coletas.id",
+      "nullable": false
+    },
+    {
+      "name": "status",
+      "type": "varchar(20)",
+      "nullable": false,
+      "default": "EM_RECEBIMENTO"
+    },
+    {
+      "name": "iniciado_por",
+      "type": "varchar(150)"
+    },
+    {
+      "name": "iniciado_em",
+      "type": "timestamp"
+    },
+    {
+      "name": "concluido_por",
+      "type": "varchar(150)"
+    },
+    {
+      "name": "concluido_em",
+      "type": "timestamp"
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "coleta_id",
+      "references": "carvia_coletas.id"
+    }
+  ],
+  "indices": [
+    {
+      "name": "ix_carvia_coleta_recebimentos_coleta_id",
+      "columns": [
+        "coleta_id"
+      ],
+      "unique": true
+    },
+    {
+      "name": "ix_carvia_coleta_recebimentos_status",
+      "columns": [
+        "status"
+      ],
+      "unique": false
+    }
+  ]
+}

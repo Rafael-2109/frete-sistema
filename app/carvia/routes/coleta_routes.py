@@ -240,6 +240,128 @@ def register_coleta_routes(bp):
              'valor_total': float(nf.valor_total) if nf.valor_total else None}
             for nf in nfs]})
 
+    # ------------------------------------------------------- recebimento chassi
+    @bp.route('/coletas/<int:coleta_id>/recebimento')  # type: ignore
+    @login_required
+    def recebimento_coleta(coleta_id):  # type: ignore
+        if not _guard():
+            return _negado()
+        from app.carvia.models.coleta import CarviaColeta
+        from app.carvia.services.documentos.coleta_recebimento_service import CarviaColetaRecebimentoService
+        coleta = db.session.get(CarviaColeta, coleta_id)
+        if coleta is None:
+            flash('Coleta nao encontrada.', 'warning')
+            return redirect(url_for('carvia.listar_coletas'))
+        receb = CarviaColetaRecebimentoService._get_recebimento(coleta)
+        chassis = receb.chassis.all() if receb else []
+        resumo = CarviaColetaRecebimentoService.resumo_por_nf(coleta)
+        return render_template('carvia/coletas/recebimento.html',
+                               coleta=coleta, recebimento=receb, chassis=chassis, resumo_nf=resumo)
+
+    @bp.route('/coletas/<int:coleta_id>/recebimento/conferir', methods=['POST'])  # type: ignore
+    @login_required
+    def conferir_chassi(coleta_id):  # type: ignore
+        """AJAX: confere 1 chassi (multipart: chassi, modelo, qr_code_lido, foto opcional)."""
+        if not _guard():
+            return jsonify({'success': False, 'message': 'Acesso negado'}), 403
+        from app.carvia.models.coleta import CarviaColeta
+        from app.carvia.services.documentos.coleta_recebimento_service import (
+            CarviaColetaRecebimentoService, RecebimentoError)
+        coleta = db.session.get(CarviaColeta, coleta_id)
+        if coleta is None:
+            return jsonify({'success': False, 'message': 'Coleta nao encontrada'}), 404
+        chassi = (request.form.get('chassi') or '').strip()
+        if not chassi:
+            return jsonify({'success': False, 'message': 'Chassi vazio'}), 400
+        # Foto SEMPRE opcional
+        foto_key = None
+        foto = request.files.get('foto')
+        if foto and foto.filename:
+            try:
+                from app.utils.file_storage import get_file_storage
+                foto_key = get_file_storage().save_file(
+                    foto, f'carvia/recebimento/{coleta_id}',
+                    allowed_extensions=['jpg', 'jpeg', 'png', 'webp', 'heic', 'heif'])
+            except Exception as e:
+                logger.warning(f'Foto recebimento nao salva: {e}')
+        try:
+            linha = CarviaColetaRecebimentoService.conferir_chassi(
+                coleta, chassi,
+                modelo=request.form.get('modelo'),
+                qr_code_lido=request.form.get('qr_code_lido') in ('1', 'true', 'True', 'on'),
+                foto_s3_key=foto_key, usuario=current_user.email)
+            db.session.commit()
+            return jsonify({
+                'success': True,
+                'chassi': {'id': linha.id, 'chassi': linha.chassi, 'modelo': linha.modelo,
+                           'status': linha.status, 'qr_code_lido': linha.qr_code_lido,
+                           'tem_foto': bool(linha.foto_s3_key)},
+                'resumo_nf': CarviaColetaRecebimentoService.resumo_por_nf(coleta),
+            })
+        except RecebimentoError as e:
+            db.session.rollback()
+            return jsonify({'success': False, 'message': str(e)}), 400
+        except Exception as e:
+            db.session.rollback()
+            logger.error(f'Erro ao conferir chassi: {e}')
+            return jsonify({'success': False, 'message': str(e)}), 500
+
+    @bp.route('/coletas/recebimento/chassi/<int:linha_id>/remover', methods=['POST'])  # type: ignore
+    @login_required
+    def remover_chassi(linha_id):  # type: ignore
+        if not _guard():
+            return _negado()
+        from app.carvia.models.coleta_recebimento import CarviaColetaRecebimentoChassi
+        from app.carvia.services.documentos.coleta_recebimento_service import CarviaColetaRecebimentoService
+        linha = db.session.get(CarviaColetaRecebimentoChassi, linha_id)
+        if linha is None:
+            flash('Chassi nao encontrado.', 'warning')
+            return redirect(url_for('carvia.listar_coletas'))
+        coleta_id = linha.recebimento.coleta_id
+        try:
+            CarviaColetaRecebimentoService.remover_chassi(linha)
+            db.session.commit()
+            flash('Chassi removido.', 'success')
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Erro: {e}', 'danger')
+        return redirect(url_for('carvia.recebimento_coleta', coleta_id=coleta_id))
+
+    @bp.route('/coletas/<int:coleta_id>/recebimento/finalizar', methods=['POST'])  # type: ignore
+    @login_required
+    def finalizar_recebimento(coleta_id):  # type: ignore
+        return _acao_recebimento(coleta_id, lambda c, svc: (
+            svc.finalizar(c, usuario=current_user.email), 'Recebimento finalizado.'))
+
+    @bp.route('/coletas/<int:coleta_id>/recebimento/reabrir', methods=['POST'])  # type: ignore
+    @login_required
+    def reabrir_recebimento(coleta_id):  # type: ignore
+        return _acao_recebimento(coleta_id, lambda c, svc: (svc.reabrir(c), 'Recebimento reaberto.'))
+
+    def _acao_recebimento(coleta_id, fn):
+        if not _guard():
+            return _negado()
+        from app.carvia.models.coleta import CarviaColeta
+        from app.carvia.services.documentos.coleta_recebimento_service import (
+            CarviaColetaRecebimentoService, RecebimentoError)
+        coleta = db.session.get(CarviaColeta, coleta_id)
+        if coleta is None:
+            flash('Coleta nao encontrada.', 'warning')
+            return redirect(url_for('carvia.listar_coletas'))
+        try:
+            res = fn(coleta, CarviaColetaRecebimentoService)
+            msg = res[1] if isinstance(res, tuple) and len(res) > 1 else 'Operacao concluida.'
+            db.session.commit()
+            flash(msg, 'success')
+        except (RecebimentoError, ValueError) as e:
+            db.session.rollback()
+            flash(str(e), 'warning')
+        except Exception as e:
+            db.session.rollback()
+            logger.error(f'Erro no recebimento {coleta_id}: {e}')
+            flash(f'Erro: {e}', 'danger')
+        return redirect(url_for('carvia.recebimento_coleta', coleta_id=coleta_id))
+
     # ---------------------------------------------------------------- helpers
     def _transportadoras():
         from app.transportadoras.models import Transportadora

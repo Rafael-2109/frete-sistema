@@ -109,6 +109,13 @@ from app.carvia.models.coleta import (  # noqa: F401
     COLETA_STATUSES, COLETA_TIPO_DESPESA,
 )
 
+# Recebimento por chassi da coleta (stream 4)
+from app.carvia.models.coleta_recebimento import (  # noqa: F401
+    CarviaColetaRecebimento, CarviaColetaRecebimentoChassi,
+    RECEB_STATUS_EM_RECEBIMENTO, RECEB_STATUS_CONCLUIDO, RECEB_STATUS_COM_DIVERGENCIA,
+    RECEB_STATUSES, CHASSI_STATUS_VINCULADO, CHASSI_STATUS_ALERTA, normalizar_chassi,
+)
+
 
 __all__ = [
     # Documentos
@@ -155,4 +162,8 @@ __all__ = [
     'CarviaColeta', 'CarviaColetaNf',
     'COLETA_STATUS_RASCUNHO', 'COLETA_STATUS_COLETADA', 'COLETA_STATUS_CANCELADA',
     'COLETA_STATUSES', 'COLETA_TIPO_DESPESA',
+    # Recebimento por chassi (stream 4)
+    'CarviaColetaRecebimento', 'CarviaColetaRecebimentoChassi',
+    'RECEB_STATUS_EM_RECEBIMENTO', 'RECEB_STATUS_CONCLUIDO', 'RECEB_STATUS_COM_DIVERGENCIA',
+    'RECEB_STATUSES', 'CHASSI_STATUS_VINCULADO', 'CHASSI_STATUS_ALERTA', 'normalizar_chassi',
 ]

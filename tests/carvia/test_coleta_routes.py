@@ -46,6 +46,20 @@ def test_detalhe_render_rascunho_e_coletada(db, client):
         assert client.get(f'/carvia/coletas/{coleta.id}').status_code == 200
 
 
+def test_recebimento_page_render(db, client):
+    coleta = CarviaColetaService.criar_coleta(local_cd='TENENTE_MARQUES', usuario='test@bot')
+    db.session.commit()
+    with patch('flask_login.utils._get_user', return_value=_user()):
+        # pagina do scanner renderiza mesmo sem recebimento iniciado
+        assert client.get(f'/carvia/coletas/{coleta.id}/recebimento').status_code == 200
+        # conferir um chassi via AJAX (sem foto) -> 200 json, status ALERTA (sem NF vinculada)
+        r = client.post(f'/carvia/coletas/{coleta.id}/recebimento/conferir',
+                        data={'chassi': 'TESTCHASSI001'})
+        assert r.status_code == 200
+        j = r.get_json()
+        assert j['success'] is True and j['chassi']['status'] == 'ALERTA'
+
+
 def test_guard_sem_carvia_redireciona(db, client):
     u = _user(); u.sistema_carvia = False
     with patch('flask_login.utils._get_user', return_value=u):

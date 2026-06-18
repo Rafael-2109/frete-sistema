@@ -105,7 +105,7 @@
     "vinculacao_carteira_separacao",
     "webhook_configs"
   ],
-  "total_tabelas": 326,
+  "total_tabelas": 328,
   "tabelas": [
     {
       "name": "agendamentos_entrega",
@@ -747,6 +747,26 @@
         "coleta_id",
         "carvia_nf_id",
         "vendedor"
+      ],
+      "dominio": "Carvia"
+    },
+    {
+      "name": "carvia_coleta_recebimento_chassis",
+      "description": "Um chassi (moto) conferido fisicamente no recebimento de uma coleta.",
+      "key_fields": [
+        "recebimento_id",
+        "carvia_nf_veiculo_id",
+        "status"
+      ],
+      "dominio": "Carvia"
+    },
+    {
+      "name": "carvia_coleta_recebimentos",
+      "description": "Recebimento fisico (Matriz SP) de uma coleta — 1:1 com CarviaColeta.",
+      "key_fields": [
+        "coleta_id",
+        "status",
+        "iniciado_em"
       ],
       "dominio": "Carvia"
     },
