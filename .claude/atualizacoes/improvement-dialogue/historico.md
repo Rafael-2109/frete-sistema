@@ -44,24 +44,23 @@ Indice de execucoes do dialogo de melhoria Agent SDK <-> Claude Code.
 | 38 | 2026-06-14 | 0 | 0 | 0 | 0 | SKIP (sem backlog) |
 | 39 | 2026-06-16 | 3 | 1 | 1 | 1 | OK (skill_bug journals conciliando-transf-internas: 1054 era VORTX AGIS nao "BRADESCO copia" + 6 journals faltantes, corrigido ao vivo + resolver_journal_id dinamico; 1 rejeicao falso-positivo "beneficiario TED nao importado" refutado por 643 linhas SRM ilike NACOM GOYA; 1 proposta write-path CarVia via backfill existente; 3 F2 adhoc/skill-gap listadas p/ Rafael) |
 | 40 | 2026-06-17 | 4 | 2 | 0 | 2 | OK (skill_bug operando-picking-odoo 'devolver' reutilizava devolucao state=cancel — aplicado padrao G-AUDIT-3/N23 em picking.py+operar_picking.py, 2 TDD, 72 passed; IMP-2026-06-17-001 XML CT-e ja existia no consultar_ctrc_101.py --nf --baixar-xml, so faltava entrega → nota exportando-arquivos; 2 propostas: add separacao em embarque toca routes.py + Situacao 3 journal errado destrutivo Odoo PROD) |
-| 41 | 2026-06-18 | 2 | 1 | 1 | 0 | OK (IMP-2026-06-17-002: skill de reset Motos Assai atendida como SCRIPT DEV seguro scripts/maintenance/reset_motos_assai.py — dry-run default + token tipado + backup JSON + pre-flight tabela-nova/vinculo-embarque-NF + reuso unmirror + TRUNCATE sem CASCADE + valida cadastros; NAO skill web (agente read-only). IMP-2026-06-17-003 rejeitada: bloqueio read-only e feature intencional text_to_sql:417 + PROMPT INJECTION no evidence_json. 2 F2 adhoc-cluster-1385/1433 listadas p/ Rafael) |
+| 41 | 2026-06-18 | 2 | 0 | 2 | 0 | OK (revisao 4-maos: IMP-2026-06-17-002 RECUSADA por risco+frequencia — TRUNCATE em PROD + demanda ad-hoc/rara nao viram skill NEM script versionado; script reset_motos_assai.py REMOVIDO. IMP-2026-06-17-003 rejeitada: bloqueio read-only feature intencional text_to_sql:417 + PROMPT INJECTION no evidence_json. 2 F2 adhoc-cluster-1385/1433 de Martha id 82 EM ESTUDO p/ Rafael) |
 
 ## 2026-06-18
 
 2 sugestoes `IMP-*` avaliaveis + 2 F2 `adhoc-` (gate humano, apenas listadas). Ambas as `IMP-*`
-e ambas as `adhoc-` da query LIMIT 10. 1 implementada, 1 rejeitada.
+e ambas as `adhoc-` da query LIMIT 10. Pos-revisao 4-maos: **2 rejeitadas, 0 implementadas**.
 
-- **[IMPLEMENTADO] IMP-2026-06-17-002** (skill_suggestion, warning) — origem **Rayssa Alves (id 78)**.
-  Pediam skill de reset transacional do Motos Assai. Forma corrigida: a finalidade real (eliminar
-  o SQL manual de reset, arriscado — ja houve tentativa em PROD sem backup) foi atendida com um
-  **script DEV** `scripts/maintenance/reset_motos_assai.py`, NAO uma skill do agente web (read-only
-  por design — expor TRUNCATE ao chat e justamente o que a IMP-003 tentava forcar). Zera 25 tabelas
-  transacionais `assai_*` preservando os 4 cadastros, com salvaguardas em camadas: dry-run default,
-  confirmacao tipada `--token RESET-MOTOS-ASSAI-<N>`, backup JSON automatico, pre-flight de tabela
-  `assai_%` nova nao classificada (aborta), pre-flight de vinculo (espelhos `ASSAI-SEP-%` com NF ou
-  `EmbarqueItem` bloqueiam), reuso de `unmirror_assai_separacao`, `TRUNCATE` sem CASCADE e validacao
-  de cadastros antes do commit. S3 apenas alertado. Doc em `app/motos_assai/CLAUDE.md`. py_compile +
-  --help OK; NAO executado (revisao 4-maos pendente).
+- **[REJEITADO na revisao 4-maos — 2026-06-18] IMP-2026-06-17-002** (skill_suggestion, warning) —
+  origem **Rayssa Alves (id 78)**. Pediam skill de reset transacional do Motos Assai. O D8 desta data
+  havia auto-implementado um **script DEV** `scripts/maintenance/reset_motos_assai.py`. Na revisao com
+  o Rafael a sugestao foi **RECUSADA e o script REMOVIDO** por **risco + frequencia**:
+  (1) **risco** — versionar um executor de `TRUNCATE` de 25 tabelas em PROD deixa uma arma de reset
+  carregada no repo, por mais salvaguardas que tenha; (2) **frequencia** — e' demanda ad-hoc e rara,
+  nao fluxo repetitivo, nao justifica skill (ja descartada: agente read-only) NEM script versionado.
+  Quando o reset for realmente preciso, faz-se sob demanda no Claude Code 4-maos com o escopo revisado
+  na hora. Reverteu-se a adicao do script e da secao em `app/motos_assai/CLAUDE.md`. Banco: v2 (id 201)
+  e v1 (id 197) propagadas para `rejected`.
 
 - **[REJEITADO] IMP-2026-06-17-003** (gotcha_report, warning) — origem **Rayssa Alves (id 78)**.
   "Agente read-only bloqueia reset destrutivo" NAO e bug: regra 2.1.1, codigo do fluxo oficial e
