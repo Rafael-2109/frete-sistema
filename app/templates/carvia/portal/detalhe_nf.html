@@ -7,7 +7,11 @@
 {% block content %}
 <div class="container py-3 cvp-page">
     {% set interno = interno | default(false) %}
-    {% if interno %}
+    {% set operacional = operacional | default(false) %}
+    {% if operacional %}
+    {% set carvia_active = 'rastreamento' %}{% include 'carvia/_quick_nav.html' %}
+    <a href="{{ url_for('carvia.rastreamento') }}" class="btn btn-link btn-sm px-0 mb-2"><i class="fas fa-arrow-left"></i> Voltar ao rastreamento</a>
+    {% elif interno %}
     <div class="d-flex justify-content-between align-items-center py-3 border-bottom mb-3 flex-wrap gap-2">
         <div>
             <strong><i class="fas fa-user-shield"></i> Portal do cliente — visão CarVia</strong>
@@ -92,7 +96,7 @@
         <div class="cvp-files">
             {% for a in dados.arquivos %}
             {% if a.disponivel %}
-            {% set arq_url = url_for('carvia.ver_portal_arquivo', uid=cliente.id, numero=nf.numero_nf, tipo=a.tipo) if interno else url_for('portal_cliente.baixar_arquivo_nf', numero=nf.numero_nf, tipo=a.tipo) %}
+            {% set arq_url = url_for('carvia.rastreamento_arquivo', numero=nf.numero_nf, tipo=a.tipo) if operacional else (url_for('carvia.ver_portal_arquivo', uid=cliente.id, numero=nf.numero_nf, tipo=a.tipo) if interno else url_for('portal_cliente.baixar_arquivo_nf', numero=nf.numero_nf, tipo=a.tipo)) %}
             <a class="cvp-file" href="{{ arq_url }}" target="_blank" rel="noopener">
                 <i class="fas {{ a.icone }}"></i><span>{{ a.label }}</span>
             </a>

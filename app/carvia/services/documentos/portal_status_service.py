@@ -109,6 +109,93 @@ class CarviaPortalStatusService:
             })
         return out
 
+    # ----------------------------------------------------- visao operacional (interna)
+    @staticmethod
+    def _cnpjs_do_grupo(grupo_id):
+        """CNPJs (so digitos) dos membros de um CarviaGrupoCliente."""
+        from app.carvia.models.tabelas import CarviaGrupoClienteMembro
+        membros = CarviaGrupoClienteMembro.query.filter_by(grupo_id=grupo_id).all()
+        return {_so_digitos(m.cnpj) for m in membros if m.cnpj}
+
+    @staticmethod
+    def _cnpjs_do_cliente(cliente_id):
+        """CNPJs (so digitos) dos enderecos DESTINO ativos de um CarviaCliente.
+        Mesma resolucao do escopo CLIENTE_COMERCIAL do portal (CarviaPortalUsuario.cnpjs_permitidos)."""
+        from app.carvia.models.clientes import CarviaClienteEndereco
+        enderecos = CarviaClienteEndereco.query.filter_by(
+            cliente_id=cliente_id, tipo='DESTINO', ativo=True).all()
+        return {_so_digitos(e.cnpj) for e in enderecos if e.cnpj}
+
+    @staticmethod
+    def ufs_distintas():
+        """UFs presentes nas NFs ATIVAS (para o select de filtro operacional)."""
+        from app import db
+        from app.carvia.models.documentos import CarviaNf
+        rows = (db.session.query(CarviaNf.uf_destinatario)
+                .filter(CarviaNf.status == 'ATIVA', CarviaNf.uf_destinatario.isnot(None))
+                .distinct().order_by(CarviaNf.uf_destinatario).all())
+        return [r[0] for r in rows if r[0]]
+
+    @staticmethod
+    def get_nf(numero_nf):
+        """CarviaNf ATIVA por numero, SEM escopo (uso interno operacional — sistema_carvia ve tudo)."""
+        from app.carvia.models.documentos import CarviaNf
+        return (CarviaNf.query.filter_by(numero_nf=numero_nf, status='ATIVA')
+                .order_by(CarviaNf.id.desc()).first())
+
+    @staticmethod
+    def listar_nfs_operacional(grupo_id=None, cliente_id=None, cnpj=None, uf=None,
+                               status_etapa=None, limite=200):
+        """NFs ATIVAS para a visao operacional INTERNA (usuario sistema_carvia ve TODAS,
+        sem escopo por cliente). Filtros opcionais combinados em AND:
+          grupo_id     -> cnpj_destinatario IN (CNPJs dos membros do grupo)
+          cliente_id   -> cnpj_destinatario IN (CNPJs destino do cliente comercial)
+          cnpj         -> match parcial por digitos em cnpj_destinatario
+          uf           -> uf_destinatario
+          status_etapa -> etapa de rastreamento (pos-calculo): COLETADO/.../ENTREGUE ou AGUARDANDO
+
+        Retorno: mesma estrutura de listar_nfs (lista de dicts nf/etapas/atual_*/qtd_motos).
+        O filtro status_etapa e aplicado APOS o limite (igual ao /portal-usuarios/<uid>/ver).
+        """
+        from app.carvia.models.documentos import CarviaNf, CarviaNfVeiculo
+        from sqlalchemy import func
+        norm = func.regexp_replace(CarviaNf.cnpj_destinatario, r'\D', '', 'g')
+        q = CarviaNf.query.filter(CarviaNf.status == 'ATIVA')
+
+        if grupo_id:
+            cnpjs_g = CarviaPortalStatusService._cnpjs_do_grupo(grupo_id)
+            if not cnpjs_g:
+                return []
+            q = q.filter(norm.in_(list(cnpjs_g)))
+        if cliente_id:
+            cnpjs_c = CarviaPortalStatusService._cnpjs_do_cliente(cliente_id)
+            if not cnpjs_c:
+                return []
+            q = q.filter(norm.in_(list(cnpjs_c)))
+        if cnpj:
+            d = _so_digitos(cnpj)
+            if d:
+                q = q.filter(norm.ilike(f'%{d}%'))
+        if uf:
+            q = q.filter(CarviaNf.uf_destinatario == uf.strip().upper())
+
+        nfs = q.order_by(CarviaNf.data_emissao.desc().nullslast(),
+                         CarviaNf.id.desc()).limit(limite).all()
+        alvo = status_etapa.strip().upper() if status_etapa else None
+        out = []
+        for nf in nfs:
+            st = CarviaPortalStatusService.status_nf(nf)
+            if alvo and (st['atual_key'] or 'AGUARDANDO') != alvo:
+                continue
+            out.append({
+                'nf': nf,
+                'atual_key': st['atual_key'],
+                'atual_label': st['atual_label'],
+                'etapas': st['etapas'],
+                'qtd_motos': CarviaNfVeiculo.query.filter_by(nf_id=nf.id).count(),
+            })
+        return out
+
     # ----------------------------------------------------- detalhe / arquivos
     # Tipos de arquivo expostos ao cliente (rotulo + icone p/ a UI).
     ARQUIVOS = [

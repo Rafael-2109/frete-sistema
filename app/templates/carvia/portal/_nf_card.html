@@ -1,0 +1,32 @@
+{# Card de NF do portal (lista). Espera no contexto: item (dict de status_nf) + det_url. #}
+{% set nf = item.nf %}
+{% set cur = (item.etapas | selectattr('key', 'equalto', item.atual_key) | first) if item.atual_key else none %}
+<a class="cvp-nf-card cvp-anim" href="{{ det_url }}">
+    <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
+        <div>
+            <strong>NF {{ nf.numero_nf }}</strong>
+            <div class="text-muted small">{{ nf.nome_destinatario or '—' }}{% if nf.cnpj_destinatario %} · {{ nf.cnpj_destinatario }}{% endif %}</div>
+            <div class="text-muted small">
+                {{ nf.cidade_destinatario or '—' }}{{ '/' ~ nf.uf_destinatario if nf.uf_destinatario }}
+                · {{ nf.data_emissao.strftime('%d/%m/%Y') if nf.data_emissao else '—' }}
+                {% if item.qtd_motos %} · <i class="fas fa-motorcycle"></i> {{ item.qtd_motos }} moto{{ 's' if item.qtd_motos > 1 }}{% endif %}
+            </div>
+        </div>
+        <div>
+            {% if item.atual_key == 'ENTREGUE' %}<span class="cvp-pill cvp-pill--done"><i class="fas fa-check"></i> {{ item.atual_label }}</span>
+            {% elif item.atual_key %}<span class="cvp-pill cvp-pill--progress">{{ item.atual_label }}</span>
+            {% else %}<span class="cvp-pill cvp-pill--wait">{{ item.atual_label }}</span>{% endif %}
+        </div>
+    </div>
+    {# mini-timeline resumida #}
+    <div class="cvp-mini">
+        {% for et in item.etapas %}
+        <span class="cvp-mini__dot {{ 'cvp-mini__dot--current' if et.key == item.atual_key else ('cvp-mini__dot--done' if et.atingido else '') }}"
+              title="{{ et.label }}{{ ' · ' ~ et.data.strftime('%d/%m/%Y') if et.data else '' }}"></span>
+        {% if not loop.last %}<span class="cvp-mini__seg {{ 'cvp-mini__seg--done' if et.atingido }}"></span>{% endif %}
+        {% endfor %}
+    </div>
+    <div class="cvp-mini__cur">
+        {{ item.atual_label }}{% if cur and cur.data %} · {{ cur.data.strftime('%d/%m/%Y') }}{% endif %}
+    </div>
+</a>
