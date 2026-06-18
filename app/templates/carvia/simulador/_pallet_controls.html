@@ -1,0 +1,37 @@
+{# Controles de conservas Nacom (pallets PBR). Modo livre usa o seletor de lote
+   + flags de agrupamento; o modo embarque oculta o bloco livre via JS (pallets
+   ja vem montados em modo A). "Pallet sobre pallet" vale nos 2 modos. #}
+<div id="simulador-pallet-livre">
+  <label class="form-label mb-1" style="font-size:0.78rem">Lote de Separação (Nacom)</label>
+  <input type="text" id="pallet-lote" class="form-control form-control-sm mb-2"
+         placeholder="LOTE_..." autocomplete="off">
+
+  <label class="form-label mb-1" style="font-size:0.78rem">Agrupamento</label>
+  <select id="pallet-modo" class="form-select form-select-sm mb-2">
+    <option value="A" selected>A — por pedido</option>
+    <option value="B">B — por CNPJ</option>
+    <option value="C">C — remontagem</option>
+    <option value="D">D — lote (só produto)</option>
+  </select>
+
+  <div class="form-check form-switch mb-1">
+    <input class="form-check-input" type="checkbox" id="pallet-separado">
+    <label class="form-check-label" for="pallet-separado" style="font-size:0.78rem">
+      Separado por pallet (B/C)
+    </label>
+  </div>
+
+  <label class="form-label mb-1" style="font-size:0.78rem">
+    Overbooking: <span id="pallet-overbooking-val">0%</span>
+  </label>
+  <input type="range" id="pallet-overbooking" class="form-range" min="0" max="50" value="0">
+</div>
+
+<div class="form-check form-switch mt-1">
+  <input class="form-check-input" type="checkbox" id="pallet-sobre-pallet">
+  <label class="form-check-label" for="pallet-sobre-pallet" style="font-size:0.78rem">
+    Pallet sobre pallet (+15cm/nível)
+  </label>
+</div>
+
+<div id="pallet-pendencias" class="text-warning mt-1" style="font-size:0.72rem"></div>

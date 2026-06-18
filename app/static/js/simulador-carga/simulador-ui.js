@@ -33,6 +33,8 @@
     packToken: 0, // descarta resultado de otimizacao obsoleto (input mudou)
     nfsPendentes: null, // cache das NFs CarVia nao entregues (lazy, modo livre)
     nfsAdicionadas: {}, // {numero_nf: true} ja puxadas para o simulador
+    pallets: [], // pallets de conservas Nacom (Camada 1) empacotados junto das motos
+    loteSeparacao: null, // separacao_lote_id ativo (modo livre)
   };
 
   function init() {
@@ -68,6 +70,7 @@
         bindEvents();
         bindPackControls(scheduleRecalc);
         setupNfSelector();
+        setupPalletControls();
 
         // Prefill (rota do mapa) tem prioridade na selecao do veiculo + motos
         var aplicouPrefill = applyPrefill();
@@ -483,6 +486,76 @@
     });
   }
 
+  // ========== Conservas Nacom (pallets) ==========
+
+  function setupPalletControls() {
+    // "Pallet sobre pallet" e client-side (re-empacota) — vale nos 2 modos.
+    var sobre = document.getElementById('pallet-sobre-pallet');
+    if (sobre) sobre.addEventListener('change', scheduleRecalc);
+
+    var blocoLivre = document.getElementById('simulador-pallet-livre');
+    if (state.modo === 'embarque') {
+      // No embarque os pallets vem prontos (modo A). Flags de agrupamento sao de
+      // planejamento — disponiveis no modo livre. Ocultar no embarque.
+      if (blocoLivre) blocoLivre.style.display = 'none';
+      return;
+    }
+
+    var loteInput = document.getElementById('pallet-lote');
+    if (loteInput) {
+      loteInput.addEventListener('change', function () {
+        state.loteSeparacao = (loteInput.value || '').trim() || null;
+        recarregarPallets();
+      });
+    }
+    ['pallet-modo', 'pallet-separado'].forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el) el.addEventListener('change', recarregarPallets);
+    });
+    var ob = document.getElementById('pallet-overbooking');
+    if (ob) {
+      ob.addEventListener('input', function () {
+        var v = document.getElementById('pallet-overbooking-val');
+        if (v) v.textContent = ob.value + '%';
+      });
+      ob.addEventListener('change', recarregarPallets);
+    }
+  }
+
+  /** Busca os pallets do lote informado no backend (Camada 1) e re-empacota. */
+  function recarregarPallets() {
+    if (!state.loteSeparacao) {
+      state.pallets = [];
+      mostrarPendencias([]);
+      scheduleRecalc();
+      return;
+    }
+    var modo = (document.getElementById('pallet-modo') || {}).value || 'A';
+    var separado = !!(document.getElementById('pallet-separado') || {}).checked;
+    var obEl = document.getElementById('pallet-overbooking');
+    var ob = obEl ? (parseFloat(obEl.value) || 0) / 100 : 0;
+    var q = 'lote=' + encodeURIComponent(state.loteSeparacao) +
+            '&modo=' + encodeURIComponent(modo) +
+            '&separado=' + (separado ? '1' : '0') +
+            '&overbooking=' + ob;
+    fetch('/carvia/api/simulador-carga/pallets-por-separacao?' + q)
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        state.pallets = data.pallets || [];
+        mostrarPendencias(data.pendencias || []);
+        scheduleRecalc();
+      })
+      .catch(function (err) { console.error('Erro ao carregar pallets:', err); });
+  }
+
+  function mostrarPendencias(pend) {
+    var el = document.getElementById('pallet-pendencias');
+    if (!el) return;
+    if (!pend || !pend.length) { el.textContent = ''; return; }
+    var cods = pend.map(function (p) { return p.cod_produto; }).join(', ');
+    el.textContent = '⚠ ' + pend.length + ' produto(s) sem cadastro de palletização: ' + cods;
+  }
+
   // ========== Modo Embarque ==========
 
   function initEmbarqueMode(initDataEl, container) {
@@ -537,6 +610,7 @@
     }
     state.colorMap = colorMap;
     state.motoListEmbarque = motoList;
+    state.pallets = data.pallets || [];
 
     recalcularEmbarque();
 
@@ -555,6 +629,7 @@
     // Painel de empacotamento recolhivel + sliders
     bindPackPanelToggle();
     bindPackControls(scheduleRecalc);
+    setupPalletControls();
   }
 
   function recalcularEmbarque() {
@@ -570,8 +645,11 @@
    */
   function packAndRender(bay, motoList, colorMap) {
     var options = getPackingOptions();
+    // Conservas Nacom primeiro: o bin-packer assenta os pallets no piso (fase 1)
+    // e as motos por cima (fase 2). A ordem na lista nao importa — packItems separa.
+    var itens = (state.pallets || []).concat(motoList);
 
-    var quick = BinPacker.pack(bay, motoList, options);
+    var quick = BinPacker.pack(bay, itens, options);
     state.renderer.render(quick, bay, colorMap);
     updateStats(quick, bay);
     updateLegend(motoList, colorMap);
@@ -579,7 +657,7 @@
     var token = ++state.packToken;
     setTimeout(function () {
       if (token !== state.packToken) return; // entrada mudou; descarta
-      var optimized = BinPacker.packOptimized(bay, motoList, options);
+      var optimized = BinPacker.packOptimized(bay, itens, options);
       if (token !== state.packToken) return;
       if (optimized.stats.posicionadas >= quick.stats.posicionadas) {
         state.renderer.render(optimized, bay, colorMap);
@@ -653,10 +731,12 @@
       if (isNaN(v)) return def;
       return div ? v / div : v;
     }
+    var sobre = document.getElementById('pallet-sobre-pallet');
     return {
       minSupport: rd('pack-min-support', 50, 100),
       maxOverhang: rd('pack-max-overhang', 15, 1),
       maxGap: rd('pack-max-gap', 50, 1),
+      palletSobrePallet: !!(sobre && sobre.checked),
     };
   }
 
@@ -768,6 +848,29 @@
       item.appendChild(label);
       container.appendChild(item);
     }
+
+    // Grupos de pallets de conservas (cor + grupo, contagem de pallets)
+    var grupos = {};
+    var lista = state.pallets || [];
+    for (var k = 0; k < lista.length; k++) {
+      var pal = lista[k];
+      var chave = (pal.grupo || 'Conservas') + '|' + (pal.color || '#c0844a');
+      if (!grupos[chave]) grupos[chave] = { grupo: pal.grupo || 'Conservas', color: pal.color || '#c0844a', n: 0 };
+      grupos[chave].n += 1;
+    }
+    Object.keys(grupos).forEach(function (chave) {
+      var g = grupos[chave];
+      var item2 = document.createElement('div');
+      item2.className = 'simulador-legend-item';
+      var swatch2 = document.createElement('div');
+      swatch2.className = 'simulador-legend-swatch';
+      swatch2.style.backgroundColor = g.color;
+      var label2 = document.createElement('span');
+      label2.textContent = g.grupo + ' (' + g.n + ' pallet' + (g.n === 1 ? '' : 's') + ')';
+      item2.appendChild(swatch2);
+      item2.appendChild(label2);
+      container.appendChild(item2);
+    });
   }
 
   function formatNumber(n) {

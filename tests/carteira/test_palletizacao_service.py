@@ -174,6 +174,18 @@ class TestEndpoint:
         assert resp.status_code == 400
 
 
+class TestPaginaSimulador:
+    def test_pagina_livre_inclui_controles_pallet(self, client, db):
+        # Smoke test de render: template + partial _pallet_controls sem erro Jinja.
+        _login_carvia(client, db)
+        resp = client.get('/carvia/simulador-carga')
+        assert resp.status_code == 200
+        html = resp.get_data(as_text=True)
+        assert 'pallet-modo' in html          # select de agrupamento A-D
+        assert 'pallet-sobre-pallet' in html  # flag pallet sobre pallet
+        assert 'Conservas Nacom' in html      # secao nova na sidebar
+
+
 class TestEmbarqueMisto:
     def test_resolver_inclui_pallets_nacom(self, db):
         from app.embarques.models import Embarque, EmbarqueItem
