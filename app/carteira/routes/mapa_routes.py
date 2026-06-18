@@ -18,7 +18,6 @@ from app.carteira.services.roteirizacao_service import (
 from app.veiculos.models import Veiculo
 from app.carteira.models import RotaSalva
 from app import db
-from sqlalchemy import or_
 logger = logging.getLogger(__name__)
 
 # Criar blueprint
@@ -645,12 +644,17 @@ def rota_salvar():
 @bp.route('/api/rotas', methods=['GET'])
 @login_required
 def rota_listar():
-    """Lista as rotas salvas do usuario (inclui rotas sem dono)."""
-    uid = getattr(current_user, 'id', None)
-    q = RotaSalva.query
-    if uid is not None:
-        q = q.filter(or_(RotaSalva.criado_por == uid, RotaSalva.criado_por.is_(None)))
-    rotas = q.order_by(RotaSalva.criado_em.desc()).limit(200).all()
+    """Lista as rotas salvas — COMPARTILHADAS entre todos os usuarios.
+
+    Carregar/excluir/cotar uma rota ja operam por id sem dono; a listagem
+    tambem nao filtra por `criado_por` (rotas sao um recurso de equipe).
+    """
+    rotas = (
+        RotaSalva.query
+        .order_by(RotaSalva.criado_em.desc())
+        .limit(200)
+        .all()
+    )
     return jsonify({'sucesso': True, 'rotas': [r.to_dict() for r in rotas]})
 
 

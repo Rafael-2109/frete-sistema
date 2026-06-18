@@ -76,9 +76,11 @@ function updateCotarButton() {
         }
     }
 
+    // "Adicionar a rota" fica SEMPRE habilitado — adicionarPedidosARota() ja valida
+    // a selecao no clique (alerta se 0). Evita o botao preso desabilitado quando o
+    // JS cacheado nao atualiza o estado. So o contador no texto reflete a selecao.
     const addRotaButton = document.getElementById('btnAddRota');
     if (addRotaButton) {
-        addRotaButton.disabled = count === 0;
         addRotaButton.innerHTML = count > 0
             ? '<i class="fas fa-route"></i> Adicionar à rota (' + count + ')'
             : '<i class="fas fa-route"></i> Adicionar à rota';
