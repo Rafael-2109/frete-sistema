@@ -37,7 +37,7 @@ atualizado: 2026-06-18
 
 ~18.5K LOC, 50 arquivos. Exibe pedidos agrupados, gera separacoes, analisa ruptura de estoque, programa lotes (Atacadao/Sendas) e gerencia standby. Campos de tabela vem dos schemas JSON; regras CarteiraPrincipal vs Separacao em `.claude/references/modelos/REGRAS_CARTEIRA_SEPARACAO.md`. `main_routes.py` e apenas o dashboard `index()` — novas rotas em `routes/`.
 
-**LOC**: ~18.5K | **Arquivos**: 50 | **22 JS** (21 templates + 1 static) | **Atualizado**: 16/06/2026
+**LOC**: ~18.5K | **Arquivos**: 50 | **22 JS** (21 templates + 1 static) | **Atualizado**: 18/06/2026
 
 Workspace principal do sistema de fretes. Exibe pedidos agrupados, gera separacoes,
 analisa ruptura de estoque, programa lotes (Atacadao/Sendas) e gerencia standby.
@@ -150,6 +150,17 @@ NAO a variavel estatica injetada no load (que vem vazia no fluxo interativo).
   clique (alerta se 0). `updateCotarButton()` (`lista-checkboxes.js`) atualiza so o
   contador no texto — NAO desabilita (evita o botao preso por JS cacheado). Os demais
   botoes (Cotar/Cotacao Manual/FOB/Ver no Mapa) seguem o padrao habilita-ao-selecionar.
+- **Scripts de `lista_pedidos.html` usam o filtro `asset_url`** (`?v=<hash md5>`,
+  `app/utils/template_filters.py`), NAO `url_for('static', ...)` puro. Era a causa-raiz
+  do botao preso `disabled`: o navegador servia o `lista-checkboxes.js` cacheado (versao
+  antiga que setava `disabled`). Ao editar qualquer JS de pedidos, manter `asset_url`
+  para o cache invalidar sozinho.
+- **"Agrupar c/ rota" no mapa cria uma NOVA rota sem mutar a de origem**: botao chama
+  `agruparComRotaSalva()` -> `POST /api/rota/agrupar` (`rota_agrupar`), que une os lotes
+  de uma `RotaSalva` existente + os lotes em avaliacao (`_lotesSelecionados()`),
+  deduplicando e preservando ordem, e grava uma RotaSalva nova (`status='salva'`). A rota
+  base permanece intacta — diferente de `rota_acumular` (`/api/rota/acumular`), que ANEXA
+  os lotes a uma rota existente. Ex.: Rota 1 (5) + avaliacao (5) -> Rota 1 intacta + Rota 2 (10).
 
 ---
 

@@ -101,6 +101,7 @@
                                 <button class="btn btn-sm btn-outline-info" onclick="adicionarParadaExtra()" title="Adicionar parada extra (endereço/CNPJ) — não cotável"><i class="fas fa-map-pin"></i> Parada extra</button>
                                 <button class="btn btn-sm btn-outline-primary ms-2" onclick="abrirBuscaPendentes()" title="Buscar pedidos pendentes de embarque para incluir"><i class="fas fa-search"></i> Buscar p/ incluir</button>
                                 <button class="btn btn-sm btn-outline-success ms-2" onclick="salvarRota()" title="Salvar esta rota"><i class="fas fa-save"></i> Salvar rota</button>
+                                <button class="btn btn-sm btn-outline-primary ms-1" onclick="agruparComRotaSalva()" title="Agrupar a seleção em avaliação com uma rota salva, criando uma NOVA rota (a original é preservada)"><i class="fas fa-object-group"></i> Agrupar c/ rota</button>
                                 <button class="btn btn-sm btn-outline-secondary ms-1" onclick="abrirRotasSalvas()" title="Rotas salvas"><i class="fas fa-folder-open"></i> Rotas salvas</button>
                             </span>
                         </div>
@@ -1446,6 +1447,61 @@
                 });
                 if (rotas.length) html += '</div>';
                 Swal.fire({ title: 'Rotas salvas', html: html, width: 600, showConfirmButton: false, showCloseButton: true });
+            });
+        }
+
+        // Agrupa a selecao viva (rota em avaliacao) com uma rota salva existente,
+        // criando uma NOVA rota — a rota de origem e PRESERVADA. Ex.: Rota 1 (5 lotes)
+        // + avaliacao (5 lotes) => mantem a Rota 1 e cria a Rota 2 com os 10 lotes
+        // (deduplicados). Usa _lotesSelecionados() (selecao viva, nao a injetada).
+        function agruparComRotaSalva() {
+            const lotes = _lotesSelecionados();
+            if (!lotes.length) { Swal.fire('Aviso', 'Selecione ao menos 1 entrega em avaliação', 'warning'); return; }
+            $.getJSON('/carteira/mapa/api/rotas', function (resp) {
+                const rotas = (resp && resp.rotas) || [];
+                if (!rotas.length) {
+                    Swal.fire('Sem rotas salvas', 'Não há rota salva para agrupar. Use "Salvar rota" primeiro.', 'info');
+                    return;
+                }
+                const opcoes = rotas.map(function (r) {
+                    return '<option value="' + r.id + '">' + (r.nome || ('Rota #' + r.id)) +
+                        ' — ' + (r.lotes ? r.lotes.length : 0) + ' lote(s)</option>';
+                }).join('');
+                Swal.fire({
+                    title: 'Agrupar com rota salva',
+                    html:
+                        '<p class="small text-muted text-start mb-2">A rota escolhida é <strong>preservada</strong>. ' +
+                        'Será criada uma <strong>nova rota</strong> com os lotes dela + as <strong>' + lotes.length +
+                        '</strong> entrega(s) em avaliação (lotes repetidos contam uma vez só).</p>' +
+                        '<select id="agrupRotaSel" class="form-select mb-2">' + opcoes + '</select>' +
+                        '<input id="agrupRotaNome" class="form-control" placeholder="Nome da nova rota (opcional)">',
+                    showCancelButton: true, confirmButtonText: 'Criar rota agrupada',
+                    preConfirm: function () {
+                        return {
+                            rota_id: parseInt(document.getElementById('agrupRotaSel').value, 10),
+                            nome: (document.getElementById('agrupRotaNome').value || '').trim() || null
+                        };
+                    }
+                }).then(function (res) {
+                    if (!res.isConfirmed || !res.value) return;
+                    $.ajax({
+                        url: '/carteira/mapa/api/rota/agrupar', method: 'POST',
+                        contentType: 'application/json', headers: { 'X-CSRFToken': getCSRFToken() },
+                        data: JSON.stringify({ rota_id: res.value.rota_id, lotes: lotes, nome: res.value.nome }),
+                        success: function (r) {
+                            if (!r.sucesso) { Swal.fire('Erro', r.erro || 'Falha ao agrupar', 'error'); return; }
+                            const nome = r.nome || ('Rota #' + r.id);
+                            Swal.fire({
+                                icon: 'success', title: 'Rota agrupada criada',
+                                html: '<strong>' + nome + '</strong> com ' + r.total_lotes + ' lote(s).',
+                                showCancelButton: true, confirmButtonText: 'Abrir no mapa', cancelButtonText: 'Fechar'
+                            }).then(function (a) {
+                                if (a.isConfirmed) window.location.href = '/carteira/mapa/visualizar?rota_id=' + r.id;
+                            });
+                        },
+                        error: function (xhr) { Swal.fire('Erro', xhr.responseJSON?.erro || 'Falha ao agrupar', 'error'); }
+                    });
+                });
             });
         }
 

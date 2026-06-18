@@ -10,7 +10,7 @@
     <div id="alertasContainer"></div>
     
     <!-- JS externo: alertas (carrega antes do conteudo dinamico) -->
-    <script src="{{ url_for('static', filename='js/pedidos/lista-alertas.js') }}"></script>
+    <script src="{{ 'js/pedidos/lista-alertas.js'|asset_url }}"></script>
 
 
     {% include "pedidos/_partials/_filtros.html" %}
@@ -22,7 +22,7 @@
 </div>{# fecha container-fluid #}
 
 <!-- JS externo: modais de separacao -->
-<script src="{{ url_for('static', filename='js/pedidos/lista-modais.js') }}"></script>
+<script src="{{ 'js/pedidos/lista-modais.js'|asset_url }}"></script>
 
 
 <!-- JS externos: funcionalidades da tabela -->
@@ -34,13 +34,13 @@ window.PEDIDOS_URLS = {
     embarqueFob: '{{ url_for("pedidos.embarque_fob") }}'
 };
 </script>
-<script src="{{ url_for('static', filename='js/pedidos/lista-checkboxes.js') }}"></script>
-<script src="{{ url_for('static', filename='js/pedidos/lista-cotacao.js') }}"></script>
-<script src="{{ url_for('static', filename='js/pedidos/lista-crud.js') }}"></script>
-<script src="{{ url_for('static', filename='js/pedidos/lista-agendamento.js') }}"></script>
-<script src="{{ url_for('static', filename='js/pedidos/lista-nf.js') }}"></script>
-<script src="{{ url_for('static', filename='js/pedidos/lista-endereco.js') }}"></script>
-<script src="{{ url_for('static', filename='js/pedidos/lista-filtros.js') }}"></script>
+<script src="{{ 'js/pedidos/lista-checkboxes.js'|asset_url }}"></script>
+<script src="{{ 'js/pedidos/lista-cotacao.js'|asset_url }}"></script>
+<script src="{{ 'js/pedidos/lista-crud.js'|asset_url }}"></script>
+<script src="{{ 'js/pedidos/lista-agendamento.js'|asset_url }}"></script>
+<script src="{{ 'js/pedidos/lista-nf.js'|asset_url }}"></script>
+<script src="{{ 'js/pedidos/lista-endereco.js'|asset_url }}"></script>
+<script src="{{ 'js/pedidos/lista-filtros.js'|asset_url }}"></script>
 
 
 <!-- Filter styles in _pedidos.css (Fase 1) -->

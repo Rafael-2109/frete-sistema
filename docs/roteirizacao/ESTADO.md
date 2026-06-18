@@ -4,7 +4,7 @@ camada: L1
 sot_de: estado vivo do projeto de ampliacao da roteirizacao "Ver no Mapa" (fonte unica de progresso das 3 fases)
 hub: docs/INDEX.md
 superseded_by: —
-atualizado: 2026-06-17
+atualizado: 2026-06-18
 -->
 # Roteirizacao "Ver no Mapa" — ESTADO
 
@@ -144,6 +144,18 @@ do template + render 200.
 - Smoke browser em PROD (todas as interacoes).
 - Migration: nenhuma coluna nova (RotaSalva ja existe; `status='rascunho'` usa coluna existente).
 
+## Melhorias operacionais (Onda 18/06/2026)
+
+2 ajustes pedidos pela operacao, sobre a base entregue.
+
+| # | Item | Como |
+|---|------|------|
+| 1 | Botao "Adicionar a rota" da lista preso `disabled` | Causa-raiz: cache do navegador servindo `lista-checkboxes.js` antigo (que setava `disabled`). HTML/JS ja nao desabilitavam (commit `dd33e64f9`), mas os `<script>` de `lista_pedidos.html` carregavam por `url_for('static',...)` sem cache-busting. Migrados para o filtro `asset_url` (`?v=<hash md5>`) — o cache invalida sozinho. |
+| 2 | Agrupar rota em avaliacao + rota salva -> NOVA rota | `POST /api/rota/agrupar` (`rota_agrupar`) une os lotes de uma `RotaSalva` existente + os lotes em avaliacao (`_lotesSelecionados()`), deduplicando e preservando ordem, e grava uma rota NOVA (`status='salva'`); a de origem fica intacta — difere de `/api/rota/acumular` (#6), que ANEXA a uma existente. UI: botao "Agrupar c/ rota" + modal `agruparComRotaSalva()`. Ex.: Rota 1 (5) + avaliacao (5) -> Rota 1 intacta + Rota 2 (10). |
+
+Doc SOT do modulo: `app/carteira/CLAUDE.md` R11 atualizada. **Sem migration** (RotaSalva ja existe).
+Validacao: `py_compile` (mapa_routes) + parse Jinja dos 2 templates + `node --check` da funcao nova.
+
 ## Pendencias
 
 - **R1 — Route Optimization API:** RESOLVIDO (17/06/2026). `route_optimization_backend` implementado (optimizeTours via service account / google-auth) e **validado contra a API real** (ordem otimizada + distancia/tempo/polyline; ex.: 3 paradas SP = 72,34 km / 107,6 min). `default_backend` usa Route Optimization quando `ROUTE_OPTIMIZATION_PROJECT` esta setado; senao cai para Directions+chunking (fallback automatico em erro). Projeto = `dynamic-heading-434921-q5`; SA = `sistema-fretes-routes-api@...` (role Route Optimization Editor). Janela global = 7 dias; metrica = `travelDuration`. Credencial: `_ro_token()` prioriza `GOOGLE_CREDENTIALS_JSON` (conteudo do JSON da SA na env var) e cai para ADC padrao (`GOOGLE_APPLICATION_CREDENTIALS`) se ausente — ambos os caminhos cobertos por teste.
@@ -166,3 +178,4 @@ do template + render 200.
 - **2026-06-17 (6):** ENTREGA — `_ro_token()` passa a aceitar `GOOGLE_CREDENTIALS_JSON` (credencial via env var, p/ Render) alem de ADC, com 2 testes novos (**38 testes verdes**). Env vars gravadas em PROD via Render API (`ROUTE_OPTIMIZATION_PROJECT` + `GOOGLE_CREDENTIALS_JSON`, ambos HTTP 200). Merge fast-forward na `main` + push. Route Optimization ativo no proximo deploy. Pendente: validar em PROD pos-deploy + smoke browser.
 - **2026-06-17 (7):** INCIDENTE PROD + FIX — apos o deploy, `/pedidos/lista_pedidos` deu 500 (`UndefinedColumn: veiculos.custo_km`): a migration `2026_06_16_veiculo_parametros_custo.sql` (8 colunas em `veiculos`) nao havia sido aplicada em PROD. O boot (`create_all`) cria TABELAS novas (`geocode_cache`/`rota_salva` ja existiam) mas NAO adiciona colunas a tabela existente — colunas novas exigem rodar o `.sql` em PROD. Apliquei as 3 migrations idempotentes via `DATABASE_URL_PROD`; `lista_pedidos` voltou a 200. LICAO: aplicar migration de coluna em PROD ANTES/junto do push (o deploy do Render nao roda `scripts/migrations/*.sql`).
 - **2026-06-17 (8):** PROJETO CONCLUIDO — smoke real em PROD pelo Rafael (`/carteira/mapa/api/rota/otimizar` = 200, Route Optimization ativo sem fallback). Resgate proposto×implementado + validacao UI item a item (painel, card de custo, incluir/remover, salvar/listar/carregar/excluir/cotar, drag-and-drop, CRUD admin veiculos): 100% coberto, 0 lacuna funcional; 3 divergencias menores documentadas (recalcular reusa otimizar; pedagio no card de stats; `ativo` so no editar). Encerrado.
+- **2026-06-18 (9):** Onda operacao (2 itens) — (1) botao "Adicionar a rota" da lista corrigido na RAIZ: scripts de pedidos migrados para `asset_url` (cache-busting); o `disabled` ja fora removido em `dd33e64f9`, mas o JS cacheado o reativava. (2) Novo `POST /api/rota/agrupar` + botao "Agrupar c/ rota" no mapa: une avaliacao + rota salva criando uma rota NOVA, preservando a de origem (Rota 1 (5)+aval(5) -> Rota 1 + Rota 2 (10)). R11 do `app/carteira/CLAUDE.md` atualizada. Sem migration.

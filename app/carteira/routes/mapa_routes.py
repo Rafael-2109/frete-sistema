@@ -830,3 +830,61 @@ def rota_acumular():
         db.session.rollback()
         logger.error(f"Erro ao acumular rota: {e}")
         return jsonify({'erro': str(e)}), 500
+
+
+@bp.route('/api/rota/agrupar', methods=['POST'])
+@login_required
+def rota_agrupar():
+    """Cria uma NOVA RotaSalva unindo os lotes de rota(s) salva(s) com os lotes em
+    avaliacao no mapa, SEM alterar as rotas de origem (diferente de `rota_acumular`,
+    que muta a rota existente).
+
+    Ex.: Rota 1 (5 lotes) + avaliacao (5 lotes) -> a Rota 1 permanece intacta e cria
+    a Rota 2 com os 10 lotes (deduplicados, ordem preservada). Body JSON:
+      - rota_ids: lista de ids de RotaSalva a unir (ou `rota_id` unico, compat)
+      - lotes: separacao_lote_id em avaliacao a somar
+      - nome: nome opcional da nova rota
+    """
+    try:
+        data = request.get_json() or {}
+        rota_ids = list(data.get('rota_ids') or [])
+        if not rota_ids and data.get('rota_id'):
+            rota_ids = [data.get('rota_id')]
+        lotes_avaliacao = [l for l in (data.get('lotes') or []) if l]
+
+        if not rota_ids and not lotes_avaliacao:
+            return jsonify({'erro': 'Informe ao menos uma rota e/ou lotes'}), 400
+
+        # Uniao preservando ordem: lotes das rotas base (na ordem dos ids) e depois
+        # os lotes em avaliacao; cada lote entra uma unica vez.
+        lotes_union, vistos = [], set()
+        for rid in rota_ids:
+            rota = RotaSalva.query.get(rid)
+            if not rota:
+                return jsonify({'erro': f'Rota {rid} nao encontrada'}), 404
+            for l in (rota.lotes or []):
+                if l not in vistos:
+                    vistos.add(l)
+                    lotes_union.append(l)
+        for l in lotes_avaliacao:
+            if l not in vistos:
+                vistos.add(l)
+                lotes_union.append(l)
+
+        if not lotes_union:
+            return jsonify({'erro': 'Nenhum lote para agrupar'}), 400
+
+        nova = RotaSalva(
+            nome=(data.get('nome') or None),
+            criado_por=getattr(current_user, 'id', None),
+            lotes=lotes_union,
+            status='salva',
+        )
+        db.session.add(nova)
+        db.session.commit()
+        return jsonify({'sucesso': True, 'id': nova.id, 'nome': nova.nome,
+                        'total_lotes': len(lotes_union)})
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Erro ao agrupar rotas: {e}")
+        return jsonify({'erro': str(e)}), 500
