@@ -102,6 +102,13 @@ from app.carvia.models.conta_corrente import (  # noqa: F401
     CarviaContaCorrenteTransportadora, TIPOS_MOVIMENTACAO_CC, STATUS_CC,
 )
 
+# Coletas ("papel de pao") — agrupa N NFs em 1 veiculo (stream 3)
+from app.carvia.models.coleta import (  # noqa: F401
+    CarviaColeta, CarviaColetaNf,
+    COLETA_STATUS_RASCUNHO, COLETA_STATUS_COLETADA, COLETA_STATUS_CANCELADA,
+    COLETA_STATUSES, COLETA_TIPO_DESPESA,
+)
+
 
 __all__ = [
     # Documentos
@@ -144,4 +151,8 @@ __all__ = [
     'CarviaAprovacaoFrete', 'STATUS_APROVACAO',
     # Conta Corrente
     'CarviaContaCorrenteTransportadora', 'TIPOS_MOVIMENTACAO_CC', 'STATUS_CC',
+    # Coletas (papel de pao)
+    'CarviaColeta', 'CarviaColetaNf',
+    'COLETA_STATUS_RASCUNHO', 'COLETA_STATUS_COLETADA', 'COLETA_STATUS_CANCELADA',
+    'COLETA_STATUSES', 'COLETA_TIPO_DESPESA',
 ]

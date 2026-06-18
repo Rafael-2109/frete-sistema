@@ -41,9 +41,9 @@ atualizado: 2026-06-15
 
 ## Contexto
 
-111 arquivos, ~69.1K LOC, 112 templates. Importa NF PDFs/XMLs + CTe XMLs, faz match NF-CTe, subcontrata com cotacao via tabelas existentes, gera faturas de cliente e transportadora e emite CTe direto no SSW via Playwright. Detalhe por topico nos sub-docs (CONFERENCIA, FINANCEIRO, COMPROVANTES, IMPORTACAO, etc.) — prefira ler o sub-doc a reconstruir o contexto a partir do codigo.
+114 arquivos, ~69.8K LOC, 115 templates. Importa NF PDFs/XMLs + CTe XMLs, faz match NF-CTe, subcontrata com cotacao via tabelas existentes, gera faturas de cliente e transportadora e emite CTe direto no SSW via Playwright. Detalhe por topico nos sub-docs (CONFERENCIA, FINANCEIRO, COMPROVANTES, IMPORTACAO, etc.) — prefira ler o sub-doc a reconstruir o contexto a partir do codigo.
 
-**111 arquivos** | **~69.1K LOC** | **112 templates** | **Atualizado**: 2026-06-16
+**114 arquivos** | **~69.8K LOC** | **115 templates** | **Atualizado**: 2026-06-17
 
 Gestao de frete subcontratado: importar NF PDFs/XMLs + CTe XMLs, matchear NF-CTe, subcontratar transportadoras com cotacao via tabelas existentes, gerar faturas cliente e transportadora. Tambem emite CTe diretamente no SSW via Playwright.
 
@@ -110,7 +110,7 @@ app/carvia/
                    #   documentos, faturas, financeiro, frete, tabelas
   forms.py         # 4 forms WTForms
 
-app/templates/carvia/  # 112 templates (dashboard, listagens, detalhes, wizards, modais)
+app/templates/carvia/  # 115 templates (dashboard, listagens, detalhes, wizards, modais)
 ```
 
 ---
@@ -313,6 +313,7 @@ Lista apenas **gotchas nao-obvios**. Para campos completos, consultar schemas JS
 | `CarviaAdminAudit` | `dados_snapshot` JSONB com serializacao completa ANTES da acao. Indices em `acao`, `(entidade_tipo, entidade_id)`, `executado_em`, `executado_por` |
 | `CarviaComissaoFechamento` / `CarviaComissaoFechamentoCte` / `CarviaComissaoAjuste` | Vendedor = FK `usuarios` (`vendedor_usuario_id`); `vendedor_nome/email` = snapshot. Junction congela o CTe (snapshot). Alterar/cancelar CTe ja comissionado gera `CarviaComissaoAjuste` (delta) abatido no proximo fechamento. `total_comissao` = CTes + `total_ajustes`; NUNCA negativo. Ver R21 |
 | `CarviaComprovantePagamento` / `CarviaComprovanteVinculo` | Comprovante de pagamento **N:N** (arquivo S3 1x via `get_file_storage` + vinculo polimorfico `entidade_tipo`∈`cotacao/nf/operacao/fatura_cliente`, sem FK fisica). `origem` `MANUAL`/`PROPAGADO`; `cnpj_pagador` pode != CNPJ da fatura. `sincronizar_cadeia` propaga pela cadeia (idempotente). Soft-delete via `ativo`. Conciliacao invertida usa `cnpj_pagador`. Ver [COMPROVANTES.md](COMPROVANTES.md) |
+| `CarviaColeta` / `CarviaColetaNf` | **Coleta "papel de pao"** (redesign stream 3): agrupa N NFs (rascunho: numero+cliente livre) em 1 veiculo (contratado texto+FK opcional, placa, valor, **destino `local_cd` VM/TM**). `CarviaColetaService.vincular_nf` consolida rascunho->NF real **e propaga `coleta.local_cd` -> `CarviaNf.local_cd`** (= fonte CarVia da flag de CD, redesign stream 1). `marcar_coletada` cria `CarviaDespesa` tipo `COLETA` a conciliar. Congela apos COLETADA; sem delete (GAP-20). Rotas `coleta_routes.py`, templates `carvia/coletas/`. |
 
 ---
 

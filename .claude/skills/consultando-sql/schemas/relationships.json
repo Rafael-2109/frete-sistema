@@ -1,6 +1,6 @@
 {
   "version": "2.0.0",
-  "total_relationships": 434,
+  "total_relationships": 438,
   "relationships": [
     {
       "from_table": "agendamentos_entrega",
@@ -360,6 +360,30 @@
       "from_table": "carvia_cliente_enderecos",
       "from_column": "cliente_id",
       "to_table": "carvia_clientes",
+      "to_column": "id"
+    },
+    {
+      "from_table": "carvia_coleta_nfs",
+      "from_column": "carvia_nf_id",
+      "to_table": "carvia_nfs",
+      "to_column": "id"
+    },
+    {
+      "from_table": "carvia_coleta_nfs",
+      "from_column": "coleta_id",
+      "to_table": "carvia_coletas",
+      "to_column": "id"
+    },
+    {
+      "from_table": "carvia_coletas",
+      "from_column": "despesa_id",
+      "to_table": "carvia_despesas",
+      "to_column": "id"
+    },
+    {
+      "from_table": "carvia_coletas",
+      "from_column": "transportadora_id",
+      "to_table": "transportadoras",
       "to_column": "id"
     },
     {

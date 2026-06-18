@@ -1,0 +1,47 @@
+"""Migration: cria carvia_coletas + carvia_coleta_nfs (stream 3 — Coletas CarVia).
+
+Logica SQL em 2026_06_17_carvia_coletas.sql (fonte de verdade). Idempotente.
+Uso: python scripts/migrations/2026_06_17_carvia_coletas.py
+"""
+import logging
+import os
+import sys
+
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
+
+from sqlalchemy import inspect  # noqa: E402
+from app import create_app, db  # noqa: E402
+
+logger = logging.getLogger(__name__)
+TABELAS = ['carvia_coletas', 'carvia_coleta_nfs']
+SQL_FILE = os.path.join(os.path.dirname(__file__), '2026_06_17_carvia_coletas.sql')
+
+
+def main():
+    logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
+    app = create_app()
+    with app.app_context():
+        insp = inspect(db.engine)
+        existentes_antes = [t for t in TABELAS if insp.has_table(t)]
+        print('Tabelas ja existentes ANTES:', existentes_antes)
+
+        with open(SQL_FILE, encoding='utf-8') as f:
+            script = f.read()
+        db.session.connection().exec_driver_sql(script)
+        db.session.commit()
+
+        insp = inspect(db.engine)
+        faltando = [t for t in TABELAS if not insp.has_table(t)]
+        print('Faltando DEPOIS:', faltando)
+        assert not faltando, f'Migration nao criou: {faltando}'
+
+        # Sanidade: colunas-chave presentes
+        cols_coleta = {c['name'] for c in insp.get_columns('carvia_coletas')}
+        cols_nf = {c['name'] for c in insp.get_columns('carvia_coleta_nfs')}
+        assert {'local_cd', 'valor_coleta', 'data_coletada', 'despesa_id', 'status'} <= cols_coleta
+        assert {'coleta_id', 'numero_nf', 'nome_cliente_rascunho', 'carvia_nf_id', 'qtd_motos'} <= cols_nf
+        print('OK — carvia_coletas + carvia_coleta_nfs criadas com colunas esperadas.')
+
+
+if __name__ == '__main__':
+    main()

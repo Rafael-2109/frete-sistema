@@ -1,0 +1,89 @@
+{
+  "name": "carvia_coleta_nfs",
+  "description": "Linha do papel de pao: uma NF (rascunho ou real) dentro de uma coleta.",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "coleta_id",
+      "type": "integer",
+      "description": "FK → carvia_coletas.id",
+      "nullable": false
+    },
+    {
+      "name": "numero_nf",
+      "type": "varchar(20)"
+    },
+    {
+      "name": "nome_cliente_rascunho",
+      "type": "varchar(255)"
+    },
+    {
+      "name": "cidade_destino",
+      "type": "varchar(120)"
+    },
+    {
+      "name": "qtd_motos",
+      "type": "integer",
+      "description": "qtd de motos / volumes"
+    },
+    {
+      "name": "valor_frete",
+      "type": "numeric(15,2)",
+      "description": "\"valor total frete\" da linha"
+    },
+    {
+      "name": "vendedor",
+      "type": "varchar(150)"
+    },
+    {
+      "name": "transportadora_embarque",
+      "type": "varchar(255)",
+      "description": "transportadora de embarque (rascunho)"
+    },
+    {
+      "name": "carvia_nf_id",
+      "type": "integer",
+      "description": "FK → carvia_nfs.id"
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação"
+    },
+    {
+      "name": "atualizado_em",
+      "type": "timestamp",
+      "description": "Última atualização"
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "coleta_id",
+      "references": "carvia_coletas.id"
+    },
+    {
+      "column": "carvia_nf_id",
+      "references": "carvia_nfs.id"
+    }
+  ],
+  "indices": [
+    {
+      "name": "ix_carvia_coleta_nfs_carvia_nf_id",
+      "columns": [
+        "carvia_nf_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carvia_coleta_nfs_coleta_id",
+      "columns": [
+        "coleta_id"
+      ],
+      "unique": false
+    }
+  ]
+}

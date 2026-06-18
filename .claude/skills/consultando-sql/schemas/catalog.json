@@ -105,7 +105,7 @@
     "vinculacao_carteira_separacao",
     "webhook_configs"
   ],
-  "total_tabelas": 324,
+  "total_tabelas": 326,
   "tabelas": [
     {
       "name": "agendamentos_entrega",
@@ -736,6 +736,28 @@
       "key_fields": [
         "nome_comercial",
         "observacoes"
+      ],
+      "dominio": "Carvia"
+    },
+    {
+      "name": "carvia_coleta_nfs",
+      "description": "Linha do papel de pao: uma NF (rascunho ou real) dentro de uma coleta.",
+      "key_fields": [
+        "numero_nf",
+        "coleta_id",
+        "carvia_nf_id",
+        "vendedor"
+      ],
+      "dominio": "Carvia"
+    },
+    {
+      "name": "carvia_coletas",
+      "description": "Coleta CarVia ('papel de pao'): N NFs em 1 veiculo, com custo a conciliar.",
+      "key_fields": [
+        "transportadora_id",
+        "despesa_id",
+        "data_prevista",
+        "status"
       ],
       "dominio": "Carvia"
     },

@@ -27,6 +27,12 @@
         <i class="fas fa-upload"></i> Importar
     </a>
 
+    {# ── 2b. Coletas (papel de pao) ── #}
+    <a href="{{ url_for('carvia.listar_coletas') }}"
+       class="btn btn-sm {{ 'btn-primary' if carvia_active == 'coletas' else 'btn-outline-secondary' }}">
+        <i class="fas fa-truck-loading"></i> Coletas
+    </a>
+
     {# ── 3. Servicos Comprados ── #}
     {% set _comprados_active = carvia_active in grp_comprados %}
     <div class="btn-group">

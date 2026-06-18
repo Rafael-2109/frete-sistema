@@ -1,0 +1,227 @@
+{% extends "base.html" %}
+{% from "shared/_macros_badges.html" import badge_local_cd %}
+
+{% block content %}
+{% set editavel = coleta.pode_editar() %}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2>
+            <i class="fas fa-truck-loading"></i> {{ coleta.numero_coleta }}
+            {{ badge_local_cd(coleta.local_cd, curto=False) }}
+            {% if coleta.status == 'COLETADA' %}<span class="badge bg-success">COLETADA</span>
+            {% elif coleta.status == 'CANCELADA' %}<span class="badge bg-secondary">CANCELADA</span>
+            {% else %}<span class="badge bg-warning text-dark">RASCUNHO</span>{% endif %}
+        </h2>
+        <a href="{{ url_for('carvia.listar_coletas') }}" class="btn btn-outline-secondary btn-sm">
+            <i class="fas fa-arrow-left"></i> Voltar
+        </a>
+    </div>
+
+    {% set carvia_active = 'coletas' %}
+    {% include 'carvia/_quick_nav.html' ignore missing %}
+
+    <!-- Cabeçalho -->
+    <div class="card mb-3"><div class="card-body">
+        <div class="row">
+            <div class="col-md-8">
+                <dl class="row mb-0">
+                    <dt class="col-sm-3">Contratado</dt><dd class="col-sm-9">{{ coleta.contratado_efetivo or '—' }}</dd>
+                    <dt class="col-sm-3">Placa</dt><dd class="col-sm-9">{{ coleta.placa or '—' }}</dd>
+                    <dt class="col-sm-3">Valor da coleta</dt><dd class="col-sm-9">{{ 'R$ %.2f'|format(coleta.valor_coleta) if coleta.valor_coleta else '—' }}</dd>
+                    <dt class="col-sm-3">Destino (CD)</dt><dd class="col-sm-9">{{ badge_local_cd(coleta.local_cd, curto=False) }}</dd>
+                    <dt class="col-sm-3">Data prevista</dt><dd class="col-sm-9">{{ coleta.data_prevista.strftime('%d/%m/%Y') if coleta.data_prevista else '—' }}</dd>
+                    <dt class="col-sm-3">Coletada</dt><dd class="col-sm-9">
+                        {% if coleta.data_coletada %}<span class="badge bg-success">{{ coleta.data_coletada_em.strftime('%d/%m/%Y %H:%M') if coleta.data_coletada_em else 'Sim' }}</span>
+                        {% else %}<span class="text-muted">não</span>{% endif %}</dd>
+                    {% if coleta.despesa_id %}
+                    <dt class="col-sm-3">Despesa</dt><dd class="col-sm-9">
+                        <a href="{{ url_for('carvia.detalhe_despesa', despesa_id=coleta.despesa_id) }}">DESP-{{ '%03d'|format(coleta.despesa_id) }}</a>
+                        <span class="text-muted small">(a conciliar)</span></dd>
+                    {% endif %}
+                    {% if coleta.observacoes %}<dt class="col-sm-3">Obs</dt><dd class="col-sm-9">{{ coleta.observacoes }}</dd>{% endif %}
+                </dl>
+            </div>
+            <div class="col-md-4 text-md-end">
+                <div class="d-grid gap-2">
+                    {% if editavel %}
+                    <button class="btn btn-outline-primary btn-sm" type="button" data-bs-toggle="collapse" data-bs-target="#editarHeader">
+                        <i class="fas fa-edit"></i> Editar cabeçalho
+                    </button>
+                    <form method="POST" action="{{ url_for('carvia.coletar_coleta', coleta_id=coleta.id) }}"
+                          onsubmit="return confirm('Marcar como coletada? Isso gera a despesa a conciliar.');">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button class="btn btn-success btn-sm w-100"><i class="fas fa-check"></i> Marcar coletada</button>
+                    </form>
+                    <form method="POST" action="{{ url_for('carvia.cancelar_coleta', coleta_id=coleta.id) }}"
+                          onsubmit="return confirm('Cancelar esta coleta?');">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button class="btn btn-outline-danger btn-sm w-100"><i class="fas fa-times"></i> Cancelar</button>
+                    </form>
+                    {% elif coleta.status == 'COLETADA' %}
+                    <form method="POST" action="{{ url_for('carvia.reabrir_coleta', coleta_id=coleta.id) }}"
+                          onsubmit="return confirm('Reabrir a coleta para edição (volta a RASCUNHO)?');">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button class="btn btn-outline-warning btn-sm w-100"><i class="fas fa-unlock"></i> Reabrir</button>
+                    </form>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        {% if editavel %}
+        <div class="collapse mt-3" id="editarHeader">
+            <form method="POST" action="{{ url_for('carvia.editar_coleta', coleta_id=coleta.id) }}" class="row g-2 border-top pt-3">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="col-md-4"><input type="text" name="contratado_nome" class="form-control form-control-sm" placeholder="Contratado" value="{{ coleta.contratado_nome or '' }}"></div>
+                <div class="col-md-4">
+                    <select name="transportadora_id" class="form-select form-select-sm">
+                        <option value="">— transportadora (opcional) —</option>
+                        {% for t in transportadoras %}<option value="{{ t.id }}" {{ 'selected' if coleta.transportadora_id == t.id }}>{{ t.razao_social }}</option>{% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2"><input type="text" name="placa" class="form-control form-control-sm" placeholder="Placa" value="{{ coleta.placa or '' }}"></div>
+                <div class="col-md-2"><input type="text" name="valor_coleta" class="form-control form-control-sm" placeholder="Valor" value="{{ '%.2f'|format(coleta.valor_coleta) if coleta.valor_coleta else '' }}"></div>
+                <div class="col-md-3">
+                    <select name="local_cd" class="form-select form-select-sm">
+                        {% for val, label in local_cd_choices %}<option value="{{ val }}" {{ 'selected' if coleta.local_cd == val }}>{{ label }}</option>{% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3"><input type="date" name="data_prevista" class="form-control form-control-sm" value="{{ coleta.data_prevista.isoformat() if coleta.data_prevista else '' }}"></div>
+                <div class="col-md-4"><input type="text" name="observacoes" class="form-control form-control-sm" placeholder="Obs" value="{{ coleta.observacoes or '' }}"></div>
+                <div class="col-md-2"><button class="btn btn-primary btn-sm w-100">Salvar</button></div>
+            </form>
+        </div>
+        {% endif %}
+    </div></div>
+
+    <!-- Linhas (papel de pão) -->
+    <div class="card"><div class="card-header d-flex justify-content-between align-items-center">
+        <strong>NFs da coleta ({{ coleta.total_nfs }} · {{ coleta.total_motos }} motos)</strong>
+        <span class="text-muted small">{{ coleta.total_vinculadas }} vinculada(s) à NF real</span>
+    </div>
+    <div class="table-responsive"><table class="table table-sm align-middle mb-0">
+        <thead class="table-light"><tr>
+            <th>NF</th><th>Cliente</th><th>Cidade</th><th class="text-center">Qtd</th>
+            <th class="text-end">Valor frete</th><th>Vendedor</th><th>Transp. embarque</th>
+            <th>Vínculo</th>{% if editavel %}<th class="text-end">Ações</th>{% endif %}
+        </tr></thead>
+        <tbody>
+            {% for ln in linhas %}
+            <tr>
+                <td>{{ ln.numero_nf or '—' }}</td>
+                <td>
+                    {{ ln.nome_cliente_efetivo or '—' }}
+                    {% if ln.vinculada %}<span class="badge bg-info" title="Nome real da NF vinculada">real</span>{% endif %}
+                </td>
+                <td>{{ ln.cidade_destino or '—' }}</td>
+                <td class="text-center">{{ ln.qtd_motos if ln.qtd_motos is not none else '—' }}</td>
+                <td class="text-end">{{ 'R$ %.2f'|format(ln.valor_frete) if ln.valor_frete else '—' }}</td>
+                <td>{{ ln.vendedor or '—' }}</td>
+                <td>{{ ln.transportadora_embarque or '—' }}</td>
+                <td>
+                    {% if ln.vinculada %}
+                        <span class="badge bg-success">NF #{{ ln.carvia_nf_id }}</span>
+                        {% if editavel %}
+                        <form method="POST" action="{{ url_for('carvia.desvincular_linha', linha_id=ln.id) }}" class="d-inline">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button class="btn btn-link btn-sm text-danger p-0" title="Desvincular"><i class="fas fa-unlink"></i></button>
+                        </form>
+                        {% endif %}
+                    {% elif editavel %}
+                        <button class="btn btn-outline-primary btn-sm py-0" type="button" onclick="vincularNf({{ ln.id }})">
+                            <i class="fas fa-link"></i> Vincular
+                        </button>
+                    {% else %}<span class="text-muted">—</span>{% endif %}
+                </td>
+                {% if editavel %}
+                <td class="text-end text-nowrap">
+                    <button class="btn btn-outline-secondary btn-sm py-0" type="button" data-bs-toggle="collapse" data-bs-target="#edit-{{ ln.id }}"><i class="fas fa-edit"></i></button>
+                    <form method="POST" action="{{ url_for('carvia.remover_linha', linha_id=ln.id) }}" class="d-inline" onsubmit="return confirm('Remover esta NF da coleta?');">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button class="btn btn-outline-danger btn-sm py-0"><i class="fas fa-trash"></i></button>
+                    </form>
+                </td>
+                {% endif %}
+            </tr>
+            {% if editavel %}
+            <!-- vincular (AJAX sugestões) -->
+            <tr class="collapse" id="vinc-{{ ln.id }}"><td colspan="9" class="bg-light">
+                <form method="POST" action="{{ url_for('carvia.vincular_linha', linha_id=ln.id) }}" class="row g-2 align-items-center">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <div class="col-auto"><span class="small text-muted">Vincular à NF real:</span></div>
+                    <div class="col-md-7"><select name="carvia_nf_id" id="vinc-select-{{ ln.id }}" class="form-select form-select-sm" required>
+                        <option value="">Buscando sugestões pela NF {{ ln.numero_nf or '?' }}...</option>
+                    </select></div>
+                    <div class="col-auto"><button class="btn btn-success btn-sm">Vincular</button></div>
+                </form>
+            </td></tr>
+            <!-- edição inline -->
+            <tr class="collapse" id="edit-{{ ln.id }}"><td colspan="9" class="bg-light">
+                <form method="POST" action="{{ url_for('carvia.editar_linha', linha_id=ln.id) }}" class="row g-2">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <div class="col-md-2"><input name="numero_nf" class="form-control form-control-sm" placeholder="NF" value="{{ ln.numero_nf or '' }}"></div>
+                    <div class="col-md-3"><input name="nome_cliente_rascunho" class="form-control form-control-sm" placeholder="Cliente (rascunho)" value="{{ ln.nome_cliente_rascunho or '' }}"></div>
+                    <div class="col-md-2"><input name="cidade_destino" class="form-control form-control-sm" placeholder="Cidade" value="{{ ln.cidade_destino or '' }}"></div>
+                    <div class="col-md-1"><input name="qtd_motos" type="number" min="0" class="form-control form-control-sm" placeholder="Qtd" value="{{ ln.qtd_motos if ln.qtd_motos is not none else '' }}"></div>
+                    <div class="col-md-2"><input name="valor_frete" class="form-control form-control-sm" placeholder="Valor frete" value="{{ '%.2f'|format(ln.valor_frete) if ln.valor_frete else '' }}"></div>
+                    <div class="col-md-2"><input name="vendedor" class="form-control form-control-sm" placeholder="Vendedor" value="{{ ln.vendedor or '' }}"></div>
+                    <div class="col-md-3"><input name="transportadora_embarque" class="form-control form-control-sm" placeholder="Transp. embarque" value="{{ ln.transportadora_embarque or '' }}"></div>
+                    <div class="col-md-2"><button class="btn btn-primary btn-sm w-100">Salvar linha</button></div>
+                </form>
+            </td></tr>
+            {% endif %}
+            {% else %}
+            <tr><td colspan="9" class="text-center text-muted py-3">Nenhuma NF. Adicione abaixo (papel de pão).</td></tr>
+            {% endfor %}
+
+            {% if editavel %}
+            <!-- adicionar linha -->
+            <tr class="table-light">
+                <td colspan="9">
+                    <form method="POST" action="{{ url_for('carvia.adicionar_linha', coleta_id=coleta.id) }}" class="row g-2">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <div class="col-md-2"><input name="numero_nf" class="form-control form-control-sm" placeholder="NF"></div>
+                        <div class="col-md-3"><input name="nome_cliente_rascunho" class="form-control form-control-sm" placeholder="Cliente (como achar)"></div>
+                        <div class="col-md-2"><input name="cidade_destino" class="form-control form-control-sm" placeholder="Cidade/destino"></div>
+                        <div class="col-md-1"><input name="qtd_motos" type="number" min="0" class="form-control form-control-sm" placeholder="Qtd"></div>
+                        <div class="col-md-2"><input name="valor_frete" class="form-control form-control-sm" placeholder="Valor frete"></div>
+                        <div class="col-md-2"><input name="vendedor" class="form-control form-control-sm" placeholder="Vendedor"></div>
+                        <div class="col-md-3"><input name="transportadora_embarque" class="form-control form-control-sm" placeholder="Transp. embarque"></div>
+                        <div class="col-md-2"><button class="btn btn-success btn-sm w-100"><i class="fas fa-plus"></i> Adicionar NF</button></div>
+                    </form>
+                </td>
+            </tr>
+            {% endif %}
+        </tbody>
+    </table></div></div>
+</div>
+
+<script>
+function vincularNf(linhaId) {
+    const row = document.getElementById('vinc-' + linhaId);
+    const sel = document.getElementById('vinc-select-' + linhaId);
+    // Toggle a linha de vínculo
+    const collapse = bootstrap.Collapse.getOrCreateInstance(row);
+    collapse.toggle();
+    if (sel.dataset.loaded) return;
+    fetch("{{ url_for('carvia.sugerir_nf', linha_id=0) }}".replace('/0/', '/' + linhaId + '/'))
+        .then(r => r.json())
+        .then(data => {
+            sel.innerHTML = '';
+            if (!data.success || !data.sugestoes.length) {
+                sel.innerHTML = '<option value="">Nenhuma NF encontrada com esse número</option>';
+                return;
+            }
+            data.sugestoes.forEach(nf => {
+                const opt = document.createElement('option');
+                opt.value = nf.id;
+                const valor = nf.valor_total ? (' · R$ ' + nf.valor_total.toFixed(2)) : '';
+                opt.textContent = 'NF ' + nf.numero_nf + ' — ' + (nf.nome_destinatario || 's/ nome') + valor;
+                sel.appendChild(opt);
+            });
+            sel.dataset.loaded = '1';
+        })
+        .catch(() => { sel.innerHTML = '<option value="">Erro ao buscar</option>'; });
+}
+</script>
+{% endblock %}

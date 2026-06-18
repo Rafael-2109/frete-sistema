@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+{% from "shared/_macros_badges.html" import badge_local_cd %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="fas fa-truck-loading"></i> Coletas CarVia</h2>
+        <div class="d-flex gap-2">
+            <a href="{{ url_for('carvia.criar_coleta') }}" class="btn btn-success btn-sm">
+                <i class="fas fa-plus"></i> Nova Coleta
+            </a>
+            <a href="{{ url_for('carvia.dashboard') }}" class="btn btn-outline-secondary btn-sm">
+                <i class="fas fa-arrow-left"></i> Dashboard
+            </a>
+        </div>
+    </div>
+
+    {% set carvia_active = 'coletas' %}
+    {% include 'carvia/_quick_nav.html' ignore missing %}
+
+    <form method="GET" class="row g-2 mb-3">
+        <div class="col-md-3">
+            <input type="text" name="busca" class="form-control form-control-sm"
+                   placeholder="Contratado / placa / obs" value="{{ busca }}">
+        </div>
+        <div class="col-md-2">
+            <select name="status" class="form-select form-select-sm">
+                <option value="">Todos status</option>
+                {% for s in statuses %}
+                <option value="{{ s }}" {{ 'selected' if status_filtro == s }}>{{ s }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-3">
+            <select name="local_cd" class="form-select form-select-sm">
+                <option value="">Todos os CDs</option>
+                {% for val, label in local_cd_choices %}
+                <option value="{{ val }}" {{ 'selected' if local_filtro == val }}>{{ label }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-2">
+            <button class="btn btn-outline-primary btn-sm w-100"><i class="fas fa-filter"></i> Filtrar</button>
+        </div>
+    </form>
+
+    <div class="card">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Coleta</th><th>Contratado</th><th>Placa</th><th>CD</th>
+                        <th class="text-end">Valor</th><th class="text-center">NFs</th>
+                        <th class="text-center">Motos</th><th>Prevista</th><th>Coletada</th><th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for c in coletas %}
+                    <tr>
+                        <td><a href="{{ url_for('carvia.detalhe_coleta', coleta_id=c.id) }}">{{ c.numero_coleta }}</a></td>
+                        <td>{{ c.contratado_efetivo or '—' }}</td>
+                        <td>{{ c.placa or '—' }}</td>
+                        <td>{{ badge_local_cd(c.local_cd, curto=True) }}</td>
+                        <td class="text-end">{{ 'R$ %.2f'|format(c.valor_coleta) if c.valor_coleta else '—' }}</td>
+                        <td class="text-center">{{ c.total_nfs }}</td>
+                        <td class="text-center">{{ c.total_motos }}</td>
+                        <td>{{ c.data_prevista.strftime('%d/%m/%Y') if c.data_prevista else '—' }}</td>
+                        <td>
+                            {% if c.data_coletada %}
+                                <span class="badge bg-success">{{ c.data_coletada_em.strftime('%d/%m %H:%M') if c.data_coletada_em else 'Sim' }}</span>
+                            {% else %}<span class="text-muted">—</span>{% endif %}
+                        </td>
+                        <td>
+                            {% if c.status == 'COLETADA' %}<span class="badge bg-success">COLETADA</span>
+                            {% elif c.status == 'CANCELADA' %}<span class="badge bg-secondary">CANCELADA</span>
+                            {% else %}<span class="badge bg-warning text-dark">RASCUNHO</span>{% endif %}
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="10" class="text-center text-muted py-4">Nenhuma coleta encontrada.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    {% if paginacao and paginacao.pages > 1 %}
+    <nav class="mt-3"><ul class="pagination pagination-sm">
+        {% for p in range(1, paginacao.pages + 1) %}
+        <li class="page-item {{ 'active' if p == paginacao.page }}">
+            <a class="page-link" href="{{ url_for('carvia.listar_coletas', page=p, status=status_filtro, local_cd=local_filtro, busca=busca) }}">{{ p }}</a>
+        </li>
+        {% endfor %}
+    </ul></nav>
+    {% endif %}
+</div>
+{% endblock %}
