@@ -551,6 +551,13 @@
                         id="chegada-filial-badge-{{ e.id }}">
                     📍 Filial: {{ e.chegada_filial_em | formatar_data_hora_brasil if e.chegada_filial_em else 'OK' }}
                   </span>
+                  <button type="button"
+                          class="btn btn-sm btn-outline-secondary chegada-filial-btn ms-1"
+                          id="chegada-filial-btn-{{ e.id }}"
+                          onclick="registrarChegadaFilial({{ e.id }})"
+                          title="Desfazer registro de chegada na filial (preenchido por engano)">
+                    Desfazer
+                  </button>
                 {% else %}
                   <button type="button"
                           class="btn btn-sm btn-outline-success chegada-filial-btn"
