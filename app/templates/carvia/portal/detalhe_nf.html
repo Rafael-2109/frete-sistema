@@ -1,29 +1,116 @@
 {% extends "base.html" %}
+{% block title %}NF {{ nf.numero_nf }} — Portal CarVia{% endblock %}
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/carvia/portal_cliente.css') }}">
+{% endblock %}
+
 {% block content %}
-<div class="container py-3" style="max-width:760px;">
+<div class="container py-3 cvp-page">
     {% set active = 'nfs' %}{% include 'carvia/portal/_header.html' %}
 
-    <a href="{{ url_for('portal_cliente.dashboard') }}" class="btn btn-link btn-sm px-0"><i class="fas fa-arrow-left"></i> Voltar</a>
-    <h4>NF {{ nf.numero_nf }}</h4>
-    <p class="text-muted mb-4">{{ nf.nome_destinatario or '' }} — {{ nf.cidade_destinatario or '' }}{{ '/' ~ nf.uf_destinatario if nf.uf_destinatario }}</p>
+    <a href="{{ url_for('portal_cliente.dashboard') }}" class="btn btn-link btn-sm px-0 mb-2"><i class="fas fa-arrow-left"></i> Voltar</a>
 
-    <div class="card"><div class="card-body">
-        <h6 class="text-muted mb-4">Acompanhamento da entrega</h6>
-        <ul class="list-unstyled mb-0">
-        {% for et in status.etapas %}
-            <li class="d-flex align-items-start mb-3">
-                <div class="me-3 text-center" style="width:32px;">
-                    {% if et.atingido %}<i class="fas fa-check-circle fa-lg text-success"></i>
-                    {% else %}<i class="far fa-circle fa-lg text-muted"></i>{% endif %}
-                    {% if not loop.last %}<div style="width:2px;height:24px;margin:2px auto 0;" class="{{ 'bg-success' if et.atingido else 'bg-light' }}"></div>{% endif %}
+    {# ---- HERO ---- #}
+    <div class="cvp-hero cvp-anim mb-3">
+        <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
+            <div>
+                <div class="cvp-hero__nf">NF {{ nf.numero_nf }}</div>
+                <div class="cvp-hero__meta">
+                    {{ nf.nome_destinatario or '' }}{% if nf.cnpj_destinatario %} · {{ nf.cnpj_destinatario }}{% endif %}
                 </div>
-                <div>
-                    <div class="{{ 'fw-bold' if et.atingido else 'text-muted' }}">{{ et.label }}</div>
-                    {% if et.data %}<small class="text-muted">{{ et.data.strftime('%d/%m/%Y %H:%M') if et.data.hour is defined else et.data.strftime('%d/%m/%Y') }}</small>{% endif %}
+                <div class="cvp-hero__meta small">
+                    {{ nf.cidade_destinatario or '' }}{{ '/' ~ nf.uf_destinatario if nf.uf_destinatario }}
+                </div>
+            </div>
+            <div>
+                {% if status.atual_key == 'ENTREGUE' %}<span class="cvp-pill cvp-pill--done"><i class="fas fa-check"></i> {{ status.atual_label }}</span>
+                {% elif status.atual_key %}<span class="cvp-pill cvp-pill--progress">{{ status.atual_label }}</span>
+                {% else %}<span class="cvp-pill cvp-pill--wait">{{ status.atual_label }}</span>{% endif %}
+            </div>
+        </div>
+        <div class="row g-3 mt-1">
+            <div class="col-6 col-md-3"><div class="cvp-hero__meta small">Emissão</div><strong>{{ nf.data_emissao.strftime('%d/%m/%Y') if nf.data_emissao else '—' }}</strong></div>
+            <div class="col-6 col-md-3"><div class="cvp-hero__meta small">Valor</div><strong>{{ 'R$ %.2f'|format(nf.valor_total) if nf.valor_total else '—' }}</strong></div>
+            <div class="col-6 col-md-3"><div class="cvp-hero__meta small">Peso bruto</div><strong>{{ '%.0f kg'|format(nf.peso_bruto) if nf.peso_bruto else '—' }}</strong></div>
+            <div class="col-6 col-md-3"><div class="cvp-hero__meta small">Motos</div><strong>{{ dados.qtd_motos or '—' }}</strong></div>
+        </div>
+        {% if dados.chave_acesso %}
+        <div class="cvp-hero__meta small mt-2"><i class="fas fa-barcode"></i> Chave: <span class="cvp-moto__chassi">{{ dados.chave_acesso }}</span></div>
+        {% endif %}
+    </div>
+
+    {# ---- PREVISOES / DATAS ---- #}
+    {% if dados.previsao_coleta or dados.previsao_chegada or dados.data_embarque or dados.data_entrega_prevista %}
+    <div class="cvp-card cvp-anim cvp-anim-2 mb-3">
+        <div class="cvp-card__title">Previsões</div>
+        <div class="cvp-chips">
+            {% if dados.previsao_coleta %}<div class="cvp-chip"><span class="cvp-chip__k">Prev. coleta</span>{{ dados.previsao_coleta.strftime('%d/%m/%Y') }}</div>{% endif %}
+            {% if dados.previsao_chegada %}<div class="cvp-chip"><span class="cvp-chip__k">Prev. chegada SP</span>{{ dados.previsao_chegada.strftime('%d/%m/%Y') }}</div>{% endif %}
+            {% if dados.data_embarque %}<div class="cvp-chip"><span class="cvp-chip__k">Embarque</span>{{ dados.data_embarque.strftime('%d/%m/%Y') }}</div>{% endif %}
+            {% if dados.data_entrega_prevista %}<div class="cvp-chip"><span class="cvp-chip__k">Prev. entrega</span>{{ dados.data_entrega_prevista.strftime('%d/%m/%Y') }}</div>{% endif %}
+        </div>
+    </div>
+    {% endif %}
+
+    {# ---- TIMELINE ---- #}
+    <div class="cvp-card cvp-anim cvp-anim-2 mb-3">
+        <div class="cvp-card__title">Acompanhamento da entrega</div>
+        <ul class="cvp-timeline">
+            {% for et in status.etapas %}
+            {% set is_current = et.key == status.atual_key %}
+            <li class="cvp-step {{ 'cvp-step--current' if is_current else ('cvp-step--done' if et.atingido else 'cvp-step--pending') }}">
+                <div class="cvp-step__rail">
+                    <div class="cvp-step__node">
+                        {% if et.atingido %}<i class="fas fa-check"></i>{% else %}<i class="far fa-circle"></i>{% endif %}
+                    </div>
+                    <div class="cvp-step__line"></div>
+                </div>
+                <div class="cvp-step__body">
+                    <div class="cvp-step__label">{{ et.label }}</div>
+                    {% if et.data %}<div class="cvp-step__date">{{ et.data.strftime('%d/%m/%Y %H:%M') if et.data.hour is defined else et.data.strftime('%d/%m/%Y') }}</div>
+                    {% elif et.atingido %}<div class="cvp-step__date">concluído</div>{% endif %}
                 </div>
             </li>
-        {% endfor %}
+            {% endfor %}
         </ul>
-    </div></div>
+    </div>
+
+    {# ---- DOCUMENTOS (sempre os 4; indisponivel fica esmaecido) ---- #}
+    <div class="cvp-card cvp-anim cvp-anim-3 mb-3">
+        <div class="cvp-card__title">Documentos</div>
+        <div class="cvp-files">
+            {% for a in dados.arquivos %}
+            {% if a.disponivel %}
+            <a class="cvp-file" href="{{ url_for('portal_cliente.baixar_arquivo_nf', numero=nf.numero_nf, tipo=a.tipo) }}" target="_blank" rel="noopener">
+                <i class="fas {{ a.icone }}"></i><span>{{ a.label }}</span>
+            </a>
+            {% else %}
+            <span class="cvp-file cvp-file--off" title="Ainda não disponível">
+                <i class="fas {{ a.icone }}"></i><span>{{ a.label }}</span>
+            </span>
+            {% endif %}
+            {% endfor %}
+        </div>
+    </div>
+
+    {# ---- MOTOS (por modelo, expansivel em chassis) ---- #}
+    {% if dados.motos_por_modelo %}
+    <div class="cvp-card cvp-anim cvp-anim-3">
+        <div class="cvp-card__title">Motos ({{ dados.qtd_motos }})</div>
+        {% for grp in dados.motos_por_modelo %}
+        <details class="cvp-modelo">
+            <summary>
+                <span><i class="fas fa-chevron-right me-1"></i> {{ grp.modelo }}</span>
+                <span class="cvp-modelo__qtd">{{ grp.qtd }}</span>
+            </summary>
+            <div class="cvp-modelo__chassis">
+                {% for ch in grp.chassis %}
+                <div class="cvp-modelo__chassi">{{ ch }}</div>
+                {% endfor %}
+            </div>
+        </details>
+        {% endfor %}
+    </div>
+    {% endif %}
 </div>
 {% endblock %}

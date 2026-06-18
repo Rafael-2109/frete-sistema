@@ -37,6 +37,7 @@ class Usuario(db.Model, UserMixin):
     sistema_carvia = db.Column(db.Boolean, default=False, nullable=False)  # Acesso ao sistema CarVia (frete subcontratado)
     sistema_seguranca = db.Column(db.Boolean, default=False, nullable=False)  # Acesso ao modulo de seguranca
     acesso_comissao_carvia = db.Column(db.Boolean, default=False, nullable=False)  # Acesso a comissoes CarVia
+    acesso_recebimento_carvia = db.Column(db.Boolean, default=False, nullable=False, server_default='false')  # Acesso SO ao recebimento por chassi das Coletas CarVia (operador, sem valores)
     sistema_remessa_vortx = db.Column(db.Boolean, default=False, nullable=False)  # Acesso a geracao de remessa VORTX
     sistema_lojas = db.Column(db.Boolean, default=False, nullable=False)  # Acesso ao modulo Lojas HORA
     sistema_motos_assai = db.Column(db.Boolean, default=False, nullable=False)  # Acesso ao módulo Motos Assaí
@@ -310,6 +311,11 @@ class Usuario(db.Model, UserMixin):
         return self.sistema_carvia and (
             self.acesso_comissao_carvia or self.perfil == 'administrador'
         )
+
+    def pode_acessar_recebimento_carvia(self):
+        """Acesso ao recebimento por chassi das Coletas CarVia (operador). Quem tem o sistema
+        CarVia completo ja entra; a flag dedicada libera SO o recebimento (sem valores/CRUD)."""
+        return self.sistema_carvia or self.acesso_recebimento_carvia or self.perfil == 'administrador'
 
     def pode_gerar_remessa_vortx(self):
         """Verifica se pode gerar remessa VORTX (flag dedicada ou admin)"""

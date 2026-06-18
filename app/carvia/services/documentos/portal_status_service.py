@@ -96,11 +96,87 @@ class CarviaPortalStatusService:
         if busca:
             q = q.filter(CarviaNf.numero_nf.ilike(f'%{busca.strip()}%'))
         nfs = q.order_by(CarviaNf.data_emissao.desc().nullslast(), CarviaNf.id.desc()).limit(limite).all()
+        from app.carvia.models.documentos import CarviaNfVeiculo
         out = []
         for nf in nfs:
             st = CarviaPortalStatusService.status_nf(nf)
-            out.append({'nf': nf, 'atual_key': st['atual_key'], 'atual_label': st['atual_label']})
+            out.append({
+                'nf': nf,
+                'atual_key': st['atual_key'],
+                'atual_label': st['atual_label'],
+                'etapas': st['etapas'],  # mini-timeline resumida na listagem
+                'qtd_motos': CarviaNfVeiculo.query.filter_by(nf_id=nf.id).count(),
+            })
         return out
+
+    # ----------------------------------------------------- detalhe / arquivos
+    # Tipos de arquivo expostos ao cliente (rotulo + icone p/ a UI).
+    ARQUIVOS = [
+        ('nf_pdf', 'Danfe (NF)', 'fa-file-invoice'),
+        ('dacte', 'DACTE (CT-e)', 'fa-file-contract'),
+        ('fatura', 'Fatura', 'fa-file-invoice-dollar'),
+        ('canhoto', 'Canhoto da entrega', 'fa-signature'),
+    ]
+
+    @staticmethod
+    def _entrega_para_canhoto(nf):
+        return CarviaPortalStatusService._entrega_carvia(nf.numero_nf)
+
+    @staticmethod
+    def arquivo_path(nf, tipo):
+        """Resolve o S3 path do arquivo da NF por tipo, ou None. Usado pelo download escopado."""
+        if tipo == 'nf_pdf':
+            return getattr(nf, 'arquivo_pdf_path', None)
+        if tipo == 'dacte':
+            for op in nf.operacoes.all():
+                if op.status != 'CANCELADO' and getattr(op, 'cte_pdf_path', None):
+                    return op.cte_pdf_path
+            return None
+        if tipo == 'fatura':
+            for f in nf.get_faturas_cliente():
+                if getattr(f, 'arquivo_pdf_path', None):
+                    return f.arquivo_pdf_path
+            return None
+        if tipo == 'canhoto':
+            entrega = CarviaPortalStatusService._entrega_para_canhoto(nf)
+            return getattr(entrega, 'canhoto_arquivo', None) if entrega else None
+        return None
+
+    @staticmethod
+    def dados_detalhe(nf):
+        """Dados ricos p/ a tela do cliente: motos agrupadas por modelo (expansiveis em chassis),
+        previsoes (coleta/chegada/entrega), embarque, chave de acesso e os 4 documentos (sempre
+        listados, com flag de disponibilidade)."""
+        from app.carvia.models.documentos import CarviaNfVeiculo
+        from app.carvia.models.coleta import CarviaColetaNf
+        veics = (CarviaNfVeiculo.query.filter_by(nf_id=nf.id)
+                 .order_by(CarviaNfVeiculo.modelo, CarviaNfVeiculo.chassi).all())
+        por_modelo = {}
+        for v in veics:
+            por_modelo.setdefault(v.modelo or 'Sem modelo', []).append(v.chassi)
+        motos_por_modelo = [{'modelo': m, 'qtd': len(ch), 'chassis': ch}
+                            for m, ch in por_modelo.items()]
+
+        entrega = CarviaPortalStatusService._entrega_carvia(nf.numero_nf)
+        coleta_nf = CarviaColetaNf.query.filter_by(carvia_nf_id=nf.id).first()
+        coleta = coleta_nf.coleta if coleta_nf else None
+
+        # Os 4 documentos SEMPRE aparecem (disponivel=True/False) — o cliente ve o que esperar.
+        arquivos = [
+            {'tipo': t, 'label': lbl, 'icone': ic,
+             'disponivel': bool(CarviaPortalStatusService.arquivo_path(nf, t))}
+            for (t, lbl, ic) in CarviaPortalStatusService.ARQUIVOS
+        ]
+        return {
+            'motos_por_modelo': motos_por_modelo,
+            'qtd_motos': len(veics),
+            'arquivos': arquivos,
+            'previsao_coleta': getattr(coleta, 'data_prevista', None) if coleta else None,
+            'previsao_chegada': getattr(coleta, 'data_prevista_chegada', None) if coleta else None,
+            'data_entrega_prevista': getattr(entrega, 'data_entrega_prevista', None) if entrega else None,
+            'data_embarque': getattr(entrega, 'data_embarque', None) if entrega else None,
+            'chave_acesso': getattr(nf, 'chave_acesso_nf', None),
+        }
 
     @staticmethod
     def get_nf_escopada(portal_usuario, numero_nf):

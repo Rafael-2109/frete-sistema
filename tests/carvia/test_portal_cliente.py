@@ -126,6 +126,28 @@ def test_pipeline_status(db):
     assert CarviaPortalStatusService.status_nf(nf)['atual_key'] == 'ENTREGUE'
 
 
+def test_dados_detalhe_agrupa_motos_e_lista_4_documentos(db):
+    """Enriquecimento: motos agrupadas por modelo (expansiveis) + os 4 documentos SEMPRE
+    listados (com flag disponivel) — independente de haver arquivo."""
+    from app.carvia.models.documentos import CarviaNfVeiculo
+    nf = _nf(db, 'NFD', '66666666000166')
+    for ch in ('C1', 'C2'):
+        db.session.add(CarviaNfVeiculo(nf_id=nf.id, chassi=ch, modelo='POP 110'))
+    db.session.add(CarviaNfVeiculo(nf_id=nf.id, chassi='C3', modelo='BIZ 125'))
+    db.session.flush()
+
+    dados = CarviaPortalStatusService.dados_detalhe(nf)
+    assert dados['qtd_motos'] == 3
+    grupos = {g['modelo']: g for g in dados['motos_por_modelo']}
+    assert grupos['POP 110']['qtd'] == 2
+    assert set(grupos['POP 110']['chassis']) == {'C1', 'C2'}
+    assert grupos['BIZ 125']['qtd'] == 1
+    # os 4 documentos sempre presentes; sem arquivo cadastrado -> todos indisponiveis
+    tipos = {a['tipo'] for a in dados['arquivos']}
+    assert tipos == {'nf_pdf', 'dacte', 'fatura', 'canhoto'}
+    assert all(a['disponivel'] is False for a in dados['arquivos'])
+
+
 # ------------------------------------------------------------ render smoke
 def _admin():
     u = MagicMock(); u.is_authenticated = True; u.sistema_carvia = True

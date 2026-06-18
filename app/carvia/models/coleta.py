@@ -52,7 +52,8 @@ class CarviaColeta(db.Model):
         info={'description': 'Destino: VICTORIO_MARCHEZINE | TENENTE_MARQUES'},
     )
 
-    data_prevista = db.Column(db.Date)
+    data_prevista = db.Column(db.Date)            # previsao de COLETA
+    data_prevista_chegada = db.Column(db.Date)    # previsao de CHEGADA na matriz/CD
     data_coletada = db.Column(db.Boolean, nullable=False, default=False, server_default='false')
     data_coletada_em = db.Column(db.DateTime)  # BRT naive
 

@@ -29,7 +29,8 @@
                     <dt class="col-sm-3">Placa</dt><dd class="col-sm-9">{{ coleta.placa or '—' }}</dd>
                     <dt class="col-sm-3">Valor da coleta</dt><dd class="col-sm-9">{{ 'R$ %.2f'|format(coleta.valor_coleta) if coleta.valor_coleta else '—' }}</dd>
                     <dt class="col-sm-3">Destino (CD)</dt><dd class="col-sm-9">{{ badge_local_cd(coleta.local_cd, curto=False) }}</dd>
-                    <dt class="col-sm-3">Data prevista</dt><dd class="col-sm-9">{{ coleta.data_prevista.strftime('%d/%m/%Y') if coleta.data_prevista else '—' }}</dd>
+                    <dt class="col-sm-3">Previsão de coleta</dt><dd class="col-sm-9">{{ coleta.data_prevista.strftime('%d/%m/%Y') if coleta.data_prevista else '—' }}</dd>
+                    <dt class="col-sm-3">Previsão de chegada</dt><dd class="col-sm-9">{{ coleta.data_prevista_chegada.strftime('%d/%m/%Y') if coleta.data_prevista_chegada else '—' }}</dd>
                     <dt class="col-sm-3">Coletada</dt><dd class="col-sm-9">
                         {% if coleta.data_coletada %}<span class="badge bg-success">{{ coleta.data_coletada_em.strftime('%d/%m/%Y %H:%M') if coleta.data_coletada_em else 'Sim' }}</span>
                         {% else %}<span class="text-muted">não</span>{% endif %}</dd>
@@ -89,8 +90,9 @@
                         {% for val, label in local_cd_choices %}<option value="{{ val }}" {{ 'selected' if coleta.local_cd == val }}>{{ label }}</option>{% endfor %}
                     </select>
                 </div>
-                <div class="col-md-3"><input type="date" name="data_prevista" class="form-control form-control-sm" value="{{ coleta.data_prevista.isoformat() if coleta.data_prevista else '' }}"></div>
-                <div class="col-md-4"><input type="text" name="observacoes" class="form-control form-control-sm" placeholder="Obs" value="{{ coleta.observacoes or '' }}"></div>
+                <div class="col-md-2"><input type="date" name="data_prevista" class="form-control form-control-sm" title="Previsão de coleta" value="{{ coleta.data_prevista.isoformat() if coleta.data_prevista else '' }}"></div>
+                <div class="col-md-2"><input type="date" name="data_prevista_chegada" class="form-control form-control-sm" title="Previsão de chegada" value="{{ coleta.data_prevista_chegada.isoformat() if coleta.data_prevista_chegada else '' }}"></div>
+                <div class="col-md-3"><input type="text" name="observacoes" class="form-control form-control-sm" placeholder="Obs" value="{{ coleta.observacoes or '' }}"></div>
                 <div class="col-md-2"><button class="btn btn-primary btn-sm w-100">Salvar</button></div>
             </form>
         </div>

@@ -24,10 +24,26 @@
 
 {% block content %}
 <div class="container-fluid py-4">
-    <div class="d-flex justify-content-between align-items-center mb-3">
-        <h2><i class="fas fa-users-cog"></i> Portal do Cliente — Usuários</h2>
-        <a href="{{ url_for('carvia.dashboard') }}" class="btn btn-outline-secondary btn-sm"><i class="fas fa-arrow-left"></i> Dashboard</a>
+    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+        <h2 class="mb-0"><i class="fas fa-users-cog"></i> Portal do Cliente — Usuários</h2>
+        <div class="d-flex gap-2">
+            {% set url_cadastro = url_for('portal_cliente.registrar', _external=True) %}
+            <button type="button" class="btn btn-outline-primary btn-sm" id="btnCopiarUrlCadastro"
+                    data-url="{{ url_cadastro }}" title="{{ url_cadastro }}">
+                <i class="fas fa-link"></i> Copiar URL de cadastro
+            </button>
+            <a href="{{ url_for('carvia.dashboard') }}" class="btn btn-outline-secondary btn-sm"><i class="fas fa-arrow-left"></i> Dashboard</a>
+        </div>
     </div>
+    <p class="text-muted small">Envie o link de cadastro abaixo para clientes e vendedores Motochefe. Após o auto-cadastro (status PENDENTE), aprove e defina o escopo de CNPJs aqui.</p>
+    <script>
+    document.getElementById('btnCopiarUrlCadastro')?.addEventListener('click', function () {
+        const url = this.dataset.url;
+        const done = () => { const o = this.innerHTML; this.innerHTML = '<i class="fas fa-check"></i> Copiado!'; setTimeout(() => this.innerHTML = o, 1800); };
+        if (navigator.clipboard) { navigator.clipboard.writeText(url).then(done).catch(() => window.prompt('Copie a URL:', url)); }
+        else { window.prompt('Copie a URL:', url); }
+    });
+    </script>
     {% set carvia_active = 'portal_usuarios' %}{% include 'carvia/_quick_nav.html' ignore missing %}
 
     <form method="GET" class="mb-3"><select name="status" class="form-select form-select-sm w-auto d-inline" onchange="this.form.submit()">

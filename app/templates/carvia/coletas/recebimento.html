@@ -13,9 +13,15 @@
                 {% else %}<span class="badge bg-info">EM RECEBIMENTO</span>{% endif %}
             {% endif %}
         </h4>
+        {% if so_recebimento %}
+        <a href="{{ url_for('carvia.listar_recebimentos') }}" class="btn btn-outline-secondary btn-sm">
+            <i class="fas fa-arrow-left"></i> Recebimentos
+        </a>
+        {% else %}
         <a href="{{ url_for('carvia.detalhe_coleta', coleta_id=coleta.id) }}" class="btn btn-outline-secondary btn-sm">
             <i class="fas fa-arrow-left"></i> Coleta
         </a>
+        {% endif %}
     </div>
 
     <div class="row g-3">

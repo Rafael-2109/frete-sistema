@@ -48,9 +48,14 @@ def _parse_date(valor_str):
 def register_coleta_routes(bp):
 
     def _guard():
+        """Acesso CarVia completo (CRUD de coletas, valores)."""
         if not getattr(current_user, 'sistema_carvia', False):
             return False
         return True
+
+    def _guard_recebimento():
+        """Acesso ao recebimento por chassi (sistema_carvia OU flag dedicada de operador)."""
+        return bool(getattr(current_user, 'pode_acessar_recebimento_carvia', lambda: False)())
 
     # ----------------------------------------------------------------- listar
     @bp.route('/coletas')  # type: ignore
@@ -110,6 +115,7 @@ def register_coleta_routes(bp):
                     valor_coleta=_parse_decimal(request.form.get('valor_coleta')),
                     local_cd=request.form.get('local_cd'),
                     data_prevista=_parse_date(request.form.get('data_prevista')),
+                    data_prevista_chegada=_parse_date(request.form.get('data_prevista_chegada')),
                     observacoes=request.form.get('observacoes'),
                     usuario=current_user.email,
                 )
@@ -253,28 +259,65 @@ def register_coleta_routes(bp):
             for nf in nfs]})
 
     # ------------------------------------------------------- recebimento chassi
+    @bp.route('/coletas/recebimento')  # type: ignore
+    @login_required
+    def listar_recebimentos():  # type: ignore
+        """Lista de coletas para o operador de recebimento (sem valores). Acesso por
+        sistema_carvia OU pela flag dedicada acesso_recebimento_carvia."""
+        if not _guard_recebimento():
+            return _negado()
+        from app.carvia.models.coleta import CarviaColeta, COLETA_STATUS_CANCELADA
+        from app.carvia.services.documentos.coleta_recebimento_service import CarviaColetaRecebimentoService
+        from app.utils.local_cd import LOCAL_CD_CHOICES
+        page = request.args.get('page', 1, type=int)
+        local_filtro = request.args.get('local_cd', '')
+        busca = request.args.get('busca', '')
+        query = CarviaColeta.query.filter(CarviaColeta.status != COLETA_STATUS_CANCELADA)
+        if local_filtro:
+            query = query.filter(CarviaColeta.local_cd == local_filtro)
+        if busca:
+            like = f'%{busca}%'
+            query = query.filter(db.or_(
+                CarviaColeta.contratado_nome.ilike(like), CarviaColeta.placa.ilike(like)))
+        paginacao = query.order_by(CarviaColeta.criado_em.desc().nullslast(),
+                                   CarviaColeta.id.desc()).paginate(page=page, per_page=25, error_out=False)
+        # status de recebimento por coleta (para badge na lista)
+        receb_status = {}
+        for c in paginacao.items:
+            r = CarviaColetaRecebimentoService._get_recebimento(c)
+            receb_status[c.id] = r.status if r else None
+        return render_template(
+            'carvia/coletas/recebimento_lista.html',
+            coletas=paginacao.items, paginacao=paginacao, receb_status=receb_status,
+            local_filtro=local_filtro, busca=busca, local_cd_choices=LOCAL_CD_CHOICES,
+        )
+
     @bp.route('/coletas/<int:coleta_id>/recebimento')  # type: ignore
     @login_required
     def recebimento_coleta(coleta_id):  # type: ignore
-        if not _guard():
+        if not _guard_recebimento():
             return _negado()
         from app.carvia.models.coleta import CarviaColeta
         from app.carvia.services.documentos.coleta_recebimento_service import CarviaColetaRecebimentoService
         coleta = db.session.get(CarviaColeta, coleta_id)
         if coleta is None:
             flash('Coleta nao encontrada.', 'warning')
-            return redirect(url_for('carvia.listar_coletas'))
+            return redirect(url_for('carvia.listar_recebimentos'))
         receb = CarviaColetaRecebimentoService._get_recebimento(coleta)
         chassis = receb.chassis.all() if receb else []
         resumo = CarviaColetaRecebimentoService.resumo_por_nf(coleta)
+        # operador so-recebimento (sem CarVia completo) volta para a lista de recebimento,
+        # nunca para o detalhe da coleta (que expoe valores).
+        so_recebimento = not getattr(current_user, 'sistema_carvia', False)
         return render_template('carvia/coletas/recebimento.html',
-                               coleta=coleta, recebimento=receb, chassis=chassis, resumo_nf=resumo)
+                               coleta=coleta, recebimento=receb, chassis=chassis, resumo_nf=resumo,
+                               so_recebimento=so_recebimento)
 
     @bp.route('/coletas/<int:coleta_id>/recebimento/chassis-esperados')  # type: ignore
     @login_required
     def chassis_esperados(coleta_id):  # type: ignore
         """AJAX: autocomplete de chassi (esperados ainda nao conferidos)."""
-        if not _guard():
+        if not _guard_recebimento():
             return jsonify({'success': False, 'message': 'Acesso negado'}), 403
         from app.carvia.models.coleta import CarviaColeta
         from app.carvia.services.documentos.coleta_recebimento_service import CarviaColetaRecebimentoService
@@ -289,7 +332,7 @@ def register_coleta_routes(bp):
     @login_required
     def conferir_chassi(coleta_id):  # type: ignore
         """AJAX: confere 1 chassi (multipart: chassi, modelo, qr_code_lido, foto opcional)."""
-        if not _guard():
+        if not _guard_recebimento():
             return jsonify({'success': False, 'message': 'Acesso negado'}), 403
         from app.carvia.models.coleta import CarviaColeta
         from app.carvia.services.documentos.coleta_recebimento_service import (
@@ -336,7 +379,7 @@ def register_coleta_routes(bp):
     @bp.route('/coletas/recebimento/chassi/<int:linha_id>/remover', methods=['POST'])  # type: ignore
     @login_required
     def remover_chassi(linha_id):  # type: ignore
-        if not _guard():
+        if not _guard_recebimento():
             return _negado()
         from app.carvia.models.coleta_recebimento import CarviaColetaRecebimentoChassi
         from app.carvia.services.documentos.coleta_recebimento_service import (
@@ -370,7 +413,7 @@ def register_coleta_routes(bp):
         return _acao_recebimento(coleta_id, lambda c, svc: (svc.reabrir(c), 'Recebimento reaberto.'))
 
     def _acao_recebimento(coleta_id, fn):
-        if not _guard():
+        if not _guard_recebimento():
             return _negado()
         from app.carvia.models.coleta import CarviaColeta
         from app.carvia.services.documentos.coleta_recebimento_service import (
@@ -412,6 +455,7 @@ def register_coleta_routes(bp):
             valor_coleta=_parse_decimal(request.form.get('valor_coleta')),
             local_cd=request.form.get('local_cd'),
             data_prevista=_parse_date(request.form.get('data_prevista')),
+            data_prevista_chegada=_parse_date(request.form.get('data_prevista_chegada')),
             observacoes=request.form.get('observacoes'),
         )
         return (coleta, 'Coleta atualizada.')

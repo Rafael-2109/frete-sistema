@@ -571,22 +571,21 @@
     {% if current_user.is_authenticated and current_user.sistema_carvia %}
     <div class="nc-sidebar__group">Frete Terceirizado</div>
     <li class="nc-sidebar__item">
-      <a class="nc-sidebar__link" href="{{ url_for('carvia.fluxo_caixa') }}"
-         data-tooltip="CarVia — Vencimentos"
-         title="CarVia — Vencimentos financeiros">
-        <i class="fas fa-truck-moving nc-sidebar__icon"></i>
-        <span class="nc-sidebar__label">CarVia</span>
-        {% if carvia_vencidos and carvia_vencidos > 0 %}
-        <span class="nc-sidebar__badge">{{ carvia_vencidos }}</span>
-        {% elif carvia_vencimento_dia and carvia_vencimento_dia > 0 %}
-        <span class="nc-sidebar__badge nc-sidebar__badge--warn">{{ carvia_vencimento_dia }}</span>
-        {% endif %}
-      </a>
-    </li>
-    <li class="nc-sidebar__item">
       <a class="nc-sidebar__link" href="{{ url_for('carvia.dashboard') }}" data-tooltip="CarVia Dashboard">
         <i class="fas fa-tachometer-alt nc-sidebar__icon"></i>
         <span class="nc-sidebar__label">CarVia Dashboard</span>
+      </a>
+    </li>
+    {% endif %}
+
+    {# Operador SO-recebimento (flag dedicada, sem o sistema CarVia completo): ve apenas o
+       recebimento por chassi das coletas — sem valores. Substitui o menu CarVia Dashboard. #}
+    {% if current_user.is_authenticated and current_user.acesso_recebimento_carvia and not current_user.sistema_carvia %}
+    <div class="nc-sidebar__group">Frete Terceirizado</div>
+    <li class="nc-sidebar__item">
+      <a class="nc-sidebar__link" href="{{ url_for('carvia.listar_recebimentos') }}" data-tooltip="Recebimento CarVia">
+        <i class="fas fa-qrcode nc-sidebar__icon"></i>
+        <span class="nc-sidebar__label">Recebimento CarVia</span>
       </a>
     </li>
     {% endif %}

@@ -46,6 +46,7 @@ class AprovarUsuarioForm(FlaskForm):
         coerce=str,
     )
     acesso_comissao_carvia = BooleanField('Acesso a Comissoes CarVia')
+    acesso_recebimento_carvia = BooleanField('Acesso ao Recebimento CarVia (operador, sem valores)')
     sistema_remessa_vortx = BooleanField('Gerar Remessas VORTX')
     observacoes = TextAreaField('Observações', validators=[Optional()])
     submit = SubmitField('Aprovar Usuário')
@@ -81,6 +82,7 @@ class EditarUsuarioForm(FlaskForm):
         coerce=str,
     )
     acesso_comissao_carvia = BooleanField('Acesso a Comissoes CarVia')
+    acesso_recebimento_carvia = BooleanField('Acesso ao Recebimento CarVia (operador, sem valores)')
     sistema_remessa_vortx = BooleanField('Gerar Remessas VORTX')
     whatsapp_autorizado = BooleanField('WhatsApp Bot (opt-in: receber/enviar via OpenClaw)')
     agente_fable5 = BooleanField('Agente — Fable 5 (opt-in: modelo mais capaz, custo elevado)')

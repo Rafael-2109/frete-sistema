@@ -99,8 +99,12 @@ def dashboard():
     from app.carvia.services.documentos.portal_status_service import CarviaPortalStatusService, ETAPAS
     user = _current_portal_user()
     busca = request.args.get('busca', '')
+    status_filtro = request.args.get('status', '')
     nfs = CarviaPortalStatusService.listar_nfs(user, busca=busca or None)
-    return render_template('carvia/portal/dashboard.html', user=user, nfs=nfs, etapas=ETAPAS, busca=busca)
+    if status_filtro:
+        nfs = [n for n in nfs if n['atual_key'] == status_filtro]
+    return render_template('carvia/portal/dashboard.html', user=user, nfs=nfs, etapas=ETAPAS,
+                           busca=busca, status_filtro=status_filtro)
 
 
 @portal_cliente_bp.route('/nf/<numero>')
@@ -113,7 +117,31 @@ def detalhe_nf(numero):
         flash('NF nao encontrada no seu acesso.', 'warning')
         return redirect(url_for('portal_cliente.dashboard'))
     status = CarviaPortalStatusService.status_nf(nf)
-    return render_template('carvia/portal/detalhe_nf.html', user=user, nf=nf, status=status)
+    dados = CarviaPortalStatusService.dados_detalhe(nf)
+    return render_template('carvia/portal/detalhe_nf.html', user=user, nf=nf, status=status, dados=dados)
+
+
+@portal_cliente_bp.route('/nf/<numero>/arquivo/<tipo>')
+@portal_required
+def baixar_arquivo_nf(numero, tipo):
+    """Download ESCOPADO de um arquivo da NF (Danfe/DACTE/Fatura/Canhoto). So serve se a NF
+    pertencer ao escopo de CNPJs do usuario do portal (seguranca: reusa get_nf_escopada)."""
+    from app.carvia.services.documentos.portal_status_service import CarviaPortalStatusService
+    user = _current_portal_user()
+    nf = CarviaPortalStatusService.get_nf_escopada(user, numero)
+    if nf is None:
+        flash('NF nao encontrada no seu acesso.', 'warning')
+        return redirect(url_for('portal_cliente.dashboard'))
+    path = CarviaPortalStatusService.arquivo_path(nf, tipo)
+    if not path:
+        flash('Arquivo nao disponivel para esta NF.', 'warning')
+        return redirect(url_for('portal_cliente.detalhe_nf', numero=numero))
+    from app.utils.file_storage import get_file_storage
+    url = get_file_storage().get_file_url(path)
+    if not url:
+        flash('Nao foi possivel acessar o arquivo agora.', 'danger')
+        return redirect(url_for('portal_cliente.detalhe_nf', numero=numero))
+    return redirect(url)
 
 
 # -------------------------------------------------------------------- cotar

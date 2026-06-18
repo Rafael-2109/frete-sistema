@@ -1,33 +1,64 @@
 {% extends "base.html" %}
+{% block title %}Minhas NFs — Portal CarVia{% endblock %}
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/carvia/portal_cliente.css') }}">
+{% endblock %}
+
 {% block content %}
-<div class="container py-3">
+<div class="container py-3 cvp-page">
     {% set active = 'nfs' %}{% include 'carvia/portal/_header.html' %}
 
-    <form method="GET" class="row g-2 mb-3">
-        <div class="col-md-4"><input name="busca" class="form-control form-control-sm" placeholder="Buscar nº da NF" value="{{ busca }}"></div>
-        <div class="col-md-2"><button class="btn btn-outline-primary btn-sm w-100"><i class="fas fa-search"></i> Buscar</button></div>
+    <form method="GET" class="row g-2 mb-3 cvp-anim">
+        <div class="col-md-5">
+            <input name="busca" class="form-control" placeholder="Buscar nº da NF" value="{{ busca }}">
+        </div>
+        <div class="col-md-4">
+            <select name="status" class="form-select" onchange="this.form.submit()">
+                <option value="">Todos os status</option>
+                {% for key, label in etapas %}
+                <option value="{{ key }}" {{ 'selected' if status_filtro == key }}>{{ label }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-3"><button class="btn btn-primary w-100"><i class="fas fa-search"></i> Buscar</button></div>
     </form>
 
-    <div class="card"><div class="table-responsive"><table class="table table-hover align-middle mb-0">
-        <thead class="table-light"><tr><th>NF</th><th>Emissão</th><th>Destino</th><th>Status atual</th><th></th></tr></thead>
-        <tbody>
+    <div class="d-flex flex-column gap-2">
         {% for item in nfs %}
-            {% set nf = item.nf %}
-            <tr>
-                <td><a href="{{ url_for('portal_cliente.detalhe_nf', numero=nf.numero_nf) }}">{{ nf.numero_nf }}</a></td>
-                <td>{{ nf.data_emissao.strftime('%d/%m/%Y') if nf.data_emissao else '—' }}</td>
-                <td>{{ nf.cidade_destinatario or '—' }}{{ '/' ~ nf.uf_destinatario if nf.uf_destinatario }}</td>
-                <td>
-                    {% if item.atual_key == 'ENTREGUE' %}<span class="badge bg-success">{{ item.atual_label }}</span>
-                    {% elif item.atual_key %}<span class="badge bg-info">{{ item.atual_label }}</span>
-                    {% else %}<span class="badge bg-secondary">{{ item.atual_label }}</span>{% endif %}
-                </td>
-                <td class="text-end"><a href="{{ url_for('portal_cliente.detalhe_nf', numero=nf.numero_nf) }}" class="btn btn-sm btn-outline-primary">Acompanhar</a></td>
-            </tr>
+        {% set nf = item.nf %}
+        {% set cur = (item.etapas | selectattr('key', 'equalto', item.atual_key) | first) if item.atual_key else none %}
+        <a class="cvp-nf-card cvp-anim" href="{{ url_for('portal_cliente.detalhe_nf', numero=nf.numero_nf) }}">
+            <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
+                <div>
+                    <strong>NF {{ nf.numero_nf }}</strong>
+                    <div class="text-muted small">{{ nf.nome_destinatario or '—' }}{% if nf.cnpj_destinatario %} · {{ nf.cnpj_destinatario }}{% endif %}</div>
+                    <div class="text-muted small">
+                        {{ nf.cidade_destinatario or '—' }}{{ '/' ~ nf.uf_destinatario if nf.uf_destinatario }}
+                        · {{ nf.data_emissao.strftime('%d/%m/%Y') if nf.data_emissao else '—' }}
+                        {% if item.qtd_motos %} · <i class="fas fa-motorcycle"></i> {{ item.qtd_motos }} moto{{ 's' if item.qtd_motos > 1 }}{% endif %}
+                    </div>
+                </div>
+                <div>
+                    {% if item.atual_key == 'ENTREGUE' %}<span class="cvp-pill cvp-pill--done"><i class="fas fa-check"></i> {{ item.atual_label }}</span>
+                    {% elif item.atual_key %}<span class="cvp-pill cvp-pill--progress">{{ item.atual_label }}</span>
+                    {% else %}<span class="cvp-pill cvp-pill--wait">{{ item.atual_label }}</span>{% endif %}
+                </div>
+            </div>
+            {# mini-timeline resumida #}
+            <div class="cvp-mini">
+                {% for et in item.etapas %}
+                <span class="cvp-mini__dot {{ 'cvp-mini__dot--current' if et.key == item.atual_key else ('cvp-mini__dot--done' if et.atingido else '') }}"
+                      title="{{ et.label }}{{ ' · ' ~ et.data.strftime('%d/%m/%Y') if et.data else '' }}"></span>
+                {% if not loop.last %}<span class="cvp-mini__seg {{ 'cvp-mini__seg--done' if et.atingido }}"></span>{% endif %}
+                {% endfor %}
+            </div>
+            <div class="cvp-mini__cur">
+                {{ item.atual_label }}{% if cur and cur.data %} · {{ cur.data.strftime('%d/%m/%Y') }}{% endif %}
+            </div>
+        </a>
         {% else %}
-            <tr><td colspan="5" class="text-center text-muted py-4">Nenhuma nota encontrada para o seu acesso.</td></tr>
+        <div class="cvp-card text-center text-muted py-4">Nenhuma nota encontrada para o seu acesso.</div>
         {% endfor %}
-        </tbody>
-    </table></div></div>
+    </div>
 </div>
 {% endblock %}

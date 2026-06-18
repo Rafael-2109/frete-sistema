@@ -36,7 +36,7 @@ class CarviaColetaService:
     @staticmethod
     def criar_coleta(*, contratado_nome=None, transportadora_id=None, placa=None,
                      valor_coleta=None, local_cd=None, data_prevista=None,
-                     observacoes=None, usuario=None):
+                     data_prevista_chegada=None, observacoes=None, usuario=None):
         from app.carvia.models.coleta import CarviaColeta, COLETA_STATUS_RASCUNHO
 
         coleta = CarviaColeta(
@@ -46,6 +46,7 @@ class CarviaColetaService:
             valor_coleta=valor_coleta,
             local_cd=normalizar_local_cd(local_cd) or LOCAL_CD_DEFAULT,
             data_prevista=data_prevista,
+            data_prevista_chegada=data_prevista_chegada,
             observacoes=(observacoes or '').strip() or None,
             status=COLETA_STATUS_RASCUNHO,
             criado_por=usuario,
@@ -56,7 +57,8 @@ class CarviaColetaService:
 
     @staticmethod
     def editar_coleta(coleta, *, contratado_nome=None, transportadora_id=None, placa=None,
-                      valor_coleta=None, local_cd=None, data_prevista=None, observacoes=None):
+                      valor_coleta=None, local_cd=None, data_prevista=None,
+                      data_prevista_chegada=None, observacoes=None):
         if not coleta.pode_editar():
             raise ColetaError(f'Coleta {coleta.numero_coleta} nao e editavel (status {coleta.status}).')
         coleta.contratado_nome = (contratado_nome or '').strip() or None
@@ -67,6 +69,7 @@ class CarviaColetaService:
         if local_cd is not None:
             coleta.local_cd = normalizar_local_cd(local_cd) or coleta.local_cd
         coleta.data_prevista = data_prevista
+        coleta.data_prevista_chegada = data_prevista_chegada
         coleta.observacoes = (observacoes or '').strip() or None
         # Se o destino (local_cd) mudou, re-propaga para as NFs ja vinculadas — senao o
         # badge/portaria/VIEW pedidos ficariam com o CD antigo (inconsistencia silenciosa).

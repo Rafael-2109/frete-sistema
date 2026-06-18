@@ -177,6 +177,11 @@
                                     {{ form.acesso_comissao_carvia.label(class="form-check-label", for="acessoComissaoCarvia") }}
                                     <small class="text-muted d-block">Permissão adicional para acessar comissões dentro do CarVia</small>
                                 </div>
+                                <div class="form-check mt-2 ms-4">
+                                    {{ form.acesso_recebimento_carvia(class="form-check-input", id="acessoRecebimentoCarvia") }}
+                                    {{ form.acesso_recebimento_carvia.label(class="form-check-label", for="acessoRecebimentoCarvia") }}
+                                    <small class="text-muted d-block">Operador: acessa SÓ o recebimento por chassi das coletas (sem ver valores). Dispensa "Acesso ao Sistema CarVia".</small>
+                                </div>
                                 <div class="form-check mt-2">
                                     {{ form.sistema_lojas(class="form-check-input", id="sistemaLojas") }}
                                     {{ form.sistema_lojas.label(class="form-check-label", for="sistemaLojas") }}
