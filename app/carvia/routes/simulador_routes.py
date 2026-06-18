@@ -131,6 +131,32 @@ def register_simulador_routes(bp):
             ],
         })
 
+    @bp.route('/api/simulador-carga/pallets-por-separacao')
+    @login_required
+    def api_simulador_pallets_por_separacao():
+        """Monta os pallets PBR de conservas Nacom de uma Separacao (Camada 1).
+
+        Params: lote (obrigatorio), modo (A-D), separado (0/1), overbooking (0-0.5).
+        """
+        if not getattr(current_user, 'sistema_carvia', False):
+            return jsonify({'erro': 'Acesso negado'}), 403
+
+        from app.carteira.services.palletizacao_service import montar_pallets_da_separacao
+
+        lote = request.args.get('lote', type=str)
+        if not lote:
+            return jsonify({'erro': 'parametro lote obrigatorio'}), 400
+        modo = request.args.get('modo', 'A', type=str)
+        separado = request.args.get('separado', '0') in ('1', 'true', 'True')
+        try:
+            overbooking = float(request.args.get('overbooking', 0) or 0)
+        except (TypeError, ValueError):
+            overbooking = 0.0
+
+        out = montar_pallets_da_separacao(
+            lote, modo=modo, separado_por_pallet=separado, overbooking_pct=overbooking)
+        return jsonify(out)
+
     @bp.route('/api/simulador-carga/embarque/<int:embarque_id>')
     @login_required
     def api_simulador_embarque(embarque_id):

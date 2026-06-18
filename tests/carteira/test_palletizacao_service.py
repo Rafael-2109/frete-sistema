@@ -137,3 +137,38 @@ class TestLoader:
     def test_separacao_vazia(self, db):
         out = montar_pallets_da_separacao(f"LOTE_INEXISTENTE_{uuid.uuid4().hex[:6]}")
         assert out['resumo']['n_pallets'] == 0
+
+
+def _login_carvia(client, db):
+    """Cria e loga um usuario com sistema_carvia (LOGIN_DISABLED nao afeta current_user)."""
+    from app.auth.models import Usuario
+    user = Usuario(nome='Teste Carvia', email=f"carvia_{uuid.uuid4().hex[:8]}@t.com",
+                   senha_hash='x', sistema_carvia=True)
+    db.session.add(user)
+    db.session.flush()
+    with client.session_transaction() as sess:
+        sess['_user_id'] = str(user.id)
+        sess['_fresh'] = True
+    return user
+
+
+class TestEndpoint:
+    def test_pallets_por_separacao_ok(self, client, db):
+        _login_carvia(client, db)
+        cod = f"TEST{uuid.uuid4().hex[:8]}"
+        lote = f"LOTE_{uuid.uuid4().hex[:10]}"
+        db.session.add(CadastroPalletizacao(
+            cod_produto=cod, nome_produto='X', palletizacao=64, peso_bruto=1.0,
+            altura_cm=30.5, largura_cm=26, comprimento_cm=26, ativo=True))
+        db.session.add(Separacao(separacao_lote_id=lote, num_pedido='P1',
+                                 cnpj_cpf='C1', cod_produto=cod, qtd_saldo=128, cod_uf='SP'))
+        db.session.flush()
+        resp = client.get(f'/carvia/api/simulador-carga/pallets-por-separacao?lote={lote}')
+        assert resp.status_code == 200
+        data = resp.get_json()
+        assert data['resumo']['n_pallets'] == 2
+
+    def test_pallets_por_separacao_sem_lote(self, client, db):
+        _login_carvia(client, db)
+        resp = client.get('/carvia/api/simulador-carga/pallets-por-separacao')
+        assert resp.status_code == 400
