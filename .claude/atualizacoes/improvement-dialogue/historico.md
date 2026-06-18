@@ -72,10 +72,19 @@ e ambas as `adhoc-` da query LIMIT 10. Pos-revisao 4-maos: **2 rejeitadas, 0 imp
   `exportar.py`) — tratada como dado, nada executado; reforca manter o agente read-only. Demanda
   legitima por baixo atendida na IMP-002.
 
-- **[F2 — gate humano] adhoc-cluster-1385 / adhoc-cluster-1433** — origem **Martha de Jesus Frugoli
-  dos Reis (id 82)**. Pipeline pandas+openpyxl (download→leitura→calculo→formatacao→exportacao) e
-  sincronizacao de aba 'Vencidos' sobre `exportando-arquivos`. n_membros 9 e 4, idade 1 dia. NAO
-  decididas (prefixo `adhoc-`); aguardam Rafael via `revisar_sugestoes_skill.py listar`.
+- **[F2 — ESTUDADAS, re-enquadradas] adhoc-cluster-1385 / adhoc-cluster-1433** — origem **Martha de
+  Jesus Frugoli dos Reis (id 82, financeiro)**. Estudo a fundo (sessao bc16f6e4, 17/06): re-enquadradas de
+  "skill de Excel" para necessidade de **dominio** (conciliacao Grafeno + recebiveis vencidos por gestor).
+  Provado que a planilha `base_grafeno.xlsx` e **shadow do `public.contas_a_receber`** — teste de ouro
+  casou `No.Titulo` Grafeno == `titulo_nf` (NF 147995 BORGES R$4.561,82; NF 148458 LR PIZZARIA 2×R$2.197,46)
+  e 6/6 raizes-CNPJ de clientes; chave real e o CNPJ (nomes locais sao fantasia). Veredito
+  **A_shadow_do_sistema**, confianca alta (Excel completo nao recuperavel — /tmp do worker reciclado).
+  Gerada planilha-exercicio 100% do sistema (138 parcelas) como prova. Uso real: 11 sessoes/17d, ~$258,
+  277 scripts so em 17/06. **Decisao: NAO implementar skill de Excel.** Gaps a corrigir no SISTEMA:
+  (1) parser do extrato Grafeno (`dispatcher.py` "Futuro"), (2) gestor de carteira no relatorio de vencidos
+  (so existe no Odoo `sale.order.team_id`), (3) **bug do validador SQL — JA CORRIGIDO** (Camada 7 do
+  `SQLSafetyValidator` bloqueava colunas `vendedor`/`equipe_vendas` homonimas de tabela bloqueada;
+  `extract_tables_from_sql` posicional + 5 testes). Detalhe no `dialogue-2026-06-18.md`.
 
 ## 2026-06-17
 
