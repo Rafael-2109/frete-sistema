@@ -172,3 +172,27 @@ class TestEndpoint:
         _login_carvia(client, db)
         resp = client.get('/carvia/api/simulador-carga/pallets-por-separacao')
         assert resp.status_code == 400
+
+
+class TestEmbarqueMisto:
+    def test_resolver_inclui_pallets_nacom(self, db):
+        from app.embarques.models import Embarque, EmbarqueItem
+        from app.carvia.routes.simulador_routes import _resolver_dados_embarque
+        cod = f"TEST{uuid.uuid4().hex[:8]}"
+        lote = f"LOTE_{uuid.uuid4().hex[:10]}"
+        db.session.add(CadastroPalletizacao(
+            cod_produto=cod, nome_produto='X', palletizacao=64, peso_bruto=1.0,
+            altura_cm=30.5, largura_cm=26, comprimento_cm=26, ativo=True))
+        emb = Embarque(numero=int(uuid.uuid4().int % 1000000), modalidade='TOCO', status='ativo')
+        db.session.add(emb)
+        db.session.flush()
+        db.session.add(EmbarqueItem(
+            embarque_id=emb.id, separacao_lote_id=lote, status='ativo',
+            cliente='Cliente Teste', pedido='P1', uf_destino='SP', cidade_destino='Sao Paulo'))
+        db.session.add(Separacao(separacao_lote_id=lote, num_pedido='P1', cnpj_cpf='C1',
+                                 cod_produto=cod, qtd_saldo=128, cod_uf='SP'))
+        db.session.flush()
+
+        dados = _resolver_dados_embarque(emb)
+        assert 'pallets' in dados
+        assert len(dados['pallets']) == 2

@@ -234,11 +234,22 @@ def _resolver_dados_embarque(embarque):
 
     motos, peso_total, items_sem_modelo = _resolver_motos_de_nfs(numeros_nf=nfs_numeros)
 
+    # Conservas Nacom: monta os pallets dos lotes Nacom (LOTE_*) do mesmo embarque.
+    from app.carteira.services.palletizacao_service import montar_pallets_da_separacao
+    lotes_nacom = {
+        it.separacao_lote_id for it in itens
+        if (it.separacao_lote_id or '').startswith('LOTE_')
+    }
+    pallets = []
+    for lote in lotes_nacom:
+        pallets.extend(montar_pallets_da_separacao(lote)['pallets'])
+
     return {
         'embarque_id': embarque.id,
         'embarque_numero': embarque.numero,
         'veiculo': veiculo_data,
         'motos': motos,
+        'pallets': pallets,
         'peso_total': peso_total,
         'items_sem_modelo': items_sem_modelo,
         'erro': 'veiculo_sem_dimensoes' if not veiculo_data else None,
