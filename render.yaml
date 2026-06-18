@@ -5,6 +5,12 @@ services:
     plan: starter
     buildCommand: chmod +x build.sh && ./build.sh
     startCommand: ./start_render.sh
+    # Caddy abre 0.0.0.0:10000 ANTES dos gunicorns ficarem prontos (start_render.sh
+    # secao 6). Sem health check, o Render marcaria o deploy live assim que a porta
+    # abre e cortaria o trafego do container antigo cedo demais -> janela de 502.
+    # healthCheckPath /auth/login (Caddy -> gunicorn-sistema:5002, 200 sem auth)
+    # so deixa o deploy virar live quando o sistema responde -> zero-downtime real.
+    healthCheckPath: /auth/login
     envVars:
       - key: ENVIRONMENT
         value: production
