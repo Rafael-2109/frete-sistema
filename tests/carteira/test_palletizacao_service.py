@@ -1,7 +1,11 @@
 """Testes da Camada 1 do simulador de conservas (palletizacao_service)."""
+import uuid
 from app.carteira.services.palletizacao_service import (
     calcular_lastro, calcular_altura, CaixaItem, montar_pallets,
+    montar_pallets_da_separacao,
 )
+from app.separacao.models import Separacao
+from app.producao.models import CadastroPalletizacao
 
 
 class TestGeometria:
@@ -107,3 +111,29 @@ class TestMontagem:
         assert d['tipo'] == 'pallet'
         assert d['altura_total'] == 137.0
         assert d['merc_x'] == 104
+
+
+class TestLoader:
+    def _cod(self):
+        return f"TEST{uuid.uuid4().hex[:8]}"
+
+    def test_carrega_separacao_e_monta(self, db):
+        cod = self._cod()
+        lote = f"LOTE_{uuid.uuid4().hex[:10]}"
+        db.session.add(CadastroPalletizacao(
+            cod_produto=cod, nome_produto='CONSERVA TESTE',
+            palletizacao=64, peso_bruto=1.0,
+            altura_cm=30.5, largura_cm=26, comprimento_cm=26, ativo=True))
+        db.session.add(Separacao(
+            separacao_lote_id=lote, num_pedido='PED1', cnpj_cpf='C1',
+            cod_produto=cod, qtd_saldo=128, cod_uf='SP'))
+        db.session.flush()
+
+        out = montar_pallets_da_separacao(lote)
+        assert out['resumo']['n_pallets'] == 2
+        assert out['pendencias'] == []
+        assert out['pallets'][0]['tipo'] == 'pallet'
+
+    def test_separacao_vazia(self, db):
+        out = montar_pallets_da_separacao(f"LOTE_INEXISTENTE_{uuid.uuid4().hex[:6]}")
+        assert out['resumo']['n_pallets'] == 0

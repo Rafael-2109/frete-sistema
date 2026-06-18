@@ -10,6 +10,12 @@ from math import floor, ceil
 from dataclasses import dataclass
 from collections import defaultdict
 
+from sqlalchemy import and_
+
+from app import db
+from app.separacao.models import Separacao
+from app.producao.models import CadastroPalletizacao
+
 PALLET_BASE_X = 100.0
 PALLET_BASE_Y = 120.0
 PALLET_ALTURA_ESTRADO = 15.0
@@ -202,3 +208,47 @@ def montar_pallets(itens, modo='A', separado_por_pallet=False, overbooking_pct=0
             p.color = cor
         pallets += ps
     return pallets, pendencias
+
+
+def _carregar_itens(lote_id):
+    """Carrega os itens de uma Separacao com as dimensoes da CadastroPalletizacao."""
+    rows = (db.session.query(
+                Separacao.num_pedido, Separacao.cnpj_cpf, Separacao.cod_produto,
+                Separacao.qtd_saldo,
+                CadastroPalletizacao.altura_cm, CadastroPalletizacao.largura_cm,
+                CadastroPalletizacao.comprimento_cm,
+                CadastroPalletizacao.palletizacao, CadastroPalletizacao.peso_bruto,
+            )
+            .outerjoin(CadastroPalletizacao,
+                       and_(Separacao.cod_produto == CadastroPalletizacao.cod_produto,
+                            CadastroPalletizacao.ativo.is_(True)))
+            .filter(Separacao.separacao_lote_id == lote_id)
+            .all())
+    itens = []
+    for r in rows:
+        itens.append(CaixaItem(
+            cod_produto=r.cod_produto, num_pedido=r.num_pedido or '',
+            cnpj=r.cnpj_cpf or '', qtd=float(r.qtd_saldo or 0),
+            largura_cm=float(r.largura_cm or 0),
+            comprimento_cm=float(r.comprimento_cm or 0),
+            altura_cm=float(r.altura_cm or 0),
+            palletizacao=float(r.palletizacao or 0),
+            peso_bruto=float(r.peso_bruto or 0)))
+    return itens
+
+
+def montar_pallets_da_separacao(lote_id, modo='A', separado_por_pallet=False,
+                                overbooking_pct=0.0):
+    """Carrega a Separacao e monta os pallets, serializando para JSON."""
+    itens = _carregar_itens(lote_id)
+    pallets, pendencias = montar_pallets(itens, modo, separado_por_pallet,
+                                         overbooking_pct)
+    pallets_dict = [p.to_dict() for p in pallets]
+    return {
+        'pallets': pallets_dict,
+        'pendencias': pendencias,
+        'resumo': {
+            'n_pallets': len(pallets_dict),
+            'peso_total': round(sum(p['peso'] for p in pallets_dict), 2),
+        },
+    }
