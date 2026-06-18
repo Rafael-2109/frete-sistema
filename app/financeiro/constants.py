@@ -72,6 +72,25 @@ JOURNAL_DEVOLUCAO_NAME = 'DEVOLUCAO'
 JOURNAL_GRAFENO_ID = 883
 JOURNAL_GRAFENO_CODE = 'GRAFENO'
 
+# Journal SICOOB por empresa (conta bancaria operacional). Fonte canonica aqui;
+# `comprovante_lancamento_service.SICOOB_JOURNAL_POR_COMPANY` duplica este mapa
+# (consolidar via import como follow-up). Validado em PROD via Odoo (2026-06-18):
+# SO existe em FB(1)->10 e LF(5)->386. SC(3)/CD(4) NAO tem journal bancario proprio
+# (zero journals type bank/cash) — por isso o par SICOOB+DESAGIO e estruturalmente FB/LF-only.
+JOURNAL_SICOOB_POR_COMPANY = {1: 10, 5: 386}
+
+# Journal DESAGIO (type cash) — usado no par de baixa de credores (SICOOB + DESAGIO).
+# SO existe na FB (company 1). Nao existia em constants ate 2026-06-18 (era hardcoded ao vivo).
+JOURNAL_DESAGIO_ID = 1025
+JOURNAL_DESAGIO_CODE = 'DESAG'
+JOURNAL_DESAGIO_NAME = 'DESAGIO'
+
+# IDs reais de company no Odoo (NAO usar EMPRESA_MAP abaixo, que esta divergente:
+# diz SC=2/CD=3, mas o Odoo real e SC=3/CD=4 — consistente com CONTA_JUROS_*_POR_COMPANY).
+COMPANY_IDS_ODOO = {'FB': 1, 'SC': 3, 'CD': 4, 'LF': 5}
+# Empresas SEM journal bancario proprio -> pagamento por banco e cross-company (conta-ponte 26868).
+COMPANIES_SEM_JOURNAL_BANCARIO = {3, 4}  # SC, CD
+
 
 # =============================================================================
 # MAPEAMENTO DE BANCOS CNAB PARA JOURNALS ODOO
