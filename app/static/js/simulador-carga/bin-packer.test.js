@@ -170,5 +170,35 @@ test('multi-slab: moto posicionada expoe slabs absolutos coerentes', () => {
   assert(s.x === p.x && s.y === p.y && s.z === p.z, 'slab na posicao da moto');
 });
 
+function pallet(mx, my, altMerc, id) {
+  return { tipo: 'pallet', id: id, nome: id,
+           base_x: 100, base_y: 120, altura_estrado: 15,
+           merc_x: mx, merc_y: my, altura_merc: altMerc,
+           altura_total: 15 + altMerc, comprimento: 100, largura: 120, altura: 15 + altMerc,
+           peso_medio: 100, qty: 1 };
+}
+
+test('caminho critico: pallets 104 e 90 cabem encostados (media 97 < 100)', () => {
+  const r = BinPacker.pack({ w: 200, d: 130, h: 250 },
+    [pallet(104, 104, 100, 'A'), pallet(90, 90, 100, 'B')]);
+  assert(r.stats.posicionadas === 2, `esperava 2, veio ${r.stats.posicionadas}`);
+});
+
+test('caminho critico: dois pallets 104 NAO cabem lado a lado em bau de 200 (baixo)', () => {
+  // bau baixo (h=200) nao comporta empilhar 2 pallets (115+115=230) -> isola o
+  // efeito horizontal: 104+104 nao interdigitam (media 104 > 100) -> so 1 cabe.
+  const r = BinPacker.pack({ w: 200, d: 130, h: 200 },
+    [pallet(104, 104, 100, 'A'), pallet(104, 104, 100, 'B')]);
+  assert(r.stats.posicionadas === 1, `esperava 1, veio ${r.stats.posicionadas}`);
+});
+
+test('pallet tem orientacao unica (estrado no chao) e 2 slabs', () => {
+  const r = BinPacker.pack({ w: 200, d: 200, h: 250 }, [pallet(104, 104, 100, 'A')]);
+  const p = r.placed[0];
+  assert(p.slabs.length === 2, '2 slabs (estrado + coluna)');
+  assert(p.slabs[0].y === 0 && p.slabs[0].h === 15, 'estrado em Y 0..15');
+  assert(p.slabs[1].y === 15, 'coluna comeca em Y=15');
+});
+
 console.log(failures === 0 ? '\nTODOS OS TESTES PASSARAM' : `\n${failures} TESTE(S) FALHARAM`);
 process.exit(failures === 0 ? 0 : 1);

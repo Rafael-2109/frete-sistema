@@ -152,7 +152,9 @@
           slabs: best.slabs,
         };
         placed.push(p);
-        freeSpaces = subtractBox(freeSpaces, p);
+        for (var sb = 0; sb < p.slabs.length; sb++) {
+          freeSpaces = subtractBox(freeSpaces, p.slabs[sb]);
+        }
       } else {
         rejected.push(item);
       }
@@ -188,12 +190,23 @@
       var m = motoList[i];
       var qty = (m.qty == null) ? 1 : m.qty; // qty=0 => 0 itens (nao 1)
       for (var q = 0; q < qty; q++) {
-        items.push({
+        var it = {
           id: m.id, nome: m.nome,
           comprimento: m.comprimento, largura: m.largura, altura: m.altura,
           peso_medio: m.peso_medio || 0, color: m.color || '#4a90d9',
-          volume: m.comprimento * m.largura * m.altura,
-        });
+          volume: (m.comprimento || 0) * (m.largura || 0) * (m.altura || 0),
+          tipo: m.tipo || 'moto',
+        };
+        if (m.tipo === 'pallet') {
+          it.base_x = m.base_x; it.base_y = m.base_y;
+          it.altura_estrado = m.altura_estrado;
+          it.merc_x = m.merc_x; it.merc_y = m.merc_y;
+          it.altura_merc = m.altura_merc; it.altura_total = m.altura_total;
+          it.altura = m.altura_total; it.comprimento = m.base_x; it.largura = m.base_y;
+          it.volume = m.base_x * m.base_y * m.altura_total;
+          it.grupo = m.grupo;
+        }
+        items.push(it);
       }
     }
     return items;
@@ -223,7 +236,24 @@
    * idx 0/2: deitada (altura A no eixo Y). idx 1/3: tombada de lado (largura L no Y).
    * Em nenhuma o comprimento vai para o eixo Y => moto nunca fica "de pe".
    */
+  // Slabs de um pallet: estrado (canto) + coluna de mercadoria (centralizada).
+  // A coluna pode exceder o estrado (folga); offset pode ser negativo.
+  function palletSlabs(item, x, y, z) {
+    var bx = item.base_x, by = item.base_y, est = item.altura_estrado;
+    var mx = item.merc_x, my = item.merc_y, alt = item.altura_total;
+    var ox = (bx - mx) / 2, oy = (by - my) / 2;
+    return [
+      { x: x, y: y, z: z, w: bx, d: by, h: est },
+      { x: x + ox, y: y + est, z: z + oy, w: mx, d: my, h: alt - est },
+    ];
+  }
+
   function getOrientations(item) {
+    if (item.tipo === 'pallet') {
+      // pallet nao rotaciona: estrado sempre com a base no chao. oh = altura total
+      // (a coluna excede lateralmente; o fit no freeSpace usa so o estrado).
+      return [{ ow: item.base_x, od: item.base_y, oh: item.altura_total, idx: 0 }];
+    }
     var C = item.comprimento, L = item.largura, A = item.altura;
     return [
       { ow: C, od: L, oh: A, idx: 0 }, // C(X) L(Z) A(Y) — deitada
@@ -275,10 +305,27 @@
       for (var o = 0; o < orientations.length; o++) {
         var ori = orientations[o];
 
-        if (ori.ow > sp.w + 0.1 || ori.od > sp.d + 0.1 || ori.oh > sp.h + 0.1) continue;
+        // Pallet: o fit no freeSpace usa so a altura do estrado (a coluna excede
+        // lateralmente e e validada por colisao); a altura TOTAL e checada no teto.
+        var ehPallet = item.tipo === 'pallet';
+        var fitH = ehPallet ? item.altura_estrado : ori.oh;
+        var altReal = ehPallet ? item.altura_total : ori.oh;
+
+        if (ori.ow > sp.w + 0.1 || ori.od > sp.d + 0.1 || fitH > sp.h + 0.1) continue;
         if (sp.x + ori.ow > bay.w + 0.1) continue;
         if (sp.z + ori.od > bay.d + 0.1) continue;
-        if (sp.y + ori.oh > bay.h + 0.1) continue;
+        if (sp.y + altReal > bay.h + 0.1) continue;
+
+        // Caminho critico: a coluna de mercadoria nao pode atravessar colunas/
+        // estrados ja posicionados (mas pode invadir o ar sobre o estrado vizinho).
+        if (ehPallet) {
+          var candSlabs = itemSlabs(item, ori, sp.x, sp.y, sp.z);
+          var colideCol = false;
+          for (var pc = 0; pc < placed.length; pc++) {
+            if (slabsColidem(candSlabs, placed[pc].slabs)) { colideCol = true; break; }
+          }
+          if (colideCol) continue;
+        }
 
         // Empilhamento: exige apoio minimo da base sobre caixas abaixo.
         if (sp.y > 0.1) {
