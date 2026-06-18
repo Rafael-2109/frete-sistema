@@ -204,7 +204,7 @@ def register_simulador_routes(bp):
 
         raw = request.args.get('nfs', '')
         numeros = [n.strip() for n in raw.split(',') if n.strip()]
-        motos, peso_total, items_sem_modelo = _resolver_motos_de_nfs(numeros_nf=numeros)
+        motos, peso_total, items_sem_modelo, _nfs = _resolver_motos_de_nfs(numeros_nf=numeros)
         return jsonify({
             'motos': motos,
             'peso_total': peso_total,
@@ -282,7 +282,7 @@ def _resolver_dados_embarque(embarque):
         if item.nota_fiscal and item.nota_fiscal.strip()
     }
 
-    motos, peso_total, items_sem_modelo = _resolver_motos_de_nfs(numeros_nf=nfs_numeros)
+    motos, peso_total, items_sem_modelo, _nfs = _resolver_motos_de_nfs(numeros_nf=nfs_numeros)
 
     # Conservas Nacom: monta os pallets dos lotes Nacom (LOTE_*) do mesmo embarque.
     from app.carteira.services.palletizacao_service import montar_pallets_da_separacao
@@ -378,20 +378,27 @@ def _resolver_prefill_rota(lotes, veiculo_id=None):
         ).with_entities(Separacao.numero_nf).all()
         numeros_nf.update(r[0] for r in rows if r[0])
 
-    motos, peso_total, items_sem_modelo = _resolver_motos_de_nfs(
-        numeros_nf=numeros_nf, nf_ids=nf_ids, itens_diretos=itens_diretos
+    # NFs reais -> breakdown por NF (chips removiveis); itens_diretos (pedido CarVia
+    # ainda sem NF) -> linhas livres sem chip. Separados para nao haver dupla
+    # contagem: a soma das motos dos chips + linhas livres = total da carga.
+    _motos_nf, peso_nf, sem_modelo_nf, nfs = _resolver_motos_de_nfs(
+        numeros_nf=numeros_nf, nf_ids=nf_ids
+    )
+    motos_diretas, peso_diretos, sem_modelo_diretos, _ = _resolver_motos_de_nfs(
+        itens_diretos=itens_diretos
     )
     return {
         'veiculo': _veiculo_data_por_id(veiculo_id),
-        'motos': motos,
-        'peso_total': peso_total,
-        'items_sem_modelo': items_sem_modelo,
+        'nfs': nfs,
+        'motos': motos_diretas,
+        'peso_total': round(peso_nf + peso_diretos, 2),
+        'items_sem_modelo': sem_modelo_nf + sem_modelo_diretos,
     }
 
 
 def _resolver_motos_de_nfs(numeros_nf=None, nf_ids=None, itens_diretos=None):
     """Resolve a contagem de motos por modelo a partir de numeros de NF e/ou
-    ids de CarviaNf. Devolve (lista_motos, peso_total, items_sem_modelo).
+    ids de CarviaNf. Devolve (lista_motos, peso_total, items_sem_modelo, nfs).
 
     Por NF, a fonte das motos e (nesta ordem, sem dupla contagem):
       1. `carvia_nf_veiculos` (1 chassi por linha, match textual do modelo) —
@@ -405,15 +412,16 @@ def _resolver_motos_de_nfs(numeros_nf=None, nf_ids=None, itens_diretos=None):
 
     `itens_diretos` = [(modelo_moto_id, quantidade)] de itens de pedido CarVia
     ainda sem NF (fallback pre-faturamento) — somados a contagem por modelo.
+
+    `nfs` (4o retorno) = breakdown por NF REAL para os chips removiveis do
+    prefill da rota: [{numero_nf, cliente, municipio, uf, motos:[{modelo_id,
+    quantidade, ...}]}]. `itens_diretos` NAO entram nos chips (nao tem NF).
     """
     from app.carvia.models.config_moto import CarviaModeloMoto
-    from app.carvia.models.documentos import CarviaNf, CarviaNfItem, CarviaNfVeiculo
+    from app.carvia.models.documentos import CarviaNf
 
     modelos_ativos = CarviaModeloMoto.query.filter_by(ativo=True).all()
     modelos_dict = {m.id: m for m in modelos_ativos}
-    contagem_modelos = defaultdict(int)  # {modelo_id: quantidade}
-    items_sem_modelo = 0
-    peso_total = 0.0
 
     ids = set(nf_ids or [])
     numeros = {str(n).strip() for n in (numeros_nf or []) if n and str(n).strip()}
@@ -423,62 +431,117 @@ def _resolver_motos_de_nfs(numeros_nf=None, nf_ids=None, itens_diretos=None):
         ).all()
         ids.update(nf.id for nf in carvia_nfs)
 
-    if ids:
-        ids_list = list(ids)
-        # FONTE PRIMARIA: chassis (carvia_nf_veiculos) — 1 linha por moto fisica,
-        # contagem exata. Preserva o comportamento das NFs que ja tem chassis.
-        veiculos_nf = CarviaNfVeiculo.query.filter(
-            CarviaNfVeiculo.nf_id.in_(ids_list)
-        ).all()
-        nfs_com_chassi = set()
-        for veiculo_nf in veiculos_nf:
-            nfs_com_chassi.add(veiculo_nf.nf_id)
-            modelo_match = _match_modelo_veiculo(veiculo_nf.modelo, modelos_ativos)
-            if modelo_match:
-                contagem_modelos[modelo_match.id] += 1
-                if modelo_match.peso_medio:
-                    peso_total += float(modelo_match.peso_medio)
-            else:
-                items_sem_modelo += 1
+    por_nf = _contar_modelos_por_nf(list(ids), modelos_ativos, modelos_dict)
 
-        # FONTE ALTERNATIVA: carvia_nf_itens (modelo_moto_id + quantidade) — mesma
-        # fonte do peso cubado (MotoRecognitionService). SO p/ NFs SEM chassi (a
-        # maioria, importadas por PDF_DANFE: tem o item com modelo, sem chassis).
-        # Itens sem modelo sao ignorados (consistente com calcular_peso_cubado_nf).
-        itens_nf = CarviaNfItem.query.filter(
-            CarviaNfItem.nf_id.in_(ids_list),
-            CarviaNfItem.modelo_moto_id.isnot(None),
-        ).all()
-        for it in itens_nf:
-            if it.nf_id in nfs_com_chassi:
-                continue  # ja contada (exata) pelos chassis
-            qtd = int(round(float(it.quantidade or 0)))
-            if qtd <= 0:
-                continue
-            m = modelos_dict.get(it.modelo_moto_id)
-            if m:
-                contagem_modelos[m.id] += qtd
-                if m.peso_medio:
-                    peso_total += float(m.peso_medio) * qtd
-            else:
-                items_sem_modelo += qtd  # modelo inativo
+    # Agregacao total por modelo (linhas de moto) + itens sem modelo reconhecido.
+    contagem_modelos = defaultdict(int)
+    items_sem_modelo = 0
+    for bucket in por_nf.values():
+        for modelo_id, qtd in bucket['modelos'].items():
+            contagem_modelos[modelo_id] += qtd
+        items_sem_modelo += bucket['sem_modelo']
 
     # Fallback: itens de pedido CarVia sem NF (modelo_moto_id + quantidade)
     for modelo_id, qtd in (itens_diretos or []):
         qtd = int(qtd or 0)
         if qtd <= 0:
             continue
-        m = modelos_dict.get(modelo_id)
-        if m:
-            contagem_modelos[m.id] += qtd
-            if m.peso_medio:
-                peso_total += float(m.peso_medio) * qtd
+        if modelo_id in modelos_dict:
+            contagem_modelos[modelo_id] += qtd
         else:
             items_sem_modelo += qtd
 
+    motos, peso_total = _serializar_motos(contagem_modelos, modelos_dict)
+
+    # Breakdown por NF (chips removiveis) — so NFs reais, com dados do destinatario.
+    nfs = []
+    if por_nf:
+        nfs_info = {
+            nf.id: nf
+            for nf in CarviaNf.query.filter(CarviaNf.id.in_(list(por_nf.keys()))).all()
+        }
+        for nf_id, bucket in por_nf.items():
+            motos_nf, _peso_nf = _serializar_motos(bucket['modelos'], modelos_dict)
+            if not motos_nf:
+                continue  # NF so com itens sem modelo reconhecido — chip nao ajuda
+            nf = nfs_info.get(nf_id)
+            nfs.append({
+                'numero_nf': nf.numero_nf if nf else str(nf_id),
+                'cliente': nf.nome_destinatario if nf else None,
+                'municipio': nf.cidade_destinatario if nf else None,
+                'uf': nf.uf_destinatario if nf else None,
+                'motos': [
+                    {'modelo_id': mm['modelo_id'], 'quantidade': mm['quantidade']}
+                    for mm in motos_nf
+                ],
+            })
+
+    return motos, peso_total, items_sem_modelo, nfs
+
+
+def _contar_modelos_por_nf(ids_list, modelos_ativos, modelos_dict):
+    """Conta motos por modelo SEPARADO por nf_id — fonte unica de contagem por NF.
+
+    Usada tanto pela agregacao total (`_resolver_motos_de_nfs`) quanto pelo
+    breakdown por NF (chips do prefill). Regra sem dupla contagem: chassi
+    (`carvia_nf_veiculos`) e fonte primaria; `carvia_nf_itens` so para NFs SEM
+    chassi (PDF_DANFE). Itens sem modelo (ou modelo inativo) viram `sem_modelo`.
+
+    Retorna {nf_id: {'modelos': {modelo_id: qtd}, 'sem_modelo': int}}.
+    """
+    from app.carvia.models.documentos import CarviaNfItem, CarviaNfVeiculo
+
+    por_nf = {}
+    if not ids_list:
+        return por_nf
+
+    def _bucket(nf_id):
+        return por_nf.setdefault(nf_id, {'modelos': defaultdict(int), 'sem_modelo': 0})
+
+    # FONTE PRIMARIA: chassis (carvia_nf_veiculos) — 1 linha por moto fisica.
+    veiculos_nf = CarviaNfVeiculo.query.filter(
+        CarviaNfVeiculo.nf_id.in_(ids_list)
+    ).all()
+    nfs_com_chassi = set()
+    for veiculo_nf in veiculos_nf:
+        nfs_com_chassi.add(veiculo_nf.nf_id)
+        bucket = _bucket(veiculo_nf.nf_id)
+        modelo_match = _match_modelo_veiculo(veiculo_nf.modelo, modelos_ativos)
+        if modelo_match:
+            bucket['modelos'][modelo_match.id] += 1
+        else:
+            bucket['sem_modelo'] += 1
+
+    # FONTE ALTERNATIVA: carvia_nf_itens — SO p/ NFs SEM chassi (a maioria,
+    # PDF_DANFE: tem o item com modelo, sem chassis). Mesma fonte do peso cubado.
+    itens_nf = CarviaNfItem.query.filter(
+        CarviaNfItem.nf_id.in_(ids_list),
+        CarviaNfItem.modelo_moto_id.isnot(None),
+    ).all()
+    for it in itens_nf:
+        if it.nf_id in nfs_com_chassi:
+            continue  # ja contada (exata) pelos chassis
+        qtd = int(round(float(it.quantidade or 0)))
+        if qtd <= 0:
+            continue
+        bucket = _bucket(it.nf_id)
+        m = modelos_dict.get(it.modelo_moto_id)
+        if m:
+            bucket['modelos'][m.id] += qtd
+        else:
+            bucket['sem_modelo'] += qtd  # modelo inativo
+
+    return por_nf
+
+
+def _serializar_motos(contagem_modelos, modelos_dict):
+    """Serializa {modelo_id: qtd} em (lista_motos, peso_total)."""
     motos = []
+    peso_total = 0.0
     for modelo_id, qtd in contagem_modelos.items():
-        m = modelos_dict[modelo_id]
+        m = modelos_dict.get(modelo_id)
+        if not m or qtd <= 0:
+            continue
         motos.append({
             'modelo_id': m.id,
             'modelo_nome': m.nome,
@@ -488,8 +551,9 @@ def _resolver_motos_de_nfs(numeros_nf=None, nf_ids=None, itens_diretos=None):
             'altura': float(m.altura),
             'peso_medio': float(m.peso_medio) if m.peso_medio else None,
         })
-
-    return motos, round(peso_total, 2), items_sem_modelo
+        if m.peso_medio:
+            peso_total += float(m.peso_medio) * qtd
+    return motos, round(peso_total, 2)
 
 
 def _veiculo_data_por_nome(nome_modalidade):

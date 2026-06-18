@@ -363,6 +363,26 @@
         }
       }
     }
+
+    // NFs da rota -> chips removiveis (reusa a infra de "NF nao entregue").
+    // Cada chip injeta suas motos; remover o chip decrementa exatamente elas.
+    var nfs = data.nfs || [];
+    if (nfs.length) {
+      var nfBox = document.getElementById('simulador-nf-box');
+      if (nfBox) nfBox.style.display = 'block'; // chips precisam estar visiveis
+      for (var n = 0; n < nfs.length; n++) {
+        var nf = nfs[n];
+        if (state.nfsAdicionadas[nf.numero_nf]) continue;
+        var motosNf = nf.motos || [];
+        state.nfsAdicionadas[nf.numero_nf] = motosNf; // guarda p/ remover depois
+        for (var k = 0; k < motosNf.length; k++) {
+          addOrIncrementMoto(motosNf[k].modelo_id, motosNf[k].quantidade);
+        }
+        addNfChip(nf, motosNf);
+      }
+    }
+
+    // Motos SEM NF (itens de pedido CarVia pre-faturamento) -> linhas livres.
     var motos = data.motos || [];
     for (var i = 0; i < motos.length; i++) {
       addOrIncrementMoto(motos[i].modelo_id, motos[i].quantidade);
@@ -481,9 +501,13 @@
     var chip = document.createElement('span');
     chip.className = 'badge bg-secondary d-inline-flex align-items-center gap-1';
     chip.dataset.nf = nf.numero_nf;
+    var localTxt = [nf.municipio, nf.uf].filter(Boolean).join('/');
+    chip.title = [nf.cliente, localTxt].filter(Boolean).join(' · ') || ('NF ' + nf.numero_nf);
 
     var label = document.createElement('span');
-    label.textContent = 'NF ' + nf.numero_nf + ' (' + total + (total === 1 ? ' moto)' : ' motos)');
+    var cli = nf.cliente ? (nf.cliente.length > 28 ? nf.cliente.slice(0, 28) + '…' : nf.cliente) : '';
+    label.textContent = 'NF ' + nf.numero_nf + (cli ? ' · ' + cli : '') +
+      ' (' + total + (total === 1 ? ' moto)' : ' motos)');
     chip.appendChild(label);
 
     var btn = document.createElement('button');
