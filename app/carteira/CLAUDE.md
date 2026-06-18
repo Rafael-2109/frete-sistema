@@ -4,7 +4,7 @@ camada: L1
 sot_de: —
 hub: CLAUDE.md
 superseded_by: —
-atualizado: 2026-06-16
+atualizado: 2026-06-18
 -->
 # Carteira — Guia de Desenvolvimento
 
@@ -25,6 +25,7 @@ atualizado: 2026-06-16
   - [R8: Template usa `data-pedido` (NAO `data-num-pedido`)](#r8-template-usa-data-pedido-nao-data-num-pedido)
   - [R9: POSTs AJAX precisam de X-CSRFToken](#r9-posts-ajax-precisam-de-x-csrftoken)
   - [R10: Analise de ruptura roda em pool concorrente priorizando visiveis](#r10-analise-de-ruptura-roda-em-pool-concorrente-priorizando-visiveis)
+  - [R11: Mapa de pedidos — rotas salvas compartilhadas + botoes da lista](#r11-mapa-de-pedidos-rotas-salvas-compartilhadas-botoes-da-lista)
 - [Modelos](#modelos)
 - [Padroes do Modulo](#padroes-do-modulo)
   - [Enriquecimento de pedidos (agrupamento_service.py)](#enriquecimento-de-pedidos-agrupamento_servicepy)
@@ -132,6 +133,23 @@ usuario esta olhando primeiro). Estado por pedido vive em `this.pedidos` (Map:
 `finally` e re-chama `processarFila()`. NUNCA reverter para fila 1-a-1 nem remover
 o observer. Preservar pausar/retomar (clique/modal) e re-enfileiramento de
 abortados (volta a `status='pendente'`).
+
+### R11: Mapa de pedidos — rotas salvas compartilhadas + botoes da lista
+Mapa em `routes/mapa_routes.py` + `services/mapa_service.py` (template `mapa_pedidos.html`).
+Lotes trafegam por `separacao_lote_id`: NACOM (lote real) e CarVia (`CARVIA-NF-{id}`,
+`CARVIA-PED-{id}`, `CARVIA-{cot_id}`). As acoes do mapa (salvar rota, simular 3D,
+densidade) usam `_lotesSelecionados()` — a **selecao viva** dos clientes marcados —
+NAO a variavel estatica injetada no load (que vem vazia no fluxo interativo).
+
+- **`RotaSalva` e COMPARTILHADA entre todos os usuarios**: `rota_listar`
+  (`GET /api/rotas`) NAO filtra por `criado_por`; carregar/excluir/cotar (`/api/rota/<id>`)
+  ja operam por id sem dono. Rota = recurso de equipe — NAO re-adicionar filtro por dono.
+  `criado_por` (`usuarios.id`, nullable) fica so como autoria/auditoria.
+- **Botao "Adicionar a rota" (`btnAddRota`) na lista de pedidos fica SEMPRE habilitado**:
+  `adicionarPedidosARota()` (`static/js/pedidos/lista-crud.js`) valida a selecao no
+  clique (alerta se 0). `updateCotarButton()` (`lista-checkboxes.js`) atualiza so o
+  contador no texto — NAO desabilita (evita o botao preso por JS cacheado). Os demais
+  botoes (Cotar/Cotacao Manual/FOB/Ver no Mapa) seguem o padrao habilita-ao-selecionar.
 
 ---
 
