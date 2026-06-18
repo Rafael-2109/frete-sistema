@@ -13,6 +13,9 @@ from .pedido_service import (
     importar_pdf_voe, confirmar_pedido,
     PedidoVoeJaExisteError, PedidoVoeParserError,
     CONFIANCA_LIMIAR,
+    # Edição manual (IMP-2026-06-18-003/-004)
+    adicionar_item_manual, editar_item_manual, remover_item_manual,
+    PedidoVoeEdicaoError,
 )
 from .compra_service import (
     listar_pedidos_consolidaveis, calcular_totalizadores_por_modelo,
@@ -115,6 +118,8 @@ __all__ = [
     'importar_pdf_voe', 'confirmar_pedido',
     'PedidoVoeJaExisteError', 'PedidoVoeParserError',
     'CONFIANCA_LIMIAR',
+    'adicionar_item_manual', 'editar_item_manual', 'remover_item_manual',
+    'PedidoVoeEdicaoError',
     'listar_pedidos_consolidaveis', 'calcular_totalizadores_por_modelo',
     'gerar_numero_po', 'criar_consolidado', 'get_compra', 'listar_compras',
     'CompraValidationError', 'gerar_pdf_po',

@@ -291,11 +291,13 @@ Exemplos de arquivos recibo em `.gitignore` (não commitados):
 - Escalada: Haiku 4.5 (`claude-haiku-4-5-20251001`) → Sonnet 4.6 (`claude-sonnet-4-6`).
 - Anthropic SDK 0.98.1, lazy init (não constrói cliente se não acionado).
 
-**Confiança** (calculada em `pedido_service`):
-```
-confianca = lojas_distintas_extraidas / total_paginas
-```
-Limiar: `CONFIANCA_LIMIAR = 0.70` (em `pedido_service.py`).
+**Confiança** — DOIS momentos (corrigido em 2026-06-18, ver seção
+"Fix parser zero-padding + edição manual" abaixo):
+- **Gate do LLM fallback** (pré-persistência, `_calcular_confianca`):
+  `lojas_distintas_extraidas / total_paginas`. Se `< CONFIANCA_LIMIAR = 0.70` →
+  aciona LLM. Mede só o que o extractor LEU.
+- **Confiança GRAVADA** (pós-persistência): `lojas_gravadas / lojas_no_documento`.
+  Reflete o que de fato entrou no banco — não esconde lojas perdidas no match.
 
 ---
 
@@ -739,6 +741,39 @@ Tours guiados in-app via Driver.js para usuarios novos.
 6. Preview em `/admin/onboarding/preview?tour=motos_assai.<nome>`
 
 **Mobile-first:** tours das telas de chao (recebimento wizard, montagem, disponibilizar, separacao) estao otimizados para celular do operador.
+
+---
+
+## Fix parser zero-padding + edição manual (2026-06-18)
+
+Origem: **IMP-2026-06-18-001/-003/-004** (sessões da usuária Rayssa). O parser
+VOE cortou 3 das 9 lojas do pedido `21589890/L` gravando `parsing_confianca=1.00`
+(silent data loss).
+
+**Causa-raiz** (NÃO era offset/header-skip como hipotetizado): mismatch de
+zero-padding. O PDF Consinco traz `LJ14` → regex extrai `"14"`; o cadastro
+`assai_loja.numero` é **inconsistente** (algumas lojas `"12"`, outras `"014"`).
+O match exato `filter_by(numero="14")` perdia em silêncio toda loja zero-padded.
+A "perda do início" foi coincidência: o PDF vem ordenado por número.
+
+**Correções** (`pedido_service.py`):
+1. `_resolver_loja` / `_variantes_numero_loja` — match TOLERANTE a zero-padding
+   (exato → variantes `lstrip`/`zfill(2|3)`; >1 candidato = ambíguo → None).
+2. Confiança GRAVADA recalculada pós-persistência (ver "Confiança" no Plano 2).
+3. `assai_pedido_venda.import_resumo` (JSONB, **Migration 32**) registra
+   `lojas_extraidas/gravadas`, `itens_extraidos/gravados` e lista de `pulados`
+   — exibido como alerta em `pedidos/detalhe.html` e flash no upload.
+
+**Edição manual** (IMP-003/-004 — fallback do parser, só em pedido `ABERTO`):
+- Service: `adicionar_item_manual` / `editar_item_manual` / `remover_item_manual`
+  (+ `PedidoVoeEdicaoError`). Remoção bloqueada se a loja tem separação ativa.
+  `import_resumo.editado_manual=True` marca auditoria.
+- Rotas: `POST /pedidos/<id>/itens/adicionar|<item_id>/editar|<item_id>/remover`
+  (form POST + redirect). Seção colapsável em `pedidos/detalhe.html`.
+- Testes: `tests/motos_assai/test_pedido_fix_e_edicao.py` (9 casos).
+
+> **Higiene pendente**: padronizar `assai_loja.numero` (014→14 etc.). Com o match
+> tolerante deixou de ser bloqueante, mas a inconsistência segue no cadastro.
 
 ---
 

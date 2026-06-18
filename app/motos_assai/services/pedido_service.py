@@ -20,7 +20,7 @@ import io
 import logging
 import tempfile
 from decimal import Decimal
-from typing import Optional, Dict, Any
+from typing import Optional, Dict
 from datetime import datetime
 
 import pdfplumber
@@ -137,7 +137,7 @@ def importar_pdf_voe(
         db.session.flush()
 
         # Cache de lojas e modelos para não fazer N queries
-        lojas_cache: Dict[str, AssaiLoja] = {}
+        lojas_cache: Dict[str, Optional[AssaiLoja]] = {}
         modelos_cache: Dict[str, Optional[AssaiModelo]] = {}
         # Cache de cabecalhos AssaiPedidoVendaLoja por loja_id (Plano 5 — Migration 10):
         # cada item DEVE apontar para um cabecalho via FK pedido_loja_id.
@@ -150,18 +150,19 @@ def importar_pdf_voe(
             numero_loja = item.get('numero_loja')
             codigo_qpa = item.get('codigo_qpa')
             if not numero_loja or not codigo_qpa:
-                items_pulados.append({'motivo': 'numero_loja ou codigo_qpa ausente', 'item': item})
+                items_pulados.append(_resumo_pulado(item, 'numero_loja ou codigo_qpa ausente'))
                 continue
 
-            # Resolver loja
+            # Resolver loja — match TOLERANTE a zero-padding (IMP-2026-06-18-001).
+            # O PDF Consinco traz "LJ14"/"LJ61" e o extractor extrai "14"/"61"; o
+            # cadastro assai_loja e inconsistente ("12" sem zero, "014" com zero).
+            # O match exato anterior perdia em SILENCIO toda loja com formatacao
+            # divergente. _resolver_loja tenta exato e variantes normalizadas.
             if numero_loja not in lojas_cache:
-                lojas_cache[numero_loja] = AssaiLoja.query.filter_by(numero=numero_loja).first()
+                lojas_cache[numero_loja] = _resolver_loja(numero_loja)
             loja = lojas_cache[numero_loja]
             if not loja:
-                items_pulados.append({
-                    'motivo': f'loja {numero_loja} não cadastrada',
-                    'item': item,
-                })
+                items_pulados.append(_resumo_pulado(item, f'loja {numero_loja} não cadastrada'))
                 continue
 
             # Resolver modelo
@@ -169,10 +170,9 @@ def importar_pdf_voe(
                 modelos_cache[codigo_qpa] = resolver_por_codigo_qpa(codigo_qpa)
             modelo = modelos_cache[codigo_qpa]
             if not modelo:
-                items_pulados.append({
-                    'motivo': f'modelo codigo_qpa={codigo_qpa} não cadastrado',
-                    'item': item,
-                })
+                items_pulados.append(
+                    _resumo_pulado(item, f'modelo codigo_qpa={codigo_qpa} não cadastrado')
+                )
                 continue
 
             # Verifica se já existe (evita duplicata em pages re-processed)
@@ -210,6 +210,24 @@ def importar_pdf_voe(
             raise PedidoVoeParserError(
                 f"Nenhum item válido. Pulados: {len(items_pulados)} (primeiros 3: {items_pulados[:3]})"
             )
+
+        # Confiança HONESTA (IMP-2026-06-18-001, camada 2): reflete o que foi
+        # efetivamente PERSISTIDO, não o que o extractor leu. A heurística antiga
+        # media lojas_extraidas/paginas ANTES da persistência e gravava 1.00 mesmo
+        # perdendo lojas no match de loja/modelo (silent data loss). Agora:
+        #   confiança = lojas_gravadas / lojas_no_documento  (∈ [0, 1])
+        lojas_no_doc = len({i.get('numero_loja') for i in items if i.get('numero_loja')})
+        lojas_gravadas = len(pedido_loja_cache)
+        if lojas_no_doc:
+            confianca = round(lojas_gravadas / lojas_no_doc, 2)
+        pedido.parsing_confianca = Decimal(str(confianca))
+        pedido.import_resumo = {
+            'lojas_extraidas': lojas_no_doc,
+            'lojas_gravadas': lojas_gravadas,
+            'itens_extraidos': len(items),
+            'itens_gravados': items_persistidos,
+            'pulados': items_pulados,
+        }
 
         db.session.commit()
 
@@ -272,3 +290,212 @@ def _parse_data(data_str: Optional[str]):
         return datetime.strptime(data_str.strip(), '%d/%m/%Y').date()
     except (ValueError, AttributeError):
         return None
+
+
+def _variantes_numero_loja(numero_loja: str) -> set:
+    """Conjunto de formas equivalentes de um número de loja (zero-padding).
+
+    "14"  -> {"14", "014"}      "061" -> {"061", "61"}      "174" -> {"174"}
+    Tolera o cadastro inconsistente de assai_loja (algumas "12", outras "014").
+    """
+    n = str(numero_loja).strip()
+    sem_zero = n.lstrip('0') or '0'
+    return {n, sem_zero, sem_zero.zfill(2), sem_zero.zfill(3)}
+
+
+def _resolver_loja(numero_loja: str) -> Optional[AssaiLoja]:
+    """Resolve AssaiLoja por número, tolerante a zero-padding divergente.
+
+    Causa-raiz de IMP-2026-06-18-001: o PDF traz "LJ14" (extrai "14") mas o
+    cadastro grava "014"; o match exato perdia a loja em silêncio. Estratégia:
+    1. Match exato (caminho feliz, sem ambiguidade).
+    2. Fallback por variantes normalizadas. Só resolve se houver UM candidato
+       (>1 = ambiguidade real no cadastro → não adivinha, devolve None).
+    """
+    n = str(numero_loja).strip()
+    loja = AssaiLoja.query.filter_by(numero=n).first()
+    if loja:
+        return loja
+
+    variantes = _variantes_numero_loja(n)
+    variantes.discard(n)
+    if not variantes:
+        return None
+    candidatos = AssaiLoja.query.filter(AssaiLoja.numero.in_(variantes)).all()
+    if len(candidatos) == 1:
+        logger.warning(
+            "Loja '%s' resolvida por normalização de zero-padding -> '%s' "
+            "(cadastro assai_loja inconsistente — padronizar).",
+            n, candidatos[0].numero,
+        )
+        return candidatos[0]
+    if len(candidatos) > 1:
+        logger.error(
+            "Loja '%s' ambígua na normalização: %d candidatos %s. Não resolvida.",
+            n, len(candidatos), [c.numero for c in candidatos],
+        )
+    return None
+
+
+def _resumo_pulado(item: dict, motivo: str) -> dict:
+    """Versão compacta e JSON-serializável de um item pulado (p/ import_resumo)."""
+    return {
+        'numero_loja': item.get('numero_loja'),
+        'codigo_qpa': item.get('codigo_qpa'),
+        'descricao': item.get('descricao'),
+        'qtd': item.get('qtd'),
+        'motivo': motivo,
+    }
+
+
+# =====================================================================
+# Edição manual de pedido (IMP-2026-06-18-003 / -004)
+# Fallback quando o parser perde lojas/itens ou o PDF não está disponível.
+# Só permitido em pedido ABERTO. Status muda apenas com NF Q.P.A. (não aqui).
+# =====================================================================
+
+class PedidoVoeEdicaoError(Exception):
+    """Edição manual inválida (status != ABERTO, separação ativa, dados inválidos)."""
+
+
+def _assert_pedido_editavel(pedido: AssaiPedidoVenda) -> None:
+    if pedido.status != PEDIDO_STATUS_ABERTO:
+        raise PedidoVoeEdicaoError(
+            f"Pedido {pedido.numero} está {pedido.status}; edição manual só é "
+            "permitida em ABERTO."
+        )
+
+
+def _assert_sem_separacao_ativa(pedido_id: int, loja_id: int) -> None:
+    """Bloqueia remoção quando há separação não-cancelada para (pedido, loja)."""
+    from app.motos_assai.models import AssaiSeparacao, SEPARACAO_STATUS_CANCELADA
+    sep = AssaiSeparacao.query.filter(
+        AssaiSeparacao.pedido_id == pedido_id,
+        AssaiSeparacao.loja_id == loja_id,
+        AssaiSeparacao.status != SEPARACAO_STATUS_CANCELADA,
+    ).first()
+    if sep:
+        raise PedidoVoeEdicaoError(
+            f"Loja {loja_id} tem separação ativa (id={sep.id}); cancele a "
+            "separação antes de remover itens dessa loja."
+        )
+
+
+def _marcar_editado_manual(pedido: AssaiPedidoVenda, operador_id: Optional[int]) -> None:
+    """Registra no import_resumo que o pedido sofreu edição manual (auditoria).
+
+    Reatribui o dict para o SQLAlchemy detectar a mudança (coluna JSON sem
+    MutableDict não rastreia mutação in-place).
+    """
+    resumo = dict(pedido.import_resumo or {})
+    resumo['editado_manual'] = True
+    resumo['ultimo_editor_id'] = operador_id
+    pedido.import_resumo = resumo
+
+
+def _validar_qtd_valor(qtd, valor_unitario):
+    qtd = int(qtd)
+    if qtd <= 0:
+        raise PedidoVoeEdicaoError("qtd deve ser > 0.")
+    valor_unitario = Decimal(str(valor_unitario))
+    if valor_unitario <= 0:
+        raise PedidoVoeEdicaoError("valor_unitário deve ser > 0.")
+    return qtd, valor_unitario
+
+
+def adicionar_item_manual(
+    pedido_id: int, loja_id: int, modelo_id: int,
+    qtd, valor_unitario, operador_id: Optional[int] = None,
+) -> AssaiPedidoVendaItem:
+    """Adiciona (ou soma a) um item (loja × modelo) num pedido ABERTO.
+
+    Cria o cabeçalho AssaiPedidoVendaLoja on-demand. Se o item já existe para
+    (loja, modelo), SOMA a qtd e o valor_total (mesma semântica do importador).
+    """
+    pedido = AssaiPedidoVenda.query.get_or_404(pedido_id)
+    _assert_pedido_editavel(pedido)
+    qtd, valor_unitario = _validar_qtd_valor(qtd, valor_unitario)
+
+    loja = AssaiLoja.query.get(loja_id)
+    if not loja:
+        raise PedidoVoeEdicaoError(f"Loja id={loja_id} não encontrada.")
+    modelo = AssaiModelo.query.get(modelo_id)
+    if not modelo:
+        raise PedidoVoeEdicaoError(f"Modelo id={modelo_id} não encontrado.")
+
+    pvl = AssaiPedidoVendaLoja.query.filter_by(
+        pedido_id=pedido_id, loja_id=loja_id,
+    ).first()
+    if not pvl:
+        pvl = AssaiPedidoVendaLoja(pedido_id=pedido_id, loja_id=loja_id)
+        db.session.add(pvl)
+        db.session.flush()
+
+    item = AssaiPedidoVendaItem.query.filter_by(
+        pedido_id=pedido_id, loja_id=loja_id, modelo_id=modelo_id,
+    ).first()
+    if item:
+        item.qtd_pedida += qtd
+        item.valor_total = (item.valor_total or Decimal('0')) + (valor_unitario * qtd)
+    else:
+        item = AssaiPedidoVendaItem(
+            pedido_id=pedido_id, pedido_loja_id=pvl.id,
+            loja_id=loja_id, modelo_id=modelo_id,
+            qtd_pedida=qtd, valor_unitario=valor_unitario,
+            valor_total=valor_unitario * qtd,
+        )
+        db.session.add(item)
+
+    _marcar_editado_manual(pedido, operador_id)
+    db.session.commit()
+    logger.info(
+        "Item manual %s pedido=%s loja=%s modelo=%s qtd=%s por user=%s",
+        'somado' if item else 'criado', pedido_id, loja_id, modelo_id, qtd, operador_id,
+    )
+    return item
+
+
+def editar_item_manual(
+    item_id: int, qtd, valor_unitario, operador_id: Optional[int] = None,
+) -> AssaiPedidoVendaItem:
+    """Edita qtd e valor_unitário de um item de pedido ABERTO (substitui, não soma)."""
+    item = AssaiPedidoVendaItem.query.get_or_404(item_id)
+    pedido = AssaiPedidoVenda.query.get(item.pedido_id)
+    _assert_pedido_editavel(pedido)
+    qtd, valor_unitario = _validar_qtd_valor(qtd, valor_unitario)
+
+    item.qtd_pedida = qtd
+    item.valor_unitario = valor_unitario
+    item.valor_total = valor_unitario * qtd
+    _marcar_editado_manual(pedido, operador_id)
+    db.session.commit()
+    return item
+
+
+def remover_item_manual(item_id: int, operador_id: Optional[int] = None) -> None:
+    """Remove um item de pedido ABERTO. Remove o cabeçalho da loja se ficar órfão.
+
+    Bloqueia se a loja tiver separação ativa (evita inconsistência com chassis
+    já separados).
+    """
+    item = AssaiPedidoVendaItem.query.get_or_404(item_id)
+    pedido = AssaiPedidoVenda.query.get(item.pedido_id)
+    _assert_pedido_editavel(pedido)
+    _assert_sem_separacao_ativa(item.pedido_id, item.loja_id)
+
+    pedido_id, loja_id = item.pedido_id, item.loja_id
+    db.session.delete(item)
+    db.session.flush()
+
+    restantes = AssaiPedidoVendaItem.query.filter_by(
+        pedido_id=pedido_id, loja_id=loja_id,
+    ).count()
+    if restantes == 0:
+        pvl = AssaiPedidoVendaLoja.query.filter_by(
+            pedido_id=pedido_id, loja_id=loja_id,
+        ).first()
+        if pvl:
+            db.session.delete(pvl)
+
+    _marcar_editado_manual(pedido, operador_id)
+    db.session.commit()

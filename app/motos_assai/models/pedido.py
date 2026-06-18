@@ -28,6 +28,10 @@ class AssaiPedidoVenda(db.Model):
     pdf_s3_key = db.Column(db.String(500))
     parser_usado = db.Column(db.String(30))
     parsing_confianca = db.Column(db.Numeric(3, 2))
+    # Resumo do import (IMP-2026-06-18-001): lojas/itens extraídos vs gravados +
+    # lista de pulados (loja/modelo não cadastrado). Torna o silent data loss
+    # visível na tela. Também marca edicao_manual=True quando o operador edita.
+    import_resumo = db.Column(db.JSON)
     status = db.Column(db.String(30), default=PEDIDO_STATUS_ABERTO, nullable=False)
     criado_por_id = db.Column(db.Integer, db.ForeignKey('usuarios.id', ondelete='SET NULL'))
     criado_em = db.Column(db.DateTime, default=agora_brasil_naive, nullable=False)

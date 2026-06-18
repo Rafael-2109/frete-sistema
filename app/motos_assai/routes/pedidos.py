@@ -17,6 +17,8 @@ from app.motos_assai.services import (
     importar_pdf_voe, PedidoVoeJaExisteError, PedidoVoeParserError,
     atualizar_agendamento_loja, criar_separacao_com_saldos,
     SeparacaoValidationError,
+    adicionar_item_manual, editar_item_manual, remover_item_manual,
+    PedidoVoeEdicaoError,
 )
 from app.motos_assai.services.separacao_service import (
     saldo_pendente_por_pedido,
@@ -40,11 +42,22 @@ def pedidos_upload():
                 nome_arquivo=pdf_file.filename or 'pedido.pdf',
                 importado_por_id=current_user.id,
             )
+            # Visibilidade do silent data loss (IMP-2026-06-18-001): se o parser
+            # pulou lojas/itens, AVISAR no momento do upload — não só na tela.
+            resumo = pedido.import_resumo or {}
+            pulados = resumo.get('pulados') or []
             flash(
                 f'Pedido {pedido.numero} importado via {pedido.parser_usado} '
-                f'(confiança {float(pedido.parsing_confianca):.0%}).',
-                'success',
+                f'(confiança {float(pedido.parsing_confianca):.0%} · '
+                f'{resumo.get("lojas_gravadas", "?")}/{resumo.get("lojas_extraidas", "?")} lojas).',
+                'success' if not pulados else 'warning',
             )
+            if pulados:
+                flash(
+                    f'⚠️ {len(pulados)} item(ns) do PDF NÃO entraram (loja/modelo não '
+                    'cadastrado). Confira o resumo no detalhe e use a edição manual.',
+                    'warning',
+                )
             return redirect(url_for('motos_assai.pedidos_detalhe', pedido_id=pedido.id))
         except PedidoVoeJaExisteError as e:
             flash(str(e), 'warning')
@@ -139,12 +152,26 @@ def pedidos_detalhe(pedido_id):
     # por loja, para exibir no header de cada accordion.
     metricas_loja = metricas_por_pedido_loja(pedido_id)
 
+    # Catalogos para edicao manual (IMP-2026-06-18-003/-004). So utilizados pela
+    # UI quando o pedido esta ABERTO (fallback do parser / PDF indisponivel).
+    editavel = pedido.status == PEDIDO_STATUS_ABERTO
+    modelos_catalogo = (
+        AssaiModelo.query.filter_by(ativo=True).order_by(AssaiModelo.codigo).all()
+        if editavel else []
+    )
+    lojas_catalogo = (
+        AssaiLoja.query.order_by(AssaiLoja.numero).all() if editavel else []
+    )
+
     return render_template(
         'motos_assai/pedidos/detalhe.html',
         pedido=pedido,
         totais_por_modelo=totais_por_modelo,
         por_loja=list(por_loja.values()),
         metricas_loja=metricas_loja,
+        editavel=editavel,
+        modelos_catalogo=modelos_catalogo,
+        lojas_catalogo=lojas_catalogo,
     )
 
 
@@ -272,6 +299,68 @@ def pedidos_separacao_criar(pedido_id, loja_id):
             pedido_id=pedido_id, loja_id=loja_id,
         ),
     })
+
+
+# =====================================================================
+# Edição manual de itens do pedido (IMP-2026-06-18-003 / -004)
+# Fallback quando o parser perde lojas/itens. Só em pedido ABERTO.
+# Form POST + redirect para a tela de detalhe (sem dependência de JS).
+# =====================================================================
+
+@motos_assai_bp.route('/pedidos/<int:pedido_id>/itens/adicionar', methods=['POST'])
+@login_required
+@require_motos_assai
+def pedidos_item_adicionar(pedido_id):
+    try:
+        item = adicionar_item_manual(
+            pedido_id=pedido_id,
+            loja_id=int(request.form['loja_id']),
+            modelo_id=int(request.form['modelo_id']),
+            qtd=request.form['qtd'],
+            valor_unitario=request.form['valor_unitario'],
+            operador_id=current_user.id,
+        )
+        flash(
+            f'Item adicionado: loja {item.loja.numero} × {item.modelo.codigo} '
+            f'({item.qtd_pedida} un).',
+            'success',
+        )
+    except (KeyError, ValueError):
+        flash('Dados inválidos no formulário de adição de item.', 'danger')
+    except PedidoVoeEdicaoError as e:
+        flash(str(e), 'warning')
+    return redirect(url_for('motos_assai.pedidos_detalhe', pedido_id=pedido_id))
+
+
+@motos_assai_bp.route('/pedidos/<int:pedido_id>/itens/<int:item_id>/editar', methods=['POST'])
+@login_required
+@require_motos_assai
+def pedidos_item_editar(pedido_id, item_id):
+    try:
+        editar_item_manual(
+            item_id=item_id,
+            qtd=request.form['qtd'],
+            valor_unitario=request.form['valor_unitario'],
+            operador_id=current_user.id,
+        )
+        flash('Item atualizado.', 'success')
+    except (KeyError, ValueError):
+        flash('Dados inválidos no formulário de edição de item.', 'danger')
+    except PedidoVoeEdicaoError as e:
+        flash(str(e), 'warning')
+    return redirect(url_for('motos_assai.pedidos_detalhe', pedido_id=pedido_id))
+
+
+@motos_assai_bp.route('/pedidos/<int:pedido_id>/itens/<int:item_id>/remover', methods=['POST'])
+@login_required
+@require_motos_assai
+def pedidos_item_remover(pedido_id, item_id):
+    try:
+        remover_item_manual(item_id=item_id, operador_id=current_user.id)
+        flash('Item removido.', 'success')
+    except PedidoVoeEdicaoError as e:
+        flash(str(e), 'warning')
+    return redirect(url_for('motos_assai.pedidos_detalhe', pedido_id=pedido_id))
 
 
 @motos_assai_bp.route('/pedidos')
