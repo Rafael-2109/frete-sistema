@@ -71,8 +71,15 @@
     </div>
     <div class="col-md-1">
       <label class="form-label">UF</label>
-      <input type="text" name="uf" class="form-control" placeholder="UF" 
+      <input type="text" name="uf" class="form-control" placeholder="UF"
              value="{{ request.args.get('uf', '') }}">
+    </div>
+    <div class="col-md-2">
+      <label class="form-label">Cidade</label>
+      <input type="text" name="municipio" class="form-control" placeholder="Cidade"
+             value="{{ request.args.get('municipio', '') }}"
+             id="filtro-cidade" list="lista-cidades" autocomplete="off">
+      <datalist id="lista-cidades"></datalist>
     </div>
     <div class="col-md-2">
       <label class="form-label">Protocolo</label>
@@ -338,7 +345,7 @@
 
 <div id="sticky-pagination" class="sticky-pagination-simple">
   <div class="container-fluid">
-    <div class="row align-items-center py-1">
+    <div class="row align-items-center">
       <div class="col-md-8">
         <nav>
           <ul class="pagination pagination-sm mb-0">
@@ -1158,6 +1165,53 @@ document.addEventListener('DOMContentLoaded', function() {
     );
 
     observer.observe(stickyPagination);
+
+    // Alinha o cabecalho fixo da tabela logo abaixo da barra, medindo a
+    // altura REAL da barra (--pag-bar-h). Evita gap ou cabecalho atras da barra
+    // qualquer que seja a altura final da barra.
+    const ajustarOffsetThead = () => {
+      const h = Math.round(stickyPagination.getBoundingClientRect().height);
+      if (h > 0) document.documentElement.style.setProperty('--pag-bar-h', h + 'px');
+    };
+    ajustarOffsetThead();
+    window.addEventListener('resize', ajustarOffsetThead);
+  }
+
+  // ===========================
+  // AUTOCOMPLETE DE CIDADE (filtra opcionalmente pela UF preenchida)
+  // ===========================
+  const inputCidade = document.getElementById('filtro-cidade');
+  const datalistCidades = document.getElementById('lista-cidades');
+  const inputUf = document.querySelector('input[name="uf"]');
+  if (inputCidade && datalistCidades) {
+    let cidadeTimer = null;
+    const buscarCidades = () => {
+      const term = inputCidade.value.trim();
+      if (term.length < 2) { datalistCidades.innerHTML = ''; return; }
+      const params = new URLSearchParams({ term: term });
+      const uf = inputUf ? inputUf.value.trim() : '';
+      if (uf) params.set('uf', uf);
+      fetch(`{{ url_for('monitoramento.buscar_cidades') }}?${params.toString()}`)
+        .then(r => r.ok ? r.json() : [])
+        .then(cidades => {
+          datalistCidades.innerHTML = '';
+          cidades.forEach(c => {
+            const opt = document.createElement('option');
+            opt.value = c.municipio;
+            opt.label = c.uf ? `${c.municipio} - ${c.uf}` : c.municipio;
+            datalistCidades.appendChild(opt);
+          });
+        })
+        .catch(() => { /* silencioso: autocomplete e acessorio */ });
+    };
+    inputCidade.addEventListener('input', () => {
+      clearTimeout(cidadeTimer);
+      cidadeTimer = setTimeout(buscarCidades, 300);
+    });
+    // Ao trocar a UF, limpa as sugestoes para refazer com o novo escopo
+    if (inputUf) {
+      inputUf.addEventListener('change', () => { datalistCidades.innerHTML = ''; });
+    }
   }
   });
 

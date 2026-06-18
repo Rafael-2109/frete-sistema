@@ -1126,6 +1126,9 @@ def listar_entregas():
     if uf := request.args.get('uf'):
         query = query.filter(EntregaMonitorada.uf.ilike(f"%{uf}%"))
 
+    if municipio := request.args.get('municipio'):
+        query = query.filter(EntregaMonitorada.municipio.ilike(f"%{municipio}%"))
+
     if protocolo := request.args.get('protocolo'):
         query = query.filter(
             EntregaMonitorada.agendamentos.any(
@@ -1355,6 +1358,45 @@ def listar_entregas():
         vendedores_unicos=vendedores_unicos,
         num_nf_transf_por_nf=num_nf_transf_por_nf,
     )
+
+
+@monitoramento_bp.route('/api/cidades/buscar')
+@login_required
+def buscar_cidades():
+    """Autocomplete de cidades (municipio) para o filtro de listar_entregas.
+
+    Fonte: DISTINCT municipio/uf da propria EntregaMonitorada — garante que
+    toda sugestao retorna resultado e a grafia casa exatamente com o filtro
+    `municipio.ilike` da listagem. Filtra opcionalmente por UF quando informado.
+    """
+    term = (request.args.get('term') or '').strip()
+    uf = (request.args.get('uf') or '').strip()
+
+    q = db.session.query(
+        EntregaMonitorada.municipio,
+        EntregaMonitorada.uf,
+    ).filter(EntregaMonitorada.municipio.isnot(None))
+
+    # Respeita o escopo de vendedor (mesma regra da listagem)
+    vendedor_filtro = get_vendedor_filter_query()
+    if vendedor_filtro == "ACESSO_NEGADO":
+        return jsonify([])
+    elif vendedor_filtro is not None:
+        q = q.filter(EntregaMonitorada.vendedor.ilike(f'%{vendedor_filtro}%'))
+
+    if uf:
+        q = q.filter(EntregaMonitorada.uf.ilike(uf))
+    if term:
+        q = q.filter(EntregaMonitorada.municipio.ilike(f"%{term}%"))
+
+    rows = (
+        q.distinct()
+        .order_by(EntregaMonitorada.municipio)
+        .limit(20)
+        .all()
+    )
+    return jsonify([{'municipio': m, 'uf': u} for m, u in rows])
+
 
 @monitoramento_bp.route('/sincronizar-todas-entregas', methods=['POST'])
 @login_required  

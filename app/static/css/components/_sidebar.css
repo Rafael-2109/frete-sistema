@@ -11,7 +11,7 @@
 .nc-shell {
     --_sidebar-w-expanded: 248px;
     --_sidebar-w-collapsed: 64px;
-    --_topbar-h: 56px;
+    --_topbar-h: 40px; /* slim: abraça os controles (botoes ~32px / Compartilhar ~30px) — era 56px */
 
     display: grid;
     grid-template-columns: var(--_sidebar-w-expanded) 1fr;
@@ -89,7 +89,7 @@ html.nc-sidebar-init-drawer .nc-shell {
     align-items: center;
     justify-content: space-between;
     gap: 0.5rem;
-    padding: 0.75rem 1rem;
+    padding: 0.25rem 1rem; /* slim: acompanha o topbar de 40px sem cortar o logo */
     border-bottom: 1px solid var(--border);
     height: var(--_topbar-h);
     flex-shrink: 0;
@@ -118,7 +118,7 @@ html.nc-sidebar-init-drawer .nc-shell {
 
 .nc-sidebar__logo img {
     flex-shrink: 0;
-    max-height: 32px;
+    max-height: 28px;
     width: auto;
     display: block;
 }

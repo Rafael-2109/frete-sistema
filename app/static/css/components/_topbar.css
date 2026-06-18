@@ -39,8 +39,8 @@
    HAMBURGER (toggle mobile / collapse desktop)
    ========================================================================== */
 .nc-topbar__hamburger {
-    width: 36px;
-    height: 36px;
+    width: 32px;
+    height: 32px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -130,8 +130,8 @@
 }
 
 .nc-topbar__action {
-    width: 36px;
-    height: 36px;
+    width: 32px;
+    height: 32px;
     display: flex;
     align-items: center;
     justify-content: center;

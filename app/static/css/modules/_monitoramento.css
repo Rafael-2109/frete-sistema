@@ -496,11 +496,11 @@
 
   @media (max-width: 768px) {
     .sticky-pagination-simple {
-      top: 50px; /* Slightly smaller navbar on mobile */
+      top: 0; /* shell novo: cola no topo do .nc-content */
     }
 
     .monitoramento-page .table thead th {
-      top: 86px; /* 50px navbar + ~36px pagination on mobile */
+      top: var(--pag-bar-h, 30px); /* altura REAL medida via JS; fallback mobile 30px */
     }
 
     .sticky-pagination-simple .pagination {
@@ -616,14 +616,20 @@
 
   .sticky-pagination-simple {
     position: sticky;
-    top: 56px; /* Below the main .nc-navbar (56px height) */
-    z-index: 50; /* Below navbar dropdowns (1030) but above table headers (40) */
+    top: 0; /* Shell novo: o scroll e o .nc-content (topbar fica fora dele), entao a barra cola no topo da area de conteudo */
+    z-index: 200; /* Acima do obs inline (z-index 100) e thead (40); abaixo de dropdowns navbar (1030) e modais (1050) */
     background: var(--bg-dark);
     border-bottom: 2px solid var(--border);
     box-shadow: var(--shadow);
     margin: 0;
     padding: 0;
   }
+
+  /* Compactacao da barra (padding/fonte dos botoes e do texto de info) vive
+     FORA do @layer, no final do arquivo: precisa vencer os defaults de
+     .pagination-sm do Bootstrap (unlayered) por especificidade, sem usar o
+     flag important (policy P8). O respiro vertical foi removido tirando a
+     utility `py-1` do HTML da row. */
 
   .sticky-pagination-simple.stuck {
     border-color: var(--amber-55);
@@ -643,7 +649,7 @@
   .monitoramento-page .table thead th {
     position: -webkit-sticky;
     position: sticky;
-    top: 96px; /* 56px navbar + ~40px sticky pagination bar */
+    top: var(--pag-bar-h, 33px); /* altura REAL da barra medida via JS (--pag-bar-h); fallback 33px */
     z-index: 40;
     background: var(--bg);
   }
@@ -871,3 +877,26 @@
   }
 
 } /* End @layer modules */
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   MONITORAMENTO — Barra de paginacao COMPACTA (UNLAYERED)
+   Fora de @layer e com especificidade > Bootstrap para vencer os defaults de
+   .pagination-sm sem usar o flag important (policy P8). O respiro vertical foi
+   removido tirando a utility `py-1` do HTML da row; a altura abraça a do botao.
+   ═══════════════════════════════════════════════════════════════════════════ */
+.sticky-pagination-simple .container-fluid {
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+.sticky-pagination-simple .pagination .page-link {
+  padding-top: 0.1rem;
+  padding-bottom: 0.1rem;
+  font-size: 0.78rem;
+  line-height: 1.2;
+}
+
+.sticky-pagination-simple .text-end small {
+  font-size: 0.72rem;
+  line-height: 1.2;
+}
