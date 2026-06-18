@@ -46,6 +46,7 @@
       minSupport: clamp(num(o.minSupport, DEFAULTS.minSupport), 0.10, 1.0),
       maxOverhang: clamp(num(o.maxOverhang, DEFAULTS.maxOverhang), 0, 100),
       maxGap: clamp(num(o.maxGap, DEFAULTS.maxGap), 0, 200),
+      palletSobrePallet: !!o.palletSobrePallet,
     };
   }
 
@@ -133,16 +134,46 @@
     return function () { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; };
   }
 
-  /** Placement guloso Bottom-Left de uma sequencia JA ordenada de itens. */
-  function packItems(bay, items, opt) {
-    var freeSpaces = [{ x: 0, y: 0, z: 0, w: bay.w, d: bay.d, h: bay.h }];
-    var placed = [];
+  /** Stats finais a partir dos itens posicionados (DRY entre as fases). */
+  function buildResult(bay, placed, rejected, total) {
+    var bayVol = bay.w * bay.d * bay.h;
+    var usedVol = 0, totalPeso = 0;
+    for (var j = 0; j < placed.length; j++) {
+      usedVol += placed[j].w * placed[j].d * placed[j].h;
+      totalPeso += placed[j].moto.peso_medio || 0;
+    }
+    return {
+      placed: placed,
+      rejected: rejected,
+      bay: bay,
+      stats: {
+        total: total,
+        posicionadas: placed.length,
+        rejeitadas: rejected.length,
+        volumeOcupado: usedVol,
+        volumeTotal: bayVol,
+        percentualOcupacao: bayVol > 0 ? Math.round((usedVol / bayVol) * 100) : 0,
+        pesoTotal: Math.round(totalPeso * 100) / 100,
+      },
+    };
+  }
+
+  /**
+   * Empacota uma sequencia (na ordem dada) a partir de um estado inicial
+   * (freeSpaces + placed de fases anteriores). Retorna so os itens NOVOS, os
+   * rejeitados e o freeSpaces final. `placed0` participa de colisao/apoio mas
+   * nao e re-retornado (evita duplicar entre fases).
+   */
+  function packSequence(bay, items, opt, freeSpaces, placed0, onlyFloorPallet) {
+    var fs = freeSpaces.slice();
+    var placed = placed0.slice();
+    var placedNew = [];
     var rejected = [];
+    var phase = { onlyFloor: onlyFloorPallet };
 
     for (var i = 0; i < items.length; i++) {
       var item = items[i];
-      var best = findBestFit(item, getOrientations(item), freeSpaces, bay, placed, opt);
-
+      var best = findBestFit(item, getOrientations(item), fs, bay, placed, opt, phase);
       if (best) {
         var p = {
           moto: item,
@@ -152,35 +183,35 @@
           slabs: best.slabs,
         };
         placed.push(p);
+        placedNew.push(p);
         for (var sb = 0; sb < p.slabs.length; sb++) {
-          freeSpaces = subtractBox(freeSpaces, p.slabs[sb]);
+          fs = subtractBox(fs, p.slabs[sb]);
         }
       } else {
         rejected.push(item);
       }
     }
+    return { placedNew: placedNew, rejected: rejected, freeSpaces: fs };
+  }
 
-    var bayVol = bay.w * bay.d * bay.h;
-    var usedVol = 0, totalPeso = 0;
-    for (var j = 0; j < placed.length; j++) {
-      usedVol += placed[j].w * placed[j].d * placed[j].h;
-      totalPeso += placed[j].moto.peso_medio || 0;
+  /**
+   * Empacotamento em 2 fases: pallets (conservas Nacom) PRIMEIRO, no piso (salvo
+   * opt.palletSobrePallet), depois motos no espaco remanescente. Garante "Nacom
+   * embaixo" — como os pallets ja estao em `placed` quando as motos entram,
+   * nenhuma moto fica sob um pallet. Lista so-motos => fase 1 vazia (regressao).
+   */
+  function packItems(bay, items, opt) {
+    var pallets = [], motos = [];
+    for (var k = 0; k < items.length; k++) {
+      (items[k].tipo === 'pallet' ? pallets : motos).push(items[k]);
     }
-
-    return {
-      placed: placed,
-      rejected: rejected,
-      bay: bay,
-      stats: {
-        total: items.length,
-        posicionadas: placed.length,
-        rejeitadas: rejected.length,
-        volumeOcupado: usedVol,
-        volumeTotal: bayVol,
-        percentualOcupacao: bayVol > 0 ? Math.round((usedVol / bayVol) * 100) : 0,
-        pesoTotal: Math.round(totalPeso * 100) / 100,
-      },
-    };
+    var FS0 = [{ x: 0, y: 0, z: 0, w: bay.w, d: bay.d, h: bay.h }];
+    var r1 = packSequence(bay, pallets, opt, FS0, [], !opt.palletSobrePallet);
+    var r2 = packSequence(bay, motos, opt, r1.freeSpaces, r1.placedNew, false);
+    return buildResult(bay,
+      r1.placedNew.concat(r2.placedNew),
+      r1.rejected.concat(r2.rejected),
+      items.length);
   }
 
   // Expande as quantidades em itens individuais (1 moto = 1 item), sem ordenar.
@@ -295,7 +326,7 @@
    *
    * Chao (Y=0): apoio total. Empilhada (Y>0): exige supportPct >= opt.minSupport.
    */
-  function findBestFit(item, orientations, freeSpaces, bay, placed, opt) {
+  function findBestFit(item, orientations, freeSpaces, bay, placed, opt, phase) {
     var best = null;
     var bestY = Infinity, bestZ = Infinity, bestX = Infinity, bestShort = Infinity;
 
@@ -308,6 +339,8 @@
         // Pallet: o fit no freeSpace usa so a altura do estrado (a coluna excede
         // lateralmente e e validada por colisao); a altura TOTAL e checada no teto.
         var ehPallet = item.tipo === 'pallet';
+        // Pallet sobre pallet so quando habilitado; senao fica no piso (Y=0).
+        if (ehPallet && phase && phase.onlyFloor && sp.y > 0.1) continue;
         var fitH = ehPallet ? item.altura_estrado : ori.oh;
         var altReal = ehPallet ? item.altura_total : ori.oh;
 

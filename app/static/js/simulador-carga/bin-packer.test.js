@@ -200,5 +200,41 @@ test('pallet tem orientacao unica (estrado no chao) e 2 slabs', () => {
   assert(p.slabs[1].y === 15, 'coluna comeca em Y=15');
 });
 
+test('Nacom embaixo: nenhuma moto fica sob um pallet', () => {
+  const bay = { w: 300, d: 130, h: 250 };
+  const items = [
+    pallet(90, 110, 120, 'P1'),
+    { id: 2, nome: 'M', tipo: 'moto', comprimento: 80, largura: 40, altura: 50, peso_medio: 150, qty: 4 },
+  ];
+  const r = BinPacker.pack(bay, items);
+  const pallets = r.placed.filter(p => p.moto.tipo === 'pallet');
+  const motos = r.placed.filter(p => p.moto.tipo !== 'pallet');
+  motos.forEach(m => {
+    pallets.forEach(p => {
+      const sobrepoeXZ = (p.x < m.x + m.w && p.x + p.w > m.x &&
+                          p.z < m.z + m.d && p.z + p.d > m.z);
+      assert(!(sobrepoeXZ && p.y >= m.y + m.h - 0.1),
+        'pallet nao pode estar acima de uma moto');
+    });
+  });
+});
+
+test('pallet sobre pallet: OFF mantem todos no chao', () => {
+  const bay = { w: 110, d: 130, h: 400 };
+  const r = BinPacker.pack(bay, [pallet(90, 110, 120, 'A'), pallet(90, 110, 120, 'B')]);
+  // base 100x120 so cabe 1 no chao desse bau estreito; sem empilhar -> 1
+  assert(r.stats.posicionadas === 1, `OFF esperava 1, veio ${r.stats.posicionadas}`);
+});
+
+test('pallet sobre pallet: ON empilha (+15cm estrado)', () => {
+  const bay = { w: 110, d: 130, h: 400 };
+  const r = BinPacker.pack(bay, [pallet(90, 110, 120, 'A'), pallet(90, 110, 120, 'B')],
+    { palletSobrePallet: true, minSupport: 0.5, maxOverhang: 20, maxGap: 60 });
+  assert(r.stats.posicionadas === 2, `ON esperava 2, veio ${r.stats.posicionadas}`);
+  const ys = r.placed.map(p => p.y).sort((a, b) => a - b);
+  assert(ys[0] === 0, 'um no chao');
+  assert(ys[1] >= 135 - 0.1, 'outro empilhado acima do topo (15+120)');
+});
+
 console.log(failures === 0 ? '\nTODOS OS TESTES PASSARAM' : `\n${failures} TESTE(S) FALHARAM`);
 process.exit(failures === 0 ? 0 : 1);
