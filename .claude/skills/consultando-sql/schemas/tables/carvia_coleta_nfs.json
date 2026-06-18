@@ -26,6 +26,10 @@
       "type": "varchar(120)"
     },
     {
+      "name": "uf",
+      "type": "varchar(2)"
+    },
+    {
       "name": "qtd_motos",
       "type": "integer",
       "description": "qtd de motos / volumes"

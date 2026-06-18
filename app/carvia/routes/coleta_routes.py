@@ -173,6 +173,17 @@ def register_coleta_routes(bp):
     def reabrir_coleta(coleta_id):  # type: ignore
         return _acao_coleta(coleta_id, lambda c, svc: (svc.reabrir(c), 'Coleta reaberta (RASCUNHO).'))
 
+    @bp.route('/coletas/<int:coleta_id>/vincular-lote', methods=['POST'])  # type: ignore
+    @login_required
+    def vincular_lote_coleta(coleta_id):  # type: ignore
+        """Vincula em lote todas as linhas sem vinculo que tenham 1 unica NF real elegivel."""
+        def _fn(c, svc):
+            vinculadas = svc.vincular_lote(c)
+            n = len(vinculadas)
+            return (vinculadas, f'{n} NF(s) vinculada(s) automaticamente.' if n
+                    else 'Nenhuma NF com match unico para vincular.')
+        return _acao_coleta(coleta_id, _fn)
+
     # ------------------------------------------------------------------ linhas
     @bp.route('/coletas/<int:coleta_id>/linhas', methods=['POST'])  # type: ignore
     @login_required
@@ -186,18 +197,22 @@ def register_coleta_routes(bp):
             flash('Coleta nao encontrada.', 'warning')
             return redirect(url_for('carvia.listar_coletas'))
         try:
-            CarviaColetaService.adicionar_linha(
+            linha = CarviaColetaService.adicionar_linha(
                 coleta,
                 numero_nf=request.form.get('numero_nf'),
                 nome_cliente_rascunho=request.form.get('nome_cliente_rascunho'),
                 cidade_destino=request.form.get('cidade_destino'),
+                uf=request.form.get('uf'),
                 qtd_motos=_parse_int(request.form.get('qtd_motos')),
                 valor_frete=_parse_decimal(request.form.get('valor_frete')),
                 vendedor=request.form.get('vendedor'),
                 transportadora_embarque=request.form.get('transportadora_embarque'),
+                carvia_nf_id=request.form.get('carvia_nf_id', type=int),
+                auto_vincular=True,
             )
             db.session.commit()
-            flash('NF adicionada a coleta.', 'success')
+            flash('NF vinculada e adicionada a coleta.' if linha.carvia_nf_id
+                  else 'NF adicionada a coleta.', 'success')
         except (ColetaError, ValueError) as e:
             db.session.rollback()
             flash(str(e), 'warning')
@@ -215,10 +230,12 @@ def register_coleta_routes(bp):
             numero_nf=request.form.get('numero_nf'),
             nome_cliente_rascunho=request.form.get('nome_cliente_rascunho'),
             cidade_destino=request.form.get('cidade_destino'),
+            uf=request.form.get('uf'),
             qtd_motos=_parse_int(request.form.get('qtd_motos')),
             valor_frete=_parse_decimal(request.form.get('valor_frete')),
             vendedor=request.form.get('vendedor'),
             transportadora_embarque=request.form.get('transportadora_embarque'),
+            auto_vincular=True,
         ), 'Linha atualizada.'))
 
     @bp.route('/coletas/linhas/<int:linha_id>/remover', methods=['POST'])  # type: ignore
@@ -257,6 +274,20 @@ def register_coleta_routes(bp):
              'data_emissao': nf.data_emissao.isoformat() if nf.data_emissao else None,
              'valor_total': float(nf.valor_total) if nf.valor_total else None}
             for nf in nfs]})
+
+    @bp.route('/coletas/lookup-nf')  # type: ignore
+    @login_required
+    def lookup_nf_coleta():  # type: ignore
+        """AJAX: estado do match para um numero de NF (preview dinamico ao digitar).
+
+        Retorna {success, status: unico|ambiguo|nenhum, nf?, total?} — usado pelo form de
+        adicionar linha para antecipar o vinculo + preencher cliente/cidade/UF.
+        """
+        if not _guard():
+            return jsonify({'success': False, 'message': 'Acesso negado'}), 403
+        from app.carvia.services.documentos.coleta_service import CarviaColetaService
+        resultado = CarviaColetaService.lookup_nf(request.args.get('numero'))
+        return jsonify({'success': True, **resultado})
 
     # ------------------------------------------------------- recebimento chassi
     @bp.route('/coletas/recebimento')  # type: ignore

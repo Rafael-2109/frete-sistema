@@ -102,11 +102,22 @@
     <!-- Linhas (papel de pão) -->
     <div class="card"><div class="card-header d-flex justify-content-between align-items-center">
         <strong>NFs da coleta ({{ coleta.total_nfs }} · {{ coleta.total_motos }} motos)</strong>
-        <span class="text-muted small">{{ coleta.total_vinculadas }} vinculada(s) à NF real</span>
+        <div class="d-flex align-items-center gap-2">
+            <span class="text-muted small">{{ coleta.total_vinculadas }} vinculada(s) à NF real</span>
+            {% if editavel %}
+            <form method="POST" action="{{ url_for('carvia.vincular_lote_coleta', coleta_id=coleta.id) }}"
+                  onsubmit="return confirm('Vincular automaticamente todas as NFs com número único e ainda não coletado?');">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button class="btn btn-outline-success btn-sm" title="Vincula em lote as linhas cujo número de NF existe, é único e não está coletado">
+                    <i class="fas fa-link"></i> Vincular NFs automaticamente
+                </button>
+            </form>
+            {% endif %}
+        </div>
     </div>
     <div class="table-responsive"><table class="table table-sm align-middle mb-0">
         <thead class="table-light"><tr>
-            <th>NF</th><th>Cliente</th><th>Cidade</th><th class="text-center">Qtd</th>
+            <th>NF</th><th>Cliente</th><th>Cidade</th><th class="text-center">UF</th><th class="text-center">Qtd</th>
             <th class="text-end">Valor frete</th><th>Vendedor</th><th>Transp. embarque</th>
             <th>Vínculo</th>{% if editavel %}<th class="text-end">Ações</th>{% endif %}
         </tr></thead>
@@ -119,6 +130,7 @@
                     {% if ln.vinculada %}<span class="badge bg-info" title="Nome real da NF vinculada">real</span>{% endif %}
                 </td>
                 <td>{{ ln.cidade_destino or '—' }}</td>
+                <td class="text-center">{{ ln.uf or '—' }}</td>
                 <td class="text-center">{{ ln.qtd_motos if ln.qtd_motos is not none else '—' }}</td>
                 <td class="text-end">{{ 'R$ %.2f'|format(ln.valor_frete) if ln.valor_frete else '—' }}</td>
                 <td>{{ ln.vendedor or '—' }}</td>
@@ -150,7 +162,7 @@
             </tr>
             {% if editavel %}
             <!-- vincular (AJAX sugestões) -->
-            <tr class="collapse" id="vinc-{{ ln.id }}"><td colspan="9" class="bg-light">
+            <tr class="collapse" id="vinc-{{ ln.id }}"><td colspan="10" class="bg-light">
                 <form method="POST" action="{{ url_for('carvia.vincular_linha', linha_id=ln.id) }}" class="row g-2 align-items-center">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <div class="col-auto"><span class="small text-muted">Vincular à NF real:</span></div>
@@ -161,12 +173,13 @@
                 </form>
             </td></tr>
             <!-- edição inline -->
-            <tr class="collapse" id="edit-{{ ln.id }}"><td colspan="9" class="bg-light">
+            <tr class="collapse" id="edit-{{ ln.id }}"><td colspan="10" class="bg-light">
                 <form method="POST" action="{{ url_for('carvia.editar_linha', linha_id=ln.id) }}" class="row g-2">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <div class="col-md-2"><input name="numero_nf" class="form-control form-control-sm" placeholder="NF" value="{{ ln.numero_nf or '' }}"></div>
                     <div class="col-md-3"><input name="nome_cliente_rascunho" class="form-control form-control-sm" placeholder="Cliente (rascunho)" value="{{ ln.nome_cliente_rascunho or '' }}"></div>
                     <div class="col-md-2"><input name="cidade_destino" class="form-control form-control-sm" placeholder="Cidade" value="{{ ln.cidade_destino or '' }}"></div>
+                    <div class="col-md-1"><input name="uf" maxlength="2" class="form-control form-control-sm text-uppercase" placeholder="UF" value="{{ ln.uf or '' }}"></div>
                     <div class="col-md-1"><input name="qtd_motos" type="number" min="0" class="form-control form-control-sm" placeholder="Qtd" value="{{ ln.qtd_motos if ln.qtd_motos is not none else '' }}"></div>
                     <div class="col-md-2"><input name="valor_frete" class="form-control form-control-sm" placeholder="Valor frete" value="{{ '%.2f'|format(ln.valor_frete) if ln.valor_frete else '' }}"></div>
                     <div class="col-md-2"><input name="vendedor" class="form-control form-control-sm" placeholder="Vendedor" value="{{ ln.vendedor or '' }}"></div>
@@ -176,23 +189,26 @@
             </td></tr>
             {% endif %}
             {% else %}
-            <tr><td colspan="9" class="text-center text-muted py-3">Nenhuma NF. Adicione abaixo (papel de pão).</td></tr>
+            <tr><td colspan="{{ 10 if editavel else 9 }}" class="text-center text-muted py-3">Nenhuma NF. Adicione abaixo (papel de pão).</td></tr>
             {% endfor %}
 
             {% if editavel %}
             <!-- adicionar linha -->
             <tr class="table-light">
-                <td colspan="9">
+                <td colspan="10">
                     <form method="POST" action="{{ url_for('carvia.adicionar_linha', coleta_id=coleta.id) }}" class="row g-2">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                        <div class="col-md-2"><input name="numero_nf" class="form-control form-control-sm" placeholder="NF"></div>
-                        <div class="col-md-3"><input name="nome_cliente_rascunho" class="form-control form-control-sm" placeholder="Cliente (como achar)"></div>
-                        <div class="col-md-2"><input name="cidade_destino" class="form-control form-control-sm" placeholder="Cidade/destino"></div>
+                        <input type="hidden" name="carvia_nf_id" id="add-carvia_nf_id">
+                        <div class="col-md-2"><input name="numero_nf" id="add-numero_nf" autocomplete="off" class="form-control form-control-sm" placeholder="NF"></div>
+                        <div class="col-md-3"><input name="nome_cliente_rascunho" id="add-cliente" class="form-control form-control-sm" placeholder="Cliente (como achar)"></div>
+                        <div class="col-md-2"><input name="cidade_destino" id="add-cidade" class="form-control form-control-sm" placeholder="Cidade/destino"></div>
+                        <div class="col-md-1"><input name="uf" id="add-uf" maxlength="2" class="form-control form-control-sm text-uppercase" placeholder="UF"></div>
                         <div class="col-md-1"><input name="qtd_motos" type="number" min="0" class="form-control form-control-sm" placeholder="Qtd"></div>
                         <div class="col-md-2"><input name="valor_frete" class="form-control form-control-sm" placeholder="Valor frete"></div>
                         <div class="col-md-2"><input name="vendedor" class="form-control form-control-sm" placeholder="Vendedor"></div>
                         <div class="col-md-3"><input name="transportadora_embarque" class="form-control form-control-sm" placeholder="Transp. embarque"></div>
                         <div class="col-md-2"><button class="btn btn-success btn-sm w-100"><i class="fas fa-plus"></i> Adicionar NF</button></div>
+                        <div class="col-12"><span id="add-nf-hint" class="small"></span></div>
                     </form>
                 </td>
             </tr>
@@ -228,5 +244,56 @@ function vincularNf(linhaId) {
         })
         .catch(() => { sel.innerHTML = '<option value="">Erro ao buscar</option>'; });
 }
+
+// Lookup dinâmico ao preencher a NF no form de adicionar: se houver 1 NF real única e
+// ainda não coletada, antecipa o vínculo (preenche cliente/cidade/UF + marca p/ vincular).
+(function () {
+    const nfInput = document.getElementById('add-numero_nf');
+    if (!nfInput) return;  // coleta congelada: form de adicionar não existe
+    const hidden = document.getElementById('add-carvia_nf_id');
+    const hint = document.getElementById('add-nf-hint');
+    const lookupUrl = "{{ url_for('carvia.lookup_nf_coleta') }}";
+    let timer = null;
+
+    function fillIfEmpty(id, val) {
+        const el = document.getElementById(id);
+        if (el && !el.value && val) el.value = val;
+    }
+    function reset() { hidden.value = ''; hint.textContent = ''; hint.className = 'small'; }
+
+    function lookup(numero) {
+        if (!numero || !numero.trim()) { reset(); return; }
+        fetch(lookupUrl + '?numero=' + encodeURIComponent(numero.trim()))
+            .then(r => r.json())
+            .then(d => {
+                if (!d.success) { reset(); return; }
+                if (d.status === 'unico') {
+                    hidden.value = d.nf.id;
+                    hint.className = 'small text-success';
+                    hint.innerHTML = '<i class="fas fa-check-circle"></i> NF ' + d.nf.numero_nf +
+                        ' — ' + (d.nf.nome_destinatario || 's/ nome') + ' · será vinculada automaticamente ao adicionar';
+                    fillIfEmpty('add-cliente', d.nf.nome_destinatario);
+                    fillIfEmpty('add-cidade', d.nf.cidade_destinatario);
+                    fillIfEmpty('add-uf', d.nf.uf_destinatario);
+                } else if (d.status === 'ambiguo') {
+                    hidden.value = '';
+                    hint.className = 'small text-warning';
+                    hint.innerHTML = '<i class="fas fa-exclamation-triangle"></i> ' + d.total +
+                        ' NFs com esse número — vincule manualmente após adicionar';
+                } else {
+                    hidden.value = '';
+                    hint.className = 'small text-muted';
+                    hint.textContent = 'Nenhuma NF real com esse número (segue como rascunho)';
+                }
+            })
+            .catch(() => reset());
+    }
+
+    nfInput.addEventListener('input', function () {
+        hidden.value = '';  // qualquer edição invalida um match anterior (evita vínculo errado)
+        clearTimeout(timer);
+        timer = setTimeout(() => lookup(nfInput.value), 400);
+    });
+})();
 </script>
 {% endblock %}

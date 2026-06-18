@@ -51,3 +51,4 @@ Todas em `scripts/migrations/`. Regra CLAUDE.md: DDL requer `.py` + `.sql` (exce
 - `2026_06_18_carvia_coleta_nf_unique.py` + `.sql` — UNIQUE(`carvia_nf_id`) em `carvia_coleta_nfs` (uma NF pertence a no max 1 coleta; fix de status ambiguo no portal). DO block idempotente.
 - `2026_06_18_carvia_recebimento_flag_e_chegada.py` + `.sql` — `usuarios.acesso_recebimento_carvia` (BOOL — operador so-recebimento, sem valores) + `carvia_coletas.data_prevista_chegada` (DATE).
 - `2026_06_18_carvia_portal_grupo_empresa.py` + `.sql` — `carvia_portal_usuarios.grupo_empresa` (VARCHAR — grupo/empresa que o cliente declara no cadastro; hint de vinculo).
+- `2026_06_18_carvia_coleta_nf_uf.py` + `.sql` — `carvia_coleta_nfs.uf` (VARCHAR(2) — UF do destino, rascunho que se consolida com a NF real ao vincular). `ADD COLUMN IF NOT EXISTS` + backfill de `uf`/`cidade_destino` das linhas ja vinculadas a partir de `carvia_nfs.uf_destinatario`/`cidade_destinatario`. Idempotente.
