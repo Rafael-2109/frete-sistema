@@ -102,8 +102,12 @@ class CarviaColetaService:
     # ------------------------------------------------------------------ linha
     @staticmethod
     def adicionar_linha(coleta, *, numero_nf=None, nome_cliente_rascunho=None,
-                        cidade_destino=None, qtd_motos=None, valor_frete=None,
-                        vendedor=None, transportadora_embarque=None):
+                        cidade_destino=None, uf=None, qtd_motos=None, valor_frete=None,
+                        vendedor=None, transportadora_embarque=None,
+                        carvia_nf_id=None, auto_vincular=False):
+        """Adiciona uma linha (NF rascunho). Se `carvia_nf_id` vier, vincula direto; senao,
+        com `auto_vincular`, vincula automaticamente quando ha 1 unica NF real elegivel para
+        o numero (existe, ATIVA e ainda nao coletada) — antecipa o vinculo para o operador."""
         from app.carvia.models.coleta import CarviaColetaNf
         if not coleta.pode_editar():
             raise ColetaError(f'Coleta {coleta.numero_coleta} nao e editavel (status {coleta.status}).')
@@ -112,6 +116,7 @@ class CarviaColetaService:
             numero_nf=(numero_nf or '').strip() or None,
             nome_cliente_rascunho=(nome_cliente_rascunho or '').strip() or None,
             cidade_destino=(cidade_destino or '').strip() or None,
+            uf=(uf or '').strip().upper() or None,
             qtd_motos=qtd_motos,
             valor_frete=valor_frete,
             vendedor=(vendedor or '').strip() or None,
@@ -119,22 +124,46 @@ class CarviaColetaService:
         )
         db.session.add(linha)
         db.session.flush()
+        CarviaColetaService._auto_vincular(linha, carvia_nf_id=carvia_nf_id, auto_vincular=auto_vincular)
         return linha
 
     @staticmethod
-    def editar_linha(linha, **campos):
+    def editar_linha(linha, *, carvia_nf_id=None, auto_vincular=False, **campos):
         if not linha.coleta.pode_editar():
             raise ColetaError('Coleta nao e editavel.')
         for campo in ('numero_nf', 'nome_cliente_rascunho', 'cidade_destino',
                       'vendedor', 'transportadora_embarque'):
             if campo in campos:
                 setattr(linha, campo, (campos[campo] or '').strip() or None)
+        if 'uf' in campos:
+            linha.uf = (campos['uf'] or '').strip().upper() or None
         if 'qtd_motos' in campos:
             linha.qtd_motos = campos['qtd_motos']
         if 'valor_frete' in campos:
             linha.valor_frete = campos['valor_frete']
         db.session.flush()
+        # Mudou o numero de uma linha ainda sem vinculo -> tenta antecipar o vinculo.
+        CarviaColetaService._auto_vincular(linha, carvia_nf_id=carvia_nf_id, auto_vincular=auto_vincular)
         return linha
+
+    @staticmethod
+    def _auto_vincular(linha, *, carvia_nf_id=None, auto_vincular=False):
+        """Vincula a linha a uma NF: explicita (`carvia_nf_id`) tem prioridade; senao, com
+        `auto_vincular`, so vincula se houver match UNICO. Resiliente: se a NF antecipada
+        deixou de ser elegivel entre o preview e o submit (ex.: vinculada a outra coleta),
+        a linha e' adicionada SEM vinculo (o operador vincula a mao) em vez de falhar."""
+        if linha.carvia_nf_id:
+            return
+        if carvia_nf_id:
+            try:
+                CarviaColetaService.vincular_nf(linha, carvia_nf_id)
+            except ColetaError:
+                pass  # NF antecipada nao mais elegivel -> linha segue como rascunho
+            return
+        if auto_vincular:
+            nf = CarviaColetaService._match_unico(linha.numero_nf)
+            if nf is not None:
+                CarviaColetaService.vincular_nf(linha, nf.id)
 
     @staticmethod
     def remover_linha(linha):
@@ -169,8 +198,81 @@ class CarviaColetaService:
                 .all())
 
     @staticmethod
+    def _match_unico(numero_nf):
+        """Retorna a UNICA CarviaNf elegivel para `numero_nf`, ou None.
+
+        Elegivel = ATIVA, numero normalizado igual e ainda NAO vinculada a nenhuma coleta
+        (= "existe, e unica e nao coletada"). Se houver 0 ou >1 candidata, retorna None
+        (ambiguidade nao se resolve sozinha — o operador vincula a mao).
+        """
+        from app.carvia.models.documentos import CarviaNf
+        from app.carvia.models.coleta import CarviaColetaNf
+        from sqlalchemy import func
+        alvo = _norm_nf(numero_nf)
+        if not alvo:
+            return None
+        norm_sql = func.ltrim(func.regexp_replace(CarviaNf.numero_nf, r'\D', '', 'g'), '0')
+        ja_vinculadas = db.session.query(CarviaColetaNf.carvia_nf_id).filter(
+            CarviaColetaNf.carvia_nf_id.isnot(None))
+        candidatas = (CarviaNf.query
+                      .filter(CarviaNf.status == 'ATIVA', norm_sql == alvo,
+                              CarviaNf.id.notin_(ja_vinculadas))
+                      .limit(2)
+                      .all())
+        return candidatas[0] if len(candidatas) == 1 else None
+
+    @staticmethod
+    def lookup_nf(numero_nf):
+        """Estado do match para o numero (preview dinamico ao digitar). Retorna dict:
+        {'status': 'unico'|'ambiguo'|'nenhum', 'nf': {...} (se unico), 'total': N (se ambiguo)}.
+        """
+        from app.carvia.models.documentos import CarviaNf
+        from app.carvia.models.coleta import CarviaColetaNf
+        from sqlalchemy import func
+        alvo = _norm_nf(numero_nf)
+        if not alvo:
+            return {'status': 'nenhum', 'total': 0}
+        norm_sql = func.ltrim(func.regexp_replace(CarviaNf.numero_nf, r'\D', '', 'g'), '0')
+        ja_vinculadas = db.session.query(CarviaColetaNf.carvia_nf_id).filter(
+            CarviaColetaNf.carvia_nf_id.isnot(None))
+        candidatas = (CarviaNf.query
+                      .filter(CarviaNf.status == 'ATIVA', norm_sql == alvo,
+                              CarviaNf.id.notin_(ja_vinculadas))
+                      .order_by(CarviaNf.id.desc())
+                      .limit(6)
+                      .all())
+        if not candidatas:
+            return {'status': 'nenhum', 'total': 0}
+        if len(candidatas) > 1:
+            return {'status': 'ambiguo', 'total': len(candidatas)}
+        nf = candidatas[0]
+        return {'status': 'unico', 'nf': {
+            'id': nf.id, 'numero_nf': nf.numero_nf,
+            'nome_destinatario': nf.nome_destinatario,
+            'cidade_destinatario': nf.cidade_destinatario,
+            'uf_destinatario': nf.uf_destinatario,
+        }}
+
+    @staticmethod
+    def vincular_lote(coleta):
+        """Vincula em lote todas as linhas SEM vinculo que tenham match unico. Retorna a
+        lista de (linha, nf) vinculadas. Linhas ambiguas/sem match sao ignoradas."""
+        if not coleta.pode_editar():
+            raise ColetaError(f'Coleta {coleta.numero_coleta} nao e editavel (status {coleta.status}).')
+        vinculadas = []
+        for linha in coleta.nfs.all():
+            if linha.carvia_nf_id:
+                continue
+            nf = CarviaColetaService._match_unico(linha.numero_nf)
+            if nf is not None:
+                CarviaColetaService.vincular_nf(linha, nf.id)
+                vinculadas.append((linha, nf))
+        return vinculadas
+
+    @staticmethod
     def vincular_nf(linha, carvia_nf_id):
-        """Vincula a linha a uma CarviaNf real e PROPAGA o local_cd da coleta para a NF."""
+        """Vincula a linha a uma CarviaNf real, PROPAGA o local_cd da coleta para a NF e
+        CONSOLIDA cidade/UF do destino a partir da NF (real vence sobre o rascunho)."""
         from app.carvia.models.documentos import CarviaNf
         from app.carvia.models.coleta import CarviaColetaNf
         if not linha.coleta.pode_editar():
@@ -189,6 +291,12 @@ class CarviaColetaService:
         # Stream 1: o destino (local_cd) da coleta passa a valer para a NF real.
         if linha.coleta.local_cd:
             nf.local_cd = linha.coleta.local_cd
+        # Consolida destino: a NF real e a fonte de verdade de cidade/UF (so sobrescreve
+        # quando a NF tem o dado — nunca apaga um rascunho com NF vazia).
+        if nf.cidade_destinatario:
+            linha.cidade_destino = nf.cidade_destinatario
+        if nf.uf_destinatario:
+            linha.uf = nf.uf_destinatario
         db.session.flush()
         # Stream 4 (backfill): se ja ha recebimento, reconcilia chassis em ALERTA que agora
         # batem com os chassis desta NF — a ordem NF<->chassi nao impacta a vinculacao.

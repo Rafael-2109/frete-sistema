@@ -11,7 +11,8 @@ import pytest
 from app.carvia.services.documentos.coleta_service import CarviaColetaService, ColetaError
 
 
-def _criar_nf(db, numero='000123', local_cd='VICTORIO_MARCHEZINE'):
+def _criar_nf(db, numero='000123', local_cd='VICTORIO_MARCHEZINE',
+              uf_destinatario=None, cidade_destinatario=None):
     from app.carvia.models.documentos import CarviaNf
     nf = CarviaNf(
         numero_nf=numero,
@@ -19,6 +20,8 @@ def _criar_nf(db, numero='000123', local_cd='VICTORIO_MARCHEZINE'):
         nome_emitente='EMITENTE TESTE',
         cnpj_destinatario='98765432000155',
         nome_destinatario='CLIENTE REAL LTDA',
+        uf_destinatario=uf_destinatario,
+        cidade_destinatario=cidade_destinatario,
         tipo_fonte='MANUAL',
         status='ATIVA',
         local_cd=local_cd,
@@ -156,6 +159,115 @@ def test_marcar_coletada_cancelada_bloqueia(db):
     CarviaColetaService.cancelar_coleta(coleta)
     with pytest.raises(ColetaError):
         CarviaColetaService.marcar_coletada(coleta, usuario='test@bot')
+
+
+def test_vincular_consolida_uf_cidade(db):
+    """UF/cidade do destino se consolidam com a NF real ao vincular (real vence)."""
+    coleta = CarviaColetaService.criar_coleta(usuario='test@bot')
+    linha = CarviaColetaService.adicionar_linha(
+        coleta, numero_nf='000777', cidade_destino='Curitba (rascunho)', uf='SP')  # palpite errado
+    nf = _criar_nf(db, numero='777', uf_destinatario='PR', cidade_destinatario='CURITIBA')
+    CarviaColetaService.vincular_nf(linha, nf.id)
+    assert linha.uf == 'PR'                    # palpite SP sobrescrito pela NF
+    assert linha.cidade_destino == 'CURITIBA'  # idem cidade
+
+
+def test_vincular_nf_sem_uf_nao_apaga_rascunho(db):
+    """NF sem UF/cidade nao apaga o rascunho digitado (so sobrescreve quando ha dado)."""
+    coleta = CarviaColetaService.criar_coleta(usuario='test@bot')
+    linha = CarviaColetaService.adicionar_linha(coleta, numero_nf='778', uf='SP', cidade_destino='Santos')
+    nf = _criar_nf(db, numero='778')  # sem uf/cidade
+    CarviaColetaService.vincular_nf(linha, nf.id)
+    assert linha.uf == 'SP'
+    assert linha.cidade_destino == 'Santos'
+
+
+def test_adicionar_linha_auto_vincula_match_unico(db):
+    """auto_vincular: NF que existe, e unica e nao coletada -> vincula sozinha + traz UF."""
+    nf = _criar_nf(db, numero='901', uf_destinatario='RJ', cidade_destinatario='RIO DE JANEIRO')
+    coleta = CarviaColetaService.criar_coleta(usuario='test@bot')
+    linha = CarviaColetaService.adicionar_linha(coleta, numero_nf='901', auto_vincular=True)
+    assert linha.carvia_nf_id == nf.id
+    assert linha.uf == 'RJ'
+    assert linha.cidade_destino == 'RIO DE JANEIRO'
+
+
+def test_adicionar_linha_nao_auto_vincula_ambiguo(db):
+    """auto_vincular NAO resolve ambiguidade: 2 NFs com mesmo numero -> linha fica solta."""
+    _criar_nf(db, numero='902')
+    _criar_nf(db, numero='0902')  # normaliza para o mesmo alvo
+    coleta = CarviaColetaService.criar_coleta(usuario='test@bot')
+    linha = CarviaColetaService.adicionar_linha(coleta, numero_nf='902', auto_vincular=True)
+    assert linha.carvia_nf_id is None
+
+
+def test_adicionar_linha_carvia_nf_id_explicito(db):
+    """carvia_nf_id explicito (hidden do preview) tem prioridade e vincula direto."""
+    nf = _criar_nf(db, numero='903', uf_destinatario='MG')
+    coleta = CarviaColetaService.criar_coleta(usuario='test@bot')
+    linha = CarviaColetaService.adicionar_linha(
+        coleta, numero_nf='903', carvia_nf_id=nf.id, auto_vincular=True)
+    assert linha.carvia_nf_id == nf.id
+    assert linha.uf == 'MG'
+
+
+def test_adicionar_linha_carvia_nf_id_indisponivel_degrada(db):
+    """Resiliencia: NF antecipada ja tomada entre preview e submit -> linha entra sem vinculo."""
+    nf = _criar_nf(db, numero='904')
+    # NF ja vinculada a outra coleta
+    c0 = CarviaColetaService.criar_coleta(usuario='test@bot')
+    l0 = CarviaColetaService.adicionar_linha(c0, numero_nf='904')
+    CarviaColetaService.vincular_nf(l0, nf.id)
+
+    coleta = CarviaColetaService.criar_coleta(usuario='test@bot')
+    linha = CarviaColetaService.adicionar_linha(
+        coleta, numero_nf='904', carvia_nf_id=nf.id, auto_vincular=True)
+    assert linha.id is not None          # linha foi adicionada
+    assert linha.carvia_nf_id is None    # sem vinculo (NF ja estava tomada)
+
+
+def test_vincular_lote(db):
+    """vincular_lote liga so as linhas com match unico; ambigua/sem match ficam soltas."""
+    nf1 = _criar_nf(db, numero='1001', uf_destinatario='SP')
+    nf2 = _criar_nf(db, numero='1002', uf_destinatario='BA')
+    _criar_nf(db, numero='1003')
+    _criar_nf(db, numero='01003')  # ambiguo p/ '1003'
+    coleta = CarviaColetaService.criar_coleta(usuario='test@bot')
+    l1 = CarviaColetaService.adicionar_linha(coleta, numero_nf='1001')
+    l2 = CarviaColetaService.adicionar_linha(coleta, numero_nf='1002')
+    l3 = CarviaColetaService.adicionar_linha(coleta, numero_nf='1003')  # ambiguo
+    l4 = CarviaColetaService.adicionar_linha(coleta, numero_nf='9999')  # inexistente
+
+    vinculadas = CarviaColetaService.vincular_lote(coleta)
+    assert len(vinculadas) == 2
+    assert l1.carvia_nf_id == nf1.id and l1.uf == 'SP'
+    assert l2.carvia_nf_id == nf2.id and l2.uf == 'BA'
+    assert l3.carvia_nf_id is None
+    assert l4.carvia_nf_id is None
+
+
+def test_lookup_nf_status(db):
+    """lookup_nf classifica unico / ambiguo / nenhum para o preview dinamico."""
+    _criar_nf(db, numero='2001', uf_destinatario='PR', cidade_destinatario='CURITIBA')
+    r = CarviaColetaService.lookup_nf('2001')
+    assert r['status'] == 'unico'
+    assert r['nf']['uf_destinatario'] == 'PR'
+
+    _criar_nf(db, numero='2002')
+    _criar_nf(db, numero='02002')
+    assert CarviaColetaService.lookup_nf('2002')['status'] == 'ambiguo'
+
+    assert CarviaColetaService.lookup_nf('999999')['status'] == 'nenhum'
+    assert CarviaColetaService.lookup_nf('')['status'] == 'nenhum'
+
+
+def test_lookup_nf_ignora_ja_vinculada(db):
+    """lookup_nf nao oferece NF ja vinculada (= nao coletada e o filtro)."""
+    nf = _criar_nf(db, numero='2100')
+    coleta = CarviaColetaService.criar_coleta(usuario='test@bot')
+    linha = CarviaColetaService.adicionar_linha(coleta, numero_nf='2100')
+    CarviaColetaService.vincular_nf(linha, nf.id)
+    assert CarviaColetaService.lookup_nf('2100')['status'] == 'nenhum'
 
 
 def test_parse_decimal_br():

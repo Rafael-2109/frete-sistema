@@ -746,6 +746,7 @@
         "numero_nf",
         "coleta_id",
         "carvia_nf_id",
+        "uf",
         "vendedor"
       ],
       "dominio": "Carvia"

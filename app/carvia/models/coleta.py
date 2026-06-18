@@ -130,6 +130,9 @@ class CarviaColetaNf(db.Model):
     numero_nf = db.Column(db.String(20))
     nome_cliente_rascunho = db.Column(db.String(255))
     cidade_destino = db.Column(db.String(120))
+    # UF do destino: rascunho (digitavel) que se CONSOLIDA com a NF real ao vincular
+    # (uf_destinatario da CarviaNf vence, igual a cidade/nome — papel de pao -> real).
+    uf = db.Column(db.String(2))
     qtd_motos = db.Column(db.Integer)             # qtd de motos / volumes
     valor_frete = db.Column(db.Numeric(15, 2))    # "valor total frete" da linha
     vendedor = db.Column(db.String(150))

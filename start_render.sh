@@ -226,58 +226,19 @@ gunicorn --config gunicorn_config_sistema.py run:app \
 GUNICORN_SISTEMA_PID=$!
 echo " Gunicorn-sistema PID: $GUNICORN_SISTEMA_PID"
 
-# Aguarda gunicorns subirem (health check antes do nginx)
-echo " Aguardando gunicorns ficarem prontos (max 240s)..."
-GUNICORNS_READY=false
-for attempt in $(seq 1 120); do
-    # Health: /agente/api/health (agente_bp url_prefix=/agente) e /auth/login
-    # (auth_bp url_prefix=/auth — rota /login GET retorna 200 sem auth).
-    # NAO usar /login direto (404) nem / (302 redirect).
-    AGENTE_RC=$(curl -fs -o /dev/null -w '%{http_code}' http://127.0.0.1:5001/agente/api/health 2>/dev/null || echo "000")
-    SISTEMA_RC=$(curl -fs -o /dev/null -w '%{http_code}' http://127.0.0.1:5002/auth/login 2>/dev/null || echo "000")
-
-    if [ "$AGENTE_RC" = "200" ] && [ "$SISTEMA_RC" = "200" ]; then
-        echo " ✅ Ambos gunicorns prontos (attempt $attempt — agente=$AGENTE_RC sistema=$SISTEMA_RC)"
-        GUNICORNS_READY=true
-        break
-    fi
-
-    # Verifica se algum morreu cedo
-    if ! kill -0 $GUNICORN_AGENTE_PID 2>/dev/null; then
-        echo " ❌ FATAL: gunicorn-agente morreu na inicializacao"
-        kill $GUNICORN_SISTEMA_PID 2>/dev/null
-        exit 1
-    fi
-    if ! kill -0 $GUNICORN_SISTEMA_PID 2>/dev/null; then
-        echo " ❌ FATAL: gunicorn-sistema morreu na inicializacao"
-        kill $GUNICORN_AGENTE_PID 2>/dev/null
-        exit 1
-    fi
-
-    if [ $((attempt % 5)) -eq 0 ]; then
-        echo "   attempt $attempt/120 agente=$AGENTE_RC sistema=$SISTEMA_RC"
-    fi
-    sleep 2
-done
-
-if [ "$GUNICORNS_READY" != "true" ]; then
-    echo " ❌ FATAL: gunicorns nao ficaram prontos em 240s"
-    kill $GUNICORN_AGENTE_PID $GUNICORN_SISTEMA_PID 2>/dev/null
-    exit 1
-fi
-
 # ---------------------------------------------------------------------
-# 5. Trap SIGTERM/SIGINT: encaminha para children + nginx
+# 5. Trap SIGTERM/SIGINT: encaminha para children + Caddy
 # ---------------------------------------------------------------------
+# Definido ANTES de subir o Caddy para o trap valer desde o bind da porta.
 NGINX_PID=""
 
 cleanup() {
     echo "================================================="
     echo " SHUTDOWN: encaminhando SIGTERM aos children"
     echo "================================================="
-    # Nginx primeiro (para parar de aceitar requests)
+    # Caddy primeiro (para parar de aceitar requests)
     if [ -n "$NGINX_PID" ] && kill -0 $NGINX_PID 2>/dev/null; then
-        echo " Parando nginx (PID $NGINX_PID)..."
+        echo " Parando Caddy (PID $NGINX_PID)..."
         kill -TERM $NGINX_PID 2>/dev/null
     fi
     # Gunicorns (graceful_timeout=1740s para drenar SSE)
@@ -295,7 +256,83 @@ cleanup() {
 trap cleanup SIGTERM SIGINT
 
 # ---------------------------------------------------------------------
-# 6. Watchdog: se gunicorn morrer, mata tudo (Render reinicia container)
+# 6. CRITICO: sobe o Caddy JA (binda 0.0.0.0:10000) ANTES do readiness.
+# ---------------------------------------------------------------------
+# Mudanca 2026-06-18 (fix timeout de deploy): antes o Caddy so subia DEPOIS
+# de um health-wait que exigia ambos os gunicorns responderem 200. Quando o
+# boot dos workers (preload_app=False + create_app pesado, 4+1 forks) demorava,
+# o curl do health-wait (sem --max-time) pendurava no accept do socket e o loop
+# nunca progredia -> Caddy nunca subia -> 0.0.0.0:10000 nunca abria -> Render
+# "Port scan timeout reached" -> update_failed (flaky). Abrindo a porta primeiro,
+# o Render detecta o bind na hora; o healthCheckPath (/auth/login, ver render.yaml)
+# garante que o trafego so vira para este container quando o gunicorn-sistema
+# responde 200 -> zero-downtime preservado. Enquanto os upstreams sobem, o Caddy
+# responde 502 nas rotas (poucos segundos, cobertos pelo container antigo que o
+# Render mantem ate o health passar).
+
+# Valida Caddyfile primeiro
+"$CADDY_BIN" validate --config "$(pwd)/Caddyfile" --adapter caddyfile 2>&1 | sed -u 's/^/[CADDY-VALIDATE] /'
+CADDY_TEST_RC=${PIPESTATUS[0]}
+if [ $CADDY_TEST_RC -ne 0 ]; then
+    echo " ❌ FATAL: Caddyfile invalido"
+    kill $GUNICORN_AGENTE_PID $GUNICORN_SISTEMA_PID 2>/dev/null
+    exit 1
+fi
+
+echo "================================================="
+echo " Subindo Caddy em :10000 — porta publica ABRE JA (antes do readiness)"
+echo "================================================="
+"$CADDY_BIN" run --config "$(pwd)/Caddyfile" --adapter caddyfile \
+    > >(sed -u 's/^/[CADDY] /') 2> >(sed -u 's/^/[CADDY] /' >&2) &
+NGINX_PID=$!
+echo " Caddy PID: $NGINX_PID (0.0.0.0:10000 bindada)"
+
+# ---------------------------------------------------------------------
+# 7. Readiness dos gunicorns — NAO bloqueia a porta (Caddy ja abriu).
+# ---------------------------------------------------------------------
+# So loga prontidao e aborta se um gunicorn MORRER cedo. NAO faz mais FATAL
+# por "demora": a porta ja esta aberta e o healthCheckPath do Render decide a
+# promocao do deploy. curl com --connect-timeout/--max-time para o loop nunca
+# pendurar no accept do socket (era a causa raiz do timeout flaky).
+echo " Aguardando readiness dos gunicorns (nao bloqueia a porta :10000)..."
+GUNICORNS_READY=false
+for attempt in $(seq 1 120); do
+    # Health: /agente/api/health (agente_bp url_prefix=/agente) e /auth/login
+    # (auth_bp url_prefix=/auth — rota /login GET retorna 200 sem auth).
+    AGENTE_RC=$(curl -fs --connect-timeout 2 --max-time 3 -o /dev/null -w '%{http_code}' http://127.0.0.1:5001/agente/api/health 2>/dev/null || echo "000")
+    SISTEMA_RC=$(curl -fs --connect-timeout 2 --max-time 3 -o /dev/null -w '%{http_code}' http://127.0.0.1:5002/auth/login 2>/dev/null || echo "000")
+
+    if [ "$AGENTE_RC" = "200" ] && [ "$SISTEMA_RC" = "200" ]; then
+        echo " ✅ Ambos gunicorns prontos (attempt $attempt — agente=$AGENTE_RC sistema=$SISTEMA_RC)"
+        GUNICORNS_READY=true
+        break
+    fi
+
+    # Morte precoce -> aborta (Render reinicia o container). Mata o outro gunicorn + Caddy.
+    if ! kill -0 $GUNICORN_AGENTE_PID 2>/dev/null; then
+        echo " ❌ FATAL: gunicorn-agente morreu na inicializacao"
+        kill $GUNICORN_SISTEMA_PID $NGINX_PID 2>/dev/null
+        exit 1
+    fi
+    if ! kill -0 $GUNICORN_SISTEMA_PID 2>/dev/null; then
+        echo " ❌ FATAL: gunicorn-sistema morreu na inicializacao"
+        kill $GUNICORN_AGENTE_PID $NGINX_PID 2>/dev/null
+        exit 1
+    fi
+
+    if [ $((attempt % 5)) -eq 0 ]; then
+        echo "   readiness attempt $attempt/120 agente=$AGENTE_RC sistema=$SISTEMA_RC (Caddy ja serve :10000)"
+    fi
+    sleep 2
+done
+
+if [ "$GUNICORNS_READY" != "true" ]; then
+    echo " ⚠️ WARN: gunicorns nao confirmaram readiness em ~240s — porta segue aberta;"
+    echo "         o healthCheckPath do Render (/auth/login) decide a promocao do deploy."
+fi
+
+# ---------------------------------------------------------------------
+# 8. Watchdog: se gunicorn morrer, mata tudo (Render reinicia container)
 # ---------------------------------------------------------------------
 watchdog() {
     while true; do
@@ -316,37 +353,13 @@ watchdog &
 WATCHDOG_PID=$!
 
 # ---------------------------------------------------------------------
-# 7. Sobe Caddy em FOREGROUND (binda 0.0.0.0:10000 para Render detectar)
+# 9. Sincronizacao incremental em background — porta ja aberta.
 # ---------------------------------------------------------------------
-echo "================================================="
-echo " Subindo Caddy em :10000 (foreground)"
-echo "================================================="
-
-# Valida Caddyfile primeiro
-"$CADDY_BIN" validate --config "$(pwd)/Caddyfile" --adapter caddyfile 2>&1 | sed -u 's/^/[CADDY-VALIDATE] /'
-CADDY_TEST_RC=${PIPESTATUS[0]}
-if [ $CADDY_TEST_RC -ne 0 ]; then
-    echo " ❌ FATAL: Caddyfile invalido"
-    cleanup
-    exit 1
-fi
-
-# Caddy em foreground; logs prefixados
-"$CADDY_BIN" run --config "$(pwd)/Caddyfile" --adapter caddyfile \
-    > >(sed -u 's/^/[CADDY] /') 2> >(sed -u 's/^/[CADDY] /' >&2) &
-NGINX_PID=$!
-echo " Caddy PID: $NGINX_PID"
-
-# ---------------------------------------------------------------------
-# 7b. Sincronizacao incremental em background — APOS o Caddy subir.
-# ---------------------------------------------------------------------
-# Movida para ca (2026-06-03): os gunicorns ja passaram no health-wait e o Caddy
-# ja vai bindar :10000 (Render detecta o deploy como live). So AGORA lancamos o
-# sync PESADO (faturamento + carteira + auditoria), que assim NAO compete mais com
-# o boot dos workers — eliminando o flake de health-check/FATAL-antes-do-Caddy.
+# Sync PESADO (faturamento + carteira + auditoria). Roda depois do Caddy/readiness
+# para nao competir com o boot dos workers.
 if [ -f "app/scheduler/sincronizacao_incremental_definitiva.py" ]; then
     mkdir -p logs
-    sleep 5  # margem p/ Caddy bindar a porta e o Render marcar o deploy live
+    sleep 5  # margem p/ o Render marcar o deploy live
     python -m app.scheduler.sincronizacao_incremental_definitiva &
     SYNC_PID=$!
     if kill -0 $SYNC_PID 2>/dev/null; then
@@ -356,7 +369,9 @@ if [ -f "app/scheduler/sincronizacao_incremental_definitiva.py" ]; then
     fi
 fi
 
-# Aguarda Caddy (trap captura signals em paralelo)
+# ---------------------------------------------------------------------
+# 10. Aguarda Caddy (trap captura signals em paralelo)
+# ---------------------------------------------------------------------
 wait $NGINX_PID
 NGINX_RC=$?
 
