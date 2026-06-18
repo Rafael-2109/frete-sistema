@@ -122,6 +122,8 @@ CarVia e um subsistema INDEPENDENTE. NAO importar de `app/fretes/`, `app/carteir
 
 Excecoes permitidas: `app/transportadoras/models.py`, `app/tabelas/models.py`, `app/odoo/utils/cte_xml_parser.py`.
 
+**Excecao do Simulador 3D** (`routes/simulador_routes.py`): le (LAZY, READ-ONLY) `app/embarques` (Embarque/EmbarqueItem), `app/separacao` (Separacao), `app/carteira` (RotaSalva) e `app/monitoramento` (EntregaMonitorada) APENAS para pre-preencher a simulacao de carga — resolve NFs do embarque / da rota do mapa / nao entregues -> `CarviaNf` -> `CarviaNfVeiculo` -> `CarviaModeloMoto`. Sem escrita; helper unico `_resolver_motos_de_nfs(numeros_nf, nf_ids)`. NAO replicar esse cruzamento em services de negocio.
+
 ### R2: Lazy imports nos routes e services
 Imports de services e models de outros modulos sao LAZY (dentro de funcoes). NAO mover para module-level — causa circular imports e startup overhead.
 

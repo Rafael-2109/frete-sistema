@@ -31,6 +31,8 @@
     debounceTimer: null,
     motoListEmbarque: [], // lista de motos do embarque (modo 'embarque'), p/ re-empacotar
     packToken: 0, // descarta resultado de otimizacao obsoleto (input mudou)
+    nfsPendentes: null, // cache das NFs CarVia nao entregues (lazy, modo livre)
+    nfsAdicionadas: {}, // {numero_nf: true} ja puxadas para o simulador
   };
 
   function init() {
@@ -65,10 +67,14 @@
         populateModeloOptions();
         bindEvents();
         bindPackControls(scheduleRecalc);
+        setupNfSelector();
 
-        // Selecionar primeiro veiculo com dimensoes
+        // Prefill (rota do mapa) tem prioridade na selecao do veiculo + motos
+        var aplicouPrefill = applyPrefill();
+
+        // Selecionar primeiro veiculo com dimensoes (se nao veio do prefill)
         var selectEl = document.getElementById('simulador-veiculo');
-        if (selectEl && selectEl.value) {
+        if (!aplicouPrefill && selectEl && selectEl.value) {
           onVeiculoChange();
         }
       })
@@ -313,6 +319,168 @@
     if (compEl) compEl.value = Math.round(bay.w);
     if (largEl) largEl.value = Math.round(bay.d);
     if (altEl) altEl.value = Math.round(bay.h);
+  }
+
+  // ========== NF nao entregue + prefill (modo livre) ==========
+
+  /** Adiciona qty ao modelo se ja houver linha dele; senao cria nova linha. */
+  function addOrIncrementMoto(modeloId, qty) {
+    if (!modeloId || qty <= 0) return;
+    var rows = document.querySelectorAll('.simulador-moto-row');
+    for (var i = 0; i < rows.length; i++) {
+      var sel = rows[i].querySelector('.simulador-modelo-select');
+      if (sel && parseInt(sel.value) === parseInt(modeloId)) {
+        var qi = rows[i].querySelector('.simulador-qty-input');
+        qi.value = (parseInt(qi.value) || 0) + qty;
+        scheduleRecalc();
+        return;
+      }
+    }
+    addMotoRow(modeloId, qty);
+  }
+
+  /** Pre-preenche veiculo + motos a partir da rota do mapa (modo livre editavel).
+      Retorna true se selecionou um veiculo (p/ nao sobrescrever com o 1o do select). */
+  function applyPrefill() {
+    var el = document.getElementById('simulador-prefill-data');
+    if (!el) return false;
+    var data;
+    try { data = JSON.parse(el.textContent); } catch (e) { return false; }
+
+    var selecionouVeiculo = false;
+    if (data.veiculo && data.veiculo.id) {
+      var select = document.getElementById('simulador-veiculo');
+      if (select) {
+        select.value = String(data.veiculo.id);
+        if (select.value === String(data.veiculo.id)) {
+          onVeiculoChange();
+          selecionouVeiculo = true;
+        }
+      }
+    }
+    var motos = data.motos || [];
+    for (var i = 0; i < motos.length; i++) {
+      addOrIncrementMoto(motos[i].modelo_id, motos[i].quantidade);
+    }
+    return selecionouVeiculo;
+  }
+
+  function setupNfSelector() {
+    var toggle = document.getElementById('simulador-add-nf-toggle');
+    var box = document.getElementById('simulador-nf-box');
+    var search = document.getElementById('simulador-nf-search');
+    if (!toggle || !box || !search) return;
+
+    toggle.addEventListener('click', function () {
+      var hidden = box.style.display === 'none' || !box.style.display;
+      box.style.display = hidden ? 'block' : 'none';
+      if (hidden) {
+        if (state.nfsPendentes === null) loadNfsPendentes();
+        search.focus();
+      }
+    });
+
+    search.addEventListener('input', function () {
+      renderNfResults(search.value);
+    });
+  }
+
+  function loadNfsPendentes() {
+    state.nfsPendentes = [];
+    fetch('/carvia/api/simulador-carga/nfs-pendentes')
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        state.nfsPendentes = data.nfs || [];
+        var search = document.getElementById('simulador-nf-search');
+        renderNfResults(search ? search.value : '');
+      })
+      .catch(function (err) { console.error('Erro ao carregar NFs pendentes:', err); });
+  }
+
+  function renderNfResults(termo) {
+    var container = document.getElementById('simulador-nf-results');
+    if (!container) return;
+    container.innerHTML = '';
+    var lista = state.nfsPendentes || [];
+    termo = (termo || '').trim().toLowerCase();
+
+    var matches = [];
+    for (var i = 0; i < lista.length && matches.length < 20; i++) {
+      var nf = lista[i];
+      if (state.nfsAdicionadas[nf.numero_nf]) continue;
+      if (termo) {
+        var hay = (nf.numero_nf + ' ' + (nf.cliente || '') + ' ' +
+                   (nf.municipio || '') + ' ' + (nf.uf || '')).toLowerCase();
+        if (hay.indexOf(termo) === -1) continue;
+      }
+      matches.push(nf);
+    }
+
+    for (var j = 0; j < matches.length; j++) {
+      (function (nf) {
+        var btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'list-group-item list-group-item-action py-1 px-2';
+        btn.style.fontSize = '0.75rem';
+        var local = [nf.municipio, nf.uf].filter(Boolean).join('/');
+        btn.innerHTML = '<strong>NF ' + nf.numero_nf + '</strong>' +
+          (nf.cliente ? ' — ' + escapeHtml(nf.cliente) : '') +
+          '<br><span class="text-muted">' + escapeHtml(local) +
+          (nf.data ? ' · ' + nf.data : '') + '</span>';
+        btn.addEventListener('click', function () { addNf(nf); });
+        container.appendChild(btn);
+      })(matches[j]);
+    }
+
+    if (!matches.length) {
+      var empty = document.createElement('div');
+      empty.className = 'text-muted px-2 py-1';
+      empty.style.fontSize = '0.75rem';
+      empty.textContent = (state.nfsPendentes && state.nfsPendentes.length)
+        ? 'Nenhuma NF encontrada.' : 'Nenhuma NF não entregue.';
+      container.appendChild(empty);
+    }
+  }
+
+  function addNf(nf) {
+    if (state.nfsAdicionadas[nf.numero_nf]) return;
+    state.nfsAdicionadas[nf.numero_nf] = true;
+
+    fetch('/carvia/api/simulador-carga/motos-por-nf?nfs=' + encodeURIComponent(nf.numero_nf))
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        var motos = data.motos || [];
+        for (var i = 0; i < motos.length; i++) {
+          addOrIncrementMoto(motos[i].modelo_id, motos[i].quantidade);
+        }
+        addNfChip(nf, motos);
+        var search = document.getElementById('simulador-nf-search');
+        renderNfResults(search ? search.value : '');
+      })
+      .catch(function (err) {
+        console.error('Erro ao resolver motos da NF:', err);
+        delete state.nfsAdicionadas[nf.numero_nf];
+      });
+  }
+
+  function addNfChip(nf, motos) {
+    var chips = document.getElementById('simulador-nf-chips');
+    if (!chips) return;
+    var total = 0;
+    for (var i = 0; i < motos.length; i++) total += (motos[i].quantidade || 0);
+
+    var chip = document.createElement('span');
+    chip.className = 'badge bg-secondary';
+    chip.dataset.nf = nf.numero_nf;
+    chip.textContent = 'NF ' + nf.numero_nf + ' (' + total + (total === 1 ? ' moto)' : ' motos)');
+    chips.appendChild(chip);
+  }
+
+  function escapeHtml(s) {
+    if (!s) return '';
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
   }
 
   // ========== Modo Embarque ==========

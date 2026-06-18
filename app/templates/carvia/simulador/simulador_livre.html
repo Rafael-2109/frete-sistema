@@ -53,6 +53,20 @@
         <button type="button" id="simulador-add-moto" class="simulador-add-btn mt-2">
           + Adicionar Modelo de Moto
         </button>
+
+        <!-- Adicionar NF não entregue (EntregaMonitorada CarVia) -->
+        <div class="simulador-nf-add mt-2">
+          <button type="button" id="simulador-add-nf-toggle" class="simulador-add-btn">
+            + Adicionar NF não entregue
+          </button>
+          <div id="simulador-nf-box" class="mt-2" style="display:none">
+            <input type="text" id="simulador-nf-search" class="form-control form-control-sm"
+                   placeholder="Buscar por NF, cliente ou cidade..." autocomplete="off">
+            <div id="simulador-nf-results" class="list-group mt-1"
+                 style="max-height:220px;overflow-y:auto"></div>
+            <div id="simulador-nf-chips" class="mt-1 d-flex flex-wrap gap-1"></div>
+          </div>
+        </div>
       </div>
 
       <hr class="my-2 opacity-25">
@@ -112,6 +126,11 @@
     </div>
   </div>
 </div>
+
+{% if prefill_json is defined and prefill_json %}
+<!-- Pre-preenchimento vindo da rota do mapa (modo livre editavel) -->
+<script id="simulador-prefill-data" type="application/json">{{ prefill_json|safe }}</script>
+{% endif %}
 {% endblock %}
 
 {% block scripts %}

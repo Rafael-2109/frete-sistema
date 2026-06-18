@@ -159,9 +159,18 @@
           | Pallet: {{ "%.2f"|format(embarque.total_pallet_pedidos()) }}
         </small>
       </h2>
-      <span class="badge bg-{% if embarque.status == 'ativo' %}success{% elif embarque.status == 'cancelado' %}danger{% else %}secondary{% endif %} fs-6">
-        {{ (embarque.status or 'draft').upper() }}
-      </span>
+      <div class="d-flex align-items-center gap-2">
+        {% if current_user.sistema_carvia %}
+        <a href="{{ url_for('carvia.simulador_carga_embarque', embarque_id=embarque.id) }}"
+           class="btn btn-outline-primary btn-sm" target="_blank"
+           title="Simular o empacotamento 3D das motos deste embarque">
+          <i class="fas fa-cube me-1"></i> Simular carga 3D
+        </a>
+        {% endif %}
+        <span class="badge bg-{% if embarque.status == 'ativo' %}success{% elif embarque.status == 'cancelado' %}danger{% else %}secondary{% endif %} fs-6">
+          {{ (embarque.status or 'draft').upper() }}
+        </span>
+      </div>
     </div>
 
     <div class="card-body">
