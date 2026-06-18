@@ -106,6 +106,7 @@ SKILL_TO_CATEGORY: Dict[str, str] = {
     # ── Dados / BI ──
     'consultando-sql': 'Consulta SQL',
     'exportando-arquivos': 'Exportacao de Dados',
+    'gerando-controle-recebiveis': 'Exportacao de Dados',
     'lendo-arquivos': 'Importacao de Dados',
     'padronizando-docs': 'Padronizacao de Docs',
     'diagnosticando-banco': 'Diagnostico de Banco',

@@ -21,11 +21,12 @@
       "conciliando-transferencias-internas",
       "consultando-sql",
       "executando-odoo-financeiro",
+      "gerando-controle-recebiveis",
       "lendo-arquivos",
       "rastreando-odoo",
       "resolvendo-entidades"
     ],
-    "routing_hash": "3cf0cfbe6d6221f9"
+    "routing_hash": "99618669f0d9f88a"
   },
   "especialista-odoo": {
     "skills": [

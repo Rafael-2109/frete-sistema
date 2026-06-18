@@ -160,6 +160,7 @@ Se a resposta esta no reference -> NAO usar skill.
 | executando-odoo-financeiro vs conciliando-transferencias-internas | Extrato de cliente/fornecedor (CNPJ terceiro) -> executando-odoo-financeiro. Extrato NACOM GOYA/61.724.241 (propria empresa) com par espelhado em outro journal -> conciliando-transferencias-internas. Sinal: "is_internal_transfer", "NACOM GOYA no extrato", "transferencia entre bancos proprios" -> conciliando-transferencias-internas |
 | gerando-baseline-conciliacao vs executando-odoo-financeiro | **Relatorio agregado** de pendentes por Mes x Journal (4 abas travadas) -> gerando-baseline-conciliacao. **Operacao** sobre linha individual (criar pagamento, reconciliar 1 extrato) -> executando-odoo-financeiro. Sinal: "atualizar baseline", "foto das conciliacoes", "extratos pendentes por mes" -> gerando-baseline-conciliacao. "reconcilie stmt X" -> executando-odoo-financeiro |
 | gerando-baseline-conciliacao vs razao-geral-odoo | **Extratos pendentes** de conciliacao (account.bank.statement.line is_reconciled=False) -> gerando-baseline-conciliacao. **Razao geral contabil** (account.move.line com saldo acumulado) -> razao-geral-odoo. Sinal: "baseline", "pendentes" -> baseline. "razao geral", "balancete" -> razao |
+| gerando-controle-recebiveis vs executando-odoo-financeiro / auditor-financeiro | **Gerar a PLANILHA de controle de titulos a receber** (situacao CONFIRMADO/Vencido/Em Aberto + vencidos por gestor, READ do contas_a_receber) -> gerando-controle-recebiveis. **Baixar/conciliar** um titulo no Odoo -> executando-odoo-financeiro. **Auditar inconsistencia/SEM_MATCH** local x Odoo -> auditor-financeiro. Sinal: "controle/planilha de recebiveis", "vencidos por gestor", "minha carteira de cobranca" -> gerando-controle-recebiveis |
 | razao-geral-odoo vs auditando-reclassificacao-odoo | **Razao/balancete completo** (todas as contas, saldo acumulado, export Excel) -> razao-geral-odoo. **Auditoria de reclassificacao** (UM par origem→destino: medir saldos por conta/periodo, validar lote-alvo, monitorar % migrado) READ-only -> auditando-reclassificacao-odoo. Sinal: "razao geral", "balancete" -> razao. "reclassificacao", "CPV/VarNeg", "lote-alvo", "quanto migrou" -> auditando-reclassificacao |
 | Nao sei qual skill Odoo usar | -> Subagente `especialista-odoo` (orquestra todas) |
 | Teams tasks vs diagnostico agente | **TeamsTask** (status task, stale cleanup) → `consultando-sql` direto. **Sessoes/memorias Teams** (filtro `--channel teams`, flags) → `gerindo-agente`. **Teams SSO** (config, webhook) → dev manual |
@@ -194,7 +195,7 @@ Se a resposta esta no reference -> NAO usar skill.
 
 ---
 
-## Skills — Inventario Completo (54 invocaveis em `.claude/skills/`)
+## Skills — Inventario Completo (55 invocaveis em `.claude/skills/`)
 
 Cada skill tem `SKILL.md` em `.claude/skills/<nome>/`. `consultando-sql` e invocavel mas expoe data folder (schemas/queries) descoberto via filesystem.
 `SKILL_IMPROVEMENT_ROADMAP.md` na raiz de `.claude/skills/` e DOC, nao skill (nao conta no inventario).
@@ -235,10 +236,11 @@ Cada skill tem `SKILL.md` em `.claude/skills/<nome>/`. `consultando-sql` e invoc
 ### Sentry — monitoramento de erros (1)
 `consultando-sentry` (MCP-first, 20 tools, Seer AI)
 
-### Utilitarios compartilhados (11)
+### Utilitarios compartilhados (12)
 `exportando-arquivos`, `lendo-arquivos` (planilhas + documentos; consolidou `lendo-documentos` 2026-06-09), `consultando-sql`,
 `cotando-frete`, `visao-produto`, `resolvendo-entidades`, `gerindo-expedicao`,
 `monitorando-entregas`, `diagnosticando-banco`,
+`gerando-controle-recebiveis` (gera a planilha de controle de titulos a receber DO SISTEMA — contas_a_receber, situacao CONFIRMADO/Vencido/Em Aberto + vencidos por gestor; financeiro/cobranca. NAO recebe upload),
 `gerando-artifact` (chat web APENAS — bundle.html via React+Tailwind+Parcel, renderizado em modal sandboxed),
 `padronizando-docs` (CRIAR/EDITAR doc ou script conforme padrao PAD-A — header doc:meta, tipo/camada, registro no hub, doc_audit; ver `ARQUITETURA_DE_ARTEFATOS.md`)
 

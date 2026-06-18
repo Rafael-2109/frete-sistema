@@ -112,6 +112,12 @@ SKILLS_SPED_RESERVED: FrozenSet[str] = frozenset({
 # ---------------------------------------------------------------------------
 SKILLS_AUDITORIA_CONTABIL_SUBAGENTE: Set[str] = {
     'auditando-reclassificacao-odoo',
+    # gerando-controle-recebiveis (2026-06-18, mesmo motivo do #164): skill financeira
+    # nova (controle de titulos a receber/vencidos por gestor, READ do contas_a_receber).
+    # O listing do principal ja estava saturado (21 skills = 7972/8000c; adicionar
+    # empurraria p/ 8678 > 8000, truncando descriptions em silencio). Dono semantico =
+    # auditor-financeiro (contas a receber / financeiro). Acesso do usuario: via delegacao.
+    'gerando-controle-recebiveis',
 }
 
 # ---------------------------------------------------------------------------

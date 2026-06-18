@@ -13,6 +13,7 @@ skills:
   - resolvendo-entidades
   - lendo-arquivos
   - auditando-reclassificacao-odoo
+  - gerando-controle-recebiveis
 ---
 
 # Auditor Financeiro — Especialista em Reconciliacao
