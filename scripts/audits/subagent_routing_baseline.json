@@ -18,6 +18,7 @@
   "auditor-financeiro": {
     "skills": [
       "auditando-reclassificacao-odoo",
+      "baixando-credores-lote-odoo",
       "conciliando-transferencias-internas",
       "consultando-sql",
       "executando-odoo-financeiro",
@@ -26,7 +27,7 @@
       "rastreando-odoo",
       "resolvendo-entidades"
     ],
-    "routing_hash": "99618669f0d9f88a"
+    "routing_hash": "02fe6886d2eb70d8"
   },
   "especialista-odoo": {
     "skills": [

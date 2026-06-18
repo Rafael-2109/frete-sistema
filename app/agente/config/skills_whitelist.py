@@ -118,6 +118,13 @@ SKILLS_AUDITORIA_CONTABIL_SUBAGENTE: Set[str] = {
     # empurraria p/ 8678 > 8000, truncando descriptions em silencio). Dono semantico =
     # auditor-financeiro (contas a receber / financeiro). Acesso do usuario: via delegacao.
     'gerando-controle-recebiveis',
+    # baixando-credores-lote-odoo (2026-06-18, mesmo motivo): skill financeira de baixa de
+    # credores em lote (contas a PAGAR; par SICOOB+DESAGIO). HOJE so' o passo 1a (PREVIEW
+    # READ-only) — WRITE (1b) pendente, --confirmar recusado. Description longa (~1.1Kc):
+    # somada ao listing ja saturado (~7972/8000c) estouraria 8000, truncando descriptions em
+    # silencio. Dono semantico = auditor-financeiro (baixas / financeiro). Acesso: via delegacao.
+    # Promover a exposicao mais ampla so' apos 1b + validacao supervisionada (handoff 1d).
+    'baixando-credores-lote-odoo',
 }
 
 # ---------------------------------------------------------------------------

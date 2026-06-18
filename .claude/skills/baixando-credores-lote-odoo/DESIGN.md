@@ -14,9 +14,18 @@ atualizado: 2026-06-18
 Demanda A da Martha (financeiro) — a mais recorrente das 6 mapeadas (4 sessoes/mes). Este doc consolida
 o design aprovado + a pesquisa de reconciliacao cross-company para guiar a implementacao do codigo.
 
-> **Status: DESIGN APROVADO, código pendente.** WRITE de pagamento real no Odoo —
-> implementar incremental (preview→write) com validação ao vivo antes de uso real.
+> **Status: passo 1a (PREVIEW READ-only) IMPLEMENTADO em 2026-06-18** (service
+> `baixa_credores_lote_service.py` + `processar_baixas.py` + SKILL.md + reference + 21 testes
+> + smoke test ao vivo). WRITE (1b) e demais passos pendentes — ver Roadmap.
 > Origem: demanda A da Martha (financeiro), a mais recorrente das 6 mapeadas (4 sessões/mês).
+>
+> **Descobertas ao vivo (2026-06-18) que refinaram o design:**
+> - O `name` da fatura **COLIDE entre companies** (mesmo `COM2/2026/06/NNNN` em FB/CD/LF). O lookup
+>   por `name` retorna várias → a coluna **EMPRESA** da planilha desambigua (company efetiva ainda
+>   vem da fatura, O8). Sem EMPRESA na colisão → `BLOQUEADO_AMBIGUO`.
+> - Journal **DESÁGIO (1025) só existe na FB**. LF tem SICOOB (386) mas **não** DESÁGIO →
+>   `desagio>0` em LF = `BLOQUEADO_SEM_JOURNAL_DESAGIO`; `desagio==0` em LF lança só o SICOOB.
+> - Faturas parceladas têm **N linhas payable** abertas → residual = soma; mapear par↔parcela é tarefa do 1b.
 
 ## Objetivo
 A partir de uma planilha de credores, criar **pagamentos em lote de contas a pagar** no Odoo:
@@ -78,7 +87,7 @@ Write-back/entrega via `exportando-arquivos`; leitura via `lendo-arquivos`.
 - **Tocar:** `app/financeiro/constants.py` (✅ journals adicionados); follow-up: `comprovante_lancamento_service` importar `SICOOB_JOURNAL_POR_COMPANY` de constants.
 
 ## Roadmap de implementação (incremental — move dinheiro real)
-1. **Parser + PREVIEW** (READ, dry-run): planilha → localiza fatura → valida saldo/company/partner → calcula pares → relatório + planilha anotada. **Zero escrita. Testável agora.**
+1. **Parser + PREVIEW** (READ, dry-run): planilha → localiza fatura → valida saldo/company/partner → calcula pares → relatório + planilha anotada. **Zero escrita. ✅ FEITO 2026-06-18.**
 2. **WRITE FB/LF** com os 6 guards + write-ahead idempotência.
 3. **`reverter_baixa.py`**.
 4. **Validação ao vivo**: dry-run + 1 credor FB pequeno supervisionado antes de uso real.
@@ -88,3 +97,12 @@ Write-back/entrega via `exportando-arquivos`; leitura via `lendo-arquivos`.
 - Contradição nas fontes sobre payment cross-company (company título vs banco) — resolver com inspeção real (Fase 2).
 - `EMPRESA_MAP` divergente em `constants.py:100` — bug latente (fora do escopo desta skill; anotado).
 - WRITE real não pode ser validado autonomamente — exige supervisão (passo 4).
+
+## Pendências para o passo 1b (do review adversarial 2026-06-18)
+- **Idempotência (ADESAO-004):** `BaixaPagamentoItem` **NÃO tem** coluna `idempotency_key` (tem `payment_ref`, semântica do fluxo EXTRATO). O write-ahead do guard F3 do 1b precisa: (a) adicionar `idempotency_key` (migration DDL + Python — par obrigatório) **ou** (b) ancorar a chave determinística no `ref`/`payment_ref` (CMPMP+venc+valor) e buscar existência por ela. Decidir no 1b antes de escrever.
+- **Consolidar SICOOB (REUSO-001):** `comprovante_lancamento_service.SICOOB_JOURNAL_POR_COMPANY` duplica `constants.JOURNAL_SICOOB_POR_COMPANY` (e `extrato_conciliacao_service` importa do service, não de constants). Follow-up: importar de `constants` (toca 2 callers — fora do 1a).
+
+## Notas de implementação do 1a (parser)
+- **Datas aceitas:** datas nativas do xlsx (openpyxl), strings BR (`dd/mm/aaaa`, `dd-mm-aaaa`) e ISO (`aaaa-mm-dd`). Ano de 2 dígitos **não** é aceito; ano fora de [2000, 2100] em string → ignorado.
+- **Detecção de coluna de vencimento (PARSER-004):** por valor (suporta cabeçalho `6`/`6.1`), mas colunas cujo header contenha `EMISSAO/NF/NOTA/NUMERO/COMPETENCIA/PAGAMENTO/BAIXA/...` são **excluídas** (não confundir data de emissão/NF com vencimento). Conferir as datas no `plano` do relatório.
+- **Deságio:** `0 <= deságio < parcela` (negativo também é `BLOQUEADO_VALOR`).

@@ -14,6 +14,7 @@ skills:
   - lendo-arquivos
   - auditando-reclassificacao-odoo
   - gerando-controle-recebiveis
+  - baixando-credores-lote-odoo
 ---
 
 # Auditor Financeiro — Especialista em Reconciliacao
