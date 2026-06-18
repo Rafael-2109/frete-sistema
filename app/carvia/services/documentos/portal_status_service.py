@@ -83,6 +83,81 @@ class CarviaPortalStatusService:
         return {'etapas': etapas, 'atual_key': atual_key, 'atual_label': atual_label or 'Aguardando'}
 
     @staticmethod
+    def _qtd_motos_por_nf(nf_ids):
+        """{nf_id: total REAL de motos} = max(chassis em carvia_nf_veiculos,
+        soma de `quantidade` dos carvia_nf_itens com `modelo_moto_id`).
+
+        Por que max() e nao a contagem de chassi: as NFs por PDF_DANFE (a maioria)
+        NAO tem chassi cadastrado — a moto so existe no item, entao contar so chassi
+        dava "0 motos"; e ha NFs com chassi PARCIAL (menos chassis lidos que motos
+        vendidas). max(chassi, item) cobre os dois lados sem SUBCONTAR (so-chassi)
+        nem DUPLICAR (chassi + item descrevem a mesma moto fisica). Batch em 2
+        agregacoes p/ nao gerar N+1 nas listagens.
+        """
+        from app import db
+        from app.carvia.models.documentos import CarviaNfVeiculo, CarviaNfItem
+        from sqlalchemy import func
+        ids = [i for i in (nf_ids or []) if i]
+        if not ids:
+            return {}
+        chassi = dict(db.session.query(CarviaNfVeiculo.nf_id, func.count(CarviaNfVeiculo.id))
+                      .filter(CarviaNfVeiculo.nf_id.in_(ids))
+                      .group_by(CarviaNfVeiculo.nf_id).all())
+        itens = dict(db.session.query(CarviaNfItem.nf_id,
+                                      func.coalesce(func.sum(CarviaNfItem.quantidade), 0))
+                     .filter(CarviaNfItem.nf_id.in_(ids),
+                             CarviaNfItem.modelo_moto_id.isnot(None))
+                     .group_by(CarviaNfItem.nf_id).all())
+        return {i: max(int(chassi.get(i, 0) or 0),
+                       int(round(float(itens.get(i, 0) or 0)))) for i in ids}
+
+    @staticmethod
+    def _motos_detalhe_nf(nf):
+        """(motos_por_modelo, qtd_motos) p/ a tela do cliente — exibe TODAS as motos
+        da NF, nao so as que tem chassi. Por modelo:
+          - NF COM chassi: 1 linha por chassi (contagem fisica exata). Se o DANFE
+            (itens) indicar MAIS motos que chassis lidos, as faltantes entram como
+            chassi vazio no grupo "Sem chassi informado" (NF de chassi parcial).
+          - NF SEM chassi (PDF_DANFE, a maioria): agrupa pelo modelo do item, com
+            chassi vazio (a moto existe; o chassi ainda nao foi lido).
+        qtd_motos = max(chassis, itens-modelo) — nunca subconta nem duplica.
+        NAO casa texto-do-chassi <-> modelo-do-item de proposito: em NFs ja completas
+        (chassi == item) um match impreciso DUPLICARIA a contagem.
+        """
+        from app.carvia.models.documentos import CarviaNfVeiculo, CarviaNfItem
+        veics = (CarviaNfVeiculo.query.filter_by(nf_id=nf.id)
+                 .order_by(CarviaNfVeiculo.modelo, CarviaNfVeiculo.chassi).all())
+        itens = (CarviaNfItem.query
+                 .filter(CarviaNfItem.nf_id == nf.id,
+                         CarviaNfItem.modelo_moto_id.isnot(None)).all())
+        total_item = sum(int(round(float(it.quantidade or 0))) for it in itens
+                         if (it.quantidade or 0) > 0)
+
+        if veics:
+            por_modelo = {}
+            for v in veics:
+                por_modelo.setdefault(v.modelo or 'Sem modelo', []).append(v.chassi)
+            motos_por_modelo = [{'modelo': m, 'qtd': len(ch), 'chassis': ch}
+                                for m, ch in por_modelo.items()]
+            deficit = total_item - len(veics)
+            if deficit > 0:
+                motos_por_modelo.append({'modelo': 'Sem chassi informado',
+                                         'qtd': deficit, 'chassis': [''] * deficit})
+            return motos_por_modelo, max(len(veics), total_item)
+
+        # NF sem chassi: a moto existe so no item — agrupa por modelo, chassi vazio.
+        por_modelo = {}
+        for it in itens:
+            qtd = int(round(float(it.quantidade or 0)))
+            if qtd <= 0:
+                continue
+            nome = it.modelo_moto.nome if it.modelo_moto else 'Sem modelo'
+            por_modelo[nome] = por_modelo.get(nome, 0) + qtd
+        motos_por_modelo = [{'modelo': nome, 'qtd': q, 'chassis': [''] * q}
+                            for nome, q in por_modelo.items()]
+        return motos_por_modelo, total_item
+
+    @staticmethod
     def listar_nfs(portal_usuario, busca=None, limite=200):
         """NFs ATIVAS cujo cnpj_destinatario esta nos CNPJs permitidos do usuario. Escopo de seguranca."""
         from app.carvia.models.documentos import CarviaNf
@@ -96,7 +171,7 @@ class CarviaPortalStatusService:
         if busca:
             q = q.filter(CarviaNf.numero_nf.ilike(f'%{busca.strip()}%'))
         nfs = q.order_by(CarviaNf.data_emissao.desc().nullslast(), CarviaNf.id.desc()).limit(limite).all()
-        from app.carvia.models.documentos import CarviaNfVeiculo
+        qtd_map = CarviaPortalStatusService._qtd_motos_por_nf([nf.id for nf in nfs])
         out = []
         for nf in nfs:
             st = CarviaPortalStatusService.status_nf(nf)
@@ -105,7 +180,7 @@ class CarviaPortalStatusService:
                 'atual_key': st['atual_key'],
                 'atual_label': st['atual_label'],
                 'etapas': st['etapas'],  # mini-timeline resumida na listagem
-                'qtd_motos': CarviaNfVeiculo.query.filter_by(nf_id=nf.id).count(),
+                'qtd_motos': qtd_map.get(nf.id, 0),
             })
         return out
 
@@ -157,7 +232,7 @@ class CarviaPortalStatusService:
         Retorno: mesma estrutura de listar_nfs (lista de dicts nf/etapas/atual_*/qtd_motos).
         O filtro status_etapa e aplicado APOS o limite (igual ao /portal-usuarios/<uid>/ver).
         """
-        from app.carvia.models.documentos import CarviaNf, CarviaNfVeiculo
+        from app.carvia.models.documentos import CarviaNf
         from sqlalchemy import func
         norm = func.regexp_replace(CarviaNf.cnpj_destinatario, r'\D', '', 'g')
         q = CarviaNf.query.filter(CarviaNf.status == 'ATIVA')
@@ -181,6 +256,7 @@ class CarviaPortalStatusService:
 
         nfs = q.order_by(CarviaNf.data_emissao.desc().nullslast(),
                          CarviaNf.id.desc()).limit(limite).all()
+        qtd_map = CarviaPortalStatusService._qtd_motos_por_nf([nf.id for nf in nfs])
         alvo = status_etapa.strip().upper() if status_etapa else None
         out = []
         for nf in nfs:
@@ -192,7 +268,7 @@ class CarviaPortalStatusService:
                 'atual_key': st['atual_key'],
                 'atual_label': st['atual_label'],
                 'etapas': st['etapas'],
-                'qtd_motos': CarviaNfVeiculo.query.filter_by(nf_id=nf.id).count(),
+                'qtd_motos': qtd_map.get(nf.id, 0),
             })
         return out
 
@@ -234,15 +310,8 @@ class CarviaPortalStatusService:
         """Dados ricos p/ a tela do cliente: motos agrupadas por modelo (expansiveis em chassis),
         previsoes (coleta/chegada/entrega), embarque, chave de acesso e os 4 documentos (sempre
         listados, com flag de disponibilidade)."""
-        from app.carvia.models.documentos import CarviaNfVeiculo
         from app.carvia.models.coleta import CarviaColetaNf
-        veics = (CarviaNfVeiculo.query.filter_by(nf_id=nf.id)
-                 .order_by(CarviaNfVeiculo.modelo, CarviaNfVeiculo.chassi).all())
-        por_modelo = {}
-        for v in veics:
-            por_modelo.setdefault(v.modelo or 'Sem modelo', []).append(v.chassi)
-        motos_por_modelo = [{'modelo': m, 'qtd': len(ch), 'chassis': ch}
-                            for m, ch in por_modelo.items()]
+        motos_por_modelo, qtd_motos = CarviaPortalStatusService._motos_detalhe_nf(nf)
 
         entrega = CarviaPortalStatusService._entrega_carvia(nf.numero_nf)
         coleta_nf = CarviaColetaNf.query.filter_by(carvia_nf_id=nf.id).first()
@@ -256,7 +325,7 @@ class CarviaPortalStatusService:
         ]
         return {
             'motos_por_modelo': motos_por_modelo,
-            'qtd_motos': len(veics),
+            'qtd_motos': qtd_motos,
             'arquivos': arquivos,
             'previsao_coleta': getattr(coleta, 'data_prevista', None) if coleta else None,
             'previsao_chegada': getattr(coleta, 'data_prevista_chegada', None) if coleta else None,

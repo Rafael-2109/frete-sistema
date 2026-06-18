@@ -10,7 +10,7 @@ import logging
 from collections import defaultdict
 from decimal import Decimal, ROUND_HALF_UP
 
-from sqlalchemy import func
+from sqlalchemy import func, or_
 
 from app import db
 
@@ -36,35 +36,68 @@ def _build_nf_peso_subquery(alias='nf_peso'):
     )
 
 
-def _build_moto_count_subquery(alias='moto_count'):
-    """Subquery: contagem de veiculos (motos) por operacao via CarviaNfVeiculo.
+def _build_moto_count_per_nf_subquery(alias='moto_nf'):
+    """Subquery (nf_id, qtd_motos) com a contagem REAL de motos por NF:
+    GREATEST(chassis em carvia_nf_veiculos, soma de `quantidade` dos
+    carvia_nf_itens com `modelo_moto_id`).
 
-    Apenas operacoes cujas NFs tem registros em carvia_nf_veiculos (chassis)
-    sao consideradas 'moto'. COUNT(veiculo.id) = numero real de motos.
+    Mesma regra do Portal do Cliente (`portal_status_service._qtd_motos_por_nf`):
+    NFs por PDF_DANFE (a maioria) NAO tem chassi — a moto so existe no item;
+    e ha NFs com chassi PARCIAL (menos chassis lidos que motos vendidas). So
+    contar chassi SUBCONTAVA/zerava as motos (afetando rateio de CTe e valor/moto).
+    GREATEST cobre os dois lados sem duplicar (chassi e item descrevem a MESMA
+    moto fisica).
     """
-    from app.carvia.models import CarviaOperacaoNf, CarviaNfVeiculo
+    from app.carvia.models import CarviaNf, CarviaNfVeiculo, CarviaNfItem
 
+    chassi_sub = (
+        db.session.query(
+            CarviaNfVeiculo.nf_id.label('nf_id'),
+            func.count(CarviaNfVeiculo.id).label('qtd'),
+        )
+        .group_by(CarviaNfVeiculo.nf_id)
+        .subquery()
+    )
+    item_sub = (
+        db.session.query(
+            CarviaNfItem.nf_id.label('nf_id'),
+            func.coalesce(func.round(func.sum(CarviaNfItem.quantidade)), 0).label('qtd'),
+        )
+        .filter(CarviaNfItem.modelo_moto_id.isnot(None))
+        .group_by(CarviaNfItem.nf_id)
+        .subquery()
+    )
     return (
         db.session.query(
-            CarviaOperacaoNf.operacao_id,
-            func.count(CarviaNfVeiculo.id).label('qtd_veiculos'),
+            CarviaNf.id.label('nf_id'),
+            func.greatest(
+                func.coalesce(chassi_sub.c.qtd, 0),
+                func.coalesce(item_sub.c.qtd, 0),
+            ).label('qtd_motos'),
         )
-        .join(CarviaNfVeiculo, CarviaNfVeiculo.nf_id == CarviaOperacaoNf.nf_id)
-        .group_by(CarviaOperacaoNf.operacao_id)
+        .outerjoin(chassi_sub, chassi_sub.c.nf_id == CarviaNf.id)
+        .outerjoin(item_sub, item_sub.c.nf_id == CarviaNf.id)
+        .filter(or_(chassi_sub.c.nf_id.isnot(None), item_sub.c.nf_id.isnot(None)))
         .subquery(alias)
     )
 
 
-def _build_moto_count_per_nf_subquery(alias='moto_nf'):
-    """Subquery: contagem de veiculos (motos) por NF via CarviaNfVeiculo."""
-    from app.carvia.models import CarviaNfVeiculo
+def _build_moto_count_subquery(alias='moto_count'):
+    """Subquery (operacao_id, qtd_veiculos) = SUM, por NF da operacao, da contagem
+    REAL de motos GREATEST(chassis, itens-modelo) — ver
+    `_build_moto_count_per_nf_subquery`. Inclui operacoes cujas NFs so tem moto no
+    item (PDF_DANFE), nao apenas as com chassi.
+    """
+    from app.carvia.models import CarviaOperacaoNf
 
+    moto_nf = _build_moto_count_per_nf_subquery('moto_nf_base')
     return (
         db.session.query(
-            CarviaNfVeiculo.nf_id,
-            func.count(CarviaNfVeiculo.id).label('qtd_motos'),
+            CarviaOperacaoNf.operacao_id,
+            func.coalesce(func.sum(moto_nf.c.qtd_motos), 0).label('qtd_veiculos'),
         )
-        .group_by(CarviaNfVeiculo.nf_id)
+        .join(moto_nf, moto_nf.c.nf_id == CarviaOperacaoNf.nf_id)
+        .group_by(CarviaOperacaoNf.operacao_id)
         .subquery(alias)
     )
 
@@ -72,7 +105,8 @@ def _build_moto_count_per_nf_subquery(alias='moto_nf'):
 def _calcular_metricas(valor_total_raw, qtd_motos_raw, peso_cubado_raw, peso_bruto_nfs_raw):
     """Calcula peso efetivo, valor/unidade e valor/kg cubado a partir dos totais.
 
-    qtd_motos: contagem real de veiculos (chassis) — se 0, mostra N/A.
+    qtd_motos: contagem real de motos = GREATEST(chassis, itens-modelo) — se 0,
+        mostra N/A (ver _build_moto_count_per_nf_subquery).
     """
     valor_total = Decimal(str(valor_total_raw)) if valor_total_raw else ZERO
     qtd_motos = int(qtd_motos_raw or 0)
@@ -118,7 +152,8 @@ class GerencialService:
 
         Regras:
         - Exclui status CANCELADO e registros sem UF/data
-        - qtd_motos = COUNT(CarviaNfVeiculo.id) — so operacoes com motos identificadas
+        - qtd_motos = SUM por NF de GREATEST(chassis, itens-modelo) — inclui motos
+          sem chassi (PDF_DANFE), nao so as com chassi
         - peso_efetivo = peso_cubado_total se > 0, senao peso_bruto_nfs_total
         - Sem motos identificadas → valor_por_unidade = None (N/A)
         - Divisao por zero → None (template exibe N/A)

@@ -103,6 +103,7 @@ def register_gerencial_routes(bp):
 
         Rateio para 1 CTe : N NFs (mesmo criterio para todas NFs do CTe):
         1. Motos: se QUALQUER NF do grupo tem motos → rateia por qtd motos
+           (qtd_motos por NF = GREATEST(chassis, itens-modelo); inclui NFs sem chassi)
         2. Peso: se nenhuma NF tem motos mas tem peso → rateia por peso_bruto
         3. Divisao igual: se nao tem motos nem peso → divide igualmente
         """
@@ -112,18 +113,16 @@ def register_gerencial_routes(bp):
 
         from app.carvia.models import (
             CarviaNf, CarviaOperacao, CarviaOperacaoNf,
-            CarviaNfVeiculo, CarviaFaturaCliente,
+            CarviaFaturaCliente,
+        )
+        from app.carvia.services.financeiro.gerencial_service import (
+            _build_moto_count_per_nf_subquery,
         )
 
         # --- 1. Query principal: NFs + Operacao + Fatura + Motos ---
-        motos_subq = (
-            db.session.query(
-                CarviaNfVeiculo.nf_id,
-                func.count(CarviaNfVeiculo.id).label('qtd_motos'),
-            )
-            .group_by(CarviaNfVeiculo.nf_id)
-            .subquery()
-        )
+        # qtd_motos REAL por NF = GREATEST(chassis, itens-modelo) — inclui NFs
+        # sem chassi (PDF_DANFE); so-chassi zerava o rateio dessas NFs.
+        motos_subq = _build_moto_count_per_nf_subquery('moto_nf_export')
 
         nfs_por_op_subq = (
             db.session.query(

@@ -121,7 +121,7 @@
             </summary>
             <div class="cvp-modelo__chassis">
                 {% for ch in grp.chassis %}
-                <div class="cvp-modelo__chassi">{{ ch }}</div>
+                <div class="cvp-modelo__chassi">{{ ch or '—' }}</div>
                 {% endfor %}
             </div>
         </details>

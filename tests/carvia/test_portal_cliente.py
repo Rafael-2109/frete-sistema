@@ -148,6 +148,77 @@ def test_dados_detalhe_agrupa_motos_e_lista_4_documentos(db):
     assert all(a['disponivel'] is False for a in dados['arquivos'])
 
 
+def _modelo(db, nome):
+    """get-or-create: `nome` e UNIQUE e o catalogo real ja pode te-lo cadastrado."""
+    from app.carvia.models.config_moto import CarviaModeloMoto
+    m = CarviaModeloMoto.query.filter_by(nome=nome).first()
+    if m:
+        return m
+    m = CarviaModeloMoto(nome=nome, comprimento=1.8, largura=0.7, altura=1.1,
+                         peso_medio=90, ativo=True, criado_por='test@bot')
+    db.session.add(m); db.session.flush()
+    return m
+
+
+def _item(db, nf, modelo, qtd):
+    from app.carvia.models.documentos import CarviaNfItem
+    it = CarviaNfItem(nf_id=nf.id, descricao=modelo.nome, quantidade=qtd,
+                      modelo_moto_id=modelo.id)
+    db.session.add(it); db.session.flush()
+    return it
+
+
+def test_motos_sem_chassi_contam_pelo_item(db):
+    """NF por PDF_DANFE (sem chassi) — a moto so existe no item. Deve contar TODAS
+    (nao 0, como antes) e exibir chassi vazio, agrupadas pelo modelo do item."""
+    nf = _nf(db, 'NFSC', '88888888000188')
+    _item(db, nf, _modelo(db, 'X12'), 3)
+
+    dados = CarviaPortalStatusService.dados_detalhe(nf)
+    assert dados['qtd_motos'] == 3  # antes: 0 (so contava chassi)
+    grp = {g['modelo']: g for g in dados['motos_por_modelo']}
+    assert grp['X12']['qtd'] == 3
+    assert grp['X12']['chassis'] == ['', '', '']  # 3 motos, chassi vazio
+    # a listagem usa a MESMA fonte de contagem
+    assert CarviaPortalStatusService._qtd_motos_por_nf([nf.id])[nf.id] == 3
+
+
+def test_motos_chassi_parcial_completa_com_vazio(db):
+    """NF com chassi PARCIAL (menos chassis lidos que motos no DANFE): exibe os
+    chassis reais + as faltantes como vazio; qtd = total real, nao subconta."""
+    from app.carvia.models.documentos import CarviaNfVeiculo
+    nf = _nf(db, 'NFPC', '99999999000199')
+    _item(db, nf, _modelo(db, 'X11 MINI'), 5)  # DANFE: 5 motos
+    for ch in ('A1', 'A2', 'A3', 'A4'):        # so 4 chassis lidos
+        db.session.add(CarviaNfVeiculo(nf_id=nf.id, chassi=ch,
+                                       modelo='MINI SCOOTER ELETR. X11 MINI'))
+    db.session.flush()
+
+    dados = CarviaPortalStatusService.dados_detalhe(nf)
+    assert dados['qtd_motos'] == 5  # max(4 chassi, 5 item) — NAO 4
+    grupos = {g['modelo']: g for g in dados['motos_por_modelo']}
+    assert grupos['MINI SCOOTER ELETR. X11 MINI']['qtd'] == 4
+    assert grupos['Sem chassi informado']['qtd'] == 1
+    assert grupos['Sem chassi informado']['chassis'] == ['']
+
+
+def test_motos_chassi_maior_que_item_usa_chassi(db):
+    """Item subconta (1) vs 3 chassis fisicos: a contagem fisica manda; sem vazios."""
+    from app.carvia.models.documentos import CarviaNfVeiculo
+    nf = _nf(db, 'NFCM', '10101010000110')
+    _item(db, nf, _modelo(db, 'BIG TRI'), 1)
+    for ch in ('B1', 'B2', 'B3'):
+        db.session.add(CarviaNfVeiculo(nf_id=nf.id, chassi=ch,
+                                       modelo='TRI MOTO ELETRICA BIG-TRI'))
+    db.session.flush()
+
+    dados = CarviaPortalStatusService.dados_detalhe(nf)
+    assert dados['qtd_motos'] == 3  # max(3 chassi, 1 item)
+    grupos = {g['modelo']: g for g in dados['motos_por_modelo']}
+    assert grupos['TRI MOTO ELETRICA BIG-TRI']['qtd'] == 3
+    assert 'Sem chassi informado' not in grupos  # sem deficit
+
+
 # ------------------------------------------------------------ render smoke
 def _admin():
     u = MagicMock(); u.is_authenticated = True; u.sistema_carvia = True

@@ -212,3 +212,63 @@ class TestD4AjusteManual:
             rules = [str(r) for r in app.url_map.iter_rules()
                      if 'ajuste-manual' in str(r)]
             assert any('extrato-conta' in r for r in rules)
+
+
+# ---------------------------------------------------------------------------
+# Contagem de motos no gerencial = GREATEST(chassis, itens-modelo)
+# ---------------------------------------------------------------------------
+
+def _modelo_gm(db, nome):
+    from app.carvia.models.config_moto import CarviaModeloMoto
+    m = CarviaModeloMoto.query.filter_by(nome=nome).first()
+    if m:
+        return m
+    m = CarviaModeloMoto(nome=nome, comprimento=1.8, largura=0.7, altura=1.1,
+                         peso_medio=90, ativo=True, criado_por='test')
+    db.session.add(m); db.session.flush()
+    return m
+
+
+def _nf_gm(db, numero):
+    from app.carvia.models.documentos import CarviaNf
+    nf = CarviaNf(numero_nf=numero, cnpj_emitente='12345678000199', nome_emitente='E',
+                  cnpj_destinatario='11222333000144', nome_destinatario='C',
+                  tipo_fonte='MANUAL', status='ATIVA', criado_por='test')
+    db.session.add(nf); db.session.flush()
+    return nf
+
+
+class TestContagemMotosGerencial:
+    """A subquery do gerencial usa a MESMA regra do portal: GREATEST(chassi, item)."""
+
+    def test_per_nf_max_chassi_item(self, db):
+        from app.carvia.models.documentos import CarviaNfVeiculo, CarviaNfItem
+        from app.carvia.services.financeiro.gerencial_service import (
+            _build_moto_count_per_nf_subquery,
+        )
+        x12 = _modelo_gm(db, 'X12')
+
+        # NF_A: so item (3), sem chassi -> 3 (antes: 0)
+        nf_a = _nf_gm(db, f'GMA-{_sfx()}')
+        db.session.add(CarviaNfItem(nf_id=nf_a.id, descricao='X12', quantidade=3,
+                                    modelo_moto_id=x12.id))
+        # NF_B: chassi parcial (2) < item (5) -> 5
+        nf_b = _nf_gm(db, f'GMB-{_sfx()}')
+        db.session.add(CarviaNfItem(nf_id=nf_b.id, descricao='X12', quantidade=5,
+                                    modelo_moto_id=x12.id))
+        for ch in (f'B{_sfx()}', f'B{_sfx()}'):
+            db.session.add(CarviaNfVeiculo(nf_id=nf_b.id, chassi=ch, modelo='X12'))
+        # NF_C: chassi (3) > item (1) -> 3
+        nf_c = _nf_gm(db, f'GMC-{_sfx()}')
+        db.session.add(CarviaNfItem(nf_id=nf_c.id, descricao='X12', quantidade=1,
+                                    modelo_moto_id=x12.id))
+        for ch in (f'C{_sfx()}', f'C{_sfx()}', f'C{_sfx()}'):
+            db.session.add(CarviaNfVeiculo(nf_id=nf_c.id, chassi=ch, modelo='X12'))
+        db.session.flush()
+
+        sub = _build_moto_count_per_nf_subquery('moto_nf_test')
+        got = dict(db.session.query(sub.c.nf_id, sub.c.qtd_motos)
+                   .filter(sub.c.nf_id.in_([nf_a.id, nf_b.id, nf_c.id])).all())
+        assert int(got[nf_a.id]) == 3   # so item
+        assert int(got[nf_b.id]) == 5   # max(2 chassi, 5 item)
+        assert int(got[nf_c.id]) == 3   # max(3 chassi, 1 item)
