@@ -141,7 +141,7 @@
 
     for (var i = 0; i < items.length; i++) {
       var item = items[i];
-      var best = findBestFit(getOrientations(item), freeSpaces, bay, placed, opt);
+      var best = findBestFit(item, getOrientations(item), freeSpaces, bay, placed, opt);
 
       if (best) {
         var p = {
@@ -149,6 +149,7 @@
           x: best.x, y: best.y, z: best.z,
           w: best.ow, d: best.od, h: best.oh,
           orientacao: best.orientIdx,
+          slabs: best.slabs,
         };
         placed.push(p);
         freeSpaces = subtractBox(freeSpaces, p);
@@ -232,6 +233,28 @@
     ];
   }
 
+  // Slabs absolutos de um item numa dada orientacao/posicao.
+  // Moto = 1 slab (footprint da orientacao). Pallet sobrescreve via palletSlabs.
+  function itemSlabs(item, ori, x, y, z) {
+    if (item.tipo === 'pallet') return palletSlabs(item, x, y, z);
+    return [{ x: x, y: y, z: z, w: ori.ow, d: ori.od, h: ori.oh }];
+  }
+
+  // Dois conjuntos de slabs colidem se algum par se sobrepoe nos 3 eixos.
+  function slabsColidem(a, b) {
+    for (var i = 0; i < a.length; i++) {
+      for (var j = 0; j < b.length; j++) {
+        var s = a[i], t = b[j];
+        if (s.x < t.x + t.w - 0.1 && s.x + s.w > t.x + 0.1 &&
+            s.y < t.y + t.h - 0.1 && s.y + s.h > t.y + 0.1 &&
+            s.z < t.z + t.d - 0.1 && s.z + s.d > t.z + 0.1) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
   /**
    * Bottom-Left-Back Fill com validacao de apoio fisico.
    *
@@ -242,7 +265,7 @@
    *
    * Chao (Y=0): apoio total. Empilhada (Y>0): exige supportPct >= opt.minSupport.
    */
-  function findBestFit(orientations, freeSpaces, bay, placed, opt) {
+  function findBestFit(item, orientations, freeSpaces, bay, placed, opt) {
     var best = null;
     var bestY = Infinity, bestZ = Infinity, bestX = Infinity, bestShort = Infinity;
 
@@ -286,6 +309,7 @@
             x: sp.x, y: sp.y, z: sp.z,
             ow: ori.ow, od: ori.od, oh: ori.oh,
             orientIdx: ori.idx,
+            slabs: itemSlabs(item, ori, sp.x, sp.y, sp.z),
           };
         }
       }

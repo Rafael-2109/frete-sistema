@@ -157,5 +157,18 @@ test('packOptimized mantem invariantes fisicos (sem sobreposicao, dentro do bau)
   p.forEach(b => { assert(b.x + b.w <= BAY.w + E && b.y + b.h <= BAY.h + E && b.z + b.d <= BAY.d + E, `${b.moto.nome} fora do bau`); });
 });
 
+// ---- Conservas Nacom: multi-slab + pallets ----
+
+test('multi-slab: moto posicionada expoe slabs absolutos coerentes', () => {
+  const r = BinPacker.pack({ w: 200, d: 200, h: 200 },
+    [{ id: 1, nome: 'M', comprimento: 100, largura: 40, altura: 50, peso_medio: 100, qty: 1 }]);
+  assert(r.stats.posicionadas === 1, 'deveria posicionar 1');
+  const p = r.placed[0];
+  assert(Array.isArray(p.slabs) && p.slabs.length === 1, 'moto tem 1 slab');
+  const s = p.slabs[0];
+  assert(s.w === p.w && s.d === p.d && s.h === p.h, 'slab = footprint da moto');
+  assert(s.x === p.x && s.y === p.y && s.z === p.z, 'slab na posicao da moto');
+});
+
 console.log(failures === 0 ? '\nTODOS OS TESTES PASSARAM' : `\n${failures} TESTE(S) FALHARAM`);
 process.exit(failures === 0 ? 0 : 1);
