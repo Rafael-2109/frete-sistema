@@ -4,11 +4,12 @@ camada: L1
 sot_de: —
 hub: docs/superpowers/plans/INDEX.md
 superseded_by: —
-atualizado: 2026-06-04
+atualizado: 2026-06-18
 -->
 # Plans — indice
 > **Papel:** mapa dos planos de implementacao. So ponteiros.
 
+- [Simulador 3D — Conservas Nacom (carga mista pallet + moto)](2026-06-18-simulador-3d-conservas-nacom.md) — expande o simulador de motos p/ conservas palletizadas: Camada 1 monta pallets PBR (regras 1-3, folga 5cm, overbooking 50%, modos A-D) em Python; Camada 2 estende o bin-packer (multi-slab estrado+coluna p/ caminho critico, 2 fases Nacom-embaixo); 10 tasks TDD; EXECUTADO (na main)
 - [Roteirizacao "Ver no Mapa" — Fase 1](2026-06-16-roteirizacao-ver-no-mapa-fase1.md) — migration custo em veiculos + service custo/selecao/motor (chunking 25) + API /api/rota/otimizar + UI custo (7 tasks TDD)
 - [Roteirizacao "Ver no Mapa" — Fase 2](2026-06-16-roteirizacao-ver-no-mapa-fase2.md) — geocode_cache persistente + model RotaSalva + APIs salvar/listar/carregar/excluir + adicionar pedido on-demand + UI (5 tasks TDD)
 - [Roteirizacao "Ver no Mapa" — Fase 3](2026-06-16-roteirizacao-ver-no-mapa-fase3.md) — cotacao por rota salva (reusa wizard) + origem configuravel + drag-and-drop (2 tasks)

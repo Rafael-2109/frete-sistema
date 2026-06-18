@@ -53,7 +53,8 @@ app/carteira/
   ├── routes/                    # 25 APIs (root)
   │   ├── carteira_simples/      # 4 arquivos (dados, separacoes, helpers, __init__)
   │   └── programacao_em_lote/   # 5 arquivos (Atacadao/Sendas: busca, importar, routes, ruptura, __init__)
-  ├── services/                  # 4 services (agrupamento, mapa, importacao, atualizacao)
+  ├── services/                  # 5 services (agrupamento, mapa, importacao, atualizacao,
+  │                              #   palletizacao — Camada 1 do simulador de conservas, consumido pelo CarVia)
   ├── utils/                     # 3 helpers (separacao, workspace, formatters)
   ├── models.py                  # 7 models (657 linhas)
   ├── models_alertas.py          # AlertaSeparacaoCotada
