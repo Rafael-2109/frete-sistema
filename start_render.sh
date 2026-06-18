@@ -296,7 +296,9 @@ echo " Caddy PID: $NGINX_PID (0.0.0.0:10000 bindada)"
 # pendurar no accept do socket (era a causa raiz do timeout flaky).
 echo " Aguardando readiness dos gunicorns (nao bloqueia a porta :10000)..."
 GUNICORNS_READY=false
-for attempt in $(seq 1 120); do
+AGENTE_KILLS=0
+AGENTE_STUCK_SINCE=0
+for attempt in $(seq 1 150); do
     # Health: /agente/api/health (agente_bp url_prefix=/agente) e /auth/login
     # (auth_bp url_prefix=/auth — rota /login GET retorna 200 sem auth).
     AGENTE_RC=$(curl -fs --connect-timeout 2 --max-time 3 -o /dev/null -w '%{http_code}' http://127.0.0.1:5001/agente/api/health 2>/dev/null || echo "000")
@@ -308,27 +310,52 @@ for attempt in $(seq 1 120); do
         break
     fi
 
-    # Morte precoce -> aborta (Render reinicia o container). Mata o outro gunicorn + Caddy.
+    # Morte precoce do MASTER -> aborta (Render reinicia o container).
     if ! kill -0 $GUNICORN_AGENTE_PID 2>/dev/null; then
-        echo " ❌ FATAL: gunicorn-agente morreu na inicializacao"
+        echo " ❌ FATAL: gunicorn-agente (master) morreu na inicializacao"
         kill $GUNICORN_SISTEMA_PID $NGINX_PID 2>/dev/null
         exit 1
     fi
     if ! kill -0 $GUNICORN_SISTEMA_PID 2>/dev/null; then
-        echo " ❌ FATAL: gunicorn-sistema morreu na inicializacao"
+        echo " ❌ FATAL: gunicorn-sistema (master) morreu na inicializacao"
         kill $GUNICORN_AGENTE_PID $NGINX_PID 2>/dev/null
         exit 1
     fi
 
+    # ---------------------------------------------------------------
+    # Auto-recuperacao do worker-agente em DEADLOCK de fork no boot.
+    # ---------------------------------------------------------------
+    # Sintoma (2026-06-18): SISTEMA=200 mas AGENTE=000 persistente — o worker do
+    # gunicorn-agente preso em futex no boot (1 thread, app nao carregado). O
+    # master nao recicla a tempo (timeout=1800s). Se o agente nao responde ha
+    # ~90s enquanto o sistema ja responde, matamos o worker do agente (run:app,
+    # filho do master) e o master refoorka. O faulthandler armado no post_fork
+    # ja tera dumpado o stack do deadlock aos 80s (logs [AGENTE]). Limite de 3x.
+    if [ "$SISTEMA_RC" = "200" ] && [ "$AGENTE_RC" != "200" ]; then
+        if [ "$AGENTE_STUCK_SINCE" = "0" ]; then AGENTE_STUCK_SINCE=$attempt; fi
+        STUCK_FOR=$(( (attempt - AGENTE_STUCK_SINCE) * 2 ))
+        if [ "$STUCK_FOR" -ge 90 ] && [ "$AGENTE_KILLS" -lt 3 ]; then
+            AGENTE_KILLS=$((AGENTE_KILLS + 1))
+            echo " ⚠️ gunicorn-agente travado ~${STUCK_FOR}s (sistema OK) — reciclando worker (kill #$AGENTE_KILLS); ver stack do faulthandler nos logs [AGENTE]"
+            pkill -KILL -P "$GUNICORN_AGENTE_PID" -f "run:app" 2>/dev/null \
+                && echo "   worker do agente morto — master $GUNICORN_AGENTE_PID vai refoorkar" \
+                || echo "   (nenhum worker run:app filho de $GUNICORN_AGENTE_PID encontrado)"
+            AGENTE_STUCK_SINCE=0  # zera p/ dar ~90s ao novo worker antes de reciclar de novo
+        fi
+    else
+        AGENTE_STUCK_SINCE=0
+    fi
+
     if [ $((attempt % 5)) -eq 0 ]; then
-        echo "   readiness attempt $attempt/120 agente=$AGENTE_RC sistema=$SISTEMA_RC (Caddy ja serve :10000)"
+        echo "   readiness attempt $attempt/150 agente=$AGENTE_RC sistema=$SISTEMA_RC kills=$AGENTE_KILLS (Caddy ja serve :10000)"
     fi
     sleep 2
 done
 
 if [ "$GUNICORNS_READY" != "true" ]; then
-    echo " ⚠️ WARN: gunicorns nao confirmaram readiness em ~240s — porta segue aberta;"
+    echo " ⚠️ WARN: gunicorns nao confirmaram readiness em ~300s — porta segue aberta;"
     echo "         o healthCheckPath do Render (/auth/login) decide a promocao do deploy."
+    [ "$AGENTE_KILLS" -ge 3 ] && echo "   ⚠️ agente reciclado ${AGENTE_KILLS}x sem subir — ver dump do faulthandler nos logs [AGENTE]."
 fi
 
 # ---------------------------------------------------------------------

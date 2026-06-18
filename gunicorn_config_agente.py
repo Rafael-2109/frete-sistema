@@ -49,6 +49,20 @@ def on_starting(server):
 
 def post_fork(server, worker):
     print(f"[AGENTE] Worker {worker.pid} iniciado")
+    # Watchdog de deadlock-de-fork no boot (2026-06-18): o worker do agente as
+    # vezes trava em futex durante o load do app (1 thread, app nao carrega) —
+    # deadlock de fork intermitente que deixava /agente 502. dump_traceback_later
+    # dispara uma thread interna do faulthandler que, se o worker NAO terminar de
+    # carregar em 80s, dumpa o stack de TODAS as threads nos logs (pina o ponto
+    # exato do deadlock; funciona mesmo com a main thread travada e sem ptrace).
+    # Cancelado em post_worker_init quando o load completa (sem ruido no boot OK).
+    try:
+        import faulthandler, threading  # noqa: E401
+        faulthandler.dump_traceback_later(80, exit=False)
+        _threads = [t.name for t in threading.enumerate()]
+        print(f"[AGENTE] post_fork pid={worker.pid} threads_apos_fork={_threads} (faulthandler armado 80s)")
+    except Exception as _e:
+        print(f"[AGENTE] post_fork instrumentacao falhou: {_e}")
     try:
         import register_pg_types  # noqa: F401
         print(f"[AGENTE] Tipos PostgreSQL no worker {worker.pid}")
@@ -57,6 +71,16 @@ def post_fork(server, worker):
     try:
         import cysignals  # noqa: F401
     except ImportError:
+        pass
+
+
+def post_worker_init(worker):
+    """App carregou com sucesso — cancela o watchdog de deadlock do faulthandler."""
+    try:
+        import faulthandler
+        faulthandler.cancel_dump_traceback_later()
+        print(f"[AGENTE] Worker {worker.pid} app carregado — faulthandler watchdog cancelado")
+    except Exception:
         pass
 
 
