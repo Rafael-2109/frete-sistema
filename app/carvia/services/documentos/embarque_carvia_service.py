@@ -265,6 +265,9 @@ class EmbarqueCarViaService:
                 volumes=nf_volumes,
                 provisorio=False,
                 carvia_cotacao_id=carvia_cotacao_id,
+                # CD de expedicao: herda da NF (propagada da Coleta) ou da cotacao — nasce
+                # consistente em vez do default VM (a Coleta re-propaga se o destino mudar).
+                local_cd=(getattr(nf_obj, 'local_cd', None) or cotacao.local_cd),
                 # Forward: item real herda agendamento (confirmacao + horario) da cotacao
                 agendamento_confirmado=bool(cotacao.agendamento_confirmado),
                 hora_agendamento=cotacao.horario_agenda,

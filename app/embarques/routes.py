@@ -3324,6 +3324,10 @@ def api_gerar_solicitacao_coleta(embarque_id):
     """
     import math
     from app.carteira.models import CarteiraPrincipal
+    from app.utils.local_cd import (
+        normalizar_local_cd, label_local_cd, endereco_local_cd,
+        LOCAL_CD_DEFAULT, LOCAL_CD_VICTORIO_MARCHEZINE, LOCAL_CD_TENENTE_MARQUES,
+    )
 
     try:
         # Verificar parâmetro com_endereco
@@ -3362,7 +3366,7 @@ def api_gerar_solicitacao_coleta(embarque_id):
         # Arredondar pallets para cima
         pallets_arredondado = math.ceil(pallet_total) if pallet_total else 0
 
-        # Montar cabeçalho da solicitação
+        # ----- Cabeçalho GERAL (exibido 1x): dados do embarque + totais + regras -----
         texto = f"""Segue solicitação de coleta conforme dados abaixo:
 
 Data da coleta: {data_coleta}
@@ -3375,64 +3379,77 @@ Peso: {peso_total:,.0f} kg
 
 Valor da carga: R$ {valor_total:,.2f}
 
-Endereço de coleta:
-
-Rua Victorio Marchezine, nº 61 – Santana de Parnaíba/SP
-
 Horário de coleta:
 
 Segunda a quinta-feira: das 07h às 16h30
-
 Sexta-feira: das 07h às 15h30
 
 ATENÇÃO:
 
 Caso ocorra qualquer contratempo que possa ultrapassar os horários informados, é imprescindível entrar em contato conosco antes do envio do veículo. Coletas realizadas fora do horário somente serão permitidas mediante autorização prévia.
-
 Observações importantes:
-
 Apresentar a ordem de coleta na portaria (Embarque #{embarque.numero}).
-
 Sempre que possível, enviar os pallets para troca no ato da coleta. Na ausência da troca, será emitida nota de cobrança, ficando o retorno pendente.
-
 """
 
-        # Montar tabela de pedidos
-        if com_endereco:
-            texto += "Pedidos:\nPedido | Cliente | Valor | Peso | UF | Cidade | Bairro | Rua | Nº\n"
-            texto += "-" * 120 + "\n"
-        else:
-            texto += "Pedidos:\nPedido | Cliente | Valor | Peso\n"
-            texto += "-" * 60 + "\n"
-
-        # Buscar dados complementares da CarteiraPrincipal para cada pedido
-        for item in itens_ativos:
+        def _linha_pedido(item):
+            """Linha da tabela de pedidos de UM item (com/sem endereço de entrega)."""
             pedido_num = item.pedido
             cliente = item.cliente or ''
             valor_item = item.valor or 0
             peso_item = item.peso or 0
-
-            if com_endereco:
-                # Buscar dados de endereço da CarteiraPrincipal
-                carteira = CarteiraPrincipal.query.filter_by(num_pedido=pedido_num).first()
-
-                if carteira:
-                    uf = carteira.cod_uf or item.uf_destino or ''
-                    cidade = carteira.nome_cidade or item.cidade_destino or ''
-                    bairro = carteira.bairro_endereco_ent or ''
-                    rua = carteira.rua_endereco_ent or ''
-                    numero = carteira.endereco_ent or ''
-                else:
-                    # Fallback para dados do EmbarqueItem
-                    uf = item.uf_destino or ''
-                    cidade = item.cidade_destino or ''
-                    bairro = ''
-                    rua = ''
-                    numero = ''
-
-                texto += f"{pedido_num} | {cliente[:30]} | R$ {valor_item:,.2f} | {peso_item:,.0f} kg | {uf} | {cidade} | {bairro} | {rua} | {numero}\n"
+            if not com_endereco:
+                return f"{pedido_num} | {cliente[:40]} | R$ {valor_item:,.2f} | {peso_item:,.0f} kg\n"
+            carteira = CarteiraPrincipal.query.filter_by(num_pedido=pedido_num).first()
+            if carteira:
+                uf = carteira.cod_uf or item.uf_destino or ''
+                cidade = carteira.nome_cidade or item.cidade_destino or ''
+                bairro = carteira.bairro_endereco_ent or ''
+                rua = carteira.rua_endereco_ent or ''
+                numero = carteira.endereco_ent or ''
             else:
-                texto += f"{pedido_num} | {cliente[:40]} | R$ {valor_item:,.2f} | {peso_item:,.0f} kg\n"
+                uf = item.uf_destino or ''
+                cidade = item.cidade_destino or ''
+                bairro = rua = numero = ''
+            return (f"{pedido_num} | {cliente[:30]} | R$ {valor_item:,.2f} | "
+                    f"{peso_item:,.0f} kg | {uf} | {cidade} | {bairro} | {rua} | {numero}\n")
+
+        # ----- Agrupar itens por CD: cada endereço coleta SÓ os seus pedidos -----
+        grupos = {}
+        for item in itens_ativos:
+            cd = normalizar_local_cd(item.local_cd) or LOCAL_CD_DEFAULT
+            grupos.setdefault(cd, []).append(item)
+
+        # Ordem canônica VM -> TM; CDs desconhecidos (defensivo) ao final.
+        ordem_cds = [LOCAL_CD_VICTORIO_MARCHEZINE, LOCAL_CD_TENENTE_MARQUES]
+        cds_presentes = ([cd for cd in ordem_cds if cd in grupos]
+                         + [cd for cd in grupos if cd not in ordem_cds])
+
+        for cd in cds_presentes:
+            itens_cd = grupos[cd]
+            peso_cd = sum(item.peso or 0 for item in itens_cd)
+            valor_cd = sum(item.valor or 0 for item in itens_cd)
+            pallet_cd = sum(item.pallets or 0 for item in itens_cd)
+            pallets_cd = math.ceil(pallet_cd) if pallet_cd else 0
+
+            texto += f"""
+==== COLETA EM {label_local_cd(cd).upper()} ====
+
+Endereço de coleta:
+{endereco_local_cd(cd)}
+
+Quantidade de pallets: {pallets_cd}
+Peso: {peso_cd:,.0f} kg
+Valor da carga: R$ {valor_cd:,.2f}
+
+"""
+            if com_endereco:
+                texto += ("Pedidos:\nPedido | Cliente | Valor | Peso | UF | Cidade | Bairro | Rua | Nº\n"
+                          + "-" * 120 + "\n")
+            else:
+                texto += "Pedidos:\nPedido | Cliente | Valor | Peso\n" + "-" * 60 + "\n"
+            for item in itens_cd:
+                texto += _linha_pedido(item)
 
         return jsonify({
             'success': True,

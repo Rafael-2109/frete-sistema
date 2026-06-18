@@ -7,6 +7,7 @@ from flask import render_template, request, jsonify, redirect, url_for, flash
 from flask_login import login_required, current_user
 
 from app import db
+from app.utils.local_cd import LOCAL_CD_DEFAULT
 
 logger = logging.getLogger(__name__)
 
@@ -616,6 +617,8 @@ def register_pedido_routes(bp):
                         volumes=vol_devolver,
                         provisorio=True,
                         carvia_cotacao_id=cotacao_id,
+                        # CD de expedicao herdado da cotacao (fonte = Coleta); a Coleta re-propaga.
+                        local_cd=(cotacao.local_cd if cotacao else None) or LOCAL_CD_DEFAULT,
                         # Forward: provisorio herda agendamento (confirmacao + horario) da cotacao
                         agendamento_confirmado=bool(cotacao.agendamento_confirmado) if cotacao else False,
                         hora_agendamento=cotacao.horario_agenda if cotacao else None,
@@ -811,6 +814,8 @@ def register_pedido_routes(bp):
                         volumes=vol_devolver,
                         provisorio=True,
                         carvia_cotacao_id=cotacao_id,
+                        # CD de expedicao herdado da cotacao (fonte = Coleta); a Coleta re-propaga.
+                        local_cd=(cotacao.local_cd if cotacao else None) or LOCAL_CD_DEFAULT,
                         # Forward: provisorio herda agendamento (confirmacao + horario) da cotacao
                         agendamento_confirmado=bool(cotacao.agendamento_confirmado) if cotacao else False,
                         hora_agendamento=cotacao.horario_agenda if cotacao else None,

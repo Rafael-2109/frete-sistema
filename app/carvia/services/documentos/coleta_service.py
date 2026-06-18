@@ -96,10 +96,14 @@ class CarviaColetaService:
     @staticmethod
     def _propagar_local_cd_para_documentos(numero_nf, local_cd):
         """Propaga local_cd para o CarviaPedido + CarviaCotacao que referenciam a NF
-        (via CarviaPedidoItem.numero_nf, match normalizado = mesmo _norm_nf do vinculo).
+        (via CarviaPedidoItem.numero_nf, match normalizado = mesmo _norm_nf do vinculo) E
+        para os destinos EXTERNOS ao CarVia (EmbarqueItem + EntregaMonitorada, via helper
+        em app/utils — R1: CarVia nao importa app/embarques/app/monitoramento direto).
 
         A Coleta e a FONTE da flag de CD; a VIEW pedidos (Partes 2A/2B) so LE essas
-        colunas. Sem item de pedido correspondente -> no-op (NF sem pedido CarVia)."""
+        colunas. Sem item de pedido correspondente -> no-op (NF sem pedido CarVia).
+        Unico ponto de propagacao: cobre os 3 gatilhos (vincular NF, editar coleta,
+        marcar coletada) sem divergencia silenciosa entre os locais que tem o local_cd."""
         if not local_cd or not numero_nf:
             return
         from app.carvia.models.cotacao import CarviaPedidoItem
@@ -120,6 +124,9 @@ class CarviaColetaService:
             pedido.local_cd = local_cd
             if pedido.cotacao is not None:
                 pedido.cotacao.local_cd = local_cd
+        # Destinos externos ao CarVia (EmbarqueItem + EntregaMonitorada). Lazy import (R1).
+        from app.utils.propagacao_local_cd import propagar_local_cd_carvia
+        propagar_local_cd_carvia(numero_nf, local_cd)
 
     @staticmethod
     def cancelar_coleta(coleta, usuario=None):

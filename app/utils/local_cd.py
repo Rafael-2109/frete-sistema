@@ -34,6 +34,12 @@ LOCAL_CD_LABELS_CURTO = {
     LOCAL_CD_TENENTE_MARQUES: 'T. Marques',
 }
 
+# Endereco fisico de coleta de cada CD (usado na solicitacao de coleta a transportadora).
+LOCAL_CD_ENDERECOS = {
+    LOCAL_CD_VICTORIO_MARCHEZINE: 'Rua Victorio Marchezine, nº 61 – Santana de Parnaíba/SP',
+    LOCAL_CD_TENENTE_MARQUES: 'Est. Tenente Marques, nº 6609 – Santana de Parnaíba/SP',
+}
+
 # Para WTForms SelectField / choices de UI
 LOCAL_CD_CHOICES = [
     (LOCAL_CD_VICTORIO_MARCHEZINE, LOCAL_CD_LABELS[LOCAL_CD_VICTORIO_MARCHEZINE]),
@@ -68,6 +74,11 @@ def label_local_cd(valor, curto=False):
     if curto:
         return LOCAL_CD_LABELS_CURTO.get(valor, '')
     return LOCAL_CD_LABELS.get(valor, '')
+
+
+def endereco_local_cd(valor):
+    """Endereco fisico de coleta de um CD (string vazia se desconhecido)."""
+    return LOCAL_CD_ENDERECOS.get(valor or LOCAL_CD_DEFAULT, '')
 
 
 # ---------------------------------------------------------------------------

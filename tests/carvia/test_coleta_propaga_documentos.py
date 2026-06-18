@@ -111,3 +111,63 @@ def test_sem_item_de_pedido_nao_quebra(db):
     linha = CarviaColetaService.adicionar_linha(coleta, numero_nf='123456')
     CarviaColetaService.vincular_nf(linha, nf.id)
     assert nf.local_cd == 'TENENTE_MARQUES'
+
+
+def _criar_embarque_item_e_entrega(db, numero_nf, local_cd='VICTORIO_MARCHEZINE'):
+    """Cria 1 EmbarqueItem CarVia (CARVIA-%) + 1 Nacom (controle) + 2 EntregaMonitorada
+    (CARVIA + outra origem) para a NF. Retorna (ei_carvia, ei_nacom, ent_carvia, ent_nacom)."""
+    from app.embarques.models import Embarque, EmbarqueItem
+    from app.monitoramento.models import EntregaMonitorada
+    from app.utils.timezone import agora_utc_naive
+    numero_emb = int(uuid.uuid4().int % 9_000_000) + 1_000_000
+    emb = Embarque(numero=numero_emb, status='ativo', criado_em=agora_utc_naive())
+    db.session.add(emb)
+    db.session.flush()
+    base = dict(embarque_id=emb.id, nota_fiscal=numero_nf, cliente='X', status='ativo',
+                uf_destino='SP', cidade_destino='X', local_cd=local_cd)
+    ei_carvia = EmbarqueItem(separacao_lote_id=f'CARVIA-NF-{numero_nf}', pedido='P1', **base)
+    ei_nacom = EmbarqueItem(separacao_lote_id='LOTE-NACOM', pedido='P2', **base)
+    ent_carvia = EntregaMonitorada(numero_nf=numero_nf, cliente='X', origem='CARVIA', local_cd=local_cd)
+    ent_nacom = EntregaMonitorada(numero_nf=numero_nf, cliente='X', origem='NACOM', local_cd=local_cd)
+    db.session.add_all([ei_carvia, ei_nacom, ent_carvia, ent_nacom])
+    db.session.flush()
+    return ei_carvia, ei_nacom, ent_carvia, ent_nacom
+
+
+def test_vincular_nf_propaga_para_embarque_item_e_entrega(db):
+    """Vincular a NF a uma coleta TM propaga para o EmbarqueItem CarVia e a EntregaMonitorada
+    CarVia; itens Nacom / entregas de outra origem ficam INTACTOS (R1: helper R1-safe)."""
+    nf = _criar_nf(db, numero='770088', local_cd='VICTORIO_MARCHEZINE')
+    ei_carvia, ei_nacom, ent_carvia, ent_nacom = _criar_embarque_item_e_entrega(db, '770088')
+
+    coleta = CarviaColetaService.criar_coleta(local_cd='TENENTE_MARQUES', usuario='test@bot')
+    linha = CarviaColetaService.adicionar_linha(coleta, numero_nf='770088')
+    CarviaColetaService.vincular_nf(linha, nf.id)
+    db.session.flush()
+    for o in (ei_carvia, ei_nacom, ent_carvia, ent_nacom):
+        db.session.refresh(o)
+
+    assert ei_carvia.local_cd == 'TENENTE_MARQUES'
+    assert ent_carvia.local_cd == 'TENENTE_MARQUES'
+    assert ei_nacom.local_cd == 'VICTORIO_MARCHEZINE'   # Nacom NAO pode mudar
+    assert ent_nacom.local_cd == 'VICTORIO_MARCHEZINE'
+
+
+def test_editar_coleta_repropaga_para_embarque_item(db):
+    """Mudar o destino da coleta (VM->TM) re-propaga para EmbarqueItem CarVia + Entrega CarVia."""
+    nf = _criar_nf(db, numero='660099', local_cd='VICTORIO_MARCHEZINE')
+    ei_carvia, _, ent_carvia, _ = _criar_embarque_item_e_entrega(db, '660099')
+
+    coleta = CarviaColetaService.criar_coleta(local_cd='VICTORIO_MARCHEZINE', usuario='test@bot')
+    linha = CarviaColetaService.adicionar_linha(coleta, numero_nf='660099')
+    CarviaColetaService.vincular_nf(linha, nf.id)
+    db.session.flush()
+    db.session.refresh(ei_carvia)
+    assert ei_carvia.local_cd == 'VICTORIO_MARCHEZINE'
+
+    CarviaColetaService.editar_coleta(coleta, local_cd='TENENTE_MARQUES')
+    db.session.flush()
+    db.session.refresh(ei_carvia)
+    db.session.refresh(ent_carvia)
+    assert ei_carvia.local_cd == 'TENENTE_MARQUES'
+    assert ent_carvia.local_cd == 'TENENTE_MARQUES'
