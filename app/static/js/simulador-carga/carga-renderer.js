@@ -209,51 +209,38 @@
     floor.position.set(cx, 0.002, cz);
     this.bayGroup.add(floor);
 
-    // --- Motos (caixas coloridas) ---
+    // --- Itens posicionados (motos + pallets de conservas Nacom) ---
     if (result && result.placed) {
       for (var i = 0; i < result.placed.length; i++) {
         var p = result.placed[i];
-        var mw = p.w * SCALE;
-        var mh = p.h * SCALE;
-        var md = p.d * SCALE;
+        var ehPallet = p.moto && p.moto.tipo === 'pallet';
 
-        var colorHex = this._resolveColor(p.moto, colorMap, i);
+        if (ehPallet) {
+          // Estrado PBR (cinza) + coluna de mercadoria (cor do grupo, centralizada).
+          var corPallet = (p.moto.color && typeof p.moto.color === 'string')
+            ? parseInt(p.moto.color.replace('#', ''), 16)
+            : this._resolveColor(p.moto, colorMap, i);
+          this._addBox(p.x, p.y, p.z,
+            p.moto.base_x, p.moto.base_y, p.moto.altura_estrado, 0x9e9e9e, 0.9);
+          var ox = (p.moto.base_x - p.moto.merc_x) / 2;
+          var oy = (p.moto.base_y - p.moto.merc_y) / 2;
+          this._addBox(p.x + ox, p.y + p.moto.altura_estrado, p.z + oy,
+            p.moto.merc_x, p.moto.merc_y, p.moto.altura_total - p.moto.altura_estrado,
+            corPallet, 0.82);
+        } else {
+          this._addBox(p.x, p.y, p.z, p.w, p.d, p.h,
+            this._resolveColor(p.moto, colorMap, i), 0.82);
+        }
 
-        var boxGeom = new THREE.BoxGeometry(mw, mh, md);
-        var boxMat = new THREE.MeshPhongMaterial({
-          color: colorHex,
-          transparent: true,
-          opacity: 0.82,
-          shininess: 30,
-        });
-        var mesh = new THREE.Mesh(boxGeom, boxMat);
-        mesh.position.set(
-          p.x * SCALE + mw / 2,
-          p.y * SCALE + mh / 2,
-          p.z * SCALE + md / 2
-        );
-        this.motosGroup.add(mesh);
-
-        // Wireframe da moto
-        var wireGeom = new THREE.EdgesGeometry(boxGeom);
-        var wireMat = new THREE.LineBasicMaterial({
-          color: 0x000000,
-          transparent: true,
-          opacity: 0.15,
-        });
-        var wire = new THREE.LineSegments(wireGeom, wireMat);
-        wire.position.copy(mesh.position);
-        this.motosGroup.add(wire);
-
-        // Rotulo com o nome do modelo, sobre a moto
+        // Rotulo com o nome, sobre o item (usa o footprint do bloco principal)
         var nome = (p.moto && p.moto.nome) ? p.moto.nome : '';
         if (nome) {
           var label = this._makeLabelSprite(nome);
           if (label) {
             label.position.set(
-              p.x * SCALE + mw / 2,
-              p.y * SCALE + mh + 0.02,
-              p.z * SCALE + md / 2
+              p.x * SCALE + (p.w * SCALE) / 2,
+              p.y * SCALE + p.h * SCALE + 0.02,
+              p.z * SCALE + (p.d * SCALE) / 2
             );
             this.motosGroup.add(label);
           }
@@ -263,6 +250,24 @@
 
     // Ajustar camera
     this._fitCamera(bw, bh, bd, cx, cy, cz);
+  };
+
+  /** Adiciona uma caixa (mesh + wireframe) ao grupo de itens, em coordenadas de cm. */
+  CargaRenderer.prototype._addBox = function (xcm, ycm, zcm, wcm, dcm, hcm, colorHex, opacity) {
+    var mw = wcm * SCALE, mh = hcm * SCALE, md = dcm * SCALE;
+    var boxGeom = new THREE.BoxGeometry(mw, mh, md);
+    var boxMat = new THREE.MeshPhongMaterial({
+      color: colorHex, transparent: true, opacity: opacity, shininess: 30,
+    });
+    var mesh = new THREE.Mesh(boxGeom, boxMat);
+    mesh.position.set(xcm * SCALE + mw / 2, ycm * SCALE + mh / 2, zcm * SCALE + md / 2);
+    this.motosGroup.add(mesh);
+
+    var wireGeom = new THREE.EdgesGeometry(boxGeom);
+    var wireMat = new THREE.LineBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.15 });
+    var wire = new THREE.LineSegments(wireGeom, wireMat);
+    wire.position.copy(mesh.position);
+    this.motosGroup.add(wire);
   };
 
   CargaRenderer.prototype._resolveColor = function (moto, colorMap, index) {
