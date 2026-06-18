@@ -766,9 +766,15 @@ class SQLSafetyValidator:
             concerns.append(f"Tabelas bloqueadas: {', '.join(sorted(blocked_found))}")
             return False, concerns
 
-        # 7. Verificar subqueries que referenciam tabelas bloqueadas
-        all_words = set(re.findall(r'\b([a-z_][a-z0-9_]*)\b', sql_lower))
-        blocked_anywhere = all_words.intersection(self.blocked_tables)
+        # 7. Verificar tabelas bloqueadas em subqueries/CTEs via extrator posicional.
+        #    NAO usar "todos os identificadores" (all_words): nomes de COLUNA homonimos
+        #    de uma tabela bloqueada (ex.: contas_a_receber.vendedor, separacao.equipe_vendas
+        #    — 'vendedor' e coluna em 13 tabelas, 'equipe_vendas' em 10, e ambas tambem sao
+        #    tabelas na deny-list) geravam FALSO POSITIVO, bloqueando consultas legitimas e
+        #    empurrando o agente para Odoo XML-RPC manual. extract_tables_from_sql so
+        #    considera nomes em posicao de tabela (FROM/JOIN, inclusive subqueries).
+        tables_in_sql = set(extract_tables_from_sql(sql))
+        blocked_anywhere = tables_in_sql.intersection(self.blocked_tables)
         if blocked_anywhere:
             concerns.append(f"Referencia a tabelas bloqueadas: {', '.join(sorted(blocked_anywhere))}")
             return False, concerns

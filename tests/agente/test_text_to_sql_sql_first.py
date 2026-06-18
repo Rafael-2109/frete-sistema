@@ -506,6 +506,47 @@ class TestRepro787:
         assert res["etapas"].get("sql_first_blocked") is None
 
 
+class TestColunaHomonimaTabelaBloqueada:
+    """Regressao: a Camada 7 do SQLSafetyValidator bloqueava COLUNAS homonimas de
+    tabela bloqueada. 'vendedor' e coluna em 13 tabelas (contas_a_receber,
+    entregas_monitoradas...) e 'equipe_vendas' em 10 (separacao, carteira_principal...),
+    e ambas tambem sao tabelas na deny-list. O 'all_words' casava a COLUNA contra o nome
+    de TABELA bloqueada -> falso positivo que empurrou o agente para Odoo XML-RPC manual
+    (sessao Martha, user 82, 17/06, 78 scripts). Fix: Camada 7 usa extract_tables_from_sql
+    (posicional, so FROM/JOIN). Tabela bloqueada REAL continua bloqueada."""
+
+    DENY = {'vendedor', 'equipe_vendas', 'segredo'}
+
+    def test_coluna_homonima_no_select_nao_bloqueia(self):
+        sv = T.SQLSafetyValidator(blocked_tables=self.DENY)
+        is_safe, concerns = sv.validate(
+            "SELECT cr.titulo_nf, cr.vendedor, cr.equipe_vendas FROM contas_a_receber cr")
+        assert is_safe is True, concerns
+
+    def test_coluna_homonima_no_where_nao_bloqueia(self):
+        sv = T.SQLSafetyValidator(blocked_tables=self.DENY)
+        is_safe, concerns = sv.validate(
+            "SELECT s.equipe_vendas FROM separacao s WHERE s.vendedor = 'X'")
+        assert is_safe is True, concerns
+
+    def test_tabela_bloqueada_real_em_from_continua_bloqueada(self):
+        sv = T.SQLSafetyValidator(blocked_tables=self.DENY)
+        is_safe, _ = sv.validate("SELECT * FROM vendedor")
+        assert is_safe is False
+
+    def test_tabela_bloqueada_real_em_join_continua_bloqueada(self):
+        sv = T.SQLSafetyValidator(blocked_tables=self.DENY)
+        is_safe, _ = sv.validate(
+            "SELECT * FROM contas_a_receber c JOIN equipe_vendas e ON e.id = c.id")
+        assert is_safe is False
+
+    def test_tabela_bloqueada_em_subquery_continua_bloqueada(self):
+        sv = T.SQLSafetyValidator(blocked_tables=self.DENY)
+        is_safe, _ = sv.validate(
+            "SELECT * FROM contas_a_receber WHERE id IN (SELECT id FROM segredo)")
+        assert is_safe is False
+
+
 # =====================================================================
 # F2 (auditoria #787) — caracterização de SEGURANÇA do caminho SQL-first
 # =====================================================================
