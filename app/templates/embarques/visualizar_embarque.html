@@ -14,7 +14,7 @@
       {% if status_portaria_geral == 'PARCIAL' %}
         <span class="badge bg-warning text-dark">
           <i class="fas fa-triangle-exclamation"></i>
-          Saída parcial — falta: {{ cds_pendentes | map('replace', '_', ' ') | join(', ') | title }}
+          Saída parcial — falta: {{ cds_pendentes | sort | map('replace', '_', ' ') | join(', ') | title }}
         </span>
       {% elif status_portaria_geral == 'SAIU' %}
         <span class="badge bg-success">Saída completa</span>
