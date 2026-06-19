@@ -62,6 +62,11 @@ logger = logging.getLogger(__name__)
 
 fretes_bp = Blueprint("fretes", __name__, url_prefix="/fretes")
 
+# Prefixo do motivo retornado pelos gates de "última saída" (embarque multi-CD).
+# Fonte única usada pelos 2 gates (Nacom + Op. Assai) e pelo acoplamento da rota
+# manual — evita divergência de texto/acento entre os pontos.
+MOTIVO_GATE_CD = "Aguardando saída dos CDs"
+
 # =================== ROTAS PARA O NOVO SISTEMA DE FRETES ===================
 
 
@@ -741,6 +746,7 @@ def processar_cte_frete_existente():
 
 @fretes_bp.route("/processar_lancamento_frete", methods=["POST"])
 @login_required
+@require_financeiro()
 def processar_lancamento_frete():
     """Processa o lançamento efetivo do frete"""
     try:
@@ -757,6 +763,13 @@ def processar_lancamento_frete():
         fatura_frete_id = request.form.get("fatura_frete_id")
 
         embarque = Embarque.query.get_or_404(embarque_id)
+
+        # Gate da última saída (paridade com o fluxo automático): em embarque MISTO,
+        # não permitir criar Frete manual antes de todos os CDs darem saída.
+        pode_lancar, motivo = verificar_requisitos_para_lancamento_frete(embarque_id, cnpj_cliente)
+        if not pode_lancar and MOTIVO_GATE_CD in motivo:
+            flash(motivo, 'warning')
+            return redirect(url_for('fretes.criar_novo_frete_por_nf', numero_nf=request.form.get('numeros_nfs', '')))
 
         # Pega dados da tabela conforme tipo de carga
         if tipo_carga == "DIRETA":
@@ -3613,7 +3626,7 @@ def verificar_requisitos_para_lancamento_frete(embarque_id, cnpj_cliente):
     from app.utils.local_cd import cds_pendentes_de_saida
     faltam = cds_pendentes_de_saida(embarque)
     if faltam:
-        return False, f"Aguardando saída dos CDs: {', '.join(sorted(faltam))}"
+        return False, f"{MOTIVO_GATE_CD}: {', '.join(sorted(faltam))}"
 
     # Verifica se já existe frete
     frete_existente = Frete.query.filter(
@@ -3897,6 +3910,14 @@ def verificar_requisitos_op_assai(embarque_id, cnpj_cliente):
     embarque = db.session.get(Embarque, embarque_id)
     if not embarque or not embarque.data_embarque:
         return False, "Aguardando saida da portaria para lancamento de frete"
+
+    # Fail-safe do gate da ULTIMA saida (paridade com Nacom/CarVia). Embarque Op.
+    # Assai e nominalmente nao-misto, mas se vier a conter itens de >1 CD, o frete
+    # nao pode nascer sem os itens do CD que ainda nao saiu.
+    from app.utils.local_cd import cds_pendentes_de_saida
+    faltam = cds_pendentes_de_saida(embarque)
+    if faltam:
+        return False, f"{MOTIVO_GATE_CD}: {', '.join(sorted(faltam))}"
 
     # Idempotencia
     frete_existente = Frete.query.filter(

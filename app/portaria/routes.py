@@ -909,9 +909,18 @@ def adicionar_embarque():
         if registro.data_saida and not embarque.data_embarque:
             embarque.data_embarque = registro.data_saida
             print(f"[DEBUG] Data embarque atualizada para {registro.data_saida} (vinculação após saída)")
-            
+
+            # 🏭 SAÍDA POR CD: propagar SOMENTE para os itens do CD deste registro
+            # (espelha o fluxo normal de saída em registrar_movimento). Sem isso, a
+            # vinculação adiantaria data_embarque dos itens do outro CD (ainda não saído).
+            local = registro.local_cd or LOCAL_CD_DEFAULT
+            itens_do_local = [
+                it for it in embarque.itens
+                if (it.local_cd or LOCAL_CD_DEFAULT) == local
+            ]
+
             # ✅ PROPAGAR data_embarque para tabela Separacao (apenas Nacom, CarVia nao tem Separacao)
-            for item in embarque.itens:
+            for item in itens_do_local:
                 if item.separacao_lote_id and not str(item.separacao_lote_id).startswith('CARVIA-'):
                     num_atualizados = Separacao.query.filter_by(
                         separacao_lote_id=item.separacao_lote_id
@@ -961,19 +970,20 @@ def adicionar_embarque():
             except Exception as e:
                 print(f"[AVISO] Hook Nacom FreteService falhou (vinculacao): {e}")
 
-            # 🔧 CORREÇÃO: Sincroniza com sistema de entregas para cada item do embarque
-            if embarque.itens:
-                print(f"[DEBUG] Sincronizando {len(embarque.itens)} itens com sistema de entregas...")
+            # 🔧 SAÍDA POR CD: Sincroniza entregas APENAS para os itens do CD deste registro
+            # (espelha o fluxo normal em registrar_movimento). Skip CarVia/Assai (hooks próprios).
+            if itens_do_local:
+                print(f"[DEBUG] Sincronizando {len(itens_do_local)} item(ns) do CD {local} com sistema de entregas...")
 
-                for item in embarque.itens:
-                    if item.nota_fiscal:
+                for item in itens_do_local:
+                    if item.nota_fiscal and not str(item.separacao_lote_id or '').startswith(('CARVIA-', 'ASSAI-')):
                         try:
                             sincronizar_entrega_por_nf(item.nota_fiscal)
                             print(f"[DEBUG] NF {item.nota_fiscal} sincronizada com entregas")
                         except Exception as e:
                             print(f"[DEBUG] Erro ao sincronizar NF {item.nota_fiscal}: {str(e)}")
 
-                flash(f'Sistema de entregas sincronizado para {len(embarque.itens)} nota(s) fiscal(is)!', 'success')
+                flash(f'Sistema de entregas sincronizado para {len(itens_do_local)} nota(s) fiscal(is)!', 'success')
 
             db.session.commit()
             flash(f'Data de embarque atualizada para {registro.data_saida.strftime("%d/%m/%Y")}!', 'info')

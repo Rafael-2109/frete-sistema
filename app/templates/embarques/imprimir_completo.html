@@ -219,6 +219,12 @@
         <h1>EMBARQUE #{{ embarque.numero }} - {{ embarque.data_prevista_embarque | formatar_data_segura if embarque.data_prevista_embarque else '___/___/_____' }}</h1>
     </div>
 
+    {% if local_cd_atual %}
+    <div style="text-align:center; font-weight:bold; font-size:13px; margin:6px 0; padding:4px; border:2px solid #333;">
+      COLETA — {{ 'TENENTE MARQUES' if local_cd_atual == 'TENENTE_MARQUES' else 'VICTORIO MARCHEZINE' }}
+    </div>
+    {% endif %}
+
     <!-- Informações do Embarque (formato formulário) -->
     <div style="margin-bottom: 12px;">
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 12px;">
@@ -300,7 +306,12 @@
         <tbody>
             {% for item in itens_nacom %}
             <tr>
-                <td>{{ item.cliente }}</td>
+                <td>{{ item.cliente }}
+                    {% if not local_cd_atual %}
+                      {% if item.local_cd == 'TENENTE_MARQUES' %}<span style="background:#5b3fb5;color:#fff;padding:1px 5px;border-radius:3px;font-size:9px;font-weight:bold;">TM</span>
+                      {% else %}<span style="background:#ffe08a;color:#1a1a1a;padding:1px 5px;border-radius:3px;font-size:9px;font-weight:bold;">VM</span>{% endif %}
+                    {% endif %}
+                </td>
                 <td>{{ item.pedido }}</td>
                 <td>{{ item.nota_fiscal or '-' }}</td>
                 <td>{{ (item.protocolo_agendamento | formatar_protocolo) or '-' }}</td>

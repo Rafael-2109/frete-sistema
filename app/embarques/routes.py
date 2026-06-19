@@ -177,14 +177,19 @@ def visualizar_embarque(id):
         
         if action == 'add_item':
             # Código para adicionar item
-            dados_portaria = obter_dados_portaria_embarque(embarque.id)
-            
+            from app.utils.local_cd import status_portaria_agregado, cds_pendentes_de_saida
+            dados_portaria_por_cd = obter_dados_portaria_embarque(embarque.id)
+            status_portaria_geral = status_portaria_agregado(embarque)
+            cds_pendentes = cds_pendentes_de_saida(embarque)
+
             pedidos_impressos = _buscar_pedidos_impressos(embarque)
 
             return render_template('embarques/visualizar_embarque.html',
                                  form=form,
                                  embarque=embarque,
-                                 dados_portaria=dados_portaria,
+                                 dados_portaria_por_cd=dados_portaria_por_cd,
+                                 status_portaria_geral=status_portaria_geral,
+                                 cds_pendentes=cds_pendentes,
                                  pedidos_impressos=pedidos_impressos)
 
         elif action == 'save':
@@ -539,14 +544,28 @@ def visualizar_embarque(id):
                 for field_name, errors in form.errors.items():
                     logger.warning(f"  Campo '{field_name}': {errors}")
                 flash("Erros na validação do formulário.", "danger")
-            dados_portaria = obter_dados_portaria_embarque(embarque.id)
+            from app.utils.local_cd import status_portaria_agregado, cds_pendentes_de_saida
+            dados_portaria_por_cd = obter_dados_portaria_embarque(embarque.id)
+            status_portaria_geral = status_portaria_agregado(embarque)
+            cds_pendentes = cds_pendentes_de_saida(embarque)
             pedidos_impressos = _buscar_pedidos_impressos(embarque)
-            return render_template('embarques/visualizar_embarque.html', form=form, embarque=embarque, dados_portaria=dados_portaria, pedidos_impressos=pedidos_impressos)
+            return render_template('embarques/visualizar_embarque.html', form=form, embarque=embarque,
+                                   dados_portaria_por_cd=dados_portaria_por_cd,
+                                   status_portaria_geral=status_portaria_geral,
+                                   cds_pendentes=cds_pendentes,
+                                   pedidos_impressos=pedidos_impressos)
 
         # Se chegou aqui e nao match action => exibe a página
-        dados_portaria = obter_dados_portaria_embarque(embarque.id)
+        from app.utils.local_cd import status_portaria_agregado, cds_pendentes_de_saida
+        dados_portaria_por_cd = obter_dados_portaria_embarque(embarque.id)
+        status_portaria_geral = status_portaria_agregado(embarque)
+        cds_pendentes = cds_pendentes_de_saida(embarque)
         pedidos_impressos = _buscar_pedidos_impressos(embarque)
-        return render_template('embarques/visualizar_embarque.html', form=form, embarque=embarque, dados_portaria=dados_portaria, pedidos_impressos=pedidos_impressos)
+        return render_template('embarques/visualizar_embarque.html', form=form, embarque=embarque,
+                               dados_portaria_por_cd=dados_portaria_por_cd,
+                               status_portaria_geral=status_portaria_geral,
+                               cds_pendentes=cds_pendentes,
+                               pedidos_impressos=pedidos_impressos)
 
     else:
         # GET
@@ -624,14 +643,19 @@ def visualizar_embarque(id):
         # ✅ READONLY: UF e cidade são StringField readonly, não precisam mais de choices
 
         # Buscar dados da portaria para este embarque
-        dados_portaria = obter_dados_portaria_embarque(embarque.id)
-        
+        from app.utils.local_cd import status_portaria_agregado, cds_pendentes_de_saida
+        dados_portaria_por_cd = obter_dados_portaria_embarque(embarque.id)
+        status_portaria_geral = status_portaria_agregado(embarque)
+        cds_pendentes = cds_pendentes_de_saida(embarque)
+
         pedidos_impressos = _buscar_pedidos_impressos(embarque)
 
         return render_template('embarques/visualizar_embarque.html',
                              form=form,
                              embarque=embarque,
-                             dados_portaria=dados_portaria,
+                             dados_portaria_por_cd=dados_portaria_por_cd,
+                             status_portaria_geral=status_portaria_geral,
+                             cds_pendentes=cds_pendentes,
                              pedidos_impressos=pedidos_impressos)
   
 @embarques_bp.route('/listar_embarques')
@@ -747,68 +771,10 @@ def listar_embarques():
         form_filtros.status.data = status
         filtros_aplicados = True
 
-    # Filtro por status da portaria
+    # Filtro por status da portaria (agregado por CD) — aplicado PÓS-QUERY,
+    # como status_nfs/status_fretes, via property Embarque.status_portaria.
     status_portaria = request.args.get('status_portaria', '').strip()
     if status_portaria and status_portaria != '':
-        from app.portaria.models import ControlePortaria
-        
-        if status_portaria == 'Sem Registro':
-            # Embarques que NÃO têm registro na portaria
-            embarques_com_registro = db.session.query(ControlePortaria.embarque_id).filter(
-                ControlePortaria.embarque_id.isnot(None)
-            ).distinct()
-            query = query.filter(~Embarque.id.in_(embarques_com_registro))
-        else:
-            # Embarques que têm registro com status específico
-            # Busca o último registro de cada embarque e filtra pelo status
-            from sqlalchemy import and_, func
-            
-            # Subquery para pegar o último registro de cada embarque (apenas com embarque_id válido)
-            ultimo_registro_subquery = db.session.query(
-                ControlePortaria.embarque_id,
-                func.max(ControlePortaria.id).label('ultimo_id')
-            ).filter(
-                ControlePortaria.embarque_id.isnot(None)
-            ).group_by(ControlePortaria.embarque_id).subquery()
-            
-            # Join para pegar os dados do último registro
-            query = query.join(
-                ultimo_registro_subquery,
-                Embarque.id == ultimo_registro_subquery.c.embarque_id
-            ).join(
-                ControlePortaria,
-                ControlePortaria.id == ultimo_registro_subquery.c.ultimo_id
-            )
-            
-            # Filtra pelo status calculado dinamicamente
-            if status_portaria == 'SAIU':
-                query = query.filter(
-                    and_(
-                        ControlePortaria.data_saida.isnot(None),
-                        ControlePortaria.hora_saida.isnot(None)
-                    )
-                )
-            elif status_portaria == 'DENTRO':
-                query = query.filter(
-                    and_(
-                        ControlePortaria.data_entrada.isnot(None),
-                        ControlePortaria.hora_entrada.isnot(None),
-                        ControlePortaria.data_saida.is_(None)
-                    )
-                )
-            elif status_portaria == 'AGUARDANDO':
-                query = query.filter(
-                    and_(
-                        ControlePortaria.data_chegada.isnot(None),
-                        ControlePortaria.hora_chegada.isnot(None),
-                        ControlePortaria.data_entrada.is_(None)
-                    )
-                )
-            elif status_portaria == 'PENDENTE':
-                query = query.filter(
-                    ControlePortaria.data_chegada.is_(None)
-                )
-        
         form_filtros.status_portaria.data = status_portaria
         filtros_aplicados = True
 
@@ -875,7 +841,8 @@ def listar_embarques():
     query = query.distinct()
 
     # ✅ CORREÇÃO: Se há filtros de propriedades calculadas, buscar TODOS antes de paginar
-    if (status_nfs and status_nfs != '') or (status_fretes and status_fretes != '') or (pallets_pendentes == 'sim'):
+    if (status_nfs and status_nfs != '') or (status_fretes and status_fretes != '') \
+            or (status_portaria and status_portaria != '') or (pallets_pendentes == 'sim'):
         # Buscar todos os embarques (sem paginação)
         embarques_todos = query.all()
 
@@ -885,6 +852,10 @@ def listar_embarques():
 
         if status_fretes and status_fretes != '':
             embarques_todos = [e for e in embarques_todos if e.status_fretes == status_fretes]
+
+        if status_portaria and status_portaria != '':
+            _alvo = 'SEM_REGISTRO' if status_portaria == 'Sem Registro' else status_portaria
+            embarques_todos = [e for e in embarques_todos if e.status_portaria == _alvo]
 
         if pallets_pendentes == 'sim':
             embarques_todos = [e for e in embarques_todos if e.pallets_pendentes]
@@ -1235,33 +1206,34 @@ def dados_tabela_embarque(id):
     return render_template('embarques/dados_tabela.html', embarque=embarque, itens=itens)
 
 def obter_dados_portaria_embarque(embarque_id):
-    """
-    Busca informações da portaria vinculadas ao embarque
+    """Retorna a lista de registros de portaria do embarque, UM por CD.
+
+    Ate 2 itens (1 por CD). Cada dict inclui `local_cd` e o `status` do registro.
+    Substitui o comportamento antigo de retornar apenas registros[-1] — que
+    escondia o 2o CD em embarque misto.
+
+    Retorna lista vazia (nao None) quando nao ha registros.
     """
     from app.portaria.models import ControlePortaria
-    
-    # Busca registros da portaria vinculados a este embarque
-    registros = ControlePortaria.query.filter_by(embarque_id=embarque_id).all()
-    
-    if not registros:
-        return None
-    
-    # Retorna informações do primeiro/último registro (pode ter vários)
-    registro = registros[-1]  # Pega o mais recente
-    
-    return {
-        'motorista_nome': registro.motorista_obj.nome_completo if registro.motorista_obj else 'N/A',
-        'placa': registro.placa,
-        'tipo_veiculo': registro.tipo_veiculo.nome if registro.tipo_veiculo else 'N/A',
-        'data_chegada': registro.data_chegada,
-        'hora_chegada': registro.hora_chegada,
-        'data_entrada': registro.data_entrada,
-        'hora_entrada': registro.hora_entrada,
-        'data_saida': registro.data_saida,
-        'hora_saida': registro.hora_saida,
-        'status': registro.status,
-        'registro_id': registro.id
-    }
+    registros = (
+        ControlePortaria.query
+        .filter_by(embarque_id=embarque_id)
+        .order_by(ControlePortaria.local_cd, ControlePortaria.id)
+        .all()
+    )
+    return [
+        {
+            'local_cd': r.local_cd,
+            'motorista_nome': r.motorista_obj.nome_completo if r.motorista_obj else 'N/A',
+            'placa': r.placa,
+            'tipo_veiculo': r.tipo_veiculo.nome if r.tipo_veiculo else 'N/A',
+            'data_chegada': r.data_chegada, 'hora_chegada': r.hora_chegada,
+            'data_entrada': r.data_entrada, 'hora_entrada': r.hora_entrada,
+            'data_saida': r.data_saida, 'hora_saida': r.hora_saida,
+            'status': r.status, 'registro_id': r.id,
+        }
+        for r in registros
+    ]
 
 @embarques_bp.route('/<int:embarque_id>/separacao/<separacao_lote_id>')
 @login_required

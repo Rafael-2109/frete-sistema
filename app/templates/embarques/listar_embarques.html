@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% from 'shared/_macros_badges.html' import badge_local_cd %}
 {% block content %}
 <div class="container-fluid my-4">
 
@@ -70,6 +71,7 @@
             {% if mostrar_todos %}
               <input type="hidden" name="mostrar_todos" value="true">
             {% endif %}
+            <input type="hidden" name="local_cd" value="{{ local_cd_atual or '' }}">
             <div class="row">
               <!-- Filtros de Data -->
               <div class="col-md-3">
@@ -261,6 +263,7 @@
           <th class="col-data">Data Prevista</th>
           <th class="col-data">Data de Embarque</th>
           <th class="col-nome-lg">Transportadora</th>
+          <th class="col-status">CD</th>
           <th class="col-status">Status</th>
           <th class="col-status">Portaria</th>
           <th class="col-status">Status NFs</th>
@@ -279,6 +282,12 @@
           {% set _label_transp = [_trans_nome, _modal_emb] | select | join(' - ') %}
           <td class="col-nome-lg" title="{{ _label_transp }}">{{ _label_transp }}</td>
           <td>
+            {% set _cds = embarque.locais_cd %}
+            {% if 'VICTORIO_MARCHEZINE' in _cds %}{{ badge_local_cd('VICTORIO_MARCHEZINE', curto=True) }}{% endif %}
+            {% if 'TENENTE_MARQUES' in _cds %}{{ badge_local_cd('TENENTE_MARQUES', curto=True) }}{% endif %}
+            {% if not _cds %}<span class="text-muted">-</span>{% endif %}
+          </td>
+          <td>
             <span class="badge bg-{% if embarque.status == 'ativo' %}success{% elif embarque.status == 'cancelado' %}danger{% else %}secondary{% endif %}">
               {{ (embarque.status or 'DRAFT').upper() }}
             </span>
@@ -294,14 +303,17 @@
             {% endif %}
           </td>
           <td>
-            {% set dados_portaria = embarque.registros_portaria %}
-            {% if dados_portaria and dados_portaria|length > 0 %}
-              {% set ultimo_registro = dados_portaria[-1] %}
-              <span class="badge bg-{% if ultimo_registro.status == 'SAIU' %}success{% elif ultimo_registro.status == 'DENTRO' %}warning{% elif ultimo_registro.status == 'AGUARDANDO' %}info{% else %}secondary{% endif %}">
-                {{ ultimo_registro.status }}
+            {% set sp = embarque.status_portaria %}
+            {% if sp == 'SEM_REGISTRO' %}
+              <span class="badge bg-light text-dark">Sem registro</span>
+            {% elif sp == 'PARCIAL' %}
+              <span class="badge bg-warning text-dark" title="Saída parcial: ao menos um CD ainda não saiu">
+                <i class="fas fa-triangle-exclamation"></i> Parcial
               </span>
             {% else %}
-              <span class="badge bg-light">Sem registro</span>
+              <span class="badge bg-{% if sp == 'SAIU' %}success{% elif sp == 'DENTRO' %}warning{% elif sp == 'AGUARDANDO' %}info{% else %}secondary{% endif %}">
+                {{ sp }}
+              </span>
             {% endif %}
           </td>
           <td>

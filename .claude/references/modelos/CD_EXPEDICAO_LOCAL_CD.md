@@ -4,7 +4,7 @@ camada: L2
 sot_de: CD de Expedicao (flag local_cd)
 hub: .claude/references/INDEX.md
 superseded_by: —
-atualizado: 2026-06-18
+atualizado: 2026-06-19
 -->
 # CD de Expedicao (flag local_cd)
 
@@ -18,6 +18,7 @@ atualizado: 2026-06-18
 - [Invariante de consistencia](#invariante-de-consistencia)
 - [Mensagem de solicitacao de coleta por CD](#mensagem-de-solicitacao-de-coleta-por-cd)
 - [Constantes e helpers](#constantes-e-helpers)
+- [Status de portaria agregado por CD](#status-de-portaria-agregado-por-cd)
 
 ## O que e
 
@@ -87,14 +88,41 @@ Para uma mesma NF, `local_cd` **NAO pode divergir** entre os locais que o copiam
 - `normalizar_local_cd(valor)` — entrada livre (form/planilha/import) -> canonico ou None (aceita VM/TM, nome por extenso com/sem acento).
 - `label_local_cd(valor, curto=False)` / `endereco_local_cd(valor)`.
 - Gate "frete dispara na ULTIMA saida" (embarque misto): `locais_cd_com_itens_ativos` / `locais_cd_com_saida` / `cds_pendentes_de_saida` (duck-typing sobre Embarque, sem importar embarques/portaria).
+- `status_portaria_agregado(embarque)` — consolida a portaria de todos os CDs num unico valor canonico (ver secao abaixo).
+
+## Status de portaria agregado por CD
+
+`status_portaria_agregado(embarque)` em `app/utils/local_cd.py` consolida os registros de `ControlePortaria` de todos os CDs de um embarque num unico valor canonico:
+
+| Valor | Significado |
+|-------|-------------|
+| `SAIU` | Todos os CDs com itens ativos ja registraram saida |
+| `PARCIAL` | Embarque misto: ao menos 1 CD saiu, mas outro(s) ainda nao |
+| `DENTRO` | Ao menos 1 CD com registro de portaria mas nenhum com saida |
+| `AGUARDANDO` | Nenhum CD tem registro de portaria ainda |
+| `PENDENTE` | Embarque tem itens ativos mas nao tem CDs identificados |
+| `SEM_REGISTRO` | Embarque sem itens ativos (ex.: cancelado / vazio) |
+
+**Regra do bucket `PARCIAL`:** acionado quando `locais_cd_com_saida(embarque)` tem ao menos 1 elemento E `cds_pendentes_de_saida(embarque)` tambem tem ao menos 1 elemento — ou seja, o embarque e misto e as saidas estao **incompletas**. O gate "frete dispara na ultima saida" nao dispara enquanto `PARCIAL`.
+
+**Consumidores:**
+1. **Coluna "Portaria" na listagem de embarques** — exibe o valor como badge colorido.
+2. **Filtro de portaria na listagem** — permite filtrar por um dos 6 valores (com mapeamento `'Sem Registro' → 'SEM_REGISTRO'` no lado do filtro).
+3. **Card do detalhe do embarque** — exibe o status agregado no topo do card de portaria.
+
+As properties `Embarque.status_portaria` e `Embarque.locais_cd` (em `app/embarques/models.py`) delegam a este helper e a `locais_cd_com_itens_ativos` respectivamente, expondo os valores diretamente no modelo para uso em templates e serializers.
 
 ## Fontes
 
-- Constantes/helpers: `app/utils/local_cd.py`
+- Constantes/helpers (incluindo `status_portaria_agregado`): `app/utils/local_cd.py`
 - Helper de propagacao externa (R1-safe): `app/utils/propagacao_local_cd.py`
 - Propagacao da Coleta (ponto unico): `app/carvia/services/documentos/coleta_service.py`
 - Heranca na criacao do EmbarqueItem: `app/carvia/services/documentos/embarque_carvia_service.py`, `app/carvia/routes/pedido_routes.py`
 - Sincronizacao de entregas CarVia: `app/utils/sincronizar_entregas_carvia.py`
+- Properties `Embarque.status_portaria` / `locais_cd`: `app/embarques/models.py`
+- Gate Op. Assai (`verificar_requisitos_op_assai`) + rota manual (`processar_lancamento_frete`): `app/fretes/routes.py`
+- Vinculacao pos-saida por CD (`adicionar_embarque` — propaga `data_embarque`/entregas so aos itens do CD do registro): `app/portaria/routes.py`
+- Impressao por CD (rotulo de CD no cabecalho + badge por item na secao Nacom): `app/templates/embarques/imprimir_embarque.html`, `app/templates/embarques/imprimir_completo.html`
 - Mensagem de coleta por CD: `app/embarques/routes.py` (`api_gerar_solicitacao_coleta`), `app/templates/embarques/visualizar_embarque.html`
 - Backfill: `scripts/migrations/2026_06_18_backfill_local_cd_embarque_entrega.py`
 - Regra de modulo CarVia: `app/carvia/CLAUDE.md` (entrada `CarviaColeta` / R1)
