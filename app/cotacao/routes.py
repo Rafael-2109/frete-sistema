@@ -129,6 +129,83 @@ def formatar_data_brasileira(data):
         print(f"[DEBUG] Erro ao formatar data '{data}': {str(e)}")
         return ''  # 🔧 CORREÇÃO: Sempre retorna string vazia em caso de erro
 
+
+# ============================================================================
+# Snapshot de tabela de frete no EmbarqueItem — PONTO UNICO (Nacom == CarVia)
+# ============================================================================
+# "Frete Nacom = Subcontrato CarVia": o item CarVia grava a tabela EXATAMENTE
+# como o item Nacom. Para a consistencia ser garantida por CONSTRUCAO (e nao por
+# coincidencia de blocos duplicados), os branches Nacom e CarVia das 3 rotas de
+# montagem de embarque (fechar_frete, fechar_frete_grupo, incluir_em_embarque)
+# chamam ESTES helpers — nunca codigo proprio.
+#
+# Historico: o item CarVia nascia com tabela_nome_tabela='0'/valor_cotado=0
+# porque incluir_em_embarque o ZERAVA "por design" (preparar_cotacao_vazia),
+# divergindo silenciosamente do Nacom (embarque 5807 / NF 38810/38807/38787).
+
+def _aplicar_dados_tabela_no_item(item, dados_tabela):
+    """Aplica o snapshot de tabela de frete em UM EmbarqueItem.
+
+    Ponto unico de gravacao de tabela no item, usado IDENTICAMENTE por Nacom e
+    CarVia. Nao olha o dominio do item (carvia_cotacao_id) — trata os dois igual.
+
+    Args:
+        item: EmbarqueItem destino.
+        dados_tabela: dict com os campos de TabelaFreteManager + 'icms_destino',
+            OU None quando nao ha tabela a aplicar.
+
+    Returns:
+        bool: True se aplicou; False se dados_tabela e None — neste caso NAO grava
+        nada (nao zera o item, evitando o placeholder '0' que originou o bug).
+    """
+    if dados_tabela is None:
+        return False
+    TabelaFreteManager.atribuir_campos_objeto(item, dados_tabela)
+    item.icms_destino = dados_tabela.get('icms_destino', 0)
+    return True
+
+
+def _resolver_tabela_da_cotacao_sessao(pedido, embarque, pedidos):
+    """Resolve o dados_tabela da MELHOR opcao cotada (session['resultados'])
+    para o CNPJ do pedido na transportadora do embarque.
+
+    Extraido do fluxo Nacom de `incluir_em_embarque` para ser compartilhado por
+    Nacom e CarVia (xerox por construcao). Mantem a regra original: melhor opcao
+    = menor valor/kg entre as opcoes do CNPJ cuja transportadora == a do embarque.
+
+    Returns:
+        dict (campos de TabelaFreteManager + 'icms_destino') ou None se nao ha
+        opcao cotada da transportadora do embarque para o CNPJ.
+    """
+    resultados = session.get('resultados', {})
+    opcoes_cnpj = resultados.get('fracionadas', {}).get(pedido.cnpj_cpf)
+    if not opcoes_cnpj:
+        return None
+
+    peso_total_cnpj = sum(
+        p.peso_total or 0 for p in pedidos if p.cnpj_cpf == pedido.cnpj_cpf
+    )
+
+    melhor_opcao = None
+    melhor_valor_kg = float('inf')
+    for opcao in opcoes_cnpj:
+        if opcao.get('transportadora_id') == embarque.transportadora_id:
+            valor_kg = (
+                opcao.get('valor_liquido', 0) / peso_total_cnpj
+                if peso_total_cnpj > 0 else float('inf')
+            )
+            if valor_kg < melhor_valor_kg:
+                melhor_valor_kg = valor_kg
+                melhor_opcao = opcao
+
+    if not melhor_opcao:
+        return None
+
+    dados = TabelaFreteManager.preparar_dados_tabela(melhor_opcao)
+    dados['icms_destino'] = melhor_opcao.get('icms_destino', 0)
+    return dados
+
+
 def calcular_otimizacoes_pedido_adicional(pedido, pedidos_atuais, transportadora, modalidade, peso_total, veiculos, frete_atual_kg):
     """
     Calcula as otimizações possíveis para um pedido que pode ser adicionado
@@ -1678,9 +1755,10 @@ def fechar_frete():
                         agendamento_confirmado=carvia_agend_confirmado,
                         hora_agendamento=carvia_horario_agenda,
                     )
-                    if tipo == 'FRACIONADA':
-                        TabelaFreteManager.atribuir_campos_objeto(item, dados_tabela)
-                        item.icms_destino = dados_tabela.get('icms_destino')
+                    # Tabela de frete: PONTO UNICO (== Nacom). Ver _aplicar_dados_tabela_no_item.
+                    _aplicar_dados_tabela_no_item(
+                        item, dados_tabela if tipo == 'FRACIONADA' else None
+                    )
                     # F1 dedup B1: evita duplicacao de provisorio CARVIA-{cot_id}
                     from app.carvia.services.documentos.embarque_carvia_service import (
                         EmbarqueCarViaService as _ECVS_F1,
@@ -1816,10 +1894,10 @@ def fechar_frete():
                         protocolo_agendamento=protocolo_formatado,
                         data_agenda=data_formatada
                     )
-                    if tipo == 'FRACIONADA':
-                        TabelaFreteManager.atribuir_campos_objeto(item, dados_tabela)
-                        item.icms_destino = dados_tabela.get('icms_destino')
-                        print(f"[DEBUG] ✅ CARGA FRACIONADA: tabela salvos no EMBARQUE_ITEM {pedido.num_pedido}")
+                    # Tabela de frete: PONTO UNICO (== CarVia). Ver _aplicar_dados_tabela_no_item.
+                    _aplicar_dados_tabela_no_item(
+                        item, dados_tabela if tipo == 'FRACIONADA' else None
+                    )
                     db.session.add(item)
 
         db.session.commit()
@@ -2166,10 +2244,12 @@ def fechar_frete_grupo():
                     provisorio=(_nota_fiscal_unica is None),
                     carvia_cotacao_id=carvia_cot_id,
                 )
-                if tipo == 'FRACIONADA' and pedido.cnpj_cpf in dados_tabela_por_cnpj:
-                    dados_tabela = dados_tabela_por_cnpj[pedido.cnpj_cpf]
-                    TabelaFreteManager.atribuir_campos_objeto(item, dados_tabela)
-                    item.icms_destino = dados_tabela.get('icms_destino', 0)
+                # Tabela de frete: PONTO UNICO (== Nacom). Ver _aplicar_dados_tabela_no_item.
+                _aplicar_dados_tabela_no_item(
+                    item,
+                    dados_tabela_por_cnpj.get(pedido.cnpj_cpf)
+                    if tipo == 'FRACIONADA' else None,
+                )
                 # F1 dedup B1: evita duplicacao de provisorio CARVIA-{cot_id}
                 from app.carvia.services.documentos.embarque_carvia_service import (
                     EmbarqueCarViaService as _ECVS_F1,
@@ -2282,10 +2362,12 @@ def fechar_frete_grupo():
                     protocolo_agendamento=formatar_protocolo(pedido.protocolo),
                     data_agenda=formatar_data_brasileira(pedido.agendamento)
                 )
-                if tipo == 'FRACIONADA' and pedido.cnpj_cpf in dados_tabela_por_cnpj:
-                    dados_tabela = dados_tabela_por_cnpj[pedido.cnpj_cpf]
-                    TabelaFreteManager.atribuir_campos_objeto(item, dados_tabela)
-                    item.icms_destino = dados_tabela.get('icms_destino', 0)
+                # Tabela de frete: PONTO UNICO (== CarVia). Ver _aplicar_dados_tabela_no_item.
+                _aplicar_dados_tabela_no_item(
+                    item,
+                    dados_tabela_por_cnpj.get(pedido.cnpj_cpf)
+                    if tipo == 'FRACIONADA' else None,
+                )
                 db.session.add(item)
 
         db.session.commit()
@@ -4019,13 +4101,20 @@ def incluir_em_embarque():
                     carvia_cotacao_id=carvia_cot_id,
                 )
 
-                # CarVia nao usa tabela Nacom (cotacao propria via CarviaCotacao).
-                # Para FRACIONADA Nacom, dados da tabela vao no item; CarVia mantem
-                # campos vazio (DIRETA usa dados do embarque; FRACIONADA CarVia
-                # nao se aplica — CarVia opera com cotacao propria).
-                dados_vazio_cv = TabelaFreteManager.preparar_cotacao_vazia()
-                TabelaFreteManager.atribuir_campos_objeto(novo_item, dados_vazio_cv)
-                novo_item.icms_destino = None
+                # XEROX do Nacom: subcontrato CarVia = frete Nacom. Resolve a tabela
+                # de custo pela cotacao em sessao (mesma transportadora do embarque) e
+                # grava no item; se nao ha tabela, rejeita o pedido — IGUAL ao Nacom.
+                if tipo_carga == 'FRACIONADA':
+                    dados_cv = _resolver_tabela_da_cotacao_sessao(pedido, embarque, pedidos)
+                    if not _aplicar_dados_tabela_no_item(novo_item, dados_cv):
+                        pedidos_nao_incluidos.append({
+                            'num_pedido': pedido.num_pedido,
+                            'cnpj': pedido.cnpj_cpf,
+                            'cliente': pedido.raz_social_red,
+                            'motivo': f"Sem dados de cotação para transportadora {embarque.transportadora.razao_social}",
+                        })
+                        continue
+                # DIRETA: tabela vai no embarque (nao no item) — nada a fazer aqui.
 
                 # F1 dedup B1: evita duplicacao de provisorio em incluir_em_embarque
                 from app.carvia.services.documentos.embarque_carvia_service import (
@@ -4086,42 +4175,11 @@ def incluir_em_embarque():
                 cidade_destino=cidade_formatada
             )
 
-            # ✅ CORREÇÃO: Para carga fracionada, OBRIGATÓRIO usar dados da tabela DA COTAÇÃO da mesma transportadora
+            # Resolve a tabela de custo pela cotacao em sessao — PONTO UNICO (== CarVia).
             dados_tabela_encontrados = False
-
             if tipo_carga == 'FRACIONADA':
-                # Busca os dados da tabela calculados na cotação para o CNPJ ESPECÍFICO deste pedido
-                resultados = session.get('resultados', {})
-
-                if 'fracionadas' in resultados and pedido.cnpj_cpf in resultados['fracionadas']:
-                    opcoes_cnpj = resultados['fracionadas'][pedido.cnpj_cpf]
-
-                    # ✅ CORREÇÃO: Busca a MELHOR OPÇÃO DA COTAÇÃO para este CNPJ específico da mesma transportadora
-                    melhor_opcao_cnpj = None
-                    melhor_valor_kg = float('inf')
-
-                    # Encontra a melhor opção (mais barata) deste CNPJ para a transportadora do embarque
-                    for opcao in opcoes_cnpj:
-                        if opcao.get('transportadora_id') == embarque.transportadora_id:
-                            # Calcula valor por kg para comparação
-                            peso_total_cnpj = sum(p.peso_total or 0 for p in pedidos if p.cnpj_cpf == pedido.cnpj_cpf)
-                            valor_kg = opcao.get('valor_liquido', 0) / peso_total_cnpj if peso_total_cnpj > 0 else float('inf')
-
-                            if valor_kg < melhor_valor_kg:
-                                melhor_valor_kg = valor_kg
-                                melhor_opcao_cnpj = opcao
-
-                    # Se encontrou a melhor opção deste CNPJ para a transportadora
-                    if melhor_opcao_cnpj:
-                        # Usa os dados da tabela específica da cotação deste CNPJ
-                        # Prepara dados e atribui usando TabelaFreteManager
-                        dados_tabela_temp = TabelaFreteManager.preparar_dados_tabela(melhor_opcao_cnpj)
-                        TabelaFreteManager.atribuir_campos_objeto(novo_item, dados_tabela_temp)
-                        # icms_destino é atribuído separadamente (vem de localidades)
-                        novo_item.icms_destino = melhor_opcao_cnpj.get('icms_destino', 0)
-
-                        dados_tabela_encontrados = True
-                        print(f"[DEBUG] ✅ Usando tabela ESPECÍFICA da cotação para CNPJ {pedido.cnpj_cpf} (Pedido {pedido.num_pedido}): {melhor_opcao_cnpj.get('nome_tabela')} - R${melhor_valor_kg:.2f}/kg")
+                dados_nac = _resolver_tabela_da_cotacao_sessao(pedido, embarque, pedidos)
+                dados_tabela_encontrados = _aplicar_dados_tabela_no_item(novo_item, dados_nac)
 
                 # ❌ SE NÃO ENCONTROU DADOS DA COTAÇÃO PARA A MESMA TRANSPORTADORA, NÃO INCLUI O PEDIDO
                 if not dados_tabela_encontrados:
