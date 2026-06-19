@@ -2362,6 +2362,7 @@ def cancelar_item_embarque(item_id):
             try:
                 from app.carvia.services.documentos.embarque_carvia_service import (
                     resetar_status_pedidos_carvia_por_lotes,
+                    cancelar_fretes_orfaos_embarque,
                 )
                 resetados = resetar_status_pedidos_carvia_por_lotes(
                     [lote_item], carvia_cotacao_id=item.carvia_cotacao_id,
@@ -2372,8 +2373,22 @@ def cancelar_item_embarque(item_id):
                         f'🔁 {resetados} pedido(s) CarVia resetado(s) apos cancelamento do item.',
                         'info',
                     )
+                # Propaga o cancelamento ao CarviaFrete: cancela fretes que ficaram
+                # orfaos (cnpj_destino sem item CarVia ativo). Sem isto o frete ficava
+                # PENDENTE com item cancelado (fantasma). Guards preservam frete com
+                # CTe/operacao/sub (revisao manual).
+                fretes_cancelados = cancelar_fretes_orfaos_embarque(
+                    embarque.id,
+                    current_user.nome if hasattr(current_user, 'nome') else 'Sistema',
+                )
+                if fretes_cancelados:
+                    db.session.commit()
+                    flash(
+                        f'🚚 {len(fretes_cancelados)} frete(s) CarVia cancelado(s) (item removido).',
+                        'info',
+                    )
             except Exception as _e_reset:
-                print(f'[AVISO] Reset CarVia apos cancel item falhou: {_e_reset}')
+                print(f'[AVISO] Reset/cancel CarVia apos cancel item falhou: {_e_reset}')
 
         # ✅ USAR NOVA SINCRONIZAÇÃO COMPLETA
         sucesso, resultado = sincronizar_nf_embarque_pedido_completa(embarque.id)
@@ -2618,24 +2633,35 @@ def desvincular_pedido(lote_id):
         try:
             from app.carvia.services.documentos.embarque_carvia_service import (
                 resetar_status_pedidos_carvia_por_lotes,
+                cancelar_fretes_orfaos_embarque,
             )
             itens = EmbarqueItem.query.filter_by(
                 separacao_lote_id=lote_id, status='ativo'
             ).all()
             carvia_cotacao_id = None
             cancelados = 0
+            embarque_ids = set()
             for it in itens:
                 if not carvia_cotacao_id and it.carvia_cotacao_id:
                     carvia_cotacao_id = it.carvia_cotacao_id
+                if it.embarque_id:
+                    embarque_ids.add(it.embarque_id)
                 it.status = 'cancelado'
                 cancelados += 1
             resetados = resetar_status_pedidos_carvia_por_lotes(
                 [lote_id], carvia_cotacao_id=carvia_cotacao_id,
             )
+            # Propaga ao CarviaFrete: cancela fretes orfaos dos embarques afetados
+            usuario_cv = current_user.nome if hasattr(current_user, 'nome') else 'Sistema'
+            fretes_cancelados = sum(
+                len(cancelar_fretes_orfaos_embarque(emb_id, usuario_cv))
+                for emb_id in embarque_ids
+            )
             db.session.commit()
             flash(
                 f"✅ Pedido CarVia {lote_id} desvinculado. "
-                f"{cancelados} item(ns) cancelado(s), {resetados} pedido(s) resetado(s).",
+                f"{cancelados} item(ns) cancelado(s), {resetados} pedido(s) resetado(s), "
+                f"{fretes_cancelados} frete(s) cancelado(s).",
                 "success",
             )
         except Exception as e:

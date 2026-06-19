@@ -2080,6 +2080,82 @@ def resetar_status_pedidos_carvia_por_lotes(
     return resetados
 
 
+def cancelar_fretes_orfaos_embarque(embarque_id: int, usuario: str) -> list:
+    """Cancela CarviaFrete(s) do embarque que ficaram ORFAOS — sem nenhum
+    EmbarqueItem CarVia ATIVO para o seu cnpj_destino.
+
+    Necessario porque cancelar um EmbarqueItem CarVia individualmente NAO tocava o
+    CarviaFrete (ficava PENDENTE com item morto). A Fase B3 de
+    `lancar_frete_carvia` cobriria isto, mas `_processar` faz early-return quando
+    nao sobra NENHUM item CarVia ativo (caso do ultimo item cancelado) — entao a B3
+    nunca roda. Este helper espelha os MESMOS guards da B3 e roda independente de
+    haver itens ativos.
+
+    So cancela frete em PENDENTE, SEM CTe e SEM operacao/subcontrato. Frete com CTe,
+    custo real ou filhos vinculados (operacao/sub) fica para revisao manual — por
+    isso nao ha cascata aqui (quem tem filhos nunca e cancelado). NAO faz commit — o
+    caller commita.
+
+    Returns: lista de IDs de CarviaFrete cancelados.
+    """
+    from app.embarques.models import EmbarqueItem
+    from app.carvia.models import CarviaFrete
+    from app.utils.cnpj_utils import normalizar_cnpj
+
+    fretes = CarviaFrete.query.filter(
+        CarviaFrete.embarque_id == embarque_id,
+        CarviaFrete.status != 'CANCELADO',
+    ).all()
+    if not fretes:
+        return []
+
+    itens_ativos = EmbarqueItem.query.filter(
+        EmbarqueItem.embarque_id == embarque_id,
+        EmbarqueItem.status == 'ativo',
+        EmbarqueItem.separacao_lote_id.ilike('CARVIA-%'),
+    ).all()
+    destinos_ativos = {normalizar_cnpj(i.cnpj_cliente or '') for i in itens_ativos}
+
+    cancelados = []
+    for fr in fretes:
+        if normalizar_cnpj(fr.cnpj_destino or '') in destinos_ativos:
+            continue  # ainda ha item ativo para este destino — frete relevante
+
+        # Guards (espelham a Fase B3): preservar custo real e filhos vinculados.
+        if fr.valor_cte and float(fr.valor_cte) > 0:
+            logger.warning(
+                "Frete orfao #%s (embarque %s) tem CTe — NAO cancelando (revisao)",
+                fr.id, embarque_id,
+            )
+            continue
+        if fr.status in ('CONFERIDO', 'FATURADO'):
+            logger.warning(
+                "Frete orfao #%s (embarque %s) status=%s — NAO cancelando (revisao)",
+                fr.id, embarque_id, fr.status,
+            )
+            continue
+        if fr.operacao_id or fr.subcontrato_id:
+            logger.warning(
+                "Frete orfao #%s (embarque %s) tem operacao=%s/sub=%s — NAO "
+                "cancelando automaticamente (revisao manual dos filhos)",
+                fr.id, embarque_id, fr.operacao_id, fr.subcontrato_id,
+            )
+            continue
+
+        fr.status = 'CANCELADO'
+        fr.observacoes = (
+            (fr.observacoes or '')
+            + f'\nCancelado: EmbarqueItem CarVia cancelado (sem item ativo) por {usuario}.'
+        ).strip()
+        cancelados.append(fr.id)
+        logger.info(
+            "Frete orfao #%s (embarque %s, destino %s) cancelado — item CarVia cancelado.",
+            fr.id, embarque_id, fr.cnpj_destino,
+        )
+
+    return cancelados
+
+
 def _resetar_status_pedidos_carvia_do_embarque(embarque_id: int) -> None:
     """Recalcula `CarviaPedido.status` apos cancelamento de embarque.
 
