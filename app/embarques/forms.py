@@ -207,7 +207,8 @@ class FiltrosEmbarqueExpandidoForm(FlaskForm):
             ('PENDENTE', 'Pendente'),
             ('AGUARDANDO', 'Aguardando'),
             ('DENTRO', 'Carregando'),
-            ('SAIU', 'Saiu para entrega')
+            ('PARCIAL', 'Saída parcial (1 CD)'),
+            ('SAIU', 'Saiu para entrega'),
         ],
         validators=[Optional()],
         render_kw={'class': 'form-control'}

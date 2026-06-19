@@ -747,68 +747,10 @@ def listar_embarques():
         form_filtros.status.data = status
         filtros_aplicados = True
 
-    # Filtro por status da portaria
+    # Filtro por status da portaria (agregado por CD) — aplicado PÓS-QUERY,
+    # como status_nfs/status_fretes, via property Embarque.status_portaria.
     status_portaria = request.args.get('status_portaria', '').strip()
     if status_portaria and status_portaria != '':
-        from app.portaria.models import ControlePortaria
-        
-        if status_portaria == 'Sem Registro':
-            # Embarques que NÃO têm registro na portaria
-            embarques_com_registro = db.session.query(ControlePortaria.embarque_id).filter(
-                ControlePortaria.embarque_id.isnot(None)
-            ).distinct()
-            query = query.filter(~Embarque.id.in_(embarques_com_registro))
-        else:
-            # Embarques que têm registro com status específico
-            # Busca o último registro de cada embarque e filtra pelo status
-            from sqlalchemy import and_, func
-            
-            # Subquery para pegar o último registro de cada embarque (apenas com embarque_id válido)
-            ultimo_registro_subquery = db.session.query(
-                ControlePortaria.embarque_id,
-                func.max(ControlePortaria.id).label('ultimo_id')
-            ).filter(
-                ControlePortaria.embarque_id.isnot(None)
-            ).group_by(ControlePortaria.embarque_id).subquery()
-            
-            # Join para pegar os dados do último registro
-            query = query.join(
-                ultimo_registro_subquery,
-                Embarque.id == ultimo_registro_subquery.c.embarque_id
-            ).join(
-                ControlePortaria,
-                ControlePortaria.id == ultimo_registro_subquery.c.ultimo_id
-            )
-            
-            # Filtra pelo status calculado dinamicamente
-            if status_portaria == 'SAIU':
-                query = query.filter(
-                    and_(
-                        ControlePortaria.data_saida.isnot(None),
-                        ControlePortaria.hora_saida.isnot(None)
-                    )
-                )
-            elif status_portaria == 'DENTRO':
-                query = query.filter(
-                    and_(
-                        ControlePortaria.data_entrada.isnot(None),
-                        ControlePortaria.hora_entrada.isnot(None),
-                        ControlePortaria.data_saida.is_(None)
-                    )
-                )
-            elif status_portaria == 'AGUARDANDO':
-                query = query.filter(
-                    and_(
-                        ControlePortaria.data_chegada.isnot(None),
-                        ControlePortaria.hora_chegada.isnot(None),
-                        ControlePortaria.data_entrada.is_(None)
-                    )
-                )
-            elif status_portaria == 'PENDENTE':
-                query = query.filter(
-                    ControlePortaria.data_chegada.is_(None)
-                )
-        
         form_filtros.status_portaria.data = status_portaria
         filtros_aplicados = True
 
@@ -875,7 +817,8 @@ def listar_embarques():
     query = query.distinct()
 
     # ✅ CORREÇÃO: Se há filtros de propriedades calculadas, buscar TODOS antes de paginar
-    if (status_nfs and status_nfs != '') or (status_fretes and status_fretes != '') or (pallets_pendentes == 'sim'):
+    if (status_nfs and status_nfs != '') or (status_fretes and status_fretes != '') \
+            or (status_portaria and status_portaria != '') or (pallets_pendentes == 'sim'):
         # Buscar todos os embarques (sem paginação)
         embarques_todos = query.all()
 
@@ -885,6 +828,10 @@ def listar_embarques():
 
         if status_fretes and status_fretes != '':
             embarques_todos = [e for e in embarques_todos if e.status_fretes == status_fretes]
+
+        if status_portaria and status_portaria != '':
+            _alvo = 'SEM_REGISTRO' if status_portaria == 'Sem Registro' else status_portaria
+            embarques_todos = [e for e in embarques_todos if e.status_portaria == _alvo]
 
         if pallets_pendentes == 'sim':
             embarques_todos = [e for e in embarques_todos if e.pallets_pendentes]
