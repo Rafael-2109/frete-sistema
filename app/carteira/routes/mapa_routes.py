@@ -570,6 +570,10 @@ def rota_otimizar():
         valor_pedagio = pedagio.get('valor_total', 0) if isinstance(pedagio, dict) else 0
         total = round(custo.get('custo_operacional', 0) + valor_pedagio, 2)
 
+        # Receita CarVia dos lotes selecionados (viabilidade pre-embarque)
+        from app.carvia.services.financeiro.viabilidade_service import receita_carvia_por_lotes
+        carvia = receita_carvia_por_lotes(data.get('lotes') or [])
+
         return jsonify({
             'sucesso': True,
             'rota': rota_out,
@@ -592,6 +596,9 @@ def rota_otimizar():
                 'total': total,
             },
             'pedagio': pedagio if isinstance(pedagio, dict) else None,
+            'carvia_receita_total': carvia['total'],
+            'carvia_por_lote': carvia['por_lote'],
+            'viabilidade': round(carvia['total'] - total, 2),
         })
     except Exception as e:
         logger.error(f"Erro em rota_otimizar: {e}")

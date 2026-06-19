@@ -160,6 +160,12 @@
             <div class="col-md-2"><div class="stats-card bg-success text-white"><div class="stat-value" id="custoTotal">R$ 0</div><div class="stat-label">Custo Total</div></div></div>
         </div>
 
+        <!-- Viabilidade CarVia (receita CTe/cotacao vs custo da rota) -->
+        <div class="row mb-3" id="viabilidadeRow" style="display: none;">
+            <div class="col-md-3"><div class="stats-card bg-primary text-white"><div class="stat-value" id="carviaReceita">R$ 0</div><div class="stat-label">CarVia (receita)</div></div></div>
+            <div class="col-md-3"><div class="stats-card text-white" id="viabilidadeCard"><div class="stat-value" id="viabilidadeValor">R$ 0</div><div class="stat-label">Viabilidade (receita − custo)</div></div></div>
+        </div>
+
         <!-- Mapa Container -->
         <div class="row">
             <div class="col-12 position-relative">
@@ -1132,6 +1138,7 @@
             if (origem) payload.origem = origem;
             const veiculoId = $('#rotaVeiculo').val();
             if (veiculoId) payload.veiculo_id = parseInt(veiculoId, 10);
+            payload.lotes = _lotesSelecionados();
 
             if (redesenhar) showLoading();
             $.ajax({
@@ -1180,6 +1187,16 @@
             if (resp.pedagio) {
                 $('#pedagioEstimado').attr('title',
                     `${resp.pedagio.num_pracas_estimado} praça(s) × R$ ${resp.pedagio.valor_medio_praca.toFixed(2)}`);
+            }
+            if (resp.carvia_receita_total !== undefined && resp.carvia_receita_total > 0) {
+                $('#carviaReceita').text(fmt(resp.carvia_receita_total));
+                const viab = resp.viabilidade || 0;
+                $('#viabilidadeValor').text(fmt(viab));
+                $('#viabilidadeCard').removeClass('bg-success bg-danger')
+                    .addClass(viab >= 0 ? 'bg-success' : 'bg-danger');
+                $('#viabilidadeRow').show();
+            } else {
+                $('#viabilidadeRow').hide();
             }
             $('#custoRotaRow').show();
         }

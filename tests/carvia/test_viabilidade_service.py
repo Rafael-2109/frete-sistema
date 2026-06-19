@@ -45,3 +45,15 @@ def test_lote_nacom_e_zero(db):
     res = receita_carvia_por_lotes(['LOTE_NACOM_123'])
     assert res['total'] == 0.0
     assert res['por_lote']['LOTE_NACOM_123']['fonte'] == 'SEM'
+
+
+def test_receita_por_lotes_soma_multiplos(db):
+    from app.carvia.models import CarviaOperacaoNf
+    from app.carvia.services.financeiro.viabilidade_service import receita_carvia_por_lotes
+    op1 = _criar_operacao(db, 'CTe-V2', 300.0); nf1 = _criar_nf(db, '70010')
+    op2 = _criar_operacao(db, 'CTe-V3', 700.0); nf2 = _criar_nf(db, '70011')
+    db.session.add(CarviaOperacaoNf(operacao_id=op1.id, nf_id=nf1.id))
+    db.session.add(CarviaOperacaoNf(operacao_id=op2.id, nf_id=nf2.id))
+    db.session.flush()
+    res = receita_carvia_por_lotes([f'CARVIA-NF-{nf1.id}', f'CARVIA-NF-{nf2.id}', 'LOTE_X'])
+    assert res['total'] == 1000.0
