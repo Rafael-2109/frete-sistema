@@ -7,9 +7,9 @@
  * - CargaRenderer: renderiza cena Three.js
  * - Stats: atualiza metricas na sidebar
  *
- * Dois modos:
- * - 'livre': carrega catalogo via API, usuario monta livremente
- * - 'embarque': dados vem embutidos no HTML (JSON), read-only
+ * Modo unico: livre — carrega catalogo via API e o usuario monta a carga.
+ * Pode abrir PRE-PREENCHIDO via <script id="simulador-prefill-data"> (motos/NFs/
+ * pallets de um embarque ou de uma rota do mapa), permanecendo editavel.
  */
 ;(function () {
   'use strict';
@@ -21,7 +21,6 @@
   ];
 
   var state = {
-    modo: 'livre', // 'livre' ou 'embarque'
     veiculos: [],
     modelosMoto: [],
     veiculoSelecionado: null,
@@ -29,27 +28,19 @@
     renderer: null,
     colorMap: {}, // {modelo_id: '#hex'}
     debounceTimer: null,
-    motoListEmbarque: [], // lista de motos do embarque (modo 'embarque'), p/ re-empacotar
     packToken: 0, // descarta resultado de otimizacao obsoleto (input mudou)
-    nfsPendentes: null, // cache das NFs CarVia nao entregues (lazy, modo livre)
+    nfsPendentes: null, // cache das NFs CarVia nao entregues (lazy)
     nfsAdicionadas: {}, // {numero_nf: [{modelo_id, quantidade}]} — motos puxadas por NF (p/ remover)
     pallets: [], // pallets de conservas Nacom (Camada 1) empacotados junto das motos
-    loteSeparacao: null, // separacao_lote_id ativo (modo livre)
+    loteSeparacao: null, // separacao_lote_id ativo
   };
 
   function init() {
     var container = document.getElementById('simulador-canvas');
     if (!container) return;
-
-    // Detectar modo
-    var initDataEl = document.getElementById('simulador-init-data');
-    if (initDataEl) {
-      state.modo = 'embarque';
-      initEmbarqueMode(initDataEl, container);
-    } else {
-      state.modo = 'livre';
-      initLivreMode(container);
-    }
+    // Modo unico: simulador livre. O embarque alimenta o livre via prefill
+    // (rota /simulador-carga?embarque_id=<id>), nao ha mais tela dedicada.
+    initLivreMode(container);
   }
 
   // ========== Modo Livre ==========
@@ -364,8 +355,22 @@
       }
     }
 
+    // Pallets de conservas Nacom (carga mista do embarque) -> entram no
+    // empacotamento 3D junto das motos. O recalc (debounced) abaixo le state.pallets.
+    if (data.pallets && data.pallets.length) {
+      state.pallets = data.pallets;
+    }
+
+    // TODAS as motos (NF + itens sem NF) -> linhas. `data.motos` ja e o total
+    // agregado: as motos SEMPRE aparecem aqui, mesmo se os chips abaixo falharem.
+    var motos = data.motos || [];
+    for (var i = 0; i < motos.length; i++) {
+      addOrIncrementMoto(motos[i].modelo_id, motos[i].quantidade);
+    }
+
     // NFs da rota -> chips removiveis (reusa a infra de "NF nao entregue").
-    // Cada chip injeta suas motos; remover o chip decrementa exatamente elas.
+    // As motos JA foram adicionadas via `data.motos`; aqui so registramos quais
+    // motos cada NF injetou (p/ o removeNf decrementar) e criamos o chip.
     var nfs = data.nfs || [];
     if (nfs.length) {
       var nfBox = document.getElementById('simulador-nf-box');
@@ -375,17 +380,8 @@
         if (state.nfsAdicionadas[nf.numero_nf]) continue;
         var motosNf = nf.motos || [];
         state.nfsAdicionadas[nf.numero_nf] = motosNf; // guarda p/ remover depois
-        for (var k = 0; k < motosNf.length; k++) {
-          addOrIncrementMoto(motosNf[k].modelo_id, motosNf[k].quantidade);
-        }
         addNfChip(nf, motosNf);
       }
-    }
-
-    // Motos SEM NF (itens de pedido CarVia pre-faturamento) -> linhas livres.
-    var motos = data.motos || [];
-    for (var i = 0; i < motos.length; i++) {
-      addOrIncrementMoto(motos[i].modelo_id, motos[i].quantidade);
     }
     return selecionouVeiculo;
   }
@@ -671,14 +667,6 @@
     var sobre = document.getElementById('pallet-sobre-pallet');
     if (sobre) sobre.addEventListener('change', scheduleRecalc);
 
-    var blocoLivre = document.getElementById('simulador-pallet-livre');
-    if (state.modo === 'embarque') {
-      // No embarque os pallets vem prontos (modo A). Flags de agrupamento sao de
-      // planejamento — disponiveis no modo livre. Ocultar no embarque.
-      if (blocoLivre) blocoLivre.style.display = 'none';
-      return;
-    }
-
     var loteInput = document.getElementById('pallet-lote');
     if (loteInput) {
       loteInput.addEventListener('change', function () {
@@ -734,87 +722,6 @@
     el.textContent = '⚠ ' + pend.length + ' produto(s) sem cadastro de palletização: ' + cods;
   }
 
-  // ========== Modo Embarque ==========
-
-  function initEmbarqueMode(initDataEl, container) {
-    var data;
-    try {
-      data = JSON.parse(initDataEl.textContent);
-    } catch (e) {
-      console.error('Erro ao parsear dados do embarque:', e);
-      return;
-    }
-
-    if (data.erro === 'veiculo_sem_dimensoes') {
-      var warning = document.getElementById('simulador-warning');
-      if (warning) {
-        warning.textContent = 'Veículo do embarque não possui dimensões do baú cadastradas. Configure nas Administração de Veículos.';
-        warning.style.display = 'block';
-      }
-      return;
-    }
-
-    // Criar renderer
-    var isDark = document.documentElement.getAttribute('data-bs-theme') === 'dark';
-    state.renderer = new CargaRenderer(container, isDark ? 'dark' : 'light');
-
-    if (!data.veiculo) return;
-
-    state.veiculoSelecionado = {
-      w: data.veiculo.comprimento_bau,
-      d: data.veiculo.largura_bau,
-      h: data.veiculo.altura_bau,
-      pesoMax: data.veiculo.peso_maximo,
-      nome: data.veiculo.nome,
-    };
-
-    // Montar lista de motos e executar pack
-    var motoList = [];
-    var colorMap = {};
-    for (var i = 0; i < data.motos.length; i++) {
-      var m = data.motos[i];
-      var colorHex = PALETTE_HEX[i % PALETTE_HEX.length];
-      colorMap[m.modelo_id] = colorHex;
-      motoList.push({
-        id: m.modelo_id,
-        nome: m.modelo_nome,
-        comprimento: m.comprimento,
-        largura: m.largura,
-        altura: m.altura,
-        peso_medio: m.peso_medio || 0,
-        qty: m.quantidade,
-        color: colorHex,
-      });
-    }
-    state.colorMap = colorMap;
-    state.motoListEmbarque = motoList;
-    state.pallets = data.pallets || [];
-
-    recalcularEmbarque();
-
-    // Bind vistas
-    document.querySelectorAll('.simulador-view-btn').forEach(function (btn) {
-      btn.addEventListener('click', function () {
-        var preset = this.dataset.view;
-        document.querySelectorAll('.simulador-view-btn').forEach(function (b) {
-          b.classList.remove('active');
-        });
-        this.classList.add('active');
-        state.renderer.setView(preset, state.veiculoSelecionado);
-      });
-    });
-
-    // Painel de empacotamento recolhivel + sliders
-    bindPackPanelToggle();
-    bindPackControls(scheduleRecalc);
-    setupPalletControls();
-  }
-
-  function recalcularEmbarque() {
-    if (!state.renderer || !state.veiculoSelecionado) return;
-    packAndRender(state.veiculoSelecionado, state.motoListEmbarque, state.colorMap);
-  }
-
   /**
    * Render em 2 fases: pack() instantaneo (feedback imediato) seguido de packOptimized
    * (Simulated Annealing, ~100-350ms) que "sobe" o resultado. A otimizacao roda fora do
@@ -848,8 +755,7 @@
 
   function scheduleRecalc() {
     if (state.debounceTimer) clearTimeout(state.debounceTimer);
-    var fn = state.modo === 'embarque' ? recalcularEmbarque : recalcular;
-    state.debounceTimer = setTimeout(fn, DEBOUNCE_MS);
+    state.debounceTimer = setTimeout(recalcular, DEBOUNCE_MS);
   }
 
   function recalcular() {
@@ -934,18 +840,6 @@
         if (span0) span0.textContent = el.value + (el.dataset.suffix || '');
       })(inputs[i]);
     }
-  }
-
-  /** Toggle do painel de empacotamento recolhivel (modo embarque). */
-  function bindPackPanelToggle() {
-    var toggle = document.getElementById('simulador-pack-toggle');
-    var body = document.getElementById('simulador-pack-body');
-    if (!toggle || !body) return;
-    toggle.addEventListener('click', function () {
-      var hidden = body.style.display === 'none' || !body.style.display;
-      body.style.display = hidden ? 'block' : 'none';
-      toggle.classList.toggle('active', hidden);
-    });
   }
 
   function getEffectiveBay() {

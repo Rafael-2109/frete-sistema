@@ -161,7 +161,7 @@
       </h2>
       <div class="d-flex align-items-center gap-2">
         {% if current_user.sistema_carvia %}
-        <a href="{{ url_for('carvia.simulador_carga_embarque', embarque_id=embarque.id) }}"
+        <a href="{{ url_for('carvia.simulador_carga', embarque_id=embarque.id) }}"
            class="btn btn-outline-primary btn-sm" target="_blank"
            title="Simular o empacotamento 3D das motos deste embarque">
           <i class="fas fa-cube me-1"></i> Simular carga 3D
