@@ -69,6 +69,7 @@ Sempre prefira ler o sub-doc correspondente ao topico ao inves de reconstruir co
 | [FLUXOGRAMA_COMPLETO.md](FLUXOGRAMA_COMPLETO.md) | Mermaid completo do processo E2E (atualizado) |
 | [MIGRATIONS.md](MIGRATIONS.md) | Historico de migrations especificas do CarVia |
 | [fluxograma_refatoracao.md](fluxograma_refatoracao.md) | Mermaid do processo E2E (historico) |
+| [RESULTADO_FRETE.md](RESULTADO_FRETE.md) | Rateio coerente receita vs custo por moto (`resultado_frete_service`), tela admin-only `/carvia/resultado-frete` + export 2 abas, viabilidade no mapa/embarque (`viabilidade_service`) |
 
 > Campos de tabelas: `.claude/skills/consultando-sql/schemas/tables/{tabela}.json`
 
