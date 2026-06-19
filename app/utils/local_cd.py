@@ -140,3 +140,39 @@ def cds_pendentes_de_saida(embarque):
     if len(locais_itens) <= 1:
         return set()  # nao-misto: comportamento legado, sem restricao por CD
     return locais_itens - locais_cd_com_saida(embarque)
+
+
+# Ordem de progresso dos status individuais de ControlePortaria.
+_ORDEM_STATUS_PORTARIA = {'PENDENTE': 0, 'AGUARDANDO': 1, 'DENTRO': 2, 'SAIU': 3}
+
+
+def status_portaria_agregado(embarque):
+    """Status de portaria de um Embarque considerando os 2 CDs (1 registro por CD).
+
+    - 'SEM_REGISTRO': nenhum ControlePortaria vinculado.
+    - 'SAIU': TODOS os CDs com itens ativos ja deram saida (embarque completo).
+    - 'PARCIAL': ao menos 1 CD deu saida, mas ainda falta a saida de outro CD com
+      itens ativos (embarque MISTO com saida parcial) — o caso que o gate de frete
+      protege e que ate aqui ficava invisivel ao operador.
+    - 'DENTRO'/'AGUARDANDO'/'PENDENTE': nenhum CD saiu ainda; reflete o status MAIS
+      AVANCADO entre os registros existentes.
+
+    Duck-typed sobre Embarque (`.itens`, `.registros_portaria`); cada registro
+    expoe `.status` e `.data_saida`. Embarque de 1 CD nunca retorna 'PARCIAL'
+    (cds_pendentes_de_saida retorna vazio) — sem regressao no fluxo legado.
+    """
+    if embarque is None:
+        return 'SEM_REGISTRO'
+    registros = list(getattr(embarque, 'registros_portaria', None) or [])
+    if not registros:
+        return 'SEM_REGISTRO'
+    pendentes = cds_pendentes_de_saida(embarque)
+    saidos = locais_cd_com_saida(embarque)
+    if saidos and pendentes:
+        return 'PARCIAL'
+    if saidos and not pendentes:
+        return 'SAIU'
+    return max(
+        (getattr(cp, 'status', 'PENDENTE') for cp in registros),
+        key=lambda s: _ORDEM_STATUS_PORTARIA.get(s, 0),
+    )

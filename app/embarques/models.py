@@ -370,6 +370,19 @@ class Embarque(db.Model):
         # Se há fretes mas sem CTe, estão emitidos
         return 'Emitido'
 
+    @property
+    def status_portaria(self):
+        """Status de portaria agregado por CD (SAIU/PARCIAL/DENTRO/AGUARDANDO/
+        PENDENTE/SEM_REGISTRO). Fonte: app/utils/local_cd.status_portaria_agregado."""
+        from app.utils.local_cd import status_portaria_agregado
+        return status_portaria_agregado(self)
+
+    @property
+    def locais_cd(self):
+        """Conjunto de local_cd dos itens ATIVOS (para badge de CD na listagem)."""
+        from app.utils.local_cd import locais_cd_com_itens_ativos
+        return locais_cd_com_itens_ativos(self)
+
     def __repr__(self):
         return f"<Embarque #{self.numero} - {self.data}>"
 
