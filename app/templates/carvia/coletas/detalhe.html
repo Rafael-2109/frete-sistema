@@ -104,6 +104,10 @@
         <strong>NFs da coleta ({{ coleta.total_nfs }} · {{ coleta.total_motos }} motos)</strong>
         <div class="d-flex align-items-center gap-2">
             <span class="text-muted small">{{ coleta.total_vinculadas }} vinculada(s) à NF real</span>
+            <a href="{{ url_for('carvia.exportar_coleta', coleta_id=coleta.id) }}" class="btn btn-outline-success btn-sm"
+               title="Exporta as NFs da coleta para Excel (chave da NF, medida e qtd por modelo)">
+                <i class="fas fa-file-excel"></i> Exportar Excel
+            </a>
             {% if editavel %}
             <form method="POST" action="{{ url_for('carvia.vincular_lote_coleta', coleta_id=coleta.id) }}"
                   onsubmit="return confirm('Vincular automaticamente todas as NFs com número único e ainda não coletado?');">
@@ -122,6 +126,27 @@
             <th>Vínculo</th>{% if editavel %}<th class="text-end">Ações</th>{% endif %}
         </tr></thead>
         <tbody>
+            {% if editavel %}
+            <!-- adicionar linha (no topo: a NF recém-adicionada entra "por cima") -->
+            <tr class="table-light">
+                <td colspan="10">
+                    <form method="POST" action="{{ url_for('carvia.adicionar_linha', coleta_id=coleta.id) }}" class="row g-2">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="carvia_nf_id" id="add-carvia_nf_id">
+                        <div class="col-md-2"><input name="numero_nf" id="add-numero_nf" autocomplete="off" class="form-control form-control-sm" placeholder="NF"></div>
+                        <div class="col-md-3"><input name="nome_cliente_rascunho" id="add-cliente" class="form-control form-control-sm" placeholder="Cliente (como achar)"></div>
+                        <div class="col-md-2"><input name="cidade_destino" id="add-cidade" class="form-control form-control-sm" placeholder="Cidade/destino"></div>
+                        <div class="col-md-1"><input name="uf" id="add-uf" maxlength="2" class="form-control form-control-sm text-uppercase" placeholder="UF"></div>
+                        <div class="col-md-1"><input name="qtd_motos" type="number" min="0" class="form-control form-control-sm" placeholder="Qtd"></div>
+                        <div class="col-md-2"><input name="valor_frete" class="form-control form-control-sm" placeholder="Valor frete"></div>
+                        <div class="col-md-2"><input name="vendedor" class="form-control form-control-sm" placeholder="Vendedor"></div>
+                        <div class="col-md-3"><input name="transportadora_embarque" class="form-control form-control-sm" placeholder="Transp. embarque"></div>
+                        <div class="col-md-2"><button class="btn btn-success btn-sm w-100"><i class="fas fa-plus"></i> Adicionar NF</button></div>
+                        <div class="col-12"><span id="add-nf-hint" class="small"></span></div>
+                    </form>
+                </td>
+            </tr>
+            {% endif %}
             {% for ln in linhas %}
             <tr>
                 <td>{{ ln.numero_nf or '—' }}</td>
@@ -189,30 +214,8 @@
             </td></tr>
             {% endif %}
             {% else %}
-            <tr><td colspan="{{ 10 if editavel else 9 }}" class="text-center text-muted py-3">Nenhuma NF. Adicione abaixo (papel de pão).</td></tr>
+            <tr><td colspan="{{ 10 if editavel else 9 }}" class="text-center text-muted py-3">Nenhuma NF. Adicione acima (papel de pão).</td></tr>
             {% endfor %}
-
-            {% if editavel %}
-            <!-- adicionar linha -->
-            <tr class="table-light">
-                <td colspan="10">
-                    <form method="POST" action="{{ url_for('carvia.adicionar_linha', coleta_id=coleta.id) }}" class="row g-2">
-                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                        <input type="hidden" name="carvia_nf_id" id="add-carvia_nf_id">
-                        <div class="col-md-2"><input name="numero_nf" id="add-numero_nf" autocomplete="off" class="form-control form-control-sm" placeholder="NF"></div>
-                        <div class="col-md-3"><input name="nome_cliente_rascunho" id="add-cliente" class="form-control form-control-sm" placeholder="Cliente (como achar)"></div>
-                        <div class="col-md-2"><input name="cidade_destino" id="add-cidade" class="form-control form-control-sm" placeholder="Cidade/destino"></div>
-                        <div class="col-md-1"><input name="uf" id="add-uf" maxlength="2" class="form-control form-control-sm text-uppercase" placeholder="UF"></div>
-                        <div class="col-md-1"><input name="qtd_motos" type="number" min="0" class="form-control form-control-sm" placeholder="Qtd"></div>
-                        <div class="col-md-2"><input name="valor_frete" class="form-control form-control-sm" placeholder="Valor frete"></div>
-                        <div class="col-md-2"><input name="vendedor" class="form-control form-control-sm" placeholder="Vendedor"></div>
-                        <div class="col-md-3"><input name="transportadora_embarque" class="form-control form-control-sm" placeholder="Transp. embarque"></div>
-                        <div class="col-md-2"><button class="btn btn-success btn-sm w-100"><i class="fas fa-plus"></i> Adicionar NF</button></div>
-                        <div class="col-12"><span id="add-nf-hint" class="small"></span></div>
-                    </form>
-                </td>
-            </tr>
-            {% endif %}
         </tbody>
     </table></div></div>
 </div>

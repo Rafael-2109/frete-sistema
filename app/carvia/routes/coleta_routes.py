@@ -140,14 +140,17 @@ def register_coleta_routes(bp):
         if not _guard():
             flash('Acesso negado.', 'danger')
             return redirect(url_for('main.dashboard'))
-        from app.carvia.models.coleta import CarviaColeta
+        from app.carvia.models.coleta import CarviaColeta, CarviaColetaNf
         from app.utils.local_cd import LOCAL_CD_CHOICES
         coleta = db.session.get(CarviaColeta, coleta_id)
         if coleta is None:
             flash('Coleta nao encontrada.', 'warning')
             return redirect(url_for('carvia.listar_coletas'))
+        # NFs mais recentes no topo (papel de pao: a ultima adicionada aparece "por cima").
+        # order_by(None) zera o ASC do relationship antes de aplicar o DESC.
+        linhas = coleta.nfs.order_by(None).order_by(CarviaColetaNf.id.desc()).all()
         return render_template('carvia/coletas/detalhe.html',
-                               coleta=coleta, linhas=coleta.nfs.all(),
+                               coleta=coleta, linhas=linhas,
                                transportadoras=_transportadoras(), local_cd_choices=LOCAL_CD_CHOICES)
 
     @bp.route('/coletas/<int:coleta_id>/editar', methods=['POST'])  # type: ignore

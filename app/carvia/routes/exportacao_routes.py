@@ -149,6 +149,74 @@ def _check_access():
 def register_exportacao_routes(bp):
 
     # =====================================================================
+    # 0. Coleta ("papel de pao") — granularidade: 1 linha por (NF x MODELO de moto)
+    # Inclui chave de acesso da NF + medida (C/L/A) e qtd por modelo. NF sem modelo
+    # reconhecido (rascunho ou itens sem moto) vira 1 linha com a qtd manual.
+    # =====================================================================
+    @bp.route('/api/exportar/coletas/<int:coleta_id>')
+    @login_required
+    def exportar_coleta(coleta_id):  # type: ignore
+        """Exporta as NFs de UMA coleta para Excel (1 linha por NF x modelo)."""
+        if _check_access():
+            return redirect(url_for('main.dashboard'))
+        from app.carvia.models.coleta import CarviaColeta, CarviaColetaNf
+        from app.carvia.models.config_moto import CarviaModeloMoto
+        from app.carvia.routes.simulador_routes import _contar_modelos_por_nf
+
+        coleta = db.session.get(CarviaColeta, coleta_id)
+        if coleta is None:
+            flash('Coleta nao encontrada.', 'warning')
+            return redirect(url_for('carvia.listar_coletas'))
+
+        # Mesma ordem da tela: mais recente "por cima".
+        linhas = coleta.nfs.order_by(None).order_by(CarviaColetaNf.id.desc()).all()
+        if not linhas:
+            flash('Coleta sem NFs para exportar.', 'info')
+            return redirect(url_for('carvia.detalhe_coleta', coleta_id=coleta_id))
+
+        # TODOS os modelos (incl. inativos) p/ nao perder a medida na exibicao.
+        modelos_dict = {m.id: m for m in CarviaModeloMoto.query.all()}
+        nf_ids = [ln.carvia_nf_id for ln in linhas if ln.carvia_nf_id]
+        # Fonte CANONICA de contagem por modelo (carvia_nf_itens.modelo_moto_id + quantidade).
+        por_nf = _contar_modelos_por_nf(nf_ids, modelos_dict)
+
+        rows = []
+        for ln in linhas:
+            base = {
+                'NF': ln.numero_nf or '',
+                'Chave da NF': (ln.carvia_nf.chave_acesso_nf if ln.carvia_nf else '') or '',
+                'Cliente': ln.nome_cliente_efetivo or '',
+                'Cidade': ln.cidade_destino or '',
+                'UF': ln.uf or '',
+                'Valor frete': float(ln.valor_frete) if ln.valor_frete is not None else None,
+                'Vendedor': ln.vendedor or '',
+                'Transp. embarque': ln.transportadora_embarque or '',
+                'Vinculo': f'NF #{ln.carvia_nf_id}' if ln.carvia_nf_id else 'rascunho',
+            }
+            modelos = (por_nf.get(ln.carvia_nf_id) or {}).get('modelos') if ln.carvia_nf_id else None
+            if modelos:
+                for modelo_id, qtd in modelos.items():
+                    m = modelos_dict.get(modelo_id)
+                    rows.append({**base,
+                                 'Modelo': m.nome if m else f'#{modelo_id}',
+                                 'Comprimento (m)': float(m.comprimento) if m else None,
+                                 'Largura (m)': float(m.largura) if m else None,
+                                 'Altura (m)': float(m.altura) if m else None,
+                                 'Qtd': qtd})
+            else:
+                # Rascunho ou NF sem item com modelo: 1 linha com a qtd_motos manual.
+                rows.append({**base,
+                             'Modelo': '', 'Comprimento (m)': None, 'Largura (m)': None,
+                             'Altura (m)': None,
+                             'Qtd': ln.qtd_motos if ln.qtd_motos is not None else None})
+
+        cols = ['NF', 'Chave da NF', 'Cliente', 'Cidade', 'UF',
+                'Modelo', 'Comprimento (m)', 'Largura (m)', 'Altura (m)', 'Qtd',
+                'Valor frete', 'Vendedor', 'Transp. embarque', 'Vinculo']
+        df = pd.DataFrame(rows, columns=cols)
+        return _gerar_excel(df, 'Coleta', f'coleta_{coleta.numero_coleta}')
+
+    # =====================================================================
     # 1. NFs — granularidade: 1 linha por ITEM DE PRODUTO
     # Agrupamentos superiores: NF -> CTe -> CTe Comp (N x 3) -> Fatura -> Conciliacao (N x 3)
     # =====================================================================
