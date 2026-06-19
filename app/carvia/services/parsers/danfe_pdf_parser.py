@@ -1226,20 +1226,26 @@ class DanfePDFParser:
     def _parsear_itens_bling(self) -> List[Dict]:
         """Parser dedicado para itens de DANFE gerada pelo Bling.
 
-        Layout (NF PABLO 6586):
-            "Itens da nota fiscal"                          <- titulo da secao
-            ...cabecalhos...
-            "133 - AUTOPROPELIDO ELETRICO EQUIPADO"         <- codigo + desc (linha 1)
-            "GERAÇÃO 1 / ANGIE"                             <- desc (continua)
-            "...VELOCIDADE 87116000 200 6.102PÇ 2,001.200,00 2.400,002.400,00 ..."  <- linha-NCM
-            "AG11 - CARBONO"                                <- desc (continua, tem o MODELO)
-            "MAX 32KM"                                      <- desc (continua)
+        Ancora cada item na LINHA-NCM (NCM 8 dig + CST + CFOP+UN + qtde +
+        V.Unit), NAO no codigo numerico. Motivo (NF 468 DRUMER, regressao real):
+        produtos como "TOMATE UFO-MN02 ... 9503 ..." ou "CAPACETE SAFE SPORT
+        6506 ..." trazem a descricao colada ao NCM e NAO tem codigo "NNN -"
+        proprio. Ancorar so no codigo numerico (versao anterior) PERDIA esses
+        itens — e colava o seguinte na descricao do AG11. So restavam os 2
+        autopropelidos; o TOMATE e os 5 capacetes sumiam.
 
-        Peculiaridades vs layout padrao:
-        - Secao titulada "Itens da nota fiscal" (nao "Dados dos Produtos").
-        - Codigo + inicio da descricao vem ACIMA da linha-NCM; resto ABAIXO.
-        - Unidade colada no CFOP ("6.102PÇ") e qtde colada no V.Unit
-          ("2,001.200,00") — qtde tem 2 casas decimais no Bling.
+        Layout (cada linha-NCM = 1 item):
+            "Itens da nota fiscal"                          <- titulo da secao
+            "TOMATE UFO-MN02 ... 9503 ... 3,00 400,00"      <- item SEM codigo
+            "5042 - AUTOPROPELIDO ELETRICO EQUIPADO"        <- codigo do AG11
+            "AG11 - CARBONO ... 8711 ... 1,001.200,00"      <- linha-NCM do AG11
+            "MAX 32KM"                                      <- desc (continua)
+            "CAPACETE SAFE SPORT 6506 ... 5,00 70,00"       <- item SEM codigo
+
+        O bloco de descricao de um item vai do "inicio" (o codigo "NNN -" do
+        proprio item, se houver; senao logo apos a NCM anterior) ate o inicio do
+        proximo item. qtde e V.Unit podem vir COLADOS ("1,001.200,00") ou
+        SEPARADOS por espaco ("3,00 400,00") — `\\s*` cobre os dois.
 
         Returns: lista de dicts no mesmo formato de _parsear_linha_produto.
         """
@@ -1258,42 +1264,55 @@ class DanfePDFParser:
             len(linhas),
         )
 
-        # Inicio de item = linha que comeca com "<codigo numerico> - <texto>"
-        starts = [
-            i for i in range(inicio + 1, fim)
-            if re.match(r'^\d+\s*-\s+\S', linhas[i].strip())
-        ]
-        if not starts:
-            return []
-        starts.append(fim)
-
-        # NCM (8) + CST (1-4) + CFOP(\d\.?\d{3}) colado a UN(alfa) +
-        # qtde (X,dd) colada a V.Unit (X.XXX,dd)
+        # NCM (8) + CST (1-4) + CFOP(\d\.?\d{3}) colado a UN(alfa) + qtde (X,dd)
+        # + V.Unit (X.XXX,dd). qtde/V.Unit COLADOS ou SEPARADOS por espaco -> \s*.
         ncm_re = re.compile(
             r'(\d{8})\s+\d{1,4}\s+(\d\.?\d{3})([A-Za-zÀ-ÿ]+)\s+'
-            r'(\d+,\d{2})(\d{1,3}(?:\.\d{3})*,\d{2})'
+            r'(\d+,\d{2})\s*(\d{1,3}(?:\.\d{3})*,\d{2})'
         )
+        code_re = re.compile(r'^(\d+)\s*-\s+\S')
+
+        # Cada linha-NCM = 1 item (ancora robusta a item sem codigo numerico).
+        ncm_pos = [i for i in range(inicio + 1, fim) if ncm_re.search(linhas[i])]
+        if not ncm_pos:
+            return []
+        code_pos = [
+            i for i in range(inicio + 1, fim)
+            if code_re.match(linhas[i].strip())
+        ]
+
+        # Fim do cabecalho da secao ("Codigo Descricao NCM/SH CFOP UN Qtde Preco
+        # ... ICMS"). O corpo dos itens comeca logo apos. Sem isto, um 1o item
+        # SEM codigo cuja linha-NCM nao traz a descricao inline perdia toda a
+        # descricao (as linhas acima da linha-NCM ficavam fora do bloco) — e sem
+        # descricao o item nao e reconhecido como moto (subcontagem).
+        cabecalho_re = re.compile(
+            r'DESCRI[ÇC]|NCM/?SH|\bCFOP\b|\bQTDE\b|PRE[ÇC]O|\bICMS\b|'
+            r'UN\s+TOTAL|C[ÓO]DIGO',
+            re.IGNORECASE,
+        )
+        body_start = inicio + 1
+        for i in range(inicio + 1, ncm_pos[0]):
+            if cabecalho_re.search(linhas[i]):
+                body_start = i + 1
+
+        # Inicio do bloco de cada item: o codigo "NNN -" do proprio item (1o
+        # codigo entre a NCM anterior e a dele). Na ausencia, logo apos a NCM
+        # anterior; para o 1o item, logo apos o cabecalho (captura a descricao
+        # acima da linha-NCM).
+        starts: List[int] = []
+        for k, p in enumerate(ncm_pos):
+            prev = ncm_pos[k - 1] if k > 0 else inicio
+            cands = [c for c in code_pos if prev < c <= p]
+            if cands:
+                starts.append(min(cands))
+            else:
+                starts.append(prev + 1 if k > 0 else body_start)
+        starts.append(fim)
 
         itens: List[Dict] = []
-        for k in range(len(starts) - 1):
-            bloco = [linhas[i] for i in range(starts[k], starts[k + 1])]
-            cod_match = re.match(r'^(\d+)\s*-', bloco[0].strip())
-            if not cod_match:
-                continue
-            codigo = cod_match.group(1)
-
-            # Localizar a linha-NCM e parsear dados fiscais
-            ncm_idx = None
-            m = None
-            for j, linha in enumerate(bloco):
-                m = ncm_re.search(linha)
-                if m:
-                    ncm_idx = j
-                    break
-            if m is None or ncm_idx is None:
-                logger.warning("itens_bling: bloco cod=%s sem linha-NCM parseavel", codigo)
-                continue
-
+        for k, p in enumerate(ncm_pos):
+            m = ncm_re.search(linhas[p])
             ncm = m.group(1)
             cfop = m.group(2).replace('.', '')
             unidade = m.group(3)
@@ -1303,21 +1322,22 @@ class DanfePDFParser:
             if quantidade is not None and valor_unitario is not None:
                 valor_total_item = round(quantidade * valor_unitario, 2)
 
-            # Descricao: bloco inteiro, removendo "<codigo> -" da 1a linha e a
-            # parte fiscal (a partir do NCM) da linha-NCM. Inclui o modelo (AG11).
-            partes = []
-            for j, linha in enumerate(bloco):
-                t = linha.strip()
-                if j == 0:
-                    t = re.sub(r'^\d+\s*-\s*', '', t)
-                if j == ncm_idx:
-                    t = linha[:m.start(1)].strip()
+            # Descricao: linhas do bloco; na linha-NCM so o texto ANTES do NCM.
+            # Remove o prefixo "<codigo> -" e usa-o como codigo do produto.
+            codigo: Optional[str] = None
+            partes: List[str] = []
+            for i in range(starts[k], starts[k + 1]):
+                t = linhas[i][:m.start(1)].strip() if i == p else linhas[i].strip()
+                mc = re.match(r'^(\d+)\s*-\s*', t)
+                if mc and codigo is None:
+                    codigo = mc.group(1)
+                t = re.sub(r'^\d+\s*-\s*', '', t)
                 if t:
                     partes.append(t)
             descricao = ' '.join(partes).strip()
 
             itens.append({
-                'codigo_produto': codigo[:60],
+                'codigo_produto': (codigo or '')[:60] or None,
                 'descricao': descricao[:255],
                 'ncm': ncm,
                 'cfop': cfop,
@@ -1737,16 +1757,28 @@ class DanfePDFParser:
     def _secao_tem_indicio_chassi(self, texto: str) -> bool:
         """Indica se a secao de dados adicionais realmente lista chassi.
 
-        Sinais: keyword CHASSI (o mesmo sinal do gate global) ou um VIN de 17
-        caracteres alfanumericos (sem I/O/Q). Usado para nao escalar o LLM de
-        veiculos em NFs NCM 8711 que NAO declaram chassi (ex: autopropelido
-        eletrico) — onde so a presenca do NCM dispararia o gate global.
+        Sinais (qualquer um basta):
+        - keyword CHASSI;
+        - VIN de 17 caracteres alfanumericos sem I/O/Q;
+        - numero de serie nacional: token alfanumerico >=8 chars com >=1 letra
+          E >=5 digitos (ex: chassi de moto eletrica "XL2025107152",
+          "MMS2505006"). Motos nacionais NAO usam VIN-17 — exigir VIN-17
+          bloqueava a extracao das motos reais (NF HORA Mainô
+          "BIG TRI 1000W XL2025107152 ..." voltava sem veiculos).
+
+        Usado para nao escalar o LLM de veiculos em NFs NCM 8711 que NAO
+        declaram chassi (ex: autopropelido eletrico). NAO casa numero PURO
+        (ex: id de nota "26023316088" na URL Bling, sem letra) nem valores
+        monetarios (tem pontuacao) — preserva o gate p/ esses casos.
         """
         upper = (texto or '').upper()
         if 'CHASSI' in upper:
             return True
         if re.search(r'\b[A-HJ-NPR-Z0-9]{17}\b', upper):
             return True
+        for token in re.findall(r'\b[A-Z0-9]{8,}\b', upper):
+            if any(c.isalpha() for c in token) and sum(c.isdigit() for c in token) >= 5:
+                return True
         return False
 
     def _extrair_texto_dados_adicionais(self) -> str:

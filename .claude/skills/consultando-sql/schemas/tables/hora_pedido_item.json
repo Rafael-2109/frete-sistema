@@ -32,6 +32,10 @@
       "nullable": false
     },
     {
+      "name": "modelo_texto_original",
+      "type": "varchar(255)"
+    },
+    {
       "name": "peca_id",
       "type": "integer",
       "description": "FK → hora_peca.id"

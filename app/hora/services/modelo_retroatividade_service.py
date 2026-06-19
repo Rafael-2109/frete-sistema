@@ -58,6 +58,7 @@ def propagar_resolucao(
         return {
             'pedido_itens_atualizados': 0,
             'motos_criadas': 0,
+            'motos_atualizadas': 0,
             'divergencias_resolvidas': 0,
         }
 
@@ -72,12 +73,31 @@ def propagar_resolucao(
     sentinela = HoraModelo.query.filter_by(nome_modelo='DESCONHECIDO').first()
     sentinela_id = sentinela.id if sentinela else None
 
-    # 1. hora_pedido_item: nao temos `modelo_texto_original` armazenado,
-    # entao nao da pra correlacionar item-pendencia por SQL retroativo.
-    # Decisao: nao corrige aqui — operador edita item manualmente via
-    # /hora/pedidos/<id> apos resolver pendencia. Caso futuro queira
-    # automatizar, adicionar coluna `modelo_texto_original` em
-    # hora_pedido_item espelhando hora_nf_entrada_item.
+    # 1. hora_pedido_item: corrige modelo_id (e a moto sentinela, quando o item
+    # tem chassi) dos itens cujo modelo_texto_original casa o nome resolvido.
+    # Cobre os dois caminhos do import: item com chassi (moto criada no sentinela
+    # DESCONHECIDO via fallback_sentinela) e item pre-NF (modelo_id NULL). Sem
+    # isto o pedido importado seguia exibindo DESCONHECIDO ate edicao manual.
+    # `modelo_texto_original` veio na migration hora_51. Idempotente: so toca
+    # item/moto ainda no estado pendente (sentinela/NULL).
+    from app.hora.models import HoraPedidoItem
+    pedido_itens = (
+        HoraPedidoItem.query
+        .filter(func.upper(HoraPedidoItem.modelo_texto_original) == nome_upper)
+        .all()
+    )
+    for p_item in pedido_itens:
+        chassi = (p_item.numero_chassi or '').strip().upper()
+        # Moto vinda SO de pedido (a secao 2 cobre as de NF). UPDATE permitido
+        # apenas quando o estado anterior e o sentinela tecnico (invariante 3).
+        if chassi and sentinela_id is not None:
+            moto = HoraMoto.query.get(chassi)
+            if moto is not None and moto.modelo_id == sentinela_id:
+                moto.modelo_id = modelo_canonico_id
+                contadores['motos_atualizadas'] += 1
+        if p_item.modelo_id is None or p_item.modelo_id == sentinela_id:
+            p_item.modelo_id = modelo_canonico_id
+            contadores['pedido_itens_atualizados'] += 1
 
     # 2. hora_nf_entrada_item: modelo_texto_original bate. Para cada chassi:
     #    - Se HoraMoto NAO existe: cria com modelo canonico.

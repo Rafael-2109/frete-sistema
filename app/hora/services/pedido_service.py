@@ -94,8 +94,13 @@ def criar_pedido(
 
         if chassi:
             # Caso com chassi: get_or_create HoraMoto + referenciar.
-            # Pode levantar ModeloPendenteError — propaga para chamador
-            # (rota retorna 4xx com link para /hora/modelos/pendencias).
+            # fallback_sentinela=True: se o modelo nao resolve, cria a moto com
+            # o sentinela DESCONHECIDO e registra a pendencia — NAO levanta
+            # ModeloPendenteError. Assim o import (batch XLSX/imagem) NUNCA
+            # aborta no 1o modelo desconhecido deixando o pedido sem itens
+            # (header orfao — o bug dos pedidos 119/124/125/126). A
+            # retroatividade (propagar_resolucao) corrige modelo_id da moto e do
+            # item ao resolver a pendencia, via modelo_texto_original.
             moto = get_or_create_moto(
                 numero_chassi=chassi,
                 modelo_nome=item.get('modelo'),
@@ -103,6 +108,7 @@ def criar_pedido(
                 criado_por=criado_por,
                 origem_pendencia=PENDENTE_ORIGEM_PEDIDO_MANUAL,
                 origem_id=pedido.id,
+                fallback_sentinela=True,
             )
             modelo_id = moto.modelo_id
             chassi_final = moto.numero_chassi
@@ -129,6 +135,7 @@ def criar_pedido(
             modelo_id=modelo_id,
             cor=item.get('cor'),
             preco_compra_esperado=Decimal(str(preco)),
+            modelo_texto_original=item.get('modelo'),
         ))
 
     db.session.commit()
@@ -351,6 +358,7 @@ def adicionar_item_pedido(
         modelo_id=modelo_id,
         cor=cor,
         preco_compra_esperado=Decimal(str(preco_compra_esperado)),
+        modelo_texto_original=modelo_nome,
     )
     db.session.add(item)
     db.session.commit()

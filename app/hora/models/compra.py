@@ -91,6 +91,13 @@ class HoraPedidoItem(db.Model):
     cor = db.Column(db.String(50), nullable=True)
     preco_compra_esperado = db.Column(db.Numeric(15, 2), nullable=False)
 
+    # Nome do modelo como veio na origem (XLSX/imagem), preservado mesmo quando o
+    # modelo nao resolve e a moto cai no sentinela DESCONHECIDO. Espelha
+    # hora_nf_entrada_item.modelo_texto_original. A retroatividade
+    # (modelo_retroatividade_service.propagar_resolucao) usa esse texto para
+    # corrigir modelo_id quando a pendencia e resolvida. Migration hora_51.
+    modelo_texto_original = db.Column(db.String(255), nullable=True)
+
     # XOR moto/peca: item e OU moto (numero_chassi/modelo_id) OU peca (peca_id/qtd_pedida).
     # CHECK no banco em hora_22_pecas_movimento_e_itens.sql.
     peca_id = db.Column(

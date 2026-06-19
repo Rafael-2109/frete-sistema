@@ -525,8 +525,16 @@ def pedidos_importar_xlsx_confirmar():
             if primeiro_pedido_id is None:
                 primeiro_pedido_id = pedido.id
         except ValueError as exc:
+            # Isola a transacao por pedido: criar_pedido faz flush do header
+            # antes dos itens; sem rollback, o header de um pedido que falhou
+            # vazaria no commit do proximo pedido do batch (header orfao sem
+            # itens — o bug dos pedidos 119/124/125/126).
+            from app import db as _db
+            _db.session.rollback()
             erros.append(f'{nome_arq} (pedido {numero}): {exc}')
         except Exception as exc:  # noqa: BLE001 — mostra ao usuário ao invés de 500
+            from app import db as _db
+            _db.session.rollback()
             from flask import current_app as _app
             _app.logger.exception(
                 f'hora: erro inesperado ao criar pedido a partir de {nome_arq}'
@@ -929,8 +937,14 @@ def pedidos_importar_imagem_confirmar():
                 falhas_enfileirar_xlsx += 1
 
         except ValueError as exc:
+            # Mesmo isolamento por-pedido do import XLSX: sem rollback, o header
+            # flushado de um pedido que falhou vazaria no commit do proximo.
+            from app import db as _db
+            _db.session.rollback()
             erros.append(f'{nome_arq} (pedido {numero}): {exc}')
         except Exception as exc:  # noqa: BLE001
+            from app import db as _db
+            _db.session.rollback()
             _app.logger.exception(
                 'hora: erro inesperado ao criar pedido a partir da imagem %s', nome_arq,
             )

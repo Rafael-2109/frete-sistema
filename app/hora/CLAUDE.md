@@ -537,7 +537,8 @@ Resolve duplicação histórica: TagPlus, NFs e pedidos podem se referir ao mesm
 4. `get_or_create_moto` levanta `ModeloPendenteError` (com `pendencia` no atributo) quando modelo não resolve. Caller decide:
    - **TagPlus backfill / DANFE saída**: captura, registra divergência `MODELO_PENDENTE`, **skipa o item**, segue.
    - **NF entrada DANFE**: aborta o import inteiro **antes** de gravar a NF. Pendências persistem (commit isolado em `resolver_ou_pendenciar(commit=True)`).
-   - **Pedido manual**: propaga, rota retorna 4xx com link para resolver.
+   - **Import de pedido (XLSX/imagem, `criar_pedido`)**: NÃO propaga — usa `get_or_create_moto(fallback_sentinela=True)`, cria a moto no sentinela DESCONHECIDO + grava `modelo_texto_original` no item, e segue (o pedido nasce completo). A retroatividade corrige depois. Mudou em 2026-06-19: antes propagava `ModeloPendenteError` e, sem rollback por-pedido na rota de confirmação, o header flushado vazava no commit do pedido seguinte do batch → pedido com 0 itens (incidente 119/124/125/126).
+   - **Adição manual de item (`adicionar_item_pedido`, 1 item interativo)**: propaga, rota retorna 4xx com link para resolver (feedback imediato — não usa sentinela).
 
 **Resolução em UI**: `/hora/modelos/pendencias`.
 - **Vincular**: cria `HoraModeloAlias` apontando o nome para um modelo existente.
@@ -547,7 +548,7 @@ Resolve duplicação histórica: TagPlus, NFs e pedidos podem se referir ao mesm
 **Retroatividade automática** (`modelo_retroatividade_service.propagar_resolucao`): ao resolver pendência:
 - Cria `HoraMoto` para chassis em `hora_nf_entrada_item` cujo `modelo_texto_original` bate no nome observado.
 - Marca divergências `MODELO_PENDENTE` como resolvidas para esses chassis.
-- (Não corrige `hora_pedido_item.modelo_id IS NULL` — operador edita manualmente.)
+- Corrige `hora_pedido_item` cujo `modelo_texto_original` bate o nome observado (migration `hora_51`): seta `modelo_id`=canônico nos itens pendentes (sentinela DESCONHECIDO ou NULL) e UPDATE-eia a `HoraMoto` sentinela vinda só de pedido (única exceção ao invariante 3, igual ao caminho NF). Antes (até 2026-06-19) isto não era feito e o operador editava o item manualmente. Idempotente.
 
 **Merge físico** (`/hora/modelos/unificar`, perm `modelos/aprovar`):
 - Operador escolhe canônico + N aliases.

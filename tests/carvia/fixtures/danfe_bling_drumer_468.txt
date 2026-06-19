@@ -1,0 +1,67 @@
+RECEBEMOS DE DRUMER MOBILIDADE ELETRICA LTDA OS PRODUTOS CONSTANTES DA NOTA FISCAL INDICADA AO LADO
+NF-e
+Nº 000468
+Data de recebimento Identificação e assinatura do recebedor Série 1
+Controle do Fisco
+DANFE
+DRUMER MOBILIDADE Documento Auxiliar
+ELETRICA LTDA da Nota Fiscal
+Rua Coronel Irineu de Castro, Eletrônica
+43, CONJ 132 SALA 1302,
+Jardim Anália Franco 0-Entrada 1 Chave de acesso
+03.333-050 - São Paulo - SP 1-Saída 3526 0666 4160 7000 0133 5500 1000 0004 6819 8691 8005
+Fone (11) 2121-2121 - Nº 000468
+admdrumer@gmail.com SERIE: 1 Consulta de autenticidade no portal nacional da NF-e
+Página: 1 de 1 www.nfe.fazenda.gov.br/portal
+ou no site da Sefaz autorizadora
+Natureza da operação Protocolo de autorização de uso
+Revenda de mercadoria 135262378292584 16/06/2026 16:24:38-03:00
+Inscrição Estadual CNPJ
+Inscr.est. do subst.trib.
+159415661114 66.416.070/0001-33
+Destinatário/Remetente
+Nome / Razão Social CNPJ/CPF Inscrição Estadual Data emissão
+99.999.999 CLIENTE TESTE LTDA 99.999.999/0001-99 000000000 16/06/2026
+Endereço Bairro CEP Data saída
+RUA TESTE, 100
+Município UF Fone/Fax Hora saída
+Fortaleza CE (11) 0000-0000 16:24:36
+Faturas
+Número Vencimento Valor Número Vencimento Valor Número Vencimento Valor
+Cálculo do imposto
+Base de cálculo do ICMS Valor do ICMS Base de cálculo do ICMS Subst. Valor do ICMS Subst. Valor do FCP ST Valor total dos produtos
+3.950,00 158,00 0,00 0,00 0,00 3.950,00
+Valor do frete Valor do seguro Desconto Outras despesas acessórias Valor do IPI Valor total da nota
+0,00 0,00 0,00 0,00 0,00 3.950,00
+Transportador/Volumes transportados
+Frete por conta
+Nome 1 - Contratação do Frete por conta do Código ANTT Placa do veículo UF CNPJ/CPF
+Destinatário (FOB)
+Endereço Município UF Inscrição Estadual
+Quantidade Espécie Peso bruto Peso líquido
+Marca Numeração
+10 Volume(s) 0,000 0,000
+Itens da nota fiscal
+Preço Preço BC
+Código Descrição do produto/serviço NCM/SHCSTCFOPUNQtde Vlr.ICMSVlr.IPI%ICMS%IPI
+un total ICMS
+TOMATE UFO-MN02 DRIFIT PEQUENO 95030097 200 6.102PÇ 3,00 400,00 1.200,001.200,00 48,00 0,00 4,0000 0,00
+5042 - AUTOPROPELIDO ELETRICO EQUIPADO
+AG11 - CARBONO COM MOTOR ELETRICO DE 1000W, VELOCIDADE 87116000 200 6.102PÇ 1,001.200,00 1.200,001.200,00 48,00 0,00 4,0000 0,00
+MAX 32KM
+5043 - AUTOPROPELIDO ELETRICO EQUIPADO
+AG11 - CAMUFLADA
+COM MOTOR ELETRICO DE 1000W, VELOCIDADE 87116000 200 6.102UN 1,001.200,00 1.200,001.200,00 48,00 0,00 4,0000 0,00
+GER.1
+MAX 32KM
+CAPACETE SAFE
+CAPACETE SAFE SPORT 65061090 200 6.102PÇ 5,00 70,00 350,00 350,00 14,00 0,00 4,0000 0,00
+SPORT LIFESTYLE
+Cálculo do ISSQN
+Inscrição Municipal Valor total dos serviços Base de cálculo do ISSQN Valor do ISSQN
+0,00 0,00 0,00
+Dados adicionais
+Observações Reservado ao fisco
+Total aproximado de tributos: R$ 1.877,71 (47,54%) Federais R$ 1.310,71 (33,18%)
+Estaduais R$ 567,00 (14,35%) . Fonte IBPT.
+16/06/2026 16:24:45
