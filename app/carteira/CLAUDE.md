@@ -37,7 +37,7 @@ atualizado: 2026-06-18
 
 ~18.5K LOC, 50 arquivos. Exibe pedidos agrupados, gera separacoes, analisa ruptura de estoque, programa lotes (Atacadao/Sendas) e gerencia standby. Campos de tabela vem dos schemas JSON; regras CarteiraPrincipal vs Separacao em `.claude/references/modelos/REGRAS_CARTEIRA_SEPARACAO.md`. `main_routes.py` e apenas o dashboard `index()` — novas rotas em `routes/`.
 
-**LOC**: ~18.5K | **Arquivos**: 50 | **22 JS** (21 templates + 1 static) | **Atualizado**: 18/06/2026
+**LOC**: ~18.5K | **Arquivos**: 50 | **22 JS** (21 templates + 1 static) | **Atualizado**: 19/06/2026
 
 Workspace principal do sistema de fretes. Exibe pedidos agrupados, gera separacoes,
 analisa ruptura de estoque, programa lotes (Atacadao/Sendas) e gerencia standby.
@@ -161,6 +161,13 @@ NAO a variavel estatica injetada no load (que vem vazia no fluxo interativo).
   deduplicando e preservando ordem, e grava uma RotaSalva nova (`status='salva'`). A rota
   base permanece intacta — diferente de `rota_acumular` (`/api/rota/acumular`), que ANEXA
   os lotes a uma rota existente. Ex.: Rota 1 (5) + avaliacao (5) -> Rota 1 intacta + Rota 2 (10).
+- **Card de viabilidade CarVia no mapa (2026-06-19)**: `rota_otimizar` (`mapa_routes.py`)
+  soma a receita CarVia dos lotes selecionados via
+  `app.carvia.services.financeiro.viabilidade_service.receita_carvia_por_lotes` (LAZY import —
+  R1: carteira le CarVia, CarVia nao le carteira) e retorna `carvia_receita_total` +
+  `viabilidade` (= receita − custo da rota) no JSON de `/api/rota/otimizar`. `mapa_pedidos.html`
+  exibe a row `#viabilidadeRow` (card "CarVia (receita)" + "Viabilidade" verde/vermelho) — visivel
+  a quem acessa o mapa (NAO admin-only; o admin-only e so o badge no embarque).
 
 ---
 

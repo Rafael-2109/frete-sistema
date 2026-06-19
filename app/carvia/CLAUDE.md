@@ -83,7 +83,7 @@ app/carvia/
                    #   custo_entrega, admin, cliente, cotacao_v2, pedido, frete, gerencial,
                    #   aprovacao, comissao, config, conta_corrente, exportacao, receita,
                    #   scanner, simulador, tabela_carvia, importacao_config, api, anexo,
-                   #   comprovante)
+                   #   comprovante, resultado_frete)
   services/        # 44 services em 6 sub-pacotes + 2 root:
                    #   admin/ (admin_service)
                    #   clientes/ (cliente_service)
@@ -96,7 +96,9 @@ app/carvia/
                    #                gerencial, previnculo, rateio_conciliacao_helper,
                    #                lancamento_freteiro [2026-06-12: espelho CarVia do
                    #                fechamento de freteiros Nacom — FT sintetica CONFERIDA,
-                   #                consumido por app/fretes via lazy import]) — 16
+                   #                consumido por app/fretes via lazy import],
+                   #                viabilidade [receita CarVia bruta p/ mapa+embarque],
+                   #                resultado_frete [rateio receita vs custo por moto]) — 18
                    #   parsers/ (importacao, importacao_config, cte_xml, danfe_pdf,
                    #            dacte_pdf, fatura_pdf, nfe_xml) — 7
                    #   pricing/ (cotacao, cotacao_v2, margem, moto_recognition,
@@ -112,6 +114,8 @@ app/carvia/
 
 app/templates/carvia/  # 126 templates (dashboard, listagens, detalhes, wizards, modais)
 ```
+
+> **Resultado por Frete + Viabilidade (2026-06-19)**: `services/financeiro/resultado_frete_service.py` rateia, na MESMA base de motos por NF, a receita (CTe `CarviaOperacao.cte_valor`) vs o custo (subcontratos `SUM(COALESCE(cte_valor, valor_acertado, valor_cotado))` + coleta `CarviaColeta.valor_coleta` por `qtd_motos` da linha) — cascata `Direto→Motos→Peso→Qtd NFs` REUSANDO `gerencial_service._build_moto_count_per_nf_subquery` (NAO duplicar a contagem). Tela admin-only `/carvia/resultado-frete` (`routes/resultado_frete_routes.py`): resumo agregavel por CTe/embarque/UF-mes + detalhe por NF + export Excel 2 abas (Resumo + Detalhe NF). Flag `REAL`/`ESTIMADO` no custo (havia `cte_valor` do subcontrato vs cotado). `services/financeiro/viabilidade_service.py` (`receita_carvia_por_lotes`/`receita_carvia_por_embarque`) soma a receita CarVia bruta (CTe se houver, senao cotacao) — consumido por `app/carteira` (card de viabilidade no mapa) e `app/embarques` (badge admin-only) via LAZY import (R1). Export `nfs`/`operacoes` ganharam coluna `Cidade Dest`.
 
 ---
 
