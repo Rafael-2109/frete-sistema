@@ -627,24 +627,28 @@
       <a href="{{ url_for('embarques.listar_embarques') }}" class="btn btn-light">
         Voltar
       </a>
-      <!-- Botão Imprimir (com opcoes por filial se embarque misto VM+TM) -->
+      <!-- Impressao direcionada por CD (decisao Rafael 2026-06-18): 2 botoes que abrem
+           um pop-up para escolher Todos / Victorio Marchezine / Tenente Marques. Nunca
+           dispara os 2 CDs num unico clique. ns_cd detecta quais CDs o embarque possui
+           (no modal, o CD sem itens fica desabilitado para evitar impressao vazia). -->
       {% set ns_cd = namespace(vm=false, tm=false) %}
       {% for it in embarque.itens_ativos %}
         {% if (it.local_cd or 'VICTORIO_MARCHEZINE') == 'TENENTE_MARQUES' %}{% set ns_cd.tm = true %}{% else %}{% set ns_cd.vm = true %}{% endif %}
       {% endfor %}
       <div class="btn-group" role="group">
-        <a href="{{ url_for('embarques.imprimir_embarque', embarque_id=embarque.id) }}"
-           class="btn btn-outline-secondary" target="_blank">
-          <i class="fas fa-print"></i> Imprimir{% if ns_cd.vm and ns_cd.tm %} (Todos){% endif %}
-        </a>
-        {% if ns_cd.vm and ns_cd.tm %}
-        <a href="{{ url_for('embarques.imprimir_embarque', embarque_id=embarque.id, local_cd='VICTORIO_MARCHEZINE') }}"
-           class="btn badge-local-cd-victorio border-0" target="_blank"
-           title="Imprimir somente itens de Victorio Marchezine">VM</a>
-        <a href="{{ url_for('embarques.imprimir_embarque', embarque_id=embarque.id, local_cd='TENENTE_MARQUES') }}"
-           class="btn badge-local-cd-tenente border-0" target="_blank"
-           title="Imprimir somente itens de Tenente Marques">TM</a>
+        {% if embarque.data_prevista_embarque %}
+        <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#modalImprimirCompleto">
+          <i class="fas fa-print"></i> Imprimir Completo
+        </button>
+        {% else %}
+        <button type="button" class="btn btn-secondary" disabled
+                title="Preencha a Data Prevista de Embarque para habilitar a impressao completa">
+          <i class="fas fa-print"></i> Imprimir Completo
+        </button>
         {% endif %}
+        <button type="button" class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#modalImprimirCapa">
+          <i class="fas fa-print"></i> Imprimir Capa
+        </button>
       </div>
       <!-- Botão Ver Dados da Tabela -->
       <a href="{{ url_for('embarques.dados_tabela_embarque', id=embarque.id) }}" class="btn btn-info">
@@ -667,25 +671,8 @@
         {% endif %}
       {% endif %}
       
-      <!-- Botão Imprimir Completo (com opcoes por filial se embarque misto VM+TM) -->
-      {% if embarque.data_prevista_embarque %}
-        <div class="btn-group" role="group">
-          <a href="{{ url_for('embarques.imprimir_embarque_completo', embarque_id=embarque.id) }}"
-             class="btn btn-success" target="_blank" id="btn-imprimir-completo">
-            <i class="fas fa-print"></i> Imprimir Completo{% if ns_cd.vm and ns_cd.tm %} (Todos){% endif %}
-          </a>
-          {% if ns_cd.vm and ns_cd.tm %}
-          <a href="{{ url_for('embarques.imprimir_embarque_completo', embarque_id=embarque.id, local_cd='VICTORIO_MARCHEZINE') }}"
-             class="btn btn-success" target="_blank" title="Completo somente Victorio Marchezine">VM</a>
-          <a href="{{ url_for('embarques.imprimir_embarque_completo', embarque_id=embarque.id, local_cd='TENENTE_MARQUES') }}"
-             class="btn btn-success" target="_blank" title="Completo somente Tenente Marques">TM</a>
-          {% endif %}
-        </div>
-      {% else %}
-        <button type="button" class="btn btn-secondary" disabled title="Preencha a Data Prevista de Embarque para habilitar">
-          <i class="fas fa-print"></i> Imprimir Completo
-        </button>
-      {% endif %}
+      <!-- (Impressao Completa foi unificada nos botoes do topo: "Imprimir Completo"
+           abre o pop-up #modalImprimirCompleto com a escolha de CD.) -->
 
       <!-- Botões Solicitar Coleta -->
       <div class="btn-group" role="group">
@@ -815,7 +802,85 @@
         {% endif %}
       </div>
 
-      
+
+  </div>
+
+  <!-- Pop-up: Imprimir Completo por CD (Todos / Victorio Marchezine / Tenente Marques).
+       Cada opcao abre a impressao completa filtrada e registra a impressao (auditoria G7).
+       O CD sem itens ativos fica desabilitado para evitar impressao vazia. -->
+  <div class="modal fade no-print" id="modalImprimirCompleto" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-sm">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h6 class="modal-title mb-0"><i class="fas fa-print"></i> Imprimir Completo — escolha o CD</h6>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+        </div>
+        <div class="modal-body d-grid gap-2">
+          <a href="{{ url_for('embarques.imprimir_embarque_completo', embarque_id=embarque.id) }}"
+             class="btn btn-success js-print-completo" target="_blank" data-bs-dismiss="modal">
+            <i class="fas fa-layer-group"></i> Todos
+          </a>
+          {% if ns_cd.vm %}
+          <a href="{{ url_for('embarques.imprimir_embarque_completo', embarque_id=embarque.id, local_cd='VICTORIO_MARCHEZINE') }}"
+             class="btn badge-local-cd-victorio border-0 js-print-completo" target="_blank" data-bs-dismiss="modal">
+            <i class="fas fa-warehouse"></i> Victorio Marchezine
+          </a>
+          {% else %}
+          <button type="button" class="btn btn-outline-secondary" disabled title="Sem itens de Victorio Marchezine neste embarque">
+            <i class="fas fa-warehouse"></i> Victorio Marchezine
+          </button>
+          {% endif %}
+          {% if ns_cd.tm %}
+          <a href="{{ url_for('embarques.imprimir_embarque_completo', embarque_id=embarque.id, local_cd='TENENTE_MARQUES') }}"
+             class="btn badge-local-cd-tenente border-0 js-print-completo" target="_blank" data-bs-dismiss="modal">
+            <i class="fas fa-warehouse"></i> Tenente Marques
+          </a>
+          {% else %}
+          <button type="button" class="btn btn-outline-secondary" disabled title="Sem itens de Tenente Marques neste embarque">
+            <i class="fas fa-warehouse"></i> Tenente Marques
+          </button>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Pop-up: Imprimir Capa por CD (somente a capa/folha de carga; nao registra impressao). -->
+  <div class="modal fade no-print" id="modalImprimirCapa" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-sm">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h6 class="modal-title mb-0"><i class="fas fa-print"></i> Imprimir Capa — escolha o CD</h6>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+        </div>
+        <div class="modal-body d-grid gap-2">
+          <a href="{{ url_for('embarques.imprimir_embarque', embarque_id=embarque.id) }}"
+             class="btn btn-outline-secondary" target="_blank" data-bs-dismiss="modal">
+            <i class="fas fa-layer-group"></i> Todos
+          </a>
+          {% if ns_cd.vm %}
+          <a href="{{ url_for('embarques.imprimir_embarque', embarque_id=embarque.id, local_cd='VICTORIO_MARCHEZINE') }}"
+             class="btn badge-local-cd-victorio border-0" target="_blank" data-bs-dismiss="modal">
+            <i class="fas fa-warehouse"></i> Victorio Marchezine
+          </a>
+          {% else %}
+          <button type="button" class="btn btn-outline-secondary" disabled title="Sem itens de Victorio Marchezine neste embarque">
+            <i class="fas fa-warehouse"></i> Victorio Marchezine
+          </button>
+          {% endif %}
+          {% if ns_cd.tm %}
+          <a href="{{ url_for('embarques.imprimir_embarque', embarque_id=embarque.id, local_cd='TENENTE_MARQUES') }}"
+             class="btn badge-local-cd-tenente border-0" target="_blank" data-bs-dismiss="modal">
+            <i class="fas fa-warehouse"></i> Tenente Marques
+          </a>
+          {% else %}
+          <button type="button" class="btn btn-outline-secondary" disabled title="Sem itens de Tenente Marques neste embarque">
+            <i class="fas fa-warehouse"></i> Tenente Marques
+          </button>
+          {% endif %}
+        </div>
+      </div>
+    </div>
   </div>
 {% endblock %}
 {% block scripts %}
@@ -883,32 +948,34 @@ $(document).ready(function() {
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // Registrar impressão quando clicar em "Imprimir Completo"
-    const btnImprimirCompleto = document.getElementById('btn-imprimir-completo');
-    if (btnImprimirCompleto) {
-        btnImprimirCompleto.addEventListener('click', function(e) {
-            // Registrar a impressão
-            fetch('{{ url_for("embarques.registrar_impressao", embarque_id=embarque.id) }}', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': '{{ csrf_token() }}'
-                }
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    // Mostrar registro de impressão
-                    document.getElementById('usuario-impressao').textContent = data.usuario;
-                    document.getElementById('data-impressao').textContent = data.data_impressao;
-                    document.getElementById('registro-impressao').style.display = 'block';
-                }
-            })
-            .catch(error => {
-                console.error('Erro ao registrar impressão:', error);
-            });
+    // Registrar impressão quando escolher qualquer CD no pop-up "Imprimir Completo"
+    function registrarImpressaoCompleto() {
+        fetch('{{ url_for("embarques.registrar_impressao", embarque_id=embarque.id) }}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': '{{ csrf_token() }}'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Mostrar registro de impressão
+                const u = document.getElementById('usuario-impressao');
+                const d = document.getElementById('data-impressao');
+                const r = document.getElementById('registro-impressao');
+                if (u) u.textContent = data.usuario;
+                if (d) d.textContent = data.data_impressao;
+                if (r) r.style.display = 'block';
+            }
+        })
+        .catch(error => {
+            console.error('Erro ao registrar impressão:', error);
         });
     }
+    document.querySelectorAll('.js-print-completo').forEach(function(btn) {
+        btn.addEventListener('click', registrarImpressaoCompleto);
+    });
 
     // Aviso para botão desabilitado
     const btnDesabilitado = document.querySelector('button[title*="Data Prevista"]');

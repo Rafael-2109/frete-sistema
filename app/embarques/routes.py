@@ -850,9 +850,11 @@ def listar_embarques():
         form_filtros.buscar_texto.data = buscar_texto
         filtros_aplicados = True
 
-    # Filtro por CD de expedicao (local_cd) — acessos "Embarques VM"/"Embarques TM" do
-    # sidebar. Seleciona embarques que tenham >=1 EmbarqueItem ativo do CD; a tela segue
-    # exibindo TODOS os itens de cada embarque (o filtro decide QUAIS embarques aparecem).
+    # Filtro por CD de expedicao (local_cd) — toggle "Todos | Victorio Marchezine |
+    # Tenente Marques" no topo da tela de listagem (substituiu os antigos links "Embarques
+    # VM"/"Embarques TM" do sidebar). Seleciona embarques que tenham >=1 EmbarqueItem ativo
+    # do CD; a tela segue exibindo TODOS os itens de cada embarque (o filtro decide QUAIS
+    # embarques aparecem).
     from app.utils.local_cd import normalizar_local_cd
     local_cd_filtro = normalizar_local_cd(request.args.get('local_cd', '').strip())
     if local_cd_filtro:

@@ -56,6 +56,7 @@ Colunas `local_cd` (`VARCHAR(20)`, `NOT NULL` default VM, exceto onde indicado):
   - Documentos CarVia (`carvia_pedidos`/`carvia_cotacoes`): match por `CarviaPedidoItem.numero_nf` normalizado.
   - Destinos externos ao CarVia (`embarque_itens` CARVIA-% + `entregas_monitoradas` origem CARVIA): via helper R1-safe `app/utils/propagacao_local_cd.py:propagar_local_cd_carvia` (CarVia nao importa `app/embarques`/`app/monitoramento` direto — ver `app/carvia/CLAUDE.md` R1).
 - `EmbarqueItem` CarVia **nasce** com `local_cd` herdado da NF/cotacao (`embarque_carvia_service.expandir_provisorio` + provisorios em `pedido_routes`), em vez do default VM — defesa em profundidade (a coleta re-propaga se o destino mudar depois).
+- **Reconciliacao tardia do `EmbarqueItem`** (fix PED-281-1, 2026-06-18): a propagacao da Coleta casa o `EmbarqueItem` **por NF** (`nota_fiscal == numero_nf`); um item **provisorio** (`CARVIA-PED-*`) que recebe a NF **depois** de a Coleta ja ter propagado ficava com o default VM divergente. `app/utils/sincronizar_entregas_carvia.py:sincronizar_entrega_carvia_por_nf` (roda em TODOS os caminhos de anexacao de NF — portaria, form de embarque, import) chama o MESMO helper `propagar_local_cd_carvia` e realinha o item (e a entrega) a `CarviaNf.local_cd`. NAO e um segundo "ponto unico": e reconciliacao a partir da MESMA fonte (CarviaNf), idempotente. Backfill do passado pelo mesmo helper.
 
 **Cadeia Nacom**: `Separacao` (sempre VM) -> `Pedido.local_cd` / `EmbarqueItem.local_cd` / `EntregaMonitorada`. Sem TM.
 
@@ -67,6 +68,7 @@ Para uma mesma NF, `local_cd` **NAO pode divergir** entre os locais que o copiam
 - `controle_portaria.local_cd` esta FORA da invariante (e input do operador por CD, nao copia da NF).
 - Backfill historico (corrige passado): `scripts/migrations/2026_06_18_backfill_local_cd_embarque_entrega.py` — idempotente, reusa o helper. Rodar em prod: `SKIP_DB_CREATE=true DATABASE_URL=$DATABASE_URL_PROD python <script> --apply`.
 - Origem do bug (2026-06-18): EmbarqueItem nascia default VM e nunca era re-propagado; EntregaMonitorada so era reescrita pelo sincronizador -> 36 embarque_itens + 15 entregas divergentes em prod (corrigido).
+  - **2o vetor (mesmo dia, fix PED-281-1)**: NF anexada a item provisorio (`CARVIA-PED-*`) APOS a coleta ja-propagada — a propagacao casa o item por NF e o provisorio ainda nao a tinha. Reconciliado dali pra frente pelo sincronizador de entregas (ver "Fonte e propagacao"); residual aplicado em prod via backfill `--apply` em 2026-06-18 (3 embarque_itens do embarque 5963: NFs 38979/39008/39054 VICTORIO -> TENENTE; divergentes 3 -> 0).
 
 ## Mensagem de solicitacao de coleta por CD
 

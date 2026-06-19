@@ -3,13 +3,7 @@
 <div class="container-fluid my-4">
 
   <div class="mb-3 d-flex justify-content-between align-items-center">
-    <h2 class="mb-0">Lista de Embarques
-      {% if local_cd_atual == 'TENENTE_MARQUES' %}
-        <span class="badge badge-local-cd-tenente ms-2"><i class="fas fa-warehouse"></i> Tenente Marques</span>
-      {% elif local_cd_atual == 'VICTORIO_MARCHEZINE' %}
-        <span class="badge badge-local-cd-victorio ms-2"><i class="fas fa-warehouse"></i> Victorio Marchezine</span>
-      {% endif %}
-    </h2>
+    <h2 class="mb-0">Lista de Embarques</h2>
 
     <!-- ✅ NOVO: Indicador e controle do pré-filtro -->
     {% if not mostrar_todos %}
@@ -36,6 +30,24 @@
       </div>
     {% endif %}
   </div>
+
+    <!-- Toggle por CD de expedicao (substitui os antigos links "Embarques VM/TM" do menu).
+         Preserva o estado do pre-filtro (mostrar_todos); demais filtros sao re-aplicados via form. -->
+    {% set _mt = 'true' if mostrar_todos else none %}
+    <div class="btn-group mb-4" role="group" aria-label="Filtrar por CD de expedicao">
+      <a href="{{ url_for('embarques.listar_embarques', mostrar_todos=_mt) }}"
+         class="btn {{ 'btn-dark' if not local_cd_atual else 'btn-outline-dark' }}">
+        <i class="fas fa-layer-group"></i> Todos
+      </a>
+      <a href="{{ url_for('embarques.listar_embarques', local_cd='VICTORIO_MARCHEZINE', mostrar_todos=_mt) }}"
+         class="btn {{ 'badge-local-cd-victorio border-0' if local_cd_atual == 'VICTORIO_MARCHEZINE' else 'btn-outline-warning' }}">
+        <i class="fas fa-warehouse"></i> Victorio Marchezine
+      </a>
+      <a href="{{ url_for('embarques.listar_embarques', local_cd='TENENTE_MARQUES', mostrar_todos=_mt) }}"
+         class="btn {{ 'badge-local-cd-tenente border-0' if local_cd_atual == 'TENENTE_MARQUES' else 'btn-outline-secondary' }}">
+        <i class="fas fa-warehouse"></i> Tenente Marques
+      </a>
+    </div>
 
     <!-- Filtros Avançados -->
     <div class="card mb-4">

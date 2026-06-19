@@ -139,6 +139,16 @@ def sincronizar_entrega_carvia_por_nf(
     # ------------------------------------------------------------------ #
     if getattr(carvia_nf, 'local_cd', None):
         entrega.local_cd = carvia_nf.local_cd
+        # Alinha TAMBEM o EmbarqueItem CarVia da NF ao local_cd da fonte (CarviaNf).
+        # Cobre o caso em que a NF e anexada a um item provisorio (lote CARVIA-PED-*)
+        # DEPOIS de a Coleta ja ter propagado: a propagacao da Coleta casa o item por
+        # NF (`nota_fiscal == numero_nf`) e o provisorio ainda nao tinha a NF naquele
+        # momento -> ficava com o default VM divergente da NF/coleta (bug PED-281-1).
+        # Como este sincronizador roda em TODOS os caminhos de anexacao de NF (portaria,
+        # form de embarque, import), e o ponto unico para reconciliar o item.
+        # Helper R1-safe, idempotente, UPDATE em massa SEM commit (commit no fim do fluxo).
+        from app.utils.propagacao_local_cd import propagar_local_cd_carvia
+        propagar_local_cd_carvia(numero_nf, carvia_nf.local_cd)
 
     # ------------------------------------------------------------------ #
     # CarviaFrete (pode nao existir ainda: NF recem-importada sem embarque)
@@ -175,6 +185,9 @@ def sincronizar_entrega_carvia_por_nf(
             .first()
         )
         if item_embarque:
+            # NB: o local_cd do EmbarqueItem CarVia desta NF ja foi reconciliado a fonte
+            # mais acima (propagar_local_cd_carvia no bloco do local_cd) — cobre tambem
+            # o item provisorio (CARVIA-PED-*) que recebeu a NF pos-coleta (bug PED-281-1).
             if not entrega.separacao_lote_id:
                 entrega.separacao_lote_id = item_embarque.separacao_lote_id
 
