@@ -5,6 +5,7 @@ Estado da moto = último evento por `ocorrido_em DESC`. Eventos são append-only
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Optional, Dict, Any, List
 
 from app import db
@@ -24,18 +25,32 @@ def emitir_evento(
     operador_id: Optional[int] = None,
     observacao: Optional[str] = None,
     dados_extras: Optional[Dict[str, Any]] = None,
+    ocorrido_em: Optional[datetime] = None,
 ) -> AssaiMotoEvento:
-    """Cria um novo evento (NÃO commita — caller decide)."""
+    """Cria um novo evento (NÃO commita — caller decide).
+
+    `ocorrido_em` opcional: registra o evento com data retroativa (carga
+    histórica / backfill / correção). Quando None (default), o model aplica
+    `agora_brasil_naive`, preservando o comportamento atual de todos os callers.
+    Deve ser **Brasil naive** (sem tzinfo) — convenção do sistema, ver
+    `.claude/references/REGRAS_TIMEZONE.md`.
+    """
     if tipo not in EVENTOS_VALIDOS:
         raise EventoInvalidoError(f'Tipo inválido: {tipo}. Válidos: {EVENTOS_VALIDOS}')
 
-    evento = AssaiMotoEvento(
+    campos: Dict[str, Any] = dict(
         chassi=chassi.strip().upper(),
         tipo=tipo,
         operador_id=operador_id,
         observacao=observacao,
         dados_extras=dados_extras or {},
     )
+    # Só sobrescreve o default do model quando uma data é fornecida — passar
+    # ocorrido_em=None ao construtor anularia o default e violaria NOT NULL.
+    if ocorrido_em is not None:
+        campos['ocorrido_em'] = ocorrido_em
+
+    evento = AssaiMotoEvento(**campos)
     db.session.add(evento)
     db.session.flush()
     return evento
