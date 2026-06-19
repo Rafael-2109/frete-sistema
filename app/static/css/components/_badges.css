@@ -407,6 +407,15 @@
     --_badge-color: hsl(0 0% 100%);
   }
 
+  /* Botao grande que reusa a cor canonica do CD (ex.: pop-up de selecao de CD da portaria).
+     As classes .badge-local-cd-* setam as vars; .badge as aplica — para um .btn esta regra
+     aplica as mesmas vars sem depender de .badge nem de inline style (UI policy P3). */
+  .btn.badge-local-cd-victorio,
+  .btn.badge-local-cd-tenente {
+    background: var(--_badge-bg);
+    color: var(--_badge-color);
+  }
+
   /* ═══════════════════════════════════════════════════════════════════════════
      STATUS BADGES - LIGHT MODE ADJUSTMENTS
      ═══════════════════════════════════════════════════════════════════════════ */

@@ -629,6 +629,7 @@ def historico():
         filtros_aplicados=filtros_aplicados,
         local_cd_ativo=local_cd_ativo,
         local_cd_choices=LOCAL_CD_CHOICES,
+        local_cd_labels=LOCAL_CD_LABELS,
     )
 
 @portaria_bp.route('/listar_motoristas')

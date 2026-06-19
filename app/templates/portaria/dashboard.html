@@ -4,31 +4,24 @@
 {% block content %}
 <div class="container-fluid mt-4">
   <div class="d-flex justify-content-between align-items-center mb-4">
-    <h1><i class="fas fa-truck me-2"></i>Controle de Portaria</h1>
+    {# 🏭 Tela dedicada ao CD ativo (escolhido no pop-up). Trocar CD reabre o pop-up. #}
+    <h1 class="d-flex align-items-center gap-2 mb-0">
+      <i class="fas fa-truck me-1"></i>Portaria — {{ local_cd_labels.get(local_cd_ativo, '') }}
+      {{ badge_local_cd(local_cd_ativo, curto=True) }}
+    </h1>
     <div>
+      <button type="button" class="btn btn-outline-dark me-2"
+              data-bs-toggle="modal" data-bs-target="#modalSelecaoCdPortaria" data-destino="dashboard">
+        <i class="fas fa-exchange-alt"></i> Trocar CD
+      </button>
       <a href="{{ url_for('portaria.listar_motoristas') }}" class="btn btn-outline-primary me-2">
         <i class="fas fa-users"></i> Motoristas
       </a>
-      <a href="{{ url_for('portaria.historico') }}" class="btn btn-outline-secondary">
+      <a href="{{ url_for('portaria.historico', local_cd=local_cd_ativo) }}" class="btn btn-outline-secondary">
         <i class="fas fa-history"></i> Histórico
       </a>
     </div>
   </div>
-
-  {# 🏭 Seletor de contexto: CD/portaria ativo. Navega por ?local_cd=... — o card de
-     veiculos/embarques abaixo reflete o local ativo, e o form de chegada envia o hidden
-     local_cd correspondente. Cores padronizadas: VM amarelo/preto, TM roxo/branco. #}
-  <ul class="nav nav-tabs mb-4" id="seletor-local-cd">
-    {% for valor, rotulo in local_cd_choices %}
-      {% set ativo = (valor == local_cd_ativo) %}
-      <li class="nav-item">
-        <a class="nav-link {{ 'active' if ativo }} {{ 'badge-local-cd-victorio' if (ativo and valor == 'VICTORIO_MARCHEZINE') }} {{ 'badge-local-cd-tenente' if (ativo and valor == 'TENENTE_MARQUES') }}"
-           href="{{ url_for('portaria.dashboard', local_cd=valor) }}">
-          <i class="fas fa-warehouse me-1"></i> {{ rotulo }}
-        </a>
-      </li>
-    {% endfor %}
-  </ul>
 
   <div class="row">
     <!-- Formulário de Busca/Cadastro de Motorista -->

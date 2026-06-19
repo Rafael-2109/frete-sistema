@@ -4,9 +4,16 @@
 {% block content %}
 <div class="container-fluid mt-4 premium-page">
   <div class="d-flex justify-content-between align-items-center mb-4 reveal">
-    <h1><i class="fas fa-history me-2"></i>Histórico da Portaria</h1>
+    <h1 class="d-flex align-items-center gap-2 mb-0">
+      <i class="fas fa-history me-1"></i>Histórico da Portaria
+      {% if local_cd_ativo %}— {{ local_cd_labels.get(local_cd_ativo, '') }} {{ badge_local_cd(local_cd_ativo, curto=True) }}{% endif %}
+    </h1>
     <div>
-      <a href="{{ url_for('portaria.dashboard') }}" class="btn btn-outline-primary">
+      <button type="button" class="btn btn-outline-dark me-2"
+              data-bs-toggle="modal" data-bs-target="#modalSelecaoCdPortaria" data-destino="historico">
+        <i class="fas fa-exchange-alt"></i> Trocar CD
+      </button>
+      <a href="{{ url_for('portaria.dashboard', local_cd=local_cd_ativo) }}" class="btn btn-outline-primary">
         <i class="fas fa-arrow-left"></i> Voltar para Portaria
       </a>
     </div>
@@ -76,7 +83,8 @@
           <div class="col-md-3 ms-auto d-flex align-items-end">
             <div class="btn-group w-100">
               {{ form.filtrar(class="btn btn-primary") }}
-              <a href="{{ url_for('portaria.historico') }}" class="btn btn-outline-secondary">
+              {# Limpar preserva o CD ativo (historico continua "por CD") #}
+              <a href="{{ url_for('portaria.historico', local_cd=local_cd_ativo) }}" class="btn btn-outline-secondary">
                 <i class="fas fa-times"></i> Limpar
               </a>
             </div>
@@ -91,7 +99,7 @@
   <div class="alert alert-info">
     <i class="fas fa-info-circle"></i>
     Encontrados <strong>{{ paginacao.total }}</strong> registro(s) com os filtros aplicados.
-    <a href="{{ url_for('portaria.historico') }}" class="alert-link">Limpar filtros</a>
+    <a href="{{ url_for('portaria.historico', local_cd=local_cd_ativo) }}" class="alert-link">Limpar filtros</a>
   </div>
   {% endif %}
 

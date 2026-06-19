@@ -76,7 +76,9 @@
         <li><a class="nc-sidebar__link" href="{{ url_for('embarques.listar_embarques') }}">
           <i class="fas fa-shipping-fast nc-sidebar__icon"></i>
           <span class="nc-sidebar__label">Embarques</span></a></li>
-        <li><a class="nc-sidebar__link" href="{{ url_for('portaria.dashboard') }}">
+        {# Portaria: abre o pop-up de selecao de CD (data-destino=dashboard) em vez de ir direto #}
+        <li><a class="nc-sidebar__link" href="#" data-tooltip="Portaria"
+               data-bs-toggle="modal" data-bs-target="#modalSelecaoCdPortaria" data-destino="dashboard">
           <i class="fas fa-truck nc-sidebar__icon"></i>
           <span class="nc-sidebar__label">Portaria</span></a></li>
         <li><hr></li>
@@ -92,7 +94,9 @@
         <li><a class="nc-sidebar__link" href="{{ url_for('pallet_v3.unified.index') }}">
           <i class="fas fa-pallet nc-sidebar__icon"></i>
           <span class="nc-sidebar__label">Gestao de Pallets</span></a></li>
-        <li><a class="nc-sidebar__link" href="{{ url_for('portaria.historico') }}">
+        {# Historico Portaria: mesmo pop-up de CD (data-destino=historico) -> historico por CD #}
+        <li><a class="nc-sidebar__link" href="#" data-tooltip="Historico Portaria"
+               data-bs-toggle="modal" data-bs-target="#modalSelecaoCdPortaria" data-destino="historico">
           <i class="fas fa-history nc-sidebar__icon"></i>
           <span class="nc-sidebar__label">Historico Portaria</span></a></li>
         <li><hr></li>
@@ -925,3 +929,55 @@
   </div>
 
 </aside>
+
+{# ───────── Modal: selecao do CD da Portaria (Victorio Marchezine / Tenente Marques) ─────────
+   Pop-up UNICO reutilizado pelos gatilhos "Portaria" e "Historico Portaria" do menu e pelo
+   botao "Trocar CD" das telas. O trigger informa o destino via data-destino (dashboard|historico);
+   o JS monta o href de cada CD com ?local_cd=. Fora do <aside> para nao herdar overflow/transform
+   da sidebar (drawer). Cores padronizadas em app/utils/local_cd.py / _badges.css. #}
+{% if current_user.is_authenticated %}
+<div class="modal fade" id="modalSelecaoCdPortaria" tabindex="-1" aria-hidden="true"
+     data-url-dashboard="{{ url_for('portaria.dashboard') }}"
+     data-url-historico="{{ url_for('portaria.historico') }}">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="fas fa-warehouse me-2"></i>Selecione o CD da Portaria</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+      </div>
+      <div class="modal-body">
+        <p class="text-muted mb-3">Escolha o centro de distribuicao para operar:</p>
+        <div class="d-grid gap-3">
+          {# Cor canonica do CD: regra .btn.badge-local-cd-* em _badges.css aplica as vars
+             --_badge-bg/--_badge-color (sem inline style — UI policy P3). #}
+          <a href="#" id="btn-cd-victorio"
+             class="btn btn-lg badge-local-cd-victorio d-flex align-items-center justify-content-center py-3">
+            <i class="fas fa-warehouse me-2"></i> Victorio Marchezine
+          </a>
+          <a href="#" id="btn-cd-tenente"
+             class="btn btn-lg badge-local-cd-tenente d-flex align-items-center justify-content-center py-3">
+            <i class="fas fa-warehouse me-2"></i> Tenente Marques
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+(function () {
+  var modal = document.getElementById('modalSelecaoCdPortaria');
+  if (!modal) return;
+  var btnVM = document.getElementById('btn-cd-victorio');
+  var btnTM = document.getElementById('btn-cd-tenente');
+  modal.addEventListener('show.bs.modal', function (event) {
+    var trigger = event.relatedTarget;
+    var destino = (trigger && trigger.getAttribute('data-destino')) || 'dashboard';
+    var base = destino === 'historico'
+      ? modal.getAttribute('data-url-historico')
+      : modal.getAttribute('data-url-dashboard');
+    btnVM.setAttribute('href', base + '?local_cd=VICTORIO_MARCHEZINE');
+    btnTM.setAttribute('href', base + '?local_cd=TENENTE_MARQUES');
+  });
+})();
+</script>
+{% endif %}
