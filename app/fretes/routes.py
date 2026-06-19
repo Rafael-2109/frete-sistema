@@ -741,6 +741,7 @@ def processar_cte_frete_existente():
 
 @fretes_bp.route("/processar_lancamento_frete", methods=["POST"])
 @login_required
+@require_financeiro()
 def processar_lancamento_frete():
     """Processa o lançamento efetivo do frete"""
     try:
@@ -757,6 +758,13 @@ def processar_lancamento_frete():
         fatura_frete_id = request.form.get("fatura_frete_id")
 
         embarque = Embarque.query.get_or_404(embarque_id)
+
+        # Gate da última saída (paridade com o fluxo automático): em embarque MISTO,
+        # não permitir criar Frete manual antes de todos os CDs darem saída.
+        pode_lancar, motivo = verificar_requisitos_para_lancamento_frete(embarque_id, cnpj_cliente)
+        if not pode_lancar and 'Aguardando saída dos CDs' in motivo:
+            flash(motivo, 'warning')
+            return redirect(url_for('fretes.criar_novo_frete_por_nf', numero_nf=request.form.get('numeros_nfs', '')))
 
         # Pega dados da tabela conforme tipo de carga
         if tipo_carga == "DIRETA":
