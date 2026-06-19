@@ -504,6 +504,9 @@ Timeouts em 4 arquivos com **deadline renewal**. DEVEM respeitar esta ordem ou c
 ### Workers RQ: job_id NAO pode conter ":" (RQ 2.6.1)
 `rq.job.Job.set_id` levanta `ValueError('id must not contain ":"')`. `AgentStep.step_uid` = `'{session_id}:{turn_seq}'` SEMPRE tem `:`. Qualquer `job_id` derivado DEVE sanitizar: `job_id=f"prefixo-{step_uid.replace(':','-')}"`. O try/except por-step ENGOLE o erro → feature fica 100% inerte SEM teste pegar (MagicMock nao valida job_id). Pegar com `assert ':' not in job_id`.
 
+### Custo: `ResultMessage.total_cost_usd` e ACUMULADO (nao por-turno)
+O SDK reporta o custo running-total da sessao SDK — CRESCE a cada turno (e zera quando a sessao SDK e recriada/resume). `_save_messages_to_db` (`routes/chat.py`) converte em DELTA via `sdk/pricing.py:turn_cost_from_cumulative` ANTES de somar em `AgentSession.total_cost_usd`; o acumulado anterior fica em `data['_sdk_cost_cumulative']` (+`_sdk_cost_session_id` p/ detectar reset). NUNCA somar o valor cru por-turno: inflava `total_cost_usd` e `agent_session_costs.cost_usd` ~Nx (N=turnos) — bug 2026-06-19 (sessao reportada $223.59 vs $31.92 real; global 30d 3.0x). Historico corrigido por `scripts/migrations/2026_06_19_backfill_agent_cost_dedup.py` (idempotente/reversivel).
+
 ### S3 Storage (screenshots, archive)
 
 Screenshots Playwright (`playwright-screenshots/{YYYY-MM}/`) e archive de sessoes (`agent-archive/{YYYY-MM}/{session}.tar.gz`) usam S3 compartilhado via `get_file_storage()`. Ambos sao best-effort (falha silenciosa se USE_S3=false ou erro de rede). Detalhes completos: `.claude/references/S3_STORAGE.md`.

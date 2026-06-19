@@ -2183,19 +2183,38 @@ def _save_messages_to_db(
             if model:
                 session.model = model
 
-            # Priorizar custo do SDK (ResultMessage.total_cost_usd) sobre recálculo local
-            sdk_cost = sdk_cost_usd
+            # Custo do TURNO a partir do acumulado do SDK.
+            # `sdk_cost_usd` = ResultMessage.total_cost_usd e o custo ACUMULADO da
+            # sessao SDK (cresce a cada turno). Somar o acumulado por-turno conta
+            # N vezes -> total_cost_usd inflado ~Nx (bug 2026-06-19: sessao
+            # reportada $223.59 vs $31.92 real, 13 turnos). turn_cost_from_cumulative
+            # devolve o DELTA do turno; o acumulado anterior fica em data['_sdk_cost_*']
+            # e um reset de sessao SDK (resume/nova) zera o baseline.
+            sdk_cumulative = float(sdk_cost_usd or 0)
             calc_cost = _calculate_cost(model, input_tokens, output_tokens)
-            if sdk_cost and sdk_cost > 0:
-                cost_usd = sdk_cost
+            if sdk_cumulative > 0:
+                from app.agente.sdk.pricing import turn_cost_from_cumulative
+                from sqlalchemy.orm.attributes import flag_modified
+                _data = session.data or {}
+                _prev_cumulative = float(_data.get('_sdk_cost_cumulative', 0) or 0)
+                _prev_sdk_sid = _data.get('_sdk_cost_session_id')
+                _curr_sdk_sid = sdk_session_id if _sdk_id_valid else _prev_sdk_sid
+                cost_usd = turn_cost_from_cumulative(
+                    sdk_cumulative, _prev_cumulative, _prev_sdk_sid, _curr_sdk_sid,
+                )
+                # Memoriza o acumulado para o proximo turno (R7: flag_modified JSONB)
+                _data['_sdk_cost_cumulative'] = sdk_cumulative
+                _data['_sdk_cost_session_id'] = _curr_sdk_sid
+                session.data = _data
+                flag_modified(session, 'data')
             else:
                 cost_usd = calc_cost
             session.total_cost_usd = float(session.total_cost_usd or 0) + cost_usd
 
             logger.info(
                 f"[AGENTE] Custo sessão {our_session_id[:8]}: "
-                f"sdk_cost={sdk_cost}, calc_cost={calc_cost:.6f}, "
-                f"final={cost_usd:.6f}, tokens=({input_tokens},{output_tokens})"
+                f"sdk_cumulative={sdk_cumulative:.6f}, turno={cost_usd:.6f}, "
+                f"calc_local={calc_cost:.6f}, tokens=({input_tokens},{output_tokens})"
             )
 
             # B1 (Onda 2): persistir PlanState em data['plan'] (flag-gated).

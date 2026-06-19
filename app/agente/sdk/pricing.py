@@ -101,6 +101,50 @@ def calculate_cost_with_cache(
     return round(cost, 6)
 
 
+def turn_cost_from_cumulative(
+    sdk_cumulative: float,
+    prev_cumulative: float,
+    prev_sdk_session_id: str | None,
+    curr_sdk_session_id: str | None,
+) -> float:
+    """Converte `ResultMessage.total_cost_usd` no custo de UM turno.
+
+    `ResultMessage.total_cost_usd` e o custo ACUMULADO da sessao SDK (running
+    total que cresce a cada turno). Persistir esse valor por-turno e somar
+    (`session.total_cost_usd += valor`) conta o acumulado N vezes -> inflacao
+    ~Nx (bug 2026-06-19: sessao reportada $223.59 vs $31.92 real, 13 turnos).
+
+    Este helper devolve o DELTA do turno: `sdk_cumulative - baseline`. O baseline
+    e o acumulado do turno anterior do MESMO segmento de sessao SDK. Um reset
+    (resume que recriou a sessao, nova sessao SDK) e detectado por:
+      - queda do acumulado (`sdk_cumulative < prev_cumulative`), ou
+      - troca de `sdk_session_id` (ambos conhecidos e diferentes).
+    Em reset, baseline volta a 0 (o acumulado reportado ja e so do segmento novo).
+
+    Args:
+        sdk_cumulative: ResultMessage.total_cost_usd deste turno (acumulado).
+        prev_cumulative: acumulado memorizado do turno anterior (0 no 1o turno).
+        prev_sdk_session_id: sdk_session_id associado ao acumulado anterior.
+        curr_sdk_session_id: sdk_session_id deste turno (None se indisponivel).
+
+    Returns:
+        Custo do turno em USD (>= 0). 0 se `sdk_cumulative <= 0`.
+    """
+    if sdk_cumulative <= 0:
+        return 0.0
+
+    reset = (
+        sdk_cumulative < prev_cumulative
+        or (
+            curr_sdk_session_id is not None
+            and prev_sdk_session_id is not None
+            and curr_sdk_session_id != prev_sdk_session_id
+        )
+    )
+    baseline = 0.0 if reset else max(0.0, prev_cumulative)
+    return round(max(0.0, sdk_cumulative - baseline), 6)
+
+
 def get_known_models() -> list[str]:
     """Retorna lista de modelos conhecidos (para validação/tests)."""
     return sorted(MODEL_PRICING.keys())
