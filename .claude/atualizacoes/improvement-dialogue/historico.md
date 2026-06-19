@@ -45,6 +45,51 @@ Indice de execucoes do dialogo de melhoria Agent SDK <-> Claude Code.
 | 39 | 2026-06-16 | 3 | 1 | 1 | 1 | OK (skill_bug journals conciliando-transf-internas: 1054 era VORTX AGIS nao "BRADESCO copia" + 6 journals faltantes, corrigido ao vivo + resolver_journal_id dinamico; 1 rejeicao falso-positivo "beneficiario TED nao importado" refutado por 643 linhas SRM ilike NACOM GOYA; 1 proposta write-path CarVia via backfill existente; 3 F2 adhoc/skill-gap listadas p/ Rafael) |
 | 40 | 2026-06-17 | 4 | 2 | 0 | 2 | OK (skill_bug operando-picking-odoo 'devolver' reutilizava devolucao state=cancel — aplicado padrao G-AUDIT-3/N23 em picking.py+operar_picking.py, 2 TDD, 72 passed; IMP-2026-06-17-001 XML CT-e ja existia no consultar_ctrc_101.py --nf --baixar-xml, so faltava entrega → nota exportando-arquivos; 2 propostas: add separacao em embarque toca routes.py + Situacao 3 journal errado destrutivo Odoo PROD) |
 | 41 | 2026-06-18 | 2 | 0 | 2 | 0 | OK (revisao 4-maos: IMP-2026-06-17-002 RECUSADA por risco+frequencia — TRUNCATE em PROD + demanda ad-hoc/rara nao viram skill NEM script versionado; script reset_motos_assai.py REMOVIDO. IMP-2026-06-17-003 rejeitada: bloqueio read-only feature intencional text_to_sql:417 + PROMPT INJECTION no evidence_json. 2 F2 adhoc-cluster-1385/1433 de Martha id 82 EM ESTUDO p/ Rafael) |
+| 42 | 2026-06-19 | 5 | 2 | 1 | 2 | OK (cluster Motos Assai backfill 1.394 chassis, Rayssa id 78: 1 mudanca atomica auto-impl `emitir_evento(ocorrido_em=...)` destrava o gargalo de 2 sugestoes, +2 TDD 7 passed; IMP-002 proposta cancelamento-por-loja (migration+model+service); IMP-19-003 proposta observacao-defeito no FATURADA (cruza routes/forms); IMP-19-002 REJEITADA over-engineering one-shot ja resolvido por script idempotente; FATURADA-sem-lastro rejeitada por invariante. 4 F2 listadas: adhoc 1385/1433 (Martha, ja estudadas 18/06), adhoc-1070 (Talita id 17), skill-gap-lendo-arquivos (Rayssa)) |
+
+## 2026-06-19
+
+5 sugestoes `IMP-*` avaliaveis (todas modulo **Motos Assai**, todas **Rayssa Alves id 78**) + 4 F2
+`adhoc-`/`skill-gap-` (gate humano, apenas listadas). As 5 derivam de **uma carga historica one-shot
+de 1.394 chassis** (sessoes `92516689…` e `17b68633…`). Veredito: **2 implementadas (1 mudanca atomica),
+1 rejeitada, 2 propostas**. Persistencia v2 ids 216-220, HTTP 200.
+
+- **[IMPLEMENTADO] IMP-2026-06-18-005 + IMP-2026-06-19-001** (skill_suggestion, warning) — o gargalo
+  estrutural citado em ambas (`emitir_evento` nao aceitar data retroativa, forcando instanciar
+  `AssaiMotoEvento` na mao e furar a abstracao do modulo) foi corrigido com **uma mudanca atomica**:
+  `emitir_evento(..., ocorrido_em: Optional[datetime]=None)` em `moto_evento_service.py`. Brasil naive
+  (REGRAS_TIMEZONE); quando omitido mantem o default `agora_brasil_naive` — 100% retrocompativel (~25
+  callers usam keyword args). Defensivo: so injeta no construtor quando nao-None (None anularia o default,
+  violaria NOT NULL). +2 TDD (default usa agora; retroativo preservado), suite 7 passed. Doc em
+  `app/motos_assai/CLAUDE.md`. NAO implementei a tela/rota de importacao (one-shot, sem recorrencia →
+  over-engineering). Arquivos: `moto_evento_service.py`, `test_moto_evento_service.py`, `CLAUDE.md`.
+- **[PROPOSTA] IMP-2026-06-19-001 itens 1 e 3** — (3) `EVENTO_DEMONSTRACAO` no enum `models/moto.py` +
+  classificar em `EVENTOS_FORA_ESTOQUE` = camada de model, gate humano (3 motos reais). (1) FATURADA
+  retroativa **sem lastro fiscal REJEITADA**: FATURADA orfa (sem `assai_nf_qpa`) viola invariante —
+  downstream (resumo/devolucao/pos_venda/cancelamento_nf) assume NF vinculada → inconsistencia silenciosa.
+- **[PROPOSTA] IMP-2026-06-18-002** (skill_suggestion, warning) — cancelamento por loja em pedido de
+  venda. Feature de produto legitima (cada loja Sendas independente; hoje so via DELETE, perde auditoria),
+  mas exige migration `ADD COLUMN status` em `assai_pedido_venda_loja` + model + service
+  `cancelar_pedido_assai` + ajuste recalculo (`pedido_status_service`/`resumo_service` ignorarem
+  CANCELADAS). Plano detalhado no `dialogue-2026-06-19.md`. Gate humano (camada de model).
+- **[PROPOSTA] IMP-2026-06-19-003** (skill_suggestion, warning) — observacao de defeito por chassi no
+  evento FATURADA. O evento ja tem coluna `observacao`. Opcao A: `importar_nf_qpa` recebe mapa
+  `chassi→observacao` (cruza `nf_qpa_adapter` + `UploadNfQpaForm`/route); Opcao B: usar
+  `assai_pos_venda_ocorrencia` (defeito e pos-venda) com nova categoria. Recomendado A p/ carga imediata,
+  B se recorrente. Gate humano (cruza routes/forms).
+- **[REJEITADO] IMP-2026-06-19-002** (skill_suggestion, warning) — backfill de recibo Motochefe conferido
+  em massa. One-shot ja resolvido por script INSERT idempotente (prefixo `MA-HIST-`); a propria sugestao
+  confirma que criar compra/recibo NAO reflete na Nacom (so o faturamento reflete). O atrito recorrente
+  real (data retroativa) ja foi resolvido em IMP-2026-06-18-005. Feature permanente = over-engineering
+  (§6). Se virar recorrente → utilitario em `scripts/migrations/`, nao UI.
+- **[F2 — listadas, sem decisao]** `adhoc-cluster-1385` / `adhoc-cluster-1433` (**Martha id 82**, ja
+  ESTUDADAS 18/06 — re-enquadradas p/ gaps de dominio, decisao preliminar NAO criar skill de Excel;
+  seguem version=1 aguardando Rafael); `adhoc-cluster-1070` (**Talita id 17**, 23 membros, gerar embarque
+  + lancar fretes); `skill-gap-lendo-arquivos-…` (**Rayssa id 78**, 2 membros, analise exploratoria de
+  planilhas). Gate humano `revisar_sugestoes_skill.py listar`.
+- **Nota de metodo**: feature-dev Discovery feita inline e completa (service + 25 callers + model + teste
+  + doc + REGRAS_TIMEZONE); para uma mudanca de 1 parametro opcional, spawnar o pipeline de 3 subagentes
+  seria desproporcional — segui o metodo (explore→design→implement→review) manualmente com TDD.
 
 ## 2026-06-18
 

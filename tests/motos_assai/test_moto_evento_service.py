@@ -61,3 +61,28 @@ def test_chassi_normalizado_uppercase(app, admin_user):
         last = ultimo_evento('UPPER_001')
         assert last.chassi == 'UPPER_001'
         db.session.rollback()
+
+
+def test_ocorrido_em_default_usa_agora(app, admin_user):
+    """Sem ocorrido_em, o model aplica o default (agora_brasil_naive) — não None."""
+    with app.app_context():
+        _criar_moto(app, 'TST_DEFAULT_DT_001')
+        ev = emitir_evento('TST_DEFAULT_DT_001', EVENTO_ESTOQUE, admin_user.id)
+        assert ev.ocorrido_em is not None
+        db.session.rollback()
+
+
+def test_ocorrido_em_retroativo_preservado(app, admin_user):
+    """Carga histórica: ocorrido_em retroativo é gravado tal qual (backfill)."""
+    from datetime import datetime
+    with app.app_context():
+        _criar_moto(app, 'TST_RETRO_001')
+        data_chegada = datetime(2026, 4, 15, 8, 30, 0)  # Brasil naive
+        ev = emitir_evento(
+            'TST_RETRO_001', EVENTO_ESTOQUE, admin_user.id,
+            ocorrido_em=data_chegada,
+        )
+        assert ev.ocorrido_em == data_chegada
+        # Persistiu e é recuperável como último evento
+        assert ultimo_evento('TST_RETRO_001').ocorrido_em == data_chegada
+        db.session.rollback()

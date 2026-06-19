@@ -223,6 +223,12 @@ Não indexados na lista de constantes acima:
 
 - `chassi_validator.py`: validação regex do chassi contra padrão configurado no `AssaiModelo.regex_chassi`. Não-bloqueante — retorna `{ok, motivo, regex_usado}`. Motivos: `MOTIVO_REGEX_INVALIDO`, `MOTIVO_MODELO_SEM_REGEX`, `MOTIVO_CHASSI_VAZIO`.
 - `moto_evento_service.py`: helpers `emitir_evento(chassi, tipo, ...)`, `status_atual(chassi)`, `historico(chassi)`. Append-only — nunca DELETE.
+  - **`ocorrido_em` opcional** (2026-06-19, D8 IMP-2026-06-18-005 / IMP-2026-06-19-001):
+    `emitir_evento(..., ocorrido_em=<datetime Brasil naive>)` registra evento com
+    data retroativa para **carga histórica / backfill / correção**. Quando omitido,
+    o model aplica `agora_brasil_naive` (comportamento atual dos ~25 callers
+    inalterado). Use este parâmetro em vez de instanciar `AssaiMotoEvento` na mão —
+    preserva a validação de tipo e a normalização do chassi do service.
 
 ### Wizard de recebimento físico A→B→C→D
 
