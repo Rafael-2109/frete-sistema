@@ -1,0 +1,104 @@
+{# app/templates/carvia/resultado_frete/index.html #}
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2><i class="fas fa-scale-balanced"></i> CarVia — Resultado por Frete</h2>
+            <p class="text-muted mb-0">Receita (CTe) vs custo (subcontrato + coleta), rateado por moto</p>
+        </div>
+        <a href="{{ url_for('carvia.exportar_resultado_frete', data_inicio=data_inicio, data_fim=data_fim, uf=uf, eixo=eixo) }}"
+           class="btn btn-outline-success" title="Exportar Excel">
+            <i class="fas fa-file-excel"></i> Exportar
+        </a>
+    </div>
+
+    <div class="card mb-3">
+        <div class="card-body py-2">
+            <form method="get" class="row g-2 align-items-end">
+                <div class="col-auto">
+                    <label class="form-label small mb-0">Data Inicio</label>
+                    <input type="date" class="form-control form-control-sm" name="data_inicio" value="{{ data_inicio }}">
+                </div>
+                <div class="col-auto">
+                    <label class="form-label small mb-0">Data Fim</label>
+                    <input type="date" class="form-control form-control-sm" name="data_fim" value="{{ data_fim }}">
+                </div>
+                <div class="col-auto">
+                    <label class="form-label small mb-0">UF</label>
+                    <input type="text" maxlength="2" class="form-control form-control-sm" name="uf" value="{{ uf }}" style="width:70px">
+                </div>
+                <div class="col-auto">
+                    <label class="form-label small mb-0">Resumo por</label>
+                    <select name="eixo" class="form-select form-select-sm">
+                        <option value="cte" {% if eixo=='cte' %}selected{% endif %}>CTe CarVia</option>
+                        <option value="embarque" {% if eixo=='embarque' %}selected{% endif %}>Embarque</option>
+                        <option value="uf_mes" {% if eixo=='uf_mes' %}selected{% endif %}>UF / Mes</option>
+                    </select>
+                </div>
+                <div class="col-auto">
+                    <button type="submit" class="btn btn-primary btn-sm"><i class="fas fa-filter"></i> Filtrar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <h5 class="mt-3">Resumo ({{ eixo }})</h5>
+    <div class="table-responsive">
+        <table class="table table-sm carvia-table mb-4">
+            <thead><tr class="table-thead-theme">
+                <th>{{ 'CTe' if eixo=='cte' else ('Embarque' if eixo=='embarque' else 'UF/Mes') }}</th>
+                <th class="text-end">Receita</th><th class="text-end">Custo Sub</th>
+                <th class="text-end">Custo Coleta</th><th class="text-end">Resultado</th>
+                <th class="text-end">Motos</th><th class="text-end">R$/Moto</th><th class="text-end">Margem %</th>
+            </tr></thead>
+            <tbody>
+            {% for g in resumo %}
+                <tr>
+                    <td>{{ g.label }}</td>
+                    <td class="text-end">{{ g.receita|valor_br }}</td>
+                    <td class="text-end">{{ g.custo_sub|valor_br }}</td>
+                    <td class="text-end">{{ g.custo_coleta|valor_br }}</td>
+                    <td class="text-end {% if g.resultado < 0 %}text-danger fw-bold{% else %}text-success{% endif %}">{{ g.resultado|valor_br }}</td>
+                    <td class="text-end">{{ g.motos }}</td>
+                    <td class="text-end">{{ g.resultado_moto|valor_br if g.resultado_moto is not none else '—' }}</td>
+                    <td class="text-end">{{ g.margem_pct ~ '%' if g.margem_pct is not none else '—' }}</td>
+                </tr>
+            {% else %}
+                <tr><td colspan="8" class="text-center text-muted py-3">Nenhum dado no periodo</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <h5>Detalhe por NF</h5>
+    <div class="table-responsive">
+        <table class="table table-sm carvia-table mb-0">
+            <thead><tr class="table-thead-theme">
+                <th>NF</th><th>Cidade/UF</th><th>CTe</th><th class="text-end">Motos</th>
+                <th class="text-end">Receita</th><th class="text-end">Custo Sub</th><th>Custo</th>
+                <th class="text-end">Custo Coleta</th><th class="text-end">Resultado</th><th class="text-end">R$/Moto</th>
+            </tr></thead>
+            <tbody>
+            {% for d in detalhe %}
+                <tr>
+                    <td>{{ d.numero_nf }}</td>
+                    <td>{{ d.cidade or '' }}/{{ d.uf or '' }}</td>
+                    <td>{{ d.cte_numero or '—' }}</td>
+                    <td class="text-end">{{ d.motos }}</td>
+                    <td class="text-end">{{ d.receita|valor_br }}</td>
+                    <td class="text-end">{{ d.custo_sub|valor_br }}</td>
+                    <td><span class="badge bg-{{ 'success' if d.custo_sub_flag=='REAL' else ('warning' if d.custo_sub_flag=='ESTIMADO' else 'secondary') }}">{{ d.custo_sub_flag }}</span></td>
+                    <td class="text-end">{{ d.custo_coleta|valor_br }}</td>
+                    <td class="text-end {% if d.resultado < 0 %}text-danger fw-bold{% else %}text-success{% endif %}">{{ d.resultado|valor_br }}</td>
+                    <td class="text-end">{{ d.resultado_moto|valor_br if d.resultado_moto is not none else '—' }}</td>
+                </tr>
+            {% else %}
+                <tr><td colspan="10" class="text-center text-muted py-3">Nenhuma NF no periodo</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
