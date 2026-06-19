@@ -38,6 +38,7 @@ atualizado: 2026-06-08
 | **Padroes de progressive disclosure (CLAUDE.md root+modulo, docs L1-L3, memoria)** | [PROGRESSIVE_DISCLOSURE_PATTERN.md](PROGRESSIVE_DISCLOSURE_PATTERN.md) |
 | Artifacts no Agente Web (skill gerando-artifact, modal, worker) | `.claude/skills/gerando-artifact/SKILL.md` + `app/agente/CLAUDE.md` (secao Artifacts) |
 | **Confiabilidade de subagentes** | [SUBAGENT_RELIABILITY.md](SUBAGENT_RELIABILITY.md) |
+| **Observabilidade do Agente (onde mora custo principal/subagente, transcript, métricas)** | [OBSERVABILIDADE_AGENTE.md](OBSERVABILIDADE_AGENTE.md) |
 | **Manual para criar/editar subagents** | [AGENT_DESIGN_GUIDE.md](AGENT_DESIGN_GUIDE.md) |
 | **Blocos reusaveis (pre-mortem, self-critique, output format)** | [AGENT_TEMPLATES.md](AGENT_TEMPLATES.md) |
 | **Manual para CLAUDE.md de modulo** | [MANUAL_CLAUDE_MD.md](MANUAL_CLAUDE_MD.md) |

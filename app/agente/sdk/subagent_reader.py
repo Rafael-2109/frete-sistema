@@ -22,7 +22,7 @@ from typing import Any, Literal, Optional
 from claude_agent_sdk import get_subagent_messages, list_subagents
 
 from app.agente.utils.pii_masker import mask_pii
-from app.utils.timezone import agora_brasil_naive
+from app.utils.timezone import agora_brasil_naive, utc_para_brasil
 
 logger = logging.getLogger('sistema_fretes')
 
@@ -212,27 +212,31 @@ def _parse_iso_timestamp(value) -> Optional[datetime]:
     - ISO string naive: `'2026-04-17T12:20:13'`
     - Epoch milliseconds (int ou float): `1713352813600`
     - Epoch seconds: `1713352813.6` (diferencia via magnitude)
-    - datetime object (retorna as-is se timezone-naive, converte aware→naive)
+    - datetime object (retorna as-is se timezone-naive, converte aware→Brasil-naive)
 
-    Retorna sempre **timezone-naive** para consistencia com _TIMEZONE_BRASIL
-    padrao do projeto. Facilita max/min sem TypeError (B5 pre-mortem).
+    Retorna sempre **timezone-naive em horario BRASIL** (convencao do projeto,
+    REGRAS_TIMEZONE.md), consistente com `recorded_at` (agora_*_naive). Valores
+    COM fuso (ISO 'Z'/offset, epoch=UTC, datetime aware) sao convertidos
+    UTC->Brasil ANTES de virar naive — senao `started_at` fica ~3h adiantado vs
+    `recorded_at` (bug 2026-06-19: 206/206 metricas com started_at > recorded_at).
+    Valores ja naive sao mantidos (assume-se ja em horario Brasil).
+    Facilita max/min sem TypeError (B5 pre-mortem).
     """
     if value is None:
         return None
     # Datetime direto
     if isinstance(value, datetime):
         if value.tzinfo is not None:
-            return value.replace(tzinfo=None)
+            return utc_para_brasil(value).replace(tzinfo=None)
         return value
-    # Epoch numerico
+    # Epoch numerico (epoch e SEMPRE UTC)
     if isinstance(value, (int, float)):
         try:
             from datetime import timezone as _tz
             # Heuristica: > 1e12 = milliseconds (post-2001); caso contrario segundos
             ts = value / 1000.0 if value > 1e12 else float(value)
-            # Python 3.12+: utcfromtimestamp e deprecated — usar
-            # fromtimestamp(tz=UTC) + replace(tzinfo=None) para manter naive.
-            return datetime.fromtimestamp(ts, _tz.utc).replace(tzinfo=None)
+            aware_utc = datetime.fromtimestamp(ts, _tz.utc)
+            return utc_para_brasil(aware_utc).replace(tzinfo=None)
         except (ValueError, OverflowError, OSError):
             return None
     # String ISO
@@ -241,7 +245,7 @@ def _parse_iso_timestamp(value) -> Optional[datetime]:
             normalized = value.replace('Z', '+00:00') if value.endswith('Z') else value
             parsed = datetime.fromisoformat(normalized)
             if parsed.tzinfo is not None:
-                return parsed.replace(tzinfo=None)
+                return utc_para_brasil(parsed).replace(tzinfo=None)
             return parsed
         except (ValueError, TypeError):
             return None
