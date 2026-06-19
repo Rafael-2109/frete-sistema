@@ -7,69 +7,37 @@
 
 
   <!-- Informações da Portaria (se houver) -->
-  {% if dados_portaria %}
+  {% if dados_portaria_por_cd %}
   <div class="card mb-4 border-info">
-    <div class="card-header">
-      <h5 class="mb-0">
-        <i class="fas fa-truck"></i> Informações da Portaria
-      </h5>
+    <div class="card-header d-flex justify-content-between align-items-center">
+      <h5 class="mb-0"><i class="fas fa-truck"></i> Informações da Portaria</h5>
+      {% if status_portaria_geral == 'PARCIAL' %}
+        <span class="badge bg-warning text-dark">
+          <i class="fas fa-triangle-exclamation"></i>
+          Saída parcial — falta: {{ cds_pendentes | map('replace', '_', ' ') | join(', ') | title }}
+        </span>
+      {% elif status_portaria_geral == 'SAIU' %}
+        <span class="badge bg-success">Saída completa</span>
+      {% endif %}
     </div>
     <div class="card-body">
-      <div class="row">
-        <div class="col-md-3">
-          <strong>Motorista:</strong><br>
-          <span class="text-primary">{{ dados_portaria.motorista_nome }}</span>
+      {% for dp in dados_portaria_por_cd %}
+      <div class="row {% if not loop.first %}border-top pt-3 mt-3{% endif %}">
+        <div class="col-md-2">{{ badge_local_cd(dp.local_cd, curto=False) }}</div>
+        <div class="col-md-3"><strong>Motorista:</strong><br><span class="text-primary">{{ dp.motorista_nome }}</span></div>
+        <div class="col-md-2"><strong>Veículo:</strong><br>{{ dp.placa }} ({{ dp.tipo_veiculo }})</div>
+        <div class="col-md-2"><strong>Saída:</strong><br>
+          {% if dp.data_saida %}{{ dp.data_saida | formatar_data_segura }} <small class="text-muted">{{ dp.hora_saida | formatar_hora_brasil if dp.hora_saida else '' }}</small>
+          {% else %}<span class="text-muted">-</span>{% endif %}
         </div>
-        <div class="col-md-3">
-          <strong>Transportadora:</strong><br>
-          <span class="text-info">{{ embarque.transportadora.razao_social if embarque.transportadora else 'Não informada' }}</span>
-        </div>
-        <div class="col-md-2">
-          <strong>Veículo:</strong><br>
-          {{ dados_portaria.placa }} ({{ dados_portaria.tipo_veiculo }})
-        </div>
-        <div class="col-md-1">
-          <strong>Chegada:</strong><br>
-          {% if dados_portaria.data_chegada %}
-            {{ dados_portaria.data_chegada | formatar_data_segura }}<br>
-            <small class="text-muted">{{ dados_portaria.hora_chegada | formatar_hora_brasil if dados_portaria.hora_chegada else '-' }}</small>
-          {% else %}
-            <span class="text-muted">-</span>
-          {% endif %}
+        <div class="col-md-2"><strong>Status:</strong><br>
+          <span class="badge bg-{% if dp.status == 'SAIU' %}success{% elif dp.status == 'DENTRO' %}warning{% elif dp.status == 'AGUARDANDO' %}info{% else %}secondary{% endif %}">{{ dp.status }}</span>
         </div>
         <div class="col-md-1">
-          <strong>Entrada:</strong><br>
-          {% if dados_portaria.data_entrada %}
-            {{ dados_portaria.data_entrada | formatar_data_segura }}<br>
-            <small class="text-muted">{{ dados_portaria.hora_entrada | formatar_hora_brasil if dados_portaria.hora_entrada else '-' }}</small>
-          {% else %}
-            <span class="text-muted">-</span>
-          {% endif %}
-        </div>
-        <div class="col-md-1">
-          <strong>Saída:</strong><br>
-          {% if dados_portaria.data_saida %}
-            {{ dados_portaria.data_saida | formatar_data_segura }}<br>
-            <small class="text-muted">{{ dados_portaria.hora_saida | formatar_hora_brasil if dados_portaria.hora_saida else '-' }}</small>
-          {% else %}
-            <span class="text-muted">-</span>
-          {% endif %}
-        </div>
-        <div class="col-md-1">
-          <strong>Status:</strong><br>
-          <span class="badge bg-{% if dados_portaria.status == 'SAIU' %}success{% elif dados_portaria.status == 'DENTRO' %}warning{% elif dados_portaria.status == 'AGUARDANDO' %}info{% else %}secondary{% endif %}">
-            {{ dados_portaria.status }}
-          </span>
+          <a href="{{ url_for('portaria.detalhes_veiculo', registro_id=dp.registro_id) }}" class="btn btn-outline-info btn-sm" title="Verificar Portaria"><i class="fas fa-clipboard-check"></i></a>
         </div>
       </div>
-      <div class="row mt-3">
-        <div class="col-12">
-          <a href="{{ url_for('portaria.detalhes_veiculo', registro_id=dados_portaria.registro_id) }}" 
-             class="btn btn-outline-info btn-sm">
-            <i class="fas fa-clipboard-check"></i> Verificar Portaria
-          </a>
-        </div>
-      </div>
+      {% endfor %}
     </div>
   </div>
   {% endif %}
