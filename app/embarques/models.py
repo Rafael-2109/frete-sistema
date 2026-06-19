@@ -146,6 +146,17 @@ class Embarque(db.Model):
             return self.valor_total
         return sum(i.valor or 0 for i in self.itens if i.status == 'ativo')
 
+    def receita_carvia(self):
+        """Receita CarVia (CTe/cotacao) das operacoes deste embarque.
+
+        Lazy import: o modulo Embarque NAO depende de CarVia em import-time (R1).
+        Retorna {'total': float, 'tem_cte': bool}.
+        """
+        from app.carvia.services.financeiro.viabilidade_service import (
+            receita_carvia_por_embarque,
+        )
+        return receita_carvia_por_embarque(self.id)
+
     def total_pallet_pedidos(self):
         """
         Retorna o total de pallets dos pedidos contidos no embarque

@@ -57,3 +57,27 @@ def test_receita_por_lotes_soma_multiplos(db):
     db.session.flush()
     res = receita_carvia_por_lotes([f'CARVIA-NF-{nf1.id}', f'CARVIA-NF-{nf2.id}', 'LOTE_X'])
     assert res['total'] == 1000.0
+
+
+def test_embarque_receita_carvia_metodo(db):
+    from app.embarques.models import Embarque
+    from app.transportadoras.models import Transportadora
+    from app.carvia.models import CarviaFrete
+
+    op = _criar_operacao(db, 'CTe-EMB', 2500.0)
+    emb = Embarque(numero=990001, status='ativo')
+    db.session.add(emb); db.session.flush()
+    transp = Transportadora(razao_social='T CARVIA', cnpj='33333333000133',
+                            cidade='SAO PAULO', uf='SP')
+    db.session.add(transp); db.session.flush()
+    cf = CarviaFrete(
+        transportadora_id=transp.id, embarque_id=emb.id,
+        cnpj_emitente='11111111000111', cnpj_destino='22222222000122',
+        nome_destino='D', uf_destino='RJ', cidade_destino='RIO DE JANEIRO',
+        tipo_carga='DIRETA', operacao_id=op.id, criado_por='test',
+    )
+    db.session.add(cf); db.session.flush()
+
+    res = emb.receita_carvia()
+    assert res['total'] == 2500.0
+    assert res['tem_cte'] is True

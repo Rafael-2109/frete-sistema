@@ -135,6 +135,15 @@
           <i class="fas fa-cube me-1"></i> Simular carga 3D
         </a>
         {% endif %}
+        {% if current_user.perfil == 'administrador' %}
+          {% set _rc = embarque.receita_carvia() %}
+          {% if _rc and _rc.total %}
+          <span class="badge bg-info fs-6"
+                title="Receita CarVia (CTe/cotacao) das operacoes deste embarque">
+            <i class="fas fa-coins me-1"></i> CarVia: R$ {{ _rc.total|valor_br }}
+          </span>
+          {% endif %}
+        {% endif %}
         <span class="badge bg-{% if embarque.status == 'ativo' %}success{% elif embarque.status == 'cancelado' %}danger{% else %}secondary{% endif %} fs-6">
           {{ (embarque.status or 'draft').upper() }}
         </span>
