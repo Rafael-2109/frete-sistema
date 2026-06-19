@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% from 'shared/_macros_badges.html' import badge_local_cd %}
 {% block content %}
 <div class="container-fluid my-4">
 
@@ -70,6 +71,7 @@
             {% if mostrar_todos %}
               <input type="hidden" name="mostrar_todos" value="true">
             {% endif %}
+            <input type="hidden" name="local_cd" value="{{ local_cd_atual or '' }}">
             <div class="row">
               <!-- Filtros de Data -->
               <div class="col-md-3">
@@ -261,6 +263,7 @@
           <th class="col-data">Data Prevista</th>
           <th class="col-data">Data de Embarque</th>
           <th class="col-nome-lg">Transportadora</th>
+          <th class="col-status">CD</th>
           <th class="col-status">Status</th>
           <th class="col-status">Portaria</th>
           <th class="col-status">Status NFs</th>
@@ -278,6 +281,12 @@
           {% set _modal_emb = embarque.modalidade_display %}
           {% set _label_transp = [_trans_nome, _modal_emb] | select | join(' - ') %}
           <td class="col-nome-lg" title="{{ _label_transp }}">{{ _label_transp }}</td>
+          <td>
+            {% set _cds = embarque.locais_cd %}
+            {% if 'VICTORIO_MARCHEZINE' in _cds %}{{ badge_local_cd('VICTORIO_MARCHEZINE', curto=True) }}{% endif %}
+            {% if 'TENENTE_MARQUES' in _cds %}{{ badge_local_cd('TENENTE_MARQUES', curto=True) }}{% endif %}
+            {% if not _cds %}<span class="text-muted">-</span>{% endif %}
+          </td>
           <td>
             <span class="badge bg-{% if embarque.status == 'ativo' %}success{% elif embarque.status == 'cancelado' %}danger{% else %}secondary{% endif %}">
               {{ (embarque.status or 'DRAFT').upper() }}
