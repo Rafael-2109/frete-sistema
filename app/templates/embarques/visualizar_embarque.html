@@ -817,12 +817,12 @@
         </div>
         <div class="modal-body d-grid gap-2">
           <a href="{{ url_for('embarques.imprimir_embarque_completo', embarque_id=embarque.id) }}"
-             class="btn btn-success js-print-completo" target="_blank" data-bs-dismiss="modal">
+             class="btn btn-success js-print-completo" target="_blank">
             <i class="fas fa-layer-group"></i> Todos
           </a>
           {% if ns_cd.vm %}
           <a href="{{ url_for('embarques.imprimir_embarque_completo', embarque_id=embarque.id, local_cd='VICTORIO_MARCHEZINE') }}"
-             class="btn badge-local-cd-victorio border-0 js-print-completo" target="_blank" data-bs-dismiss="modal">
+             class="btn badge-local-cd-victorio border-0 js-print-completo" target="_blank">
             <i class="fas fa-warehouse"></i> Victorio Marchezine
           </a>
           {% else %}
@@ -832,7 +832,7 @@
           {% endif %}
           {% if ns_cd.tm %}
           <a href="{{ url_for('embarques.imprimir_embarque_completo', embarque_id=embarque.id, local_cd='TENENTE_MARQUES') }}"
-             class="btn badge-local-cd-tenente border-0 js-print-completo" target="_blank" data-bs-dismiss="modal">
+             class="btn badge-local-cd-tenente border-0 js-print-completo" target="_blank">
             <i class="fas fa-warehouse"></i> Tenente Marques
           </a>
           {% else %}
@@ -855,12 +855,12 @@
         </div>
         <div class="modal-body d-grid gap-2">
           <a href="{{ url_for('embarques.imprimir_embarque', embarque_id=embarque.id) }}"
-             class="btn btn-outline-secondary" target="_blank" data-bs-dismiss="modal">
+             class="btn btn-outline-secondary" target="_blank">
             <i class="fas fa-layer-group"></i> Todos
           </a>
           {% if ns_cd.vm %}
           <a href="{{ url_for('embarques.imprimir_embarque', embarque_id=embarque.id, local_cd='VICTORIO_MARCHEZINE') }}"
-             class="btn badge-local-cd-victorio border-0" target="_blank" data-bs-dismiss="modal">
+             class="btn badge-local-cd-victorio border-0" target="_blank">
             <i class="fas fa-warehouse"></i> Victorio Marchezine
           </a>
           {% else %}
@@ -870,7 +870,7 @@
           {% endif %}
           {% if ns_cd.tm %}
           <a href="{{ url_for('embarques.imprimir_embarque', embarque_id=embarque.id, local_cd='TENENTE_MARQUES') }}"
-             class="btn badge-local-cd-tenente border-0" target="_blank" data-bs-dismiss="modal">
+             class="btn badge-local-cd-tenente border-0" target="_blank">
             <i class="fas fa-warehouse"></i> Tenente Marques
           </a>
           {% else %}
@@ -975,6 +975,20 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     document.querySelectorAll('.js-print-completo').forEach(function(btn) {
         btn.addEventListener('click', registrarImpressaoCompleto);
+    });
+
+    // Fechar o pop-up de impressao ao escolher um CD.
+    // NAO usar data-bs-dismiss="modal" nos <a>: no Bootstrap 5 o handler de dismiss
+    // chama event.preventDefault() em elementos <a>/<area>, o que cancela o
+    // target="_blank" e a impressao nunca abre. Fechamos o modal via API aqui,
+    // deixando a navegacao nativa do link acontecer normalmente.
+    document.querySelectorAll('#modalImprimirCompleto a[href], #modalImprimirCapa a[href]').forEach(function(link) {
+        link.addEventListener('click', function() {
+            const modalEl = this.closest('.modal');
+            if (modalEl && window.bootstrap) {
+                bootstrap.Modal.getOrCreateInstance(modalEl).hide();
+            }
+        });
     });
 
     // Aviso para botão desabilitado
