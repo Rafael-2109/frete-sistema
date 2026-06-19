@@ -294,14 +294,17 @@
             {% endif %}
           </td>
           <td>
-            {% set dados_portaria = embarque.registros_portaria %}
-            {% if dados_portaria and dados_portaria|length > 0 %}
-              {% set ultimo_registro = dados_portaria[-1] %}
-              <span class="badge bg-{% if ultimo_registro.status == 'SAIU' %}success{% elif ultimo_registro.status == 'DENTRO' %}warning{% elif ultimo_registro.status == 'AGUARDANDO' %}info{% else %}secondary{% endif %}">
-                {{ ultimo_registro.status }}
+            {% set sp = embarque.status_portaria %}
+            {% if sp == 'SEM_REGISTRO' %}
+              <span class="badge bg-light text-dark">Sem registro</span>
+            {% elif sp == 'PARCIAL' %}
+              <span class="badge bg-warning text-dark" title="Saída parcial: ao menos um CD ainda não saiu">
+                <i class="fas fa-triangle-exclamation"></i> Parcial
               </span>
             {% else %}
-              <span class="badge bg-light">Sem registro</span>
+              <span class="badge bg-{% if sp == 'SAIU' %}success{% elif sp == 'DENTRO' %}warning{% elif sp == 'AGUARDANDO' %}info{% else %}secondary{% endif %}">
+                {{ sp }}
+              </span>
             {% endif %}
           </td>
           <td>
