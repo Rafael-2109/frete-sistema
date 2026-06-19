@@ -46,6 +46,7 @@ def register_simulador_routes(bp):
                 prefill_json = json.dumps({
                     'veiculo': dados['veiculo'],
                     'motos': dados['motos'],
+                    'unidades': dados.get('unidades', []),
                     'nfs': dados.get('nfs', []),
                     'pallets': dados.get('pallets', []),
                     'peso_total': dados['peso_total'],
@@ -292,6 +293,7 @@ def _resolver_dados_embarque(embarque):
         'embarque_numero': embarque.numero,
         'veiculo': veiculo_data,
         'motos': motos,
+        'unidades': [_unidade_de_nf(n) for n in nfs],
         'nfs': nfs,
         'pallets': pallets,
         'peso_total': peso_total,
@@ -311,11 +313,21 @@ def _resolver_prefill_rota(lotes, veiculo_id=None):
       - 'CARVIA-{cot_id}'    -> CarviaCotacao -> pedidos -> itens
       - separacao_lote_id NACOM -> NF via Separacao.numero_nf
 
-    Pedidos CarVia faturados resolvem as motos REAIS pelas NFs
-    (CarviaPedidoItem.numero_nf -> CarviaNf -> itens modelo_moto_id+qtd). Itens
-    ainda sem NF caem no fallback direto (modelo_moto_id + quantidade) para o
-    simulador abrir preenchido mesmo antes do faturamento.
+    Cada CHIP removivel = uma UNIDADE de roteirizacao (`unidades`):
+      - pedido faturado -> 1 unidade por NF REAL (chave `NF-<num>`);
+      - pedido pre-faturamento (itens sem NF) -> 1 unidade do pedido (`PED-<id>`);
+      - cotacao solta (sem pedido) -> 1 unidade via CarviaCotacaoMoto (`COT-<id>`);
+      - `CARVIA-NF-` direto / lote NACOM -> unidade por NF.
+
+    `motos` = TODAS as motos agregadas por modelo (soma de todas as unidades) =
+    as linhas do simulador. As unidades SO marcam quais motos cada chip injetou
+    (o frontend NAO re-adiciona — ja vieram em `motos`). `motos` permanece
+    retrocompativel: se o JS estiver em cache (sem suporte a chips), as motos
+    ainda aparecem. `nfs` continua sendo enviado (subconjunto que e NF) para o JS
+    antigo cacheado seguir criando ao menos os chips de NF.
     """
+    from app.carvia.models.config_moto import CarviaModeloMoto
+
     nf_ids = set()
     numeros_nf = set()
     pedido_ids = set()
@@ -342,27 +354,9 @@ def _resolver_prefill_rota(lotes, veiculo_id=None):
         else:
             lotes_nacom.append(texto)
 
-    # Pedidos/cotacoes CarVia -> itens (numero_nf faturado OU modelo direto)
-    itens_diretos = []  # [(modelo_moto_id, quantidade)] de itens ainda sem NF
-    if pedido_ids or cotacao_ids:
-        from app.carvia.models.cotacao import CarviaPedido, CarviaPedidoItem
-
-        ped_ids = set(pedido_ids)
-        if cotacao_ids:
-            rows = CarviaPedido.query.filter(
-                CarviaPedido.cotacao_id.in_(list(cotacao_ids))
-            ).with_entities(CarviaPedido.id).all()
-            ped_ids.update(r[0] for r in rows)
-
-        if ped_ids:
-            itens = CarviaPedidoItem.query.filter(
-                CarviaPedidoItem.pedido_id.in_(list(ped_ids))
-            ).all()
-            for it in itens:
-                if it.numero_nf and str(it.numero_nf).strip():
-                    numeros_nf.add(str(it.numero_nf).strip())
-                elif it.modelo_moto_id:
-                    itens_diretos.append((it.modelo_moto_id, it.quantidade or 0))
+    modelos_dict = {
+        m.id: m for m in CarviaModeloMoto.query.filter_by(ativo=True).all()
+    }
 
     if lotes_nacom:
         from app.separacao.models import Separacao
@@ -372,20 +366,179 @@ def _resolver_prefill_rota(lotes, veiculo_id=None):
         ).with_entities(Separacao.numero_nf).all()
         numeros_nf.update(r[0] for r in rows if r[0])
 
-    # `motos` = TODAS as motos agregadas por modelo (NF + itens_diretos) = as linhas
-    # do simulador. `nfs` = breakdown POR NF apenas como METADADO p/ os chips
-    # removiveis — o frontend NAO re-adiciona essas motos (ja estao em `motos`),
-    # so cria o chip e registra quais motos remover. Mantem `motos` retrocompativel:
-    # se o JS estiver em cache (sem suporte a chips), as motos ainda aparecem.
-    motos, peso_total, items_sem_modelo, nfs = _resolver_motos_de_nfs(
-        numeros_nf=numeros_nf, nf_ids=nf_ids, itens_diretos=itens_diretos
+    # Pedidos CarVia: itens faturados alimentam `numeros_nf` (viram unidade NF);
+    # itens sem NF viram a unidade do PEDIDO. Cotacao sem pedido -> unidade COT.
+    pedidos_info = []     # [(pedido, cotacao, [(modelo_id, qtd)] de itens sem NF)]
+    cotacoes_soltas = []  # [(cotacao, [(modelo_id, qtd)])]
+    if pedido_ids or cotacao_ids:
+        from app.carvia.models.cotacao import (
+            CarviaPedido, CarviaPedidoItem, CarviaCotacao, CarviaCotacaoMoto,
+        )
+
+        ped_ids = set(pedido_ids)
+        cotacoes_com_pedido = set()
+        if cotacao_ids:
+            rows = CarviaPedido.query.filter(
+                CarviaPedido.cotacao_id.in_(list(cotacao_ids))
+            ).all()
+            for p in rows:
+                ped_ids.add(p.id)
+                cotacoes_com_pedido.add(p.cotacao_id)
+        ids_cotacoes_soltas = set(cotacao_ids) - cotacoes_com_pedido
+
+        pedidos = []
+        if ped_ids:
+            pedidos = CarviaPedido.query.filter(
+                CarviaPedido.id.in_(list(ped_ids))
+            ).all()
+
+        # Cotacoes necessarias para enriquecer os chips (dos pedidos + soltas)
+        ids_cot = {p.cotacao_id for p in pedidos if p.cotacao_id} | ids_cotacoes_soltas
+        cotacoes_dict = {}
+        if ids_cot:
+            cotacoes_dict = {
+                c.id: c for c in CarviaCotacao.query.filter(
+                    CarviaCotacao.id.in_(list(ids_cot))
+                ).all()
+            }
+
+        if pedidos:
+            itens = CarviaPedidoItem.query.filter(
+                CarviaPedidoItem.pedido_id.in_([p.id for p in pedidos])
+            ).all()
+            itens_por_pedido = defaultdict(list)
+            for it in itens:
+                itens_por_pedido[it.pedido_id].append(it)
+            for p in pedidos:
+                diretos = []
+                for it in itens_por_pedido.get(p.id, []):
+                    if it.numero_nf and str(it.numero_nf).strip():
+                        numeros_nf.add(str(it.numero_nf).strip())
+                    elif it.modelo_moto_id:
+                        diretos.append((it.modelo_moto_id, it.quantidade or 0))
+                if diretos:
+                    pedidos_info.append((p, cotacoes_dict.get(p.cotacao_id), diretos))
+
+        if ids_cotacoes_soltas:
+            motos_cot = CarviaCotacaoMoto.query.filter(
+                CarviaCotacaoMoto.cotacao_id.in_(list(ids_cotacoes_soltas))
+            ).all()
+            diretos_por_cot = defaultdict(list)
+            for cm in motos_cot:
+                if cm.modelo_moto_id:
+                    diretos_por_cot[cm.cotacao_id].append(
+                        (cm.modelo_moto_id, cm.quantidade or 0)
+                    )
+            for cot_id in ids_cotacoes_soltas:
+                cot = cotacoes_dict.get(cot_id)
+                diretos = diretos_por_cot.get(cot_id, [])
+                if cot and diretos:
+                    cotacoes_soltas.append((cot, diretos))
+
+    # Unidades NF (numeros_nf faturados/NACOM + nf_ids diretos)
+    motos_nf, _peso_nf, items_sem_modelo, nfs = _resolver_motos_de_nfs(
+        numeros_nf=numeros_nf, nf_ids=nf_ids
     )
+    unidades = [_unidade_de_nf(n) for n in nfs]
+
+    # Total agregado por modelo (NF + pedidos s/ NF + cotacoes soltas)
+    contagem_total = defaultdict(int)
+    for m in motos_nf:
+        contagem_total[m['modelo_id']] += m['quantidade']
+
+    for pedido, cotacao, diretos in pedidos_info:
+        motos_u, sem_u = _breakdown_diretos(diretos, modelos_dict)
+        items_sem_modelo += sem_u
+        for mm in motos_u:
+            contagem_total[mm['modelo_id']] += mm['quantidade']
+        if motos_u:
+            unidades.append(_unidade_de_pedido(pedido, cotacao, motos_u))
+
+    for cotacao, diretos in cotacoes_soltas:
+        motos_u, sem_u = _breakdown_diretos(diretos, modelos_dict)
+        items_sem_modelo += sem_u
+        for mm in motos_u:
+            contagem_total[mm['modelo_id']] += mm['quantidade']
+        if motos_u:
+            unidades.append(_unidade_de_cotacao(cotacao, motos_u))
+
+    motos, peso_total = _serializar_motos(contagem_total, modelos_dict)
+
     return {
         'veiculo': _veiculo_data_por_id(veiculo_id),
-        'nfs': nfs,
+        'unidades': unidades,
+        'nfs': nfs,  # retrocompat (JS antigo cacheado cria ao menos os chips de NF)
         'motos': motos,
         'peso_total': peso_total,
         'items_sem_modelo': items_sem_modelo,
+    }
+
+
+def _breakdown_diretos(itens_diretos, modelos_dict):
+    """[(modelo_id, qtd)] -> ([{modelo_id, quantidade}], items_sem_modelo).
+
+    Agrega por modelo; so considera modelos ATIVOS (presentes em `modelos_dict`).
+    Modelo ausente/inativo conta em `items_sem_modelo` (some da carga, espelha
+    `_contar_modelos_por_nf`).
+    """
+    contagem = defaultdict(int)
+    items_sem_modelo = 0
+    for modelo_id, qtd in itens_diretos or []:
+        qtd = int(qtd or 0)
+        if qtd <= 0:
+            continue
+        if modelo_id in modelos_dict:
+            contagem[modelo_id] += qtd
+        else:
+            items_sem_modelo += qtd
+    motos = [{'modelo_id': mid, 'quantidade': q} for mid, q in contagem.items()]
+    return motos, items_sem_modelo
+
+
+def _unidade_de_nf(nf_breakdown):
+    """Converte um item do breakdown `nfs` em unidade (chip) removivel.
+
+    `chave` = numero da NF PURO (sem prefixo) — a MESMA chave do fluxo manual
+    "NF nao entregue" (`addNf` no JS usa `numero_nf`), p/ uma NF presente no
+    prefill nao duplicar se o usuario tentar re-adiciona-la pela busca.
+    """
+    numero = nf_breakdown.get('numero_nf')
+    return {
+        'chave': str(numero),
+        'tipo': 'nf',
+        'rotulo': 'NF ' + str(numero),
+        'cliente': nf_breakdown.get('cliente'),
+        'municipio': nf_breakdown.get('municipio'),
+        'uf': nf_breakdown.get('uf'),
+        'motos': nf_breakdown.get('motos', []),
+    }
+
+
+def _unidade_de_pedido(pedido, cotacao, motos):
+    """Unidade (chip) de um pedido CarVia pre-faturamento (ainda sem NF)."""
+    cliente = cotacao.cliente.nome_comercial if (cotacao and cotacao.cliente) else None
+    return {
+        'chave': 'PED-' + str(pedido.id),
+        'tipo': 'pedido',
+        'rotulo': 'Pedido ' + str(pedido.numero_pedido) + ' (s/ NF)',
+        'cliente': cliente,
+        'municipio': cotacao.entrega_cidade if cotacao else None,
+        'uf': cotacao.entrega_uf if cotacao else None,
+        'motos': motos,
+    }
+
+
+def _unidade_de_cotacao(cotacao, motos):
+    """Unidade (chip) de uma cotacao solta (sem pedido — pre-pedido)."""
+    cliente = cotacao.cliente.nome_comercial if cotacao.cliente else None
+    return {
+        'chave': 'COT-' + str(cotacao.id),
+        'tipo': 'cotacao',
+        'rotulo': 'Cotação ' + str(cotacao.numero_cotacao),
+        'cliente': cliente,
+        'municipio': cotacao.entrega_cidade,
+        'uf': cotacao.entrega_uf,
+        'motos': motos,
     }
 
 

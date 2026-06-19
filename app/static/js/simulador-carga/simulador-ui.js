@@ -30,7 +30,7 @@
     debounceTimer: null,
     packToken: 0, // descarta resultado de otimizacao obsoleto (input mudou)
     nfsPendentes: null, // cache das NFs CarVia nao entregues (lazy)
-    nfsAdicionadas: {}, // {numero_nf: [{modelo_id, quantidade}]} — motos puxadas por NF (p/ remover)
+    nfsAdicionadas: {}, // {chave: [{modelo_id, quantidade}]} — motos puxadas por unidade (NF/pedido/cotacao) p/ remover
     pallets: [], // pallets de conservas Nacom (Camada 1) empacotados junto das motos
     loteSeparacao: null, // separacao_lote_id ativo
   };
@@ -368,19 +368,30 @@
       addOrIncrementMoto(motos[i].modelo_id, motos[i].quantidade);
     }
 
-    // NFs da rota -> chips removiveis (reusa a infra de "NF nao entregue").
-    // As motos JA foram adicionadas via `data.motos`; aqui so registramos quais
-    // motos cada NF injetou (p/ o removeNf decrementar) e criamos o chip.
-    var nfs = data.nfs || [];
-    if (nfs.length) {
+    // Unidades de roteirizacao -> chips removiveis (NF real / pedido s/ NF /
+    // cotacao solta). As motos JA foram adicionadas via `data.motos`; aqui so
+    // registramos quais motos cada unidade injetou (p/ o removeUnidade
+    // decrementar) e criamos o chip. Fallback p/ `data.nfs` (formato antigo)
+    // caso o backend ainda nao envie `unidades`.
+    var unidades = data.unidades;
+    if (!unidades && data.nfs) {
+      unidades = data.nfs.map(function (nf) {
+        return {
+          chave: String(nf.numero_nf), tipo: 'nf', rotulo: 'NF ' + nf.numero_nf,
+          cliente: nf.cliente, municipio: nf.municipio, uf: nf.uf,
+          motos: nf.motos || [],
+        };
+      });
+    }
+    unidades = unidades || [];
+    if (unidades.length) {
       var nfBox = document.getElementById('simulador-nf-box');
       if (nfBox) nfBox.style.display = 'block'; // chips precisam estar visiveis
-      for (var n = 0; n < nfs.length; n++) {
-        var nf = nfs[n];
-        if (state.nfsAdicionadas[nf.numero_nf]) continue;
-        var motosNf = nf.motos || [];
-        state.nfsAdicionadas[nf.numero_nf] = motosNf; // guarda p/ remover depois
-        addNfChip(nf, motosNf);
+      for (var n = 0; n < unidades.length; n++) {
+        var u = unidades[n];
+        if (state.nfsAdicionadas[u.chave]) continue;
+        state.nfsAdicionadas[u.chave] = u.motos || []; // guarda p/ remover depois
+        addUnidadeChip(u);
       }
     }
     return selecionouVeiculo;
@@ -475,7 +486,12 @@
         for (var i = 0; i < motos.length; i++) {
           addOrIncrementMoto(motos[i].modelo_id, motos[i].quantidade);
         }
-        addNfChip(nf, motos);
+        // NF manual = unidade com chave = numero_nf (mesma chave do prefill, p/
+        // nao duplicar caso a NF tambem tenha vindo da rota).
+        addUnidadeChip({
+          chave: String(nf.numero_nf), tipo: 'nf', rotulo: 'NF ' + nf.numero_nf,
+          cliente: nf.cliente, municipio: nf.municipio, uf: nf.uf, motos: motos,
+        });
         // Fecha a listagem ao selecionar: limpa busca + resultados (chips ficam visiveis).
         var search = document.getElementById('simulador-nf-search');
         if (search) search.value = '';
@@ -488,21 +504,25 @@
       });
   }
 
-  function addNfChip(nf, motos) {
+  /** Cria 1 chip removivel para uma unidade de carga (NF / pedido / cotacao). */
+  function addUnidadeChip(unidade) {
     var chips = document.getElementById('simulador-nf-chips');
     if (!chips) return;
+    var motos = unidade.motos || [];
     var total = 0;
     for (var i = 0; i < motos.length; i++) total += (motos[i].quantidade || 0);
 
     var chip = document.createElement('span');
     chip.className = 'badge bg-secondary d-inline-flex align-items-center gap-1';
-    chip.dataset.nf = nf.numero_nf;
-    var localTxt = [nf.municipio, nf.uf].filter(Boolean).join('/');
-    chip.title = [nf.cliente, localTxt].filter(Boolean).join(' · ') || ('NF ' + nf.numero_nf);
+    chip.dataset.chave = unidade.chave;
+    var localTxt = [unidade.municipio, unidade.uf].filter(Boolean).join('/');
+    chip.title = [unidade.cliente, localTxt].filter(Boolean).join(' · ') || unidade.rotulo;
 
     var label = document.createElement('span');
-    var cli = nf.cliente ? (nf.cliente.length > 28 ? nf.cliente.slice(0, 28) + '…' : nf.cliente) : '';
-    label.textContent = 'NF ' + nf.numero_nf + (cli ? ' · ' + cli : '') +
+    var cli = unidade.cliente
+      ? (unidade.cliente.length > 28 ? unidade.cliente.slice(0, 28) + '…' : unidade.cliente)
+      : '';
+    label.textContent = unidade.rotulo + (cli ? ' · ' + cli : '') +
       ' (' + total + (total === 1 ? ' moto)' : ' motos)');
     chip.appendChild(label);
 
@@ -510,29 +530,29 @@
     btn.type = 'button';
     btn.className = 'btn-close btn-close-white';
     btn.style.fontSize = '0.55rem';
-    btn.setAttribute('aria-label', 'Remover NF ' + nf.numero_nf);
-    btn.addEventListener('click', function () { removeNf(nf.numero_nf); });
+    btn.setAttribute('aria-label', 'Remover ' + unidade.rotulo);
+    btn.addEventListener('click', function () { removeUnidade(unidade.chave); });
     chip.appendChild(btn);
 
     chips.appendChild(chip);
   }
 
-  /** Remove uma NF adicionada: decrementa as motos que ela injetou e tira o chip. */
-  function removeNf(numeroNf) {
-    var motos = state.nfsAdicionadas[numeroNf];
+  /** Remove uma unidade adicionada: decrementa as motos que ela injetou e tira o chip. */
+  function removeUnidade(chave) {
+    var motos = state.nfsAdicionadas[chave];
     if (Array.isArray(motos)) {
       for (var i = 0; i < motos.length; i++) {
         decrementMoto(motos[i].modelo_id, motos[i].quantidade);
       }
     }
-    delete state.nfsAdicionadas[numeroNf];
+    delete state.nfsAdicionadas[chave];
 
     var chips = document.getElementById('simulador-nf-chips');
     if (chips) {
-      var chip = chips.querySelector('[data-nf="' + numeroNf + '"]');
+      var chip = chips.querySelector('[data-chave="' + chave + '"]');
       if (chip) chip.remove();
     }
-    // NF volta a ficar disponivel na busca
+    // Unidade volta a ficar disponivel na busca (NF manual)
     var search = document.getElementById('simulador-nf-search');
     renderNfResults(search ? search.value : '');
     scheduleRecalc();
