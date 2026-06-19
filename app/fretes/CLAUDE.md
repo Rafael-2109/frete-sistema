@@ -59,7 +59,7 @@ atualizado: 2026-06-03
 
 20 arquivos Python, ~19.0K LOC, 43 templates. Modulo CORE com o `lancamento_odoo_service.py` (16 etapas DFe -> PO -> Invoice). Padroes Odoo (P1-P7) em `app/odoo/CLAUDE.md`; frete real vs teorico em `.claude/references/negocio/FRETE_REAL_VS_TEORICO.md`.
 
-**20 arquivos Python** | **~19.0K LOC** | **43 templates** | **Atualizado**: 2026-05-08
+**20 arquivos Python** | **~19.0K LOC** | **43 templates** | **Atualizado**: 2026-06-19
 
 Modulo CORE: gestao de frete real Nacom (industria embarca). Fluxo Cotacao → Frete → CTe → Lancamento Odoo (PO + Invoice) → Pagamento → Conta Corrente.
 
@@ -191,7 +191,7 @@ Sao campos diferentes, atualizados em momentos diferentes durante vinculacao man
 
 **Gates obrigatorios** (em ordem):
 1. `embarque.data_embarque` preenchido (portaria deu saida)
-1.1. **ULTIMA saida (embarque bifurcado VM/TM)** — `verificar_requisitos` (REQUISITO 0.1) usa `app.utils.local_cd.cds_pendentes_de_saida(embarque)`: em embarque MISTO (itens ativos em >1 `local_cd`), o frete so dispara quando TODOS os CDs ja deram saida na portaria; a 1a saida carimba `data_embarque` mas NAO libera o frete (senao nasceria sem os itens do CD pendente). Embarque de 1 CD = sem restricao (comportamento legado; nao exige `ControlePortaria`). Espelhado no CarVia em `CarviaFreteService._processar`. Gate central em `verificar_requisitos` cobre os 5 call sites de `processar_lancamento_automatico_fretes`. Testes: `tests/fretes/test_frete_ultima_saida.py`.
+1.1. **ULTIMA saida (embarque bifurcado VM/TM)** — `verificar_requisitos` (REQUISITO 0.1) usa `app.utils.local_cd.cds_pendentes_de_saida(embarque)`: em embarque MISTO (itens ativos em >1 `local_cd`), o frete so dispara quando TODOS os CDs ja deram saida na portaria; a 1a saida carimba `data_embarque` mas NAO libera o frete (senao nasceria sem os itens do CD pendente). Embarque de 1 CD = sem restricao (comportamento legado; nao exige `ControlePortaria`). Espelhado em TODOS os 4 caminhos de disparo: CarVia (`CarviaFreteService._processar`), **Op. Assai** (`verificar_requisitos_op_assai`) e a **rota manual** (`processar_lancamento_frete` — ver Caminho 2). A mensagem de bloqueio vem da constante unica `MOTIVO_GATE_CD` (`"Aguardando saída dos CDs"`, topo de `routes.py`) usada pelos 2 gates Nacom/Op.Assai + o acoplamento da rota manual. Gate central em `verificar_requisitos` cobre os 5 call sites Nacom de `processar_lancamento_automatico_fretes`. Testes: `tests/fretes/test_frete_ultima_saida.py`, `tests/fretes/test_status_portaria_agregado.py`.
 2. `validar_cnpj_embarque_faturamento(embarque_id)` retorna sucesso (TODAS as NFs validadas, sem `erro_validacao`)
 3. `verificar_requisitos_para_lancamento_frete(embarque_id, cnpj)` — 5 requisitos: itens ativos, NFs faturadas, sem erros, transportadora definida, NFs do CNPJ existem
 4. `Frete.query.filter_by(embarque_id, cnpj_cliente).first()` retorna None (idempotencia)
@@ -214,7 +214,7 @@ Sao campos diferentes, atualizados em momentos diferentes durante vinculacao man
 
 ### Caminho 2: Manual
 
-`criar_novo_frete_por_nf(numero_nf, fatura_frete_id)` (`routes.py:596-805`) — usuario cria manualmente quando o automatico falhou (gates nao atendidos) ou para freteiros (sem embarque normal). Mesma estrutura de campos. POST grava `Frete` + atribui campos da tabela.
+`criar_novo_frete_por_nf(numero_nf, fatura_frete_id)` (`routes.py:596-805`) — usuario cria manualmente quando o automatico falhou (gates nao atendidos) ou para freteiros (sem embarque normal). Mesma estrutura de campos. POST grava `Frete` + atribui campos da tabela. O POST `processar_lancamento_frete` exige `@require_financeiro()` e respeita o **gate de CD** (chama `verificar_requisitos_para_lancamento_frete`): em embarque MISTO com saida parcial, bloqueia (flash + redirect) sem criar o frete; nos demais motivos de falha, segue o fluxo manual normal (a tela existe justamente para esses casos).
 
 ### Caminho 3: Cancelamento
 

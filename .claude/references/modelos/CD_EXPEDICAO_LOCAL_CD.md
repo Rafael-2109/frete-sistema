@@ -96,12 +96,12 @@ Para uma mesma NF, `local_cd` **NAO pode divergir** entre os locais que o copiam
 
 | Valor | Significado |
 |-------|-------------|
-| `SAIU` | Todos os CDs com itens ativos ja registraram saida |
-| `PARCIAL` | Embarque misto: ao menos 1 CD saiu, mas outro(s) ainda nao |
-| `DENTRO` | Ao menos 1 CD com registro de portaria mas nenhum com saida |
-| `AGUARDANDO` | Nenhum CD tem registro de portaria ainda |
-| `PENDENTE` | Embarque tem itens ativos mas nao tem CDs identificados |
-| `SEM_REGISTRO` | Embarque sem itens ativos (ex.: cancelado / vazio) |
+| `SAIU` | Ha registro(s) de portaria e TODOS os CDs com itens ativos ja deram saida |
+| `PARCIAL` | Embarque misto: ao menos 1 CD deu saida E ainda falta a saida de outro CD com itens ativos |
+| `DENTRO` | Nenhum CD saiu ainda; o status mais avancado entre os registros de portaria e `DENTRO` (algum veiculo entrou) |
+| `AGUARDANDO` | Nenhum CD saiu ainda; o status mais avancado entre os registros e `AGUARDANDO` (algum so chegou) |
+| `PENDENTE` | Nenhum CD saiu ainda; o status mais avancado entre os registros e `PENDENTE` (registro sem chegada) |
+| `SEM_REGISTRO` | Embarque sem nenhum `ControlePortaria` vinculado (ou embarque inexistente) |
 
 **Regra do bucket `PARCIAL`:** acionado quando `locais_cd_com_saida(embarque)` tem ao menos 1 elemento E `cds_pendentes_de_saida(embarque)` tambem tem ao menos 1 elemento — ou seja, o embarque e misto e as saidas estao **incompletas**. O gate "frete dispara na ultima saida" nao dispara enquanto `PARCIAL`.
 
