@@ -240,7 +240,8 @@ def pedidos_lista(): ...
 - Laiouns (DANFEs compactas sem CFOP, código com dash) — `danfe_pdf_parser.py:623,1076`.
 - Q.P.A (repeat detection de código) — `danfe_pdf_parser.py:1191,1221`.
 - B2B (comportamento default).
-- Extração de chassi/motor/cor/modelo via LLM (Haiku primário, Sonnet fallback) — `danfe_pdf_parser.py:1418`.
+- **Bling / Mainô** (seção "Itens da nota fiscal"): itens ancorados na **linha-NCM** (não no código numérico), suportando NF com **itens mistos** — moto NCM 8711 + acessório/brinde de outro NCM (capacete 6506, brinquedo 9503), com ou sem código `NNN -` — `danfe_pdf_parser.py:_parsear_itens_bling`.
+- Extração de chassi/motor/cor/modelo via LLM (Haiku primário, Sonnet fallback) — `danfe_pdf_parser.py:1418`. O gate de chassi (`_secao_tem_indicio_chassi`) aceita **chassi nacional não-VIN** (série alfanumérica, ex: `XL2025107152`), não só VIN-17 — DANFE de moto elétrica nacional não volta mais "sem veículo".
 - Regex de modelos eletric motos — `moto_recognition_service.py:48`.
 
 **Padrão de uso no HORA**:
