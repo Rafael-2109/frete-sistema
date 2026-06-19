@@ -265,3 +265,39 @@ def test_carvia_nao_gera_frete_com_saida_parcial(db):
     resultado = CarviaFreteService._processar(eid, 'test@nacom.com')
     assert resultado == []
     assert CarviaFrete.query.filter_by(embarque_id=eid).count() == 0
+
+
+# ---------------------------------------------------------------------------
+# (4) Integracao — gate Op. Assai em verificar_requisitos_op_assai
+# ---------------------------------------------------------------------------
+
+def _novo_item_op_assai(db, embarque_id, local_cd, lote, nf, cnpj):
+    db.session.execute(text("""
+        INSERT INTO embarque_itens
+            (embarque_id, separacao_lote_id, local_cd, cliente, pedido,
+             nota_fiscal, cnpj_cliente, uf_destino, cidade_destino, status)
+        VALUES
+            (:eid, :lote, :local, 'Cliente Assai', :pedido,
+             :nf, :cnpj, 'SP', 'Sao Paulo', 'ativo')
+    """), {'eid': embarque_id, 'lote': lote, 'local': local_cd,
+           'pedido': f'PED-{lote}', 'nf': nf, 'cnpj': cnpj})
+
+
+def test_op_assai_bloqueia_quando_falta_saida_de_um_cd(db):
+    """Embarque MISTO com item Op. Assai (ASSAI-SEP) VM saido + item TM nao-saido:
+    verificar_requisitos_op_assai deve BLOQUEAR (fail-safe do gate)."""
+    from app.fretes.routes import verificar_requisitos_op_assai
+
+    suf = uuid.uuid4().hex[:8]
+    cnpj = '12345678000199'
+    mid = _novo_motorista(db)
+    eid = _novo_embarque_com_data(db)
+    _novo_item_op_assai(db, eid, LOCAL_CD_VICTORIO_MARCHEZINE, f'ASSAI-SEP-{suf}', f'NFA{suf[:6]}', cnpj)
+    _novo_item_carvia(db, eid, LOCAL_CD_TENENTE_MARQUES, f'CARVIA-TM-{suf}', f'NFT{suf[:6]}', cnpj)
+    _registro_saida(db, mid, eid, LOCAL_CD_VICTORIO_MARCHEZINE, saiu=True)
+    _registro_saida(db, mid, eid, LOCAL_CD_TENENTE_MARQUES, saiu=False)
+    db.session.flush()
+
+    pode, motivo = verificar_requisitos_op_assai(eid, cnpj)
+    assert pode is False
+    assert 'CD' in motivo and 'TENENTE_MARQUES' in motivo, motivo

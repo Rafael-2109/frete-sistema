@@ -3898,6 +3898,14 @@ def verificar_requisitos_op_assai(embarque_id, cnpj_cliente):
     if not embarque or not embarque.data_embarque:
         return False, "Aguardando saida da portaria para lancamento de frete"
 
+    # Fail-safe do gate da ULTIMA saida (paridade com Nacom/CarVia). Embarque Op.
+    # Assai e nominalmente nao-misto, mas se vier a conter itens de >1 CD, o frete
+    # nao pode nascer sem os itens do CD que ainda nao saiu.
+    from app.utils.local_cd import cds_pendentes_de_saida
+    faltam = cds_pendentes_de_saida(embarque)
+    if faltam:
+        return False, f"Aguardando saida dos CDs: {', '.join(sorted(faltam))}"
+
     # Idempotencia
     frete_existente = Frete.query.filter(
         and_(Frete.embarque_id == embarque_id, Frete.cnpj_cliente == cnpj_cliente)
