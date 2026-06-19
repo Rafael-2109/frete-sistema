@@ -18,7 +18,7 @@ def test_api_otimizar_retorna_custo(client, db):
         'veiculo_id': v.id, 'inclui_volta': False, 'dias_viagem': 1,
     }
     fake = {'ordem': ['A', 'B'], 'distancia_km': 100.0, 'tempo_min': 120.0,
-            'polyline': 'p', 'trechos': 1}
+            'polyline': ['p'], 'trechos': 1}
     with patch('app.carteira.routes.mapa_routes.otimizar_rota', return_value=fake):
         resp = client.post('/carteira/mapa/api/rota/otimizar',
                            data=json.dumps(payload), content_type='application/json')
@@ -50,7 +50,7 @@ def test_api_otimizar_retorna_rota_para_desenho(client, db):
         'veiculo_id': v.id, 'otimizar': False,
     }
     fake = {'ordem': ['A', 'B'], 'distancia_km': 80.0, 'tempo_min': 95.0,
-            'polyline': 'p', 'trechos': 1,
+            'polyline': ['p'], 'trechos': 1,
             'legs': [{'duracao_s': 1800, 'distancia_m': 40000, 'duracao': '30 min', 'distancia': '40 km'},
                      {'duracao_s': 3900, 'distancia_m': 40000, 'duracao': '1h 05min', 'distancia': '40 km'}],
             'bounds': {'southwest': {'lat': -23.5, 'lng': -46.8},

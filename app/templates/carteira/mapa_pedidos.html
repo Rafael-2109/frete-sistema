@@ -1607,10 +1607,16 @@
                 }
             });
 
-            // Decodificar polyline. O motor pode devolver multiplos segmentos
-            // separados por '|' (fallback Directions com chunking > 23 paradas);
-            // decodifica cada um e concatena.
-            const path = (rota.polyline || '').split('|').filter(Boolean)
+            // Decodificar polyline. O motor devolve uma LISTA de segmentos encoded
+            // (1 por trecho; Directions com chunking > 23 paradas devolve varios);
+            // decodifica cada um e concatena. NUNCA usar split de string: '|'
+            // (ASCII 124) faz parte do alfabeto do encoded polyline (63-126), e um
+            // split('|') quebrava a rota jogando a linha pro meio do mar (0,0).
+            // Retrocompat defensiva: aceita string unica de versoes antigas.
+            const segs = Array.isArray(rota.polyline)
+                ? rota.polyline
+                : (rota.polyline ? [rota.polyline] : []);
+            const path = segs.filter(Boolean)
                 .flatMap(seg => google.maps.geometry.encoding.decodePath(seg));
 
             // Criar nova polyline com cor personalizada

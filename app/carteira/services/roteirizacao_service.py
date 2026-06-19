@@ -62,13 +62,15 @@ def otimizar_rota(paradas, origem, inclui_volta=False, respeitar_ordem=False, ba
 
     `backend(origem, destino, waypoints, inclui_volta, respeitar_ordem) ->
      {ordem_indices, distancia_km, tempo_min, polyline, trechos, legs, bounds}`.
+    `polyline` e uma LISTA de segmentos encoded (1 por trecho) — o front decodifica
+    cada um e concatena, sem separador de string ('|' faz parte do alfabeto).
     Default backend = default_backend (Route Optimization/Directions+chunking).
     `respeitar_ordem=True` mede a ordem recebida sem reordenar (drag-and-drop).
     Retorna tambem `legs` (trechos com duracao_s/distancia_m) e `bounds`, que
     alimentam o desenho da rota e o "tempo ate aqui" — unificando desenho+custo."""
     if not paradas:
         return {'ordem': [], 'distancia_km': 0.0, 'tempo_min': 0.0,
-                'polyline': '', 'trechos': 0, 'legs': [], 'bounds': None}
+                'polyline': [], 'trechos': 0, 'legs': [], 'bounds': None}
     if backend is None:
         from app.carteira.services.roteirizacao_backends import default_backend
         backend = default_backend
@@ -80,7 +82,7 @@ def otimizar_rota(paradas, origem, inclui_volta=False, respeitar_ordem=False, ba
         'ordem': ordem,
         'distancia_km': round(res.get('distancia_km', 0.0), 2),
         'tempo_min': round(res.get('tempo_min', 0.0), 1),
-        'polyline': res.get('polyline', ''),
+        'polyline': res.get('polyline') or [],  # lista de segmentos encoded
         'trechos': res.get('trechos', 1),
         'legs': res.get('legs', []),
         'bounds': res.get('bounds'),

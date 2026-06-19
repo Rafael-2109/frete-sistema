@@ -187,7 +187,10 @@ def directions_chunking_backend(origem, destino, waypoints, inclui_volta=False,
         'ordem_indices': ordem_final,
         'distancia_km': round(dist_total, 2),
         'tempo_min': round(tempo_total, 1),
-        'polyline': polylines[0] if len(polylines) == 1 else '|'.join(polylines),
+        # LISTA de segmentos encoded (1 por bloco do chunking). NAO juntar numa
+        # string com separador: '|' (ASCII 124) faz parte do alfabeto do encoded
+        # polyline (63-126), entao um split('|') no front quebraria a rota.
+        'polyline': polylines,
         'trechos': len(blocos),
         'legs': legs_out,
         'bounds': bounds_acc,
@@ -279,7 +282,9 @@ def route_optimization_backend(origem, destino, waypoints, inclui_volta=False,
         'ordem_indices': ordem_indices,
         'distancia_km': round(dist_km, 2),
         'tempo_min': round(tempo_min, 1),
-        'polyline': polyline,
+        # LISTA de segmentos encoded (1 trecho unico aqui). Ver nota no
+        # directions_chunking_backend: '|' nao serve de separador.
+        'polyline': [polyline] if polyline else [],
         'trechos': 1,
         'legs': legs_out,
         'bounds': bounds,

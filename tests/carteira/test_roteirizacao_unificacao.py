@@ -78,7 +78,7 @@ def test_otimizar_repassa_legs_bounds_e_respeitar_ordem():
     def fake_backend(origem, destino, waypoints, inclui_volta, respeitar_ordem=False):
         captured['respeitar_ordem'] = respeitar_ordem
         return {'ordem_indices': [0, 1], 'distancia_km': 42.0, 'tempo_min': 60.0,
-                'polyline': 'xyz', 'trechos': 1,
+                'polyline': ['xyz'], 'trechos': 1,
                 'legs': [{'duracao_s': 600, 'distancia_m': 10000,
                           'duracao': '10 min', 'distancia': '10 km'}],
                 'bounds': {'southwest': {'lat': -23.5, 'lng': -46.8},

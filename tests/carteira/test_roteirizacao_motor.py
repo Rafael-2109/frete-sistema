@@ -21,12 +21,12 @@ def test_otimizar_usa_backend_injetado():
 
     def fake_backend(origem, destino, waypoints, inclui_volta, respeitar_ordem=False):
         return {'ordem_indices': list(range(len(waypoints))),
-                'distancia_km': 42.0, 'tempo_min': 60.0, 'polyline': 'xyz', 'trechos': 1}
+                'distancia_km': 42.0, 'tempo_min': 60.0, 'polyline': ['xyz'], 'trechos': 1}
 
     r = otimizar_rota(paradas, origem='CD', inclui_volta=False, backend=fake_backend)
     assert r['distancia_km'] == 42.0
     assert r['ordem'] == ['A', 'B']
-    assert r['polyline'] == 'xyz'
+    assert r['polyline'] == ['xyz']
 
 
 def test_otimizar_vazio_retorna_zerado():
