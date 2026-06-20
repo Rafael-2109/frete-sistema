@@ -185,6 +185,24 @@ def sincronizar_entrega_carvia_por_nf(
             .first()
         )
         if item_embarque:
+            # ------------------------------------------------------------ #
+            # Reset nf_cd — espelha o fluxo Nacom (sincronizar_nova_entrega_por_nf,
+            # app/utils/sincronizar_entregas.py:296): a NF esta vinculada a um
+            # EmbarqueItem ATIVO de um Embarque ATIVO -> NAO esta "no CD".
+            # Sem este reset, uma NF que voltou ao CD (nf_cd=True setado no
+            # cancelamento de um embarque anterior por
+            # embarques/routes.py:sincronizar_nf_embarque_pedido_completa) e foi
+            # RE-embarcada permanecia com o badge "NF no CD" indevido na listagem
+            # de monitoramento — este sincronizador, ao contrario do Nacom, nunca
+            # limpava o flag. Idempotente; nao toca campos operacionais protegidos.
+            # ------------------------------------------------------------ #
+            if (
+                entrega.nf_cd
+                and getattr(embarque, 'status', None) == 'ativo'
+                and getattr(item_embarque, 'status', None) == 'ativo'
+            ):
+                entrega.nf_cd = False
+
             # NB: o local_cd do EmbarqueItem CarVia desta NF ja foi reconciliado a fonte
             # mais acima (propagar_local_cd_carvia no bloco do local_cd) — cobre tambem
             # o item provisorio (CARVIA-PED-*) que recebeu a NF pos-coleta (bug PED-281-1).
