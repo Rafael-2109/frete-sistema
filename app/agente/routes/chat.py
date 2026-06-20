@@ -1306,14 +1306,10 @@ def _stream_chat_response(
                             f"session={response_state.get('our_session_id', '?')[:12]}"
                         )
 
-                    # Sessao A: Context usage — enriquece done payload
-                    try:
-                        context_usage = client.get_context_usage()
-                        if context_usage:
-                            done_payload['context_usage'] = context_usage
-                    except Exception:
-                        pass  # Best-effort: nao quebrar stream por falha de context usage
-
+                    # Context usage NAO e coletado aqui: ClaudeSDKClient.get_context_usage()
+                    # e ASYNC no SDK 0.2.x e este callback e sync no _sdk_loop (chama-lo
+                    # aqui deadlockaria/retornaria None). Coletado async APOS o done, como
+                    # evento 'context_usage' separado (ver async_stream, pos _async_stream_sdk_client).
                     event_queue.put(_sse_event('done', done_payload))
 
                 return False  # Não é init, não precisa continue
@@ -1341,6 +1337,20 @@ def _stream_chat_response(
                 thinking_display=thinking_display,
                 rotated_from_session_id=rotated_from_session_id,
             )
+
+            # =============================================================
+            # Sessao A: Context usage (best-effort, após done)
+            # Espelha 'suggestions'. get_context_usage() é ASYNC no SDK 0.2.x; aqui
+            # estamos em contexto async (mesmo _sdk_loop) → await direto, sem deadlock.
+            # Emitido como evento 'context_usage' separado (o callback sync do done não
+            # pode awaitar). Frontend: case 'context_usage' → updateContextUsage(data).
+            # =============================================================
+            try:
+                context_usage = await client.get_context_usage_async(our_session_id)
+                if context_usage:
+                    event_queue.put(_sse_event('context_usage', context_usage))
+            except Exception as ctx_err:
+                logger.debug(f"[AGENTE] context_usage pós-done falhou (ignorado): {ctx_err}")
 
             # =============================================================
             # P1-1: Prompt Suggestions (best-effort, após done)

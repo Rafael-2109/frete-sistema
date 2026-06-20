@@ -3,7 +3,7 @@
 > Historico de adocoes, breaking changes, bug fixes e features NAO adotadas do
 > Claude Agent SDK + Anthropic SDK Python. Extraido de `CLAUDE.md` para reducao de ruido.
 >
-> **Atualizado**: 2026-06-13 (SDK 0.2.101 + CLI bundled 2.1.177 + anthropic 0.98.1 → 0.109.1 — bumps CLI + 1 feature aditiva; zero breaking)
+> **Atualizado**: 2026-06-19 (reconciliação de drift vs código — `get_context_usage`/`list_subagents`/`fork_session` marcados ADOTADOS; `tag_session` = recusa consciente). Último bump de versão: 2026-06-13 (SDK 0.2.101 + CLI bundled 2.1.177 + anthropic 0.98.1 → 0.109.1 — bumps CLI + 1 feature aditiva; zero breaking)
 
 ---
 
@@ -975,7 +975,7 @@ Tabela `claude_session_store` substituiu `session_persistence.py` — SDK 0.1.64
 - **Features novas disponiveis nao adotadas**: `xhigh` effort level (SDK 0.1.60 nao expõe no Literal type — via `extra_args` se necessario), `task_budget` beta (`task-budgets-2026-03-13` — campo ja existe em `ClaudeAgentOptions`), alta resolucao de imagem (2576px automatico, irrelevante para screenshots Playwright ja comprimidos).
 
 ### Features adotadas (0.1.56–0.1.60):
-- **`list_subagents()`/`get_subagent_messages()`** (0.1.60): Helpers para inspecionar cadeias de mensagens de subagentes spawnados. Exportados no top-level. **NAO adotado ainda** — candidato a endpoint admin de debug.
+- **`list_subagents()`/`get_subagent_messages()`** (0.1.60): Helpers para inspecionar cadeias de mensagens de subagentes spawnados. Exportados no top-level. **ADOTADO** (2026-04-16, fases 1-2): wrapper `sdk/subagent_reader.py:22` + endpoint admin `routes/admin_subagents.py:240,286-347` + tool `session_search_tool.py:798,825` (`get_subagent_transcript`). Detalhe na seção "Features adotadas (2026-04-16 — SDK 0.1.60 fases 1-2)" abaixo.
 - **Distributed tracing W3C** (0.1.60): `TRACEPARENT`/`TRACESTATE` propagados para subprocess CLI quando span OpenTelemetry ativo. **NAO adotado** (projeto nao usa OTEL).
 - **Cascading `delete_session()`** (0.1.60): Agora remove diretorios de transcript de subagentes irmaos. **NAO aplicavel** (projeto nao usa `delete_session()` do SDK, usa fluxo DB proprio).
 - **`setting_sources=[]` fix** (0.1.60): Lista vazia passada nao e mais silenciosamente descartada — desabilita todos os settings do filesystem corretamente. Adotado automaticamente via upgrade.
@@ -991,10 +991,11 @@ Tabela `claude_session_store` substituiu `session_persistence.py` — SDK 0.1.64
 - **`AgentDefinition.disallowedTools/maxTurns/initialPrompt`** (0.1.51): `agent_loader.py` parseia `disallowed_tools`, `max_turns`, `initial_prompt` do frontmatter. Disponivel para uso nos `.claude/agents/*.md` quando necessario — nao aplicado por padrao.
 - **`ClaudeAgentOptions.session_id`** (0.1.52): Pre-declara UUID do JSONL. `_build_options()` passa `our_session_id` como `session_id` → naming deterministico. Resume usa `our_session_id` como fallback se `sdk_session_id` ausente. **NOTA**: Issue #560 (aberta) — `ClaudeSDKClient` nao usa `session_id` para isolamento; nosso pool resolve via instancias separadas.
 - **`ResultMessage.errors`** (0.1.51): Campo `errors` logado no ResultMessage handler e propagado no StreamEvent `done`.
-- **`fork_session()`/`delete_session()`** (0.1.51, NAO usadas): APIs de sessao. Disponiveis para uso futuro.
+- **`fork_session()`/`delete_session()`** (0.1.51): `delete_session()` NÃO usado (projeto usa fluxo DB próprio). **`fork_session` ADOTADO** via `fork_session_via_store()` — endpoint `routes/sessions.py:323,436` (`api_fork_session`) + UI de branch em `chat.js:3697+` (`forked_from`/`session-fork-child`).
+- **`tag_session()`** (0.1.51+, NÃO usado — recusa consciente): tagging de sessão no store SDK. Projeto usa `AgentSession.title`/`summary` + `PostgresSessionStore` (SOT, DB-native — filtragem e escopo mais ricos que parse de JSONL).
 - **`task_budget`** (0.1.51, NAO usado): Limite de tokens por task/subagent.
 - **`SystemPromptFile`** (0.1.51, NAO usado): System prompt via arquivo. Nosso prompt e ~3KB string — sem necessidade.
-- **`get_context_usage()`** (0.1.52, NAO implementado): Monitoramento de context window. Requer wiring 3-layer (client→routes→chat.js).
+- **`get_context_usage()`** (0.1.52): **CONSERTADO 2026-06-19**. Era INERTE/BUG: o SDK 0.2.x tornou `ClaudeSDKClient.get_context_usage()` **async** (`_internal/query.py:727`) e o app chamava SEM `await` (sync) → coroutine → `.get()` AttributeError → `except` → **`None` sempre** (provado por repro contra o SDK real). Fix: método virou `AgentClient.get_context_usage_async()` (`client.py:461` — `await` + chaves corretas `totalTokens`/`maxTokens`/`percentage` + breakdown `categories`); a coleta saiu do callback sync do done e foi para `async_stream` APÓS o done (contexto async no `_sdk_loop` → `await` direto, sem deadlock), emitida como evento SSE **`context_usage`** separado (molde do `suggestions`); `chat.js` ganhou `case 'context_usage'` → `updateContextUsage(data)`. Validado em lógica (repro com stub async retorna dado, não None); falta confirmar o shape real do control request em runtime/prod.
 - **`stderr` callback** (0.1.53, implementado 2026-04-01): Captura debug output do CLI subprocess em real-time. Pipeline 3-layer: `_build_options(stderr_queue)` → `StreamEvent('stderr')` → SSE → debug panel (admin-only). Flag: `USE_STDERR_CALLBACK`. Requer `debug_mode=true` no request E flag ativa. `extra_args: {"debug-to-stderr": None}` habilita output no CLI.
 - **`output_format`** (0.1.53, frontend implementado 2026-04-01): Structured output com JSON Schema. Backend ja estava wired (`_build_options` + done event). Frontend agora renderiza `structured_output` como tabela (arrays), badges (fields simples), ou JSON collapsible (fallback). Request param: `output_format: {type: "json_schema", schema: {...}}`.
 

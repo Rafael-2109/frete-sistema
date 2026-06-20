@@ -370,6 +370,30 @@ async def get_or_create_client(
         # Connect com streaming mode (None = interactive, sem prompt inicial)
         await client.connect()
 
+        # Health-check dos MCP servers. SDK 0.2.82+ tornou a conexao MCP NON-BLOCKING
+        # por default: um server que falha ao subir nao aborta o connect() — fica
+        # silencioso. get_mcp_status() (async no SDK 0.2.x) expoe o estado real.
+        # Best-effort: nunca quebra a criacao do client (try/except + log).
+        try:
+            mcp_status = await client.get_mcp_status()
+            mcp_servers = list((mcp_status or {}).get('mcpServers') or [])
+            # 'failed'/'needs-auth' nao sao transitorios (um server nesse estado nao
+            # vira 'connected' sozinho); 'pending' e transitorio pos-connect — nao alarmar.
+            mcp_broken = [s for s in mcp_servers if s.get('status') in ('failed', 'needs-auth')]
+            for s in mcp_broken:
+                logger.warning(
+                    f"[SDK_POOL] MCP server NAO conectado: name={s.get('name')!r} "
+                    f"status={s.get('status')} error={s.get('error')!r} "
+                    f"session={session_id[:8]}..."
+                )
+            if not mcp_broken:
+                logger.debug(
+                    f"[SDK_POOL] MCP health OK: {len(mcp_servers)} servers "
+                    f"session={session_id[:8]}..."
+                )
+        except Exception as mcp_err:
+            logger.debug(f"[SDK_POOL] get_mcp_status falhou (ignorado): {mcp_err}")
+
         pooled = PooledClient(
             client=client,
             session_id=session_id,

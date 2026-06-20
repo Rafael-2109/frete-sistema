@@ -2602,10 +2602,17 @@ function processSSEEvent(eventType, data, state, streamLocal) {
                     injectFeedbackButtons(state.msgElement, state.text);
                 }
 
-                // Sessao A: Atualizar indicador de contexto
+                // Sessao A: Atualizar indicador de contexto (compat: done legado)
                 if (data.context_usage) {
                     updateContextUsage(data.context_usage);
                 }
+                break;
+
+            // Sessao A: indicador de contexto (evento separado, pós-done). O SDK 0.2.x
+            // tornou get_context_usage async; agora coletado após o turno (ver chat.py
+            // async_stream). Payload deste evento: {used,total,percent,categories}.
+            case 'context_usage':
+                updateContextUsage(data);
                 break;
 
             // P1-1: Sugestões de prompt contextuais (chips clicáveis)

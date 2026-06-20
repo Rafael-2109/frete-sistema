@@ -458,23 +458,29 @@ class AgentClient:
             )
             return ""
 
-    def get_context_usage(self) -> Optional[Dict[str, Any]]:
+    async def get_context_usage_async(self, session_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
         """
-        Retorna uso do context window via SDK get_context_usage().
+        Uso do context window via SDK get_context_usage() (control request ASYNC).
 
-        Sessao A: Indicador de contexto consumido na UI.
-        Disponivel desde SDK 0.1.52. Best-effort: retorna None se indisponivel.
+        Sessao A: indicador de contexto consumido na UI. Disponivel desde SDK 0.1.52,
+        mas o metodo do ClaudeSDKClient e ASYNC desde 0.2.x — DEVE ser awaited. A
+        versao sync anterior chamava SEM await (comentario obsoleto "sincrono no SDK")
+        e retornava SEMPRE None (bug 2026-06-19: coroutine sem .get() -> AttributeError
+        -> except). Chamar APOS o turno (CLI idle), de dentro do _sdk_loop (contexto
+        async) -> await direto, sem deadlock. Best-effort: None se indisponivel.
+
+        Args:
+            session_id: nosso UUID de sessao (pool key). Se None, usa o ContextVar.
 
         Returns:
-            {"used": int, "total": int, "percent": float} ou None
+            {"used": int, "total": int, "percent": float, "categories": [...]} ou None
         """
         try:
             from .client_pool import get_pooled_client
             from ..config.permissions import get_session_id
 
-            pool_key = get_session_id() or ''
+            pool_key = session_id or get_session_id() or ''
             pooled = get_pooled_client(pool_key)
-
             if not pooled or not pooled.connected:
                 return None
 
@@ -482,24 +488,36 @@ class AgentClient:
             if not hasattr(sdk_client, 'get_context_usage'):
                 return None
 
-            # get_context_usage() e sincrono no SDK — retorna dict direto
-            usage = sdk_client.get_context_usage()
-            if not usage:
+            raw = await sdk_client.get_context_usage()  # ASYNC no SDK 0.2.x
+            if not raw:
                 return None
 
-            used = usage.get('used', 0)
-            total = usage.get('total', 200000)
-            if total == 0:
+            # ContextUsageResponse (SDK 0.2.x): totalTokens/maxTokens/percentage
+            # (fallback used/total p/ retrocompat caso o shape mude).
+            used = raw.get('totalTokens') or raw.get('used') or 0
+            total = raw.get('maxTokens') or raw.get('total') or 200000
+            if not total:
                 return None
+            percent = raw.get('percentage')
+            if percent is None:
+                percent = used / total * 100
+
+            # Breakdown por categoria (o que domina a janela) — antes descartado.
+            categories = [
+                {'name': c.get('name'), 'tokens': c.get('tokens')}
+                for c in (raw.get('categories') or [])
+                if c.get('tokens')
+            ]
 
             return {
                 'used': used,
                 'total': total,
-                'percent': round(used / total * 100, 1),
+                'percent': round(float(percent), 1),
+                'categories': categories,
             }
 
         except Exception as e:
-            logger.debug(f"[AGENT_CLIENT] get_context_usage falhou (ignorado): {e}")
+            logger.debug(f"[AGENT_CLIENT] get_context_usage_async falhou (ignorado): {e}")
             return None
 
     def _build_full_system_prompt(self, custom_instructions: str) -> str:

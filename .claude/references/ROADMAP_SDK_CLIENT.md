@@ -4,7 +4,7 @@ camada: L2
 sot_de: —
 hub: .claude/references/INDEX.md
 superseded_by: —
-atualizado: 2026-06-02
+atualizado: 2026-06-19
 -->
 # Migração: query() → ClaudeSDKClient — ROADMAP VIVO
 
@@ -65,6 +65,7 @@ atualizado: 2026-06-02
 > **Status geral**: EM PROGRESSO (pausado — Fases 4-5 pendentes)
 > **Progresso**: ██████░░░░ 60% (Fase 0 ✅ + Fase 1 ✅ + Fase 2 ✅ + Fase 3 ✅)
 > **Nota (04/04)**: `set_model()` e interrupt handling implementados (itens de Fase 4), mas V4.1-V4.3 e V5.1-V5.2 ainda pendentes. `toggle_mcp_server` nao implementado.
+> **Reconciliação (2026-06-19, gap analysis vs código)**: o dead code v2 — `_stream_response()` + `_make_streaming_prompt()` — foi DELETADO em 2026-04-04 (`client.py:2816-2818`), o que avança as tasks 4.2 (✅) e 5.2 (◑ parcial). **NÃO está concluído**: `_with_resume()` permanece em uso (`client.py:2823`), DC-1/4.5 (globals Playwright) não-feito, flag `USE_PERSISTENT_SDK_CLIENT` ainda existe (5.1), 5.3-5.4 pendentes. Progresso real um pouco acima de 60% — Fases 4-5 seguem PARCIAIS, não "pausadas". SDK atual: **0.2.101** (este doc descreve a faixa 0.1.48).
 > **POC**: CONCLUÍDA (2.15x speedup) — `scripts/poc_sdk_client.py`
 > **Rollback instantâneo**: `AGENT_PERSISTENT_SDK_CLIENT=false`
 
@@ -580,7 +581,7 @@ Se SDK mudar internals, `_force_kill_subprocess()` falha graciosamente (try/exce
 | Task | Status | Arquivo | O que fazer | Dependência |
 |------|--------|---------|-------------|-------------|
 | 4.1 | ○ | `client.py` | Remover `streaming_done_event` do path persistente | 1.1 |
-| 4.2 | ○ | `client.py` | Remover `_make_streaming_prompt()` do path persistente | 1.1 |
+| 4.2 | ✅ | `client.py` | Remover `_make_streaming_prompt()` do path persistente — **deletado 2026-04-04** (`client.py:2816-2818`) | 1.1 |
 | 4.3 | ○ | `session_persistence.py` | Reduzir backup JSONL: apenas no disconnect/recycle (não todo turno) | 1.1 |
 | 4.4 | ○ | `routes.py`, `models.py` | Remover tracking de `sdk_session_id` no DB para sessões ativas (client gerencia) | 1.1 |
 | 4.5 | ○ | `playwright_mcp_tool.py` | Fix DC-1: Dict `_pages: Dict[str, Page]` per session_id + ContextVar `_current_frame` | — |
@@ -604,7 +605,7 @@ Se SDK mudar internals, `_force_kill_subprocess()` falha graciosamente (try/exce
 | Task | Status | Arquivo | O que fazer | Dependência |
 |------|--------|---------|-------------|-------------|
 | 5.1 | ○ | `feature_flags.py` | Remover `USE_PERSISTENT_SDK_CLIENT` (sempre true) | 4.x |
-| 5.2 | ○ | `client.py` | Remover `_stream_response()` (path antigo), `_make_streaming_prompt()`, `_with_resume()` | 5.1 |
+| 5.2 | ◑ | `client.py` | Remover `_stream_response()` (path antigo), `_make_streaming_prompt()`, `_with_resume()` — **`_stream_response()`+`_make_streaming_prompt()` deletados 2026-04-04 (`client.py:2816`); `_with_resume()` AINDA em uso (`client.py:2823`)** | 5.1 |
 | 5.3 | ○ | `routes.py` | Remover branch `if not USE_PERSISTENT_SDK_CLIENT` | 5.1 |
 | 5.4 | ○ | `CLAUDE.md`, `app/agente/CLAUDE.md` | Documentar nova arquitetura | 5.1-5.3 |
 
