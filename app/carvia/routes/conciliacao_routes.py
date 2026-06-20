@@ -348,20 +348,53 @@ def register_conciliacao_routes(bp):
         if filtro_cte or filtro_nf or filtro_cnpj or filtro_numero:
             docs = [d for d in docs if _doc_passa_filtros(d)]
 
-        # Scoring sugestivo (opcional — quando linha_id informado)
+        # Scoring sugestivo (opcional — quando linha(s) informada(s)).
+        # 1 linha -> linha_id; N linhas selecionadas -> linha_ids (CSV). Com N
+        # linhas pontua pela SOMA dos valores (multi-pagamento do mesmo cliente
+        # p/ 1 fatura: ex. 1000+750=1750 casa a fatura de 1750). Sem isto, a
+        # selecao multipla DESLIGAVA a sugestao e a lista vinha so por data.
         linha_id = request.args.get('linha_id', type=int)
-        if linha_id:
+        linha_ids_raw = (request.args.get('linha_ids') or '').strip()
+        ids_score = []
+        if linha_ids_raw:
+            ids_score = [int(x) for x in linha_ids_raw.split(',') if x.strip().isdigit()]
+        elif linha_id:
+            ids_score = [linha_id]
+
+        if ids_score:
             from app.carvia.models import CarviaExtratoLinha
             from app.carvia.services.financeiro.carvia_sugestao_service import pontuar_documentos
             from app.carvia.services.financeiro.carvia_historico_match_service import (
                 CarviaHistoricoMatchService,
             )
 
-            linha = db.session.get(CarviaExtratoLinha, linha_id)
-            if linha:
+            linhas = CarviaExtratoLinha.query.filter(
+                CarviaExtratoLinha.id.in_(ids_score)
+            ).all()
+            # Preserva a ordem de selecao (1a linha = base do texto/data/CNPJ)
+            pos = {lid: i for i, lid in enumerate(ids_score)}
+            linhas.sort(key=lambda l: pos.get(l.id, 1_000_000))
+
+            linha_score = None
+            if len(linhas) == 1:
+                linha_score = linhas[0]
+            elif len(linhas) > 1:
+                # Linha AGREGADA: soma os valores (abs); usa a 1a linha para
+                # texto/data/razao (pagamentos multiplos costumam ser do mesmo
+                # cliente). pontuar_documentos so LE atributos da linha.
+                from types import SimpleNamespace
+                base = linhas[0]
+                total = sum(abs(float(l.valor or 0)) for l in linhas)
+                linha_score = SimpleNamespace(
+                    id=base.id, valor=total, data=base.data,
+                    descricao=base.descricao, memo=base.memo,
+                    razao_social=base.razao_social,
+                )
+
+            if linha_score is not None:
                 # R17: boost por historico aprendido
-                cnpjs_hist = CarviaHistoricoMatchService.cnpjs_aprendidos(linha)
-                docs = pontuar_documentos(linha, docs, cnpjs_historico=cnpjs_hist)
+                cnpjs_hist = CarviaHistoricoMatchService.cnpjs_aprendidos(linha_score)
+                docs = pontuar_documentos(linha_score, docs, cnpjs_historico=cnpjs_hist)
 
         return jsonify({
             'documentos': docs,

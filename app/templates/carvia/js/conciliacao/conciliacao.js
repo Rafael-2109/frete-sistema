@@ -196,9 +196,15 @@
         docsPlaceholder.classList.remove('d-none');
         docsLista.classList.add('d-none');
 
-        // Scoring sugestivo: passa linha_id quando 1 unica linha selecionada
-        const linhaParam = linhasSelecionadas.length === 1
-            ? `&linha_id=${linhasSelecionadas[0].id}` : '';
+        // Scoring sugestivo: 1 linha -> linha_id; N linhas -> linha_ids (o
+        // backend pontua pela SOMA dos valores, p/ casar p.ex. 1000+750 com a
+        // fatura de 1750). Antes, com 2+ linhas a sugestao era DESLIGADA.
+        let linhaParam = '';
+        if (linhasSelecionadas.length === 1) {
+            linhaParam = `&linha_id=${linhasSelecionadas[0].id}`;
+        } else if (linhasSelecionadas.length > 1) {
+            linhaParam = `&linha_ids=${linhasSelecionadas.map(l => l.id).join(',')}`;
+        }
 
         // REFINO 2026-04-20: filtros server-side CTe / NF / CNPJ / Numero
         const filtroCte = document.getElementById('filtroCteDocs')?.value?.trim() || '';

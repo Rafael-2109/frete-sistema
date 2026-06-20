@@ -84,3 +84,37 @@ class TestIntegracaoAgrupado:
         # valor agrupado (0.50) + data proxima + nome forte -> nao pode ser None
         assert out[0]['score_label'] is not None
         assert out[0]['score'] >= 0.30
+
+
+class TestSelecaoMultiLinhaSoma:
+    """Caso ESPORTE BIKE: 2 linhas (1000+750) somadas casam a fatura de 1750.
+
+    O backend (api_documentos_elegiveis) monta uma linha AGREGADA quando >1
+    linha e selecionada; aqui simulamos essa linha somada e provamos que a
+    fatura exata vai para o TOPO com label ALTO (antes a selecao multipla
+    DESLIGAVA o scoring e a fatura caia no meio da lista, por data)."""
+
+    def test_soma_linhas_prioriza_fatura_exata_no_topo(self):
+        linha_agregada = types.SimpleNamespace(
+            valor=1750.0,  # 1000 + 750
+            data=date(2026, 6, 15),
+            descricao='Esporte Bike Ltda - Pix recebido: "Cp :08561701-ESPORTE BIKE LTDA"',
+            memo='', razao_social=None,
+        )
+        docs = [
+            {'tipo_documento': 'fatura_cliente', 'id': 1, 'saldo': 400.0,
+             'numero': '286-1', 'nome': 'RAPHAEL MARCHETTO AUTOMOVEIS LTDA',
+             'cnpj_cliente': '38450398000130', 'vencimento': '17/06/2026', 'data': '17/06/2026'},
+            {'tipo_documento': 'fatura_cliente', 'id': 2, 'saldo': 3500.0,
+             'numero': '288-7', 'nome': 'R BENATTI COMERCIO DE AUTOPROPELIDOS LTD',
+             'cnpj_cliente': '23148685000113', 'vencimento': '17/06/2026', 'data': '17/06/2026'},
+            {'tipo_documento': 'fatura_cliente', 'id': 3, 'saldo': 1500.0,
+             'numero': '289-5', 'nome': 'JAIR SCHEIN',
+             'cnpj_cliente': '31688852000147', 'vencimento': '17/06/2026', 'data': '17/06/2026'},
+            {'tipo_documento': 'fatura_cliente', 'id': 4, 'saldo': 1750.0,
+             'numero': '290-9', 'nome': 'ESPORTE BIKE LTDA',
+             'cnpj_cliente': '01823474000104', 'vencimento': '17/06/2026', 'data': '17/06/2026'},
+        ]
+        out = pontuar_documentos(linha_agregada, docs)
+        assert out[0]['id'] == 4              # ESPORTE BIKE no topo
+        assert out[0]['score_label'] == 'ALTO'  # valor exato (1750) + nome forte

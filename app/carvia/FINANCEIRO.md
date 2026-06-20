@@ -19,6 +19,10 @@ Cobre: conciliacao bancaria, motor de sugestao de match (3 sinais + cobertura de
 
 Antes, divergencia >30% caia para ~0 e o peso 0.50 do valor zerava o score do doc agrupado correto (14% dos docs corretos ficavam SEM label). Validado em `scripts/carvia/golden_match_conciliacao.py` (286 conciliacoes reais, ground-truth do Render): **top3 57.7→64.0%**, **docs corretos sem label 14.0→2.8%**, cauda (rank>10) 77→64; top1 estavel (−1 caso). Testes: `tests/carvia/test_score_valor_cobertura.py`.
 
+### Selecao multipla de linhas pontua pela SOMA (2026-06-19)
+
+`api_documentos_elegiveis` aceita `linha_ids` (CSV) alem de `linha_id`. Com N linhas selecionadas na tela dual-panel, pontua os documentos contra uma **linha agregada** (valor = soma dos valores; texto/data/razao da 1a linha) — cobre o multi-pagamento do mesmo cliente para 1 fatura (ex.: 1000+750 casam a fatura de 1750 → valor exato + nome → topo com ALTO). **Antes, selecionar 2+ linhas DESLIGAVA a sugestao** (o front so enviava `linha_id` com 1 linha) e a lista vinha so por data de emissao, enterrando a fatura correta. Frontend: `conciliacao.js` envia `linha_ids` quando >1 linha.
+
 ### O que NAO mudou (decisao medida no golden, nao por preferencia)
 
 - **Pesos (0.50/0.30/0.20)**: re-peso valor→nome NAO ajuda — o nome do pagador raramente bate o cliente (razao_social=0%, CNPJ na descricao=0%, raiz "Cp :" e gateway em 84%); subir o peso do nome dilui o unico sinal forte (valor, 94% exato no 1:1). Mantidos.
