@@ -39,11 +39,15 @@ def calcular_lastro(largura_cm, comprimento_cm, folga=FOLGA_LASTRO_CM):
     op2 = _opcao(comprimento_cm, largura_cm)   # comprimento no eixo X
     if op1[0] >= op2[0]:
         lastro, nx, ny = op1
-        merc_x, merc_y = nx * largura_cm, ny * comprimento_cm
+        caixa_x, caixa_y = largura_cm, comprimento_cm
     else:
         lastro, nx, ny = op2
-        merc_x, merc_y = nx * comprimento_cm, ny * largura_cm
-    return {'lastro': lastro, 'merc_x': merc_x, 'merc_y': merc_y}
+        caixa_x, caixa_y = comprimento_cm, largura_cm
+    # nx/ny/caixa_x/caixa_y descrevem a GRADE de caixas por camada (eixos X e Y),
+    # consumida pelo renderer 3D p/ desenhar caixa a caixa (nao 1 bloco unico).
+    return {'lastro': lastro, 'nx': nx, 'ny': ny,
+            'caixa_x': caixa_x, 'caixa_y': caixa_y,
+            'merc_x': nx * caixa_x, 'merc_y': ny * caixa_y}
 
 
 def calcular_altura(caixas, lastro, altura_cm):
@@ -79,6 +83,16 @@ class Pallet:
     altura_total: float
     peso: float
     color: str = '#c0844a'
+    # Grade de caixas (Frente C — render por caixa): dims de UMA caixa nos eixos
+    # X/Y/Z + caixas por camada (nx, ny) + nº de camadas + total. A ultima camada
+    # pode ser parcial (total < camadas*nx*ny).
+    caixa_x: float = 0.0
+    caixa_y: float = 0.0
+    caixa_z: float = 0.0
+    nx: int = 0
+    ny: int = 0
+    camadas: int = 0
+    total_caixas: int = 0
 
     def to_dict(self):
         return {
@@ -89,6 +103,9 @@ class Pallet:
             'merc_x': self.merc_x, 'merc_y': self.merc_y,
             'altura_merc': self.altura_merc, 'altura_total': self.altura_total,
             'peso': self.peso, 'color': self.color,
+            'caixa_x': self.caixa_x, 'caixa_y': self.caixa_y, 'caixa_z': self.caixa_z,
+            'nx': self.nx, 'ny': self.ny, 'camadas': self.camadas,
+            'total_caixas': self.total_caixas,
         }
 
 
@@ -111,6 +128,9 @@ def _finalizar_pallet(conteudo_itens, grupo, fechado):
         merc_x=lastro['merc_x'], merc_y=lastro['merc_y'],
         altura_merc=round(altura['altura_total'] - PALLET_ALTURA_ESTRADO, 2),
         altura_total=round(altura['altura_total'], 2), peso=round(peso, 2),
+        caixa_x=lastro['caixa_x'], caixa_y=lastro['caixa_y'], caixa_z=base.altura_cm,
+        nx=lastro['nx'], ny=lastro['ny'],
+        camadas=altura['camadas'], total_caixas=int(total),
     )
 
 

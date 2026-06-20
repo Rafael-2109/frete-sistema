@@ -28,7 +28,9 @@
     renderer: null,
     colorMap: {}, // {modelo_id: '#hex'}
     debounceTimer: null,
-    packToken: 0, // descarta resultado de otimizacao obsoleto (input mudou)
+    ladderCache: null,       // {sig, ladder} — escada por assinatura (sem o apoio)
+    ladderComputingSig: null, // assinatura da escada sendo computada agora
+    currentSig: null,        // assinatura da entrada corrente (carga+bau+amplitudes)
     nfsPendentes: null, // cache das NFs CarVia nao entregues (lazy)
     nfsAdicionadas: {}, // {chave: [{modelo_id, quantidade}]} — motos puxadas por unidade (NF/pedido/cotacao) p/ remover
     pallets: [], // pallets de conservas Nacom (Camada 1) empacotados junto das motos
@@ -359,6 +361,12 @@
     // empacotamento 3D junto das motos. O recalc (debounced) abaixo le state.pallets.
     if (data.pallets && data.pallets.length) {
       state.pallets = data.pallets;
+    }
+
+    // Produtos Nacom sem cadastro de palletizacao completo NAO viram pallet.
+    // Exibe o aviso (em vez de sumirem em silencio) — Frente B.
+    if (data.pendencias && data.pendencias.length) {
+      mostrarPendencias(data.pendencias);
     }
 
     // TODAS as motos (NF + itens sem NF) -> linhas. `data.motos` ja e o total
@@ -743,10 +751,10 @@
   }
 
   /**
-   * Render em 2 fases: pack() instantaneo (feedback imediato) seguido de packOptimized
-   * (Simulated Annealing, ~100-350ms) que "sobe" o resultado. A otimizacao roda fora do
-   * frame atual (setTimeout) para nao atrasar o render preliminar; o packToken descarta
-   * o resultado se o usuario alterou a entrada nesse meio-tempo.
+   * Render em 2 fases: pack() instantaneo (feedback imediato) seguido da ESCADA de
+   * apoio (packLadder, fora do frame via setTimeout) que "sobe" o resultado de forma
+   * MONOTONA. A escada e cacheada por assinatura (ladderSignature, sem o minSupport),
+   * entao mexer so no slider de apoio e lookup instantaneo (bestOfLadder).
    */
   function packAndRender(bay, motoList, colorMap) {
     var options = getPackingOptions();
@@ -754,21 +762,65 @@
     // e as motos por cima (fase 2). A ordem na lista nao importa — packItems separa.
     var itens = (state.pallets || []).concat(motoList);
 
+    // Preview instantaneo (passada gulosa).
     var quick = BinPacker.pack(bay, itens, options);
     state.renderer.render(quick, bay, colorMap);
     updateStats(quick, bay);
     updateLegend(motoList, colorMap);
 
-    var token = ++state.packToken;
+    // Escada de apoio (MONOTONA): computada 1x por assinatura (carga+bau+amplitudes,
+    // SEM o minSupport) e cacheada. Mexer so no slider de apoio vira lookup instantaneo
+    // e monotono (afrouxar nunca posiciona menos) — corrige a incoerencia do SA puro.
+    var sig = ladderSignature(bay, itens, options);
+    state.currentSig = sig;
+
+    if (state.ladderCache && state.ladderCache.sig === sig) {
+      applyBestLadder(state.ladderCache.ladder, bay, colorMap, quick, options.minSupport);
+      return;
+    }
+    if (state.ladderComputingSig === sig) return; // ja ha uma escada computando esta sig
+
+    state.ladderComputingSig = sig;
     setTimeout(function () {
-      if (token !== state.packToken) return; // entrada mudou; descarta
-      var optimized = BinPacker.packOptimized(bay, itens, options);
-      if (token !== state.packToken) return;
-      if (optimized.stats.posicionadas >= quick.stats.posicionadas) {
-        state.renderer.render(optimized, bay, colorMap);
-        updateStats(optimized, bay);
+      var ladder = BinPacker.packLadder(bay, itens, options, { maxIters: 100, maxMs: 500 });
+      if (state.ladderComputingSig === sig) state.ladderComputingSig = null;
+      state.ladderCache = { sig: sig, ladder: ladder };
+      // Aplica so se a entrada (sem o apoio) ainda e a corrente; usa o apoio ATUAL.
+      if (state.currentSig === sig) {
+        var optNow = getPackingOptions();
+        var bayNow = getEffectiveBay() || bay;
+        applyBestLadder(ladder, bayNow, colorMap, quick, optNow.minSupport);
       }
     }, 0);
+  }
+
+  /** Renderiza o melhor layout da escada p/ o apoio dado, se superar a passada gulosa. */
+  function applyBestLadder(ladder, bay, colorMap, quick, minSupport) {
+    var best = BinPacker.bestOfLadder(ladder, minSupport);
+    if (best && best.stats.posicionadas >= quick.stats.posicionadas) {
+      state.renderer.render(best, bay, colorMap);
+      updateStats(best, bay);
+    }
+  }
+
+  /** Assinatura da entrada que invalida a escada — TUDO menos o minSupport (o eixo
+      da escada). Mudou carga/bau/amplitudes -> recomputa; mudou so o apoio -> cache. */
+  function ladderSignature(bay, itens, options) {
+    var head = [Math.round(bay.w), Math.round(bay.d), Math.round(bay.h),
+                options.maxOverhang, options.maxGap, options.palletSobrePallet ? 1 : 0];
+    var its = [];
+    for (var i = 0; i < itens.length; i++) {
+      var m = itens[i];
+      if (m.tipo === 'pallet') {
+        its.push('p:' + m.merc_x + 'x' + m.merc_y + 'x' + m.altura_total +
+                 ':' + (m.nx || 0) + 'x' + (m.ny || 0) + 'x' + (m.camadas || 0));
+      } else {
+        its.push('m:' + m.id + ':' + (m.qty || 1) + ':' +
+                 m.comprimento + 'x' + m.largura + 'x' + m.altura);
+      }
+    }
+    its.sort();
+    return head.join('|') + '||' + its.join(',');
   }
 
   // ========== Recalc ==========

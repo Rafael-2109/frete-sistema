@@ -44,6 +44,45 @@ def _item(cod='A', ped='P1', cnpj='C1', qtd=64, larg=26, comp=26, alt=30.5,
     return CaixaItem(cod, ped, cnpj, qtd, larg, comp, alt, palt, peso)
 
 
+class TestGradeCaixas:
+    """Render por caixa (Frente C): to_dict expoe a grade nx*ny*camadas."""
+
+    def test_calcular_lastro_expoe_nx_ny_caixa(self):
+        # caixa 26x26 -> 4x4 caixas/camada; caixa_x/caixa_y = dim no eixo
+        r = calcular_lastro(largura_cm=26, comprimento_cm=26)
+        assert r['nx'] == 4 and r['ny'] == 4
+        assert r['caixa_x'] == 26 and r['caixa_y'] == 26
+        assert r['nx'] * r['caixa_x'] == r['merc_x']
+        assert r['ny'] * r['caixa_y'] == r['merc_y']
+
+    def test_calcular_lastro_orientacao_B_inverte_caixa(self):
+        # caixa 40x30 -> orient B vence (lastro 9): caixa_x=comprimento=30, caixa_y=largura=40
+        r = calcular_lastro(largura_cm=40, comprimento_cm=30)
+        assert r['lastro'] == 9
+        assert r['nx'] == 3 and r['ny'] == 3
+        assert r['caixa_x'] == 30 and r['caixa_y'] == 40
+
+    def test_to_dict_expoe_grade_de_caixas(self):
+        # 64 caixas, caixa 26x26x30.5, lastro 16 -> 4 camadas
+        pallets, _ = montar_pallets([_item(qtd=64, palt=64, larg=26, comp=26, alt=30.5)])
+        d = pallets[0].to_dict()
+        assert d['nx'] == 4 and d['ny'] == 4
+        assert d['caixa_x'] == 26 and d['caixa_y'] == 26 and d['caixa_z'] == 30.5
+        assert d['camadas'] == 4
+        assert d['total_caixas'] == 64
+        # a grade cobre a mercadoria e comporta todas as caixas
+        assert d['nx'] * d['caixa_x'] == d['merc_x']
+        assert d['ny'] * d['caixa_y'] == d['merc_y']
+        assert d['camadas'] * d['nx'] * d['ny'] >= d['total_caixas']
+
+    def test_to_dict_camada_parcial(self):
+        # 12 caixas, lastro 16 -> 1 camada parcial (12 < 16)
+        pallets, _ = montar_pallets([_item(qtd=12, palt=64, larg=26, comp=26, alt=30.5)])
+        d = pallets[0].to_dict()
+        assert d['camadas'] == 1
+        assert d['total_caixas'] == 12
+
+
 class TestMontagem:
     def test_pallet_fechado_regra1(self):
         # 128 caixas, limite 64 -> 2 pallets fechados, sem fracao
@@ -208,3 +247,28 @@ class TestEmbarqueMisto:
         dados = _resolver_dados_embarque(emb)
         assert 'pallets' in dados
         assert len(dados['pallets']) == 2
+
+    def test_resolver_propaga_pendencias_nacom(self, db):
+        # Produto Nacom com cadastro INCOMPLETO (dims zeradas) NAO vira pallet —
+        # deve ser reportado em 'pendencias' (nao descartado em silencio, Frente B).
+        from app.embarques.models import Embarque, EmbarqueItem
+        from app.carvia.routes.simulador_routes import _resolver_dados_embarque
+        cod = f"TEST{uuid.uuid4().hex[:8]}"
+        lote = f"LOTE_{uuid.uuid4().hex[:10]}"
+        db.session.add(CadastroPalletizacao(
+            cod_produto=cod, nome_produto='SEM DIMS', palletizacao=45, peso_bruto=1.0,
+            altura_cm=0, largura_cm=0, comprimento_cm=0, ativo=True))
+        emb = Embarque(numero=int(uuid.uuid4().int % 1000000), modalidade='TOCO', status='ativo')
+        db.session.add(emb)
+        db.session.flush()
+        db.session.add(EmbarqueItem(
+            embarque_id=emb.id, separacao_lote_id=lote, status='ativo',
+            cliente='C', pedido='P1', uf_destino='SP', cidade_destino='Sao Paulo'))
+        db.session.add(Separacao(separacao_lote_id=lote, num_pedido='P1', cnpj_cpf='C1',
+                                 cod_produto=cod, qtd_saldo=7, cod_uf='SP'))
+        db.session.flush()
+
+        dados = _resolver_dados_embarque(emb)
+        assert dados['pallets'] == []
+        assert 'pendencias' in dados
+        assert any(p['cod_produto'] == cod for p in dados['pendencias'])

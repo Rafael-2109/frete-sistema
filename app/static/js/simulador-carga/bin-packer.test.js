@@ -236,5 +236,124 @@ test('pallet sobre pallet: ON empilha (+15cm estrado)', () => {
   assert(ys[1] >= 135 - 0.1, 'outro empilhado acima do topo (15+120)');
 });
 
+// ---- Frente C: grade de caixas do pallet (render por caixa) ----
+
+function palletComGrade(camadas, total) {
+  return { tipo: 'pallet', nome: 'P', base_x: 100, base_y: 120, altura_estrado: 15,
+    merc_x: 104, merc_y: 104, altura_merc: 122, altura_total: 15 + camadas * 30.5,
+    caixa_x: 26, caixa_y: 26, caixa_z: 30.5, nx: 4, ny: 4, camadas: camadas,
+    total_caixas: total, qty: 1 };
+}
+
+test('palletCaixas: grade cheia tem nx*ny*camadas caixas, todas com a dim da caixa', () => {
+  const boxes = BinPacker.palletCaixas(palletComGrade(4, 64));
+  assert(boxes.length === 64, `esperava 64, veio ${boxes.length}`);
+  boxes.forEach(b => assert(b.w === 26 && b.d === 26 && Math.abs(b.h - 30.5) < 1e-9, 'dim da caixa'));
+});
+
+test('palletCaixas: primeira camada assenta no topo do estrado (y=altura_estrado)', () => {
+  const boxes = BinPacker.palletCaixas(palletComGrade(4, 64));
+  assert(Math.abs(boxes[0].y - 15) < 1e-9, `y=${boxes[0].y} (esperado 15)`);
+});
+
+test('palletCaixas: ultima camada parcial respeita total_caixas (12 de 16)', () => {
+  const boxes = BinPacker.palletCaixas(palletComGrade(1, 12));
+  assert(boxes.length === 12, `esperava 12, veio ${boxes.length}`);
+});
+
+test('palletCaixas: caixas nunca se sobrepoem entre si', () => {
+  const boxes = BinPacker.palletCaixas(palletComGrade(2, 32));
+  const E = 0.01;
+  for (let i = 0; i < boxes.length; i++) for (let j = i + 1; j < boxes.length; j++) {
+    const a = boxes[i], b = boxes[j];
+    const overlap = a.x < b.x + b.w - E && a.x + a.w > b.x + E &&
+                    a.y < b.y + b.h - E && a.y + a.h > b.y + E &&
+                    a.z < b.z + b.d - E && a.z + a.d > b.z + E;
+    assert(!overlap, `caixas ${i} e ${j} se sobrepoem`);
+  }
+});
+
+test('palletCaixas: pallet sem grade (campos ausentes) -> [] (fallback 1 bloco)', () => {
+  const boxes = BinPacker.palletCaixas({ tipo: 'pallet', base_x: 100, base_y: 120,
+    altura_estrado: 15, merc_x: 90, merc_y: 120, altura_total: 100 });
+  assert(boxes.length === 0, `esperava 0, veio ${boxes.length}`);
+});
+
+test('expandItems preserva a grade de caixas no item posicionado', () => {
+  const r = BinPacker.pack({ w: 200, d: 200, h: 200 }, [palletComGrade(4, 64)]);
+  const m = r.placed[0].moto;
+  assert(m.nx === 4 && m.ny === 4 && m.camadas === 4 && m.total_caixas === 64, 'grade preservada');
+  assert(m.caixa_x === 26 && Math.abs(m.caixa_z - 30.5) < 1e-9, 'dims da caixa preservadas');
+});
+
+// ---- Frente A: monotonia em minSupport (packMonotonic) ----
+
+// Carga que EXIBE a inversao do SA (caso real reportado: 10% cabia menos que 15%).
+const CARGA_INVERTE = [
+  { id: 1, nome: 'FANTON',   comprimento: 160, largura: 38, altura: 75, peso_medio: 136.8,   qty: 9 },
+  { id: 2, nome: 'X11 MINI', comprimento: 141, largura: 39, altura: 65, peso_medio: 107.2,   qty: 22 },
+  { id: 3, nome: 'X12',      comprimento: 148, largura: 37, altura: 64, peso_medio: 105.1,   qty: 18 },
+  { id: 4, nome: 'JET',      comprimento: 168, largura: 42, altura: 84, peso_medio: 177.811, qty: 9 },
+  { id: 5, nome: 'BOB',      comprimento: 142, largura: 32, altura: 75, peso_medio: 102.24,  qty: 3 },
+  { id: 6, nome: 'BIG TRI',  comprimento: 137, largura: 76, altura: 61, peso_medio: 190.5,   qty: 4 },
+];
+const AMPL_MAX = { maxOverhang: 60, maxGap: 150 };
+// A monotonia e garantida POR CONSTRUCAO (max sobre sufixo da escada), independe do
+// orcamento — os testes usam budget pequeno p/ rodar rapido.
+const FAST = { maxIters: 30, maxMs: 4000 };
+
+test('escada: o melhor acumulado ao afrouxar o apoio NUNCA decresce (monotonia)', () => {
+  // 1 computacao da escada. packMonotonic(t) = melhor dos degraus >= t, logo o
+  // "melhor ate aqui" varrendo do mais restritivo (100%) ao permissivo (10%) so sobe.
+  const ladder = BinPacker.packLadder(BAY, CARGA_INVERTE, AMPL_MAX, FAST);
+  let melhor = -1, prev = -1;
+  for (let i = 0; i < ladder.length; i++) {
+    melhor = Math.max(melhor, ladder[i].result.stats.posicionadas);
+    assert(melhor >= prev, `apoio ${ladder[i].threshold * 100}%: max-sufixo ${melhor} caiu vs ${prev}`);
+    prev = melhor;
+  }
+});
+
+test('packMonotonic = melhor degrau da escada (>= minSupport)', () => {
+  const ladder = BinPacker.packLadder(BAY, CARGA_INVERTE, AMPL_MAX, FAST);
+  const maxLadder = Math.max.apply(null, ladder.map(x => x.result.stats.posicionadas));
+  const mono10 = BinPacker.packMonotonic(BAY, CARGA_INVERTE, Object.assign({ minSupport: 0.10 }, AMPL_MAX), FAST).stats.posicionadas;
+  assert(mono10 === maxLadder, `monotonic@10% ${mono10} != melhor da escada ${maxLadder}`);
+});
+
+test('packMonotonic resolve a inversao do caso real: 10% nunca pior que 15%', () => {
+  const m10 = BinPacker.packMonotonic(BAY, CARGA_INVERTE, Object.assign({ minSupport: 0.10 }, AMPL_MAX), FAST).stats.posicionadas;
+  const m15 = BinPacker.packMonotonic(BAY, CARGA_INVERTE, Object.assign({ minSupport: 0.15 }, AMPL_MAX), FAST).stats.posicionadas;
+  assert(m10 >= m15, `monotonic@10% ${m10} < monotonic@15% ${m15}`);
+});
+
+test('packMonotonic nunca posiciona menos que packOptimized no mesmo minSupport', () => {
+  for (const pct of [10, 50]) {
+    const opt = Object.assign({ minSupport: pct / 100 }, AMPL_MAX);
+    const mono = BinPacker.packMonotonic(BAY, CARGA_INVERTE, opt, FAST).stats.posicionadas;
+    const sa = BinPacker.packOptimized(BAY, CARGA_INVERTE, opt, FAST).stats.posicionadas;
+    assert(mono >= sa, `${pct}%: monotonic ${mono} < optimized ${sa}`);
+  }
+});
+
+test('packMonotonic e deterministico (mesma entrada -> mesmo resultado)', () => {
+  const a = BinPacker.packMonotonic(BAY, CARGA_INVERTE, Object.assign({ minSupport: 0.30 }, AMPL_MAX), FAST).stats;
+  const b = BinPacker.packMonotonic(BAY, CARGA_INVERTE, Object.assign({ minSupport: 0.30 }, AMPL_MAX), FAST).stats;
+  assert(a.posicionadas === b.posicionadas && a.volumeOcupado === b.volumeOcupado, 'divergiu');
+});
+
+test('packMonotonic mantem invariantes fisicos (sem sobreposicao, dentro do bau)', () => {
+  const p = BinPacker.packMonotonic(BAY, CARGA_INVERTE, Object.assign({ minSupport: 0.10 }, AMPL_MAX), FAST).placed;
+  const E = 0.1;
+  for (let i = 0; i < p.length; i++) for (let j = i + 1; j < p.length; j++) {
+    const a = p[i], b = p[j];
+    const overlap = a.x < b.x + b.w - E && a.x + a.w > b.x + E &&
+                    a.y < b.y + b.h - E && a.y + a.h > b.y + E &&
+                    a.z < b.z + b.d - E && a.z + a.d > b.z + E;
+    assert(!overlap, `sobreposicao ${a.moto.nome} x ${b.moto.nome}`);
+  }
+  p.forEach(b => assert(b.x + b.w <= BAY.w + E && b.y + b.h <= BAY.h + E && b.z + b.d <= BAY.d + E, `${b.moto.nome} fora do bau`));
+});
+
 console.log(failures === 0 ? '\nTODOS OS TESTES PASSARAM' : `\n${failures} TESTE(S) FALHARAM`);
 process.exit(failures === 0 ? 0 : 1);

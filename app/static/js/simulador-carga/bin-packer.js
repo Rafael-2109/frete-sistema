@@ -72,20 +72,29 @@
    */
   function packOptimized(bay, motoList, options, budget) {
     var opt = normalizeOptions(options);
+    var base = expandItems(motoList);
+    if (base.length > MAX_ITEMS) base = base.slice(0, MAX_ITEMS);
+    return _packSA(bay, base, opt, budget, null);
+  }
+
+  /**
+   * Motor do Simulated Annealing sobre a ORDEM de insercao. `base` ja vem expandido
+   * e `opt` normalizado. `startOrder` (opcional) e um WARM-START: a busca parte dessa
+   * ordem em vez da heuristica altura-deitada — usado pela escada (packLadder) para
+   * encadear thresholds. Anexa `_order` (a melhor ordem encontrada) ao resultado.
+   */
+  function _packSA(bay, base, opt, budget, startOrder) {
     budget = budget || {};
     var maxIters = (typeof budget.maxIters === 'number') ? budget.maxIters : 160;
     var maxMs = (typeof budget.maxMs === 'number') ? budget.maxMs : 1500;
-
-    var base = expandItems(motoList);
-    if (base.length > MAX_ITEMS) base = base.slice(0, MAX_ITEMS);
     var total = base.length;
 
-    // Solucao inicial = heuristica altura-deitada asc (melhor passada unica).
-    var current = sortByLayingHeight(base.slice());
+    // Solucao inicial = warm-start (se dado) ou heuristica altura-deitada asc.
+    var current = startOrder ? startOrder.slice() : sortByLayingHeight(base.slice());
     var currentRes = packItems(bay, current, opt);
     var currentE = energy(currentRes);
-    var bestRes = currentRes, bestE = currentE;
-    if (bestRes.stats.posicionadas >= total) return bestRes; // ja cabe tudo
+    var bestRes = currentRes, bestE = currentE, bestOrder = current;
+    if (bestRes.stats.posicionadas >= total) { bestRes._order = bestOrder.slice(); return bestRes; }
 
     var rng = makeRng(0x9e3779b9);
     var clock = (typeof performance !== 'undefined' && performance.now)
@@ -114,13 +123,85 @@
       var e = energy(res);
       if (e < currentE || rng() < Math.exp(-(e - currentE) / T)) {
         current = cand; currentE = e; currentRes = res;
-        if (e < bestE) { bestE = e; bestRes = res; }
+        if (e < bestE) { bestE = e; bestRes = res; bestOrder = cand; }
       }
       T *= cool;
       if (bestRes.stats.posicionadas >= total) break;         // acomodou tudo
       if ((it & 15) === 0 && clock() - t0 > maxMs) break;      // guarda de tempo
     }
+    bestRes._order = bestOrder.slice();
     return bestRes;
+  }
+
+  // Grade de thresholds de apoio do slider (100% -> 10%, passo 5%).
+  var SLIDER_THRESHOLDS = (function () {
+    var a = [];
+    for (var pct = 100; pct >= 10; pct -= 5) a.push(pct / 100);
+    return a;
+  })();
+
+  /**
+   * Escada de empacotamento: roda o SA para CADA threshold de apoio do slider, do
+   * mais restritivo (100%) ao mais permissivo (10%). Cada degrau parte da MESMA
+   * heuristica inicial (cold-start altura-deitada) — warm-start encadeado foi
+   * descartado porque propagava ordens sub-otimas dos degraus restritivos e PIORAVA
+   * a qualidade. Com cold-start, o degrau de cada threshold == packOptimized(threshold),
+   * entao bestOfLadder >= packOptimized no mesmo apoio (garantia testada). Early-stop:
+   * quando um degrau acomoda TUDO, os mais permissivos herdam (apoio menor => continua
+   * valido e cheio). Retorna [{threshold, result}] do mais restritivo ao mais permissivo.
+   */
+  function packLadder(bay, motoList, options, budget) {
+    var opt0 = normalizeOptions(options);
+    var base = expandItems(motoList);
+    if (base.length > MAX_ITEMS) base = base.slice(0, MAX_ITEMS);
+    var total = base.length;
+
+    var ladder = [];
+    var full = null;
+    for (var i = 0; i < SLIDER_THRESHOLDS.length; i++) {
+      var t = SLIDER_THRESHOLDS[i];
+      var res;
+      if (full) {
+        res = full; // ja acomodou tudo num apoio MAIS exigente -> vale aqui tambem
+      } else {
+        var optS = normalizeOptions({
+          minSupport: t, maxOverhang: opt0.maxOverhang,
+          maxGap: opt0.maxGap, palletSobrePallet: opt0.palletSobrePallet,
+        });
+        res = _packSA(bay, base, optS, budget, null);
+        if (res.stats.posicionadas >= total) full = res;
+      }
+      ladder.push({ threshold: t, result: res });
+    }
+    return ladder;
+  }
+
+  /** Melhor resultado da escada com threshold >= minSupport (todos validos p/ ele). */
+  function bestOfLadder(ladder, minSupport) {
+    var best = null;
+    for (var i = 0; i < ladder.length; i++) {
+      if (ladder[i].threshold < minSupport - 1e-9) continue;
+      var r = ladder[i].result;
+      if (!best || r.stats.posicionadas > best.stats.posicionadas ||
+          (r.stats.posicionadas === best.stats.posicionadas &&
+           r.stats.volumeOcupado > best.stats.volumeOcupado)) {
+        best = r;
+      }
+    }
+    return best || ladder[ladder.length - 1].result;
+  }
+
+  /**
+   * Empacotamento MONOTONO em minSupport: afrouxar o apoio NUNCA posiciona menos.
+   * Computa a escada (packLadder) e retorna o melhor layout entre os thresholds
+   * >= minSupport pedido (todos fisicamente validos para ele). Monotono por
+   * construcao: minSupport menor so AMPLIA o sufixo da escada -> resultado nunca cai.
+   * Elimina a incoerencia do SA puro (orcamento fixo dava resultado nao-monotono).
+   */
+  function packMonotonic(bay, motoList, options, budget) {
+    var opt0 = normalizeOptions(options);
+    var ladder = packLadder(bay, motoList, options, budget);
+    return bestOfLadder(ladder, opt0.minSupport);
   }
 
   /** Energia a minimizar: prioriza nº de motos; desempata por volume ocupado. */
@@ -236,6 +317,10 @@
           it.altura = m.altura_total; it.comprimento = m.base_x; it.largura = m.base_y;
           it.volume = m.base_x * m.base_y * m.altura_total;
           it.grupo = m.grupo;
+          // Grade de caixas (render por caixa) — preservada p/ o renderer.
+          it.caixa_x = m.caixa_x; it.caixa_y = m.caixa_y; it.caixa_z = m.caixa_z;
+          it.nx = m.nx; it.ny = m.ny; it.camadas = m.camadas;
+          it.total_caixas = m.total_caixas;
         }
         items.push(it);
       }
@@ -277,6 +362,35 @@
       { x: x, y: y, z: z, w: bx, d: by, h: est },
       { x: x + ox, y: y + est, z: z + oy, w: mx, d: my, h: alt - est },
     ];
+  }
+
+  /**
+   * Grade de caixas de um pallet, em coordenadas RELATIVAS ao canto (x,y,z) do
+   * pallet. Cada caixa = {x,y,z,w,d,h}. A mercadoria e centralizada sobre o estrado
+   * (offset pode ser negativo se a coluna excede a base); a ultima camada pode ser
+   * parcial (total_caixas < camadas*nx*ny). Retorna [] se o pallet nao traz a grade
+   * (campos ausentes/zero) — o renderer entao desenha 1 bloco unico (fallback).
+   */
+  function palletCaixas(item) {
+    var nx = item.nx | 0, ny = item.ny | 0, camadas = item.camadas | 0;
+    var cx = item.caixa_x, cy = item.caixa_y, cz = item.caixa_z;
+    var total = item.total_caixas | 0;
+    if (nx <= 0 || ny <= 0 || camadas <= 0 || !cx || !cy || !cz || total <= 0) return [];
+    var ox = (item.base_x - nx * cx) / 2;  // centraliza a coluna na base
+    var oy = (item.base_y - ny * cy) / 2;
+    var est = item.altura_estrado || 0;
+    var boxes = [];
+    var n = 0;
+    for (var k = 0; k < camadas && n < total; k++) {
+      for (var iy = 0; iy < ny && n < total; iy++) {
+        for (var ix = 0; ix < nx && n < total; ix++) {
+          boxes.push({ x: ox + ix * cx, y: est + k * cz, z: oy + iy * cy,
+                       w: cx, d: cy, h: cz });
+          n++;
+        }
+      }
+    }
+    return boxes;
   }
 
   function getOrientations(item) {
@@ -624,5 +738,8 @@
     return keep;
   }
 
-  window.BinPacker = { pack: pack, packOptimized: packOptimized };
+  window.BinPacker = {
+    pack: pack, packOptimized: packOptimized, packMonotonic: packMonotonic,
+    packLadder: packLadder, bestOfLadder: bestOfLadder, palletCaixas: palletCaixas,
+  };
 })();

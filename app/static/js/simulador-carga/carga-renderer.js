@@ -216,17 +216,30 @@
         var ehPallet = p.moto && p.moto.tipo === 'pallet';
 
         if (ehPallet) {
-          // Estrado PBR (cinza) + coluna de mercadoria (cor do grupo, centralizada).
+          // Estrado PBR (cinza) + CAIXAS individuais empilhadas (cor do grupo).
           var corPallet = (p.moto.color && typeof p.moto.color === 'string')
             ? parseInt(p.moto.color.replace('#', ''), 16)
             : this._resolveColor(p.moto, colorMap, i);
           this._addBox(p.x, p.y, p.z,
             p.moto.base_x, p.moto.base_y, p.moto.altura_estrado, 0x9e9e9e, 0.9);
-          var ox = (p.moto.base_x - p.moto.merc_x) / 2;
-          var oy = (p.moto.base_y - p.moto.merc_y) / 2;
-          this._addBox(p.x + ox, p.y + p.moto.altura_estrado, p.z + oy,
-            p.moto.merc_x, p.moto.merc_y, p.moto.altura_total - p.moto.altura_estrado,
-            corPallet, 0.82);
+          // Render por caixa (Frente C): desenha a grade nx*ny*camadas; cada caixa
+          // ganha seu wireframe (separacao visual). Fallback p/ 1 bloco unico se o
+          // pallet nao trouxer a grade (cadastro antigo sem dims da caixa).
+          var caixas = (window.BinPacker && window.BinPacker.palletCaixas)
+            ? window.BinPacker.palletCaixas(p.moto) : [];
+          if (caixas.length) {
+            for (var cb = 0; cb < caixas.length; cb++) {
+              var cxn = caixas[cb];
+              this._addBox(p.x + cxn.x, p.y + cxn.y, p.z + cxn.z,
+                cxn.w, cxn.d, cxn.h, corPallet, 0.9);
+            }
+          } else {
+            var ox = (p.moto.base_x - p.moto.merc_x) / 2;
+            var oy = (p.moto.base_y - p.moto.merc_y) / 2;
+            this._addBox(p.x + ox, p.y + p.moto.altura_estrado, p.z + oy,
+              p.moto.merc_x, p.moto.merc_y, p.moto.altura_total - p.moto.altura_estrado,
+              corPallet, 0.82);
+          }
         } else {
           this._addBox(p.x, p.y, p.z, p.w, p.d, p.h,
             this._resolveColor(p.moto, colorMap, i), 0.82);

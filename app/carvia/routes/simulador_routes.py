@@ -49,6 +49,7 @@ def register_simulador_routes(bp):
                     'unidades': dados.get('unidades', []),
                     'nfs': dados.get('nfs', []),
                     'pallets': dados.get('pallets', []),
+                    'pendencias': dados.get('pendencias', []),
                     'peso_total': dados['peso_total'],
                     'items_sem_modelo': dados['items_sem_modelo'],
                 }, ensure_ascii=False)
@@ -285,8 +286,11 @@ def _resolver_dados_embarque(embarque):
         if (it.separacao_lote_id or '').startswith('LOTE_')
     }
     pallets = []
+    pendencias = []
     for lote in lotes_nacom:
-        pallets.extend(montar_pallets_da_separacao(lote)['pallets'])
+        out = montar_pallets_da_separacao(lote)
+        pallets.extend(out['pallets'])
+        pendencias.extend(out.get('pendencias', []))
 
     return {
         'embarque_id': embarque.id,
@@ -296,6 +300,9 @@ def _resolver_dados_embarque(embarque):
         'unidades': [_unidade_de_nf(n) for n in nfs],
         'nfs': nfs,
         'pallets': pallets,
+        # Produtos Nacom sem cadastro de palletizacao completo NAO viram pallet;
+        # propagados aqui p/ a UI avisar (Frente B) em vez de sumirem em silencio.
+        'pendencias': pendencias,
         'peso_total': peso_total,
         'items_sem_modelo': items_sem_modelo,
         'erro': 'veiculo_sem_dimensoes' if not veiculo_data else None,
