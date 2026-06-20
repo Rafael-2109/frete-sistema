@@ -4,7 +4,7 @@ camada: L2
 sot_de: —
 hub: .claude/references/INDEX.md
 superseded_by: —
-atualizado: 2026-06-02
+atualizado: 2026-06-20
 -->
 # S3 Storage — Uso no Sistema de Fretes
 
@@ -50,7 +50,7 @@ atualizado: 2026-06-02
 - [Migration path: local → S3](#migration-path-local-s3)
 - [Links](#links)
 
-**Ultima Atualizacao**: 2026-04-16
+**Ultima Atualizacao**: 2026-06-20
 
 > Documento autoritativo sobre o que e gravado em AWS S3 hoje no projeto.
 > **Antes de propor DB persistente ou disco Render para arquivos, CONSULTE aqui** — S3 ja esta em producao com 18+ call sites integrados em ~14 modulos.
@@ -106,13 +106,17 @@ storage = get_file_storage()  # instancia por-request (lazy boto3 init)
 
 ### 1. Agente Web — Upload de arquivos do chat
 
-**Arquivo**: `app/agente/routes/files.py`
+**Arquivo**: `app/agente/routes/files.py` + `app/agente/services/upload_recovery_service.py`
 **O que grava**: uploads do usuario no chat (PDF, Excel, CSV, imagens, texto, CNAB, OFX)
-**Onde grava**: `/tmp/agente_files/{user_id}/{session_id}/{uuid8}_{filename}` (disco local efemero — NAO usa S3)
+**Onde grava — local**: `/tmp/agente_files/{user_id}/{session_id}/{uuid8}_{filename}` (disco efemero — uso imediato da sessao)
+**Onde grava — S3**: `agente-uploads/{user_id}/{uuid8}_{filename}` (dual-write, IMP-2026-06-19-007)
 **Trigger**: POST `/agente/api/upload` (usuario faz upload no chat)
-**Como consulta**: `GET /agente/api/files/{session_id}/{filename}` via `send_file` local
-**Quota**: 20 arquivos por sessao, 50MB total por sessao
-**Nota**: Este modulo usa `/tmp/` local (Render ephemeral), NAO FileStorage/S3. Arquivos sao efemeros por sessao. Extensoes: pdf, xlsx, xls, csv, docx, doc, rtf, png, jpg, jpeg, gif, webp, txt, md, json, xml, log, rem, ret, cnab, ofx.
+**Como consulta**: `GET /agente/api/files/{session_id}/{filename}` via `send_file` local; ENTRE sessoes, tools `mcp__sessions__list_session_uploads` + `recover_upload` (baixam do S3 para o /tmp da sessao atual)
+**Manifesto**: tabela `agente_upload` (1 linha por upload: `user_id`, `session_id`, `file_id`, `safe_name`, `s3_key`, `criado_em`, `expira_em`, `ativo`) — escopo por `user_id`, query por recencia. Migration: `scripts/migrations/2026_06_20_agente_upload.{py,sql}`
+**Quota (/tmp)**: 20 arquivos por sessao, 50MB total por sessao (inalterada — o dual-write NAO altera a quota local)
+**S3 condicional**: dual-write apenas se `USE_S3=true`, best-effort/nao-fatal — com `USE_S3` off o upload local segue valido e `persistir_upload_s3` retorna None (no-op). TTL ~90d (`expira_em`)
+**Causa-raiz**: anexos so em /tmp sumiam na rotacao de sessao por idle (IMP-2026-06-20-002 / IMP-2026-06-19-008) — esta persistencia + recuperacao resolve estruturalmente; o aviso do `resume_notice` (`hooks.py`) virou rede de seguranca
+**Extensoes**: pdf, xlsx, xls, csv, docx, doc, rtf, png, jpg, jpeg, gif, webp, txt, md, json, xml, log, rem, ret, cnab, ofx.
 
 ---
 
@@ -384,6 +388,7 @@ storage = get_file_storage()  # instancia por-request (lazy boto3 init)
 |---|---|---|
 | `agent-archive/{YYYY-MM}/` | Agente | tarball .tar.gz sessao SDK |
 | `playwright-screenshots/{YYYY-MM}/` | Agente | PNG/JPEG screenshots |
+| `agente-uploads/{user_id}/` | Agente | Uploads do chat (dual /tmp+S3, manifesto `agente_upload`, TTL 90d) |
 | `carvia/nfs_xml/` | CarVia | XMLs NF-e importados |
 | `carvia/nfs_pdf/` | CarVia | PDFs DANFE importados |
 | `carvia/ctes_complementares_xml/` | CarVia | XMLs CTe Complementar |
@@ -420,7 +425,7 @@ storage = get_file_storage()  # instancia por-request (lazy boto3 init)
 - **Filename default**: `{YYYYMMDD_HHMMSS}_{uuid[:8]}_{secure_filename(original)}`
 - **Filename customizado**: quando o chamador passa `filename=` explicitamente (ex: `{chave_acesso}.pdf`)
 - **ACL**: todos os objetos criados com `ACL: private`
-- **TTL**: sem lifecycle rule configurada por padrao. `agent-archive/` e `playwright-screenshots/` sao candidatos a expiracao em 30d/7d respectivamente (nao implementado ainda)
+- **TTL**: sem lifecycle rule de bucket configurada por padrao. `agente-uploads/` (90d, rastreado por `expira_em` da tabela `agente_upload`), `agent-archive/` (30d) e `playwright-screenshots/` (7d) sao candidatos a expiracao (lifecycle rule do bucket nao implementada ainda). **Follow-up (baixo ROI, IMP-2026-06-19-007 Task 5)**: cron que marca `agente_upload.ativo=False` e remove do S3 onde `expira_em < agora` — ainda NAO implementado
 - **Privacidade**: acesso sempre via presigned URL (1h GET, 1h download). Nunca URL publica
 
 ---
@@ -434,7 +439,7 @@ storage = get_file_storage()  # instancia por-request (lazy boto3 init)
 | JSONB estruturado < 1MB (cost entries, configs) | **DB** | Queries agregadas, indice GIN |
 | Transcript SDK grande (sessao agente) | **DB TEXT** | `sdk_session_transcript` (TEXT, ate 1GB) — ja decidido |
 | Files temporarios < 1h (intermediarios de processamento) | **/tmp/** | Render ephemeral OK; nao persistir |
-| Uploads chat agente (por-sessao) | **/tmp/** | Efemero por design; ver modulo 1 acima |
+| Uploads chat agente (por-sessao) | **/tmp/ + S3** | /tmp p/ uso imediato; S3 (`agente-uploads/`) p/ recuperacao entre sessoes apos rotacao — ver modulo 1 |
 | Logs de auditoria append-only | **DB** | Queryable, indexado |
 | Dados binarios frequentemente lidos < 10KB | **DB bytea ou TEXT** | Evita RTT S3 e overhead presigned |
 | Screenshots Playwright | **S3 + /tmp/** | Local para serve imediato; S3 para persistencia cross-deploy |
