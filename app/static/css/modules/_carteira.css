@@ -328,6 +328,66 @@
     font-weight: bold;
   }
 
+  /* Corpo do card (permite truncar nome em flex — precisa de min-width:0) */
+  .cliente-item-body {
+    min-width: 0;
+  }
+
+  /* Header do card: nome (trunca) + badges/acoes (nao encolhem) */
+  .cliente-item-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+  }
+
+  .cliente-item-nome {
+    font-size: 0.82rem;
+    font-weight: 600;
+    line-height: 1.2;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .cliente-item-badges {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+  }
+
+  .cliente-item-badges .badge {
+    font-size: 0.62rem;
+    font-weight: 600;
+    padding: 0.25em 0.5em;
+  }
+
+  .cliente-item-local {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    margin-top: 1px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .cliente-item-metrics {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 8px;
+    font-size: 0.78rem;
+    margin-top: 1px;
+  }
+
+  .cliente-item-valor {
+    font-weight: 600;
+    color: var(--bs-body-color);
+    font-variant-numeric: tabular-nums;
+  }
+
   /* Sub-itens dos pedidos (sempre visiveis, compactos) */
   .cliente-pedidos {
     border-top: 1px dashed var(--bs-border-color);
@@ -336,16 +396,64 @@
   }
 
   .pedido-sub-item {
-    font-size: 0.78rem;
-    padding: 1px 0;
+    font-size: 0.76rem;
+    padding: 3px 4px;
+    border-radius: 4px;
+  }
+
+  .pedido-sub-item + .pedido-sub-item {
+    margin-top: 2px;
+  }
+
+  .pedido-sub-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 6px;
+  }
+
+  .pedido-sub-id {
+    font-weight: 600;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .pedido-sub-valor {
+    white-space: nowrap;
+    color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
   }
 
   .pedido-sub-datas {
-    font-size: 0.72rem;
+    font-size: 0.7rem;
+    margin-top: 1px;
   }
 
   .pedido-sub-item:hover {
-    background: hsla(0 0% 0% / 0.05);
+    background: var(--hover-bg);
+  }
+
+  /* Chips compactos (moto / NF) reutilizados na lista e na InfoWindow.
+     Cor vem de classes utilitarias Bootstrap (text-bg-*) no HTML — este
+     template e standalone (so Bootstrap CDN), e a policy proibe tokens
+     --bs-*-subtle/emphasis em CSS modulo (P6). Aqui so o shape/tamanho. */
+  .pedido-sub-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 3px;
+  }
+
+  .chip-sm {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    font-size: 0.66rem;
+    font-weight: 600;
+    line-height: 1;
+    white-space: nowrap;
   }
 
   /* Botao de remover entrega da lista */

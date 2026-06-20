@@ -168,6 +168,19 @@ NAO a variavel estatica injetada no load (que vem vazia no fluxo interativo).
   `viabilidade` (= receita − custo da rota) no JSON de `/api/rota/otimizar`. `mapa_pedidos.html`
   exibe a row `#viabilidadeRow` (card "CarVia (receita)" + "Viabilidade" verde/vermelho) — visivel
   a quem acessa o mapa (NAO admin-only; o admin-only e so o badge no embarque).
+- **Motos + NF no pedido_info do mapa (2026-06-19)**: `mapa_service.obter_clientes_para_mapa`
+  enriquece cada `pedido` com `qtd_motos` (int) e `nfs` (list[str]) e o `cliente.totais` com
+  `qtd_motos` (soma). Fontes: **NACOM** = motos sempre 0 (conservas), `nfs` de `Separacao.numero_nf`
+  (distinct, so pos-faturamento); **CarVia pedido** (`CARVIA-PED-{id}`) = `SUM(quantidade)` dos
+  `CarviaPedidoItem` COM `modelo_moto_id` (fonte canonica pre-faturamento, espelha
+  `calcular_peso_cubado_nf`) + `CarviaPedidoItem.numero_nf` distinct; **CarVia cotacao solta**
+  (`CARVIA-{cot}`) = `CarviaCotacao.qtd_total_motos` so se `tipo_material='MOTO'`, sem NF.
+  No front (`mapa_pedidos.html`): o **pointer** ganha selo lateral `🏍 N` (SVG cresce p/ 96px;
+  retangulo de peso e omitido quando `peso=0`, ex.: moto) quando `totais.qtd_motos>0`; a **lista
+  lateral** e a **InfoWindow** (agora DRY via `renderPedidoSubItem`) mostram chips `🏍`/`NF` por
+  pedido (`renderPedidoChips`) + selo de motos no header. Chips usam tokens `--bs-warning/info-*`
+  (tematizados light/dark). Contrato JSON aditivo e retrocompativel (front faz `|| 0` / `|| []`).
+  Testes: `tests/carteira/test_mapa_motos_nf.py` (caminho NACOM).
 
 ---
 

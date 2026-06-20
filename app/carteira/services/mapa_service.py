@@ -323,6 +323,12 @@ class MapaService:
                 partes_endereco.append("Brasil")
                 endereco_completo = ", ".join(filter(None, partes_endereco))
 
+                # NFs do pedido (preenchidas apos faturamento) — exibidas na lista/mapa
+                nfs_pedido = sorted({
+                    str(s.numero_nf).strip() for s in seps
+                    if s.numero_nf and str(s.numero_nf).strip()
+                })
+
                 # Dados do pedido
                 pedido_info = {
                     'num_pedido': num_pedido,
@@ -335,7 +341,9 @@ class MapaService:
                     'agendamento': agendamento,
                     'agendamento_confirmado': agendamento_confirmado,
                     'protocolo': protocolo,
-                    'separacao_lote_id': separacao_lote_id
+                    'separacao_lote_id': separacao_lote_id,
+                    'qtd_motos': 0,   # NACOM (conservas) nao transporta motos
+                    'nfs': nfs_pedido,
                 }
 
                 if cliente_key not in clientes_dict:
@@ -361,7 +369,8 @@ class MapaService:
                             'peso': 0,
                             'pallet': 0,
                             'itens': 0,
-                            'qtd_pedidos': 0
+                            'qtd_pedidos': 0,
+                            'qtd_motos': 0
                         },
                         'coordenadas': None  # Será preenchido após geocodificação
                     }
@@ -373,6 +382,7 @@ class MapaService:
                 clientes_dict[cliente_key]['totais']['pallet'] += pedido_info['pallet']
                 clientes_dict[cliente_key]['totais']['itens'] += pedido_info['itens']
                 clientes_dict[cliente_key]['totais']['qtd_pedidos'] += 1
+                clientes_dict[cliente_key]['totais']['qtd_motos'] += pedido_info['qtd_motos']
 
             # 4. Mesclar CarVia (mesmo CNPJ+endereco = mesmo cliente_key)
             for cv_cliente in clientes_carvia:
@@ -380,7 +390,7 @@ class MapaService:
                 if key in clientes_dict:
                     # Append pedidos do CarVia ao cliente existente
                     clientes_dict[key]['pedidos'].extend(cv_cliente['pedidos'])
-                    for k in ('valor', 'peso', 'pallet', 'itens', 'qtd_pedidos'):
+                    for k in ('valor', 'peso', 'pallet', 'itens', 'qtd_pedidos', 'qtd_motos'):
                         clientes_dict[key]['totais'][k] += cv_cliente['totais'].get(k, 0)
                 else:
                     clientes_dict[key] = cv_cliente
@@ -516,18 +526,25 @@ class MapaService:
                 ).all()
                 enderecos_dict = {e.id: e for e in rows}
 
-            # Buscar valores agregados por pedido (SUM CarviaPedidoItem.valor_total)
+            # Agregar por pedido: valor (SUM valor_total), nº de itens, qtd de motos
+            # (SUM quantidade dos itens COM modelo_moto_id — fonte canonica da
+            # contagem de motos pre-faturamento; espelha calcular_peso_cubado_nf)
+            # e NFs distintas (preenchidas pos-faturamento em CarviaPedidoItem.numero_nf).
             valores_por_ped = {}
+            motos_por_ped = {}
+            nfs_por_ped = {}
             if ped_ids:
-                rows = db.session.query(
-                    CarviaPedidoItem.pedido_id,
-                    func.coalesce(func.sum(CarviaPedidoItem.valor_total), 0).label('valor'),
-                    func.count(CarviaPedidoItem.id).label('itens'),
-                ).filter(
+                itens_rows = CarviaPedidoItem.query.filter(
                     CarviaPedidoItem.pedido_id.in_(list(ped_ids))
-                ).group_by(CarviaPedidoItem.pedido_id).all()
-                for pid, valor, itens in rows:
-                    valores_por_ped[pid] = (float(valor or 0), int(itens or 0))
+                ).all()
+                for it in itens_rows:
+                    pid = it.pedido_id
+                    valor_acc, itens_acc = valores_por_ped.get(pid, (0.0, 0))
+                    valores_por_ped[pid] = (valor_acc + float(it.valor_total or 0), itens_acc + 1)
+                    if it.modelo_moto_id:
+                        motos_por_ped[pid] = motos_por_ped.get(pid, 0) + int(it.quantidade or 0)
+                    if it.numero_nf and str(it.numero_nf).strip():
+                        nfs_por_ped.setdefault(pid, set()).add(str(it.numero_nf).strip())
 
             # Montar dict de clientes
             clientes_dict = {}
@@ -577,7 +594,7 @@ class MapaService:
                         'pedidos': [],
                         'totais': {
                             'valor': 0, 'peso': 0, 'pallet': 0,
-                            'itens': 0, 'qtd_pedidos': 0,
+                            'itens': 0, 'qtd_pedidos': 0, 'qtd_motos': 0,
                         },
                         'coordenadas': None,
                     }
@@ -588,6 +605,7 @@ class MapaService:
                 clientes_dict[key]['totais']['pallet'] += pedido_info['pallet']
                 clientes_dict[key]['totais']['itens'] += pedido_info['itens']
                 clientes_dict[key]['totais']['qtd_pedidos'] += 1
+                clientes_dict[key]['totais']['qtd_motos'] += pedido_info.get('qtd_motos', 0)
 
             # Adicionar pedidos
             for p in pedidos_cv:
@@ -608,6 +626,8 @@ class MapaService:
                     'agendamento_confirmado': False,
                     'protocolo': None,
                     'separacao_lote_id': f'CARVIA-PED-{p.id}',
+                    'qtd_motos': motos_por_ped.get(p.id, 0),
+                    'nfs': sorted(nfs_por_ped.get(p.id, set())),
                 }
                 _add_to_cliente(end, pedido_info)
 
@@ -633,6 +653,10 @@ class MapaService:
                     'agendamento_confirmado': False,
                     'protocolo': None,
                     'separacao_lote_id': f'CARVIA-{cot.id}',
+                    # Cotacao "solta" (sem pedido): so conta motos se for material MOTO;
+                    # NF inexistente nesta fase (pre-pedido/pre-faturamento)
+                    'qtd_motos': int(cot.qtd_total_motos or 0) if cot.tipo_material == 'MOTO' else 0,
+                    'nfs': [],
                 }
                 _add_to_cliente(end, pedido_info)
 

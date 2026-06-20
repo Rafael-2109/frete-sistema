@@ -640,15 +640,32 @@
 
                 // Formatar peso para exibição
                 const pesoFormatado = formatarPeso(cliente.totais.peso);
+                const qtdMotos = cliente.totais.qtd_motos || 0;
+                const temMotos = qtdMotos > 0;
+                const temPeso = (cliente.totais.peso || 0) > 0;
+                // Largura do SVG cresce p/ acomodar o selo de motos (🏍 N) ao lado do pin
+                const svgW = temMotos ? 96 : 50;
 
-                // Criar marker customizado com número e peso
+                // Selo lateral de motos — só aparece p/ cliente CarVia de moto
+                const motoBadgeSvg = temMotos ? `
+                                <rect x="49" y="11" width="44" height="20" rx="10" fill="#0f172a" stroke="white" stroke-width="1.5"/>
+                                <text x="71" y="25" fill="white" font-size="12" font-weight="bold" text-anchor="middle">🏍 ${qtdMotos}</text>
+                ` : '';
+
+                // Retângulo de peso — omitido quando não há peso (ex.: moto CarVia, peso cubado)
+                const pesoRectSvg = temPeso ? `
+                                <rect x="3" y="42" width="44" height="16" rx="4" fill="#1e40af"/>
+                                <text x="25" y="54" fill="white" font-size="9" text-anchor="middle">${pesoFormatado}</text>
+                ` : '';
+
+                // Criar marker customizado com número, peso e (opcional) selo de motos
                 const marker = new google.maps.Marker({
                     position: position,
                     map: map,
-                    title: `${cliente.cliente.nome} - ${cliente.totais.qtd_pedidos} pedido(s)`,
+                    title: `${cliente.cliente.nome} - ${cliente.totais.qtd_pedidos} pedido(s)${temMotos ? ` · ${qtdMotos} moto(s)` : ''}`,
                     icon: {
                         url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(`
-                            <svg xmlns="http://www.w3.org/2000/svg" width="50" height="70" viewBox="0 0 50 70">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="${svgW}" height="70" viewBox="0 0 ${svgW} 70">
                                 <!-- Círculo principal com número -->
                                 <circle cx="25" cy="20" r="18" fill="${getMarkerHexColor(cliente.status)}" stroke="white" stroke-width="2"/>
                                 <text x="25" y="26" fill="white" font-size="16" font-weight="bold" text-anchor="middle">${index + 1}</text>
@@ -657,12 +674,11 @@
                                 <circle cx="40" cy="8" r="8" fill="#ef4444" stroke="white" stroke-width="1"/>
                                 <text x="40" y="12" fill="white" font-size="10" font-weight="bold" text-anchor="middle">${cliente.totais.qtd_pedidos}</text>
                                 ` : ''}
-                                <!-- Retângulo com peso -->
-                                <rect x="3" y="42" width="44" height="16" rx="4" fill="#1e40af"/>
-                                <text x="25" y="54" fill="white" font-size="9" text-anchor="middle">${pesoFormatado}</text>
+                                ${pesoRectSvg}
+                                ${motoBadgeSvg}
                             </svg>
                         `),
-                        scaledSize: new google.maps.Size(50, 70),
+                        scaledSize: new google.maps.Size(svgW, 70),
                         anchor: new google.maps.Point(25, 70)
                     },
                     animation: google.maps.Animation.DROP,
@@ -761,28 +777,12 @@
 
         // Mostrar InfoWindow para cliente (com lista de pedidos)
         function mostrarInfoWindowCliente(marker, cliente) {
-            // Gerar lista de pedidos do cliente
-            let pedidosHtml = '';
-            cliente.pedidos.forEach((pedido, idx) => {
-                const statusAgend = pedido.agendamento_confirmado
-                    ? '<span class="badge bg-success">Confirmado</span>'
-                    : (pedido.agendamento ? '<span class="badge bg-warning">Aguardando</span>' : '');
-
-                pedidosHtml += `
-                    <div class="border-start border-2 ps-2 mb-2 ${idx > 0 ? 'mt-2' : ''}">
-                        <div class="d-flex justify-content-between align-items-center">
-                            <strong>${pedido.num_pedido}</strong>
-                            ${statusAgend}
-                        </div>
-                        <div class="small text-muted">
-                            R$ ${(pedido.valor || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} |
-                            ${formatarPeso(pedido.peso)}
-                        </div>
-                        ${pedido.expedicao ? `<div class="small">Exp: ${pedido.expedicao}</div>` : ''}
-                        ${pedido.agendamento ? `<div class="small">Agend: ${pedido.agendamento}</div>` : ''}
-                    </div>
-                `;
-            });
+            // Lista de pedidos: mesmo render da lista lateral (DRY) — ja traz chips de moto/NF
+            const pedidosHtml = cliente.pedidos.map(renderPedidoSubItem).join('');
+            const qtdMotosCliente = cliente.totais.qtd_motos || 0;
+            const motoBadgeHeader = qtdMotosCliente > 0
+                ? `<span class="badge rounded-pill text-bg-warning ms-2" title="${qtdMotosCliente} moto(s)">🏍 ${qtdMotosCliente}</span>`
+                : '';
 
             const content = `
                 <div class="info-window" style="max-width: 350px;">
@@ -790,6 +790,7 @@
                         <h6 class="mb-0 text-white">
                             <i class="fas fa-building"></i> ${cliente.cliente.nome}
                             <span class="badge bg-dark ms-2">${cliente.totais.qtd_pedidos} pedido(s)</span>
+                            ${motoBadgeHeader}
                         </h6>
                     </div>
                     <div class="info-window-content">
@@ -819,8 +820,9 @@
                                 <div class="text-muted">Peso</div>
                             </div>
                             <div class="col-4">
-                                <div class="fw-bold text-info">${cliente.totais.pallet.toFixed(2)}</div>
-                                <div class="text-muted">Pallets</div>
+                                ${qtdMotosCliente > 0
+                                    ? `<div class="fw-bold">🏍 ${qtdMotosCliente}</div><div class="text-muted">Motos</div>`
+                                    : `<div class="fw-bold text-info">${cliente.totais.pallet.toFixed(2)}</div><div class="text-muted">Pallets</div>`}
                             </div>
                         </div>
 
@@ -928,6 +930,24 @@
             return selecionados;
         }
 
+        // Chips compactos de moto (🏍) e NF — reutilizados na lista E na InfoWindow.
+        // Motos: CarVia de moto (qtd). NF: so quando ja existe (pos-faturamento).
+        function renderPedidoChips(pedido) {
+            let html = '';
+            const qtdMotos = pedido.qtd_motos || 0;
+            if (qtdMotos > 0) {
+                html += `<span class="badge rounded-pill text-bg-warning chip-sm" title="${qtdMotos} moto(s)">🏍 ${qtdMotos}</span>`;
+            }
+            const nfs = pedido.nfs || [];
+            if (nfs.length) {
+                html += `<span class="badge rounded-pill text-bg-info chip-sm" title="Nota Fiscal ${nfs[0]}"><i class="fas fa-file-invoice"></i> NF ${nfs[0]}</span>`;
+                if (nfs.length > 1) {
+                    html += `<span class="badge rounded-pill text-bg-secondary chip-sm" title="${nfs.join(', ')}">+${nfs.length - 1}</span>`;
+                }
+            }
+            return html;
+        }
+
         // Sub-item de pedido (formato unico, sempre com expedicao/agendamento).
         // Usado na lista lateral E na InfoWindow (DRY) — itens #11/#13.
         function renderPedidoSubItem(pedido) {
@@ -938,12 +958,14 @@
             const exp = pedido.expedicao ? `Exp ${pedido.expedicao}` : '';
             const ag = pedido.agendamento ? `Ag ${pedido.agendamento}` : '';
             const datas = [exp, ag].filter(Boolean).join(' · ');
+            const chips = renderPedidoChips(pedido);
             return `
-                <div class="pedido-sub-item small">
-                    <div class="d-flex justify-content-between">
-                        <span>${pedido.num_pedido} ${agend}</span>
-                        <span class="text-nowrap">${valor}</span>
+                <div class="pedido-sub-item">
+                    <div class="pedido-sub-top">
+                        <span class="pedido-sub-id">${pedido.num_pedido} ${agend}</span>
+                        <span class="pedido-sub-valor">${valor}</span>
                     </div>
+                    ${chips ? `<div class="pedido-sub-chips">${chips}</div>` : ''}
                     ${datas ? `<div class="pedido-sub-datas text-muted">${datas}</div>` : ''}
                 </div>`;
         }
@@ -971,6 +993,12 @@
                 // Sub-itens dos pedidos (sempre visiveis — formato unico)
                 const pedidosHtml = cliente.pedidos.map(renderPedidoSubItem).join('');
 
+                const qtdMotosCliente = cliente.totais.qtd_motos || 0;
+                const motoBadge = qtdMotosCliente > 0
+                    ? `<span class="badge rounded-pill text-bg-warning" title="${qtdMotosCliente} moto(s)">🏍 ${qtdMotosCliente}</span>`
+                    : '';
+                const temPesoCliente = (cliente.totais.peso || 0) > 0;
+
                 html += `
                     <div class="cliente-item ${statusClass} ${cliente.na_rota ? 'na-rota' : ''}" data-cliente-id="${cliente.cliente_id}"
                          draggable="true" ondragstart="dndStart(event, ${index})" ondragover="dndOver(event)" ondrop="dndDrop(event, ${index})" title="Arraste para reordenar a rota">
@@ -979,13 +1007,14 @@
                                    data-cliente-id="${cliente.cliente_id}"
                                    ${isChecked ? 'checked' : ''}
                                    onchange="toggleClienteSelecao(this);">
-                            <div class="flex-grow-1">
-                                <div class="d-flex justify-content-between align-items-start">
-                                    <strong style="cursor:pointer" onclick="focusCliente(${index})">${index + 1}. ${cliente.cliente.nome || 'Cliente'}</strong>
-                                    <span class="d-flex align-items-center">
+                            <div class="flex-grow-1 cliente-item-body">
+                                <div class="cliente-item-head">
+                                    <strong class="cliente-item-nome" style="cursor:pointer" onclick="focusCliente(${index})">${index + 1}. ${cliente.cliente.nome || 'Cliente'}</strong>
+                                    <span class="cliente-item-badges">
+                                        ${motoBadge}
                                         ${cliente.placeholder
-                                            ? '<span class="badge bg-info me-1" title="Parada extra (não cotável)"><i class=\'fas fa-map-pin\'></i> extra</span>'
-                                            : `<span class="badge bg-info me-1">${cliente.totais.qtd_pedidos} ped.</span>`}
+                                            ? '<span class="badge bg-info" title="Parada extra (não cotável)"><i class=\'fas fa-map-pin\'></i> extra</span>'
+                                            : `<span class="badge bg-info">${cliente.totais.qtd_pedidos} ped.</span>`}
                                         <button class="btn-remover-entrega" title="Remover do mapa"
                                                 onclick="event.stopPropagation(); removerEntrega('${cliente.cliente_id}')">
                                             <i class="fas fa-times"></i>
@@ -993,10 +1022,10 @@
                                     </span>
                                 </div>
                                 <div style="cursor:pointer" onclick="focusCliente(${index})">
-                                    <div class="small text-muted">${cliente.endereco.cidade || ''}/${cliente.endereco.uf || ''}</div>
-                                    <div class="small d-flex justify-content-between">
-                                        <span>R$ ${cliente.totais.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
-                                        <span>${formatarPeso(cliente.totais.peso)}</span>
+                                    <div class="cliente-item-local"><i class="fas fa-map-marker-alt"></i> ${cliente.endereco.cidade || ''}/${cliente.endereco.uf || ''}</div>
+                                    <div class="cliente-item-metrics">
+                                        <span class="cliente-item-valor">R$ ${cliente.totais.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                                        ${temPesoCliente ? `<span class="text-muted">${formatarPeso(cliente.totais.peso)}</span>` : ''}
                                     </div>
                                 </div>
                                 <div class="cliente-pedidos mt-1">${pedidosHtml}</div>
