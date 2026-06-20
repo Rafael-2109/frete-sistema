@@ -1065,17 +1065,12 @@ def register_cotacao_v2_routes(bp):
                     **_ctx_criar(),
                 )
 
-            # Criacao tardia: pricing do CTe existente
-            is_criacao_tardia = request.form.get('criacao_tardia') == '1'
-
-            # tipo_carga + veiculo (DIRETA only)
-            # Criacao tardia: tipo_carga nasce vazio (forcar preenchimento)
-            tipo_carga_raw = request.form.get('tipo_carga', '')
-            if not is_criacao_tardia:
-                tipo_carga = tipo_carga_raw or 'FRACIONADA'
-            else:
-                tipo_carga = tipo_carga_raw if tipo_carga_raw in ('DIRETA', 'FRACIONADA') else None
-            if tipo_carga in ('DIRETA', 'FRACIONADA'):
+            # tipo_carga OPCIONAL (2026-06-20): vazio = sem distincao -> cota em
+            # todas as modalidades (DIRETA + FRACIONADA) e pega a menor. So grava
+            # quando o usuario escolhe explicitamente DIRETA ou FRACIONADA.
+            tipo_carga_raw = (request.form.get('tipo_carga') or '').strip().upper()
+            tipo_carga = tipo_carga_raw if tipo_carga_raw in ('DIRETA', 'FRACIONADA') else None
+            if tipo_carga:
                 cotacao.tipo_carga = tipo_carga
             veiculo_id_form = request.form.get('veiculo_id', type=int)
             if veiculo_id_form and tipo_carga == 'DIRETA':
@@ -1102,36 +1097,8 @@ def register_cotacao_v2_routes(bp):
 
             db.session.flush()
 
-            if is_criacao_tardia and nf_id_param:
-                # Criacao tardia: pricing do CTe existente (backend determina valor)
-                from decimal import Decimal as _Decimal
-                from app.carvia.models import CarviaNf as _CarviaNf
-                nf_tardia = db.session.get(_CarviaNf, nf_id_param) if nf_id_param else None
-                if nf_tardia:
-                    ops_nf = nf_tardia.operacoes.all()
-                    cte_valor = sum(_Decimal(str(op.cte_valor or 0)) for op in ops_nf)
-                    if cte_valor > 0:
-                        cotacao.criacao_tardia = True
-                        cotacao.valor_tabela = cte_valor
-                        cotacao.valor_descontado = cte_valor
-                        cotacao.valor_final_aprovado = cte_valor
-                        cotacao.percentual_desconto = _Decimal('0')
-                        cotacao.dentro_tabela = True
-                        logger.info(
-                            "Cotacao %s criada como tardia (CTe valor=%s, NF=%s)",
-                            cotacao.id, cte_valor, nf_id_param,
-                        )
-                    else:
-                        logger.warning(
-                            "Criacao tardia sem CTe valor para NF %s, prosseguindo sem pricing",
-                            nf_id_param,
-                        )
-            else:
-                # Auto-cotar apos criacao (fluxo normal)
-                try:
-                    CotacaoV2Service.calcular_preco(cotacao.id)
-                except Exception as e_price:
-                    logger.warning("Auto-cotacao falhou para %s: %s", cotacao.id, e_price)
+            # Pricing roda APOS criar pedidos/NFs (ver bloco mais abaixo): se as
+            # NFs ja tiverem CTe, aproveita o valor do CTe; senao cota pela tabela.
 
             # Criar 1 pedido por NF — suporta array de NFs (multi-NF)
             nf_dados_raw = request.form.get('nf_dados_json', '').strip()
@@ -1394,6 +1361,16 @@ def register_cotacao_v2_routes(bp):
                         "Wizard: erro ao importar hook status: %s", e_hook_imp
                     )
 
+            # Pricing final (2026-06-20): se a(s) NF(s) da cotacao ja tem CTe,
+            # aproveita o valor do CTe como valor de venda; senao cota pela tabela
+            # CarVia (fluxo normal). Roda APOS criar pedidos/NFs para enxergar as NFs.
+            try:
+                aproveitou, _ = CotacaoV2Service.aproveitar_cte_se_houver(cotacao.id)
+                if not aproveitou:
+                    CotacaoV2Service.calcular_preco(cotacao.id)
+            except Exception as e_price:
+                logger.warning("Pricing pos-criacao falhou para %s: %s", cotacao.id, e_price)
+
             db.session.commit()
             n_pedidos = len(nfs_list)
             msg_pedidos = f' com {n_pedidos} pedido(s)' if n_pedidos else ''
@@ -1582,12 +1559,13 @@ def register_cotacao_v2_routes(bp):
             if 'tipo_material' in data and data['tipo_material'] in ('CARGA_GERAL', 'MOTO'):
                 cotacao.tipo_material = data['tipo_material']
 
-            # Tipo carga + veiculo
+            # Tipo carga + veiculo — OPCIONAL (vazio = sem distincao, permitido)
             if 'tipo_carga' in data:
-                new_tc = (data['tipo_carga'] or '').upper()
-                if new_tc in ('DIRETA', 'FRACIONADA') and new_tc != cotacao.tipo_carga:
+                new_tc = (data['tipo_carga'] or '').strip().upper()
+                new_tc = new_tc if new_tc in ('DIRETA', 'FRACIONADA') else None
+                if new_tc != cotacao.tipo_carga:
                     cotacao.tipo_carga = new_tc
-                    # Limpar veiculo se saiu de DIRETA
+                    # Limpar veiculo se nao e DIRETA
                     if new_tc != 'DIRETA':
                         cotacao.veiculo_id = None
                     # Limpar pricing (tipo_carga mudou)
@@ -1851,12 +1829,13 @@ def register_cotacao_v2_routes(bp):
                     cotacao.percentual_desconto = None
             if data.get('tipo_material') in ('CARGA_GERAL', 'MOTO'):
                 cotacao.tipo_material = data['tipo_material']
-            if data.get('tipo_carga') in ('DIRETA', 'FRACIONADA'):
-                new_tc = data['tipo_carga']
-                if new_tc != cotacao.tipo_carga:
-                    # Limpar veiculo se saiu de DIRETA
-                    if new_tc != 'DIRETA':
-                        cotacao.veiculo_id = None
+            # tipo_carga OPCIONAL — vazio limpa a distincao (permitido)
+            if 'tipo_carga' in data:
+                new_tc = (data.get('tipo_carga') or '').strip().upper()
+                new_tc = new_tc if new_tc in ('DIRETA', 'FRACIONADA') else None
+                # Limpar veiculo se nao e DIRETA
+                if new_tc != cotacao.tipo_carga and new_tc != 'DIRETA':
+                    cotacao.veiculo_id = None
                 cotacao.tipo_carga = new_tc
 
             if 'veiculo_id' in data:
@@ -2528,7 +2507,7 @@ def register_cotacao_v2_routes(bp):
     @bp.route('/api/cotacoes/<int:cotacao_id>/enviar', methods=['POST']) # type: ignore
     @login_required
     def api_enviar_cotacao(cotacao_id): # type: ignore
-        """Marca como ENVIADO"""
+        """Grava a cotacao aprovando direto (pula a etapa de aprovacao do cliente)."""
         if not getattr(current_user, 'sistema_carvia', False):
             return jsonify({'erro': 'Acesso negado.'}), 403
 
@@ -2540,7 +2519,7 @@ def register_cotacao_v2_routes(bp):
             if not sucesso:
                 return jsonify({'erro': erro}), 400
             db.session.commit()
-            return jsonify({'sucesso': True, 'mensagem': 'Cotacao enviada.'})
+            return jsonify({'sucesso': True, 'mensagem': 'Cotacao gravada e aprovada.'})
         except Exception as e:
             db.session.rollback()
             return jsonify({'erro': f'Erro: {e}'}), 500

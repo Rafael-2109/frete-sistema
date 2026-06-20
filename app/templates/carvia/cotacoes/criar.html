@@ -259,12 +259,10 @@
                         </select>
                     </div>
                     <div class="col-md-3">
-                        <label class="form-label">Tipo Carga <span class="text-danger">*</span></label>
-                        <select name="tipo_carga" id="selTipoCargaCriar" class="form-select" required
+                        <label class="form-label">Tipo Carga</label>
+                        <select name="tipo_carga" id="selTipoCargaCriar" class="form-select"
                                 onchange="toggleVeiculoCriar()">
-                            {% if criacao_tardia %}
-                            <option value="">Selecione...</option>
-                            {% endif %}
+                            <option value="">Sem distincao</option>
                             <option value="FRACIONADA">Fracionada</option>
                             <option value="DIRETA">Direta</option>
                         </select>

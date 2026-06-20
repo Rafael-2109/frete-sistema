@@ -50,10 +50,47 @@ CarviaTabelaService.cotar_carvia(categorias_moto=[{categoria_id, quantidade}]):
 
 | Feature | Modelo | Prefixo | Label UI | Uso |
 |---------|--------|---------|----------|-----|
-| Cotacao Comercial | `CarviaCotacao` | `COT-###` | "Cotacao Comercial" | Fluxo formal: cliente → pricing → desconto → aprovacao → pedido |
+| Cotacao Comercial | `CarviaCotacao` | `COT-###` | "Cotacao Comercial" | Fluxo formal: cliente → pricing → desconto → gravar (aprova direto) → pedido |
 | Cotacao de Rotas | `CarviaSessaoCotacao` | `COTACAO-###` | "Cotacao de Rotas" | Ferramenta pontual: cotar rota para cliente sob demanda |
 
 Ambos coexistem sem colisao de prefixo. NAO deprecar nenhum.
+
+---
+
+## Cotacao Comercial (`CarviaCotacao`) — fluxo de status e pricing
+
+`CotacaoV2Service` + `routes/cotacao_v2_routes.py` (wizard `/carvia/cotacoes/nova`).
+
+### Fluxo de status (2026-06-20)
+
+```
+RASCUNHO ──(Gravar = marcar_enviado)──> APROVADO ──> [Pedido / Embarque / CTe]
+   │  desconto > limite OU valor manual (toggle exigir_aprovacao_admin ON)
+   └──> PENDENTE_ADMIN ──(admin_aprovar)──> RASCUNHO
+CANCELADO <── cancelar (qualquer status); reabrir: APROVADO ──> RASCUNHO
+```
+
+- **"Gravar" pula a aprovacao do cliente**: `marcar_enviado` vai DIRETO de
+  `RASCUNHO`/`RECUSADO` para `APROVADO` (grava `aprovado_por`/`aprovado_em`). A
+  etapa intermediaria `ENVIADO` + as transicoes `registrar_aprovacao_cliente` /
+  `registrar_recusa_cliente` / `registrar_contra_proposta` permanecem APENAS para
+  cotacoes legadas que ja estejam em `ENVIADO` (botoes mantidos no `detalhe.html`).
+  `STATUSES` do model ainda inclui `ENVIADO` (retrocompat).
+
+### `tipo_carga` OPCIONAL
+
+`tipo_carga` (`DIRETA`/`FRACIONADA`) e **opcional** na criacao/edicao. Vazio = "sem
+distincao" → `cotar_carvia(tipo_carga=None)` busca em TODAS as modalidades e pega a
+menor (so `DIRETA` exige veiculo). Form: `<select>` sem `required`, com opcao vazia.
+
+### Aproveitamento automatico do CTe
+
+Se a(s) NF(s) vinculadas a cotacao ja possuem CTe CarVia (`CarviaOperacao.cte_valor`),
+`CotacaoV2Service.aproveitar_cte_se_houver` usa a **SOMA dos `cte_valor`** (dedup por
+operacao — 1 CTe pode cobrir N NFs) como valor de venda e marca `criacao_tardia=True`,
+**substituindo** o calculo de tabela. Roda no fim de `criar_cotacao_v2`, APOS criar
+pedidos/NFs; so cai em `calcular_preco` (tabela) quando nao ha CTe. Independe da flag
+`criacao_tardia` do link — e automatico para qualquer NF anexada.
 
 ---
 

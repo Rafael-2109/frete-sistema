@@ -343,6 +343,64 @@ class CotacaoV2Service:
 
         return None
 
+    @staticmethod
+    def aproveitar_cte_se_houver(cotacao_id: int) -> Tuple[bool, Decimal]:
+        """Aproveita o valor do CTe quando a(s) NF(s) da cotacao ja possuem CTe CarVia.
+
+        Quando a cotacao e criada a partir de NF que ja tem CTe (CarviaOperacao),
+        o valor de venda real e o do proprio CTe — nao o calculo de tabela. Soma
+        os `cte_valor` das operacoes ATIVAS das NFs vinculadas (via pedidos ->
+        itens -> numero_nf), deduplicando por operacao (1 CTe pode cobrir N NFs).
+
+        Se a soma > 0, grava o valor na cotacao e marca `criacao_tardia=True`.
+        Substitui o calculo de tabela. Retorna (aproveitou, cte_total).
+        """
+        from app.carvia.models import CarviaCotacao, CarviaNf
+
+        cotacao = db.session.get(CarviaCotacao, cotacao_id)
+        if not cotacao:
+            return False, Decimal('0')
+
+        # Numeros de NF dos itens dos pedidos da cotacao
+        numeros = {
+            item.numero_nf
+            for pedido in cotacao.pedidos.all()
+            for item in pedido.itens.all()
+            if item.numero_nf
+        }
+        if not numeros:
+            return False, Decimal('0')
+
+        nfs = CarviaNf.query.filter(
+            CarviaNf.numero_nf.in_([str(n) for n in numeros]),
+            CarviaNf.status == 'ATIVA',
+        ).all()
+
+        # Dedup por operacao (1 CTe pode estar vinculado a varias NFs)
+        ops = {}
+        for nf in nfs:
+            for op in nf.operacoes.all():
+                if op.status != 'CANCELADO':
+                    ops[op.id] = op
+
+        cte_total = sum((Decimal(str(op.cte_valor or 0)) for op in ops.values()), Decimal('0'))
+        if cte_total <= 0:
+            return False, Decimal('0')
+
+        cotacao.criacao_tardia = True
+        cotacao.valor_tabela = cte_total
+        cotacao.valor_descontado = cte_total
+        cotacao.valor_final_aprovado = cte_total
+        cotacao.percentual_desconto = Decimal('0')
+        cotacao.dentro_tabela = True
+        db.session.flush()
+
+        logger.info(
+            "Cotacao %s: valor do CTe aproveitado (total=%s, %d operacao(oes), NFs=%s)",
+            cotacao.id, cte_total, len(ops), sorted(numeros),
+        )
+        return True, cte_total
+
     # ==================== COTACAO MANUAL ====================
 
     # ==================== AJUSTE POS-APROVACAO (Fase C) ====================
@@ -622,7 +680,14 @@ class CotacaoV2Service:
 
     @staticmethod
     def marcar_enviado(cotacao_id: int, enviado_por: str) -> Tuple[bool, Optional[str]]:
-        """Jessica marca cotacao como enviada ao cliente."""
+        """Grava a cotacao APROVANDO direto (pula a etapa de aprovacao do cliente).
+
+        Decisao 2026-06-20: a etapa intermediaria ENVIADO -> "aprovacao do
+        cliente" nao e usada na operacao e so adicionava passo. Ao "Gravar", a
+        cotacao vai DIRETO para APROVADO (com aprovado_por/aprovado_em). O estado
+        ENVIADO e as transicoes registrar_aprovacao_cliente/recusa/contra-proposta
+        permanecem apenas para cotacoes legadas que ja estejam em ENVIADO.
+        """
         from app.carvia.models import CarviaCotacao
         from app.utils.timezone import agora_utc_naive
 
@@ -643,7 +708,9 @@ class CotacaoV2Service:
                 'Destino provisorio sem CNPJ. Preencha o CNPJ do destino antes de gravar.'
             )
 
-        cotacao.status = 'ENVIADO'
+        cotacao.status = 'APROVADO'
+        cotacao.aprovado_por = enviado_por
+        cotacao.aprovado_em = agora_utc_naive()
         db.session.flush()
         return True, None
 
