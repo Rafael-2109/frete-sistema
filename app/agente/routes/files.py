@@ -11,6 +11,7 @@ from flask import request, jsonify, send_file
 from flask_login import login_required, current_user
 from werkzeug.utils import secure_filename
 
+from app import db
 from app.agente.routes import agente_bp
 from app.agente.routes._constants import (
     UPLOAD_FOLDER,
@@ -97,6 +98,23 @@ def _validate_magic_bytes(file, ext: str) -> tuple:
     )
 
 
+def _get_session_folder_for_user(user_id, session_id: str) -> str:
+    """
+    Retorna a pasta /tmp da sessao para um user_id EXPLICITO, criando se necessario.
+
+    Variante de _get_session_folder que NAO depende de current_user — usavel
+    fora de request context (MCP tools em sdk-pool-daemon thread, recuperacao
+    de upload entre sessoes — IMP-2026-06-19-007).
+
+    session_id e sanitizado como defesa em profundidade (callers ja
+    deveriam ter chamado _sanitize_session_id antes de usar o valor).
+    """
+    safe_sid = _sanitize_session_id(session_id)
+    folder = os.path.join(UPLOAD_FOLDER, str(user_id), safe_sid)
+    os.makedirs(folder, exist_ok=True)
+    return folder
+
+
 def _get_session_folder(session_id: str) -> str:
     """
     Retorna o caminho da pasta da sessao, criando se necessario.
@@ -104,10 +122,7 @@ def _get_session_folder(session_id: str) -> str:
     session_id e sanitizado como defesa em profundidade (callers ja
     deveriam ter chamado _sanitize_session_id antes de usar o valor).
     """
-    safe_sid = _sanitize_session_id(session_id)
-    folder = os.path.join(UPLOAD_FOLDER, str(current_user.id), safe_sid)
-    os.makedirs(folder, exist_ok=True)
-    return folder
+    return _get_session_folder_for_user(current_user.id, session_id)
 
 
 def _get_file_type(filename: str) -> str:
@@ -332,6 +347,19 @@ def api_upload_file():
         file_path = os.path.join(folder, safe_name)
 
         file.save(file_path)
+
+        # IMP-2026-06-19-007: persiste no S3 + manifesto (recuperavel entre sessoes).
+        # Nao-fatal: se USE_S3 off ou S3 falhar, o upload local em /tmp segue valido.
+        try:
+            from app.agente.services.upload_recovery_service import persistir_upload_s3
+            persistir_upload_s3(
+                file, user_id=current_user.id, session_id=session_id,
+                file_id=file_id, original_name=original_name, safe_name=safe_name,
+                file_type=_get_file_type(original_name), size_bytes=file_size)
+            db.session.commit()
+        except Exception as s3_err:
+            db.session.rollback()
+            logger.warning(f"[AGENTE] Persistencia S3 do upload falhou (nao fatal): {s3_err}")
 
         logger.info(f"[AGENTE] Arquivo uploaded: {safe_name} ({file_size} bytes)")
 
