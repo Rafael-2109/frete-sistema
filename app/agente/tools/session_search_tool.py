@@ -1162,11 +1162,122 @@ try:
                 "structuredContent": structured}
 
     # ========================================================================
-    # MCP Server Registration (Enhanced v4.2.0)
+    # IMP-2026-06-19-007: recuperacao de uploads do chat entre sessoes
+    # ========================================================================
+    UPLOADS_LIST_OUTPUT_SCHEMA: dict = {
+        "type": "object",
+        "properties": {
+            "count": {"type": "integer"},
+            "uploads": {"type": "array", "items": {"type": "object", "properties": {
+                "file_id": {"type": "string"}, "original_name": {"type": "string"},
+                "file_type": {"type": ["string", "null"]}, "size_bytes": {"type": "integer"},
+                "session_id": {"type": "string"}, "criado_em": {"type": ["string", "null"]},
+            }}},
+        },
+        "required": ["count", "uploads"],
+    }
+
+    @enhanced_tool(
+        "list_session_uploads",
+        (
+            "Lista anexos (PDF/xlsx/XML) que o usuario enviou em sessoes ANTERIORES e que "
+            "podem ter sumido do /tmp na rotacao de sessao. Use quando o usuario disser que "
+            "perdeu arquivos ou apos aviso de rotacao. Retorna file_id para recuperar."
+        ),
+        {
+            "type": "object",
+            "properties": {
+                "dias": {"type": "integer", "description": "Janela de busca em dias (default 7)"},
+                "target_user_id": {"type": "integer", "description": "Admin-only (debug mode): uploads de outro usuario"},
+            },
+            "required": [],
+        },
+        annotations=ToolAnnotations(
+            readOnlyHint=True, destructiveHint=False,
+            idempotentHint=True, openWorldHint=False,
+        ),
+        output_schema=UPLOADS_LIST_OUTPUT_SCHEMA,
+    )
+    async def list_session_uploads(args: Dict[str, Any]) -> Dict[str, Any]:
+        """Lista uploads anteriores do usuario (por user_id, recencia)."""
+        try:
+            user_id = _resolve_user_id(args)
+        except (RuntimeError, PermissionError) as e:
+            return {"content": [{"type": "text", "text": f"Erro: {e}"}], "is_error": True}
+        dias = int(args.get("dias") or 7)
+
+        def _run():
+            from app.agente.services.upload_recovery_service import listar_uploads_usuario
+            return listar_uploads_usuario(user_id, dias=dias)
+
+        uploads = _execute_with_context(_run)
+        structured = {"count": len(uploads), "uploads": uploads}
+        if not uploads:
+            return {"content": [{"type": "text", "text": "Nenhum upload anterior encontrado."}],
+                    "structuredContent": structured}
+        linhas = [f"- {u['original_name']} (file_id={u['file_id']}, {u['file_type']}, "
+                  f"{u['size_bytes']} bytes, {u['criado_em']})" for u in uploads]
+        return {"content": [{"type": "text", "text": "\n".join(linhas)}],
+                "structuredContent": structured}
+
+    @enhanced_tool(
+        "recover_upload",
+        (
+            "Recupera para a sessao ATUAL um anexo enviado numa sessao anterior (baixa do S3 "
+            "para /tmp). Passe o file_id obtido de list_session_uploads. O session_id atual e "
+            "detectado automaticamente; so passe target_session_id para sobrescrever."
+        ),
+        {
+            "type": "object",
+            "properties": {
+                "file_id": {"type": "string", "description": "file_id do upload (de list_session_uploads)"},
+                "target_session_id": {"type": "string", "description": "Opcional: session_id destino (default = sessao atual)"},
+                "target_user_id": {"type": "integer", "description": "Admin-only (debug mode): recuperar upload de outro usuario"},
+            },
+            "required": ["file_id"],
+        },
+        annotations=ToolAnnotations(
+            readOnlyHint=False, destructiveHint=False,
+            idempotentHint=True, openWorldHint=False,
+        ),
+    )
+    async def recover_upload(args: Dict[str, Any]) -> Dict[str, Any]:
+        """Baixa um upload anterior para o /tmp da sessao atual."""
+        try:
+            user_id = _resolve_user_id(args)
+        except (RuntimeError, PermissionError) as e:
+            return {"content": [{"type": "text", "text": f"Erro: {e}"}], "is_error": True}
+        file_id = (args.get("file_id") or "").strip()
+        if not file_id:
+            return {"content": [{"type": "text", "text": "Erro: file_id obrigatorio."}],
+                    "is_error": True}
+        target = (args.get("target_session_id") or "").strip()
+        if not target:
+            try:
+                from ..config.permissions import get_current_session_id
+                target = (get_current_session_id() or "").strip()
+            except Exception:
+                target = ""
+        if not target:
+            return {"content": [{"type": "text", "text": "Erro: nao foi possivel determinar a sessao atual; passe target_session_id."}],
+                    "is_error": True}
+
+        def _run():
+            from app.agente.services.upload_recovery_service import recuperar_upload
+            return recuperar_upload(user_id, file_id, target_session_id=target)
+
+        path = _execute_with_context(_run)
+        if not path:
+            return {"content": [{"type": "text", "text": f"Upload {file_id} nao encontrado ou indisponivel."}],
+                    "is_error": True}
+        return {"content": [{"type": "text", "text": f"Arquivo recuperado para a sessao atual: {path}"}]}
+
+    # ========================================================================
+    # MCP Server Registration (Enhanced v4.3.0)
     # ========================================================================
     sessions_server = create_enhanced_mcp_server(
         name="sessions",
-        version="4.2.0",
+        version="4.3.0",
         tools=[
             search_sessions,
             list_recent_sessions,
@@ -1174,10 +1285,12 @@ try:
             list_session_users,
             get_subagent_transcript,
             get_session_transcript,
+            list_session_uploads,   # IMP-2026-06-19-007
+            recover_upload,         # IMP-2026-06-19-007
         ],
     )
 
-    logger.info("[SESSION_SEARCH] Enhanced MCP 'sessions' v4.2.0 registrado (6 tools, structuredContent)")
+    logger.info("[SESSION_SEARCH] Enhanced MCP 'sessions' v4.3.0 registrado (8 tools, structuredContent)")
 
 except ImportError as e:
     sessions_server = None
