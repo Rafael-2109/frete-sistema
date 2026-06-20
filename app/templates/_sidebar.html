@@ -692,6 +692,11 @@
         <li><a class="nc-sidebar__link" href="{{ url_for('carvia.simulador_carga') }}">
           <i class="fas fa-cube nc-sidebar__icon"></i>
           <span class="nc-sidebar__label">Simulador 3D</span></a></li>
+        {% if current_user.perfil == 'administrador' %}
+        <li><a class="nc-sidebar__link" href="{{ url_for('carvia.resultado_frete') }}">
+          <i class="fas fa-scale-balanced nc-sidebar__icon"></i>
+          <span class="nc-sidebar__label">Resultado por Frete</span></a></li>
+        {% endif %}
         {% endif %}
       </ul>
     </li>
