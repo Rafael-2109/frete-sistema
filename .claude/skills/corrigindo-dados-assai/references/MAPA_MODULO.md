@@ -77,7 +77,7 @@ SEPARADA -> DISPONIVEL        (desfazer_chassi / cancelar_separacao)
 SEPARADA/FECHADA -> CARREGADA (carregamento finalizado)
 SEPARADA -> FATURADA          (NF Q.P.A. BATEU — UNICO caminho)
 FATURADA -> CARREGADA/SEPARADA (cancelar_nf_qpa)
-FATURADA -> PENDENTE          (devolucao NFd)
+FATURADA -> PENDENTE          (devolucao NFd — service oficial; skill: --registrar-devolucao-nfd)
 ```
 > **Backfill (a skill) so opera ESTOQUE/MONTADA/PENDENTE/DISPONIVEL/DEMONSTRACAO.**
 > SEPARADA/CARREGADA/FATURADA = fluxo oficial (separar / NF).

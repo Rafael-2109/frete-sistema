@@ -73,6 +73,16 @@ Nacom). FATURADA nasce da NF Q.P.A. real (`--importar-nf`), nunca avulso.
 Correcao = NOVO evento (append-only); nunca UPDATE/DELETE de evento. Faturamento
 Q.P.A. NAO se mistura com o da Nacom (so a logistica espelha quando a sep fecha).
 
+### A7: Validar chassi por skill+fonte, NAO por cruzamento improvisado
+Antes de separar/faturar (especialmente backfill dirigido por planilha), valide
+EXISTENCIA e CONFLITO (chassi ja em separacao ativa) com fonte explicita:
+- 1 chassi pontual -> `rastreando-chassi-assai --chassi <X>` (historico + estado).
+- LOTE -> `consultando-estoque-assai` (estado agregado por modelo/pendencia) e/ou
+  consulta SQL CITANDO a tabela (`assai_moto` / `assai_separacao_item`).
+NUNCA cruze chassis "de cabeca" sem citar a tabela/evento. Se delegar a validacao
+a um sub-passo, passe os chassis INLINE no prompt — handoff por caminho `/tmp`
+falha entre processos (IMP-2026-06-19-009).
+
 ## ARVORE DE DECISAO
 
 | Pergunta do usuario | Skill |
@@ -140,6 +150,7 @@ Sintetize em 4-6 linhas com numeros exatos.
 > Ref: `.claude/references/AGENT_TEMPLATES.md#self-critique`
 
 - [ ] Citei o `status_efetivo` do chassi com fonte (`evento_id`)?
+- [ ] Validei existencia/conflito de chassi via skill+fonte (A7), nao por cruzamento improvisado?
 - [ ] Considerei se o usuario tem permissao (`pode_acessar_motos_assai`)?
 - [ ] Reportei resultados negativos explicitamente ("nenhum recibo encontrado")?
 - [ ] Em WRITE: o dry-run foi mostrado ANTES da confirmacao?

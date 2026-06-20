@@ -97,3 +97,85 @@ def test_parse_ocorrido_em_formatos():
     assert cda._parse_ocorrido_em('') is None
     with pytest.raises(ValueError):
         cda._parse_ocorrido_em('data-invalida')
+
+
+# ----- registrar-devolucao-nfd (IMP-2026-06-19-010) -------------------------
+# Validacao de args + dry-run sao PUROS (nao tocam DB): o service so e' chamado
+# no --confirmar. Testa o contrato do handler sem fixtures de banco.
+import types  # noqa: E402
+
+
+def _args_dev(**kw):
+    base = dict(nf_id=None, numero_nfd=None, motivo=None, data_devolucao=None,
+                chassis_json=None, chassi=None, confirmar=False, user_id=74)
+    base.update(kw)
+    return types.SimpleNamespace(**base)
+
+
+def test_devolucao_nfd_exige_nf_id():
+    r = cda._cmd_registrar_devolucao_nfd(_args_dev(
+        numero_nfd='123', motivo='avaria', data_devolucao='2026-06-20',
+        chassi='MCBRX11M123456789'))
+    assert r['ok'] is False and r['tipo_erro'] == 'validacao'
+    assert '--nf-id' in r['erro']
+
+
+def test_devolucao_nfd_exige_numero_nfd():
+    r = cda._cmd_registrar_devolucao_nfd(_args_dev(
+        nf_id=1, motivo='avaria', data_devolucao='2026-06-20', chassi='X'))
+    assert r['ok'] is False and '--numero-nfd' in r['erro']
+
+
+def test_devolucao_nfd_exige_motivo_minimo():
+    r = cda._cmd_registrar_devolucao_nfd(_args_dev(
+        nf_id=1, numero_nfd='123', motivo='ab', data_devolucao='2026-06-20',
+        chassi='X'))
+    assert r['ok'] is False and 'motivo' in r['erro'].lower()
+
+
+def test_devolucao_nfd_exige_data():
+    r = cda._cmd_registrar_devolucao_nfd(_args_dev(
+        nf_id=1, numero_nfd='123', motivo='avaria', chassi='X'))
+    assert r['ok'] is False and '--data-devolucao' in r['erro']
+
+
+def test_devolucao_nfd_data_invalida():
+    r = cda._cmd_registrar_devolucao_nfd(_args_dev(
+        nf_id=1, numero_nfd='123', motivo='avaria', data_devolucao='xx/yy',
+        chassi='X'))
+    assert r['ok'] is False and 'data' in r['erro'].lower()
+
+
+def test_devolucao_nfd_exige_chassi():
+    r = cda._cmd_registrar_devolucao_nfd(_args_dev(
+        nf_id=1, numero_nfd='123', motivo='avaria', data_devolucao='2026-06-20'))
+    assert r['ok'] is False and 'chassi' in r['erro'].lower()
+
+
+def test_devolucao_nfd_chassis_json_nao_lista():
+    r = cda._cmd_registrar_devolucao_nfd(_args_dev(
+        nf_id=1, numero_nfd='123', motivo='avaria', data_devolucao='2026-06-20',
+        chassis_json='"soh-uma-string"'))
+    assert r['ok'] is False and 'chassis-json' in r['erro'].lower()
+
+
+def test_devolucao_nfd_dry_run_chassi_single_normaliza():
+    """Dry-run: chassi vira UPPER, data DD/MM/YYYY normaliza para ISO."""
+    r = cda._cmd_registrar_devolucao_nfd(_args_dev(
+        nf_id=7, numero_nfd='99', motivo='avaria no transporte',
+        data_devolucao='20/06/2026', chassi='mcbrx11m123456789'))
+    assert r.get('dry_run') is True
+    assert r['modo'] == 'registrar-devolucao-nfd'
+    assert r['nf_id'] == 7
+    assert r['chassis'] == ['MCBRX11M123456789']
+    assert r['n_chassis'] == 1
+    assert r['data_devolucao'] == '2026-06-20'
+
+
+def test_devolucao_nfd_dry_run_chassis_json_multi():
+    r = cda._cmd_registrar_devolucao_nfd(_args_dev(
+        nf_id=7, numero_nfd='99', motivo='avaria', data_devolucao='2026-06-20',
+        chassis_json='["abc", "def"]'))
+    assert r.get('dry_run') is True
+    assert r['chassis'] == ['ABC', 'DEF']
+    assert r['n_chassis'] == 2

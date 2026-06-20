@@ -34,6 +34,33 @@ _RE_JUNTAR = re.compile(
     r"[^\n]*?\bvincul\w*\s+n[ao]\s+(?:nota|nf)\s+(?P<nf>\d+)\b",
     re.IGNORECASE)
 
+# Guard de DOMINIO (IMP-2026-06-20-001): chassi de moto Motos Assai (B2B Q.P.A.)
+# nao e um PO de recebimento. Sem este guard, "considera para a NF 1779
+# LA2025SA120000401" era classificado como {nf:1779, po:LA2025SA120000401} e
+# abortava com nf_nao_encontrada (NF Q.P.A. nunca esta na carteira de validacao
+# de compras). Padroes = assai_modelo.regex_chassi (X11/DOT/SOL), seedados em
+# scripts/migrations/motos_assai_05_seed_modelos.py. Bem especificos: nenhum PO
+# real (PO#####, 45########, etc.) colide. Na duvida o fast-path NAO intercepta
+# e o agente trata normalmente (conservador, R-EXEC-6).
+_RE_CHASSI_MOTOS_ASSAI = re.compile(
+    r"\b(?:"
+    r"MCBRX11M\d{9}"              # X11 MINI
+    r"|MCBRDOT\d{10}"             # DOT
+    r"|LA\d+SA\d+\d{5}"          # DOT (LA####SA##...) — ex. LA2025SA120000401
+    r"|LA\d+V1000W\d{4}"         # X11 / DOT
+    r"|HL5TCAH3[0-9X]S9W57\d{3}"  # DOT (VIN-like)
+    r"|17292\d{10}"             # SOL (15 digitos)
+    r")\b",
+    re.IGNORECASE)
+
+
+def _tem_sinal_motos_assai(mensagem: str | None) -> bool:
+    """True se a msg contem um chassi do dominio Motos Assai (Q.P.A.) — sinal de
+    que NAO e uma vinculacao NF×PO de recebimento. Guard anti mis-classificacao."""
+    if not mensagem:
+        return False
+    return bool(_RE_CHASSI_MOTOS_ASSAI.search(str(mensagem)))
+
 
 def should_intercept_vinculacao(mensagem: str | None) -> dict | None:
     """Retorna {acao, nf, po} se a msg é uma (des)vinculação direta; senão None.
@@ -44,6 +71,8 @@ def should_intercept_vinculacao(mensagem: str | None) -> dict | None:
     if not mensagem or not str(mensagem).strip():
         return None
     t = str(mensagem).strip()
+    if _tem_sinal_motos_assai(t):
+        return None
     m = _RE_JUNTAR.search(t)
     if m:
         pos = [p.strip() for p in m.group("pos").split("/") if p.strip()]
@@ -81,6 +110,9 @@ def parse_vinculacao_haiku(mensagem: str | None) -> dict | None:
     """Fallback N1: Haiku estrutura (acao, nf, po). Só dispara se houver keyword
     de recebimento (não gasta token em msg fora de domínio)."""
     if not mensagem or not _KW_RECEBIMENTO.search(str(mensagem)):
+        return None
+    if _tem_sinal_motos_assai(mensagem):
+        logger.info("[VINC-FASTPATH] sinal Motos Assai (chassi) -> nao intercepta")
         return None
     try:
         raw = _call_haiku(str(mensagem))

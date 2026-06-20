@@ -5,12 +5,14 @@ description: >-
   Q.P.A.) — para o que os fluxos normais (upload PDF da NF, CCe, telas 1-a-1) NAO
   alcancam: carga historica em LOTE a partir de planilha Excel, eventos de estado
   com DATA RETROATIVA, cadastros (loja/modelo), itens de pedido ABERTO, gravar
-  faturamento (NF Q.P.A.) e alterar chassi em NF. Gatilhos: "fazer backfill das
+  faturamento (NF Q.P.A.), alterar chassi em NF e registrar devolucao (NFd).
+  Gatilhos: "fazer backfill das
   motos Assai", "a Rayssa mandou uma planilha de chassis para subir", "carregar
   historico de motos Q.P.A.", "corrigir o status/estado retroativo de uma moto",
   "marcar motos como demonstracao", "gravar o faturamento de uma NF Q.P.A. antiga",
-  "alterar/corrigir o chassi numa NF Q.P.A.", "cadastrar/corrigir loja ou modelo
-  Assai". Tambem traz o MAPA do modulo (tabelas, relacoes, services, guard-rails)
+  "alterar/corrigir o chassi numa NF Q.P.A.", "registrar a devolucao (NFd) de
+  motos Q.P.A.", "cadastrar/corrigir loja ou modelo Assai". Tambem traz o MAPA do
+  modulo (tabelas, relacoes, services, guard-rails)
   para o agente escrever scripts Python ad-hoc quando a skill nao cobrir. Sempre
   exige --user-id; dry-run e o default, so efetiva com --confirmar. NAO usar para
   operacao pontual do dia a dia de 1 chassi -> registrando-evento-moto-assai; nem
@@ -117,6 +119,7 @@ faz rollback e reporta TODAS as linhas problematicas (nada e persistido).
 | `--corrigir-chassi-nf` | `--nf-id` `--de-chassi --para-chassi`\|`--pares-json` `[--numero-cce]` | troca chassi(s) em NF Q.P.A. |
 | `--cancelar-nf` | `--nf-id` `--motivo` | cancela NF Q.P.A. (reverte FATURADA) |
 | `--vincular-nf` | `--nf-id` `--pedido-id` | vincula NF NAO_RECONCILIADO ao pedido (CNPJ) |
+| `--registrar-devolucao-nfd` | `--nf-id` `--numero-nfd` `--data-devolucao` `--motivo` `--chassi`\|`--chassis-json` | devolucao (NFd) de 1+ chassis de NF FATURADA: chassi volta PENDENTE + saldo do modelo retorna; NF original **NAO** cancelada. Anexos so via tela |
 
 `--estado`: `ESTOQUE`, `MONTADA`, `PENDENTE`, `DISPONIVEL`, `DEMONSTRACAO` (cadeia
 calculada do estado atual ate o alvo; PENDENTE/REVERTIDA exigem `--motivo>=3`).
@@ -138,6 +141,7 @@ calculada do estado atual ate o alvo; PENDENTE/REVERTIDA exigem `--motivo>=3`).
 | "grava o faturamento dessa NF (so tenho os dados, sem PDF)" | `--registrar-nf-manual --nf-json '{...}'` |
 | "corrige o chassi errado na NF Y" | `--corrigir-chassi-nf --nf-id Y --de-chassi A --para-chassi B` |
 | "vincula essa NF orfa ao pedido P" | `--vincular-nf --nf-id Y --pedido-id P` |
+| "registra a devolucao (NFd) do(s) chassi(s) da NF Y" | `--registrar-devolucao-nfd --nf-id Y --numero-nfd <nfd> --data-devolucao <data> --motivo "..." --chassi X` (ou `--chassis-json '["X","Z"]'`) |
 | algo que nenhum modo cobre | escreva script ad-hoc (ver `references/MAPA_MODULO.md` secao 7) |
 
 ---

@@ -1344,6 +1344,150 @@ class LinkingService:
         return count
 
     # ------------------------------------------------------------------
+    # reprocessar_itens_fatura_transportadora_por_subcontrato:
+    #   repopula nf apos o subcontrato ganhar operacao_id (re-vinculacao)
+    # ------------------------------------------------------------------
+
+    def reprocessar_itens_fatura_transportadora_por_subcontrato(self, subcontrato_id):
+        """Repopula nf_id/nf_numero/operacao_id/contraparte dos itens de fatura
+        transportadora apos o subcontrato ganhar operacao_id (re-vinculacao).
+
+        Cenario (IMP-2026-06-19-004, fatura 83 ALEMAR — Talita): subcontrato
+        anexado a fatura com operacao_id=NULL -> item criado por
+        criar_itens_fatura_transportadora[_incremental] com nf_id/nf_numero/
+        operacao_id NULL. Ao definir operacao_id depois (rota
+        vincular_operacao_subcontrato), os itens NAO eram atualizados — a UI
+        mostrava badge "1 NF(s)" com numero "-".
+
+        Faz 2 coisas, IDEMPOTENTE (espelha os linkers existentes):
+        1. Atualiza os itens EXISTENTES do subcontrato (apenas campos NULL):
+           operacao_id, contraparte, valor_mercadoria, peso_kg e — para o item
+           orfao de NF — a 1a NF disponivel da operacao.
+        2. Cria itens SUPLEMENTARES para as demais NFs da operacao, com valores
+           financeiros NULL (espelha expandir_itens_com_nfs_do_cte — evita dupla
+           contagem; o frete fica no item principal).
+
+        Re-rodar nao duplica: NF ja representada num item do MESMO subcontrato
+        e ignorada.
+
+        Args:
+            subcontrato_id: ID do CarviaSubcontrato re-vinculado.
+
+        Returns:
+            dict: {itens_atualizados, itens_criados, nfs_operacao}
+        """
+        from app.carvia.models import (
+            CarviaFaturaTransportadoraItem, CarviaSubcontrato,
+            CarviaOperacaoNf, CarviaNf
+        )
+
+        stats = {'itens_atualizados': 0, 'itens_criados': 0, 'nfs_operacao': 0}
+
+        sub = db.session.get(CarviaSubcontrato, subcontrato_id)
+        if not sub:
+            logger.warning(f"Subcontrato {subcontrato_id} nao encontrado")
+            return stats
+
+        itens = CarviaFaturaTransportadoraItem.query.filter_by(
+            subcontrato_id=subcontrato_id
+        ).all()
+        if not itens:
+            return stats
+
+        operacao = sub.operacao if hasattr(sub, 'operacao') else None
+        if not operacao:
+            # Sem operacao ainda — nada a popular (itens permanecem NULL).
+            return stats
+
+        fatura_id = itens[0].fatura_transportadora_id
+
+        # NFs da operacao (junction N:N), ordenadas para determinismo
+        junctions = CarviaOperacaoNf.query.filter_by(
+            operacao_id=operacao.id
+        ).order_by(CarviaOperacaoNf.nf_id.asc()).all()
+        nf_ids_operacao = [j.nf_id for j in junctions]
+        stats['nfs_operacao'] = len(nf_ids_operacao)
+
+        # NFs ja representadas em itens deste subcontrato (idempotencia)
+        nf_ids_existentes = {it.nf_id for it in itens if it.nf_id is not None}
+        nf_ids_disponiveis = [
+            nid for nid in nf_ids_operacao if nid not in nf_ids_existentes
+        ]
+        idx_nf = 0
+
+        for it in itens:
+            mudou = False
+            if it.operacao_id is None:
+                it.operacao_id = sub.operacao_id
+                mudou = True
+            if it.contraparte_cnpj is None and operacao.cnpj_cliente:
+                it.contraparte_cnpj = operacao.cnpj_cliente
+                mudou = True
+            if it.contraparte_nome is None and operacao.nome_cliente:
+                it.contraparte_nome = operacao.nome_cliente
+                mudou = True
+            if it.valor_mercadoria is None and operacao.valor_mercadoria is not None:
+                it.valor_mercadoria = operacao.valor_mercadoria
+                mudou = True
+            if it.peso_kg is None and operacao.peso_utilizado:
+                it.peso_kg = float(operacao.peso_utilizado or 0)
+                mudou = True
+            # Preencher a NF do item orfao com a proxima NF disponivel
+            if it.nf_id is None and idx_nf < len(nf_ids_disponiveis):
+                nf = db.session.get(CarviaNf, nf_ids_disponiveis[idx_nf])
+                idx_nf += 1
+                if nf:
+                    it.nf_id = nf.id
+                    it.nf_numero = nf.numero_nf
+                    nf_ids_existentes.add(nf.id)
+                    mudou = True
+            if mudou:
+                stats['itens_atualizados'] += 1
+
+        # Itens suplementares para as NFs ainda nao atribuidas (valores NULL)
+        item_template = itens[0]
+        for nf_id in nf_ids_disponiveis[idx_nf:]:
+            if nf_id in nf_ids_existentes:
+                continue
+            nf = db.session.get(CarviaNf, nf_id)
+            if not nf:
+                continue
+            novo = CarviaFaturaTransportadoraItem(
+                fatura_transportadora_id=fatura_id,
+                subcontrato_id=subcontrato_id,
+                operacao_id=sub.operacao_id,
+                nf_id=nf.id,
+                nf_numero=nf.numero_nf,
+                cte_numero=item_template.cte_numero,
+                cte_data_emissao=item_template.cte_data_emissao,
+                contraparte_cnpj=operacao.cnpj_cliente,
+                contraparte_nome=operacao.nome_cliente,
+                # Valores financeiros NULL — evita dupla contagem (frete no principal)
+                valor_mercadoria=None,
+                peso_kg=None,
+                valor_frete=None,
+                valor_cotado=None,
+                valor_acertado=None,
+            )
+            db.session.add(novo)
+            nf_ids_existentes.add(nf.id)
+            stats['itens_criados'] += 1
+            logger.info(
+                f"Reprocessar FT: fatura={fatura_id} sub={subcontrato_id} "
+                f"op={operacao.id} nf={nf.id} (NF {nf.numero_nf}) — suplementar"
+            )
+
+        if stats['itens_atualizados'] or stats['itens_criados']:
+            db.session.flush()
+            logger.info(
+                f"Reprocessar FT sub={subcontrato_id}: "
+                f"{stats['itens_atualizados']} atualizados, "
+                f"{stats['itens_criados']} suplementares criados"
+            )
+
+        return stats
+
+    # ------------------------------------------------------------------
     # criar_itens_fatura_cliente_from_operacoes: gera itens (UI manual)
     # ------------------------------------------------------------------
 

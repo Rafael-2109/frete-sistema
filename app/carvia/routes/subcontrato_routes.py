@@ -462,6 +462,15 @@ def register_subcontrato_routes(bp):
             # Operacao anterior nao espelha mais status de sub (COTADO/CONFIRMADO
             # deprecados 2026-06): permanece RASCUNHO ate ser faturada — sem downgrade.
 
+            # IMP-2026-06-19-004: re-vincular a operacao deixava os itens da fatura
+            # transportadora (criados quando o sub ainda nao tinha operacao) com
+            # nf_numero/operacao_id/contraparte NULL. Reprocessa para preencher.
+            # Idempotente e no-op se o sub nao estiver em nenhuma fatura transportadora.
+            from app.carvia.services.documentos.linking_service import LinkingService
+            LinkingService().reprocessar_itens_fatura_transportadora_por_subcontrato(
+                sub.id
+            )
+
             db.session.commit()
 
             msg = (
