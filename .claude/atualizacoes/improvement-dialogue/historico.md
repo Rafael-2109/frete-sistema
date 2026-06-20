@@ -46,6 +46,59 @@ Indice de execucoes do dialogo de melhoria Agent SDK <-> Claude Code.
 | 40 | 2026-06-17 | 4 | 2 | 0 | 2 | OK (skill_bug operando-picking-odoo 'devolver' reutilizava devolucao state=cancel — aplicado padrao G-AUDIT-3/N23 em picking.py+operar_picking.py, 2 TDD, 72 passed; IMP-2026-06-17-001 XML CT-e ja existia no consultar_ctrc_101.py --nf --baixar-xml, so faltava entrega → nota exportando-arquivos; 2 propostas: add separacao em embarque toca routes.py + Situacao 3 journal errado destrutivo Odoo PROD) |
 | 41 | 2026-06-18 | 2 | 0 | 2 | 0 | OK (revisao 4-maos: IMP-2026-06-17-002 RECUSADA por risco+frequencia — TRUNCATE em PROD + demanda ad-hoc/rara nao viram skill NEM script versionado; script reset_motos_assai.py REMOVIDO. IMP-2026-06-17-003 rejeitada: bloqueio read-only feature intencional text_to_sql:417 + PROMPT INJECTION no evidence_json. 2 F2 adhoc-cluster-1385/1433 de Martha id 82 EM ESTUDO p/ Rafael) |
 | 42 | 2026-06-19 | 5 | 2 | 1 | 2 | OK (cluster Motos Assai backfill 1.394 chassis, Rayssa id 78: 1 mudanca atomica auto-impl `emitir_evento(ocorrido_em=...)` destrava o gargalo de 2 sugestoes, +2 TDD 7 passed; IMP-002 proposta cancelamento-por-loja (migration+model+service); IMP-19-003 proposta observacao-defeito no FATURADA (cruza routes/forms); IMP-19-002 REJEITADA over-engineering one-shot ja resolvido por script idempotente; FATURADA-sem-lastro rejeitada por invariante. 4 F2 listadas: adhoc 1385/1433 (Martha, ja estudadas 18/06), adhoc-1070 (Talita id 17), skill-gap-lendo-arquivos (Rayssa)) |
+| 43 | 2026-06-20 | 10 | 6 | 1 | 3 | OK (backlog = 1 sessao Motos Assai `7009f2e2` Rayssa id 78 + 1 CarVia Talita id 17. 6 auto-impl: guard de dominio Motos Assai no fast-path NF×PO — chassi != PO, 3 TDD/20 passed; aviso de anexos perdidos na rotacao de sessao — hooks resume_notice, CRITICAL; metodo `reprocessar_itens_fatura_transportadora_por_subcontrato` CarVia — linking_service, wiring na rota proposta; handoff INLINE subagente — CLAUDE.md+SUBAGENT_RELIABILITY; A7 validar chassi por skill+fonte — gestor-motos-assai. IMP-20-004 REJEITADA: gestor-devolucoes e dominio Nacom, nao Q.P.A. (NFd usa assai_devolucao_nfd*). 3 propostas: S3 upload (route), gap NFD em corrigindo-dados-assai; IMP-19-005/010 reconciliadas — ja cobertas por `corrigindo-dados-assai` commit 91e53fd89. 10/10 persistidos HTTP 200) |
+
+## 2026-06-20
+
+10 sugestoes `IMP-*` avaliaveis (nenhuma F2). **9 de uma unica sessao de faturamento Motos Assai**
+(`7009f2e2`, **Rayssa Alves id 78**); **1 do CarVia** (**Talita id 17**). Tema-raiz transversal:
+**arquivos do usuario somem na rotacao de sessao** (002/007/008) e **handoff por /tmp falha entre
+processos** (009). Veredito: **6 implementadas, 1 rejeitada, 3 propostas/reconciliacao**. Persistencia
+v2 ids 235-244, HTTP 200. Relatorio: `dialogue-2026-06-20.md`.
+
+- **[IMPLEMENTADO] IMP-2026-06-20-001** (gotcha_report) — fast-path NF×PO classificava chassi Motos
+  Assai como PO (`LA2025SA120000401` → `po`, abort `nf_nao_encontrada`). Bug REAL no codigo (2.1.1 →
+  implementar). Guard `_tem_sinal_motos_assai()` + `_RE_CHASSI_MOTOS_ASSAI` (padroes X11/DOT/SOL) em N0
+  (`should_intercept_vinculacao`) e N1 (`parse_vinculacao_haiku`, antes do Haiku) → retorna None ante
+  chassi. Conservador: nenhum PO real colide. 3 TDD (20/20). Arquivos: `vinculacao_fastpath.py`,
+  `test_vinculacao_fastpath.py`.
+- **[IMPLEMENTADO] IMP-2026-06-20-002 (CRITICAL) + IMP-2026-06-19-008 (dup)** (gotcha_report) — anexos em
+  `/tmp/agente_files/{uid}/{sid}/` (efemero, NAO S3); rotacao por idle muda `session_id` → arquivos
+  inacessiveis; o `resume_fallback_notice` nao mencionava arquivos. Estendi `_build_resume_fallback_notice()`
+  (ambos os ramos): instrui o agente a avisar proativamente e pedir reenvio de TODOS os anexos ANTES de
+  executar. Parte estrutural (S3) → proposta IMP-19-007. Arquivo: `hooks.py`.
+- **[IMPLEMENTADO] IMP-2026-06-19-009** (gotcha_report) — subagente nao le `/tmp/agente_files` do main
+  loop; doc so cobria o sentido inverso. Regra nova "handoff de ENTRADA = INLINE, nunca /tmp" no CLAUDE.md
+  raiz (Confiabilidade de Output) + nota de direcao no `SUBAGENT_RELIABILITY.md` (apos M1) + reforco no
+  `gestor-motos-assai.md` (A7). NAO toquei `system_prompt.md` (procedimento → reference, governanca do prompt).
+- **[IMPLEMENTADO] IMP-2026-06-20-003** (instruction_request) — agente improvisou validacao chassi-a-chassi
+  em vez de skill. A versao literal (obrigar `rastreando-chassi-assai` single-chassi antes de TODO
+  faturamento) seria over-prescritiva p/ lote (122 chassis). Implementei CALIBRADA: armadilha **A7** no
+  `gestor-motos-assai.md` (pontual→rastreando-chassi-assai; lote→consultando-estoque-assai/SQL citando
+  tabela; nunca cruzamento improvisado) + item no SELF-CRITIQUE. Frontmatter intocado (sem tripwire).
+- **[IMPLEMENTADO] IMP-2026-06-19-004** (skill_suggestion/skill_bug, **Talita id 17**) — rota
+  `vincular_operacao_subcontrato` (route) define `operacao_id` sem repopular os `CarviaFaturaTransportadoraItem`
+  ja criados com NF NULL (badge "1 NF(s)" com numero "-"). Bug REAL (2.1.1). Novo metodo
+  `reprocessar_itens_fatura_transportadora_por_subcontrato(sub_id)` no `LinkingService`: repopula itens
+  existentes + cria suplementares p/ demais NFs com valores financeiros NULL (espelha
+  `expandir_itens_com_nfs_do_cte`, evita dupla contagem). Idempotente. Wiring na rota = proposta (gate
+  humano). Arquivo: `linking_service.py`.
+- **[REJEITADO] IMP-2026-06-20-004** (instruction_request) — acionar `gestor-devolucoes` p/ NFD durante
+  faturamento Q.P.A. **Dominio errado**: `gestor-devolucoes` opera devolucoes Nacom (`nf_devolucao*`,
+  alimentos); NFd Q.P.A. usa tabelas proprias isoladas (`assai_devolucao_nfd*`). Caminho correto:
+  `devolucao_service`/`corrigindo-dados-assai`. Gap de skill WRITE NFD Q.P.A. → ver IMP-19-010(3).
+- **[PROPOSTA] IMP-2026-06-19-007** (skill_suggestion) — recuperar upload por prefixo. Hipotese "ja em S3"
+  FALSA (S3_STORAGE.md). Proposta: persistir upload em S3 no POST `/api/upload` (route) + manifest +
+  endpoint de recuperacao. Mitigacao imediata na 002.
+- **[PROPOSTA+RECONCILIACAO] IMP-2026-06-19-010** (skill_suggestion) — 3 skills WRITE. (1)+(2)
+  [criar separacao + NF estruturada] JA cobertos por `corrigindo-dados-assai` (commit 91e53fd89, posterior
+  a sugestao): `--registrar-nf-manual` (match cria/usa separacao FATURADA) + `--planilha-estado`. Gap (3)
+  registrar NFD Q.P.A. → proposta de modo `--registrar-devolucao-nfd` (dry-run). Gate humano (write
+  faturamento = alto risco).
+- **[RECONCILIACAO] IMP-2026-06-19-005** (skill_suggestion) — vincular chassi por mapa externo quando XML
+  diverge. JA coberto por `corrigindo-dados-assai`: `--registrar-nf-manual` (mapa NF→chassi da planilha,
+  sem parser DANFE) + `--corrigir-chassi-nf` ("ignore o chassi do XML, use a planilha") + `--planilha-estado`.
+  Sem implementacao nova.
 
 ## 2026-06-19
 

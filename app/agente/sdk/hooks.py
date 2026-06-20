@@ -136,6 +136,14 @@ def _build_resume_fallback_notice(reason: str) -> str:
     a MESMA conversa na UI e espera continuidade total (caso conversa-nacom
     2026-06-10). 'resume_failed' (default): resume do SDK falhou (R-CLI-CRASH).
     """
+    aviso_anexos = (
+        " ATENÇÃO a ARQUIVOS: anexos enviados na sessão anterior (PDF, planilha "
+        ".xlsx, XML, etc.) NÃO sobrevivem à rotação — ficam inacessíveis nesta "
+        "sessão. Se a tarefa em andamento depende de arquivos anexados, AVISE o "
+        "usuário proativamente e peça o reenvio de TODOS os arquivos necessários "
+        "de uma vez ANTES de executar qualquer passo — não tente prosseguir e "
+        "descobrir o sumiço no meio do fluxo."
+    )
     if reason == 'rotated':
         return (
             "IMPORTANTE: Esta conversa CONTINUA uma sessão anterior do mesmo "
@@ -144,12 +152,14 @@ def _build_resume_fallback_notice(reason: str) -> str:
             "total — NÃO trate como assunto novo. Abaixo: resumo e últimas "
             "mensagens da sessão original. Se algo essencial não estiver "
             "aqui, pergunte objetivamente em vez de presumir."
+            + aviso_anexos
         )
     return (
         "IMPORTANTE: A sessão anterior não pôde ser restaurada via resume. "
         "Abaixo está o histórico recente da conversa extraído do banco de dados. "
         "Use este contexto para continuar a conversa de forma coerente. "
         "O usuário pode não saber que o contexto foi perdido."
+        + aviso_anexos
     )
 
 

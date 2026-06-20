@@ -105,6 +105,15 @@ O subagente escreve findings detalhados em arquivo. O principal le o arquivo par
 {outputs de scripts, trechos de arquivos — o que for crucial}
 ```
 
+> **Direcao do canal — M1 cobre SO' a SAIDA do subagente.** O `/tmp/subagent-findings/`
+> serve o fluxo subagente ESCREVE -> principal LE. Para o sentido INVERSO (dar dados de
+> ENTRADA ao subagente) NAO use caminho `/tmp`: o subagente pode nao enxergar o mesmo
+> filesystem do main loop (isolamento e/ou wipe entre a escrita e o spawn). Caso real
+> **IMP-2026-06-19-009** (agente web): 2 JSONs gravados pelo main loop em
+> `/tmp/agente_files` foram reportados AUSENTES pelo subagente `gestor-motos-assai`, que
+> ainda listou um arquivo que o main loop NAO via — handoff por arquivo falhou nos dois
+> sentidos. **Regra: passe dados de trabalho INLINE no corpo do prompt do subagente.**
+
 ### M1.1: Ordem de Leitura (SDK 0.1.60+, 2026-04-17)
 
 Com o SDK 0.1.60, o projeto ganhou `list_subagents()` + `get_subagent_messages()` — fonte canonica do transcript completo de cada subagente em `~/.claude/projects/<proj>/<session>/subagents/`. O protocolo M1 (`/tmp/subagent-findings/`) continua ativo como fallback escrito.

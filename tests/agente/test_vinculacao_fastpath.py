@@ -38,6 +38,27 @@ def test_vazio_nao_casa():
     assert det("") is None and det(None) is None
 
 
+# ──────────── Guard de dominio Motos Assai (IMP-2026-06-20-001) ────────────
+def test_guard_chassi_assai_nao_intercepta_n0():
+    # chassi DOT no lugar do "po" -> guard ativa, nao classifica como NF×PO
+    assert det("considera para a NF 1779 LA2025SA120000401") is None
+    # guard tem precedencia sobre o regex de vinculacao
+    assert det("vincular o pedido MCBRX11M123456789 na nota 1779") is None
+
+
+def test_guard_chassi_assai_nao_chama_haiku():
+    # mesmo com keyword de recebimento, sinal de chassi aborta ANTES do Haiku
+    with patch.object(fp, "_call_haiku") as mock_haiku:
+        r = fp.parse_vinculacao_haiku("considera para a NF 1779 LA2025SA120000401")
+        assert r is None
+        mock_haiku.assert_not_called()
+
+
+def test_guard_nao_afeta_vinculacao_legitima():
+    # PO real (sem padrao de chassi) segue interceptando normalmente
+    assert det("vincular pedido 4500012345 na nf 998877") is not None
+
+
 # ───────────────────────── N1: parser Haiku (fallback) ─────────────────────────
 def test_parse_haiku_extrai_json():
     with patch.object(fp, "_call_haiku",
