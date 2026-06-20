@@ -25,19 +25,25 @@ TTL_DIAS = 90
 S3_PREFIXO = 'agente-uploads'
 
 
-def persistir_upload_s3(file, *, user_id, session_id, file_id, original_name,
+def persistir_upload_s3(file_path, *, user_id, session_id, file_id, original_name,
                         safe_name, file_type, size_bytes) -> Optional[AgenteUpload]:
     """Grava o upload no S3 (se use_s3) e cria/atualiza a linha do manifesto.
 
-    Retorna None se USE_S3 off (sem persistencia, nao-fatal). Idempotente por
-    (user_id, safe_name): reenvio do mesmo arquivo atualiza s3_key/datas e reativa.
+    Le do ARQUIVO LOCAL ja salvo (`file_path`), NAO do stream da request: o
+    stream do Werkzeug fica exausto apos `file.save()` e re-upar dele subiria
+    0 bytes ao S3 (revisao 2026-06-20).
+
+    Retorna None se USE_S3 off (sem persistencia, nao-fatal) ou se o save_file
+    falhar. O upsert por (user_id, safe_name) e DEFENSIVO contra a UNIQUE
+    constraint; na pratica cada upload gera linha nova (file_id e um uuid novo a
+    cada envio, entao safe_name difere). Limpeza por TTL/`expira_em` e follow-up.
     """
     storage = get_file_storage()
     if not storage.use_s3:
         return None  # dev / USE_S3 off — sem persistencia, nao-fatal
     folder = f"{S3_PREFIXO}/{user_id}"
-    file.seek(0)
-    s3_key = storage.save_file(file, folder, filename=safe_name)  # retorna folder/filename
+    with open(file_path, 'rb') as fh:
+        s3_key = storage.save_file(fh, folder, filename=safe_name)  # retorna folder/filename
     if not s3_key:
         # save_file logou o erro e retornou None — nao-fatal
         return None
@@ -79,22 +85,31 @@ def listar_uploads_usuario(user_id, *, dias=7) -> List[Dict]:
 def recuperar_upload(user_id, file_id, *, target_session_id) -> Optional[str]:
     """Baixa do S3 um upload anterior para o /tmp da sessao ATUAL.
 
-    Retorna o path local gravado, ou None se nao houver manifesto ativo para
-    (user_id, file_id) ou o objeto S3 estiver indisponivel.
+    Retorna o path local gravado, ou None se: nao houver manifesto ativo para
+    (user_id, file_id); USE_S3 estiver off; ou o objeto S3 estiver indisponivel.
     """
     import os
+    from werkzeug.utils import secure_filename
     from app.agente.routes.files import _get_session_folder_for_user
+    storage = get_file_storage()
+    if not storage.use_s3:
+        return None  # USE_S3 off — manifesto pode existir mas o objeto nao e recuperavel
     row = (AgenteUpload.query
            .filter_by(user_id=user_id, file_id=file_id, ativo=True)
            .order_by(AgenteUpload.criado_em.desc()).first())
     if not row:
         return None
-    storage = get_file_storage()
     conteudo = storage.download_file(row.s3_key)  # bytes ou None
     if conteudo is None:
         return None
     destino_dir = _get_session_folder_for_user(user_id, target_session_id)
-    destino = os.path.join(destino_dir, row.safe_name)
+    # Defense-in-depth: safe_name vem do banco; re-sanitiza e confina na pasta.
+    nome_local = secure_filename(row.safe_name) or row.file_id
+    destino = os.path.join(destino_dir, nome_local)
+    if not os.path.realpath(destino).startswith(os.path.realpath(destino_dir) + os.sep):
+        logger.warning(
+            f"[AGENTE] recuperar_upload: caminho fora da pasta da sessao bloqueado: {destino}")
+        return None
     with open(destino, 'wb') as fh:
         fh.write(conteudo)
     return destino

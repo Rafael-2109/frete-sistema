@@ -352,8 +352,9 @@ def api_upload_file():
         # Nao-fatal: se USE_S3 off ou S3 falhar, o upload local em /tmp segue valido.
         try:
             from app.agente.services.upload_recovery_service import persistir_upload_s3
+            # Le do arquivo LOCAL ja salvo (file_path), nao do stream exausto pos file.save()
             persistir_upload_s3(
-                file, user_id=current_user.id, session_id=session_id,
+                file_path, user_id=current_user.id, session_id=session_id,
                 file_id=file_id, original_name=original_name, safe_name=safe_name,
                 file_type=_get_file_type(original_name), size_bytes=file_size)
             db.session.commit()
