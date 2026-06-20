@@ -362,6 +362,43 @@ Aplica o padrao SSL drop resilience (R15) tambem.
 
 ---
 
+## Tratamento de avisos SSW e salvaguardas de frete (2026-06-19)
+
+O script `emitir_cte_004.py` (skill `operando-ssw`) ganhou tratamento robusto dos avisos HTML
+do SSW pos-simulacao e **3 salvaguardas que garantem que NUNCA grava um CTe com frete errado**.
+Construido a 4 maos sobre a coleta 3 (filial GIG). Backlog/evidencias:
+`docs/superpowers/plans/2026-06-19-resiliencia-emissao-cte-ssw.md`.
+
+### Avisos tratados (Camada 1 — loop pos-simulacao)
+
+| Aviso SSW | Tratamento |
+|-----------|-----------|
+| Email indisponivel | clica "E-mail nao disponivel" |
+| **Cliente pagador bloqueado** | abre tela 389/ssw1105 (**polling ate 18s** — a 389 carrega ~6-10s apos o clique), seta `Transportar=S`, grava (`EN2`), retorna `retentar=True` → o orquestrador **re-emite** (a 2a passada nao ve mais o bloqueio). Desbloqueio e emissao sao operacoes SEPARADAS — tentar voltar da 389 p/ a 004 com estado gerava `TypeError at concluindo` |
+| GNRE / ICMS antecipado | clica "Continuar" |
+| **Cidade nao atendida (opc 402)** | extrai cidade/UF, retorna `cidade_nao_atendida=True` — operador cadastra na 402 (decisao: NAO usar tipo FEC). Camada 2 classifica `CIDADE_NAO_ATENDIDA`. O lote PULA e lista |
+| Peso real invalido | re-preenche 50% do cubado e re-simula |
+
+### Salvaguardas de frete (defesa em profundidade)
+
+O "Frete informado" (override do valor cobrado) pode ser DESCARTADO pelo SSW e substituido pelo
+frete da TABELA. As 3 salvaguardas impedem gravar o valor errado:
+1. **Forcar clique nativo** — `_clicar_simular` remove o overlay `errorpanel` antes de clicar o ►. O caminho NATIVO preserva o frete; o fallback JS (`lnk_env`) recalcula pela tabela (bug NF 39092: saiu 1567,73 vs 850).
+2. **Abortar se fallback** — se alguma simulacao caiu no fallback, aborta ANTES de gravar (`frete_nao_confiavel`, `retentar=True`).
+3. **Ler o resumo (definitiva)** — antes de gravar, le `VALOR A RECEBER` e aborta se != informado. Pega QUALQUER divergencia, inclusive avisos "Continuar" extras que recalculam (bug NF 39111: saiu 533,74 vs 600). O runner faz retry 1x e para se persistir.
+
+> Resultado: das 22 emissoes da coleta 3, 3 sairam com frete errado ANTES das salvaguardas (canceladas+reemitidas); com as 3 salvaguardas, nenhum CTe e gravado com valor divergente.
+
+### Performance (parcial — 2026-06-19)
+
+Helper `_esperar(target, cond_js, timeout)` (polling) substituiu os `asyncio.sleep` fixos grandes
+(NORMAL/chave/simular/gravar/101) — sai assim que o estado aparece em vez de esperar 8-20s. SEFAZ
+20→6s (fire-and-forget; a 101 confirma a autorizacao depois). Emissao completa **~90s → ~40s/NF**.
+**Pendente (proxima sessao)**: sessao reutilizavel (1 login/lote) + baixar XML na 101 interna (mata
+a 2a sessao Playwright/NF) → alvo ~15-20s/NF. Ver backlog.
+
+---
+
 ## Endpoints REST
 
 | Endpoint | Metodo | Proposito |

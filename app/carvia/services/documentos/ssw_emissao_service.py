@@ -23,6 +23,10 @@ logger = logging.getLogger(__name__)
 #   "Rota com origem na unidade GIG e destino a unidade FEI nao cadastrada. (Opcao 403)"
 # Por isso o regex usa .{0,200} entre "rota" e "nao cadastrada".
 ERROS_SSW = {
+    # Cidade de destino nao cadastrada na 402 (ANTES de rota/frete p/ nao ser
+    # mascarado). Painel SSW: "Cidade X/UF nao e atendida (opc 402)". O script
+    # 004 retorna aviso "CIDADE_NAO_ATENDIDA_402:cidade/uf".
+    r'CIDADE_NAO_ATENDIDA|opc\s*402|op[cç][aã]o\s*402|cidade\b.{0,80}?n[aã]o.{0,10}atendida': 'CIDADE_NAO_ATENDIDA',
     r'rota\b.{0,200}?n[aã]o\s+cadastrada|op[cç][aã]o\s+403': 'ROTA_NAO_CADASTRADA',
     r'bloqueado|inadimplente|falta\s+de\s+pagamento': 'CLIENTE_BLOQUEADO',
     r'GNRE|guia\s+GNRE': 'GNRE_OBRIGATORIA',
@@ -36,6 +40,10 @@ ERROS_SSW = {
 
 # Mensagens amigaveis exibidas ao operador (com instrucao de fix)
 ERROS_SSW_MENSAGENS = {
+    'CIDADE_NAO_ATENDIDA': (
+        'Cidade de destino nao atendida no SSW. Cadastre na opcao 402 '
+        '(Cidades Atendidas) e tente novamente — ou emita tipo FEC.'
+    ),
     'ROTA_NAO_CADASTRADA': (
         'Rota nao cadastrada no SSW. Cadastre na opcao 403 (Rotas) e tente novamente.'
     ),

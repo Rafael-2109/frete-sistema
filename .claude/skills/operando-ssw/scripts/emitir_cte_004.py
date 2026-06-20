@@ -86,6 +86,30 @@ async def capturar_screenshot_local(page, nome):
     return await capturar_screenshot(page, nome, diretorio=EVIDENCE_DIR)
 
 
+async def _esperar(target, cond_js, timeout_s=12.0, intervalo=0.25):
+    """Espera CONDICIONAL: faz polling da condicao JS ate True ou timeout.
+
+    Substitui os `asyncio.sleep(N)` fixos do fluxo — o SSW responde tipicamente
+    em <1s, mas o codigo antigo esperava o tempo cheio (8-20s) a cada passo
+    (a "briga com a web", feedback do dono 2026-06-19). Com isto o script anda
+    na velocidade da tela: sai assim que o estado esperado aparece.
+
+    `cond_js`: funcao JS que retorna truthy quando o passo terminou.
+    Retorna True se a condicao foi atingida; False em timeout (o fluxo segue
+    igual ao sleep antigo — no PIOR caso espera o mesmo, no melhor sai cedo).
+    """
+    elapsed = 0.0
+    while elapsed < timeout_s:
+        try:
+            if await target.evaluate(cond_js):
+                return True
+        except Exception:
+            pass
+        await asyncio.sleep(intervalo)
+        elapsed += intervalo
+    return False
+
+
 async def _clicar_simular(popup, timeout_ms=5000):
     """Click no ► (#lnk_env → calculafrete) com fallback JS.
 
@@ -107,7 +131,24 @@ async def _clicar_simular(popup, timeout_ms=5000):
     Raises:
         RuntimeError: Se nenhum dos metodos encontrou/conseguiu clicar.
     """
-    # 1) Tentativa nativa rapida
+    # 0) Remover o overlay errorpanel ANTES de clicar. Ele intercepta o click
+    #    NATIVO do ► e forca o fallback lnk_env — e o caminho fallback faz o SSW
+    #    RECALCULAR o frete pela tabela, DESCARTANDO o frete informado (bug real
+    #    NF 39092/39101, 2026-06-19: sairam com valor de tabela). O caminho
+    #    NATIVO preserva o frete informado; o fallback NAO.
+    try:
+        await popup.evaluate("""() => {
+            const ep = document.getElementById('errorpanel');
+            if (ep) {
+                ep.style.display = 'none';
+                ep.style.visibility = 'hidden';
+                ep.style.pointerEvents = 'none';
+            }
+        }""")
+    except Exception:
+        pass
+
+    # 1) Tentativa nativa (preserva o frete informado)
     try:
         await popup.get_by_role("link", name="►").first.click(
             timeout=timeout_ms
@@ -116,7 +157,9 @@ async def _clicar_simular(popup, timeout_ms=5000):
     except Exception:
         pass
 
-    # 2) Fallback: click via JS direto no DOM (bypassa overlay errorpanel)
+    # 2) Fallback: click via JS direto no DOM (bypassa overlay errorpanel).
+    #    ATENCAO: este caminho pode RECALCULAR o frete pela tabela — o chamador
+    #    trata emissao via fallback como NAO-CONFIAVEL (salvaguarda: nao grava).
     metodo = await popup.evaluate("""() => {
         // Tenta pelo id explicito primeiro
         const link = document.getElementById('lnk_env');
@@ -502,7 +545,12 @@ async def emitir_cte(args):
 
             # ── 4. Clicar "N Normal" — deixar override fazer document.write(valSep) ──
             await popup.evaluate("ajaxEnvia('NORMAL', 1)")
-            await asyncio.sleep(5)  # Esperar AJAX + document.write
+            # Espera o formulario (campo placa f13) renderizar — ~1s vs 5s fixos.
+            await _esperar(
+                popup, "() => !!document.querySelector('input[name=\"f13\"]')",
+                timeout_s=8,
+            )
+            await asyncio.sleep(0.3)
             # Re-apply override
             await popup.evaluate(CREATE_NEW_DOC_OVERRIDE)
 
@@ -545,7 +593,15 @@ async def emitir_cte(args):
                 except Exception:
                     # Fallback: clicar fora
                     await popup.mouse.click(10, 500)
-                await asyncio.sleep(10)  # Esperar lookup NF-e
+                # Espera condicional: o lookup NF-e termina quando o remetente
+                # (id_cli_rem_cnpj) preenche. Sai em ~2-3s vs 10s fixos.
+                await _esperar(
+                    popup,
+                    "() => { const e = document.getElementById('id_cli_rem_cnpj');"
+                    " return !!(e && e.value && e.value.replace(/\\D/g,'').length >= 8); }",
+                    timeout_s=12,
+                )
+                await asyncio.sleep(0.4)
 
                 # Se aviso carta de correcao apareceu, clicar OK novamente
                 try:
@@ -705,6 +761,8 @@ async def emitir_cte(args):
             dialogs = []
             ctrc_num = None
             avisos_tratados = []
+            simular_fallback = False  # True se alguma simulacao caiu no fallback
+            #                           JS (frete pode ter virado o da tabela)
 
             async def on_dialog(dialog):
                 nonlocal ctrc_num
@@ -729,7 +787,18 @@ async def emitir_cte(args):
                 # pointer events no SSW — fallback via evaluate.
                 metodo_simular = await _clicar_simular(popup)
                 avisos_tratados.append(f"SIMULAR_CLICK:{metodo_simular}")
-                await asyncio.sleep(8)
+                if metodo_simular != 'native':
+                    simular_fallback = True
+                # Espera a resposta da simulacao (aviso OU resumo) — ~1-2s vs 8s.
+                await _esperar(
+                    popup,
+                    "() => { const t = (document.body ? document.body.innerText : '')"
+                    ".toLowerCase(); return ['disponível','bloqueado','recolhido',"
+                    "'atendida','gnre','gravar','valor a receber','continuar',"
+                    "'inválido'].some(s => t.includes(s)); }",
+                    timeout_s=10,
+                )
+                await asyncio.sleep(0.5)
                 await capturar_screenshot_local(popup, "06_pos_simular")
 
                 # ── 6b. Tratar paineis Aviso em sequencia ──
@@ -755,6 +824,51 @@ async def emitir_cte(args):
                         await asyncio.sleep(5)
                         await capturar_screenshot_local(popup, f"07_aviso_{aviso_idx}_email")
                         continue
+
+                    # --- Aviso: Cidade nao atendida (opcao 402) ---
+                    # Painel "Cidade X/UF nao e atendida (opc 402). 1.Trocar p/ FEC
+                    # 2.Ajustar 402 3.Voltar" — destino da NF nao cadastrado na 402.
+                    # Decisao de negocio (2026-06-19): CADASTRAR na 402 (nao FEC). O
+                    # script NAO escolhe sozinho — aborta CLASSIFICADO (cidade/uf
+                    # extraidas) para o operador cadastrar e o orquestrador PULAR
+                    # esta NF sem travar o lote inteiro (antes caia em
+                    # NAO_RECONHECIDO -> "Falha na emissao" generica).
+                    if ('atendida' in body_lower
+                            and ('402' in body_lower or 'opc 402' in body_lower)):
+                        m_cid = re.search(
+                            r'cidade\s+(.+?)\s*/\s*([A-Z]{2})\s+n[aã]o',
+                            body, re.IGNORECASE,
+                        )
+                        cidade_av = m_cid.group(1).strip() if m_cid else None
+                        uf_av = m_cid.group(2).strip().upper() if m_cid else None
+                        avisos_tratados.append(
+                            f"CIDADE_NAO_ATENDIDA_402:{cidade_av}/{uf_av}"
+                        )
+                        await capturar_screenshot_local(
+                            popup, f"07_aviso_{aviso_idx}_cidade402"
+                        )
+                        try:
+                            popup.remove_listener("dialog", on_dialog)
+                        except Exception:
+                            pass
+                        return gerar_saida(
+                            False,
+                            ctrc=None,
+                            cidade_nao_atendida=True,
+                            precisa_cadastro_402=True,
+                            cidade=cidade_av,
+                            uf=uf_av,
+                            campos_preenchidos=campos_ok,
+                            resultado={
+                                "avisos_tratados": avisos_tratados,
+                                "dialogs": dialogs,
+                            },
+                            mensagem=(
+                                f"Cidade {cidade_av or '?'}/{uf_av or '?'} nao "
+                                f"atendida na opcao 402. Cadastre a cidade na 402 "
+                                f"(ou emita tipo FEC) e retente."
+                            ),
+                        )
 
                     # --- Aviso: Peso real inválido ---
                     if 'peso real' in body_lower and 'inválido' in body_lower:
@@ -789,7 +903,9 @@ async def emitir_cte(args):
 
                         # Re-simular apos ajuste de peso (com fallback JS)
                         try:
-                            await _clicar_simular(popup)
+                            _m_resim = await _clicar_simular(popup)
+                            if _m_resim != 'native':
+                                simular_fallback = True
                         except Exception as e_resim:
                             avisos_tratados.append(
                                 f"RESIMULAR_PESO_ERRO: {e_resim}"
@@ -812,37 +928,80 @@ async def emitir_cte(args):
                         avisos_tratados.append("CLIENTE_BLOQUEADO")
                         await capturar_screenshot_local(popup, f"07_aviso_{aviso_idx}_bloqueio")
 
-                        # Alvo do fill: desbloq_page se SSW abriu em nova janela,
-                        # ou o proprio popup se o SSW navegou in-place.
+                        # Alvo do fill: nova page (se SSW abriu janela) ou o
+                        # proprio popup (navegacao in-place para 389/ssw1105).
+                        #
+                        # FIX timing (2026-06-19, NF 5537 CEZINHA BIKE): a 389
+                        # carrega ~6-10s APOS o clique. O codigo antigo esperava
+                        # nova page por 4s (que nunca vem — e in-place) e checava o
+                        # body UMA vez em +3s; a 389 ainda nao tinha carregado ->
+                        # DESBLOQUEIO_SEM_TARGET (falso). Agora: clica e faz POLLING
+                        # ate ~18s, detectando a 389 por sinais robustos (campo
+                        # Transportar id="2"/f2, ou "transportar"+"limites de cr",
+                        # ou titulo 389/ssw1105), inline OU em nova page.
                         desbloq_target = None
                         desbloq_origem = None
+                        n_pages_antes = len(context.pages)
                         try:
-                            async with context.expect_page(timeout=4000) as desbloq_info:
-                                await popup.get_by_role(
-                                    "link", name="Desbloquear cliente pagador"
-                                ).click()
-                            desbloq_target = await desbloq_info.value
-                            desbloq_origem = "nova_page"
-                            await asyncio.sleep(2)
+                            await popup.get_by_role(
+                                "link", name="Desbloquear cliente pagador"
+                            ).click(timeout=4000)
                         except Exception:
-                            # Timeout curto: SSW provavelmente navegou a mesma popup
-                            # para ssw1105. Aguardar e verificar se o body mudou.
-                            await asyncio.sleep(3)
+                            # Fallback JS: clicar o link de desbloqueio por texto
                             try:
-                                body_check = await popup.evaluate(
-                                    "() => (document.body?.innerText || '').substring(0,3000).toLowerCase()"
-                                )
+                                await popup.evaluate("""() => {
+                                    for (const a of document.querySelectorAll('a')) {
+                                        if ((a.textContent || '').toLowerCase()
+                                                .includes('desbloquear cliente')) {
+                                            a.click(); return true;
+                                        }
+                                    }
+                                    return false;
+                                }""")
                             except Exception:
-                                body_check = ''
-                            # Tela 389/ssw1105 tem "limites de credito" e "transportar:"
-                            if ('limites de cr' in body_check
-                                    and 'transportar' in body_check):
+                                pass
+
+                        async def _eh_tela_389(target):
+                            try:
+                                return await target.evaluate("""() => {
+                                    const campo = !!(
+                                        document.querySelector('input[id="2"]') ||
+                                        document.querySelector('input[name="f2"]'));
+                                    const t = (document.body?.innerText || '').toLowerCase();
+                                    const titulo = (document.title || '').toLowerCase();
+                                    return campo
+                                        || (t.includes('transportar')
+                                            && t.includes('limites de cr'))
+                                        || titulo.includes('389')
+                                        || titulo.includes('cadastro de clientes');
+                                }""")
+                            except Exception:
+                                return False
+
+                        # Polling ate ~18s (12 x 1.5s) pela tela 389/ssw1105
+                        for _tent_desbloq in range(12):
+                            await asyncio.sleep(1.5)
+                            if len(context.pages) > n_pages_antes:
+                                cand = context.pages[-1]
+                                try:
+                                    await cand.wait_for_load_state(
+                                        "domcontentloaded", timeout=3000
+                                    )
+                                except Exception:
+                                    pass
+                                if await _eh_tela_389(cand):
+                                    desbloq_target = cand
+                                    desbloq_origem = "nova_page"
+                                    break
+                            if await _eh_tela_389(popup):
                                 desbloq_target = popup
                                 desbloq_origem = "inline_popup"
-                            else:
-                                avisos_tratados.append(
-                                    "DESBLOQUEIO_SEM_TARGET: body nao parece ssw1105"
-                                )
+                                break
+
+                        if desbloq_target is None:
+                            avisos_tratados.append(
+                                "DESBLOQUEIO_SEM_TARGET: 389 nao apareceu em 18s"
+                            )
 
                         if desbloq_target is not None:
                             avisos_tratados.append(
@@ -923,26 +1082,62 @@ async def emitir_cte(args):
                             desbloqueio_ok = False
 
                         if not desbloqueio_ok:
-                            # Desbloqueio falhou (nova page nao abriu E navegacao
-                            # in-place nao foi detectada, OU o fill/click falhou).
-                            # Interromper loop: sem desbloqueio o proximo ciclo
-                            # veria o mesmo painel, gastando ate MAX_AVISOS=6
-                            # iteracoes (~84s) antes de falhar.
+                            # Desbloqueio falhou de verdade (389 nao apareceu em
+                            # 18s, ou o fill/gravar falhou). NAO cair no bloco de
+                            # GRAVAR: concluindo('C') na tela de bloqueio/389 gera
+                            # "TypeError ... className null" (bug historico, NF
+                            # 5537). Sair limpo com mensagem classificavel pela
+                            # Camada 2 (regex 'bloqueado' -> CLIENTE_BLOQUEADO).
                             avisos_tratados.append("CLIENTE_BLOQUEADO_ABORT")
-                            break
-
-                        # Re-simular na MESMA popup apos desbloqueio. Se o SSW
-                        # navegou in-place, pode ser necessario aguardar mais
-                        # tempo para ele retornar da tela 389 para a 004.
-                        await asyncio.sleep(3)
-                        try:
-                            await _clicar_simular(popup)
-                        except Exception as e_resim:
-                            avisos_tratados.append(
-                                f"RESIMULAR_DESBLOQ_ERRO: {e_resim}"
+                            try:
+                                popup.remove_listener("dialog", on_dialog)
+                            except Exception:
+                                pass
+                            return gerar_saida(
+                                False,
+                                ctrc=None,
+                                campos_preenchidos=campos_ok,
+                                resultado={
+                                    "avisos_tratados": avisos_tratados,
+                                    "dialogs": dialogs,
+                                },
+                                mensagem=(
+                                    "Cliente pagador bloqueado para transporte e "
+                                    "desbloqueio automatico falhou (opcao 389). "
+                                    "Desbloqueie manualmente (Transportar=S) e retente."
+                                ),
                             )
-                        await asyncio.sleep(8)
-                        continue
+
+                        # Desbloqueio GRAVADO (Transportar=S persiste no cadastro
+                        # do cliente). No fluxo inline a 389 OCUPOU o popup da 004
+                        # e o SSW NAO volta sozinho para a 004 com os campos
+                        # preenchidos — re-simular aqui cai na 389 (-> NAO_RECONHECIDO
+                        # -> TypeError no gravar, bug NF 5537 2026-06-19).
+                        # Estrategia robusta: ABORTAR esta emissao com retentar=True;
+                        # o orquestrador re-emite do ZERO e a 2a passada NAO ve mais
+                        # o bloqueio (o cadastro ja mudou). Desbloqueio e emissao sao
+                        # operacoes SEPARADAS.
+                        avisos_tratados.append("DESBLOQUEADO_RETENTAR")
+                        try:
+                            popup.remove_listener("dialog", on_dialog)
+                        except Exception:
+                            pass
+                        return gerar_saida(
+                            False,
+                            ctrc=None,
+                            cliente_desbloqueado=True,
+                            retentar=True,
+                            campos_preenchidos=campos_ok,
+                            resultado={
+                                "avisos_tratados": avisos_tratados,
+                                "dialogs": dialogs,
+                            },
+                            mensagem=(
+                                "Cliente pagador desbloqueado (Transportar=S). "
+                                "Re-emitir o CTe — a nova tentativa nao vera mais "
+                                "o bloqueio."
+                            ),
+                        )
 
                     # --- Aviso: GNRE/Guia de Recolhimento ---
                     if ('guia de recolhimento' in body_lower or
@@ -1137,6 +1332,79 @@ async def emitir_cte(args):
                         "FRETE_REINFORMADO_SKIPPED:sem_resimulacao"
                     )
 
+                # ── SALVAGUARDA DE FRETE (2026-06-19, bug NF 39092/39101) ──
+                # Se ALGUMA simulacao caiu no fallback JS (lnk_env/onclick), o SSW
+                # pode ter recalculado o frete pela TABELA, descartando o frete
+                # informado. CTe com valor errado e pior que nao emitir: ABORTAR
+                # antes de gravar. retentar=True -> o orquestrador re-emite; com o
+                # errorpanel removido no _clicar_simular, a 2a usa o caminho nativo.
+                if simular_fallback:
+                    avisos_tratados.append("ABORT_FRETE_NAO_CONFIAVEL_FALLBACK")
+                    try:
+                        popup.remove_listener("dialog", on_dialog)
+                    except Exception:
+                        pass
+                    return gerar_saida(
+                        False,
+                        ctrc=None,
+                        frete_nao_confiavel=True,
+                        retentar=True,
+                        campos_preenchidos=campos_ok,
+                        resultado={
+                            "avisos_tratados": avisos_tratados,
+                            "dialogs": dialogs,
+                        },
+                        mensagem=(
+                            "Simulacao via fallback (overlay bloqueou o clique "
+                            "nativo do simular) — frete pode ter sido recalculado "
+                            "pela tabela. Emissao abortada para nao gravar valor "
+                            "errado; retente."
+                        ),
+                    )
+
+                # ── SALVAGUARDA DE FRETE 2: LEITURA DO RESUMO (definitiva) ──
+                # Le "VALOR A RECEBER" do resumo e compara com o frete informado.
+                # Pega QUALQUER divergencia, inclusive perda do override por avisos
+                # extras (bug NF 39111: 2 "Continuar" recalcularam p/ TAB GENERICA
+                # 533,74 != 600 informado). Diverge -> ABORTA (retentar). Garante
+                # que NUNCA grava CTe com valor errado, independente da causa.
+                try:
+                    _body_res = await popup.evaluate(
+                        "() => document.body ? document.body.innerText : ''"
+                    )
+                    _mv = re.search(
+                        r'VALOR\s+A\s+RECEBER:\s*([\d.]*\d,\d{2})', _body_res
+                    )
+                    if _mv:
+                        _vr = float(_mv.group(1).replace('.', '').replace(',', '.'))
+                        _vi = float(args.frete_peso)
+                        if abs(_vr - _vi) > 1.0:
+                            avisos_tratados.append(
+                                f"FRETE_DIVERGE_RESUMO:inf={_vi}:resumo={_vr}"
+                            )
+                            await capturar_screenshot_local(popup, "08_frete_diverge")
+                            try:
+                                popup.remove_listener("dialog", on_dialog)
+                            except Exception:
+                                pass
+                            return gerar_saida(
+                                False, ctrc=None, frete_nao_confiavel=True,
+                                retentar=True, frete_informado=_vi, frete_resumo=_vr,
+                                campos_preenchidos=campos_ok,
+                                resultado={"avisos_tratados": avisos_tratados,
+                                           "dialogs": dialogs},
+                                mensagem=(
+                                    f"Frete no resumo R$ {_vr} difere do informado "
+                                    f"R$ {_vi} (SSW recalculou pela tabela). Emissao "
+                                    f"abortada para nao gravar valor errado."
+                                ),
+                            )
+                        avisos_tratados.append(f"FRETE_RESUMO_OK:{_vr}")
+                    else:
+                        avisos_tratados.append("FRETE_RESUMO_NAO_LIDO")
+                except Exception as _e_res:
+                    avisos_tratados.append(f"FRETE_RESUMO_CHECK_ERRO:{_e_res}")
+
                 # ── 7. GRAVAR pre-CTRC (match flexivel + fallback JS) ──
                 await capturar_screenshot_local(popup, "08_pre_gravar")
                 gravar_clicked = False
@@ -1178,7 +1446,17 @@ async def emitir_cte(args):
                     except Exception as e:
                         avisos_tratados.append(f"GRAVAR_CLICK_ERRO: {e}")
 
-                await asyncio.sleep(12)
+                # Espera o SSW processar a gravacao: CTRC aparece OU popup fecha.
+                # Sai em ~1-2s vs 12s fixos (cap 10s = folga do antigo).
+                await _esperar(
+                    popup,
+                    "() => { const b = document.body ? document.body.innerText : '';"
+                    " const s = document.querySelector('input[name=\"seq_ant\"]');"
+                    " return /CTRC\\s*anterior\\s*:?\\s*0*\\d+/i.test(b)"
+                    " || !!(s && s.value && s.value.trim()); }",
+                    timeout_s=10,
+                )
+                await asyncio.sleep(0.5)
                 await capturar_screenshot_local(popup, "08_pos_gravar")
 
                 # ── 8. Extrair CTRC ──
@@ -1231,7 +1509,9 @@ async def emitir_cte(args):
                         await popup.evaluate(
                             "ajaxEnvia('', 1, 'ssw0767?act=REM&chamador=ssw0024')"
                         )
-                        await asyncio.sleep(20)
+                        # REM e fire-and-forget; a autorizacao e verificada na 101
+                        # (depois, com folga). 6s vs 20s.
+                        await asyncio.sleep(6)
                         sefaz_result = {"metodo": "ajaxEnvia_REM_popup004"}
                     except Exception as e_popup:
                         # Popup pode ter fechado — abrir 007 e chamar REM la
@@ -1250,7 +1530,7 @@ async def emitir_cte(args):
                             await popup_007.evaluate(
                                 "ajaxEnvia('', 1, 'ssw0767?act=REM&chamador=ssw0024')"
                             )
-                            await asyncio.sleep(20)
+                            await asyncio.sleep(6)
                             sefaz_result["metodo"] = "ajaxEnvia_REM_popup007"
                         except Exception as e_007:
                             sefaz_result["popup007_erro"] = str(e_007)
@@ -1314,7 +1594,15 @@ async def emitir_cte(args):
 
                     # Pesquisar: ajaxEnvia('P1', 1)
                     await popup_101.evaluate("ajaxEnvia('P1', 1)")
-                    await asyncio.sleep(8)
+                    # Espera os dados do CTRC (ou link DACTE) — ~1-2s vs 8s.
+                    await _esperar(
+                        popup_101,
+                        "() => { const t = document.body ? document.body.innerText : '';"
+                        " return t.includes('Dados do CTRC')"
+                        " || !!document.getElementById('link_imp_dacte'); }",
+                        timeout_s=10,
+                    )
+                    await asyncio.sleep(0.4)
                     await popup_101.evaluate(CREATE_NEW_DOC_OVERRIDE)
                     await capturar_screenshot_local(popup_101, f"10_101_{ctrc_num}")
 

@@ -64,8 +64,11 @@ Separada de `acessando-ssw` (apenas consulta/documentacao).
 | "Nao conseguiu consultar ICMS do CTe pai" no 222 | Consulta 101 do pai retornou erro | Passar `--valor-outros` manual (valor final pos-grossing up) |
 | "Aliquota ICMS invalida" no 222 | Frete ou ICMS do pai zerado na 101 | Verificar CTe pai manualmente na 101, usar `--valor-outros` |
 | Loop "Continuar" no 222 | Multiplos avisos CFOP/ICMS/GNRE | Normal — script clica todos via loop MAX=5x |
-| `errorpanel` bloqueia click em `►` no 004 | Overlay invisivel sem `pointer-events: none` | Script ja usa `_clicar_simular()` com fallback JS (native → lnk_env → onclick_calculafrete) |
+| `errorpanel` bloqueia click em `►` no 004 | Overlay invisivel sem `pointer-events: none` | `_clicar_simular()` REMOVE o `errorpanel` antes do clique nativo. ⚠️ NAO confiar no fallback `lnk_env`: recalcula o frete pela TABELA e descarta o informado (salvaguardas abortam se cair nele) |
 | Match "Gravar" nao encontra no 004 | SSW renderiza como "1. Gravar", "1.Gravar", "Gravar" | Script usa `re.compile(r"Gravar", re.IGNORECASE)` — se falhar, usa fallback JS `concluindo('C')` |
+| Cliente pagador bloqueado na 004 | inadimplencia/cadastro | Desbloqueio AUTO: abre 389 (polling ate 18s), `Transportar=S`, grava, retorna `retentar=True` → re-emitir. Se falhar: msg CLIENTE_BLOQUEADO (desbloquear manual na 389) |
+| Cidade nao atendida (opc 402) na 004 | destino sem cadastro na 402 | Aborta classificado (`cidade_nao_atendida`); cadastrar a cidade na 402 e retentar (NAO usar tipo FEC) |
+| CTe gravaria com frete da TABELA (!= informado) | override perdido (fallback de simular OU avisos "Continuar" extras) | 3 salvaguardas abortam ANTES de gravar (`frete_nao_confiavel`+`retentar`); le `VALOR A RECEBER` do resumo vs informado. Detalhe: `app/carvia/SSW_INTEGRATION.md` |
 
 ---
 
