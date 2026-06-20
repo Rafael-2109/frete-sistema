@@ -544,7 +544,7 @@ dict-simples faz o factory marcar tudo `required` + `additionalProperties:false`
 `target_user_id` ANTES do handler. Schemas devem ser dict-completo (type+properties+required);
 travado por `tests/agente/tools/test_memory_mcp_schema.py`.
 
-### MCP Tools de sessao (session_search_tool.py v4.1.0 Enhanced, 5 operacoes)
+### MCP Tools de sessao (session_search_tool.py v4.3.0 Enhanced, 8 operacoes)
 | Tool | O que faz |
 |------|-----------|
 | `search_sessions` | Busca textual (ILIKE) em sessoes anteriores |
@@ -552,10 +552,22 @@ travado por `tests/agente/tools/test_memory_mcp_schema.py`.
 | `semantic_search_sessions` | Busca semantica via embeddings (fallback ILIKE) |
 | `list_session_users` | Lista usuarios com sessoes — **admin-only, debug mode** |
 | `get_subagent_transcript` | Transcript completo de subagente executado em uma sessao (tools, duracao, findings) |
+| `get_session_transcript` | Transcript de uma sessao (execucoes de tools + operacoes Odoo correlacionadas) |
+| `list_session_uploads` | Lista anexos (PDF/xlsx/XML) que o usuario enviou em sessoes ANTERIORES, recuperaveis apos rotacao (IMP-2026-06-19-007) |
+| `recover_upload` | Baixa do S3 para o /tmp da sessao atual um anexo de sessao anterior (`file_id` de `list_session_uploads`; session destino = sessao atual por default) |
 
-**Admin (debug mode)**: `search_sessions`, `list_recent_sessions` e `semantic_search_sessions`
-aceitam `target_user_id=N` para busca cross-user. `channel='teams'|'web'` filtra por canal.
-Pattern: `_resolve_user_id(args)` espelha `memory_mcp_tool.py`.
+**Admin (debug mode)**: `search_sessions`, `list_recent_sessions`, `semantic_search_sessions`,
+`list_session_uploads` e `recover_upload` aceitam `target_user_id=N` para acesso cross-user.
+`channel='teams'|'web'` filtra por canal. Pattern: `_resolve_user_id(args)` espelha `memory_mcp_tool.py`.
+
+**Persistencia S3 de uploads (IMP-2026-06-19-007)**: uploads do chat (`routes/files.py`) fazem
+dual-write `/tmp` + S3 (`agente-uploads/{user_id}/`) via `services/upload_recovery_service.py`
+(condicional a `USE_S3`; com a flag off = no-op nao-fatal), com manifesto na tabela
+`AgenteUpload` (escopo `user_id`, TTL 90d via `expira_em`; migration
+`scripts/migrations/2026_06_20_agente_upload.{py,sql}`). As tools `list_session_uploads` +
+`recover_upload` recuperam anexos orfanados pela rotacao de sessao (causa-raiz
+IMP-2026-06-20-002 / IMP-2026-06-19-008); o `resume_notice` (`sdk/hooks.py`) aponta as tools.
+Detalhe: `.claude/references/S3_STORAGE.md` modulo 1.
 
 ### MCP Tools de descoberta de schema (progressive disclosure — S1)
 | Tool | O que faz |
