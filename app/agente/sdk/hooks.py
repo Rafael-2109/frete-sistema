@@ -137,12 +137,14 @@ def _build_resume_fallback_notice(reason: str) -> str:
     2026-06-10). 'resume_failed' (default): resume do SDK falhou (R-CLI-CRASH).
     """
     aviso_anexos = (
-        " ATENÇÃO a ARQUIVOS: anexos enviados na sessão anterior (PDF, planilha "
-        ".xlsx, XML, etc.) NÃO sobrevivem à rotação — ficam inacessíveis nesta "
-        "sessão. Se a tarefa em andamento depende de arquivos anexados, AVISE o "
-        "usuário proativamente e peça o reenvio de TODOS os arquivos necessários "
-        "de uma vez ANTES de executar qualquer passo — não tente prosseguir e "
-        "descobrir o sumiço no meio do fluxo."
+        " ATENÇÃO a ARQUIVOS: anexos enviados antes (PDF, planilha .xlsx, XML, "
+        "etc.) podem ter saído do /tmp nesta sessão. ANTES de pedir reenvio, tente "
+        "recuperá-los: chame `list_session_uploads` para ver os anexos recentes do "
+        "usuário e `recover_upload` (com o file_id retornado) para trazer cada um de "
+        "volta para a sessão atual. Se a tarefa depende de um anexo que "
+        "`list_session_uploads` NÃO encontrar, AVISE o usuário proativamente e peça "
+        "o reenvio de TODOS os arquivos necessários de uma vez ANTES de executar "
+        "qualquer passo — não tente prosseguir e descobrir o sumiço no meio do fluxo."
     )
     if reason == 'rotated':
         return (

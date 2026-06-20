@@ -91,3 +91,11 @@ class TestResumeFallbackNotice:
         from app.agente.sdk.hooks import _build_resume_fallback_notice
         notice = _build_resume_fallback_notice('resume_failed')
         assert 'não pôde ser restaurada' in notice
+
+    def test_resume_notice_aponta_tool_de_recuperacao(self):
+        # IMP-2026-06-19-007: aviso de anexos aponta as tools de recuperacao
+        from app.agente.sdk.hooks import _build_resume_fallback_notice
+        for reason in ('rotated', 'resume_failed'):
+            notice = _build_resume_fallback_notice(reason)
+            assert 'list_session_uploads' in notice
+            assert 'recover_upload' in notice
