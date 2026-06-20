@@ -138,8 +138,15 @@ abortados (volta a `status='pendente'`).
 Mapa em `routes/mapa_routes.py` + `services/mapa_service.py` (template `mapa_pedidos.html`).
 Lotes trafegam por `separacao_lote_id`: NACOM (lote real) e CarVia (`CARVIA-NF-{id}`,
 `CARVIA-PED-{id}`, `CARVIA-{cot_id}`). As acoes do mapa (salvar rota, simular 3D,
-densidade) usam `_lotesSelecionados()` — a **selecao viva** dos clientes marcados —
-NAO a variavel estatica injetada no load (que vem vazia no fluxo interativo).
+densidade, **cotar frete**) usam `_lotesSelecionados()` — a **selecao viva** dos clientes
+marcados — NAO a variavel estatica injetada no load (que vem vazia no fluxo interativo).
+
+- **`cotar_frete_mapa` (`POST /api/cotar-frete`) coteja por LOTE, nao por `num_pedido`**:
+  o front (`cotarFrete()`) envia `{lotes: _lotesSelecionados()}` (separacao_lote_id) — antes
+  enviava `{pedidos: [num_pedido]}` e o backend resolvia via `Separacao`, **perdendo CarVia**
+  (sem registro em `Separacao`, R9 embarques). O endpoint usa `data['lotes']` direto e so cai
+  no caminho `pedidos`→`Separacao` como fallback legado. O wizard `cotacao.tela_cotacao` ja
+  cota lotes mistos NACOM+CarVia (ramo CarVia do `fechar_frete`). NAO reverter para `num_pedido`.
 
 - **`RotaSalva` e COMPARTILHADA entre todos os usuarios**: `rota_listar`
   (`GET /api/rotas`) NAO filtra por `criado_por`; carregar/excluir/cotar (`/api/rota/<id>`)

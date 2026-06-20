@@ -631,7 +631,18 @@
       <a href="{{ url_for('embarques.dados_tabela_embarque', id=embarque.id) }}" class="btn btn-info">
         Ver Dados da Tabela
       </a>
-      
+
+      <!-- Botão Ver no Mapa — usa os lotes ativos do embarque (NACOM + CarVia,
+           distinguidos pelo prefixo CARVIA- no separacao_lote_id). -->
+      {% set lotes_mapa = embarque.itens_ativos | selectattr('separacao_lote_id') | map(attribute='separacao_lote_id') | unique | list %}
+      {% if lotes_mapa %}
+      <a href="{{ url_for('mapa.visualizar_mapa', **{'lotes[]': lotes_mapa}) }}"
+         class="btn btn-outline-success" target="_blank" rel="noopener"
+         title="Visualizar os pedidos deste embarque no mapa">
+        <i class="fas fa-map-marked-alt"></i> Ver no Mapa
+      </a>
+      {% endif %}
+
       <!-- Botão Alterar Cotação (apenas se data embarque não preenchida) -->
       {% if not embarque.data_embarque and embarque.status != 'cancelado' %}
         <a href="{{ url_for('embarques.alterar_cotacao', embarque_id=embarque.id) }}" 

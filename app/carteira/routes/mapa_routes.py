@@ -476,23 +476,33 @@ def exportar_mapa_excel():
 @bp.route('/api/cotar-frete', methods=['POST'])
 @login_required
 def cotar_frete_mapa():
-    """Prepara cotação de frete para pedidos selecionados no mapa"""
+    """Prepara cotação de frete para pedidos selecionados no mapa.
+
+    Aceita `lotes` (separacao_lote_id — PREFERIDO, distingue CarVia pelo prefixo
+    CARVIA-) ou `pedidos` (num_pedido — legado Nacom, resolvido via Separacao).
+    Cotar por num_pedido perdia CarVia, que NAO tem registro em Separacao (R9);
+    por isso o front agora envia os lotes diretos e o backend os usa sem conversao.
+    """
     try:
         from app.separacao.models import Separacao
 
-        data = request.get_json()
-        pedido_ids = data.get('pedidos', [])  # Lista de num_pedido
+        data = request.get_json() or {}
+        lotes_in = data.get('lotes') or []        # separacao_lote_id (NACOM + CarVia)
+        pedido_ids = data.get('pedidos') or []    # legado: num_pedido (so Nacom)
 
-        if not pedido_ids:
+        if lotes_in:
+            # Dedupe preservando a ordem da selecao; descarta vazios/None.
+            lotes = list(dict.fromkeys([l for l in lotes_in if l]))
+        elif pedido_ids:
+            # Legado: resolve num_pedido -> separacao_lote_id (so Nacom; CarVia
+            # nao tem Separacao e seria perdido — manter so por retrocompat).
+            separacoes = Separacao.query.filter(
+                Separacao.num_pedido.in_(pedido_ids),
+                Separacao.sincronizado_nf == False
+            ).all()
+            lotes = list(set([s.separacao_lote_id for s in separacoes if s.separacao_lote_id]))
+        else:
             return jsonify({'erro': 'Nenhum pedido selecionado'}), 400
-
-        # Buscar separacao_lote_ids correspondentes
-        separacoes = Separacao.query.filter(
-            Separacao.num_pedido.in_(pedido_ids),
-            Separacao.sincronizado_nf == False
-        ).all()
-
-        lotes = list(set([s.separacao_lote_id for s in separacoes if s.separacao_lote_id]))
 
         if not lotes:
             return jsonify({'erro': 'Nenhuma separação encontrada para os pedidos selecionados'}), 400

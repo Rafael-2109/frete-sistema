@@ -71,6 +71,8 @@ app/embarques/
 
 Blueprint `embarques` (`url_prefix=/embarques`), registrado em `app/__init__.py:917` (import) + `:981` (register). Rotas usam `@login_required` + `@require_embarques()` (permissao `pode_acessar_embarques`); `visualizar`/`listar` re-checam `vendedor` item-a-item.
 
+> O hub (`visualizar_embarque`) tem o botao **Ver no Mapa** → link direto para `mapa.visualizar_mapa` com `lotes[]=` dos `separacao_lote_id` dos itens ativos (NACOM + CarVia; o mapa distingue CarVia pelo prefixo `CARVIA-`). Mesmo destino do "Ver no Mapa" da lista de pedidos.
+
 | Grupo | Rotas principais |
 |-------|------------------|
 | **Hub/CRUD** | `GET\|POST /<id>` (`visualizar_embarque` — hub), `/listar_embarques`, `/<id>/editar` (POST morto), `/<id>/cancelar`, `/novo` (rascunho), `/<id>/novo_item`, `/excluir_item/<item_id>`, `/item/<item_id>/cancelar`, `/<id>/alterar_cotacao` |

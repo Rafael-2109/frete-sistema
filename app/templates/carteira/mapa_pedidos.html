@@ -2566,11 +2566,14 @@
                 return;
             }
 
-            // Coletar todos os num_pedido dos clientes selecionados
-            const pedidos = [];
-            selecionados.forEach(c => {
-                (c.pedidos || []).forEach(p => pedidos.push(p.num_pedido));
-            });
+            // Coletar os separacao_lote_id (NACOM + CarVia) — num_pedido perdia
+            // CarVia, que nao tem registro em Separacao. _lotesSelecionados() ja
+            // filtra placeholders e extrai p.separacao_lote_id da selecao viva.
+            const lotes = _lotesSelecionados();
+            if (lotes.length === 0) {
+                Swal.fire('Aviso', 'Nenhum lote de separação encontrado na seleção', 'warning');
+                return;
+            }
 
             showLoading();
 
@@ -2582,7 +2585,7 @@
                 headers: {
                     'X-CSRFToken': getCSRFToken()
                 },
-                data: JSON.stringify({ pedidos: pedidos }),
+                data: JSON.stringify({ lotes: lotes }),
                 success: function (response) {
                     if (response.sucesso) {
                         _cotacaoRedirectUrl = response.redirect;
