@@ -987,6 +987,72 @@ def _cmd_registrar_nf_manual(args):
         return _resp_validacao(str(e))
 
 
+def _cmd_registrar_devolucao_nfd(args):
+    """Registra devolucao (NFd) de 1+ chassis de uma NF Q.P.A. ja FATURADA.
+
+    Reusa devolucao_service.criar_devolucao: cada chassi volta a PENDENTE
+    (conserto), AssaiNfQpaItem.devolvido=True e o saldo do modelo retorna ao
+    pedido. A NF original NAO e cancelada (devolucao parcial e legitima).
+    Idempotente por UNIQUE (nf_id, numero_nfd). Anexos (PDF/XML/imagem) NAO
+    sao suportados via CLI — so pela tela. O service commita.
+    """
+    if args.nf_id is None:
+        return _resp_validacao('--nf-id obrigatorio para --registrar-devolucao-nfd')
+    if not (args.numero_nfd and args.numero_nfd.strip()):
+        return _resp_validacao('--numero-nfd obrigatorio para --registrar-devolucao-nfd')
+    if not (args.motivo and len(args.motivo.strip()) >= 3):
+        return _resp_validacao('--motivo (>=3 chars) obrigatorio para --registrar-devolucao-nfd')
+    if not args.data_devolucao:
+        return _resp_validacao('--data-devolucao obrigatorio (YYYY-MM-DD ou DD/MM/YYYY)')
+    try:
+        dt = _parse_ocorrido_em(args.data_devolucao)
+    except ValueError as e:
+        return _resp_validacao(f'--data-devolucao: {e}')
+    data_dev = dt.date() if dt else None
+    if not data_dev:
+        return _resp_validacao('--data-devolucao vazia/invalida')
+
+    # chassis: --chassi (1) OU --chassis-json (lista)
+    if args.chassis_json:
+        try:
+            raw = json.loads(args.chassis_json)
+        except json.JSONDecodeError as e:
+            return _resp_validacao(f'--chassis-json invalido (use ["X","Y"]): {e}')
+        if not isinstance(raw, list):
+            return _resp_validacao('--chassis-json deve ser uma lista JSON')
+        chassis = [str(c).strip().upper() for c in raw if str(c).strip()]
+    elif args.chassi:
+        chassis = [args.chassi.strip().upper()]
+    else:
+        chassis = []
+    if not chassis:
+        return _resp_validacao('informe ao menos 1 chassi via --chassi ou --chassis-json')
+
+    if not args.confirmar:
+        return _resp_dry_run(
+            'registrar-devolucao-nfd', nf_id=args.nf_id,
+            numero_nfd=args.numero_nfd.strip(), data_devolucao=str(data_dev),
+            motivo=args.motivo.strip(), n_chassis=len(chassis), chassis=chassis,
+            acao_pretendida='criar AssaiDevolucaoNfd + por chassi: evento PENDENTE '
+                            '(volta ao estoque) + AssaiNfQpaItem.devolvido=True + '
+                            'saldo do modelo retorna; NF original NAO e cancelada')
+    try:
+        from app.motos_assai.services.devolucao_service import (
+            criar_devolucao, DevolucaoValidationError,
+        )
+        dev = criar_devolucao(
+            nf_id=args.nf_id, numero_nfd=args.numero_nfd.strip(),
+            data_devolucao=data_dev, motivo=args.motivo.strip(),
+            chassis=chassis, anexos=None, operador_id=args.user_id,
+        )
+        return _resp_ok('registrar-devolucao-nfd', {
+            'devolucao_id': dev.id, 'numero_nfd': dev.numero_nfd,
+            'nf_id': args.nf_id, 'n_chassis': len(chassis), 'chassis': chassis})
+    except DevolucaoValidationError as e:
+        db.session.rollback()
+        return _resp_validacao(str(e))
+
+
 # ----- Roteador -------------------------------------------------------------
 
 COMANDOS = [
@@ -1003,6 +1069,7 @@ COMANDOS = [
     ('cancelar_nf', _cmd_cancelar_nf),
     ('vincular_nf', _cmd_vincular_nf),
     ('registrar_nf_manual', _cmd_registrar_nf_manual),
+    ('registrar_devolucao_nfd', _cmd_registrar_devolucao_nfd),
 ]
 
 
@@ -1035,6 +1102,8 @@ def main():
     p.add_argument('--cancelar-nf', action='store_true', dest='cancelar_nf')
     p.add_argument('--vincular-nf', action='store_true', dest='vincular_nf')
     p.add_argument('--registrar-nf-manual', action='store_true', dest='registrar_nf_manual')
+    p.add_argument('--registrar-devolucao-nfd', action='store_true',
+                   dest='registrar_devolucao_nfd')
 
     # Args de dados
     p.add_argument('--chassi')
@@ -1071,6 +1140,13 @@ def main():
     p.add_argument('--nf-json', dest='nf_json', default=None,
                    help='JSON da NF Q.P.A. p/ registro manual sem PDF '
                         '(chave_44, numero, loja_id/destinatario_cnpj, itens[])')
+    p.add_argument('--numero-nfd', dest='numero_nfd', default=None,
+                   help='Numero da NF de devolucao (registrar-devolucao-nfd)')
+    p.add_argument('--data-devolucao', dest='data_devolucao', default=None,
+                   help='Data da NFd: YYYY-MM-DD ou DD/MM/YYYY (registrar-devolucao-nfd)')
+    p.add_argument('--chassis-json', dest='chassis_json', default=None,
+                   help='Lista de chassis a devolver: ["X","Y"] (registrar-devolucao-nfd; '
+                        'ou use --chassi para 1)')
 
     # Planilha
     p.add_argument('--excel', default=None, help='Caminho do .xlsx')

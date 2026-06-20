@@ -107,12 +107,14 @@ O subagente escreve findings detalhados em arquivo. O principal le o arquivo par
 
 > **Direcao do canal — M1 cobre SO' a SAIDA do subagente.** O `/tmp/subagent-findings/`
 > serve o fluxo subagente ESCREVE -> principal LE. Para o sentido INVERSO (dar dados de
-> ENTRADA ao subagente) NAO use caminho `/tmp`: o subagente pode nao enxergar o mesmo
-> filesystem do main loop (isolamento e/ou wipe entre a escrita e o spawn). Caso real
-> **IMP-2026-06-19-009** (agente web): 2 JSONs gravados pelo main loop em
-> `/tmp/agente_files` foram reportados AUSENTES pelo subagente `gestor-motos-assai`, que
-> ainda listou um arquivo que o main loop NAO via — handoff por arquivo falhou nos dois
-> sentidos. **Regra: passe dados de trabalho INLINE no corpo do prompt do subagente.**
+> ENTRADA ao subagente) NAO use caminho `/tmp`: handoff por `/tmp` falha ENTRE PROCESSOS —
+> um caminho `/tmp` "nu" resolve diferente entre o subprocesso do subagente e o main loop
+> (TMPDIR divergente, `/tmp/claude-{uid}` vs `/tmp` — ver `app/agente/routes/_constants.py:11-19`;
+> o `/tmp` do Render tambem e efemero entre deploys). **NAO e isolamento de filesystem**: o
+> read-back de findings (M1.1, abaixo) prova que escritor e leitor compartilham o mesmo `/tmp`.
+> Caso real **IMP-2026-06-19-009** (agente web): 2 JSONs gravados pelo main loop em
+> `/tmp/agente_files` foram reportados AUSENTES pelo subagente `gestor-motos-assai`.
+> **Regra: passe dados de trabalho INLINE no corpo do prompt do subagente.**
 
 ### M1.1: Ordem de Leitura (SDK 0.1.60+, 2026-04-17)
 

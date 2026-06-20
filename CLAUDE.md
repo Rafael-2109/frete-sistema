@@ -213,9 +213,12 @@ Subagentes retornam resumo compactado (10:1 a 50:1). **Nao existe validacao auto
 4. Para implementacao: REVISAR todos os arquivos tocados
 
 **Handoff de ENTRADA (dados PARA o subagente): INLINE no prompt, NUNCA por caminho `/tmp`.**
-O subagente pode NAO enxergar o `/tmp` do main loop (filesystem isolado e/ou wipe entre a
-escrita e o spawn — IMP-2026-06-19-009: 2 JSONs gravados em `/tmp/agente_files` foram
-reportados AUSENTES pelo subagente). Passe os dados de trabalho no CORPO do prompt; os 4
-passos acima cobrem so' o sentido inverso (saida do subagente -> main loop).
+Handoff por `/tmp` falha ENTRE PROCESSOS: um caminho `/tmp` "nu" resolve diferente entre o
+subprocesso do subagente e o main loop (TMPDIR divergente — `/tmp/claude-{uid}` vs `/tmp`,
+ver `app/agente/routes/_constants.py:11-19`; o `/tmp` do Render tambem e efemero entre
+deploys). NAO e isolamento de filesystem (o read-back de findings prova `/tmp` compartilhado).
+IMP-2026-06-19-009: 2 JSONs gravados em `/tmp/agente_files` foram reportados AUSENTES pelo
+subagente. Passe os dados de trabalho no CORPO do prompt; os 4 passos acima cobrem so' o
+sentido inverso (saida do subagente -> main loop).
 
 **Sinais de alerta**: output sem citacao de fontes, dados sem nuances, ausencia de "nao encontrado"
