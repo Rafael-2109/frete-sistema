@@ -159,6 +159,11 @@ Gotchas rapidos:
 | Teams Bot | `app/teams/` — ver `app/teams/CLAUDE.md` |
 | WhatsApp Bot | `app/whatsapp/` (canal via OpenClaw + plugin nacom-bridge) — ver `app/whatsapp/CLAUDE.md` |
 | Fretes | `app/fretes/routes.py`, `app/fretes/services/`, `app/templates/fretes/` — ver `app/fretes/CLAUDE.md` |
+| Separacao | `app/separacao/models.py` (tabela-fato + event listeners = maquina de estados), `app/separacao/routes.py` (legado) — ver `app/separacao/CLAUDE.md`. Criacao real da Separacao: `app/carteira/` |
+| Cotacao | `app/cotacao/routes.py`, `app/templates/cotacao/` — motor de cotacao PRE-embarque (cria Embarque) — ver `app/cotacao/CLAUDE.md` |
+| Embarques | `app/embarques/routes.py`, `app/embarques/services/`, `app/templates/embarques/` — HUB central pos-cotacao (NF/portaria/frete) — ver `app/embarques/CLAUDE.md` |
+| Portaria | `app/portaria/routes.py`, `app/portaria/models.py` — saida fisica no CD (carimba data_embarque, dispara frete) — ver `app/portaria/CLAUDE.md` |
+| Faturamento | `app/faturamento/routes.py`, `app/faturamento/services/` — NF do Odoo -> vincula EmbarqueItem/Separacao (FATURADO) — ver `app/faturamento/CLAUDE.md` |
 | Recebimento | `app/recebimento/routes/`, `app/recebimento/services/`, `app/recebimento/workers/` |
 | Devolucao | `app/devolucao/routes/`, `app/devolucao/services/` — ver `app/devolucao/CLAUDE.md` (dev) ou `app/devolucao/README.md` (narrativa) |
 | Pallet | `app/pallet/routes/`, `app/pallet/services/`, `app/templates/pallet/` |

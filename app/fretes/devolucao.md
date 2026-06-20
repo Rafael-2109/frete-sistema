@@ -1,3 +1,18 @@
+<!-- doc:meta
+tipo: explanation
+camada: L3
+sot_de: —
+hub: app/fretes/CLAUDE.md
+superseded_by: —
+atualizado: 2026-06-19
+-->
+
+> **Papel:** especificacao do fluxo de despesas extras de devolucao + frete de retorno (PRD informal).
+
+## Contexto
+
+Requisitos do tratamento de devolucao no modulo fretes (NFD, frete retorno, tratativas). Ver tambem `app/devolucao/README.md`.
+
 Preciso iniciar um projeto que consiste em:
 <processo>
 <registro_monitoramento>

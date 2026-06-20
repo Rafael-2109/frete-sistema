@@ -1,3 +1,14 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: app/fretes/CLAUDE.md
+superseded_by: —
+atualizado: 2026-06-19
+-->
+
+> **Papel:** guia visual (wireframes ASCII) das interfaces do botao "Lancar no Odoo": estados, modal, feedback.
+
 # 🎨 GUIA VISUAL - Interfaces de Lançamento no Odoo
 
 **Data:** 14/11/2025

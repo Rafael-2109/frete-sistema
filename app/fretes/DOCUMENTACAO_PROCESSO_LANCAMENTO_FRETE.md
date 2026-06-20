@@ -1,3 +1,14 @@
+<!-- doc:meta
+tipo: reference
+camada: L2
+sot_de: —
+hub: app/fretes/CLAUDE.md
+superseded_by: —
+atualizado: 2026-06-19
+-->
+
+> **Papel:** visao sistemica do processo de frete no sistema local (modelos, campos, validacoes, fatura, CTe, fluxo de vida).
+
 # 📋 DOCUMENTAÇÃO COMPLETA: PROCESSO DE LANÇAMENTO DE FRETE
 
 **Data de Criação:** 15/11/2025

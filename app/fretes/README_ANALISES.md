@@ -1,3 +1,14 @@
+<!-- doc:meta
+tipo: reference
+camada: L2
+sot_de: —
+hub: app/fretes/CLAUDE.md
+superseded_by: —
+atualizado: 2026-06-19
+-->
+
+> **Papel:** guia do sub-modulo de Analises de custo de frete (graficos, filtros, API /fretes/analises).
+
 # 📊 Sistema de Análises de Fretes
 
 ## 📋 Visão Geral

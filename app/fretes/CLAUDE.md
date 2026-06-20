@@ -4,7 +4,7 @@ camada: L1
 sot_de: —
 hub: CLAUDE.md
 superseded_by: —
-atualizado: 2026-06-03
+atualizado: 2026-06-19
 -->
 # Fretes — Guia de Desenvolvimento
 
@@ -47,13 +47,9 @@ atualizado: 2026-06-03
   - [G7: 7 docs em `services/documentacao_odoo/`](#g7-7-docs-em-servicesdocumentacao_odoo)
 - [Permissao e Menu](#permissao-e-menu)
 - [Skills Relacionadas](#skills-relacionadas)
-- [Referencias (ponteiros para docs externas)](#referencias-ponteiros-para-docs-externas)
-  - [Documentacao interna do modulo](#documentacao-interna-do-modulo)
-  - [Padroes e patterns (cross-modulo)](#padroes-e-patterns-cross-modulo)
-  - [Regras de negocio](#regras-de-negocio)
-  - [Reconciliacao financeira (pagamento de fretes)](#reconciliacao-financeira-pagamento-de-fretes)
-  - [Modelos e schemas](#modelos-e-schemas)
-  - [Skills e subagentes operacionais](#skills-e-subagentes-operacionais)
+- [Referencias](#referencias)
+  - [Docs internos do modulo](#docs-internos-do-modulo)
+  - [Cross-modulo](#cross-modulo)
 
 ## Contexto
 
@@ -74,10 +70,10 @@ Modulo CORE: gestao de frete real Nacom (industria embarca). Fluxo Cotacao → F
 ```
 app/fretes/
   ├── __init__.py
-  ├── models.py                     # 1.214 LOC — 9 models (Frete, FaturaFrete, DespesaExtra, etc.)
+  ├── models.py                     # 1.255 LOC — 9 models (Frete, FaturaFrete, DespesaExtra, etc.)
   ├── email_models.py               #    57 LOC — EmailAnexado
   ├── frota_models.py               #   139 LOC — FrotaVeiculo, FrotaDespesa
-  ├── routes.py                     # 7.208 LOC — fretes_bp (~90 endpoints) + funcoes exportadas
+  ├── routes.py                     # 7.462 LOC — fretes_bp (~90 endpoints) + funcoes exportadas
   ├── cte_routes.py                 #   561 LOC — cte_bp (/fretes/ctes)
   ├── frota_routes.py               #   633 LOC — frota_bp (/fretes/frota)
   ├── email_routes.py               #   138 LOC — emails_bp (/fretes/emails)
@@ -91,7 +87,7 @@ app/fretes/
   │   ├── despesa_cte_service.py                 #   611 LOC — Vincula CTe complementar → DespesaExtra
   │   └── documentacao_odoo/                     # 7 docs .md (historico de implementacao)
   ├── workers/
-  │   └── lancamento_odoo_jobs.py   #   839 LOC — RQ jobs: lancar_frete/despesa/lote
+  │   └── lancamento_odoo_jobs.py   #   921 LOC — RQ jobs: lancar_frete/despesa/lote
   └── jobs/
       └── cte_cancelamento_outlook_job.py  # 559 LOC — Job Outlook → cancelamentos CTe
 ```
@@ -177,7 +173,7 @@ Sao campos diferentes, atualizados em momentos diferentes durante vinculacao man
 | `AprovacaoFrete` | `aprovacoes_frete` | Status: PENDENTE/APROVADO/REJEITADO. Criada quando `Frete.requer_aprovacao_por_valor()` retorna True |
 | `LancamentoFreteOdooAuditoria` | `lancamento_frete_odoo_auditoria` | `etapa` (1-16), `status` (SUCESSO/ERRO/AVISO). FK para `frete_id` OU `despesa_extra_id` (mutuamente exclusivos) |
 | `CtePendenciaCancelamento` | `cte_pendencia_cancelamento` | Status: CANCELADO_OK, PENDENTE_FATURA_CONFERIDA, ORPHAN, FRETE_CANCELADO_REVISAR, ERRO, CANCELAMENTO_ODOO_FALHOU |
-| `FreteLancado` | `fretes_lancados` | **DEAD CODE** — model legado, lido apenas em rota `/antigo/<id>` (`routes.py:3388`). Nao remover sem migration |
+| `FreteLancado` | `fretes_lancados` | **DEAD CODE** — model legado, lido apenas em rota `/antigo/<id>` (`routes.py:3421`). Nao remover sem migration |
 
 **Constante global** (`models.py:10`): `FRETE_STATUS_BLOQUEANTES = ('EM_TRATATIVA', 'REJEITADO')` — fonte unica usada em routes.py para impedir conferencia de fatura.
 
@@ -187,7 +183,7 @@ Sao campos diferentes, atualizados em momentos diferentes durante vinculacao man
 
 ### Caminho 1: Automatico (a maior parte do volume)
 
-`processar_lancamento_automatico_fretes(embarque_id, cnpj_cliente, usuario)` (`routes.py:4073`) e o **trigger central** — invocado por 4 modulos: `embarques`, `faturamento`, `odoo`, `portaria`.
+`processar_lancamento_automatico_fretes(embarque_id, cnpj_cliente, usuario)` (`routes.py:4343`) e o **trigger central** — invocado por 4 modulos: `embarques`, `faturamento`, `odoo`, `portaria`.
 
 **Gates obrigatorios** (em ordem):
 1. `embarque.data_embarque` preenchido (portaria deu saida)
@@ -196,7 +192,7 @@ Sao campos diferentes, atualizados em momentos diferentes durante vinculacao man
 3. `verificar_requisitos_para_lancamento_frete(embarque_id, cnpj)` — 5 requisitos: itens ativos, NFs faturadas, sem erros, transportadora definida, NFs do CNPJ existem
 4. `Frete.query.filter_by(embarque_id, cnpj_cliente).first()` retorna None (idempotencia)
 
-**Uma vez liberado**, `lancar_frete_automatico(embarque_id, cnpj, usuario)` (`routes.py:3651`) calcula `valor_cotado` baseado em **`tipo_carga`** do embarque:
+**Uma vez liberado**, `lancar_frete_automatico(embarque_id, cnpj, usuario)` (`routes.py:3714`) calcula `valor_cotado` baseado em **`tipo_carga`** do embarque:
 
 | `tipo_carga` | Tabela usada | Calculo de `valor_cotado` |
 |--------------|--------------|--------------------------|
@@ -214,11 +210,11 @@ Sao campos diferentes, atualizados em momentos diferentes durante vinculacao man
 
 ### Caminho 2: Manual
 
-`criar_novo_frete_por_nf(numero_nf, fatura_frete_id)` (`routes.py:596-805`) — usuario cria manualmente quando o automatico falhou (gates nao atendidos) ou para freteiros (sem embarque normal). Mesma estrutura de campos. POST grava `Frete` + atribui campos da tabela. O POST `processar_lancamento_frete` exige `@require_financeiro()` e respeita o **gate de CD** (chama `verificar_requisitos_para_lancamento_frete`): em embarque MISTO com saida parcial, bloqueia (flash + redirect) sem criar o frete; nos demais motivos de falha, segue o fluxo manual normal (a tela existe justamente para esses casos).
+`criar_novo_frete_por_nf(numero_nf, fatura_frete_id)` (`routes.py:611`) — usuario cria manualmente quando o automatico falhou (gates nao atendidos) ou para freteiros (sem embarque normal). Mesma estrutura de campos. POST grava `Frete` + atribui campos da tabela. O POST `processar_lancamento_frete` exige `@require_financeiro()` e respeita o **gate de CD** (chama `verificar_requisitos_para_lancamento_frete`): em embarque MISTO com saida parcial, bloqueia (flash + redirect) sem criar o frete; nos demais motivos de falha, segue o fluxo manual normal (a tela existe justamente para esses casos).
 
 ### Caminho 3: Cancelamento
 
-`cancelar_frete_por_embarque(embarque_id, cnpj_cliente, usuario)` (`routes.py:3834`) — invocado por `app/embarques/routes.py` quando embarque cancelado. Marca todos `Frete.status = 'CANCELADO'` (nao deleta). Idempotente (filtra `status != 'CANCELADO'`).
+`cancelar_frete_por_embarque(embarque_id, cnpj_cliente, usuario)` (`routes.py:4104`) — invocado por `app/embarques/routes.py` quando embarque cancelado. Marca todos `Frete.status = 'CANCELADO'` (nao deleta). Idempotente (filtra `status != 'CANCELADO'`).
 
 ---
 
@@ -233,10 +229,10 @@ Sao campos diferentes, atualizados em momentos diferentes durante vinculacao man
 | Documento fiscal | CTe (`ConhecimentoTransporte`) | NFS ou RECIBO |
 | Vinculo Frete↔documento | `frete_cte_id` → CTe | Sem CTe; fatura agrupa diretamente |
 | Despesas extras | `tipo_documento='CTE'` + `despesa_cte_id` | `tipo_documento='NFS'` ou `'RECIBO'` |
-| Lancamento Odoo (despesa) | `/despesas/<id>/lancar_odoo` (16 etapas via DFe) | `/despesas/<id>/lancar_nfs_recibo` (`routes.py:5522`) — fluxo simplificado, sem DFe |
-| Fechamento | Fatura criada por upload PDF/integracao | UI dedicada `/lancamento_freteiros` (`routes.py:5035`) lista pendencias por freteiro — Nacom E CarVia |
-| Geracao da fatura | Operador ou automatica (XML CTe) | `POST /emitir_fatura_freteiro/<transportadora_id>` (`routes.py:5252`) — agrupa fretes/despesas selecionados + lado CarVia |
-| Excel de fechamento | — | `GET /faturas/exportar-fechamento-freteiros` (`routes.py:6692`) — 4 abas (Detalhamento + Resumo com dados bancarios + Detalhamento CarVia + Resumo CarVia). Restrito a admin/financeiro/logistica |
+| Lancamento Odoo (despesa) | `/despesas/<id>/lancar_odoo` (16 etapas via DFe) | `/despesas/<id>/lancar_nfs_recibo` (`routes.py:5934`) — fluxo simplificado, sem DFe |
+| Fechamento | Fatura criada por upload PDF/integracao | UI dedicada `/lancamento_freteiros` (`routes.py:5069`) lista pendencias por freteiro — Nacom E CarVia |
+| Geracao da fatura | Operador ou automatica (XML CTe) | `POST /emitir_fatura_freteiro/<transportadora_id>` (`routes.py:5286`) — agrupa fretes/despesas selecionados + lado CarVia |
+| Excel de fechamento | — | `GET /faturas/exportar-fechamento-freteiros` (`routes.py:6726`) — 4 abas (Detalhamento + Resumo com dados bancarios + Detalhamento CarVia + Resumo CarVia). Restrito a admin/financeiro/logistica |
 | Filtro analises | `incluir_transportadora=True/False` | `incluir_freteiro=True/False` (default ambos True). Ver `analise_dinamica` |
 
 ### Pontos de atencao
@@ -267,50 +263,14 @@ Sao campos diferentes, atualizados em momentos diferentes durante vinculacao man
 
 ## Fluxo Lancamento Odoo (16 etapas)
 
-Ver `app/odoo/CLAUDE.md` para Patterns P1-P7. Service: `services/lancamento_odoo_service.py:1049` (`lancar_frete_odoo`).
+> **DETALHE COMPLETO** (cada etapa, IDs fixos, `CNPJ_PARA_COMPANY`, campos por modelo Odoo, problemas conhecidos): `app/fretes/services/documentacao_odoo/LANCAMENTO_ODOO.md` (SOT). Patterns P1-P7: `app/odoo/CLAUDE.md`.
 
-```
-ENTRADA: frete_id + cte_chave (44 digitos) + data_vencimento
-   ↓
-[1] Buscar DFe pela chave (l10n_br_ciel_it_account.dfe)
-   ↓
-[CHECKPOINT] _verificar_lancamento_existente() → continuar_de_etapa (0|7|9|11|13|16)
-   ↓
-[VALIDACAO] DFe deve estar status '04' (PO) para novo; '04' ou '06' para retomada
-   ↓
-[2] Atualizar l10n_br_data_entrada + payment_reference (SEMPRE atualiza, mesmo retomada)
-[3] Verificar/corrigir operacao fiscal (uso OPERACAO_DE_PARA dict)
-[4] Atualizar l10n_br_tipo_pedido = 'servico'
-[5] Verificar company_id do DFe
-   ↓
-[6] *** FIRE-AND-POLL *** action_gerar_po_dfe
-    fire: 90s timeout
-    se timeout/502/socket.error/'cannot marshal None' → polling cada 10s por ate 600s
-    Reconcilia auditorias ERRO→SUCESSO se PO encontrado em polling
-   ↓
-[7] Configurar PO: valor, picking_type_id, l10n_br_operacao_id, partner_ref
-[8] PULADO (regra R3)
-[9] Confirmar PO (button_confirm com validate_analytic=True)
-[10] Aprovar PO se state == 'to approve' (opcional)
-[11] Criar Invoice (action_create_invoice)
-[12] Atualizar impostos Invoice (regra R4 — opcional)
-[13] Configurar Invoice: l10n_br_compra_indcom='out', l10n_br_situacao_nf='autorizado', invoice_date_due
-[14] Atualizar impostos Invoice (regra R4 — opcional)
-[15] Confirmar Invoice (action_post)
-   ↓
-[16] db.session.remove() → re-fetch Frete+CTe (regra R2)
-     status='LANCADO_ODOO', salvar IDs Odoo, lancado_odoo_em/por, commit
-```
-
-**IDs fixos hardcoded** (`lancamento_odoo_service.py`):
-- `PRODUTO_SERVICO_FRETE_ID = 29993`
-- `CONTA_ANALITICA_LOGISTICA_ID = 1186`
-- `TEAM_LANCAMENTO_FRETE_ID = 119`
-- `PAYMENT_PROVIDER_TRANSFERENCIA_ID = 30`
-
-**Rollback**: `_rollback_frete_odoo()` reseta IDs Odoo para NULL — so executa se `etapas_concluidas < 16`.
-
-**Despesa**: `LancamentoDespesaOdooService` herda de `LancamentoOdooService`. Override apenas `_audit_etapa6()` (registra `despesa_extra_id` em vez de `frete_id`) e `_verificar_lancamento_existente_despesa()`.
+Service: `lancamento_odoo_service.py` (`lancar_frete_odoo`). Pipeline DFe → PO → Invoice com checkpoint/retomada (`continuar_de_etapa`). Pontos que NAO se inferem do codigo:
+- **Etapa 6 = FIRE-AND-POLL**: `action_gerar_po_dfe` dispara (~90s); em timeout/`cannot marshal None` → polla `DFe.purchase_id` cada 10s ate 600s (R1 anti-detach + R7 lock).
+- **Etapa 8 PULADA** (R3) e **Etapas 12/14 OPCIONAIS** (R4) — numeracao mantida para nao quebrar a auditoria (`LancamentoFreteOdooAuditoria`).
+- **Etapa 16**: `db.session.remove()` + re-fetch (R2) → `status='LANCADO_ODOO'` + IDs Odoo.
+- **Rollback**: `_rollback_frete_odoo()` zera os IDs Odoo so se `etapas_concluidas < 16`.
+- **Despesa**: `LancamentoDespesaOdooService` herda do service (override so de auditoria + verificacao de existencia).
 
 ---
 
@@ -379,7 +339,7 @@ Fila: `'odoo_lancamento'` (via `app/portal/workers:enqueue_job`).
 Correcao 2026-04-20 (`lancamento_odoo_service.py:1275`): em retomada, atualiza data de entrada para refletir dia real do lancamento. Nao-bloqueante (DFe pode estar concluido/bloqueado no Odoo).
 
 ### G3: `FreteLancado` e dead code
-Tabela `fretes_lancados` + rota `/antigo/<id>` (linha 3388 em routes.py). Nao usar em codigo novo. Nao remover sem migration de cleanup.
+Tabela `fretes_lancados` + rota `/antigo/<id>` (linha 3421 em routes.py). Nao usar em codigo novo. Nao remover sem migration de cleanup.
 
 ### G4: Rotas `*_antigo` nao removidas
 `/lancar_antigo`, `/simulador_antigo` em `routes.py`. Mantidas por compatibilidade historica. Nao estender.
@@ -418,72 +378,30 @@ Sinal de alta complexidade historica do fluxo. Quando depurar, comecar por `STAT
 
 ---
 
-## Referencias (ponteiros para docs externas)
+## Referencias
 
-> Este CLAUDE.md cobre estrutura, regras criticas e fluxo. Detalhes profundos
-> ficam nos docs apontados abaixo — sempre preferir LER o doc especifico ao
-> reconstruir contexto a partir do codigo.
+> Este CLAUDE.md cobre estrutura, regras e gotchas. O detalhe profundo vive nos docs abaixo — preferir LER o doc a reconstruir do codigo.
 
-### Documentacao interna do modulo
+### Docs internos do modulo
 
 | Doc | Cobre |
 |-----|-------|
-| `DOCUMENTACAO_PROCESSO_LANCAMENTO_FRETE.md` | Narrativa do processo end-to-end (cotacao → cobranca) com diagramas |
-| `README_ANALISES.md` | Modulo `analises_service` (UF, cidade, transp., subrota), API `/analises/api/data`, dimensoes `incluir_transportadora`/`incluir_freteiro` |
-| `devolucao.md` | Fluxo de despesas extras de devolucao + `FretePlaceholderService` (frete fantasma para devolucoes pre-julho/2024) |
-| `services/documentacao_odoo/STATUS_IMPLEMENTACAO.md` | Estado atual da integracao Odoo (etapa por etapa, datas de adocao) |
-| `services/documentacao_odoo/RESUMO_RAPIDO_LANCAMENTO.md` | TL;DR do fluxo de 16 etapas para onboarding rapido |
-| `services/documentacao_odoo/IMPLEMENTACAO_FINAL_COMPLETA.md` | Snapshot da implementacao final (16 etapas codificadas) |
-| `services/documentacao_odoo/IMPLEMENTACAO_LANCAMENTO_ODOO_COMPLETA.md` | Versao expandida com codigo + decisoes |
-| `services/documentacao_odoo/DOCUMENTACAO_LANCAMENTO_FRETE_ODOO.md` | Especificacao tecnica detalhada por etapa |
-| `services/documentacao_odoo/GUIA_VISUAL_INTERFACES_LANCAMENTO.md` | Mockups das telas de lancamento (UI tour) |
-| `services/documentacao_odoo/PROPOSTA_SUGESTAO_CTE.md` | Algoritmo de sugestao automatica de CTe para frete |
-| `services/documentacao_odoo/lancamento.md` | Notas operacionais do dia-a-dia |
+| `app/fretes/services/documentacao_odoo/LANCAMENTO_ODOO.md` | **SOT** do lancamento Odoo: 16 etapas, IDs fixos, `CNPJ_PARA_COMPANY`, campos por modelo, problemas conhecidos |
+| `app/fretes/DOCUMENTACAO_PROCESSO_LANCAMENTO_FRETE.md` | Visao sistemica do processo de frete (modelos, validacoes, fatura, CTe, fluxo de vida) |
+| `app/fretes/README_ANALISES.md` | Sub-modulo de Analises (`analises_service`, API `/analises`, dimensoes transportadora/freteiro) |
+| `app/fretes/services/documentacao_odoo/GUIA_VISUAL_INTERFACES_LANCAMENTO.md` | Wireframes das telas de lancamento (UI) |
+| `app/fretes/services/documentacao_odoo/PROPOSTA_SUGESTAO_CTE.md` | Proposta (NAO implementada) de sugestao automatica de CTe |
+| `app/fretes/devolucao.md` | Despesas extras de devolucao + `FretePlaceholderService` (frete fantasma pre-julho/2024) |
 
-### Padroes e patterns (cross-modulo)
+> Os demais `.md` de `documentacao_odoo/` (IMPLEMENTACAO_*, STATUS_*, RESUMO_*, `lancamento.md`, `DOCUMENTACAO_LANCAMENTO_FRETE_ODOO.md`) sao **stubs historicos** (14/11/2025) superados pelo SOT acima.
+
+### Cross-modulo
 
 | Preciso de... | Documento |
 |---------------|-----------|
-| Patterns Odoo (P1-P7: Anti-Detach, Fire-and-Polling, Timeout adaptativo, Batch Fan-Out, Checkpointing, Retomada, Commit antes) | `app/odoo/CLAUDE.md` secao "Patterns" |
-| Pipeline 16 etapas (visao geral Odoo) | `.claude/references/odoo/PIPELINE_RECEBIMENTO.md` |
-| IDs fixos por empresa (company_id, journal, picking_type, conta analitica) | `.claude/references/odoo/IDS_FIXOS.md` |
-| Gotchas Odoo (timeouts, erros, circuit breaker, l10n_br) | `.claude/references/odoo/GOTCHAS.md` |
-| Modelos e campos Odoo (sale.order, account.move, etc.) | `.claude/references/odoo/MODELOS_CAMPOS.md` |
-| Padroes de backend (helpers como `sanitize_for_json`) | `.claude/references/PADROES_BACKEND.md` |
-| JSON sanitization para campos JSONB (Decimal/datetime/UUID) | `.claude/references/REGRAS_DEV_LOCAL.md` secao JSON SANITIZATION |
-
-### Regras de negocio
-
-| Preciso de... | Documento |
-|---------------|-----------|
-| Frete real vs teorico (criterio de divergencia, tolerancia R$ 5,00) | `.claude/references/negocio/FRETE_REAL_VS_TEORICO.md` |
-| Margem e custeio (`CustoFrete` orcado por UF/incoterm) | `.claude/references/negocio/MARGEM_CUSTEIO.md` |
-| Regras gerais de negocio (incoterms, status, fluxos) | `.claude/references/negocio/REGRAS_NEGOCIO.md` |
-
-### Reconciliacao financeira (pagamento de fretes)
-
-| Preciso de... | Documento |
-|---------------|-----------|
-| Como o pagamento dos fretes flui no Odoo (5 caminhos) | `app/financeiro/FLUXOS_RECONCILIACAO.md` |
-| Gotchas financeiros (80+ A1-A10, O1-O12) — incluindo conciliacao multi-company | `app/financeiro/GOTCHAS.md` |
-| Baixa de titulos via API vs Wizard | `scripts/analise_baixa_titulos/DOCUMENTACAO_BAIXA_TITULOS_ODOO.md` |
-| Wizard vs API: por que NAO usamos bank rec widget nativo | `scripts/analise_baixa_titulos/WIZARD_VS_API_ANALISE.md` |
-| Conciliacao multi-company (3 cenarios) | `scripts/analise_baixa_titulos/ANALISE_CONCILIACAO_EXTRATO_MULTICOMPANY.md` |
-| Modulo financeiro completo (CRUD titulos, extrato, CNAB) | `app/financeiro/CLAUDE.md` |
-
-### Modelos e schemas
-
-| Preciso de... | Documento |
-|---------------|-----------|
-| Campos de qualquer tabela do modulo | `.claude/skills/consultando-sql/schemas/tables/{fretes,faturas_frete,despesas_extras,conhecimento_transporte,...}.json` |
+| Patterns Odoo P1-P7 / IDs por empresa / gotchas / modelos | `app/odoo/CLAUDE.md` + `.claude/references/odoo/{IDS_FIXOS,GOTCHAS,MODELOS_CAMPOS}.md` |
+| Frete real vs teorico / margem / regras de negocio | `.claude/references/negocio/{FRETE_REAL_VS_TEORICO,MARGEM_CUSTEIO,REGRAS_NEGOCIO}.md` |
+| Pagamento de fretes no Odoo / reconciliacao multi-company | `app/financeiro/CLAUDE.md` + `app/financeiro/{FLUXOS_RECONCILIACAO,GOTCHAS}.md` |
 | Cadeia Pedido → Embarque → Frete → CTe → Pagamento | `.claude/references/modelos/CADEIA_PEDIDO_ENTREGA.md` |
-
-### Skills e subagentes operacionais
-
-| Preciso de... | Como acessar |
-|---------------|--------------|
-| Diagnosticar custo real de um frete | Subagente `controlador-custo-frete` |
-| Cotar frete teorico para nova venda | Skill `cotando-frete` |
-| Auditar reconciliacao Local x Odoo | Subagente `auditor-financeiro` |
-| KPIs de performance (transportadoras, atrasos) | Subagente `analista-performance-logistica` |
-| Documentacao do processo Odoo (passo-a-passo) | Skill `integracao-odoo` |
+| JSON sanitization / padroes de backend | `.claude/references/PADROES_BACKEND.md` + `.claude/references/REGRAS_DEV_LOCAL.md` |
+| Campos das tabelas do modulo | `.claude/skills/consultando-sql/schemas/tables/{fretes,faturas_frete,despesas_extras,conhecimento_transporte}.json` |

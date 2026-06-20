@@ -1,3 +1,18 @@
+<!-- doc:meta
+tipo: explanation
+camada: L3
+sot_de: —
+hub: app/fretes/CLAUDE.md
+superseded_by: —
+atualizado: 2026-06-19
+-->
+
+> **Papel:** proposta de feature (NAO implementada): sugestao automatica de CT-e na edicao do frete via busca no DFe.
+
+## Contexto
+
+Proposta de UX/backend para sugerir automaticamente o CT-e ao editar um frete. Documento de design — verificar implementacao real antes de assumir que existe.
+
 # 💡 PROPOSTA: SUGESTÃO AUTOMÁTICA DE CT-e NO FRETE
 
 **Data:** 15/11/2025
