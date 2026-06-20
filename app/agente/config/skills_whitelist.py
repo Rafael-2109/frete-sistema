@@ -64,6 +64,9 @@ SKILLS_DOMINIO_ASSAI: Set[str] = {
     # F0.2 PAD-CTX (2026-06-09): estava ausente por omissao desde 2026-06-02 —
     # vazava ao listing do principal (bug N-2 do estudo de contexto).
     'carregando-motos-assai',
+    # 2026-06-20: skill WRITE de backfill/correcao manual (delegada ao gestor).
+    # Fora do listing do principal (dominio Assai) — so' o subagente a invoca.
+    'corrigindo-dados-assai',
 }
 
 # ---------------------------------------------------------------------------

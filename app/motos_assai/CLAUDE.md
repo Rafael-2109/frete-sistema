@@ -4,7 +4,7 @@ camada: L1
 sot_de: —
 hub: CLAUDE.md
 superseded_by: —
-atualizado: 2026-06-06
+atualizado: 2026-06-20
 -->
 # Módulo Motos Assaí
 
@@ -144,6 +144,14 @@ Link em `app/templates/base.html` condicionado a
 | `FATURADA` | NF Q.P.A. importada e bateu | Não |
 | `CANCELADA` | Separação cancelada (volta como DISPONIVEL via novo evento) | Depende |
 | `MOTO_FALTANDO` | Declarada no recibo mas não chegou | Não |
+| `DEMONSTRACAO` | Moto cedida para demonstração (backfill manual) | Não |
+
+> `DEMONSTRACAO` adicionado em 2026-06-20 (Migration 33 — ALTER do CHECK
+> `ck_assai_moto_evento_tipo`; **adicionar evento ao model exige migration**, a
+> coluna tem CHECK). Em `EVENTOS_FORA_ESTOQUE`. Usado pela skill `corrigindo-dados-assai`.
+> ⚠️ A Migration 33 **NÃO consta no build.sh**: foi aplicada manualmente em prod
+> (padrão da 32); os arquivos `scripts/migrations/motos_assai_33_*` ficam só como
+> registro do DDL (idempotente — DROP IF EXISTS + recriar, se precisar re-rodar).
 
 ---
 
@@ -381,6 +389,7 @@ Função de conveniência: `resolver_por_codigo_qpa(codigo_str)` para lookup dir
 - Extrai loja_id de `nome_destinatario` via regex `LJ\d+`
 - Match BATEU / DIVERGENTE / NAO_RECONCILIADO com tolerância 1% no valor unitário
 - Quando BATEU: separação → status FATURADA; cada chassi emite evento FATURADA
+- **`criar_nf_qpa_de_dados(dados, operador_id)`** (2026-06-20): grava NF Q.P.A. a partir de dados ESTRUTURADOS (sem PDF) reusando o mesmo pós-match (`_finalizar_match_nf`). Usado pela skill `corrigindo-dados-assai` (`--registrar-nf-manual`) p/ faturamento histórico sem PDF. `importar_nf_qpa` (PDF) permanece intocado. Lastro = a própria NF (nunca FATURADA órfã).
 
 **Upload em lote (2026-05-12)** — `UploadNfQpaForm.pdfs` (`MultipleFileField`):
 - Variante global `/motos-assai/faturamento/upload-nf` aceita 1 ou N PDFs.
@@ -580,8 +589,9 @@ Para consultas e operações via Claude Code ou agente web Nacom Goya:
 | `acompanhando-pedido-compra-assai` | READ | Pedidos VOE Q.P.A. + compras Motochefe |
 | `acompanhando-saida-assai` | READ | Separações + NFs Q.P.A. (match BATEU/DIVERGENTE) |
 | `conferindo-recibo-assai` | READ + WRITE | Recibos Motochefe + wizard A→B→C→D |
-| `registrando-evento-moto-assai` | WRITE | Montagem, disponibilizar, separar, reverter, cancelar |
+| `registrando-evento-moto-assai` | WRITE | Montagem, disponibilizar, separar, reverter, cancelar (pontual, 1 chassi, agora) |
 | `carregando-motos-assai` | READ + WRITE | Carregamento (Sep→NF): listar/detalhar + iniciar/escanear/finalizar/cancelar/alterar |
+| `corrigindo-dados-assai` | WRITE | **Backfill / correção manual**: carga em lote (planilha Excel), eventos com data retroativa, cadastros (loja/modelo), item de pedido ABERTO, gravar faturamento (NF Q.P.A.) e alterar chassi em NF. Traz o mapa do módulo (`references/MAPA_MODULO.md`) p/ o agente escrever scripts ad-hoc. Dry-run + `--confirmar`. |
 
 Agente orquestrador: `gestor-motos-assai` (sub-agent — `model: sonnet`).
 

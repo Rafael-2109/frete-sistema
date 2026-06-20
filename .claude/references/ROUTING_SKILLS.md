@@ -26,10 +26,10 @@ atualizado: 2026-06-08
   - [Sentry — monitoramento de erros (1)](#sentry-monitoramento-de-erros-1)
   - [Utilitarios compartilhados (11)](#utilitarios-compartilhados-11)
   - [Skills Lojas HORA (6) — APENAS no Agente Lojas HORA (escopo isolado por `<loja_context>`)](#skills-lojas-hora-6-apenas-no-agente-lojas-hora-escopo-isolado-por-loja_context)
-  - [Skills motos_assai (7)](#skills-motos_assai-7)
+  - [Skills motos_assai (8)](#skills-motos_assai-8)
   - [Skills SPED ECD audit (4) — USO EXCLUSIVO do subagent `auditor-sped-ecd`](#skills-sped-ecd-audit-4-uso-exclusivo-do-subagent-auditor-sped-ecd)
 
-**Ultima Atualizacao**: 13/06/2026 (54 skills invocaveis. Historico de mudancas do inventario: comentario HTML ao fim deste arquivo — F0.4 PAD-CTX moveu o changelog para fora do corpo lido pelo agente.)
+**Ultima Atualizacao**: 20/06/2026 (57 skills invocaveis — +1 Assai: `corrigindo-dados-assai` (motos_assai 7→8), skill WRITE de backfill/correcao manual, delegada ao subagente `gestor-motos-assai` (deny-list, fora do listing do principal). Historico de mudancas do inventario: comentario HTML ao fim deste arquivo — F0.4 PAD-CTX moveu o changelog para fora do corpo lido pelo agente.)
 
 **REGRA**: Use a skill MAIS ESPECIFICA. `descobrindo-odoo-estrutura` e ULTIMO RECURSO.
 
@@ -78,6 +78,7 @@ atualizado: 2026-06-08
 | MOTOS ASSAÍ — RECIBO MOTOCHEFE | "recibos pendentes Motochefe", "conferir recibo RM-", "wizard recebimento" | -> `conferindo-recibo-assai` |
 | MOTOS ASSAÍ — EVENTOS WRITE | "registra montagem", "disponibiliza", "reverte", "separar chassi" | -> `registrando-evento-moto-assai` |
 | MOTOS ASSAÍ — CARREGAMENTO (READ+WRITE) | "carregamentos em andamento", "iniciar/finalizar carregamento", "escanear chassi na carga", "reabre carregamento" | -> `carregando-motos-assai` |
+| MOTOS ASSAÍ — BACKFILL/CORREÇÃO (WRITE) | "subir planilha de chassis", "backfill Q.P.A.", "corrigir estado retroativo", "marcar demonstração", "gravar faturamento NF antiga", "alterar chassi em NF", "cadastrar/corrigir loja/modelo" | -> `corrigindo-dados-assai` |
 | MOTOS ASSAÍ — CROSS-ENTIDADE | "como está operação Q.P.A.?", "resumo Motos Assaí" | -> Subagente `gestor-motos-assai` |
 
 ---
@@ -195,7 +196,7 @@ Se a resposta esta no reference -> NAO usar skill.
 
 ---
 
-## Skills — Inventario Completo (56 invocaveis em `.claude/skills/`)
+## Skills — Inventario Completo (57 invocaveis em `.claude/skills/`)
 
 Cada skill tem `SKILL.md` em `.claude/skills/<nome>/`. `consultando-sql` e invocavel mas expoe data folder (schemas/queries) descoberto via filesystem.
 `SKILL_IMPROVEMENT_ROADMAP.md` na raiz de `.claude/skills/` e DOC, nao skill (nao conta no inventario).
@@ -253,10 +254,10 @@ Cada skill tem `SKILL.md` em `.claude/skills/<nome>/`. `consultando-sql` e invoc
 `consultando-venda-loja` (consultar vendas + validar preco/desconto + margem, READ),
 `rastreando-chassi` (historico completo de UM chassi: pedido->NF->recebimento->venda)
 
-### Skills motos_assai (7)
+### Skills motos_assai (8)
 `consultando-estoque-assai`, `rastreando-chassi-assai`, `acompanhando-pedido-compra-assai`,
 `acompanhando-saida-assai`, `conferindo-recibo-assai`, `registrando-evento-moto-assai`,
-`carregando-motos-assai`
+`carregando-motos-assai`, `corrigindo-dados-assai`
 
 ### Skills SPED ECD audit (4) — USO EXCLUSIVO do subagent `auditor-sped-ecd`
 `parseando-sped-ecd` (parse Leiaute 9 streaming -> dict JSON em /tmp/),

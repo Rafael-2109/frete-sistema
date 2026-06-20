@@ -86,3 +86,27 @@ def test_ocorrido_em_retroativo_preservado(app, admin_user):
         # Persistiu e é recuperável como último evento
         assert ultimo_evento('TST_RETRO_001').ocorrido_em == data_chegada
         db.session.rollback()
+
+
+def test_demonstracao_evento_valido_fora_estoque():
+    """DEMONSTRACAO (Migration 33) é evento válido e NÃO conta como estoque."""
+    from app.motos_assai.models import (
+        EVENTOS_VALIDOS, EVENTOS_FORA_ESTOQUE, EVENTOS_EM_ESTOQUE,
+        EVENTO_DEMONSTRACAO,
+    )
+    assert EVENTO_DEMONSTRACAO == 'DEMONSTRACAO'
+    assert EVENTO_DEMONSTRACAO in EVENTOS_VALIDOS
+    assert EVENTO_DEMONSTRACAO in EVENTOS_FORA_ESTOQUE
+    assert EVENTO_DEMONSTRACAO not in EVENTOS_EM_ESTOQUE
+
+
+def test_emitir_demonstracao(app, admin_user):
+    """emitir_evento aceita DEMONSTRACAO e ela vira o estado efetivo."""
+    from app.motos_assai.models import EVENTO_DEMONSTRACAO
+    with app.app_context():
+        _criar_moto(app, 'TST_DEMO_001')
+        emitir_evento('TST_DEMO_001', EVENTO_ESTOQUE, admin_user.id)
+        ev = emitir_evento('TST_DEMO_001', EVENTO_DEMONSTRACAO, admin_user.id)
+        assert ev.tipo == EVENTO_DEMONSTRACAO
+        assert status_efetivo('TST_DEMO_001') == EVENTO_DEMONSTRACAO
+        db.session.rollback()

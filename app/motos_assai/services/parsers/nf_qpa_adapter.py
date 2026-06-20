@@ -62,6 +62,192 @@ class NfQpaJaImportadaError(Exception):
     pass
 
 
+def criar_nf_qpa_de_dados(
+    dados: Dict[str, Any], operador_id: int,
+) -> AssaiNfQpa:
+    """Cria AssaiNfQpa + itens a partir de dados ESTRUTURADOS e roda o match.
+
+    Caminho compartilhado pelo registro MANUAL de NF (skill corrigindo-dados-assai,
+    sem PDF) e reaproveitavel por outros importadores. Da' lastro fiscal ao
+    faturamento Q.P.A. sem depender de PDF — o proprio AssaiNfQpa e' o lastro
+    (NUNCA cria FATURADA orfa). O financeiro Nacom NAO e' tocado; a logistica
+    (espelho separacao -> embarque/entrega) reflete como em qualquer NF, porque a
+    moto foi transportada pela Nacom/CarVia.
+
+    `dados` (chave_44 e itens obrigatorios; demais opcionais):
+        chave_44 (str 44, UNIQUE), numero, serie, emitente_cnpj, destinatario_cnpj,
+        destinatario_nome, loja_id (se ausente, resolve por CNPJ destinatario ->
+        regex 'LJ<n>' no nome), valor_total, data_emissao, pdf_s3_key,
+        itens: [{chassi, modelo, valor_unitario}].
+
+    Roda ajustar_separacao_pela_nf (NF e' fonte de verdade; cria sep FATURADA se
+    nao houver — S1=b) + _calcular_match (pode subir FATURADA) + CCes pendentes,
+    e commita. Sincroniza EntregaMonitorada pos-commit se BATEU.
+
+    Raises:
+        NfQpaParseError (chave invalida / sem itens), NfQpaJaImportadaError (dup).
+    """
+    import logging as _log
+    _logger = _log.getLogger(__name__)
+
+    chave = (dados.get('chave_44') or '').strip()
+    if not chave or len(chave) != 44:
+        raise NfQpaParseError(f'chave_44 invalida: {chave!r} (precisa ter 44 caracteres)')
+
+    if AssaiNfQpa.query.filter_by(chave_44=chave).first():
+        raise NfQpaJaImportadaError(f'NF {chave} ja importada')
+
+    itens_in = dados.get('itens') or []
+    chassis_in = [(it.get('chassi') or '').strip().upper() for it in itens_in]
+    chassis_in = [c for c in chassis_in if c]
+    if not chassis_in:
+        raise NfQpaParseError('NF sem itens/chassis')
+
+    # Resolver loja: loja_id explicito -> CNPJ destinatario -> regex 'LJ<n>' no nome.
+    loja = None
+    match_caminho = 'no-match'
+    if dados.get('loja_id'):
+        loja = AssaiLoja.query.get(dados['loja_id'])
+        if loja:
+            match_caminho = 'explicit-loja-id'
+    nome_dest = dados.get('destinatario_nome') or ''
+    cnpj_dest_raw = dados.get('destinatario_cnpj') or ''
+    if not loja and cnpj_dest_raw:
+        cnpj_dest_norm = normalizar_cnpj(cnpj_dest_raw)
+        if cnpj_dest_norm:
+            lojas_match = [
+                ll for ll in AssaiLoja.query.filter_by(ativo=True).all()
+                if normalizar_cnpj(ll.cnpj) == cnpj_dest_norm
+            ]
+            if len(lojas_match) == 1:
+                loja = lojas_match[0]
+                match_caminho = 'matched-by-cnpj'
+            elif len(lojas_match) > 1:
+                _logger.warning(
+                    'criar_nf_qpa_de_dados: CNPJ %s ambiguo (%d lojas) — fallback regex',
+                    cnpj_dest_raw, len(lojas_match),
+                )
+    if not loja and nome_dest:
+        m = re.search(r'LJ\s*(\d+)', nome_dest)
+        if m:
+            loja = AssaiLoja.query.filter_by(numero=m.group(1)).first()
+            if loja:
+                match_caminho = 'matched-by-name-regex'
+    _logger.info(
+        'criar_nf_qpa_de_dados: loja via %s (chave=%s, loja_id=%s)',
+        match_caminho, chave, loja.id if loja else None,
+    )
+
+    valor_total = Decimal(str(dados.get('valor_total') or 0))
+    nf = AssaiNfQpa(
+        chave_44=chave,
+        numero=dados.get('numero'),
+        serie=dados.get('serie'),
+        emitente_cnpj=re.sub(r'\D', '', dados.get('emitente_cnpj') or '')[:18] or None,
+        destinatario_cnpj=re.sub(r'\D', '', cnpj_dest_raw)[:18] or None,
+        destinatario_nome=nome_dest or None,
+        loja_id=loja.id if loja else None,
+        valor_total=valor_total,
+        data_emissao=dados.get('data_emissao'),
+        pdf_s3_key=dados.get('pdf_s3_key'),
+        status_match=NF_STATUS_NAO_RECONCILIADO,
+        importada_em=agora_brasil_naive(),
+        importada_por_id=operador_id,
+    )
+    db.session.add(nf)
+    db.session.flush()
+
+    n_itens = max(1, len(chassis_in))
+    for it in itens_in:
+        chassi = (it.get('chassi') or '').strip().upper()
+        if not chassi:
+            continue
+        valor_unit = it.get('valor_unitario') or it.get('valor')
+        if valor_unit:
+            try:
+                valor_extraido = Decimal(str(valor_unit))
+            except Exception:
+                valor_extraido = Decimal(str(valor_total / n_itens))
+        else:
+            valor_extraido = Decimal(str(valor_total / n_itens))
+        db.session.add(AssaiNfQpaItem(
+            nf_id=nf.id,
+            chassi=chassi,
+            modelo_extraido=it.get('modelo'),
+            valor_extraido=valor_extraido,
+        ))
+    db.session.flush()
+
+    # Pos-persistencia: mesmo fluxo do importar_nf_qpa (NF e' fonte de verdade).
+    _finalizar_match_nf(nf, operador_id)
+    return nf
+
+
+def _finalizar_match_nf(nf: AssaiNfQpa, operador_id: int) -> None:
+    """Ajuste de separacao + match + CCes pendentes + commit + sync entrega.
+
+    Orquestracao pos-persistencia para o registro MANUAL de NF (criar_nf_qpa_de_dados).
+    Espelha o fluxo do importar_nf_qpa (PDF) reusando os MESMOS helpers
+    (ajustar_separacao_pela_nf, _calcular_match, aplicar_cce_pendentes_para_nf) — a
+    logica-nucleo do match vive nesses helpers, nao aqui. importar_nf_qpa mantem a
+    sua versao inline (intocada) por nao haver fixture de PDF que prove equivalencia.
+    """
+    import logging
+    _logger = logging.getLogger(__name__)
+
+    # Ajuste pos-NF (regra 2026-05-12): NF e' fonte de verdade. Se todos os
+    # chassis existem e ha sep candidata (ou cria sep FATURADA via S1=b), ajusta.
+    try:
+        from app.motos_assai.services.separacao_service import ajustar_separacao_pela_nf
+        ajuste = ajustar_separacao_pela_nf(nf.id, operador_id)
+        if ajuste['ok'] and ajuste.get('sep_alvo_id'):
+            try:
+                from app.motos_assai.services.separacao_mirror_service import (
+                    sincronizar_espelho_com_separacao,
+                )
+                sincronizar_espelho_com_separacao(ajuste['sep_alvo_id'])
+            except Exception as e:
+                _logger.error(
+                    'sincronizar_espelho_com_separacao FALHOU NF %s: %s',
+                    nf.numero, e, exc_info=True,
+                )
+    except Exception as e:
+        _logger.error(
+            'ajustar_separacao_pela_nf FALHOU NF %s: %s — seguindo match natural',
+            nf.numero, e, exc_info=True,
+        )
+
+    # Match (apos eventual ajuste).
+    _calcular_match(nf, operador_id)
+
+    # Match reverso CCe: aplica CCes que chegaram antes desta NF.
+    try:
+        from app.motos_assai.services.cce_service import aplicar_cce_pendentes_para_nf
+        aplicar_cce_pendentes_para_nf(nf, operador_id)
+    except Exception as e:
+        _logger.exception(
+            'aplicar_cce_pendentes_para_nf FALHOU NF %s: %s — CCes ficam PENDENTE',
+            nf.numero, e,
+        )
+
+    db.session.commit()
+
+    # Sincronizar EntregaMonitorada APOS commit (status ja persistido).
+    if nf.status_match == NF_STATUS_BATEU and nf.numero:
+        try:
+            from app.utils.sincronizar_entregas_op_assai import (
+                sincronizar_entrega_op_assai_por_nf,
+            )
+            sincronizar_entrega_op_assai_por_nf(str(nf.numero))
+            db.session.commit()
+        except Exception as e:
+            _logger.warning(
+                'sincronizar_entrega_op_assai_por_nf (pos-commit) NF %s: %s',
+                nf.numero, e,
+            )
+            db.session.rollback()
+
+
 def importar_nf_qpa(
     pdf_bytes: bytes, nome_arquivo: str, importada_por_id: int,
 ) -> AssaiNfQpa:

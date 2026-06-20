@@ -87,10 +87,11 @@
       "carregando-motos-assai",
       "conferindo-recibo-assai",
       "consultando-estoque-assai",
+      "corrigindo-dados-assai",
       "rastreando-chassi-assai",
       "registrando-evento-moto-assai"
     ],
-    "routing_hash": "44b79af9f25676f2"
+    "routing_hash": "24160619482a11c8"
   },
   "gestor-recebimento": {
     "skills": [
