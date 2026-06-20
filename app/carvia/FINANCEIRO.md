@@ -1,9 +1,29 @@
 # CarVia — Fluxos Financeiros
 
 **Referenciado por**: `app/carvia/CLAUDE.md` (regras R11, R16, R17, R22)
-**Atualizado**: 2026-06-16
+**Atualizado**: 2026-06-19
 
-Cobre: conciliacao bancaria, propagacao FT→CE, pre-vinculo extrato↔cotacao (frete pre-pago), historico de match aprendido (boost de scoring) e conciliacao p/ comprovante (modo invertido, R22).
+Cobre: conciliacao bancaria, motor de sugestao de match (3 sinais + cobertura de valor), propagacao FT→CE, pre-vinculo extrato↔cotacao (frete pre-pago), historico de match aprendido (boost de scoring) e conciliacao p/ comprovante (modo invertido, R22).
+
+---
+
+## Motor de Sugestao de Match (`carvia_sugestao_service`)
+
+`pontuar_documentos(linha, docs, cnpjs_historico)` ranqueia documentos elegiveis para uma linha do extrato. Score = **VALOR 0.50 + DATA 0.30 + NOME 0.20**, com floors deterministicos (CNPJ completo na descricao → 0.95; raiz de CNPJ → 0.80) e boost por historico (R17). Labels: ALTO ≥0.80, MEDIO ≥0.55, BAIXO ≥0.30.
+
+### Cobertura de valor — pagamento agrupado (2026-06-19)
+
+`_score_valor` trata divergencia grande de valor por **direcao**, em vez de zerar:
+- **doc CABE na linha** (saldo ≤ valor da linha): pagamento **AGRUPADO** (1 PIX paga N fretes — 21% das linhas fatura_cliente) → piso **0.50** (compativel, nao penaliza).
+- **doc MAIOR que a linha**: pagamento **PARCIAL** → proporcao coberta (`valor/saldo`), teto 0.45 (< tier de proximidade → monotonia).
+
+Antes, divergencia >30% caia para ~0 e o peso 0.50 do valor zerava o score do doc agrupado correto (14% dos docs corretos ficavam SEM label). Validado em `scripts/carvia/golden_match_conciliacao.py` (286 conciliacoes reais, ground-truth do Render): **top3 57.7→64.0%**, **docs corretos sem label 14.0→2.8%**, cauda (rank>10) 77→64; top1 estavel (−1 caso). Testes: `tests/carvia/test_score_valor_cobertura.py`.
+
+### O que NAO mudou (decisao medida no golden, nao por preferencia)
+
+- **Pesos (0.50/0.30/0.20)**: re-peso valor→nome NAO ajuda — o nome do pagador raramente bate o cliente (razao_social=0%, CNPJ na descricao=0%, raiz "Cp :" e gateway em 84%); subir o peso do nome dilui o unico sinal forte (valor, 94% exato no 1:1). Mantidos.
+- **Boost de raiz (0.80)**: removê-lo isolado PIORA (top3 57.7→57.0, cauda 77→81). Mantido.
+- **Historico (R17)**: expandir a chave para overlap de tokens REGRIDE — chaves de nome ambiguas ("securitizadora"→11 CNPJs) dao boost a CNPJs errados (LOO temporal: top1 48→36%). Mantido como esta; o ganho do historico depende de massa critica que a base (240 eventos, 58% de uso unico, 18% de chaves ambiguas) ainda nao tem.
 
 ---
 

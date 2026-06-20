@@ -224,7 +224,20 @@ def pontuar_documentos(linha, docs, cnpjs_historico=None):
 def _score_valor(valor_extrato, saldo_doc):
     """Score de proximidade de valor (0.0 a 1.0).
 
-    Calibrado: ~50% das conciliacoes existentes sao match exato (1:1).
+    Calibrado: ~94% das conciliacoes 1:1 sao match exato. Mas 21% das linhas
+    fatura_cliente sao PAGAMENTO AGRUPADO (1 PIX paga N fretes), onde o saldo do
+    doc individual e fracao da linha.
+
+    REFINO 2026-06-19 (medido em golden de 286 conciliacoes reais —
+    scripts/carvia/golden_match_conciliacao.py): antes a divergencia >30% caia
+    para ~0 e, com o peso 0.50 do valor, ZERAVA o score do doc correto agrupado
+    (14% dos docs corretos ficavam SEM label). Agora a divergencia grande e
+    tratada por DIRECAO (cobertura) em vez de zerar:
+      - doc CABE na linha (saldo <= linha): pagamento AGRUPADO compativel -> piso 0.50;
+      - doc MAIOR que a linha: pagamento PARCIAL -> proporcao coberta (valor/saldo),
+        com teto 0.45 (< tier de proximidade -> preserva monotonia).
+    Ganho medido: top3 57.7->64.0%, docs corretos sem label 14.0->2.8%,
+    cauda (rank>10) 77->64; top1 praticamente estavel (-1 caso em 286).
     """
     if valor_extrato <= 0 or saldo_doc <= 0:
         return SCORE_NEUTRO
@@ -232,6 +245,7 @@ def _score_valor(valor_extrato, saldo_doc):
     maior = max(valor_extrato, saldo_doc)
     diff_pct = abs(valor_extrato - saldo_doc) / maior
 
+    # Match de proximidade (valores ~iguais) — tiers calibrados (inalterados)
     if diff_pct < 0.001:    # match exato (< 0.1%)
         return 1.0
     elif diff_pct <= 0.01:  # < 1%
@@ -240,10 +254,13 @@ def _score_valor(valor_extrato, saldo_doc):
         return 0.80
     elif diff_pct <= 0.15:  # < 15%
         return 0.50
-    elif diff_pct <= 0.30:  # < 30%
-        return 0.25
+    # Divergencia grande (>15%): distinguir por DIRECAO (cobertura)
+    elif saldo_doc <= valor_extrato:
+        # doc cabe na linha -> pagamento AGRUPADO, nao penalizar
+        return 0.50
     else:
-        return max(0.0, 0.15 - diff_pct * 0.1)
+        # doc MAIOR que a linha -> pagamento PARCIAL: proporcao coberta, teto 0.45
+        return min(0.45, 0.50 * (valor_extrato / saldo_doc))
 
 
 def _score_data(data_extrato, vencimento_str, data_str):
