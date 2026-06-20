@@ -1229,8 +1229,39 @@ def register_exportacao_routes(bp):
             )
         if busca:
             busca_like = f'%{busca}%'
+            # Busca ABRANGENTE — MANTER EM SINCRONIA com listar_faturas_cliente
+            # (fatura_routes.py) para o Excel bater com a tela.
+            from app.carvia.models import (
+                CarviaOperacao, CarviaCteComplementar, CarviaOperacaoNf, CarviaNf,
+            )
+            sub_cte = db.session.query(CarviaOperacao.fatura_cliente_id).filter(
+                CarviaOperacao.cte_numero.ilike(busca_like),
+                CarviaOperacao.fatura_cliente_id.isnot(None),
+            ).distinct()
+            sub_comp = db.session.query(CarviaCteComplementar.fatura_cliente_id).filter(
+                db.or_(
+                    CarviaCteComplementar.numero_comp.ilike(busca_like),
+                    CarviaCteComplementar.cte_numero.ilike(busca_like),
+                ),
+                CarviaCteComplementar.fatura_cliente_id.isnot(None),
+            ).distinct()
+            sub_nf = db.session.query(CarviaOperacao.fatura_cliente_id).join(
+                CarviaOperacaoNf, CarviaOperacaoNf.operacao_id == CarviaOperacao.id
+            ).join(
+                CarviaNf, CarviaNf.id == CarviaOperacaoNf.nf_id
+            ).filter(
+                CarviaNf.numero_nf.ilike(busca_like),
+                CarviaOperacao.fatura_cliente_id.isnot(None),
+            ).distinct()
             query = query.filter(
-                CarviaFaturaCliente.numero_fatura.ilike(busca_like),
+                db.or_(
+                    CarviaFaturaCliente.numero_fatura.ilike(busca_like),
+                    CarviaFaturaCliente.nome_cliente.ilike(busca_like),
+                    CarviaFaturaCliente.cnpj_cliente.ilike(busca_like),
+                    CarviaFaturaCliente.id.in_(sub_cte),
+                    CarviaFaturaCliente.id.in_(sub_comp),
+                    CarviaFaturaCliente.id.in_(sub_nf),
+                )
             )
         if data_emissao_de:
             try:

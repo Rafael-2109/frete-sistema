@@ -71,8 +71,39 @@ def register_fatura_routes(bp):
             )
         if busca:
             busca_like = f'%{busca}%'
+            # Busca ABRANGENTE (FIX bug "filtro generico nao acha"): antes casava
+            # SO numero_fatura, ignorando as proprias colunas CTe/NF exibidas na tela.
+            # Agora casa numero_fatura, nome/cnpj do cliente E faturas cujas operacoes
+            # (CTe), CTe complementares ou NFs vinculadas batam o termo (via subquery).
+            from app.carvia.models import CarviaOperacaoNf, CarviaNf  # lazy (R2)
+            sub_cte = db.session.query(CarviaOperacao.fatura_cliente_id).filter(
+                CarviaOperacao.cte_numero.ilike(busca_like),
+                CarviaOperacao.fatura_cliente_id.isnot(None),
+            ).distinct()
+            sub_comp = db.session.query(CarviaCteComplementar.fatura_cliente_id).filter(
+                db.or_(
+                    CarviaCteComplementar.numero_comp.ilike(busca_like),
+                    CarviaCteComplementar.cte_numero.ilike(busca_like),
+                ),
+                CarviaCteComplementar.fatura_cliente_id.isnot(None),
+            ).distinct()
+            sub_nf = db.session.query(CarviaOperacao.fatura_cliente_id).join(
+                CarviaOperacaoNf, CarviaOperacaoNf.operacao_id == CarviaOperacao.id
+            ).join(
+                CarviaNf, CarviaNf.id == CarviaOperacaoNf.nf_id
+            ).filter(
+                CarviaNf.numero_nf.ilike(busca_like),
+                CarviaOperacao.fatura_cliente_id.isnot(None),
+            ).distinct()
             query = query.filter(
-                CarviaFaturaCliente.numero_fatura.ilike(busca_like),
+                db.or_(
+                    CarviaFaturaCliente.numero_fatura.ilike(busca_like),
+                    CarviaFaturaCliente.nome_cliente.ilike(busca_like),
+                    CarviaFaturaCliente.cnpj_cliente.ilike(busca_like),
+                    CarviaFaturaCliente.id.in_(sub_cte),
+                    CarviaFaturaCliente.id.in_(sub_comp),
+                    CarviaFaturaCliente.id.in_(sub_nf),
+                )
             )
 
         if data_emissao_de:

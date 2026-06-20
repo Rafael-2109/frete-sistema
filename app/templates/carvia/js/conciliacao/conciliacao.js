@@ -550,10 +550,48 @@
         document.getElementById(id)?.addEventListener('input', aplicarFiltrosDocs);
     });
 
+    // ===== Persistencia dos filtros do extrato (FIX bug: filtro Pendente/Credito
+    // resetava apos conciliar — o location.reload() pos-conciliacao re-renderiza
+    // a partir de CARVIA_DATA.linhas e os selects voltavam para "Todos").
+    // sessionStorage sobrevive ao reload da mesma aba; querystring nao e usada
+    // porque as linhas vem inline (server-side sem filtro).
+    const FILTROS_EXTRATO_KEY = 'carviaConcFiltrosExtrato';
+    const FILTROS_EXTRATO_IDS = [
+        'filtroTipoExtrato', 'filtroStatusExtrato', 'filtroBuscaExtrato',
+        'filtroValorMinExtrato', 'filtroValorMaxExtrato',
+    ];
+
+    function salvarFiltrosExtrato() {
+        const estado = {};
+        FILTROS_EXTRATO_IDS.forEach(id => {
+            const el = document.getElementById(id);
+            if (el) estado[id] = el.value;
+        });
+        try { sessionStorage.setItem(FILTROS_EXTRATO_KEY, JSON.stringify(estado)); }
+        catch (e) { /* sessionStorage indisponivel — degrada para comportamento antigo */ }
+    }
+
+    function restaurarFiltrosExtrato() {
+        let estado;
+        try { estado = JSON.parse(sessionStorage.getItem(FILTROS_EXTRATO_KEY) || '{}'); }
+        catch (e) { estado = {}; }
+        let temFiltro = false;
+        FILTROS_EXTRATO_IDS.forEach(id => {
+            const el = document.getElementById(id);
+            if (el && estado[id] != null && estado[id] !== '') {
+                el.value = estado[id];
+                temFiltro = true;
+            }
+        });
+        if (temFiltro) aplicarFiltrosExtrato();
+    }
+
     // ===== Init: carregar linhas pendentes via inline data =====
     if (CARVIA_DATA.linhas.length > 0) {
         todasLinhas = CARVIA_DATA.linhas;
         renderizarLinhas(todasLinhas);
+        // Reaplica os filtros salvos (sobrevive ao reload pos-conciliacao)
+        restaurarFiltrosExtrato();
     } else {
         document.getElementById('extratoLoading').innerHTML =
             '<div class="text-muted py-3">Importe um arquivo OFX para comecar</div>';
@@ -566,6 +604,9 @@
         const busca = document.getElementById('filtroBuscaExtrato').value.toLowerCase();
         const valMin = parseFloat(document.getElementById('filtroValorMinExtrato')?.value) || 0;
         const valMax = parseFloat(document.getElementById('filtroValorMaxExtrato')?.value) || Infinity;
+
+        // Persiste o estado atual para sobreviver ao reload pos-conciliacao
+        salvarFiltrosExtrato();
 
         const filtradas = todasLinhas.filter(l => {
             // Tipo (CREDITO/DEBITO)
