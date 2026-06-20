@@ -591,7 +591,7 @@ Para consultas e operações via Claude Code ou agente web Nacom Goya:
 | `conferindo-recibo-assai` | READ + WRITE | Recibos Motochefe + wizard A→B→C→D |
 | `registrando-evento-moto-assai` | WRITE | Montagem, disponibilizar, separar, reverter, cancelar (pontual, 1 chassi, agora) |
 | `carregando-motos-assai` | READ + WRITE | Carregamento (Sep→NF): listar/detalhar + iniciar/escanear/finalizar/cancelar/alterar |
-| `corrigindo-dados-assai` | WRITE | **Backfill / correção manual**: carga em lote (planilha Excel), eventos com data retroativa, cadastros (loja/modelo), item de pedido ABERTO, gravar faturamento (NF Q.P.A.) e alterar chassi em NF. Traz o mapa do módulo (`references/MAPA_MODULO.md`) p/ o agente escrever scripts ad-hoc. Dry-run + `--confirmar`. |
+| `corrigindo-dados-assai` | WRITE | **Backfill / correção manual**: carga em lote (planilha Excel), eventos com data retroativa, cadastros (loja/modelo), item de pedido ABERTO, gravar faturamento (NF Q.P.A.), alterar chassi em NF e registrar devolução (NFd, `--registrar-devolucao-nfd` → FATURADA→PENDENTE via `devolucao_service`). Traz o mapa do módulo (`references/MAPA_MODULO.md`) p/ o agente escrever scripts ad-hoc. Dry-run + `--confirmar`. |
 
 Agente orquestrador: `gestor-motos-assai` (sub-agent — `model: sonnet`).
 

@@ -68,8 +68,10 @@ Modelo/cor confirmados no recebimento fisico SOBRESCREVEM `AssaiMoto.cor` e
 Antes de DISPONIVEL, chassi deve passar por PENDENCIA_RESOLVIDA + MONTADA novo.
 
 ### A6: Backfill nao cria FATURADA avulso nem toca a Nacom
-`corrigindo-dados-assai` opera so ENTRADA/ESTOQUE/ESTADO/CADASTRO (isolado da
-Nacom). FATURADA nasce da NF Q.P.A. real (`--importar-nf`), nunca avulso.
+`corrigindo-dados-assai` opera ENTRADA/ESTOQUE/ESTADO/CADASTRO + faturamento e
+devolucao (NFd) Q.P.A. via services oficiais, sempre isolado da Nacom. FATURADA
+nasce da NF Q.P.A. real (`--importar-nf`/`--registrar-nf-manual`), nunca avulso; a
+devolucao (`--registrar-devolucao-nfd`) leva FATURADA->PENDENTE via `devolucao_service`.
 Correcao = NOVO evento (append-only); nunca UPDATE/DELETE de evento. Faturamento
 Q.P.A. NAO se mistura com o da Nacom (so a logistica espelha quando a sep fecha).
 
@@ -99,6 +101,7 @@ falha entre processos (IMP-2026-06-19-009).
 | "disponibiliza moto X" | `registrando-evento-moto-assai --disponibilizar` |
 | "sobe a planilha de backfill da Rayssa" | `corrigindo-dados-assai --planilha-estado` (DRY-RUN PRIMEIRO) |
 | "corrige estado/cadastro retroativo, grava faturamento, altera chassi em NF" | `corrigindo-dados-assai` (ler `references/MAPA_MODULO.md`) |
+| "registra devolucao (NFd) de moto Q.P.A. faturada" | `corrigindo-dados-assai --registrar-devolucao-nfd` (DRY-RUN PRIMEIRO) |
 | "caso fora dos modos da skill (NF sem PDF, regra propria)" | escrever script ad-hoc reusando services (MAPA_MODULO §7) |
 | "como esta a operacao Motos Assai?" | F1 (resumo cross-entidade) |
 

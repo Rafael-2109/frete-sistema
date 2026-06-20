@@ -168,6 +168,7 @@ NUNCA mover status para tras. Cancelar e criar novo. CarVia opera em **2 dominio
 - **NUNCA desvincular operacao apos faturamento**. Subcontratos desanexaveis apenas enquanto FT nao CONFERIDO
 - Custos de Entrega disponiveis para FT: `status='PENDENTE', fatura_transportadora_id IS NULL` — ao vincular vira `VINCULADO_FT`
 - **Custo de Entrega pode ter `frete_id=NULL`** (2026-05-05): permitido criar CE direto da operacao quando CarviaFrete ainda nao existe (gap operacional). Auto-link best-effort via `tentar_vincular_frete` em todos os pontos de criacao. Para FT: `ces_disponiveis_para_fatura` cobre os 2 cenarios (com ou sem `frete_id`).
+- **Re-vincular operacao a um subcontrato reprocessa os itens da FT** (IMP-2026-06-19-004): `vincular_operacao_subcontrato` chama `LinkingService.reprocessar_itens_fatura_transportadora_por_subcontrato(sub.id)` antes do commit. Itens criados com `operacao_id/nf_id/nf_numero` NULL (sub anexado a FT ANTES de ter operacao) sao repopulados + itens suplementares p/ as demais NFs da operacao (financeiros NULL = anti dupla contagem). Idempotente; no-op se o sub nao esta em FT.
 
 ### R6: Classificacao de CTe por CNPJ emitente
 - CNPJ emitente == `CARVIA_CNPJ` (env var) → `CarviaOperacao` (CTe CarVia)
