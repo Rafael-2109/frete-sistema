@@ -2,7 +2,7 @@
 tipo: how-to
 camada: L1
 sot_de: fluxo operacional industrializacao FB-LF (visao do usuario)
-hub: docs/industrializacao-fb-lf/INDEX.md
+hub: docs/industrializacao-fb-lf/README.md
 superseded_by: —
 atualizado: 2026-06-15
 -->

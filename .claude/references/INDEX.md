@@ -178,6 +178,11 @@ atualizado: 2026-06-08
 | `escriturando-odoo` (WRITE ABRANGENTE) | `app/odoo/estoque/CLAUDE.md`, `app/odoo/estoque/fluxos/1.2.1-escriturar-dfe-industrializacao.md`, `odoo/IDS_FIXOS.md` |
 | `auditando-cadastro-fiscal-odoo` (PRE-FLIGHT) | `app/odoo/estoque/CLAUDE.md` (G017/G018/G035/G014 + D-OPS-2/3) |
 | `faturando-odoo` (WRITE Skill 8) | `app/odoo/estoque/CLAUDE.md`, `app/odoo/estoque/orchestrators/inventario_pipeline.py`, `odoo/IDS_FIXOS.md` |
+| `auditando-reclassificacao-odoo` (READ — subagente auditor-financeiro) | `odoo/MODELOS_CAMPOS`, `odoo/AGENT_BOILERPLATE` |
+| `baixando-credores-lote-odoo` (subagente auditor-financeiro) | `app/financeiro/CLAUDE.md` |
+| `gerando-controle-recebiveis` | (sem references — banco direto: `contas_a_receber`) |
+| `diagnosticando-banco` | `INFRAESTRUTURA` (postgresId / secao IDs dos Recursos) |
+| `integracao-odoo`, `frontend-design` | skill **dev-global** (fora de `.claude/skills/`) — ver nota em ROUTING_SKILLS.md |
 
 
 ## Module -> CLAUDE.md
@@ -191,14 +196,20 @@ CLAUDE.md de modulo (Padrao 1 de [PROGRESSIVE_DISCLOSURE_PATTERN.md](PROGRESSIVE
 | Carteira | `app/carteira/CLAUDE.md` | Carteira de pedidos, P1-P7, separacao, ruptura |
 | CarVia | `app/carvia/CLAUDE.md` | Frete subcontratado (transportadora do grupo) |
 | Chat in-app | `app/chat/CLAUDE.md` | Chat web, artifacts |
+| Cotacao | `app/cotacao/CLAUDE.md` | Motor de cotacao PRE-embarque (cria Embarque) |
 | Devolucao | `app/devolucao/CLAUDE.md` | NFD, De-Para AI, descarte vs retorno |
+| Embarques | `app/embarques/CLAUDE.md` | HUB central pos-cotacao (NF/portaria/frete) |
+| Faturamento | `app/faturamento/CLAUDE.md` | NF do Odoo -> vincula EmbarqueItem/Separacao (FATURADO) |
 | Financeiro | `app/financeiro/CLAUDE.md` | Reconciliacao, CNAB, extratos, multi-company |
 | Fretes | `app/fretes/CLAUDE.md` | CTe, custo real, conta corrente transportadoras |
+| Integracoes | `app/integracoes/CLAUDE.md` | Conector TagPlus (OAuth2, NFe, webhooks) |
 | Lojas HORA | `app/hora/CLAUDE.md` | Motochefe (motos), TagPlus NFe |
+| MotoChefe | `app/motochefe/CLAUDE.md` | Distribuidora B2B de motos (estoque FIFO, vendas, financeiro) |
 | Motos Assai | `app/motos_assai/CLAUDE.md` | B2B Q.P.A. Sendas/Assai |
 | Odoo | `app/odoo/CLAUDE.md` (+ `app/odoo/estoque/CLAUDE.md`) | Integracao ERP CIEL IT; estoque WRITE (skills atomicas) |
 | Relatorios Fiscais | `app/relatorios_fiscais/CLAUDE.md` | SPED ECD (Leiaute 9) |
 | Seguranca | `app/seguranca/CLAUDE.md` | Varreduras de seguranca |
+| Separacao | `app/separacao/CLAUDE.md` | Tabela-fato + event listeners (maquina de estados) |
 | Teams Bot | `app/teams/CLAUDE.md` | Bot Framework Microsoft Teams |
 | WhatsApp Bot | `app/whatsapp/CLAUDE.md` | Canal via OpenClaw (Baileys) |
 

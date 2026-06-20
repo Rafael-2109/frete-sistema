@@ -16,7 +16,7 @@ Artefatos duplicados, SOTs bicefala e estado replicado em N docs levaram a decis
 
 ## Zonas gerenciadas
 
-- **Docs gerenciados:** `docs/`, `.claude/references/`, `.claude/skills/`, `app/*/CLAUDE.md`, `CLAUDE.md` (raiz)
+- **Docs gerenciados:** `docs/`, `.claude/references/`, `.claude/skills/`, `app/**/CLAUDE.md` (recursivo — inclui sub-CLAUDE.md como `app/agente/services/`, `app/odoo/estoque/`), `CLAUDE.md` (raiz)
 - **Scripts operacionais:** zonas declaradas na allowlist de `scripts/audits/artefato_lint.config.json`
 - **Fora de enforcement:** `/tmp`, fixtures de teste, `tipo: scratch`
 
@@ -79,7 +79,7 @@ file-relative     ->  prefixe ./ :              [titulo](./sub/y.md)         (cl
 mesmo diretorio   ->  nome nu (sem /):          [titulo](y.md)               (ja e file-relative)
 ```
 
-Links legados file-relative com `/` sem `./` (ex.: `modelos/X.md` em INDEX.md antigos) **nao** sao creditados pelo grafo C8. A varredura por cluster (Onda 4a–4g) **migrou todo o legado gerenciado** e zerou a divida (C8 global = 0). Em **2026-06-03 (SELAGEM, Onda 4g)** os checks `C1` (header), `C7` (link-rot) e `C8` (alcancabilidade) foram **promovidos a `block`**: orfaos, hubs quebrados e links nao-`./` agora **travam o commit**. C8 faz auto-skip sob escopo parcial (grafo incompleto) — so trava no audit completo / commit que toca o grafo.
+Links legados file-relative com `/` sem `./` (ex.: `modelos/X.md` em INDEX.md antigos) **nao** sao creditados pelo grafo C8. A varredura por cluster (Onda 4a–4g) **migrou todo o legado gerenciado** e zerou a divida (C8 global = 0). Em **2026-06-03 (SELAGEM, Onda 4g)** os checks `C1` (header), `C7` (link-rot) e `C8` (alcancabilidade) foram **promovidos a `block`**. **`C1`/`C7` travam o commit** (rodam no escopo parcial do pre-commit). Mas **`C8` (orfaos / bidirecionalidade / hub quebrado) NAO roda no pre-commit** — `pre-commit-doc-lint.sh` usa `--enforce-added` (escopo parcial) e o `C8` **auto-skipa sob escopo parcial** (grafo incompleto). A cadencia de deteccao do `C8` e a **rodada GLOBAL** (`doc_audit.py --report-only`, sem escopo nem `--path`), executada na **manutencao semanal** (passo 0 de `.claude/atualizacoes/dominios/dominio-2-references.md` — adicionado 2026-06-19); fora dela, so um audit manual `--strict`/`--report-only` global trava/reporta por `C8`.
 
 ## Checklist resumido (9 itens)
 

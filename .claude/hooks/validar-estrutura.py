@@ -16,7 +16,7 @@ import sys
 # Sair silencioso em PROD (Render) para evitar trigger do bug claude-code #61862:
 # Vj3() over-fires interrupted_turn quando hook_success attachment com conteudo
 # vira leaf do JSONL. Em DEV continua emitindo warnings para o desenvolvedor.
-# Ref: docs/agente/STICKY_SESSION_FIX.md
+# Ref: bug claude-code #61862 (sem doc interno dedicado — o mecanismo esta nas 3 linhas acima).
 if os.getenv('RENDER') or os.getenv('CLAUDE_AGENT_PROD'):
     sys.exit(0)
 

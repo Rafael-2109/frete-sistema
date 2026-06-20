@@ -188,11 +188,12 @@ Modulos complexos tem CLAUDE.md proprio com patterns, convencoes e gotchas de de
 - `app/seguranca/CLAUDE.md` — ~2K LOC, 14 arquivos, 8 templates
 - `app/teams/CLAUDE.md` — ~2.3K LOC, 4 arquivos
 - `app/whatsapp/CLAUDE.md` — ~875 LOC, 5 arquivos (canal via OpenClaw + plugin nacom-bridge em `~/.openclaw/plugins/`)
+- `app/motochefe/CLAUDE.md` — ~20.7K LOC (distribuidora B2B de motos; hub de navegacao p/ `documentacao/` 26 docs + carga inicial; consumido por hora/motos_assai) [criado 2026-06-19]
+- `app/integracoes/CLAUDE.md` — conector TagPlus (OAuth2/NFe/webhooks); hub p/ `tagplus/` 8 docs [criado 2026-06-19]
 
 **Planejados (ainda nao criados):**
 - `app/recebimento/CLAUDE.md` — P0 (28.7K LOC, 29 arquivos — maior modulo sem CLAUDE.md)
 - `app/pallet/CLAUDE.md` — P1 (13.8K LOC)
-- `app/motochefe/CLAUDE.md` — P1 (20.7K LOC — B2B distribuidora, referenciado por hora/motos_assai)
 - `app/portal/CLAUDE.md` — P2 (15.3K LOC, 40 arquivos — Atacadao/Hodie integration)
 - `app/pedidos/CLAUDE.md` — P2 (13.6K LOC, 31 arquivos — leitura PDFs VOE)
 

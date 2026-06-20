@@ -1,5 +1,5 @@
 {
-  "managed_doc_globs": ["docs/**/*.md", ".claude/references/**/*.md", ".claude/skills/**/*.md", "app/*/CLAUDE.md", "CLAUDE.md"],
+  "managed_doc_globs": ["docs/**/*.md", ".claude/references/**/*.md", ".claude/skills/**/*.md", "app/**/CLAUDE.md", "CLAUDE.md"],
   "operational_script_globs": ["scripts/inventario_2026_05/**/*.py", "app/odoo/estoque/scripts/**/*.py"],
   "ignore_globs": ["**/tests/fixtures/**", "**/_deprecated/**", "**/.venv/**", "**/__pycache__/**"],
   "toc_min_lines": 100,

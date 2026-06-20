@@ -2,7 +2,7 @@
 tipo: reference
 camada: L3
 sot_de: regularizacao historica (G9) da industrializacao FB<->LF
-hub: docs/industrializacao-fb-lf/INDEX.md
+hub: docs/industrializacao-fb-lf/README.md
 superseded_by: —
 atualizado: 2026-06-15
 -->

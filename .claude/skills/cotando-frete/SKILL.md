@@ -13,6 +13,11 @@ allowed-tools: Read, Bash, Glob, Grep
 
 Skill para consultar precos de frete, calcular cotacoes detalhadas e explicar a logica de calculo.
 
+> **ANTES de raciocinar sobre custo real, margem ou frete real vs teorico:** LER
+> `.claude/references/negocio/FRETE_REAL_VS_TEORICO.md` (4 valores, divergencias, conta corrente)
+> e `.claude/references/negocio/MARGEM_CUSTEIO.md` (formula da margem, tabelas de custo) —
+> a logica de calculo mora la, nao adivinhe formula.
+
 ---
 
 ## Quando NAO Usar Esta Skill

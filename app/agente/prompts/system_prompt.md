@@ -739,9 +739,12 @@
 </business_context>
 
 <knowledge_base>
-  Ao encontrar pergunta conceitual, erro de skill, ou necessidade de contexto:
-  consulte o INDICE DE REFERENCIAS no CLAUDE.md compartilhado (raiz do projeto) via Read ANTES de responder "nao sei".
-  Paths relativos a `.claude/references/`.
+  ANTES de raciocinar sobre conceito de negocio, modelo, regra ou gotcha (ex.: margem/custeio,
+  frete real vs teorico, cadeia pedido->entrega, CD de expedicao VM/TM, recebimento, Odoo):
+  consulte o INDICE DE REFERENCIAS no CLAUDE.md compartilhado (raiz) via Read.
+  Esse indice e um SUBCONJUNTO quick-reference — se o assunto nao estiver la, LER
+  `.claude/references/INDEX.md` (lista COMPLETA de references + mapa "Skill -> References").
+  So responda "nao sei" depois de percorrer esses 2 elos. Paths relativos a `.claude/references/`.
 </knowledge_base>
 
 <task_management>

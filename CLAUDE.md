@@ -90,6 +90,7 @@ Gotchas rapidos:
 | Regras Embarque, Faturamento, etc. | `.claude/references/modelos/REGRAS_MODELOS.md` |
 | Campos de QUALQUER tabela | `.claude/skills/consultando-sql/schemas/tables/{tabela}.json` |
 | Cadeia Pedido -> Entrega | `.claude/references/modelos/CADEIA_PEDIDO_ENTREGA.md` |
+| CD de Expedicao (flag `local_cd`: VM=Victorio Marchezine / TM=Tenente Marques) | `.claude/references/modelos/CD_EXPEDICAO_LOCAL_CD.md` |
 | Queries SQL / JOINs | `.claude/references/modelos/QUERIES_MAPEAMENTO.md` |
 | Regras de negocio | `.claude/references/negocio/REGRAS_NEGOCIO.md` |
 | Prioridades P1-P7 e envio parcial | `.claude/references/negocio/REGRAS_P1_P7.md` |
@@ -151,6 +152,7 @@ Gotchas rapidos:
 | Chat in-app | `app/chat/routes/`, `app/chat/services/`, `app/templates/chat/` — ver `app/chat/CLAUDE.md` |
 | Lojas HORA (Motochefe) | `app/hora/routes/`, `app/hora/services/`, `app/hora/models/`, `app/templates/hora/` — ver `app/hora/CLAUDE.md` |
 | Motos Assai (B2B Q.P.A.) | `app/motos_assai/routes/`, `app/motos_assai/services/`, `app/motos_assai/models/`, `app/templates/motos_assai/` — ver `app/motos_assai/CLAUDE.md` |
+| MotoChefe (distribuidora B2B) | `app/motochefe/routes/`, `app/motochefe/models/`, `app/motochefe/documentacao/` — distribuidora de motos (estoque FIFO, vendas, financeiro); consumida por HORA/Assai — ver `app/motochefe/CLAUDE.md` |
 | Financeiro | `app/financeiro/routes/`, `app/financeiro/services/`, `app/financeiro/workers/` — ver `app/financeiro/CLAUDE.md` |
 | Odoo | `app/odoo/services/`, `app/odoo/utils/`, `app/odoo/jobs/` — ver `app/odoo/CLAUDE.md` |
 | Relatorios Fiscais (SPED ECD) | `app/relatorios_fiscais/routes.py`, `app/relatorios_fiscais/services/`, `app/relatorios_fiscais/manual_ecd/` — ver `app/relatorios_fiscais/CLAUDE.md` |
@@ -169,6 +171,7 @@ Gotchas rapidos:
 | Pallet | `app/pallet/routes/`, `app/pallet/services/`, `app/templates/pallet/` |
 | Producao | `app/producao/routes.py`, `app/producao/models.py` |
 | Pedidos | `app/pedidos/routes/`, `app/pedidos/services/`, `app/pedidos/workers/` |
+| Integracoes (TagPlus NFe) | `app/integracoes/tagplus/` — conector TagPlus (OAuth2, importacao NF, webhooks) — ver `app/integracoes/CLAUDE.md` |
 | **NAO ESTENDER (dev)** | `app/carteira/main_routes.py` — apenas dashboard `index()` (Fase 3 limpa). Novas rotas: usar `app/carteira/routes/` |
 
 > Para lista completa de modulos e rotas: `.claude/references/INDEX.md`

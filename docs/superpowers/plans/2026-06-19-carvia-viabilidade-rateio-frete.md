@@ -2,7 +2,7 @@
 tipo: explanation
 camada: L3
 sot_de: —
-hub: docs/INDEX.md
+hub: docs/superpowers/plans/INDEX.md
 superseded_by: —
 atualizado: 2026-06-19
 -->

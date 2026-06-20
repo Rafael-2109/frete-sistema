@@ -36,6 +36,25 @@ SYNC_MAP = {
     "FRETE_REAL_VS_TEORICO.md": [
         ".claude/skills/cotando-frete/SKILL.md",
     ],
+    # Refs citadas diretamente no system_prompt do agente web (verificado 2026-06-19:
+    # MEMORY_PROTOCOL L121, REGRAS_OUTPUT L476/481/585, GOTCHAS L503,
+    # SUBAGENT_RELIABILITY L663, IDS_FIXOS L729). Editar a ref => revisar o prompt.
+    # Chaves com diretorio para GOTCHAS/IDS_FIXOS (existem em varios modulos).
+    "MEMORY_PROTOCOL.md": [
+        "app/agente/prompts/system_prompt.md",
+    ],
+    "REGRAS_OUTPUT.md": [
+        "app/agente/prompts/system_prompt.md",
+    ],
+    "SUBAGENT_RELIABILITY.md": [
+        "app/agente/prompts/system_prompt.md",
+    ],
+    "odoo/GOTCHAS.md": [
+        "app/agente/prompts/system_prompt.md",
+    ],
+    "odoo/IDS_FIXOS.md": [
+        "app/agente/prompts/system_prompt.md",
+    ],
 }
 
 
