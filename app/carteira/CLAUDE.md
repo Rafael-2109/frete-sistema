@@ -171,16 +171,20 @@ NAO a variavel estatica injetada no load (que vem vazia no fluxo interativo).
 - **Motos + NF no pedido_info do mapa (2026-06-19)**: `mapa_service.obter_clientes_para_mapa`
   enriquece cada `pedido` com `qtd_motos` (int) e `nfs` (list[str]) e o `cliente.totais` com
   `qtd_motos` (soma). Fontes: **NACOM** = motos sempre 0 (conservas), `nfs` de `Separacao.numero_nf`
-  (distinct, so pos-faturamento); **CarVia pedido** (`CARVIA-PED-{id}`) = `SUM(quantidade)` dos
-  `CarviaPedidoItem` COM `modelo_moto_id` (fonte canonica pre-faturamento, espelha
-  `calcular_peso_cubado_nf`) + `CarviaPedidoItem.numero_nf` distinct; **CarVia cotacao solta**
-  (`CARVIA-{cot}`) = `CarviaCotacao.qtd_total_motos` so se `tipo_material='MOTO'`, sem NF.
+  (distinct, so pos-faturamento); **CarVia** = `qtd_motos` via o service CANONICO CarVia
+  `services/documentos/motos_lote_service.qtd_motos_por_lotes(lotes)` (lazy import, R1 — espelha
+  `viabilidade_service.receita_carvia_por_lotes`), `nfs` de `CarviaPedidoItem.numero_nf` distinct.
   No front (`mapa_pedidos.html`): o **pointer** ganha selo lateral `🏍 N` (SVG cresce p/ 96px;
   retangulo de peso e omitido quando `peso=0`, ex.: moto) quando `totais.qtd_motos>0`; a **lista
   lateral** e a **InfoWindow** (agora DRY via `renderPedidoSubItem`) mostram chips `🏍`/`NF` por
   pedido (`renderPedidoChips`) + selo de motos no header. Chips usam tokens `--bs-warning/info-*`
   (tematizados light/dark). Contrato JSON aditivo e retrocompativel (front faz `|| 0` / `|| []`).
-  Testes: `tests/carteira/test_mapa_motos_nf.py` (caminho NACOM).
+  Testes: `tests/carteira/test_mapa_motos_nf.py` (NACOM) + `tests/carvia/test_motos_lote_service.py`.
+  - **FIX 2026-06-20 (qtd_motos sempre 0)**: a versao 2026-06-19 contava motos por
+    `CarviaPedidoItem.modelo_moto_id` — NULL em 100% dos itens de pedido (motos so existem na NF).
+    Corrigido: `qtd_motos_por_lotes` resolve `CARVIA-PED` via `numero_nf -> carvia_nf_itens`
+    (fonte canonica `_contar_modelos_por_nf`, exclui NF CANCELADA), `CARVIA-{cot}` via
+    `qtd_total_motos` (so MOTO), `CARVIA-NF-{id}` direto. Validado em prod: PED-331-1=5, 330-1=12.
 
 ---
 

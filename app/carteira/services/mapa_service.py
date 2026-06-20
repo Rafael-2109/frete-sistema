@@ -526,12 +526,9 @@ class MapaService:
                 ).all()
                 enderecos_dict = {e.id: e for e in rows}
 
-            # Agregar por pedido: valor (SUM valor_total), nº de itens, qtd de motos
-            # (SUM quantidade dos itens COM modelo_moto_id — fonte canonica da
-            # contagem de motos pre-faturamento; espelha calcular_peso_cubado_nf)
-            # e NFs distintas (preenchidas pos-faturamento em CarviaPedidoItem.numero_nf).
+            # Agregar por pedido: valor (SUM valor_total), nº de itens e NFs
+            # distintas (preenchidas pos-faturamento em CarviaPedidoItem.numero_nf).
             valores_por_ped = {}
-            motos_por_ped = {}
             nfs_por_ped = {}
             if ped_ids:
                 itens_rows = CarviaPedidoItem.query.filter(
@@ -541,10 +538,19 @@ class MapaService:
                     pid = it.pedido_id
                     valor_acc, itens_acc = valores_por_ped.get(pid, (0.0, 0))
                     valores_por_ped[pid] = (valor_acc + float(it.valor_total or 0), itens_acc + 1)
-                    if it.modelo_moto_id:
-                        motos_por_ped[pid] = motos_por_ped.get(pid, 0) + int(it.quantidade or 0)
                     if it.numero_nf and str(it.numero_nf).strip():
                         nfs_por_ped.setdefault(pid, set()).add(str(it.numero_nf).strip())
+
+            # Qtd de motos por lote — fonte CANONICA (carvia_nf_itens via numero_nf),
+            # NAO CarviaPedidoItem.modelo_moto_id (NULL em 100% dos itens de pedido).
+            # Service CarVia consumido via LAZY import (R1: carteira le CarVia).
+            from app.carvia.services.documentos.motos_lote_service import (
+                qtd_motos_por_lotes,
+            )
+            motos_por_lote = qtd_motos_por_lotes(
+                [f'CARVIA-PED-{pid}' for pid in ped_ids]
+                + [f'CARVIA-{cid}' for cid in cot_ids]
+            )
 
             # Montar dict de clientes
             clientes_dict = {}
@@ -626,7 +632,7 @@ class MapaService:
                     'agendamento_confirmado': False,
                     'protocolo': None,
                     'separacao_lote_id': f'CARVIA-PED-{p.id}',
-                    'qtd_motos': motos_por_ped.get(p.id, 0),
+                    'qtd_motos': motos_por_lote.get(f'CARVIA-PED-{p.id}', 0),
                     'nfs': sorted(nfs_por_ped.get(p.id, set())),
                 }
                 _add_to_cliente(end, pedido_info)
@@ -653,9 +659,9 @@ class MapaService:
                     'agendamento_confirmado': False,
                     'protocolo': None,
                     'separacao_lote_id': f'CARVIA-{cot.id}',
-                    # Cotacao "solta" (sem pedido): so conta motos se for material MOTO;
-                    # NF inexistente nesta fase (pre-pedido/pre-faturamento)
-                    'qtd_motos': int(cot.qtd_total_motos or 0) if cot.tipo_material == 'MOTO' else 0,
+                    # Cotacao "solta" (sem pedido): motos via CarviaCotacaoMoto
+                    # (qtd_total_motos quando MOTO); NF inexistente nesta fase.
+                    'qtd_motos': motos_por_lote.get(f'CARVIA-{cot.id}', 0),
                     'nfs': [],
                 }
                 _add_to_cliente(end, pedido_info)

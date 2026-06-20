@@ -41,9 +41,9 @@ atualizado: 2026-06-19
 
 ## Contexto
 
-121 arquivos, ~71.0K LOC, 126 templates. Importa NF PDFs/XMLs + CTe XMLs, faz match NF-CTe, subcontrata com cotacao via tabelas existentes, gera faturas de cliente e transportadora e emite CTe direto no SSW via Playwright. Detalhe por topico nos sub-docs (CONFERENCIA, FINANCEIRO, COMPROVANTES, IMPORTACAO, etc.) — prefira ler o sub-doc a reconstruir o contexto a partir do codigo.
+126 arquivos, ~73.0K LOC, 127 templates. Importa NF PDFs/XMLs + CTe XMLs, faz match NF-CTe, subcontrata com cotacao via tabelas existentes, gera faturas de cliente e transportadora e emite CTe direto no SSW via Playwright. Detalhe por topico nos sub-docs (CONFERENCIA, FINANCEIRO, COMPROVANTES, IMPORTACAO, etc.) — prefira ler o sub-doc a reconstruir o contexto a partir do codigo.
 
-**121 arquivos** | **~71.0K LOC** | **126 templates** | **Atualizado**: 2026-06-19
+**126 arquivos** | **~73.0K LOC** | **127 templates** | **Atualizado**: 2026-06-20
 
 Gestao de frete subcontratado: importar NF PDFs/XMLs + CTe XMLs, matchear NF-CTe, subcontratar transportadoras com cotacao via tabelas existentes, gerar faturas cliente e transportadora. Tambem emite CTe diretamente no SSW via Playwright.
 
@@ -90,7 +90,8 @@ app/carvia/
                    #   clientes/ (cliente_service)
                    #   documentos/ (carvia_frete, conferencia, embarque_carvia,
                    #                linking, matching, nf_transferencia, operacao_cancel,
-                   #                ssw_emissao, aprovacao_frete, anexo, comprovante) — 11
+                   #                ssw_emissao, aprovacao_frete, anexo, comprovante,
+                   #                motos_lote [qtd_motos por lote p/ mapa Nacom, R1]) — 12
                    #   financeiro/ (conciliacao, csv_razao, historico_match, ofx, pagamento,
                    #                sugestao, comissao, conta_corrente, custo_entrega_autolink,
                    #                custo_entrega_cobertura, custo_entrega_fatura, fluxo_caixa,

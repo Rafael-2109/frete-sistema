@@ -1,11 +1,10 @@
 """Mapa de pedidos: enriquecimento de pedido_info/totais com qtd_motos e NFs.
 
 Cobre o caminho NACOM (motos=0; NFs vindas de Separacao.numero_nf, so quando
-faturado). O caminho CarVia (cotacao MOTO -> qtd_total_motos; pedido -> SUM
-quantidade dos itens COM modelo_moto_id + CarviaPedidoItem.numero_nf) foi
-validado com dados reais (COT-37 -> 1 moto/sem NF; PED-33-1 -> 3 motos/NF 999001)
-— fixtures CarVia completas (cliente+enderecos+modelo+cotacao+motos+pedido+itens)
-sao custosas e a logica e isolada/aditiva.
+faturado). O caminho CarVia (contagem de motos por lote) e testado em
+`tests/carvia/test_motos_lote_service.py` — `qtd_motos_por_lotes` resolve as
+motos via `carvia_nf_itens` (fonte canonica), NAO por `CarviaPedidoItem.
+modelo_moto_id` (NULL em 100% dos itens de pedido — era o bug do contador zerado).
 """
 from unittest.mock import patch
 
