@@ -2492,3 +2492,32 @@ class AgentAdhocScript(db.Model):
 
     def __repr__(self):
         return f'<AgentAdhocScript {self.id} gap={self.tipo_gap} cluster={self.cluster_id}>'
+
+
+class AgenteUpload(db.Model):
+    """Manifesto de uploads do chat persistidos no S3 (IMP-2026-06-19-007).
+
+    1 linha por arquivo enviado em /api/upload. Permite recuperar anexos de
+    sessoes anteriores quando a rotacao de sessao orfana o /tmp local.
+    """
+    __tablename__ = 'agente_upload'
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, nullable=False, index=True)
+    session_id = db.Column(db.String(64), nullable=False, index=True)
+    file_id = db.Column(db.String(16), nullable=False)
+    original_name = db.Column(db.String(255), nullable=False)
+    safe_name = db.Column(db.String(280), nullable=False)
+    s3_key = db.Column(db.String(512), nullable=False)
+    file_type = db.Column(db.String(20), nullable=True)
+    size_bytes = db.Column(db.Integer, nullable=False, default=0)
+    criado_em = db.Column(db.DateTime, nullable=False)
+    expira_em = db.Column(db.DateTime, nullable=True, index=True)
+    ativo = db.Column(db.Boolean, nullable=False, default=True, index=True)
+
+    __table_args__ = (
+        db.UniqueConstraint('user_id', 'safe_name', name='uq_agente_upload_user_safe'),
+    )
+
+    def __repr__(self):
+        return f'<AgenteUpload {self.id} user={self.user_id} file={self.safe_name}>'
