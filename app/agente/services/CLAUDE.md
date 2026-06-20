@@ -10,7 +10,7 @@ atualizado: 2026-06-15
 
 > **Papel:** guia dev dos services de inteligencia do Agente Web (analise, otimizacao e aprendizado de sessoes). Companheiro do guia do modulo: [`CLAUDE.md`](../CLAUDE.md). Abra antes de editar `app/agente/services/`.
 
-**LOC**: ~14.9K | **Arquivos**: 25 | **Atualizado**: 2026-06-15
+**LOC**: ~15.0K | **Arquivos**: 26 | **Atualizado**: 2026-06-20
 
 ## Contexto
 
@@ -45,7 +45,8 @@ app/agente/services/
   ├── sentiment_detector.py           #   260 LOC — Deteccao LOCAL de frustracao, zero API (P1-2)
   ├── teams_observability_service.py  #   346 LOC — KPIs canal Teams (teams_tasks + agent_step), read-only (F2)
   ├── skill_effectiveness_service.py  # Avaliador de efetividade de skill pos-sessao (Fase 1): janela+funil estagio0/Haiku/Sonnet+aplicacao+idempotencia
-  └── approval_inbox_service.py       # Inbox de Aprovacao: AgentMemory shadow + ImprovementDialogue proposed (conserta directive_promotion shadow->ativa)
+  ├── approval_inbox_service.py       # Inbox de Aprovacao: AgentMemory shadow + ImprovementDialogue proposed (conserta directive_promotion shadow->ativa)
+  └── upload_recovery_service.py      # Persistencia S3 + recuperacao de uploads do chat (IMP-2026-06-19-007) — persistencia de arquivos, NAO service de inteligencia/LLM (R3-R5 nao se aplicam)
 ```
 
 ## Regras Criticas
