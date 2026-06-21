@@ -26,7 +26,8 @@ from app.carvia.models import (
     CarviaConciliacao, CarviaExtratoLinha,
 )
 from app.carvia.utils.excel_export_helper import (
-    Campo, ColunaGrupo, gerar_excel_duplo_cabecalho, grupo_dinamico,
+    Campo, ColunaGrupo, aplicar_formato_datas,
+    gerar_excel_duplo_cabecalho, grupo_dinamico,
 )
 from app.carvia.utils.tomador import tomador_label_para_export
 from app.utils.timezone import agora_utc_naive
@@ -92,13 +93,23 @@ def _max_len(lista_de_listas):
 
 
 def _fmt_date(val):
-    """Formata date para DD/MM/YYYY ou string vazia."""
-    return val.strftime('%d/%m/%Y') if val else ''
+    """Retorna o date/datetime NATIVO (Excel formata como data ordenavel via
+    _aplicar_formato_datas) ou '' se vazio. Excel nao suporta timezone."""
+    if not val:
+        return ''
+    if getattr(val, 'tzinfo', None) is not None:
+        val = val.replace(tzinfo=None)
+    return val
 
 
 def _fmt_datetime(val):
-    """Formata datetime para DD/MM/YYYY HH:MM ou string vazia."""
-    return val.strftime('%d/%m/%Y %H:%M') if val else ''
+    """Retorna o datetime NATIVO (sem tz) ou '' se vazio. O formato visivel
+    pt-BR e aplicado por _aplicar_formato_datas no worksheet."""
+    if not val:
+        return ''
+    if getattr(val, 'tzinfo', None) is not None:
+        val = val.replace(tzinfo=None)
+    return val
 
 
 def _fmt_bool(val):
@@ -127,6 +138,7 @@ def _gerar_excel(df, sheet_name, entity_name):
         df.to_excel(writer, index=False, sheet_name=sheet_name)
         worksheet = writer.sheets[sheet_name]
         _ajustar_largura_colunas(df, worksheet)
+        aplicar_formato_datas(worksheet, min_row=2)
 
     output.seek(0)
 
@@ -314,6 +326,13 @@ def register_exportacao_routes(bp):
 
         nf_ids = [nf.id for nf in nfs]
 
+        # ---- Peso cubado por NF (volume x qtd x cubagem_minima==300) ----
+        # Cubado canonico CarVia (R3) — usa peso_medio do modelo se cadastrado.
+        from app.carvia.services.pricing.moto_recognition_service import (
+            MotoRecognitionService,
+        )
+        cubado_por_nf = MotoRecognitionService().calcular_peso_cubado_batch(nf_ids)
+
         # ---- Itens de produto (1 por linha do Excel) ----
         itens = db.session.query(CarviaNfItem).filter(
             CarviaNfItem.nf_id.in_(nf_ids)
@@ -391,6 +410,7 @@ def register_exportacao_routes(bp):
                     'nf_uf_dest': nf.uf_destinatario or '',
                     'nf_valor': float(nf.valor_total or 0),
                     'nf_peso': float(nf.peso_bruto or 0),
+                    'nf_peso_cubado': cubado_por_nf.get(nf.id, ''),
                     'nf_vol': nf.quantidade_volumes or 0,
                     'nf_modfrete': _modalidade_frete_label(getattr(nf, 'modalidade_frete', None)),
                     'nf_status': nf.status or '',
@@ -448,6 +468,7 @@ def register_exportacao_routes(bp):
                 Campo('nf_uf_dest', 'UF'),
                 Campo('nf_valor', 'Valor', fmt='money'),
                 Campo('nf_peso', 'Peso', fmt='money'),
+                Campo('nf_peso_cubado', 'Peso Cubado', fmt='money'),
                 Campo('nf_vol', 'Vol', fmt='int'),
                 Campo('nf_modfrete', 'modFrete'),
                 Campo('nf_status', 'Status'),
@@ -572,6 +593,13 @@ def register_exportacao_routes(bp):
         for op_id, nf in nfs_rows:
             nfs_por_op[op_id].append(nf)
 
+        # ---- Peso cubado por NF (volume x qtd x cubagem_minima==300, R3) ----
+        from app.carvia.services.pricing.moto_recognition_service import (
+            MotoRecognitionService,
+        )
+        nf_ids_op = [nf.id for nfs in nfs_por_op.values() for nf in nfs]
+        cubado_por_nf = MotoRecognitionService().calcular_peso_cubado_batch(nf_ids_op)
+
         # ---- CTes Complementares por operacao ----
         comps_por_op = defaultdict(list)
         for c in db.session.query(CarviaCteComplementar).filter(
@@ -614,6 +642,7 @@ def register_exportacao_routes(bp):
                     'nf_uf_dest': (nf.uf_destinatario if nf else op.uf_destino or '') or '',
                     'nf_valor': float(nf.valor_total or 0) if nf else '',
                     'nf_peso': float(nf.peso_bruto or 0) if nf else '',
+                    'nf_peso_cubado': cubado_por_nf.get(nf.id, '') if nf else '',
                     'nf_modfrete': _modalidade_frete_label(getattr(nf, 'modalidade_frete', None)) if nf else '',
                     # CTe
                     'cte_numero': op.cte_numero or '',
@@ -661,6 +690,7 @@ def register_exportacao_routes(bp):
                 Campo('nf_uf_dest', 'UF'),
                 Campo('nf_valor', 'Valor', fmt='money'),
                 Campo('nf_peso', 'Peso', fmt='money'),
+                Campo('nf_peso_cubado', 'Peso Cubado', fmt='money'),
                 Campo('nf_modfrete', 'modFrete'),
             ]),
             ColunaGrupo('CTe', [
@@ -1821,6 +1851,7 @@ def register_exportacao_routes(bp):
         with pd.ExcelWriter(output, engine='openpyxl') as writer:
             df.to_excel(writer, index=False, sheet_name='Tabelas Frete')
             _ajustar_largura_colunas(df, writer.sheets['Tabelas Frete'])
+            aplicar_formato_datas(writer.sheets['Tabelas Frete'], min_row=2)
 
             if not df_precos.empty:
                 df_precos.to_excel(writer, index=False, sheet_name='Precos Moto')
@@ -1930,10 +1961,12 @@ def register_exportacao_routes(bp):
             df_fechamentos.to_excel(writer, index=False, sheet_name='Fechamentos')
             if not df_fechamentos.empty:
                 _ajustar_largura_colunas(df_fechamentos, writer.sheets['Fechamentos'])
+                aplicar_formato_datas(writer.sheets['Fechamentos'], min_row=2)
 
             df_ctes.to_excel(writer, index=False, sheet_name='CTes')
             if not df_ctes.empty:
                 _ajustar_largura_colunas(df_ctes, writer.sheets['CTes'])
+                aplicar_formato_datas(writer.sheets['CTes'], min_row=2)
 
         output.seek(0)
         timestamp = agora_utc_naive().strftime('%Y%m%d_%H%M')

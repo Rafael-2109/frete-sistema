@@ -556,6 +556,7 @@ class ContaCorrenteService:
         """Gera planilha Excel do extrato com totais."""
         from openpyxl import Workbook
         from openpyxl.styles import Font, PatternFill, Alignment
+        from app.carvia.utils.excel_export_helper import aplicar_formato_datas
         from app.transportadoras.models import Transportadora
 
         transp = db.session.get(Transportadora, transportadora_id)
@@ -597,7 +598,7 @@ class ContaCorrenteService:
         total_debito = 0.0
         total_credito = 0.0
         for idx, m in enumerate(movs, start=5):
-            ws.cell(row=idx, column=1, value=m['criado_em'].strftime('%d/%m/%Y') if m['criado_em'] else '')
+            ws.cell(row=idx, column=1, value=m['criado_em'].date() if m['criado_em'] else '')
             ws.cell(row=idx, column=2, value=f"Frete #{m['frete_id']}" if m['frete_id'] else '-')
             ws.cell(row=idx, column=3, value=m['frete_cte_numero'] or '-')
             ws.cell(row=idx, column=4, value=m['op_cte_numero'] or '-')
@@ -632,6 +633,9 @@ class ContaCorrenteService:
         for row in range(5, total_row + 1):
             for col in (7, 8, 9):
                 ws.cell(row=row, column=col).number_format = 'R$ #,##0.00'
+
+        # Coluna 'Data' (col 1) como data real do Excel — ordenavel
+        aplicar_formato_datas(ws, min_row=5)
 
         buffer = BytesIO()
         wb.save(buffer)

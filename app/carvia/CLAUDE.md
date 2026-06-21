@@ -43,7 +43,7 @@ atualizado: 2026-06-19
 
 126 arquivos, ~73.0K LOC, 127 templates. Importa NF PDFs/XMLs + CTe XMLs, faz match NF-CTe, subcontrata com cotacao via tabelas existentes, gera faturas de cliente e transportadora e emite CTe direto no SSW via Playwright. Detalhe por topico nos sub-docs (CONFERENCIA, FINANCEIRO, COMPROVANTES, IMPORTACAO, etc.) — prefira ler o sub-doc a reconstruir o contexto a partir do codigo.
 
-**126 arquivos** | **~73.0K LOC** | **127 templates** | **Atualizado**: 2026-06-20
+**126 arquivos** | **~73.0K LOC** | **127 templates** | **Atualizado**: 2026-06-21
 
 Gestao de frete subcontratado: importar NF PDFs/XMLs + CTe XMLs, matchear NF-CTe, subcontratar transportadoras com cotacao via tabelas existentes, gerar faturas cliente e transportadora. Tambem emite CTe diretamente no SSW via Playwright.
 
@@ -245,6 +245,8 @@ Tomador do frete tem fonte unica: `CarviaOperacao.cte_tomador` (extraido de `<id
 **Exports Excel com DUPLO CABECALHO hierarquico** (linha 1 = grupo mesclado, linha 2 = campos). Helper: `app/carvia/utils/excel_export_helper.py` (`ColunaGrupo`, `Campo`, `grupo_dinamico`).
   - Granularidade: NF=1 linha/item, CTe=1 linha/NF vinculada, CTe Comp=1 linha/comp, Faturas=1 linha/fatura.
   - Agrupamentos: cada export mostra campos da PROPRIA entidade + agrupamentos SUPERIORES (ex.: Fatura aparece no export CTe). NUNCA agrupamento inferior.
+  - **DATAS = data NATIVA do Excel (NAO texto)** — `fmt='date'/'datetime'` gravam o objeto `date`/`datetime` + mascara `DD/MM/YYYY` (ordenavel cronologicamente). NUNCA escrever `strftime(...)` em celula. Exports df-based (`_gerar_excel`) e geradores openpyxl diretos (`gerencial_routes`, `conta_corrente_service`) usam `excel_export_helper.aplicar_formato_datas(ws, min_row=...)` — fonte unica do tratamento de datas.
+  - **PESO CUBADO por NF** nos exports `nfs` e `operacoes` (coluna "Peso Cubado" no grupo NF, ao lado de "Peso") = `MotoRecognitionService.calcular_peso_cubado_batch(nf_ids)` (volume×qtd×`cubagem_minima`==300; usa `peso_medio` do modelo se cadastrado — cubado canonico R3). A aba "Itens NF x CTe" do `gerencial` ja traz "Peso Cubado Modelo" (unitario).
 
 ### R20: "Anexar" tem 2 semanticas — desambiguar ANTES de implementar
 

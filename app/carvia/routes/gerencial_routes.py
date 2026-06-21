@@ -18,6 +18,7 @@ from flask_login import login_required, current_user
 from sqlalchemy import func
 
 from app import db
+from app.carvia.utils.excel_export_helper import aplicar_formato_datas
 from app.utils.auth_decorators import require_admin
 from app.utils.timezone import agora_utc_naive
 
@@ -257,7 +258,9 @@ def register_gerencial_routes(bp):
         all_rows.sort(key=lambda r: (r.get('data_nf') or date.min, r.get('numero_nf') or ''))
 
         def _fmt(val):
-            return val.strftime('%d/%m/%Y') if val else ''
+            # Retorna o date/datetime NATIVO (Excel formata como data ordenavel
+            # via aplicar_formato_datas) ou '' se vazio.
+            return val if val else ''
 
         data = []
         for r in all_rows:
@@ -304,6 +307,7 @@ def register_gerencial_routes(bp):
 
             ws.freeze_panes = 'A2'
             ws.auto_filter.ref = ws.dimensions
+            aplicar_formato_datas(ws, min_row=2)  # Data NF/CTe/Fatura -> data real
 
             # Aba de resumo de rateio
             resumo = []
@@ -387,6 +391,7 @@ def register_gerencial_routes(bp):
                         ws3.column_dimensions[col_letter].width = min(max_len + 2, 50)
                     ws3.freeze_panes = 'A2'
                     ws3.auto_filter.ref = ws3.dimensions
+                    aplicar_formato_datas(ws3, min_row=2)  # Data NF -> data real
 
         output.seek(0)
         timestamp = agora_utc_naive().strftime('%Y%m%d_%H%M')

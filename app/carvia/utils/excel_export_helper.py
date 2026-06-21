@@ -23,10 +23,14 @@ API:
     ]
     gerar_excel_duplo_cabecalho(colunas, linhas_dict, sheet_name, entity_name)
 
-Formato numerico/data segue padrao pt-BR (vem de _fmt_date/_fmt_datetime do
-export.py original).
+Formato numerico segue padrao pt-BR. DATAS (fmt='date'/'datetime') sao
+gravadas como objeto date/datetime NATIVO do Excel (ordenavel
+cronologicamente — 05/01/26 antes de 01/02/26), com a mascara visivel
+DD/MM/YYYY vinda de _numberformat. Para worksheets montados fora deste helper
+(df-based / openpyxl direto), usar `aplicar_formato_datas(ws, min_row=...)`.
 """
 from dataclasses import dataclass, field
+from datetime import date, datetime
 from io import BytesIO
 from typing import Any, Callable, Dict, List, Optional
 
@@ -80,15 +84,38 @@ def _fmt_value(value: Any, fmt: Optional[str]) -> Any:
             return int(value)
         except (TypeError, ValueError):
             return ''
-    if fmt == 'date':
+    if fmt in ('date', 'datetime'):
+        # Retorna o objeto date/datetime NATIVO — openpyxl o escreve como data
+        # real do Excel (ordenavel cronologicamente). O formato visivel pt-BR
+        # vem de _numberformat. Excel nao suporta timezone -> remover tzinfo.
         if hasattr(value, 'strftime'):
-            return value.strftime('%d/%m/%Y')
-        return str(value)
-    if fmt == 'datetime':
-        if hasattr(value, 'strftime'):
-            return value.strftime('%d/%m/%Y %H:%M')
+            if getattr(value, 'tzinfo', None) is not None:
+                value = value.replace(tzinfo=None)
+            return value
         return str(value)
     return value
+
+
+def aplicar_formato_datas(worksheet, min_row: int = 2) -> None:
+    """Aplica numberformat pt-BR (DD/MM/YYYY) nas celulas date/datetime das
+    linhas de dados de um worksheet openpyxl, ignorando texto e numeros.
+
+    Helper compartilhado por TODOS os exports Excel CarVia que escrevem
+    objetos date/datetime nas celulas (em vez de strftime). openpyxl ja grava
+    a data como serial nativo do Excel — aqui so' definimos a mascara visivel.
+    datetime tem precedencia (e' subclasse de date).
+
+    Args:
+        worksheet: openpyxl worksheet.
+        min_row: primeira linha de DADOS (2 p/ cabecalho simples, 3 p/ duplo).
+    """
+    for row in worksheet.iter_rows(min_row=min_row):
+        for cell in row:
+            v = cell.value
+            if isinstance(v, datetime):
+                cell.number_format = 'DD/MM/YYYY HH:MM'
+            elif isinstance(v, date):
+                cell.number_format = 'DD/MM/YYYY'
 
 
 def _numberformat(fmt: Optional[str]) -> Optional[str]:
@@ -97,6 +124,10 @@ def _numberformat(fmt: Optional[str]) -> Optional[str]:
         return 'R$ #,##0.00'
     if fmt == 'int':
         return '#,##0'
+    if fmt == 'date':
+        return 'DD/MM/YYYY'
+    if fmt == 'datetime':
+        return 'DD/MM/YYYY HH:MM'
     return None
 
 
