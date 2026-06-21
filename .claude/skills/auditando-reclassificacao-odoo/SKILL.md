@@ -155,6 +155,16 @@ skill.
 - **READ-only inviolavel**: se o pedido for EXECUTAR a reclassificacao (mover
   linhas para CPV), esta skill NAO faz — ela so audita. O write e' script
   dedicado fora de skill (#163 rejeitada).
+- **INSTRUMENTE o write ad-hoc com esta skill — NAO use heuristica de log**
+  (caso IMP-2026-06-19-006): quando o write em massa rodar via script dedicado
+  (`button_draft → write account_id → action_post` em lote), o PROGRESSO deve sair
+  de `monitorar-andamento` (`pct_concluido` = contador REAL de move.lines
+  processadas + `moves_draft`) e a INTEGRIDADE pos-execucao de `validar-lote`
+  (duplicados/ausentes/divergentes). NUNCA estimar progresso por contagem de
+  linhas do output/log (ex.: "~9.185 linhas de log ÷ 12 ≈ 765 moves") — e' fragil,
+  engana o usuario e nao detecta inconsistencia se o write for interrompido no
+  meio. Rode `validar-lote` ao final: `integro:true` so' quando 0 duplicados,
+  0 ausentes, 0 divergentes e `moves_draft==0`.
 - **`debit>0` no medir-saldos**: mede apenas linhas a debito efetivas (espelha os
   scripts originais). Lancamentos a credito (debit=0) sao ignorados de proposito.
 - **`account_id` vem como `[id, nome]`** (many2one via XML-RPC): o classificador

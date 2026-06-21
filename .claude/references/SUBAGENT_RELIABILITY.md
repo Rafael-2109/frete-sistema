@@ -116,6 +116,24 @@ O subagente escreve findings detalhados em arquivo. O principal le o arquivo par
 > `/tmp/agente_files` foram reportados AUSENTES pelo subagente `gestor-motos-assai`.
 > **Regra: passe dados de trabalho INLINE no corpo do prompt do subagente.**
 
+> **Variante UPLOADS DO USUARIO — caso IMP-2026-06-20-005** (agente web, Rayssa). O usuario
+> anexou planilha + PDFs no chat; o principal delegou a validacao chassi-a-chassi a um subagente
+> referenciando "a planilha que o usuario enviou" — o subagente nao acessou os arquivos e a
+> validacao **nao rodou** (o principal so' percebeu depois). **A causa NAO e' "filesystem isolado"**
+> (o `/tmp` e' compartilhado — vide M1.1): a falha tem duas pernas, ambas com o MESMO remedio.
+> 1. **Contexto nao herdado**: anexos que o principal leu pra dentro do CONTEXTO (document block
+>    nativo do Claude ou skill `lendo-arquivos`) viram conteudo das MENSAGENS do principal — o
+>    subagente recebe SO' o prompt do `Task`, nao herda esse historico, entao nao "enxerga" o anexo.
+> 2. **Caminho `/tmp` divergente**: mesmo o arquivo fisico em `UPLOAD_FOLDER` (`/tmp/agente_files`,
+>    ver `app/agente/routes/_constants.py:11-19`) pode nao ser encontrado pelo subprocesso do
+>    subagente por TMPDIR divergente.
+>
+> **Remedio (vale pras duas pernas): MATERIALIZE o conteudo ANTES de delegar** — extraia os dados
+> do arquivo no principal (ler/parsear a planilha/PDF) e passe o resultado como texto/JSON INLINE no
+> corpo do prompt do subagente. NUNCA delegue com referencia "ao arquivo" esperando que o subagente
+> o leia. Se o volume nao couber inline, fatie a tarefa (o principal processa por lotes) em vez de
+> empurrar o arquivo pro subagente.
+
 ### M1.1: Ordem de Leitura (SDK 0.1.60+, 2026-04-17)
 
 Com o SDK 0.1.60, o projeto ganhou `list_subagents()` + `get_subagent_messages()` — fonte canonica do transcript completo de cada subagente em `~/.claude/projects/<proj>/<session>/subagents/`. O protocolo M1 (`/tmp/subagent-findings/`) continua ativo como fallback escrito.

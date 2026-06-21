@@ -47,6 +47,40 @@ Indice de execucoes do dialogo de melhoria Agent SDK <-> Claude Code.
 | 41 | 2026-06-18 | 2 | 0 | 2 | 0 | OK (revisao 4-maos: IMP-2026-06-17-002 RECUSADA por risco+frequencia — TRUNCATE em PROD + demanda ad-hoc/rara nao viram skill NEM script versionado; script reset_motos_assai.py REMOVIDO. IMP-2026-06-17-003 rejeitada: bloqueio read-only feature intencional text_to_sql:417 + PROMPT INJECTION no evidence_json. 2 F2 adhoc-cluster-1385/1433 de Martha id 82 EM ESTUDO p/ Rafael) |
 | 42 | 2026-06-19 | 5 | 2 | 1 | 2 | OK (cluster Motos Assai backfill 1.394 chassis, Rayssa id 78: 1 mudanca atomica auto-impl `emitir_evento(ocorrido_em=...)` destrava o gargalo de 2 sugestoes, +2 TDD 7 passed; IMP-002 proposta cancelamento-por-loja (migration+model+service); IMP-19-003 proposta observacao-defeito no FATURADA (cruza routes/forms); IMP-19-002 REJEITADA over-engineering one-shot ja resolvido por script idempotente; FATURADA-sem-lastro rejeitada por invariante. 4 F2 listadas: adhoc 1385/1433 (Martha, ja estudadas 18/06), adhoc-1070 (Talita id 17), skill-gap-lendo-arquivos (Rayssa)) |
 | 43 | 2026-06-20 | 10 | 6 | 1 | 3 | OK (backlog = 1 sessao Motos Assai `7009f2e2` Rayssa id 78 + 1 CarVia Talita id 17. 6 auto-impl: guard de dominio Motos Assai no fast-path NF×PO — chassi != PO, 3 TDD/20 passed; aviso de anexos perdidos na rotacao de sessao — hooks resume_notice, CRITICAL; metodo `reprocessar_itens_fatura_transportadora_por_subcontrato` CarVia — linking_service, wiring na rota proposta; handoff INLINE subagente — CLAUDE.md+SUBAGENT_RELIABILITY; A7 validar chassi por skill+fonte — gestor-motos-assai. IMP-20-004 REJEITADA: gestor-devolucoes e dominio Nacom, nao Q.P.A. (NFd usa assai_devolucao_nfd*). 3 propostas: S3 upload (route), gap NFD em corrigindo-dados-assai; IMP-19-005/010 reconciliadas — ja cobertas por `corrigindo-dados-assai` commit 91e53fd89. 10/10 persistidos HTTP 200) |
+| 44 | 2026-06-21 | 2 | 2 | 0 | 0 | OK (2 auto-impl documentais + 3 F2 listadas. IMP-20-005 gotcha subagente (Rayssa id 78): causa "filesystem isolado" REFUTADA — /tmp e compartilhado; falha real = contexto/uploads nao herdados + TMPDIR divergente; add variante UPLOADS no M1 SUBAGENT_RELIABILITY, complementa handoff INLINE do #43. IMP-19-006 skill_bug em rastreando-odoo (TAMIRIS id 44) IMPROCEDENTE: skill e read-only, reclassificacao foi 100% ad-hoc (agent_adhoc_script ids 2260-2271, decisao #163 rejeitou virar skill); matriz 2.1.1 codigo-correto+ad-hoc-presente; finalidade endereçada — instrumentar write ad-hoc com modos monitorar-andamento/validar-lote (contador real, NAO heuristica de log) em auditando-reclassificacao-odoo. F2: adhoc-1070 Talita id 17, skill-gap-lendo-arquivos Rayssa id 78, adhoc-1161 TAMIRIS id 44 (contraparte executora do #163). v2 ids 246-247 HTTP 200) |
+
+## 2026-06-21
+
+**5 sugestoes pendentes** no backlog: **2 avaliaveis** + **3 F2** (`adhoc-`/`skill-gap-`, gate humano).
+
+**IMP-2026-06-20-005** (gotcha_report, warning — **Rayssa Alves id 78**, sessao `7009f2e2`):
+subagente delegado nao enxergou planilha+PDFs do principal. A causa proposta ("filesystem isolado")
+foi **refutada**: `/tmp` E compartilhado (read-back de findings prova). Causa real, **duas pernas**:
+(1) anexos lidos para o CONTEXTO (document block / `lendo-arquivos`) viram mensagens do principal e
+NAO sao herdados pelo subagente (`Task` so' passa o prompt); (2) arquivo fisico em `/tmp/agente_files`
+some por TMPDIR divergente (`_constants.py:11-19`). O M1 ja cobria o handoff de JSON via `/tmp`
+(IMP-2026-06-19-009, "handoff INLINE" do #43), mas faltava o angulo **UPLOADS DO USUARIO**.
+**Implementado**: variante "UPLOADS DO USUARIO" no bloco M1 de `SUBAGENT_RELIABILITY.md` (corrige a
+imprecisao causal + duas pernas + remedio: materializar conteudo INLINE; fatiar se nao couber).
+
+**IMP-2026-06-19-006** (skill_bug, info — **TAMIRIS id 44**, sessoes 504b7db6/03d356dd/3098a82d):
+"operacoes destrutivas em massa sem salvaguardas", alvo declarado `rastreando-odoo`. Aplicada **matriz
+2.1.1**: alvo **improcedente** — `rastreando-odoo` e READ-only e nao reclassifica; o write foi **100%
+ad-hoc** (`agent_adhoc_script` ids 2260-2271, clusters 1161/642, `button_draft→write→action_post`),
+e promover a skill ja foi **REJEITADO na decisao #163**. Codigo-correto + proveniencia-ad-hoc-presente
+→ NAO e bug de fluxo. Finalidade com merito (ponto #4: progresso por heuristica de log e fragil) e a
+salvaguarda **JA EXISTE** (`monitorar-andamento`/`validar-lote`, contador real de move.lines), so' nao
+era usada. **Implementado**: nota na secao Armadilhas de `auditando-reclassificacao-odoo/SKILL.md`
+instrumentando o write ad-hoc com esses modos e proibindo progresso por contagem de log. Sem skill
+executora (respeita #163).
+
+**F2 listadas (gate humano Rafael+CC)**: `adhoc-cluster-1070` (gerar embarque+fretes, 23 membros,
+Talita id 17), `skill-gap-lendo-arquivos` (analise exploratoria de planilhas, 2 membros, Rayssa id 78),
+`adhoc-cluster-1161` (reclassificacao em lote AML, 64 membros, TAMIRIS id 44 — contraparte executora
+do #163; reincide, decisao de reabrir e' do Rafael).
+
+**Resultado**: 2 implementadas, 0 rejeitadas, 0 propostas. Persistencia v2 ids 246-247, HTTP 200.
+Nenhum arquivo core tocado. Relatorio: `dialogue-2026-06-21.md`.
 
 ## 2026-06-20
 
