@@ -316,7 +316,7 @@ class CarviaClienteService:
         """
         from app.carvia.models import (
             CarviaCliente, CarviaClienteEndereco, CarviaCteComplementar,
-            CarviaNf, CarviaOperacao, CarviaOperacaoNf,
+            CarviaFaturaClienteItem, CarviaNf, CarviaOperacao, CarviaOperacaoNf,
         )
 
         fatura_ids = list(fatura_ids or [])
@@ -400,6 +400,52 @@ class CarviaClienteService:
             ).all()
 
             for fat_id, cnpj_dest, cliente_id, nome, ativo in rows_comp:
+                if fat_id in result:
+                    continue
+                result[fat_id] = {
+                    'id': cliente_id,
+                    'nome_comercial': nome,
+                    'ativo': ativo,
+                    'cnpj_destinatario': cnpj_dest,
+                }
+
+        # 3. Fallback via ITENS da fatura (nf_id) para faturas cujo documento-mae
+        #    NAO aponta de volta via fatura_cliente_id. Caso real: CTe
+        #    Complementar faturado por importacao de PDF mas nunca registrado
+        #    como CarviaCteComplementar — o item fica com operacao_id/
+        #    cte_complementar_id NULL e so o nf_id resolvido pelo linking. As
+        #    partes 1 e 2 (que partem do documento) nao alcancam essas faturas.
+        faturas_sem = [fid for fid in fatura_ids if fid not in result]
+        if faturas_sem:
+            rows_item = db.session.query(
+                CarviaFaturaClienteItem.fatura_cliente_id,
+                CarviaNf.cnpj_destinatario,
+                CarviaCliente.id,
+                CarviaCliente.nome_comercial,
+                CarviaCliente.ativo,
+            ).join(
+                CarviaNf, CarviaNf.id == CarviaFaturaClienteItem.nf_id,
+            ).join(
+                CarviaClienteEndereco,
+                CarviaClienteEndereco.cnpj == CarviaNf.cnpj_destinatario,
+            ).join(
+                CarviaCliente,
+                CarviaCliente.id == CarviaClienteEndereco.cliente_id,
+            ).filter(
+                CarviaFaturaClienteItem.fatura_cliente_id.in_(faturas_sem),
+                CarviaFaturaClienteItem.nf_id.isnot(None),
+                CarviaClienteEndereco.cliente_id.isnot(None),
+                CarviaClienteEndereco.ativo == True,
+                CarviaClienteEndereco.tipo == 'DESTINO',
+                CarviaNf.cnpj_destinatario.isnot(None),
+            ).order_by(
+                CarviaFaturaClienteItem.fatura_cliente_id,
+                CarviaFaturaClienteItem.id,
+                CarviaCliente.ativo.desc(),
+                CarviaCliente.id.asc(),
+            ).all()
+
+            for fat_id, cnpj_dest, cliente_id, nome, ativo in rows_item:
                 if fat_id in result:
                     continue
                 result[fat_id] = {

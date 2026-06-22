@@ -101,7 +101,15 @@
                                     {{ carvia_ref(op_info.get('cte_numero'), op_info.get('ctrc_numero'), fallback='-') }}
                                 </a>
                             </td>
-                            <td>{{ comp.nome_cliente or comp.cnpj_cliente or '-' }}</td>
+                            <td>
+                                {% set ct = cliente_tomador_por_comp.get(comp.id) %}
+                                {% if ct and ct.nome %}
+                                <span title="Tomador do frete (SOT: cte_tomador do CTe pai)">{{ ct.nome }}</span>
+                                {% if ct.cnpj %}<small class="text-muted cnpj-col d-block">{{ ct.cnpj }}</small>{% endif %}
+                                {% else %}
+                                {{ comp.nome_cliente or comp.cnpj_cliente or '-' }}
+                                {% endif %}
+                            </td>
                             <td>
                                 {% set p = papeis_por_comp.get(comp.id) %}
                                 {% if p and (p.emit or p.dest or p.tomador) %}

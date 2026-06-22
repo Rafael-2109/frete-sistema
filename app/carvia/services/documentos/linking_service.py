@@ -936,7 +936,33 @@ class LinkingService:
                     'fatura_id': fatura_id,
                 }
 
-            # Gate unico (NN3): usa fatura.pode_editar()
+            valor_anterior = float(fatura.valor_total or 0)
+
+            # Impacto da amarracao no valor_total, calculado ANTES de aplicar
+            # (o comp ainda esta com fatura_cliente_id NULL, entao soma_comp
+            # existente NAO o inclui — somamos o cte_valor dele a parte).
+            soma_ops = db.session.query(
+                func.coalesce(func.sum(CarviaOperacao.cte_valor), 0)
+            ).filter(
+                CarviaOperacao.fatura_cliente_id == fatura_id
+            ).scalar()
+            soma_comp_existente = db.session.query(
+                func.coalesce(func.sum(CarviaCteComplementar.cte_valor), 0)
+            ).filter(
+                CarviaCteComplementar.fatura_cliente_id == fatura_id
+            ).scalar()
+            novo_total = (
+                float(soma_ops or 0)
+                + float(soma_comp_existente or 0)
+                + float(cte_comp.cte_valor or 0)
+            )
+            amarracao_neutra = abs(novo_total - valor_anterior) < 0.005
+
+            # Gate (NN3): `fatura.pode_editar()` OU amarracao documental que
+            # NAO altera o valor_total. Preencher a FK item<->comp e marcar o
+            # comp FATURADO nao e edicao financeira — numa fatura ja paga/
+            # conferida so bloqueamos quando o valor_total mudaria (ai sim ha
+            # impacto financeiro que exige reabrir/desconciliar antes).
             pode_editar = True
             if hasattr(fatura, 'pode_editar'):
                 try:
@@ -953,19 +979,19 @@ class LinkingService:
                     )
                     pode_editar = False
 
-            if not pode_editar:
+            if not pode_editar and not amarracao_neutra:
                 return {
                     'status': 'SKIP_FATURA_BLOQUEADA',
                     'motivo': (
                         f'fatura_status={fatura.status} '
                         f'status_conferencia='
-                        f'{getattr(fatura, "status_conferencia", "?")}'
+                        f'{getattr(fatura, "status_conferencia", "?")} '
+                        f'(amarracao alteraria valor_total '
+                        f'{valor_anterior:.2f} -> {novo_total:.2f})'
                     ),
                     'cte_comp_id': cte_comp_id,
                     'fatura_id': fatura_id,
                 }
-
-            valor_anterior = float(fatura.valor_total or 0)
 
             # Popula cte_complementar_id nos items encontrados
             for item in items_candidatos:
@@ -976,23 +1002,8 @@ class LinkingService:
             if cte_comp.status in ('RASCUNHO', 'EMITIDO'):
                 cte_comp.status = 'FATURADO'
 
-            # Recalcula valor_total (mesma logica de
-            # vincular_ctes_complementares_da_fatura L652-669)
-            soma_ops = db.session.query(
-                func.coalesce(func.sum(CarviaOperacao.cte_valor), 0)
-            ).filter(
-                CarviaOperacao.fatura_cliente_id == fatura_id
-            ).scalar()
-
-            soma_comp = db.session.query(
-                func.coalesce(
-                    func.sum(CarviaCteComplementar.cte_valor), 0
-                )
-            ).filter(
-                CarviaCteComplementar.fatura_cliente_id == fatura_id
-            ).scalar()
-
-            novo_total = float(soma_ops or 0) + float(soma_comp or 0)
+            # valor_total so muda quando a amarracao NAO e neutra (e nesse caso
+            # a fatura era editavel — o gate acima garante isso).
             if novo_total != valor_anterior and novo_total > 0:
                 fatura.valor_total = novo_total
 

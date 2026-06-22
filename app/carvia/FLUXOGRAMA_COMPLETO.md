@@ -388,7 +388,7 @@ sequenceDiagram
 
 | Flag | Default | Controla |
 |------|---------|----------|
-| `CARVIA_FEATURE_AUTO_VINCULAR_CTE_COMP` | — | A1 Bug #2: fechar vinculo CTe Comp tardio apos import do XML |
+| `CARVIA_FEATURE_AUTO_VINCULAR_CTE_COMP` | `True` (2026-06-22; era OFF) | A1 Bug #2: fechar vinculo CTe Comp tardio apos import do XML. Em fatura paga/conferida so amarra se o valor_total nao muda. Acao manual equivalente na UI: botao "Vincular a fatura" no detalhe do CTe Comp |
 | `CARVIA_FEATURE_EDITAR_ENDERECO_CCE` | — | A4 Bug #4: UI de correcao de endereco via CC-e |
 | `CARVIA_FEATURE_CASCADE_CANCELAMENTO` | `False` | B3: cascade de cancelamento atomico |
 

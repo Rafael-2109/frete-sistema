@@ -76,6 +76,15 @@ class Config:
     # Ativar via ENABLE_QUERY_PROFILING=true no Render (reinicia servico)
     ENABLE_QUERY_PROFILING = os.environ.get("ENABLE_QUERY_PROFILING", "False").lower() == "true"
 
+    # CarVia — auto-vincular CTe Complementar tardio a fatura pre-existente
+    # (A1 Bug #2). Quando o XML do CTe Comp e importado DEPOIS da fatura, o
+    # LinkingService.fechar_vinculo_cte_comp_fatura fecha o vinculo. ON por
+    # padrao (feature madura: transacao isolada, lock, idempotente). Faturas
+    # ja pagas/conferidas sao amarradas apenas se o valor_total nao muda.
+    CARVIA_FEATURE_AUTO_VINCULAR_CTE_COMP = os.environ.get(
+        "CARVIA_FEATURE_AUTO_VINCULAR_CTE_COMP", "True"
+    ).lower() == "true"
+
     # ✅ CONFIGURAÇÕES DE CSRF OTIMIZADAS
     WTF_CSRF_ENABLED = True
     WTF_CSRF_TIME_LIMIT = 7200  # 2 horas (era 1 hora por padrão)

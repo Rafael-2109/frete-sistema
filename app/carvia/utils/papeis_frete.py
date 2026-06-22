@@ -84,6 +84,37 @@ def resolver_papeis_cte_complementar(cte_comp):
     return papeis
 
 
+def tomador_como_cliente(papeis):
+    """Resolve {'nome', 'cnpj'} do TOMADOR do frete a partir dos papeis.
+
+    O tomador (cte_tomador, SOT = XML do CTe) e quem paga o frete = o
+    "cliente" do CTe. Mapeia o codigo do tomador para o lado emit/dest da NF:
+      REMETENTE (label_visual='emitente')    -> papeis['emit']
+      DESTINATARIO (label_visual='destinatario') -> papeis['dest']
+
+    Os demais codigos (EXPEDIDOR/RECEBEDOR/TERCEIRO) nao tem entidade direta
+    na primeira NF -> retorna None para o chamador aplicar seu fallback
+    (tipicamente o nome_cliente herdado da operacao).
+
+    Args:
+        papeis: dict no formato de resolver_papeis_* (emit/dest/tomador) ou None.
+
+    Returns:
+        dict {'nome', 'cnpj', 'cidade', 'uf'} do lado tomador, ou None.
+    """
+    if not papeis:
+        return None
+    tomador = papeis.get('tomador')
+    if not isinstance(tomador, dict):
+        return None
+    visual = tomador.get('label_visual')
+    if visual == 'emitente':
+        return papeis.get('emit')
+    if visual == 'destinatario':
+        return papeis.get('dest')
+    return None
+
+
 def resolver_papeis_fatura_cliente(fatura):
     """Papeis de Fatura Cliente (single-record, sem N+1)."""
     if fatura is None:

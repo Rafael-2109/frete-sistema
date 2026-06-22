@@ -397,8 +397,9 @@ class TestA2NfTardiaComExpansaoRetroativa:
         assert r1['itens_criados'] == 1
         assert r2['itens_criados'] == 0  # segunda vez nao cria nada
 
-    def test_feature_flag_auto_vincular_default_false(self, app):
-        """A1 flag default False (rollout gradual)."""
+    def test_feature_flag_auto_vincular_default_true(self, app):
+        """A1 flag ON por padrao (2026-06-22 — feature madura; rollout gradual
+        encerrado). Override via env CARVIA_FEATURE_AUTO_VINCULAR_CTE_COMP=False."""
         assert app.config.get(
             'CARVIA_FEATURE_AUTO_VINCULAR_CTE_COMP', False
-        ) is False
+        ) is True

@@ -105,9 +105,19 @@ def register_cte_complementar_routes(bp):
             op_info_map = {o_id: {'cte_numero': cte, 'ctrc_numero': ctrc} for o_id, cte, ctrc in ops}
 
         # Batch papeis (emit/dest/tomador) via operacao pai -> NFs
-        from app.carvia.utils.papeis_frete import batch_papeis_por_cte_complementar
+        from app.carvia.utils.papeis_frete import (
+            batch_papeis_por_cte_complementar, tomador_como_cliente,
+        )
         comp_ids = [c.id for c in paginacao.items]
         papeis_por_comp = batch_papeis_por_cte_complementar(comp_ids)
+
+        # Cliente exibido = TOMADOR do frete (SOT = cte_tomador do CTe pai),
+        # NAO o nome_cliente herdado (que aponta sempre para o emitente). Para
+        # tomador=DESTINATARIO o cliente correto e o destinatario da NF.
+        cliente_tomador_por_comp = {
+            cid: tomador_como_cliente(papeis_por_comp.get(cid))
+            for cid in comp_ids
+        }
 
         return render_template(
             'carvia/ctes_complementares/listar.html',
@@ -115,6 +125,7 @@ def register_cte_complementar_routes(bp):
             paginacao=paginacao,
             op_info_map=op_info_map,
             papeis_por_comp=papeis_por_comp,
+            cliente_tomador_por_comp=cliente_tomador_por_comp,
             operacao_filtro=operacao_filtro,
             status_filtro=status_filtro,
             busca=busca,
@@ -327,8 +338,35 @@ def register_cte_complementar_routes(bp):
 
         # Papeis (emit/dest/tomador) via operacao pai -> primeira NF.
         # CTe Comp herda do CTe original porque nao tem emit/dest proprios.
-        from app.carvia.utils.papeis_frete import resolver_papeis_cte_complementar
+        from app.carvia.utils.papeis_frete import (
+            resolver_papeis_cte_complementar, tomador_como_cliente,
+        )
         papeis = resolver_papeis_cte_complementar(cte_comp)
+
+        # Cliente exibido = TOMADOR do frete (ver listar_ctes_complementares).
+        cliente_tomador = tomador_como_cliente(papeis)
+
+        # Preview: fatura pre-existente que referencia este CTe Comp por um item
+        # com cte_complementar_id NULL (cenario "XML importado depois da fatura").
+        # Habilita o botao "Vincular a fatura" so quando ha o que amarrar.
+        fatura_candidata = None
+        if cte_comp.fatura_cliente_id is None and cte_comp.cte_numero:
+            from app.carvia.models import CarviaFaturaClienteItem, CarviaFaturaCliente
+            cte_norm = str(cte_comp.cte_numero).lstrip('0') or '0'
+            q_item = CarviaFaturaClienteItem.query.filter(
+                db.func.ltrim(CarviaFaturaClienteItem.cte_numero, '0') == cte_norm,
+                CarviaFaturaClienteItem.cte_complementar_id.is_(None),
+            )
+            if cte_comp.operacao_id is not None:
+                q_item = q_item.filter(db.or_(
+                    CarviaFaturaClienteItem.operacao_id.is_(None),
+                    CarviaFaturaClienteItem.operacao_id == cte_comp.operacao_id,
+                ))
+            item_cand = q_item.first()
+            if item_cand:
+                fatura_candidata = db.session.get(
+                    CarviaFaturaCliente, item_cand.fatura_cliente_id
+                )
 
         return render_template(
             'carvia/ctes_complementares/detalhe.html',
@@ -336,6 +374,8 @@ def register_cte_complementar_routes(bp):
             custos_vinculados=custos_vinculados,
             despesas_extras=despesas_extras,
             papeis=papeis,
+            cliente_tomador=cliente_tomador,
+            fatura_candidata=fatura_candidata,
         )
 
     @bp.route('/ctes-complementares/<int:cte_comp_id>/editar', methods=['GET', 'POST']) # type: ignore
@@ -729,3 +769,78 @@ def register_cte_complementar_routes(bp):
             db.session.rollback()
             logger.exception('Erro ao desvincular CE #%s', custo_entrega_id)
             return jsonify({'sucesso': False, 'erro': str(e)}), 500
+
+    @bp.route(
+        '/ctes-complementares/<int:cte_comp_id>/vincular-fatura',
+        methods=['POST'],
+    )  # type: ignore
+    @login_required
+    def vincular_fatura_cte_complementar(cte_comp_id):  # type: ignore
+        """Fecha o vinculo de um CTe Comp com a fatura pre-existente que ja o
+        referencia por um item (cenario "XML importado depois da fatura").
+
+        Reusa `LinkingService.fechar_vinculo_cte_comp_fatura`: amarra o item
+        existente (sem duplicar) e marca o CTe Comp FATURADO. Em fatura ja
+        paga/conferida so prossegue se a amarracao NAO alterar o valor_total.
+        """
+        if not getattr(current_user, 'sistema_carvia', False):
+            flash('Acesso negado.', 'danger')
+            return redirect(url_for('main.dashboard'))
+
+        cte_comp = db.session.get(CarviaCteComplementar, cte_comp_id)
+        if not cte_comp:
+            flash('CTe complementar nao encontrado.', 'warning')
+            return redirect(url_for('carvia.listar_ctes_complementares'))
+
+        from app.carvia.services.documentos.linking_service import LinkingService
+        try:
+            res = LinkingService().fechar_vinculo_cte_comp_fatura(cte_comp_id)
+            db.session.commit()
+        except Exception as e:
+            db.session.rollback()
+            logger.exception(
+                'Erro ao vincular CTe Comp %s a fatura', cte_comp_id
+            )
+            flash(f'Erro ao vincular a fatura: {e}', 'danger')
+            return redirect(url_for(
+                'carvia.detalhe_cte_complementar', cte_comp_id=cte_comp_id
+            ))
+
+        status = res.get('status')
+        if status == 'VINCULADO':
+            flash(
+                f"CTe vinculado a fatura #{res.get('fatura_id')} "
+                f"({res.get('items_atualizados')} item(ns) amarrado(s)).",
+                'success',
+            )
+        elif status == 'SKIP':
+            flash(
+                f"CTe ja vinculado a fatura #{res.get('fatura_id')}.", 'info'
+            )
+        elif status == 'SEM_FATURA':
+            flash(
+                'Nenhuma fatura pre-existente referencia este CTe. '
+                'Use "Nova Fatura" para fatura-lo.',
+                'warning',
+            )
+        elif status == 'MULTIPLAS_FATURAS':
+            flash(
+                f"CTe referenciado em multiplas faturas "
+                f"({res.get('fatura_ids')}) — investigacao manual.",
+                'warning',
+            )
+        elif status == 'SKIP_FATURA_BLOQUEADA':
+            flash(
+                f"Fatura bloqueada para amarracao: {res.get('motivo')}. "
+                'Reabra a conferencia / desconcilie antes (a amarracao '
+                'mudaria o valor da fatura).',
+                'warning',
+            )
+        else:
+            flash(
+                f"Nao foi possivel vincular: {res.get('motivo', status)}.",
+                'danger',
+            )
+        return redirect(url_for(
+            'carvia.detalhe_cte_complementar', cte_comp_id=cte_comp_id
+        ))

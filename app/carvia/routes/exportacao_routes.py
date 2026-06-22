@@ -1019,19 +1019,28 @@ def register_exportacao_routes(bp):
         concil_por_fat = _coletar_conciliacoes('fatura_cliente', fat_ids)
         max_concil = _max_len(concil_por_fat.values())
 
+        # Cliente exibido = TOMADOR do frete (SOT = cte_tomador do CTe pai),
+        # NAO o nome_cliente herdado (que aponta sempre para o emitente).
+        from app.carvia.utils.papeis_frete import (
+            batch_papeis_por_cte_complementar, tomador_como_cliente,
+        )
+        papeis_por_comp = batch_papeis_por_cte_complementar([c.id for c in items])
+
         linhas = []
         for c in items:
             op = operacoes.get(c.operacao_id)
             fatura = faturas.get(c.fatura_cliente_id)
             concils = concil_por_fat.get(fatura.id, []) if fatura else []
 
+            cliente_tom = tomador_como_cliente(papeis_por_comp.get(c.id))
+
             linha = {
                 # CTE COMP (entidade propria)
                 'comp_numero': c.numero_comp or '',
                 'comp_cte_numero': c.cte_numero or '',
                 'comp_ctrc': c.ctrc_numero or '',
-                'comp_cliente': c.nome_cliente or '',
-                'comp_cnpj_cliente': c.cnpj_cliente or '',
+                'comp_cliente': (cliente_tom.get('nome') if cliente_tom else None) or c.nome_cliente or '',
+                'comp_cnpj_cliente': (cliente_tom.get('cnpj') if cliente_tom else None) or c.cnpj_cliente or '',
                 'comp_valor': float(c.cte_valor or 0),
                 'comp_data': c.cte_data_emissao,
                 'comp_motivo': getattr(c, 'motivo', None) or getattr(c, 'observacoes', None) or '',

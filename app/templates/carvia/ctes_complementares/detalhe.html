@@ -114,10 +114,20 @@
                             <strong>{{ cte_comp.cte_data_emissao.strftime('%d/%m/%Y') if cte_comp.cte_data_emissao else '-' }}</strong>
                         </div>
                         <div class="col-12">
-                            <small class="text-muted d-block">Cliente</small>
+                            <small class="text-muted d-block">
+                                Cliente
+                                <em>(tomador do frete)</em>
+                            </small>
+                            {% if cliente_tomador and cliente_tomador.nome %}
+                            <strong>{{ cliente_tomador.nome }}</strong>
+                            {% if cliente_tomador.cnpj %}
+                            <div class="cnpj-col small text-muted">{{ cliente_tomador.cnpj }}</div>
+                            {% endif %}
+                            {% else %}
                             <strong>{{ cte_comp.nome_cliente or '-' }}</strong>
                             {% if cte_comp.cnpj_cliente %}
                             <div class="cnpj-col small text-muted">{{ cte_comp.cnpj_cliente }}</div>
+                            {% endif %}
                             {% endif %}
                         </div>
                         {% if cte_comp.cte_chave_acesso %}
@@ -188,6 +198,29 @@
                         <span class="text-muted small align-self-center">CTe cancelado.</span>
                         {% endif %}
                     </div>
+
+                    {# Vinculo a fatura pre-existente (XML importado depois da
+                       fatura). Aparece so quando ha fatura referenciando este
+                       CTe por um item ainda sem cte_complementar_id. #}
+                    {% if cte_comp.fatura_cliente_id is none and fatura_candidata and cte_comp.status != 'CANCELADO' %}
+                    <hr>
+                    <h6><i class="fas fa-link"></i> Vincular a fatura</h6>
+                    <p class="small text-muted mb-2">
+                        A fatura <strong>{{ fatura_candidata.numero_fatura }}</strong>
+                        ja referencia este CTe (importada do PDF antes do XML).
+                        Amarre o documento para fechar o vinculo
+                        {% if fatura_candidata.status in ('PAGA',) or fatura_candidata.status_conferencia == 'CONFERIDO' %}
+                        — permitido mesmo com a fatura {{ fatura_candidata.status|lower }} porque o valor nao muda.
+                        {% endif %}
+                    </p>
+                    <form method="POST" action="{{ url_for('carvia.vincular_fatura_cte_complementar', cte_comp_id=cte_comp.id) }}">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="btn btn-sm btn-primary"
+                                onclick="return confirm('Vincular este CTe a fatura {{ fatura_candidata.numero_fatura }}?')">
+                            <i class="fas fa-link"></i> Vincular a fatura {{ fatura_candidata.numero_fatura }}
+                        </button>
+                    </form>
+                    {% endif %}
                 </div>
             </div>
         </div>
