@@ -4,6 +4,8 @@
 {% set status_ativos = (filtro_args.get('status', '') or '').split(',') %}
 {# Toggle "Apenas Pendentes" — default ON; query string '?pendente=0' desliga #}
 {% set apenas_pendentes_ativo = filtro_args.get('pendente', '') != '0' %}
+{# Toggle "Apenas NF nao entregues" — default ON; query string '?nao_entregue=0' desliga #}
+{% set apenas_nao_entregues_ativo = filtro_args.get('nao_entregue', '') != '0' %}
 
 <div class="card mb-3">
     <div class="card-header py-2">
@@ -46,6 +48,16 @@
                     <label class="form-check-label" for="toggle-apenas-pendentes"
                            title="Quando ligado, exclui pedidos faturados, embarcados e com NF nao retornada ao CD. Reduz drasticamente o universo das consultas.">
                         <i class="fas fa-filter"></i> Apenas Pendentes
+                    </label>
+                </div>
+                <div class="form-check form-switch ps-0 m-0">
+                    <input class="form-check-input ms-0 me-2" type="checkbox" role="switch"
+                           id="toggle-apenas-nao-entregues"
+                           {{ 'checked' if apenas_nao_entregues_ativo }}
+                           data-param="nao_entregue" data-value-off="0">
+                    <label class="form-check-label" for="toggle-apenas-nao-entregues"
+                           title="Quando ligado, oculta pedidos cuja NF ja foi entregue. Desligue para incluir as NFs entregues.">
+                        <i class="fas fa-check-circle"></i> Apenas NF nao entregues
                     </label>
                 </div>
             </div>

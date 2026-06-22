@@ -47,6 +47,8 @@ def register_nf_routes(bp):
         mostrar_transferencias = request.args.get(
             'mostrar_transferencias', '0'
         ) == '1'
+        # Filtro "Apenas NF nao entregues" — default ON; '0' explicito desliga
+        apenas_nao_entregues = request.args.get('nao_entregue', '') != '0'
 
         # Subquery: contar CTes vinculados a cada NF
         subq_ctes = db.session.query(
@@ -68,6 +70,19 @@ def register_nf_routes(bp):
         else:
             # Padrao: apenas ATIVA
             query = query.filter(CarviaNf.status != 'CANCELADA')
+
+        # Filtro "Apenas NF nao entregues": exclui NFs cuja entrega (origem
+        # CARVIA) ja foi realizada. Match por numero_nf (chave da entrega).
+        # Lazy import R1-safe (CarVia nao depende de app/monitoramento).
+        if apenas_nao_entregues:
+            from app.monitoramento.models import EntregaMonitorada
+            entregues_nums = db.session.query(
+                EntregaMonitorada.numero_nf
+            ).filter(
+                EntregaMonitorada.entregue.is_(True),
+                EntregaMonitorada.origem == 'CARVIA',
+            )
+            query = query.filter(CarviaNf.numero_nf.notin_(entregues_nums))
 
         if tipo_filtro:
             query = query.filter(CarviaNf.tipo_fonte == tipo_filtro)
@@ -332,6 +347,80 @@ def register_nf_routes(bp):
             'nf', [nf.id for nf, _ in paginacao.items]
         )
 
+        # Batch: status de entrega/coleta/recebimento/embarque por NF (badges)
+        # Todos lazy (R1) — CarVia nao depende de monitoramento/embarques.
+        entregue_por_nf = {}        # nf_id -> data_hora_entrega_realizada
+        coleta_receb_por_nf = {}    # nf_id -> {'coletado_em', 'recebido_em'}
+        embarque_por_nf = {}        # nf_id -> {'id', 'numero'}
+        if nf_ids:
+            # 1) Entregue (EntregaMonitorada origem CARVIA, match por numero_nf)
+            numeros_nf = {nf.numero_nf for nf, _ in paginacao.items if nf.numero_nf}
+            if numeros_nf:
+                from app.monitoramento.models import EntregaMonitorada
+                rows_ent = db.session.query(
+                    EntregaMonitorada.numero_nf,
+                    EntregaMonitorada.data_hora_entrega_realizada,
+                ).filter(
+                    EntregaMonitorada.numero_nf.in_(list(numeros_nf)),
+                    EntregaMonitorada.entregue.is_(True),
+                    EntregaMonitorada.origem == 'CARVIA',
+                ).all()
+                ent_por_numero = {}
+                for num, dt in rows_ent:
+                    atual = ent_por_numero.get(num)
+                    if num not in ent_por_numero or (
+                        dt is not None and (atual is None or dt > atual)
+                    ):
+                        ent_por_numero[num] = dt
+                for nf, _ in paginacao.items:
+                    if nf.numero_nf in ent_por_numero:
+                        entregue_por_nf[nf.id] = ent_por_numero[nf.numero_nf]
+
+            # 2) Coleta + Recebimento (CarVia nativos; carvia_nf_id e UNIQUE)
+            from app.carvia.models import (
+                CarviaColeta, CarviaColetaNf, CarviaColetaRecebimento,
+            )
+            rows_col = db.session.query(
+                CarviaColetaNf.carvia_nf_id,
+                CarviaColeta.data_coletada_em,
+                CarviaColetaRecebimento.status,
+                CarviaColetaRecebimento.concluido_em,
+            ).join(
+                CarviaColeta, CarviaColeta.id == CarviaColetaNf.coleta_id
+            ).outerjoin(
+                CarviaColetaRecebimento,
+                CarviaColetaRecebimento.coleta_id == CarviaColeta.id,
+            ).filter(
+                CarviaColetaNf.carvia_nf_id.in_(nf_ids),
+            ).all()
+            for cnf_id, col_em, rec_status, rec_concl in rows_col:
+                if cnf_id not in coleta_receb_por_nf:
+                    coleta_receb_por_nf[cnf_id] = {
+                        'coletado_em': col_em,
+                        'recebido_em': rec_concl if rec_status == 'CONCLUIDO' else None,
+                    }
+
+            # 3) Embarque (NF -> operacao -> CarviaFrete -> Embarque)
+            from app.carvia.models import CarviaFrete
+            from app.embarques.models import Embarque
+            rows_emb = db.session.query(
+                CarviaOperacaoNf.nf_id,
+                Embarque.id,
+                Embarque.numero,
+            ).join(
+                CarviaFrete,
+                CarviaFrete.operacao_id == CarviaOperacaoNf.operacao_id,
+            ).join(
+                Embarque, Embarque.id == CarviaFrete.embarque_id
+            ).filter(
+                CarviaOperacaoNf.nf_id.in_(nf_ids),
+                CarviaFrete.status != 'CANCELADO',
+                CarviaFrete.embarque_id.isnot(None),
+            ).all()
+            for nf_id_e, emb_id, emb_num in rows_emb:
+                if nf_id_e not in embarque_por_nf:
+                    embarque_por_nf[nf_id_e] = {'id': emb_id, 'numero': emb_num}
+
         return render_template(
             'carvia/nfs/listar.html',
             nfs=paginacao.items,
@@ -357,6 +446,10 @@ def register_nf_routes(bp):
             mostrar_transferencias=mostrar_transferencias,
             ids_transf_efetivas=ids_transf_efetivas,
             num_nf_transf_por_venda=num_nf_transf_por_venda,
+            apenas_nao_entregues=apenas_nao_entregues,
+            entregue_por_nf=entregue_por_nf,
+            coleta_receb_por_nf=coleta_receb_por_nf,
+            embarque_por_nf=embarque_por_nf,
         )
 
     # ==================== HELPER: ÚLTIMOS FRETES ====================
@@ -615,6 +708,54 @@ def register_nf_routes(bp):
         )
         comprovantes_nf = CarviaComprovanteService.listar('nf', nf.id)
 
+        # Status de coleta/recebimento/embarque/entrega (badges) — todos lazy (R1)
+        # Entregue: EntregaMonitorada origem CARVIA (match por numero_nf).
+        # nf_entregue (bool) alinha o badge ao mesmo criterio do filtro
+        # (entregue=True), mesmo que a data esteja ausente.
+        entrega_data = None
+        nf_entregue = False
+        if nf.numero_nf:
+            from app.monitoramento.models import EntregaMonitorada
+            em = (
+                EntregaMonitorada.query
+                .filter(
+                    EntregaMonitorada.numero_nf == nf.numero_nf,
+                    EntregaMonitorada.entregue.is_(True),
+                    EntregaMonitorada.origem == 'CARVIA',
+                )
+                .order_by(
+                    EntregaMonitorada.data_hora_entrega_realizada.desc().nullslast()
+                )
+                .first()
+            )
+            if em:
+                nf_entregue = True
+                entrega_data = em.data_hora_entrega_realizada
+
+        # Coleta + Recebimento (CarVia nativos; carvia_nf_id e UNIQUE → 0/1 linha)
+        from app.carvia.models import CarviaColetaNf, CarviaColeta
+        coleta_data = None
+        recebimento_data = None
+        col_nf = (
+            CarviaColetaNf.query
+            .filter(CarviaColetaNf.carvia_nf_id == nf.id)
+            .first()
+        )
+        if col_nf:
+            coleta = db.session.get(CarviaColeta, col_nf.coleta_id)
+            if coleta:
+                coleta_data = coleta.data_coletada_em
+                rec = getattr(coleta, 'recebimento', None)
+                if rec and rec.status == 'CONCLUIDO':
+                    recebimento_data = rec.concluido_em
+
+        # Embarque vinculado (primeiro frete com embarque)
+        embarque_nf = None
+        for f in fretes_nf:
+            if getattr(f, 'embarque_id', None) and f.embarque is not None:
+                embarque_nf = {'id': f.embarque.id, 'numero': f.embarque.numero}
+                break
+
         return render_template(
             'carvia/nfs/detalhe.html',
             nf=nf,
@@ -648,6 +789,11 @@ def register_nf_routes(bp):
             eh_candidata_transf=eh_candidata_transf,
             vinculo_transf_obj=vinculo_transf_obj,
             ultima_emissao_ssw=ultima_emissao_ssw,
+            entrega_data=entrega_data,
+            nf_entregue=nf_entregue,
+            coleta_data=coleta_data,
+            recebimento_data=recebimento_data,
+            embarque_nf=embarque_nf,
         )
 
     # ==================== CRIAR CTE VIA NF ====================

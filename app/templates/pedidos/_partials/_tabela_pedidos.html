@@ -341,6 +341,9 @@
                   {% else %}
                     <br><small class="text-muted">Sem data</small>
                   {% endif %}
+                  {% if p.entregue %}
+                    <br><span class="badge bg-success" title="NF entregue{% if p.data_entrega %} em {{ p.data_entrega|formatar_data('%d/%m/%Y') }}{% endif %}"><i class="fas fa-check-circle"></i> Entregue</span>
+                  {% endif %}
                 </td>
                 
                 <td>

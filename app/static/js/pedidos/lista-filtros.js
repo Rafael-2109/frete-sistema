@@ -35,8 +35,8 @@
     };
 
     // Params que nao geram chips (controle interno)
-    // 'pendente' tem chip proprio so quando OFF (estado nao-default)
-    var SKIP_CHIP_PARAMS = ['page', 'sort_by', 'sort_order', 'origem', 'pendente'];
+    // 'pendente'/'nao_entregue' tem chip proprio so quando OFF (estado nao-default)
+    var SKIP_CHIP_PARAMS = ['page', 'sort_by', 'sort_order', 'origem', 'pendente', 'nao_entregue'];
 
     // localStorage: lembra preferencia do toggle "Apenas Pendentes"
     var LS_KEY_PENDENTE = 'pedidos:apenasPendentes';
@@ -185,6 +185,14 @@
             html += '<span class="pedidos-chip pedidos-chip--info" title="Mostrando todos os pedidos, inclusive faturados/embarcados antigos">' +
                 '<i class="fas fa-globe"></i> Universo: Tudo' +
                 ' <span class="pedidos-chip__remove" data-action="reset-pendente">&times;</span></span>';
+            hasChips = true;
+        }
+
+        // Chip especial: "Inclui entregues" quando o toggle Apenas NF nao entregues esta OFF
+        if (params.get('nao_entregue') === '0') {
+            html += '<span class="pedidos-chip pedidos-chip--info" title="Mostrando tambem as NFs ja entregues">' +
+                '<i class="fas fa-check-circle"></i> Inclui entregues' +
+                ' <span class="pedidos-chip__remove" data-action="reset-nao-entregue">&times;</span></span>';
             hasChips = true;
         }
 
@@ -349,6 +357,12 @@
                     navegarComFiltros({ pendente: null });
                     return;
                 }
+                // Reset toggle nao_entregue: voltar ao default ON
+                var resetNaoEntBtn = e.target.closest('[data-action="reset-nao-entregue"]');
+                if (resetNaoEntBtn) {
+                    navegarComFiltros({ nao_entregue: null });
+                    return;
+                }
                 var removeBtn = e.target.closest('.pedidos-chip__remove');
                 if (removeBtn) {
                     onChipRemove(removeBtn);
@@ -407,10 +421,21 @@
             }
         }
 
-        // Persistir origem e pendente nos links da pagina (paginacao, sort, etc.)
+        // Toggle "Apenas NF nao entregues" — default ON; sem persistencia em
+        // localStorage (URL limpa sempre volta a ON, honrando o default).
+        var toggleNaoEntregue = document.getElementById('toggle-apenas-nao-entregues');
+        if (toggleNaoEntregue) {
+            toggleNaoEntregue.addEventListener('change', function () {
+                // ON = remove o param (default ON); OFF = nao_entregue=0
+                navegarComFiltros({ nao_entregue: this.checked ? null : '0' });
+            });
+        }
+
+        // Persistir origem, pendente e nao_entregue nos links da pagina (paginacao, sort, etc.)
         var currentOrigem = new URLSearchParams(window.location.search).get('origem');
         var currentPendente = new URLSearchParams(window.location.search).get('pendente');
-        if (currentOrigem || currentPendente !== null) {
+        var currentNaoEntregue = new URLSearchParams(window.location.search).get('nao_entregue');
+        if (currentOrigem || currentPendente !== null || currentNaoEntregue !== null) {
             document.querySelectorAll('a[href]').forEach(function (link) {
                 var hrefAttr = link.getAttribute('href') || '';
                 if (!hrefAttr || hrefAttr.startsWith('#') || hrefAttr.startsWith('javascript:')) return;
@@ -419,6 +444,7 @@
                     if (linkUrl.pathname !== window.location.pathname) return;
                     if (currentOrigem) linkUrl.searchParams.set('origem', currentOrigem);
                     if (currentPendente !== null) linkUrl.searchParams.set('pendente', currentPendente);
+                    if (currentNaoEntregue !== null) linkUrl.searchParams.set('nao_entregue', currentNaoEntregue);
                     link.href = linkUrl.toString();
                 } catch (e) { /* ignora URLs invalidas */ }
             });

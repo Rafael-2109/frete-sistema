@@ -105,6 +105,11 @@ class ListaPedidosService:
         # '0' explicito desliga; qualquer outra coisa (inclusive ausente) fica ON
         apenas_pendentes = pendente_raw != '0'
 
+        # Toggle "Apenas NF nao entregues" — pre-filtra universo (default ON)
+        # '0' explicito desliga; ausente/qualquer outra coisa fica ON
+        nao_entregue_raw = (args.get('nao_entregue', '') or '').strip()
+        apenas_nao_entregues = nao_entregue_raw != '0'
+
         return {
             'status_list': status_list,
             'active_conds': active_conds,
@@ -112,6 +117,7 @@ class ListaPedidosService:
             'refinements': refinements,
             'origem': origem,
             'apenas_pendentes': apenas_pendentes,
+            'apenas_nao_entregues': apenas_nao_entregues,
         }
 
     # ---------------------------------------------------------------
@@ -171,6 +177,31 @@ class ListaPedidosService:
             Svc = ListaPedidosService
             query = query.filter(Svc._apenas_pendentes_filter(model))
         return query
+
+    @staticmethod
+    def _apply_apenas_nao_entregues(query, apenas_nao_entregues, model=None):
+        """Aplica pre-filtro 'Apenas NF nao entregues' quando ativo.
+
+        Exclui pedidos cuja NF ja foi entregue (EntregaMonitorada.entregue).
+        Match por numero_nf (chave canonica da entrega). Pedido sem NF
+        (nf NULL/'') passa — nao ha entrega registrada. Ortogonal ao
+        'Apenas Pendentes' (que ja exclui finalizados por NF + embarque).
+        """
+        if not apenas_nao_entregues:
+            return query
+        if model is None:
+            model = Pedido
+        from app.monitoramento.models import EntregaMonitorada
+        entregue_exists = (
+            db.session.query(EntregaMonitorada.id)
+            .filter(
+                EntregaMonitorada.numero_nf == model.nf,
+                EntregaMonitorada.entregue.is_(True),
+            )
+            .correlate(model)
+            .exists()
+        )
+        return query.filter(~entregue_exists)
 
     @staticmethod
     def _apply_statuses(query, status_list, carvia_sets=None):
@@ -268,6 +299,7 @@ class ListaPedidosService:
         p = Svc._parse_filter_params(args)
         carvia_sets = Svc._carvia_lotes_por_status()
         query = Svc._apply_apenas_pendentes(query, p['apenas_pendentes'])
+        query = Svc._apply_apenas_nao_entregues(query, p['apenas_nao_entregues'])
         query = Svc._apply_origem(query, p['origem'])
         query = Svc._apply_statuses(query, p['status_list'], carvia_sets)
         query = Svc._apply_conditions(query, p['active_conds'], hoje,
@@ -304,6 +336,7 @@ class ListaPedidosService:
         # --- STATUS COUNTS: base = pendente + origem + refinements + dates + conditions ---
         q_s = Pedido.query
         q_s = Svc._apply_apenas_pendentes(q_s, p['apenas_pendentes'])
+        q_s = Svc._apply_apenas_nao_entregues(q_s, p['apenas_nao_entregues'])
         q_s = Svc._apply_origem(q_s, p['origem'])
         q_s = Svc._apply_refinements(q_s, p['refinements'])
         q_s = Svc._apply_date_range(q_s, p['dates'])
@@ -328,6 +361,7 @@ class ListaPedidosService:
         # --- CONDITION COUNTS: base = pendente + origem + refinements + dates + statuses ---
         q_c = Pedido.query
         q_c = Svc._apply_apenas_pendentes(q_c, p['apenas_pendentes'])
+        q_c = Svc._apply_apenas_nao_entregues(q_c, p['apenas_nao_entregues'])
         q_c = Svc._apply_origem(q_c, p['origem'])
         q_c = Svc._apply_refinements(q_c, p['refinements'])
         q_c = Svc._apply_date_range(q_c, p['dates'])
@@ -345,6 +379,7 @@ class ListaPedidosService:
         # --- DATE COUNTS: base = pendente + origem + refinements + statuses + conditions (sem datas) ---
         q_d = Pedido.query
         q_d = Svc._apply_apenas_pendentes(q_d, p['apenas_pendentes'])
+        q_d = Svc._apply_apenas_nao_entregues(q_d, p['apenas_nao_entregues'])
         q_d = Svc._apply_origem(q_d, p['origem'])
         q_d = Svc._apply_refinements(q_d, p['refinements'])
         q_d = Svc._apply_statuses(q_d, p['status_list'], carvia_sets)
@@ -1108,6 +1143,37 @@ class ListaPedidosService:
         for pedido in pedidos:
             pedido.ultimo_embarque = embarques_por_lote.get(pedido.separacao_lote_id)
             pedido.contato_agendamento = contatos_por_cnpj.get(pedido.cnpj_cpf)
+
+        # --- Status de entrega (badge "Entregue") ---
+        # Match por numero_nf (chave canonica). Guarda a entrega mais recente
+        # quando ha mais de um registro para o mesmo numero (reemissao).
+        nfs_pedidos = list({p.nf for p in pedidos if getattr(p, 'nf', None)})
+        entregue_por_nf = {}
+        if nfs_pedidos:
+            from app.monitoramento.models import EntregaMonitorada
+            rows_ent = (
+                db.session.query(
+                    EntregaMonitorada.numero_nf,
+                    EntregaMonitorada.data_hora_entrega_realizada,
+                )
+                .filter(
+                    EntregaMonitorada.numero_nf.in_(nfs_pedidos),
+                    EntregaMonitorada.entregue.is_(True),
+                )
+                .all()
+            )
+            for num, dt in rows_ent:
+                atual = entregue_por_nf.get(num, (False, None))
+                # Prefere registro com data mais recente (None perde para data)
+                if num not in entregue_por_nf or (
+                    dt is not None and (atual[1] is None or dt > atual[1])
+                ):
+                    entregue_por_nf[num] = (True, dt)
+        for pedido in pedidos:
+            num = getattr(pedido, 'nf', None)
+            entregue, data_ent = entregue_por_nf.get(num, (False, None))
+            pedido.entregue = entregue
+            pedido.data_entrega = data_ent
 
         # --- Batch-load hora_saida da portaria (P12, 2026-04-24) ---
         # Alimenta `_hora_saida_portaria` usado pela property `badge_embarcado`

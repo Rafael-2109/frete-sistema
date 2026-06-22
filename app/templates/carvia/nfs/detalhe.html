@@ -33,6 +33,11 @@
                     <i class="fas fa-clock"></i> Fatura Pendente
                 </span>
                 {% endif %}
+                {% if nf_entregue %}
+                <span class="badge bg-success" title="Entrega realizada ao cliente final">
+                    <i class="fas fa-flag-checkered"></i> Entregue{% if entrega_data %} {{ entrega_data.strftime('%d/%m/%Y') }}{% endif %}
+                </span>
+                {% endif %}
                 {# NF Triangular: badges de transferencia #}
                 {% if eh_transf_efetiva %}
                 {{ badge_nf_transferencia(nf.numero_nf, nf.id, size='lg') }}
@@ -315,6 +320,33 @@
                             <small class="text-muted d-block">Volumes</small>
                             <strong>{{ nf.quantidade_volumes or '-' }}</strong>
                         </div>
+                    </div>
+                    <hr>
+                    <small class="text-muted d-block mb-1">Rastreamento</small>
+                    <div class="d-flex flex-wrap gap-2 align-items-center">
+                        {% if recebimento_data %}
+                        <span class="badge bg-success" title="Recebido na matriz">
+                            <i class="fas fa-clipboard-check"></i> Recebido {{ recebimento_data.strftime('%d/%m/%Y') }}
+                        </span>
+                        {% elif coleta_data %}
+                        <span class="badge bg-warning text-dark" title="Coletado no remetente">
+                            <i class="fas fa-truck-loading"></i> Coletado {{ coleta_data.strftime('%d/%m/%Y') }}
+                        </span>
+                        {% endif %}
+                        {% if embarque_nf %}
+                        <a href="{{ url_for('embarques.visualizar_embarque', id=embarque_nf.id) }}"
+                           class="badge bg-primary text-decoration-none" title="Ver embarque #{{ embarque_nf.numero }}">
+                            <i class="fas fa-dolly"></i> Emb. {{ embarque_nf.numero }}
+                        </a>
+                        {% endif %}
+                        {% if nf_entregue %}
+                        <span class="badge bg-success" title="Entrega ao cliente final">
+                            <i class="fas fa-flag-checkered"></i> Entregue{% if entrega_data %} {{ entrega_data.strftime('%d/%m/%Y') }}{% endif %}
+                        </span>
+                        {% endif %}
+                        {% if not recebimento_data and not coleta_data and not embarque_nf and not nf_entregue %}
+                        <small class="text-muted">Sem coleta/embarque/entrega registrados</small>
+                        {% endif %}
                     </div>
                 </div>
             </div>
