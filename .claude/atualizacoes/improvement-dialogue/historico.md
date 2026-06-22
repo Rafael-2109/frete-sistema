@@ -48,6 +48,34 @@ Indice de execucoes do dialogo de melhoria Agent SDK <-> Claude Code.
 | 42 | 2026-06-19 | 5 | 2 | 1 | 2 | OK (cluster Motos Assai backfill 1.394 chassis, Rayssa id 78: 1 mudanca atomica auto-impl `emitir_evento(ocorrido_em=...)` destrava o gargalo de 2 sugestoes, +2 TDD 7 passed; IMP-002 proposta cancelamento-por-loja (migration+model+service); IMP-19-003 proposta observacao-defeito no FATURADA (cruza routes/forms); IMP-19-002 REJEITADA over-engineering one-shot ja resolvido por script idempotente; FATURADA-sem-lastro rejeitada por invariante. 4 F2 listadas: adhoc 1385/1433 (Martha, ja estudadas 18/06), adhoc-1070 (Talita id 17), skill-gap-lendo-arquivos (Rayssa)) |
 | 43 | 2026-06-20 | 10 | 6 | 1 | 3 | OK (backlog = 1 sessao Motos Assai `7009f2e2` Rayssa id 78 + 1 CarVia Talita id 17. 6 auto-impl: guard de dominio Motos Assai no fast-path NF×PO — chassi != PO, 3 TDD/20 passed; aviso de anexos perdidos na rotacao de sessao — hooks resume_notice, CRITICAL; metodo `reprocessar_itens_fatura_transportadora_por_subcontrato` CarVia — linking_service, wiring na rota proposta; handoff INLINE subagente — CLAUDE.md+SUBAGENT_RELIABILITY; A7 validar chassi por skill+fonte — gestor-motos-assai. IMP-20-004 REJEITADA: gestor-devolucoes e dominio Nacom, nao Q.P.A. (NFd usa assai_devolucao_nfd*). 3 propostas: S3 upload (route), gap NFD em corrigindo-dados-assai; IMP-19-005/010 reconciliadas — ja cobertas por `corrigindo-dados-assai` commit 91e53fd89. 10/10 persistidos HTTP 200) |
 | 44 | 2026-06-21 | 2 | 2 | 0 | 0 | OK (2 auto-impl documentais + 3 F2 listadas. IMP-20-005 gotcha subagente (Rayssa id 78): causa "filesystem isolado" REFUTADA — /tmp e compartilhado; falha real = contexto/uploads nao herdados + TMPDIR divergente; add variante UPLOADS no M1 SUBAGENT_RELIABILITY, complementa handoff INLINE do #43. IMP-19-006 skill_bug em rastreando-odoo (TAMIRIS id 44) IMPROCEDENTE: skill e read-only, reclassificacao foi 100% ad-hoc (agent_adhoc_script ids 2260-2271, decisao #163 rejeitou virar skill); matriz 2.1.1 codigo-correto+ad-hoc-presente; finalidade endereçada — instrumentar write ad-hoc com modos monitorar-andamento/validar-lote (contador real, NAO heuristica de log) em auditando-reclassificacao-odoo. F2: adhoc-1070 Talita id 17, skill-gap-lendo-arquivos Rayssa id 78, adhoc-1161 TAMIRIS id 44 (contraparte executora do #163). v2 ids 246-247 HTTP 200) |
+| 45 | 2026-06-22 | 0 | 0 | 0 | 0 | SKIP (backlog 100% F2 — gate humano; nenhuma avaliavel pelo D8. 3 F2 reincidentes do #44, todas `version=1` sem v2: `adhoc-cluster-1070` (gerar embarque+fretes, 23 membros, Talita id 17, 4d), `skill-gap-lendo-arquivos` (analise exploratoria planilhas, 2 membros, Rayssa id 78, 3d), `adhoc-cluster-1161` (reclassificacao lote AML, 64 membros, TAMIRIS id 44, 2d — contraparte executora #163). Nada decidido/persistido; so relatorio+historico commitados, sem push) |
+
+## 2026-06-22
+
+**3 sugestoes pendentes** no backlog — **todas F2** (`adhoc-`/`skill-gap-`, gate humano).
+**Zero avaliaveis pelo D8.** Sao as **mesmas 3** ja listadas ontem (#44): as 2 avaliaveis
+de ontem (IMP-2026-06-20-005, IMP-2026-06-19-006) viraram `version=2` e saíram do backlog;
+restaram so' estas 3 F2 em `version=1` sem v2, aguardando `revisar_sugestoes_skill.py listar`.
+
+**F2 listadas (gate humano Rafael+CC — NAO decididas, NAO persistidas):**
+- `adhoc-cluster-1070` (skill_suggestion, info — **Talita id 17**, 23 membros, 4 dias):
+  gerar Embarque programaticamente + `processar_lancamento_automatico_fretes` em sequencia
+  (gap em `gerindo-expedicao`). Liga ao IMP-2026-06-16-003 do #40 (proposta, toca
+  `app/embarques/routes.py`) e ao falso-positivo IMP-2026-06-12-003 do #43 (embarque
+  ficticio ad-hoc; worktree `feat/redespacho-multi-perna` resolve na raiz).
+- `skill-gap-lendo-arquivos-…` (skill_suggestion, info — **Rayssa id 78**, 2 membros, 3 dias):
+  analise exploratoria sobre DataFrame (distribuicao categorica, completude, regras
+  condicionais, relatorio de qualidade) estendendo `lendo-arquivos`. Baixa frequencia (2).
+- `adhoc-cluster-1161` (skill_suggestion, info — **TAMIRIS id 44**, 64 membros, 2 dias):
+  reclassificacao em lote de AMLs origem→destino. **Contraparte executora da decisao #163**
+  (ja analisada no #44, matriz 2.1.1: write 100% ad-hoc `agent_adhoc_script` 2260-2271,
+  virar skill executora foi rejeitado; salvaguarda `monitorar-andamento`/`validar-lote` ja
+  codificada em `auditando-reclassificacao-odoo`). 64 membros = reincide com forca; reabrir
+  a decisao e' do Rafael.
+
+**Resultado**: 0 avaliadas, 0 implementadas, 0 rejeitadas, 0 propostas. Nenhuma persistencia
+(F2 nao gera version=2). Nenhum arquivo core nem codigo de producao tocado. So' relatorio +
+historico, commitados em `cron/manutencao` sem push. Relatorio: `dialogue-2026-06-22.md`.
 
 ## 2026-06-21
 
