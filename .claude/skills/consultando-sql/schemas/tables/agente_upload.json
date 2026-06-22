@@ -1,0 +1,104 @@
+{
+  "name": "agente_upload",
+  "description": "Manifesto de uploads do chat persistidos no S3 (IMP-2026-06-19-007).",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "user_id",
+      "type": "integer",
+      "nullable": false
+    },
+    {
+      "name": "session_id",
+      "type": "varchar(64)",
+      "nullable": false
+    },
+    {
+      "name": "file_id",
+      "type": "varchar(16)",
+      "nullable": false
+    },
+    {
+      "name": "original_name",
+      "type": "varchar(255)",
+      "nullable": false
+    },
+    {
+      "name": "safe_name",
+      "type": "varchar(280)",
+      "nullable": false
+    },
+    {
+      "name": "s3_key",
+      "type": "varchar(512)",
+      "nullable": false
+    },
+    {
+      "name": "file_type",
+      "type": "varchar(20)"
+    },
+    {
+      "name": "size_bytes",
+      "type": "integer",
+      "nullable": false,
+      "default": 0
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação",
+      "nullable": false
+    },
+    {
+      "name": "expira_em",
+      "type": "timestamp"
+    },
+    {
+      "name": "ativo",
+      "type": "boolean",
+      "description": "True = registro ativo",
+      "nullable": false,
+      "default": true
+    }
+  ],
+  "unique_constraints": [
+    [
+      "user_id",
+      "safe_name"
+    ]
+  ],
+  "indices": [
+    {
+      "name": "ix_agente_upload_ativo",
+      "columns": [
+        "ativo"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_agente_upload_expira_em",
+      "columns": [
+        "expira_em"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_agente_upload_session_id",
+      "columns": [
+        "session_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_agente_upload_user_id",
+      "columns": [
+        "user_id"
+      ],
+      "unique": false
+    }
+  ]
+}

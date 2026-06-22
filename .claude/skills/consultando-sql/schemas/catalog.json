@@ -105,7 +105,7 @@
     "vinculacao_carteira_separacao",
     "webhook_configs"
   ],
-  "total_tabelas": 330,
+  "total_tabelas": 331,
   "tabelas": [
     {
       "name": "agendamentos_entrega",
@@ -235,6 +235,16 @@
         "user_id",
         "session_id",
         "status"
+      ],
+      "dominio": "Agente"
+    },
+    {
+      "name": "agente_upload",
+      "description": "Manifesto de uploads do chat persistidos no S3 (IMP-2026-06-19-007).",
+      "key_fields": [
+        "user_id",
+        "session_id",
+        "file_id"
       ],
       "dominio": "Agente"
     },
