@@ -1114,6 +1114,7 @@ def register_exportacao_routes(bp):
         tipo_filtro = request.args.get('tipo', '')
         status_filtro = request.args.get('status', '')
         busca = request.args.get('busca', '')
+        nf_filtro = request.args.get('nf', '')
         sort = request.args.get('sort', 'criado_em')
         direction = request.args.get('direction', 'desc')
 
@@ -1135,6 +1136,16 @@ def register_exportacao_routes(bp):
                     CarviaCustoEntrega.observacoes.ilike(busca_like),
                 )
             )
+        if nf_filtro:
+            from app.carvia.models import CarviaOperacaoNf, CarviaNf
+            sub_op_nf = db.session.query(
+                CarviaOperacaoNf.operacao_id
+            ).join(
+                CarviaNf, CarviaNf.id == CarviaOperacaoNf.nf_id
+            ).filter(
+                CarviaNf.numero_nf.ilike(f'%{nf_filtro}%')
+            ).distinct()
+            query = query.filter(CarviaCustoEntrega.operacao_id.in_(sub_op_nf))
 
         sortable_columns = {
             'numero_custo': CarviaCustoEntrega.numero_custo,

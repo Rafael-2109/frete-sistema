@@ -323,6 +323,98 @@ def batch_papeis_por_fatura_transportadora(fatura_ids):
     return resultado
 
 
+def batch_papeis_por_operacao(operacao_ids):
+    """Batch papeis (emit/dest/tomador) por operacao -> primeira NF.
+
+    Espelha batch_papeis_por_cte_complementar, mas chaveado por operacao_id.
+    Usado por listagens que mostram o tomador a partir da operacao (ex.: Custos
+    de Entrega).
+    """
+    from app.carvia.models import CarviaNf, CarviaOperacao, CarviaOperacaoNf
+
+    operacao_ids = list(operacao_ids or [])
+    if not operacao_ids:
+        return {}
+
+    rows = db.session.query(
+        CarviaOperacao.id,
+        CarviaOperacao.cte_tomador,
+        CarviaNf.nome_emitente, CarviaNf.cnpj_emitente,
+        CarviaNf.cidade_emitente, CarviaNf.uf_emitente,
+        CarviaNf.nome_destinatario, CarviaNf.cnpj_destinatario,
+        CarviaNf.cidade_destinatario, CarviaNf.uf_destinatario,
+    ).join(
+        CarviaOperacaoNf, CarviaOperacaoNf.operacao_id == CarviaOperacao.id
+    ).join(
+        CarviaNf, CarviaNf.id == CarviaOperacaoNf.nf_id
+    ).filter(
+        CarviaOperacao.id.in_(operacao_ids)
+    ).order_by(
+        CarviaOperacao.id,
+        CarviaNf.id,
+    ).all()
+
+    resultado = {}
+    for row in rows:
+        (oid, cte_tom,
+         emit_nome, emit_cnpj, emit_cidade, emit_uf,
+         dest_nome, dest_cnpj, dest_cidade, dest_uf) = row
+        if oid in resultado:
+            existente = resultado[oid]
+            if existente['tomador'] is None and cte_tom:
+                existente['tomador'] = resolver_tomador(cte_tom)
+            continue
+        emit, dest = _row_to_papel(
+            emit_nome, emit_cnpj, emit_cidade, emit_uf,
+            dest_nome, dest_cnpj, dest_cidade, dest_uf,
+        )
+        resultado[oid] = {
+            'emit': emit, 'dest': dest,
+            'tomador': resolver_tomador(cte_tom),
+            'origem': 'operacao',
+        }
+    return resultado
+
+
+def batch_nfs_por_operacao(operacao_ids, apenas_ativas=True):
+    """Batch das NFs (numero_nf) vinculadas a cada operacao.
+
+    Retorna {operacao_id: [{'id', 'numero_nf'}, ...]} deduplicado por
+    numero_nf (R1: reemissao gera 2 registros com o mesmo numero — 1 CANCELADA
+    + 1 ATIVA). Por padrao filtra `status='ATIVA'`.
+    """
+    from app.carvia.models import CarviaNf, CarviaOperacaoNf
+
+    operacao_ids = list(operacao_ids or [])
+    if not operacao_ids:
+        return {}
+
+    q = db.session.query(
+        CarviaOperacaoNf.operacao_id,
+        CarviaNf.id,
+        CarviaNf.numero_nf,
+    ).join(
+        CarviaNf, CarviaNf.id == CarviaOperacaoNf.nf_id
+    ).filter(
+        CarviaOperacaoNf.operacao_id.in_(operacao_ids)
+    )
+    if apenas_ativas:
+        q = q.filter(CarviaNf.status == 'ATIVA')
+    q = q.order_by(CarviaOperacaoNf.operacao_id, CarviaNf.id)
+
+    resultado = {}
+    vistos = set()
+    for op_id, nf_id, numero_nf in q.all():
+        chave = (op_id, numero_nf)
+        if chave in vistos:
+            continue
+        vistos.add(chave)
+        resultado.setdefault(op_id, []).append(
+            {'id': nf_id, 'numero_nf': numero_nf}
+        )
+    return resultado
+
+
 def batch_papeis_por_cte_complementar(cte_comp_ids):
     """Batch papeis para CTes Complementares via operacao pai -> NFs."""
     from app.carvia.models import (

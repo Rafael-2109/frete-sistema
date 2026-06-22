@@ -114,9 +114,10 @@ class CarviaCustoEntrega(db.Model):
     - fatura_transportadora_id FK nullable (equivalente a DespesaExtra.fatura_frete_id)
     - Fluxo: criar sem fatura -> vincular fatura manualmente depois -> propagacao PAGO via FT
 
-    STATUS:
-    - PENDENTE: criado, sem fatura vinculada
-    - VINCULADO_FT: vinculado a CarviaFaturaTransportadora, sera pago junto
+    STATUS (PENDENTE/PAGO/CANCELADO — 2026-06-22: status VINCULADO_FT removido):
+    - PENDENTE: aguardando pagamento. O vinculo a uma FaturaTransportadora NAO e
+      mais um status — e indicado pela FK `fatura_transportadora_id IS NOT NULL`
+      (CE PENDENTE com FK = sera pago junto da FT).
     - PAGO: pago (via propagacao automatica da FT ou conciliacao direta)
     - CANCELADO: cancelado
     """
@@ -131,7 +132,7 @@ class CarviaCustoEntrega(db.Model):
         'OUTROS',
     ]
 
-    STATUS_CHOICES = ['PENDENTE', 'VINCULADO_FT', 'PAGO', 'CANCELADO']
+    STATUS_CHOICES = ['PENDENTE', 'PAGO', 'CANCELADO']
 
     id = db.Column(db.Integer, primary_key=True)
     numero_custo = db.Column(db.String(20), nullable=False, index=True)
@@ -292,7 +293,6 @@ class CarviaCustoEntrega(db.Model):
         """Retorna descricao amigavel do status (xerox DespesaExtra)."""
         descricoes = {
             'PENDENTE': 'Pendente',
-            'VINCULADO_FT': 'Vinculada a Fatura',
             'PAGO': 'Paga',
             'CANCELADO': 'Cancelada',
         }

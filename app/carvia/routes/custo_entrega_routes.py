@@ -29,7 +29,7 @@ TIPOS_CUSTO = [
     'GNRE_ICMS',
     'OUTROS',
 ]
-STATUS_CUSTO = ['PENDENTE', 'VINCULADO_FT', 'PAGO', 'CANCELADO']
+STATUS_CUSTO = ['PENDENTE', 'PAGO', 'CANCELADO']
 
 # C3 (2026-04-19): politicas centralizadas em upload_policies.py
 from app.carvia.utils.upload_policies import (  # noqa: E402
@@ -78,6 +78,7 @@ def register_custo_entrega_routes(bp):
         tipo_filtro = request.args.get('tipo', '')
         status_filtro = request.args.get('status', '')
         busca = request.args.get('busca', '')
+        nf_filtro = request.args.get('nf', '')
         sort = request.args.get('sort', 'criado_em')
         direction = request.args.get('direction', 'desc')
 
@@ -117,6 +118,17 @@ def register_custo_entrega_routes(bp):
                     CarviaOperacao.cidade_destino.ilike(busca_like),
                 )
             )
+        if nf_filtro:
+            # Filtra custos cuja operacao referencia uma NF com numero batendo.
+            from app.carvia.models import CarviaOperacaoNf, CarviaNf
+            sub_op_nf = db.session.query(
+                CarviaOperacaoNf.operacao_id
+            ).join(
+                CarviaNf, CarviaNf.id == CarviaOperacaoNf.nf_id
+            ).filter(
+                CarviaNf.numero_nf.ilike(f'%{nf_filtro}%')
+            ).distinct()
+            query = query.filter(CarviaCustoEntrega.operacao_id.in_(sub_op_nf))
 
         # Ordenacao dinamica
         sortable_columns = {
@@ -138,6 +150,25 @@ def register_custo_entrega_routes(bp):
 
         today = date.today()
 
+        # Batch (sem N+1): NFs por operacao + TOMADOR do frete por custo.
+        # Coluna "Tomador" substitui o antigo "Emitente" (que mostrava o
+        # nome_cliente herdado = sempre o emitente). SOT = cte_tomador.
+        from app.carvia.utils.papeis_frete import (
+            batch_nfs_por_operacao, batch_papeis_por_operacao,
+            tomador_como_cliente,
+        )
+        op_ids = list({c.operacao_id for c in paginacao.items if c.operacao_id})
+        nfs_por_operacao = batch_nfs_por_operacao(op_ids)
+        papeis_por_operacao = batch_papeis_por_operacao(op_ids)
+        nfs_por_custo = {
+            c.id: nfs_por_operacao.get(c.operacao_id, [])
+            for c in paginacao.items
+        }
+        tomador_por_custo = {
+            c.id: tomador_como_cliente(papeis_por_operacao.get(c.operacao_id))
+            for c in paginacao.items
+        }
+
         return render_template(
             'carvia/custos_entrega/listar.html',
             custos_entrega=paginacao.items,
@@ -146,10 +177,13 @@ def register_custo_entrega_routes(bp):
             tipo_filtro=tipo_filtro,
             status_filtro=status_filtro,
             busca=busca,
+            nf_filtro=nf_filtro,
             sort=sort,
             direction=direction,
             tipos_custo=TIPOS_CUSTO,
             today=today,
+            nfs_por_custo=nfs_por_custo,
+            tomador_por_custo=tomador_por_custo,
         )
 
     # Rota /custos-entrega/criar REMOVIDA (2026-04-15).
@@ -385,12 +419,14 @@ def register_custo_entrega_routes(bp):
                 'carvia.detalhe_custo_entrega', custo_id=custo_id
             ))
 
-        # Invariante: CE em VINCULADO_FT nao pode ter status alterado por esta
-        # rota. Tem que desvincular da FT primeiro (via rota dedicada) —
-        # caso contrario ficaria com FK preenchida e status inconsistente.
-        if custo.status == 'VINCULADO_FT':
+        # Invariante: CE vinculado a uma FT (FK preenchida) nao pode ter status
+        # alterado por esta rota. Tem que desvincular da FT primeiro (via rota
+        # dedicada) — caso contrario ficaria com FK preenchida e status
+        # inconsistente. (Status VINCULADO_FT removido em 2026-06-22; o vinculo
+        # agora e a FK fatura_transportadora_id, nao um status.)
+        if custo.fatura_transportadora_id:
             flash(
-                f'Custo esta VINCULADO_FT (fatura #{custo.fatura_transportadora_id}). '
+                f'Custo esta vinculado a fatura transportadora #{custo.fatura_transportadora_id}. '
                 f'Desvincule da fatura antes de alterar o status.',
                 'warning',
             )

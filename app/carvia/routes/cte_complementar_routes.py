@@ -69,13 +69,25 @@ def register_cte_complementar_routes(bp):
 
         if busca:
             busca_like = f'%{busca}%'
+            # Busca tambem por NUMERO DE NF (via operacao pai -> NFs): permite
+            # verificar se ha CTe Complementar emitido para uma dada NF.
+            from app.carvia.models import CarviaOperacaoNf, CarviaNf
+            sub_op_por_nf = db.session.query(
+                CarviaOperacaoNf.operacao_id
+            ).join(
+                CarviaNf, CarviaNf.id == CarviaOperacaoNf.nf_id
+            ).filter(
+                CarviaNf.numero_nf.ilike(busca_like)
+            ).distinct()
             query = query.filter(
                 db.or_(
                     CarviaCteComplementar.numero_comp.ilike(busca_like),
+                    CarviaCteComplementar.cte_numero.ilike(busca_like),
                     CarviaCteComplementar.cnpj_cliente.ilike(busca_like),
                     CarviaCteComplementar.nome_cliente.ilike(busca_like),
                     CarviaCteComplementar.ctrc_numero.ilike(busca_like),
                     CarviaCteComplementar.observacoes.ilike(busca_like),
+                    CarviaCteComplementar.operacao_id.in_(sub_op_por_nf),
                 )
             )
 
@@ -107,6 +119,7 @@ def register_cte_complementar_routes(bp):
         # Batch papeis (emit/dest/tomador) via operacao pai -> NFs
         from app.carvia.utils.papeis_frete import (
             batch_papeis_por_cte_complementar, tomador_como_cliente,
+            batch_nfs_por_operacao,
         )
         comp_ids = [c.id for c in paginacao.items]
         papeis_por_comp = batch_papeis_por_cte_complementar(comp_ids)
@@ -119,6 +132,14 @@ def register_cte_complementar_routes(bp):
             for cid in comp_ids
         }
 
+        # NFs (numero_nf) por CTe Comp via operacao pai — exibe a quais NFs o
+        # CTe Complementar se refere (verificar se ha CTe emitido para uma NF).
+        nfs_por_operacao = batch_nfs_por_operacao(op_ids)
+        nfs_por_comp = {
+            c.id: nfs_por_operacao.get(c.operacao_id, [])
+            for c in paginacao.items
+        }
+
         return render_template(
             'carvia/ctes_complementares/listar.html',
             ctes_complementares=paginacao.items,
@@ -126,6 +147,7 @@ def register_cte_complementar_routes(bp):
             op_info_map=op_info_map,
             papeis_por_comp=papeis_por_comp,
             cliente_tomador_por_comp=cliente_tomador_por_comp,
+            nfs_por_comp=nfs_por_comp,
             operacao_filtro=operacao_filtro,
             status_filtro=status_filtro,
             busca=busca,
@@ -288,7 +310,7 @@ def register_cte_complementar_routes(bp):
             .filter(
                 CarviaCustoEntrega.operacao_id == operacao_id,
                 CarviaCustoEntrega.cte_complementar_id.is_(None),
-                CarviaCustoEntrega.status.in_(['PENDENTE', 'VINCULADO_FT']),
+                CarviaCustoEntrega.status == 'PENDENTE',
             )
             .order_by(CarviaCustoEntrega.criado_em.desc())
             .all()
@@ -681,7 +703,7 @@ def register_cte_complementar_routes(bp):
         """Retorna JSON com CEs elegiveis para vincular a este CTe Comp.
 
         Filtros deterministicos: mesma operacao_id, sem cte_complementar_id,
-        status PENDENTE/VINCULADO_FT. Inclui flags valor_match/motivo_match.
+        status PENDENTE. Inclui flags valor_match/motivo_match.
         """
         if not getattr(current_user, 'sistema_carvia', False):
             return jsonify({'sucesso': False, 'erro': 'Acesso negado'}), 403

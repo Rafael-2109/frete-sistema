@@ -39,7 +39,7 @@
                 <div class="col-md-3">
                     <label class="form-label small">Busca</label>
                     <input type="text" name="busca" class="form-control form-control-sm"
-                           placeholder="Numero, cliente, observacoes..." value="{{ busca }}">
+                           placeholder="Numero, NF, cliente, observacoes..." value="{{ busca }}">
                 </div>
                 <div class="col-md-2">
                     <label class="form-label small">Emissao De</label>
@@ -77,6 +77,7 @@
                         <tr>
                             <th>CTe Complementar</th>
                             <th>CTe do Frete</th>
+                            <th>NF</th>
                             <th>Cliente</th>
                             <th>Emitente / Destinatario</th>
                             {{ th_sort('cte_valor', 'Valor', sort, direction, 'text-end') }}
@@ -100,6 +101,16 @@
                                    class="text-decoration-none">
                                     {{ carvia_ref(op_info.get('cte_numero'), op_info.get('ctrc_numero'), fallback='-') }}
                                 </a>
+                            </td>
+                            <td>
+                                {% set nfs = nfs_por_comp.get(comp.id, []) %}
+                                {% if nfs %}
+                                    {% for nf in nfs %}
+                                    <span class="badge bg-light text-dark border" title="NF vinculada ao CTe original">{{ nf.numero_nf }}</span>
+                                    {% endfor %}
+                                {% else %}
+                                <span class="text-muted">-</span>
+                                {% endif %}
                             </td>
                             <td>
                                 {% set ct = cliente_tomador_por_comp.get(comp.id) %}

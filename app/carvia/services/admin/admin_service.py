@@ -321,7 +321,10 @@ class AdminService:
             fatura_transportadora_id=fatura_id
         ).all():
             ce.fatura_transportadora_id = None
-            if ce.status in ('VINCULADO_FT', 'PAGO'):
+            # CE pago via FT (auto-propagacao) volta a PENDENTE ao deletar a FT.
+            # (status VINCULADO_FT removido em 2026-06-22; CE vinculado ja era
+            # PENDENTE — basta soltar a FK acima.)
+            if ce.status == 'PAGO':
                 ce.status = 'PENDENTE'
             ces_revertidos += 1
 

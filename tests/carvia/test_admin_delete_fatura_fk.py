@@ -64,13 +64,14 @@ def test_excluir_fatura_transportadora_com_frete_nao_quebra_fk(db):
     frete = _criar_frete(db, transp, fatura_transportadora_id=fatura.id)
     frete_id = frete.id
 
-    # CE vinculado a FT deve voltar para PENDENTE ao excluir a fatura
+    # CE vinculado a FT (PENDENTE + FK) deve continuar PENDENTE e perder a FK ao
+    # excluir a fatura (status VINCULADO_FT removido em 2026-06-22).
     ce = CarviaCustoEntrega(
         numero_custo='CE-TESTE-I4',
         tipo_custo='OUTROS',
         valor=50,
         data_custo=date(2026, 6, 6),
-        status='VINCULADO_FT',
+        status='PENDENTE',
         fatura_transportadora_id=fatura.id,
         criado_por='test@bot',
     )

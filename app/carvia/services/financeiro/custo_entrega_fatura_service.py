@@ -125,13 +125,15 @@ class CustoEntregaFaturaService:
             if ajustes.get('copiar_vencimento_fatura') and fatura.vencimento:
                 ce.data_vencimento = fatura.vencimento
 
-        # Executar vinculo — status vai para VINCULADO_FT.
-        # NOTA (2026-05-20): a FT pode agora estar PAGA/conciliada (pode_anexar_item
+        # Executar vinculo — a FK `fatura_transportadora_id` passa a indicar o
+        # vinculo; o status PERMANECE PENDENTE (status VINCULADO_FT removido em
+        # 2026-06-22). CE PENDENTE com FK = sera pago junto da FT.
+        # NOTA (2026-05-20): a FT pode estar PAGA/conciliada (pode_anexar_item
         # permite). NAO auto-propagamos PAGO ao CE: o pagamento ja realizado nao
-        # cobriu este item atrasado. O CE fica VINCULADO_FT e seu pagamento e
-        # tratado a parte (conciliacao direta ou nova rodada da FT).
+        # cobriu este item atrasado — seu pagamento e tratado a parte
+        # (conciliacao direta ou nova rodada da FT).
         ce.fatura_transportadora_id = fatura_id
-        ce.status = 'VINCULADO_FT'
+        ce.status = 'PENDENTE'
 
         logger.info(
             "CE %s vinculado a FT #%d (%s) por %s (ajustes=%s)",
@@ -211,9 +213,10 @@ class CustoEntregaFaturaService:
                     f'Custo {ce.numero_custo} tem movimentacao de fluxo de caixa propria. '
                     f'Remova a movimentacao antes de desvincular.'
                 )
-        elif ce.status == 'VINCULADO_FT':
-            # Status VINCULADO_FT volta para PENDENTE ao desvincular
-            ce.status = 'PENDENTE'
+        elif old_ft_id and ce.status == 'PENDENTE':
+            # CE estava vinculado a FT (FK preenchida) e PENDENTE — ao desvincular
+            # mantem PENDENTE mas reseta os campos de documento/vencimento
+            # (xerox Nacom). Antes era o estado VINCULADO_FT.
             status_revertido = True
 
         # Reset de campos de documento e vencimento (xerox Nacom).

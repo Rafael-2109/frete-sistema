@@ -6,7 +6,7 @@
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h2><i class="fas fa-money-bill-wave"></i> Custos de Entrega</h2>
         <div class="d-flex gap-2">
-            <a href="{{ url_for('carvia.exportar_custos_entrega', tipo=tipo_filtro, status=status_filtro, busca=busca, sort=sort, direction=direction) }}"
+            <a href="{{ url_for('carvia.exportar_custos_entrega', tipo=tipo_filtro, status=status_filtro, busca=busca, nf=nf_filtro, sort=sort, direction=direction) }}"
                class="btn btn-outline-success btn-sm" title="Exportar Excel">
                 <i class="fas fa-file-excel"></i> Excel
             </a>
@@ -44,7 +44,12 @@
                         <option value="CANCELADO" {{ 'selected' if status_filtro == 'CANCELADO' }}>Cancelado</option>
                     </select>
                 </div>
-                <div class="col-md-4">
+                <div class="col-md-2">
+                    <label class="form-label small">NF</label>
+                    <input type="text" name="nf" class="form-control form-control-sm"
+                           placeholder="Numero da NF" value="{{ nf_filtro }}">
+                </div>
+                <div class="col-md-2">
                     <label class="form-label small">Busca</label>
                     <input type="text" name="busca" class="form-control form-control-sm"
                            placeholder="Numero, descricao, fornecedor..." value="{{ busca }}">
@@ -54,7 +59,7 @@
                         <i class="fas fa-search"></i> Filtrar
                     </button>
                 </div>
-                {% if tipo_filtro or status_filtro or busca %}
+                {% if tipo_filtro or status_filtro or busca or nf_filtro %}
                 <div class="col-md-2">
                     <a href="{{ url_for('carvia.listar_custos_entrega') }}" class="btn btn-sm btn-outline-secondary w-100">
                         <i class="fas fa-times"></i> Limpar
@@ -77,7 +82,8 @@
                             {{ th_sort('numero_custo', 'Numero', sort, direction) }}
                             <th>CTe / CTRC</th>
                             <th>CTe Comp</th>
-                            <th>Emitente</th>
+                            <th>NF</th>
+                            <th>Tomador</th>
                             <th>Destino</th>
                             <th>Beneficiario</th>
                             {{ th_sort('tipo_custo', 'Tipo', sort, direction) }}
@@ -113,12 +119,26 @@
                                 <span class="badge bg-danger" title="{{ em.erro_ssw or 'Falha na emissao SSW 222' }}">Erro emissao</span>
                                 {% elif em and em.status in ['PENDENTE', 'EM_PROCESSAMENTO'] %}
                                 <span class="badge bg-info" title="Emissao SSW em andamento">Emitindo…</span>
+                                {% elif not c.cte_complementar and c.tipo_custo == 'GNRE_ICMS' %}
+                                <span class="text-muted small" title="GNRE/ICMS — recolhido por guia, nao gera CTe Complementar">—</span>
                                 {% elif not c.cte_complementar %}
                                 <span class="badge bg-warning" title="Sem CTe Complementar — pode gerar pela tela de detalhe">Pendente</span>
                                 {% endif %}
                             </td>
                             <td>
-                                {% if c.operacao %}
+                                {% set nfs = nfs_por_custo.get(c.id, []) %}
+                                {% if nfs %}
+                                    {% for nf in nfs %}
+                                    <span class="badge bg-light text-dark border" title="NF do CTe original">{{ nf.numero_nf }}</span>
+                                    {% endfor %}
+                                {% else %}<span class="text-muted">-</span>{% endif %}
+                            </td>
+                            <td>
+                                {% set tom = tomador_por_custo.get(c.id) %}
+                                {% if tom and tom.nome %}
+                                <strong title="Tomador do frete (SOT: cte_tomador)">{{ tom.nome }}</strong>
+                                {% if tom.cnpj %}<div class="cnpj-col small text-muted">{{ tom.cnpj }}</div>{% endif %}
+                                {% elif c.operacao %}
                                 <strong>{{ c.operacao.nome_cliente or '-' }}</strong>
                                 <div class="cnpj-col small text-muted">{{ c.operacao.cnpj_cliente or '' }}</div>
                                 {% else %}-{% endif %}
@@ -138,10 +158,14 @@
                             </td>
                             <td><span class="badge bg-secondary">{{ c.tipo_custo }}</span></td>
                             <td>
+                                {% if c.tipo_custo == 'GNRE_ICMS' %}
+                                <span class="text-muted">-</span>
+                                {% else %}
                                 {% set desc = c.descricao or c.observacoes or '-' %}
                                 {% if desc|length > 50 %}
                                 <span title="{{ desc }}" style="cursor: help;">{{ desc[:50] }}…</span>
                                 {% else %}{{ desc }}{% endif %}
+                                {% endif %}
                             </td>
                             <td class="valor-col">{{ c.valor|valor_br }}</td>
                             <td>{{ c.data_custo.strftime('%d/%m/%Y') if c.data_custo else '-' }}</td>
@@ -179,7 +203,7 @@
                 <ul class="pagination pagination-sm mb-0">
                     {% if paginacao.has_prev %}
                     <li class="page-item">
-                        <a class="page-link" href="{{ url_for('carvia.listar_custos_entrega', page=paginacao.prev_num, tipo=tipo_filtro, status=status_filtro, busca=busca, sort=sort, direction=direction) }}">
+                        <a class="page-link" href="{{ url_for('carvia.listar_custos_entrega', page=paginacao.prev_num, tipo=tipo_filtro, status=status_filtro, busca=busca, nf=nf_filtro, sort=sort, direction=direction) }}">
                             <i class="fas fa-chevron-left"></i>
                         </a>
                     </li>
@@ -187,7 +211,7 @@
                     {% for p in paginacao.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
                         {% if p %}
                         <li class="page-item {{ 'active' if p == paginacao.page }}">
-                            <a class="page-link" href="{{ url_for('carvia.listar_custos_entrega', page=p, tipo=tipo_filtro, status=status_filtro, busca=busca, sort=sort, direction=direction) }}">{{ p }}</a>
+                            <a class="page-link" href="{{ url_for('carvia.listar_custos_entrega', page=p, tipo=tipo_filtro, status=status_filtro, busca=busca, nf=nf_filtro, sort=sort, direction=direction) }}">{{ p }}</a>
                         </li>
                         {% else %}
                         <li class="page-item disabled"><span class="page-link">...</span></li>
@@ -195,7 +219,7 @@
                     {% endfor %}
                     {% if paginacao.has_next %}
                     <li class="page-item">
-                        <a class="page-link" href="{{ url_for('carvia.listar_custos_entrega', page=paginacao.next_num, tipo=tipo_filtro, status=status_filtro, busca=busca, sort=sort, direction=direction) }}">
+                        <a class="page-link" href="{{ url_for('carvia.listar_custos_entrega', page=paginacao.next_num, tipo=tipo_filtro, status=status_filtro, busca=busca, nf=nf_filtro, sort=sort, direction=direction) }}">
                             <i class="fas fa-chevron-right"></i>
                         </a>
                     </li>

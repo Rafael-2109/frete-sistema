@@ -21,7 +21,7 @@ Mutex de emissao (item 3 do plano):
 Filtros deterministicos para `ces_elegiveis_para_vincular`:
   - mesma `operacao_id` (HARD)
   - `cte_complementar_id IS NULL`
-  - status IN ('PENDENTE', 'VINCULADO_FT')
+  - status == 'PENDENTE' (vinculo a FT = FK, nao status)
 """
 
 import logging
@@ -272,7 +272,7 @@ class CteComplementarService:
           - cte_comp.status != 'CANCELADO'
           - CE.operacao_id == cte_comp.operacao_id (HARD)
           - CE.cte_complementar_id IS NULL
-          - CE.status IN ('PENDENTE', 'VINCULADO_FT')
+          - CE.status == 'PENDENTE' (vinculo a FT = FK, nao status)
 
         Returns:
             dict com sucesso, ce_numero, cte_comp_numero
@@ -292,7 +292,7 @@ class CteComplementarService:
             raise ValueError(
                 f'Custo {custo.numero_custo} ja esta vinculado a CTe Comp #{custo.cte_complementar_id}.'
             )
-        if custo.status not in ('PENDENTE', 'VINCULADO_FT'):
+        if custo.status != 'PENDENTE':
             raise ValueError(
                 f'Custo {custo.numero_custo} esta {custo.status} — nao pode ser vinculado.'
             )
@@ -322,7 +322,7 @@ class CteComplementarService:
 
         Bloqueios:
           - CE.status == 'PAGO' (pagamento ja foi processado)
-          - CE.status == 'VINCULADO_FT' com FT CONFERIDA/PAGA: o CTe Comp e
+          - CE vinculado a FT (FK) CONFERIDA/PAGA: o CTe Comp e
             parte da rastreabilidade financeira ja consolidada — desvincular
             quebraria a trilha de auditoria. Para alterar, usar fluxo de
             cancelamento da FT primeiro.
@@ -347,10 +347,10 @@ class CteComplementarService:
                 f'Custo {custo.numero_custo} esta PAGO — nao pode desvincular.'
             )
 
-        # Guard VINCULADO_FT: bloquear apenas se a FT estiver CONFERIDA ou PAGA.
-        # FT em construcao (PENDENTE/EM_CONFERENCIA) ainda permite desvincular,
-        # consistente com `pode_editar()` da FT.
-        if custo.status == 'VINCULADO_FT' and custo.fatura_transportadora_id:
+        # Guard FT: se o CE esta vinculado a uma FT (FK), bloquear apenas se a FT
+        # estiver CONFERIDA ou PAGA. FT em construcao (PENDENTE/EM_CONFERENCIA)
+        # ainda permite desvincular, consistente com `pode_editar()` da FT.
+        if custo.fatura_transportadora_id:
             ft = db.session.get(
                 CarviaFaturaTransportadora, custo.fatura_transportadora_id,
             )
@@ -387,7 +387,7 @@ class CteComplementarService:
         Filtros deterministicos (item 5 do plano):
           - mesma operacao_id
           - cte_complementar_id IS NULL
-          - status IN ('PENDENTE', 'VINCULADO_FT')
+          - status == 'PENDENTE' (vinculo a FT = FK, nao status)
 
         Inclui flags:
           - valor_match: |CE.valor - cte_comp.cte_valor / 0.9075| <= 0.01
@@ -416,7 +416,7 @@ class CteComplementarService:
             .filter(
                 CarviaCustoEntrega.operacao_id == cte_comp.operacao_id,
                 CarviaCustoEntrega.cte_complementar_id.is_(None),
-                CarviaCustoEntrega.status.in_(['PENDENTE', 'VINCULADO_FT']),
+                CarviaCustoEntrega.status == 'PENDENTE',
             )
             .order_by(CarviaCustoEntrega.criado_em.desc())
             .all()
