@@ -118,14 +118,18 @@
                         <div id="benef-DESTINATARIO" class="benef-panel" style="display:none">
                             <div class="row">
                                 <div class="col-md-7">
-                                    <label class="form-label">Nome do Destinatario (do CTe)</label>
-                                    <input type="text" class="form-control" value="{{ operacao.nome_cliente or '-' }}" disabled>
+                                    <label class="form-label">Nome do Destinatario (da NF)</label>
+                                    <input type="text" class="form-control" value="{{ destinatario.nome or '-' }}" disabled>
                                 </div>
                                 <div class="col-md-5">
                                     <label class="form-label">CNPJ</label>
-                                    <input type="text" class="form-control" value="{{ operacao.cnpj_cliente or '-' }}" disabled>
+                                    <input type="text" class="form-control" value="{{ destinatario.cnpj or '-' }}" disabled>
                                 </div>
                             </div>
+                            <small class="text-muted mt-2 d-block">
+                                <i class="fas fa-info-circle"></i>
+                                Destinatario real da mercadoria (primeira NF), nao o tomador do frete.
+                            </small>
                         </div>
 
                         <div id="benef-OUTROS" class="benef-panel" style="display:none">

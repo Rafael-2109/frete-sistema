@@ -1746,12 +1746,22 @@ def register_custo_entrega_routes(bp):
             flash('Operacao (CTe CarVia) nao encontrada.', 'warning')
             return redirect(url_for('carvia.nova_despesa_extra_por_nf_carvia'))
 
+        # Destinatario REAL da mercadoria (primeira NF da operacao). NAO usar
+        # operacao.nome_cliente: ele aponta para o EMITENTE (= tomador quando
+        # cte_tomador=REMETENTE), nao o destino real. O beneficiario
+        # "Destinatario" deve ser quem RECEBE a mercadoria.
+        from app.carvia.utils.papeis_frete import resolver_papeis_operacao
+        _papeis_op = resolver_papeis_operacao(operacao) or {}
+        _dest = _papeis_op.get('dest') or {}
+        destinatario_nome = _dest.get('nome') or operacao.nome_cliente
+        destinatario_cnpj = _dest.get('cnpj') or operacao.cnpj_cliente
+
         form = CarviaDespesaExtraForm()
         # Reusa helper do form (espera frete) — passa operacao envolvida em
-        # objeto fake-frete-like (nome_destino + cnpj_destino + transportadora None)
+        # objeto fake-frete-like (destinatario REAL + transportadora None)
         class _OpAsFrete:
-            nome_destino = operacao.nome_cliente
-            cnpj_destino = operacao.cnpj_cliente
+            nome_destino = destinatario_nome
+            cnpj_destino = destinatario_cnpj
             transportadora = None
         _popular_choices_despesa_form(form, _OpAsFrete())
 
@@ -1764,8 +1774,8 @@ def register_custo_entrega_routes(bp):
                 if tipo_benef == 'TRANSPORTADORA':
                     transportadora_id_final = form.transportadora_id.data or None
                 elif tipo_benef == 'DESTINATARIO':
-                    fornecedor_nome_final = operacao.nome_cliente
-                    fornecedor_cnpj_final = operacao.cnpj_cliente
+                    fornecedor_nome_final = destinatario_nome
+                    fornecedor_cnpj_final = destinatario_cnpj
                 elif tipo_benef == 'OUTROS':
                     fornecedor_nome_final = (form.beneficiario_nome.data or '').strip() or None
 
@@ -1840,6 +1850,7 @@ def register_custo_entrega_routes(bp):
             'carvia/custos_entrega/criar_por_cte.html',
             form=form,
             operacao=operacao,
+            destinatario={'nome': destinatario_nome, 'cnpj': destinatario_cnpj},
             pode_emitir=pode_emitir,
             today=date.today(),
         )

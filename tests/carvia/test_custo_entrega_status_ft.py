@@ -104,3 +104,24 @@ def test_vinculado_ft_nao_e_mais_status_valido(db):
     from app.carvia.models import CarviaCustoEntrega
     assert 'VINCULADO_FT' not in CarviaCustoEntrega.STATUS_CHOICES
     assert CarviaCustoEntrega.STATUS_CHOICES == ['PENDENTE', 'PAGO', 'CANCELADO']
+
+
+def test_gerar_numero_custo_sem_prefixo(db):
+    """numero_custo passa a ser numero direto (sem 'CE-')."""
+    from app.carvia.models import CarviaCustoEntrega
+    n = CarviaCustoEntrega.gerar_numero_custo()
+    assert 'CE-' not in n
+    assert n.isdigit()
+
+
+def test_gerar_numero_custo_incrementa_sobre_legado(db):
+    """Considera tambem o legado 'CE-###' ao calcular o proximo numero."""
+    from app.carvia.models import CarviaCustoEntrega
+    atual = int(CarviaCustoEntrega.gerar_numero_custo())
+    legado = atual + 50
+    db.session.add(CarviaCustoEntrega(
+        numero_custo=f'CE-{legado:03d}', tipo_custo='OUTROS', valor=10,
+        data_custo=date(2026, 6, 6), status='PENDENTE', criado_por='test',
+    ))
+    db.session.flush()
+    assert CarviaCustoEntrega.gerar_numero_custo() == str(legado + 1)

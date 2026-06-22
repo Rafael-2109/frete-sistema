@@ -300,20 +300,22 @@ class CarviaCustoEntrega(db.Model):
 
     @staticmethod
     def gerar_numero_custo():
-        """Gera proximo numero sequencial CE-###."""
-        max_num = db.session.query(
-            func.max(CarviaCustoEntrega.numero_custo)
-        ).filter(
-            CarviaCustoEntrega.numero_custo.ilike('CE-%'),
-        ).scalar()
-
-        next_num = 1
-        if max_num:
+        """Gera o proximo numero sequencial — NUMERO DIRETO, sem prefixo 'CE-'
+        (2026-06-22). Considera numeros puros ('27') e legados ('CE-027'),
+        extraindo o valor numerico — robusto durante/apos a migracao de remocao
+        do prefixo.
+        """
+        max_n = 0
+        for (nc,) in db.session.query(CarviaCustoEntrega.numero_custo).all():
+            if not nc:
+                continue
             try:
-                next_num = int(max_num.replace('CE-', '')) + 1
+                n = int(str(nc).replace('CE-', '').strip())
             except (ValueError, TypeError):
-                pass
-        return f'CE-{next_num:03d}'
+                continue
+            if n > max_n:
+                max_n = n
+        return str(max_n + 1)
 
     def __repr__(self):
         return f'<CarviaCustoEntrega {self.numero_custo} {self.tipo_custo} ({self.status})>'

@@ -74,6 +74,11 @@ echo "CarVia: migration remover status VINCULADO_FT de custos_entrega (idempoten
 python scripts/migrations/2026_06_22_carvia_custo_entrega_remover_vinculado_ft.py \
     || echo "⚠️ migration remover VINCULADO_FT falhou — verificar (continuando deploy)..."
 
+# CarVia 2026-06-22: numero_custo 'CE-###' -> numero direto. Idempotente.
+echo "CarVia: migration numero_custo CE-### -> numero direto (idempotente)..."
+python scripts/migrations/2026_06_22_carvia_custo_entrega_numero_direto.py \
+    || echo "⚠️ migration numero_custo direto falhou — verificar (continuando deploy)..."
+
 # Formato canonico de memorias (2026-06-08): coluna meta JSONB + indice GIN +
 # backfill REMOVIDOS do build apos aplicacao em PROD (deploy ad3c78027). Scripts
 # permanecem versionados — re-rodar manual via Render Shell se necessario:
