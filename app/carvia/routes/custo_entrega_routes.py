@@ -6,6 +6,8 @@ import logging
 import os
 from datetime import date
 
+from sqlalchemy.orm import joinedload, contains_eager
+
 from flask import (
     render_template, request, flash, redirect, url_for, jsonify,
 )
@@ -79,9 +81,19 @@ def register_custo_entrega_routes(bp):
         sort = request.args.get('sort', 'criado_em')
         direction = request.args.get('direction', 'desc')
 
+        # outerjoin a CarviaOperacao serve ao filtro `busca`/sort; os demais
+        # relacionamentos exibidos na tabela sao eager-loaded para evitar N+1
+        # (todos to-one — sem risco de produto cartesiano).
         query = db.session.query(CarviaCustoEntrega).outerjoin(
             CarviaOperacao,
             CarviaCustoEntrega.operacao_id == CarviaOperacao.id,
+        ).options(
+            contains_eager(CarviaCustoEntrega.operacao),
+            joinedload(CarviaCustoEntrega.cte_complementar),
+            joinedload(CarviaCustoEntrega.fatura_transportadora),
+            joinedload(CarviaCustoEntrega.transportadora),
+            joinedload(CarviaCustoEntrega.frete),
+            joinedload(CarviaCustoEntrega.emissao_cte_comp),
         )
 
         if operacao_filtro:

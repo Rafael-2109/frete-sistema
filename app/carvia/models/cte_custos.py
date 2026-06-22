@@ -387,7 +387,13 @@ class CarviaEmissaoCteComplementar(db.Model):
     ctrc_pai = db.Column(db.String(30), nullable=False)  # CTRC do CTe original (ex: CAR-113-9)
     motivo_ssw = db.Column(db.String(5), nullable=False)  # C/D/E/R
     filial_ssw = db.Column(db.String(10), nullable=False, default='CAR')
-    valor_calculado = db.Column(db.Numeric(15, 2), nullable=False)
+    # valor_base = valor LIQUIDO do custo a complementar (= valor do CustoEntrega
+    # OU valor a cobrar no caso AVULSO). E o que o SSW 222 recebe para refazer o
+    # grossing-up (PIS/COFINS + ICMS) ao vivo com o ICMS atual do CTe pai. nullable
+    # por retrocompat: emissoes avulsas legadas ficam NULL e o worker cai no fallback
+    # de custo_entrega.valor. Ver migration 2026_06_22_carvia_emissao_cte_comp_valor_base.
+    valor_base = db.Column(db.Numeric(15, 2))
+    valor_calculado = db.Column(db.Numeric(15, 2), nullable=False)  # ja com grossing-up
     icms_aliquota_usada = db.Column(db.Numeric(5, 2))  # Snapshot do ICMS usado no calculo
 
     # Status: PENDENTE | EM_PROCESSAMENTO | SUCESSO | ERRO

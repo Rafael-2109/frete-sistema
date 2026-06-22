@@ -143,6 +143,8 @@
                                     <strong>{{ cte_info.label }}</strong>
                                     {% if cte_info.tipo == 'SUBCONTRATO' %}
                                     <br><small class="text-muted"><i class="fas fa-handshake"></i> Sub</small>
+                                    {% elif cte_info.tipo == 'OPERACAO_JUNCTION' %}
+                                    <br><small class="text-warning" title="CTe localizado pela NF, mas o frete ainda nao esta vinculado a operacao. Rode o backfill ou vincule manualmente."><i class="fas fa-unlink"></i> via NF</small>
                                     {% endif %}
                                     {% else %}
                                     <em class="text-muted">Pendente</em>

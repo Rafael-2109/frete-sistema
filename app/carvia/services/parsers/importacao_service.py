@@ -855,6 +855,18 @@ class ImportacaoService:
                     # (lista Python atualizada apenas apos persist OK).
                     if operacao_registrada is not None:
                         operacoes_criadas.append(operacao_registrada)
+                        # Hook reconciliacao: o CTe pode ter sido importado APOS o
+                        # CarviaFrete ja existir — nesse caso frete.operacao_id ficou
+                        # NULL (a criacao do frete so vincula a operacao que ja existia
+                        # naquele instante). Re-vincula agora os fretes pendentes cujas
+                        # NFs casam esta operacao. Best-effort (nao quebra o import).
+                        try:
+                            self._revincular_fretes_da_operacao(operacao_registrada)
+                        except Exception as e_revinc:
+                            logger.warning(
+                                "Erro hook re-vinculo frete<-operacao op=%s: %s",
+                                operacao_registrada.id, e_revinc,
+                            )
                 except IntegrityError as e:
                     # SAVEPOINT ja revertido automaticamente pelo `with`.
                     logger.warning(
@@ -2066,6 +2078,63 @@ class ImportacaoService:
             icms_base_calculo=cte_data.get('impostos', {}).get('base_icms'),
             cte_tomador=cte_tomador_persist,
         )
+
+    def _revincular_fretes_da_operacao(self, operacao):
+        """Hook: re-vincula CarviaFretes pendentes a esta operacao recem-importada.
+
+        Fecha o gap do CTe importado APOS o frete: a criacao do frete so vincula a
+        CarviaOperacao que ja existia naquele instante (carvia_frete_service.py:431);
+        se o CTe so e importado depois, frete.operacao_id fica NULL para sempre e a
+        UI mostra "Sem operacao" embora o CTe exista (via junction). Aqui, ao
+        importar/enriquecer a operacao, re-vinculamos os fretes pendentes cujas NFs
+        casam — modo ESTRITO (so grava se a operacao for unica para aquele frete;
+        NFs espalhadas por CTes diferentes => pula). Best-effort.
+
+        Returns: numero de fretes vinculados.
+        """
+        from sqlalchemy import or_
+        from app.carvia.models import CarviaFrete
+        from app.carvia.services.documentos.carvia_frete_service import (
+            CarviaFreteService,
+        )
+
+        # Numeros de NF desta operacao (via junction)
+        numeros = [
+            num for (num,) in db.session.query(CarviaNf.numero_nf)
+            .join(CarviaOperacaoNf, CarviaOperacaoNf.nf_id == CarviaNf.id)
+            .filter(CarviaOperacaoNf.operacao_id == operacao.id)
+            .distinct().all()
+        ]
+        if not numeros:
+            return 0
+
+        # Fretes candidatos: operacao_id NULL, ativos, numeros_nfs casa alguma NF
+        # (CSV ancorado por virgula para nao casar substring de outro numero).
+        conds = []
+        for num in numeros:
+            conds.extend([
+                CarviaFrete.numeros_nfs == num,
+                CarviaFrete.numeros_nfs.like(f"{num},%"),
+                CarviaFrete.numeros_nfs.like(f"%,{num},%"),
+                CarviaFrete.numeros_nfs.like(f"%,{num}"),
+            ])
+        fretes = CarviaFrete.query.filter(
+            CarviaFrete.operacao_id.is_(None),
+            CarviaFrete.status != 'CANCELADO',
+            or_(*conds),
+        ).all()
+
+        n_vinc = 0
+        for f in fretes:
+            res = CarviaFreteService.revincular_frete_estrito(f)
+            if res['status'] == 'UNICA':
+                n_vinc += 1
+        if n_vinc:
+            logger.info(
+                "Hook re-vinculo frete<-operacao op=%s: %s frete(s) vinculado(s)",
+                operacao.id, n_vinc,
+            )
+        return n_vinc
 
     def _vincular_nfs(self, operacao: CarviaOperacao, nfs_ref: List[Dict],
                       nf_map: Dict):

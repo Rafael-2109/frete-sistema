@@ -24,6 +24,25 @@ SSW_SCRIPTS = os.path.join(
 )
 
 
+def _resolver_valor_base_ssw(emissao):
+    """Valor base LIQUIDO p/ o SSW 222 refazer o grossing-up (PIS/COFINS + ICMS).
+
+    Prioridade:
+      1. ``emissao.valor_base`` — fonte canonica (com OU sem CE), persistida na
+         criacao desde 2026-06-22. E o valor do CustoEntrega OU o valor a cobrar
+         (avulso TDE/Diaria).
+      2. ``emissao.custo_entrega.valor`` — fallback p/ emissoes legadas (anteriores
+         a coluna valor_base) que so tinham o CE como fonte do liquido.
+      3. ``None`` — avulso legado sem valor_base nem CE: o caller marca ERRO em vez
+         de crashar (era o AttributeError que inviabilizava o CTe complementar avulso).
+    """
+    if getattr(emissao, 'valor_base', None) is not None:
+        return float(emissao.valor_base)
+    if emissao.custo_entrega is not None:
+        return float(emissao.custo_entrega.valor)
+    return None
+
+
 def emitir_cte_complementar_job(emissao_comp_id: int) -> dict:
     """Job RQ: executa emissao de CTe Complementar via SSW opcao 222.
 
@@ -81,10 +100,25 @@ def emitir_cte_complementar_job(emissao_comp_id: int) -> dict:
 
             # ── Fase A: Emitir CTe Complementar (opcao 222 + 007 + 101) ──
             # O script consulta opcao 101 do pai para extrair ICMS ao vivo e
-            # calcula o grossing up automaticamente. Passamos valor_base (bruto)
+            # calcula o grossing up automaticamente. Passamos valor_base (liquido)
             # em vez de valor_outros para que o calculo use o ICMS real atual
             # do CTe pai no SSW (fonte de verdade) em vez do snapshot stale.
-            custo_valor_base = float(emissao.custo_entrega.valor)
+            # Fonte do liquido: emissao.valor_base (canonico) > custo_entrega.valor
+            # (legado). CTe complementar AVULSO (TDE/Diaria sem CE) so funciona aqui
+            # via valor_base — antes crashava ao ler custo_entrega.valor de None.
+            custo_valor_base = _resolver_valor_base_ssw(emissao)
+            if custo_valor_base is None:
+                emissao.status = 'ERRO'
+                emissao.erro_ssw = (
+                    'Emissao sem valor_base e sem CustoEntrega vinculado — nao e '
+                    'possivel determinar o valor liquido a complementar.'
+                )
+                emissao.atualizado_em = agora_utc_naive()
+                db.session.commit()
+                logger.error(
+                    "EmissaoCteComp %s sem valor_base/CE — abortada", emissao_comp_id
+                )
+                return {'status': 'ERRO', 'erro': emissao.erro_ssw}
             args_222 = argparse.Namespace(
                 ctrc_pai=ctrc_pai,
                 motivo=emissao.motivo_ssw,

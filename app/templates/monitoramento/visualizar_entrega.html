@@ -445,15 +445,29 @@
                  title="Lanca um CarviaCustoEntrega vinculado ao CarviaFrete desta NF">
                 <i class="fas fa-plus"></i> Lancar Custo Extra CarVia
               </a>
+            {% elif operacao_carvia %}
+              <a href="{{ url_for('carvia.criar_despesa_por_cte_carvia', operacao_id=operacao_carvia.id) }}"
+                 class="btn btn-sm btn-dark"
+                 title="Sem CarviaFrete, mas existe CTe CarVia para esta NF. Lanca o custo direto pela operacao (vira CTe complementar ao cliente).">
+                <i class="fas fa-plus"></i> Lancar Custo pela CTe {{ operacao_carvia.cte_numero or operacao_carvia.ctrc_numero or operacao_carvia.id }}
+              </a>
             {% else %}
               <button type="button" class="btn btn-sm btn-secondary" disabled
-                      title="Nenhum CarviaFrete registrado para esta NF. O frete e gerado automaticamente ao passar pela portaria.">
+                      title="Nenhum CarviaFrete nem CTe CarVia registrado para esta NF. O frete e gerado automaticamente ao passar pela portaria.">
                 <i class="fas fa-plus"></i> Lancar Custo Extra CarVia
               </button>
             {% endif %}
           </div>
           <div class="card-body">
-            {% if not tem_frete_carvia %}
+            {% if not tem_frete_carvia and operacao_carvia %}
+              <p class="text-muted small mb-0">
+                <i class="fas fa-info-circle"></i>
+                CTe CarVia {{ operacao_carvia.cte_numero or operacao_carvia.ctrc_numero }}
+                detectado para esta NF, sem CarviaFrete vinculado. Use
+                <strong>Lancar Custo pela CTe</strong> acima para registrar o custo
+                (ex.: descarga) direto na operacao e depois gerar o CTe complementar.
+              </p>
+            {% elif not tem_frete_carvia %}
               <p class="text-muted small mb-0">
                 <i class="fas fa-info-circle"></i>
                 Aguardando registro do CarviaFrete. O frete e gerado automaticamente

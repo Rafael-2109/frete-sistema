@@ -264,6 +264,10 @@ def visualizar_entrega(id):
     tem_frete_carvia = False
     frete_carvia = None
     custos_entrega_carvia = []
+    # Operacao (CTe CarVia) casando a NF, resolvida SO quando nao ha CarviaFrete:
+    # destrava o atalho de criar custo direto pela operacao (frete_id=NULL e
+    # permitido — R5), em vez de deixar o botao desabilitado. Ver custo sem frete.
+    operacao_carvia = None
 
     if getattr(current_user, 'sistema_carvia', False):
         try:
@@ -293,6 +297,36 @@ def visualizar_entrega(id):
                     .order_by(CarviaCustoEntrega.data_custo.desc())
                     .all()
                 )
+            else:
+                # Sem CarviaFrete, mas pode haver um CTe CarVia (operacao) casando a
+                # NF via carvia_operacao_nfs. Resolve o gap operacional onde a NF foi
+                # faturada pela CarVia mas a portaria nao gerou frete (caso Notco).
+                from app.carvia.models import (
+                    CarviaOperacao, CarviaOperacaoNf, CarviaNf,
+                )
+
+                nf_carvia = (
+                    CarviaNf.query
+                    .filter(
+                        CarviaNf.numero_nf == entrega.numero_nf,
+                        CarviaNf.status == 'ATIVA',
+                    )
+                    .first()
+                )
+                if nf_carvia:
+                    operacao_carvia = (
+                        db.session.query(CarviaOperacao)
+                        .join(
+                            CarviaOperacaoNf,
+                            CarviaOperacaoNf.operacao_id == CarviaOperacao.id,
+                        )
+                        .filter(
+                            CarviaOperacaoNf.nf_id == nf_carvia.id,
+                            CarviaOperacao.status != 'CANCELADO',
+                        )
+                        .order_by(CarviaOperacao.criado_em.desc())
+                        .first()
+                    )
         except Exception as e_carvia:
             print(f"[AVISO] Lookup CarVia visualizar_entrega falhou: {e_carvia}")
 
@@ -316,6 +350,7 @@ def visualizar_entrega(id):
         tem_frete_carvia=tem_frete_carvia,
         frete_carvia=frete_carvia,
         custos_entrega_carvia=custos_entrega_carvia,
+        operacao_carvia=operacao_carvia,
     )
 
 @monitoramento_bp.route('/<int:id>/adicionar_log', methods=['POST'])

@@ -870,29 +870,99 @@ class CarviaFreteService:
             if not operacao:
                 return
 
-            # 4. Vincular operacao ao frete
-            frete.operacao_id = operacao.id
-
-            # Atualizar valor_venda com cte_valor da operacao se disponivel
-            if operacao.cte_valor and not frete.valor_venda:
-                frete.valor_venda = float(operacao.cte_valor)
-
-            # 5. Propagar fatura_cliente_id se operacao ja tiver fatura
-            if operacao.fatura_cliente_id:
-                frete.fatura_cliente_id = operacao.fatura_cliente_id
-
-            logger.info(
-                "CarviaFrete #%s vinculado a operacao existente %s "
-                "(fatura_cliente_id=%s) via NFs %s",
-                frete.id, operacao.cte_numero,
-                operacao.fatura_cliente_id, nfs_numeros,
-            )
+            # 4-5. Aplicar vinculo (operacao_id + valor_venda + fatura_cliente_id)
+            CarviaFreteService._aplicar_vinculo_operacao(frete, operacao)
 
         except Exception as e:
             logger.warning(
                 "Erro ao vincular operacao existente para frete #%s: %s",
                 frete.id, e,
             )
+
+    # ------------------------------------------------------------------
+    # Reconciliacao frete<->operacao (backfill + hook do import)
+    # ------------------------------------------------------------------
+    @staticmethod
+    def _aplicar_vinculo_operacao(frete, operacao) -> None:
+        """Grava o vinculo frete->operacao (operacao_id + valor_venda + fatura).
+
+        Fonte UNICA da escrita usada por _vincular_operacao_existente (criacao,
+        escolhe operacao de maior cobertura) e revincular_frete_estrito
+        (backfill/hook, exige operacao unica).
+        """
+        frete.operacao_id = operacao.id
+        if operacao.cte_valor and not frete.valor_venda:
+            frete.valor_venda = float(operacao.cte_valor)
+        if operacao.fatura_cliente_id:
+            frete.fatura_cliente_id = operacao.fatura_cliente_id
+        logger.info(
+            "CarviaFrete #%s vinculado a operacao %s (fatura_cliente_id=%s)",
+            frete.id, operacao.cte_numero, operacao.fatura_cliente_id,
+        )
+
+    @staticmethod
+    def resolver_operacao_unica_por_nfs(nfs_numeros):
+        """Resolve a CarviaOperacao (CTe) das NFs via junction — modo ESTRITO.
+
+        Diferente de _vincular_operacao_existente (que escolhe a de MAIOR
+        cobertura), este so' retorna a operacao se houver EXATAMENTE UMA
+        candidata nao-cancelada. Quando ha mais de uma (NFs do frete espalhadas
+        por CTes diferentes), devolve AMBIGUA para o caller PULAR e listar para
+        revisao manual (regra Rafael 2026-06-22) em vez de adivinhar.
+
+        Returns: dict {status: 'UNICA'|'AMBIGUA'|'NENHUMA', operacao, candidatas:[ids]}.
+        """
+        vazio = {'status': 'NENHUMA', 'operacao': None, 'candidatas': []}
+        if not nfs_numeros:
+            return vazio
+        from app.carvia.models import CarviaNf, CarviaOperacaoNf, CarviaOperacao
+
+        nf_ids = [
+            nid for (nid,) in db.session.query(CarviaNf.id).filter(
+                CarviaNf.numero_nf.in_(nfs_numeros),
+                CarviaNf.status == 'ATIVA',
+            ).all()
+        ]
+        if not nf_ids:
+            return vazio
+
+        op_ids = [
+            oid for (oid,) in db.session.query(
+                CarviaOperacaoNf.operacao_id
+            ).filter(CarviaOperacaoNf.nf_id.in_(nf_ids)).distinct().all()
+        ]
+        candidatas = []
+        for oid in op_ids:
+            op = db.session.get(CarviaOperacao, oid)
+            if op and op.status != 'CANCELADO':
+                candidatas.append(op)
+
+        ids = sorted({op.id for op in candidatas})
+        if len(ids) == 1:
+            return {'status': 'UNICA', 'operacao': candidatas[0], 'candidatas': ids}
+        if len(ids) > 1:
+            return {'status': 'AMBIGUA', 'operacao': None, 'candidatas': ids}
+        return vazio
+
+    @staticmethod
+    def revincular_frete_estrito(frete):
+        """Re-vincula UM CarviaFrete a sua CarviaOperacao via junction (ESTRITO).
+
+        Fecha o gap do CTe importado APOS o frete (frete.operacao_id ficou NULL
+        porque a importacao do CTe nunca atualiza o frete). So grava se houver
+        operacao UNICA; AMBIGUA/NENHUMA NAO grava (pula). Idempotente: no-op se
+        o frete ja tem operacao_id. Usado pelo backfill e pelo hook do import.
+
+        Returns: dict {status, operacao, candidatas} com status em
+          JA_VINCULADO | UNICA | AMBIGUA | NENHUMA.
+        """
+        if frete.operacao_id:
+            return {'status': 'JA_VINCULADO', 'operacao': None, 'candidatas': []}
+        nfs = [n.strip() for n in (frete.numeros_nfs or '').split(',') if n.strip()]
+        res = CarviaFreteService.resolver_operacao_unica_por_nfs(nfs)
+        if res['status'] == 'UNICA':
+            CarviaFreteService._aplicar_vinculo_operacao(frete, res['operacao'])
+        return res
 
     # ------------------------------------------------------------------
     # Helpers

@@ -207,6 +207,11 @@ class CteComplementarService:
                 ctrc_pai=operacao.ctrc_numero,
                 motivo_ssw=motivo_ssw,
                 filial_ssw='CAR',
+                # Liquido p/ o SSW refazer o grossing-up. Fonte unica (com OU sem CE):
+                # no caminho com CE, valor_base_f == custo.valor (passado pelo shim);
+                # no AVULSO, valor_base_f == valor a cobrar do form. Sem isto, o worker
+                # crashava no avulso ao ler custo_entrega.valor de None.
+                valor_base=valor_base_f,
                 valor_calculado=valor_cte,
                 icms_aliquota_usada=icms,
                 status='PENDENTE',

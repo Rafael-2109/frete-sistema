@@ -49,6 +49,32 @@ def _build_cte_por_frete(frete_ids):
         elif cte_num:
             cte_por_frete[fid] = {'label': cte_num, 'tipo': 'OPERACAO'}
 
+    # Fallback via junction: fretes sem operacao_id materializado (FK NULL) cujo
+    # CTe EXISTE e e detectavel pela junction carvia_operacao_nfs — o gap do CTe
+    # importado APOS o frete. Mostra o CTRC/CTe com tipo OPERACAO_JUNCTION para a
+    # UI sinalizar que o vinculo nao esta materializado. So resolve quando ha
+    # operacao UNICA (ambiguo continua "Pendente"). Defesa em profundidade ate o
+    # backfill/hook gravarem frete.operacao_id.
+    sem_label = [fid for fid in frete_ids if not cte_por_frete[fid]['label']]
+    if sem_label:
+        from app.carvia.services.documentos.carvia_frete_service import (
+            CarviaFreteService,
+        )
+        fretes_nfs = db.session.query(
+            CarviaFrete.id, CarviaFrete.numeros_nfs,
+        ).filter(
+            CarviaFrete.id.in_(sem_label),
+            CarviaFrete.operacao_id.is_(None),
+        ).all()
+        for fid, numeros_nfs in fretes_nfs:
+            nfs = [n.strip() for n in (numeros_nfs or '').split(',') if n.strip()]
+            res = CarviaFreteService.resolver_operacao_unica_por_nfs(nfs)
+            if res['status'] == 'UNICA':
+                op = res['operacao']
+                label = op.ctrc_numero or op.cte_numero
+                if label:
+                    cte_por_frete[fid] = {'label': label, 'tipo': 'OPERACAO_JUNCTION'}
+
     # CTe via subcontrato (compra) — preenche apenas fretes sem label ainda.
     # Order determinista por sub.id asc + filtro CANCELADO (consistente com
     # `subs_ativos` em detalhe_fatura_transportadora).

@@ -43,8 +43,13 @@
       "default": "CAR"
     },
     {
+      "name": "valor_base",
+      "type": "numeric(15,2)"
+    },
+    {
       "name": "valor_calculado",
       "type": "numeric(15,2)",
+      "description": "ja com grossing-up",
       "nullable": false
     },
     {
