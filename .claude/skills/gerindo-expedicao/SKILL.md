@@ -98,6 +98,7 @@ Se a simulacao de `criando_separacao_pedidos.py` retornar `alertas_estoque` NAO-
 | **Disponibilidade de grupo** | `analisando_disponibilidade_estoque.py` | `--grupo atacadao --completude` |
 | **Prazo de entrega** ("quando chega?") | `calculando_leadtime_entrega.py` | `--pedido X --data-embarque Y` |
 | **Criar separacao** | `criando_separacao_pedidos.py` | `--pedido X --expedicao Y` (SEM --executar!) |
+| **Gerar embarque** (de separacoes ja escolhidas) | `gerar_embarque.py` | `--user-id N --lotes '[...]' --transportadora-id T --tabela "..."` OU `--user-id N --embarque-origem ID` (SEM --confirmar!) |
 | **Programacao de producao** | `consultando_programacao_producao.py` | `--listar --dias 7` |
 | **Analise completa da carteira** | `analisando_carteira_completa.py` | `--resumo` ou sem parametros |
 | **Priorizar por P1-P7** | `analisando_carteira_completa.py` | `--prioridade N` |
@@ -110,6 +111,7 @@ Se a simulacao de `criando_separacao_pedidos.py` retornar `alertas_estoque` NAO-
 4. **DISPONIBILIDADE de pedido:** → `analisando_disponibilidade_estoque.py --pedido X`
 5. **PRAZO de entrega:** → `calculando_leadtime_entrega.py`
 6. **ACAO de criar separacao:** → `criando_separacao_pedidos.py` (SEMPRE simular antes!)
+7. **ACAO de gerar embarque** (separacoes JA escolhidas → Cotacao+Embarque): → `gerar_embarque.py` (SEMPRE dry-run antes! `--confirmar` efetiva). NAO lanca frete — o frete nasce depois na portaria/faturamento. v1 SO Nacom (recusa CARVIA-/ASSAI-).
 
 ### --cliente vs --grupo (IMPORTANTE)
 - **Loja especifica mencionada** (ex: "Atacadao 183", "Assai SP"): usar `--cliente "ATACADAO 183"`
@@ -142,7 +144,7 @@ Se resultado tiver mais de 1 loja: PERGUNTAR qual loja.
 
 **Para parametros completos, retornos e modos de operacao**: LER `SCRIPTS.md`
 
-Resumo dos 8 scripts:
+Resumo dos 9 scripts:
 
 | # | Script | Proposito |
 |---|--------|-----------|
@@ -154,6 +156,7 @@ Resumo dos 8 scripts:
 | 6 | `consultando_programacao_producao.py` | Programacao de producao |
 | 7 | `resolver_entidades.py` | Utilitario interno de resolucao |
 | 8 | `analisando_carteira_completa.py` | Analise P1-P7 completa com decisoes |
+| 9 | `gerar_embarque.py` | Gerar embarque (Cotacao+Embarque) de separacoes ja escolhidas — dry-run antes! NAO lanca frete |
 
 ---
 

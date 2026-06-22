@@ -4,7 +4,7 @@ camada: L2
 sot_de: —
 hub: .claude/skills/gerindo-expedicao/SKILL.md
 superseded_by: —
-atualizado: 2026-06-02
+atualizado: 2026-06-22
 -->
 # Scripts — Gerindo Expedicao (Detalhes)
 
@@ -21,6 +21,7 @@ atualizado: 2026-06-02
 - [6. consultando_programacao_producao.py](#6-consultando_programacao_producaopy)
 - [7. resolver_entidades.py](#7-resolver_entidadespy)
 - [8. analisando_carteira_completa.py](#8-analisando_carteira_completapy)
+- [9. gerar_embarque.py](#9-gerar_embarquepy)
 
 Referencia detalhada de parametros, retornos e modos de operacao.
 
@@ -283,3 +284,99 @@ python .claude/skills/gerindo-expedicao/scripts/analisando_carteira_completa.py 
 - Comunicacoes PCP: agrupadas por produto em falta
 - Comunicacoes Comercial: agrupadas por gestor
 - Comandos de separacao prontos para execucao
+
+---
+
+## 9. gerar_embarque.py
+
+**Proposito:** Gera um EMBARQUE PRONTO (Cotacao + Embarque + EmbarqueItem) a partir de
+Separacoes JA escolhidas, propagando `cotacao_id` na Separacao (status -> COTADO via
+event listener). Replica a sequencia oficial do `fechar_frete` (ramo Nacom) DENTRO de
+app_context, reusando as funcoes oficiais (TabelaFreteManager, obter_proximo_numero_embarque,
+LocalizacaoService, Separacao.atualizar_cotacao). NAO reimplementa nada.
+
+**NAO LANCA FRETE.** O embarque nasce SEM `data_embarque`. O frete nasce DEPOIS, no fluxo
+normal de portaria/faturamento. Este script NUNCA chama lancamento de frete.
+
+**IMPORTANTE:** Sempre executar primeiro SEM `--confirmar` (dry-run) para ver o plano!
+
+**v1 SO ramo Nacom** — RECUSA lotes com prefixo `CARVIA-`/`ASSAI-` com erro claro.
+
+```bash
+source .venv/bin/activate && \
+python .claude/skills/gerindo-expedicao/scripts/gerar_embarque.py [parametros]
+```
+
+### Dois modos
+
+| Modo | Como acionar | O que faz com a tabela de frete |
+|------|--------------|----------------------------------|
+| **A) ESPELHO** | `--embarque-origem <id>` | Copia o snapshot `tabela_*` congelado do Embarque origem (DIRETA) ou de um EmbarqueItem origem (FRACIONADA). NAO re-busca TabelaFrete. Lotes vem dos itens Nacom ativos do origem (restrinja com `--lotes`). |
+| **B) SOLTAS** | `--lotes '[...]' --transportadora-id T --tabela "NOME"` | Monta `dados_tabela` a partir da TabelaFrete oficial (uf_origem=SP, uf_destino derivado dos pedidos, tipo_carga=`--tipo`, modalidade=`--modalidade`). |
+
+### Parametros
+
+| Parametro | Descricao | Exemplo |
+|-----------|-----------|---------|
+| `--user-id` | ID do usuario, validado contra tabela `usuarios` (OBRIGATORIO; vira `Cotacao.usuario_id` e `Embarque.criado_por`) | `--user-id 74` |
+| `--embarque-origem` | Modo ESPELHO: id do Embarque a espelhar | `--embarque-origem 5807` |
+| `--lotes` | Modo SOLTAS: JSON array de `separacao_lote_id` (no ESPELHO restringe o subset) | `--lotes '["LOTE_20251004_1","LOTE_20251004_2"]'` |
+| `--transportadora-id` | Modo SOLTAS: id da transportadora | `--transportadora-id 12` |
+| `--tabela` | Modo SOLTAS: nome da TabelaFrete (uf_origem=SP) | `--tabela "TABELA AM"` |
+| `--tipo` | `DIRETA` ou `FRACIONADA` (default FRACIONADA; no ESPELHO herda do origem) | `--tipo DIRETA` |
+| `--modalidade` | Modalidade da tabela (modo SOLTAS) | `--modalidade "FRETE PESO"` |
+| `--confirmar` | Efetiva a criacao. Sem isso, apenas simula (dry-run). | flag |
+
+### Guard-rails
+
+- **`--dry-run` e o DEFAULT** — sem `--confirmar` so simula e imprime o plano (totais
+  recalculados do banco, numero de embarque previsto, itens que criaria, aviso de frete).
+- **`--user-id` OBRIGATORIO** e validado contra `usuarios` (inexistente -> exit 1).
+- **DIRETA exige UF normalizado unico** (`LocalizacaoService.normalizar_uf_com_regras`).
+  UF misto -> erro (use FRACIONADA ou separe por UF).
+- **Idempotencia**: se algum lote ja pertence a embarque ativo, o dry-run ALERTA e o
+  `--confirmar` ABORTA (evita Cotacao/Embarque duplicados).
+- **Totais recalculados do banco** (`Pedido` por `separacao_lote_id`), nunca da entrada.
+- **NUNCA INSERT raw** — so ORM via funcoes oficiais. Frete jamais com tabela zerada.
+
+### Exit codes
+
+| Code | Significado |
+|------|-------------|
+| `0` | Efetivado (`--confirmar` com sucesso) |
+| `4` | Dry-run OK (simulacao bem-sucedida; default sem `--confirmar`) |
+| `1` | Falha (erro de execucao / validacao de negocio / user-id inexistente) |
+| `2` | Uso (parametros invalidos: sem modo, `--lotes` nao-JSON, `--user-id` ausente) |
+
+### Exemplos
+
+```bash
+# ESPELHO (dry-run -> exit 4)
+python .claude/skills/gerindo-expedicao/scripts/gerar_embarque.py --user-id 74 --embarque-origem 5807
+
+# ESPELHO efetivo (-> exit 0)
+python .claude/skills/gerindo-expedicao/scripts/gerar_embarque.py --user-id 74 --embarque-origem 5807 --confirmar
+
+# SOLTAS (dry-run -> exit 4)
+python .claude/skills/gerindo-expedicao/scripts/gerar_embarque.py --user-id 74 \
+  --lotes '["LOTE_20251004_1","LOTE_20251004_2"]' \
+  --transportadora-id 12 --tabela "TABELA AM" --tipo DIRETA --modalidade "FRETE PESO"
+
+# SOLTAS efetivo FRACIONADA (-> exit 0)
+python .claude/skills/gerindo-expedicao/scripts/gerar_embarque.py --user-id 74 \
+  --lotes '["LOTE_A"]' --transportadora-id 12 --tabela "TABELA AM" --tipo FRACIONADA --confirmar
+```
+
+### Retorno (dry-run) inclui
+
+- `usuario` (id, nome) validado
+- `plano`: `modo`, `tipo_carga`, `transportadora_id`, `lotes`, `dados_tabela` (snapshot),
+  `totais` (valor/peso/pallet recalculados), `icms_destino`, `numero_embarque_previsto`,
+  `itens_previstos` (1 por lote: cnpj, cliente, pedido, peso, valor, pallets, cidade/uf),
+  `ja_em_embarque_ativo`, `aviso_frete`.
+- `alerta_idempotencia` quando algum lote ja esta em embarque ativo.
+
+### Retorno (efetivado) inclui
+
+- `cotacao_id`, `embarque_id`, `numero_embarque`, `tipo_carga`, `itens_criados`, `totais`,
+  `aviso_frete` ("Embarque criado SEM data_embarque. Frete nascera no fluxo normal...").
