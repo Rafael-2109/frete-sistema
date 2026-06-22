@@ -28,7 +28,9 @@ ERROS_SSW = {
     # 004 retorna aviso "CIDADE_NAO_ATENDIDA_402:cidade/uf".
     r'CIDADE_NAO_ATENDIDA|opc\s*402|op[cç][aã]o\s*402|cidade\b.{0,80}?n[aã]o.{0,10}atendida': 'CIDADE_NAO_ATENDIDA',
     r'rota\b.{0,200}?n[aã]o\s+cadastrada|op[cç][aã]o\s+403': 'ROTA_NAO_CADASTRADA',
-    r'bloqueado|inadimplente|falta\s+de\s+pagamento': 'CLIENTE_BLOQUEADO',
+    # (?<!des) evita casar 'bloqueado' DENTRO de 'desbloqueado' (sucesso do
+    # desbloqueio automatico nao e bloqueio). 'bloqueado' real ainda detectado.
+    r'(?<!des)bloqueado|inadimplente|falta\s+de\s+pagamento': 'CLIENTE_BLOQUEADO',
     r'GNRE|guia\s+GNRE': 'GNRE_OBRIGATORIA',
     r'rejeit': 'SEFAZ_REJEITADO',
     r'n[aã]o\s+autorizado': 'SEFAZ_NAO_AUTORIZADO',

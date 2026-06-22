@@ -190,7 +190,18 @@ def emitir_cte_ssw_job(emissao_id: int) -> dict:
             # (60-120s) — evita SSL drop por idle timeout do Postgres.
             _liberar_conexao_antes_playwright()
 
-            resultado_cte = _executar_script_cte(args_cte)
+            # Emite o CTe. Se o cliente pagador estava bloqueado, o script 004
+            # desbloqueia sozinho (Transportar=S na opcao 389) e ABORTA com
+            # retentar=True — desbloqueio e emissao sao operacoes SEPARADAS no
+            # SSW. Re-emitimos UMA vez: a 2a passada nao ve mais o bloqueio.
+            # Sem isto o desbloqueio fica orfao e o operador ve "Cliente
+            # bloqueado" falso (cliente JA foi desbloqueado).
+            def _marcar_etapa_retry():
+                _commit_pos_playwright(emissao_id, etapa='PREENCHIMENTO')
+
+            resultado_cte = _emitir_cte_com_retry_desbloqueio(
+                args_cte, marcar_etapa_retry=_marcar_etapa_retry,
+            )
 
             # Detectar erros SSW
             erro = SswEmissaoService.detectar_erro_ssw(resultado_cte)
@@ -521,6 +532,45 @@ def _executar_script_cte(args):
 
     from emitir_cte_004 import emitir_cte
     return asyncio.run(emitir_cte(args))
+
+
+def _emitir_cte_com_retry_desbloqueio(args_cte, marcar_etapa_retry=None,
+                                      _sleep=time.sleep):
+    """Executa emitir_cte() e re-emite UMA vez se o cliente foi desbloqueado.
+
+    Quando o cliente pagador esta bloqueado para transporte, o script 004
+    desbloqueia automaticamente (grava Transportar=S na opcao 389) e ABORTA a
+    emissao retornando retentar=True + cliente_desbloqueado=True — desbloqueio e
+    emissao sao operacoes SEPARADAS no SSW. Aqui re-emitimos UMA vez: a 2a
+    passada nao encontra mais o bloqueio (o cadastro do cliente ja mudou). Sem
+    este retry o desbloqueio fica orfao e o worker marca ERRO "Cliente
+    bloqueado" falso — o contrato `retentar` entrou no script (f728e5cb5) sem a
+    contraparte no worker.
+
+    Args:
+        args_cte: argparse.Namespace para emitir_cte().
+        marcar_etapa_retry: callback opcional chamado antes da 2a passada —
+            reconecta + atualiza etapa (a sessao detacha apos o Playwright).
+        _sleep: injetavel para teste (default time.sleep).
+
+    Returns:
+        dict resultado da emissao (1a passada, ou 2a se houve desbloqueio).
+    """
+    resultado = _executar_script_cte(args_cte)
+
+    if resultado.get('retentar') and resultado.get('cliente_desbloqueado'):
+        logger.info(
+            "CTe: cliente pagador desbloqueado (Transportar=S); re-emitindo 1x "
+            "(desbloqueio e emissao sao operacoes separadas no SSW)"
+        )
+        if marcar_etapa_retry:
+            marcar_etapa_retry()
+        # Padrao SSL-drop: fecha a conexao antes do 2o Playwright longo.
+        _liberar_conexao_antes_playwright()
+        _sleep(3)  # margem p/ o SSW propagar o desbloqueio do cadastro
+        resultado = _executar_script_cte(args_cte)
+
+    return resultado
 
 
 def _executar_consulta_101(ctrc_numero, filial='CAR'):
