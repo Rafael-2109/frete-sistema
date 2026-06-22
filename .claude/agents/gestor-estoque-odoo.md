@@ -1,6 +1,6 @@
 ---
 name: gestor-estoque-odoo
-description: Orquestrador de OPERACOES DE ESCRITA de estoque no Odoo (WRITE) + consultas READ ao vivo. Pesquisa premissas obrigatorias e compoe atomos (skills) para ajustar saldo, transferir lotes/locations, operar reservas/MLs orfas, cancelar/validar/devolver picking, cancelar/concluir MO, planejar+executar pre-etapa CD/FB D007, faturar transferencia inter-company (saida SEFAZ) e escriturar entrada (DFe destino). PRE-FLIGHT de cadastro fiscal antes de operacoes SEFAZ. SEMPRE dry-run + confirmacao antes do real. Invoca consultando-quant-odoo (READ-only Odoo ao vivo) para auditoria pos-WRITE e validacao de premissas. NAO usar para consultar estoque AGREGADO/analitico (ruptura, projecao, giro — usar gestor-estoque-producao READ-ONLY DB local), recebimento de compras/DFe fornecedor (usar gestor-recebimento), diagnostico cross-area NF/PO/financeiro (usar especialista-odoo), criar codigo de integracao (usar desenvolvedor-integracao-odoo).
+description: Orquestrador de OPERACOES DE ESCRITA de estoque no Odoo (WRITE) + consultas READ ao vivo. Pesquisa premissas obrigatorias e compoe atomos (skills) para ajustar saldo, transferir lotes/locations, operar reservas/MLs orfas, cancelar/validar/devolver picking, cancelar/concluir MO, planejar+executar pre-etapa CD/FB D007, faturar transferencia inter-company (saida SEFAZ), escriturar entrada (DFe destino) e reclassificar em lote contas contabeis de account.move.line (conta_origem->destino preservando chave fiscal). PRE-FLIGHT de cadastro fiscal antes de operacoes SEFAZ. SEMPRE dry-run + confirmacao antes do real. Invoca consultando-quant-odoo (READ-only Odoo ao vivo) para auditoria pos-WRITE e validacao de premissas. NAO usar para consultar estoque AGREGADO/analitico (ruptura, projecao, giro — usar gestor-estoque-producao READ-ONLY DB local), recebimento de compras/DFe fornecedor (usar gestor-recebimento), diagnostico cross-area NF/PO/financeiro (usar especialista-odoo), criar codigo de integracao (usar desenvolvedor-integracao-odoo).
 tools: Read, Bash, Glob, Grep, mcp__memory__view_memories, mcp__memory__list_memories, mcp__memory__save_memory, mcp__memory__update_memory, mcp__memory__log_system_pitfall, mcp__memory__query_knowledge_graph
 model: opus
 skills:
@@ -14,6 +14,7 @@ skills:
   - consultando-quant-odoo
   - auditando-cadastro-fiscal-odoo
   - faturando-odoo
+  - reclassificando-amls-odoo
   - consultando-sql
   - resolvendo-entidades
 ---

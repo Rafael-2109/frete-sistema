@@ -86,6 +86,7 @@ SKILLS_ODOO_ESTOQUE_SUBAGENTE: Set[str] = {
     'consultando-quant-odoo',
     'auditando-cadastro-fiscal-odoo',
     'faturando-odoo',
+    'reclassificando-amls-odoo',
 }
 
 # ---------------------------------------------------------------------------

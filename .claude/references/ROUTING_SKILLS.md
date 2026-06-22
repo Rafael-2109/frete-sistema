@@ -29,7 +29,7 @@ atualizado: 2026-06-08
   - [Skills motos_assai (8)](#skills-motos_assai-8)
   - [Skills SPED ECD audit (4) — USO EXCLUSIVO do subagent `auditor-sped-ecd`](#skills-sped-ecd-audit-4-uso-exclusivo-do-subagent-auditor-sped-ecd)
 
-**Ultima Atualizacao**: 20/06/2026 (57 skills invocaveis — +1 Assai: `corrigindo-dados-assai` (motos_assai 7→8), skill WRITE de backfill/correcao manual, delegada ao subagente `gestor-motos-assai` (deny-list, fora do listing do principal). Historico de mudancas do inventario: comentario HTML ao fim deste arquivo — F0.4 PAD-CTX moveu o changelog para fora do corpo lido pelo agente.)
+**Ultima Atualizacao**: 22/06/2026 (58 skills invocaveis — +1 Odoo: `reclassificando-amls-odoo` (Skills Odoo 21→22), skill WRITE de reclassificacao em lote de account.move.line conta_origem->destino preservando chave fiscal (F2 #3 do D8), delegada ao subagente `gestor-estoque-odoo` (deny-list, fora do listing do principal). 20/06/2026 (57 skills) +1 Assai: `corrigindo-dados-assai` (motos_assai 7→8), skill WRITE de backfill/correcao manual, delegada ao subagente `gestor-motos-assai`. Historico de mudancas do inventario: comentario HTML ao fim deste arquivo — F0.4 PAD-CTX moveu o changelog para fora do corpo lido pelo agente.)
 
 **REGRA**: Use a skill MAIS ESPECIFICA. `descobrindo-odoo-estrutura` e ULTIMO RECURSO.
 
@@ -197,7 +197,7 @@ Se a resposta esta no reference -> NAO usar skill.
 
 ---
 
-## Skills — Inventario Completo (57 invocaveis em `.claude/skills/`)
+## Skills — Inventario Completo (58 invocaveis em `.claude/skills/`)
 
 Cada skill tem `SKILL.md` em `.claude/skills/<nome>/`. `consultando-sql` e invocavel mas expoe data folder (schemas/queries) descoberto via filesystem.
 `SKILL_IMPROVEMENT_ROADMAP.md` na raiz de `.claude/skills/` e DOC, nao skill (nao conta no inventario).
