@@ -18,6 +18,7 @@ allowed-tools: Read, Bash, Glob, Grep
 - [Script 1 — ler.py (Excel/CSV)](#script-1--lerpy-excelcsv)
 - [Script 2 — ler_doc.py (Word / CNAB / OFX)](#script-2--ler_docpy-word--cnab--ofx)
 - [Cenarios Compostos](#cenarios-compostos)
+- [Analise alem da leitura (read-only)](#analise-alem-da-leitura-read-only)
 - [Tratamento de Erros](#tratamento-de-erros)
 - [Detalhe completo](#detalhe-completo)
 - [Relacionado](#relacionado)
@@ -109,6 +110,82 @@ python .claude/skills/lendo-arquivos/scripts/ler_doc.py --url "CAMINHO_OU_URL" [
   → somar `trnamt`.
 - **"Reconcilia esse retorno no Odoo?"**: ler aqui PRIMEIRO; depois
   `executando-odoo-financeiro` (nunca reconciliar so com dados locais).
+
+## Analise alem da leitura (read-only)
+
+A leitura fiel (R1-R7) e o **DEFAULT**. Esta secao e analise EXPLORATORIA sob
+demanda — read-only, **NUNCA escreve no sistema**. Ao REPORTAR numeros, R1-R4
+continuam valendo: nao inventar, nao arredondar, nao renomear. Use so quando o
+usuario pede uma pergunta analitica (distribuicao, completude, consistencia,
+diff). **Nao vire engine generica**: 1 heredoc focado responde a pergunta; nao
+construa pipeline de dados.
+
+### Padrao canonico (2 passos)
+
+**PASSO 1** — rodar `ler.py` UMA vez para ver `colunas`, `abas`/`aba_lida` e
+`total_linhas` (orienta a analise; nao precisa de mais).
+
+**PASSO 2** — Bash heredoc com pandas lendo o **ARQUIVO INTEIRO** via
+`url_para_caminho`. **NUNCA analise sobre `dados.registros` do JSON do ler.py —
+ele vem TRUNCADO em 1000 linhas (`--limite` default 1000); contagem/soma sairiam
+erradas.** Molde de import:
+
+```bash
+source .venv/bin/activate && python3 - <<'PY'
+import sys
+sys.path.insert(0, '.claude/skills/lendo-arquivos/scripts')
+from ler import url_para_caminho
+import pandas as pd
+caminho = url_para_caminho("CAMINHO_OU_URL")
+df = pd.read_excel(caminho)        # ou pd.read_csv(caminho, sep=';')
+# ... analise abaixo ...
+PY
+```
+
+### Receitas
+
+(a) **Distribuicao** de uma coluna (NaN conta como categoria):
+```python
+print(df["LOJA"].value_counts(dropna=False))
+```
+
+(b) **Completude** de colunas obrigatorias:
+```python
+obrig = ["LOJA", "CNPJ", "MODELO"]
+print(df[obrig].isna().sum())                       # nulos por coluna
+print("linhas c/ alguma obrig nula:", df[obrig].isna().any(axis=1).sum())
+```
+
+(c) **Consistencia 1:1 entre 2 colunas — BIDIRECIONAL** (os DOIS sentidos sao
+defeito):
+```python
+loja_n_cnpj = df.groupby("LOJA")["CNPJ"].nunique()
+cnpj_n_loja = df.groupby("CNPJ")["LOJA"].nunique()
+print("1 LOJA com N CNPJ:\n", loja_n_cnpj[loja_n_cnpj > 1])
+print("1 CNPJ com N LOJA:\n", cnpj_n_loja[cnpj_n_loja > 1])
+```
+
+(d) **Diff vs sistema** — extraia o SET de chaves AQUI e **delegue o cruzamento a
+`consultando-sql`** (NAO consulte SQL nesta skill):
+```python
+chaves = sorted(df["CNPJ"].dropna().astype(str).unique())
+print("total chaves:", len(chaves)); print(chaves)
+```
+Depois leve `chaves` para `consultando-sql` cruzar com o banco.
+
+(e) **Simulacao de exclusao** (quais linhas restam se remover N chaves):
+```python
+remover = {"001", "002"}
+antes = len(df); df2 = df[~df["LOJA"].astype(str).isin(remover)]
+print("antes:", antes, "depois:", len(df2))
+print(df2["MODELO"].value_counts())                 # vs df["MODELO"].value_counts()
+```
+
+### Ponteiro final
+
+Para regra de negocio especifica, escreva pandas ad-hoc seguindo o molde acima.
+**Anti-retry-storm**: rode UM heredoc completo que ja responde a pergunta toda,
+em vez de N tentativas incrementais.
 
 ## Tratamento de Erros
 
