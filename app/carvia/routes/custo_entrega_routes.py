@@ -803,7 +803,7 @@ def register_custo_entrega_routes(bp):
 
     # ── CTe Complementar: trigger de emissao via SSW opcao 222 ──
 
-    def _executar_gerar_cte_complementar(custo, user_email):
+    def _executar_gerar_cte_complementar(custo, user_email, valor_base_override=None):
         """Shim para compatibilidade — delega ao CteComplementarService.
 
         Refatorado em 2026-05-05: a logica de emissao foi unificada em
@@ -816,6 +816,9 @@ def register_custo_entrega_routes(bp):
         Args:
             custo: CarviaCustoEntrega ja persistido em sessao.
             user_email: email do usuario (auditoria).
+            valor_base_override: se informado (> 0), sobrepoe `custo.valor` como
+                valor-base do gross-up — permite emitir CTe Comp com valor
+                diferente do custo (2026-06-22). None = usa o valor do custo.
 
         Returns:
             tuple(sucesso: bool, mensagem: str, emissao_id: int | None)
@@ -838,9 +841,13 @@ def register_custo_entrega_routes(bp):
                 None,
             )
 
+        valor_base = float(custo.valor or 0)
+        if valor_base_override is not None and float(valor_base_override) > 0:
+            valor_base = float(valor_base_override)
+
         return CteComplementarService.criar_para_emissao_ssw(
             operacao_id=custo.operacao_id,
-            valor_base=float(custo.valor or 0),
+            valor_base=valor_base,
             tipo_custo=custo.tipo_custo,
             motivo_texto=(
                 custo.descricao
@@ -863,8 +870,23 @@ def register_custo_entrega_routes(bp):
             flash('Custo de entrega nao encontrado.', 'warning')
             return redirect(url_for('carvia.listar_custos_entrega'))
 
+        # Valor-base editavel (2026-06-22): se o operador informar um valor no modal,
+        # o CTe Comp e emitido sobre ele (gross-up) em vez do valor do custo. Vazio = usa custo.valor.
+        valor_base_override = None
+        vb_str = (request.form.get('valor_base') or '').strip()
+        if vb_str:
+            try:
+                valor_base_override = float(vb_str.replace('.', '').replace(',', '.')) \
+                    if ',' in vb_str else float(vb_str)
+            except ValueError:
+                flash('Valor base invalido.', 'warning')
+                return redirect(url_for('carvia.detalhe_custo_entrega', custo_id=custo_id))
+            if valor_base_override <= 0:
+                flash('Valor base deve ser maior que zero.', 'warning')
+                return redirect(url_for('carvia.detalhe_custo_entrega', custo_id=custo_id))
+
         sucesso, mensagem, _emissao_id = _executar_gerar_cte_complementar(
-            custo, current_user.email,
+            custo, current_user.email, valor_base_override,
         )
         if sucesso:
             flash(mensagem, 'success')

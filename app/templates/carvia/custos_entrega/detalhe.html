@@ -730,63 +730,70 @@
 <div class="modal fade" id="modalGerarCteComp" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title"><i class="fas fa-file-invoice"></i> Gerar CTe Complementar</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <p>Sera gerado um CTe Complementar no SSW (opcao 222) com os seguintes dados:</p>
-                <table class="table table-sm table-bordered mb-3">
-                    <tr>
-                        <th class="w-50">CTRC Referencia</th>
-                        <td><strong>{{ operacao.ctrc_numero }}</strong></td>
-                    </tr>
-                    <tr>
-                        <th>Tipo Custo</th>
-                        <td><span class="badge bg-secondary">{{ custo.tipo_custo }}</span></td>
-                    </tr>
-                    <tr>
-                        <th>Valor Base (custo)</th>
-                        <td>{{ custo.valor|valor_br }}</td>
-                    </tr>
-                    <tr>
-                        <th>PIS/COFINS</th>
-                        <td>9,25% (fixo)</td>
-                    </tr>
-                    <tr>
-                        <th>ICMS</th>
-                        <td>{{ operacao.icms_aliquota|numero_br(2) if operacao.icms_aliquota else 'A resolver do XML' }}%</td>
-                    </tr>
-                    <tr class="table-success">
-                        <th>Valor CTe Complementar (estimado)</th>
-                        <td>
-                            {% if operacao.icms_aliquota %}
-                                {% set icms_div = 1 - (operacao.icms_aliquota|float / 100) %}
-                                {% if icms_div > 0 %}
-                                    <strong>{{ (custo.valor|float / 0.9075 / icms_div)|round(2)|valor_br }}</strong>
-                                {% else %}
-                                    <strong>Erro ICMS</strong>
-                                {% endif %}
-                            {% else %}
-                                <em>Sera calculado apos resolver ICMS</em>
-                            {% endif %}
-                        </td>
-                    </tr>
-                </table>
-                <div class="alert alert-info py-2 mb-0">
-                    <i class="fas fa-info-circle"></i>
-                    O CTe sera emitido automaticamente no SSW. O processo leva 1-2 minutos.
+            <form method="POST" action="{{ url_for('carvia.gerar_cte_complementar', custo_id=custo.id) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="fas fa-file-invoice"></i> Gerar CTe Complementar</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                <form method="POST" action="{{ url_for('carvia.gerar_cte_complementar', custo_id=custo.id) }}">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="modal-body">
+                    <p>Sera gerado um CTe Complementar no SSW (opcao 222) com os seguintes dados:</p>
+                    <table class="table table-sm table-bordered mb-3">
+                        <tr>
+                            <th class="w-50">CTRC Referencia</th>
+                            <td><strong>{{ operacao.ctrc_numero }}</strong></td>
+                        </tr>
+                        <tr>
+                            <th>Tipo Custo</th>
+                            <td><span class="badge bg-secondary">{{ custo.tipo_custo }}</span></td>
+                        </tr>
+                        <tr>
+                            <th>Valor Base (R$)</th>
+                            <td>
+                                <input type="number" step="0.01" min="0.01" name="valor_base"
+                                       id="cteCompValorBase"
+                                       class="form-control form-control-sm"
+                                       value="{{ '%.2f'|format(custo.valor|float) }}"
+                                       data-icms="{{ operacao.icms_aliquota|float if operacao.icms_aliquota else 0 }}">
+                                <small class="text-muted">Pre-preenchido com o valor do custo. Edite para emitir um CTe Comp de valor diferente.</small>
+                            </td>
+                        </tr>
+                        <tr>
+                            <th>PIS/COFINS</th>
+                            <td>9,25% (fixo)</td>
+                        </tr>
+                        <tr>
+                            <th>ICMS</th>
+                            <td>{{ operacao.icms_aliquota|numero_br(2) if operacao.icms_aliquota else 'A resolver do XML' }}%</td>
+                        </tr>
+                        <tr class="table-success">
+                            <th>Valor CTe Complementar (estimado)</th>
+                            <td>
+                                {% if operacao.icms_aliquota %}
+                                    {% set icms_div = 1 - (operacao.icms_aliquota|float / 100) %}
+                                    {% if icms_div > 0 %}
+                                        <strong id="cteCompEstimado">{{ (custo.valor|float / 0.9075 / icms_div)|round(2)|valor_br }}</strong>
+                                    {% else %}
+                                        <strong id="cteCompEstimado">Erro ICMS</strong>
+                                    {% endif %}
+                                {% else %}
+                                    <em id="cteCompEstimado">Sera calculado apos resolver ICMS</em>
+                                {% endif %}
+                            </td>
+                        </tr>
+                    </table>
+                    <div class="alert alert-info py-2 mb-0">
+                        <i class="fas fa-info-circle"></i>
+                        O CTe sera emitido automaticamente no SSW. O processo leva 1-2 minutos.
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
                     <button type="submit" class="btn btn-primary">
                         <i class="fas fa-paper-plane"></i> Confirmar e Emitir
                     </button>
-                </form>
-            </div>
+                </div>
+            </form>
         </div>
     </div>
 </div>
@@ -889,6 +896,22 @@
 
     bindPagarCusto();
     bindDesfazerCusto();
+
+    // Recalcula o valor estimado do CTe Comp ao editar o valor-base no modal (gross-up).
+    (function bindCteCompValorBase() {
+        var input = document.getElementById('cteCompValorBase');
+        var out = document.getElementById('cteCompEstimado');
+        if (!input || !out) return;
+        var icms = parseFloat(input.dataset.icms || '0');
+        input.addEventListener('input', function() {
+            var base = parseFloat(input.value || '0');
+            var icmsDiv = 1 - (icms / 100);
+            if (base > 0 && icms > 0 && icmsDiv > 0) {
+                out.textContent = (base / 0.9075 / icmsDiv)
+                    .toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+            }
+        });
+    })();
 
     // Upload de anexo via AJAX
     document.getElementById('formUploadAnexo')?.addEventListener('submit', function(e) {
