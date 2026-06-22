@@ -4,7 +4,7 @@ camada: L2
 sot_de: CD de Expedicao (flag local_cd)
 hub: .claude/references/INDEX.md
 superseded_by: —
-atualizado: 2026-06-19
+atualizado: 2026-06-22
 -->
 # CD de Expedicao (flag local_cd)
 
@@ -121,7 +121,8 @@ As properties `Embarque.status_portaria` e `Embarque.locais_cd` (em `app/embarqu
 - Sincronizacao de entregas CarVia: `app/utils/sincronizar_entregas_carvia.py`
 - Properties `Embarque.status_portaria` / `locais_cd`: `app/embarques/models.py`
 - Gate Op. Assai (`verificar_requisitos_op_assai`) + rota manual (`processar_lancamento_frete`): `app/fretes/routes.py`
-- Vinculacao pos-saida por CD (`adicionar_embarque` — propaga `data_embarque`/entregas so aos itens do CD do registro): `app/portaria/routes.py`
+- Vinculacao pos-saida por CD (`adicionar_embarque` — propaga `data_embarque`/entregas so aos itens do CD do registro; duplicidade por `(embarque_id, local_cd)`): `app/portaria/routes.py`
+- Seletores de "embarque pendente de saida POR CD" (fila do dashboard + dropdown do form de chegada + APIs `api_embarques*`): `ControlePortaria.embarques_pendentes_do_cd_query(local_cd)` em `app/portaria/models.py` — criterio 2CD (item ativo do CD + sem saida do CD). NAO usar `data_embarque IS NULL`: o cabecalho agregado e preenchido pela 1a saida de QUALQUER CD e esconderia o embarque misto do CD que ainda nao saiu. Detalhe: `app/portaria/CLAUDE.md` R4.
 - Impressao por CD (rotulo de CD no cabecalho + badge por item na secao Nacom): `app/templates/embarques/imprimir_embarque.html`, `app/templates/embarques/imprimir_completo.html`
 - Mensagem de coleta por CD: `app/embarques/routes.py` (`api_gerar_solicitacao_coleta`), `app/templates/embarques/visualizar_embarque.html`
 - Backfill: `scripts/migrations/2026_06_18_backfill_local_cd_embarque_entrega.py`
