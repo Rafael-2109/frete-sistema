@@ -27,7 +27,7 @@ atualizado: 2026-06-22
 | Valor | Rotulo | Endereco de coleta |
 |-------|--------|--------------------|
 | `VICTORIO_MARCHEZINE` | Victorio Marchezine | Rua Victorio Marchezine, nº 61 – Santana de Parnaíba/SP |
-| `TENENTE_MARQUES` | Tenente Marques | Est. Tenente Marques, nº 6609 – Santana de Parnaíba/SP |
+| `TENENTE_MARQUES` | Tenente Marques | Est. Tenente Marques, nº 5440 – Santana de Parnaíba/SP |
 
 - **Default universal** = `VICTORIO_MARCHEZINE` (Nacom e historico). Pedidos Nacom sao SEMPRE VM.
 - **Pedidos CarVia** podem ter os dois CDs — a flag nasce na **Coleta** (stream Coletas do redesign CarVia).

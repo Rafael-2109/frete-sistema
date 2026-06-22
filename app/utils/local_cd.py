@@ -37,7 +37,7 @@ LOCAL_CD_LABELS_CURTO = {
 # Endereco fisico de coleta de cada CD (usado na solicitacao de coleta a transportadora).
 LOCAL_CD_ENDERECOS = {
     LOCAL_CD_VICTORIO_MARCHEZINE: 'Rua Victorio Marchezine, nº 61 – Santana de Parnaíba/SP',
-    LOCAL_CD_TENENTE_MARQUES: 'Est. Tenente Marques, nº 6609 – Santana de Parnaíba/SP',
+    LOCAL_CD_TENENTE_MARQUES: 'Est. Tenente Marques, nº 5440 – Santana de Parnaíba/SP',
 }
 
 # Para WTForms SelectField / choices de UI
