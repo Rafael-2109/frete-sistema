@@ -128,6 +128,16 @@ class CarviaColetaService:
         from app.utils.propagacao_local_cd import propagar_local_cd_carvia
         propagar_local_cd_carvia(numero_nf, local_cd)
 
+        # A lista_pedidos le da MV mv_pedidos (PedidoMV), refreshed a cada ciclo do
+        # scheduler (~30min) — sem isto, o CD novo so' apareceria no proximo ciclo.
+        # Dispara um refresh assincrono + DEBOUNCED (rajada de N NFs = 1 refresh) +
+        # best-effort. Lazy import (R2). Ver app/pedidos/services/mv_refresh_service.py.
+        try:
+            from app.pedidos.services.mv_refresh_service import solicitar_refresh_mv_pedidos
+            solicitar_refresh_mv_pedidos()
+        except Exception:
+            pass
+
     @staticmethod
     def cancelar_coleta(coleta, usuario=None):
         from app.carvia.models.coleta import COLETA_STATUS_CANCELADA, COLETA_STATUS_COLETADA
