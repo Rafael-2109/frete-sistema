@@ -67,6 +67,13 @@ echo "Fase 3 loop corretivo: migration agent_memories (error_signature/harmful/h
 python scripts/migrations/2026_06_02_agent_memories_error_signature.py \
     || echo "⚠️ migration error_signature falhou — verificar (continuando deploy)..."
 
+# CarVia 2026-06-22: colapsa status VINCULADO_FT -> PENDENTE em carvia_custos_entrega
+# (o vinculo a uma Fatura Transportadora passou a ser a FK fatura_transportadora_id,
+# nao um status). Idempotente: UPDATE WHERE status='VINCULADO_FT' -> no-op apos a 1a vez.
+echo "CarVia: migration remover status VINCULADO_FT de custos_entrega (idempotente)..."
+python scripts/migrations/2026_06_22_carvia_custo_entrega_remover_vinculado_ft.py \
+    || echo "⚠️ migration remover VINCULADO_FT falhou — verificar (continuando deploy)..."
+
 # Formato canonico de memorias (2026-06-08): coluna meta JSONB + indice GIN +
 # backfill REMOVIDOS do build apos aplicacao em PROD (deploy ad3c78027). Scripts
 # permanecem versionados — re-rodar manual via Render Shell se necessario:
