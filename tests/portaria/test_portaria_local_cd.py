@@ -274,6 +274,94 @@ def test_saida_tm_posterior_propaga_item_tm(db, client, _mock_hooks_saida):
 # (c) regressao Nacom — embarque 100% VM, 1 registro VM
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# (d) embarques_pendentes_do_cd_query — seletor de embarque 2CD-aware
+#     Regressao do bug: a 1a saida de QUALQUER CD carimba Embarque.data_embarque
+#     (cabecalho agregado) e os seletores legados (`data_embarque IS NULL`)
+#     escondiam o embarque misto do 2o CD. O helper usa o criterio por-CD.
+# ---------------------------------------------------------------------------
+
+def _marcar_saida(db, registro):
+    """Carimba data/hora de saida num registro existente (sem passar pela rota)."""
+    registro.data_saida = date(2026, 1, 10)
+    registro.hora_saida = time(17, 0)
+    db.session.flush()
+
+
+def test_helper_misto_pos_saida_tm_continua_pendente_vm(db):
+    """Apos a saida TM (que ja carimbou Embarque.data_embarque), o embarque misto
+    DEVE continuar pendente para a VM e NAO mais para a TM."""
+    suf = uuid.uuid4().hex[:8]
+    mid = _novo_motorista(db)
+    eid = _novo_embarque(db)
+    _novo_item(db, eid, LOCAL_CD_VICTORIO_MARCHEZINE, f'L-VM-{suf}', f'NFVM{suf[:6]}')
+    _novo_item(db, eid, LOCAL_CD_TENENTE_MARQUES, f'L-TM-{suf}', f'NFTM{suf[:6]}')
+
+    # 1a saida pela TM: registro TM com saida + cabecalho data_embarque preenchido
+    reg_tm = _registro_portaria(db, mid, eid, LOCAL_CD_TENENTE_MARQUES)
+    _marcar_saida(db, reg_tm)
+    db.session.execute(
+        text("UPDATE embarques SET data_embarque = :d WHERE id = :id"),
+        {'d': date(2026, 1, 10), 'id': eid},
+    )
+    db.session.flush()
+
+    pend_vm = {e.id for e in ControlePortaria.embarques_pendentes_do_cd_query(
+        LOCAL_CD_VICTORIO_MARCHEZINE).all()}
+    pend_tm = {e.id for e in ControlePortaria.embarques_pendentes_do_cd_query(
+        LOCAL_CD_TENENTE_MARQUES).all()}
+
+    assert eid in pend_vm, "Embarque misto deveria seguir pendente para a VM apos a saida TM"
+    assert eid not in pend_tm, "TM ja deu saida -> nao deveria mais constar como pendente TM"
+
+
+def test_helper_apos_ambas_saidas_nao_lista(db):
+    """Com saida registrada nos DOIS CDs, o embarque some de ambos os seletores."""
+    suf = uuid.uuid4().hex[:8]
+    mid = _novo_motorista(db)
+    eid = _novo_embarque(db)
+    _novo_item(db, eid, LOCAL_CD_VICTORIO_MARCHEZINE, f'L-VM-{suf}', f'NFVM{suf[:6]}')
+    _novo_item(db, eid, LOCAL_CD_TENENTE_MARQUES, f'L-TM-{suf}', f'NFTM{suf[:6]}')
+
+    reg_vm = _registro_portaria(db, mid, eid, LOCAL_CD_VICTORIO_MARCHEZINE)
+    reg_tm = _registro_portaria(db, mid, eid, LOCAL_CD_TENENTE_MARQUES)
+    _marcar_saida(db, reg_vm)
+    _marcar_saida(db, reg_tm)
+    db.session.flush()
+
+    pend_vm = {e.id for e in ControlePortaria.embarques_pendentes_do_cd_query(
+        LOCAL_CD_VICTORIO_MARCHEZINE).all()}
+    pend_tm = {e.id for e in ControlePortaria.embarques_pendentes_do_cd_query(
+        LOCAL_CD_TENENTE_MARQUES).all()}
+
+    assert eid not in pend_vm
+    assert eid not in pend_tm
+
+
+def test_helper_regressao_nacom_puro(db):
+    """Nacom puro (100% VM): pendente VM antes da saida; some apos a saida VM."""
+    suf = uuid.uuid4().hex[:8]
+    mid = _novo_motorista(db)
+    eid = _novo_embarque(db)
+    _novo_item(db, eid, LOCAL_CD_VICTORIO_MARCHEZINE, f'L-A-{suf}', f'NFA{suf[:6]}')
+    _novo_item(db, eid, LOCAL_CD_VICTORIO_MARCHEZINE, f'L-B-{suf}', f'NFB{suf[:6]}')
+
+    antes = {e.id for e in ControlePortaria.embarques_pendentes_do_cd_query(
+        LOCAL_CD_VICTORIO_MARCHEZINE).all()}
+    assert eid in antes, "Embarque Nacom novo deveria estar pendente para a VM"
+    # Nunca foi pendente da TM (sem itens TM)
+    assert eid not in {e.id for e in ControlePortaria.embarques_pendentes_do_cd_query(
+        LOCAL_CD_TENENTE_MARQUES).all()}
+
+    reg_vm = _registro_portaria(db, mid, eid, LOCAL_CD_VICTORIO_MARCHEZINE)
+    _marcar_saida(db, reg_vm)
+    db.session.flush()
+
+    depois = {e.id for e in ControlePortaria.embarques_pendentes_do_cd_query(
+        LOCAL_CD_VICTORIO_MARCHEZINE).all()}
+    assert eid not in depois, "Apos a saida VM o embarque nao deve mais constar pendente"
+
+
 def test_regressao_nacom_100pct_vm_propaga_todos_itens(db, client, _mock_hooks_saida):
     suf = uuid.uuid4().hex[:8]
     lote_1 = f'LOTE-A-{suf}'

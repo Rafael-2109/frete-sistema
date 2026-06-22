@@ -374,8 +374,9 @@ document.addEventListener('DOMContentLoaded', function() {
       // Limpa opções anteriores
       select.innerHTML = '<option value="">Carregando...</option>';
       
-      // Busca embarques disponíveis
-      fetch('/portaria/api/embarques_disponiveis')
+      // Busca embarques disponíveis do CD deste veículo (2CD-aware): um embarque
+      // misto segue pendente para o CD que ainda nao deu saida.
+      fetch('/portaria/api/embarques_disponiveis?local_cd={{ registro.local_cd }}')
         .then(response => response.json())
         .then(data => {
           select.innerHTML = '<option value="">Selecione um embarque...</option>';

@@ -1,8 +1,9 @@
 from datetime import datetime
 from app import db
 from app.utils.timezone import agora_utc_naive
-from app.embarques.models import Embarque
+from app.embarques.models import Embarque, EmbarqueItem
 from app.veiculos.models import Veiculo
+from app.utils.local_cd import LOCAL_CD_DEFAULT, normalizar_local_cd
 
 
 class Motorista(db.Model):
@@ -140,6 +141,42 @@ class ControlePortaria(db.Model):
         self.data_saida = agora.date()
         self.hora_saida = agora.time()
     
+    @staticmethod
+    def embarques_pendentes_do_cd_query(local_cd=None):
+        """Query base dos Embarques pendentes de SAIDA no CD informado (2CD-aware).
+
+        "Pendente do CD" = embarque ATIVO que (1) tem >=1 EmbarqueItem ativo daquele
+        local E (2) ainda nao teve a SAIDA registrada por uma portaria daquele local.
+        NAO usa `Embarque.data_embarque` (cabecalho agregado: a 1a saida de QUALQUER
+        CD ja o preenche enquanto o outro CD segue pendente — ver CLAUDE.md R4). Esta
+        e a FONTE UNICA do criterio 2CD: dashboard, dropdown do form de chegada e as
+        APIs `api_embarques*` consomem este helper (antes cada um filtrava
+        `data_embarque IS NULL`, que escondia o embarque misto apos a 1a saida).
+
+        Retorna a `Embarque.query` (sem options/order) para o consumidor refinar
+        (joinedload, filtro por termo, order_by, `.all()`). `local_cd` e normalizado;
+        valor invalido/vazio cai no default VM.
+        """
+        local = normalizar_local_cd(local_cd) or LOCAL_CD_DEFAULT
+
+        tem_item_do_local = EmbarqueItem.query.filter(
+            EmbarqueItem.embarque_id == Embarque.id,
+            EmbarqueItem.status == 'ativo',
+            EmbarqueItem.local_cd == local,
+        ).exists()
+
+        saida_do_local_registrada = ControlePortaria.query.filter(
+            ControlePortaria.embarque_id == Embarque.id,
+            ControlePortaria.local_cd == local,
+            ControlePortaria.data_saida.isnot(None),
+        ).exists()
+
+        return Embarque.query.filter(
+            Embarque.status == 'ativo',
+            tem_item_do_local,
+            ~saida_do_local_registrada,
+        )
+
     @staticmethod
     def veiculos_do_dia(local_cd=None):
         """Retorna veículos do dia + não finalizados, ordenados: DENTRO, AGUARDANDO, SAIU.

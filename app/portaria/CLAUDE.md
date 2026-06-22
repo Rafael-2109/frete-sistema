@@ -59,11 +59,11 @@ Blueprint `portaria` (`/portaria`), registrado em `app/__init__.py:941`+`:1006`.
 |------|--------|-------|
 | `GET /` | `dashboard` | **Fila do dia por CD** (2CD-aware) — `?local_cd=` (default VM) |
 | `POST /registrar_movimento` | `registrar_movimento` | **ROTA CRITICA** — `acao` ∈ chegada/entrada/saida |
-| `POST /adicionar_embarque` | `adicionar_embarque` | Vincula embarque; se ja saiu, REPLICA o carimbo de saida |
+| `POST /adicionar_embarque` | `adicionar_embarque` | Vincula embarque; se ja saiu, REPLICA o carimbo de saida. Duplicidade checada por `(embarque_id, local_cd)` — embarque misto admite 1 registro por CD (R3) |
 | `POST /excluir_embarque` | `excluir_embarque` | Desvincula — REVERTE data_embarque (Embarque+Separacao+Entrega) |
 | `POST /registrar`/`cadastrar`/`editar`/`excluir` motorista | — | CRUD de motorista |
 | `GET /historico` | `historico` | Paginado; status reimplementado em SQL (ver R1) |
-| `GET /api/embarques`, `/api/embarques_disponiveis` | — | Selects — **AINDA usam filtro legado** `data_embarque IS NULL` (nao 2CD-aware) |
+| `GET /api/embarques`, `/api/embarques_disponiveis` | — | Selects de embarque — **2CD-aware** via `ControlePortaria.embarques_pendentes_do_cd_query` (param `?local_cd=`) |
 
 ---
 
@@ -78,8 +78,8 @@ Ao registrar saida de um registro com embarque vinculado: (1) `Embarque.data_emb
 ### R3: Saida e POR-CD — 2 registros por embarque misto
 Cada registro de portaria pertence a UM `local_cd` e a saida despacha **somente** os `EmbarqueItem` com `(it.local_cd or VM) == local do registro`. Um embarque MISTO (VM+TM) tem 2 registros de `ControlePortaria` (1 por CD); cada CD carimba seus itens com a sua data de saida. `NULL` em `local_cd` conta como VM. Para Nacom puro (1 registro VM) o efeito e identico ao legado.
 
-### R4: A fila NAO filtra por data_embarque do cabecalho
-`Embarque.data_embarque` e cabecalho **agregado**: em embarque misto, a saida VM ja o preenche enquanto itens TM seguem pendentes. A fila do dashboard usa: embarque `ativo` AND existe `EmbarqueItem` ativo do CD AND ainda nao ha registro de saida desse CD. NAO usar `data_embarque IS NULL` para saber se um CD especifico saiu (as APIs `api_embarques*` ainda usam o filtro legado — corretas so para 1 CD).
+### R4: "pendente de saida do CD" NAO usa data_embarque do cabecalho
+`Embarque.data_embarque` e cabecalho **agregado**: em embarque misto, a 1a saida de QUALQUER CD ja o preenche enquanto o outro CD segue pendente. O criterio "pendente de saida do CD" e **FONTE UNICA** em `ControlePortaria.embarques_pendentes_do_cd_query(local_cd)`: embarque `ativo` AND existe `EmbarqueItem` ativo do CD AND ainda nao ha registro de saida desse CD. Consumido por: fila do dashboard, dropdown de embarque do form de chegada (`ControlePortariaForm(local_cd_ativo=...)`) e APIs `api_embarques*` (param `?local_cd=`). NAO usar `data_embarque IS NULL` para saber se um CD especifico saiu — escondia o embarque misto do 2o CD apos a 1a saida (bug corrigido 2026-06-22: o operador nao conseguia vincular o embarque ao veiculo do 2o CD para registrar a saida).
 
 ### R5: Saida dispara frete (Nacom/CarVia/Op.Assai) por embarque inteiro
 A saida (e a vinculacao-apos-saida) chama os hooks de frete: Nacom via `processar_lancamento_automatico_fretes` (de `app.fretes.routes`), CarVia via `CarviaFreteService.lancar_frete_carvia`, Op.Assai via sync proprio. **Importante**: o carimbo/propagacao e POR-CD, mas os hooks de frete recebem o `embarque_id` INTEIRO — a saida de um CD ja dispara tentativa de frete do embarque todo (o gate 2-CD que segura o frete ate a ultima saida vive em `app/fretes`). Todos os hooks estao em try/except silencioso (falha de frete NAO aborta a saida). Desvincular chama `apagar_fretes_sem_cte_embarque` (de `app.embarques.routes`).

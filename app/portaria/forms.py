@@ -161,9 +161,9 @@ class ControlePortariaForm(FlaskForm):
     # Nota: Botões de ação removidos para evitar conflito com métodos do modelo
     # Os botões são renderizados diretamente no template
     
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, local_cd_ativo=None, **kwargs):
         super(ControlePortariaForm, self).__init__(*args, **kwargs)
-        
+
         # Carrega opções de veículos
         self.tipo_veiculo_id.choices = [('', 'Selecione o tipo de veículo')]
         try:
@@ -173,16 +173,20 @@ class ControlePortariaForm(FlaskForm):
             ])
         except:
             pass  # Em caso de erro na consulta
-        
-        # Carrega apenas embarques pendentes de embarque (sem data_embarque)
+
+        # 🏭 Carrega embarques pendentes de SAIDA do CD ativo (2CD-aware).
+        # NAO filtrar por `data_embarque IS NULL`: num embarque MISTO, a 1a saida de
+        # qualquer CD ja preenche o cabecalho e esconderia o embarque do 2o CD. O
+        # criterio correto (item ativo do CD + sem saida do CD) vem do helper unico.
+        local = normalizar_local_cd(local_cd_ativo) or LOCAL_CD_DEFAULT
         self.embarque_id.choices = [('', 'Selecione um embarque')]
         try:
-            embarques = Embarque.query.filter(
-                Embarque.status == 'ativo',
-                Embarque.data_embarque.is_(None)  # Apenas embarques que ainda não saíram
-            ).order_by(Embarque.numero.desc()).all()
+            from app.portaria.models import ControlePortaria
+            embarques = ControlePortaria.embarques_pendentes_do_cd_query(local).order_by(
+                Embarque.numero.desc()
+            ).all()
             self.embarque_id.choices.extend([
-                (e.id, f'Embarque #{e.numero} - {e.transportadora.razao_social if e.transportadora else ""} (PENDENTE)') 
+                (e.id, f'Embarque #{e.numero} - {e.transportadora.razao_social if e.transportadora else ""} (PENDENTE)')
                 for e in embarques
             ])
         except:

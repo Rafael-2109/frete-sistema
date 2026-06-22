@@ -12,7 +12,7 @@ from sqlalchemy.orm import joinedload
 from app.utils.auth_decorators import require_portaria
 from app.portaria.models import Motorista, ControlePortaria
 from app.portaria.forms import CadastroMotoristaForm, BuscarMotoristaForm, ControlePortariaForm, FiltroHistoricoForm
-from app.embarques.models import Embarque, EmbarqueItem
+from app.embarques.models import Embarque
 from app.separacao.models import Separacao
 from app.monitoramento.models import EntregaMonitorada
 from app.utils.sincronizar_entregas import sincronizar_entrega_por_nf
@@ -58,44 +58,23 @@ def dashboard():
     Dashboard principal da portaria - mostra veículos do dia e embarques pendentes
     """
     form_buscar = BuscarMotoristaForm()
-    form_controle = ControlePortariaForm()
 
     # 🏭 CD/portaria ativo: vem do seletor de contexto (?local_cd=...). Default = VM (Nacom).
     # Normaliza para garantir valor canonico; entrada invalida cai no default.
     local_cd_ativo = normalizar_local_cd(request.args.get('local_cd')) or LOCAL_CD_DEFAULT
 
+    # Form de chegada com o dropdown de embarques pendentes ja filtrado pelo CD ativo.
+    form_controle = ControlePortariaForm(local_cd_ativo=local_cd_ativo)
+
     # Busca veículos do dia ordenados conforme especificação (do CD ativo)
     veiculos_hoje = ControlePortaria.veiculos_do_dia(local_cd=local_cd_ativo)
 
-    # Busca embarques pendentes do CD ativo.
-    #
-    # "Pendente do CD ativo" = embarque ativo que (1) tem >=1 EmbarqueItem ativo daquele
-    # local E (2) ainda nao teve a SAIDA registrada por uma portaria daquele local.
-    # Embarque.data_embarque e agregado (cabecalho), entao NAO basta filtrar por ele:
-    # um embarque misto VM+TM pode ja ter data_embarque preenchida pela saida VM e ainda
-    # ter itens TM pendentes. Por isso:
-    #   - EXISTS em EmbarqueItem (status ativo, local_cd == ativo) -> tem carga deste CD;
-    #   - NOT EXISTS em ControlePortaria (mesmo embarque, mesmo local, com data_saida) ->
-    #     este CD ainda nao despachou. (2 registros por embarque sao permitidos: 1 por CD.)
-    tem_item_do_local = EmbarqueItem.query.filter(
-        EmbarqueItem.embarque_id == Embarque.id,
-        EmbarqueItem.status == 'ativo',
-        EmbarqueItem.local_cd == local_cd_ativo,
-    ).exists()
-
-    saida_do_local_registrada = ControlePortaria.query.filter(
-        ControlePortaria.embarque_id == Embarque.id,
-        ControlePortaria.local_cd == local_cd_ativo,
-        ControlePortaria.data_saida.isnot(None),
-    ).exists()
-
-    # joinedload evita N+1 ao acessar embarque.transportadora no template
-    embarques_pendentes = Embarque.query.options(
+    # Busca embarques pendentes de SAIDA do CD ativo (criterio 2CD — ver helper).
+    # joinedload evita N+1 ao acessar embarque.transportadora no template.
+    embarques_pendentes = ControlePortaria.embarques_pendentes_do_cd_query(
+        local_cd_ativo
+    ).options(
         joinedload(Embarque.transportadora)
-    ).filter(
-        Embarque.status == 'ativo',
-        tem_item_do_local,
-        ~saida_do_local_registrada,
     ).order_by(Embarque.numero.desc()).all()
 
     return render_template(
@@ -239,8 +218,12 @@ def registrar_movimento():
         print(f"[DEBUG] Ação recebida: {acao}")
         
         if acao == 'chegada':
-            # Novo registro de controle
-            form = ControlePortariaForm()
+            # Novo registro de controle. O dropdown de embarque precisa conhecer o CD
+            # ativo (seletor de contexto) para validar a escolha contra os pendentes do
+            # CD — senao o SelectField rejeitaria o embarque misto pos-saida do outro CD.
+            form = ControlePortariaForm(
+                local_cd_ativo=normalizar_local_cd(request.form.get('local_cd'))
+            )
             print(f"[DEBUG] Formulário criado para chegada")
             
             if form.validate_on_submit():
@@ -727,12 +710,12 @@ def api_embarques():
     API para buscar embarques pendentes de embarque (para select dinâmico)
     """
     termo = request.args.get('q', '')
-    
-    query = Embarque.query.filter(
-        Embarque.status == 'ativo',
-        Embarque.data_embarque.is_(None)  # Apenas embarques pendentes
-    )
-    
+    # 🏭 CD ativo (seletor de contexto). Embarques pendentes de SAIDA desse CD
+    # (criterio 2CD — ver helper); NAO usar `data_embarque IS NULL` (esconde o
+    # embarque misto apos a 1a saida do outro CD).
+    local_cd_ativo = normalizar_local_cd(request.args.get('local_cd')) or LOCAL_CD_DEFAULT
+    query = ControlePortaria.embarques_pendentes_do_cd_query(local_cd_ativo)
+
     if termo:
         # Embarque.numero e Integer; cast para text antes do LIKE para evitar
         # "operator does not exist: integer ~~ unknown" (PYTHON-FLASK-PF).
@@ -742,7 +725,7 @@ def api_embarques():
                 Embarque.transportadora.has(razao_social=f'%{termo}%')
             )
         )
-    
+
     embarques = query.order_by(Embarque.numero.desc()).all()
     
     resultados = []
@@ -771,16 +754,19 @@ def api_embarques_disponiveis():
     API para buscar embarques pendentes de embarque para vincular à portaria
     (apenas embarques ativos sem data_embarque)
     """
-    # Busca apenas embarques pendentes de embarque (sem data_embarque)
-    embarques = Embarque.query.filter(
-        Embarque.status == 'ativo',
-        Embarque.data_embarque.is_(None)  # Apenas embarques que ainda não saíram
+    # 🏭 CD ativo (seletor de contexto). Embarques pendentes de SAIDA desse CD
+    # (criterio 2CD — ver helper); NAO usar `data_embarque IS NULL`.
+    local_cd_ativo = normalizar_local_cd(request.args.get('local_cd')) or LOCAL_CD_DEFAULT
+    embarques = ControlePortaria.embarques_pendentes_do_cd_query(
+        local_cd_ativo
     ).order_by(Embarque.numero.desc()).all()
-    
+
     resultado = []
     for embarque in embarques:
-        # Verifica se já está vinculado a algum veículo
-        registro_vinculado = ControlePortaria.query.filter_by(embarque_id=embarque.id).first()
+        # Verifica se ja esta vinculado a algum veiculo DESTE CD (1 registro por CD)
+        registro_vinculado = ControlePortaria.query.filter_by(
+            embarque_id=embarque.id, local_cd=local_cd_ativo
+        ).first()
         
         item_embarque = {
             'id': embarque.id,
@@ -829,12 +815,18 @@ def adicionar_embarque():
         
         # Busca o embarque
         embarque = Embarque.query.get_or_404(embarque_id)
-        
-        # Verifica se o embarque já está vinculado a outro veículo
-        registro_existente = ControlePortaria.query.filter_by(embarque_id=embarque_id).first()
-        
+
+        # 🏭 Duplicidade e POR CD: um embarque MISTO tem 1 registro por CD (VM + TM).
+        # So bloqueia se ja houver outro veiculo do MESMO CD deste registro vinculado
+        # ao embarque — vincular o 2o CD a outro veiculo e legitimo (R3).
+        registro_existente = ControlePortaria.query.filter(
+            ControlePortaria.embarque_id == embarque_id,
+            ControlePortaria.local_cd == registro.local_cd,
+            ControlePortaria.id != registro.id,
+        ).first()
+
         if registro_existente and not substituir_veiculo:
-            flash(f'Este embarque já está vinculado ao veículo {registro_existente.placa}! Use a opção de substituir se necessário.', 'warning')
+            flash(f'Este embarque já está vinculado ao veículo {registro_existente.placa} neste CD! Use a opção de substituir se necessário.', 'warning')
             return redirect(url_for('portaria.detalhes_veiculo', registro_id=registro_id))
         
         # Se for substituição, remove o vínculo anterior
