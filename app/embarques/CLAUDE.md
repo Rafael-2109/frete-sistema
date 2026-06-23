@@ -73,6 +73,8 @@ Blueprint `embarques` (`url_prefix=/embarques`), registrado em `app/__init__.py:
 
 > O hub (`visualizar_embarque`) tem o botao **Ver no Mapa** → link direto para `mapa.visualizar_mapa` com `lotes[]=` dos `separacao_lote_id` dos itens ativos (NACOM + CarVia; o mapa distingue CarVia pelo prefixo `CARVIA-`). Mesmo destino do "Ver no Mapa" da lista de pedidos.
 
+> **Botao admin-only "Registrar saida na portaria"** (so' `administrador` + embarque `ativo`): link para a rota da PORTARIA `portaria.criar_registro_embarque` (`/portaria/admin/criar-registro-embarque/<id>`), que cria um `ControlePortaria` ja com chegada/entrada/saida e dispara a cadeia de efeitos da saida (carimba `data_embarque`, etc.). Atalho para regularizar saida fora do fluxo fisico da portaria — ver `app/portaria/CLAUDE.md`.
+
 | Grupo | Rotas principais |
 |-------|------------------|
 | **Hub/CRUD** | `GET\|POST /<id>` (`visualizar_embarque` — hub), `/listar_embarques`, `/<id>/editar` (POST morto), `/<id>/cancelar`, `/novo` (rascunho), `/<id>/novo_item`, `/excluir_item/<item_id>`, `/item/<item_id>/cancelar`, `/<id>/alterar_cotacao` |
