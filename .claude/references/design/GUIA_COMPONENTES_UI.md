@@ -4,7 +4,7 @@ camada: L2
 sot_de: —
 hub: .claude/references/INDEX.md
 superseded_by: —
-atualizado: 2026-06-02
+atualizado: 2026-06-23
 -->
 # Guia de Componentes UI — Nacom Goya Design System
 
@@ -254,6 +254,39 @@ Lista completa em `components/_tables.css`: `col-id, col-pedido, col-cnpj, col-d
 ```html
 <table class="table table-sticky-both">...</table>
 ```
+
+> ⚠️ **Sticky header (vertical) e scroll-x sao mutuamente exclusivos no MESMO container.** Ver gotcha em 4.5.
+
+### 4.5 Scroll horizontal, wrap e o gotcha sticky × overflow
+
+**Como o scroll-x funciona.** `.table-responsive` e quem provê o rolamento horizontal:
+`.table-responsive > .table { width: auto; min-width: 100% }` (`_tables.css:349`) faz a
+tabela expandir alem do container; o wrapper rola. Por isso **NUNCA** sobrescreva
+`.table-responsive` com `overflow: visible` — isso TRAVA o scroll-x e as colunas da
+direita ficam inacessiveis. (Foi exatamente o bug corrigido em `monitoramento/listar_entregas`.)
+
+**Wrap das celulas.** Por padrao TODA celula em `.table-responsive > .table` recebe
+`white-space: nowrap` (`_tables.css:356`) — proposital: forca scroll-x em vez de comprimir
+colunas. Opt-out por celula:
+
+| Quer... | Use |
+|---|---|
+| Texto que quebra (descricao/obs) | `.cell-wrap` (`white-space: normal; min-width: 150px`) |
+| Empilhar botao + texto na vertical numa coluna | `white-space: normal` na celula (em `@layer modules`, vence o nowrap global sem `!important`) |
+
+> Caso real: a coluna Embarque do monitoramento punha botao `w-100` e a badge de previsao
+> LADO A LADO (nowrap global). `white-space: normal` na celula faz a previsao quebrar para baixo.
+
+**Gotcha sticky × overflow-x.** `overflow-x: auto` num container e `position: sticky`
+VERTICAL (thead colando no scroll da pagina) **nao coexistem**: por spec, `overflow-x: auto`
+promove `overflow-y` a `auto`, criando contexto de scroll proprio — o thead passa a ancorar
+no container, nao na pagina. Opcoes:
+
+- **Scroll-x + thead NAO cola no scroll vertical** → `.table-responsive { overflow-x: auto }`. Colunas fixas (`.sticky-col*`, left) seguem funcionando. (Escolha do monitoramento.)
+- **Scroll-x + thead cola** → data-grid: `.table-responsive { overflow: auto; max-height: <X> }` + `thead th { top: 0 }`. A pagina deixa de rolar; a tabela rola internamente (scroll aninhado).
+
+**Densidade escopada (-X%).** Para reduzir uniformemente uma tela inteira (fontes, paddings,
+larguras px), `zoom: <fator>` num seletor que so a tela-alvo casa (ex.: `.monitoramento-page.pagination-container { zoom: 0.8 }`). `zoom` (≠ `transform: scale`) reflui o layout e e suportado em navegadores atuais. **Cuidado:** `getBoundingClientRect()` retorna px ja pos-zoom — JS que mede e reaplica como `top`/offset precisa dividir pelo fator.
 
 ---
 
