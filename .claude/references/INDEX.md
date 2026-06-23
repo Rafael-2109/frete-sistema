@@ -10,7 +10,7 @@ atualizado: 2026-06-08
 
 > **Papel:** Indice de Referencias.
 
-**Ultima atualizacao**: 2026-06-08 (mapeamento Skill->References ampliado: `consultando-venda-loja`, `carregando-motos-assai`, `padronizando-docs` — 3 skills novas de 2026-06-02; inventario 51 -> 54)
+**Ultima atualizacao**: 2026-06-22 (mapeamento Skill->References: +`corrigindo-dados-assai` (WRITE backfill Assai, 2026-06-19, delegada a `gestor-motos-assai`); inventario 54 -> 57 — tambem ja contava `auditando-reclassificacao-odoo` (2026-06-13), `baixando-credores-lote-odoo` (2026-06-18). Historico anterior: 2026-06-08 ampliacao +3 skills de 2026-06-02; inventario 51 -> 54)
 
 ---
 
@@ -162,6 +162,7 @@ atualizado: 2026-06-08
 | `conferindo-recibo-assai` | `app/motos_assai/CLAUDE.md` |
 | `registrando-evento-moto-assai` | `app/motos_assai/CLAUDE.md` |
 | `carregando-motos-assai` | `app/motos_assai/CLAUDE.md` |
+| `corrigindo-dados-assai` (WRITE — subagente gestor-motos-assai) | `app/motos_assai/CLAUDE.md` |
 | `consultando-venda-loja` (Lojas HORA) | `app/hora/CLAUDE.md` |
 | `padronizando-docs` | `ARQUITETURA_DE_ARTEFATOS.md`, `scripts/audits/doc_audit.py` |
 | `parseando-sped-ecd` | `app/relatorios_fiscais/CLAUDE.md`, `app/relatorios_fiscais/SPED_ECD_PLANO.md` |

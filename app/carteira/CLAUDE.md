@@ -4,7 +4,7 @@ camada: L1
 sot_de: —
 hub: CLAUDE.md
 superseded_by: —
-atualizado: 2026-06-18
+atualizado: 2026-06-22
 -->
 # Carteira — Guia de Desenvolvimento
 
@@ -35,9 +35,9 @@ atualizado: 2026-06-18
 
 ## Contexto
 
-~18.5K LOC, 50 arquivos. Exibe pedidos agrupados, gera separacoes, analisa ruptura de estoque, programa lotes (Atacadao/Sendas) e gerencia standby. Campos de tabela vem dos schemas JSON; regras CarteiraPrincipal vs Separacao em `.claude/references/modelos/REGRAS_CARTEIRA_SEPARACAO.md`. `main_routes.py` e apenas o dashboard `index()` — novas rotas em `routes/`.
+~19.9K LOC, 53 arquivos. Exibe pedidos agrupados, gera separacoes, analisa ruptura de estoque, programa lotes (Atacadao/Sendas) e gerencia standby. Campos de tabela vem dos schemas JSON; regras CarteiraPrincipal vs Separacao em `.claude/references/modelos/REGRAS_CARTEIRA_SEPARACAO.md`. `main_routes.py` e apenas o dashboard `index()` — novas rotas em `routes/`.
 
-**LOC**: ~18.5K | **Arquivos**: 50 | **22 JS** (21 templates + 1 static) | **Atualizado**: 19/06/2026
+**LOC**: ~19.9K | **Arquivos**: 53 | **22 JS** (21 templates + 1 static) | **Atualizado**: 22/06/2026
 
 Workspace principal do sistema de fretes. Exibe pedidos agrupados, gera separacoes,
 analisa ruptura de estoque, programa lotes (Atacadao/Sendas) e gerencia standby.
@@ -54,8 +54,10 @@ app/carteira/
   ├── routes/                    # 25 APIs (root)
   │   ├── carteira_simples/      # 4 arquivos (dados, separacoes, helpers, __init__)
   │   └── programacao_em_lote/   # 5 arquivos (Atacadao/Sendas: busca, importar, routes, ruptura, __init__)
-  ├── services/                  # 5 services (agrupamento, mapa, importacao, atualizacao,
-  │                              #   palletizacao — Camada 1 do simulador de conservas, consumido pelo CarVia)
+  ├── services/                  # 7 services (agrupamento, mapa, importacao_nao_odoo, atualizar_dados,
+  │                              #   palletizacao — Camada 1 do simulador de conservas, consumido pelo CarVia;
+  │                              #   roteirizacao_service + roteirizacao_backends — custo parametrico/selecao
+  │                              #   de veiculo/motor de otimizacao, abstracao de backend)
   ├── utils/                     # 3 helpers (separacao, workspace, formatters)
   ├── models.py                  # 7 models (657 linhas)
   ├── models_alertas.py          # AlertaSeparacaoCotada

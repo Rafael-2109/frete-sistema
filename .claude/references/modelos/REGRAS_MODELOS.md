@@ -86,7 +86,7 @@ __table_args__ = {'info': {'is_view': True}}
 
 ## PreSeparacaoItem (app/carteira/models.py)
 
-> Tabela `pre_separacao_item` (singular). Schema JSON NAO gerado (tabela deprecada — ver abaixo); campos direto no modelo `app/carteira/models.py:457`.
+> Tabela `pre_separacao_item` (singular). Schema JSON NAO gerado (tabela deprecada — ver abaixo); campos direto no modelo `app/carteira/models.py:441`.
 
 ### DEPRECATED - NAO USAR!
 SEMPRE substituir por Separacao com status='PREVISAO' para fazer tudo que PreSeparacaoItem fazia.
@@ -108,7 +108,7 @@ SEMPRE substituir por Separacao com status='PREVISAO' para fazer tudo que PreSep
 
 ### EmbarqueItem
 
-> Campos completos: ver schema em `.claude/skills/consultando-sql/schemas/tables/embarque_items.json`
+> Campos completos: ver schema em `.claude/skills/consultando-sql/schemas/tables/embarque_itens.json`
 
 #### R3.1 — Inserir item com qtd_saldo=0 em embarque sem NF (confirmacao TIPADA)
 

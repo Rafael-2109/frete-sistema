@@ -31,7 +31,7 @@ atualizado: 2026-06-15
   - [DFE (l10n_br_ciel_it_account.dfe)](#dfe-l10n_br_ciel_it_accountdfe)
   - [DFE Line (l10n_br_ciel_it_account.dfe.line)](#dfe-line-l10n_br_ciel_it_accountdfeline)
 - [Arquivos do Modulo](#arquivos-do-modulo)
-  - [Models (23 models em `app/recebimento/models.py`)](#models-23-models-em-apprecebimentomodelspy)
+  - [Models (24 models em `app/recebimento/models.py`)](#models-24-models-em-apprecebimentomodelspy)
   - [Services (13 em `app/recebimento/services/`)](#services-13-em-apprecebimentoservices)
   - [Routes (5 em `app/recebimento/routes/`)](#routes-5-em-apprecebimentoroutes)
   - [Jobs (3 em `app/recebimento/jobs/`)](#jobs-3-em-apprecebimentojobs)

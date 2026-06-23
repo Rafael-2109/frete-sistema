@@ -4,7 +4,7 @@ camada: L2
 sot_de: —
 hub: app/agente/CLAUDE.md
 superseded_by: —
-atualizado: 2026-06-15
+atualizado: 2026-06-20
 -->
 # Agente Services — Guia de Desenvolvimento
 
