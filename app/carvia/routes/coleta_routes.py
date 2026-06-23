@@ -5,7 +5,7 @@ marcar coletada (cria despesa a conciliar), cancelar/reabrir. Toda a regra vive 
 CarviaColetaService; aqui so HTTP + flash + CSRF global.
 """
 import logging
-from datetime import date
+from datetime import date, datetime
 
 from flask import render_template, request, flash, redirect, url_for, jsonify
 from flask_login import login_required, current_user
@@ -43,6 +43,12 @@ def _parse_int(valor_str):
 def _parse_date(valor_str):
     valor_str = (valor_str or '').strip()
     return date.fromisoformat(valor_str) if valor_str else None
+
+
+def _parse_datetime_local(valor_str):
+    """Converte <input type=datetime-local> ('YYYY-MM-DDTHH:MM[:SS]') -> datetime naive; '' -> None."""
+    valor_str = (valor_str or '').strip()
+    return datetime.fromisoformat(valor_str) if valor_str else None
 
 
 def register_coleta_routes(bp):
@@ -157,6 +163,12 @@ def register_coleta_routes(bp):
     @login_required
     def editar_coleta(coleta_id):  # type: ignore
         return _acao_coleta(coleta_id, _editar_header)
+
+    @bp.route('/coletas/<int:coleta_id>/editar-datas', methods=['POST'])  # type: ignore
+    @login_required
+    def editar_datas_coleta(coleta_id):  # type: ignore
+        """Edita as datas da coleta (incl. a data efetiva) mesmo apos COLETADA."""
+        return _acao_coleta(coleta_id, _editar_datas)
 
     @bp.route('/coletas/<int:coleta_id>/coletar', methods=['POST'])  # type: ignore
     @login_required
@@ -493,6 +505,15 @@ def register_coleta_routes(bp):
             observacoes=request.form.get('observacoes'),
         )
         return (coleta, 'Coleta atualizada.')
+
+    def _editar_datas(coleta, svc):
+        svc.editar_datas(
+            coleta,
+            data_prevista=_parse_date(request.form.get('data_prevista')),
+            data_prevista_chegada=_parse_date(request.form.get('data_prevista_chegada')),
+            data_coletada_em=_parse_datetime_local(request.form.get('data_coletada_em')),
+        )
+        return (coleta, 'Datas da coleta atualizadas.')
 
     def _acao_coleta(coleta_id, fn):
         if not _guard():

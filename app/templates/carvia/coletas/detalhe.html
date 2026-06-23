@@ -62,6 +62,9 @@
                         <button class="btn btn-outline-danger btn-sm w-100"><i class="fas fa-times"></i> Cancelar</button>
                     </form>
                     {% elif coleta.status == 'COLETADA' %}
+                    <button class="btn btn-outline-primary btn-sm" type="button" data-bs-toggle="collapse" data-bs-target="#editarDatas">
+                        <i class="fas fa-calendar-alt"></i> Editar datas
+                    </button>
                     <form method="POST" action="{{ url_for('carvia.reabrir_coleta', coleta_id=coleta.id) }}"
                           onsubmit="return confirm('Reabrir a coleta para edição (volta a RASCUNHO)?');">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -94,6 +97,32 @@
                 <div class="col-md-2"><input type="date" name="data_prevista_chegada" class="form-control form-control-sm" title="Previsão de chegada" value="{{ coleta.data_prevista_chegada.isoformat() if coleta.data_prevista_chegada else '' }}"></div>
                 <div class="col-md-3"><input type="text" name="observacoes" class="form-control form-control-sm" placeholder="Obs" value="{{ coleta.observacoes or '' }}"></div>
                 <div class="col-md-2"><button class="btn btn-primary btn-sm w-100">Salvar</button></div>
+            </form>
+        </div>
+        {% endif %}
+
+        {# Editar datas — disponivel apos COLETADA (a coleta congela, mas as datas, incl.
+           a efetiva que vira o badge "Coletado", podem ser corrigidas). NAO mexe na despesa. #}
+        {% if coleta.status == 'COLETADA' %}
+        <div class="collapse mt-3" id="editarDatas">
+            <form method="POST" action="{{ url_for('carvia.editar_datas_coleta', coleta_id=coleta.id) }}" class="row g-2 border-top pt-3">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="col-md-3">
+                    <label class="form-label small mb-1">Previsão de coleta</label>
+                    <input type="date" name="data_prevista" class="form-control form-control-sm"
+                           value="{{ coleta.data_prevista.isoformat() if coleta.data_prevista else '' }}">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small mb-1">Previsão de chegada</label>
+                    <input type="date" name="data_prevista_chegada" class="form-control form-control-sm"
+                           value="{{ coleta.data_prevista_chegada.isoformat() if coleta.data_prevista_chegada else '' }}">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label small mb-1">Data da coleta (efetiva)</label>
+                    <input type="datetime-local" name="data_coletada_em" class="form-control form-control-sm" required
+                           value="{{ coleta.data_coletada_em.strftime('%Y-%m-%dT%H:%M') if coleta.data_coletada_em else '' }}">
+                </div>
+                <div class="col-md-2 align-self-end"><button class="btn btn-primary btn-sm w-100">Salvar datas</button></div>
             </form>
         </div>
         {% endif %}

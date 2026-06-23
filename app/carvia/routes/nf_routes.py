@@ -47,8 +47,11 @@ def register_nf_routes(bp):
         mostrar_transferencias = request.args.get(
             'mostrar_transferencias', '0'
         ) == '1'
-        # Filtro "Apenas NF nao entregues" — default ON; '0' explicito desliga
-        apenas_nao_entregues = request.args.get('nao_entregue', '') != '0'
+        # Filtro "Apenas NF nao entregues" — default OFF; '1' explicito liga
+        apenas_nao_entregues = request.args.get('nao_entregue', '') == '1'
+        # Filtro "Apenas Emb. Pendente" — default OFF; '1' liga. Mostra NFs que NAO
+        # sairam da portaria (em embarque sem data_embarque OU sem embarque algum).
+        emb_pendente = request.args.get('emb_pendente', '') == '1'
 
         # Subquery: contar CTes vinculados a cada NF
         subq_ctes = db.session.query(
@@ -83,6 +86,40 @@ def register_nf_routes(bp):
                 EntregaMonitorada.origem == 'CARVIA',
             )
             query = query.filter(CarviaNf.numero_nf.notin_(entregues_nums))
+
+        # Filtro "Apenas Emb. Pendente": exclui NFs que JA sairam da portaria
+        # (= embarque com data_embarque preenchida) por qualquer caminho. As que
+        # restam estao em embarque sem saida OU nao constam em embarque nenhum.
+        # Lazy import R1-safe. Match NF<->embarque por 2 vias (mesma uniao do badge):
+        #   (a) embarque_itens CARVIA-* ativo (match por numero_nf);
+        #   (b) operacao -> CarviaFrete -> Embarque (pega EI cancelado/ausente).
+        if emb_pendente:
+            from app.embarques.models import Embarque, EmbarqueItem
+            from app.carvia.models import CarviaFrete
+            saiu_ei_notas = db.session.query(
+                EmbarqueItem.nota_fiscal
+            ).join(
+                Embarque, Embarque.id == EmbarqueItem.embarque_id
+            ).filter(
+                EmbarqueItem.separacao_lote_id.like('CARVIA-%'),
+                EmbarqueItem.status == 'ativo',
+                EmbarqueItem.nota_fiscal.isnot(None),
+                Embarque.data_embarque.isnot(None),
+            )
+            saiu_frete_nf_ids = db.session.query(
+                CarviaOperacaoNf.nf_id
+            ).join(
+                CarviaFrete, CarviaFrete.operacao_id == CarviaOperacaoNf.operacao_id
+            ).join(
+                Embarque, Embarque.id == CarviaFrete.embarque_id
+            ).filter(
+                CarviaFrete.status != 'CANCELADO',
+                Embarque.data_embarque.isnot(None),
+            )
+            query = query.filter(
+                CarviaNf.numero_nf.notin_(saiu_ei_notas),
+                CarviaNf.id.notin_(saiu_frete_nf_ids),
+            )
 
         if tipo_filtro:
             query = query.filter(CarviaNf.tipo_fonte == tipo_filtro)
@@ -400,9 +437,52 @@ def register_nf_routes(bp):
                         'recebido_em': rec_concl if rec_status == 'CONCLUIDO' else None,
                     }
 
-            # 3) Embarque (NF -> operacao -> CarviaFrete -> Embarque)
+            # 3) Embarque — UNIAO de 2 caminhos (R1 lazy). data_embarque (carimbada
+            # na portaria) = saida fisica do CD => badge verde com a data. Quando ha
+            # mais de um embarque por NF, prioriza o que JA saiu (com data_embarque).
+            #   (a) embarque_itens CARVIA-* ativo (match por numero_nf) — pega NFs em
+            #       embarque AINDA SEM CTe/frete lancados (pre-portaria). Caminho que
+            #       faltava: 61 de 330 NFs em embarque nao tinham badge (ex.: NF 2044).
+            #   (b) operacao -> CarviaFrete -> Embarque — pega os casos cujo EI esta
+            #       cancelado/ausente mas o frete segue vinculado ao embarque.
             from app.carvia.models import CarviaFrete
-            from app.embarques.models import Embarque
+            from app.embarques.models import Embarque, EmbarqueItem
+
+            def _registrar_embarque(nf_id_key, emb_id, emb_num, emb_data):
+                atual = embarque_por_nf.get(nf_id_key)
+                # registra se ainda nao ha, OU se este saiu da portaria e o anterior nao
+                if atual is None or (
+                    emb_data is not None and atual.get('data_embarque') is None
+                ):
+                    embarque_por_nf[nf_id_key] = {
+                        'id': emb_id, 'numero': emb_num, 'data_embarque': emb_data,
+                    }
+
+            # mapa numero_nf -> nf_ids da pagina (numero_nf NAO e unico — R1)
+            numero_to_nf_ids_emb = defaultdict(list)
+            for nf_pg, _ in paginacao.items:
+                if nf_pg.numero_nf:
+                    numero_to_nf_ids_emb[nf_pg.numero_nf].append(nf_pg.id)
+
+            # (a) via embarque_itens
+            if numero_to_nf_ids_emb:
+                rows_ei = db.session.query(
+                    EmbarqueItem.nota_fiscal,
+                    Embarque.id,
+                    Embarque.numero,
+                    Embarque.data_embarque,
+                ).join(
+                    Embarque, Embarque.id == EmbarqueItem.embarque_id
+                ).filter(
+                    EmbarqueItem.nota_fiscal.in_(list(numero_to_nf_ids_emb.keys())),
+                    EmbarqueItem.separacao_lote_id.like('CARVIA-%'),
+                    EmbarqueItem.status == 'ativo',
+                ).all()
+                for nota, emb_id, emb_num, emb_data in rows_ei:
+                    for nf_id_e in numero_to_nf_ids_emb.get(nota, []):
+                        _registrar_embarque(nf_id_e, emb_id, emb_num, emb_data)
+
+            # (b) via operacao -> CarviaFrete -> Embarque
             rows_emb = db.session.query(
                 CarviaOperacaoNf.nf_id,
                 Embarque.id,
@@ -418,14 +498,8 @@ def register_nf_routes(bp):
                 CarviaFrete.status != 'CANCELADO',
                 CarviaFrete.embarque_id.isnot(None),
             ).all()
-            # data_embarque (carimbada na portaria) = saida fisica do CD.
-            # Presente => embarque "saiu"; badge fica verde com a data.
             for nf_id_e, emb_id, emb_num, emb_data in rows_emb:
-                if nf_id_e not in embarque_por_nf:
-                    embarque_por_nf[nf_id_e] = {
-                        'id': emb_id, 'numero': emb_num,
-                        'data_embarque': emb_data,
-                    }
+                _registrar_embarque(nf_id_e, emb_id, emb_num, emb_data)
 
         return render_template(
             'carvia/nfs/listar.html',
@@ -453,6 +527,7 @@ def register_nf_routes(bp):
             ids_transf_efetivas=ids_transf_efetivas,
             num_nf_transf_por_venda=num_nf_transf_por_venda,
             apenas_nao_entregues=apenas_nao_entregues,
+            emb_pendente=emb_pendente,
             entregue_por_nf=entregue_por_nf,
             coleta_receb_por_nf=coleta_receb_por_nf,
             embarque_por_nf=embarque_por_nf,

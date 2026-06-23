@@ -77,7 +77,7 @@
                         <i class="fas fa-search"></i>
                     </button>
                 </div>
-                {% if busca or tipo_filtro or status_filtro or cte_filtro or uf_filtro or data_emissao_de or data_emissao_ate or mostrar_transferencias or not apenas_nao_entregues %}
+                {% if busca or tipo_filtro or status_filtro or cte_filtro or uf_filtro or data_emissao_de or data_emissao_ate or mostrar_transferencias or apenas_nao_entregues or emb_pendente %}
                 <div class="col-md-1">
                     <a href="{{ url_for('carvia.listar_nfs') }}" class="btn btn-sm btn-outline-secondary w-100">
                         <i class="fas fa-times"></i>
@@ -87,14 +87,22 @@
                 <div class="col-md-12">
                     <div class="form-check form-check-inline small mt-1">
                         <input class="form-check-input" type="checkbox" id="naoEntregueChk"
+                               name="nao_entregue" value="1"
                                {{ 'checked' if apenas_nao_entregues }}
-                               onchange="document.getElementById('naoEntregueHidden').disabled = this.checked; this.form.submit();">
-                        {# Default ON: quando marcado, o hidden fica disabled (param ausente => ON no backend) #}
-                        <input type="hidden" name="nao_entregue" id="naoEntregueHidden" value="0"
-                               {{ 'disabled' if apenas_nao_entregues }}>
+                               onchange="this.form.submit();">
                         <label class="form-check-label" for="naoEntregueChk">
                             <i class="fas fa-check-circle text-success"></i>
-                            Apenas NF nao entregues (default: ligado)
+                            Apenas NF nao entregues (default: desligado)
+                        </label>
+                    </div>
+                    <div class="form-check form-check-inline small mt-1">
+                        <input class="form-check-input" type="checkbox" id="embPendenteChk"
+                               name="emb_pendente" value="1"
+                               {{ 'checked' if emb_pendente }}
+                               onchange="this.form.submit();">
+                        <label class="form-check-label" for="embPendenteChk">
+                            <i class="fas fa-dolly text-primary"></i>
+                            Apenas Emb. Pendente — nao saiu da portaria ou sem embarque (default: desligado)
                         </label>
                     </div>
                     <div class="form-check form-check-inline small mt-1">
@@ -313,7 +321,7 @@
                 <ul class="pagination pagination-sm mb-0">
                     {% if paginacao.has_prev %}
                     <li class="page-item">
-                        <a class="page-link" href="{{ url_for('carvia.listar_nfs', page=paginacao.prev_num, busca=busca, tipo_fonte=tipo_filtro, status=status_filtro, cte=cte_filtro, uf_destino=uf_filtro, data_emissao_de=data_emissao_de, data_emissao_ate=data_emissao_ate, sort=sort, direction=direction, nao_entregue=('0' if not apenas_nao_entregues else none)) }}">
+                        <a class="page-link" href="{{ url_for('carvia.listar_nfs', page=paginacao.prev_num, busca=busca, tipo_fonte=tipo_filtro, status=status_filtro, cte=cte_filtro, uf_destino=uf_filtro, data_emissao_de=data_emissao_de, data_emissao_ate=data_emissao_ate, sort=sort, direction=direction, nao_entregue=('1' if apenas_nao_entregues else none), emb_pendente=('1' if emb_pendente else none)) }}">
                             <i class="fas fa-chevron-left"></i>
                         </a>
                     </li>
@@ -321,7 +329,7 @@
                     {% for p in paginacao.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
                         {% if p %}
                         <li class="page-item {{ 'active' if p == paginacao.page }}">
-                            <a class="page-link" href="{{ url_for('carvia.listar_nfs', page=p, busca=busca, tipo_fonte=tipo_filtro, status=status_filtro, cte=cte_filtro, uf_destino=uf_filtro, data_emissao_de=data_emissao_de, data_emissao_ate=data_emissao_ate, sort=sort, direction=direction, nao_entregue=('0' if not apenas_nao_entregues else none)) }}">{{ p }}</a>
+                            <a class="page-link" href="{{ url_for('carvia.listar_nfs', page=p, busca=busca, tipo_fonte=tipo_filtro, status=status_filtro, cte=cte_filtro, uf_destino=uf_filtro, data_emissao_de=data_emissao_de, data_emissao_ate=data_emissao_ate, sort=sort, direction=direction, nao_entregue=('1' if apenas_nao_entregues else none), emb_pendente=('1' if emb_pendente else none)) }}">{{ p }}</a>
                         </li>
                         {% else %}
                         <li class="page-item disabled"><span class="page-link">...</span></li>
@@ -329,7 +337,7 @@
                     {% endfor %}
                     {% if paginacao.has_next %}
                     <li class="page-item">
-                        <a class="page-link" href="{{ url_for('carvia.listar_nfs', page=paginacao.next_num, busca=busca, tipo_fonte=tipo_filtro, status=status_filtro, cte=cte_filtro, uf_destino=uf_filtro, data_emissao_de=data_emissao_de, data_emissao_ate=data_emissao_ate, sort=sort, direction=direction, nao_entregue=('0' if not apenas_nao_entregues else none)) }}">
+                        <a class="page-link" href="{{ url_for('carvia.listar_nfs', page=paginacao.next_num, busca=busca, tipo_fonte=tipo_filtro, status=status_filtro, cte=cte_filtro, uf_destino=uf_filtro, data_emissao_de=data_emissao_de, data_emissao_ate=data_emissao_ate, sort=sort, direction=direction, nao_entregue=('1' if apenas_nao_entregues else none), emb_pendente=('1' if emb_pendente else none)) }}">
                             <i class="fas fa-chevron-right"></i>
                         </a>
                     </li>

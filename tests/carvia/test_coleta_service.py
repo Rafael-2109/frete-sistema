@@ -106,6 +106,50 @@ def test_congelamento_apos_coletada(db):
         CarviaColetaService.adicionar_linha(coleta, numero_nf='999')
 
 
+def test_editar_datas_coletada(db):
+    """As datas (incl. a efetiva que vira o badge) sao editaveis mesmo apos COLETADA."""
+    from datetime import date, datetime
+    coleta = CarviaColetaService.criar_coleta(valor_coleta=Decimal('10'), usuario='test@bot')
+    CarviaColetaService.marcar_coletada(coleta, usuario='test@bot')
+    assert coleta.pode_editar() is False  # congelada para edicao normal...
+
+    nova_efetiva = datetime(2026, 6, 1, 9, 30)
+    CarviaColetaService.editar_datas(
+        coleta,
+        data_prevista=date(2026, 5, 30),
+        data_prevista_chegada=date(2026, 6, 2),
+        data_coletada_em=nova_efetiva,
+    )
+    assert coleta.data_coletada_em == nova_efetiva  # ...mas as datas mudam
+    assert coleta.data_prevista == date(2026, 5, 30)
+    assert coleta.data_prevista_chegada == date(2026, 6, 2)
+
+    # em COLETADA a data efetiva nao pode ser esvaziada
+    with pytest.raises(ColetaError):
+        CarviaColetaService.editar_datas(coleta, data_coletada_em=None)
+
+
+def test_editar_datas_bloqueia_cancelada(db):
+    from datetime import datetime
+    coleta = CarviaColetaService.criar_coleta(usuario='test@bot')
+    CarviaColetaService.cancelar_coleta(coleta, usuario='test@bot')
+    with pytest.raises(ColetaError):
+        CarviaColetaService.editar_datas(coleta, data_coletada_em=datetime(2026, 6, 1, 9, 0))
+
+
+def test_editar_datas_rascunho_ignora_efetiva(db):
+    """Em RASCUNHO, edita as previsoes mas NAO grava data efetiva (ainda nao coletada)."""
+    from datetime import date, datetime
+    coleta = CarviaColetaService.criar_coleta(usuario='test@bot')
+    CarviaColetaService.editar_datas(
+        coleta,
+        data_prevista=date(2026, 5, 30),
+        data_coletada_em=datetime(2026, 6, 1, 9, 0),  # ignorada em RASCUNHO
+    )
+    assert coleta.data_prevista == date(2026, 5, 30)
+    assert coleta.data_coletada_em is None
+
+
 def test_sugerir_nf_normaliza_numero(db):
     coleta = CarviaColetaService.criar_coleta(usuario='test@bot')
     linha = CarviaColetaService.adicionar_linha(coleta, numero_nf='000123')  # zeros a esquerda

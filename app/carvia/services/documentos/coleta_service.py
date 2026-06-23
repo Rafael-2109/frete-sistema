@@ -79,6 +79,31 @@ class CarviaColetaService:
         return coleta
 
     @staticmethod
+    def editar_datas(coleta, *, data_prevista=None, data_prevista_chegada=None,
+                     data_coletada_em=None):
+        """Edita as datas da coleta — funciona MESMO com a coleta ja COLETADA (correcao
+        operacional), diferente de `editar_coleta` que congela apos RASCUNHO.
+
+        - data_prevista / data_prevista_chegada: sempre atualizadas (exceto CANCELADA).
+        - data_coletada_em (efetiva, alimenta o badge "Coletado - DD/MM"): so se aplica
+          quando a coleta esta COLETADA e e obrigatoria nesse status (nao pode esvaziar).
+        NAO altera a CarviaDespesa ja gerada (pode estar conciliada) — escopo: so as datas.
+        """
+        from app.carvia.models.coleta import (
+            COLETA_STATUS_CANCELADA, COLETA_STATUS_COLETADA)
+        if coleta.status == COLETA_STATUS_CANCELADA:
+            raise ColetaError('Coleta cancelada nao tem datas editaveis.')
+        coleta.data_prevista = data_prevista
+        coleta.data_prevista_chegada = data_prevista_chegada
+        if coleta.status == COLETA_STATUS_COLETADA:
+            if data_coletada_em is None:
+                raise ColetaError(
+                    'Data efetiva da coleta e obrigatoria em uma coleta COLETADA.')
+            coleta.data_coletada_em = data_coletada_em
+        db.session.flush()
+        return coleta
+
+    @staticmethod
     def _propagar_local_cd(coleta):
         """Propaga `coleta.local_cd` para TODAS as CarviaNf reais vinculadas (Stream 1) e,
         via numero_nf, para os CarviaPedido/CarviaCotacao que as referenciam (Frente A)."""
