@@ -1,12 +1,12 @@
 {
   "app/agente": {
-    "py": 108,
-    "loc": 56742,
+    "py": 109,
+    "loc": 57073,
     "tpl": 0
   },
   "app/agente/services": {
-    "py": 25,
-    "loc": 14883,
+    "py": 26,
+    "loc": 14998,
     "tpl": 0
   },
   "app/agente_lojas": {
@@ -16,12 +16,12 @@
   },
   "app/carteira": {
     "py": 53,
-    "loc": 19876,
+    "loc": 19906,
     "tpl": 13
   },
   "app/carvia": {
-    "py": 126,
-    "loc": 73017,
+    "py": 131,
+    "loc": 74807,
     "tpl": 127
   },
   "app/chat": {
@@ -51,17 +51,17 @@
   },
   "app/motos_assai": {
     "py": 90,
-    "loc": 20382,
+    "loc": 20421,
     "tpl": 71
   },
   "app/odoo": {
-    "py": 72,
-    "loc": 43554,
+    "py": 73,
+    "loc": 43869,
     "tpl": 4
   },
   "app/odoo/estoque": {
-    "py": 21,
-    "loc": 20822,
+    "py": 22,
+    "loc": 21137,
     "tpl": 0
   },
   "app/relatorios_fiscais": {
