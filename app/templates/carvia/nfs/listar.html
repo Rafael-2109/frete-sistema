@@ -124,6 +124,7 @@
                             {{ th_sort('numero_nf', 'NF', sort, direction) }}
                             {{ th_sort('emitente', 'Emitente', sort, direction) }}
                             <th>Destinatario</th>
+                            <th>Rastreamento</th>
                             {{ th_sort('valor_total', 'Valor / Peso', sort, direction, 'text-end') }}
                             <th>Status</th>
                             <th>CTe</th>
@@ -153,14 +154,10 @@
                                 {% endif %}
                                 <div class="mt-1">{{ badge_local_cd(nf.local_cd, curto=True) }}</div>
                                 <small class="text-muted d-block">{{ nf.data_emissao.strftime('%d/%m/%Y') if nf.data_emissao else '' }}</small>
-                                {% if nf.id in entregue_por_nf %}
-                                {% set _ent = entregue_por_nf.get(nf.id) %}
-                                <small class="text-success d-block" title="Entrega ao cliente final"><i class="fas fa-flag-checkered"></i> Entregue{% if _ent %} {{ _ent.strftime('%d/%m/%Y') }}{% endif %}</small>
-                                {% endif %}
                             </td>
                             <td>
-                                <span title="{{ nf.cnpj_emitente }}" class="cnpj-col">
-                                    {{ nf.nome_emitente or nf.cnpj_emitente }}
+                                <span title="{{ nf.nome_emitente or nf.cnpj_emitente }}" class="cnpj-col">
+                                    {{ (nf.nome_emitente or nf.cnpj_emitente)|truncate(40, True, '…', 0) }}
                                 </span>
                                 {% if nf.cidade_emitente or nf.uf_emitente %}
                                 <small class="text-muted d-block">{{ nf.cidade_emitente or '' }}{% if nf.cidade_emitente and nf.uf_emitente %}/{% endif %}{{ nf.uf_emitente or '' }}</small>
@@ -181,20 +178,30 @@
                                 <small class="text-muted d-block">{{ nf.cidade_destinatario or '' }}{% if nf.cidade_destinatario and nf.uf_destinatario %}/{% endif %}{{ nf.uf_destinatario or '' }}</small>
                                 {% endif %}
                             </td>
-                            <td class="valor-col">
+                            <td class="rastreamento-col">
+                                {# Coletado | Recebido - DD/MM #}
                                 {% set _cr = coleta_receb_por_nf.get(nf.id) %}
                                 {% if _cr and _cr.recebido_em %}
-                                <span class="badge bg-success d-block mb-1" style="width:fit-content" title="Recebido na matriz"><i class="fas fa-clipboard-check"></i> Recebido {{ _cr.recebido_em.strftime('%d/%m/%Y') }}</span>
+                                <span class="badge bg-success d-block mb-1" style="width:fit-content" title="Recebido na matriz"><i class="fas fa-clipboard-check"></i> Recebido - {{ _cr.recebido_em.strftime('%d/%m') }}</span>
                                 {% elif _cr and _cr.coletado_em %}
-                                <span class="badge bg-warning text-dark d-block mb-1" style="width:fit-content" title="Coletado no remetente"><i class="fas fa-truck-loading"></i> Coletado {{ _cr.coletado_em.strftime('%d/%m/%Y') }}</span>
+                                <span class="badge bg-warning text-dark d-block mb-1" style="width:fit-content" title="Coletado no remetente"><i class="fas fa-truck-loading"></i> Coletado - {{ _cr.coletado_em.strftime('%d/%m') }}</span>
                                 {% endif %}
+                                {# Emb. #### - DD/MM (verde quando saiu da portaria = data_embarque) #}
                                 {% set _emb = embarque_por_nf.get(nf.id) %}
                                 {% if _emb %}
+                                {% if _emb.data_embarque %}
+                                <a href="{{ url_for('embarques.visualizar_embarque', id=_emb.id) }}" class="badge bg-success text-decoration-none d-block mb-1" style="width:fit-content" title="Embarque #{{ _emb.numero }} — saiu da portaria"><i class="fas fa-dolly"></i> Emb. {{ _emb.numero }} - {{ _emb.data_embarque.strftime('%d/%m') }}</a>
+                                {% else %}
                                 <a href="{{ url_for('embarques.visualizar_embarque', id=_emb.id) }}" class="badge bg-primary text-decoration-none d-block mb-1" style="width:fit-content" title="Ver embarque #{{ _emb.numero }}"><i class="fas fa-dolly"></i> Emb. {{ _emb.numero }}</a>
                                 {% endif %}
-                                {% if nf.nome_emitente %}
-                                <span class="badge bg-light text-dark border d-block mb-1" style="width:fit-content" title="{{ nf.nome_emitente }}"><i class="fas fa-industry"></i> {{ nf.nome_emitente|truncate(40, True, '…', 0) }}</span>
                                 {% endif %}
+                                {# Entregue - DD/MM #}
+                                {% if nf.id in entregue_por_nf %}
+                                {% set _ent = entregue_por_nf.get(nf.id) %}
+                                <span class="badge bg-dark d-block mb-1" style="width:fit-content" title="Entrega ao cliente final"><i class="fas fa-flag-checkered"></i> Entregue{% if _ent %} - {{ _ent.strftime('%d/%m') }}{% endif %}</span>
+                                {% endif %}
+                            </td>
+                            <td class="valor-col">
                                 <div>{{ nf.valor_total|valor_br if nf.valor_total else '-' }}</div>
                                 {% if nf.peso_bruto %}
                                 <small class="text-muted d-block" {% if nf.quantidade_volumes %}title="Volumes: {{ nf.quantidade_volumes }}"{% endif %}>{{ nf.peso_bruto|numero_br(1) }} kg</small>

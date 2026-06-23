@@ -407,6 +407,7 @@ def register_nf_routes(bp):
                 CarviaOperacaoNf.nf_id,
                 Embarque.id,
                 Embarque.numero,
+                Embarque.data_embarque,
             ).join(
                 CarviaFrete,
                 CarviaFrete.operacao_id == CarviaOperacaoNf.operacao_id,
@@ -417,9 +418,14 @@ def register_nf_routes(bp):
                 CarviaFrete.status != 'CANCELADO',
                 CarviaFrete.embarque_id.isnot(None),
             ).all()
-            for nf_id_e, emb_id, emb_num in rows_emb:
+            # data_embarque (carimbada na portaria) = saida fisica do CD.
+            # Presente => embarque "saiu"; badge fica verde com a data.
+            for nf_id_e, emb_id, emb_num, emb_data in rows_emb:
                 if nf_id_e not in embarque_por_nf:
-                    embarque_por_nf[nf_id_e] = {'id': emb_id, 'numero': emb_num}
+                    embarque_por_nf[nf_id_e] = {
+                        'id': emb_id, 'numero': emb_num,
+                        'data_embarque': emb_data,
+                    }
 
         return render_template(
             'carvia/nfs/listar.html',
@@ -753,7 +759,11 @@ def register_nf_routes(bp):
         embarque_nf = None
         for f in fretes_nf:
             if getattr(f, 'embarque_id', None) and f.embarque is not None:
-                embarque_nf = {'id': f.embarque.id, 'numero': f.embarque.numero}
+                embarque_nf = {
+                    'id': f.embarque.id,
+                    'numero': f.embarque.numero,
+                    'data_embarque': getattr(f.embarque, 'data_embarque', None),
+                }
                 break
 
         return render_template(
