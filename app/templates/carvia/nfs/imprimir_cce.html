@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="pt-br"><head><meta charset="utf-8"><title>Cartas de Correcao</title>
+<style>
+  @page { margin: 8mm; }
+  body { margin: 0; font-family: Arial, sans-serif; }
+  .cce-page { page-break-after: always; text-align: center; }
+  .cce-page:last-child { page-break-after: auto; }
+  .cce-page img { max-width: 100%; height: auto; }
+  .cce-desc { font-size: 12px; color: #444; margin: 4px 0; }
+  .cce-vazio { padding: 40px; color: #888; text-align: center; }
+</style></head><body>
+{% if cces %}
+  {% for cce in cces %}
+    {% for pag in cce.paginas %}
+    <div class="cce-page">
+      {% if cce.descricao and loop.first %}<div class="cce-desc">{{ cce.descricao }}</div>{% endif %}
+      <img src="data:image/png;base64,{{ pag }}" alt="Carta de Correcao">
+    </div>
+    {% endfor %}
+  {% endfor %}
+{% else %}
+  <div class="cce-vazio">Nenhuma carta de correcao para esta NF.</div>
+{% endif %}
+<script>window.onload = function () { window.print(); };</script>
+</body></html>

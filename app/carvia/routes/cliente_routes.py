@@ -267,7 +267,17 @@ def register_cliente_routes(bp):
                 return jsonify(resp), status
 
             db.session.commit()
-            return jsonify({'sucesso': True, 'mensagem': 'Endereco atualizado.'})
+            resposta = {'sucesso': True, 'mensagem': 'Endereco atualizado.'}
+            if contexto and contexto.get('propagacao'):
+                p = contexto['propagacao']
+                resposta['propagacao'] = p
+                resposta['mensagem'] = (
+                    'Endereco atualizado. Propagado para '
+                    f"{p['nfs']} NF(s), {p['operacoes']} CTe(s), "
+                    f"{p['cotacoes']} cotacao(oes), {p['embarque_itens']} embarque(s), "
+                    f"{p['entregas']} entrega(s)."
+                )
+            return jsonify(resposta)
 
         except Exception as e:
             db.session.rollback()

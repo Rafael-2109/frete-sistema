@@ -819,6 +819,11 @@ def register_nf_routes(bp):
         )
         comprovantes_nf = CarviaComprovanteService.listar('nf', nf.id)
 
+        from app.carvia.services.documentos.carta_correcao_service import (
+            CarviaCartaCorrecaoService,
+        )
+        cces_nf = CarviaCartaCorrecaoService.listar('nf', nf.id)
+
         # Status de coleta/recebimento/embarque/entrega (badges) — todos lazy (R1)
         # Entregue: EntregaMonitorada origem CARVIA (match por numero_nf).
         # nf_entregue (bool) alinha o badge ao mesmo criterio do filtro
@@ -875,6 +880,7 @@ def register_nf_routes(bp):
             'carvia/nfs/detalhe.html',
             nf=nf,
             comprovantes_nf=comprovantes_nf,
+            cces_nf=cces_nf,
             itens=itens,
             veiculos=veiculos,
             operacoes=operacoes,

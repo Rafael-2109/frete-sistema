@@ -35,15 +35,16 @@ atualizado: 2026-06-23
   - [R20: "Anexar" tem 2 semanticas — desambiguar ANTES de implementar](#r20-anexar-tem-2-semanticas-desambiguar-antes-de-implementar)
   - [R21: Comissoes — ajustes (debito/credito) + vendedor = usuario](#r21-comissoes-ajustes-debitocredito-vendedor-usuario)
   - [R22: Comprovantes de Pagamento (N:N) — propagacao + conciliacao invertida](#r22-comprovantes-de-pagamento-nn-propagacao--conciliacao-invertida)
+  - [R23: Propagacao de endereco destino + Carta de Correcao (CCe)](#r23-propagacao-de-endereco-destino--carta-de-correcao-cce)
 - [Modelos](#modelos)
 - [Interdependencias](#interdependencias)
 - [Permissao](#permissao)
 
 ## Contexto
 
-126 arquivos, ~73.0K LOC, 127 templates. Importa NF PDFs/XMLs + CTe XMLs, faz match NF-CTe, subcontrata com cotacao via tabelas existentes, gera faturas de cliente e transportadora e emite CTe direto no SSW via Playwright. Detalhe por topico nos sub-docs (CONFERENCIA, FINANCEIRO, COMPROVANTES, IMPORTACAO, etc.) — prefira ler o sub-doc a reconstruir o contexto a partir do codigo.
+131 arquivos, ~74.8K LOC, 127 templates. Importa NF PDFs/XMLs + CTe XMLs, faz match NF-CTe, subcontrata com cotacao via tabelas existentes, gera faturas de cliente e transportadora e emite CTe direto no SSW via Playwright. Detalhe por topico nos sub-docs (CONFERENCIA, FINANCEIRO, COMPROVANTES, IMPORTACAO, etc.) — prefira ler o sub-doc a reconstruir o contexto a partir do codigo.
 
-**126 arquivos** | **~73.0K LOC** | **127 templates** | **Atualizado**: 2026-06-23
+**131 arquivos** | **~74.8K LOC** | **127 templates** | **Atualizado**: 2026-06-23
 
 Gestao de frete subcontratado: importar NF PDFs/XMLs + CTe XMLs, matchear NF-CTe, subcontratar transportadoras com cotacao via tabelas existentes, gerar faturas cliente e transportadora. Tambem emite CTe diretamente no SSW via Playwright.
 
@@ -328,6 +329,38 @@ SOT: [COMPROVANTES.md](COMPROVANTES.md).
   `static/carvia/js/comprovantes_widget.js`.
 - Arquivos: `models/comprovante.py`, `services/documentos/comprovante_service.py`,
   `routes/comprovante_routes.py`. Migration `scripts/migrations/carvia_comprovante_pagamento.{sql,py}`.
+
+### R23: Propagacao de endereco destino + Carta de Correcao (CCe) (2026-06-23)
+
+Duas frentes do fluxo fiscal de correcao de endereco. Spec/plano:
+`docs/superpowers/{specs,plans}/2026-06-23-carvia-propagacao-endereco-cce*`.
+
+- **Propagacao de cidade/UF**: editar `fisico_cidade`/`fisico_uf` de um
+  `CarviaClienteEndereco` (tipo DESTINO) **propaga para registros EM ABERTO** —
+  `CarviaCotacao` (override `entrega_*` so se ja preenchido; FK `endereco_destino_id`),
+  `CarviaNf` (ATIVA, match por CNPJ), `CarviaOperacao` (RASCUNHO, CNPJ), `EmbarqueItem`
+  (CARVIA-%, ativo) e `EntregaMonitorada` (origem CARVIA, nao entregue). Gatilho:
+  `CarviaClienteService.atualizar_endereco` -> `CarviaPropagacaoEnderecoService.propagar`
+  (so se cidade/UF mudaram); a API devolve contagem por entidade. EmbarqueItem/Entrega
+  via helper R1-safe `app/utils/propagacao_endereco_carvia.py` (espelha `propagacao_local_cd`).
+  Vinculo NF/Operacao por CNPJ (sem FK) -> mesmo CNPJ com 2 enderecos DESTINO atinge ambos.
+- **CCe-anexo (N:N, cadeia cotacao<->nf)**: `CarviaCartaCorrecao` (arquivo S3 1x) +
+  `CarviaCartaCorrecaoVinculo` (`entidade_tipo` ∈ `cotacao/nf`, `origem` MANUAL/PROPAGADO).
+  Espelha o padrao Comprovante; o fecho de cadeia agora vem do SOT compartilhado
+  `services/documentos/_cadeia_nf.py:resolver_cadeia_nf` (comprovante delega tambem). Anexar
+  na NF aparece na cotacao vinculada e vice-versa. Card `_cartas_correcao_card.html` +
+  `static/carvia/js/cartas_correcao_widget.js` no detalhe da cotacao e da NF.
+- **Impressao** (PDF->imagem via `pypdfium2`, `services/documentos/cce_render.py`): a CCe sai
+  no PDF do embarque (capa `imprimir_embarque` + completo `imprimir_embarque_completo`), no
+  detalhe da NF e no monitoramento (`visualizar_entrega`), via rota unica
+  `GET /carvia/cartas-correcao/imprimir?nf_id=` + `templates/carvia/nfs/imprimir_cce.html`.
+- **NAO confundir** com `CarviaEnderecoCorrecao` (audit textual de CAMPOS do CTe, flag
+  `CARVIA_FEATURE_EDITAR_ENDERECO_CCE`) — complementar, fora desta feature. CC-e da SEFAZ
+  nao corrige cidade/UF (so endereco textual); a propagacao de cidade/UF e correcao de cadastro.
+- Arquivos: `models/carta_correcao.py`, `services/clientes/propagacao_endereco_service.py`,
+  `services/documentos/{_cadeia_nf,carta_correcao_service,cce_render}.py`,
+  `routes/carta_correcao_routes.py`, `app/utils/propagacao_endereco_carvia.py`.
+  Migration `scripts/migrations/carvia_cce.{sql,py}`.
 
 ---
 

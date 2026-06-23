@@ -1,0 +1,88 @@
+{# ============================================================================
+   Widget reutilizavel de Cartas de Correcao (CCe) CarVia (N:N cotacao<->nf).
+
+   Uso (no topo do template):
+     {% from 'carvia/_cartas_correcao_card.html' import cartas_correcao_card with context %}
+
+   Render (cces = lista de pares (carta, vinculo) de CarviaCartaCorrecaoService.listar):
+     {{ cartas_correcao_card('Cartas de Correcao (CCe)', cces_nf,
+          url_for('carvia.upload_carta_correcao', entidade_tipo='nf', entidade_id=nf.id),
+          pode_editar=True) }}
+
+   Requer (uma vez por pagina, no bloco scripts):
+     <script src="{{ url_for('static', filename='carvia/js/cartas_correcao_widget.js') }}"></script>
+
+   O upload propaga automaticamente entre a cotacao e a NF da cadeia.
+   ========================================================================== #}
+{% macro cartas_correcao_card(titulo, cces, upload_url, pode_editar=True) %}
+<div class="card mt-3">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="mb-0"><i class="fas fa-file-signature"></i> {{ titulo }} ({{ cces|length }})</h5>
+    </div>
+    <div class="card-body">
+        {% if cces %}
+        <div class="table-responsive">
+            <table class="table table-sm table-hover align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th>Arquivo</th>
+                        <th>Origem</th>
+                        <th class="col-nowrap">Enviado</th>
+                        <th class="text-end">Acoes</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for carta, vinc in cces %}
+                    <tr>
+                        <td>
+                            <strong>{{ carta.nome_original }}</strong>
+                            {% if carta.descricao %}<div class="small text-muted">{{ carta.descricao }}</div>{% endif %}
+                        </td>
+                        <td>
+                            {% if vinc.origem == 'PROPAGADO' %}
+                            <span class="badge bg-secondary" title="Herdado da cadeia">Propagado</span>
+                            {% else %}
+                            <span class="badge bg-primary" title="Anexado neste documento">Manual</span>
+                            {% endif %}
+                        </td>
+                        <td class="col-nowrap"><small>{{ carta.criado_em.strftime('%d/%m/%Y %H:%M') if carta.criado_em else '-' }}<br>{{ carta.criado_por or '' }}</small></td>
+                        <td class="text-end col-nowrap">
+                            <a href="{{ url_for('carvia.download_carta_correcao', carta_id=carta.id) }}"
+                               class="btn btn-sm btn-outline-primary" title="Baixar CCe"><i class="fas fa-download"></i></a>
+                            {% if pode_editar %}
+                            <button type="button" class="btn btn-sm btn-outline-danger carvia-cce-excluir"
+                                    data-carta-id="{{ carta.id }}" title="Excluir CCe"><i class="fas fa-trash"></i></button>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="text-muted text-center mb-3">Nenhuma carta de correcao.</p>
+        {% endif %}
+
+        {% if pode_editar %}
+        <hr>
+        <form class="carvia-cce-form" enctype="multipart/form-data" data-upload-url="{{ upload_url }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="row g-2 align-items-end">
+                <div class="col-md-5">
+                    <label class="form-label">Carta de Correcao <span class="text-danger">*</span></label>
+                    <input type="file" class="form-control form-control-sm" name="arquivo" accept=".pdf,.jpg,.jpeg,.png" required>
+                </div>
+                <div class="col-md-5">
+                    <label class="form-label">Descricao</label>
+                    <input type="text" class="form-control form-control-sm" name="descricao" placeholder="Opcional">
+                </div>
+                <div class="col-md-2">
+                    <button type="submit" class="btn btn-sm btn-outline-success w-100" title="Enviar CCe"><i class="fas fa-upload"></i></button>
+                </div>
+            </div>
+            <small class="text-muted">pdf, jpg, jpeg, png (max 10MB). Propaga entre a cotacao e a NF da cadeia.</small>
+        </form>
+        {% endif %}
+    </div>
+</div>
+{% endmacro %}

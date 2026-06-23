@@ -30,6 +30,9 @@ ALLOWED_EXT_ANEXO: frozenset[str] = frozenset({
     'msg', 'eml',
 })
 
+# Carta de Correcao (CCe) — PDF ou imagem (renderizavel p/ impressao)
+ALLOWED_EXT_CCE: frozenset[str] = frozenset({'pdf', 'jpg', 'jpeg', 'png'})
+
 # Helper para bytes
 MB = 1024 * 1024
 MAX_BYTES_IMPORTACAO = UPLOAD_MAX_MB_IMPORTACAO * MB

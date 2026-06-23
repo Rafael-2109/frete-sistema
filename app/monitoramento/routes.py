@@ -194,6 +194,21 @@ def processar_nf_cd_pedido(entrega_id):
         print(f"[DEBUG] ❌ {error_msg}")
         return False, error_msg
 
+def _cces_da_entrega(entrega):
+    """CCe da entrega CarVia (numero_nf -> CarviaNf ATIVA -> CCe).
+    Retorna (pares, nf_id). Lazy import (R1-safe). ([], None) se nao-CarVia."""
+    if not entrega or getattr(entrega, 'origem', None) != 'CARVIA' or not entrega.numero_nf:
+        return [], None
+    from app.carvia.models.documentos import CarviaNf
+    from app.carvia.services.documentos.carta_correcao_service import (
+        CarviaCartaCorrecaoService,
+    )
+    nf = CarviaNf.query.filter_by(numero_nf=entrega.numero_nf, status='ATIVA').first()
+    if not nf:
+        return [], None
+    return CarviaCartaCorrecaoService.listar('nf', nf.id), nf.id
+
+
 @monitoramento_bp.route('/<int:id>', methods=['GET'])
 @login_required
 @allow_vendedor_own_data()  # 🔒 VENDEDORES: Apenas dados próprios
@@ -335,9 +350,13 @@ def visualizar_entrega(id):
     if entrega.origem == 'CARVIA':
         _enriquecer_entregas_carvia_batch([entrega])
 
+    cces_entrega, cce_nf_id = _cces_da_entrega(entrega)
+
     return render_template(
         'monitoramento/visualizar_entrega.html',
         entrega=entrega,
+        cces_entrega=cces_entrega,
+        cce_nf_id=cce_nf_id,
         form_log=form_log,
         form_evento=form_evento,
         form_custo=form_custo,

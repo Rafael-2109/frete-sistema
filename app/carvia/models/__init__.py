@@ -87,6 +87,11 @@ from app.carvia.models.comprovante import (  # noqa: F401
     CarviaComprovantePagamento, CarviaComprovanteVinculo,
 )
 
+# Carta de Correção (CCe) — N:N com cotacao / NF
+from app.carvia.models.carta_correcao import (  # noqa: F401
+    CarviaCartaCorrecao, CarviaCartaCorrecaoVinculo,
+)
+
 # Comissao
 from app.carvia.models.comissao import (  # noqa: F401
     CarviaComissaoFechamento, CarviaComissaoFechamentoCte, CarviaComissaoAjuste,
@@ -159,6 +164,8 @@ __all__ = [
     'CarviaAnexo',
     # Comprovantes de Pagamento
     'CarviaComprovantePagamento', 'CarviaComprovanteVinculo',
+    # Carta de Correção (CCe)
+    'CarviaCartaCorrecao', 'CarviaCartaCorrecaoVinculo',
     # Comissao
     'CarviaComissaoFechamento', 'CarviaComissaoFechamentoCte', 'CarviaComissaoAjuste',
     # Aprovacao Fretes

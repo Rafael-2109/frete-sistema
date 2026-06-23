@@ -115,84 +115,9 @@ class CarviaComprovanteService:
     # ------------------------------------------------------------------ #
     @staticmethod
     def _entidades_relacionadas(entidade_tipo, entidade_id):
-        """Conjunto de (tipo, id) no fecho da cadeia ligado a esta entidade.
-
-        Eixo = NFs. A partir das NFs deriva operacoes (CarviaOperacaoNf),
-        faturas (operacao.fatura_cliente_id) e cotacoes (numero_nf, mesmo elo
-        textual usado no resto do modulo). Inclui a propria entidade de origem.
-        """
-        from app.carvia.models import (
-            CarviaNf, CarviaOperacao, CarviaOperacaoNf,
-            CarviaPedido, CarviaPedidoItem,
-        )
-        rel = {(entidade_tipo, entidade_id)}
-
-        # 1. Resolver o conjunto de NFs (eixo da cadeia)
-        nf_ids = set()
-        if entidade_tipo == 'nf':
-            nf_ids.add(entidade_id)
-        elif entidade_tipo == 'operacao':
-            nf_ids.update(
-                r.nf_id for r in
-                CarviaOperacaoNf.query.filter_by(operacao_id=entidade_id).all()
-            )
-        elif entidade_tipo == 'fatura_cliente':
-            op_ids = [
-                o.id for o in
-                CarviaOperacao.query.filter_by(fatura_cliente_id=entidade_id).all()
-            ]
-            if op_ids:
-                nf_ids.update(
-                    r.nf_id for r in CarviaOperacaoNf.query.filter(
-                        CarviaOperacaoNf.operacao_id.in_(op_ids)
-                    ).all()
-                )
-        elif entidade_tipo == 'cotacao':
-            numeros = [
-                i.numero_nf
-                for p in CarviaPedido.query.filter_by(cotacao_id=entidade_id).all()
-                for i in p.itens if i.numero_nf
-            ]
-            if numeros:
-                nf_ids.update(
-                    nf.id for nf in
-                    CarviaNf.query.filter(CarviaNf.numero_nf.in_(numeros)).all()
-                )
-
-        if not nf_ids:
-            return rel
-
-        # 2. NFs + seus numeros (para achar cotacoes)
-        numeros_nf = set()
-        for nf in CarviaNf.query.filter(CarviaNf.id.in_(nf_ids)).all():
-            rel.add(('nf', nf.id))
-            if nf.numero_nf:
-                numeros_nf.add(nf.numero_nf)
-
-        # 3. Operacoes (CTe) dessas NFs
-        op_ids = set()
-        for r in CarviaOperacaoNf.query.filter(CarviaOperacaoNf.nf_id.in_(nf_ids)).all():
-            rel.add(('operacao', r.operacao_id))
-            op_ids.add(r.operacao_id)
-
-        # 4. Faturas cliente dessas operacoes
-        if op_ids:
-            for op in CarviaOperacao.query.filter(CarviaOperacao.id.in_(op_ids)).all():
-                if op.fatura_cliente_id:
-                    rel.add(('fatura_cliente', op.fatura_cliente_id))
-
-        # 5. Cotacoes via numero_nf (elo textual)
-        if numeros_nf:
-            rows = db.session.query(CarviaPedido.cotacao_id).join(
-                CarviaPedidoItem, CarviaPedidoItem.pedido_id == CarviaPedido.id
-            ).filter(
-                CarviaPedidoItem.numero_nf.in_(list(numeros_nf))
-            ).distinct().all()
-            for (cot_id,) in rows:
-                if cot_id:
-                    rel.add(('cotacao', cot_id))
-
-        return rel
+        """Fecho da cadeia (delegado ao SOT compartilhado _cadeia_nf)."""
+        from app.carvia.services.documentos._cadeia_nf import resolver_cadeia_nf
+        return resolver_cadeia_nf(entidade_tipo, entidade_id)
 
     @staticmethod
     def sincronizar_cadeia(entidade_tipo, entidade_id, criado_por='sistema'):

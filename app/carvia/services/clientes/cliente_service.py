@@ -569,6 +569,9 @@ class CarviaClienteService:
         if not endereco:
             return False, 'Endereco nao encontrado.', None
 
+        # Snapshot p/ detectar mudanca de cidade/UF (propagacao downstream)
+        cidade_uf_antes = (endereco.fisico_cidade, endereco.fisico_uf)
+
         # Transferir para outro cliente (pre-validar antes do flush)
         if 'cliente_id' in dados:
             novo_cliente_id = dados['cliente_id']
@@ -657,7 +660,18 @@ class CarviaClienteService:
                 setattr(endereco, chave, dados[chave])
 
         db.session.flush()
-        return True, None, None
+
+        # Propaga cidade/UF para os registros em aberto, se mudaram (DESTINO).
+        contexto_saida = None
+        cidade_uf_depois = (endereco.fisico_cidade, endereco.fisico_uf)
+        if endereco.tipo == 'DESTINO' and cidade_uf_depois != cidade_uf_antes:
+            from app.carvia.services.clientes.propagacao_endereco_service import (
+                CarviaPropagacaoEnderecoService,
+            )
+            propagacao = CarviaPropagacaoEnderecoService.propagar(endereco.id)
+            if any(propagacao.values()):
+                contexto_saida = {'propagacao': propagacao}
+        return True, None, contexto_saida
 
     @staticmethod
     def buscar_candidatos_migracao(endereco_id: int) -> List:

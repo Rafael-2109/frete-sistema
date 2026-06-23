@@ -1,0 +1,74 @@
+{
+  "name": "carvia_carta_correcao_vinculos",
+  "description": "Vínculo N:N polimórfico entre CCe e documento (cotacao/nf).",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "carta_id",
+      "type": "integer",
+      "description": "FK → carvia_cartas_correcao.id",
+      "nullable": false
+    },
+    {
+      "name": "entidade_tipo",
+      "type": "varchar(30)",
+      "nullable": false
+    },
+    {
+      "name": "entidade_id",
+      "type": "integer",
+      "nullable": false
+    },
+    {
+      "name": "origem",
+      "type": "varchar(20)",
+      "nullable": false,
+      "default": "MANUAL"
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação",
+      "nullable": false
+    },
+    {
+      "name": "criado_por",
+      "type": "varchar(100)",
+      "nullable": false
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "carta_id",
+      "references": "carvia_cartas_correcao.id"
+    }
+  ],
+  "unique_constraints": [
+    [
+      "carta_id",
+      "entidade_tipo",
+      "entidade_id"
+    ]
+  ],
+  "indices": [
+    {
+      "name": "ix_carvia_carta_correcao_vinculos_carta_id",
+      "columns": [
+        "carta_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carvia_cce_vinculo_entidade",
+      "columns": [
+        "entidade_tipo",
+        "entidade_id"
+      ],
+      "unique": false
+    }
+  ]
+}

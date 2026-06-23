@@ -567,6 +567,17 @@
     </div>
     {% endfor %}
 
+    {# Cartas de Correcao (CCe) das NFs CarVia — 1 pagina por imagem #}
+    {% if cces_embarque %}
+      {% for cce in cces_embarque %}
+        {% for pag in cce.paginas %}
+        <div class="page-break" style="text-align:center;">
+          <img src="data:image/png;base64,{{ pag }}" style="max-width:100%;height:auto;" alt="Carta de Correcao">
+        </div>
+        {% endfor %}
+      {% endfor %}
+    {% endif %}
+
     <!-- Rodapé -->
     <div class="footer">
         <div style="display: flex; justify-content: space-between;">
