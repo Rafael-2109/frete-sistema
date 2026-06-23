@@ -1437,6 +1437,29 @@ def imprimir_docs_carvia(embarque_id, item_id):
     )
 
 
+def _coletar_cces_embarque(numeros_nf):
+    """Renderiza as CCe (PDF->imagem base64) das NFs CarVia do embarque, p/ impressao.
+    Lazy imports de app.carvia (R1 deste modulo + R2 do CarVia: evita ciclo)."""
+    numeros = [n for n in (numeros_nf or []) if n]
+    if not numeros:
+        return []
+    from app.carvia.models.documentos import CarviaNf
+    from app.carvia.services.documentos.carta_correcao_service import (
+        CarviaCartaCorrecaoService,
+    )
+    from app.carvia.services.documentos.cce_render import render_cces_para_impressao
+    nf_ids = [nf.id for nf in CarviaNf.query.filter(
+        CarviaNf.numero_nf.in_(numeros), CarviaNf.status == 'ATIVA').all()]
+    pares = []
+    vistos = set()
+    for nf_id in nf_ids:
+        for carta, vinc in CarviaCartaCorrecaoService.listar('nf', nf_id):
+            if carta.id not in vistos:
+                vistos.add(carta.id)
+                pares.append((carta, vinc))
+    return render_cces_para_impressao(pares)
+
+
 @embarques_bp.route('/<int:embarque_id>/imprimir_embarque')
 @login_required
 def imprimir_embarque(embarque_id):
@@ -1476,6 +1499,13 @@ def imprimir_embarque(embarque_id):
     from app.utils.local_cd import normalizar_local_cd
     local_cd_atual = normalizar_local_cd(request.args.get('local_cd', '').strip())
 
+    # Cartas de Correcao (CCe) das NFs CarVia do embarque (saem no mesmo papel)
+    numeros_nf_carvia = [
+        it.nota_fiscal for it in embarque.itens_ativos
+        if it.nota_fiscal and (it.separacao_lote_id or '').startswith('CARVIA-')
+    ]
+    cces_embarque = _coletar_cces_embarque(numeros_nf_carvia)
+
     # Renderiza template específico para impressão do embarque
     html = render_template(
         'embarques/imprimir_embarque.html',
@@ -1485,6 +1515,7 @@ def imprimir_embarque(embarque_id):
         current_user=current_user,
         qrcode_base64=qrcode_base64,
         local_cd_atual=local_cd_atual,
+        cces_embarque=cces_embarque,
     )
     
     response = make_response(html)
@@ -1627,6 +1658,13 @@ def imprimir_embarque_completo(embarque_id):
         if cv.get('filial'):
             filial_por_lote[cv['lote_id']] = cv['filial']
 
+    # Cartas de Correcao (CCe) das NFs CarVia do embarque (saem no mesmo papel)
+    numeros_nf_carvia = [
+        it.nota_fiscal for it in embarque.itens_ativos
+        if it.nota_fiscal and (it.separacao_lote_id or '').startswith('CARVIA-')
+    ]
+    cces_embarque = _coletar_cces_embarque(numeros_nf_carvia)
+
     # Renderiza template específico para impressão completa
     html = render_template(
         'embarques/imprimir_completo.html',
@@ -1638,6 +1676,7 @@ def imprimir_embarque_completo(embarque_id):
         current_user=current_user,
         qrcode_base64=qrcode_base64,
         local_cd_atual=local_cd_atual,
+        cces_embarque=cces_embarque,
     )
 
     response = make_response(html)

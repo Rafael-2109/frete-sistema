@@ -346,6 +346,17 @@
     </div>
     {% endif %}***/--!>#}
 
+    {# Cartas de Correcao (CCe) das NFs CarVia — 1 pagina por imagem #}
+    {% if cces_embarque %}
+      {% for cce in cces_embarque %}
+        {% for pag in cce.paginas %}
+        <div style="page-break-before: always; text-align:center;">
+          <img src="data:image/png;base64,{{ pag }}" style="max-width:100%;height:auto;" alt="Carta de Correcao">
+        </div>
+        {% endfor %}
+      {% endfor %}
+    {% endif %}
+
     <!-- Script para impressão automática -->
     <script>
         window.onload = function() {
