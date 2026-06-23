@@ -178,6 +178,86 @@ class ControlePortaria(db.Model):
         )
 
     @staticmethod
+    def embarques_com_saida_pendente_query(local_cd=None):
+        """Query base da LISTAGEM de embarques com SAIDA pendente (2CD-aware + legado-safe).
+
+        Diferente de `embarques_pendentes_do_cd_query` (FONTE da portaria FISICA, que so
+        olha portaria), este helper e a FONTE da tela `listar_embarques`: um embarque segue
+        "pendente" enquanto QUALQUER CD com itens ativos nao deu saida, MESMO que
+        `Embarque.data_embarque` (cabecalho AGREGADO) ja tenha sido carimbado pela 1a saida
+        de outro CD. Sem isso, um embarque MISTO (VM+TM) sumia da lista de pendentes assim que
+        1 CD dava saida — inclusive ao filtrar pelo CD que ainda nao saiu (bug 2026-06-23).
+
+        Criterio (sempre `status == 'ativo'`):
+            data_embarque IS NULL                         -- nada saiu (cobre legado single-CD)
+            OR (
+                existe saida registrada na portaria       -- o processo FISICO de saida comecou
+                AND existe item ativo de um CD que ainda nao deu saida desse CD
+            )
+
+        O ramo `data_embarque IS NULL` preserva o legado: embarque single-CD com `data_embarque`
+        setado SEM ControlePortaria (saida manual/importada) NAO reaparece como pendente — pois
+        o 2o ramo exige saida fisica registrada. O 2o ramo so e satisfeito por embarque MISTO em
+        saida PARCIAL (single-CD que ja saiu tem saida do seu unico CD → nenhum item pendente).
+
+        `local_cd`: se informado, restringe a "pendente DAQUELE CD" (tem item ativo do CD E o
+        CD ainda nao saiu). None = pendente de QUALQUER CD. Retorna `Embarque.query` (sem
+        options/order) para o consumidor refinar.
+        """
+        from sqlalchemy import or_, and_, func
+
+        local = normalizar_local_cd(local_cd) if local_cd else None
+
+        # Saida de portaria do MESMO local do item (correlacionado a EmbarqueItem.local_cd).
+        # `.correlate(Embarque, EmbarqueItem)` e OBRIGATORIO: esta subquery esta aninhada DENTRO
+        # de outra (item_cd_pendente), entao a auto-correlacao do SQLAlchemy so amarraria
+        # EmbarqueItem e re-introduziria `embarques` no FROM (produto cartesiano → decorrelaciona
+        # a saida e devolve resultado errado). Aqui forcamos a correlacao aos DOIS niveis externos.
+        saida_do_local_do_item = ControlePortaria.query.filter(
+            ControlePortaria.embarque_id == Embarque.id,
+            ControlePortaria.local_cd == func.coalesce(
+                EmbarqueItem.local_cd, LOCAL_CD_DEFAULT
+            ),
+            ControlePortaria.data_saida.isnot(None),
+        ).correlate(Embarque, EmbarqueItem).exists()
+
+        # Existe item ativo de um CD (qualquer, ou o filtrado) que ainda nao deu saida.
+        item_cd_pendente_q = EmbarqueItem.query.filter(
+            EmbarqueItem.embarque_id == Embarque.id,
+            EmbarqueItem.status == 'ativo',
+            ~saida_do_local_do_item,
+        )
+        if local:
+            item_cd_pendente_q = item_cd_pendente_q.filter(
+                EmbarqueItem.local_cd == local
+            )
+        item_cd_pendente = item_cd_pendente_q.exists()
+
+        # O processo fisico de saida comecou para ALGUM CD do embarque.
+        alguma_saida_registrada = ControlePortaria.query.filter(
+            ControlePortaria.embarque_id == Embarque.id,
+            ControlePortaria.data_saida.isnot(None),
+        ).exists()
+
+        pendente = or_(
+            Embarque.data_embarque.is_(None),
+            and_(alguma_saida_registrada, item_cd_pendente),
+        )
+
+        query = Embarque.query.filter(Embarque.status == 'ativo', pendente)
+
+        if local:
+            # Mesmo no ramo `data_embarque IS NULL`, so embarques com item ativo do CD filtrado.
+            tem_item_do_local = EmbarqueItem.query.filter(
+                EmbarqueItem.embarque_id == Embarque.id,
+                EmbarqueItem.status == 'ativo',
+                EmbarqueItem.local_cd == local,
+            ).exists()
+            query = query.filter(tem_item_do_local)
+
+        return query
+
+    @staticmethod
     def veiculos_do_dia(local_cd=None):
         """Retorna veículos do dia + não finalizados, ordenados: DENTRO, AGUARDANDO, SAIU.
 

@@ -677,19 +677,29 @@ def listar_embarques():
     transportadoras = Transportadora.query.all()
     form_filtros.transportadora_id.choices = [('', 'Todas as transportadoras')] + [(t.id, t.razao_social) for t in transportadoras]
 
-    # ✅ NOVO: Pré-filtro - Mostra apenas embarques ativos sem data de embarque (por padrão)
+    # ✅ NOVO: Pré-filtro - Mostra apenas embarques ativos com SAIDA pendente (por padrão)
     mostrar_todos = request.args.get('mostrar_todos', '').lower() == 'true'
-    
-    # Query base
-    query = Embarque.query.options(db.joinedload(Embarque.transportadora))
-    query = query.outerjoin(EmbarqueItem).outerjoin(Transportadora)
-    
+
+    # 🏭 Filtro por CD de expedicao (local_cd) — lido AQUI (antes do pre-filtro) porque a
+    # "pendencia" e POR CD: o pre-filtro de pendentes precisa respeitar o CD selecionado.
+    from app.utils.local_cd import normalizar_local_cd
+    local_cd_filtro = normalizar_local_cd(request.args.get('local_cd', '').strip())
+
     # ✅ APLICAR PRÉ-FILTRO (apenas se não foi solicitado "mostrar todos")
     if not mostrar_todos:
-        query = query.filter(
-            Embarque.status == 'ativo',
-            Embarque.data_embarque.is_(None)
-        )
+        # Pendencia 2CD-aware (FONTE: ControlePortaria.embarques_com_saida_pendente_query):
+        # um embarque MISTO segue pendente enquanto QUALQUER CD nao deu saida, mesmo apos a 1a
+        # saida carimbar `data_embarque` (cabecalho agregado). O antigo `data_embarque IS NULL`
+        # escondia o embarque misto do 2o CD apos a 1a saida (bug 2026-06-23). Ja embute
+        # `status == 'ativo'` e, se `local_cd_filtro`, o recorte por item daquele CD.
+        from app.portaria.models import ControlePortaria
+        query = ControlePortaria.embarques_com_saida_pendente_query(local_cd_filtro)
+        query = query.options(db.joinedload(Embarque.transportadora))
+        query = query.outerjoin(EmbarqueItem).outerjoin(Transportadora)
+    else:
+        # Query base (mostrar todos)
+        query = Embarque.query.options(db.joinedload(Embarque.transportadora))
+        query = query.outerjoin(EmbarqueItem).outerjoin(Transportadora)
 
     # Aplicar filtros
     filtros_aplicados = not mostrar_todos  # Se não está mostrando todos, filtro está aplicado
@@ -820,18 +830,18 @@ def listar_embarques():
     # Tenente Marques" no topo da tela de listagem (substituiu os antigos links "Embarques
     # VM"/"Embarques TM" do sidebar). Seleciona embarques que tenham >=1 EmbarqueItem ativo
     # do CD; a tela segue exibindo TODOS os itens de cada embarque (o filtro decide QUAIS
-    # embarques aparecem).
-    from app.utils.local_cd import normalizar_local_cd
-    local_cd_filtro = normalizar_local_cd(request.args.get('local_cd', '').strip())
+    # embarques aparecem). No modo pendentes (not mostrar_todos) o recorte por CD ja foi
+    # embutido em embarques_com_saida_pendente_query — so reaplica aqui em "mostrar todos".
     if local_cd_filtro:
-        query = query.filter(
-            Embarque.id.in_(
-                db.session.query(EmbarqueItem.embarque_id).filter(
-                    EmbarqueItem.local_cd == local_cd_filtro,
-                    EmbarqueItem.status == 'ativo',
+        if mostrar_todos:
+            query = query.filter(
+                Embarque.id.in_(
+                    db.session.query(EmbarqueItem.embarque_id).filter(
+                        EmbarqueItem.local_cd == local_cd_filtro,
+                        EmbarqueItem.status == 'ativo',
+                    )
                 )
             )
-        )
         filtros_aplicados = True
 
     # Ordenação padrão (mais recente primeiro)
