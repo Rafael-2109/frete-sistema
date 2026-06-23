@@ -1,6 +1,6 @@
 {
   "version": "2.0.0",
-  "total_relationships": 443,
+  "total_relationships": 444,
   "relationships": [
     {
       "from_table": "agendamentos_entrega",
@@ -354,6 +354,12 @@
       "from_table": "carvia_aprovacoes_frete",
       "from_column": "frete_id",
       "to_table": "carvia_fretes",
+      "to_column": "id"
+    },
+    {
+      "from_table": "carvia_carta_correcao_vinculos",
+      "from_column": "carta_id",
+      "to_table": "carvia_cartas_correcao",
       "to_column": "id"
     },
     {

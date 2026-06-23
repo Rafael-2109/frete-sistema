@@ -105,7 +105,7 @@
     "vinculacao_carteira_separacao",
     "webhook_configs"
   ],
-  "total_tabelas": 331,
+  "total_tabelas": 333,
   "tabelas": [
     {
       "name": "agendamentos_entrega",
@@ -707,6 +707,26 @@
         "frete_id",
         "status",
         "solicitado_em"
+      ],
+      "dominio": "Carvia"
+    },
+    {
+      "name": "carvia_carta_correcao_vinculos",
+      "description": "Vínculo N:N polimórfico entre CCe e documento (cotacao/nf).",
+      "key_fields": [
+        "carta_id",
+        "entidade_id",
+        "entidade_tipo"
+      ],
+      "dominio": "Carvia"
+    },
+    {
+      "name": "carvia_cartas_correcao",
+      "description": "Carta de Correção (arquivo S3) — N:N com cotacao/nf via vínculo.",
+      "key_fields": [
+        "nome_original",
+        "nome_arquivo",
+        "caminho_s3"
       ],
       "dominio": "Carvia"
     },
