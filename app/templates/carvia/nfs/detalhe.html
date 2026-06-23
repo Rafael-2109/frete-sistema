@@ -324,24 +324,34 @@
                     <hr>
                     <small class="text-muted d-block mb-1">Rastreamento</small>
                     <div class="d-flex flex-wrap gap-2 align-items-center">
+                        {# Coletado | Recebido - DD/MM #}
                         {% if recebimento_data %}
                         <span class="badge bg-success" title="Recebido na matriz">
-                            <i class="fas fa-clipboard-check"></i> Recebido {{ recebimento_data.strftime('%d/%m/%Y') }}
+                            <i class="fas fa-clipboard-check"></i> Recebido - {{ recebimento_data.strftime('%d/%m') }}
                         </span>
                         {% elif coleta_data %}
                         <span class="badge bg-warning text-dark" title="Coletado no remetente">
-                            <i class="fas fa-truck-loading"></i> Coletado {{ coleta_data.strftime('%d/%m/%Y') }}
+                            <i class="fas fa-truck-loading"></i> Coletado - {{ coleta_data.strftime('%d/%m') }}
                         </span>
                         {% endif %}
+                        {# Emb. #### - DD/MM (verde quando saiu da portaria = data_embarque) #}
                         {% if embarque_nf %}
+                        {% if embarque_nf.data_embarque %}
+                        <a href="{{ url_for('embarques.visualizar_embarque', id=embarque_nf.id) }}"
+                           class="badge bg-success text-decoration-none" title="Embarque #{{ embarque_nf.numero }} — saiu da portaria">
+                            <i class="fas fa-dolly"></i> Emb. {{ embarque_nf.numero }} - {{ embarque_nf.data_embarque.strftime('%d/%m') }}
+                        </a>
+                        {% else %}
                         <a href="{{ url_for('embarques.visualizar_embarque', id=embarque_nf.id) }}"
                            class="badge bg-primary text-decoration-none" title="Ver embarque #{{ embarque_nf.numero }}">
                             <i class="fas fa-dolly"></i> Emb. {{ embarque_nf.numero }}
                         </a>
                         {% endif %}
+                        {% endif %}
+                        {# Entregue - DD/MM #}
                         {% if nf_entregue %}
-                        <span class="badge bg-success" title="Entrega ao cliente final">
-                            <i class="fas fa-flag-checkered"></i> Entregue{% if entrega_data %} {{ entrega_data.strftime('%d/%m/%Y') }}{% endif %}
+                        <span class="badge bg-dark" title="Entrega ao cliente final">
+                            <i class="fas fa-flag-checkered"></i> Entregue{% if entrega_data %} - {{ entrega_data.strftime('%d/%m') }}{% endif %}
                         </span>
                         {% endif %}
                         {% if not recebimento_data and not coleta_data and not embarque_nf and not nf_entregue %}

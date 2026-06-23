@@ -759,7 +759,11 @@ def register_nf_routes(bp):
         embarque_nf = None
         for f in fretes_nf:
             if getattr(f, 'embarque_id', None) and f.embarque is not None:
-                embarque_nf = {'id': f.embarque.id, 'numero': f.embarque.numero}
+                embarque_nf = {
+                    'id': f.embarque.id,
+                    'numero': f.embarque.numero,
+                    'data_embarque': getattr(f.embarque, 'data_embarque', None),
+                }
                 break
 
         return render_template(
