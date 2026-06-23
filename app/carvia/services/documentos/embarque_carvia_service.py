@@ -358,6 +358,18 @@ class EmbarqueCarViaService:
         # Recalcular totais do embarque
         EmbarqueCarViaService._recalcular_totais(embarque_id)
 
+        # Reconciliar o local_cd de TODOS os EmbarqueItem desta NF a fonte (CarviaNf.local_cd,
+        # definido pela Coleta) — INDEPENDENTE de data_embarque. Sem isto, o item so era
+        # alinhado dentro do bloco `if embarque.data_embarque` abaixo (apos a saida da portaria):
+        # antes da saida, o caminho legado nao seta local_cd e a propagacao da Coleta casa o
+        # item por `nota_fiscal == numero_nf` (nao alcanca o item que ainda nao tinha a NF no
+        # instante da propagacao) -> o item ficava no default VM divergente da NF/Coleta TM,
+        # enquanto a entrega (casa por numero_nf) ja era reconciliada. Idempotente, R1-safe,
+        # sem commit (commit do caller).
+        if nf_obj is not None and getattr(nf_obj, 'local_cd', None):
+            from app.utils.propagacao_local_cd import propagar_local_cd_carvia
+            propagar_local_cd_carvia(numero_nf, nf_obj.local_cd)
+
         # Sinalizar que embarque precisa reimprimir (se ja foi impresso)
         from app.embarques.models import Embarque as _Embarque
         _emb = db.session.get(_Embarque, embarque_id)
