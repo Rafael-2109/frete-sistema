@@ -395,7 +395,7 @@ Função de conveniência: `resolver_por_codigo_qpa(codigo_str)` para lookup dir
 - Variante global `/motos-assai/faturamento/upload-nf` aceita 1 ou N PDFs.
 - 1 PDF + sucesso → redirect detalhe (UX antiga preservada).
 - 1 PDF + erro → flash + re-render upload.
-- N PDFs → `upload_nf_resultado.html` com tabela arquivo|status|NF|match|erro + resumo (total/ok/duplicada/erro_parse).
+- N PDFs → `upload_nf_resultado.html` com tabela arquivo|status|NF|match|erro + resumo (total/ok/duplicada/erro_parse/**falha**). Uma exceção INESPERADA num arquivo (além de `NfQpaParseError`/`NfQpaJaImportadaError`) **não aborta o lote**: `db.session.rollback()` + status `falha` no relatório e segue para o próximo. Antes o lote inteiro caía em 500 e os arquivos seguintes sumiam sem rastro (`importar_nf_qpa` commita por arquivo → data loss silencioso).
 - Acesso: botão "Importar NFs em lote" no header de `lista_separacoes.html` (tela Faturamento).
 - Botão "Upload NF" por-linha (variante per-separação) também continua aceitando N PDFs.
 

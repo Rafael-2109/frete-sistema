@@ -47,6 +47,16 @@
       </div>
     </div>
   </div>
+  {% if resumo.falha %}
+  <div class="col-md-3">
+    <div class="card border-0 shadow-sm">
+      <div class="card-body py-2">
+        <h6 class="card-subtitle text-muted small">Falhas inesperadas</h6>
+        <p class="h4 mb-0 text-danger">{{ resumo.falha }}</p>
+      </div>
+    </div>
+  </div>
+  {% endif %}
 </section>
 
 <div class="table-responsive">
@@ -71,6 +81,8 @@
           <span class="badge bg-success">Importada</span>
         {% elif r.status == 'duplicada' %}
           <span class="badge bg-warning text-dark">Já existia</span>
+        {% elif r.status == 'falha' %}
+          <span class="badge bg-danger">Falha</span>
         {% else %}
           <span class="badge bg-danger">Erro</span>
         {% endif %}

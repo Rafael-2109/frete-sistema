@@ -361,6 +361,26 @@ def faturamento_upload_nf(separacao_id):
                     'nf_numero': None,
                     'erro': str(e),
                 })
+            except Exception as e:
+                # Qualquer outra excecao (IntegrityError, decimal, anthropic,
+                # AttributeError, OperationalError...): NAO aborta o lote.
+                # Limpa a sessao (evita contaminar o proximo arquivo) e
+                # registra como 'falha' VISIVEL no relatorio — em vez de o
+                # arquivo sumir sem rastro (importar_nf_qpa commita por
+                # arquivo, entao os ja processados ficam e os demais somem).
+                db.session.rollback()
+                current_app.logger.exception(
+                    'Falha inesperada ao importar NF Q.P.A. (arquivo %s)',
+                    f.filename,
+                )
+                resultados.append({
+                    'filename': f.filename,
+                    'status': 'falha',
+                    'status_match': None,
+                    'nf_id': None,
+                    'nf_numero': None,
+                    'erro': f'{type(e).__name__}: {e}',
+                })
 
         # 1 arquivo + sucesso → preserva UX antiga
         if len(resultados) == 1 and resultados[0]['status'] == 'ok':
@@ -372,7 +392,7 @@ def faturamento_upload_nf(separacao_id):
         if len(resultados) == 1 and resultados[0]['status'] != 'ok':
             r = resultados[0]
             categoria = 'warning' if r['status'] == 'duplicada' else 'danger'
-            prefix = '' if r['status'] == 'duplicada' else 'Erro ao parsear NF: '
+            prefix = 'Erro ao parsear NF: ' if r['status'] == 'erro_parse' else ''
             flash(f'{prefix}{r["erro"]}', categoria)
             return render_template('motos_assai/faturamento/upload_nf.html', form=form, separacao_id=separacao_id)
 
@@ -382,6 +402,7 @@ def faturamento_upload_nf(separacao_id):
             'ok': sum(1 for r in resultados if r['status'] == 'ok'),
             'duplicada': sum(1 for r in resultados if r['status'] == 'duplicada'),
             'erro_parse': sum(1 for r in resultados if r['status'] == 'erro_parse'),
+            'falha': sum(1 for r in resultados if r['status'] == 'falha'),
         }
         return render_template(
             'motos_assai/faturamento/upload_nf_resultado.html',
