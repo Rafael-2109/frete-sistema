@@ -66,7 +66,7 @@ atualizado: 2026-06-19
 > **Progresso**: ██████░░░░ 60% (Fase 0 ✅ + Fase 1 ✅ + Fase 2 ✅ + Fase 3 ✅)
 > **Nota (04/04)**: `set_model()` e interrupt handling implementados (itens de Fase 4), mas V4.1-V4.3 e V5.1-V5.2 ainda pendentes. `toggle_mcp_server` nao implementado.
 > **Reconciliação (2026-06-19, gap analysis vs código)**: o dead code v2 — `_stream_response()` + `_make_streaming_prompt()` — foi DELETADO em 2026-04-04 (`client.py:2816-2818`), o que avança as tasks 4.2 (✅) e 5.2 (◑ parcial). **NÃO está concluído**: `_with_resume()` permanece em uso (`client.py:2823`), DC-1/4.5 (globals Playwright) não-feito, flag `USE_PERSISTENT_SDK_CLIENT` ainda existe (5.1), 5.3-5.4 pendentes. Progresso real um pouco acima de 60% — Fases 4-5 seguem PARCIAIS, não "pausadas". SDK atual: **0.2.101** (este doc descreve a faixa 0.1.48).
-> **POC**: CONCLUÍDA (2.15x speedup) — `scripts/poc_sdk_client.py`
+> **POC**: CONCLUÍDA (2.15x speedup) — `scripts/_deprecated/oneoff-2026-06/poc_sdk_client.py`
 > **Rollback instantâneo**: `AGENT_PERSISTENT_SDK_CLIENT=false`
 
 ---
@@ -632,7 +632,7 @@ Se SDK mudar internals, `_force_kill_subprocess()` falha graciosamente (try/exce
 |---------|---------|-----------|------------|
 | `app/agente/config/permissions.py` | 0, 1 | 607 | Fix DC-2 (2 pontos app_context) + `_make_scoped_can_use_tool()` |
 | `app/agente/sdk/client.py` | 0, 1, 3 | 2672 | `_parse_sdk_message()` extraído + `_stream_response_persistent()` + dispatch + fix DC-3 + `our_session_id` em `get_response()` |
-| `app/agente/routes.py` | 1, 2 | 3074 | Novo path `submit_coroutine()` + interrupt real + health pool |
+| `app/agente/routes/` (pacote — split do antigo `routes.py`) | 1, 2 | ~9032 | Novo path `submit_coroutine()` + interrupt real + health pool |
 | `app/agente/config/feature_flags.py` | 0 | 243 | +1 flag (`USE_PERSISTENT_SDK_CLIENT`) |
 | `app/agente/sdk/__init__.py` | 0 | ~10 | Export `submit_coroutine`, `get_or_create_client` |
 | `app/teams/services.py` | 3 | ~950 | `submit_coroutine()` em vez de `asyncio.run()` |
@@ -817,11 +817,11 @@ AGENT_PERSISTENT_SDK_CLIENT=false
 
 | Recurso | Caminho |
 |---------|---------|
-| POC benchmark | `scripts/poc_sdk_client.py` |
+| POC benchmark | `scripts/_deprecated/oneoff-2026-06/poc_sdk_client.py` |
 | SDK ClaudeSDKClient API | `.venv/lib/python3.12/site-packages/claude_agent_sdk/client.py` |
 | SDK query() API | `.venv/lib/python3.12/site-packages/claude_agent_sdk/query.py` |
 | Agent client atual | `app/agente/sdk/client.py` (2672 linhas) |
-| Routes Flask | `app/agente/routes.py` (3074 linhas) |
+| Routes Flask | `app/agente/routes/` (pacote — split do antigo `routes.py`; ~9032 linhas no total) |
 | Permissions | `app/agente/config/permissions.py` (607 linhas) |
 | Pending questions | `app/agente/sdk/pending_questions.py` (219 linhas) |
 | Session persistence | `app/agente/sdk/session_persistence.py` (206 linhas) |

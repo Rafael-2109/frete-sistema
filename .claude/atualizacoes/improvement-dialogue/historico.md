@@ -49,6 +49,73 @@ Indice de execucoes do dialogo de melhoria Agent SDK <-> Claude Code.
 | 43 | 2026-06-20 | 10 | 6 | 1 | 3 | OK (backlog = 1 sessao Motos Assai `7009f2e2` Rayssa id 78 + 1 CarVia Talita id 17. 6 auto-impl: guard de dominio Motos Assai no fast-path NF×PO — chassi != PO, 3 TDD/20 passed; aviso de anexos perdidos na rotacao de sessao — hooks resume_notice, CRITICAL; metodo `reprocessar_itens_fatura_transportadora_por_subcontrato` CarVia — linking_service, wiring na rota proposta; handoff INLINE subagente — CLAUDE.md+SUBAGENT_RELIABILITY; A7 validar chassi por skill+fonte — gestor-motos-assai. IMP-20-004 REJEITADA: gestor-devolucoes e dominio Nacom, nao Q.P.A. (NFd usa assai_devolucao_nfd*). 3 propostas: S3 upload (route), gap NFD em corrigindo-dados-assai; IMP-19-005/010 reconciliadas — ja cobertas por `corrigindo-dados-assai` commit 91e53fd89. 10/10 persistidos HTTP 200) |
 | 44 | 2026-06-21 | 2 | 2 | 0 | 0 | OK (2 auto-impl documentais + 3 F2 listadas. IMP-20-005 gotcha subagente (Rayssa id 78): causa "filesystem isolado" REFUTADA — /tmp e compartilhado; falha real = contexto/uploads nao herdados + TMPDIR divergente; add variante UPLOADS no M1 SUBAGENT_RELIABILITY, complementa handoff INLINE do #43. IMP-19-006 skill_bug em rastreando-odoo (TAMIRIS id 44) IMPROCEDENTE: skill e read-only, reclassificacao foi 100% ad-hoc (agent_adhoc_script ids 2260-2271, decisao #163 rejeitou virar skill); matriz 2.1.1 codigo-correto+ad-hoc-presente; finalidade endereçada — instrumentar write ad-hoc com modos monitorar-andamento/validar-lote (contador real, NAO heuristica de log) em auditando-reclassificacao-odoo. F2: adhoc-1070 Talita id 17, skill-gap-lendo-arquivos Rayssa id 78, adhoc-1161 TAMIRIS id 44 (contraparte executora do #163). v2 ids 246-247 HTTP 200) |
 | 45 | 2026-06-22 | 0 | 0 | 0 | 0 | SKIP (backlog 100% F2 — gate humano; nenhuma avaliavel pelo D8. 3 F2 reincidentes do #44, todas `version=1` sem v2: `adhoc-cluster-1070` (gerar embarque+fretes, 23 membros, Talita id 17, 4d), `skill-gap-lendo-arquivos` (analise exploratoria planilhas, 2 membros, Rayssa id 78, 3d), `adhoc-cluster-1161` (reclassificacao lote AML, 64 membros, TAMIRIS id 44, 2d — contraparte executora #163). Nada decidido/persistido; so relatorio+historico commitados, sem push) |
+| 46 | 2026-06-23 | 6 | 0 | 1 | 5 | OK (6 IMP avaliaveis, 0 auto-impl — todas tocam rota/service sensivel ou sao nao-bug; v2 257-262 HTTP 200. 1 REJEICAO IMP-23-001 list_session_uploads (Rayssa id 78): NAO-bug, limitacao historica — anexos 18-20/06 sao ANTERIORES ao deploy do dual-write `agente_upload` (20/06 ~17h), tabela 0 linhas; codigo+filtro corretos, worktree s3-uploads ja mergeada. 5 PROPOSTAS: (a) IMP-22-001 skill portaria via refactor `movimento_service` extraindo cadeia de saida de routes.py (Samantha id 49); (b) IMP-22-002 rota excluir FT CarVia PENDENTE 6-guards xerox excluir_despesa_extra (Talita id 17); (c) IMP-22-004 BUG REAL peso cubado frete — 3a re-incidencia #32/#33, causa isolada (frete usa `calcular_cubado_por_modelos` dependente da cotacao vs fonte canonica `calcular_peso_cubado_batch` via item; NF 38312/38317 ambas tem item+veiculo, divergencia = cotacao nao cobre JET), correcao = unificar com o caminho canonico ja existente (Barbara id 87); (d) IMP-23-002 upload NF Q.P.A. sincrono confirmado, restarts com CONFOUND deploy (Rayssa id 78); (e) IMP-23-003 BUG data loss silencioso loop faturamento.py:331 sem except generico (Rayssa id 78). 2.1.1a: WIP nao-commitado `_to_decimal_safe` em nf_qpa_adapter.py corrige 1 causa de -002/-003, nao o estrutural. 4 F2 listadas: 3 reincidentes (#44/#45) + 1 NOVA skill-gap-exportando-arquivos (Gislene id 47). Sem push) |
+
+## 2026-06-23
+
+**6 sugestoes IMP avaliaveis** (+ 4 F2 de gate humano). **0 auto-implementadas** — 4 propostas
+tocam rota/service sensivel (custo de frete, dados financeiros, maquina de estados de portaria),
+1 e mitigacao de infra com confound, 1 e nao-bug. **6/6 persistidas** v2 (ids 257-262, HTTP 200).
+Relatorio: `dialogue-2026-06-23.md`.
+
+**Rejeitada (1):**
+- **IMP-2026-06-23-001** (skill_bug, Rayssa id 78) — `list_session_uploads` "nao recupera". NAO-bug:
+  os anexos da Rayssa (18-20/06) sao ANTERIORES ao deploy do dual-write `agente_upload` (20/06
+  ~16:50-16:59, commits f4c8002be/7744aa372/d81a3e89d); a tabela tem 0 linhas para esses uploads
+  (salvos pelo codigo antigo so com `file.save`). Filtro user_id+ativo+janela CORRETO
+  (`upload_recovery_service.py:70-82`); worktree `s3-uploads-agente-recuperacao` ja mergeada.
+  Solucao do caso = pedir reenvio (fallback do `resume_fallback_notice`). Nota lateral: no-op
+  silencioso se `USE_S3=false` (esta ON em prod). Liga a #43/#44.
+
+**Propostas (5):**
+- **IMP-2026-06-22-001** (skill_suggestion, Samantha id 49) — skill `operando-portaria` (dar
+  saida/entrada pelo chat). NAO auto-impl: cadeia de saida (carimba `data_embarque` + propaga
+  Separacao por-CD + 3 hooks de frete) vive EMBUTIDA+DUPLICADA em `portaria/routes.py`
+  (`registrar_movimento` + `adicionar_embarque`). Plano: PASSO 1 extrair
+  `portaria/services/movimento_service.py` (toca routes = aval); PASSO 2 skill WRITE
+  dry-run/`--confirmar`/`--user-id` que invoca o service. `motorista_id` NOT NULL — caso Samantha
+  era nao ter dados do motorista. Ocorrencia unica.
+- **IMP-2026-06-22-002** (skill_suggestion, Talita id 17) — rota excluir `CarviaFaturaTransportadora`.
+  Requer routes -> proposta. Xerox `excluir_despesa_extra_carvia` (`custo_entrega_routes.py:1877`):
+  `POST /faturas-transportadora/<id>/excluir` em `fatura_routes.py`, 6 guards
+  (sistema_carvia/conf=PENDENTE/pag=PENDENTE/NOT conciliado/0 itens/0 subs), botao condicional via
+  `@property pode_excluir()`. Caso: fatura ID 90 DAGO TRANSPORTE duplicada.
+- **IMP-2026-06-22-004** (gotcha_report, Barbara id 87) — **BUG REAL** peso cubado frete CarVia.
+  3a re-incidencia (#32 rejeitada, #33 proposta "cotacao nao cobre modelo"). Causa isolada por
+  codigo+banco: 2 caminhos divergentes — frete usa `_peso_cubado_resolvido`
+  (`carvia_frete_service.py:513`) -> `calcular_cubado_por_modelos`
+  (`embarque_carvia_service.py:604`) dependente de `CarviaCotacaoMoto` da cotacao; fonte canonica
+  (tela/export, R1/R19) usa `calcular_peso_cubado_batch` via `CarviaNfItem.modelo_moto_id`
+  (independe da cotacao). NF 38312(JET)/38317(DOT) AMBAS tem item+veiculo com modelo no banco ->
+  divergencia = cotacao nao cobre o JET -> frete grava bruto so na JET (675,92 vs 867,54 correto).
+  Bug 2ario: `frete_routes.py:627` backfill POST usa `sum(peso_bruto)`. Correcao = unificar o frete
+  com o caminho canonico ja existente + backfill + teste. Encerra a re-incidencia em vez de re-propor.
+- **IMP-2026-06-23-002** (gotcha_report, Rayssa id 78) — upload NF Q.P.A. SINCRONO confirmado
+  (`faturamento.py:318` -> pdfplumber in-memory + ate 3 LLM/arquivo; risco OOM 722->882MB).
+  CONFOUND (2.1.1): restarts 09:30/36/48 sem deploy/SIGKILL nos logs = consistente com recycle mas
+  nao provado -> acao Rafael confirmar no Render. Mitigacao: (1) limitar PDFs/request; (2) worker RQ
+  + relatorio persistido; (3) liberar memoria entre arquivos. Ligada a -003.
+- **IMP-2026-06-23-003** (gotcha_report, Rayssa id 78) — **BUG** data loss silencioso. Loop
+  `faturamento.py:331-363` so captura `NfQpaJaImportadaError`/`NfQpaParseError`; outra excecao ou OOM
+  mid-loop aborta o lote sem relatorio (commit por arquivo `nf_qpa_adapter.py:490` -> processados
+  ficam, restantes somem; 10 PDFs -> 4 entram, 4 somem). Fix: `except Exception` final
+  status='falha'+continue (relatorio visivel) + idealmente worker RQ com relatorio persistido.
+
+**2.1.1a — trabalho dev em curso reconhecido:** WIP NAO COMMITADO em
+`app/motos_assai/services/parsers/nf_qpa_adapter.py` adiciona `_to_decimal_safe` (trata
+`decimal.InvalidOperation` em valor_total — ex.: PDF de CCe no endpoint de NF), corrigindo UMA
+causa de excecao nao-capturada de IMP-23-002/-003, mas nao o sincronismo/loop estrutural. Nao
+commitado por mim (regra: `git add` so dos arquivos do D8).
+
+**F2 listadas (gate humano Rafael+CC — NAO decididas/persistidas):**
+- `adhoc-cluster-1070` (Talita id 17, 23 membros, 5d) — gerar embarque + fretes. Reincidente
+  (#44/#45); liga a IMP-2026-06-16-003 (#40) e ao falso-positivo embarque ad-hoc (#43).
+- `skill-gap-lendo-arquivos` (Rayssa id 78, 2 membros, 4d) — analise exploratoria de planilha.
+  Reincidente; baixa frequencia.
+- `adhoc-cluster-1161` (TAMIRIS id 44, 64 membros, 3d) — reclassificacao lote AML. Contraparte
+  executora da decisao #163; salvaguarda ja em `auditando-reclassificacao-odoo`. Reabrir = Rafael.
+- `skill-gap-exportando-arquivos` (Gislene id 47, 2 membros, 1d) **[NOVA]** — exportar pedidos via
+  SQL avancado (CTEs) p/ Excel. Baixa frequencia.
 
 ## 2026-06-22
 

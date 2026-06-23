@@ -4,7 +4,7 @@ camada: L1
 sot_de: —
 hub: CLAUDE.md
 superseded_by: —
-atualizado: 2026-06-19
+atualizado: 2026-06-23
 -->
 # CarVia — Guia de Desenvolvimento
 
@@ -80,19 +80,21 @@ Sempre prefira ler o sub-doc correspondente ao topico ao inves de reconstruir co
 
 ```
 app/carvia/
-  routes/          # 31 sub-rotas (dashboard, importacao, nf, nf_transferencia, operacao,
+  routes/          # 35 sub-rotas (dashboard, importacao, nf, nf_transferencia, operacao,
                    #   subcontrato, fatura, despesa, fluxo_caixa, conciliacao, cte_complementar,
                    #   custo_entrega, admin, cliente, cotacao_v2, pedido, frete, gerencial,
                    #   aprovacao, comissao, config, conta_corrente, exportacao, receita,
                    #   scanner, simulador, tabela_carvia, importacao_config, api, anexo,
-                   #   comprovante, resultado_frete)
-  services/        # 44 services em 6 sub-pacotes + 2 root:
+                   #   comprovante, resultado_frete, coleta, portal_admin, portal_operacional)
+  services/        # 51 services em 6 sub-pacotes + 2 root:
                    #   admin/ (admin_service)
                    #   clientes/ (cliente_service)
                    #   documentos/ (carvia_frete, conferencia, embarque_carvia,
                    #                linking, matching, nf_transferencia, operacao_cancel,
                    #                ssw_emissao, aprovacao_frete, anexo, comprovante,
-                   #                motos_lote [qtd_motos por lote p/ mapa Nacom, R1]) — 12
+                   #                motos_lote [qtd_motos por lote p/ mapa Nacom, R1],
+                   #                coleta, coleta_recebimento [coletas porta-a-porta],
+                   #                portal_auth, portal_status [portal do cliente]) — 16
                    #   financeiro/ (conciliacao, csv_razao, historico_match, ofx, pagamento,
                    #                sugestao, comissao, conta_corrente, custo_entrega_autolink,
                    #                custo_entrega_cobertura, custo_entrega_fatura, fluxo_caixa,
@@ -110,10 +112,12 @@ app/carvia/
   workers/         # 4 workers RQ com SSL-drop resilience (R15):
                    #   _ssw_helpers, ssw_cte_jobs, ssw_cte_complementar_jobs, verificar_ctrc_ssw_jobs
   utils/           # tomador.py, upload_policies.py, excel_export_helper.py, papeis_frete.py
-  models/          # Pacote 15 modulos: admin, anexos, aprovacao, clientes, comissao,
+  models/          # Pacote 18 modulos: admin, anexos, aprovacao, clientes, comissao,
                    #   comprovante, config_moto, conta_corrente, cotacao, cte_custos,
-                   #   documentos, faturas, financeiro, frete, tabelas
+                   #   documentos, faturas, financeiro, frete, tabelas, coleta,
+                   #   coleta_recebimento, portal
   forms.py         # 4 forms WTForms
+  portal_cliente.py # Blueprint do portal do cliente (login/dashboard/cotar/detalhe NF)
 
 app/templates/carvia/  # 126 templates (dashboard, listagens, detalhes, wizards, modais)
 ```

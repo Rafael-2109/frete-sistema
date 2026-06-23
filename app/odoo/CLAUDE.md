@@ -4,7 +4,7 @@ camada: L1
 sot_de: —
 hub: CLAUDE.md
 superseded_by: —
-atualizado: 2026-06-15
+atualizado: 2026-06-22
 -->
 # Odoo — Guia de Desenvolvimento
 
@@ -35,7 +35,7 @@ atualizado: 2026-06-15
 
 72 arquivos, ~43.4K LOC. API-only (sem models SQLAlchemy proprios, salvo 2 excecoes de inventario/auditoria) — le/escreve models de 8+ outros modulos; e o modulo mais consumido do sistema (37+ arquivos externos importam). O subpacote `estoque/` (orquestrador WRITE + READ ao vivo) tem guia proprio em `app/odoo/estoque/CLAUDE.md`.
 
-**72 arquivos** | **~43.4K LOC** | **Atualizado**: 15/06/2026
+**72 arquivos** | **~43.4K LOC** | **Atualizado**: 22/06/2026
 
 Integracao bidirecional com Odoo ERP via XML-RPC. API-only: sem models SQLAlchemy proprios — le/escreve models de outros modulos (8+). Modulo mais consumido do sistema (37+ arquivos externos importam).
 

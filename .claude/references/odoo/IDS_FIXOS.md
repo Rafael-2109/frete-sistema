@@ -91,7 +91,7 @@ Ver `docs/inventario-2026-05/00-decisoes/D011-locais-indisponivel-por-empresa.md
 
 ## Picking Types por Company
 
-> **Atualizado 2026-05-17** apos audit (`scripts/inventario_2026_05/00b_investigar_gotchas.py`).
+> **Atualizado 2026-05-17** apos audit (`scripts/inventario_2026_05/_deprecated/00b_investigar_gotchas.py`).
 > Anterior afirmava LF=16, mas id=16 e' "Conferencia (CD)" inativo da CD, nao LF.
 
 | Company | picking_type_id (Recebimento principal) | Outros incoming |
@@ -224,7 +224,7 @@ Sempre usar `wait_until='domcontentloaded'` + `wait_for_selector('.o_form_view')
 ```python
 # Buscar picking_type_id pela company
 # CORRECAO 2026-05-17: LF e' 19, NAO 16 (id=16 e' "Conferencia (CD)" inativo da CD).
-# Audit em scripts/inventario_2026_05/00b_investigar_gotchas.py. Ver tabela "Picking Types por Company" acima.
+# Audit em scripts/inventario_2026_05/_deprecated/00b_investigar_gotchas.py. Ver tabela "Picking Types por Company" acima.
 PICKING_TYPES = {
     1: 1,   # FB
     3: 8,   # SC

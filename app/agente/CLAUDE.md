@@ -4,7 +4,7 @@ camada: L1
 sot_de: —
 hub: CLAUDE.md
 superseded_by: —
-atualizado: 2026-06-15
+atualizado: 2026-06-22
 -->
 # Agente Logistico Web — Guia de Desenvolvimento
 
@@ -45,9 +45,9 @@ atualizado: 2026-06-15
 
 ## Contexto
 
-Encapsula o Claude Agent SDK: chat web (SSE) + Teams bot (async); ~56.4K LOC em 108 arquivos. Para o roteiro de onde achar cada detalhe, ver **Mapa de Navegacao** acima.
+Encapsula o Claude Agent SDK: chat web (SSE) + Teams bot (async); ~57.1K LOC em 109 arquivos. Para o roteiro de onde achar cada detalhe, ver **Mapa de Navegacao** acima.
 
-**LOC**: ~56.4K | **Arquivos**: 108 | **Atualizado**: 15/06/2026
+**LOC**: ~57.1K | **Arquivos**: 109 | **Atualizado**: 22/06/2026
 
 > **EVOLUCAO DO AGENTE (flywheel/blueprint Ondas 0-4)**: o rastreador VIVO e o
 > `docs/blueprint-agente/EXECUCAO.md` (estado de cada item, gates, log append-only); o design
@@ -144,7 +144,7 @@ app/agente/                          # Root — 7 arquivos
 │   ├── turn_context_registry.py     # Resolve falante do turno em grupos Teams (client do pool reusado NAO reaplica hooks — Fase B)
 │   ├── verifiers.py                 # Verificadores B2 (verify shadow do super-loop)
 │   └── vincular_teams_fastpath.py   # Fast-path meta-comando `vincular ABC123` (pareamento identidade Teams, sem LLM/sessao)
-├── services/                        # Servicos de inteligencia — 25 arquivos (ver services/CLAUDE.md)
+├── services/                        # Servicos de inteligencia — 26 arquivos (ver services/CLAUDE.md)
 │   ├── __init__.py
 │   ├── CLAUDE.md                    # Sub-guia com regras R1-R5 dos services
 │   ├── _utils.py                    # Helpers compartilhados (parse_llm_json_response)
@@ -170,7 +170,8 @@ app/agente/                          # Root — 7 arquivos
 │   ├── sql_evaluator_falses_service.py # Detector de falsos negativos em SQL evaluator
 │   ├── suggestion_generator.py      # Gerador de sugestoes proativas
 │   ├── teams_observability_service.py # KPIs observabilidade canal Teams (teams_tasks + agent_step, read-only)
-│   └── tool_skill_mapper.py         # Mapeamento tool → skill
+│   ├── tool_skill_mapper.py         # Mapeamento tool → skill
+│   └── upload_recovery_service.py   # Recuperacao de uploads (dual-write /tmp + S3 agente-uploads/{user_id}/)
 ├── templates/agente/                # Templates Jinja2 — 7 arquivos
 │   ├── admin_metrics.html           # Dashboard telemetria subagent (Chart.js 3.9.1, admin)
 │   ├── admin_session_store.html     # Dashboard admin SessionStore (R6 observability)
@@ -516,7 +517,7 @@ Screenshots Playwright (`playwright-screenshots/{YYYY-MM}/`) e archive de sessoe
 |---------|--------|
 | `historia.md` (76K) | Apenas referencia historica |
 
-### Services (25 arquivos, ~14.9K LOC)
+### Services (26 arquivos, ~15.1K LOC)
 Guia completo de regras (R1-R5), gotchas e interdependencias: [`services/CLAUDE.md`](./services/CLAUDE.md).
 Todos controlados por feature flags em `config/feature_flags.py`.
 

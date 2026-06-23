@@ -313,6 +313,6 @@ TIPO DE INTEGRACAO
 | `lancamento_odoo_service.py` | 2.240 | 1, 2, 3, 7, 8 | `app/fretes/services/` |
 | `cte_service.py` | 1.168 | 4 | `app/odoo/services/` |
 | `carteira_service.py` | 3.117 | 4 | `app/odoo/services/` |
-| `pedido_compras_service.py` | 1.352 | 4 | `app/odoo/services/` |
-| `recebimento_fisico_odoo_service.py` | 773 | 5, 6 | `app/recebimento/services/` |
+| `pedido_compras_service.py` | 1.363 | 4 | `app/odoo/services/` |
+| `recebimento_fisico_odoo_service.py` | 814 | 5, 6 | `app/recebimento/services/` |
 | `baixa_titulos_service.py` | 2.167 | 1 | `app/financeiro/services/` |

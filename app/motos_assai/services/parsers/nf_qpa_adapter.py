@@ -54,6 +54,24 @@ from app.motos_assai.services.moto_evento_service import emitir_evento
 TOLERANCIA_VALOR_ABS = Decimal('1.00')
 
 
+def _to_decimal_safe(valor, default: str = '0') -> Decimal:
+    """Converte ``valor`` para Decimal sem estourar InvalidOperation.
+
+    O parser DANFE pode devolver ``valor_total`` ausente, vazio ou em formato
+    não-numérico (ex.: PDF de Carta de Correção enviado ao endpoint de NF).
+    ``Decimal(str(...))`` cru levantava ``decimal.InvalidOperation``
+    (ConversionSyntax) e quebrava a importação. Aqui retornamos ``default``
+    quando a conversão falha, deixando o match seguir como NAO_RECONCILIADO.
+    """
+    from decimal import InvalidOperation
+    if valor is None:
+        return Decimal(default)
+    try:
+        return Decimal(str(valor).strip() or default)
+    except (InvalidOperation, ValueError, TypeError):
+        return Decimal(default)
+
+
 class NfQpaParseError(Exception):
     pass
 
@@ -138,7 +156,7 @@ def criar_nf_qpa_de_dados(
         match_caminho, chave, loja.id if loja else None,
     )
 
-    valor_total = Decimal(str(dados.get('valor_total') or 0))
+    valor_total = _to_decimal_safe(dados.get('valor_total'))
     nf = AssaiNfQpa(
         chave_44=chave,
         numero=dados.get('numero'),
@@ -336,7 +354,7 @@ def importar_nf_qpa(
         destinatario_cnpj=re.sub(r'\D', '', resultado.get('cnpj_destinatario') or '')[:18] or None,
         destinatario_nome=nome_dest,
         loja_id=loja.id if loja else None,
-        valor_total=Decimal(str(resultado.get('valor_total', 0))),
+        valor_total=_to_decimal_safe(resultado.get('valor_total')),
         data_emissao=resultado.get('data_emissao'),
         pdf_s3_key=s3_key,
         status_match=NF_STATUS_NAO_RECONCILIADO,
