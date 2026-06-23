@@ -304,3 +304,100 @@ class FiltroHistoricoForm(FlaskForm):
             pass  # Em caso de erro na consulta
 
 
+class RegistroPortariaEmbarqueAdminForm(FlaskForm):
+    """Form ADMIN: cria um ControlePortaria direto do embarque ja com chegada,
+    entrada e saida (datas/horas informadas manualmente — registro retroativo).
+
+    Usado pela rota `portaria.criar_registro_embarque` (admin-only). A saida dispara
+    a cadeia de efeitos normal da portaria (ver app/portaria/CLAUDE.md R2/R5).
+    `cd_choices` (kwarg) restringe o local_cd aos CDs com itens ativos do embarque.
+    """
+    # Motorista (preenchido via busca por CPF — reusa /portaria/buscar_motorista).
+    # cpf so' alimenta a busca AJAX no front; o vinculo real e' motorista_id (FK NOT NULL).
+    cpf = StringField('CPF do Motorista', validators=[Optional()],
+                      render_kw={'placeholder': '000.000.000-00'})
+    motorista_id = HiddenField(
+        validators=[DataRequired(message='Busque e selecione um motorista (CPF) antes de salvar')]
+    )
+    nome_completo = StringField('Nome Completo', render_kw={'readonly': True})
+    rg = StringField('RG', render_kw={'readonly': True})
+    telefone = StringField('Telefone', render_kw={'readonly': True})
+
+    # Veiculo
+    placa = StringField(
+        'Placa',
+        validators=[
+            DataRequired(message='Placa é obrigatória'),
+            Regexp(
+                r'^[A-Z]{3}-?\d{4}$|^[A-Z]{3}-?\d{1}[A-Z]{1}\d{2}$',
+                message='Placa deve estar no formato ABC-1234 (antiga) ou ABC-1D23 (Mercosul)'
+            )
+        ],
+        render_kw={'placeholder': 'ABC-1234 ou ABC-1D23', 'style': 'text-transform: uppercase;'}
+    )
+    tipo_veiculo_id = SelectField(
+        'Tipo de Veículo', coerce=coerce_int_or_none, validators=[Optional()], choices=[]
+    )
+
+    # Carga
+    tipo_carga = SelectField(
+        'Tipo de Carga',
+        validators=[DataRequired(message='Tipo de carga é obrigatório')],
+        choices=[
+            ('', 'Selecione o tipo de carga'),
+            ('Coleta', 'Coleta'),
+            ('Coleta + Devolução', 'Coleta + Devolução'),
+            ('Devolução', 'Devolução'),
+            ('Entrega', 'Entrega'),
+            ('Coleta de Moto', 'Coleta de Moto'),
+        ],
+        default='Entrega',
+    )
+    empresa = StringField(
+        'Empresa',
+        validators=[
+            DataRequired(message='Empresa é obrigatória'),
+            Length(min=2, max=255, message='Nome da empresa deve ter entre 2 e 255 caracteres')
+        ],
+        render_kw={'placeholder': 'Nome da empresa'}
+    )
+
+    # 🏭 CD/portaria deste registro (R3: 1 registro por CD). Choices = CDs com item
+    # ativo do embarque (preenchidos no __init__); fallback = todos os CDs.
+    local_cd = SelectField(
+        'CD / Portaria',
+        validators=[DataRequired(message='Selecione o CD da saída')],
+        choices=[],
+    )
+
+    # Horarios (registro retroativo — StringField + type=date/time, parse na rota).
+    data_chegada = StringField('Data Chegada', validators=[DataRequired(message='Data de chegada é obrigatória')],
+                               render_kw={'type': 'date'})
+    hora_chegada = StringField('Hora Chegada', validators=[DataRequired(message='Hora de chegada é obrigatória')],
+                               render_kw={'type': 'time'})
+    data_entrada = StringField('Data Entrada', validators=[DataRequired(message='Data de entrada é obrigatória')],
+                               render_kw={'type': 'date'})
+    hora_entrada = StringField('Hora Entrada', validators=[DataRequired(message='Hora de entrada é obrigatória')],
+                               render_kw={'type': 'time'})
+    data_saida = StringField('Data Saída', validators=[DataRequired(message='Data de saída é obrigatória')],
+                             render_kw={'type': 'date'})
+    hora_saida = StringField('Hora Saída', validators=[DataRequired(message='Hora de saída é obrigatória')],
+                             render_kw={'type': 'time'})
+
+    submit = SubmitField('Criar registro e dar saída')
+
+    def __init__(self, *args, cd_choices=None, **kwargs):
+        super(RegistroPortariaEmbarqueAdminForm, self).__init__(*args, **kwargs)
+
+        # CD: restringe aos CDs do embarque (passado pela rota); fallback = todos.
+        self.local_cd.choices = list(cd_choices) if cd_choices else list(LOCAL_CD_CHOICES)
+
+        # Tipos de veiculo (igual ControlePortariaForm)
+        self.tipo_veiculo_id.choices = [('', 'Selecione o tipo de veículo')]
+        try:
+            veiculos = Veiculo.query.order_by(Veiculo.nome).all()
+            self.tipo_veiculo_id.choices.extend([(v.id, v.nome) for v in veiculos])
+        except Exception:
+            pass
+
+

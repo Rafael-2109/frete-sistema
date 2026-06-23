@@ -144,6 +144,13 @@
           </span>
           {% endif %}
         {% endif %}
+        {% if current_user.perfil == 'administrador' and embarque.status == 'ativo' %}
+        <a href="{{ url_for('portaria.criar_registro_embarque', embarque_id=embarque.id) }}"
+           class="btn btn-outline-success btn-sm"
+           title="ADMIN: criar registro de portaria já com chegada, entrada e saída">
+          <i class="fas fa-clipboard-check me-1"></i> Registrar saída na portaria
+        </a>
+        {% endif %}
         <span class="badge bg-{% if embarque.status == 'ativo' %}success{% elif embarque.status == 'cancelado' %}danger{% else %}secondary{% endif %} fs-6">
           {{ (embarque.status or 'draft').upper() }}
         </span>

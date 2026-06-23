@@ -1,0 +1,236 @@
+{% extends 'base.html' %}
+{% from 'shared/_macros_badges.html' import badge_local_cd %}
+{% block content %}
+
+<div class="container my-4">
+
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h4 class="mb-0">
+      <i class="fas fa-clipboard-check me-2"></i>Registrar saída na portaria —
+      Embarque #{{ embarque.numero }}
+    </h4>
+    <a href="{{ url_for('embarques.visualizar_embarque', id=embarque.id) }}" class="btn btn-light">
+      <i class="fas fa-arrow-left"></i> Voltar ao embarque
+    </a>
+  </div>
+
+  <div class="alert alert-warning">
+    <i class="fas fa-triangle-exclamation me-1"></i>
+    <strong>Atalho administrativo.</strong> Cria um registro de portaria já com chegada,
+    entrada e saída (datas/horas informadas abaixo). A saída <strong>carimba a data de
+    embarque</strong>, propaga para a Separação, sincroniza as entregas e dispara o frete —
+    igual à saída normal da portaria.
+  </div>
+
+  <div class="card mb-3">
+    <div class="card-header">
+      <strong>Transportadora:</strong>
+      {{ embarque.transportadora.razao_social if embarque.transportadora else '-' }}
+      &nbsp;|&nbsp;
+      <strong>Data prevista:</strong>
+      {{ embarque.data_prevista_embarque | formatar_data_segura if embarque.data_prevista_embarque else '-' }}
+    </div>
+  </div>
+
+  {# Busca de motorista por CPF (AJAX — reusa /portaria/buscar_motorista) #}
+  <div class="card mb-4">
+    <div class="card-header"><h5 class="mb-0"><i class="fas fa-user me-2"></i>Motorista</h5></div>
+    <div class="card-body">
+      <form id="form-buscar-motorista">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+        <div class="row mb-3">
+          <div class="col-md-6">
+            {{ form.cpf.label(class="form-label") }}
+            {{ form.cpf(class="form-control", id="cpf-buscar") }}
+          </div>
+          <div class="col-md-6 d-flex align-items-end">
+            <button type="submit" class="btn btn-outline-primary me-2">
+              <i class="fas fa-search"></i> Buscar
+            </button>
+            <a href="{{ url_for('portaria.cadastrar_motorista') }}" target="_blank" class="btn btn-outline-success">
+              <i class="fas fa-plus"></i> Cadastrar
+            </a>
+          </div>
+        </div>
+      </form>
+      <div class="row">
+        <div class="col-md-5">
+          {{ form.nome_completo.label(class="form-label") }}
+          {{ form.nome_completo(class="form-control", id="nome_completo") }}
+        </div>
+        <div class="col-md-4">
+          {{ form.rg.label(class="form-label") }}
+          {{ form.rg(class="form-control", id="rg") }}
+        </div>
+        <div class="col-md-3">
+          {{ form.telefone.label(class="form-label") }}
+          {{ form.telefone(class="form-control", id="telefone") }}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {# Formulario principal #}
+  <form method="POST" action="{{ url_for('portaria.criar_registro_embarque', embarque_id=embarque.id) }}" id="form-registro">
+    {{ form.csrf_token }}
+    {{ form.motorista_id(id="motorista_id") }}
+
+    <div class="card mb-4">
+      <div class="card-header"><h5 class="mb-0"><i class="fas fa-car me-2"></i>Veículo e Carga</h5></div>
+      <div class="card-body">
+        <div class="row">
+          <div class="col-md-4">
+            {{ form.placa.label(class="form-label") }}
+            {{ form.placa(class="form-control") }}
+            {% for e in form.placa.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+          </div>
+          <div class="col-md-4">
+            {{ form.tipo_veiculo_id.label(class="form-label") }}
+            {{ form.tipo_veiculo_id(class="form-control") }}
+          </div>
+          <div class="col-md-4">
+            {{ form.local_cd.label(class="form-label") }}
+            {{ form.local_cd(class="form-control") }}
+            {% for e in form.local_cd.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+          </div>
+        </div>
+        <div class="row mt-2">
+          <div class="col-md-6">
+            {{ form.tipo_carga.label(class="form-label") }}
+            {{ form.tipo_carga(class="form-control") }}
+            {% for e in form.tipo_carga.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+          </div>
+          <div class="col-md-6">
+            {{ form.empresa.label(class="form-label") }}
+            {{ form.empresa(class="form-control") }}
+            {% for e in form.empresa.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card mb-4">
+      <div class="card-header"><h5 class="mb-0"><i class="fas fa-clock me-2"></i>Horários (chegada ≤ entrada ≤ saída)</h5></div>
+      <div class="card-body">
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label class="form-label fw-bold">Chegada</label>
+            <div class="input-group">
+              {{ form.data_chegada(class="form-control") }}
+              {{ form.hora_chegada(class="form-control") }}
+            </div>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label fw-bold">Entrada</label>
+            <div class="input-group">
+              {{ form.data_entrada(class="form-control") }}
+              {{ form.hora_entrada(class="form-control") }}
+            </div>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label fw-bold text-success">Saída <small>(vira a data de embarque)</small></label>
+            <div class="input-group">
+              {{ form.data_saida(class="form-control") }}
+              {{ form.hora_saida(class="form-control") }}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="d-flex justify-content-end gap-2">
+      <a href="{{ url_for('embarques.visualizar_embarque', id=embarque.id) }}" class="btn btn-light">Cancelar</a>
+      {{ form.submit(class="btn btn-success btn-lg") }}
+    </div>
+  </form>
+
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  let buscandoMotorista = false;
+
+  // Busca motorista por CPF (AJAX)
+  document.getElementById('form-buscar-motorista').addEventListener('submit', function(e) {
+    e.preventDefault();
+    if (buscandoMotorista) return;
+
+    const cpf = document.getElementById('cpf-buscar').value;
+    const csrfToken = document.querySelector('input[name="csrf_token"]').value;
+    if (!cpf.trim()) { alert('Digite um CPF para buscar'); return; }
+
+    buscandoMotorista = true;
+    const submitBtn = e.target.querySelector('button[type="submit"]');
+    const originalText = submitBtn.textContent;
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Buscando...';
+
+    fetch('{{ url_for("portaria.buscar_motorista") }}', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'X-CSRFToken': csrfToken
+      },
+      body: `cpf=${encodeURIComponent(cpf)}&csrf_token=${encodeURIComponent(csrfToken)}`
+    })
+    .then(response => {
+      if (response.redirected) { window.location.reload(); return; }
+      return response.json();
+    })
+    .then(data => {
+      if (!data) return;
+      if (data.success) {
+        const m = data.motorista;
+        document.getElementById('motorista_id').value = m.id;
+        document.getElementById('nome_completo').value = m.nome_completo;
+        document.getElementById('rg').value = m.rg;
+        document.getElementById('telefone').value = m.telefone;
+      } else {
+        alert(data.message);
+        if (data.redirect_cadastro && confirm('Motorista não encontrado. Deseja cadastrar?')) {
+          window.open('{{ url_for("portaria.cadastrar_motorista") }}', '_blank');
+        }
+      }
+    })
+    .catch(error => { console.error('Erro:', error); alert('Erro ao buscar motorista.'); })
+    .finally(() => {
+      buscandoMotorista = false;
+      submitBtn.disabled = false;
+      submitBtn.textContent = originalText;
+    });
+  });
+
+  // Máscara CPF
+  const cpfInput = document.getElementById('cpf-buscar');
+  cpfInput.addEventListener('input', function(e) {
+    let v = e.target.value.replace(/\D/g, '');
+    v = v.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
+    e.target.value = v;
+  });
+
+  // Máscara placa (antigo ABC-1234 e Mercosul ABC-1D23)
+  const placaInput = document.querySelector('input[name="placa"]');
+  if (placaInput) {
+    placaInput.addEventListener('input', function(e) {
+      let v = e.target.value.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+      if (v.length <= 7) {
+        if (v.length >= 5 && /\d/.test(v[3]) && /[A-Z]/.test(v[4])) {
+          v = v.replace(/([A-Z]{3})(\d{1}[A-Z]{1}\d{0,2})/, '$1-$2');
+        } else if (v.length >= 4) {
+          v = v.replace(/([A-Z]{3})(\d{1,4})/, '$1-$2');
+        }
+      }
+      e.target.value = v;
+    });
+  }
+
+  // Bloqueia submit sem motorista selecionado (FK NOT NULL)
+  document.getElementById('form-registro').addEventListener('submit', function(e) {
+    if (!document.getElementById('motorista_id').value) {
+      e.preventDefault();
+      alert('Busque e selecione um motorista (CPF) antes de salvar.');
+    }
+  });
+});
+</script>
+{% endblock %}

@@ -9,9 +9,15 @@ from app import db
 from sqlalchemy import func
 from sqlalchemy.orm import joinedload
 # 🔒 Importar decoradores de permissão
-from app.utils.auth_decorators import require_portaria
+from app.utils.auth_decorators import require_portaria, require_admin
 from app.portaria.models import Motorista, ControlePortaria
-from app.portaria.forms import CadastroMotoristaForm, BuscarMotoristaForm, ControlePortariaForm, FiltroHistoricoForm
+from app.portaria.forms import (
+    CadastroMotoristaForm,
+    BuscarMotoristaForm,
+    ControlePortariaForm,
+    FiltroHistoricoForm,
+    RegistroPortariaEmbarqueAdminForm,
+)
 from app.embarques.models import Embarque
 from app.separacao.models import Separacao
 from app.monitoramento.models import EntregaMonitorada
@@ -190,6 +196,234 @@ def cadastrar_motorista():
     
     return render_template('portaria/cadastrar_motorista.html', form=form, motorista=motorista)
 
+def _aplicar_efeitos_saida(registro):
+    """Aplica a cadeia de efeitos da SAIDA de um registro de portaria.
+
+    Extraida de `registrar_movimento` (acao='saida') para reuso pela rota admin
+    `criar_registro_embarque`. Pressupoe `registro.data_saida`/`hora_saida` ja
+    setados. NAO faz commit (o chamador commita) e NAO valida o gate
+    `pode_registrar_saida` (idempotencia fica a cargo do chamador).
+
+    Efeitos POR-CD (ver app/portaria/CLAUDE.md R2/R3/R5):
+      1) carimba Embarque.data_embarque (se vazio) com data_saida;
+      2) propaga data_saida -> Separacao.data_embarque dos itens do MESMO local_cd;
+      3) sincroniza EntregaMonitorada por NF (skip CARVIA-/ASSAI-) + reseta nf_cd;
+      4) alerta de pallets pendentes / CarVia saida sem NF;
+      5) hooks de frete Nacom/CarVia/Op.Assai (try/except silencioso).
+    """
+    # Atualiza data_embarque do embarque vinculado automaticamente
+    if registro.embarque_id and registro.embarque:
+        embarque = registro.embarque
+
+        # 🏭 SAIDA POR CD: cada portaria (registro) despacha SOMENTE os itens
+        # do SEU local. Um embarque pode ter 2 registros (1 por CD).
+        local = registro.local_cd or LOCAL_CD_DEFAULT
+        itens_do_local = [
+            it for it in embarque.itens
+            if (it.local_cd or LOCAL_CD_DEFAULT) == local
+        ]
+
+        # 1) Embarque.data_embarque (cabecalho/agregado): "preenche se vazio"
+        #    por QUALQUER local — a 1a saida (de qualquer CD) carimba a data.
+        #    Sem regressao p/ Nacom puro (1 saida VM preenche tudo).
+        if not embarque.data_embarque:
+            embarque.data_embarque = registro.data_saida
+            print(f"[DEBUG] Data embarque atualizada para {registro.data_saida}")
+            flash(f'Data de embarque do Embarque #{embarque.numero} atualizada para {registro.data_saida.strftime("%d/%m/%Y")}!', 'info')
+
+        # 2) Propagacao POR-ITEM-DO-LOCAL: roda SEMPRE que ha saida (idempotente),
+        #    restrita aos itens deste CD. Assim o 2o local (TM) tambem propaga,
+        #    mesmo que o cabecalho ja tivesse data (preenchido pela saida VM).
+        #    Nacom puro (1 registro VM, todos itens VM) -> itens_do_local == todos
+        #    os itens -> efeito IDENTICO ao codigo anterior.
+
+        # ✅ PROPAGAR data_embarque para tabela Separacao (apenas Nacom, CarVia nao tem Separacao)
+        for item in itens_do_local:
+            if item.separacao_lote_id and not str(item.separacao_lote_id).startswith('CARVIA-'):
+                num_atualizados = Separacao.query.filter_by(
+                    separacao_lote_id=item.separacao_lote_id
+                ).update({'data_embarque': registro.data_saida}, synchronize_session='fetch')
+
+                if num_atualizados > 0:
+                    print(f"[DEBUG] Separacao lote {item.separacao_lote_id}: {num_atualizados} registro(s) atualizado(s) com data_embarque")
+                else:
+                    print(f"[AVISO] Separacao lote {item.separacao_lote_id}: NENHUM registro encontrado para atualizar!")
+                    flash(f'⚠️ Lote {item.separacao_lote_id} não encontrado na tabela Separação!', 'warning')
+
+        # Sincroniza com sistema de entregas para cada item DO LOCAL
+        # Skip CarVia (hook proprio abaixo) e Op. Assai (hook proprio abaixo) —
+        # ambos tem service dedicado (NFs nao estao em RelatorioFaturamentoImportado).
+        if itens_do_local:
+            print(f"[DEBUG] Sincronizando {len(itens_do_local)} item(ns) do CD {local} com sistema de entregas...")
+
+            for item in itens_do_local:
+                if not item.nota_fiscal:
+                    continue
+                lote = str(item.separacao_lote_id or '')
+                if lote.startswith('CARVIA-') or lote.startswith('ASSAI-'):
+                    continue  # CarVia/Op. Assai tem hook proprio
+                try:
+                    sincronizar_entrega_por_nf(item.nota_fiscal)
+                    # 🔒 NOVO: Reseta flag de NF no CD diretamente em Separacao
+                    Separacao.query.filter_by(numero_nf=item.nota_fiscal).update({'nf_cd': False})
+                    print(f"[DEBUG] NF {item.nota_fiscal} sincronizada com entregas")
+                except Exception as e:
+                    print(f"[DEBUG] Erro ao sincronizar NF {item.nota_fiscal}: {str(e)}")
+                    print(f"[DEBUG] Tipo do erro: {type(e)}")
+                    # Não interrompe o processo por erro de sincronização
+
+            flash(f'Sistema de entregas sincronizado para {len(itens_do_local)} nota(s) fiscal(is)!', 'success')
+
+        # ⚠️ ALERTA DE PALLETS PENDENTES
+        if embarque.pallets_pendentes:
+            saldo = embarque.saldo_pallets_pendentes
+            flash(
+                f'⚠️ ALERTA: Embarque #{embarque.numero} tem {saldo} pallet(s) pendente(s) de faturamento!',
+                'warning'
+            )
+
+    # Alerta CarVia: saida sem NF (persiste + flash)
+    if registro.embarque_id:
+        try:
+            from app.embarques.models import EmbarqueItem as _EI
+            from app.carvia.models import CarviaCotacao as _CC
+
+            # Itens CarVia ativos sem NF (provisorio ou nota_fiscal vazia)
+            itens_sem_nf = _EI.query.filter(
+                _EI.embarque_id == registro.embarque_id,
+                _EI.status == 'ativo',
+                _EI.carvia_cotacao_id.isnot(None),
+                db.or_(
+                    _EI.provisorio == True,
+                    _EI.nota_fiscal.is_(None),
+                    _EI.nota_fiscal == '',
+                )
+            ).all()
+
+            cotacao_ids = set(
+                item.carvia_cotacao_id for item in itens_sem_nf
+            )
+
+            if cotacao_ids:
+                agora = agora_utc_naive()
+                for cot_id in cotacao_ids:
+                    cot = db.session.get(_CC, cot_id)
+                    if cot and not cot.alerta_saida_sem_nf:
+                        cot.alerta_saida_sem_nf = True
+                        cot.alerta_saida_sem_nf_em = agora
+                        cot.alerta_saida_embarque_id = registro.embarque_id
+
+                flash(
+                    f'ATENCAO: {len(cotacao_ids)} cotacao(oes) CarVia '
+                    f'saiu(ram) SEM NF no Embarque #{embarque.numero}. '
+                    'Verifique a listagem de cotacoes.',
+                    'warning'
+                )
+        except Exception:
+            pass
+
+    # Hook CarVia: gerar fretes (orquestrador unico)
+    # CarviaFreteService cria CarviaOperacao + CarviaSubcontrato + CarviaFrete
+    if registro.embarque_id:
+        try:
+            from app.carvia.services.documentos.carvia_frete_service import CarviaFreteService
+            from flask import g as _g
+            fretes = CarviaFreteService.lancar_frete_carvia(
+                embarque_id=registro.embarque_id,
+                usuario=current_user.email,
+            )
+            if fretes:
+                flash(f'{len(fretes)} frete(s) CarVia gerado(s).', 'info')
+            # W11 (Sprint 3 I1): exibir avisos de NFs bloqueadas
+            for bloq in getattr(_g, 'carvia_w11_bloqueios', []):
+                flash(
+                    f"NF(s) {', '.join(bloq['nfs_bloqueadas'])} "
+                    f"bloqueada(s) pelo W11 (frete #{bloq['frete_id']}). "
+                    f"Cancele o frete CarVia e recrie para incluir.",
+                    'warning',
+                )
+            # Limpar para evitar vazar para proxima request
+            if hasattr(_g, 'carvia_w11_bloqueios'):
+                del _g.carvia_w11_bloqueios
+        except Exception as e:
+            print(f"[AVISO] Hook CarVia FreteService falhou: {e}")
+
+    # Hook Monitoramento CarVia: sincronizar EntregaMonitorada para NFs CarVia
+    # Cria/atualiza EntregaMonitorada(origem='CARVIA') apos CarviaFrete existir,
+    # compartilhando gatilhos/recursos do monitoramento (agenda, canhoto, etc).
+    if registro.embarque_id:
+        try:
+            from app.utils.sincronizar_entregas_carvia import (
+                sincronizar_entrega_carvia_por_nf,
+            )
+            from app.embarques.models import EmbarqueItem as _EI
+            itens_carvia_nf = _EI.query.filter(
+                _EI.embarque_id == registro.embarque_id,
+                _EI.status == 'ativo',
+                _EI.separacao_lote_id.ilike('CARVIA-%'),
+                _EI.nota_fiscal.isnot(None),
+                _EI.nota_fiscal != '',
+            ).all()
+            sync_ok = 0
+            for item_c in itens_carvia_nf:
+                try:
+                    sincronizar_entrega_carvia_por_nf(item_c.nota_fiscal)
+                    sync_ok += 1
+                except Exception as e_item:
+                    print(
+                        f"[AVISO] Sync monitoramento CarVia NF "
+                        f"{item_c.nota_fiscal} falhou: {e_item}"
+                    )
+            if sync_ok:
+                flash(
+                    f'{sync_ok} NF(s) CarVia sincronizada(s) '
+                    f'com monitoramento.',
+                    'info',
+                )
+        except Exception as e_sync:
+            print(f"[AVISO] Hook monitoramento CarVia falhou: {e_sync}")
+
+    # Hook Monitoramento Op. Assai: sincronizar EntregaMonitorada
+    # com origem='OP_ASSAI'. Espelha o hook CarVia acima — NFs
+    # Q.P.A. nao estao em RelatorioFaturamentoImportado, por
+    # isso tem service dedicado.
+    if registro.embarque_id:
+        try:
+            from app.utils.sincronizar_entregas_op_assai import (
+                sincronizar_entregas_op_assai_por_embarque,
+            )
+            qtd_assai = sincronizar_entregas_op_assai_por_embarque(
+                registro.embarque_id
+            )
+            if qtd_assai:
+                flash(
+                    f'{qtd_assai} NF(s) Op. Assai sincronizada(s) '
+                    f'com monitoramento.',
+                    'info',
+                )
+        except Exception as e_assai:
+            print(f"[AVISO] Hook monitoramento Op. Assai falhou: {e_assai}")
+
+    # Hook Nacom: gerar fretes (mesma lógica do embarque save).
+    # processar_lancamento_automatico_fretes detecta embarques
+    # Op. Assai automaticamente e roteia para lancar_frete_op_assai
+    # (invariante: embarque NAO-misto).
+    if registro.embarque_id:
+        try:
+            from app.fretes.routes import processar_lancamento_automatico_fretes
+            sucesso_nacom, resultado_nacom = processar_lancamento_automatico_fretes(
+                embarque_id=registro.embarque_id,
+                usuario=current_user.email,
+            )
+            print(f"[DEBUG] Hook Nacom frete: sucesso={sucesso_nacom}, resultado={resultado_nacom}")
+            if sucesso_nacom and "lançado(s) automaticamente" in resultado_nacom:
+                flash(resultado_nacom, 'info')
+            elif resultado_nacom:
+                flash(f'Frete Nacom: {resultado_nacom}', 'info')
+        except Exception as e:
+            print(f"[AVISO] Hook Nacom FreteService falhou: {e}")
+
+
 @portaria_bp.route('/registrar_movimento', methods=['POST'])
 @login_required
 @require_portaria()  # 🔒 BLOQUEADO para vendedores
@@ -299,217 +533,7 @@ def registrar_movimento():
                     registro.atualizado_por_id = current_user.id
                     registro.registrar_saida()
                     
-                    # Atualiza data_embarque do embarque vinculado automaticamente
-                    if registro.embarque_id and registro.embarque:
-                        embarque = registro.embarque
-
-                        # 🏭 SAIDA POR CD: cada portaria (registro) despacha SOMENTE os itens
-                        # do SEU local. Um embarque pode ter 2 registros (1 por CD).
-                        local = registro.local_cd or LOCAL_CD_DEFAULT
-                        itens_do_local = [
-                            it for it in embarque.itens
-                            if (it.local_cd or LOCAL_CD_DEFAULT) == local
-                        ]
-
-                        # 1) Embarque.data_embarque (cabecalho/agregado): "preenche se vazio"
-                        #    por QUALQUER local — a 1a saida (de qualquer CD) carimba a data.
-                        #    Sem regressao p/ Nacom puro (1 saida VM preenche tudo).
-                        if not embarque.data_embarque:
-                            embarque.data_embarque = registro.data_saida
-                            print(f"[DEBUG] Data embarque atualizada para {registro.data_saida}")
-                            flash(f'Data de embarque do Embarque #{embarque.numero} atualizada para {registro.data_saida.strftime("%d/%m/%Y")}!', 'info')
-
-                        # 2) Propagacao POR-ITEM-DO-LOCAL: roda SEMPRE que ha saida (idempotente),
-                        #    restrita aos itens deste CD. Assim o 2o local (TM) tambem propaga,
-                        #    mesmo que o cabecalho ja tivesse data (preenchido pela saida VM).
-                        #    Nacom puro (1 registro VM, todos itens VM) -> itens_do_local == todos
-                        #    os itens -> efeito IDENTICO ao codigo anterior.
-
-                        # ✅ PROPAGAR data_embarque para tabela Separacao (apenas Nacom, CarVia nao tem Separacao)
-                        for item in itens_do_local:
-                            if item.separacao_lote_id and not str(item.separacao_lote_id).startswith('CARVIA-'):
-                                num_atualizados = Separacao.query.filter_by(
-                                    separacao_lote_id=item.separacao_lote_id
-                                ).update({'data_embarque': registro.data_saida}, synchronize_session='fetch')
-
-                                if num_atualizados > 0:
-                                    print(f"[DEBUG] Separacao lote {item.separacao_lote_id}: {num_atualizados} registro(s) atualizado(s) com data_embarque")
-                                else:
-                                    print(f"[AVISO] Separacao lote {item.separacao_lote_id}: NENHUM registro encontrado para atualizar!")
-                                    flash(f'⚠️ Lote {item.separacao_lote_id} não encontrado na tabela Separação!', 'warning')
-
-                        # Sincroniza com sistema de entregas para cada item DO LOCAL
-                        # Skip CarVia (hook proprio abaixo) e Op. Assai (hook proprio abaixo) —
-                        # ambos tem service dedicado (NFs nao estao em RelatorioFaturamentoImportado).
-                        if itens_do_local:
-                            print(f"[DEBUG] Sincronizando {len(itens_do_local)} item(ns) do CD {local} com sistema de entregas...")
-
-                            for item in itens_do_local:
-                                if not item.nota_fiscal:
-                                    continue
-                                lote = str(item.separacao_lote_id or '')
-                                if lote.startswith('CARVIA-') or lote.startswith('ASSAI-'):
-                                    continue  # CarVia/Op. Assai tem hook proprio
-                                try:
-                                    sincronizar_entrega_por_nf(item.nota_fiscal)
-                                    # 🔒 NOVO: Reseta flag de NF no CD diretamente em Separacao
-                                    Separacao.query.filter_by(numero_nf=item.nota_fiscal).update({'nf_cd': False})
-                                    print(f"[DEBUG] NF {item.nota_fiscal} sincronizada com entregas")
-                                except Exception as e:
-                                    print(f"[DEBUG] Erro ao sincronizar NF {item.nota_fiscal}: {str(e)}")
-                                    print(f"[DEBUG] Tipo do erro: {type(e)}")
-                                    # Não interrompe o processo por erro de sincronização
-
-                            flash(f'Sistema de entregas sincronizado para {len(itens_do_local)} nota(s) fiscal(is)!', 'success')
-
-                        # ⚠️ ALERTA DE PALLETS PENDENTES
-                        if embarque.pallets_pendentes:
-                            saldo = embarque.saldo_pallets_pendentes
-                            flash(
-                                f'⚠️ ALERTA: Embarque #{embarque.numero} tem {saldo} pallet(s) pendente(s) de faturamento!',
-                                'warning'
-                            )
-
-                    # Alerta CarVia: saida sem NF (persiste + flash)
-                    if registro.embarque_id:
-                        try:
-                            from app.embarques.models import EmbarqueItem as _EI
-                            from app.carvia.models import CarviaCotacao as _CC
-
-                            # Itens CarVia ativos sem NF (provisorio ou nota_fiscal vazia)
-                            itens_sem_nf = _EI.query.filter(
-                                _EI.embarque_id == registro.embarque_id,
-                                _EI.status == 'ativo',
-                                _EI.carvia_cotacao_id.isnot(None),
-                                db.or_(
-                                    _EI.provisorio == True,
-                                    _EI.nota_fiscal.is_(None),
-                                    _EI.nota_fiscal == '',
-                                )
-                            ).all()
-
-                            cotacao_ids = set(
-                                item.carvia_cotacao_id for item in itens_sem_nf
-                            )
-
-                            if cotacao_ids:
-                                agora = agora_utc_naive()
-                                for cot_id in cotacao_ids:
-                                    cot = db.session.get(_CC, cot_id)
-                                    if cot and not cot.alerta_saida_sem_nf:
-                                        cot.alerta_saida_sem_nf = True
-                                        cot.alerta_saida_sem_nf_em = agora
-                                        cot.alerta_saida_embarque_id = registro.embarque_id
-
-                                flash(
-                                    f'ATENCAO: {len(cotacao_ids)} cotacao(oes) CarVia '
-                                    f'saiu(ram) SEM NF no Embarque #{embarque.numero}. '
-                                    'Verifique a listagem de cotacoes.',
-                                    'warning'
-                                )
-                        except Exception:
-                            pass
-
-                    # Hook CarVia: gerar fretes (orquestrador unico)
-                    # CarviaFreteService cria CarviaOperacao + CarviaSubcontrato + CarviaFrete
-                    if registro.embarque_id:
-                        try:
-                            from app.carvia.services.documentos.carvia_frete_service import CarviaFreteService
-                            from flask import g as _g
-                            fretes = CarviaFreteService.lancar_frete_carvia(
-                                embarque_id=registro.embarque_id,
-                                usuario=current_user.email,
-                            )
-                            if fretes:
-                                flash(f'{len(fretes)} frete(s) CarVia gerado(s).', 'info')
-                            # W11 (Sprint 3 I1): exibir avisos de NFs bloqueadas
-                            for bloq in getattr(_g, 'carvia_w11_bloqueios', []):
-                                flash(
-                                    f"NF(s) {', '.join(bloq['nfs_bloqueadas'])} "
-                                    f"bloqueada(s) pelo W11 (frete #{bloq['frete_id']}). "
-                                    f"Cancele o frete CarVia e recrie para incluir.",
-                                    'warning',
-                                )
-                            # Limpar para evitar vazar para proxima request
-                            if hasattr(_g, 'carvia_w11_bloqueios'):
-                                del _g.carvia_w11_bloqueios
-                        except Exception as e:
-                            print(f"[AVISO] Hook CarVia FreteService falhou: {e}")
-
-                    # Hook Monitoramento CarVia: sincronizar EntregaMonitorada para NFs CarVia
-                    # Cria/atualiza EntregaMonitorada(origem='CARVIA') apos CarviaFrete existir,
-                    # compartilhando gatilhos/recursos do monitoramento (agenda, canhoto, etc).
-                    if registro.embarque_id:
-                        try:
-                            from app.utils.sincronizar_entregas_carvia import (
-                                sincronizar_entrega_carvia_por_nf,
-                            )
-                            from app.embarques.models import EmbarqueItem as _EI
-                            itens_carvia_nf = _EI.query.filter(
-                                _EI.embarque_id == registro.embarque_id,
-                                _EI.status == 'ativo',
-                                _EI.separacao_lote_id.ilike('CARVIA-%'),
-                                _EI.nota_fiscal.isnot(None),
-                                _EI.nota_fiscal != '',
-                            ).all()
-                            sync_ok = 0
-                            for item_c in itens_carvia_nf:
-                                try:
-                                    sincronizar_entrega_carvia_por_nf(item_c.nota_fiscal)
-                                    sync_ok += 1
-                                except Exception as e_item:
-                                    print(
-                                        f"[AVISO] Sync monitoramento CarVia NF "
-                                        f"{item_c.nota_fiscal} falhou: {e_item}"
-                                    )
-                            if sync_ok:
-                                flash(
-                                    f'{sync_ok} NF(s) CarVia sincronizada(s) '
-                                    f'com monitoramento.',
-                                    'info',
-                                )
-                        except Exception as e_sync:
-                            print(f"[AVISO] Hook monitoramento CarVia falhou: {e_sync}")
-
-                    # Hook Monitoramento Op. Assai: sincronizar EntregaMonitorada
-                    # com origem='OP_ASSAI'. Espelha o hook CarVia acima — NFs
-                    # Q.P.A. nao estao em RelatorioFaturamentoImportado, por
-                    # isso tem service dedicado.
-                    if registro.embarque_id:
-                        try:
-                            from app.utils.sincronizar_entregas_op_assai import (
-                                sincronizar_entregas_op_assai_por_embarque,
-                            )
-                            qtd_assai = sincronizar_entregas_op_assai_por_embarque(
-                                registro.embarque_id
-                            )
-                            if qtd_assai:
-                                flash(
-                                    f'{qtd_assai} NF(s) Op. Assai sincronizada(s) '
-                                    f'com monitoramento.',
-                                    'info',
-                                )
-                        except Exception as e_assai:
-                            print(f"[AVISO] Hook monitoramento Op. Assai falhou: {e_assai}")
-
-                    # Hook Nacom: gerar fretes (mesma lógica do embarque save).
-                    # processar_lancamento_automatico_fretes detecta embarques
-                    # Op. Assai automaticamente e roteia para lancar_frete_op_assai
-                    # (invariante: embarque NAO-misto).
-                    if registro.embarque_id:
-                        try:
-                            from app.fretes.routes import processar_lancamento_automatico_fretes
-                            sucesso_nacom, resultado_nacom = processar_lancamento_automatico_fretes(
-                                embarque_id=registro.embarque_id,
-                                usuario=current_user.email,
-                            )
-                            print(f"[DEBUG] Hook Nacom frete: sucesso={sucesso_nacom}, resultado={resultado_nacom}")
-                            if sucesso_nacom and "lançado(s) automaticamente" in resultado_nacom:
-                                flash(resultado_nacom, 'info')
-                            elif resultado_nacom:
-                                flash(f'Frete Nacom: {resultado_nacom}', 'info')
-                        except Exception as e:
-                            print(f"[AVISO] Hook Nacom FreteService falhou: {e}")
+                    _aplicar_efeitos_saida(registro)
 
                     db.session.commit()
                     flash('Saída registrada com sucesso!', 'success')
@@ -1084,5 +1108,117 @@ def excluir_embarque():
     except Exception as e:
         db.session.rollback()
         flash(f'Erro ao remover vínculo: {str(e)}', 'danger')
-    
+
     return redirect(url_for('portaria.detalhes_veiculo', registro_id=registro_id))
+
+
+@portaria_bp.route('/admin/criar-registro-embarque/<int:embarque_id>', methods=['GET', 'POST'])
+@login_required
+@require_admin
+def criar_registro_embarque(embarque_id):
+    """ADMIN: cria um ControlePortaria direto do embarque, ja com chegada/entrada/saida.
+
+    Datas/horas sao informadas manualmente (registro retroativo). A SAIDA dispara a
+    cadeia de efeitos normal da portaria via `_aplicar_efeitos_saida` (carimba
+    data_embarque, propaga Separacao, sincroniza entregas, hooks de frete — R2/R5).
+    R3: 1 registro por CD — o seletor `local_cd` so' oferece os CDs com item ativo
+    do embarque. Motorista (FK NOT NULL) vem da busca por CPF (reusa /buscar_motorista).
+    """
+    embarque = Embarque.query.options(
+        joinedload(Embarque.transportadora)
+    ).get_or_404(embarque_id)
+
+    # CDs com item ativo do embarque -> choices do seletor (R3). Fallback: todos.
+    locais = sorted(embarque.locais_cd) if embarque.locais_cd else []
+    cd_choices = [(l, LOCAL_CD_LABELS.get(l, l)) for l in locais] or list(LOCAL_CD_CHOICES)
+
+    form = RegistroPortariaEmbarqueAdminForm(cd_choices=cd_choices)
+
+    if request.method == 'GET':
+        # Defaults: empresa = transportadora do embarque; local_cd = 1o CD do embarque.
+        if embarque.transportadora and embarque.transportadora.razao_social:
+            form.empresa.data = embarque.transportadora.razao_social
+        form.local_cd.data = cd_choices[0][0]
+
+    if form.validate_on_submit():
+        try:
+            # Motorista (FK NOT NULL): valida que o id selecionado existe de fato.
+            try:
+                motorista = Motorista.query.get(int(form.motorista_id.data))
+            except (ValueError, TypeError):
+                motorista = None
+            if not motorista:
+                flash('Motorista não encontrado. Busque por CPF e selecione um motorista válido.', 'danger')
+                return render_template('portaria/criar_registro_embarque.html', form=form, embarque=embarque)
+
+            # Parse das datas/horas (StringField + type=date/time, igual FiltroHistoricoForm).
+            try:
+                dc = datetime.strptime(form.data_chegada.data, '%Y-%m-%d').date()
+                hc = datetime.strptime(form.hora_chegada.data, '%H:%M').time()
+                de = datetime.strptime(form.data_entrada.data, '%Y-%m-%d').date()
+                he = datetime.strptime(form.hora_entrada.data, '%H:%M').time()
+                ds = datetime.strptime(form.data_saida.data, '%Y-%m-%d').date()
+                hs = datetime.strptime(form.hora_saida.data, '%H:%M').time()
+            except (ValueError, TypeError):
+                flash('Data ou hora inválida. Verifique os campos de horário.', 'danger')
+                return render_template('portaria/criar_registro_embarque.html', form=form, embarque=embarque)
+
+            # Coerencia temporal: chegada <= entrada <= saida.
+            momentos = [datetime.combine(dc, hc), datetime.combine(de, he), datetime.combine(ds, hs)]
+            if not (momentos[0] <= momentos[1] <= momentos[2]):
+                flash('Os horários devem respeitar a ordem: chegada ≤ entrada ≤ saída.', 'danger')
+                return render_template('portaria/criar_registro_embarque.html', form=form, embarque=embarque)
+
+            local = normalizar_local_cd(form.local_cd.data) or LOCAL_CD_DEFAULT
+
+            # Guard R3: nao criar 2a saida para o MESMO CD deste embarque (evita
+            # registro duplicado e disparo em duplicidade da cadeia de frete).
+            ja_saiu = ControlePortaria.query.filter(
+                ControlePortaria.embarque_id == embarque.id,
+                ControlePortaria.local_cd == local,
+                ControlePortaria.data_saida.isnot(None),
+            ).first()
+            if ja_saiu:
+                flash(
+                    f'O Embarque #{embarque.numero} já tem saída registrada para '
+                    f'{LOCAL_CD_LABELS.get(local, local)} (registro #{ja_saiu.id}). '
+                    'Não foi criado um novo registro.',
+                    'warning'
+                )
+                return render_template('portaria/criar_registro_embarque.html', form=form, embarque=embarque)
+
+            registro = ControlePortaria(
+                motorista_id=motorista.id,
+                placa=(form.placa.data or '').upper(),
+                tipo_veiculo_id=form.tipo_veiculo_id.data,
+                tipo_carga=form.tipo_carga.data,
+                empresa=form.empresa.data,
+                embarque_id=embarque.id,
+                local_cd=local,
+                data_chegada=dc, hora_chegada=hc,
+                data_entrada=de, hora_entrada=he,
+                data_saida=ds, hora_saida=hs,
+                registrado_por_id=current_user.id,
+                atualizado_por_id=current_user.id,
+            )
+            db.session.add(registro)
+            db.session.flush()  # garante registro.id e relacionamento embarque carregavel
+
+            # Dispara a MESMA cadeia de efeitos da saida normal (registrar_movimento).
+            _aplicar_efeitos_saida(registro)
+
+            db.session.commit()
+            flash(
+                f'Registro de portaria criado e SAÍDA registrada para o Embarque '
+                f'#{embarque.numero} ({LOCAL_CD_LABELS.get(local, local)}).',
+                'success'
+            )
+            return redirect(url_for('embarques.visualizar_embarque', id=embarque.id))
+
+        except Exception as e:
+            db.session.rollback()
+            logger.error(f"Erro ao criar registro de portaria (admin) do embarque {embarque_id}: {e}")
+            traceback.print_exc()
+            flash(f'Erro ao criar registro: {str(e)}', 'danger')
+
+    return render_template('portaria/criar_registro_embarque.html', form=form, embarque=embarque)

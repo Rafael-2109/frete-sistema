@@ -60,6 +60,7 @@ Blueprint `portaria` (`/portaria`), registrado em `app/__init__.py:941`+`:1006`.
 | `GET /` | `dashboard` | **Fila do dia por CD** (2CD-aware) — `?local_cd=` (default VM) |
 | `POST /registrar_movimento` | `registrar_movimento` | **ROTA CRITICA** — `acao` ∈ chegada/entrada/saida |
 | `POST /adicionar_embarque` | `adicionar_embarque` | Vincula embarque; se ja saiu, REPLICA o carimbo de saida. Duplicidade checada por `(embarque_id, local_cd)` — embarque misto admite 1 registro por CD (R3) |
+| `GET\|POST /admin/criar-registro-embarque/<id>` | `criar_registro_embarque` | **ADMIN-only** (`@require_admin`) — cria 1 `ControlePortaria` direto do embarque com chegada/entrada/saida (datas/horas manuais, retroativo). Dispara `_aplicar_efeitos_saida` (mesma cadeia da saida normal). Seletor `local_cd` so' lista os CDs com item ativo do embarque (R3). Motorista via busca por CPF (`/buscar_motorista`). Botao na tela `visualizar_embarque` |
 | `POST /excluir_embarque` | `excluir_embarque` | Desvincula — REVERTE data_embarque (Embarque+Separacao+Entrega) |
 | `POST /registrar`/`cadastrar`/`editar`/`excluir` motorista | — | CRUD de motorista |
 | `GET /historico` | `historico` | Paginado; status reimplementado em SQL (ver R1) |
@@ -101,7 +102,9 @@ A saida (e a vinculacao-apos-saida) chama os hooks de frete: Nacom via `processa
 
 ## Fluxo da Saida
 
-`registrar_movimento` (POST) e o **unico** endpoint de chegada/entrada/saida (`acao` no form). **CHEGADA** cria o registro (grava `local_cd` do seletor de contexto). **ENTRADA** exige chegada previa. **SAIDA**: gate de idempotencia (`pode_registrar_saida` — tem entrada e nao tem saida; se ja saiu, flash e nao reprocessa) → carimba cabecalho + propaga por CD + sincroniza entregas + hooks de frete → **1 commit** no fim. O redirect preserva `?local_cd`. `adicionar_embarque` REPLICA esse fluxo quando o embarque e vinculado APOS a saida (codigo duplicado — alterar a regra 2CD exige tocar os 2 pontos). `excluir_embarque` reverte tudo (zera `data_embarque` em Embarque + Separacao de TODOS os itens + EntregaMonitorada).
+`registrar_movimento` (POST) e o **unico** endpoint de chegada/entrada/saida (`acao` no form). **CHEGADA** cria o registro (grava `local_cd` do seletor de contexto). **ENTRADA** exige chegada previa. **SAIDA**: gate de idempotencia (`pode_registrar_saida` — tem entrada e nao tem saida; se ja saiu, flash e nao reprocessa) → `_aplicar_efeitos_saida(registro)` → **1 commit** no fim. O redirect preserva `?local_cd`.
+
+> **`_aplicar_efeitos_saida(registro)` e a SOT da cadeia de efeitos da saida** (modulo-level em `routes.py`): carimba `data_embarque` do cabecalho (se vazio) + propaga por CD para `Separacao` + sincroniza entregas + reset `nf_cd` + hooks de frete (R2/R5). Pressupoe `data_saida`/`hora_saida` ja setados; NAO faz commit nem valida `pode_registrar_saida` (a cargo do chamador). Chamada por `registrar_movimento` (acao=saida) **e** pela rota admin `criar_registro_embarque`. `adicionar_embarque` REPLICA uma versao MAIS ENXUTA (vinculacao apos saida — sem reset `nf_cd` nem alertas; NAO usa a funcao). `excluir_embarque` reverte tudo (zera `data_embarque` em Embarque + Separacao de TODOS os itens + EntregaMonitorada).
 
 ---
 
