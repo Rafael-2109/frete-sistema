@@ -101,6 +101,29 @@
       <a href="{{ url_for('monitoramento.visualizar_arquivos', id=entrega.id) }}" class="btn btn-outline-dark">Arquivos</a>
     </div>
 
+    {% if cces_entrega %}
+    <div class="card mt-3">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span><i class="fas fa-file-signature"></i> Cartas de Correcao (CCe) ({{ cces_entrega|length }})</span>
+        {% if cce_nf_id %}
+        <a href="{{ url_for('carvia.imprimir_cce', nf_id=cce_nf_id) }}" target="_blank"
+           class="btn btn-sm btn-outline-secondary"><i class="fas fa-print"></i> Imprimir CCe</a>
+        {% endif %}
+      </div>
+      <div class="card-body p-2">
+        <ul class="list-unstyled mb-0">
+          {% for carta, vinc in cces_entrega %}
+          <li>
+            <a href="{{ url_for('carvia.download_carta_correcao', carta_id=carta.id) }}">
+              <i class="fas fa-download"></i> {{ carta.nome_original }}</a>
+            {% if carta.descricao %}<small class="text-muted">— {{ carta.descricao }}</small>{% endif %}
+          </li>
+          {% endfor %}
+        </ul>
+      </div>
+    </div>
+    {% endif %}
+
   {% if ocorrencias_devolucao %}
   <div class="alert alert-warning mt-3 mb-2">
     <strong>Esta entrega possui {{ ocorrencias_devolucao|length }} devolucao(oes):</strong>
