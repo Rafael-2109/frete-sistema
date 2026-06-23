@@ -766,6 +766,9 @@ def _enriquecer_entregas_batch(entregas):
             entrega.nf_cancelada = False
             entrega.modalidade = None
             entrega.rastreamento_id = None
+            entrega.embarque_id = None
+            entrega.embarque_numero = None
+            entrega.previsao_embarque = None
         return
 
     # Batch 1: RelatorioFaturamentoImportado (num_pedido, incoterm, valor)
@@ -810,6 +813,22 @@ def _enriquecer_entregas_batch(entregas):
             if c.num_pedido not in carteira_map:
                 carteira_map[c.num_pedido] = c
 
+    # Batch 5: Separacao.expedicao (data prevista de embarque) por lote
+    # Fonte da "Previsao" exibida quando nao ha data_embarque. expedicao e
+    # preservada quando a NF volta ao CD (ver processar_nf_cd_pedido), portanto
+    # sobrevive ao estado nf_cd — exatamente o cenario em que mostramos a previsao.
+    lotes = list({e.separacao_lote_id for e in entregas if e.separacao_lote_id})
+    expedicao_por_lote = {}
+    if lotes:
+        for lote, expedicao in db.session.query(
+            Separacao.separacao_lote_id, Separacao.expedicao
+        ).filter(
+            Separacao.separacao_lote_id.in_(lotes),
+            Separacao.expedicao.isnot(None)
+        ).all():
+            if lote not in expedicao_por_lote:
+                expedicao_por_lote[lote] = expedicao
+
     # Enriquecer cada entrega via lookup O(1)
     for entrega in entregas:
         faturamento = fat_imp_map.get(entrega.numero_nf)
@@ -833,29 +852,35 @@ def _enriquecer_entregas_batch(entregas):
         faturamento_produto = fat_prod_map.get(entrega.numero_nf)
         entrega.nf_cancelada = (faturamento_produto and faturamento_produto.status_nf == 'Cancelado')
 
-        # Embarque / modalidade / rastreamento
+        # Embarque / modalidade / rastreamento / link / previsao
         embarque_item = emb_itens_map.get(entrega.numero_nf)
-        if embarque_item:
-            if embarque_item.modalidade:
-                entrega.modalidade = embarque_item.modalidade
-            elif embarque_item.embarque:
-                entrega.modalidade = embarque_item.embarque.modalidade
-            else:
-                entrega.modalidade = None
+        embarque = embarque_item.embarque if embarque_item else None
 
-            if embarque_item.embarque and hasattr(embarque_item.embarque, 'rastreamento'):
-                rastreamento = embarque_item.embarque.rastreamento
-                if rastreamento and rastreamento.aceite_lgpd:
-                    entrega.rastreamento_id = rastreamento.id
-                    entrega.rastreamento_status = rastreamento.status
-                    entrega.embarque_numero = embarque_item.embarque.numero
-                else:
-                    entrega.rastreamento_id = None
-            else:
-                entrega.rastreamento_id = None
+        if embarque_item and embarque_item.modalidade:
+            entrega.modalidade = embarque_item.modalidade
+        elif embarque:
+            entrega.modalidade = embarque.modalidade
         else:
             entrega.modalidade = None
+
+        # Link para o embarque (botao na coluna Embarque)
+        entrega.embarque_id = embarque.id if embarque else None
+        entrega.embarque_numero = embarque.numero if embarque else None
+
+        # Rastreamento GPS (somente com aceite LGPD)
+        rastreamento = getattr(embarque, 'rastreamento', None) if embarque else None
+        if rastreamento and rastreamento.aceite_lgpd:
+            entrega.rastreamento_id = rastreamento.id
+            entrega.rastreamento_status = rastreamento.status
+        else:
             entrega.rastreamento_id = None
+
+        # Previsao de embarque: Separacao.expedicao (preservada em "NF no CD"),
+        # fallback Embarque.data_prevista_embarque. Exibida so quando nao ha data_embarque.
+        previsao = expedicao_por_lote.get(entrega.separacao_lote_id)
+        if not previsao and embarque:
+            previsao = embarque.data_prevista_embarque
+        entrega.previsao_embarque = previsao
 
 
 def _enriquecer_entregas_carvia_batch(entregas):

@@ -592,7 +592,25 @@
             {% endif %}
           </td>
           <td>
-            {{ e.data_embarque | formatar_data_segura if e.data_embarque else '-' }}
+            {# Botao com link para o embarque (acima da data) #}
+            {% if e.embarque_id %}
+              <a href="{{ url_for('embarques.visualizar_embarque', id=e.embarque_id) }}"
+                 class="btn btn-sm btn-outline-primary w-100 mb-1"
+                 target="_blank"
+                 title="Ver embarque #{{ e.embarque_numero }}">
+                <i class="fas fa-truck-loading"></i> Embarque #{{ e.embarque_numero }}
+              </a>
+            {% endif %}
+            {# Data de embarque OU previsao (Separacao.expedicao) quando ainda nao embarcou #}
+            {% if e.data_embarque %}
+              {{ e.data_embarque | formatar_data_segura }}
+            {% elif e.previsao_embarque %}
+              <span class="badge bg-secondary" title="Data prevista de embarque (expedicao planejada)">
+                Previsão:<br>{{ e.previsao_embarque.strftime('%d/%m') }}
+              </span>
+            {% else %}
+              -
+            {% endif %}
             {% set _nf_transf = (num_nf_transf_por_nf or {}).get(e.numero_nf) if num_nf_transf_por_nf is defined else None %}
             {% if _nf_transf %}
               <br><small class="carvia-nf-transf-label" title="NF de Transferencia triangular (R18)">NF Transf: {{ _nf_transf }}</small>
