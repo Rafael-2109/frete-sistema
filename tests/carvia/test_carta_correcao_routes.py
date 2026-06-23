@@ -37,3 +37,13 @@ def test_upload_carta_correcao_na_nf(db, client):
                            data=data, content_type='multipart/form-data')
     assert resp.status_code == 200
     assert resp.get_json()['sucesso'] is True
+
+
+def test_detalhe_nf_renderiza_card_cce(db, client):
+    """Smoke: o card de CCe nao quebra o render do detalhe da NF."""
+    nf = _nf('8802')
+    db.session.commit()
+    with patch('flask_login.utils._get_user', return_value=_user()):
+        resp = client.get(f'/carvia/nfs/{nf.id}')
+    assert resp.status_code == 200
+    assert b'Cartas de Correcao (CCe)' in resp.data

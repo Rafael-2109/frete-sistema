@@ -5,6 +5,7 @@
 
 {% block content %}
 {% from 'carvia/_comprovantes_card.html' import comprovantes_card with context %}
+{% from 'carvia/_cartas_correcao_card.html' import cartas_correcao_card with context %}
 <div class="container-fluid py-4">
     <div class="d-flex justify-content-between align-items-center mb-4">
         <div>
@@ -1082,11 +1083,17 @@
         comprovantes_nf,
         url_for('carvia.upload_comprovante_carvia', entidade_tipo='nf', entidade_id=nf.id),
         pode_editar=True) }}
+    {{ cartas_correcao_card(
+        'Cartas de Correcao (CCe)',
+        cces_nf,
+        url_for('carvia.upload_carta_correcao', entidade_tipo='nf', entidade_id=nf.id),
+        pode_editar=True) }}
 </div>
 {% endblock %}
 
 {% block scripts %}
 <script src="{{ url_for('static', filename='carvia/js/comprovantes_widget.js') }}"></script>
+<script src="{{ url_for('static', filename='carvia/js/cartas_correcao_widget.js') }}"></script>
 <script>
 function downloadArquivoNf(nfId, tipo) {
     fetch(`/carvia/api/nf/${nfId}/arquivo/${tipo}`)

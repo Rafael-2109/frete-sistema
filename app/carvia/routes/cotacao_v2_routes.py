@@ -1488,10 +1488,16 @@ def register_cotacao_v2_routes(bp):
         )
         comprovantes_cotacao = CarviaComprovanteService.listar('cotacao', cotacao_id)
 
+        from app.carvia.services.documentos.carta_correcao_service import (
+            CarviaCartaCorrecaoService,
+        )
+        cces_cotacao = CarviaCartaCorrecaoService.listar('cotacao', cotacao_id)
+
         return render_template(
             'carvia/cotacoes/detalhe.html',
             cotacao=cotacao,
             comprovantes_cotacao=comprovantes_cotacao,
+            cces_cotacao=cces_cotacao,
             motos=motos_raw,
             motos_list_json=motos_list_json,
             pedidos=pedidos,
