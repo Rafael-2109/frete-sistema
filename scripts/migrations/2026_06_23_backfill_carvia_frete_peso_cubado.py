@@ -8,28 +8,31 @@ CarviaNfItem.modelo_moto_id) — divergencia.
 
 Em producao (2026-06-23): 71 fretes PENDENTE com peso_total < cubado canonico
 (deficit ~21.172 kg). Este backfill recalcula peso_total = sum(max(bruto,
-cubado canonico)) por NF via CarviaFreteService.peso_total_de_nfs — a MESMA
-fonte do codigo corrigido (consistencia garantida).
+cubado canonico)) por NF — a MESMA formula do codigo corrigido
+(MotoRecognitionService.calcular_peso_cubado_batch + max), porem em BATCH GLOBAL
+(3 queries no total, em vez de N+1) para rodar rapido contra o banco remoto.
 
 OPCAO (a), decisao Rafael 2026-06-23: corrige SOMENTE o peso_total. NAO
 recalcula valor_cotado/custo (valor contratado; todos os fretes afetados estao
-PENDENTE — nada conciliado a desfazer). Os 28 via embarque com possivel custo
-subcalculado, se houver, sao revisados caso a caso, fora deste backfill.
+PENDENTE — nada conciliado a desfazer).
 
 DRY-RUN por padrao (nao grava). Use --confirmar para efetivar.
   python scripts/migrations/2026_06_23_backfill_carvia_frete_peso_cubado.py [--confirmar]
+Para apontar a producao localmente:
+  DATABASE_URL="$DATABASE_URL_PROD" python scripts/migrations/...py [--confirmar]
 """
 import argparse
 import logging
 import os
 import sys
+from collections import defaultdict
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
 
 from app import create_app, db  # noqa: E402
 from app.carvia.models import CarviaFrete, CarviaNf  # noqa: E402
-from app.carvia.services.documentos.carvia_frete_service import (  # noqa: E402
-    CarviaFreteService,
+from app.carvia.services.pricing.moto_recognition_service import (  # noqa: E402
+    MotoRecognitionService,
 )
 
 logger = logging.getLogger(__name__)
@@ -45,27 +48,46 @@ def main():
     )
     args = ap.parse_args()
 
-    logging.basicConfig(level=logging.WARNING)  # silencia INFO de cada calculo
+    logging.basicConfig(level=logging.WARNING)
     app = create_app()
     with app.app_context():
+        # 1 query: fretes nao-cancelados com NFs
         fretes = CarviaFrete.query.filter(
             CarviaFrete.status != 'CANCELADO',
             CarviaFrete.numeros_nfs.isnot(None),
             CarviaFrete.numeros_nfs != '',
         ).order_by(CarviaFrete.id).all()
 
+        fretes_nums = {}
+        todos_nums = set()
+        for f in fretes:
+            nums = [n.strip() for n in (f.numeros_nfs or '').split(',') if n.strip()]
+            fretes_nums[f.id] = nums
+            todos_nums.update(nums)
+
+        # 1 query: todas as NFs ATIVAS referenciadas (numero -> [nfs])
+        nfs_por_num = defaultdict(list)
+        nf_ids = []
+        if todos_nums:
+            for nf in CarviaNf.query.filter(
+                CarviaNf.numero_nf.in_(todos_nums),
+                CarviaNf.status == 'ATIVA',
+            ).all():
+                nfs_por_num[nf.numero_nf].append(nf)
+                nf_ids.append(nf.id)
+
+        # 1 batch: cubado canonico de todas as NFs de uma vez (mesma fonte do fix)
+        cubado_por_nf = MotoRecognitionService().calcular_peso_cubado_batch(nf_ids) if nf_ids else {}
+
         candidatos = []  # (frete, gravado, correto)
         for f in fretes:
-            nf_nums = [n.strip() for n in (f.numeros_nfs or '').split(',') if n.strip()]
-            if not nf_nums:
+            nfs_do_frete = [nf for n in fretes_nums[f.id] for nf in nfs_por_num.get(n, [])]
+            if not nfs_do_frete:
                 continue
-            nfs = CarviaNf.query.filter(
-                CarviaNf.numero_nf.in_(nf_nums),
-                CarviaNf.status == 'ATIVA',
-            ).all()
-            if not nfs:
-                continue
-            correto = CarviaFreteService.peso_total_de_nfs(nfs)
+            correto = sum(
+                max(float(nf.peso_bruto or 0), float(cubado_por_nf.get(nf.id, 0) or 0))
+                for nf in nfs_do_frete
+            )
             gravado = float(f.peso_total or 0)
             if correto > gravado + TOLERANCIA_KG:
                 candidatos.append((f, gravado, correto))
