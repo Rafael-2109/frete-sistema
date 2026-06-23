@@ -47,3 +47,12 @@ def test_detalhe_nf_renderiza_card_cce(db, client):
         resp = client.get(f'/carvia/nfs/{nf.id}')
     assert resp.status_code == 200
     assert b'Cartas de Correcao (CCe)' in resp.data
+
+
+def test_imprimir_cce_da_nf_retorna_html(db, client):
+    nf = _nf('8801')
+    db.session.commit()
+    with patch('flask_login.utils._get_user', return_value=_user()):
+        resp = client.get(f'/carvia/cartas-correcao/imprimir?nf_id={nf.id}')
+    assert resp.status_code == 200
+    assert b'window.print' in resp.data  # sem CCe: pagina vazia mas valida
