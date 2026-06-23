@@ -92,6 +92,8 @@ Thumbs.db
 # Uploads e arquivos temporários
 uploads/
 backup_*.db
+backups/
+*:Zone.Identifier
 limpeza_completa_sistema.py
 
 # Arquivos de configuração local
