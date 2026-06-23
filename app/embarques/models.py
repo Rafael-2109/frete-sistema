@@ -147,15 +147,26 @@ class Embarque(db.Model):
         return sum(i.valor or 0 for i in self.itens if i.status == 'ativo')
 
     def receita_carvia(self):
-        """Receita CarVia (CTe/cotacao) das operacoes deste embarque.
+        """Receita CarVia (CTe/cotacao) das operacoes deste embarque, agregada por cotacao.
 
+        Coleta aqui os itens CarVia ativos (lote CARVIA-% + carvia_cotacao_id) e os passa ao
+        service — assim o service NAO importa app/embarques (R1 CarVia). Inclui a receita
+        COTADA dos pedidos ja adicionados, mesmo antes do CTe/frete (o calculo antigo so via
+        CTe via CarviaFrete e ficava R$ 0 ate a saida da portaria).
         Lazy import: o modulo Embarque NAO depende de CarVia em import-time (R1).
         Retorna {'total': float, 'tem_cte': bool}.
         """
+        itens_carvia = [
+            (i.separacao_lote_id, getattr(i, 'carvia_cotacao_id', None))
+            for i in self.itens
+            if i.status == 'ativo' and (i.separacao_lote_id or '').startswith('CARVIA-')
+        ]
+        if not itens_carvia:
+            return {'total': 0.0, 'tem_cte': False}
         from app.carvia.services.financeiro.viabilidade_service import (
             receita_carvia_por_embarque,
         )
-        return receita_carvia_por_embarque(self.id)
+        return receita_carvia_por_embarque(self.id, itens_carvia=itens_carvia)
 
     def total_pallet_pedidos(self):
         """

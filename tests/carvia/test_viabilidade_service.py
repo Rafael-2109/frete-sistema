@@ -1,5 +1,8 @@
+import uuid
 from datetime import datetime
 from decimal import Decimal
+
+from sqlalchemy import text
 
 
 def _criar_operacao(db, cte_numero, cte_valor):
@@ -59,25 +62,101 @@ def test_receita_por_lotes_soma_multiplos(db):
     assert res['total'] == 1000.0
 
 
-def test_embarque_receita_carvia_metodo(db):
-    from app.embarques.models import Embarque
-    from app.transportadoras.models import Transportadora
-    from app.carvia.models import CarviaFrete
+def _criar_cot_ped(db, numero_nf=None, valor_aprovado=None):
+    """Cria cliente+endereco+cotacao (com valor_final_aprovado) + pedido (+item com NF)."""
+    suf = uuid.uuid4().hex[:6]
+    cli = db.session.execute(text(
+        "INSERT INTO carvia_clientes (nome_comercial, criado_por) "
+        "VALUES (:n, 'test') RETURNING id"
+    ), {'n': f'C{suf}'}).scalar()
+    end = db.session.execute(text(
+        "INSERT INTO carvia_cliente_enderecos (cliente_id, tipo, criado_por) "
+        "VALUES (:c, 'ORIGEM', 'test') RETURNING id"
+    ), {'c': cli}).scalar()
+    cot = db.session.execute(text(
+        "INSERT INTO carvia_cotacoes (numero_cotacao, cliente_id, endereco_origem_id, "
+        "endereco_destino_id, tipo_material, criado_por, local_cd, valor_final_aprovado) "
+        "VALUES (:num, :cli, :e, :e, 'MOTO', 'test', 'VICTORIO_MARCHEZINE', :v) RETURNING id"
+    ), {'num': f'COT-{suf}', 'cli': cli, 'e': end, 'v': valor_aprovado}).scalar()
+    ped = db.session.execute(text(
+        "INSERT INTO carvia_pedidos (numero_pedido, cotacao_id, filial, tipo_separacao, "
+        "criado_por, local_cd) "
+        "VALUES (:n, :c, 'SP', 'ESTOQUE', 'test', 'VICTORIO_MARCHEZINE') RETURNING id"
+    ), {'n': f'P-{suf}', 'c': cot}).scalar()
+    if numero_nf:
+        db.session.execute(text(
+            "INSERT INTO carvia_pedido_itens (pedido_id, quantidade, numero_nf) "
+            "VALUES (:p, 1, :nf)"
+        ), {'p': ped, 'nf': numero_nf})
+    db.session.flush()
+    return cot, ped
 
+
+def _emb_com_itens(db, itens):
+    """itens: lista de (lote, cot_id, nota_fiscal). Cria 1 embarque ativo com os EmbarqueItem."""
+    from app.embarques.models import Embarque, EmbarqueItem
+    emb = Embarque(numero=int(uuid.uuid4().int % 9_000_000) + 1_000_000, status='ativo')
+    db.session.add(emb)
+    db.session.flush()
+    for lote, cot_id, nf in itens:
+        db.session.add(EmbarqueItem(
+            embarque_id=emb.id, separacao_lote_id=lote, pedido='P', cliente='X',
+            status='ativo', uf_destino='SP', cidade_destino='X',
+            local_cd='VICTORIO_MARCHEZINE', carvia_cotacao_id=cot_id, nota_fiscal=nf,
+        ))
+    db.session.flush()
+    return emb
+
+
+def test_receita_embarque_cte_vence_cotado(db):
+    """Pedido cuja NF tem CTe (operacao): usa cte_valor (vence o cotado), tem_cte=True."""
+    from app.carvia.models import CarviaOperacaoNf
+    cot, ped = _criar_cot_ped(db, numero_nf='80001', valor_aprovado=Decimal('999'))
     op = _criar_operacao(db, 'CTe-EMB', 2500.0)
-    emb = Embarque(numero=990001, status='ativo')
-    db.session.add(emb); db.session.flush()
-    transp = Transportadora(razao_social='T CARVIA', cnpj='33333333000133',
-                            cidade='SAO PAULO', uf='SP')
-    db.session.add(transp); db.session.flush()
-    cf = CarviaFrete(
-        transportadora_id=transp.id, embarque_id=emb.id,
-        cnpj_emitente='11111111000111', cnpj_destino='22222222000122',
-        nome_destino='D', uf_destino='RJ', cidade_destino='RIO DE JANEIRO',
-        tipo_carga='DIRETA', operacao_id=op.id, criado_por='test',
-    )
-    db.session.add(cf); db.session.flush()
+    nf = _criar_nf(db, '80001')
+    db.session.add(CarviaOperacaoNf(operacao_id=op.id, nf_id=nf.id))
+    db.session.flush()
+    emb = _emb_com_itens(db, [(f'CARVIA-PED-{ped}', cot, '80001')])
 
     res = emb.receita_carvia()
     assert res['total'] == 2500.0
     assert res['tem_cte'] is True
+
+
+def test_receita_embarque_usa_cotado_sem_cte(db):
+    """Pedido sem CTe/frete: usa o valor cotado. Era o caso que ficava R$ 0 ate a portaria."""
+    cot, ped = _criar_cot_ped(db, numero_nf=None, valor_aprovado=Decimal('900'))
+    emb = _emb_com_itens(db, [(f'CARVIA-PED-{ped}', cot, None)])
+
+    res = emb.receita_carvia()
+    assert res['total'] == 900.0
+    assert res['tem_cte'] is False
+
+
+def test_receita_embarque_dedup_por_cotacao(db):
+    """2 itens da MESMA cotacao (split/provisorio+NF) sem CTe contam o cotado 1x, nao 2x."""
+    cot, ped = _criar_cot_ped(db, numero_nf=None, valor_aprovado=Decimal('900'))
+    emb = _emb_com_itens(db, [
+        (f'CARVIA-PED-{ped}', cot, None),
+        ('CARVIA-NF-99999', cot, None),
+    ])
+
+    res = emb.receita_carvia()
+    assert res['total'] == 900.0
+
+
+def test_receita_embarque_sem_itens_carvia_e_zero(db):
+    """Embarque so com item Nacom: receita CarVia = 0 (nao toca itens nao-CARVIA)."""
+    from app.embarques.models import Embarque, EmbarqueItem
+    emb = Embarque(numero=int(uuid.uuid4().int % 9_000_000) + 1_000_000, status='ativo')
+    db.session.add(emb)
+    db.session.flush()
+    db.session.add(EmbarqueItem(
+        embarque_id=emb.id, separacao_lote_id='LOTE_NACOM', pedido='P', cliente='X',
+        status='ativo', local_cd='VICTORIO_MARCHEZINE', uf_destino='SP', cidade_destino='X',
+    ))
+    db.session.flush()
+
+    res = emb.receita_carvia()
+    assert res['total'] == 0.0
+    assert res['tem_cte'] is False
