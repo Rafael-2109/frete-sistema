@@ -231,7 +231,13 @@ class ControlePortaria(db.Model):
             item_cd_pendente_q = item_cd_pendente_q.filter(
                 EmbarqueItem.local_cd == local
             )
-        item_cd_pendente = item_cd_pendente_q.exists()
+        # `.correlate(Embarque)` e OBRIGATORIO: o consumidor `embarques.listar_embarques` faz
+        # `.outerjoin(EmbarqueItem)`, colocando EmbarqueItem no FROM EXTERNO. Sem este correlate,
+        # a auto-correlacao do SQLAlchemy arrastaria o EmbarqueItem DESTA subquery para fora,
+        # deixando-a "sem FROM" → InvalidRequestError no `.paginate()` (bug 500 2026-06-23).
+        # Correlacionar SO com Embarque fixa EmbarqueItem no FROM desta subquery, com ou sem
+        # outerjoin externo (sem outerjoin tambem e correto — nada para auto-correlacionar).
+        item_cd_pendente = item_cd_pendente_q.correlate(Embarque).exists()
 
         # O processo fisico de saida comecou para ALGUM CD do embarque.
         alguma_saida_registrada = ControlePortaria.query.filter(
@@ -248,11 +254,13 @@ class ControlePortaria(db.Model):
 
         if local:
             # Mesmo no ramo `data_embarque IS NULL`, so embarques com item ativo do CD filtrado.
+            # `.correlate(Embarque)` pelo mesmo motivo de `item_cd_pendente` acima: protege contra
+            # o `.outerjoin(EmbarqueItem)` do consumidor (senao `?local_cd=` dava 500 no paginate).
             tem_item_do_local = EmbarqueItem.query.filter(
                 EmbarqueItem.embarque_id == Embarque.id,
                 EmbarqueItem.status == 'ativo',
                 EmbarqueItem.local_cd == local,
-            ).exists()
+            ).correlate(Embarque).exists()
             query = query.filter(tem_item_do_local)
 
         return query
