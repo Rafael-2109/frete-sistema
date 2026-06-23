@@ -106,3 +106,35 @@ def test_endereco_origem_nao_propaga(db):
     res = CarviaPropagacaoEnderecoService.propagar(end.id)
     assert res == {'cotacoes': 0, 'nfs': 0, 'operacoes': 0,
                    'embarque_itens': 0, 'entregas': 0}
+
+
+# --------------------------------------------------------------------------- #
+# A3 — hook no atualizar_endereco                                             #
+# --------------------------------------------------------------------------- #
+
+def test_atualizar_endereco_dispara_propagacao(db):
+    from app.carvia.models.documentos import CarviaNf
+    from app.carvia.services.clientes.cliente_service import CarviaClienteService
+    end = _endereco_destino(cnpj='55666777000188', cidade='Velha', uf='RJ')
+    nf = CarviaNf(numero_nf='950', cnpj_emitente='1', nome_emitente='E',
+                  cnpj_destinatario='55666777000188', nome_destinatario='D',
+                  cidade_destinatario='Velha', uf_destinatario='RJ',
+                  valor_total=1, tipo_fonte='MANUAL', status='ATIVA', criado_por='t')
+    _db.session.add(nf)
+    _db.session.flush()
+
+    ok, erro, ctx = CarviaClienteService.atualizar_endereco(
+        end.id, {'fisico_cidade': 'Nova', 'fisico_uf': 'SP'})
+    assert ok and erro is None
+    assert ctx and ctx.get('propagacao', {}).get('nfs') == 1
+    db.session.refresh(nf)
+    assert nf.cidade_destinatario == 'Nova'
+
+
+def test_atualizar_endereco_sem_mudar_cidade_uf_nao_propaga(db):
+    from app.carvia.services.clientes.cliente_service import CarviaClienteService
+    end = _endereco_destino(cnpj='10101010000110', cidade='Velha', uf='RJ')
+    ok, erro, ctx = CarviaClienteService.atualizar_endereco(
+        end.id, {'razao_social': 'Outra Razao'})
+    assert ok
+    assert (ctx or {}).get('propagacao') is None
