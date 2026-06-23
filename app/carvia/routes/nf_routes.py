@@ -106,15 +106,26 @@ def register_nf_routes(bp):
                 EmbarqueItem.nota_fiscal.isnot(None),
                 Embarque.data_embarque.isnot(None),
             )
+            # Via frete: so conta como "saiu" se a NF NAO tem EmbarqueItem CARVIA
+            # (mesma regra do badge — EI ativo ja entra por saiu_ei_notas; EI cancelado
+            # = a NF saiu daquele embarque, nao "saiu da portaria"). Alias evita colisao
+            # com o CarviaNf da query externa.
+            CarviaNfFrete = db.aliased(CarviaNf)
             saiu_frete_nf_ids = db.session.query(
                 CarviaOperacaoNf.nf_id
             ).join(
                 CarviaFrete, CarviaFrete.operacao_id == CarviaOperacaoNf.operacao_id
             ).join(
                 Embarque, Embarque.id == CarviaFrete.embarque_id
+            ).join(
+                CarviaNfFrete, CarviaNfFrete.id == CarviaOperacaoNf.nf_id
             ).filter(
                 CarviaFrete.status != 'CANCELADO',
                 Embarque.data_embarque.isnot(None),
+                ~db.session.query(EmbarqueItem.id).filter(
+                    EmbarqueItem.nota_fiscal == CarviaNfFrete.numero_nf,
+                    EmbarqueItem.separacao_lote_id.like('CARVIA-%'),
+                ).exists(),
             )
             query = query.filter(
                 CarviaNf.numero_nf.notin_(saiu_ei_notas),
@@ -482,7 +493,24 @@ def register_nf_routes(bp):
                     for nf_id_e in numero_to_nf_ids_emb.get(nota, []):
                         _registrar_embarque(nf_id_e, emb_id, emb_num, emb_data)
 
-            # (b) via operacao -> CarviaFrete -> Embarque
+            # NFs (da pagina) que TEM algum EmbarqueItem CARVIA (qualquer status):
+            # a via (b) NAO vale para elas — EI ativo ja foi pego em (a); EI cancelado
+            # sem ativo = a NF saiu daquele embarque (decisao 2026-06-23). A via (b) e
+            # fallback so para NF SEM item (frete sem EmbarqueItem correspondente).
+            notas_com_ei_carvia = set()
+            if numero_to_nf_ids_emb:
+                rows_tem_ei = db.session.query(
+                    EmbarqueItem.nota_fiscal
+                ).filter(
+                    EmbarqueItem.nota_fiscal.in_(list(numero_to_nf_ids_emb.keys())),
+                    EmbarqueItem.separacao_lote_id.like('CARVIA-%'),
+                ).distinct().all()
+                notas_com_ei_carvia = {r[0] for r in rows_tem_ei}
+            nf_id_to_numero = {
+                nf_pg.id: nf_pg.numero_nf for nf_pg, _ in paginacao.items
+            }
+
+            # (b) via operacao -> CarviaFrete -> Embarque (so NF SEM EI CARVIA)
             rows_emb = db.session.query(
                 CarviaOperacaoNf.nf_id,
                 Embarque.id,
@@ -499,6 +527,8 @@ def register_nf_routes(bp):
                 CarviaFrete.embarque_id.isnot(None),
             ).all()
             for nf_id_e, emb_id, emb_num, emb_data in rows_emb:
+                if nf_id_to_numero.get(nf_id_e) in notas_com_ei_carvia:
+                    continue
                 _registrar_embarque(nf_id_e, emb_id, emb_num, emb_data)
 
         return render_template(
