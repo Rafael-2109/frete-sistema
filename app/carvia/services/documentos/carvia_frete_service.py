@@ -520,10 +520,12 @@ class CarviaFreteService:
         cair silenciosamente no peso bruto — resolve da FONTE DE VERDADE:
 
           1. item.peso_cubado, se > 0
-          2. Item real (com NF): cubado proporcional aos veiculos DA NF,
-             via EmbarqueCarViaService.calcular_cubado_por_modelos. Se nao
-             resolver por modelos, retorna 0 (usa bruto) para NAO
-             superestimar em cenarios multi-NF.
+          2. Item real (com NF): cubado canonico dos ITENS DA NF
+             (CarviaNfItem.modelo_moto_id), via
+             MotoRecognitionService.calcular_peso_cubado_nf — a MESMA fonte
+             da tela/export (R3/R19), independente de a cotacao cobrir o
+             modelo. Se nenhum item tiver modelo, retorna 0 (usa bruto)
+             para NAO superestimar em cenarios multi-NF.
           3. Provisorio (sem NF): soma peso_cubado_total dos
              CarviaCotacaoMoto da cotacao (representa o saldo inteiro).
           4. 0.0 (sem cubagem -> caller usa peso bruto).
@@ -538,35 +540,33 @@ class CarviaFreteService:
         if not cot_id:
             return 0.0
 
-        from app.carvia.services.documentos.embarque_carvia_service import (
-            EmbarqueCarViaService,
-        )
-
         nf_num = (item.nota_fiscal or '').strip() if item.nota_fiscal else ''
 
-        # 2. Item real (com NF): cubado dos veiculos DA NF
+        # 2. Item real (com NF): cubado canonico dos ITENS da NF
+        #    (CarviaNfItem.modelo_moto_id) — MESMA fonte da tela/export
+        #    (R3/R19), independente de a cotacao cobrir o modelo.
         if nf_num:
             try:
                 from app.carvia.models import CarviaNf
+                from app.carvia.services.pricing.moto_recognition_service import (
+                    MotoRecognitionService,
+                )
                 nf = CarviaNf.query.filter_by(
                     numero_nf=nf_num, status='ATIVA',
                 ).order_by(CarviaNf.id.desc()).first()
                 if nf:
-                    modelos = [v.modelo for v in nf.veiculos.all() if v.modelo]
-                    if modelos:
-                        cubado = EmbarqueCarViaService.calcular_cubado_por_modelos(
-                            cot_id, modelos,
+                    resultado = MotoRecognitionService().calcular_peso_cubado_nf(nf.id)
+                    cubado = float((resultado or {}).get('peso_cubado_total') or 0)
+                    if cubado > 0:
+                        logger.info(
+                            "peso_cubado ausente no item (lote=%s NF=%s) — "
+                            "resolvido via itens da NF (fonte canonica): %.2f kg",
+                            item.separacao_lote_id, nf_num, cubado,
                         )
-                        if cubado and cubado > 0:
-                            logger.info(
-                                "peso_cubado ausente no item (lote=%s NF=%s) — "
-                                "resolvido via veiculos da NF: %.2f kg",
-                                item.separacao_lote_id, nf_num, cubado,
-                            )
-                            return float(cubado)
+                        return cubado
                 logger.warning(
                     "peso_cubado ausente no item real (lote=%s NF=%s) e nao "
-                    "resolvido por modelos — frete usara peso bruto.",
+                    "resolvido pelos itens da NF — frete usara peso bruto.",
                     item.separacao_lote_id, nf_num,
                 )
             except Exception as e:
@@ -611,6 +611,33 @@ class CarviaFreteService:
         bruto = float(item.peso or 0)
         cubado = CarviaFreteService._peso_cubado_resolvido(item)
         return max(bruto, cubado)
+
+    @staticmethod
+    def peso_total_de_nfs(nfs) -> float:
+        """Peso total do frete a partir de uma lista de CarviaNf:
+        sum(max(bruto, cubado canonico)) por NF — mesma regra R3/R19 do
+        _peso_frete_item, porem a NIVEL de NF (usado no backfill manual, que
+        nao tem EmbarqueItem). O cubado vem da fonte canonica
+        MotoRecognitionService.calcular_peso_cubado_batch (itens via
+        modelo_moto_id), nunca da cotacao. Import lazy (R2).
+        """
+        nfs = list(nfs)
+        cubado_por_nf = {}
+        try:
+            from app.carvia.services.pricing.moto_recognition_service import (
+                MotoRecognitionService,
+            )
+            ids = [nf.id for nf in nfs]
+            if ids:
+                cubado_por_nf = MotoRecognitionService().calcular_peso_cubado_batch(ids)
+        except Exception as e:
+            logger.warning(
+                "peso_total_de_nfs: erro ao calcular cubado batch: %s", e,
+            )
+        return sum(
+            max(float(nf.peso_bruto or 0), float(cubado_por_nf.get(nf.id, 0) or 0))
+            for nf in nfs
+        )
 
     # ------------------------------------------------------------------
     # Calculos de custo e venda

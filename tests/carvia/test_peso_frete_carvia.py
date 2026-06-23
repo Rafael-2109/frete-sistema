@@ -21,6 +21,11 @@ CALC_PATH = (
     'EmbarqueCarViaService.calcular_cubado_por_modelos'
 )
 
+MRS_PATH = (
+    'app.carvia.services.pricing.moto_recognition_service.'
+    'MotoRecognitionService'
+)
+
 
 def _fake_item(peso=None, peso_cubado=None, carvia_cotacao_id=None,
                nota_fiscal=None, separacao_lote_id='CARVIA-NF-1'):
@@ -32,12 +37,6 @@ def _fake_item(peso=None, peso_cubado=None, carvia_cotacao_id=None,
     item.nota_fiscal = nota_fiscal
     item.separacao_lote_id = separacao_lote_id
     return item
-
-
-def _veiculo(modelo):
-    v = MagicMock()
-    v.modelo = modelo
-    return v
 
 
 class TestPesoFreteSnapshot:
@@ -59,38 +58,46 @@ class TestPesoFreteSnapshot:
 
 
 class TestPesoFreteResolveViaNf:
-    """Snapshot vazio + item real (NF): resolve cubado pelos veiculos da NF."""
+    """Snapshot vazio + item real (NF): resolve cubado pela FONTE CANONICA
+    — os ITENS da NF (CarviaNfItem.modelo_moto_id), independente da cotacao.
+
+    Antes (bug): resolvia via calcular_cubado_por_modelos, que casa o texto
+    do chassi contra a CarviaCotacaoMoto DA COTACAO. Quando a cotacao nao
+    cobria o modelo, retornava 0 -> o frete gravava o peso bruto (ex.: NF
+    38312 JET, 675,92 bruto vs 867,54 cubado correto), divergindo da
+    tela/export que ja usam a fonte canonica (calcular_peso_cubado_nf).
+    """
 
     @patch('app.carvia.models.CarviaNf')
-    @patch(CALC_PATH)
-    def test_resolve_cubado_da_nf_caso_37819(self, mock_calc, mock_nf_cls):
-        # 10x JET + 2x DOT = 2.119,39 kg (cenario real do embarque #5336)
-        mock_calc.return_value = 2119.39
+    @patch(MRS_PATH)
+    def test_resolve_cubado_pelos_itens_independe_da_cotacao(
+            self, mock_mrs_cls, mock_nf_cls):
+        # NF 38312 (JET): modelo AUSENTE da cotacao, mas com CarviaNfItem
+        # tendo modelo_moto_id -> cubado vem dos ITENS, nao da cotacao.
+        mock_mrs_cls.return_value.calcular_peso_cubado_nf.return_value = {
+            'peso_cubado_total': 867.54,
+        }
         nf = MagicMock()
-        nf.veiculos.all.return_value = (
-            [_veiculo('MOTO ELETRICA JET')] * 10
-            + [_veiculo('SCOOTER ELETRICA DOT')] * 2
-        )
+        nf.id = 326
         (mock_nf_cls.query.filter_by.return_value
             .order_by.return_value.first.return_value) = nf
 
-        item = _fake_item(peso=984, peso_cubado=None, carvia_cotacao_id=84,
-                          nota_fiscal='37819', separacao_lote_id='CARVIA-PED-93')
+        item = _fake_item(peso=675.92, peso_cubado=None, carvia_cotacao_id=84,
+                          nota_fiscal='38312', separacao_lote_id='CARVIA-PED-93')
 
-        # max(984, 2119.39) = 2119.39 (cubado da fonte de verdade)
-        assert CarviaFreteService._peso_frete_item(item) == 2119.39
-        # passou os 12 modelos da NF para a cotacao 84
-        cot_id_arg, modelos_arg = mock_calc.call_args[0]
-        assert cot_id_arg == 84
-        assert len(modelos_arg) == 12
+        # max(675.92, 867.54) = 867.54 (cubado canonico via itens da NF)
+        assert CarviaFreteService._peso_frete_item(item) == 867.54
+        mock_mrs_cls.return_value.calcular_peso_cubado_nf.assert_called_once_with(326)
 
     @patch('app.carvia.models.CarviaNf')
-    @patch(CALC_PATH)
-    def test_nf_sem_veiculos_nao_superestima_usa_bruto(self, mock_calc, mock_nf_cls):
-        # NF sem veiculos com modelo: nao da pra resolver -> usa bruto
-        # (nunca a cotacao inteira, para nao superestimar em multi-NF)
+    @patch(MRS_PATH)
+    def test_nf_sem_itens_com_modelo_usa_bruto(self, mock_mrs_cls, mock_nf_cls):
+        # calcular_peso_cubado_nf devolve None (nenhum item com modelo) ->
+        # nao da pra resolver -> usa bruto (nunca a cotacao inteira, para nao
+        # superestimar em multi-NF).
+        mock_mrs_cls.return_value.calcular_peso_cubado_nf.return_value = None
         nf = MagicMock()
-        nf.veiculos.all.return_value = []
+        nf.id = 999
         (mock_nf_cls.query.filter_by.return_value
             .order_by.return_value.first.return_value) = nf
 
@@ -98,7 +105,6 @@ class TestPesoFreteResolveViaNf:
                           nota_fiscal='37819')
 
         assert CarviaFreteService._peso_frete_item(item) == 984
-        mock_calc.assert_not_called()
 
 
 class TestPesoFreteResolveViaCotacao:
@@ -130,3 +136,32 @@ class TestPesoFreteItemNaoCarVia:
                           carvia_cotacao_id=None,
                           separacao_lote_id='LOTE_20260505_115532_495')
         assert CarviaFreteService._peso_frete_item(item) == 3610.12
+
+
+class TestPesoTotalDeNfs:
+    """Backfill manual (sem EmbarqueItem): peso = sum(max(bruto, cubado)) por
+    NF, com o cubado vindo da fonte canonica (itens via
+    calcular_peso_cubado_batch). Antes o backfill POST somava SO o peso bruto
+    (frete_routes.py), subestimando motos cujo modelo nao estava na cotacao.
+    """
+
+    @patch(MRS_PATH)
+    def test_usa_max_bruto_cubado_por_nf(self, mock_mrs_cls):
+        mock_mrs_cls.return_value.calcular_peso_cubado_batch.return_value = {
+            326: 867.54,  # cubado > bruto -> cubado
+            330: 50.0,    # cubado < bruto -> bruto
+        }
+        nf1 = MagicMock(); nf1.id = 326; nf1.peso_bruto = 675.92
+        nf2 = MagicMock(); nf2.id = 330; nf2.peso_bruto = 200.0
+
+        total = CarviaFreteService.peso_total_de_nfs([nf1, nf2])
+        assert total == 867.54 + 200.0
+        mock_mrs_cls.return_value.calcular_peso_cubado_batch.assert_called_once_with(
+            [326, 330]
+        )
+
+    @patch(MRS_PATH)
+    def test_sem_cubado_usa_bruto(self, mock_mrs_cls):
+        mock_mrs_cls.return_value.calcular_peso_cubado_batch.return_value = {}
+        nf1 = MagicMock(); nf1.id = 1; nf1.peso_bruto = 300.0
+        assert CarviaFreteService.peso_total_de_nfs([nf1]) == 300.0

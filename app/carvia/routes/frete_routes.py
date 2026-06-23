@@ -649,8 +649,13 @@ def register_frete_routes(bp):
                 )
                 return redirect(url_for('carvia.backfill_frete_carvia', nf_id=seed_nf_id))
 
-        # Agregar totais
-        peso_total = sum(float(nf.peso_bruto or 0) for nf in selected_nfs)
+        # Agregar totais — peso = max(bruto, cubado canonico) por NF (R3/R19,
+        # mesma fonte da tela/export e do frete normal). So-bruto subestimava
+        # motos cujo modelo nao estava na cotacao (bug peso cubado backfill).
+        from app.carvia.services.documentos.carvia_frete_service import (
+            CarviaFreteService,
+        )
+        peso_total = CarviaFreteService.peso_total_de_nfs(selected_nfs)
         valor_total_nfs = sum(float(nf.valor_total or 0) for nf in selected_nfs)
         numeros_nfs = ','.join(nf.numero_nf for nf in selected_nfs if nf.numero_nf)
 
