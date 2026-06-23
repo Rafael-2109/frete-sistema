@@ -23,6 +23,18 @@
 @layer modules {
 
   /* ═══════════════════════════════════════════════════════════════════════════
+     MONITORAMENTO - Densidade da listagem (-20%)
+     Reduz uniformemente TUDO da tela de listagem (botoes, filtros, colunas,
+     textos) via zoom. Escopado a `.monitoramento-page.pagination-container`
+     (combinacao exclusiva de listar_entregas.html) para NAO afetar as outras
+     telas que compartilham este CSS (visualizar/exportar/diagnostico).
+     ═══════════════════════════════════════════════════════════════════════════ */
+
+  .monitoramento-page.pagination-container {
+    zoom: 0.8;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
      MONITORAMENTO - Hybrid Pagination
      ═══════════════════════════════════════════════════════════════════════════ */
 
@@ -606,8 +618,23 @@
     position: relative;
   }
 
+  /* Scroll lateral REABILITADO: a tabela e larga e nao cabe na viewport; sem
+     overflow-x a area direita (Info/Reagendar) fica inacessivel. overflow-x:auto
+     restaura o rolamento horizontal do Bootstrap. As colunas fixas (.sticky-col*)
+     continuam grudando a esquerda.
+     TRADE-OFFS (aceitos — overflow-x cria contexto de scroll proprio):
+     1. Por spec, overflow-y:visible e promovido a 'auto' quando o outro eixo e
+        'auto'. Como NAO ha max-height aqui, a altura = conteudo -> sem scroll-y
+        interno -> o thead deixa de colar no scroll VERTICAL da pagina (e o
+        `top: var(--pag-bar-h)` do thead fica inocuo, pois sticky so desloca
+        havendo rolagem no proprio container).
+     2. .obs-inline-wrapper (absolute, expande ~60px ao focar) pode ser clipado
+        SE a linha estiver na borda extrema do container; no miolo da tabela
+        nao clipa. Se virar problema, a saida e converter em data-grid
+        (max-height + overflow:auto + thead top:0). */
   .pagination-container .table-responsive {
-    overflow: visible;
+    overflow-x: auto;
+    overflow-y: visible;
   }
 
   /* ═══════════════════════════════════════════════════════════════════════════
@@ -874,6 +901,31 @@
     white-space: nowrap;
     display: inline-block;
     line-height: 1.2;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     MONITORAMENTO - Coluna Embarque (anti-atropelo)
+     CAUSA RAIZ: _tables.css:356 aplica `white-space: nowrap` a TODA celula de
+     .table-responsive (proposital — forca scroll-x em vez de comprimir). Isso
+     punha o botao "Embarque #N" (w-100) e a badge de previsao LADO A LADO,
+     atropelando-se. `white-space: normal` aqui (layer modules vence components,
+     sem o flag important) deixa a previsao QUEBRAR para baixo do botao. min-width da
+     respiro; o botao fica compacto (.monit-btn-embarque).
+     ═══════════════════════════════════════════════════════════════════════════ */
+  .monit-col-embarque {
+    min-width: 130px;
+    text-align: center;
+    white-space: normal;
+  }
+
+  .monit-btn-embarque {
+    font-size: 0.7rem;
+    padding: 2px 6px;
+    line-height: 1.15;
+    white-space: nowrap;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
 } /* End @layer modules */

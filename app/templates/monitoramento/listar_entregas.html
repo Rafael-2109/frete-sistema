@@ -591,11 +591,11 @@
             </div>
             {% endif %}
           </td>
-          <td>
+          <td class="monit-col-embarque">
             {# Botao com link para o embarque (acima da data) #}
             {% if e.embarque_id %}
               <a href="{{ url_for('embarques.visualizar_embarque', id=e.embarque_id) }}"
-                 class="btn btn-sm btn-outline-primary w-100 mb-1"
+                 class="btn btn-sm btn-outline-primary monit-btn-embarque w-100 mb-1"
                  target="_blank"
                  title="Ver embarque #{{ e.embarque_numero }}">
                 <i class="fas fa-truck-loading"></i> Embarque #{{ e.embarque_numero }}
