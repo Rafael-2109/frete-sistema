@@ -274,6 +274,19 @@ def register_cotacao_routes(bp):
                 _eh_multi_nf = ',' in _nf_raw
                 _nota_fiscal_unica = _nf_raw if _nf_raw and not _eh_multi_nf else None
 
+                # volumes (CarVia) = qtd REAL de motos via fonte canonica
+                # (max chassis, itens-modelo da NF; fallback qtd_total_motos da cotacao).
+                from app.carvia.services.documentos.motos_lote_service import (
+                    qtd_motos_carvia as _qtd_motos_carvia,
+                )
+                _motos_cv = _qtd_motos_carvia(
+                    separacao_lote_id=pedido.separacao_lote_id,
+                    nota_fiscal=_nota_fiscal_unica,
+                    carvia_cotacao_id=carvia_cot_id,
+                )
+                if _motos_cv > 0:
+                    carvia_volumes = _motos_cv
+
                 embarque_item = EmbarqueItem(
                     embarque_id=embarque.id,
                     separacao_lote_id=pedido.separacao_lote_id,

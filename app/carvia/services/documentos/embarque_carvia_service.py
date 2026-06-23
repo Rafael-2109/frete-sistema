@@ -116,8 +116,21 @@ class EmbarqueCarViaService:
         ).first()
         nf_peso = float(nf_obj.peso_bruto or 0) if nf_obj else 0
         nf_valor = float(nf_obj.valor_total or 0) if nf_obj else 0
-        nf_volumes = int(nf_obj.quantidade_volumes or 1) if nf_obj else 1
         nf_id = nf_obj.id if nf_obj else 0
+        # volumes = qtd REAL de motos da NF = max(chassis, Σ itens-modelo), a MESMA
+        # regra do Portal/Gerencial. `quantidade_volumes` (<transp>/<vol>/<qVol> do
+        # XML) e' volume FISICO de transporte, NAO a qtd de motos — so' serve de
+        # fallback quando a NF nao tem moto identificavel (taxa/acessorio).
+        nf_volumes = 1
+        if nf_obj:
+            from app.carvia.services.documentos.portal_status_service import (
+                CarviaPortalStatusService,
+            )
+            _motos_nf = CarviaPortalStatusService._qtd_motos_por_nf([nf_id]).get(nf_id, 0)
+            nf_volumes = (
+                int(_motos_nf) if _motos_nf and _motos_nf > 0
+                else int(nf_obj.quantidade_volumes or 1)
+            )
 
         lote_id_nf = f'CARVIA-NF-{nf_id}'
 

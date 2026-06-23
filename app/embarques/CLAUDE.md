@@ -176,6 +176,7 @@ O listener `atualizar_status_automatico` (`app/separacao/models.py`) NAO tem bra
 - **G3 — pallet teorico ≠ fisico**: nao usar `pallet_total`/`pallets` (teorico) para NF de pallet/controle PBR; usar o GRUPO 2 (`qtd_pallets_separados/trazidos`, `nf_pallet_*`).
 - **G4 — deteccao CarVia e DUPLA**: item e CarVia se `separacao_lote_id` comeca com `CARVIA-` OU tem `carvia_cotacao_id`. Filtrar so pelo prefixo perde itens com cotacao sem lote prefixado. Os 3 pontos (template, sync, docs) devem ficar alinhados.
 - **G5 — propagacao de `local_cd` ao anexar NF acontece FORA daqui**: em `app/utils/sincronizar_entregas_carvia.py` (realinha `EmbarqueItem.local_cd` ao `CarviaNf.local_cd`); o routes so chama o sincronizador.
+- **G6 — `volumes` tem 2 semanticas por dominio**: NACOM = volume FISICO manual (campo editavel na tela; ~0% preenchido em prod). CarVia = **qtd de MOTOS** (cada moto = 1 volume). A fonte canonica do volume CarVia e `motos_lote_service.qtd_motos_carvia` (= `max(chassis, Σ itens-modelo)` da NF; fallback `qtd_total_motos` da cotacao), aplicada em TODOS os pontos de escrita (`cotacao.fechar_frete`/`fechar_frete_grupo`/`incluir_em_embarque`, `pedidos.cotacao_manual`, `embarque_carvia_service.expandir_provisorio`). NUNCA usar `CarviaNf.quantidade_volumes` (`<vol>/<qVol>` do XML = volume de transporte, ≠ motos). O cabecalho de `visualizar_embarque` mostra `Embarque.total_volumes()` = soma desse campo (Nacom manual + motos CarVia). Backfill historico: `scripts/migrations/2026_06_23_backfill_volumes_motos_embarque_carvia.py`.
 
 ---
 

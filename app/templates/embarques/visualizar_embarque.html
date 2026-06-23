@@ -123,8 +123,9 @@
         Embarque #{{ embarque.numero }}
         <small class="text-muted">
           | Peso: {{ "%.0f"|format(embarque.total_peso_pedidos()) }} kg
-          | Valor: R$ {{ "%.2f"|format(embarque.total_valor_pedidos()) }} 
+          | Valor: R$ {{ "%.2f"|format(embarque.total_valor_pedidos()) }}
           | Pallet: {{ "%.2f"|format(embarque.total_pallet_pedidos()) }}
+          | Volumes: {{ embarque.total_volumes() }}
         </small>
       </h2>
       <div class="d-flex align-items-center gap-2">

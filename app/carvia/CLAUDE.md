@@ -92,7 +92,9 @@ app/carvia/
                    #   documentos/ (carvia_frete, conferencia, embarque_carvia,
                    #                linking, matching, nf_transferencia, operacao_cancel,
                    #                ssw_emissao, aprovacao_frete, anexo, comprovante,
-                   #                motos_lote [qtd_motos por lote p/ mapa Nacom, R1],
+                   #                motos_lote [qtd_motos por lote p/ mapa Nacom (so itens-modelo) +
+                   #                  qtd_motos_carvia/qtd_motos_de_item = fonte de EmbarqueItem.volumes
+                   #                  (max chassis,itens da NF; fallback qtd_total_motos cotacao), R1],
                    #                coleta, coleta_recebimento [coletas porta-a-porta],
                    #                portal_auth, portal_status [portal do cliente]) — 16
                    #   financeiro/ (conciliacao, csv_razao, historico_match, ofx, pagamento,
