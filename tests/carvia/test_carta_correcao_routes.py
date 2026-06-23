@@ -4,6 +4,7 @@ Login via patch('flask_login.utils._get_user') (padrao do projeto).
 """
 import io
 from unittest.mock import patch, MagicMock
+from werkzeug.datastructures import FileStorage
 
 from app import db as _db
 
@@ -56,3 +57,20 @@ def test_imprimir_cce_da_nf_retorna_html(db, client):
         resp = client.get(f'/carvia/cartas-correcao/imprimir?nf_id={nf.id}')
     assert resp.status_code == 200
     assert b'window.print' in resp.data  # sem CCe: pagina vazia mas valida
+
+
+def test_botao_imprimir_cce_aparece_com_cce(db, client):
+    """Com CCe anexada, o botao 'Imprimir CCe' aparece no detalhe da NF."""
+    from app.carvia.services.documentos.carta_correcao_service import (
+        CarviaCartaCorrecaoService,
+    )
+    nf = _nf('8803')
+    CarviaCartaCorrecaoService.criar(
+        'nf', nf.id,
+        FileStorage(stream=io.BytesIO(b'%PDF-1.4 x'), filename='c.pdf',
+                    content_type='application/pdf'), 'u')
+    db.session.commit()
+    with patch('flask_login.utils._get_user', return_value=_user()):
+        resp = client.get(f'/carvia/nfs/{nf.id}')
+    assert resp.status_code == 200
+    assert b'Imprimir CCe' in resp.data

@@ -67,6 +67,12 @@
                 <i class="fas fa-download"></i> PDF
             </button>
             {% endif %}
+            {% if cces_nf %}
+            <a href="{{ url_for('carvia.imprimir_cce', nf_id=nf.id) }}" target="_blank"
+               class="btn btn-outline-secondary btn-sm" title="Imprimir Cartas de Correcao">
+                <i class="fas fa-print"></i> Imprimir CCe ({{ cces_nf|length }})
+            </a>
+            {% endif %}
             {% if nf.status != 'CANCELADA' %}
             <button type="button" class="btn btn-outline-info btn-sm" title="Cotar frete"
                     id="btnCotarNf">
