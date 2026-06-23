@@ -407,6 +407,7 @@ def register_nf_routes(bp):
                 CarviaOperacaoNf.nf_id,
                 Embarque.id,
                 Embarque.numero,
+                Embarque.data_embarque,
             ).join(
                 CarviaFrete,
                 CarviaFrete.operacao_id == CarviaOperacaoNf.operacao_id,
@@ -417,9 +418,14 @@ def register_nf_routes(bp):
                 CarviaFrete.status != 'CANCELADO',
                 CarviaFrete.embarque_id.isnot(None),
             ).all()
-            for nf_id_e, emb_id, emb_num in rows_emb:
+            # data_embarque (carimbada na portaria) = saida fisica do CD.
+            # Presente => embarque "saiu"; badge fica verde com a data.
+            for nf_id_e, emb_id, emb_num, emb_data in rows_emb:
                 if nf_id_e not in embarque_por_nf:
-                    embarque_por_nf[nf_id_e] = {'id': emb_id, 'numero': emb_num}
+                    embarque_por_nf[nf_id_e] = {
+                        'id': emb_id, 'numero': emb_num,
+                        'data_embarque': emb_data,
+                    }
 
         return render_template(
             'carvia/nfs/listar.html',
