@@ -816,7 +816,7 @@ document.addEventListener('DOMContentLoaded', function() {
             
             // Seleciona/deseleciona todos os fretes do embarque
             document.querySelectorAll(`input[data-embarque-id="${embarqueId}"]`).forEach(item => {
-                if (item.name === 'fretes_selecionados' || item.name === 'despesas_selecionadas') {
+                if (item.name === 'fretes_selecionados' || item.name === 'despesas_selecionadas' || item.name === 'carvia_selecionados') {
                     item.checked = isChecked;
                 }
             });
@@ -833,7 +833,7 @@ document.addEventListener('DOMContentLoaded', function() {
             
             // Seleciona/deseleciona todos os itens da transportadora
             document.querySelectorAll(`input[data-transportadora-id="${transportadoraId}"]`).forEach(item => {
-                if (item.name === 'fretes_selecionados' || item.name === 'despesas_selecionadas') {
+                if (item.name === 'fretes_selecionados' || item.name === 'despesas_selecionadas' || item.name === 'carvia_selecionados') {
                     item.checked = isChecked;
                 }
             });

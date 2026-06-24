@@ -6746,11 +6746,12 @@ def api_auditoria_detalhes(chave_cte):
 @require_profiles('administrador', 'gerente_financeiro', 'financeiro', 'logistica')
 def exportar_fechamento_freteiros():
     """
-    Exporta fechamento de freteiros com 2 abas:
-    - Aba "Detalhamento": Dados individuais de cada frete/despesa
-    - Aba "Resumo": Totais por transportadora com dados bancários
+    Exporta fechamento de freteiros com 3 abas:
+    - Aba "Detalhamento": cada frete/despesa Nacom E CarVia (coluna "Operação" diferencia)
+    - Aba "Resumo Nacom": totais Nacom por transportadora com dados bancários
+    - Aba "Resumo Carvia": totais CarVia por transportadora com dados bancários
 
-    Filtros via query string: transportadora_id, data_criacao_de, data_criacao_ate
+    Filtros via query string: transportadora_id, data_criacao_de, data_criacao_ate, origem
     """
     from io import BytesIO
     import pandas as pd
@@ -6953,93 +6954,138 @@ def exportar_fechamento_freteiros():
     if not df_resumo.empty:
         df_resumo = df_resumo.sort_values("Transportadora", ascending=True)
 
-    # ========== 🆕 ABAS CARVIA (2026-06-12) ==========
-    # Mesmo Excel, abas separadas, mesmo range de datas (decisao Rafael):
-    # CarviaFaturaTransportadora de freteiros (lazy import — R1/R2 CarVia).
-    dados_detalhamento_carvia = []
+    # ========== 🆕 PARTE CARVIA — MESMA aba Detalhamento (coluna "Operação"=CARVIA) ==========
+    # Decisao Rafael (2026-06-24): 3 abas — Detalhamento (Nacom+CarVia, diferenciado
+    # pela coluna "Operação") | Resumo Nacom | Resumo Carvia. Os fretes E os custos de
+    # entrega CarVia entram na MESMA lista de Detalhamento; o Resumo Carvia fica em aba
+    # propria (com dados bancarios). Lazy import (R1/R2 CarVia). CarVia so entra quando
+    # NAO ha filtro de origem Nacom (NACOM/OP_ASSAI). Falha NAO e mais silenciosa.
     dados_resumo_carvia = []
-    try:
-        from app.carvia.models import CarviaFaturaTransportadora, CarviaFrete
+    if not origem_filtro:
+        try:
+            from app.carvia.models import CarviaFaturaTransportadora, CarviaFrete
 
-        query_cv = CarviaFaturaTransportadora.query.join(
-            Transportadora,
-            CarviaFaturaTransportadora.transportadora_id == Transportadora.id,
-        ).filter(Transportadora.freteiro == True)
+            query_cv = CarviaFaturaTransportadora.query.join(
+                Transportadora,
+                CarviaFaturaTransportadora.transportadora_id == Transportadora.id,
+            ).filter(Transportadora.freteiro == True)
 
-        if transportadora_id:
-            try:
-                query_cv = query_cv.filter(
-                    CarviaFaturaTransportadora.transportadora_id == int(transportadora_id)
-                )
-            except (ValueError, TypeError):
-                pass
-        if data_criacao_de:
-            try:
-                query_cv = query_cv.filter(
-                    CarviaFaturaTransportadora.criado_em
-                    >= datetime.strptime(data_criacao_de, "%Y-%m-%d")
-                )
-            except ValueError:
-                pass
-        if data_criacao_ate:
-            try:
-                dt_ate = datetime.strptime(data_criacao_ate, "%Y-%m-%d").replace(
-                    hour=23, minute=59, second=59
-                )
-                query_cv = query_cv.filter(CarviaFaturaTransportadora.criado_em <= dt_ate)
-            except ValueError:
-                pass
+            if transportadora_id:
+                try:
+                    query_cv = query_cv.filter(
+                        CarviaFaturaTransportadora.transportadora_id == int(transportadora_id)
+                    )
+                except (ValueError, TypeError):
+                    pass
+            if data_criacao_de:
+                try:
+                    query_cv = query_cv.filter(
+                        CarviaFaturaTransportadora.criado_em
+                        >= datetime.strptime(data_criacao_de, "%Y-%m-%d")
+                    )
+                except ValueError:
+                    pass
+            if data_criacao_ate:
+                try:
+                    dt_ate = datetime.strptime(data_criacao_ate, "%Y-%m-%d").replace(
+                        hour=23, minute=59, second=59
+                    )
+                    query_cv = query_cv.filter(CarviaFaturaTransportadora.criado_em <= dt_ate)
+                except ValueError:
+                    pass
 
-        faturas_cv = query_cv.order_by(desc(CarviaFaturaTransportadora.criado_em)).all()
+            faturas_cv = query_cv.order_by(desc(CarviaFaturaTransportadora.criado_em)).all()
 
-        resumo_cv = {}
-        transp_cv_info = {}
-        for fatura_cv in faturas_cv:
-            fretes_cv = CarviaFrete.query.filter(
-                CarviaFrete.fatura_transportadora_id == fatura_cv.id,
-                CarviaFrete.status != "CANCELADO",
-            ).all()
-            transp_cv = db.session.get(Transportadora, fatura_cv.transportadora_id)
-            for frete_cv in fretes_cv:
-                valor_cv = float(frete_cv.valor_considerado or frete_cv.valor_cotado or 0)
-                dados_detalhamento_carvia.append({
-                    "CNPJ Transportadora": transp_cv.cnpj if transp_cv else "",
-                    "Transportadora": transp_cv.razao_social if transp_cv else "",
-                    "Operação": "CARVIA",
-                    "Tipo": "Frete",
-                    "Fatura": fatura_cv.numero_fatura,
-                    "Embarque": frete_cv.embarque_id or "",
-                    "NFs": frete_cv.numeros_nfs or "",
-                    "Cliente": frete_cv.nome_destino or "",
-                    "Valor NFs": formatar_valor_br(float(frete_cv.valor_total_nfs or 0)),
-                    "Peso NFs": formatar_valor_br(float(frete_cv.peso_total or 0)),
-                    "Valor Frete/Despesa": formatar_valor_br(valor_cv),
+            resumo_cv = {}
+            transp_cv_info = {}
+            for fatura_cv in faturas_cv:
+                transp_cv = db.session.get(Transportadora, fatura_cv.transportadora_id)
+                fretes_cv = CarviaFrete.query.filter(
+                    CarviaFrete.fatura_transportadora_id == fatura_cv.id,
+                    CarviaFrete.status != "CANCELADO",
+                ).all()
+
+                # Fretes CarVia -> mesma aba Detalhamento (Operação=CARVIA)
+                for frete_cv in fretes_cv:
+                    valor_cv = float(frete_cv.valor_considerado or frete_cv.valor_cotado or 0)
+                    sub_cv = frete_cv.subcontratos.first()
+                    doc_cv = (
+                        sub_cv.cte_numero if sub_cv and sub_cv.cte_numero
+                        else (f"EMB-{frete_cv.embarque_id}" if frete_cv.embarque_id else "")
+                    )
+                    dados_detalhamento.append({
+                        "CNPJ Transportadora": transp_cv.cnpj if transp_cv else "",
+                        "Transportadora": transp_cv.razao_social if transp_cv else "",
+                        "Operação": "CARVIA",
+                        "Tipo": "Frete",
+                        "Fatura": fatura_cv.numero_fatura,
+                        "CTE": doc_cv,
+                        "NFs": frete_cv.numeros_nfs or "",
+                        "Cliente": frete_cv.nome_destino or "",
+                        "Valor NFs": formatar_valor_br(float(frete_cv.valor_total_nfs or 0)),
+                        "Peso NFs": formatar_valor_br(float(frete_cv.peso_total or 0)),
+                        "Valor Frete/Despesa": formatar_valor_br(valor_cv),
+                        "Transp. Original (Frete)": "",
+                    })
+                    if transp_cv:
+                        transp_cv_info[transp_cv.id] = transp_cv
+                        resumo_cv[transp_cv.id] = resumo_cv.get(transp_cv.id, 0) + valor_cv
+
+                # Custos de entrega CarVia (xerox DespesaExtra Nacom) -> mesma aba
+                for custo_cv in fatura_cv.todos_custos_entrega():
+                    if (custo_cv.status or "").upper() == "CANCELADO":
+                        continue
+                    valor_custo = float(custo_cv.valor or 0)
+                    frete_do_custo = (
+                        db.session.get(CarviaFrete, custo_cv.frete_id)
+                        if custo_cv.frete_id else None
+                    )
+                    dados_detalhamento.append({
+                        "CNPJ Transportadora": transp_cv.cnpj if transp_cv else "",
+                        "Transportadora": transp_cv.razao_social if transp_cv else "",
+                        "Operação": "CARVIA",
+                        "Tipo": custo_cv.tipo_custo or "Custo de Entrega",
+                        "Fatura": fatura_cv.numero_fatura,
+                        "CTE": custo_cv.numero_documento or "",
+                        "NFs": (frete_do_custo.numeros_nfs if frete_do_custo else "") or "",
+                        "Cliente": custo_cv.descricao or (frete_do_custo.nome_destino if frete_do_custo else "") or "",
+                        "Valor NFs": formatar_valor_br(float(frete_do_custo.valor_total_nfs or 0) if frete_do_custo else 0),
+                        "Peso NFs": formatar_valor_br(float(frete_do_custo.peso_total or 0) if frete_do_custo else 0),
+                        "Valor Frete/Despesa": formatar_valor_br(valor_custo),
+                        "Transp. Original (Frete)": "",
+                    })
+                    if transp_cv:
+                        transp_cv_info[transp_cv.id] = transp_cv
+                        resumo_cv[transp_cv.id] = resumo_cv.get(transp_cv.id, 0) + valor_custo
+
+            for transp_id_cv, valor_total_cv in resumo_cv.items():
+                t = transp_cv_info[transp_id_cv]
+                tipo_conta_cv = ""
+                if t.tipo_conta:
+                    tipo_conta_cv = t.tipo_conta.replace("corrente", "Corrente").replace("poupanca", "Poupança")
+                dados_resumo_carvia.append({
+                    "CNPJ": t.cnpj or "",
+                    "Transportadora": t.razao_social or "",
+                    "Banco": t.banco or "",
+                    "Agência": t.agencia or "",
+                    "Conta": t.conta or "",
+                    "Tipo Conta": tipo_conta_cv,
+                    "PIX": t.pix or "",
+                    "CPF/CNPJ Favorecido": t.cpf_cnpj_favorecido or "",
+                    "Obs. Financeira": t.obs_financ or "",
+                    "Valor Total": formatar_valor_br(valor_total_cv),
                 })
-                if transp_cv:
-                    transp_cv_info[transp_cv.id] = transp_cv
-                    resumo_cv[transp_cv.id] = resumo_cv.get(transp_cv.id, 0) + valor_cv
+        except Exception as e:
+            logger.exception("[FECHAMENTO_FRETEIROS] Falha ao montar a parte CarVia")
+            flash(
+                f"Erro ao gerar a parte CarVia do fechamento: {e}. "
+                "Exportação cancelada — corrija e tente novamente.",
+                "danger",
+            )
+            return redirect(url_for("fretes.listar_faturas"))
 
-        for transp_id_cv, valor_total_cv in resumo_cv.items():
-            t = transp_cv_info[transp_id_cv]
-            tipo_conta_cv = ""
-            if t.tipo_conta:
-                tipo_conta_cv = t.tipo_conta.replace("corrente", "Corrente").replace("poupanca", "Poupança")
-            dados_resumo_carvia.append({
-                "CNPJ": t.cnpj or "",
-                "Transportadora": t.razao_social or "",
-                "Banco": t.banco or "",
-                "Agência": t.agencia or "",
-                "Conta": t.conta or "",
-                "Tipo Conta": tipo_conta_cv,
-                "PIX": t.pix or "",
-                "CPF/CNPJ Favorecido": t.cpf_cnpj_favorecido or "",
-                "Obs. Financeira": t.obs_financ or "",
-                "Valor Total": formatar_valor_br(valor_total_cv),
-            })
-    except Exception as e:
-        logger.warning(f"[FECHAMENTO_FRETEIROS] Abas CarVia indisponiveis: {e}")
-
-    df_detalhamento_carvia = pd.DataFrame(dados_detalhamento_carvia)
+    # Detalhamento agora COMBINA Nacom + CarVia (coluna "Operação" diferencia)
+    df_detalhamento = pd.DataFrame(dados_detalhamento)
     df_resumo_carvia = pd.DataFrame(dados_resumo_carvia)
     if not df_resumo_carvia.empty:
         df_resumo_carvia = df_resumo_carvia.sort_values("Transportadora", ascending=True)
@@ -7054,23 +7100,20 @@ def exportar_fechamento_freteiros():
 
     output = BytesIO()
     with pd.ExcelWriter(output, engine="openpyxl") as writer:
-        # Aba 1: Detalhamento
+        # Aba 1: Detalhamento (Nacom + CarVia — coluna "Operação" diferencia)
         if not df_detalhamento.empty:
             df_detalhamento.to_excel(writer, index=False, sheet_name="Detalhamento")
             _ajustar_larguras(writer, df_detalhamento, "Detalhamento")
 
-        # Aba 2: Resumo
+        # Aba 2: Resumo Nacom (totais por transportadora, com dados bancarios)
         if not df_resumo.empty:
-            df_resumo.to_excel(writer, index=False, sheet_name="Resumo por Transportadora")
-            _ajustar_larguras(writer, df_resumo, "Resumo por Transportadora")
+            df_resumo.to_excel(writer, index=False, sheet_name="Resumo Nacom")
+            _ajustar_larguras(writer, df_resumo, "Resumo Nacom")
 
-        # 🆕 Abas 3/4: CarVia (mesmo arquivo, abas separadas)
-        if not df_detalhamento_carvia.empty:
-            df_detalhamento_carvia.to_excel(writer, index=False, sheet_name="Detalhamento CarVia")
-            _ajustar_larguras(writer, df_detalhamento_carvia, "Detalhamento CarVia")
+        # Aba 3: Resumo Carvia (totais por transportadora, com dados bancarios)
         if not df_resumo_carvia.empty:
-            df_resumo_carvia.to_excel(writer, index=False, sheet_name="Resumo CarVia")
-            _ajustar_larguras(writer, df_resumo_carvia, "Resumo CarVia")
+            df_resumo_carvia.to_excel(writer, index=False, sheet_name="Resumo Carvia")
+            _ajustar_larguras(writer, df_resumo_carvia, "Resumo Carvia")
 
     output.seek(0)
 
