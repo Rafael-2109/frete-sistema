@@ -95,6 +95,53 @@ Se nao houver sugestoes pendentes: escrever status SKIP e encerrar.
 
 ---
 
+## PASSO 1.5: RECONCILIAR PROPOSTAS JA IMPLEMENTADAS DEPOIS
+
+> **Motivo (gap descoberto em 2026-06-24):** a query do PASSO 1 filtra `NOT EXISTS v2`.
+> Uma vez que uma sugestao recebe v2 com `auto_implemented=false` (PROPOSTA — opcao C),
+> ela NUNCA mais e reavaliada — mesmo que o Rafael implemente a proposta depois. Caso real:
+> IMP-22-002 e IMP-22-004 foram propostos em 23/06 e implementados nos commits `3b26ebc02` /
+> `120f2f61d`, mas ficaram registrados como proposta (`auto_implemented=false`) ate a
+> reconciliacao manual. Este passo fecha o drift. E barato e idempotente (filtro `NOT EXISTS v3`).
+
+Query no Render Postgres (propostas ainda em aberto, ultimos 45 dias):
+
+```sql
+SELECT a.suggestion_key, a.title, v2.created_at AS proposta_em
+FROM agent_improvement_dialogue a
+JOIN agent_improvement_dialogue v2
+  ON v2.suggestion_key = a.suggestion_key AND v2.version = 2
+WHERE a.version = 1 AND a.author = 'agent_sdk'
+  AND v2.author = 'claude_code'
+  AND v2.status = 'responded'
+  AND COALESCE(v2.auto_implemented, false) = false
+  AND NOT EXISTS (
+      SELECT 1 FROM agent_improvement_dialogue v3
+      WHERE v3.suggestion_key = a.suggestion_key AND v3.version = 3
+  )
+  AND v2.created_at > now() - interval '45 days'
+ORDER BY v2.created_at;
+```
+
+Para CADA proposta retornada, verificar se virou codigo (a worktree ja esta sincronizada com
+`origin/main`):
+
+```bash
+git log --all --oneline --grep="<suggestion_key>"
+```
+
+- **Se houver commit** citando a `suggestion_key` (ou cujo escopo implementa claramente a
+  proposta): gravar **v3** via curl (PASSO 4) com `version: 3`, `author: "claude_code"`,
+  `status: "responded"`, `auto_implemented: true`, `affected_files` = arquivos do commit
+  (`git show --stat <sha>`) e `implementation_notes` citando o SHA. Registrar na secao
+  "Reconciliacao de propostas implementadas" do relatorio (PASSO 5.1) e no status.json.
+- **Se NAO houver commit**: deixar como esta (segue proposta pendente de implementacao pelo Rafael).
+
+Gastar no maximo uma verificacao `git log --grep` por proposta. Estas reconciliacoes contam
+em `suggestions_evaluated` do relatorio (subtotal proprio: "reconciliadas").
+
+---
+
 ## PASSO 2: AVALIAR CADA SUGESTAO
 
 Para cada sugestao retornada:
