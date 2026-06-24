@@ -1,6 +1,21 @@
 # Validador de Títulos x Bancos — Design
 
-> Status: aprovado pelo Marcus em 24/06/2026 (design). Aguarda revisão do spec e plano de implementação.
+> Status: **implementado** em 24/06/2026 na branch `feature/validador-titulos-bancos`.
+> 65 testes verdes + validação ponta a ponta contra a planilha real (duplicados 106/106).
+> Pendente: testar a tela rodando (precisa de Postgres/deploy) e fechar os 3 pontos abertos.
+
+## Estado da implementação (24/06/2026)
+
+| Componente | Arquivo | Status |
+|------------|---------|--------|
+| Normalizador NF-PARC | `app/financeiro/services/validador_titulos/normalizador.py` | ✅ 22 testes |
+| Parsers dos bancos | `.../parsers_bancos.py` | ✅ 15 testes + validado vs real |
+| Comparador (3 cruzamentos) | `.../comparador.py` | ✅ 12 testes |
+| CP-NACOM (recompras) | `.../cp_nacom.py` | ✅ 5 testes |
+| Faturamento (contas_a_receber) | `.../faturamento.py` | ✅ 4 testes |
+| Orquestrador | `.../service.py` | ✅ 2 testes |
+| Exportador Excel | `.../exportador.py` | ✅ 3 testes |
+| Rota + tela + menu | `app/financeiro/routes/validador_titulos.py`, `app/templates/financeiro/validador_titulos.html`, `_sidebar.html` | ✅ wiring validado |
 
 ## Contexto e problema
 
