@@ -34,7 +34,9 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/latest/toastr.min.css">
 
   <!-- Design System Nacom Goya - Layer System -->
-  <link rel="stylesheet" href="{{ 'css/main.css'|asset_url }}">
+  {# main.css servido com @import versionado (?v=hash) p/ furar o cache immutable
+     do Caddy quando um modulo CSS muda — ver app/utils/asset_bundler.py #}
+  <link rel="stylesheet" href="{{ url_for('main_css_versioned') }}">
   <!-- style.css removido - estilos migrados para css/utilities/_legacy.css -->
   <!-- premium-effects.css migrado para @import em main.css -->
 

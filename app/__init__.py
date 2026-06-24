@@ -567,6 +567,28 @@ def create_app(config_name=None):
 
             return response
 
+        @app.route('/assets/main.css')
+        def main_css_versioned(): # pyright: ignore[reportUnusedFunction]
+            """Serve o main.css com cada @import LOCAL versionado (?v=<hash>).
+
+            Necessario porque o Caddy marca /static/* como `immutable` (Caddyfile):
+            sem versao na URL, editar um modulo CSS nao invalida o cache do
+            navegador (ate 7 dias). Aqui o ?v= muda com o conteudo -> rebaixa so'
+            o que mudou, sem hard reload. Bundle leve (no-cache + ETag -> 304s).
+            Fallback: qualquer erro serve o main.css cru (comportamento legado).
+            """
+            from flask import Response, redirect, url_for
+            try:
+                from app.utils.asset_bundler import get_versioned_css
+                content, etag = get_versioned_css(app)
+            except Exception as e:
+                logger.warning(f"[CSS] bundler falhou ({e}); servindo main.css cru")
+                return redirect(url_for('static', filename='css/main.css'))
+            resp = Response(content, mimetype='text/css')
+            resp.set_etag(etag)
+            resp.headers['Cache-Control'] = 'no-cache'
+            return resp.make_conditional(request)
+
         @app.errorhandler(404)
         def handle_404(error): # pyright: ignore[reportUnusedFunction]
             """Captura erros 404 - não loga favicon e outros recursos estáticos"""

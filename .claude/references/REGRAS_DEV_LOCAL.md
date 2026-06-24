@@ -155,12 +155,17 @@ explodia flush por `detalhes_calculo` com Decimals vindos da `CalculadoraFrete`.
 3. **Badges de modulo**: no CSS do modulo (`_fretes.css`, `_financeiro.css`, `_manufatura.css`)
 4. **Cores**: SEMPRE usar design tokens (`var(--text)`, `var(--bg-light)`, etc.) — NUNCA hex hardcoded
 5. **Dark mode**: tokens adaptam automaticamente. Se precisar ajuste: `[data-bs-theme="light"]` selector
-6. **Cache-busting de `@import`**: `<link>` carrega só `css/main.css` via filtro `asset_url`
-   (`app/utils/template_filters.py`). `asset_url` hasheia o conteúdo de `main.css` **+ todos os
-   `@import` recursivamente** — por isso editar um `modules/_*.css` muda o `?v=` e o browser
-   rebaixa. **NUNCA reverter `asset_url` para hash só do arquivo-topo**: `main.css` nunca muda
-   (é só a lista de `@import`), então o hash congelaria e edições em módulos não chegariam ao
-   browser (cache servindo CSS velho). Em produção o hash é memoizado por processo; em dev recomputa.
+6. **Cache-busting de `@import` (Caddy `immutable`)**: o Caddy serve `/static/*` DIRETO do disco
+   com `Cache-Control: public, max-age=604800, immutable` (`Caddyfile`) — Flask NÃO intercepta o
+   arquivo CSS. `immutable` = o browser nunca revalida. Como os `@import` dentro do `main.css` têm
+   URL FIXA (sem `?v=`), editar um `modules/_*.css` NÃO muda a URL → o browser serve a versão velha
+   por 7 dias (nem F5 resolve). **Versionar só o `main.css` (via `asset_url`) NÃO basta**: rebaixa o
+   `main.css`, mas os `@import` internos continuam com URL fixa e cacheados.
+   **Solução:** o `main.css` é servido pela rota `/assets/main.css` (`app/__init__.py` →
+   `app/utils/asset_bundler.py`), que reescreve cada `@import` local para `/static/css/...?v=<hash>`.
+   Agora a URL do import muda com o conteúdo → o browser rebaixa só o que mudou, sem hard reload.
+   `asset_url` continua para JS / CSS-folha (arquivos sem `@import`). **Não voltar o `<link>` do
+   `base.html` para `main.css|asset_url`** — reintroduz o bug.
 
 | Arquivo | Papel |
 |---------|-------|
