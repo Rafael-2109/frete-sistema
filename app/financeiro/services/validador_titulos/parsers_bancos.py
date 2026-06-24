@@ -165,13 +165,17 @@ def extrair_boletos(linhas: List[list], banco: str) -> List[dict]:
     return boletos
 
 
-def ler_arquivo(caminho: str) -> List[list]:
-    """Le um arquivo xlsx/xlsm/xlsb/csv/txt e devolve a matriz de linhas (lista de listas)."""
+def ler_arquivo(caminho: str, aba: Optional[str] = None) -> List[list]:
+    """Le um arquivo xlsx/xlsm/xlsb/csv/txt e devolve a matriz de linhas.
+
+    Se `aba` for informado (planilhas Excel), seleciona a aba pelo nome de forma
+    tolerante (ignora espacos/hifens/maiusculas). CSV ignora `aba`.
+    """
     ext = os.path.splitext(caminho)[1].lower()
     if ext in (".xlsx", ".xlsm"):
-        return _ler_xlsx(caminho)
+        return _ler_xlsx(caminho, aba)
     if ext == ".xlsb":
-        return _ler_xlsb(caminho)
+        return _ler_xlsb(caminho, aba)
     if ext in (".csv", ".txt"):
         return _ler_csv(caminho)
     raise ValueError(
@@ -179,20 +183,34 @@ def ler_arquivo(caminho: str) -> List[list]:
     )
 
 
-def _ler_xlsx(caminho: str) -> List[list]:
+def _escolher_aba(nomes: List[str], aba: Optional[str]) -> str:
+    """Resolve o nome real da aba a partir de um alvo tolerante a formatacao."""
+    if aba is None:
+        return nomes[0]
+    alvo = _norm_col(aba)
+    for nome in nomes:
+        if _norm_col(nome) == alvo:
+            return nome
+    raise ValueError(
+        f"Aba '{aba}' nao encontrada no arquivo. Abas disponiveis: {nomes}."
+    )
+
+
+def _ler_xlsx(caminho: str, aba: Optional[str] = None) -> List[list]:
     from openpyxl import load_workbook
     wb = load_workbook(caminho, read_only=True, data_only=True)
     try:
-        ws = wb.active
+        nome = _escolher_aba(wb.sheetnames, aba)
+        ws = wb[nome]
         return [list(row) for row in ws.iter_rows(values_only=True)]
     finally:
         wb.close()
 
 
-def _ler_xlsb(caminho: str) -> List[list]:
+def _ler_xlsb(caminho: str, aba: Optional[str] = None) -> List[list]:
     from pyxlsb import open_workbook
     with open_workbook(caminho) as wb:
-        nome = wb.sheets[0]
+        nome = _escolher_aba(wb.sheets, aba)
         with wb.get_sheet(nome) as ws:
             return [[c.v for c in row] for row in ws.rows()]
 

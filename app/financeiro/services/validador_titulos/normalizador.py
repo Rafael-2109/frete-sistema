@@ -9,9 +9,12 @@ sao reduzidos a uma chave unica canonica:
 Exemplos: "146299/003" -> "146299-3", "148466-001" -> "148466-1".
 """
 
+import re
 from typing import Optional
 
 from app.financeiro.parcela_utils import parcela_to_int
+
+_FLOAT_INTEIRO = re.compile(r"^\d+\.0+$")
 
 
 def montar_nf_parc(identificador) -> Optional[str]:
@@ -51,3 +54,40 @@ def montar_nf_parc(identificador) -> Optional[str]:
         return None
 
     return f"{nf}-{parc_int}"
+
+
+def _limpar_nf(nf) -> str:
+    """Normaliza o numero da NF preservando zeros a esquerda.
+
+    Trata float vindo do Excel (2023.0 -> '2023') sem destruir zeros de
+    strings como '00106' (que NAO devem virar '106').
+    """
+    if nf is None:
+        return ""
+    if isinstance(nf, float) and nf.is_integer():
+        return str(int(nf))
+    if isinstance(nf, int):
+        return str(nf)
+    txt = str(nf).strip()
+    if _FLOAT_INTEIRO.match(txt):
+        txt = txt.split(".")[0]
+    return txt
+
+
+def montar_nf_parc_partes(nf, parcela) -> Optional[str]:
+    """
+    Monta a chave NF-PARC quando NF e parcela vem em colunas separadas
+    (faturamento `contas_a_receber` e aba CP-NACOM).
+
+    Returns:
+        str "NF-PARC" ou None se NF vazia ou parcela invalida/ausente.
+    """
+    nf_limpo = _limpar_nf(nf)
+    if not nf_limpo:
+        return None
+
+    parc_int = parcela_to_int(parcela)
+    if parc_int is None:
+        return None
+
+    return f"{nf_limpo}-{parc_int}"

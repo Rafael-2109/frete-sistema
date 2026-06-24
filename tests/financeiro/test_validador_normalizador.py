@@ -8,7 +8,10 @@ Casos reais extraidos do gabarito da planilha W:\\VALIDADOR TITULOS BANCOS.xlsb
 
 import pytest
 
-from app.financeiro.services.validador_titulos.normalizador import montar_nf_parc
+from app.financeiro.services.validador_titulos.normalizador import (
+    montar_nf_parc,
+    montar_nf_parc_partes,
+)
 
 
 class TestMontarNfParc:
@@ -71,3 +74,31 @@ class TestMontarNfParc:
 
     def test_nf_vazia_retorna_none(self):
         assert montar_nf_parc("/3") is None
+
+
+class TestMontarNfParcPartes:
+    """NF e parcela em colunas separadas (faturamento e CP-NACOM)."""
+
+    def test_strings_simples(self):
+        assert montar_nf_parc_partes("148990", "1") == "148990-1"
+
+    def test_parcela_float(self):
+        assert montar_nf_parc_partes("148990", 1.0) == "148990-1"
+
+    def test_nf_e_parcela_float_do_excel(self):
+        """No CP-NACOM, Titulo e Parc vem como float (2023.0, 10.0)."""
+        assert montar_nf_parc_partes(2023.0, 10.0) == "2023-10"
+
+    def test_preserva_zeros_a_esquerda_da_nf(self):
+        assert montar_nf_parc_partes("00106", "3") == "00106-3"
+
+    def test_espacos_sao_ignorados(self):
+        assert montar_nf_parc_partes(" 148990 ", " 2 ") == "148990-2"
+
+    def test_nf_vazia_retorna_none(self):
+        assert montar_nf_parc_partes(None, "1") is None
+        assert montar_nf_parc_partes("", "1") is None
+
+    def test_parcela_vazia_retorna_none(self):
+        assert montar_nf_parc_partes("148990", None) is None
+        assert montar_nf_parc_partes("148990", "") is None

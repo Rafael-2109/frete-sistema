@@ -154,6 +154,31 @@ class TestLerArquivo:
         with pytest.raises(ValueError):
             ler_arquivo(str(caminho))
 
+    def test_le_aba_nomeada_xlsx(self, tmp_path):
+        """Le uma aba especifica por nome (tolerante a espacos/hifens)."""
+        from openpyxl import Workbook
+        wb = Workbook()
+        wb.active.title = "RESUMO"
+        wb.active.append(["lixo"])
+        ws2 = wb.create_sheet("CP - NACOM")
+        ws2.append(["Titulo", "Parc"])
+        ws2.append(["2023", "10"])
+        caminho = tmp_path / "cp.xlsx"
+        wb.save(caminho)
+
+        linhas = ler_arquivo(str(caminho), aba="CP-NACOM")
+        assert linhas[0][0] == "Titulo"
+        assert linhas[1][0] == "2023"
+
+    def test_aba_inexistente_levanta_erro(self, tmp_path):
+        from openpyxl import Workbook
+        wb = Workbook()
+        wb.active.title = "RESUMO"
+        caminho = tmp_path / "cp.xlsx"
+        wb.save(caminho)
+        with pytest.raises(ValueError):
+            ler_arquivo(str(caminho), aba="CP-NACOM")
+
 
 class TestParsearArquivoIntegracao:
     """parsear_arquivo: le o arquivo e extrai boletos (ponta a ponta de um banco)."""
