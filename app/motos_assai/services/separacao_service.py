@@ -1313,7 +1313,9 @@ def finalizar_separacao_com_decisao(
 # sep candidata, retorna ok=False (fallback para _calcular_match).
 
 
-def ajustar_separacao_pela_nf(nf_id: int, operador_id: int) -> Dict[str, Any]:
+def ajustar_separacao_pela_nf(
+    nf_id: int, operador_id: int, pedido_id: Optional[int] = None,
+) -> Dict[str, Any]:
     """Ajusta separacao(oes) para refletir a NF Q.P.A. (fonte de verdade) v2.
 
     Plano 3 Tasks 4-5:
@@ -1322,6 +1324,13 @@ def ajustar_separacao_pela_nf(nf_id: int, operador_id: int) -> Dict[str, Any]:
     - A11: gera Excel versao 1 quando sep e nascida via NF
     - S19=b: NF parcial (chassis mistos) cria sep parcial + divergencias
     - N-M5: idempotente em relacao a NFs ja processadas
+
+    Args:
+        pedido_id: quando fornecido (caller `vincular_nf_manualmente`, que JA
+            validou o pedido + cabecalho AssaiPedidoVendaLoja na loja do CNPJ),
+            tem prioridade sobre a inferencia automatica. Curto-circuita o branch
+            ambiguo S1=b — D8 IMP-2026-06-23-011. None = inferir pela NF (default,
+            comportamento dos callers PDF / dados estruturados inalterado).
 
     Returns:
         {
@@ -1441,40 +1450,48 @@ def ajustar_separacao_pela_nf(nf_id: int, operador_id: int) -> Dict[str, Any]:
     # M2 (2026-05-12): derivar pedido_id provavel da NF a partir dos chassis.
     # Filtrando candidatas APENAS dentro do pedido inferido evita parar NF na
     # sep de OUTRO pedido da mesma loja.
-    pedidos_via_chassi = (
-        db.session.query(AssaiSeparacao.pedido_id, func.count(AssaiSeparacaoItem.id))
-        .join(AssaiSeparacaoItem, AssaiSeparacaoItem.separacao_id == AssaiSeparacao.id)
-        .filter(
-            AssaiSeparacaoItem.chassi.in_(chassis_filtrados),
-            AssaiSeparacao.status.in_([
-                SEPARACAO_STATUS_EM_SEPARACAO, SEPARACAO_STATUS_FECHADA,
-                SEPARACAO_STATUS_CARREGADA,
-            ]),
-            AssaiSeparacao.loja_id == nf.loja_id,
-        )
-        .group_by(AssaiSeparacao.pedido_id)
-        .order_by(func.count(AssaiSeparacaoItem.id).desc())
-        .all()
-    )
-    pedido_inferido_id = None
-    if pedidos_via_chassi:
-        pedido_inferido_id = pedidos_via_chassi[0][0]
-    else:
-        # Sem chassis ja separados — fallback: NAO restringir por pedido_id, mas
-        # exigir que apenas 1 pedido tenha sep ativa na loja para nao ficar ambiguo
-        pedidos_seps_loja = (
-            db.session.query(AssaiSeparacao.pedido_id)
+    #
+    # D8 IMP-2026-06-23-011 (2026-06-24): pedido_id explicito tem PRIORIDADE sobre
+    # a inferencia. `vincular_nf_manualmente` ja validou que o pedido existe e tem
+    # AssaiPedidoVendaLoja na loja do CNPJ destinatario; propaga-lo aqui curto-
+    # circuita tanto a inferencia automatica abaixo quanto o branch ambiguo S1=b
+    # (que exige EXATAMENTE 1 pedido ABERTO/PARCIAL na loja — falso negativo para
+    # NF de backfill em loja Sendas/Assai com >1 pedido vivo: 98/100 caiam ali).
+    pedido_inferido_id = pedido_id
+    if pedido_inferido_id is None:
+        pedidos_via_chassi = (
+            db.session.query(AssaiSeparacao.pedido_id, func.count(AssaiSeparacaoItem.id))
+            .join(AssaiSeparacaoItem, AssaiSeparacaoItem.separacao_id == AssaiSeparacao.id)
             .filter(
-                AssaiSeparacao.loja_id == nf.loja_id,
+                AssaiSeparacaoItem.chassi.in_(chassis_filtrados),
                 AssaiSeparacao.status.in_([
                     SEPARACAO_STATUS_EM_SEPARACAO, SEPARACAO_STATUS_FECHADA,
                     SEPARACAO_STATUS_CARREGADA,
                 ]),
+                AssaiSeparacao.loja_id == nf.loja_id,
             )
-            .distinct().all()
+            .group_by(AssaiSeparacao.pedido_id)
+            .order_by(func.count(AssaiSeparacaoItem.id).desc())
+            .all()
         )
-        if len(pedidos_seps_loja) == 1:
-            pedido_inferido_id = pedidos_seps_loja[0][0]
+        if pedidos_via_chassi:
+            pedido_inferido_id = pedidos_via_chassi[0][0]
+        else:
+            # Sem chassis ja separados — fallback: NAO restringir por pedido_id, mas
+            # exigir que apenas 1 pedido tenha sep ativa na loja para nao ficar ambiguo
+            pedidos_seps_loja = (
+                db.session.query(AssaiSeparacao.pedido_id)
+                .filter(
+                    AssaiSeparacao.loja_id == nf.loja_id,
+                    AssaiSeparacao.status.in_([
+                        SEPARACAO_STATUS_EM_SEPARACAO, SEPARACAO_STATUS_FECHADA,
+                        SEPARACAO_STATUS_CARREGADA,
+                    ]),
+                )
+                .distinct().all()
+            )
+            if len(pedidos_seps_loja) == 1:
+                pedido_inferido_id = pedidos_seps_loja[0][0]
 
     # S1=b (Plano 3 Task 5): se nenhum pedido inferido OU sem sep candidata,
     # tenta inferir pedido a partir de pedidos com loja ABERTOS e cria sep em FATURADA.

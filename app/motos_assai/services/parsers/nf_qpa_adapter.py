@@ -948,7 +948,14 @@ def vincular_nf_manualmente(
     # - S1=b cria sep em FATURADA se nao ha sep candidata
     # - A11 gera Excel versao 1
     # - Match natural detecta BATEU apos ajuste
-    resultado = ajustar_separacao_pela_nf(nf.id, operador_id)
+    #
+    # D8 IMP-2026-06-23-011: propaga o pedido_id JA VALIDADO acima (existe + tem
+    # AssaiPedidoVendaLoja na loja resolvida pelo CNPJ). Sem isso, a funcao
+    # re-inferia o pedido e, para NF de backfill (chassis em ESTOQUE, sem sep
+    # viva), caia no branch ambiguo S1=b — 98/100 NFs do fechamento Q.P.A.
+    # retornavam ok=False ('necessita escolha manual') mesmo o operador tendo
+    # escolhido o pedido. Com pedido_id explicito, a ambiguidade some por design.
+    resultado = ajustar_separacao_pela_nf(nf.id, operador_id, pedido_id=pedido_id)
 
     # Se ajuste OK, re-roda _calcular_match para fechar status=BATEU
     if resultado.get('ok'):

@@ -87,6 +87,26 @@ Valores validos para `--status`: RASCUNHO, COTADO, CONFIRMADO, FATURADO, CANCELA
 - Fluxo normal: RASCUNHO → COTADO → CONFIRMADO → FATURADO
 - Cancelar: qualquer status exceto FATURADO
 
+### 9. ESCRITA EM carvia_fretes — dry-run obrigatorio
+`atualizando_frete_carvia.py` e o UNICO script de ESCRITA desta skill. Persiste
+valores JA CALCULADOS (`valor_cotado`, `valor_considerado`, `valor_pago`,
+`valor_venda`, `tabela_nome_tabela`, `tabela_valor_kg`) em UM frete.
+- **dry-run e o DEFAULT**: sem `--confirmar` o script so mostra antes/depois e
+  faz rollback. SEMPRE rode o dry-run, mostre o antes/depois ao usuario e so
+  rode com `--confirmar` apos confirmacao explicita.
+- **NAO calcula frete**: o valor (peso cubado × tabela) vem de
+  `cotando_subcontrato_carvia.py`. Fluxo: cotar → pegar `valor_cotado` →
+  persistir. Nunca invente o valor (Regra 1).
+- **Gotcha UI lancar-cte** (IMP-2026-06-24-004): a tela
+  `/carvia/fretes/lancar-cte` exibe **V.Cotado** vindo de
+  `carvia_fretes.valor_cotado`, mas o campo **NAO e editavel na UI** quando nao
+  ha CTe vinculado. Antecipe isso: para corrigir um frete com tabela "0" /
+  `valor_cotado=0`, oriente direto para este script — NAO mande o usuario tentar
+  editar na tela.
+- `requer_aprovacao` e recalculado (regra |considerado−cotado|>R$5 ou
+  |considerado−pago|>R$5) e reportado em `requer_aprovacao.motivos`; o script
+  NAO auto-aprova.
+
 ---
 
 ## DECISION TREE - Qual Script Usar?
@@ -110,6 +130,7 @@ Valores validos para `--status`: RASCUNHO, COTADO, CONFIRMADO, FATURADO, CANCELA
 | **Opcoes de transportadora** | `cotando_subcontrato_carvia.py` | `--operacao 123 --listar-opcoes` |
 | **Ranking todas transportadoras** | `cotando_subcontrato_carvia.py` | `--operacao 123 --todas` |
 | **Detalhe de fatura especifica** | `consultando_faturas_carvia.py` | `--fatura 456` |
+| **Atualizar valor de frete** (WRITE; tabela "0"/valor_cotado=0) | `atualizando_frete_carvia.py` | `--frete-id 810 --valor-cotado 226.33 --tabela-nome "9-"` (add `--confirmar` p/ efetivar) |
 
 ### Regras de Decisao
 
@@ -127,6 +148,7 @@ Valores validos para `--status`: RASCUNHO, COTADO, CONFIRMADO, FATURADO, CANCELA
 | 1 | `consultando_operacoes_carvia.py` | Operacoes, subcontratos, resumo |
 | 2 | `consultando_faturas_carvia.py` | Faturas cliente e transportadora |
 | 3 | `cotando_subcontrato_carvia.py` | Cotacao de frete para subcontrato |
+| 4 | `atualizando_frete_carvia.py` | **WRITE** — atualiza valor_cotado/considerado/tabela de UM frete (dry-run default, `--confirmar` efetiva) |
 
 ---
 
@@ -154,6 +176,7 @@ Valores validos para `--status`: RASCUNHO, COTADO, CONFIRMADO, FATURADO, CANCELA
 | `carvia_faturas_transportadora` | consultando_faturas_carvia.py |
 | `transportadoras` | cotando_subcontrato_carvia.py |
 | `tabelas_frete` | cotando_subcontrato_carvia.py |
+| `carvia_fretes` | atualizando_frete_carvia.py (WRITE) |
 
 ---
 
