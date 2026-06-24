@@ -165,8 +165,23 @@ CD e FB.
 - **Validação ponta a ponta:** rodar com as bases reais e conferir que os números batem com
   a planilha atual (`FINAL` e `BOL x FAT`).
 
+## Achados da validação do normalizador (24/06/2026)
+
+Normalizador validado contra o gabarito real da planilha (coluna NF-PARC feita à mão):
+**814/826 batem exatamente.** AGIS 425/425, SRM 67/68, e os não-vazios de GRAFENO/VORTX.
+As 12 divergências reais são **dados sujos da planilha manual** (a decidir com Marcus):
+
+- **6× `00NNN-00P`** (só VORTX, ex. `00106-003`): normalizador gera `00106-3`; a planilha
+  gera `00106--3` (hífen duplo, artefato de fórmula). Decisão atual: **preservar zeros à
+  esquerda** da NF (não casar `00106` com `106`). Confirmar com Marcus.
+- **5× `NNN.0`** (só VORTX, ex. `147569.0`, `105.0`): a planilha "inventa" parcela = último
+  dígito (`105-5`). É lixo → normalizador retorna `None` (sinaliza conferência). Confirmar.
+- **1× SRM `147812`** sem parcela no documento: a parcela real está em coluna separada
+  (`PARCELA`) — o parser SRM deve usá-la como fallback.
+
 ## Pontos abertos para a implementação
 
 1. Amostra do **arquivo cru** baixado de cada banco (antes das fórmulas) — para os parsers.
 2. Exemplo real de **recompra** na aba `CP - NACOM` — confirmar formato do título/parcela.
 3. Filtro do **faturamento** em `contas_a_receber` (empresas, período, status).
+4. Os 12 casos de borda acima (zeros à esquerda, `NNN.0`, SRM sem parcela).
