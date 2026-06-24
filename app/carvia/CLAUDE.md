@@ -218,7 +218,7 @@ Conciliacao 100% de um documento altera automaticamente status (`PAGA`/`PAGO`/`R
 
 **Entidades com hard-delete admin ATIVO** (atualizado 2026-04-18 — B4 sprint hygiene):
 - `fatura-cliente` (FC) — bloqueia se `conciliado=True`
-- `fatura-transportadora` (FT) — bloqueia se ha `CarviaConciliacao`
+- `fatura-transportadora` (FT) — bloqueia se ha `CarviaConciliacao` **OU subcontrato com CTe REAL** (`cte_chave_acesso` OU `cte_numero` que nao seja `Sub-%` de freteiro). **Exclusao tambem liberada ao operador `sistema_carvia`** (nao so admin) via botao "Excluir" em `faturas_transportadora/visualizar.html` -> rota `excluir_fatura_transportadora` (`fatura_routes.py`), que reusa `AdminService.excluir_fatura_transportadora` (mesmo cascade/auditoria/guards). Paridade Nacom `fretes.excluir_fatura` (2026-06-24, IMP Talita)
 - `receita` — sem bloqueio adicional
 - `subcontrato-orfao` — apenas legado, sem `frete_id`
 
@@ -384,7 +384,7 @@ Lista apenas **gotchas nao-obvios**. Para campos completos, consultar schemas JS
 | `CarviaSubcontrato` | `valor_final` e @property. Conferencia MOVIDA para `CarviaFrete` (Phase C — ver [CONFERENCIA.md](CONFERENCIA.md)) |
 | `CarviaFrete` | Unidade de conferencia (Phase C) — ver [CONFERENCIA.md](CONFERENCIA.md) |
 | `CarviaFaturaCliente` | **UNIQUE(numero_fatura, cnpj_cliente)**. `cnpj_cliente` = CNPJ do **PAGADOR** (NAO beneficiario/CarVia). `status_conferencia` binario manual (Refator 2.1) |
-| `CarviaFaturaTransportadora` | **2 status independentes**: `status_conferencia` (documental) e `status_pagamento` (financeiro). Gate 1 + Gate 2 (ver [CONFERENCIA.md](CONFERENCIA.md)) |
+| `CarviaFaturaTransportadora` | **2 status independentes**: `status_conferencia` (documental) e `status_pagamento` (financeiro). Gate 1 + Gate 2 (ver [CONFERENCIA.md](CONFERENCIA.md)). **UNIQUE(numero_fatura, transportadora_id)** — `nova_fatura_transportadora` checa repetida ANTES do insert com msg amigavel (o constraint e rede de seguranca). Exclusao bloqueia se subcontrato com CTe real (ver R14) (2026-06-24) |
 | `CarviaCteComplementar` | SEM integracao financeira propria — financeiro e da `CarviaFaturaCliente`. Campos SSW populados pos-emissao 222 |
 | `CarviaCustoEntrega` | **Xerox de DespesaExtra Nacom** (fluxo compra). FK `fatura_transportadora_id` bloqueia conciliacao direta — pagamento via propagacao FT. Service: `CustoEntregaFaturaService`. **Status = PENDENTE/PAGO/CANCELADO** (2026-06-22: `VINCULADO_FT` REMOVIDO; o vinculo a FT e a FK `fatura_transportadora_id`, nao um status — CE PENDENTE com FK = sera pago junto da FT). Guards de "vinculado" agora checam a FK, nao o status |
 | `CarviaEmissaoCte` / `CarviaEmissaoCteComplementar` | Tracking de emissao SSW. Paths LOCAIS temporarios — S3 finais em `CarviaOperacao`/`CarviaCteComplementar`. Ver [SSW_INTEGRATION.md](SSW_INTEGRATION.md) |

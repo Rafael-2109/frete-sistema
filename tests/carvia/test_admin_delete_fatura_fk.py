@@ -101,6 +101,119 @@ def test_excluir_fatura_transportadora_com_frete_nao_quebra_fk(db):
     assert ce_db.status == 'PENDENTE'
 
 
+def _criar_subcontrato(db, transp, fatura, **kwargs):
+    from app.carvia.models import CarviaSubcontrato
+    sub = CarviaSubcontrato(
+        transportadora_id=transp.id,
+        fatura_transportadora_id=fatura.id,
+        status='FATURADO',
+        criado_por='test@bot',
+        **kwargs,
+    )
+    db.session.add(sub)
+    db.session.flush()
+    return sub
+
+
+def _criar_fatura_transp(db, transp, numero='FT-CTE-TEST'):
+    from app.carvia.models import CarviaFaturaTransportadora
+    fatura = CarviaFaturaTransportadora(
+        transportadora_id=transp.id,
+        numero_fatura=numero,
+        data_emissao=date(2026, 6, 24),
+        valor_total=500,
+        criado_por='test@bot',
+    )
+    db.session.add(fatura)
+    db.session.flush()
+    return fatura
+
+
+def test_excluir_ft_bloqueia_subcontrato_com_cte_numero(db):
+    """FT com subcontrato que tem CTe real (cte_numero) NAO pode ser excluida."""
+    from app.carvia.models import CarviaFaturaTransportadora
+    from app.carvia.services.admin.admin_service import AdminService
+
+    transp = _criar_transportadora(db)
+    fatura = _criar_fatura_transp(db, transp, 'FT-COM-CTE')
+    _criar_subcontrato(db, transp, fatura, cte_numero='135210')
+
+    svc = AdminService()
+    with patch.object(db.session, 'commit', db.session.flush):
+        resultado = svc.excluir_fatura_transportadora(
+            fatura.id, 'tentativa de exclusao com cte', 'test@bot',
+        )
+
+    assert resultado['sucesso'] is False
+    assert 'CTe' in resultado['mensagem']
+    # Fatura permanece
+    assert db.session.get(CarviaFaturaTransportadora, fatura.id) is not None
+
+
+def test_excluir_ft_bloqueia_subcontrato_com_chave_acesso(db):
+    """FT com subcontrato que tem cte_chave_acesso NAO pode ser excluida."""
+    from app.carvia.models import CarviaFaturaTransportadora
+    from app.carvia.services.admin.admin_service import AdminService
+
+    transp = _criar_transportadora(db)
+    fatura = _criar_fatura_transp(db, transp, 'FT-COM-CHAVE')
+    _criar_subcontrato(db, transp, fatura, cte_chave_acesso='3' * 44)
+
+    svc = AdminService()
+    with patch.object(db.session, 'commit', db.session.flush):
+        resultado = svc.excluir_fatura_transportadora(
+            fatura.id, 'tentativa de exclusao com chave', 'test@bot',
+        )
+
+    assert resultado['sucesso'] is False
+    assert db.session.get(CarviaFaturaTransportadora, fatura.id) is not None
+
+
+def test_excluir_ft_permite_subcontrato_sem_cte(db):
+    """FT cujo subcontrato NAO tem CTe pode ser excluida; sub volta a CONFIRMADO."""
+    from app.carvia.models import CarviaFaturaTransportadora, CarviaSubcontrato
+    from app.carvia.services.admin.admin_service import AdminService
+
+    transp = _criar_transportadora(db)
+    fatura = _criar_fatura_transp(db, transp, 'FT-SEM-CTE')
+    sub = _criar_subcontrato(db, transp, fatura, cte_numero=None)
+    sub_id = sub.id
+
+    svc = AdminService()
+    with patch.object(db.session, 'commit', db.session.flush):
+        resultado = svc.excluir_fatura_transportadora(
+            fatura.id, 'exclusao sem cte permitida', 'test@bot',
+        )
+
+    db.session.expire_all()
+    assert resultado['sucesso'] is True, resultado.get('mensagem')
+    assert db.session.get(CarviaFaturaTransportadora, fatura.id) is None
+    sub_db = db.session.get(CarviaSubcontrato, sub_id)
+    assert sub_db is not None
+    assert sub_db.fatura_transportadora_id is None
+    assert sub_db.status == 'CONFIRMADO'
+
+
+def test_excluir_ft_permite_subcontrato_freteiro_sub_numero(db):
+    """Subcontrato de freteiro grava 'Sub-###' em cte_numero — NAO e CTe real,
+    nao deve bloquear a exclusao."""
+    from app.carvia.models import CarviaFaturaTransportadora
+    from app.carvia.services.admin.admin_service import AdminService
+
+    transp = _criar_transportadora(db)
+    fatura = _criar_fatura_transp(db, transp, 'FT-FRETEIRO')
+    _criar_subcontrato(db, transp, fatura, cte_numero='Sub-007')
+
+    svc = AdminService()
+    with patch.object(db.session, 'commit', db.session.flush):
+        resultado = svc.excluir_fatura_transportadora(
+            fatura.id, 'exclusao freteiro sem cte real', 'test@bot',
+        )
+
+    assert resultado['sucesso'] is True, resultado.get('mensagem')
+    assert db.session.get(CarviaFaturaTransportadora, fatura.id) is None
+
+
 def test_excluir_fatura_cliente_com_frete_nao_quebra_fk(db):
     from app.carvia.models import CarviaFaturaCliente, CarviaFrete
     from app.carvia.services.admin.admin_service import AdminService

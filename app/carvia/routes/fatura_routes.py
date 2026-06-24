@@ -1579,6 +1579,24 @@ def register_fatura_routes(bp):
                 flash('Transportadora nao encontrada.', 'warning')
                 return redirect(url_for('carvia.nova_fatura_transportadora'))
 
+            # Bloqueia fatura repetida (mesmo numero + transportadora) com
+            # mensagem clara ANTES do insert — o UNIQUE constraint
+            # (uq_fatura_transp_num_transp) ja protege a integridade, mas o
+            # IntegrityError generico ("tente novamente") confundia o operador.
+            # IMP Talita 2026-06-24.
+            ja_existe = CarviaFaturaTransportadora.query.filter_by(
+                transportadora_id=transportadora_id,
+                numero_fatura=numero_fatura,
+            ).first()
+            if ja_existe:
+                flash(
+                    f'Ja existe a fatura Nº {numero_fatura} para '
+                    f'{transportadora.razao_social}. Lancamento de fatura '
+                    f'repetida bloqueado.',
+                    'warning',
+                )
+                return redirect(url_for('carvia.nova_fatura_transportadora'))
+
             try:
                 data_emissao = date.fromisoformat(data_emissao_str)
                 vencimento = date.fromisoformat(vencimento_str)
@@ -2232,6 +2250,49 @@ def register_fatura_routes(bp):
             ctes_complementares=ctes_complementares_ft,
             papeis=papeis,
         )
+
+    @bp.route('/faturas-transportadora/<int:fatura_id>/excluir', methods=['POST']) # type: ignore
+    @login_required
+    def excluir_fatura_transportadora(fatura_id): # type: ignore
+        """Exclui uma fatura de transportadora (operador CarVia).
+
+        Paridade Nacom (`fretes.excluir_fatura`): so permite quando NAO ha
+        subcontrato com CTe vinculado. Reusa
+        `AdminService.excluir_fatura_transportadora` — cascade (reverte
+        subcontratos -> CONFIRMADO, nullify FKs), auditoria e os bloqueios
+        (conciliacao + CTe, centralizados no service). Liberado para
+        `sistema_carvia` (nao mais admin-only) — decisao Rafael 2026-06-24.
+        """
+        if not getattr(current_user, 'sistema_carvia', False):
+            flash('Acesso negado.', 'danger')
+            return redirect(url_for('main.dashboard'))
+
+        motivo = (request.form.get('motivo') or '').strip()
+        if len(motivo) < 10:
+            flash('Motivo da exclusao obrigatorio (minimo 10 caracteres).', 'warning')
+            return redirect(url_for('carvia.detalhe_fatura_transportadora', fatura_id=fatura_id))
+
+        from app.carvia.services.admin.admin_service import AdminService
+        try:
+            resultado = AdminService().excluir_fatura_transportadora(
+                fatura_id, motivo, current_user.email,
+            )
+        except Exception as exc:  # noqa: BLE001 — nunca devolver HTTP 500 cru
+            db.session.rollback()
+            logger.exception(
+                "Erro ao excluir fatura transportadora #%s: %s", fatura_id, exc
+            )
+            flash(f'Erro ao excluir fatura: {exc}', 'danger')
+            return redirect(url_for('carvia.detalhe_fatura_transportadora', fatura_id=fatura_id))
+
+        if resultado['sucesso']:
+            flash(
+                f'{resultado["mensagem"]} (Auditoria #{resultado["auditoria_id"]})',
+                'success',
+            )
+            return redirect(url_for('carvia.listar_faturas_transportadora'))
+        flash(resultado['mensagem'], 'danger')
+        return redirect(url_for('carvia.detalhe_fatura_transportadora', fatura_id=fatura_id))
 
     # Rotas removidas (2026-05-07): editar_vencimento_fatura_transportadora,
     # atualizar_pdf_fatura_transportadora. Substituidas por

@@ -294,6 +294,33 @@ class AdminService:
                 'mensagem': 'Fatura bloqueada: possui conciliacoes bancarias. Desfaca primeiro.',
             }
 
+        # Bloqueio: subcontrato com CTe REAL vinculado (paridade Nacom
+        # excluir_fatura — nao excluir fatura cujo CTe ja foi lancado; cancele/
+        # desvincule o CTe antes). A FaturaTransportadora agrupa CarviaSubcontrato;
+        # o documento fiscal e o CTe do subcontratado (cte_numero do XML +
+        # cte_chave_acesso de 44 digitos). O fluxo de FRETEIRO grava em cte_numero
+        # o sequencial interno "Sub-###" (gerar_numero_sub, lancamento_freteiro_
+        # service) — NAO e CTe e NAO deve bloquear; por isso o filtro exclui o
+        # padrao 'Sub-%'. Subcontratos sem CTe sao apenas desvinculados abaixo.
+        subs_com_cte = CarviaSubcontrato.query.filter(
+            CarviaSubcontrato.fatura_transportadora_id == fatura_id,
+            db.or_(
+                CarviaSubcontrato.cte_chave_acesso.isnot(None),
+                db.and_(
+                    CarviaSubcontrato.cte_numero.isnot(None),
+                    ~CarviaSubcontrato.cte_numero.ilike('Sub-%'),
+                ),
+            ),
+        ).count()
+        if subs_com_cte > 0:
+            return {
+                'sucesso': False,
+                'mensagem': (
+                    f'Fatura bloqueada: ha {subs_com_cte} subcontrato(s) com CTe '
+                    f'vinculado. Cancele/desvincule o CTe primeiro.'
+                ),
+            }
+
         snapshot = self.serializar_entidade(fatura)
         itens = CarviaFaturaTransportadoraItem.query.filter_by(
             fatura_transportadora_id=fatura_id

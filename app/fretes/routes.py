@@ -2046,6 +2046,24 @@ def nova_fatura():
     """Cadastra nova fatura de frete"""
     form = FaturaFreteForm()
     if form.validate_on_submit():
+        # Bloqueia lançamento de fatura repetida (mesmo número + transportadora).
+        # IMP Talita 2026-06-24. Validação na aplicação — sem UNIQUE no banco:
+        # já existem duplicatas legítimas em produção (ex.: fechamentos de
+        # freteiro com numeração própria), que uma constraint quebraria.
+        transportadora_id_nova = request.form.get("transportadora_id")
+        if transportadora_id_nova and form.numero_fatura.data:
+            fatura_existente = FaturaFrete.query.filter_by(
+                transportadora_id=transportadora_id_nova,
+                numero_fatura=form.numero_fatura.data,
+            ).first()
+            if fatura_existente:
+                flash(
+                    f"❌ Já existe a fatura Nº {form.numero_fatura.data} para esta "
+                    f"transportadora. Lançamento de fatura repetida bloqueado.",
+                    "warning",
+                )
+                return render_template("fretes/nova_fatura.html", form=form)
+
         nova_fatura = FaturaFrete(
             transportadora_id=request.form.get("transportadora_id"),
             numero_fatura=form.numero_fatura.data,

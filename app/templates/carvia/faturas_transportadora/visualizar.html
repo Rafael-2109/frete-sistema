@@ -1,5 +1,4 @@
 {% extends "base.html" %}
-{% from 'carvia/_modal_admin_excluir.html' import modal_admin_excluir with context %}
 {% from 'carvia/_macros.html' import carvia_ref %}
 
 {% block title %}Visualizar Fatura Subcontrato - {{ fatura.numero_fatura }}{% endblock %}
@@ -24,9 +23,9 @@
                 <i class="fas fa-download"></i> PDF
             </button>
             {% endif %}
-            {% if current_user.perfil == 'administrador' %}
-            <button type="button" class="btn btn-outline-danger" data-bs-toggle="modal" data-bs-target="#modalAdminExcluir"
-                    title="Exclusao permanente (admin)">
+            {% if current_user.sistema_carvia %}
+            <button type="button" class="btn btn-outline-danger" data-bs-toggle="modal" data-bs-target="#modalExcluirFaturaTransp"
+                    title="Excluir fatura (bloqueada se houver subcontrato com CTe)">
                 <i class="fas fa-trash"></i> Excluir
             </button>
             {% endif %}
@@ -672,16 +671,65 @@
 {# Modal 'Vincular Custos de Entrega' removido — fluxo xerox Nacom: Despesas #}
 {# Extras sao criadas e vinculadas pelo CarviaFrete, nao pela FaturaTransportadora. #}
 
-{{ modal_admin_excluir(
-    entidade_tipo='fatura-transportadora',
-    entidade_id=fatura.id,
-    entidade_label='Fatura ' ~ fatura.numero_fatura,
-    impacto_cascade=[
-        'Itens da fatura',
-        'Subcontratos vinculados voltarao para CONFIRMADO',
-        'Movimentacao financeira e conciliacoes serao removidas',
-    ]
-) }}
+<!-- Modal Excluir Fatura Transportadora (operador CarVia, sistema_carvia) -->
+{% if current_user.sistema_carvia %}
+<div class="modal fade" id="modalExcluirFaturaTransp" tabindex="-1" aria-labelledby="modalExcluirFaturaTranspLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalExcluirFaturaTranspLabel">
+                    <i class="fas fa-exclamation-triangle text-danger"></i> Excluir Fatura
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <form method="POST" action="{{ url_for('carvia.excluir_fatura_transportadora', fatura_id=fatura.id) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="modal-body">
+                    <div class="alert alert-danger mb-3">
+                        <strong>ATENCAO:</strong> Esta acao e <strong>irreversivel</strong>.
+                        A fatura <strong>{{ fatura.numero_fatura }}</strong> sera excluida permanentemente.
+                    </div>
+                    <div class="alert alert-warning small mb-3">
+                        Bloqueada se houver <strong>subcontrato com CTe</strong> vinculado ou conciliacao bancaria.
+                        Subcontratos sem CTe voltam para CONFIRMADO (desvinculados).
+                    </div>
+                    <div class="mb-3">
+                        <label for="motivoExclusaoFT" class="form-label">
+                            <strong>Motivo da exclusao</strong> <span class="text-danger">*</span>
+                        </label>
+                        <textarea class="form-control" id="motivoExclusaoFT" name="motivo"
+                                  rows="3" required minlength="10"
+                                  placeholder="Descreva o motivo da exclusao (min. 10 caracteres)..."></textarea>
+                    </div>
+                    <div class="form-check mb-0">
+                        <input class="form-check-input" type="checkbox" id="confirmarExclusaoFT" required>
+                        <label class="form-check-label text-danger" for="confirmarExclusaoFT">
+                            Confirmo que entendo que esta acao e irreversivel
+                        </label>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-danger" id="btnConfirmarExclusaoFT" disabled>
+                        <i class="fas fa-trash-alt"></i> Excluir Permanentemente
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+<script>
+(function() {
+    const cb = document.getElementById('confirmarExclusaoFT');
+    const btn = document.getElementById('btnConfirmarExclusaoFT');
+    const mot = document.getElementById('motivoExclusaoFT');
+    if (!cb || !btn || !mot) return;
+    function upd() { btn.disabled = !(cb.checked && mot.value.trim().length >= 10); }
+    cb.addEventListener('change', upd);
+    mot.addEventListener('input', upd);
+})();
+</script>
+{% endif %}
 
 {# Modal "Atualizar PDF" removido (2026-05-07) — PDF e gerenciado pela
    tela `editar_fatura_transportadora` (paridade Nacom). #}
