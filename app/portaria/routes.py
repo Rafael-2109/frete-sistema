@@ -352,6 +352,18 @@ def _aplicar_efeitos_saida(registro):
                 )
             if hasattr(_g, 'carvia_w11_bloqueios'):
                 del _g.carvia_w11_bloqueios
+            # Fase 4: frete CarVia ainda nao gerado por ESPERAR a saida de outro CD
+            # (embarque misto VM+TM — frete dispara na ULTIMA saida). Nao e erro.
+            if _rel.get('frete_aguardando_cds'):
+                from app.utils.local_cd import label_local_cd as _label_cd
+                _cds_pend = ', '.join(
+                    _label_cd(c, curto=True) for c in _rel['frete_aguardando_cds']
+                )
+                flash(
+                    f"Frete CarVia aguardando a saida do(s) CD(s): {_cds_pend} "
+                    "(embarque misto — o frete gera na ULTIMA saida).",
+                    'info',
+                )
             # Fase 4 (falha visivel): reconciliacao com avisos -> sinaliza ao operador.
             if _rel.get('erros'):
                 flash(
@@ -954,6 +966,16 @@ def adicionar_embarque():
                     )
                 if hasattr(_g, 'carvia_w11_bloqueios'):
                     del _g.carvia_w11_bloqueios
+                if _rel.get('frete_aguardando_cds'):
+                    from app.utils.local_cd import label_local_cd as _label_cd
+                    _cds_pend = ', '.join(
+                        _label_cd(c, curto=True) for c in _rel['frete_aguardando_cds']
+                    )
+                    flash(
+                        f"Frete CarVia aguardando a saida do(s) CD(s): {_cds_pend} "
+                        "(embarque misto — o frete gera na ULTIMA saida).",
+                        'info',
+                    )
                 if _rel.get('erros'):
                     flash(
                         f"Reconciliacao CarVia com {len(_rel['erros'])} aviso(s) — "

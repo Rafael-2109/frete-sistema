@@ -115,6 +115,24 @@ def test_reconciliar_frete_cancela_orfao(db):
     assert frete.status == 'CANCELADO'
 
 
+def test_reconciliar_frete_aguardando_cd_nao_e_erro(db):
+    """Embarque MISTO (VM+TM) sem todas as saidas -> frete nao gera (gate 2-CD), mas e
+    ESPERADO: relatorio sinaliza frete_aguardando_cds, sem erro (Fase 4). O gate so
+    restringe embarque com itens em >1 CD (1-CD gera direto)."""
+    transp = mk_transportadora(db)
+    emb = mk_embarque(db, transp)  # sem ControlePortaria de saida
+    nf_vm = mk_nf(db, 'NF-AGV-' + uuid.uuid4().hex[:6])
+    nf_tm = mk_nf(db, 'NF-AGT-' + uuid.uuid4().hex[:6])
+    mk_embarque_item(db, emb, nf_vm.numero_nf, local_cd=LOCAL_CD_VICTORIO_MARCHEZINE)
+    mk_embarque_item(db, emb, nf_tm.numero_nf, local_cd=LOCAL_CD_TENENTE_MARQUES)
+
+    rel = _reconciliar(embarque_id=emb.id, gatilhos={'frete'})
+
+    assert rel.get('frete_aguardando_cds')   # CDs pendentes de saida listados
+    assert not rel['fretes']                 # frete nao gera ate a ultima saida
+    assert not rel['erros']                  # NAO e erro
+
+
 def test_reconciliar_embarque_inexistente_nao_quebra(db):
     rel = _reconciliar(embarque_id=999_999_999)
     assert rel is not None

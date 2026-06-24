@@ -144,14 +144,20 @@ def _sincronizar_item(item: EmbarqueItem) -> dict:
     pallets_antigo = item.pallets or 0
 
     # ========================================
-    # SKIP: Itens CarVia (gerenciados por expandir_provisorio, nao por sync)
+    # SKIP: Itens CarVia — CORRETO E OBRIGATORIO, NAO REMOVER.
+    # O peso/valor de um item CarVia e CANONICO na CRIACAO (factory
+    # criar_embarque_item_carvia) e mantido pelo reconciliar_embarque_carvia. CarVia NAO
+    # tem FaturamentoProduto nem Separacao — se este item caisse nos CASOS 1/2 abaixo, o
+    # peso/valor seria buscado em fontes inexistentes e ZERADO. O TOTAL do embarque
+    # (sincronizar_totais_embarque, soma de TODOS os itens ativos) JA inclui os itens
+    # CarVia com seu peso/valor proprio, entao o header reflete CarVia mesmo com este skip.
     # ========================================
     lote = item.separacao_lote_id or ''
     if lote.startswith('CARVIA-') or item.carvia_cotacao_id:
         return {
             'item_id': item.id,
             'pedido': item.pedido,
-            'fonte': 'CarVia (skip)',
+            'fonte': 'CarVia (skip — total no header inclui CarVia)',
             'alteracoes': {}
         }
 

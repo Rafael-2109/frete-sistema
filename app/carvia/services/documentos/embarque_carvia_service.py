@@ -180,6 +180,16 @@ def reconciliar_embarque_carvia(embarque_id, *, usuario='Sistema', gatilhos=None
         except Exception as e:  # noqa: BLE001
             relatorio['erros'].append(f'frete_lancar:{e}')
         relatorio['passos'].append('frete')
+        # Fase 4: distinguir "frete nao gerado" ESPERADO (gate 2-CD aguardando a ultima
+        # saida) de PROBLEMA. Da visibilidade ao bug #3 sem tratar a espera como erro.
+        if not relatorio['fretes']:
+            try:
+                from app.utils.local_cd import cds_pendentes_de_saida
+                pend = cds_pendentes_de_saida(embarque)
+                if pend:
+                    relatorio['frete_aguardando_cds'] = sorted(pend)
+            except Exception:  # noqa: BLE001
+                pass
 
     # 4. entregas (commita internamente; ve o frete recem-criado; reconcilia local_cd por NF)
     if 'entregas' in gatilhos:
