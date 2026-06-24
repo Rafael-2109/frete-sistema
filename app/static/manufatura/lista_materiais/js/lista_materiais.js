@@ -18,6 +18,14 @@ const ListaMateriais = {
     },
 
     /**
+     * Token CSRF da meta tag — obrigatório nos fetch POST/PUT/DELETE
+     * (o interceptor do base.html cobre apenas jQuery AJAX, não fetch)
+     */
+    getCsrfToken() {
+        return $('meta[name="csrf-token"]').attr('content') || '';
+    },
+
+    /**
      * Vincula eventos
      */
     bindEvents() {
@@ -139,10 +147,25 @@ const ListaMateriais = {
                 ? '<span class="badge badge-tem-estrutura">Tem Estrutura</span>'
                 : '<span class="badge badge-sem-estrutura">Sem Estrutura</span>';
 
+            // Quando o produto entrou na busca por causa de um COMPONENTE (e não pelo
+            // próprio nome/código), exibir o motivo do match.
+            let badgeMatch = '';
+            const matches = produto.match_componentes || [];
+            if (matches.length > 0) {
+                const titulo = matches
+                    .map(m => `${m.cod}${m.nome ? ' - ' + m.nome : ''}`)
+                    .join('; ')
+                    .replace(/"/g, '&quot;');
+                const resumo = matches.map(m => m.cod).join(', ');
+                badgeMatch = `<br><span class="badge bg-info text-dark mt-1" title="${titulo}">
+                    <i class="fas fa-puzzle-piece"></i> contém: ${resumo}
+                </span>`;
+            }
+
             tbody.append(`
                 <tr data-cod-produto="${produto.cod_produto}" class="tr-produto-clicavel" style="cursor: pointer;">
                     <td><strong>${produto.cod_produto}</strong></td>
-                    <td>${produto.nome_produto}</td>
+                    <td>${produto.nome_produto}${badgeMatch}</td>
                     <td>${badgeEstrutura}</td>
                     <td>
                         <i class="fas fa-chevron-down text-primary"></i>
@@ -185,6 +208,16 @@ const ListaMateriais = {
     async carregarEstrutura(codProduto, $linhaClicada) {
         console.log(`🔍 carregarEstrutura chamado para: ${codProduto}`);
         this.produtoAtual = codProduto;
+
+        // Re-localizar a linha do produto quando chamado sem referência
+        // (ex: reload após salvar/editar/remover componente)
+        if (!$linhaClicada || !$linhaClicada.length) {
+            $linhaClicada = $(`.tr-produto-clicavel[data-cod-produto="${codProduto}"]`).first();
+        }
+        if (!$linhaClicada || !$linhaClicada.length) {
+            console.warn(`⚠️ Linha do produto ${codProduto} não está visível; reload ignorado.`);
+            return;
+        }
 
         // Remover linha de estrutura anterior se existir
         $('.linha-estrutura-bom').remove();
@@ -363,7 +396,12 @@ const ListaMateriais = {
                     </td>
                     <td class="bom-col-acoes text-center">
                         <div class="btn-group btn-group-sm" role="group">
-                            <button class="btn btn-outline-primary btn-sm" title="Editar">
+                            <button class="btn btn-outline-primary btn-sm btn-editar"
+                                    data-id="${comp.id}"
+                                    data-cod="${comp.cod_produto_componente}"
+                                    data-qtd="${comp.qtd_utilizada}"
+                                    data-versao="${comp.versao || 'v1'}"
+                                    title="Editar">
                                 <i class="fas fa-edit"></i>
                             </button>
                             <button class="btn btn-outline-danger btn-sm btn-remover" data-id="${comp.id}" title="Remover">
@@ -567,6 +605,18 @@ const ListaMateriais = {
                     </tr>
                 `);
             }
+        });
+
+        // Botão editar
+        $('.btn-editar').off('click').on('click', (e) => {
+            e.stopPropagation();
+            const $btn = $(e.currentTarget);
+            this.abrirModalComponente({
+                id: $btn.data('id'),
+                cod_produto_componente: $btn.data('cod'),
+                qtd_utilizada: $btn.data('qtd'),
+                versao: $btn.data('versao')
+            });
         });
 
         // Botão remover
@@ -911,7 +961,10 @@ const ListaMateriais = {
 
             const response = await fetch(url, {
                 method: method,
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': this.getCsrfToken()
+                },
                 body: JSON.stringify(dados)
             });
 
@@ -947,7 +1000,8 @@ const ListaMateriais = {
     async removerComponente(componenteId) {
         try {
             const response = await fetch(`/manufatura/api/lista-materiais/${componenteId}`, {
-                method: 'DELETE'
+                method: 'DELETE',
+                headers: { 'X-CSRFToken': this.getCsrfToken() }
             });
 
             const data = await response.json();

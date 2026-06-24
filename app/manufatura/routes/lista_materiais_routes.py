@@ -679,7 +679,10 @@ def register_lista_materiais_routes(bp):
         Lista todos os produtos que podem ter estrutura (produto_produzido=True)
 
         Query Params:
-            - busca: Texto para filtrar por código ou nome (opcional)
+            - busca: Texto para filtrar por código ou nome (opcional). A busca casa
+              tanto no PRÓPRIO produto produzido quanto nos COMPONENTES contidos nele:
+              um produto acabado aparece se algum dos seus componentes (na BOM) casar
+              com o termo, mesmo que o código/nome do produto acabado não casem.
 
         Returns:
             {
@@ -689,78 +692,82 @@ def register_lista_materiais_routes(bp):
                         'cod_produto': str,
                         'nome_produto': str,
                         'tipo': str,
-                        'tem_estrutura': bool
+                        'tem_estrutura': bool,
+                        'match_componentes': [  # por que entrou na busca por componente
+                            {'cod': str, 'nome': str}
+                        ]
                     }
                 ],
                 'total': int
             }
         """
         try:
-            print("\n" + "="*80)
-            print("🔍 [LISTA MATERIAIS] Iniciando busca de produtos produzidos")
-            print("="*80)
-
             busca = request.args.get('busca', '').strip()
-            print(f"📝 Busca: '{busca}'")
 
-            # 🔍 DEBUG: Contar total de produtos
-            total_produtos = CadastroPalletizacao.query.filter_by(ativo=True).count()
-            print(f"📊 Total de produtos ativos no banco: {total_produtos}")
-            logger.info(f"🔍 Total de produtos ativos no banco: {total_produtos}")
-
-            # Query base
+            # Query base: apenas produtos que PODEM ter estrutura
             query = CadastroPalletizacao.query.filter_by(
                 produto_produzido=True,
                 ativo=True
             )
 
-            # 🔍 DEBUG: Contar produtos com produto_produzido=True
-            count_produzidos = query.count()
-            print(f"🏭 Produtos com produto_produzido=True: {count_produzidos}")
-            logger.info(f"🔍 Produtos com produto_produzido=True: {count_produzidos}")
-
-            # Filtro de busca
+            # Componentes (na BOM) que casaram com a busca, agrupados por produto
+            # produzido. Alimenta tanto o FILTRO por componente quanto o "motivo do
+            # match" exibido na UI.
+            componentes_match = {}
             if busca:
-                print(f"🔍 Aplicando filtro de busca: {busca}")
-                query = query.filter(
+                like = f'%{busca}%'
+
+                rows = db.session.query(
+                    ListaMateriais.cod_produto_produzido,
+                    ListaMateriais.cod_produto_componente,
+                    ListaMateriais.nome_produto_componente
+                ).filter(
+                    ListaMateriais.status == 'ativo',
                     db.or_(
-                        CadastroPalletizacao.cod_produto.ilike(f'%{busca}%'),
-                        CadastroPalletizacao.nome_produto.ilike(f'%{busca}%')
+                        ListaMateriais.cod_produto_componente.ilike(like),
+                        ListaMateriais.nome_produto_componente.ilike(like)
                     )
-                )
+                ).all()
+
+                for cod_prod, cod_comp, nome_comp in rows:
+                    componentes_match.setdefault(cod_prod, []).append({
+                        'cod': cod_comp,
+                        'nome': nome_comp
+                    })
+
+                # Casa no próprio produto OU contém componente que casa
+                condicoes = [
+                    CadastroPalletizacao.cod_produto.ilike(like),
+                    CadastroPalletizacao.nome_produto.ilike(like),
+                ]
+                if componentes_match:
+                    condicoes.append(
+                        CadastroPalletizacao.cod_produto.in_(list(componentes_match.keys()))
+                    )
+                query = query.filter(db.or_(*condicoes))
 
             produtos_db = query.order_by(CadastroPalletizacao.nome_produto).all()
-            print(f"✅ Produtos retornados pela query: {len(produtos_db)}")
-            logger.info(f"🔍 Produtos retornados pela query: {len(produtos_db)}")
+
+            # Pré-carrega quais produtos têm estrutura ativa (evita N+1 de db.exists()
+            # dentro do loop — relevante agora que a busca pode retornar mais produtos)
+            produzidos_com_estrutura = {
+                r[0] for r in db.session.query(
+                    ListaMateriais.cod_produto_produzido
+                ).filter(ListaMateriais.status == 'ativo').distinct().all()
+            }
 
             produtos = []
-            print(f"🔄 Processando {len(produtos_db)} produtos...")
-
-            for i, prod in enumerate(produtos_db, 1):
-                print(f"  [{i}/{len(produtos_db)}] Processando: {prod.cod_produto}")
-
-                # Verificar se tem estrutura cadastrada
-                tem_estrutura = db.session.query(
-                    db.exists().where(
-                        db.and_(
-                            ListaMateriais.cod_produto_produzido == prod.cod_produto,
-                            ListaMateriais.status == 'ativo'
-                        )
-                    )
-                ).scalar()
-
+            for prod in produtos_db:
                 classificacao = ServicoBOM._classificar_produto(prod.cod_produto)
-                print(f"      Tipo: {classificacao['tipo']} | Estrutura: {tem_estrutura}")
-
                 produtos.append({
                     'cod_produto': prod.cod_produto,
                     'nome_produto': prod.nome_produto,
                     'tipo': classificacao['tipo'],
-                    'tem_estrutura': tem_estrutura
+                    'tem_estrutura': prod.cod_produto in produzidos_com_estrutura,
+                    'match_componentes': componentes_match.get(prod.cod_produto, [])
                 })
 
-            print(f"✅ Total de produtos processados: {len(produtos)}")
-            print("="*80 + "\n")
+            logger.info(f"Lista de materiais: busca='{busca}' -> {len(produtos)} produtos")
 
             return jsonify({
                 'sucesso': True,
@@ -769,10 +776,7 @@ def register_lista_materiais_routes(bp):
             })
 
         except Exception as e:
-            print(f"\n❌ ERRO ao listar produtos produzidos: {e}")
-            import traceback
-            traceback.print_exc()
-            logger.error(f"Erro ao listar produtos produzidos: {e}")
+            logger.error(f"Erro ao listar produtos produzidos: {e}", exc_info=True)
             return jsonify({
                 'sucesso': False,
                 'erro': str(e)
