@@ -24,6 +24,7 @@ from flask_login import login_required
 from werkzeug.utils import secure_filename
 
 from app.financeiro.routes import financeiro_bp, UPLOAD_FOLDER
+from app.financeiro.routes.dashboard import requires_financeiro
 from app.financeiro.services.validador_titulos.parsers_bancos import BANCOS_SUPORTADOS
 from app.financeiro.services.validador_titulos.service import processar_validacao
 from app.financeiro.services.validador_titulos.exportador import gerar_excel
@@ -50,6 +51,7 @@ def _limpar_temporarios_antigos():
 
 @financeiro_bp.route("/validador-titulos/", methods=["GET"])
 @login_required
+@requires_financeiro
 def validador_titulos():
     """Tela inicial: formulario de upload das bases."""
     return render_template(
@@ -61,6 +63,7 @@ def validador_titulos():
 
 @financeiro_bp.route("/validador-titulos/processar", methods=["POST"])
 @login_required
+@requires_financeiro
 def validador_titulos_processar():
     """Recebe os uploads, roda os comparativos e mostra o resultado."""
     _limpar_temporarios_antigos()
@@ -115,6 +118,7 @@ def validador_titulos_processar():
 
 @financeiro_bp.route("/validador-titulos/download/<token>", methods=["GET"])
 @login_required
+@requires_financeiro
 def validador_titulos_download(token):
     """Baixa o Excel gerado no ultimo processamento (por token)."""
     nome = secure_filename(f"resultado_{token}.xlsx")

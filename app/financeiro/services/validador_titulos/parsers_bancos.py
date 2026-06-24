@@ -231,8 +231,11 @@ def _ler_csv(caminho: str) -> List[list]:
     try:
         dialect = csv.Sniffer().sniff(amostra, delimiters=";,\t")
     except csv.Error:
-        dialect = csv.excel
-        dialect.delimiter = ";"
+        # NAO mutar csv.excel (classe global -> poluiria o processo inteiro);
+        # subclasse local preserva os demais atributos do excel.
+        class _ExcelPontoVirgula(csv.excel):
+            delimiter = ";"
+        dialect = _ExcelPontoVirgula
     return [row for row in csv.reader(dados.splitlines(), dialect)]
 
 
