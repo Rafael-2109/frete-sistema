@@ -2436,6 +2436,35 @@ def executar_reconciliacao_teams():
         logger.error(f"❌ [TEAMS-RECONCILE] job falhou: {e}", exc_info=True)
 
 
+def executar_faturamento_diario_teams():
+    """Job (seg-sex 6h): envia a imagem do faturamento do mes corrente no Teams.
+
+    Gera o PNG (dias do mes + total do mes) a partir do Odoo (empresas CD+FB,
+    somente vendas, notas lancadas), sobe no S3 e entrega na conversa 1:1 do
+    destinatario via a mesma ponte proativa do bot. Best-effort, NUNCA derruba
+    o scheduler. Atras da flag FATURAMENTO_DIARIO_TEAMS_ENABLED.
+
+    Segue o padrao de `executar_reconciliacao_teams`: cria app por execucao +
+    dispose de conexoes (Render derruba SSL idle).
+    """
+    try:
+        from app import create_app, db
+        from app.faturamento.services.faturamento_diario_teams_service import (
+            enviar_faturamento_diario_teams,
+        )
+        app = create_app()
+        with app.app_context():
+            try:
+                db.session.close()
+                db.engine.dispose()
+            except Exception:
+                pass
+            res = enviar_faturamento_diario_teams()
+            logger.info(f"📊 [FAT-DIARIO] {res}")
+    except Exception as e:
+        logger.error(f"❌ [FAT-DIARIO] job falhou: {e}", exc_info=True)
+
+
 def main():
     """
     Função principal - inicializa services FORA do contexto e configura scheduler
@@ -2492,6 +2521,27 @@ def main():
         replace_existing=True
     )
     logger.info(f"   8. Reconciliação Teams: a cada {_teams_recon_min} min (re-entrega órfãs)")
+
+    # Faturamento diario no Teams (seg-sex): imagem do mes corrente + total
+    # enviada proativamente ao destinatario (Marcus). Default OFF ate validar
+    # em producao (flag FATURAMENTO_DIARIO_TEAMS_ENABLED).
+    if os.getenv("FATURAMENTO_DIARIO_TEAMS_ENABLED", "false").lower() in ("1", "true", "yes", "on"):
+        _fat_hour = int(os.getenv("FATURAMENTO_DIARIO_TEAMS_HOUR", "6"))
+        scheduler.add_job(
+            func=executar_faturamento_diario_teams,
+            trigger="cron",
+            day_of_week="mon-fri",
+            hour=_fat_hour,
+            minute=0,
+            id="faturamento_diario_teams",
+            name="Faturamento diario no Teams (seg-sex)",
+            max_instances=1,
+            misfire_grace_time=3600,
+            replace_existing=True,
+        )
+        logger.info(f"   9. Faturamento diário Teams: seg-sex às {_fat_hour:02d}:00 (ENABLED)")
+    else:
+        logger.info("   9. Faturamento diário Teams: DESABILITADO (FATURAMENTO_DIARIO_TEAMS_ENABLED=false)")
 
     logger.info("=" * 60)
     logger.info("✅ Scheduler configurado com TODAS as correções:")
