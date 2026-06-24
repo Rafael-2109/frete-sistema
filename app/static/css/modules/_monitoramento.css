@@ -919,6 +919,9 @@
   }
 
   .monit-btn-embarque {
+    /* display:block garante que a data/previsao SEMPRE caia para baixo do botao
+       (empilhamento determinístico, independente do white-space herdado). */
+    display: block;
     font-size: 0.7rem;
     padding: 2px 6px;
     line-height: 1.15;
@@ -926,6 +929,23 @@
     max-width: 100%;
     overflow: hidden;
     text-overflow: ellipsis;
+    /* CONTRASTE: o btn-outline-primary base é texto âmbar SEM fundo
+       (--amber-55 = hsl 60 75% 50%), que some no fundo claro da tabela.
+       Aqui (layer modules > base) trocamos por âmbar SÓLIDO + texto preto-fixo
+       (--black-fixed, nao-adaptativo) — contraste máximo em light e dark mode.
+       Tokens canônicos (policy P9: nada de hsl/rgb literal em CSS de módulo). */
+    background-color: var(--amber-55);
+    border-color: var(--amber-50);
+    color: var(--black-fixed);
+    font-weight: 600;
+  }
+
+  .monit-btn-embarque:hover,
+  .monit-btn-embarque:focus {
+    background-color: var(--amber-50);
+    border-color: var(--amber-50);
+    color: var(--black-fixed);
+    box-shadow: var(--shadow);
   }
 
 } /* End @layer modules */

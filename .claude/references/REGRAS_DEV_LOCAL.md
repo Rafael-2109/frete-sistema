@@ -155,6 +155,12 @@ explodia flush por `detalhes_calculo` com Decimals vindos da `CalculadoraFrete`.
 3. **Badges de modulo**: no CSS do modulo (`_fretes.css`, `_financeiro.css`, `_manufatura.css`)
 4. **Cores**: SEMPRE usar design tokens (`var(--text)`, `var(--bg-light)`, etc.) — NUNCA hex hardcoded
 5. **Dark mode**: tokens adaptam automaticamente. Se precisar ajuste: `[data-bs-theme="light"]` selector
+6. **Cache-busting de `@import`**: `<link>` carrega só `css/main.css` via filtro `asset_url`
+   (`app/utils/template_filters.py`). `asset_url` hasheia o conteúdo de `main.css` **+ todos os
+   `@import` recursivamente** — por isso editar um `modules/_*.css` muda o `?v=` e o browser
+   rebaixa. **NUNCA reverter `asset_url` para hash só do arquivo-topo**: `main.css` nunca muda
+   (é só a lista de `@import`), então o hash congelaria e edições em módulos não chegariam ao
+   browser (cache servindo CSS velho). Em produção o hash é memoizado por processo; em dev recomputa.
 
 | Arquivo | Papel |
 |---------|-------|

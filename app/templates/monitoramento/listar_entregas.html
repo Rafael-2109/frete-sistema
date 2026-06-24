@@ -522,24 +522,24 @@
                 <span class="badge bg-info" title="Emitente (remetente da carga)">Emit.</span>
                 {{ e._carvia_cnpj_emitente | cnpj_br if e._carvia_cnpj_emitente else '—' }}
               </small><br>
-              <small class="text-muted">{{ e._carvia_nome_emitente or '—' }}</small><br>
+              <small class="text-muted" title="{{ e._carvia_nome_emitente or '' }}">{{ (e._carvia_nome_emitente or '—')|truncate(40, True, '…', 0) }}</small><br>
               <small class="text-muted">
                 <span class="badge bg-success" title="Destinatario da carga">Dest.</span>
                 {{ e._carvia_cnpj_destinatario | cnpj_br if e._carvia_cnpj_destinatario else '—' }}
               </small><br>
-              <small class="text-muted">{{ e._carvia_nome_destinatario or e.cliente }}</small><br>
-              <small class="text-muted">👤 {{ e._carvia_nome_comercial or e.vendedor or 'Não informado' }}</small>
+              <small class="text-muted" title="{{ e._carvia_nome_destinatario or e.cliente or '' }}">{{ (e._carvia_nome_destinatario or e.cliente or '—')|truncate(40, True, '…', 0) }}</small><br>
+              <small class="text-muted" title="{{ e._carvia_nome_comercial or e.vendedor or '' }}">👤 {{ (e._carvia_nome_comercial or e.vendedor or 'Não informado')|truncate(40, True, '…', 0) }}</small>
             {% else %}
               <small class="text-muted">{{ e.cnpj_cliente }}{% if e.pedido_cliente %} | PC:{{ e.pedido_cliente }}{% endif %}</small><br>
-              {{ e.cliente }}<br>
-              <small class="text-muted">👤 {{ e.vendedor or 'Não informado' }}</small>
+              <span title="{{ e.cliente or '' }}">{{ e.cliente|truncate(40, True, '…', 0) if e.cliente else '' }}</span><br>
+              <small class="text-muted" title="{{ e.vendedor or '' }}">👤 {{ (e.vendedor or 'Não informado')|truncate(40, True, '…', 0) }}</small>
             {% endif %}
           </td>
           <td>
             {% if e.incoterm or e.modalidade %}
               <small class="text-muted">{{ e.incoterm or '' }}{% if e.incoterm and e.modalidade %} - {% endif %}{{ e.modalidade or '' }}</small><br>
             {% endif %}
-            <span title="{{ e.transportadora }}">{{ e.transportadora|truncate(50, True) if e.transportadora else '' }}</span><br>
+            <span title="{{ e.transportadora }}">{{ e.transportadora|truncate(30, True, '…', 0) if e.transportadora else '' }}</span><br>
             <small class="text-muted">{{ e.uf }} - {{ e.municipio }}</small>
             {% if e.origem != 'NACOM' %}
               {# 🏭 CD de expedicao (topico 4J) — SO p/ origem != NACOM #}

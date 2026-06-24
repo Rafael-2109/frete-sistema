@@ -98,6 +98,10 @@ def numero_br(valor, decimais=3):
         return f"0,{'0' * decimais}" if decimais > 0 else "0"
 
 
+_asset_hash_cache = {}  # filename -> hash (so populado quando debug=False)
+_IMPORT_RE = None       # regex compilada lazy para @import url(...)
+
+
 def asset_url(filename):
     """
     Filtro Jinja2 para versioning automatico de assets estaticos.
@@ -108,18 +112,73 @@ def asset_url(filename):
 
     Beneficio: Quando o arquivo muda, o hash muda automaticamente,
     forcando o navegador a baixar a versao nova.
+
+    IMPORTANTE — entry-points CSS com @import (ex: main.css):
+    o hash combina o conteudo do arquivo MAIS o de todos os @import
+    transitivos. Sem isso, editar um modulo importado (ex: _monitoramento.css)
+    NAO mudaria o hash de main.css (cujo proprio conteudo nunca muda),
+    e o navegador continuaria servindo o CSS antigo do cache. URLs http(s)
+    (fontes/CDN) sao ignoradas. Arquivos sem @import (JS, CSS folha) seguem
+    com o hash do proprio conteudo — comportamento retrocompativel.
+
+    Cache: em producao (debug=False) o resultado e memoizado por processo,
+    pois os assets sao imutaveis durante o ciclo de vida do worker. Em dev
+    (debug=True) recomputa a cada chamada para refletir edicoes ao vivo.
     """
     import hashlib
     import os
+    import re
     from flask import url_for
 
-    filepath = os.path.join(current_app.root_path, 'static', filename)
-    try:
-        with open(filepath, 'rb') as f:
-            file_hash = hashlib.md5(f.read()).hexdigest()[:8]
-        return f"{url_for('static', filename=filename)}?v={file_hash}"
-    except FileNotFoundError:
+    global _IMPORT_RE
+    if _IMPORT_RE is None:
+        _IMPORT_RE = re.compile(rb"""@import\s+url\(\s*['"]?([^'")]+)['"]?\s*\)""")
+
+    debug = bool(getattr(current_app, 'debug', False))
+    if not debug and filename in _asset_hash_cache:
+        return f"{url_for('static', filename=filename)}?v={_asset_hash_cache[filename]}"
+
+    static_root = os.path.join(current_app.root_path, 'static')
+    filepath = os.path.join(static_root, filename)
+
+    md5 = hashlib.md5()
+    visited = set()
+    found_any = [False]
+
+    def coletar(path):
+        real = os.path.realpath(path)
+        if real in visited:
+            return
+        visited.add(real)
+        try:
+            with open(path, 'rb') as f:
+                data = f.read()
+        except (FileNotFoundError, IsADirectoryError, OSError):
+            return
+        found_any[0] = True
+        md5.update(data)  # hash sempre do conteudo ORIGINAL (com comentarios)
+        # Expande @import apenas em arquivos CSS (entry-points como main.css)
+        if path.endswith('.css'):
+            base_dir = os.path.dirname(path)
+            # Ignora @import dentro de comentarios /* ... */ (ex: modulo desativado
+            # temporariamente) — so' a VARREDURA limpa comentarios; o hash acima usa
+            # o conteudo integral, entao alternar o comentario ainda muda o ?v=.
+            data_scan = re.sub(rb'/\*.*?\*/', b'', data, flags=re.DOTALL)
+            for m in _IMPORT_RE.finditer(data_scan):
+                ref = m.group(1).decode('utf-8', 'ignore').strip()
+                if not ref or ref.startswith('http://') or ref.startswith('https://') or ref.startswith('//'):
+                    continue  # CDN/fontes externas — fora do versionamento local
+                coletar(os.path.normpath(os.path.join(base_dir, ref)))
+
+    coletar(filepath)
+
+    if not found_any[0]:
         return url_for('static', filename=filename)
+
+    file_hash = md5.hexdigest()[:8]
+    if not debug:
+        _asset_hash_cache[filename] = file_hash
+    return f"{url_for('static', filename=filename)}?v={file_hash}"
 
 
 def register_template_filters(app):
