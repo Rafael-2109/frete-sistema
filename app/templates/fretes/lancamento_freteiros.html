@@ -302,7 +302,8 @@
                                                            value="{{ fc.id }}"
                                                            data-embarque-id="{{ embarque_id }}"
                                                            data-transportadora-id="{{ dados.freteiro.id }}"
-                                                           data-peso="0"
+                                                           data-peso="{{ fc.peso_total or 0 }}"
+                                                           data-valor-nf="{{ fc.valor_total_nfs or 0 }}"
                                                            data-valor-cotado="{{ fc.valor_cotado }}"
                                                            data-valor-considerado="{{ fc.valor_considerado }}">
                                                 </td>
@@ -470,7 +471,7 @@
                                                 <strong>{{ "{:,.2f}".format(dados.valor_cotado_total or 0) }}</strong>
                                             </td>
                                             <td style="text-align: right;" id="valor_considerado_fretes_transportadora_{{ dados.freteiro.id }}">
-                                                <strong>{{ "{:,.2f}".format(dados.total_valor - (dados.despesas_extras | sum(attribute='valor_despesa') if dados.despesas_extras else 0)) }}</strong>
+                                                <strong>{{ "{:,.2f}".format(dados.total_valor + (dados.total_carvia or 0) - (dados.despesas_extras | sum(attribute='valor_despesa') if dados.despesas_extras else 0)) }}</strong>
                                             </td>
                                             <td style="text-align: right;" id="valor_despesas_transportadora_{{ dados.freteiro.id }}">
                                                 {% set total_despesas = 0 %}
@@ -482,7 +483,7 @@
                                                 <strong>{{ "{:,.2f}".format(total_despesas) }}</strong>
                                             </td>
                                             <td class="text-end bg-success text-white" id="valor_total_final_transportadora_{{ dados.freteiro.id }}">
-                                                <strong>{{ "{:,.2f}".format(dados.total_valor) }}</strong>
+                                                <strong>{{ "{:,.2f}".format(dados.total_valor + (dados.total_carvia or 0)) }}</strong>
                                             </td>
                                         </tr>
                                     </tbody>
@@ -644,7 +645,16 @@ document.addEventListener('DOMContentLoaded', function() {
             valorCotadoTotalTransp += valorCotado;
             valorConsideradoTotalTransp += valorConsiderado;
         });
-        
+
+        // 🆕 CarVia entra no RESUMO GERAL da transportadora (era só Nacom)
+        document.querySelectorAll(`input[name="carvia_selecionados"][data-transportadora-id="${transportadoraId}"]`).forEach(fc => {
+            pesoTotalTransp += parseFloat(fc.getAttribute('data-peso') || 0);
+            valorNfTotalTransp += parseFloat(fc.getAttribute('data-valor-nf') || 0);
+            valorCotadoTotalTransp += parseFloat(fc.getAttribute('data-valor-cotado') || 0);
+            valorConsideradoTotalTransp += parseFloat(fc.getAttribute('data-valor-considerado-rateado') ||
+                                                      fc.getAttribute('data-valor-considerado') || 0);
+        });
+
         // Calcula totais das despesas extras
         todasDespesas.forEach(despesa => {
             const despesaId = despesa.getAttribute('data-despesa-id');
@@ -729,7 +739,16 @@ document.addEventListener('DOMContentLoaded', function() {
             valorCotadoTotalEmb += valorCotado;
             valorConsideradoTotalEmb += valorConsiderado;
         });
-        
+
+        // 🆕 CarVia entra na linha "Total" do embarque (era só Nacom)
+        document.querySelectorAll(`input[name="carvia_selecionados"][data-embarque-id="${embarqueId}"]`).forEach(fc => {
+            pesoTotalEmb += parseFloat(fc.getAttribute('data-peso') || 0);
+            valorNfTotalEmb += parseFloat(fc.getAttribute('data-valor-nf') || 0);
+            valorCotadoTotalEmb += parseFloat(fc.getAttribute('data-valor-cotado') || 0);
+            valorConsideradoTotalEmb += parseFloat(fc.getAttribute('data-valor-considerado-rateado') ||
+                                                   fc.getAttribute('data-valor-considerado') || 0);
+        });
+
         // Atualiza totalizadores do embarque
         const elementoPesoEmb = document.getElementById(`peso_total_embarque_${embarqueId}`);
         if (elementoPesoEmb) {

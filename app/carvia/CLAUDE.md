@@ -168,6 +168,8 @@ Apos alterar `peso_bruto` ou `peso_cubado`, OBRIGATORIO chamar `operacao.calcula
 
 **Distribuicao de peso entre itens e PROPORCIONAL**, NAO exata por unidade. Detalhes: [CONFERENCIA.md](CONFERENCIA.md).
 
+**Rateio DIRETA com peso 0 (fix 2026-06-24):** `_calcular_custo_rateio` rateia o frete do CAMINHÃO por peso (`proporcao = peso_grupo/peso_embarque`). Frete com `peso_grupo=0` (NF sem motos reconhecidas → cubado 0) recebe `valor_cotado=0` — NUNCA o frete inteiro. O bug antigo (`else: proporcao=1.0` quando `peso_grupo` era falsy) atribuía o frete do caminhão todo ao item de peso zero (E-VIBE NF 2044 embarque 6008 → R$12.000). NF de valor relevante + peso 0 = sintoma de motos NÃO reconhecidas (corrigir cubagem à parte). Correção de dados já gravados: `scripts/carvia/corrigir_rateio_peso_zero.py`. Teste: `tests/carvia/test_calculo_custo_rateio_diretra.py`.
+
 ### R4: Fluxo de status e irreversivel (exceto cancelamento)
 NUNCA mover status para tras. Cancelar e criar novo. CarVia opera em **2 dominios independentes** (venda/compra) com conferencia assimetrica (auto no custo, manual na venda). Detalhes completos: [CONFERENCIA.md](CONFERENCIA.md).
 
