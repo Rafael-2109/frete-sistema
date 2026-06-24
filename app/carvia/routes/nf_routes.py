@@ -22,6 +22,38 @@ from app.utils.timezone import agora_utc_naive
 logger = logging.getLogger(__name__)
 
 
+def _frete_id_por_nf(nf_ids):
+    """Mapeia nf_id -> id do CarviaFrete (nao cancelado) que cobre a NF, para o link
+    'ver frete' da listagem de NFs.
+
+    Resolve pelo MESMO criterio de `detalhe_nf` (numeros_nfs + cnpj emitente/destino),
+    e NAO pelo vinculo via CarviaOperacao (operacao_id). Antes a listagem juntava
+    `CarviaFrete.operacao_id == CarviaOperacaoNf.operacao_id`, entao uma NF com frete mas
+    AINDA sem CTe (operacao_id NULL) nao aparecia e o botao ficava "Sem frete" indevido,
+    apesar do CarviaFrete existir (caso NF 39147 / frete 803). R10-R13: a UI le o frete
+    REAL, nao a FK de operacao.
+    """
+    if not nf_ids:
+        return {}
+    from app.carvia.models import CarviaFrete
+    from sqlalchemy import any_
+
+    rows = db.session.query(
+        CarviaNf.id, func.min(CarviaFrete.id)
+    ).join(
+        CarviaFrete,
+        db.and_(
+            CarviaFrete.status != 'CANCELADO',
+            CarviaFrete.cnpj_emitente == CarviaNf.cnpj_emitente,
+            CarviaFrete.cnpj_destino == CarviaNf.cnpj_destinatario,
+            CarviaNf.numero_nf == any_(func.string_to_array(CarviaFrete.numeros_nfs, ',')),
+        )
+    ).filter(
+        CarviaNf.id.in_(nf_ids)
+    ).group_by(CarviaNf.id).all()
+    return {nf_id: frete_id for nf_id, frete_id in rows}
+
+
 def register_nf_routes(bp):
 
     @bp.route('/nfs')
@@ -298,20 +330,10 @@ def register_nf_routes(bp):
                         'ctrc_numero': ctrc_num, 'status': op_status,
                     })
 
-            # Query 5: Frete ID por NF (para indicador clicavel na listagem)
-            from app.carvia.models import CarviaFrete
-
-            rows_frete = db.session.query(
-                CarviaOperacaoNf.nf_id,
-                func.min(CarviaFrete.id).label('frete_id')
-            ).join(
-                CarviaFrete,
-                CarviaFrete.operacao_id == CarviaOperacaoNf.operacao_id
-            ).filter(
-                CarviaOperacaoNf.nf_id.in_(nf_ids),
-                CarviaFrete.status != 'CANCELADO'
-            ).group_by(CarviaOperacaoNf.nf_id).all()
-            frete_id_por_nf = {nf_id: frete_id for nf_id, frete_id in rows_frete}
+            # Query 5: Frete ID por NF (para indicador clicavel na listagem).
+            # Resolve por numeros_nfs + cnpj (mesmo criterio do detalhe), NAO via operacao
+            # — senao NF com frete mas sem CTe (op=None) fica "Sem frete". Ver _frete_id_por_nf.
+            frete_id_por_nf = _frete_id_por_nf(nf_ids)
 
             # Query 6: Cotacao ID por NF (via pedido_itens.numero_nf → pedido → cotacao)
             # numero_nf NAO e unique — multiplas NFs podem compartilhar o mesmo numero
