@@ -87,6 +87,33 @@
             </div>
         </div>
 
+        <!-- Ajustes a Incorporar (debito/credito do vendedor) -->
+        <div class="card mb-3" id="cardAjustes" style="display: none;">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <strong><i class="fas fa-balance-scale"></i> Ajustes a Incorporar (debito/credito)</strong>
+                <span>Total ajustes: <strong id="ajustesTotalLabel" class="text-muted">R$ 0,00</strong></span>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-sm mb-0 carvia-table">
+                        <thead>
+                            <tr>
+                                <th>CTe</th>
+                                <th>Motivo</th>
+                                <th>Origem</th>
+                                <th class="text-end">Delta Comissao</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tabelaAjustes"></tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="card-footer text-muted small">
+                <i class="fas fa-info-circle"></i> Gerados por CTes alterados/cancelados apos fechamentos anteriores deste vendedor.
+                Serao deduzidos/somados automaticamente no total deste fechamento.
+            </div>
+        </div>
+
         <!-- Resumo e Submit -->
         <div class="card mb-3" id="cardResumo" style="display: none;">
             <div class="card-body d-flex justify-content-between align-items-center">
@@ -94,7 +121,9 @@
                     <strong>Resumo:</strong>
                     <span id="resumoSelecionados">0 CTes selecionados</span> |
                     Total Bruto: <strong id="resumoBruto">R$ 0,00</strong> |
-                    Comissao (<span id="resumoPct">0</span>%): <strong id="resumoComissao">R$ 0,00</strong>
+                    Comissao CTes (<span id="resumoPct">0</span>%): <strong id="resumoComissaoCtes">R$ 0,00</strong>
+                    <span id="resumoAjustesWrap" style="display: none;"> | Ajustes: <strong id="resumoAjustes" class="text-muted">R$ 0,00</strong></span> |
+                    Total: <strong id="resumoComissao" class="text-success">R$ 0,00</strong>
                 </div>
                 <button type="submit" class="btn btn-success">
                     <i class="fas fa-save"></i> Criar Fechamento
@@ -131,7 +160,7 @@ function carregarAjustes() {
     const vid = document.getElementById('vendedor_usuario_id').value;
     const painel = document.getElementById('painelAjustes');
     ajustesTotal = 0;
-    if (!vid) { painel.innerHTML = ''; atualizarResumo(); return; }
+    if (!vid) { painel.innerHTML = ''; renderAjustes([]); atualizarResumo(); return; }
     fetch(`/carvia/api/comissoes/ajustes-pendentes?vendedor_usuario_id=${vid}`, { headers: { 'X-CSRFToken': csrfToken } })
         .then(r => r.json())
         .then(data => {
@@ -141,9 +170,39 @@ function carregarAjustes() {
                 const cls = ajustesTotal < 0 ? 'text-danger' : 'text-success';
                 painel.innerHTML = `<i class="fas fa-info-circle"></i> ${data.qtd} ajuste(s) pendente(s): <strong class="${cls}">${fmt}</strong> (incorporado ao total).`;
             } else { painel.innerHTML = ''; }
+            renderAjustes(data.ajustes || []);
             atualizarResumo();
         })
-        .catch(() => { painel.innerHTML = ''; });
+        .catch(() => { painel.innerHTML = ''; renderAjustes([]); });
+}
+
+// Renderiza a relacao detalhada dos ajustes que serao incorporados ao fechamento
+function renderAjustes(ajustes) {
+    const card = document.getElementById('cardAjustes');
+    const tbody = document.getElementById('tabelaAjustes');
+    const totalLabel = document.getElementById('ajustesTotalLabel');
+    if (!ajustes || ajustes.length === 0) {
+        card.style.display = 'none';
+        tbody.innerHTML = '';
+        return;
+    }
+    const fmtBRL = v => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    const motivoLabel = m => m === 'ALTERACAO_VALOR' ? 'Alteracao de valor'
+        : (m === 'CANCELAMENTO_CTE' ? 'Cancelamento CTe' : m);
+    let html = '';
+    ajustes.forEach(a => {
+        const cls = a.delta_comissao < 0 ? 'text-danger' : 'text-success';
+        html += `<tr>`;
+        html += `<td><strong>${a.cte_numero}</strong></td>`;
+        html += `<td>${motivoLabel(a.motivo)}</td>`;
+        html += `<td><small class="text-muted">Fech. #${a.fechamento_origem_id}</small></td>`;
+        html += `<td class="text-end"><strong class="${cls}">${fmtBRL(a.delta_comissao)}</strong></td>`;
+        html += `</tr>`;
+    });
+    tbody.innerHTML = html;
+    totalLabel.className = ajustesTotal < 0 ? 'text-danger' : 'text-success';
+    totalLabel.textContent = fmtBRL(ajustesTotal);
+    card.style.display = '';
 }
 
 function renderCtes() {
@@ -205,12 +264,27 @@ function atualizarResumo() {
         }
     });
 
-    const totalComissao = totalBruto * pct / 100 + ajustesTotal;
+    const fmtBRL = v => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    const comissaoCtes = totalBruto * pct / 100;
+    const totalComissao = comissaoCtes + ajustesTotal;
 
     document.getElementById('resumoSelecionados').textContent = count + ' CTes selecionados';
-    document.getElementById('resumoBruto').textContent = totalBruto.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    document.getElementById('resumoBruto').textContent = fmtBRL(totalBruto);
     document.getElementById('resumoPct').textContent = pct.toFixed(2);
-    document.getElementById('resumoComissao').textContent = totalComissao.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    document.getElementById('resumoComissaoCtes').textContent = fmtBRL(comissaoCtes);
+
+    // Quebra explicita dos ajustes (so aparece quando ha delta)
+    const ajustesWrap = document.getElementById('resumoAjustesWrap');
+    const ajustesEl = document.getElementById('resumoAjustes');
+    if (ajustesTotal !== 0) {
+        ajustesWrap.style.display = '';
+        ajustesEl.textContent = fmtBRL(ajustesTotal);
+        ajustesEl.className = ajustesTotal < 0 ? 'text-danger' : 'text-success';
+    } else {
+        ajustesWrap.style.display = 'none';
+    }
+
+    document.getElementById('resumoComissao').textContent = fmtBRL(totalComissao);
     document.getElementById('resumoCtes').textContent = `${count} de ${ctesData.length} selecionados`;
 
     // Nunca permite fechamento com total negativo (debitos > comissao do periodo)
