@@ -80,6 +80,126 @@ def criar_embarque_item_carvia(*, local_cd=None, nf_obj=None, cotacao=None, **ca
     return EmbarqueItem(**campos)
 
 
+RECONCILE_GATILHOS_DEFAULT = frozenset({'local_cd', 'totais', 'entregas', 'frete'})
+
+
+def reconciliar_embarque_carvia(embarque_id, *, usuario='Sistema', gatilhos=None,
+                                commit=True):
+    """Orquestrador idempotente: reconcilia TODOS os fatos derivados de um embarque CarVia.
+
+    UM ponto que toda porta mutante chama, em vez de N helpers soltos (o "esqueci de chamar"
+    era a causa-raiz da recorrencia). Ordem FIXA:
+      local_cd -> totais -> entregas (commita interno) -> [commit-trava] -> frete (ULTIMO).
+    Frete por ULTIMO porque `lancar_frete_carvia` faz rollback em InFailedSqlTransaction —
+    a reconciliacao anterior ja esta commitada e nao se perde. Idempotente: 2x == 1x (todos
+    os helpers delegados sao idempotentes).
+
+    Args:
+        embarque_id: id do Embarque.
+        usuario: autor (frete).
+        gatilhos: subconjunto de {'local_cd','totais','entregas','frete'} (default = todos).
+        commit: se False, nao commita (caller commita) — usado no GET de visualizar_embarque.
+
+    Returns:
+        dict relatorio: {embarque_id, passos[], local_cd_realinhados, entregas, fretes[],
+        fretes_cancelados[], erros[]}. `erros` alimenta o feedback visivel (Fase 4).
+    """
+    from app.embarques.models import Embarque, EmbarqueItem
+
+    gatilhos = frozenset(gatilhos) if gatilhos else RECONCILE_GATILHOS_DEFAULT
+    relatorio = {
+        'embarque_id': embarque_id, 'passos': [], 'local_cd_realinhados': 0,
+        'entregas': 0, 'fretes': [], 'fretes_cancelados': [], 'erros': [],
+    }
+
+    embarque = db.session.get(Embarque, embarque_id)
+    if not embarque:
+        relatorio['erros'].append('embarque_inexistente')
+        return relatorio
+
+    # NFs dos itens CARVIA ATIVOS (fonte de local_cd / entregas)
+    itens_ativos = EmbarqueItem.query.filter(
+        EmbarqueItem.embarque_id == embarque_id,
+        EmbarqueItem.separacao_lote_id.ilike('CARVIA-%'),
+        EmbarqueItem.status == 'ativo',
+        EmbarqueItem.nota_fiscal.isnot(None),
+        EmbarqueItem.nota_fiscal != '',
+    ).all()
+    numeros_nf = sorted({it.nota_fiscal for it in itens_ativos if it.nota_fiscal})
+
+    # 1. local_cd — realinha cada item CARVIA da NF a fonte (CarviaNf.local_cd)
+    if 'local_cd' in gatilhos:
+        from app.carvia.models import CarviaNf
+        from app.utils.propagacao_local_cd import propagar_local_cd_carvia
+        for numero in numeros_nf:
+            nf = CarviaNf.query.filter_by(numero_nf=numero, status='ATIVA').first()
+            if nf and getattr(nf, 'local_cd', None):
+                try:
+                    relatorio['local_cd_realinhados'] += propagar_local_cd_carvia(
+                        numero, nf.local_cd
+                    )
+                except Exception as e:  # noqa: BLE001 — best-effort por NF
+                    relatorio['erros'].append(f'local_cd:{numero}:{e}')
+        relatorio['passos'].append('local_cd')
+
+    # 2. totais
+    if 'totais' in gatilhos:
+        try:
+            EmbarqueCarViaService._recalcular_totais(embarque_id)
+            relatorio['passos'].append('totais')
+        except Exception as e:  # noqa: BLE001
+            relatorio['erros'].append(f'totais:{e}')
+
+    # 3. entregas (commita internamente; tambem reconcilia local_cd por NF)
+    if 'entregas' in gatilhos:
+        from app.utils.sincronizar_entregas_carvia import (
+            sincronizar_entrega_carvia_por_nf,
+        )
+        for numero in numeros_nf:
+            try:
+                sincronizar_entrega_carvia_por_nf(numero)
+                relatorio['entregas'] += 1
+            except Exception as e:  # noqa: BLE001
+                relatorio['erros'].append(f'entregas:{numero}:{e}')
+        relatorio['passos'].append('entregas')
+
+    # commit-trava: persiste local_cd/totais/entregas ANTES do frete, cujo rollback
+    # interno (InFailedSqlTransaction) nao pode perder a reconciliacao acima.
+    if commit:
+        try:
+            db.session.commit()
+        except Exception as e:  # noqa: BLE001
+            db.session.rollback()
+            relatorio['erros'].append(f'commit_pre_frete:{e}')
+
+    # 4. frete — POR ULTIMO. cancelar orfaos + (re)gerar (lancar e idempotente).
+    if 'frete' in gatilhos:
+        try:
+            relatorio['fretes_cancelados'] = cancelar_fretes_orfaos_embarque(
+                embarque_id, usuario
+            )
+        except Exception as e:  # noqa: BLE001
+            relatorio['erros'].append(f'frete_orfaos:{e}')
+        try:
+            from app.carvia.services.documentos.carvia_frete_service import (
+                CarviaFreteService,
+            )
+            relatorio['fretes'] = CarviaFreteService.lancar_frete_carvia(
+                embarque_id, usuario
+            )
+        except Exception as e:  # noqa: BLE001
+            relatorio['erros'].append(f'frete_lancar:{e}')
+        relatorio['passos'].append('frete')
+        if commit:
+            try:
+                db.session.commit()
+            except Exception as e:  # noqa: BLE001
+                db.session.rollback()
+                relatorio['erros'].append(f'commit_frete:{e}')
+
+    return relatorio
+
+
 class EmbarqueCarViaService:
     """Gestao de itens provisorios CarVia em embarques."""
 

@@ -49,16 +49,35 @@ def mk_nf(db, numero, *, cnpj_emit='11111111000111', cnpj_dest='22222222000122',
     return nf
 
 
-def mk_embarque_item(db, emb, numero_nf, *, status='ativo', cnpj_dest='22222222000122'):
+def mk_embarque_item(db, emb, numero_nf, *, status='ativo', cnpj_dest='22222222000122',
+                     local_cd=None, peso=100, valor=1000, lote_prefixo='CARVIA-PED-'):
     from app.embarques.models import EmbarqueItem
     sufixo = uuid.uuid4().hex[:8]
-    item = EmbarqueItem(embarque_id=emb.id, separacao_lote_id=f'CARVIA-PED-{sufixo}',
-                        cnpj_cliente=cnpj_dest, cliente='CLIENTE', pedido=f'PED-{sufixo}',
-                        nota_fiscal=numero_nf, peso=100, valor=1000, status=status,
-                        provisorio=False, uf_destino='SP', cidade_destino='SAO PAULO')
+    kwargs = dict(embarque_id=emb.id, separacao_lote_id=f'{lote_prefixo}{sufixo}',
+                  cnpj_cliente=cnpj_dest, cliente='CLIENTE', pedido=f'PED-{sufixo}',
+                  nota_fiscal=numero_nf, peso=peso, valor=valor, status=status,
+                  provisorio=False, uf_destino='SP', cidade_destino='SAO PAULO')
+    if local_cd is not None:
+        kwargs['local_cd'] = local_cd
+    item = EmbarqueItem(**kwargs)
     db.session.add(item)
     db.session.flush()
     return item
+
+
+def mk_frete_simples(db, transp, emb, *, numero_nf, cnpj_emit='11111111000111',
+                     cnpj_dest='22222222000122', status='PENDENTE'):
+    """CarviaFrete SEM operacao/subcontrato (orfao-cancelavel). Para testar o passo frete."""
+    from app.carvia.models import CarviaFrete
+    frete = CarviaFrete(
+        embarque_id=emb.id, transportadora_id=transp.id,
+        cnpj_emitente=cnpj_emit, cnpj_destino=cnpj_dest, uf_destino='SP',
+        cidade_destino='SAO PAULO', tipo_carga='FRACIONADA', peso_total=100,
+        valor_total_nfs=1000, quantidade_nfs=1, numeros_nfs=numero_nf,
+        valor_cotado=50, status=status, criado_por='test')
+    db.session.add(frete)
+    db.session.flush()
+    return frete
 
 
 def mk_cotacao(db, *, local_cd=None, tipo_material='MOTO'):
