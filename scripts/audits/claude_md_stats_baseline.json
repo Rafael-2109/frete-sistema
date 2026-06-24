@@ -35,9 +35,9 @@
     "tpl": 7
   },
   "app/financeiro": {
-    "py": 84,
-    "loc": 47587,
-    "tpl": 30
+    "py": 94,
+    "loc": 49070,
+    "tpl": 31
   },
   "app/fretes": {
     "py": 20,
