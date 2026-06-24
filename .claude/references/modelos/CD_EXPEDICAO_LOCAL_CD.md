@@ -51,6 +51,8 @@ Colunas `local_cd` (`VARCHAR(20)`, `NOT NULL` default VM, exceto onde indicado):
 
 ## Fonte e propagacao
 
+> **Consolidacao 2026-06-23 (Fases 0-6)**: o `local_cd` do `EmbarqueItem` CarVia agora **nasce correto na CRIACAO** — todo item CarVia e instanciado pelo factory `criar_embarque_item_carvia` (`app/carvia/services/documentos/embarque_carvia_service.py`), que resolve `local_cd` da fonte canonica (NF ATIVA -> cotacao -> DEFAULT) via `resolver_local_cd_carvia`. Fecha a janela "VM-errado" na origem que a propagacao pos-evento NAO cobria (o helper `propagar_local_cd_carvia` casa por `nota_fiscal`, e o provisorio nascia sem NF). A reconciliacao posterior virou **safety-net** dentro do orquestrador unico `reconciliar_embarque_carvia` (passo `local_cd`), chamado por TODAS as portas mutantes (cotacao, pedido, expandir_provisorio, save do embarque, portaria). Teste-guarda `tests/carvia/test_factory_embarque_item_carvia.py::test_guard_*` falha o build se um criador novo nao setar `local_cd`. NAO ha `CHECK` no DB (VM e TM sao ambos validos — nao distinguiria errado de certo; a tranca e o factory + guard). SOT da arquitetura: `docs/superpowers/specs/2026-06-23-carvia-consolidacao-pipeline-expedicao-design.md`.
+
 **Cadeia CarVia** (uma NF de moto): a **Coleta** e a fonte unica. Ao vincular a NF / editar destino / marcar coletada, `local_cd` propaga para todos os locais da NF.
 
 - Ponto unico: `CarviaColetaService._propagar_local_cd_para_documentos(numero_nf, local_cd)` (`app/carvia/services/documentos/coleta_service.py`). Cobre os 3 gatilhos: **vincular NF**, **editar coleta** (re-propaga ao mudar destino), **marcar coletada**.

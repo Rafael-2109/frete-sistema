@@ -1,0 +1,116 @@
+"""Fase 2 — herança de local_cd na CRIACAO do EmbarqueItem CarVia (factory).
+
+Causa-raiz do bug "pedido CarVia TM gravava VM": os criadores em cotacao/routes.py
+instanciavam EmbarqueItem sem local_cd -> caia no default VM da coluna. A propagacao
+pos-evento (propagar_local_cd_carvia) NAO fechava a janela: casa por nota_fiscal, e o
+provisorio nasce SEM NF. O factory `criar_embarque_item_carvia` resolve o local_cd da
+FONTE CANONICA (NF ATIVA -> senao cotacao -> senao DEFAULT) na PROPRIA criacao.
+"""
+import uuid
+
+from app.utils.local_cd import (
+    LOCAL_CD_TENENTE_MARQUES, LOCAL_CD_VICTORIO_MARCHEZINE, LOCAL_CD_DEFAULT,
+)
+from tests.carvia._embarque_builders import mk_nf, mk_cotacao
+
+
+def test_resolver_local_cd_da_nf(db):
+    from app.carvia.services.documentos.embarque_carvia_service import (
+        resolver_local_cd_carvia,
+    )
+    nf = mk_nf(db, 'NF-LC-' + uuid.uuid4().hex[:6], local_cd=LOCAL_CD_TENENTE_MARQUES)
+
+    assert resolver_local_cd_carvia(nota_fiscal=nf.numero_nf) == LOCAL_CD_TENENTE_MARQUES
+
+
+def test_resolver_local_cd_da_cotacao(db):
+    from app.carvia.services.documentos.embarque_carvia_service import (
+        resolver_local_cd_carvia,
+    )
+    cot = mk_cotacao(db, local_cd=LOCAL_CD_TENENTE_MARQUES)
+
+    assert resolver_local_cd_carvia(carvia_cotacao_id=cot.id) == LOCAL_CD_TENENTE_MARQUES
+
+
+def test_resolver_nf_tem_prioridade_sobre_cotacao(db):
+    from app.carvia.services.documentos.embarque_carvia_service import (
+        resolver_local_cd_carvia,
+    )
+    nf = mk_nf(db, 'NF-P-' + uuid.uuid4().hex[:6], local_cd=LOCAL_CD_TENENTE_MARQUES)
+    cot = mk_cotacao(db, local_cd=LOCAL_CD_VICTORIO_MARCHEZINE)
+
+    assert resolver_local_cd_carvia(
+        nota_fiscal=nf.numero_nf, carvia_cotacao_id=cot.id
+    ) == LOCAL_CD_TENENTE_MARQUES
+
+
+def test_resolver_default_sem_fonte(db):
+    from app.carvia.services.documentos.embarque_carvia_service import (
+        resolver_local_cd_carvia,
+    )
+    # sem NF e cotacao inexistente -> DEFAULT (VM)
+    assert resolver_local_cd_carvia(nota_fiscal=None, carvia_cotacao_id=999_999_999) \
+        == LOCAL_CD_DEFAULT
+
+
+def test_factory_seta_local_cd_herdado_da_cotacao(db):
+    from app.carvia.services.documentos.embarque_carvia_service import (
+        criar_embarque_item_carvia,
+    )
+    cot = mk_cotacao(db, local_cd=LOCAL_CD_TENENTE_MARQUES)
+    item = criar_embarque_item_carvia(
+        embarque_id=1, separacao_lote_id=f'CARVIA-PED-{uuid.uuid4().hex[:6]}',
+        cnpj_cliente='1', cliente='C', pedido='P', nota_fiscal=None,
+        peso=1, valor=1, provisorio=True, carvia_cotacao_id=cot.id,
+    )
+
+    assert item.local_cd == LOCAL_CD_TENENTE_MARQUES
+
+
+def test_guard_embarque_item_carvia_sempre_seta_local_cd():
+    """TRANCA (Fase 5): todo `EmbarqueItem(...)` que passa carvia_cotacao_id DEVE setar
+    local_cd (na criacao OU via factory criar_embarque_item_carvia). Impede um criador novo
+    de reintroduzir o bug "local_cd VM-errado" silenciosamente — falha o build, nao a prod.
+    """
+    import pathlib
+    raiz = pathlib.Path(__file__).resolve().parents[2] / 'app'
+    violacoes = []
+    for py in raiz.rglob('*.py'):
+        texto = py.read_text(encoding='utf-8')
+        idx = 0
+        while True:
+            pos = texto.find('EmbarqueItem(', idx)
+            if pos == -1:
+                break
+            ini = pos + len('EmbarqueItem(')
+            depth, j = 1, ini
+            while j < len(texto) and depth > 0:
+                if texto[j] == '(':
+                    depth += 1
+                elif texto[j] == ')':
+                    depth -= 1
+                j += 1
+            span = texto[ini:j]
+            idx = j
+            if 'carvia_cotacao_id' in span and 'local_cd' not in span:
+                linha = texto[:pos].count('\n') + 1
+                violacoes.append(f"{py.relative_to(raiz.parent)}:{linha}")
+    assert not violacoes, (
+        "EmbarqueItem CarVia criado SEM local_cd — use criar_embarque_item_carvia(...) "
+        f"ou passe local_cd= explicito. Violacoes: {violacoes}"
+    )
+
+
+def test_factory_respeita_local_cd_explicito(db):
+    from app.carvia.services.documentos.embarque_carvia_service import (
+        criar_embarque_item_carvia,
+    )
+    cot = mk_cotacao(db, local_cd=LOCAL_CD_VICTORIO_MARCHEZINE)
+    item = criar_embarque_item_carvia(
+        embarque_id=1, separacao_lote_id=f'CARVIA-PED-{uuid.uuid4().hex[:6]}',
+        cnpj_cliente='1', cliente='C', pedido='P', nota_fiscal=None,
+        peso=1, valor=1, provisorio=True, carvia_cotacao_id=cot.id,
+        local_cd=LOCAL_CD_TENENTE_MARQUES,
+    )
+
+    assert item.local_cd == LOCAL_CD_TENENTE_MARQUES

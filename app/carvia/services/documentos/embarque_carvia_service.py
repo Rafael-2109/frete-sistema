@@ -20,6 +20,200 @@ from app import db
 logger = logging.getLogger(__name__)
 
 
+def resolver_local_cd_carvia(*, nf_obj=None, nota_fiscal=None, cotacao=None,
+                             carvia_cotacao_id=None):
+    """Resolve o CD de expedicao (local_cd) de um item CarVia pela FONTE CANONICA.
+
+    Ordem (1a fonte nao-vazia vence): NF (objeto -> senao ATIVA por numero) -> cotacao
+    (objeto -> senao por id) -> DEFAULT (VM). Tudo propagado da Coleta — ver
+    .claude/references/modelos/CD_EXPEDICAO_LOCAL_CD.md. Generaliza o padrao de
+    `expandir_provisorio` (getattr(nf_obj,'local_cd') or cotacao.local_cd) para os
+    pontos que so tem os ids em mao.
+    """
+    from app.utils.local_cd import LOCAL_CD_DEFAULT
+
+    v = getattr(nf_obj, 'local_cd', None)
+    if v:
+        return v
+    if nota_fiscal:
+        from app.carvia.models import CarviaNf
+        v = (
+            db.session.query(CarviaNf.local_cd)
+            .filter(CarviaNf.numero_nf == str(nota_fiscal), CarviaNf.status == 'ATIVA')
+            .limit(1).scalar()
+        )
+        if v:
+            return v
+    v = getattr(cotacao, 'local_cd', None)
+    if v:
+        return v
+    if carvia_cotacao_id:
+        from app.carvia.models import CarviaCotacao
+        v = (
+            db.session.query(CarviaCotacao.local_cd)
+            .filter(CarviaCotacao.id == carvia_cotacao_id)
+            .limit(1).scalar()
+        )
+        if v:
+            return v
+    return LOCAL_CD_DEFAULT
+
+
+def criar_embarque_item_carvia(*, local_cd=None, nf_obj=None, cotacao=None, **campos):
+    """UNICO ponto autorizado a instanciar EmbarqueItem com lote CARVIA-.
+
+    Garante a heranca de local_cd na CRIACAO (fecha a janela VM-errado na origem que a
+    propagacao pos-evento NAO cobre — o provisorio nasce sem NF, e propagar_local_cd_carvia
+    casa por nota_fiscal). Se `local_cd` nao for explicito, resolve da fonte canonica
+    (NF -> cotacao -> DEFAULT) via `nf_obj`/`cotacao` (objetos, se o caller os tiver) ou
+    `nota_fiscal`/`carvia_cotacao_id` (ja presentes em `campos`). NAO adiciona a sessao —
+    o caller decide (adicionar_item_dedup / session.add).
+    """
+    from app.embarques.models import EmbarqueItem
+
+    if not local_cd:
+        local_cd = resolver_local_cd_carvia(
+            nf_obj=nf_obj, nota_fiscal=campos.get('nota_fiscal'),
+            cotacao=cotacao, carvia_cotacao_id=campos.get('carvia_cotacao_id'),
+        )
+    campos['local_cd'] = local_cd
+    return EmbarqueItem(**campos)
+
+
+RECONCILE_GATILHOS_DEFAULT = frozenset({'local_cd', 'totais', 'entregas', 'frete'})
+
+
+def reconciliar_embarque_carvia(embarque_id, *, usuario='Sistema', gatilhos=None,
+                                commit=True):
+    """Orquestrador idempotente: reconcilia TODOS os fatos derivados de um embarque CarVia.
+
+    UM ponto que toda porta mutante chama, em vez de N helpers soltos (o "esqueci de chamar"
+    era a causa-raiz da recorrencia). Ordem FIXA:
+      local_cd -> totais -> entregas (commita interno) -> [commit-trava] -> frete (ULTIMO).
+    Frete por ULTIMO porque `lancar_frete_carvia` faz rollback em InFailedSqlTransaction —
+    a reconciliacao anterior ja esta commitada e nao se perde. Idempotente: 2x == 1x (todos
+    os helpers delegados sao idempotentes).
+
+    Args:
+        embarque_id: id do Embarque.
+        usuario: autor (frete).
+        gatilhos: subconjunto de {'local_cd','totais','entregas','frete'} (default = todos).
+        commit: se False, nao commita (caller commita) — usado no GET de visualizar_embarque.
+
+    Returns:
+        dict relatorio: {embarque_id, passos[], local_cd_realinhados, entregas, fretes[],
+        fretes_cancelados[], erros[]}. `erros` alimenta o feedback visivel (Fase 4).
+    """
+    from app.embarques.models import Embarque, EmbarqueItem
+
+    gatilhos = frozenset(gatilhos) if gatilhos else RECONCILE_GATILHOS_DEFAULT
+    relatorio = {
+        'embarque_id': embarque_id, 'passos': [], 'local_cd_realinhados': 0,
+        'entregas': 0, 'fretes': [], 'fretes_cancelados': [], 'erros': [],
+    }
+
+    embarque = db.session.get(Embarque, embarque_id)
+    if not embarque:
+        relatorio['erros'].append('embarque_inexistente')
+        return relatorio
+
+    # NFs dos itens CARVIA ATIVOS (fonte de local_cd / entregas)
+    itens_ativos = EmbarqueItem.query.filter(
+        EmbarqueItem.embarque_id == embarque_id,
+        EmbarqueItem.separacao_lote_id.ilike('CARVIA-%'),
+        EmbarqueItem.status == 'ativo',
+        EmbarqueItem.nota_fiscal.isnot(None),
+        EmbarqueItem.nota_fiscal != '',
+    ).all()
+    numeros_nf = sorted({it.nota_fiscal for it in itens_ativos if it.nota_fiscal})
+
+    # 1. local_cd — realinha cada item CARVIA da NF a fonte (CarviaNf.local_cd)
+    if 'local_cd' in gatilhos:
+        from app.carvia.models import CarviaNf
+        from app.utils.propagacao_local_cd import propagar_local_cd_carvia
+        for numero in numeros_nf:
+            nf = CarviaNf.query.filter_by(numero_nf=numero, status='ATIVA').first()
+            if nf and getattr(nf, 'local_cd', None):
+                try:
+                    relatorio['local_cd_realinhados'] += propagar_local_cd_carvia(
+                        numero, nf.local_cd
+                    )
+                except Exception as e:  # noqa: BLE001 — best-effort por NF
+                    relatorio['erros'].append(f'local_cd:{numero}:{e}')
+        relatorio['passos'].append('local_cd')
+
+    # 2. totais
+    if 'totais' in gatilhos:
+        try:
+            EmbarqueCarViaService._recalcular_totais(embarque_id)
+            relatorio['passos'].append('totais')
+        except Exception as e:  # noqa: BLE001
+            relatorio['erros'].append(f'totais:{e}')
+
+    # commit-trava: persiste local_cd/totais ANTES do frete, cujo rollback interno
+    # (InFailedSqlTransaction) nao pode perder a reconciliacao acima.
+    if commit:
+        try:
+            db.session.commit()
+        except Exception as e:  # noqa: BLE001
+            db.session.rollback()
+            relatorio['erros'].append(f'commit_pre_frete:{e}')
+
+    # 3. frete — cancelar orfaos + (re)gerar (lancar e idempotente). ANTES de entregas
+    # para a EntregaMonitorada enxergar o frete recem-criado (data_embarque/transportadora);
+    # depois do commit-trava p/ um rollback do frete nao perder local_cd/totais. Espelha a
+    # ordem do fluxo legado (expandir_provisorio/portaria: frete -> sincronizar entrega).
+    if 'frete' in gatilhos:
+        try:
+            relatorio['fretes_cancelados'] = cancelar_fretes_orfaos_embarque(
+                embarque_id, usuario
+            )
+        except Exception as e:  # noqa: BLE001
+            relatorio['erros'].append(f'frete_orfaos:{e}')
+        try:
+            from app.carvia.services.documentos.carvia_frete_service import (
+                CarviaFreteService,
+            )
+            relatorio['fretes'] = CarviaFreteService.lancar_frete_carvia(
+                embarque_id, usuario
+            )
+        except Exception as e:  # noqa: BLE001
+            relatorio['erros'].append(f'frete_lancar:{e}')
+        relatorio['passos'].append('frete')
+        # Fase 4: distinguir "frete nao gerado" ESPERADO (gate 2-CD aguardando a ultima
+        # saida) de PROBLEMA. Da visibilidade ao bug #3 sem tratar a espera como erro.
+        if not relatorio['fretes']:
+            try:
+                from app.utils.local_cd import cds_pendentes_de_saida
+                pend = cds_pendentes_de_saida(embarque)
+                if pend:
+                    relatorio['frete_aguardando_cds'] = sorted(pend)
+            except Exception:  # noqa: BLE001
+                pass
+
+    # 4. entregas (commita internamente; ve o frete recem-criado; reconcilia local_cd por NF)
+    if 'entregas' in gatilhos:
+        from app.utils.sincronizar_entregas_carvia import (
+            sincronizar_entrega_carvia_por_nf,
+        )
+        for numero in numeros_nf:
+            try:
+                sincronizar_entrega_carvia_por_nf(numero)
+                relatorio['entregas'] += 1
+            except Exception as e:  # noqa: BLE001
+                relatorio['erros'].append(f'entregas:{numero}:{e}')
+        relatorio['passos'].append('entregas')
+
+    if commit:
+        try:
+            db.session.commit()
+        except Exception as e:  # noqa: BLE001
+            db.session.rollback()
+            relatorio['erros'].append(f'commit_final:{e}')
+
+    return relatorio
+
+
 class EmbarqueCarViaService:
     """Gestao de itens provisorios CarVia em embarques."""
 
@@ -368,20 +562,14 @@ class EmbarqueCarViaService:
             acao = 'atualizado_inplace'
             resultado_item_id = item_alvo.id
 
-        # Recalcular totais do embarque
-        EmbarqueCarViaService._recalcular_totais(embarque_id)
-
-        # Reconciliar o local_cd de TODOS os EmbarqueItem desta NF a fonte (CarviaNf.local_cd,
-        # definido pela Coleta) — INDEPENDENTE de data_embarque. Sem isto, o item so era
-        # alinhado dentro do bloco `if embarque.data_embarque` abaixo (apos a saida da portaria):
-        # antes da saida, o caminho legado nao seta local_cd e a propagacao da Coleta casa o
-        # item por `nota_fiscal == numero_nf` (nao alcanca o item que ainda nao tinha a NF no
-        # instante da propagacao) -> o item ficava no default VM divergente da NF/Coleta TM,
-        # enquanto a entrega (casa por numero_nf) ja era reconciliada. Idempotente, R1-safe,
-        # sem commit (commit do caller).
-        if nf_obj is not None and getattr(nf_obj, 'local_cd', None):
-            from app.utils.propagacao_local_cd import propagar_local_cd_carvia
-            propagar_local_cd_carvia(numero_nf, nf_obj.local_cd)
+        # Reconciliar derivados do embarque CarVia via ponto UNICO (Fase 1/3 consolidacao):
+        # totais + local_cd SEMPRE (independe de saida); frete + entregas so APOS a saida da
+        # portaria (data_embarque). Substitui o cluster manual (recalcular_totais +
+        # propagar_local_cd + lancar_frete + sincronizar entrega). Idempotente; commit=False
+        # (commit do caller pedido_routes/cotacao_v2 — entregas commita internamente, ok).
+        reconciliar_embarque_carvia(
+            embarque_id, gatilhos={'local_cd', 'totais'}, commit=False,
+        )
 
         # Sinalizar que embarque precisa reimprimir (se ja foi impresso)
         from app.embarques.models import Embarque as _Embarque
@@ -389,36 +577,18 @@ class EmbarqueCarViaService:
         if _emb:
             _emb.marcar_alterado_apos_impressao()
 
-        # Se portaria ja deu saida, gerar frete CarVia
+        # Se portaria ja deu saida, gerar frete + sincronizar entrega (frete -> entrega,
+        # mesma ordem do legado). lancar_frete tem gate proprio (cds_pendentes_de_saida).
         try:
             from app.embarques.models import Embarque
             embarque = db.session.get(Embarque, embarque_id)
             if embarque and embarque.data_embarque:
-                from app.carvia.services.documentos.carvia_frete_service import CarviaFreteService
-                CarviaFreteService.lancar_frete_carvia(
-                    embarque_id=embarque_id,
-                    usuario='sistema',
+                reconciliar_embarque_carvia(
+                    embarque_id, usuario='sistema',
+                    gatilhos={'frete', 'entregas'}, commit=False,
                 )
-                # FIX CR1: sincronizar EntregaMonitorada (data_embarque + transportadora)
-                # apos frete gerado. Sem isso, NF anexada pos-portaria fica com
-                # monitoramento vazio (portaria executa uma unica vez e ja passou).
-                # NOTA: sincronizar_entrega_carvia_por_nf faz db.session.commit()
-                # interno — isso e DELIBERADO. Neste ponto novo_item + frete ja
-                # foram flushed, e os callers (pedido_routes/cotacao_v2_routes)
-                # farao um commit subsequente (no-op para estas entidades).
-                try:
-                    from app.utils.sincronizar_entregas_carvia import (
-                        sincronizar_entrega_carvia_por_nf,
-                    )
-                    sincronizar_entrega_carvia_por_nf(numero_nf)
-                except Exception as e_sync:
-                    logger.warning(
-                        "Erro ao sincronizar monitoramento CarVia pos-NF "
-                        "(nao-bloqueante) NF=%s: %s",
-                        numero_nf, e_sync,
-                    )
         except Exception as e:
-            logger.warning("Erro ao lancar frete CarVia pos-NF: %s", e)
+            logger.warning("Erro ao reconciliar frete/entrega CarVia pos-NF: %s", e)
 
         return {
             'acao': acao,

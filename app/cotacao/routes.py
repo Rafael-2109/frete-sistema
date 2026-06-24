@@ -1751,7 +1751,12 @@ def fechar_frete():
                     if _motos_cv > 0:
                         carvia_volumes = _motos_cv
 
-                    item = EmbarqueItem(
+                    # Factory CARVIA: herda local_cd na criacao (fonte canonica NF/cotacao),
+                    # fechando a janela VM-errado na origem (Fase 2 consolidacao).
+                    from app.carvia.services.documentos.embarque_carvia_service import (
+                        criar_embarque_item_carvia,
+                    )
+                    item = criar_embarque_item_carvia(
                         embarque_id=embarque.id,
                         separacao_lote_id=pedido.separacao_lote_id,
                         cnpj_cliente=pedido.cnpj_cpf,
@@ -2254,7 +2259,11 @@ def fechar_frete_grupo():
                     carvia_cotacao_id=carvia_cot_id,
                 )
 
-                item = EmbarqueItem(
+                # Factory CARVIA: herda local_cd na criacao (Fase 2 consolidacao).
+                from app.carvia.services.documentos.embarque_carvia_service import (
+                    criar_embarque_item_carvia,
+                )
+                item = criar_embarque_item_carvia(
                     embarque_id=embarque.id,
                     separacao_lote_id=pedido.separacao_lote_id,
                     cnpj_cliente=pedido.cnpj_cpf,
@@ -4120,7 +4129,11 @@ def incluir_em_embarque():
                 if _motos_cv > 0:
                     carvia_volumes = _motos_cv
 
-                novo_item = EmbarqueItem(
+                # Factory CARVIA: herda local_cd na criacao (Fase 2 consolidacao).
+                from app.carvia.services.documentos.embarque_carvia_service import (
+                    criar_embarque_item_carvia,
+                )
+                novo_item = criar_embarque_item_carvia(
                     embarque_id=embarque.id,
                     separacao_lote_id=pedido.separacao_lote_id,
                     cnpj_cliente=pedido.cnpj_cpf,

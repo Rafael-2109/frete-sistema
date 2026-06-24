@@ -322,19 +322,27 @@ def _aplicar_efeitos_saida(registro):
         except Exception:
             pass
 
-    # Hook CarVia: gerar fretes (orquestrador unico)
-    # CarviaFreteService cria CarviaOperacao + CarviaSubcontrato + CarviaFrete
+    # Hook CarVia: reconciliacao UNICA do embarque (frete + entregas + totais + local_cd) na
+    # saida da portaria — ponto unico (Fase 1/3 consolidacao). Substitui os 2 hooks separados
+    # (gerar frete + sincronizar entrega). lancar_frete_carvia (dentro do reconcile) mantem o
+    # gate 2-CD (cds_pendentes_de_saida) e popula g.carvia_w11_bloqueios.
     if registro.embarque_id:
         try:
-            from app.carvia.services.documentos.carvia_frete_service import CarviaFreteService
-            from flask import g as _g
-            fretes = CarviaFreteService.lancar_frete_carvia(
-                embarque_id=registro.embarque_id,
-                usuario=current_user.email,
+            from app.carvia.services.documentos.embarque_carvia_service import (
+                reconciliar_embarque_carvia,
             )
-            if fretes:
-                flash(f'{len(fretes)} frete(s) CarVia gerado(s).', 'info')
-            # W11 (Sprint 3 I1): exibir avisos de NFs bloqueadas
+            from flask import g as _g
+            _rel = reconciliar_embarque_carvia(
+                registro.embarque_id, usuario=current_user.email, commit=True,
+            )
+            if _rel.get('fretes'):
+                flash(f"{len(_rel['fretes'])} frete(s) CarVia gerado(s).", 'info')
+            if _rel.get('entregas'):
+                flash(
+                    f"{_rel['entregas']} NF(s) CarVia sincronizada(s) com monitoramento.",
+                    'info',
+                )
+            # W11 (Sprint 3 I1): NFs bloqueadas (populado por lancar_frete_carvia via flask.g)
             for bloq in getattr(_g, 'carvia_w11_bloqueios', []):
                 flash(
                     f"NF(s) {', '.join(bloq['nfs_bloqueadas'])} "
@@ -342,46 +350,29 @@ def _aplicar_efeitos_saida(registro):
                     f"Cancele o frete CarVia e recrie para incluir.",
                     'warning',
                 )
-            # Limpar para evitar vazar para proxima request
             if hasattr(_g, 'carvia_w11_bloqueios'):
                 del _g.carvia_w11_bloqueios
-        except Exception as e:
-            print(f"[AVISO] Hook CarVia FreteService falhou: {e}")
-
-    # Hook Monitoramento CarVia: sincronizar EntregaMonitorada para NFs CarVia
-    # Cria/atualiza EntregaMonitorada(origem='CARVIA') apos CarviaFrete existir,
-    # compartilhando gatilhos/recursos do monitoramento (agenda, canhoto, etc).
-    if registro.embarque_id:
-        try:
-            from app.utils.sincronizar_entregas_carvia import (
-                sincronizar_entrega_carvia_por_nf,
-            )
-            from app.embarques.models import EmbarqueItem as _EI
-            itens_carvia_nf = _EI.query.filter(
-                _EI.embarque_id == registro.embarque_id,
-                _EI.status == 'ativo',
-                _EI.separacao_lote_id.ilike('CARVIA-%'),
-                _EI.nota_fiscal.isnot(None),
-                _EI.nota_fiscal != '',
-            ).all()
-            sync_ok = 0
-            for item_c in itens_carvia_nf:
-                try:
-                    sincronizar_entrega_carvia_por_nf(item_c.nota_fiscal)
-                    sync_ok += 1
-                except Exception as e_item:
-                    print(
-                        f"[AVISO] Sync monitoramento CarVia NF "
-                        f"{item_c.nota_fiscal} falhou: {e_item}"
-                    )
-            if sync_ok:
+            # Fase 4: frete CarVia ainda nao gerado por ESPERAR a saida de outro CD
+            # (embarque misto VM+TM — frete dispara na ULTIMA saida). Nao e erro.
+            if _rel.get('frete_aguardando_cds'):
+                from app.utils.local_cd import label_local_cd as _label_cd
+                _cds_pend = ', '.join(
+                    _label_cd(c, curto=True) for c in _rel['frete_aguardando_cds']
+                )
                 flash(
-                    f'{sync_ok} NF(s) CarVia sincronizada(s) '
-                    f'com monitoramento.',
+                    f"Frete CarVia aguardando a saida do(s) CD(s): {_cds_pend} "
+                    "(embarque misto — o frete gera na ULTIMA saida).",
                     'info',
                 )
-        except Exception as e_sync:
-            print(f"[AVISO] Hook monitoramento CarVia falhou: {e_sync}")
+            # Fase 4 (falha visivel): reconciliacao com avisos -> sinaliza ao operador.
+            if _rel.get('erros'):
+                flash(
+                    f"Reconciliacao CarVia com {len(_rel['erros'])} aviso(s) — "
+                    "ver log do servidor.",
+                    'warning',
+                )
+        except Exception as e:
+            print(f"[AVISO] Hook CarVia reconciliacao falhou: {e}")
 
     # Hook Monitoramento Op. Assai: sincronizar EntregaMonitorada
     # com origem='OP_ASSAI'. Espelha o hook CarVia acima — NFs
@@ -948,17 +939,24 @@ def adicionar_embarque():
                         print(f"[AVISO] Separacao lote {item.separacao_lote_id}: NENHUM registro encontrado para atualizar!")
                         flash(f'⚠️ Lote {item.separacao_lote_id} não encontrado na tabela Separação!', 'warning')
             
-            # Hook CarVia: gerar fretes (vinculacao apos saida)
+            # Hook CarVia: reconciliacao UNICA (frete + entregas + totais + local_cd) na
+            # vinculacao apos saida — ponto unico (Fase 1/3). Antes este caminho SO gerava
+            # frete; as entregas CarVia ficavam de fora (gap fechado pelo reconcile).
             try:
-                from app.carvia.services.documentos.carvia_frete_service import CarviaFreteService
-                from flask import g as _g
-                fretes = CarviaFreteService.lancar_frete_carvia(
-                    embarque_id=embarque_id,
-                    usuario=current_user.email,
+                from app.carvia.services.documentos.embarque_carvia_service import (
+                    reconciliar_embarque_carvia,
                 )
-                if fretes:
-                    flash(f'{len(fretes)} frete(s) CarVia gerado(s).', 'info')
-                # W11 (Sprint 3 I1): exibir avisos de NFs bloqueadas
+                from flask import g as _g
+                _rel = reconciliar_embarque_carvia(
+                    embarque_id, usuario=current_user.email, commit=True,
+                )
+                if _rel.get('fretes'):
+                    flash(f"{len(_rel['fretes'])} frete(s) CarVia gerado(s).", 'info')
+                if _rel.get('entregas'):
+                    flash(
+                        f"{_rel['entregas']} NF(s) CarVia sincronizada(s) com monitoramento.",
+                        'info',
+                    )
                 for bloq in getattr(_g, 'carvia_w11_bloqueios', []):
                     flash(
                         f"NF(s) {', '.join(bloq['nfs_bloqueadas'])} "
@@ -968,8 +966,24 @@ def adicionar_embarque():
                     )
                 if hasattr(_g, 'carvia_w11_bloqueios'):
                     del _g.carvia_w11_bloqueios
+                if _rel.get('frete_aguardando_cds'):
+                    from app.utils.local_cd import label_local_cd as _label_cd
+                    _cds_pend = ', '.join(
+                        _label_cd(c, curto=True) for c in _rel['frete_aguardando_cds']
+                    )
+                    flash(
+                        f"Frete CarVia aguardando a saida do(s) CD(s): {_cds_pend} "
+                        "(embarque misto — o frete gera na ULTIMA saida).",
+                        'info',
+                    )
+                if _rel.get('erros'):
+                    flash(
+                        f"Reconciliacao CarVia com {len(_rel['erros'])} aviso(s) — "
+                        "ver log do servidor.",
+                        'warning',
+                    )
             except Exception as e:
-                print(f"[AVISO] Hook CarVia FreteService falhou (vinculacao): {e}")
+                print(f"[AVISO] Hook CarVia reconciliacao falhou (vinculacao): {e}")
 
             # Hook Nacom: gerar fretes (vinculacao apos saida)
             try:

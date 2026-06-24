@@ -467,32 +467,29 @@ def visualizar_embarque(id):
                 ]
                 if itens_carvia_com_nf:
                     try:
-                        from app.carvia.services.documentos.carvia_frete_service import CarviaFreteService
-                        from app.utils.sincronizar_entregas_carvia import sincronizar_entrega_carvia_por_nf
-
-                        _usuario_carvia = current_user.email if current_user.is_authenticated else 'Sistema'
-                        _fretes_ids = CarviaFreteService.lancar_frete_carvia(
-                            embarque_id=embarque.id,
-                            usuario=_usuario_carvia,
+                        # Ponto UNICO de reconciliacao (Fase 1/3): local_cd + totais + frete +
+                        # entregas numa chamada idempotente (antes este hook so fazia frete +
+                        # sync, sem recomputar totais CarVia -> bug "valor stale" no save).
+                        # commit=False: a rota commita ao fim (entregas commita interno, ok).
+                        from app.carvia.services.documentos.embarque_carvia_service import (
+                            reconciliar_embarque_carvia,
                         )
-                        if _fretes_ids:
+                        _usuario_carvia = current_user.email if current_user.is_authenticated else 'Sistema'
+                        _rel = reconciliar_embarque_carvia(
+                            embarque.id, usuario=_usuario_carvia, commit=False,
+                        )
+                        if _rel.get('fretes'):
                             messages_fretes.append(
-                                f"✅ {len(_fretes_ids)} frete(s) CarVia gerado(s)/atualizado(s)."
+                                f"✅ {len(_rel['fretes'])} frete(s) CarVia gerado(s)/atualizado(s)."
                             )
-
-                        _sync_carvia_ok = 0
-                        for _item_c in itens_carvia_com_nf:
-                            try:
-                                sincronizar_entrega_carvia_por_nf(_item_c.nota_fiscal)
-                                _sync_carvia_ok += 1
-                            except Exception as _e_sync_item:
-                                print(
-                                    f"[AVISO] Sync monitoramento CarVia NF "
-                                    f"{_item_c.nota_fiscal} falhou: {_e_sync_item}"
-                                )
-                        if _sync_carvia_ok:
+                        if _rel.get('entregas'):
                             messages_entregas.append(
-                                f"📦 {_sync_carvia_ok} NF(s) CarVia sincronizada(s) com monitoramento."
+                                f"📦 {_rel['entregas']} NF(s) CarVia sincronizada(s) com monitoramento."
+                            )
+                        # Fase 4 (falha visivel): reconciliacao com avisos -> sinaliza ao operador.
+                        if _rel.get('erros'):
+                            messages_fretes.append(
+                                f"⚠️ Reconciliacao CarVia com {len(_rel['erros'])} aviso(s) — ver log do servidor."
                             )
                     except Exception as _e_carvia:
                         print(f"[AVISO] Hook CarVia pos-edit embarque falhou: {_e_carvia}")
