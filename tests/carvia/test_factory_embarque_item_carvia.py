@@ -67,6 +67,40 @@ def test_factory_seta_local_cd_herdado_da_cotacao(db):
     assert item.local_cd == LOCAL_CD_TENENTE_MARQUES
 
 
+def test_guard_embarque_item_carvia_sempre_seta_local_cd():
+    """TRANCA (Fase 5): todo `EmbarqueItem(...)` que passa carvia_cotacao_id DEVE setar
+    local_cd (na criacao OU via factory criar_embarque_item_carvia). Impede um criador novo
+    de reintroduzir o bug "local_cd VM-errado" silenciosamente — falha o build, nao a prod.
+    """
+    import pathlib
+    raiz = pathlib.Path(__file__).resolve().parents[2] / 'app'
+    violacoes = []
+    for py in raiz.rglob('*.py'):
+        texto = py.read_text(encoding='utf-8')
+        idx = 0
+        while True:
+            pos = texto.find('EmbarqueItem(', idx)
+            if pos == -1:
+                break
+            ini = pos + len('EmbarqueItem(')
+            depth, j = 1, ini
+            while j < len(texto) and depth > 0:
+                if texto[j] == '(':
+                    depth += 1
+                elif texto[j] == ')':
+                    depth -= 1
+                j += 1
+            span = texto[ini:j]
+            idx = j
+            if 'carvia_cotacao_id' in span and 'local_cd' not in span:
+                linha = texto[:pos].count('\n') + 1
+                violacoes.append(f"{py.relative_to(raiz.parent)}:{linha}")
+    assert not violacoes, (
+        "EmbarqueItem CarVia criado SEM local_cd — use criar_embarque_item_carvia(...) "
+        f"ou passe local_cd= explicito. Violacoes: {violacoes}"
+    )
+
+
 def test_factory_respeita_local_cd_explicito(db):
     from app.carvia.services.documentos.embarque_carvia_service import (
         criar_embarque_item_carvia,

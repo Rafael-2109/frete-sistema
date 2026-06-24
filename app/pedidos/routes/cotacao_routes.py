@@ -287,7 +287,12 @@ def register_cotacao_routes(bp):
                 if _motos_cv > 0:
                     carvia_volumes = _motos_cv
 
-                embarque_item = EmbarqueItem(
+                # Factory CARVIA: herda local_cd na criacao (Fase 5 — tranca; este criador
+                # era um vetor LATENTE do bug local_cd VM-errado: nao setava local_cd).
+                from app.carvia.services.documentos.embarque_carvia_service import (
+                    criar_embarque_item_carvia,
+                )
+                embarque_item = criar_embarque_item_carvia(
                     embarque_id=embarque.id,
                     separacao_lote_id=pedido.separacao_lote_id,
                     cnpj_cliente=pedido.cnpj_cpf,
