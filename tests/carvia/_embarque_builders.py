@@ -32,14 +32,18 @@ def mk_embarque(db, transp, *, data_embarque=None):
     return emb
 
 
-def mk_nf(db, numero, *, cnpj_emit='11111111000111', cnpj_dest='22222222000122'):
+def mk_nf(db, numero, *, cnpj_emit='11111111000111', cnpj_dest='22222222000122',
+         local_cd=None):
     from app.carvia.models import CarviaNf
-    nf = CarviaNf(numero_nf=numero, chave_acesso_nf=uuid.uuid4().hex.ljust(44, '0')[:44],
+    kwargs = dict(numero_nf=numero, chave_acesso_nf=uuid.uuid4().hex.ljust(44, '0')[:44],
                   cnpj_emitente=cnpj_emit, nome_emitente='E',
                   cnpj_destinatario=cnpj_dest, nome_destinatario='D',
                   cidade_destinatario='SAO PAULO', uf_destinatario='SP',
                   data_emissao=agora_utc_naive().date(), valor_total=1,
                   status='ATIVA', tipo_fonte='MANUAL', criado_por='test')
+    if local_cd is not None:
+        kwargs['local_cd'] = local_cd
+    nf = CarviaNf(**kwargs)
     db.session.add(nf)
     db.session.flush()
     return nf
@@ -55,6 +59,29 @@ def mk_embarque_item(db, emb, numero_nf, *, status='ativo', cnpj_dest='222222220
     db.session.add(item)
     db.session.flush()
     return item
+
+
+def mk_cotacao(db, *, local_cd=None, tipo_material='MOTO'):
+    """CarviaCliente + 2 enderecos + CarviaCotacao (com local_cd opcional)."""
+    from app.carvia.models.clientes import CarviaCliente, CarviaClienteEndereco
+    from app.carvia.models.cotacao import CarviaCotacao
+    cli = CarviaCliente(nome_comercial='CLI', ativo=True, criado_por='test@bot')
+    db.session.add(cli)
+    db.session.flush()
+    origem = CarviaClienteEndereco(cliente_id=cli.id, tipo='ORIGEM', criado_por='test@bot')
+    destino = CarviaClienteEndereco(cliente_id=cli.id, tipo='DESTINO', criado_por='test@bot')
+    db.session.add_all([origem, destino])
+    db.session.flush()
+    kwargs = dict(numero_cotacao='COT-' + uuid.uuid4().hex[:6], cliente_id=cli.id,
+                  endereco_origem_id=origem.id, endereco_destino_id=destino.id,
+                  tipo_material=tipo_material, entrega_cidade='Campinas', entrega_uf='SP',
+                  status='RASCUNHO', criado_por='test@bot')
+    if local_cd is not None:
+        kwargs['local_cd'] = local_cd
+    cot = CarviaCotacao(**kwargs)
+    db.session.add(cot)
+    db.session.flush()
+    return cot
 
 
 def mk_operacao_frete(db, transp, emb, nf, *, cnpj_emit='11111111000111',

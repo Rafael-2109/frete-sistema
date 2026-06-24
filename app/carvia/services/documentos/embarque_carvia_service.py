@@ -20,6 +20,66 @@ from app import db
 logger = logging.getLogger(__name__)
 
 
+def resolver_local_cd_carvia(*, nf_obj=None, nota_fiscal=None, cotacao=None,
+                             carvia_cotacao_id=None):
+    """Resolve o CD de expedicao (local_cd) de um item CarVia pela FONTE CANONICA.
+
+    Ordem (1a fonte nao-vazia vence): NF (objeto -> senao ATIVA por numero) -> cotacao
+    (objeto -> senao por id) -> DEFAULT (VM). Tudo propagado da Coleta — ver
+    .claude/references/modelos/CD_EXPEDICAO_LOCAL_CD.md. Generaliza o padrao de
+    `expandir_provisorio` (getattr(nf_obj,'local_cd') or cotacao.local_cd) para os
+    pontos que so tem os ids em mao.
+    """
+    from app.utils.local_cd import LOCAL_CD_DEFAULT
+
+    v = getattr(nf_obj, 'local_cd', None)
+    if v:
+        return v
+    if nota_fiscal:
+        from app.carvia.models import CarviaNf
+        v = (
+            db.session.query(CarviaNf.local_cd)
+            .filter(CarviaNf.numero_nf == str(nota_fiscal), CarviaNf.status == 'ATIVA')
+            .limit(1).scalar()
+        )
+        if v:
+            return v
+    v = getattr(cotacao, 'local_cd', None)
+    if v:
+        return v
+    if carvia_cotacao_id:
+        from app.carvia.models import CarviaCotacao
+        v = (
+            db.session.query(CarviaCotacao.local_cd)
+            .filter(CarviaCotacao.id == carvia_cotacao_id)
+            .limit(1).scalar()
+        )
+        if v:
+            return v
+    return LOCAL_CD_DEFAULT
+
+
+def criar_embarque_item_carvia(*, local_cd=None, nf_obj=None, cotacao=None, **campos):
+    """UNICO ponto autorizado a instanciar EmbarqueItem com lote CARVIA-.
+
+    Garante a heranca de local_cd na CRIACAO (fecha a janela VM-errado na origem que a
+    propagacao pos-evento NAO cobre — o provisorio nasce sem NF, e propagar_local_cd_carvia
+    casa por nota_fiscal). Se `local_cd` nao for explicito, resolve da fonte canonica
+    (NF -> cotacao -> DEFAULT) via `nf_obj`/`cotacao` (objetos, se o caller os tiver) ou
+    `nota_fiscal`/`carvia_cotacao_id` (ja presentes em `campos`). NAO adiciona a sessao —
+    o caller decide (adicionar_item_dedup / session.add).
+    """
+    from app.embarques.models import EmbarqueItem
+
+    if not local_cd:
+        local_cd = resolver_local_cd_carvia(
+            nf_obj=nf_obj, nota_fiscal=campos.get('nota_fiscal'),
+            cotacao=cotacao, carvia_cotacao_id=campos.get('carvia_cotacao_id'),
+        )
+    campos['local_cd'] = local_cd
+    return EmbarqueItem(**campos)
+
+
 class EmbarqueCarViaService:
     """Gestao de itens provisorios CarVia em embarques."""
 
