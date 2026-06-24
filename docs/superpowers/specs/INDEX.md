@@ -4,11 +4,12 @@ camada: L1
 sot_de: —
 hub: docs/superpowers/specs/INDEX.md
 superseded_by: —
-atualizado: 2026-06-18
+atualizado: 2026-06-23
 -->
 # Specs — indice
 > **Papel:** mapa das specs de design. So ponteiros.
 
+- [Consolidação do pipeline de expedição CarVia/Nacom — reconciliador central + fonte canônica](2026-06-23-carvia-consolidacao-pipeline-expedicao-design.md) — diagnóstico (CarVia reusa EmbarqueItem sem herdar a maquina de consistencia da Separacao Nacom → 4 sintomas recorrentes: local_cd VM-errado, totais stale, frete nao-gerado, badge cego) + arquitetura-alvo hibrida P1(EmbarqueReconciler)→P2(fonte canonica+CHECK), P3(Policy/coluna) descartado; plano faseado 0-6, prod 2-CD, sem big-bang; PROPOSTA aguardando aval
 - [Simulador 3D — Expansão para Conservas Nacom (carga mista pallet + moto)](2026-06-18-simulador-3d-conservas-nacom-design.md) — expande o simulador de motos para conservas palletizadas no mesmo baú; Camada 1 monta pallets PBR (regras 1–4, folga 5cm, overbooking 50%, modos A–D) em Python; Camada 2 estende o bin-packer com perfil multi-slab (estrado+coluna) p/ caminho crítico e empacotamento em 2 fases (Nacom embaixo); sem migration
 - [Roteirizacao "Ver no Mapa" — Ampliacao](2026-06-16-roteirizacao-ver-no-mapa-design.md) — custo parametrico por tipo de veiculo (custo_km/motorista/fixo/depreciacao), motor Route Optimization API (sem limite 25), flag volta, dias, incluir/remover on-demand, rotas salvas + cotacao por rota; mono-veiculo; bin-packer fora
 - [PAD-A — Arquitetura de Artefatos](2026-06-01-arquitetura-de-artefatos-design.md) — padrao deterministico docs+scripts
