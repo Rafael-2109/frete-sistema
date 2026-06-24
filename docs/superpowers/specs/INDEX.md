@@ -4,11 +4,12 @@ camada: L1
 sot_de: —
 hub: docs/superpowers/specs/INDEX.md
 superseded_by: —
-atualizado: 2026-06-23
+atualizado: 2026-06-24
 -->
 # Specs — indice
 > **Papel:** mapa das specs de design. So ponteiros.
 
+- [Calibração da proatividade do Agente Web (evasão → meio-termo por risco)](2026-06-24-calibracao-proatividade-agente-design.md) — corrige a evasão (recusa quando não há skill ou a skill é read-only) reconciliando R5/R9/R12 do `system_prompt.md` num eixo único de **risco/reversibilidade** (não "existência de skill"); tabela de tiers como SOT (T1 reversível pontual = preview + 1 confirmação; T2 massa ≥50; T3 fiscal/append-only intocado); poda compensatória PAD-CTX; diagnóstico medido em PROD (1.456 ad-hoc/semana = não é trava universal; caso-prova IMP-24-002 CarVia read-only); PROPOSTA APROVADA, implementação pendente
 - [Baixa de antecipação por reconciliação de "caixinhas" (estado-alvo determinístico)](2026-06-24-baixa-antecipacao-caixinhas-design.md) — substitui a lógica ad-hoc (corrige-ano-2000 + rede frágil `desconto_ja_embutido` + validação por soma; 74/76 Sendas falharam) por caixinhas determinísticas: desconto = face×taxa-do-cliente (`l10n_br_total_nfe` × `x_studio_desconto` 0,5%), encargos+líquido completam a face (invariante); reconcilia os 3 estados Odoo (ano-2000/embutido/nada) contra o mesmo alvo; Etapas 1-3 implementadas (working tree; v2 remove `desconto_ja_embutido` + 1ª baixa real pendentes)
 - [Consolidação do pipeline de expedição CarVia/Nacom — reconciliador central + fonte canônica](2026-06-23-carvia-consolidacao-pipeline-expedicao-design.md) — diagnóstico (CarVia reusa EmbarqueItem sem herdar a maquina de consistencia da Separacao Nacom → 4 sintomas recorrentes: local_cd VM-errado, totais stale, frete nao-gerado, badge cego) + arquitetura-alvo hibrida P1(EmbarqueReconciler)→P2(fonte canonica+CHECK), P3(Policy/coluna) descartado; plano faseado 0-6, prod 2-CD, sem big-bang; PROPOSTA aguardando aval
 - [Simulador 3D — Expansão para Conservas Nacom (carga mista pallet + moto)](2026-06-18-simulador-3d-conservas-nacom-design.md) — expande o simulador de motos para conservas palletizadas no mesmo baú; Camada 1 monta pallets PBR (regras 1–4, folga 5cm, overbooking 50%, modos A–D) em Python; Camada 2 estende o bin-packer com perfil multi-slab (estrado+coluna) p/ caminho crítico e empacotamento em 2 fases (Nacom embaixo); sem migration
