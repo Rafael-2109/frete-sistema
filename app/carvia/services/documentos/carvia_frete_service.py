@@ -34,13 +34,17 @@ class CarviaFreteService:
 
     @staticmethod
     def lancar_frete_carvia(embarque_id: int, usuario: str) -> List[int]:
-        """Gera fretes CarVia para um embarque (orquestrador unico).
+        """Gera os CarviaFrete de um embarque (orquestrador unico), 1 por grupo
+        (cnpj_emitente, cnpj_destino) dos itens CarVia ativos com NF.
 
-        Para cada grupo (cnpj_emitente, cnpj_destino), cria:
-          1. CarviaOperacao (CTe CarVia — preco VENDA)
-          2. CarviaOperacaoNf (junctions com NFs)
-          3. CarviaSubcontrato (preco CUSTO)
-          4. CarviaFrete com operacao_id + subcontrato_id JA populados
+        Cria APENAS o CarviaFrete (eixo central, status PENDENTE) com os valores
+        calculados. NAO cria CarviaOperacao (CTe CarVia) nem CarviaSubcontrato — esses sao
+        lancados DEPOIS (emissao SSW / importacao do XML do CTe) e so entao vinculados ao
+        frete: `_criar_frete_completo` chama `_vincular_operacao_existente`, que preenche
+        `operacao_id`/`fatura_cliente_id` SE ja existir uma CarviaOperacao para as NFs do
+        grupo; senao o frete nasce com `operacao_id` NULL (frete sem CTe ainda — estado
+        NORMAL ate a emissao). Fretes PENDENTE ja existentes tem o CSV de NFs atualizado
+        in-place (Fase B3/W11); fretes orfaos (cnpj_destino sem grupo atual) sao cancelados.
 
         Chamado por:
           - portaria/routes.py: apos saida da portaria
