@@ -294,6 +294,28 @@ class BaixaTitulosService:
         logger.info(f"  Usando journal principal: {item.journal_excel} (ID={journal_id_final})")
 
         # =================================================================
+        # ROTEAMENTO — MODELO DE CAIXINHAS (cliente com desconto contratual)
+        # Deterministico: desconto = face x taxa do cliente; liquido+encargos+desconto = face.
+        # Reconcilia o estado do titulo (embutido/nada-aplicado) contra esse alvo e fecha.
+        # Substitui a heuristica 'desconto_ja_embutido' para esses clientes (ex: Sendas/Assai).
+        # Demais clientes (sem desconto contratual) seguem o fluxo classico abaixo.
+        # =================================================================
+        caixinhas, estado_caixinhas = self._montar_caixinhas(item, encargos_excel)
+        if caixinhas is not None:
+            snapshot_antes = self._capturar_snapshot(item.titulo_odoo_id, item.move_odoo_id)
+            item.set_snapshot_antes(snapshot_antes)
+            self._baixar_por_caixinhas(item, caixinhas, estado_caixinhas, journal_id_final, company_id)
+            self._finalizar_baixa(
+                item, company_name,
+                mensagem_extra=(
+                    f"[CAIXINHAS:{estado_caixinhas}] face={caixinhas.face:.2f} "
+                    f"desconto={caixinhas.desconto:.2f} liquido={caixinhas.liquido:.2f} "
+                    f"encargos={caixinhas.encargos:.2f}"
+                ),
+            )
+            return
+
+        # =================================================================
         # ANTECIPACAO (ex: Sendas/Assai): VALOR=liquido (journal Sicoob) +
         # ENCARGOS (write-off na conta ENCARGOS DE EMPRESTIMOS E FINANCIAMENTOS).
         # O write-off real = saldo - liquido (fecha o titulo); o ENCARGOS informado
@@ -583,32 +605,44 @@ class BaixaTitulosService:
         elif juros_excel > 0 and juros_processado_com_writeoff:
             logger.info(f"  [5] JUROS ja processado via Write-Off no pagamento principal")
 
-        # 7. Capturar snapshot DEPOIS
+        # =================================================================
+        # FINALIZACAO (snapshot depois, campos, saldo, partial, status, G2/G3, log)
+        # =================================================================
+        msg_extra = None
+        if desconto_ja_embutido:
+            msg_extra = (
+                f"[DESCONTO_EMBUTIDO: R$ {desconto_excel:.2f} não lançado - "
+                f"já embutido no saldo (sem bug ano 2000)]"
+            )
+        self._finalizar_baixa(item, company_name, mensagem_extra=msg_extra)
+
+    def _finalizar_baixa(self, item: BaixaTituloItem, company_name, mensagem_extra=None) -> None:
+        """
+        Fechamento comum de uma baixa bem-sucedida (fluxo classico OU caixinhas):
+        snapshot depois + campos alterados, saldo depois, partial_reconcile, status SUCESSO,
+        atualizacao do titulo local (G2/G3) e log. Usa item.get_snapshot_antes() como base
+        de comparacao (o snapshot ANTES ja foi gravado no item por quem chamou).
+        """
+        # Snapshot DEPOIS + campos alterados
         snapshot_depois = self._capturar_snapshot(item.titulo_odoo_id, item.move_odoo_id)
         item.set_snapshot_depois(snapshot_depois)
+        item.set_campos_alterados(
+            self._comparar_snapshots(item.get_snapshot_antes(), snapshot_depois)
+        )
 
-        # 8. Identificar campos alterados
-        campos_alterados = self._comparar_snapshots(snapshot_antes, snapshot_depois)
-        item.set_campos_alterados(campos_alterados)
-
-        # 9. Atualizar saldo depois
+        # Saldo depois
         titulo_atualizado = self._buscar_titulo_por_id(item.titulo_odoo_id)
         item.saldo_depois = titulo_atualizado.get('amount_residual', 0) if titulo_atualizado else None
 
-        # 10. Buscar partial_reconcile criado (se houve valor principal)
+        # Partial reconcile (se houve pagamento principal/liquido)
         if item.valor_excel > 0:
             item.partial_reconcile_id = self._buscar_partial_reconcile(item.titulo_odoo_id)
 
         item.status = 'SUCESSO'
         item.processado_em = agora_utc_naive()
         item.validado_em = agora_utc_naive()
-
-        # Registrar mensagem se desconto foi embutido
-        if desconto_ja_embutido:
-            item.mensagem = (
-                f"[DESCONTO_EMBUTIDO: R$ {desconto_excel:.2f} não lançado - "
-                f"já embutido no saldo (sem bug ano 2000)]"
-            )
+        if mensagem_extra:
+            item.mensagem = mensagem_extra
 
         # =================================================================
         # FIX G2+G3: Atualizar parcela_paga + metodo_baixa local imediato
@@ -660,7 +694,10 @@ class BaixaTitulosService:
         if item.payment_encargos_odoo_name:
             pagamentos_criados.append(f"Encargos: {item.payment_encargos_odoo_name}")
 
-        logger.info(f"  OK - Payments: {', '.join(pagamentos_criados)}, Saldo: {item.saldo_antes} -> {item.saldo_depois}")
+        logger.info(
+            f"  OK - Payments: {', '.join(pagamentos_criados)}, "
+            f"Saldo: {item.saldo_antes} -> {item.saldo_depois}"
+        )
 
     # =========================================================================
     # MÉTODOS DE BUSCA DE TÍTULOS
@@ -1623,6 +1660,207 @@ class BaixaTitulosService:
         if journals:
             return self._extrair_id(journals[0].get('company_id'))
         return None
+
+    # =========================================================================
+    # MODELO DE CAIXINHAS (antecipacao com desconto contratual)
+    # Fontes de verdade lidas AO VIVO do Odoo; logica pura em
+    # app.financeiro.services.antecipacao_caixinhas.
+    # Spec: docs/superpowers/specs/2026-06-24-baixa-antecipacao-caixinhas-design.md
+    # =========================================================================
+
+    def _buscar_taxa_desconto_cliente(self, partner_id: int) -> float:
+        """
+        Taxa de desconto contratual do cliente como FRACAO (ex: 0.005 = 0,5%).
+        Fonte: res.partner.x_studio_desconto (%) + flag x_studio_desconto_contratual.
+        Retorna 0.0 se o cliente NAO tem desconto contratual.
+        """
+        if not partner_id:
+            return 0.0
+        partners = self.connection.search_read(
+            'res.partner',
+            [['id', '=', partner_id]],
+            fields=['x_studio_desconto', 'x_studio_desconto_contratual'],
+            limit=1
+        )
+        if not partners:
+            return 0.0
+        p = partners[0]
+        if not p.get('x_studio_desconto_contratual'):
+            return 0.0
+        pct = p.get('x_studio_desconto') or 0
+        return round(float(pct) / 100.0, 6)
+
+    def _buscar_face_nfe(self, move_id: int) -> float:
+        """Face da NF (valor sem abatimentos) = account.move.l10n_br_total_nfe."""
+        if not move_id:
+            return 0.0
+        moves = self.connection.search_read(
+            'account.move',
+            [['id', '=', move_id]],
+            fields=['l10n_br_total_nfe'],
+            limit=1
+        )
+        if not moves:
+            return 0.0
+        return round(float(moves[0].get('l10n_br_total_nfe') or 0), 2)
+
+    def _tem_linha_2000(self, move_id: int) -> bool:
+        """True se o move tem linha receivable date_maturity=2000-01-01 (desconto fantasma)."""
+        if not move_id:
+            return False
+        linhas = self.connection.search_read(
+            'account.move.line',
+            [
+                ['move_id', '=', move_id],
+                ['account_type', '=', 'asset_receivable'],
+                ['date_maturity', '=', '2000-01-01'],
+                ['debit', '>', 0],
+            ],
+            fields=['id'],
+            limit=1
+        )
+        return bool(linhas)
+
+    def _montar_caixinhas(self, item: BaixaTituloItem, encargos_excel: float):
+        """
+        Se o cliente tem desconto contratual (taxa > 0), monta as caixinhas-alvo
+        (face x taxa) e classifica o estado do titulo no Odoo. Retorna (Caixinhas, estado).
+        Retorna (None, None) para clientes SEM desconto contratual ou sem face — esses
+        seguem o fluxo classico.
+
+        Pre-requisito: item.partner_odoo_id, item.move_odoo_id e item.saldo_antes ja populados.
+        NOTA: _corrigir_titulo_ano_2000 ja rodou no inicio do _processar_item e normalizou
+        eventual linha-fantasma 2000 — por isso o estado classificado aqui ja deve ser
+        EMBUTIDO ou NADA_APLICADO (ANO_2000 e' tratado como erro no _baixar_por_caixinhas).
+        """
+        from app.financeiro.services.antecipacao_caixinhas import (
+            calcular_caixinhas, classificar_estado,
+        )
+
+        taxa = self._buscar_taxa_desconto_cliente(item.partner_odoo_id)
+        if taxa <= 0:
+            return None, None
+
+        face = self._buscar_face_nfe(item.move_odoo_id)
+        if not face or face <= 0:
+            logger.warning(
+                f"  [CAIXINHAS] NF {item.nf_excel}: cliente com desconto contratual "
+                f"(taxa {taxa}) mas sem l10n_br_total_nfe (face). Seguindo fluxo classico."
+            )
+            return None, None
+
+        caixinhas = calcular_caixinhas(face, taxa, encargos_excel)
+        tem_2000 = self._tem_linha_2000(item.move_odoo_id)
+        estado = classificar_estado(caixinhas, item.saldo_antes, tem_2000)
+
+        logger.info(
+            f"  [CAIXINHAS] NF {item.nf_excel}: face={caixinhas.face:.2f} "
+            f"desconto={caixinhas.desconto:.2f} titulo={caixinhas.titulo:.2f} "
+            f"encargos={caixinhas.encargos:.2f} liquido={caixinhas.liquido:.2f} "
+            f"| estado={estado} saldo={item.saldo_antes:.2f}"
+        )
+        return caixinhas, estado
+
+    def _baixar_por_caixinhas(self, item: BaixaTituloItem, caixinhas, estado: str,
+                              journal_id: int, company_id: int) -> None:
+        """
+        Executa a baixa deterministica conforme o estado do titulo (reconciliador):
+
+        - NADA_APLICADO: lanca o DESCONTO concedido (reduz saldo de 'face' p/ 'titulo')
+          e depois baixa o titulo.
+        - EMBUTIDO: o saldo ja e' o 'titulo'; baixa direto.
+
+        Baixa do 'titulo':
+        - com encargos > 0: pagamento do LIQUIDO (journal) + write-off ENCARGOS (fecha).
+        - sem encargos: pagamento do LIQUIDO (== titulo) e reconcilia (fecha).
+
+        ANO_2000 nao deveria chegar aqui (normalizado no inicio) — erro explicito.
+        """
+        from app.financeiro.services.antecipacao_caixinhas import (
+            ESTADO_NADA_APLICADO, ESTADO_ANO_2000,
+        )
+
+        if estado == ESTADO_ANO_2000:
+            raise ValueError(
+                f"NF {item.nf_excel}: titulo ainda em estado ANO_2000 apos normalizacao "
+                f"— requer revisao manual."
+            )
+
+        # Sanity: o VALOR (liquido) informado na planilha deve bater com o liquido
+        # calculado (face - desconto - encargos). Divergencia = erro de preenchimento.
+        if item.valor_excel and abs(item.valor_excel - caixinhas.liquido) > max(TOLERANCIA_ENCARGOS, 0.05):
+            raise ValueError(
+                f"NF {item.nf_excel}: VALOR informado ({item.valor_excel:.2f}) diverge do "
+                f"liquido calculado ({caixinhas.liquido:.2f}) [face {caixinhas.face:.2f} - "
+                f"desconto {caixinhas.desconto:.2f} - encargos {caixinhas.encargos:.2f}]. "
+                f"Verifique VALOR e ENCARGOS na planilha."
+            )
+
+        company_journal = self._company_do_journal(journal_id) or company_id
+
+        # NADA_APLICADO: lancar o DESCONTO concedido primeiro (saldo face -> titulo)
+        if estado == ESTADO_NADA_APLICADO and caixinhas.desconto > 0:
+            pid, pname = self._criar_pagamento_especial(
+                partner_id=item.partner_odoo_id,
+                valor=caixinhas.desconto,
+                journal_id=JOURNAL_DESCONTO_CONCEDIDO_ID,
+                ref=f"DESCONTO - {item.move_odoo_name}",
+                data=item.data_excel,
+                company_id=company_id,
+            )
+            item.payment_desconto_odoo_id = pid
+            item.payment_desconto_odoo_name = pname
+            credit_line_id = self._buscar_linha_credito(pid)
+            if credit_line_id:
+                self._reconciliar(credit_line_id, item.titulo_odoo_id)
+            logger.info(
+                f"  [CAIXINHAS] Desconto R$ {caixinhas.desconto:.2f} lancado (estado NADA_APLICADO)"
+            )
+
+        # Baixar o 'titulo' (= liquido + encargos)
+        if caixinhas.encargos > 0:
+            conta_encargos_id = CONTA_ENCARGOS_POR_COMPANY.get(company_journal)
+            if not conta_encargos_id:
+                raise ValueError(
+                    f"Conta de ENCARGOS nao mapeada para company {company_journal} "
+                    f"(journal {item.journal_excel}). Ver CONTA_ENCARGOS_POR_COMPANY."
+                )
+            pid, pname = self._criar_pagamento_com_writeoff_encargos(
+                titulo_id=item.titulo_odoo_id,
+                partner_id=item.partner_odoo_id,
+                valor_liquido=caixinhas.liquido,
+                journal_id=journal_id,
+                conta_encargos_id=conta_encargos_id,
+                ref=item.move_odoo_name,
+                data=item.data_excel,
+            )
+            item.payment_odoo_id = pid
+            item.payment_odoo_name = pname
+            item.payment_encargos_odoo_id = pid
+            item.payment_encargos_odoo_name = (
+                f"{pname} (Write-Off Encargos: R$ {caixinhas.encargos:.2f})"
+            )
+            logger.info(
+                f"  [CAIXINHAS] LIQUIDO {caixinhas.liquido:.2f} + ENCARGOS "
+                f"{caixinhas.encargos:.2f} (conta {conta_encargos_id}) -> {pname}"
+            )
+        else:
+            pid, pname = self._criar_pagamento(
+                partner_id=item.partner_odoo_id,
+                valor=caixinhas.liquido,
+                journal_id=journal_id,
+                ref=item.move_odoo_name,
+                data=item.data_excel,
+                company_id=company_id,
+            )
+            item.payment_odoo_id = pid
+            item.payment_odoo_name = pname
+            self._postar_pagamento(pid)
+            credit_line_id = self._buscar_linha_credito(pid)
+            if not credit_line_id:
+                raise ValueError("Linha de credito nao encontrada apos pagamento liquido (caixinhas)")
+            self._reconciliar(credit_line_id, item.titulo_odoo_id)
+            logger.info(f"  [CAIXINHAS] LIQUIDO {caixinhas.liquido:.2f} (sem encargos) -> {pname}")
 
     def _criar_pagamento_com_writeoff_encargos(
         self,

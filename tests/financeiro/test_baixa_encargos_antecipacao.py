@@ -7,10 +7,31 @@ encargos, resolucao da company do journal e o mapa de contas de encargos.
 A baixa end-to-end no Odoo NAO e' testavel aqui (exige titulo aberto) — a primeira
 execucao real deve ser feita com 1 titulo, conforme o fluxo da tela.
 """
+from types import SimpleNamespace
 from unittest.mock import MagicMock
+
+import pytest
 
 from app.financeiro.constants import CONTA_ENCARGOS_POR_COMPANY
 from app.financeiro.services.baixa_titulos_service import BaixaTitulosService
+from app.financeiro.services.antecipacao_caixinhas import (
+    calcular_caixinhas,
+    ESTADO_EMBUTIDO,
+    ESTADO_NADA_APLICADO,
+    ESTADO_ANO_2000,
+)
+
+
+def _make_item(valor_excel=5410.89, saldo_antes=5969.54):
+    return SimpleNamespace(
+        nf_excel='149407', parcela_excel=1, partner_odoo_id=204476,
+        move_odoo_id=806368, move_odoo_name='VND/2026/04554', titulo_odoo_id=5345534,
+        saldo_antes=saldo_antes, valor_excel=valor_excel, data_excel='2026-08-21',
+        journal_excel='SICOOB',
+        payment_odoo_id=None, payment_odoo_name=None,
+        payment_desconto_odoo_id=None, payment_desconto_odoo_name=None,
+        payment_encargos_odoo_id=None, payment_encargos_odoo_name=None,
+    )
 
 
 def test_conta_encargos_por_company_cobre_as_quatro_empresas():
@@ -93,3 +114,102 @@ def test_writeoff_encargos_cannot_marshal_none_e_sucesso():
     )
     assert payment_id == 1000
     assert payment_name == 'PSIC/1502/01245'
+
+
+# ===========================================================================
+# RECONCILIADOR — _montar_caixinhas e _baixar_por_caixinhas (modelo de caixinhas)
+# ===========================================================================
+
+def test_montar_caixinhas_sem_desconto_contratual_retorna_none():
+    svc = BaixaTitulosService(connection=MagicMock())
+    item = _make_item()
+    svc._buscar_taxa_desconto_cliente = MagicMock(return_value=0.0)
+    caixinhas, estado = svc._montar_caixinhas(item, 0)
+    assert caixinhas is None and estado is None
+
+
+def test_montar_caixinhas_com_desconto_classifica_embutido():
+    svc = BaixaTitulosService(connection=MagicMock())
+    item = _make_item(saldo_antes=5969.54)
+    svc._buscar_taxa_desconto_cliente = MagicMock(return_value=0.005)
+    svc._buscar_face_nfe = MagicMock(return_value=5999.54)
+    svc._tem_linha_2000 = MagicMock(return_value=False)
+    caixinhas, estado = svc._montar_caixinhas(item, 558.65)
+    assert estado == ESTADO_EMBUTIDO
+    assert caixinhas.liquido == 5410.89
+    assert caixinhas.desconto == 30.00
+
+
+def test_baixar_caixinhas_embutido_com_encargos_usa_writeoff():
+    svc = BaixaTitulosService(connection=MagicMock())
+    item = _make_item(valor_excel=5410.89, saldo_antes=5969.54)
+    c = calcular_caixinhas(5999.54, 0.005, 558.65)  # liquido 5410.89
+    svc._company_do_journal = MagicMock(return_value=1)   # journal FB -> conta 22768
+    svc._criar_pagamento_com_writeoff_encargos = MagicMock(return_value=(999, 'PSIC/1502/01244'))
+    svc._criar_pagamento = MagicMock()
+    svc._criar_pagamento_especial = MagicMock()
+
+    svc._baixar_por_caixinhas(item, c, ESTADO_EMBUTIDO, journal_id=10, company_id=4)
+
+    svc._criar_pagamento_com_writeoff_encargos.assert_called_once()
+    kw = svc._criar_pagamento_com_writeoff_encargos.call_args.kwargs
+    assert kw['valor_liquido'] == 5410.89
+    assert kw['conta_encargos_id'] == CONTA_ENCARGOS_POR_COMPANY[1]  # 22768 (company do journal)
+    svc._criar_pagamento.assert_not_called()         # nao usou pagamento simples
+    svc._criar_pagamento_especial.assert_not_called()  # NAO relancou desconto (embutido)
+    assert item.payment_odoo_name == 'PSIC/1502/01244'
+    assert 'Encargos' in item.payment_encargos_odoo_name
+
+
+def test_baixar_caixinhas_embutido_sem_encargos_paga_liquido():
+    svc = BaixaTitulosService(connection=MagicMock())
+    item = _make_item(valor_excel=479.51, saldo_antes=479.51)
+    c = calcular_caixinhas(481.92, 0.005, 0)  # titulo 479.51, liquido 479.51
+    svc._company_do_journal = MagicMock(return_value=1)
+    svc._criar_pagamento = MagicMock(return_value=(1, 'PSIC/x'))
+    svc._postar_pagamento = MagicMock()
+    svc._buscar_linha_credito = MagicMock(return_value=55)
+    svc._reconciliar = MagicMock()
+    svc._criar_pagamento_com_writeoff_encargos = MagicMock()
+
+    svc._baixar_por_caixinhas(item, c, ESTADO_EMBUTIDO, journal_id=10, company_id=4)
+
+    svc._criar_pagamento.assert_called_once()
+    assert svc._criar_pagamento.call_args.kwargs['valor'] == 479.51
+    svc._reconciliar.assert_called_once_with(55, item.titulo_odoo_id)
+    svc._criar_pagamento_com_writeoff_encargos.assert_not_called()
+
+
+def test_baixar_caixinhas_nada_aplicado_lanca_desconto_antes():
+    svc = BaixaTitulosService(connection=MagicMock())
+    item = _make_item(valor_excel=5410.89, saldo_antes=5999.54)  # saldo = face cheia
+    c = calcular_caixinhas(5999.54, 0.005, 558.65)
+    svc._company_do_journal = MagicMock(return_value=1)
+    svc._criar_pagamento_especial = MagicMock(return_value=(7, 'DESC/x'))
+    svc._buscar_linha_credito = MagicMock(return_value=70)
+    svc._reconciliar = MagicMock()
+    svc._criar_pagamento_com_writeoff_encargos = MagicMock(return_value=(999, 'PSIC/x'))
+
+    svc._baixar_por_caixinhas(item, c, ESTADO_NADA_APLICADO, journal_id=10, company_id=4)
+
+    # lancou o DESCONTO (face -> titulo) e DEPOIS baixou liquido+encargos
+    svc._criar_pagamento_especial.assert_called_once()
+    assert svc._criar_pagamento_especial.call_args.kwargs['valor'] == 30.00
+    svc._criar_pagamento_com_writeoff_encargos.assert_called_once()
+
+
+def test_baixar_caixinhas_valor_divergente_falha():
+    svc = BaixaTitulosService(connection=MagicMock())
+    item = _make_item(valor_excel=9999.99, saldo_antes=5969.54)  # VALOR != liquido (5410.89)
+    c = calcular_caixinhas(5999.54, 0.005, 558.65)
+    svc._company_do_journal = MagicMock(return_value=1)
+    with pytest.raises(ValueError, match="diverge do"):
+        svc._baixar_por_caixinhas(item, c, ESTADO_EMBUTIDO, journal_id=10, company_id=4)
+
+
+def test_baixar_caixinhas_ano_2000_falha():
+    svc = BaixaTitulosService(connection=MagicMock())
+    item = _make_item()
+    c = calcular_caixinhas(5999.54, 0.005, 558.65)
+    with pytest.raises(ValueError, match="ANO_2000"):
+        svc._baixar_por_caixinhas(item, c, ESTADO_ANO_2000, journal_id=10, company_id=4)
