@@ -826,11 +826,28 @@ para parar a perda silenciosa de dados:
 
 Testes: `tests/motos_assai/test_nf_qpa_import_guards.py` (10 casos).
 
-> **Pendente (não coberto aqui — exige sessão dev)**: o blocker crítico IMP-23-005
-> (faturar ~100 NFs históricas em `NAO_RECONCILIADO` sem separação viva — o
-> *double-match trap* em `nf_qpa_adapter._calcular_match` que exclui seps FATURADA
-> do JOIN, desfazendo o S1=b) e o parser de CCe que classifica "correção de pedido"
-> como CHASSI / perde SOL (IMP-23-009) seguem ABERTOS.
+**Guard CCe correção-de-pedido (IMP-2026-06-23-009, parcial):** `cce_service.
+_parece_correcao_de_pedido(dados_parsed)` detecta, pelo texto bruto, uma CCe de
+correção de PEDIDO que cita motos por chassi (marcador "CORRECAO DE PEDIDO" sem
+"CORRECAO DE CHASSI") e, no `_tentar_aplicar_cce`, registra IGNORADA **sem trocar
+chassis** — o fallback LLM (`cce_llm_fallback._normalizar_resposta`) inferia CHASSI
+por mera presença de chassi e o apply trocava chassis na NF. Testes:
+`tests/motos_assai/test_cce_correcao_pedido_guard.py` (5 casos). Resta a parte do
+regex SOL do parser de CCe (perde 3/10 SOL puro-numérico) — unificar com a extração
+do parser de NF (LLM) é follow-up.
+
+> **Pendente (exige sessão dev / decisão de modelo)**: o blocker crítico IMP-23-005
+> (faturar as NFs históricas em `NAO_RECONCILIADO` SEM separação viva). Estado em
+> 2026-06-24: split-brain consistente já corrigido (backfill `2026_06_23_...`, 14
+> NFs→BATEU). Restam **102 NFs sem separação** (1025/1046 chassis limpos
+> ESTOQUE/MONTADA; **22 compartilhados com outra NF** + 20 em fluxo de venda =
+> integridade a resolver). Faturar exige criar separação, que exige `pedido_id NOT
+> NULL` — e os únicos pedidos vivos são 7 ABERTO/PARCIAL (anexar corromperia o
+> tracking). **Decisão de modelo pendente** (pedido sintético de backfill vs novo
+> status `CONCILIADO_BACKFILL` sem sep + auditar leitores de `status_match` em
+> resumo/faturamento/carregamento/reprocessar). Também aberto: 4 split-brain com
+> chassi RE-ALOCADO entre NFs (1727/1729/1737/2037) e a NF 1797 (`merged3.pdf`:
+> 138 págs/~9 NFs num registro só, 20 chassis únicos — split + re-import).
 
 ---
 

@@ -352,23 +352,35 @@ def _tentar_aplicar_cce(
     Nao commita — caller decide.
     """
     # 1. Tipo NAO_CHASSI: registrar como IGNORADA mas tentar vincular NF
-    if cce.tipo_correcao not in ('CHASSI',):
+    # NAO trocar chassis quando (a) tipo != CHASSI, OU (b) tipo=CHASSI mas o texto
+    # bruto e correcao de PEDIDO mal-classificada (IMP-2026-06-23-009): o LLM
+    # forcava CHASSI por presenca de chassi numa 'correcao de pedido', e o apply
+    # trocava chassis na NF. Aqui registramos para revisao manual, sem trocar.
+    misclass_pedido = cce.tipo_correcao == 'CHASSI' and _parece_correcao_de_pedido(cce.dados_parsed)
+    if cce.tipo_correcao not in ('CHASSI',) or misclass_pedido:
         nf = nf_alvo or _resolver_nf_da_cce(cce)
         if nf:
             cce.nf_id = nf.id
             cce.tem_nf = True
         cce.status = CCE_STATUS_IGNORADA
-        cce.observacao = (
-            f'CCe tipo {cce.tipo_correcao} — nenhuma alteracao automatica '
-            f'aplicada (apenas registro). Acao manual necessaria.'
-        )
+        if misclass_pedido:
+            cce.observacao = (
+                'CCe classificada como CHASSI mas o texto e correcao de PEDIDO '
+                '(IMP-2026-06-23-009) — chassis NAO trocados. Revisao manual.'
+            )
+            mensagem = ('CCe parece correcao de pedido (nao de chassi) — '
+                        'chassis nao trocados. Verifique manualmente.')
+        else:
+            cce.observacao = (
+                f'CCe tipo {cce.tipo_correcao} — nenhuma alteracao automatica '
+                f'aplicada (apenas registro). Acao manual necessaria.'
+            )
+            mensagem = (f'CCe registrada como {cce.tipo_correcao} — '
+                        'nao altera chassis. Verifique manualmente.')
         return {
             'ok': True,
             'status_final': cce.status,
-            'mensagem': (
-                f'CCe registrada como {cce.tipo_correcao} — '
-                'nao altera chassis. Verifique manualmente.'
-            ),
+            'mensagem': mensagem,
         }
 
     # 2. Tipo CHASSI sem chassis_corrigidos no parser → ERRO
@@ -571,6 +583,29 @@ def _extrair_sequencia(dados: Dict[str, Any]) -> int:
         except ValueError:
             pass
     return 1
+
+
+def _parece_correcao_de_pedido(dados_parsed: Any) -> bool:
+    """True se o texto bruto da CCe indica correcao de PEDIDO (e nao de chassi).
+
+    Guard anti IMP-2026-06-23-009: o fallback LLM (`cce_llm_fallback`) inferia tipo
+    CHASSI por mera presenca de chassi numa 'correcao de pedido' que cita motos, e o
+    apply trocava chassis na NF. Aqui, pelo texto, distinguimos: se ha marcador de
+    PEDIDO e NAO ha marcador explicito de CHASSI, e correcao de pedido (nao trocar).
+    Insensivel a acento/caixa.
+    """
+    if not isinstance(dados_parsed, dict):
+        return False
+    texto = dados_parsed.get('texto_correcao_bruto') or ''
+    if not texto.strip():
+        return False
+    import unicodedata
+    norm = ''.join(
+        c for c in unicodedata.normalize('NFKD', texto) if not unicodedata.combining(c)
+    ).upper()
+    tem_chassi = 'CORRECAO DE CHASSI' in norm
+    tem_pedido = ('CORRECAO DE PEDIDO' in norm) or ('NUMERO DO PEDIDO' in norm)
+    return tem_pedido and not tem_chassi
 
 
 def _extrair_chassis_corrigidos(dados_parsed: Any) -> List[tuple]:
