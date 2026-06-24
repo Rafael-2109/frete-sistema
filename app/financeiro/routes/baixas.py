@@ -294,21 +294,25 @@ def baixas_download_template():
         with pd.ExcelWriter(output, engine='openpyxl') as writer:
             # Aba 1: Baixas (template para preenchimento)
             # Colunas especiais (ordem de processamento):
-            # 1. VALOR (principal) - journal informado
+            # 1. VALOR (principal/liquido) - journal informado
             # 2. DESCONTO - journal DESCONTO CONCEDIDO (886)
             # 3. ACORDO - journal ACORDO COMERCIAL (885)
             # 4. DEVOLUCAO - journal DEVOLUCAO (879)
             # 5. JUROS - journal JUROS RECEBIDOS (1066) - pode ultrapassar saldo
+            # 6. ENCARGOS - ANTECIPACAO (ex: Sendas/Assai): VALOR=liquido (Sicoob) +
+            #    ENCARGOS (write-off conta ENCARGOS DE EMPRESTIMOS E FINANCIAMENTOS) fecham
+            #    o titulo. NAO combinar ENCARGOS com DESCONTO/ACORDO/DEVOLUCAO/JUROS na mesma linha.
             df_baixas = pd.DataFrame({
                 'NF': ['92234', '92235', '92236'],
-                'PARCELA': [1, 1, 2],
-                'VALOR': [1500.00, 2000.00, 3500.50],
+                'PARCELA': [1, 1, 1],
+                'VALOR': [1500.00, 5410.89, 3500.50],  # 2a linha = liquido da antecipacao (Sicoob)
                 'JOURNAL': ['GRAFENO', 'SICOOB', 'AGIS'],
                 'DATA': [date.today().strftime('%Y-%m-%d')] * 3,
-                'DESCONTO': ['', 100.00, ''],  # Desconto concedido (limitado ao saldo)
-                'ACORDO': ['', '', 50.00],  # Acordo comercial (limitado ao saldo)
+                'DESCONTO': ['', '', 100.00],  # Desconto concedido (limitado ao saldo)
+                'ACORDO': ['', '', ''],  # Acordo comercial (limitado ao saldo)
                 'DEVOLUCAO': [200.00, '', ''],  # Devolucao (limitado ao saldo)
-                'JUROS': [50.00, '', 25.00]  # Juros recebidos (pode ultrapassar saldo)
+                'JUROS': [50.00, '', ''],  # Juros recebidos (pode ultrapassar saldo)
+                'ENCARGOS': ['', 558.65, '']  # Antecipacao: VALOR=liquido + ENCARGOS fecham o titulo (linha limpa)
             })
             df_baixas.to_excel(writer, index=False, sheet_name='Baixas')
 
@@ -499,6 +503,12 @@ def baixas_upload():
             except (ValueError, TypeError):
                 devolucao = 0
 
+            # Encargos de antecipacao (coluna opcional)
+            try:
+                encargos = round(float(row['ENCARGOS']), 2) if 'ENCARGOS' in df.columns and pd.notna(row.get('ENCARGOS')) else 0
+            except (ValueError, TypeError):
+                encargos = 0
+
             # Data
             try:
                 if pd.notna(row['DATA']):
@@ -525,10 +535,18 @@ def baixas_upload():
             tem_desconto = desconto > 0
             tem_acordo = acordo > 0
             tem_devolucao = devolucao > 0
-            tem_algum_valor = tem_valor_principal or tem_juros or tem_desconto or tem_acordo or tem_devolucao
+            tem_encargos = encargos > 0
+            tem_algum_valor = tem_valor_principal or tem_juros or tem_desconto or tem_acordo or tem_devolucao or tem_encargos
 
             if not tem_algum_valor:
-                erros.append('Nenhum valor preenchido (VALOR, JUROS, DESCONTO, ACORDO ou DEVOLUCAO)')
+                erros.append('Nenhum valor preenchido (VALOR, JUROS, DESCONTO, ACORDO, DEVOLUCAO ou ENCARGOS)')
+
+            # ENCARGOS (antecipacao) exige VALOR liquido e NAO combina com outros abatimentos
+            if tem_encargos:
+                if not tem_valor_principal:
+                    erros.append('ENCARGOS exige VALOR (liquido recebido no banco) preenchido')
+                if tem_desconto or tem_acordo or tem_devolucao or tem_juros:
+                    erros.append('ENCARGOS nao combina com DESCONTO/ACORDO/DEVOLUCAO/JUROS na mesma linha')
 
             # Journal é obrigatório quando há qualquer valor a lançar
             if tem_algum_valor and not journal_info:
@@ -572,6 +590,7 @@ def baixas_upload():
                 desconto_concedido_excel=desconto,
                 acordo_comercial_excel=acordo,
                 devolucao_excel=devolucao,
+                encargos_excel=encargos,
                 journal_odoo_id=journal_info['id'] if journal_info else None,
                 journal_odoo_code=journal_info['code'] if journal_info else None,
                 ativo=item_ativo,
@@ -808,6 +827,7 @@ def baixas_get_lote(lote_id):
             'nf': item.nf_excel,
             'parcela': item.parcela_excel,
             'valor': item.valor_excel,
+            'encargos': item.encargos_excel,
             'journal': item.journal_excel,
             'journal_id': item.journal_odoo_id,
             'data': item.data_excel.strftime('%Y-%m-%d') if item.data_excel else None,

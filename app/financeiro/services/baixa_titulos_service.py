@@ -39,10 +39,15 @@ from app.financeiro.constants import (
     JOURNAL_ACORDO_COMERCIAL_ID,
     JOURNAL_DEVOLUCAO_ID,
     CONTA_JUROS_RECEBIMENTOS_POR_COMPANY,
+    CONTA_ENCARGOS_POR_COMPANY,
     CNAB_BANCO_PARA_JOURNAL,
     JOURNAL_GRAFENO_ID,
     JOURNAL_GRAFENO_CODE,
 )
+
+# Tolerancia (R$) entre o ENCARGOS informado na planilha e a diferenca real
+# (saldo - liquido) que o write-off vai fechar. Absorve oscilacao de centavos.
+TOLERANCIA_ENCARGOS = 0.05
 
 
 def obter_journal_por_banco_cnab(banco_codigo: str) -> dict:
@@ -216,6 +221,7 @@ class BaixaTitulosService:
         desconto_excel = getattr(item, 'desconto_concedido_excel', 0) or 0
         acordo_excel = getattr(item, 'acordo_comercial_excel', 0) or 0
         devolucao_excel = getattr(item, 'devolucao_excel', 0) or 0
+        encargos_excel = getattr(item, 'encargos_excel', 0) or 0
 
         # Log de inicio
         partes_log = [f"NF {item.nf_excel} P{item.parcela_excel}"]
@@ -229,6 +235,8 @@ class BaixaTitulosService:
             partes_log.append(f"Devolucao R$ {devolucao_excel}")
         if juros_excel > 0:
             partes_log.append(f"Juros R$ {juros_excel}")
+        if encargos_excel > 0:
+            partes_log.append(f"Encargos R$ {encargos_excel}")
 
         logger.info(f"Processando: {' | '.join(partes_log)}")
 
@@ -286,6 +294,43 @@ class BaixaTitulosService:
         logger.info(f"  Usando journal principal: {item.journal_excel} (ID={journal_id_final})")
 
         # =================================================================
+        # ANTECIPACAO (ex: Sendas/Assai): VALOR=liquido (journal Sicoob) +
+        # ENCARGOS (write-off na conta ENCARGOS DE EMPRESTIMOS E FINANCIAMENTOS).
+        # O write-off real = saldo - liquido (fecha o titulo); o ENCARGOS informado
+        # e' sanity check. A conta de encargos segue a company do JOURNAL do pagamento
+        # (Sicoob), NAO a do titulo — espelha o padrao validado em prod (gotcha O8).
+        # =================================================================
+        usar_writeoff_encargos = encargos_excel > 0 and item.valor_excel > 0
+        conta_encargos_id = None
+        diferenca_encargos = 0.0
+        if usar_writeoff_encargos:
+            company_journal = self._company_do_journal(journal_id_final) or company_id
+            conta_encargos_id = CONTA_ENCARGOS_POR_COMPANY.get(company_journal)
+            if not conta_encargos_id:
+                raise ValueError(
+                    f"Conta de ENCARGOS nao mapeada para company {company_journal} "
+                    f"(journal {item.journal_excel}). Ver CONTA_ENCARGOS_POR_COMPANY."
+                )
+            if item.valor_excel > item.saldo_antes + 0.01:
+                raise ValueError(
+                    f"VALOR liquido ({item.valor_excel:.2f}) maior que saldo ({item.saldo_antes:.2f}) "
+                    f"na antecipacao com encargos."
+                )
+            diferenca_encargos = round(item.saldo_antes - item.valor_excel, 2)
+            tol_enc = max(TOLERANCIA_ENCARGOS, round(encargos_excel * 0.01, 2))
+            if abs(diferenca_encargos - encargos_excel) > tol_enc:
+                raise ValueError(
+                    f"ENCARGOS informado ({encargos_excel:.2f}) diverge da diferenca saldo-liquido "
+                    f"({diferenca_encargos:.2f}) alem da tolerancia ({tol_enc:.2f}). "
+                    f"Verifique VALOR (liquido) e ENCARGOS. Saldo={item.saldo_antes:.2f}"
+                )
+            logger.info(
+                f"  [ENCARGOS] NF {item.nf_excel}: Liquido R$ {item.valor_excel:.2f} + "
+                f"Encargos R$ {diferenca_encargos:.2f} (conta {conta_encargos_id}, "
+                f"company journal {company_journal}) = Saldo R$ {item.saldo_antes:.2f}"
+            )
+
+        # =================================================================
         # VALIDACAO DE DUPLICIDADE - Desconto Concedido (unico por titulo)
         # Pular se desconto já embutido (não será lançado)
         # =================================================================
@@ -301,18 +346,20 @@ class BaixaTitulosService:
         # - Principal + Desconto + Acordo + Devolucao devem respeitar saldo
         # - Juros NAO entra na soma (pode ser acima)
         # - Se desconto já embutido, exclui da soma
+        # - Antecipacao (encargos) tem validacao propria acima — pular aqui
         # =================================================================
-        if desconto_ja_embutido:
-            soma_valores_saldo = item.valor_excel + acordo_excel + devolucao_excel
-        else:
-            soma_valores_saldo = item.valor_excel + desconto_excel + acordo_excel + devolucao_excel
+        if not usar_writeoff_encargos:
+            if desconto_ja_embutido:
+                soma_valores_saldo = item.valor_excel + acordo_excel + devolucao_excel
+            else:
+                soma_valores_saldo = item.valor_excel + desconto_excel + acordo_excel + devolucao_excel
 
-        if soma_valores_saldo > item.saldo_antes + 0.01:  # Tolerancia de 1 centavo
-            raise ValueError(
-                f"Soma dos valores ({soma_valores_saldo:.2f}) maior que saldo ({item.saldo_antes:.2f}). "
-                f"Principal={item.valor_excel}, Desconto={desconto_excel}{'[EMBUTIDO]' if desconto_ja_embutido else ''}, "
-                f"Acordo={acordo_excel}, Devolucao={devolucao_excel}"
-            )
+            if soma_valores_saldo > item.saldo_antes + 0.01:  # Tolerancia de 1 centavo
+                raise ValueError(
+                    f"Soma dos valores ({soma_valores_saldo:.2f}) maior que saldo ({item.saldo_antes:.2f}). "
+                    f"Principal={item.valor_excel}, Desconto={desconto_excel}{'[EMBUTIDO]' if desconto_ja_embutido else ''}, "
+                    f"Acordo={acordo_excel}, Devolucao={devolucao_excel}"
+                )
 
         # =================================================================
         # VARIAVEL DE CONTROLE: Saldo consumido acumulado
@@ -342,8 +389,28 @@ class BaixaTitulosService:
                         f"O titulo pode ter sido baixado por outro processo."
                     )
 
+            # ANTECIPACAO: liquido + write-off de encargos no mesmo payment (fecha o titulo)
+            if usar_writeoff_encargos:
+                payment_id, payment_name = self._criar_pagamento_com_writeoff_encargos(
+                    titulo_id=item.titulo_odoo_id,
+                    partner_id=item.partner_odoo_id,
+                    valor_liquido=item.valor_excel,
+                    journal_id=journal_id_final,
+                    conta_encargos_id=conta_encargos_id,
+                    ref=item.move_odoo_name,
+                    data=item.data_excel,
+                )
+
+                item.payment_odoo_id = payment_id
+                item.payment_odoo_name = payment_name
+                # Encargos foi processado junto com o liquido via Write-Off (mesmo payment)
+                item.payment_encargos_odoo_id = payment_id
+                item.payment_encargos_odoo_name = f"{payment_name} (Write-Off Encargos: R$ {diferenca_encargos:.2f})"
+
+                logger.info(f"  [1] Pagamento LIQUIDO + ENCARGOS (Write-Off) criado: {payment_name}")
+
             # Se tem JUROS, usar wizard com Write-Off
-            if juros_excel > 0:
+            elif juros_excel > 0:
                 payment_id, payment_name = self._criar_pagamento_com_writeoff_juros(
                     titulo_id=item.titulo_odoo_id,
                     partner_id=item.partner_odoo_id,
@@ -590,6 +657,8 @@ class BaixaTitulosService:
             pagamentos_criados.append(f"Devolucao: {item.payment_devolucao_odoo_name}")
         if item.payment_juros_odoo_name:
             pagamentos_criados.append(f"Juros: {item.payment_juros_odoo_name}")
+        if item.payment_encargos_odoo_name:
+            pagamentos_criados.append(f"Encargos: {item.payment_encargos_odoo_name}")
 
         logger.info(f"  OK - Payments: {', '.join(pagamentos_criados)}, Saldo: {item.saldo_antes} -> {item.saldo_depois}")
 
@@ -1540,6 +1609,110 @@ class BaixaTitulosService:
         logger.info(f"  Pagamento com Write-Off criado: {payment_name} (ID={payment_id}, state={payment.get('state')})")
 
         return payment_id, payment_name
+
+    def _company_do_journal(self, journal_id: int) -> Optional[int]:
+        """Retorna o company_id do journal (resolve a conta de encargos por company)."""
+        if not journal_id:
+            return None
+        journals = self.connection.search_read(
+            'account.journal',
+            [['id', '=', journal_id]],
+            fields=['company_id'],
+            limit=1
+        )
+        if journals:
+            return self._extrair_id(journals[0].get('company_id'))
+        return None
+
+    def _criar_pagamento_com_writeoff_encargos(
+        self,
+        titulo_id: int,
+        partner_id: int,
+        valor_liquido: float,
+        journal_id: int,
+        conta_encargos_id: int,
+        ref: str,
+        data,
+    ) -> Tuple[int, str]:
+        """
+        Cria pagamento de ANTECIPACAO (ex: Sendas/Assai) via wizard account.payment.register.
+
+        O cliente antecipa o recebivel: entra o valor LIQUIDO no banco (journal Sicoob) e a
+        diferenca (saldo - liquido) e' o encargo financeiro, lancado como write-off na conta
+        ENCARGOS DE EMPRESTIMOS E FINANCIAMENTOS (despesa). O wizard ja posta E reconcilia
+        (fecha o titulo) — NAO chamar action_post()/reconcile() depois (O2).
+
+        A company do move e' determinada pelo journal (Sicoob); a conta de encargos DEVE
+        pertencer a essa company (ver CONTA_ENCARGOS_POR_COMPANY). 'cannot marshal None'
+        no action_create_payments = SUCESSO (O6).
+
+        Returns:
+            Tuple com (payment_id, payment_name)
+        """
+        data_str = data.strftime('%Y-%m-%d') if hasattr(data, 'strftime') else str(data)
+
+        wizard_context = {
+            'active_model': 'account.move.line',
+            'active_ids': [titulo_id],
+        }
+
+        wizard_data = {
+            'payment_type': 'inbound',
+            'partner_type': 'customer',
+            'partner_id': partner_id,
+            'amount': valor_liquido,
+            'journal_id': journal_id,
+            'payment_date': data_str,
+            'communication': ref,
+            'payment_difference_handling': 'reconcile',  # diferenca (saldo-liquido) vira write-off
+            'writeoff_account_id': conta_encargos_id,
+            'writeoff_label': 'Encargos de antecipacao',
+        }
+
+        wizard_id = self.connection.execute_kw(
+            'account.payment.register',
+            'create',
+            [wizard_data],
+            {'context': wizard_context}
+        )
+
+        logger.info(f"  Wizard encargos criado: ID={wizard_id}")
+
+        try:
+            self.connection.execute_kw(
+                'account.payment.register',
+                'action_create_payments',
+                [[wizard_id]],
+                {'context': wizard_context}
+            )
+        except Exception as e:
+            if not is_cannot_marshal_none(e):  # 'cannot marshal None' = sucesso (O6) — ver odoo/GOTCHAS.md
+                raise
+
+        payments = self.connection.execute_kw(
+            'account.payment',
+            'search_read',
+            [[
+                ['partner_id', '=', partner_id],
+                ['amount', '=', valor_liquido],
+                ['journal_id', '=', journal_id],
+            ]],
+            {
+                'fields': ['id', 'name', 'move_id', 'state'],
+                'order': 'id desc',
+                'limit': 1
+            }
+        )
+
+        if not payments:
+            raise ValueError("Pagamento de antecipacao nao encontrado apos criar via wizard")
+
+        payment = payments[0]
+        logger.info(
+            f"  Pagamento antecipacao criado: {payment['name']} "
+            f"(ID={payment['id']}, state={payment.get('state')})"
+        )
+        return payment['id'], payment['name']
 
     def _criar_lancamento_juros_avulso(
         self,

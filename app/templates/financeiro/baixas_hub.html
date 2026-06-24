@@ -377,6 +377,8 @@
                     <div>
                         <strong>Formato esperado:</strong><br>
                         <code style="background: var(--fin-bg-tertiary); padding: 0.25rem 0.5rem; border-radius: 4px;">NF | PARCELA | VALOR | JOURNAL | DATA</code>
+                        <br>
+                        <small>Opcionais: DESCONTO, ACORDO, DEVOLUCAO, JUROS e <strong>ENCARGOS</strong> (antecipa&ccedil;&atilde;o Sendas/Assa&iacute;: VALOR = l&iacute;quido no banco + ENCARGOS fecham o t&iacute;tulo; n&atilde;o combinar com os demais).</small>
                         <br><br>
                         <a href="{{ url_for('financeiro.baixas_download_template') }}" class="fin-link">
                             <i class="fas fa-download"></i> Baixar modelo Excel

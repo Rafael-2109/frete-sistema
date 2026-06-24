@@ -73,6 +73,11 @@
       "default": 0
     },
     {
+      "name": "encargos_excel",
+      "type": "float",
+      "default": 0
+    },
+    {
       "name": "titulo_odoo_id",
       "type": "integer",
       "description": "account.move.line ID"
@@ -176,6 +181,14 @@
     },
     {
       "name": "payment_devolucao_odoo_name",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "payment_encargos_odoo_id",
+      "type": "integer"
+    },
+    {
+      "name": "payment_encargos_odoo_name",
       "type": "varchar(100)"
     },
     {

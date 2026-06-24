@@ -1055,6 +1055,9 @@ class BaixaTituloItem(db.Model):
     desconto_concedido_excel = db.Column(db.Float, nullable=True, default=0)  # Desconto concedido ao cliente
     acordo_comercial_excel = db.Column(db.Float, nullable=True, default=0)  # Acordo comercial
     devolucao_excel = db.Column(db.Float, nullable=True, default=0)  # Devolucao
+    # Encargos de antecipacao (ex: Sendas/Assai): diferenca saldo-liquido lancada como
+    # write-off na conta ENCARGOS DE EMPRESTIMOS E FINANCIAMENTOS (despesa). Fecha o titulo.
+    encargos_excel = db.Column(db.Float, nullable=True, default=0)
 
     # =========================================================================
     # DADOS RESOLVIDOS DO ODOO (apos validacao)
@@ -1107,6 +1110,9 @@ class BaixaTituloItem(db.Model):
     payment_acordo_odoo_name = db.Column(db.String(100), nullable=True)
     payment_devolucao_odoo_id = db.Column(db.Integer, nullable=True)
     payment_devolucao_odoo_name = db.Column(db.String(100), nullable=True)
+    # Encargos de antecipacao (write-off no mesmo payment do liquido)
+    payment_encargos_odoo_id = db.Column(db.Integer, nullable=True)
+    payment_encargos_odoo_name = db.Column(db.String(100), nullable=True)
 
     # Saldo apos baixa
     saldo_depois = db.Column(db.Float, nullable=True)  # amount_residual DEPOIS
@@ -1156,6 +1162,7 @@ class BaixaTituloItem(db.Model):
             'desconto_concedido_excel': self.desconto_concedido_excel,
             'acordo_comercial_excel': self.acordo_comercial_excel,
             'devolucao_excel': self.devolucao_excel,
+            'encargos_excel': self.encargos_excel,
             # Dados Odoo resolvidos
             'titulo_odoo_id': self.titulo_odoo_id,
             'move_odoo_id': self.move_odoo_id,
@@ -1181,6 +1188,8 @@ class BaixaTituloItem(db.Model):
             'payment_acordo_odoo_name': self.payment_acordo_odoo_name,
             'payment_devolucao_odoo_id': self.payment_devolucao_odoo_id,
             'payment_devolucao_odoo_name': self.payment_devolucao_odoo_name,
+            'payment_encargos_odoo_id': self.payment_encargos_odoo_id,
+            'payment_encargos_odoo_name': self.payment_encargos_odoo_name,
             'saldo_depois': self.saldo_depois,
             # Snapshots
             'snapshot_antes': json.loads(self.snapshot_antes) if self.snapshot_antes else None,

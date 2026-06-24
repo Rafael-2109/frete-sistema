@@ -141,6 +141,12 @@ Setar `valor_titulo` diretamente resulta em valor inconsistente.
 `baixas.py` = contas a RECEBER (upload Excel, BaixaTituloLote/Item, `/contas-receber/baixas/`)
 `pagamentos_baixas.py` = contas a PAGAR (extrato banco, BaixaPagamentoLote/Item, `/contas-pagar/baixas/`)
 Models, rotas e services completamente separados. Nomes similares, fluxos diferentes.
+Template a RECEBER: `NF|PARCELA|VALOR|JOURNAL|DATA` + opcionais `DESCONTO|ACORDO|DEVOLUCAO|JUROS|ENCARGOS`.
+`ENCARGOS` = ANTECIPACAO (ex: Sendas/Assai): `VALOR`=liquido (journal Sicoob) + write-off da diferenca
+(saldo-liquido) na conta ENCARGOS DE EMPRESTIMOS E FINANCIAMENTOS (`CONTA_ENCARGOS_POR_COMPANY`,
+pela company do JOURNAL, nao do titulo — gotcha O8). Via wizard `account.payment.register` (posta+reconcilia,
+nao re-postar — O2). NAO combinar ENCARGOS com DESCONTO/ACORDO/DEVOLUCAO/JUROS na mesma linha. O desconto
+de contrato Sendas ja vem abatido no saldo (linha DESCONTOS CONCEDIDOS no move da venda) — nao se relanca.
 
 ### A8: matches_candidatos e TEXT, nao JSONB
 `ExtratoItem.matches_candidatos` (1368) e `BaixaPagamentoItem.matches_candidatos` (2000): TEXT.

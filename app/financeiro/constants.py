@@ -50,6 +50,20 @@ CONTA_JUROS_PAGAMENTOS_POR_COMPANY = {
     5: 26619,  # LA FAMIGLIA - LF
 }
 
+# Conta 3701010002 ENCARGOS DE EMPRESTIMOS E FINANCIAMENTOS (expense)
+# Usada na baixa de ANTECIPACAO (ex.: Sendas/Assai): o titulo entra liquido no banco
+# (journal Sicoob) e a diferenca saldo-liquido e' o encargo financeiro da antecipacao,
+# lancado como DESPESA via write-off do wizard account.payment.register.
+# IMPORTANTE: a conta segue a company do JOURNAL do pagamento (Sicoob), NAO a do titulo
+# — espelha o padrao validado em prod (titulo CD baixado via Sicoob FB usa encargos FB 22768).
+# Confirmado no Odoo 2026-06-23 (code 3701010002 por company).
+CONTA_ENCARGOS_POR_COMPANY = {
+    1: 22768,  # NACOM GOYA - FB
+    3: 24050,  # NACOM GOYA - SC
+    4: 25334,  # NACOM GOYA - CD
+    5: 26618,  # LA FAMIGLIA - LF
+}
+
 
 # =============================================================================
 # JOURNALS ESPECIAIS - IDs no Odoo (account.journal)
