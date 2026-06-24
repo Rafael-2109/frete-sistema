@@ -99,6 +99,7 @@ Se a simulacao de `criando_separacao_pedidos.py` retornar `alertas_estoque` NAO-
 | **Prazo de entrega** ("quando chega?") | `calculando_leadtime_entrega.py` | `--pedido X --data-embarque Y` |
 | **Criar separacao** | `criando_separacao_pedidos.py` | `--pedido X --expedicao Y` (SEM --executar!) |
 | **Gerar embarque** (de separacoes ja escolhidas) | `gerar_embarque.py` | `--user-id N --lotes '[...]' --transportadora-id T --tabela "..."` OU `--user-id N --embarque-origem ID` (SEM --confirmar!) |
+| **Adicionar lote a embarque EXISTENTE** | `adicionando_item_embarque.py` | `--embarque-id N --lote LOTE_... --user-id N` (SEM --confirmar!) |
 | **Programacao de producao** | `consultando_programacao_producao.py` | `--listar --dias 7` |
 | **Analise completa da carteira** | `analisando_carteira_completa.py` | `--resumo` ou sem parametros |
 | **Priorizar por P1-P7** | `analisando_carteira_completa.py` | `--prioridade N` |
@@ -112,6 +113,7 @@ Se a simulacao de `criando_separacao_pedidos.py` retornar `alertas_estoque` NAO-
 5. **PRAZO de entrega:** → `calculando_leadtime_entrega.py`
 6. **ACAO de criar separacao:** → `criando_separacao_pedidos.py` (SEMPRE simular antes!)
 7. **ACAO de gerar embarque** (separacoes JA escolhidas → Cotacao+Embarque): → `gerar_embarque.py` (SEMPRE dry-run antes! `--confirmar` efetiva). NAO lanca frete — o frete nasce depois na portaria/faturamento. v1 SO Nacom (recusa CARVIA-/ASSAI-).
+8. **ACAO de adicionar 1 lote a embarque JA EXISTENTE**: → `adicionando_item_embarque.py` (SEMPRE dry-run antes! `--confirmar` efetiva). Recalcula os totais por SOMA dos itens ativos (`sincronizar_totais_embarque`) — NUNCA incremente o total na mao (infla). SO Nacom (LOTE_*); itens CARVIA-* tem fluxo proprio (`reconciliar_embarque_carvia`).
 
 ### --cliente vs --grupo (IMPORTANTE)
 - **Loja especifica mencionada** (ex: "Atacadao 183", "Assai SP"): usar `--cliente "ATACADAO 183"`
@@ -144,7 +146,7 @@ Se resultado tiver mais de 1 loja: PERGUNTAR qual loja.
 
 **Para parametros completos, retornos e modos de operacao**: LER `SCRIPTS.md`
 
-Resumo dos 9 scripts:
+Resumo dos 10 scripts:
 
 | # | Script | Proposito |
 |---|--------|-----------|
@@ -157,6 +159,7 @@ Resumo dos 9 scripts:
 | 7 | `resolver_entidades.py` | Utilitario interno de resolucao |
 | 8 | `analisando_carteira_completa.py` | Analise P1-P7 completa com decisoes |
 | 9 | `gerar_embarque.py` | Gerar embarque (Cotacao+Embarque) de separacoes ja escolhidas — dry-run antes! NAO lanca frete |
+| 10 | `adicionando_item_embarque.py` | Anexar 1 lote Nacom a embarque EXISTENTE — dry-run antes! Recalcula totais por SOMA (anti-inflacao) |
 
 ---
 

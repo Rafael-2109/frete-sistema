@@ -51,6 +51,81 @@ Indice de execucoes do dialogo de melhoria Agent SDK <-> Claude Code.
 | 45 | 2026-06-22 | 0 | 0 | 0 | 0 | SKIP (backlog 100% F2 — gate humano; nenhuma avaliavel pelo D8. 3 F2 reincidentes do #44, todas `version=1` sem v2: `adhoc-cluster-1070` (gerar embarque+fretes, 23 membros, Talita id 17, 4d), `skill-gap-lendo-arquivos` (analise exploratoria planilhas, 2 membros, Rayssa id 78, 3d), `adhoc-cluster-1161` (reclassificacao lote AML, 64 membros, TAMIRIS id 44, 2d — contraparte executora #163). Nada decidido/persistido; so relatorio+historico commitados, sem push) |
 | 46 | 2026-06-23 | 6 | 0 | 1 | 5 | OK (6 IMP avaliaveis, 0 auto-impl — todas tocam rota/service sensivel ou sao nao-bug; v2 257-262 HTTP 200. 1 REJEICAO IMP-23-001 list_session_uploads (Rayssa id 78): NAO-bug, limitacao historica — anexos 18-20/06 sao ANTERIORES ao deploy do dual-write `agente_upload` (20/06 ~17h), tabela 0 linhas; codigo+filtro corretos, worktree s3-uploads ja mergeada. 5 PROPOSTAS: (a) IMP-22-001 skill portaria via refactor `movimento_service` extraindo cadeia de saida de routes.py (Samantha id 49); (b) IMP-22-002 rota excluir FT CarVia PENDENTE 6-guards xerox excluir_despesa_extra (Talita id 17); (c) IMP-22-004 BUG REAL peso cubado frete — 3a re-incidencia #32/#33, causa isolada (frete usa `calcular_cubado_por_modelos` dependente da cotacao vs fonte canonica `calcular_peso_cubado_batch` via item; NF 38312/38317 ambas tem item+veiculo, divergencia = cotacao nao cobre JET), correcao = unificar com o caminho canonico ja existente (Barbara id 87); (d) IMP-23-002 upload NF Q.P.A. sincrono confirmado, restarts com CONFOUND deploy (Rayssa id 78); (e) IMP-23-003 BUG data loss silencioso loop faturamento.py:331 sem except generico (Rayssa id 78). 2.1.1a: WIP nao-commitado `_to_decimal_safe` em nf_qpa_adapter.py corrige 1 causa de -002/-003, nao o estrutural. 4 F2 listadas: 3 reincidentes (#44/#45) + 1 NOVA skill-gap-exportando-arquivos (Gislene id 47). Sem push) |
 | 47 | 2026-06-24 | 7 | 5 | 0 | 2 | OK (RECONCILIACAO DEV 4-maos, NAO cron — fixes implementados direto na sessao, IMP atualizados em PROD. Rodada Q.P.A. Rayssa id 78. 5 IMPLEMENTADOS: IMP-23-002 OOM (cap 25 PDFs + gc/f.close + with pdfplumber), IMP-23-003 data loss (17d5c4b04), IMP-23-004 fail-loud 0/parcial chassis, IMP-23-008 porteiro CCe-vs-NF, IMP-23-009 guard CCe correcao-de-pedido nao troca chassis. 2 PARCIAIS: IMP-23-005/-010 faturar historico — causa-raiz isolada = double-match trap (S1=b cria sep FATURADA, _calcular_match exclui FATURADA do JOIN e desfaz); PARTE 1 feita = backfill 14 NFs split-brain -> BATEU (prod NAO_RECONCILIADO 120->106); PARTE 2 (102 sem-sep) = decisao subir pedidos VOE dos PDFs -> sep viva -> match natural. Validacao: sweep dos 125 PDFs (122 completos, 0 perda silenciosa). Commits 17d5c4b04/181aba751/bd8fe19b2 push main. v2 261-262,277-281 HTTP 200. Integridade aberta: 4 split-brain c/ chassi re-alocado + NF 1797 merge. IMP-23-006/007 nao-Q.P.A. seguem proposed) |
+| 48 | 2026-06-24 | 9 | 6 | 1 | 2 | OK (cron D8 normal — pega o backlog que o #47 deixou p/ "D8 normal" + CarVia Barbara id 87 + critica Rayssa id 78; relatorio `dialogue-2026-06-24-cron.md`. v2 286-294 HTTP 200. 6 AUTO-IMPL: IMP-23-011 critico BUG REAL (vincular_nf_manualmente nao propagava pedido_id ja validado -> branch ambiguo S1=b, 98/100 NFs backfill; pedido_id curto-circuita inferencia, 22 testes); cluster CarVia escrita IMP-24-001/-002/-003 = 1 script novo `atualizando_frete_carvia.py` (1o WRITE da skill, dry-run default, recalcula requer_aprovacao, NAO calcula — delega a cotando_subcontrato); IMP-24-004 gotcha lancar-cte readonly documentado (regra #9); IMP-23-007 `adicionando_item_embarque.py` modo Nacom reusa gerar_embarque + sincronizar_totais por SOMA (anti-inflacao 1089 vs 863kg), CarVia recusado (fronteira R1). 2 PROPOSTAS: IMP-23-012 causa-raiz faturamento parcial isolada (_calcular_match seta sep FATURADA inteira mas emite evento so por item-da-NF) — decisao de modelo pendente (split-brain 1727/1729/1737/2037); IMP-22-003 principio ja coberto (cannot_do + R3) — recomendacao p/ review trimestral jul/2026, nao auto-edit por governanca PAD-CTX. 1 REJEICAO: IMP-23-006 confirmar diario inter-company = salvaguarda correta (R3) + skill mal-atribuida (lendo-arquivos nao baixa) + sinal fraco; caminho = memoria de perfil. Sem push) |
+| R1 | 2026-06-24 | 2 | 2 | 0 | 0 | OK (RECONCILIACAO MANUAL — nao e execucao do cron. Fecha drift: 2 propostas do #46 viraram codigo e o registro ficou defasado. IMP-22-004 (peso cubado frete, Barbara id 87) implementado em `120f2f61d` (23/06); IMP-22-002 (excluir FT CarVia, Talita id 17) implementado em `3b26ebc02` (24/06, IMP Talita). Gravado v3 `auto_implemented=true` ids 295-296 HTTP 200. Gap de processo corrigido: novo PASSO 1.5 no prompt D8 reabre propostas implementadas via `git log --grep`. Sem push) |
+
+## 2026-06-24 (reconciliacao manual — propostas ja implementadas)
+
+**Sessao dev 4-maos (NAO cron).** A avaliacao do D8 do dia (#47 + #48) detectou 2 propostas
+antigas (do #46, 23/06) que JA viraram codigo mas seguiam registradas como proposta
+(`auto_implemented=false`) — drift causado pelo filtro `NOT EXISTS v2` do PASSO 1 (uma vez
+proposta-v2, a sugestao nunca mais e reavaliada pelo cron).
+
+- **IMP-2026-06-22-004** — peso cubado do frete CarVia (Barbara id 87). Implementado no commit
+  `120f2f61d` (2026-06-23): `CarviaFreteService._peso_cubado_resolvido` passou a usar a fonte
+  canonica `MotoRecognitionService.calcular_peso_cubado_nf` (nao a cotacao). Validado em 24/06
+  (0 fretes subestimados). Gravado **v3 id 295** (`auto_implemented=true`, HTTP 200).
+- **IMP-2026-06-22-002** — excluir Fatura Transportadora CarVia (Talita id 17). Implementado no
+  commit `3b26ebc02` (2026-06-24, "IMP Talita"): nova rota POST `/faturas-transportadora/<id>/excluir`
+  liberada ao `sistema_carvia`, bloqueando quando ha `CarviaConciliacao` ou subcontrato com CTe REAL.
+  Gravado **v3 id 296** (`auto_implemented=true`, HTTP 200).
+
+**Correcao de processo:** adicionado o **PASSO 1.5** ao prompt do D8
+(`dominio-8-improvement-dialogue.md`, arvore principal + esta worktree) — varre propostas
+`auto_implemented=false` sem v3 dos ultimos 45 dias, checa `git log --grep=<key>` e grava v3
+quando ja implementadas. Idempotente (filtro `NOT EXISTS v3`), barato (1 `git log` por proposta).
+
+## 2026-06-24 (cron D8 #48)
+
+**Execucao cron D8 normal** (distinta da reconciliacao dev #47 do mesmo dia). Pega o
+backlog que o #47 deixou explicitamente para "o D8 normal" (IMP-23-006, IMP-23-007) +
+o cluster CarVia (Barbara id 87) + a critica IMP-23-011 (Rayssa id 78). **9 avaliadas,
+6 auto-impl, 1 rejeitada, 2 propostas.** Relatorio: `dialogue-2026-06-24-cron.md`.
+
+**6 AUTO-IMPLEMENTADAS:**
+- **IMP-23-011 (critical, BUG REAL)**: `vincular_nf_manualmente` validava `pedido_id`
+  (existe + AssaiPedidoVendaLoja na loja do CNPJ) mas chamava `ajustar_separacao_pela_nf`
+  SEM propaga-lo -> a funcao re-inferia e caia no branch ambiguo S1=b (exige exatamente 1
+  pedido ABERTO/PARCIAL na loja; 98/100 NFs de backfill batiam ali). Fix: param
+  `pedido_id=None` que, fornecido, curto-circuita TODA a inferencia ANTES dela; caller
+  propaga o id ja validado. Outros 2 callers inalterados. **22 testes passaram**.
+  (separacao_service.py + nf_qpa_adapter.py)
+- **Cluster CarVia escrita — IMP-24-001/-002/-003**: 1 script novo
+  `atualizando_frete_carvia.py` (1o WRITE da gerindo-carvia). Atualiza
+  valor_cotado/considerado/pago/venda/tabela de UM frete; dry-run DEFAULT (rollback +
+  antes/depois), `--confirmar` efetiva; espelha valor_considerado=valor_cotado sem CTe;
+  recalcula `requer_aprovacao` (nao auto-aprova). NAO calcula (peso cubado×tabela) —
+  delega a `cotando_subcontrato_carvia.py` (atomo nao embute outro fluxo). Validado em
+  banco local.
+- **IMP-24-004 (gotcha)**: tela `lancar-cte` exibe V.Cotado de carvia_fretes.valor_cotado,
+  campo readonly na UI (editar.html, form sem o campo). Documentado na regra #9 do SKILL.md
+  — o agente antecipa e manda usar o script, nao a tela.
+- **IMP-23-007 (Rafael id 1)**: `adicionando_item_embarque.py` modo Nacom. Reusa helpers
+  testados de `gerar_embarque.py` + `sincronizar_totais_embarque` (recalculo por SOMA dos
+  itens ativos — corrige a inflacao 1089,35 vs 863,35 kg do incremento aritmetico).
+  Idempotente. Itens CarVia recusados (fronteira R1; ponto canonico = `reconciliar_embarque_carvia`).
+  Validado em banco local (dry-run, idempotencia, conflito).
+
+**2 PROPOSTAS:**
+- **IMP-23-012 (Rayssa id 78)**: causa-raiz confirmada — `_calcular_match` seta `sep.status=FATURADA`
+  para a sep INTEIRA (~734) mas emite EVENTO_FATURADA so por item-da-NF com match (~738-744);
+  sep parcialmente coberta deixa chassis em SEPARADA. Correcao toca a semantica do faturamento =
+  decisao de modelo, ja PENDENTE no CLAUDE.md motos_assai (split-brain 1727/1729/1737/2037 +
+  IMP-23-005). Plano: FIX A (emitir FATURADA p/ todos os chassis da sep) + FIX B (funcao
+  idempotente `completar_faturada_parcial` na skill corrigindo-dados-assai).
+- **IMP-22-003 (Jessica id 4)**: principio JA coberto (system_prompt `<cannot_do>` "modificar
+  banco sem confirmacao" + R3 "aguarde resposta explicita"). Gap fino: R3 fala so de "criar
+  separacoes" e nao tem clausula anti-ambiguidade. NAO auto-editei (governanca PAD-CTX +
+  pre-commit anti-crescimento + review trimestral jul/2026). Recomendacao registrada p/ jul/2026.
+
+**1 REJEICAO:**
+- **IMP-23-006 (origem desconhecida)**: confirmar diario inter-company antes de um lote de
+  baixas e salvaguarda CORRETA (R3, irreversivel), nao friccao — um default fixo gravaria no
+  diario errado. Skill mal-atribuida (`lendo-arquivos` so LE; o fluxo e de
+  `baixando-credores-lote-odoo`/`executando-odoo-financeiro`). Descricao vazia + origem
+  desconhecida = sinal fraco. Caminho correto: memoria de perfil (R3 ja autoriza).
+
+Persistencia v2 ids 286-294 (HTTP 200). Branch `cron/manutencao`, sem push.
 
 ## 2026-06-24
 
