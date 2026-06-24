@@ -50,8 +50,10 @@ _URL_TTL = 7 * 24 * 3600
 def buscar_faturamento_mes(ano: int, mes: int) -> tuple[list[tuple[date, int]], int]:
     """Retorna ([(dia, valor_arredondado), ...], total_mes) do mes informado.
 
-    Usa search_read (campo `date` em ISO 'YYYY-MM-DD', sem locale) e agrega por
-    dia em memoria — robusto contra o locale do label do read_group.
+    Pagina o search_read por offset (sem teto fixo — nao trunca meses de alto
+    volume) e agrega por dia em memoria. `date` vem em ISO 'YYYY-MM-DD', sem
+    depender do locale do label de agrupamento do read_group (por isso aqui
+    nao usamos read_group).
     """
     from app.odoo.utils.connection import get_odoo_connection
 
@@ -66,9 +68,18 @@ def buscar_faturamento_mes(ano: int, mes: int) -> tuple[list[tuple[date, int]], 
         ('date', '>=', ini), ('date', '<=', fim),
     ]
     conn = get_odoo_connection()
-    registros = conn.search_read(
-        'account.move.line', domain, ['date', 'price_total'], limit=50000
-    )
+    registros = []
+    _PAGINA = 20000
+    offset = 0
+    while True:
+        lote = conn.search_read(
+            'account.move.line', domain, ['date', 'price_total'],
+            limit=_PAGINA, offset=offset,
+        )
+        registros.extend(lote)
+        if len(lote) < _PAGINA:
+            break
+        offset += _PAGINA
 
     agg: dict[str, float] = {}
     for r in registros:

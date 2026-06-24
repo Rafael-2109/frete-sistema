@@ -24,6 +24,7 @@
         <div class="card-body">
             <form method="POST" action="{{ url_for('financeiro.validador_titulos_processar') }}"
                   enctype="multipart/form-data">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <div class="row g-3">
                     {% for banco in bancos %}
                     <div class="col-md-6 col-lg-3">

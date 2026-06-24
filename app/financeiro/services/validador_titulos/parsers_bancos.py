@@ -116,12 +116,17 @@ def _achar_indices(linhas, config):
 
 
 def _achar_coluna(colunas_normalizadas, alvo) -> Optional[int]:
-    """Indice da coluna cujo nome normalizado e igual ou contem o alvo."""
+    """Indice da coluna cujo nome normalizado e igual ou CONTEM o alvo.
+
+    So `alvo in c` (cabecalho mais descritivo que o alvo). A direcao inversa
+    (`c in alvo`) foi removida: deixava uma celula curta de resumo casar a
+    coluna errada (ex: 'v' casando 'valor').
+    """
     for i, c in enumerate(colunas_normalizadas):
         if c == alvo:
             return i
     for i, c in enumerate(colunas_normalizadas):
-        if c and (alvo in c or c in alvo):
+        if c and alvo in c:
             return i
     return None
 
