@@ -22,6 +22,7 @@ Werkzeug==3.1.5                # patch (transitiva via Flask)
 certifi>=2026.1.4              # CA roots atualizados (transitiva via requests)
 pandas==3.0.0
 openpyxl==3.1.5
+pyxlsb==1.0.10                 # leitura de .xlsb (Validador de Titulos x Bancos)
 # xlsxwriter removido - usando openpyxl com template
 xlrd==2.0.2
 xlwt==1.3.0
