@@ -252,9 +252,9 @@ STRING custom (option `system_prompt`) — 3 arquivos concatenados em _build_ful
 | Componente | Linhas | Bytes | Tokens (est.) |
 |------------|-------:|------:|--------------:|
 | `preset_operacional.md` | 117 | 5079 | ~1.5K tok |
-| `system_prompt.md` | 770 | 48374 | ~13.8K tok |
+| `system_prompt.md` | 771 | 49434 | ~14.1K tok |
 | `empresa_briefing.md` | 81 | 5084 | ~1.5K tok |
-| **TOTAL estatico** | **968** | **58537** | **~16.7K tok** |
+| **TOTAL estatico** | **969** | **59597** | **~17.0K tok** |
 
 > Medido por `scripts/audits/prompt_size_audit.py` (tokens = bytes/3.5, estimativa pt-BR+XML). NUNCA editar a mao — rode `--update-claude-md`.
 <!-- prompt-size:end -->
@@ -291,7 +291,7 @@ STRING custom (option `system_prompt`) — 3 arquivos concatenados em _build_ful
 
 ### Arquivos envolvidos
 - `prompts/preset_operacional.md` — preset customizado (tamanho no bloco auto-medido — `prompt_size_audit.py`)
-- `prompts/system_prompt.md` — system prompt operacional (v4.4.0, estatico — sem vars dinamicas)
+- `prompts/system_prompt.md` — system prompt operacional (v4.5.0, estatico — sem vars dinamicas)
 - `sdk/client.py` — `_format_system_prompt()` (guard cache), `_user_prompt_submit_hook()` (session_context)
 - `config/feature_flags.py` — `USE_CUSTOM_SYSTEM_PROMPT`, `USE_PROMPT_CACHE_OPTIMIZATION`
 - `config/settings.py` — `operational_preset_path`

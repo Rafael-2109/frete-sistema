@@ -347,7 +347,8 @@ NAO cortar/comprimir (evidencia empirica interna):
 - `constitutional_hierarchy` L1-L4 + exemplo trabalhado (unico desempate de conflitos).
 - L2 grounding "fonte que PROVA vs DESCREVE" (anti-alucinacao).
 - `critical_fields`/`critical_ids` (listas da secao anterior).
-- R11/R12 confirmacao tipada em escrita Odoo/banco.
+- R11 (SEFAZ) confirmacao tipada + R12 tabela de tiers de risco em escrita Odoo/banco
+  (T1 reversivel pontual / T2 massa = 1 confirmacao; confirmacao tipada/multipla so em T3).
 - `session_summaries` + `pendencias` + `user_rules` no hook (continuidade).
 
 Licoes vigentes:
