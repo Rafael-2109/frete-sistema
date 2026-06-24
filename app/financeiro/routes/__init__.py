@@ -52,3 +52,4 @@ from app.financeiro.routes import comprovantes
 from app.financeiro.routes import comprovante_match
 from app.financeiro.routes import remessa_vortx
 from app.financeiro.routes import conversor_extrato_srm
+from app.financeiro.routes import validador_titulos
