@@ -103,20 +103,23 @@ class DanfePDFParser:
             import pdfplumber
 
             if self.pdf_path:
-                pdf = pdfplumber.open(self.pdf_path)
+                ctx = pdfplumber.open(self.pdf_path)
             elif self.pdf_bytes:
                 import io
-                pdf = pdfplumber.open(io.BytesIO(self.pdf_bytes))
+                ctx = pdfplumber.open(io.BytesIO(self.pdf_bytes))
             else:
                 return ''
 
+            # context manager: libera o handle mesmo se extract_text() falhar
+            # numa pagina (antes pdf.close() ficava fora de finally e vazava em
+            # lote — IMP-2026-06-23-002).
             textos = []
-            for page in pdf.pages:
-                texto = page.extract_text()
-                if texto:
-                    textos.append(texto)
-                    self.paginas.append(texto)
-            pdf.close()
+            with ctx as pdf:
+                for page in pdf.pages:
+                    texto = page.extract_text()
+                    if texto:
+                        textos.append(texto)
+                        self.paginas.append(texto)
             return '\n'.join(textos)
         except Exception as e:
             logger.warning(f"pdfplumber falhou: {e}")

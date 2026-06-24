@@ -128,6 +128,32 @@ class CceParseError(Exception):
     """Falha critica do parser deterministico — caller deve usar LLM fallback."""
 
 
+def _extrair_texto_pdf(pdf_bytes: bytes) -> str:
+    """Extrai o texto do PDF (todas as paginas) com pdfplumber.
+
+    Helper compartilhado por extrair_cce e eh_documento_cce. Usa context
+    manager (libera o handle mesmo em excecao).
+    """
+    with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
+        return '\n'.join((page.extract_text() or '') for page in pdf.pages)
+
+
+def eh_documento_cce(pdf_bytes: bytes) -> bool:
+    """True se o PDF for uma Carta de Correcao (CCe), nao uma NF Q.P.A.
+
+    Porteiro CCe-vs-NF (IMP-2026-06-23-008): a tela de upload de NF aceitava
+    PDF de CCe e criava NF orfa. Usa os MESMOS marcadores de formato do parser
+    de CCe (RE_FORMATO_QPA / RE_FORMATO_MOTOCHEFE) — read-only, nunca levanta.
+    """
+    if not pdf_bytes:
+        return False
+    try:
+        texto = _extrair_texto_pdf(pdf_bytes)
+    except Exception:
+        return False
+    return _detectar_formato(texto) in (FORMATO_QPA, FORMATO_MOTOCHEFE)
+
+
 def extrair_cce(pdf_bytes: bytes) -> Dict[str, Any]:
     """Extrai dados estruturados de PDF de CCe.
 
@@ -144,8 +170,7 @@ def extrair_cce(pdf_bytes: bytes) -> Dict[str, Any]:
         raise CceParseError('PDF vazio')
 
     try:
-        with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
-            texto = '\n'.join((page.extract_text() or '') for page in pdf.pages)
+        texto = _extrair_texto_pdf(pdf_bytes)
     except Exception as e:
         raise CceParseError(f'Falha ao abrir PDF com pdfplumber: {e}')
 

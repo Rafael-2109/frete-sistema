@@ -1,3 +1,4 @@
+import gc
 import re
 
 from flask import (
@@ -22,6 +23,7 @@ from app.utils.file_storage import FileStorage
 from app.motos_assai.forms import UploadNfQpaForm
 from app.motos_assai.services.parsers.nf_qpa_adapter import (
     importar_nf_qpa, NfQpaParseError, NfQpaJaImportadaError,
+    NfQpaDocumentoCceError,
     vincular_nf_manualmente, VincularNfError,
 )
 from app.motos_assai.services.cancelamento_nf_service import (
@@ -352,6 +354,17 @@ def faturamento_upload_nf(separacao_id):
                     'nf_numero': None,
                     'erro': str(e),
                 })
+            except NfQpaDocumentoCceError as e:
+                # PDF de CCe enviado ao endpoint de NF (IMP-2026-06-23-008):
+                # NAO cria NF orfa — orienta a usar a tela de CCe.
+                resultados.append({
+                    'filename': f.filename,
+                    'status': 'documento_errado',
+                    'status_match': None,
+                    'nf_id': None,
+                    'nf_numero': None,
+                    'erro': str(e),
+                })
             except NfQpaParseError as e:
                 resultados.append({
                     'filename': f.filename,
@@ -381,6 +394,14 @@ def faturamento_upload_nf(separacao_id):
                     'nf_numero': None,
                     'erro': f'{type(e).__name__}: {e}',
                 })
+            finally:
+                # Libera memoria entre arquivos do lote (IMP-2026-06-23-002):
+                # sem isto o pico era a SOMA de varios PDFs+respostas LLM em voo.
+                try:
+                    f.close()
+                except Exception:
+                    pass
+                gc.collect()
 
         # 1 arquivo + sucesso → preserva UX antiga
         if len(resultados) == 1 and resultados[0]['status'] == 'ok':
@@ -403,6 +424,7 @@ def faturamento_upload_nf(separacao_id):
             'duplicada': sum(1 for r in resultados if r['status'] == 'duplicada'),
             'erro_parse': sum(1 for r in resultados if r['status'] == 'erro_parse'),
             'falha': sum(1 for r in resultados if r['status'] == 'falha'),
+            'documento_errado': sum(1 for r in resultados if r['status'] == 'documento_errado'),
         }
         return render_template(
             'motos_assai/faturamento/upload_nf_resultado.html',

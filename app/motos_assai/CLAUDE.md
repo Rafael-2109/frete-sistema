@@ -4,7 +4,7 @@ camada: L1
 sot_de: —
 hub: CLAUDE.md
 superseded_by: —
-atualizado: 2026-06-20
+atualizado: 2026-06-23
 -->
 # Módulo Motos Assaí
 
@@ -66,6 +66,7 @@ atualizado: 2026-06-20
   - [Gotchas](#gotchas)
 - [Onboarding Tours (2026-05-08)](#onboarding-tours-2026-05-08)
 - [Fix parser zero-padding + edição manual (2026-06-18)](#fix-parser-zero-padding--edição-manual-2026-06-18)
+- [Guards de import de NF Q.P.A. (2026-06-23)](#guards-de-import-de-nf-qpa-2026-06-23)
 - [Referências](#referências)
 
 ## Contexto
@@ -794,6 +795,42 @@ A "perda do início" foi coincidência: o PDF vem ordenado por número.
 
 > **Higiene pendente**: padronizar `assai_loja.numero` (014→14 etc.). Com o match
 > tolerante deixou de ser bloqueante, mas a inconsistência segue no cadastro.
+
+---
+
+## Guards de import de NF Q.P.A. (2026-06-23)
+
+Origem: **IMP-2026-06-23-002/-004/-008** (carga histórica da Rayssa). O upload de
+PDF de NF Q.P.A. (`routes/faturamento.py:faturamento_upload_nf` →
+`services/parsers/nf_qpa_adapter.py:importar_nf_qpa`) ganhou 3 guards cirúrgicos
+para parar a perda silenciosa de dados:
+
+1. **Porteiro CCe-vs-NF** (IMP-008): `cce_pdf_extractor.eh_documento_cce(pdf_bytes)`
+   detecta, pelos marcadores de formato (`RE_FORMATO_QPA`/`RE_FORMATO_MOTOCHEFE`),
+   um PDF de Carta de Correção enviado ao endpoint de NF. `importar_nf_qpa` rejeita
+   com `NfQpaDocumentoCceError` (subclasse de `NfQpaParseError` — o loop em lote
+   nunca perde o arquivo) **antes** de construir o parser/LLM; a rota mostra status
+   `documento_errado` orientando a usar a tela de CCe.
+2. **Fail-loud de completude** (IMP-004): `_validar_completude_chassis(resultado)`
+   roda após validar chave/duplicata e **antes** de qualquer escrita. Levanta
+   `NfQpaParseError` se 0 chassis ou se `len(veiculos) < qtd_declarada_itens_veiculo`
+   (o gabarito NCM 8711 que o parser já calcula) — espelha o guard que já existia no
+   caminho de dados estruturados (`criar_nf_qpa_de_dados`). Modelos SOL (chassi
+   puro-numérico) que o parser perde por layout deixam de gravar NF incompleta em
+   silêncio.
+3. **Cap + liberação de memória no lote** (IMP-002): `forms/faturamento_forms.py`
+   limita `MAX_PDFS_POR_UPLOAD=25` por request (upload é síncrono: pdfplumber + até
+   3 LLM/arquivo + S3, sem worker RQ); a rota libera memória entre arquivos
+   (`f.close()` + `gc.collect()`); `danfe_pdf_parser._extrair_com_pdfplumber` passou
+   a usar `with pdfplumber.open(...)` (liberava o handle só no happy path).
+
+Testes: `tests/motos_assai/test_nf_qpa_import_guards.py` (10 casos).
+
+> **Pendente (não coberto aqui — exige sessão dev)**: o blocker crítico IMP-23-005
+> (faturar ~100 NFs históricas em `NAO_RECONCILIADO` sem separação viva — o
+> *double-match trap* em `nf_qpa_adapter._calcular_match` que exclui seps FATURADA
+> do JOIN, desfazendo o S1=b) e o parser de CCe que classifica "correção de pedido"
+> como CHASSI / perde SOL (IMP-23-009) seguem ABERTOS.
 
 ---
 

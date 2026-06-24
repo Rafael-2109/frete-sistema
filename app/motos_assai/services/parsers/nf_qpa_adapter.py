@@ -40,6 +40,7 @@ from app.motos_assai.models import (
 )
 from app.motos_assai.services.modelo_resolver import resolver_modelo
 from app.motos_assai.services.moto_evento_service import emitir_evento
+from app.motos_assai.services.parsers.cce_pdf_extractor import eh_documento_cce
 
 
 # Toleranciade match em valor: limite ABSOLUTO de R$ 1,00 entre valor da separacao
@@ -78,6 +79,45 @@ class NfQpaParseError(Exception):
 
 class NfQpaJaImportadaError(Exception):
     pass
+
+
+class NfQpaDocumentoCceError(NfQpaParseError):
+    """PDF enviado ao endpoint de NF e, na verdade, uma Carta de Correcao (CCe).
+
+    Subclasse de NfQpaParseError para que o loop de upload em lote
+    (except NfQpaParseError) NUNCA perca o arquivo — mas a rota pode capturar
+    este tipo especifico antes, para orientar o operador a usar a tela de CCe
+    (IMP-2026-06-23-008).
+    """
+    pass
+
+
+def _validar_completude_chassis(resultado: Dict[str, Any]) -> None:
+    """Fail-loud: NF Q.P.A. sem chassis ou com chassis incompletos NAO pode ser
+    gravada silenciosamente (IMP-2026-06-23-004).
+
+    Espelha, para o caminho do PDF (importar_nf_qpa), o guard que ja existe no
+    caminho de dados estruturados (criar_nf_qpa_de_dados: 'NF sem itens/chassis').
+    O parser ja calcula o gabarito (qtd_declarada_itens_veiculo = soma das qtds
+    dos itens NCM 8711); quando ha menos chassis que o declarado, levanta — em
+    vez de gravar uma NF com chassis faltando (ex.: modelos SOL puro-numericos
+    que o parser perde por layout).
+    """
+    veiculos = resultado.get('veiculos') or []
+    chassis = [v for v in veiculos if (v.get('chassi') or '').strip()]
+    declarada = resultado.get('qtd_declarada_itens_veiculo')
+    if not chassis:
+        raise NfQpaParseError(
+            f'NF Q.P.A. sem chassis extraidos do PDF '
+            f'(declarados: {declarada if declarada else "?"}). '
+            f'Layout nao reconhecido — revise o PDF ou registre manualmente.'
+        )
+    if isinstance(declarada, int) and declarada > 0 and len(chassis) < declarada:
+        raise NfQpaParseError(
+            f'NF Q.P.A. com chassis incompletos: extraidos {len(chassis)} '
+            f'de {declarada} declarados. Revise o PDF (layout/modelo nao '
+            f'reconhecido, ex.: SOL) ou registre manualmente.'
+        )
 
 
 def criar_nf_qpa_de_dados(
@@ -275,6 +315,15 @@ def importar_nf_qpa(
     if not pdf_bytes:
         raise NfQpaParseError('PDF vazio')
 
+    # Porteiro CCe-vs-NF (IMP-2026-06-23-008): um PDF de Carta de Correcao
+    # enviado a este endpoint criava NF orfa (0 chassis, valor_total invalido).
+    # Rejeita ANTES de construir o parser/LLM e orienta a usar a tela de CCe.
+    if eh_documento_cce(pdf_bytes):
+        raise NfQpaDocumentoCceError(
+            'Este PDF e uma Carta de Correcao (CCe), nao uma NF Q.P.A. '
+            'Use a tela de CCe (/motos-assai/cce/upload) para registra-lo.'
+        )
+
     parser = DanfePDFParser(pdf_bytes=pdf_bytes)
     resultado = parser.get_todas_informacoes()
 
@@ -284,6 +333,11 @@ def importar_nf_qpa(
 
     if AssaiNfQpa.query.filter_by(chave_44=chave).first():
         raise NfQpaJaImportadaError(f'NF {chave} já importada')
+
+    # Fail-loud de completude (IMP-2026-06-23-004): nao gravar NF com 0/parcial
+    # chassis silenciosamente. Roda APOS validar chave/duplicata e ANTES de
+    # qualquer escrita (DB/S3).
+    _validar_completude_chassis(resultado)
 
     # Loja: resolver via 2 caminhos em ordem de prioridade.
     # P0 (2026-05-17): CNPJ destinatario primeiro (deterministico) — fallback
