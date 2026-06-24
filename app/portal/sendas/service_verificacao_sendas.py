@@ -39,6 +39,24 @@ class VerificacaoSendasService:
             Dict com resultados do processamento
         """
         try:
+            # 0. Faxina automatica da fila: remove itens 'processado' antigos.
+            #    A tabela so era limpa por acao manual (routes_fila.py) e havia
+            #    acumulado ~13k registros (lixo de meses). Rodar a cada verificacao
+            #    mantem a fila enxuta. Corte de 30 dias: cobre com folga o ciclo de
+            #    verificacao sem cortar agendamentos recentes ainda pendentes de
+            #    confirmacao (esses, se a Separacao segue ativa, ja vem da fonte 1).
+            #    Falha aqui NAO impede a verificacao — a faxina e' secundaria.
+            try:
+                removidos = FilaAgendamentoSendas.limpar_processados(dias=30)
+                if removidos:
+                    logger.info(
+                        f"Faxina da fila Sendas: {removidos} itens 'processado' "
+                        f"antigos (>30d) removidos"
+                    )
+            except Exception as e:
+                logger.warning(f"Falha na faxina da fila Sendas (ignorada): {e}")
+                db.session.rollback()
+
             # 1. Ler Excel e criar índice por protocolo
             df = pd.read_excel(BytesIO(arquivo_excel))
             logger.info(f"Planilha lida com {len(df)} linhas")
@@ -245,7 +263,14 @@ class VerificacaoSendasService:
             EntregaMonitorada.entregue == False                  # 🆕 FIX BUG 6c
         ).all()
 
+        # Dedupe por protocolo (a query traz 1 linha por agendamento; varios
+        # podem compartilhar o mesmo protocolo). protocolos_vistos eh reusado
+        # pela fonte 3 para evitar re-adicionar protocolos ja contemplados.
+        protocolos_vistos = {p['protocolo'] for p in protocolos}
         for agend in agendamentos:
+            if agend.protocolo_agendamento in protocolos_vistos:
+                continue
+            protocolos_vistos.add(agend.protocolo_agendamento)
             protocolos.append({
                 'protocolo': agend.protocolo_agendamento,
                 'tipo_origem': 'nf',
@@ -262,45 +287,71 @@ class VerificacaoSendasService:
 
         # 3. Buscar em FilaAgendamentoSendas (status='processado')
         # 🆕 FIX BUG 6b: status correto e 'processado' (modelo so suporta pendente/processado/erro)
-        # Como garantia adicional, caso não esteja nas tabelas acima
+        # Como garantia adicional, caso não esteja nas tabelas acima.
+        # 🚀 PERF (2026-06-24): elimina N+1 + duplicacao que travava a verificacao
+        #   ("processando eternamente mesmo apos concluir"). A fila acumula ~13k
+        #   registros 'processado' (1 por produto/pedido). O codigo antigo:
+        #     (a) NAO atualizava protocolos_existentes dentro do loop, entao TODOS
+        #         os registros com protocolo repetido eram adicionados (~13k entradas);
+        #     (b) disparava 1 query individual a Separacao POR registro -> ~13k
+        #         round-trips sequenciais ao Postgres.
+        #   Agora: 1 item por protocolo (dedupe via protocolos_vistos) + 1 unica
+        #   query batch (.in_) para enriquecer todos os lotes de uma vez.
         fila_items = FilaAgendamentoSendas.query.filter(
             FilaAgendamentoSendas.status == 'processado'
         ).all()
 
-        # Adicionar apenas se não estiver já na lista
-        protocolos_existentes = {p['protocolo'] for p in protocolos}
+        # Dedupe por protocolo, ignorando os ja contemplados pelas fontes 1 e 2.
+        fila_por_protocolo = {}
         for fila in fila_items:
-            if fila.protocolo not in protocolos_existentes:
-                # Buscar cliente/cidade/uf baseado no tipo_origem
-                cliente = None
-                nome_cidade = None
-                cod_uf = None
-                if fila.tipo_origem in ['lote', 'separacao'] and fila.documento_origem:
-                    # Tentar buscar dados da Separacao
-                    sep_info = db.session.query(
-                        Separacao.raz_social_red,
-                        Separacao.nome_cidade,
-                        Separacao.cod_uf
-                    ).filter(
-                        Separacao.separacao_lote_id == fila.documento_origem
-                    ).first()
-                    if sep_info:
-                        cliente = sep_info.raz_social_red
-                        nome_cidade = sep_info.nome_cidade
-                        cod_uf = sep_info.cod_uf
+            if not fila.protocolo or fila.protocolo in protocolos_vistos:
+                continue
+            if fila.protocolo not in fila_por_protocolo:
+                fila_por_protocolo[fila.protocolo] = fila
 
-                protocolos.append({
-                    'protocolo': fila.protocolo,
-                    'tipo_origem': fila.tipo_origem,
-                    'documento_origem': fila.documento_origem,
-                    'cnpj': fila.cnpj,
-                    'cliente': cliente or fila.cnpj,
-                    # 🆕 FIX BUG 6a: dados de endereco (podem ser None se nao encontrar)
-                    'raz_social': cliente,
-                    'nome_cidade': nome_cidade,
-                    'cod_uf': cod_uf,
-                    'data_agendamento': fila.data_agendamento,
-                })
+        # Enriquecimento em lote: 1 query para todos os lotes (evita o N+1).
+        docs_lote = {
+            f.documento_origem for f in fila_por_protocolo.values()
+            if f.tipo_origem in ('lote', 'separacao') and f.documento_origem
+        }
+        sep_por_lote = {}
+        if docs_lote:
+            sep_rows = db.session.query(
+                Separacao.separacao_lote_id,
+                Separacao.raz_social_red,
+                Separacao.nome_cidade,
+                Separacao.cod_uf,
+            ).filter(
+                Separacao.separacao_lote_id.in_(docs_lote)
+            ).all()
+            for r in sep_rows:
+                if r.separacao_lote_id not in sep_por_lote:
+                    sep_por_lote[r.separacao_lote_id] = r
+
+        for fila in fila_por_protocolo.values():
+            # Buscar cliente/cidade/uf baseado no tipo_origem (do dict pre-carregado)
+            cliente = None
+            nome_cidade = None
+            cod_uf = None
+            if fila.tipo_origem in ('lote', 'separacao') and fila.documento_origem:
+                sep_info = sep_por_lote.get(fila.documento_origem)
+                if sep_info:
+                    cliente = sep_info.raz_social_red
+                    nome_cidade = sep_info.nome_cidade
+                    cod_uf = sep_info.cod_uf
+
+            protocolos.append({
+                'protocolo': fila.protocolo,
+                'tipo_origem': fila.tipo_origem,
+                'documento_origem': fila.documento_origem,
+                'cnpj': fila.cnpj,
+                'cliente': cliente or fila.cnpj,
+                # 🆕 FIX BUG 6a: dados de endereco (podem ser None se nao encontrar)
+                'raz_social': cliente,
+                'nome_cidade': nome_cidade,
+                'cod_uf': cod_uf,
+                'data_agendamento': fila.data_agendamento,
+            })
 
         logger.info(f"Total de protocolos não confirmados: {len(protocolos)}")
         return protocolos

@@ -185,18 +185,22 @@ class FilaAgendamentoSendas(db.Model):
     @classmethod
     def limpar_processados(cls, dias=7):
         """
-        Remove itens processados há mais de X dias
+        Remove itens processados há mais de X dias.
+
+        Returns:
+            int: quantidade de registros removidos.
         """
         from datetime import timedelta
-        
+
         limite = agora_utc_naive() - timedelta(days=dias)
-        
-        cls.query.filter(
+
+        removidos = cls.query.filter(
             cls.status == 'processado',
             cls.processado_em < limite
         ).delete()
-        
+
         db.session.commit()
+        return removidos
     
     def __repr__(self):
         return f'<FilaSendas {self.cnpj} - {self.cod_produto} - {self.quantidade}>'
