@@ -50,6 +50,24 @@ def require_hora_perm(modulo: str, acao: str = 'ver'):
     Em rotas AJAX (Accept: application/json) retorna 403 JSON.
     Em rotas HTML faz flash + redirect para o dashboard HORA (ou login).
     """
+    return require_hora_perm_any((modulo, acao))
+
+
+def require_hora_perm_any(*pares: tuple[str, str]):
+    """Exige QUALQUER uma das permissoes (modulo, acao) informadas (OR).
+
+    Util quando uma mesma tela e acessivel por perfis distintos — ex.: a fila
+    de "NFs de Saida" e vista tanto pelo vendedor (`vendas/ver`) quanto pelo
+    operador de faturamento (`tagplus/ver`). Passa se ao menos um par for
+    concedido. Admin sempre passa (via `tem_perm`). Comportamento de bloqueio
+    (pre-requisito de acesso ao modulo, AJAX 403, redirect) identico ao
+    `require_hora_perm`.
+
+    Uso: `@require_hora_perm_any(('vendas', 'ver'), ('tagplus', 'ver'))`.
+    """
+    if not pares:
+        raise ValueError('require_hora_perm_any exige ao menos um par (modulo, acao)')
+
     def decorator(func):
         @wraps(func)
         def wrapper(*args, **kwargs):
@@ -67,16 +85,24 @@ def require_hora_perm(modulo: str, acao: str = 'ver'):
 
             # Import tardio evita ciclo (services -> models -> app -> ...)
             from app.hora.services.permissao_service import tem_perm
-            if not tem_perm(current_user, modulo, acao):
+            if not any(tem_perm(current_user, mod, ac) for mod, ac in pares):
+                desc = ' ou '.join(f'{mod}.{ac}' for mod, ac in pares)
                 if _is_ajax():
                     return jsonify({
                         'ok': False,
-                        'erro': f'sem permissao: {modulo}.{acao}',
+                        'erro': f'sem permissao: {desc}',
                     }), 403
-                flash(
-                    f'Acesso negado: voce nao tem permissao "{acao}" em "{modulo}".',
-                    'danger',
-                )
+                if len(pares) == 1:
+                    _mod, _ac = pares[0]
+                    flash(
+                        f'Acesso negado: voce nao tem permissao "{_ac}" em "{_mod}".',
+                        'danger',
+                    )
+                else:
+                    flash(
+                        f'Acesso negado: voce nao tem nenhuma das permissoes: {desc}.',
+                        'danger',
+                    )
                 # Tenta voltar para o dashboard HORA; se nem isso o usuario tem,
                 # cai no dashboard principal.
                 if tem_perm(current_user, 'dashboard', 'ver') or current_user.perfil == 'administrador':
