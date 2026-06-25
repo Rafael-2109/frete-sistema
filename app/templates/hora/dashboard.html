@@ -47,7 +47,7 @@
           <td><small>{{ e.timestamp.strftime('%d/%m/%Y %H:%M') }}</small></td>
           <td class="chassi-mono">{{ e.numero_chassi }}</td>
           <td><span class="badge badge-status-{{ e.tipo|lower }}">{{ e.tipo }}</span></td>
-          <td>{{ e.loja.nome if e.loja else '—' }}</td>
+          <td>{{ e.loja.rotulo_display if e.loja else '—' }}</td>
           <td>{{ e.operador or '—' }}</td>
           <td><small>{{ e.detalhe or '' }}</small></td>
         </tr>

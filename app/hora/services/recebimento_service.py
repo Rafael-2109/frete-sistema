@@ -1325,7 +1325,7 @@ def listar_nfs_para_recebimento_automatico(
             'cnpj_emitente': nf.cnpj_emitente,
             'nome_emitente': nf.nome_emitente,
             'loja_id': nf.loja_destino_id,
-            'loja_nome': nf.loja_destino.nome.strip() if nf.loja_destino else None,
+            'loja_nome': nf.loja_destino.rotulo_display.strip() if nf.loja_destino else None,
             'pedido_id': nf.pedido_id,
             'pedido_numero': pedido.numero_pedido if pedido else None,
             'qtd_motos_nf': len(nf.itens_considerados),
@@ -1608,7 +1608,7 @@ def verificar_bloqueios_exclusao(recebimento_id: int) -> dict:
             'pecas_faltando_abertas': len(pecas_abertas),
             'devolucoes_vinculadas': len(devs),
             'nf_numero': rec.nf.numero_nf if rec.nf else None,
-            'loja_nome': rec.loja.nome if rec.loja else None,
+            'loja_nome': rec.loja.rotulo_display if rec.loja else None,
             'status': rec.status,
         },
     }

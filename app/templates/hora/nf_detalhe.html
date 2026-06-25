@@ -192,7 +192,7 @@
     <strong>
       <i class="fas fa-truck-loading"></i>
       Recebimento físico #{{ r.id }}
-      <span class="text-muted">— {{ r.loja.nome }} · {{ r.data_recebimento.strftime('%d/%m/%Y') }}</span>
+      <span class="text-muted">— {{ r.loja.rotulo_display }} · {{ r.data_recebimento.strftime('%d/%m/%Y') }}</span>
     </strong>
     <div class="d-flex align-items-center gap-2">
       <span class="badge badge-status-{{ r.status|lower }}">{{ r.status }}</span>
