@@ -61,7 +61,7 @@ def classificar_movimento(grupo: str, tipo_mov: str, local_mov: str) -> str:
 
 
 def _round(v: float) -> float:
-    return round(float(v or 0.0), 3)
+    return round(float(v) if v is not None else 0.0, 3)
 
 
 def montar_abas(

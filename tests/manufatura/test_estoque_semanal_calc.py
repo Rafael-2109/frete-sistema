@@ -88,3 +88,24 @@ def test_montar_abas_exibe_estoque_negativo_sem_piso():
     linha = abas["Insumos"][0]
     assert linha["estoque_seg_anterior"] == -50.0
     assert linha["estoque_seg_atual"] == -30.0
+
+
+def test_montar_abas_colapsa_por_unificacao():
+    cadastro = {
+        "1001": {"nome_produto": "Palmito", "tipo_materia_prima": "", "categoria": "Insumo", "embalagem": ""},
+        "1002": {"nome_produto": "Palmito (substituto)", "tipo_materia_prima": "", "categoria": "Insumo", "embalagem": ""},
+    }
+    estoque0 = {"1001": 600.0, "1002": 400.0}      # -> 1000 no canônico
+    estoque_hoje = {"1001": 600.0, "1002": 450.0}  # -> 1050
+    movimentos = [("1002", "ENTRADA", "COMPRA", 50.0)]
+    mapa_unif = {"1002": "1001"}
+    abas = montar_abas(estoque0, estoque_hoje, movimentos, cadastro, mapa_unif)
+    insumos = abas["Insumos"]
+    assert len(insumos) == 1
+    linha = insumos[0]
+    assert linha["cod_produto"] == "1001"
+    assert linha["estoque_seg_anterior"] == 1000.0
+    assert linha["estoque_seg_atual"] == 1050.0
+    assert linha["entradas"] == 50.0
+    assert (linha["estoque_seg_anterior"] + linha["entradas"]
+            - linha["consumos"] + linha["outros_ajustes"] == linha["estoque_seg_atual"])
