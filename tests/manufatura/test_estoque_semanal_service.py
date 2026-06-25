@@ -17,6 +17,8 @@ def test_gerar_planilha_bytes_tem_abas_e_rotulos():
     assert isinstance(conteudo, bytes) and len(conteudo) > 0
     xls = pd.ExcelFile(io.BytesIO(conteudo))
     assert "Insumos" in xls.sheet_names
+    assert "Embalagens" in xls.sheet_names
+    assert "Produto_Acabado" in xls.sheet_names
     df = pd.read_excel(xls, "Insumos")
     # rótulo do componente menciona "compra" e "produção"
     cols = " | ".join(df.columns)

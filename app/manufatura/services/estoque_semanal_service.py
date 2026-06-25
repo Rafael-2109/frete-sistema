@@ -81,7 +81,7 @@ def _movimentos_periodo(ini: date, fim: date) -> List[Tuple[str, str, str, float
 
 
 def _cadastro_map() -> Dict[str, Dict[str, str]]:
-    rows = CadastroPalletizacao.query.filter_by(ativo=True).all()
+    rows = CadastroPalletizacao.query.filter(CadastroPalletizacao.ativo.is_(True)).all()
     return {
         str(r.cod_produto): {
             "nome_produto": r.nome_produto or "",
@@ -150,6 +150,13 @@ def gerar_planilha_bytes(abas: Dict[str, List[Dict[str, Any]]],
 
 # ------------------------------------------------------------------ e-mail --
 def enviar_estoque_semanal_email(dry_run: bool = False) -> dict:
+    destinos = []
+    if not dry_run:
+        destinos = [e.strip() for e in os.getenv("ESTOQUE_SEMANAL_EMAIL_TO", "").split(",") if e.strip()]
+        if not destinos:
+            logger.warning("[ESTOQUE-SEMANAL] sem destinatário (ESTOQUE_SEMANAL_EMAIL_TO vazio)")
+            return {"ok": False, "motivo": "sem_destinatario"}
+
     abas, seg_ant, seg_atual = montar_relatorio_semanal()
     conteudo = gerar_planilha_bytes(abas, seg_ant, seg_atual)
     periodo = f"{seg_ant.strftime('%d/%m')} a {seg_atual.strftime('%d/%m/%Y')}"
@@ -160,11 +167,6 @@ def enviar_estoque_semanal_email(dry_run: bool = False) -> dict:
     if dry_run:
         resultado["motivo"] = "dry_run"
         return resultado
-
-    destinos = [e.strip() for e in os.getenv("ESTOQUE_SEMANAL_EMAIL_TO", "").split(",") if e.strip()]
-    if not destinos:
-        logger.warning("[ESTOQUE-SEMANAL] sem destinatário (ESTOQUE_SEMANAL_EMAIL_TO vazio)")
-        return {"ok": False, "motivo": "sem_destinatario", "periodo": periodo}
 
     sender = EmailSender()
     assunto = f"Relatório semanal de estoque — semana de {periodo}"
