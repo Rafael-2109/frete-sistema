@@ -51,8 +51,55 @@ Indice de execucoes do dialogo de melhoria Agent SDK <-> Claude Code.
 | 45 | 2026-06-22 | 0 | 0 | 0 | 0 | SKIP (backlog 100% F2 — gate humano; nenhuma avaliavel pelo D8. 3 F2 reincidentes do #44, todas `version=1` sem v2: `adhoc-cluster-1070` (gerar embarque+fretes, 23 membros, Talita id 17, 4d), `skill-gap-lendo-arquivos` (analise exploratoria planilhas, 2 membros, Rayssa id 78, 3d), `adhoc-cluster-1161` (reclassificacao lote AML, 64 membros, TAMIRIS id 44, 2d — contraparte executora #163). Nada decidido/persistido; so relatorio+historico commitados, sem push) |
 | 46 | 2026-06-23 | 6 | 0 | 1 | 5 | OK (6 IMP avaliaveis, 0 auto-impl — todas tocam rota/service sensivel ou sao nao-bug; v2 257-262 HTTP 200. 1 REJEICAO IMP-23-001 list_session_uploads (Rayssa id 78): NAO-bug, limitacao historica — anexos 18-20/06 sao ANTERIORES ao deploy do dual-write `agente_upload` (20/06 ~17h), tabela 0 linhas; codigo+filtro corretos, worktree s3-uploads ja mergeada. 5 PROPOSTAS: (a) IMP-22-001 skill portaria via refactor `movimento_service` extraindo cadeia de saida de routes.py (Samantha id 49); (b) IMP-22-002 rota excluir FT CarVia PENDENTE 6-guards xerox excluir_despesa_extra (Talita id 17); (c) IMP-22-004 BUG REAL peso cubado frete — 3a re-incidencia #32/#33, causa isolada (frete usa `calcular_cubado_por_modelos` dependente da cotacao vs fonte canonica `calcular_peso_cubado_batch` via item; NF 38312/38317 ambas tem item+veiculo, divergencia = cotacao nao cobre JET), correcao = unificar com o caminho canonico ja existente (Barbara id 87); (d) IMP-23-002 upload NF Q.P.A. sincrono confirmado, restarts com CONFOUND deploy (Rayssa id 78); (e) IMP-23-003 BUG data loss silencioso loop faturamento.py:331 sem except generico (Rayssa id 78). 2.1.1a: WIP nao-commitado `_to_decimal_safe` em nf_qpa_adapter.py corrige 1 causa de -002/-003, nao o estrutural. 4 F2 listadas: 3 reincidentes (#44/#45) + 1 NOVA skill-gap-exportando-arquivos (Gislene id 47). Sem push) |
 | 47 | 2026-06-24 | 7 | 5 | 0 | 2 | OK (RECONCILIACAO DEV 4-maos, NAO cron — fixes implementados direto na sessao, IMP atualizados em PROD. Rodada Q.P.A. Rayssa id 78. 5 IMPLEMENTADOS: IMP-23-002 OOM (cap 25 PDFs + gc/f.close + with pdfplumber), IMP-23-003 data loss (17d5c4b04), IMP-23-004 fail-loud 0/parcial chassis, IMP-23-008 porteiro CCe-vs-NF, IMP-23-009 guard CCe correcao-de-pedido nao troca chassis. 2 PARCIAIS: IMP-23-005/-010 faturar historico — causa-raiz isolada = double-match trap (S1=b cria sep FATURADA, _calcular_match exclui FATURADA do JOIN e desfaz); PARTE 1 feita = backfill 14 NFs split-brain -> BATEU (prod NAO_RECONCILIADO 120->106); PARTE 2 (102 sem-sep) = decisao subir pedidos VOE dos PDFs -> sep viva -> match natural. Validacao: sweep dos 125 PDFs (122 completos, 0 perda silenciosa). Commits 17d5c4b04/181aba751/bd8fe19b2 push main. v2 261-262,277-281 HTTP 200. Integridade aberta: 4 split-brain c/ chassi re-alocado + NF 1797 merge. IMP-23-006/007 nao-Q.P.A. seguem proposed) |
+| 49 | 2026-06-25 | 6 | 0 | 1 | 1 | OK (2 avaliaveis + 4 reconciliadas (PASSO 1.5) + 2 F2 listadas. 0 auto-impl. IMP-24-005 REJEITADA falso positivo (TAMIRIS id 44): matriz 2.1.1 codigo-correto+ad-hoc — fluxo oficial `reclassificando-amls-odoo` ja trata `cannot marshal None` via `is_cannot_marshal_none` em connection.py:265-269 desde 305ccb8dd (2026-01-26); falha 53/53 veio de ServerProxy CRU ad-hoc (agent_adhoc ids 3725-3749); JSON-RPC desnecessario+pior (senha real). IMP-24-006 PROPOSTA (TALITA id 17): pedagio ceil NAO e bug (config `pedagio_por_fracao` transportadoras:62); valor_cotado congelado e design (baseline R6), ajuste ja existe via `valor_considerado` editavel em editar_frete:895; proposta = botao recalcular->valor_considerado (toca routes.py). 4 RECONCILIADAS v3: IMP-10-005 (bf4f61bc6), IMP-16-004 (7c13865f0), IMP-19-007 (serie S3), IMP-19-010 (37ca214cc). 2 F2: adhoc-3734 conta-destino CD/OUT (TAMIRIS id 44), adhoc-966 res.partner (Martha id 82/VANDERLEIA id 48). v2 301-302, v3 303-306 HTTP ok. Sem push) |
 | 48 | 2026-06-24 | 9 | 6 | 1 | 2 | OK (cron D8 normal — pega o backlog que o #47 deixou p/ "D8 normal" + CarVia Barbara id 87 + critica Rayssa id 78; relatorio `dialogue-2026-06-24-cron.md`. v2 286-294 HTTP 200. 6 AUTO-IMPL: IMP-23-011 critico BUG REAL (vincular_nf_manualmente nao propagava pedido_id ja validado -> branch ambiguo S1=b, 98/100 NFs backfill; pedido_id curto-circuita inferencia, 22 testes); cluster CarVia escrita IMP-24-001/-002/-003 = 1 script novo `atualizando_frete_carvia.py` (1o WRITE da skill, dry-run default, recalcula requer_aprovacao, NAO calcula — delega a cotando_subcontrato); IMP-24-004 gotcha lancar-cte readonly documentado (regra #9); IMP-23-007 `adicionando_item_embarque.py` modo Nacom reusa gerar_embarque + sincronizar_totais por SOMA (anti-inflacao 1089 vs 863kg), CarVia recusado (fronteira R1). 2 PROPOSTAS: IMP-23-012 causa-raiz faturamento parcial isolada (_calcular_match seta sep FATURADA inteira mas emite evento so por item-da-NF) — decisao de modelo pendente (split-brain 1727/1729/1737/2037); IMP-22-003 principio ja coberto (cannot_do + R3) — recomendacao p/ review trimestral jul/2026, nao auto-edit por governanca PAD-CTX. 1 REJEICAO: IMP-23-006 confirmar diario inter-company = salvaguarda correta (R3) + skill mal-atribuida (lendo-arquivos nao baixa) + sinal fraco; caminho = memoria de perfil. Sem push) |
 | R1 | 2026-06-24 | 2 | 2 | 0 | 0 | OK (RECONCILIACAO MANUAL — nao e execucao do cron. Fecha drift: 2 propostas do #46 viraram codigo e o registro ficou defasado. IMP-22-004 (peso cubado frete, Barbara id 87) implementado em `120f2f61d` (23/06); IMP-22-002 (excluir FT CarVia, Talita id 17) implementado em `3b26ebc02` (24/06, IMP Talita). Gravado v3 `auto_implemented=true` ids 295-296 HTTP 200. Gap de processo corrigido: novo PASSO 1.5 no prompt D8 reabre propostas implementadas via `git log --grep`. Sem push) |
+
+## 2026-06-25 (cron D8 #49)
+
+Cron D8 normal. Backlog do PASSO 1 = 2 avaliaveis (`warning`) + 2 F2 `adhoc-`. PASSO 1.5
+reconciliou 4 propostas antigas que viraram codigo. **0 auto-impl** (1 falso positivo + 1
+nao-bug que toca `routes.py`). Relatorio: `dialogue-2026-06-25.md`.
+
+**1 REJEICAO (falso positivo):**
+- **IMP-2026-06-24-005 (gotcha, TAMIRIS id 44)**: "button_draft via XML-RPC falha com None —
+  usar JSON-RPC". Matriz 2.1.1 = codigo-correto + ad-hoc-presente. O fluxo oficial
+  `reclassificando-amls-odoo` (`reclassificacao.py:239,244` via `self.odoo.execute_kw`) JA trata
+  `cannot marshal None` como sucesso: `OdooConnection.execute_kw` captura o Fault via
+  `is_cannot_marshal_none()` e retorna `None` (`connection.py:265-269`), desde `305ccb8dd`
+  (2026-01-26) — meses antes da sessao. XML-RPC puro funciona; JSON-RPC e desnecessario e PIOR
+  (senha real em vez de api_key = regressao de seguranca). Gotcha ja documentado em `GOTCHAS.md`
+  l.420-440 (ciclo button_draft->write->action_post) + l.539. A falha "53/53 via XML-RPC" veio de
+  scripts AD-HOC com `ServerProxy` cru (`agent_adhoc_script` ids 3725-3749). Friccao real =
+  roteamento (caiu em ad-hoc em vez da skill). Nenhuma alteracao de codigo.
+
+**1 PROPOSTA:**
+- **IMP-2026-06-24-006 (skill_bug, TALITA id 17)**: "valor_cotado congelado no UI". (a) pedagio
+  ceil NAO e bug — config por transportadora `pedagio_por_fracao` (`transportadoras/models.py:62`,
+  `calculadora_frete.py:150-153`, `fretes/routes.py:1368`); cobrar proporcional = setar False no
+  cadastro. (b) `valor_cotado` congelado e DESIGN — snapshot/baseline da tolerancia R$5 (R6); o
+  ajuste do valor real JA EXISTE via `valor_considerado` editavel na mesma tela
+  (`editar_frete:895-897`, inicia = cotado em :807). Proposta de conveniencia (toca `routes.py` =>
+  so propor): endpoint POST `/fretes/<id>/recalcular-cotacao` + botao na tela que recalcula via
+  `calcular_valor_frete_pela_tabela` e grava em `valor_considerado` (NUNCA em `valor_cotado`),
+  re-aplicando a aprovacao existente; bloquear status final.
+
+**4 RECONCILIADAS (PASSO 1.5 — v3 auto_implemented=true):**
+- **IMP-2026-06-10-005** -> `bf4f61bc6` (CarVia unificado no Lancamento Freteiros, 2026-06-12).
+- **IMP-2026-06-16-004** -> `7c13865f0` (conciliando-transferencias Situacao 3, 2026-06-17).
+- **IMP-2026-06-19-007** -> serie S3 upload recovery (`7744aa372`..`de9c72ea4`, 2026-06-20).
+- **IMP-2026-06-19-010** -> `37ca214cc` (modo devolucao-nfd fecha a 3a capacidade; `corrigindo-dados-assai`
+  hoje cobre as 3: `--registrar-nf-manual`, separacao FATURADA via match, `--registrar-devolucao-nfd`).
+- Permanecem pendentes (so tinham hit de commit `improvement(D8)`, sem implementacao): IMP-06-01-001,
+  -06-08-002, -06-16-001, -06-16-003.
+
+**2 F2 listadas (gate humano):**
+- `adhoc-cluster-3734` — conta contabil de destino em op CD/OUT no Odoo (6 membros, TAMIRIS id 44,
+  ~1 dia) — mesma sessao `bf1aff40` da IMP-005.
+- `adhoc-cluster-966` — consulta/metricas `res.partner` no Odoo (178 membros, Martha id 82 +
+  VANDERLEIA id 48, ~1 dia).
+
+Persistencia v2 ids 301-302, v3 ids 303-306 (HTTP ok). Branch `cron/manutencao`, sem push.
 
 ## 2026-06-24 (reconciliacao manual — propostas ja implementadas)
 
