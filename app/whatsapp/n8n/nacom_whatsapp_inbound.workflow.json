@@ -1,0 +1,73 @@
+{
+  "name": "Nacom WhatsApp Inbound (Evolution -> Flask)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "nacom-whatsapp-inbound",
+        "responseMode": "onReceived",
+        "responseData": "allEntries",
+        "options": {}
+      },
+      "id": "webhook-evolution",
+      "name": "Webhook (Evolution)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300],
+      "webhookId": "nacom-whatsapp-inbound"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Normaliza o evento bruto da Evolution API (messages.upsert) para o\n// contrato do Flask POST /api/whatsapp/n8n/inbound.\n// Retorna [] (descarta) para eventos que NAO devem virar task:\n//   - fromMe (mensagem enviada por nos mesmos)\n//   - sem texto (audio/imagem/sticker — Fase 6 trata anexos)\n//   - evento que nao seja messages.upsert\n\nconst out = [];\n\nfor (const item of $input.all()) {\n  const body = item.json.body || item.json; // webhook pode aninhar em .body\n  const event = (body.event || '').toLowerCase();\n  if (event && event !== 'messages.upsert') continue;\n\n  const data = body.data || {};\n  const key = data.key || {};\n  if (key.fromMe) continue; // ignora o que nos mesmos enviamos\n\n  const remoteJid = key.remoteJid || '';\n  const isGroup = remoteJid.endsWith('@g.us');\n\n  // Texto: conversation (simples) ou extendedTextMessage.text (com contexto)\n  const msg = data.message || {};\n  const text = (\n    msg.conversation ||\n    (msg.extendedTextMessage && msg.extendedTextMessage.text) ||\n    ''\n  ).trim();\n  if (!text) continue; // sem texto -> ignora (anexos sao Fase 6)\n\n  // Remetente: em grupo e o participant; em DM e o proprio remoteJid.\n  const senderJid = isGroup ? (key.participant || '') : remoteJid;\n  const sender = senderJid.split('@')[0].replace(/\\D/g, '');\n  if (!sender) continue;\n\n  // Conversa: grupo mantem o JID @g.us; DM usa o numero.\n  const conversation = isGroup ? remoteJid : sender;\n\n  out.push({\n    json: {\n      sender,\n      conversation,\n      is_group: isGroup,\n      text,\n      message_id: key.id || null,\n      sender_name: data.pushName || null,\n      session_key: body.instance || null\n    }\n  });\n}\n\nreturn out;"
+      },
+      "id": "normalize",
+      "name": "Normaliza Evento",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [520, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.FLASK_BASE_URL }}/api/whatsapp/n8n/inbound",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.N8N_INBOUND_TOKEN }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "timeout": 15000,
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "post-flask",
+      "name": "POST Flask /n8n/inbound",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [800, 300]
+    }
+  ],
+  "connections": {
+    "Webhook (Evolution)": {
+      "main": [[{ "node": "Normaliza Evento", "type": "main", "index": 0 }]]
+    },
+    "Normaliza Evento": {
+      "main": [[{ "node": "POST Flask /n8n/inbound", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": { "executionOrder": "v1" },
+  "meta": {
+    "description": "Recebe webhook da Evolution API, normaliza messages.upsert e encaminha ao Flask. Usa env do N8N: FLASK_BASE_URL e N8N_INBOUND_TOKEN."
+  }
+}
