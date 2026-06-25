@@ -123,7 +123,7 @@ def _formatar_pedido(venda) -> str:
     """Formata mensagem de novo pedido de venda para WhatsApp."""
     loja_nome = None
     if getattr(venda, 'loja', None):
-        loja_nome = getattr(venda.loja, 'nome', None)
+        loja_nome = getattr(venda.loja, 'rotulo_display', None) or getattr(venda.loja, 'nome', None)
 
     linhas = [
         f'🛒 *Novo pedido confirmado — Nº {venda.id}*',
@@ -153,7 +153,7 @@ def _formatar_nfe(venda, emissao) -> str:
     """Formata mensagem de NFe emitida para WhatsApp."""
     loja_nome = None
     if venda and getattr(venda, 'loja', None):
-        loja_nome = getattr(venda.loja, 'nome', None)
+        loja_nome = getattr(venda.loja, 'rotulo_display', None) or getattr(venda.loja, 'nome', None)
 
     numero_nfe = getattr(emissao, 'numero_nfe', None) or getattr(emissao, 'tagplus_nfe_id', '—')
     linhas = [
@@ -336,7 +336,7 @@ def processar_notificacao(registro_id: int) -> None:
             reg.valor = venda.valor_total if venda else None
             reg.vendedor_nome = venda.vendedor if venda else None
             reg.loja_nome = (
-                venda.loja.nome
+                (getattr(venda.loja, 'rotulo_display', None) or venda.loja.nome)
                 if venda and getattr(venda, 'loja', None)
                 else None
             )
@@ -364,7 +364,7 @@ def processar_notificacao(registro_id: int) -> None:
             reg.valor = venda.valor_total
             reg.vendedor_nome = venda.vendedor
             reg.loja_nome = (
-                venda.loja.nome
+                (getattr(venda.loja, 'rotulo_display', None) or venda.loja.nome)
                 if getattr(venda, 'loja', None)
                 else None
             )
