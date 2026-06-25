@@ -15,6 +15,8 @@ atualizado: 2026-06-25
 
 - [Visao geral](#visao-geral)
 - [Por que esta arquitetura](#por-que-esta-arquitetura)
+- [Valores a coletar (preencha ANTES de comecar)](#valores-a-coletar-preencha-antes-de-comecar)
+- [Checklist de execucao (faca nesta ordem)](#checklist-de-execucao-faca-nesta-ordem)
 - [Pre-requisitos](#pre-requisitos)
 - [Passo 1 — Subir a Evolution API (VPS, 24/7)](#passo-1--subir-a-evolution-api-vps-247)
 - [Passo 2 — Criar a instancia e parear o numero](#passo-2--criar-a-instancia-e-parear-o-numero)
@@ -57,6 +59,44 @@ Quatro pecas:
   cair, voce ainda recebe (so para de processar inbound novo) e as respostas em andamento saem.
 - **Seletor por env**: OpenClaw continua intacto. Voce vira a chave (`WHATSAPP_TRANSPORT=n8n`)
   e faz rollback instantaneo (`=openclaw`) sem deploy de codigo.
+
+---
+
+## Valores a coletar (preencha ANTES de comecar)
+
+Tenha estes valores em maos / gere-os antes — voce vai reusar em varios passos.
+Anote num bloco de notas seguro (NAO commite isso no git):
+
+| Valor | Como obter | Onde usa |
+|-------|-----------|----------|
+| `EVOLUTION_API_URL` | URL publica HTTPS do seu VPS (ex: `https://evo.seudominio.com`) | Evolution (`SERVER_URL`), Render |
+| `EVOLUTION_API_KEY` | Voce inventa uma chave forte (`openssl rand -hex 32`) e poe no compose | Evolution (`AUTHENTICATION_API_KEY`), Render, todos os `curl` |
+| `EVOLUTION_INSTANCE` | Nome que voce escolher ao criar a instancia (ex: `nacom`) | Passo 2, Render |
+| `N8N_INBOUND_TOKEN` | `python -c "import secrets; print(secrets.token_urlsafe(48))"` | N8N (variavel) **e** Render — MESMO valor nos dois |
+| `FLASK_BASE_URL` | URL publica do Render (ex: `https://sistema-fretes.onrender.com`) | N8N (variavel) |
+| URL do webhook N8N | Sai no Passo 3 ao ativar o workflow (`https://seu-n8n/webhook/nacom-whatsapp-inbound`) | Passo 4 (apontar Evolution) |
+
+> Regra de ouro: `EVOLUTION_API_KEY` e `N8N_INBOUND_TOKEN` sao segredos. So o `N8N_INBOUND_TOKEN`
+> precisa ser **identico** em dois lugares (N8N e Render). Os demais sao 1 lugar so.
+
+---
+
+## Checklist de execucao (faca nesta ordem)
+
+Marque conforme avanca. Cada item linka pro passo detalhado abaixo.
+
+- [ ] **0.** Desconectar o numero do OpenClaw (Aparelhos conectados no WhatsApp) — o numero
+      so pode estar pareado em um lugar por vez.
+- [ ] **1.** [Subir a Evolution API no VPS](#passo-1--subir-a-evolution-api-vps-247) (`docker compose up -d` + reverse proxy HTTPS).
+- [ ] **2.** [Criar a instancia e parear o numero](#passo-2--criar-a-instancia-e-parear-o-numero) (escanear QR). Confirmar `state: open`.
+- [ ] **3.** [Importar e ativar o workflow no N8N](#passo-3--montar-o-workflow-no-n8n) + setar `FLASK_BASE_URL` e `N8N_INBOUND_TOKEN`. Copiar a Production URL.
+- [ ] **4.** [Apontar o webhook da Evolution pro N8N](#passo-4--apontar-o-webhook-da-evolution-para-o-n8n) (1 curl).
+- [ ] **5.** [Setar as envs no Render](#passo-5--configurar-as-envs-no-render) (incluindo `WHATSAPP_TRANSPORT=n8n`) e reiniciar.
+- [ ] **6.** [Validar](#passo-6--cutover-e-validacao): `/health` mostra `transport: n8n`, mandar msg de teste de um numero autorizado, receber resposta.
+- [ ] **7.** Rodou bem por alguns dias? Pode desligar o OpenClaw de vez (manter as envs OpenClaw no Render por enquanto, custam nada e servem de rollback).
+
+> Travou em algum passo? Vai direto pro [Troubleshooting](#troubleshooting). Deu errado feio?
+> [Rollback](#rollback) em 1 env e volta pro OpenClaw na hora.
 
 ---
 
