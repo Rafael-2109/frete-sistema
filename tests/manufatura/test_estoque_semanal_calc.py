@@ -30,7 +30,30 @@ def test_classificar_movimento_produto_acabado():
     assert classificar_movimento("PRODUTO_ACABADO", "PRODUCAO", "PRODUCAO") == "ENTRADA"
     assert classificar_movimento("PRODUTO_ACABADO", "FATURAMENTO", "VENDA") == "CONSUMO"
     assert classificar_movimento("PRODUTO_ACABADO", "SAIDA", "VENDA") == "CONSUMO"
-    assert classificar_movimento("PRODUTO_ACABADO", "ENTRADA", "DEVOLUCAO") == "OUTRO"
+    # devolução de venda (reversão) volta ao estoque -> ENTRADA
+    assert classificar_movimento("PRODUTO_ACABADO", "ENTRADA", "REVERSAO") == "ENTRADA"
+    assert classificar_movimento("PRODUTO_ACABADO", "ENTRADA", "DEVOLUCAO") == "ENTRADA"
+
+
+def test_montar_abas_pa_devolucao_entra_em_entradas():
+    cadastro = {
+        "4001": {"nome_produto": "Conserva 300g", "tipo_materia_prima": "", "categoria": "PA", "embalagem": ""},
+    }
+    estoque0 = {"4001": 200.0}
+    estoque_hoje = {"4001": 230.0}
+    movimentos = [
+        ("4001", "PRODUÇÃO", "PRODUCAO", 100.0),     # produção
+        ("4001", "FATURAMENTO", "VENDA", -90.0),      # venda
+        ("4001", "ENTRADA", "REVERSAO", 20.0),        # devolução -> entrada
+    ]
+    abas = montar_abas(estoque0, estoque_hoje, movimentos, cadastro, {})
+    pa = next(l for l in abas["Produto_Acabado"] if l["cod_produto"] == "4001")
+    assert pa["entradas"] == 120.0          # produção 100 + devolução 20
+    assert pa["consumos"] == 90.0           # venda, exibida positiva
+    assert pa["outros_ajustes"] == 0.0
+    # fechamento: 200 + 120 - 90 + 0 == 230
+    assert (pa["estoque_seg_anterior"] + pa["entradas"]
+            - pa["consumos"] + pa["outros_ajustes"] == pa["estoque_seg_atual"])
 
 
 def test_montar_abas_fecha_a_conta_e_classifica():

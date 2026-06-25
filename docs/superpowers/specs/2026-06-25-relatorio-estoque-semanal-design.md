@@ -50,7 +50,7 @@ dimensão temporal e a origem de cada movimento:
 - `data_movimentacao` (date) — data do movimento.
 - `qtd_movimentacao` (numeric, **com sinal**) — positivo entra, negativo sai.
 - `tipo_movimentacao` — `ENTRADA`, `SAIDA`, `AJUSTE`, `PRODUÇÃO`, `CONSUMO`, `FATURAMENTO`.
-- `local_movimentacao` — `COMPRA`, `VENDA`, `PRODUCAO`, `AJUSTE`, `DEVOLUCAO`.
+- `local_movimentacao` — `COMPRA`, `VENDA`, `PRODUCAO`, `AJUSTE`, `DEVOLUCAO`, `REVERSAO`.
 - `ativo` (bool) — `False` = movimento cancelado (sempre filtrar `ativo=True`).
 
 Origens confirmadas:
@@ -59,10 +59,19 @@ Origens confirmadas:
 - **Consumo de produção (apontamento)**: `consumo_producao_service.py` grava
   `tipo='CONSUMO'` (negativo) e a contrapartida `tipo='PRODUÇÃO'` (positivo) para
   o produto produzido. **Atenção: `'PRODUÇÃO'` é gravado com acento.**
-- **Venda de Produto Acabado**: `processar_faturamento.py` grava
-  `tipo='FATURAMENTO'` + `local='VENDA'` + `qtd=-abs(...)` (negativo). **Não
+- **Saída de Produto Acabado (todo faturamento)**: `processar_faturamento.py` grava
+  `tipo='FATURAMENTO'` + `local='VENDA'` + `qtd=-abs(...)` (negativo) para **toda
+  NF de saída** — venda E **bonificação** (a importação Odoo inclui
+  `l10n_br_tipo_pedido in (venda, bonificacao, industrializacao, exportacao,
+  venda-industrializacao)`, `faturamento_service.py:1399`). No estoque, venda e
+  bonificação são indistinguíveis (ambas baixam como FATURAMENTO+VENDA). **Não
   existe escritor `tipo='SAIDA'` para vendas de PA** — usar `FATURAMENTO` como
   sinal primário (código aceita `SAIDA` como fallback defensivo).
+- **Entrada por devolução de venda (PA)**: `reversao_service.py` grava
+  `tipo='ENTRADA'` + `local='REVERSAO'` + `qtd` positivo (produto devolvido volta
+  ao estoque). É o único movimento de devolução que afeta o estoque hoje (a NFD do
+  cliente, sozinha, não gera `MovimentacaoEstoque`). O código aceita também
+  `local='DEVOLUCAO'` por robustez.
 
 Classificação em Insumos / Embalagens / Produto Acabado: reusa a função
 `classificar_aba` de `relatorios_semanais_calc.py` (mesma do relatório atual),
@@ -103,7 +112,7 @@ Para todos os grupos a planilha mostra: **Estoque seg0 · Entradas · Consumos/S
 | Grupo | "Entradas" soma | "Consumos/Saídas" soma |
 |-------|-----------------|------------------------|
 | **Insumos / Embalagens** | movimentos de **compra** (`tipo=ENTRADA` + `local=COMPRA`) | **consumo de produção** (`tipo=CONSUMO`) |
-| **Produto Acabado** | **produção** (`tipo=PRODUÇÃO`) | **vendas** (`tipo=FATURAMENTO` + `local=VENDA`; aceita `SAIDA` como fallback) |
+| **Produto Acabado** | **produção** (`tipo=PRODUÇÃO`) + **devolução de venda** (`local=REVERSAO`/`DEVOLUCAO`) | **todo faturamento** — venda e **bonificação** (`tipo=FATURAMENTO` + `local=VENDA`; aceita `SAIDA` como fallback) |
 
 - "Entradas" e "Consumos/Saídas" são exibidos como **valores positivos** (quantidade).
 - **"Outros ajustes"** = `(Estoque hoje − Estoque seg0) − Entradas + Consumos`.

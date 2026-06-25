@@ -172,8 +172,8 @@ saldo da segunda anterior com o da segunda atual:
 
 | Coluna | Insumos/Embalagens | Produto Acabado |
 |--------|--------------------|-----------------|
-| Entradas | recebimento de compra | produção |
-| Consumos/Saídas | consumo na produção | vendas |
+| Entradas | recebimento de compra | produção + devolução de venda (REVERSAO) |
+| Consumos/Saídas | consumo na produção | todo faturamento — vendas e bonificações |
 
 `Outros ajustes` fecha a conta (`seg0 + entradas − consumos + outros = hoje`).
 Fonte: `MovimentacaoEstoque` (`ativo=True`). Código: `estoque_semanal_service.py`

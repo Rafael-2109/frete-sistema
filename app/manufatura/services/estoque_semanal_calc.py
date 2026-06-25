@@ -24,6 +24,10 @@ from app.manufatura.services.relatorios_semanais_calc import (
 # Sentido das colunas "Entradas"/"Consumos" por grupo.
 _GRUPOS_COMPONENTE = ("INSUMOS", "EMBALAGENS")
 _TIPOS_PRODUCAO = ("PRODUÇÃO", "PRODUCAO")  # gravado com acento; aceita ambos
+# Devolução de venda de PA que volta ao estoque: ReversaoService grava
+# tipo='ENTRADA' + local='REVERSAO' (positivo). DEVOLUCAO incluído por robustez
+# (domínio do campo local_movimentacao).
+_LOCAIS_DEVOLUCAO_PA = ("REVERSAO", "DEVOLUCAO")
 
 # Aba de destino por classificação (MP_EXCLUIDO é descartado).
 _ABA_POR_GRUPO = {
@@ -52,8 +56,10 @@ def classificar_movimento(grupo: str, tipo_mov: str, local_mov: str) -> str:
             return "CONSUMO"
         return "OUTRO"
     if grupo == "PRODUTO_ACABADO":
-        if t in _TIPOS_PRODUCAO:
+        # entrada: produção OU devolução de venda (volta ao estoque)
+        if t in _TIPOS_PRODUCAO or l in _LOCAIS_DEVOLUCAO_PA:
             return "ENTRADA"
+        # saída: todo faturamento (venda, bonificação, etc.) baixa como FATURAMENTO+VENDA
         if l == "VENDA" and t in ("FATURAMENTO", "SAIDA"):
             return "CONSUMO"
         return "OUTRO"
