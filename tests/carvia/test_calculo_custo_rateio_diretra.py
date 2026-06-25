@@ -4,9 +4,10 @@ caminhao inteiro.
 Bug E-VIBE (embarque 6008, NF 2044, 2026-06-24): a NF sem motos reconhecidas
 (peso_cubado=0) caia no ramo `else: proporcao = 1.0` de
 `CarviaFreteService._calcular_custo_rateio` e recebia o frete do caminhao todo
-(R$12.000). Fix: `proporcao = peso_grupo / peso_embarque_real` sempre que o
-embarque tem peso agregado (peso_grupo=0 -> proporcao 0); o `else=1.0` so vale
-quando o embarque inteiro nao tem peso.
+(R$12.000). Fix: `proporcao = (peso_grupo or 1) / peso_embarque_real` sempre que
+o embarque tem peso agregado (peso_grupo=0 usa FALLBACK de 1 kg = fatia minima,
+nem 0 nem o frete inteiro); o `else=1.0` so vale quando o embarque inteiro nao
+tem peso.
 """
 
 
@@ -41,8 +42,9 @@ def test_rateio_peso_zero_nao_leva_frete_inteiro(db, monkeypatch):
         lambda self, **kw: {'valor_com_icms': 12000},
     )
 
-    # peso_grupo=0 (NF sem motos reconhecidas) -> 0, NUNCA 12.000 (o bug)
-    assert CarviaFreteService._calcular_custo_rateio(e, 0, 100) == 0
+    # peso_grupo=0 (NF sem motos reconhecidas) -> FALLBACK de 1 kg: fatia minima
+    # (12000 * 1/1000 = 12), NUNCA o frete inteiro (12.000) nem 0
+    assert CarviaFreteService._calcular_custo_rateio(e, 0, 100) == 12
 
     # peso_grupo=500 de 1000 -> fatia 50% = 6.000 (rateio por peso preservado)
     assert CarviaFreteService._calcular_custo_rateio(e, 500, 25000) == 6000

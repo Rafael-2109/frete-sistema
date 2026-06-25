@@ -7,9 +7,10 @@ cubado 0), atribuindo o frete do caminhao inteiro a 1 item de peso zero
 (ex.: E-VIBE NF 2044 embarque 6008 -> R$ 12.000). O codigo ja foi corrigido;
 este script recalcula os fretes JA GRAVADOS pela MESMA logica corrigida.
 
-Para peso 0 o rateio correto e 0. ATENCAO: frete com NF de valor relevante +
-peso 0 = motos NAO reconhecidas (cubado 0). Aqui ele zera (rateio correto p/
-peso 0), mas o valor REAL depende de reconhecer os modelos da NF (cubagem) —
+Para peso 0 o rateio usa FALLBACK de 1 kg (fatia minima positiva, decisao Rafael
+2026-06-25): nem 0 nem o frete inteiro. ATENCAO: frete com NF de valor relevante
++ peso 0 = motos NAO reconhecidas (cubado 0). Aqui ele vira a fatia minima de
+1 kg, mas o valor REAL depende de reconhecer os modelos da NF (cubagem) —
 investigar recognition separadamente nesses casos (marcados com ⚠).
 
 So toca fretes NAO faturados (valor_cte IS NULL) e NAO cancelados. So sincroniza

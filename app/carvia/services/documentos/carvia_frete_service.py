@@ -746,16 +746,18 @@ class CarviaFreteService:
                 return None
 
             # Proporcao de peso: frete_total e o frete do CAMINHAO; cada grupo
-            # paga sua FATIA por peso. proporcao=1 SO quando o embarque nao tem
-            # peso agregado (peso_embarque_real=0) — ai o calculo foi feito para
-            # o grupo inteiro. Item com peso_grupo=0 num embarque COM peso paga 0
-            # (rateio por peso), NUNCA o frete inteiro.
-            # BUG corrigido (2026-06-24): a condicao antiga `peso_embarque_real>0
-            # and peso_grupo` caia no else=1.0 quando peso_grupo=0 (NF sem motos
-            # reconhecidas / cubado 0), atribuindo o frete do caminhao inteiro a
-            # 1 item de peso zero (ex.: E-VIBE NF 2044 embarque 6008 -> R$12.000).
+            # paga sua FATIA por peso (proporcao = peso_grupo / peso_embarque).
+            # proporcao=1 (frete inteiro) SO quando o embarque nao tem peso
+            # agregado (peso_embarque_real=0). Item com peso_grupo=0 (NF sem motos
+            # reconhecidas / cubado 0) usa FALLBACK de 1 kg (`peso_grupo or 1`):
+            # paga uma fatia MINIMA positiva, NUNCA o frete do caminhao inteiro
+            # (bug) nem 0.
+            # BUG (2026-06-24): a condicao antiga `peso_embarque_real>0 and
+            # peso_grupo` caia no else=1.0 quando peso_grupo=0, levando o frete do
+            # caminhao todo a 1 item de peso zero (E-VIBE NF 2044 emb 6008 ->
+            # R$12.000). Fallback peso 0 -> 1 (decisao Rafael 2026-06-25).
             if peso_embarque_real > 0:
-                proporcao = float(peso_grupo or 0) / peso_embarque_real
+                proporcao = float(peso_grupo or 1) / peso_embarque_real
             else:
                 proporcao = 1.0
 
