@@ -26,7 +26,7 @@ from flask import (
 from flask_login import current_user
 
 from app import db
-from app.hora.decorators import require_hora_perm
+from app.hora.decorators import require_hora_perm, require_hora_perm_any
 from app.hora.models import (
     HoraModelo,
     HoraVenda,
@@ -40,6 +40,7 @@ from app.hora.models.tagplus import (
     NFE_STATUS_VALIDOS,
 )
 from app.hora.routes import hora_bp
+from app.hora.services.auth_helper import lojas_permitidas_ids
 from app.hora.services.tagplus.api_client import ApiClient
 from app.hora.services.tagplus.cancelador_nfe import (
     CanceladorNfe,
@@ -964,10 +965,18 @@ def tagplus_webhook():
 # ============================================================
 
 @hora_bp.route('/tagplus/emissoes')
-@require_hora_perm('tagplus', 'ver')
+@require_hora_perm_any(('vendas', 'ver'), ('tagplus', 'ver'))
 def tagplus_emissoes_lista():
+    """Fila de NFs de saida (emissoes NFe).
+
+    Acessivel pelo vendedor (`vendas/ver`) e pelo operador de faturamento
+    (`tagplus/ver`). Para nao-admin a lista e escopada exatamente como
+    `vendas_lista`: criterio 'vendedor' mostra so as NFs das vendas do proprio
+    usuario; criterio 'loja' (padrao) limita as lojas permitidas. Admin / loja
+    NULL veem tudo.
+    """
     from datetime import datetime as _dt
-    from sqlalchemy import or_
+    from sqlalchemy import false, or_
 
     status_filtro = (request.args.get('status') or '').strip().upper() or None
     if status_filtro and status_filtro not in NFE_STATUS_VALIDOS:
@@ -995,22 +1004,44 @@ def tagplus_emissoes_lista():
         data_inicio = None
         data_fim = None
 
+    # Escopo de visibilidade (mesma regra de vendas_lista).
+    criterio = (getattr(current_user, 'criterio_pedidos_hora', 'loja') or 'loja')
+    permitidas = lojas_permitidas_ids()  # None = admin / loja NULL (irrestrito)
+    # Join em HoraVenda necessario para busca por cliente e/ou escopo.
+    precisa_join_venda = bool(busca) or criterio == 'vendedor' or permitidas is not None
+
     q = HoraTagPlusNfeEmissao.query.order_by(HoraTagPlusNfeEmissao.criado_em.desc())
+    if precisa_join_venda:
+        q = q.outerjoin(HoraVenda, HoraTagPlusNfeEmissao.venda_id == HoraVenda.id)
     if status_filtro:
-        q = q.filter_by(status=status_filtro)
+        q = q.filter(HoraTagPlusNfeEmissao.status == status_filtro)
 
     if busca:
         # Busca em numero_nfe, chave_44 (NF) e nome_cliente da venda relacionada.
         b = busca
-        q = (
-            q.outerjoin(HoraVenda, HoraTagPlusNfeEmissao.venda_id == HoraVenda.id)
-            .filter(or_(
-                HoraTagPlusNfeEmissao.numero_nfe.ilike(f'%{b}%'),
-                HoraTagPlusNfeEmissao.chave_44.ilike(f'%{b}%'),
-                HoraVenda.nome_cliente.ilike(f'%{b}%'),
-                HoraVenda.cpf_cliente.ilike(f'%{b}%'),
-            ))
-        )
+        q = q.filter(or_(
+            HoraTagPlusNfeEmissao.numero_nfe.ilike(f'%{b}%'),
+            HoraTagPlusNfeEmissao.chave_44.ilike(f'%{b}%'),
+            HoraVenda.nome_cliente.ilike(f'%{b}%'),
+            HoraVenda.cpf_cliente.ilike(f'%{b}%'),
+        ))
+
+    # Aplica o escopo apos o join. Vendedor: so as proprias vendas. Loja:
+    # restringe `HoraVenda.loja_id` (lista vazia -> nenhuma NF). Admin/None: sem filtro.
+    if criterio == 'vendedor':
+        nomes = [n for n in (
+            getattr(current_user, 'nome', None),
+            getattr(current_user, 'vendedor_vinculado', None),
+        ) if n]
+        uid = getattr(current_user, 'id', None)
+        conds = []
+        if nomes:
+            conds.append(HoraVenda.vendedor.in_(nomes))
+        if uid is not None:
+            conds.append(HoraVenda.criado_por_id == uid)
+        q = q.filter(or_(*conds)) if conds else q.filter(false())
+    elif permitidas is not None:
+        q = q.filter(HoraVenda.loja_id.in_(permitidas))
 
     if data_inicio:
         q = q.filter(HoraTagPlusNfeEmissao.criado_em >= data_inicio)

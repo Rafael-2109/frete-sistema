@@ -229,6 +229,21 @@ from app.hora.decorators import require_hora_perm
 def pedidos_lista(): ...
 ```
 
+**Tela acessivel por mais de um perfil** — use `require_hora_perm_any` (passa se
+QUALQUER par for concedido). Ex.: a fila de **NFs de Saida** (`tagplus_emissoes_lista`)
+e vista tanto pelo vendedor quanto pelo operador de faturamento:
+```python
+from app.hora.decorators import require_hora_perm_any
+
+@hora_bp.route('/tagplus/emissoes')
+@require_hora_perm_any(('vendas', 'ver'), ('tagplus', 'ver'))
+def tagplus_emissoes_lista(): ...
+```
+A rota escopa por loja/vendedor (mesma regra de `vendas_lista` via
+`criterio_pedidos_hora` + `lojas_permitidas_ids`) para o vendedor nao ver NFs de
+outras lojas. O link do menu (`base.html`) deve usar o MESMO OR de permissoes que
+o decorator — caso contrario o usuario ve o link mas leva "acesso negado".
+
 **Como usar em templates**:
 ```jinja
 {% if current_user.tem_perm_hora('lojas', 'criar') %}
