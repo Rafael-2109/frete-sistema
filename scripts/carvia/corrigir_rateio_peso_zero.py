@@ -20,7 +20,12 @@ Uso (rodar NO RENDER, apos o deploy do fix de codigo):
     python scripts/carvia/corrigir_rateio_peso_zero.py            # dry-run (default)
     python scripts/carvia/corrigir_rateio_peso_zero.py --confirm  # aplica
 """
+import os
 import sys
+
+# Permite rodar como `python scripts/carvia/corrigir_rateio_peso_zero.py`
+# (insere a raiz do repo no sys.path — 3 niveis acima deste arquivo).
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from app import create_app, db
 from app.carvia.models import CarviaFrete
