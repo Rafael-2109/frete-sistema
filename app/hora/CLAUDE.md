@@ -201,8 +201,11 @@ Documentação detalhada na análise de primeiros princípios do módulo (comand
 
 > Substitui o antigo `require_lojas` (mantido apenas para retrocompat). Use sempre `require_hora_perm` em rotas novas.
 
-**10 módulos canônicos** (em `app/hora/models/permissao.py:MODULOS_HORA`):
-`usuarios, dashboard, lojas, modelos, pedidos, nfs, recebimentos, estoque, devolucoes, pecas`.
+**Módulos canônicos**: a lista COMPLETA e fonte de verdade é `MODULOS_HORA` em
+`app/hora/models/permissao.py` (cresceu bem além do núcleo original
+`usuarios, dashboard, lojas, modelos, pedidos, nfs, recebimentos, estoque, devolucoes, pecas` —
+inclui hoje os módulos virtuais de visibilidade fina descritos abaixo). Sempre
+consultar o código, não esta lista, ao contar/conferir módulos.
 
 **5 ações** (`ACOES_HORA`): `ver, criar, editar, apagar, aprovar`.
 A ação `aprovar` é semântica e só tem decorator real no módulo `usuarios` (aprovação de cadastros pendentes). Para os demais, a flag é armazenada mas ignorada — o template marca a célula com `—`.
@@ -260,7 +263,7 @@ o decorator — caso contrario o usuario ve o link mas leva "acesso negado".
 
 **Service** (`app/hora/services/permissao_service.py`):
 - `tem_perm(user, modulo, acao)` — fonte de verdade (admin sempre True; status≠ativo False; sem entry False).
-- `get_matriz(user_id)` — dict `{modulo: {acao: bool}}` com 10 módulos × 5 ações.
+- `get_matriz(user_id)` — dict `{modulo: {acao: bool}}` com todos os módulos de `MODULOS_HORA` × 5 ações.
 - `get_matrizes_batch(user_ids)` — versão N-usuarios em 1 query (usado na tela de gestão).
 - `salvar_matriz_completa(user_id, matriz, atualizado_por_id)` — upsert em batch + commit.
 
