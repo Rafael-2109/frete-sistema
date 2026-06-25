@@ -3,7 +3,9 @@ Faturamento diario via Teams
 =============================
 
 Gera uma IMAGEM (PNG) do faturamento do MES CORRENTE e a envia, de forma
-proativa, na conversa 1:1 do destinatario (Marcus) com o Agente no Teams.
+proativa, no Teams. Destino padrao: o GRUPO "Financeiro - Nacom Goya"
+(DEFAULT_CONVERSATION_ID); com fallback para a conversa 1:1 do destinatario
+(Marcus) quando o grupo nao esta definido (env CONVERSATION_ID vazia).
 
 Acionado pelo scheduler de seg a sex as 6h (ver
 `app/scheduler/sincronizacao_incremental_definitiva.py`).
@@ -33,8 +35,17 @@ logger = logging.getLogger(__name__)
 
 # Empresas do relatorio (IDS_FIXOS.md): FB=1, CD=4
 COMPANIES_FATURAMENTO = [1, 4]
-# Destinatario padrao: Marcus Lima (usuarios.id=18). Override por env.
+# Destinatario 1:1 (fallback): Marcus Lima (usuarios.id=18). Override por env.
 DEFAULT_USER_ID = int(os.environ.get("FATURAMENTO_DIARIO_TEAMS_USER_ID", "18"))
+
+# Destino preferencial: GRUPO "Financeiro - Nacom Goya" no Teams (groupChat,
+# conversation_id capturado em 25/06/2026 quando o Agente foi chamado no grupo).
+# Quando definido, o envio vai para ESTE grupo em vez da conversa 1:1 do usuario.
+# Para voltar ao 1:1, setar a env como string vazia.
+DEFAULT_CONVERSATION_ID = os.environ.get(
+    "FATURAMENTO_DIARIO_TEAMS_CONVERSATION_ID",
+    "19:6fb2c48f46ba4776a3fd31d9182bd688@thread.v2",
+)
 
 MES_ABREV = ['', 'JAN', 'FEV', 'MAR', 'ABR', 'MAI', 'JUN',
              'JUL', 'AGO', 'SET', 'OUT', 'NOV', 'DEZ']
@@ -175,20 +186,25 @@ def gerar_imagem_bytes(linhas: list[tuple[date, int]], total: int,
 
 
 # ──────────────────────────────────────────────────────────────────
-# 3) Destinatario — conversation_reference da conversa 1:1 no Teams
+# 3) Destinatario — conversation_reference da conversa/grupo no Teams
 # ──────────────────────────────────────────────────────────────────
-def _conversation_reference(user_id: int):
-    """Reference da conversa 1:1 (personal) mais recente do usuario no Teams.
+def _conversation_reference(conversation_id: str | None = None,
+                            user_id: int | None = None):
+    """Reference (mais recente) de uma conversa do Teams.
 
-    Conversas 1:1 tem conversation_id iniciando por 'a:'. Cai para qualquer
-    conversa com reference se nao houver 1:1 (defensivo).
+    Prioriza um `conversation_id` especifico (ex.: o grupo "Financeiro - Nacom
+    Goya"). Sem ele, cai na conversa 1:1 (personal, 'a:%') mais recente do
+    `user_id` e, por fim, em qualquer conversa do usuario.
     """
     from app.teams.models import TeamsTask
 
-    base = TeamsTask.query.filter(
-        TeamsTask.user_id == user_id,
-        TeamsTask.conversation_reference.isnot(None),
-    )
+    base = TeamsTask.query.filter(TeamsTask.conversation_reference.isnot(None))
+    if conversation_id:
+        task = (base.filter(TeamsTask.conversation_id == conversation_id)
+                    .order_by(TeamsTask.created_at.desc()).first())
+        return task.conversation_reference if task else None
+
+    base = base.filter(TeamsTask.user_id == user_id)
     task = (base.filter(TeamsTask.conversation_id.like('a:%'))
                 .order_by(TeamsTask.created_at.desc()).first()
             or base.order_by(TeamsTask.created_at.desc()).first())
@@ -198,12 +214,18 @@ def _conversation_reference(user_id: int):
 # ──────────────────────────────────────────────────────────────────
 # 4) Orquestracao — gera, sobe S3 e envia no Teams
 # ──────────────────────────────────────────────────────────────────
-def enviar_faturamento_diario_teams(user_id: int | None = None,
+def enviar_faturamento_diario_teams(conversation_id: str | None = None,
+                                    user_id: int | None = None,
                                     dry_run: bool = False) -> dict:
     """Gera a imagem do mes corrente e envia no Teams (entrega proativa).
 
+    Destino: por padrao o GRUPO "Financeiro - Nacom Goya"
+    (DEFAULT_CONVERSATION_ID). Passe `conversation_id` para outra conversa, ou
+    deixe o destino vazio (env "") para cair na conversa 1:1 do `user_id`.
+
     Args:
-        user_id: destinatario (usuarios.id). Default = Marcus (env/18).
+        conversation_id: conversa/grupo de destino. Default = grupo Financeiro.
+        user_id: destinatario 1:1 (fallback quando nao ha conversation_id).
         dry_run: se True, gera tudo mas NAO posta no Teams (para teste manual).
 
     Returns:
@@ -211,6 +233,7 @@ def enviar_faturamento_diario_teams(user_id: int | None = None,
     """
     from app.utils.timezone import agora_utc_naive
 
+    conversation_id = conversation_id or (DEFAULT_CONVERSATION_ID or None)
     user_id = user_id or DEFAULT_USER_ID
     hoje = agora_utc_naive().date()
     ano, mes = hoje.year, hoje.month
@@ -255,9 +278,10 @@ def enviar_faturamento_diario_teams(user_id: int | None = None,
         return resultado
 
     # 4) destinatario + envio proativo (reusa a ponte da entrega do bot)
-    reference = _conversation_reference(user_id)
+    reference = _conversation_reference(conversation_id=conversation_id, user_id=user_id)
     if not reference:
-        logger.error(f"[FAT-DIARIO] Sem conversation_reference para user_id={user_id}")
+        alvo = f"conversation_id={conversation_id}" if conversation_id else f"user_id={user_id}"
+        logger.error(f"[FAT-DIARIO] Sem conversation_reference para {alvo}")
         resultado["motivo"] = "sem_conversa_teams"
         return resultado
 
@@ -283,9 +307,10 @@ def enviar_faturamento_diario_teams(user_id: int | None = None,
         resultado["motivo"] = f"post_falhou: {e}"
         return resultado
 
+    destino = f"grupo {conversation_id}" if conversation_id else f"user_id={user_id}"
     logger.info(
-        f"[FAT-DIARIO] Enviado para user_id={user_id}: {rotulo} "
+        f"[FAT-DIARIO] Enviado para {destino}: {rotulo} "
         f"total={_br(total)} dias={len(linhas)}"
     )
-    resultado.update(ok=True, motivo="enviado")
+    resultado.update(ok=True, motivo="enviado", destino=destino)
     return resultado
