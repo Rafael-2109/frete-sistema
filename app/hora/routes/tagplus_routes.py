@@ -1410,7 +1410,7 @@ def venda_nfe_status(venda_id: int):
 
 
 @hora_bp.route('/vendas/<int:venda_id>/nfe/preview', methods=['GET'])
-@require_hora_perm('vendas', 'criar')
+@require_hora_perm('vendas_nf', 'ver')
 def venda_nfe_preview(venda_id: int):
     """Tela read-only com totais, custos e margem antes de emitir a NFe.
 
@@ -1436,7 +1436,7 @@ def venda_nfe_preview(venda_id: int):
 
 
 @hora_bp.route('/vendas/<int:venda_id>/nfe/emitir', methods=['POST'])
-@require_hora_perm('vendas', 'criar')
+@require_hora_perm('vendas_nf', 'ver')
 def venda_nfe_emitir(venda_id: int):
     try:
         emissao_id = EmissorNfeHora.enfileirar(venda_id)
@@ -1449,7 +1449,7 @@ def venda_nfe_emitir(venda_id: int):
 
 
 @hora_bp.route('/vendas/<int:venda_id>/nfe/cancelar', methods=['POST'])
-@require_hora_perm('vendas', 'apagar')
+@require_hora_perm('vendas_nf', 'ver')
 def venda_nfe_cancelar(venda_id: int):
     justificativa = (request.form.get('justificativa') or '').strip()
     emissao = HoraTagPlusNfeEmissao.query.filter_by(venda_id=venda_id).first()
@@ -1528,7 +1528,7 @@ def venda_nfe_sincronizar(venda_id: int):
 
 
 @hora_bp.route('/vendas/<int:venda_id>/nfe/cce', methods=['POST'])
-@require_hora_perm('vendas', 'editar')
+@require_hora_perm('vendas_nf', 'ver')
 def venda_nfe_cce(venda_id: int):
     texto = (request.form.get('texto_correcao') or '').strip()
     emissao = HoraTagPlusNfeEmissao.query.filter_by(venda_id=venda_id).first()

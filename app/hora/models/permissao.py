@@ -22,7 +22,7 @@ MODULOS_HORA: list[tuple[str, str]] = [
     ('dashboard', 'Dashboard'),
     ('lojas', 'Lojas'),
     ('modelos', 'Modelos'),
-    ('pedidos', 'Pedidos'),
+    ('pedidos', 'Compras (Pedido de Compras)'),
     ('nfs', 'NFs de Entrada'),
     ('recebimentos', 'Recebimentos'),
     ('recebimento_resumo', 'Recebimento: Ver resumo/comparativo'),
@@ -36,7 +36,8 @@ MODULOS_HORA: list[tuple[str, str]] = [
     ('transferencias', 'Transferencias entre filiais'),
     ('emprestimos', 'Emprestimos com lojas externas'),
     ('avarias', 'Avarias'),
-    ('vendas', 'Vendas (NF saida)'),
+    ('vendas', 'Vendas (Pedido de Venda)'),
+    ('vendas_nf', 'Vendas: Emitir/Cancelar NF de saida (fiscal)'),
     ('vendas_exportar', 'Vendas: Exportar Excel (pedidos)'),
     ('vendas_descarte', 'Vendas: Descartar (NF teste)'),
     ('tagplus', 'Integracao TagPlus (NFe)'),
@@ -60,6 +61,10 @@ MODULOS_SO_VER: set[str] = {
     'estoque_valores',
     'estoque_exportar',
     'vendas_exportar',
+    # Acao fiscal da NF de saida (emitir/preview/cancelar/CC-e), separada de
+    # 'vendas' (que agora gateia apenas o PEDIDO de venda). Permite dar a um
+    # vendedor o poder de criar pedido SEM o poder de emitir/cancelar a NFe.
+    'vendas_nf',
 }
 
 # Modulos onde a acao 'aprovar' tem semantica REAL (decorator existe e e

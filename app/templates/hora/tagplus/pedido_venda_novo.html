@@ -12,6 +12,7 @@
 {% set pode_apagar = current_user.tem_perm_hora('vendas', 'apagar') %}
 {% set pode_aprovar = current_user.tem_perm_hora('vendas', 'aprovar') %}
 {% set pode_criar = current_user.tem_perm_hora('vendas', 'criar') %}
+{% set pode_emitir_nf = current_user.tem_perm_hora('vendas_nf', 'ver') %}
 
 {% set status_badge = {
     'INCOMPLETO': 'warning',
@@ -143,7 +144,7 @@
         <button type="submit" class="btn btn-primary"><i class="fas fa-check-circle"></i> Confirmar pedido</button>
       </form>
     {% endif %}
-    {% if is_confirmado and pode_criar %}
+    {% if is_confirmado and pode_emitir_nf %}
       <a href="{{ url_for('hora.venda_nfe_preview', venda_id=venda.id) }}" class="btn btn-success" id="btn-emitir-nfe">
         <i class="fas fa-paper-plane"></i> Emitir NFe
       </a>

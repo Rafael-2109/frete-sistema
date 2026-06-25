@@ -5,7 +5,7 @@
    e botao "Confirmar emissao" que POSTa para venda_nfe_emitir. #}
 
 {% block hora_content %}
-{% set pode_emitir = current_user.tem_perm_hora('vendas', 'criar') %}
+{% set pode_emitir = current_user.tem_perm_hora('vendas_nf', 'ver') %}
 {% set is_confirmado = venda.status == 'CONFIRMADO' %}
 {% set ja_tem_chave = venda.nf_saida_chave_44 is not none %}
 {% set tem_div_aberta = venda.tem_divergencia_aberta %}

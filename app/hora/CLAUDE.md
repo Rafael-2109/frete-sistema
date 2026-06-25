@@ -214,8 +214,14 @@ módulos-CRUD, existem slugs que só usam a ação `ver` para gatear pedaços de
   Sem a flag, o vendedor vê a moto/rastreio mas não os valores.
 - `estoque_exportar` — botão + rota `estoque_exportar_xlsx` (export do estoque).
 - `vendas_exportar` — botão + rota `vendas_exportar_xlsx` (export dos pedidos de venda).
+- `vendas_nf` — **ação fiscal da NF de saída** (emitir/preview/cancelar/CC-e), SEPARADA
+  do pedido de venda. Rotas `venda_nfe_{preview,emitir,cancelar,cce}` e os botões em
+  `pedido_venda_novo.html` / `nfe_status.html` / `venda_preview_nfe.html`. Permite dar
+  ao vendedor o poder de **criar pedido** (`vendas/criar`) SEM o poder de **emitir/cancelar
+  a NFe fiscal**. O módulo `vendas` foi renomeado para "Vendas (Pedido de Venda)" — ele
+  NÃO gateia mais a NF (só o pedido: COTACAO→CONFIRMADO + edição/itens).
 
-São independentes de `estoque/ver` e `vendas/ver` (ver a tela ≠ ver valores / exportar).
+São independentes de `estoque/ver` e `vendas/ver` (ver a tela ≠ ver valores / exportar / emitir NF).
 Default `False`: usuário não-admin só ganha cada uma quando o admin marca o checkbox
 correspondente em `/hora/permissoes`. Sem DDL — `hora_user_permissao.modulo` é VARCHAR(40)
 e as linhas são criadas sob demanda por `salvar_matriz_completa`.
