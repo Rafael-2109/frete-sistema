@@ -4,7 +4,7 @@ camada: L1
 sot_de: —
 hub: CLAUDE.md
 superseded_by: —
-atualizado: 2026-06-06
+atualizado: 2026-06-25
 -->
 # WhatsApp Bot — Guia de Desenvolvimento
 
@@ -63,6 +63,24 @@ app/whatsapp/
 ```
 
 Migration: `scripts/migrations/2026_05_09_whatsapp_module.{py,sql}`
+
+---
+
+## Transportes (seletor `WHATSAPP_TRANSPORT`)
+
+O core do modulo e **transport-agnostic** — toda a inteligencia esta no Agent SDK.
+O canal WhatsApp fisico e selecionado por env `WHATSAPP_TRANSPORT`:
+
+| Valor | Inbound | Outbound | Quando |
+|-------|---------|----------|--------|
+| `openclaw` (default) | plugin `nacom-bridge` -> `POST /inbound` (headers `X-OpenClaw-*`) | gateway OpenClaw loopback:18789 | Legado. So roda com o PC do operador ligado |
+| `n8n` | Evolution API -> N8N -> `POST /n8n/inbound` (body JSON) | Evolution API direto (`/message/sendText`) | 24/7 num VPS. **Montagem: `app/whatsapp/N8N_EVOLUTION_SETUP.md`** |
+
+- Inbound compartilha o core `bot_routes._create_inbound_task(...)` — os dois transportes
+  divergem so na extracao de identidade (headers vs body).
+- Outbound: `services._send_whatsapp_reply` despacha por `WHATSAPP_TRANSPORT`. No modo `n8n`
+  a resposta vai **direto na Evolution** (nao volta pelo N8N — um hop a menos).
+- Rollback = trocar `WHATSAPP_TRANSPORT=openclaw` (sem deploy de codigo).
 
 ---
 
@@ -176,8 +194,9 @@ pending → processing → completed | error | timeout | awaiting_user_input
 
 | Endpoint | Metodo | Auth | Funcao |
 |----------|--------|------|--------|
-| `/api/whatsapp/inbound` | POST | Bearer plugin | Recebe inbound, cria task async, retorna 202 |
-| `/api/whatsapp/health` | GET | — | Status threads ativas + tokens configurados |
+| `/api/whatsapp/inbound` | POST | Bearer `OPENCLAW_PLUGIN_TOKEN` | Inbound OpenClaw (headers `X-OpenClaw-*`), cria task async, 202 |
+| `/api/whatsapp/n8n/inbound` | POST | Bearer `N8N_INBOUND_TOKEN` | Inbound N8N (body JSON: `sender`, `text`, `is_group`...), cria task async, 202 |
+| `/api/whatsapp/health` | GET | — | Status: `transport`, threads ativas, tokens/configs dos dois transportes |
 
 Futuro Fase 6:
 - `/api/whatsapp/answer` — AskUserQuestion via numeracao no texto ou polls
@@ -186,6 +205,30 @@ Futuro Fase 6:
 ---
 
 ## Configuracao (variaveis de ambiente)
+
+### Seletor de transporte
+
+```bash
+# openclaw (default) | n8n
+WHATSAPP_TRANSPORT=openclaw
+```
+
+### Transporte N8N + Evolution API (quando WHATSAPP_TRANSPORT=n8n)
+
+> Runbook completo de montagem: `app/whatsapp/N8N_EVOLUTION_SETUP.md`
+
+```bash
+N8N_INBOUND_TOKEN=<token-shared-secret>   # Bearer que o N8N envia no /n8n/inbound
+EVOLUTION_API_URL=https://evo.seudominio.com
+EVOLUTION_API_KEY=<apikey-da-evolution>
+EVOLUTION_INSTANCE=nacom                   # nome da instancia pareada
+# EVOLUTION_NOTIFY_ENABLED=true            # opcional; "false" muta o envio
+```
+
+Gerar `N8N_INBOUND_TOKEN`: `python -c "import secrets; print(secrets.token_urlsafe(48))"`
+(o MESMO valor deve ir no N8N — env `N8N_INBOUND_TOKEN` do workflow).
+
+### Transporte OpenClaw (legado — quando WHATSAPP_TRANSPORT=openclaw)
 
 ```bash
 # Token Bearer que o plugin OpenClaw envia em Authorization
@@ -257,7 +300,8 @@ ou similar — formato confirmado no plugin).
 
 | Importa de | O que | Cuidado |
 |-----------|-------|---------|
-| `app.utils.whatsapp_notify` | `send_whatsapp` (gateway HTTP) | Lib helper, sem app context |
+| `app.utils.whatsapp_notify` | `send_whatsapp` (gateway OpenClaw) | Lib helper, sem app context. Usado quando `WHATSAPP_TRANSPORT=openclaw` |
+| `app.utils.whatsapp_evolution` | `send_whatsapp_evolution` (Evolution API) | Outbound direto. Usado quando `WHATSAPP_TRANSPORT=n8n`. Reusa excecoes de `whatsapp_notify` |
 | `app.auth.models.Usuario` | `find_by_whatsapp_jid` | Multi-formato BR/E.164 |
 | `app.agente.sdk` | `get_client`, `submit_coroutine` | Mesma SDK do Teams |
 | `app.agente.config.permissions` | ContextVar set/cleanup | Cross-thread — testar Teams se mudar |

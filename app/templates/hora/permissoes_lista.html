@@ -42,7 +42,7 @@
                   <select name="loja_hora_id" class="form-select form-select-sm">
                     <option value="">Todas as lojas</option>
                     {% for l in lojas %}
-                      <option value="{{ l.id }}">{{ l.nome }} ({{ l.cnpj }})</option>
+                      <option value="{{ l.id }}">{{ l.rotulo_display }} ({{ l.cnpj }})</option>
                     {% endfor %}
                   </select>
                   <button type="submit" class="btn btn-sm btn-success"
@@ -113,7 +113,7 @@
             <option value="" {% if not u.loja_hora_id %}selected{% endif %}>Todas as lojas</option>
             {% for l in lojas %}
               <option value="{{ l.id }}" {% if u.loja_hora_id == l.id %}selected{% endif %}>
-                {{ l.nome }} ({{ l.cnpj }})
+                {{ l.rotulo_display }} ({{ l.cnpj }})
               </option>
             {% endfor %}
           </select>

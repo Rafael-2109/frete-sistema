@@ -286,29 +286,43 @@ def _obter_resposta_agente_whatsapp(
 
 
 # ═══════════════════════════════════════════════════════════════════════
-# Envio da resposta via gateway OpenClaw
+# Envio da resposta — seletor de transporte (OpenClaw | Evolution via N8N)
 # ═══════════════════════════════════════════════════════════════════════
 
 def _send_whatsapp_reply(task, text: str) -> bool:
-    """Envia resposta ao peer via gateway OpenClaw (loopback:18789).
+    """Envia resposta ao peer pelo transporte ativo (WHATSAPP_TRANSPORT).
 
     Em DM: target = peer_jid. Em grupo: target = conversation_jid (@g.us).
-    OpenClaw chunka mensagens > 4096 chars automaticamente.
     Bypassa rate limit local (skip_rate_limit=True) — ja respondendo a
     inbound, nao gera flood independente.
-    """
-    from app.utils.whatsapp_notify import (
-        WhatsAppNotifyError,
-        send_whatsapp,
-    )
 
+    Transportes:
+    - "openclaw" (default): gateway OpenClaw em loopback:18789. Chunka >4096
+      automaticamente.
+    - "n8n": Evolution API direto (POST /message/sendText). O helper fragmenta
+      mensagens longas. NAO passa pelo N8N na saida (um hop a menos).
+
+    Ambos os helpers levantam WhatsAppNotifyError — tratamento unico.
+    """
+    import os
+
+    from app.utils.whatsapp_notify import WhatsAppNotifyError
+
+    transport = os.environ.get("WHATSAPP_TRANSPORT", "openclaw").lower()
     target = task.conversation_jid if task.is_group else task.peer_jid
+
     try:
-        send_whatsapp(target, text, skip_rate_limit=True)
+        if transport == "n8n":
+            from app.utils.whatsapp_evolution import send_whatsapp_evolution
+            send_whatsapp_evolution(target, text, skip_rate_limit=True)
+        else:
+            from app.utils.whatsapp_notify import send_whatsapp
+            send_whatsapp(target, text, skip_rate_limit=True)
         return True
     except WhatsAppNotifyError as exc:
         logger.error(
-            f"[WHATSAPP] Falha ao enviar resposta task={task.id[:8]}...: {exc}"
+            f"[WHATSAPP] Falha ao enviar resposta task={task.id[:8]}... "
+            f"(transport={transport}): {exc}"
         )
         return False
 

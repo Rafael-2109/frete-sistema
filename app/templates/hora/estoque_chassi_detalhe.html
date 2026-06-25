@@ -60,7 +60,7 @@
       <div class="col-md-3"><small class="text-muted">Loja destino</small><br>
         {{ rastreio.pedido.loja_destino.rotulo_display if rastreio.pedido.loja_destino else '—' }}
       </div>
-      {% if rastreio.pedido_item and rastreio.pedido_item.preco_compra_esperado is not none %}
+      {% if rastreio.pedido_item and rastreio.pedido_item.preco_compra_esperado is not none and current_user.tem_perm_hora('estoque_valores', 'ver') %}
         <div class="col-md-2"><small class="text-muted">Preço esperado</small><br>
           {{ rastreio.pedido_item.preco_compra_esperado|valor_br }}
         </div>
@@ -109,6 +109,7 @@
       <div class="col-md-4"><small class="text-muted">Emitente</small><br>
         {{ rastreio.nf.nome_emitente or rastreio.nf.cnpj_emitente }}
       </div>
+      {% if current_user.tem_perm_hora('estoque_valores', 'ver') %}
       <div class="col-md-2"><small class="text-muted">Valor total</small><br>
         R$ {{ rastreio.nf.valor_total|valor_br(2) if rastreio.nf.valor_total else '—' }}
       </div>
@@ -117,6 +118,7 @@
           R$ {{ rastreio.nf_item.preco_real|valor_br(2) }}
         {% else %}—{% endif %}
       </div>
+      {% endif %}
     </div>
     {# Texto cru da NF intencionalmente omitido aqui — modelo canonico ja
        eh exibido em "Modelo" (linha 25) via moto.modelo.nome_modelo. Para
@@ -348,7 +350,9 @@
         {{ rastreio.venda.nome_cliente }}
         <br><small class="text-muted">{{ rastreio.venda.cpf_cliente }}</small>
       </div>
-      <div class="col-md-3"><small class="text-muted">Preço / Forma pgto</small><br>
+      <div class="col-md-3">
+        {% if current_user.tem_perm_hora('estoque_valores', 'ver') %}
+        <small class="text-muted">Preço / Forma pgto</small><br>
         {% if rastreio.venda_item %}
           <strong>R$ {{ rastreio.venda_item.preco_final|valor_br(2) }}</strong>
           {% if rastreio.venda_item.desconto_aplicado and rastreio.venda_item.desconto_aplicado > 0 %}
@@ -358,7 +362,11 @@
             </small>
           {% endif %}
         {% endif %}
-        <br><small>{{ rastreio.venda.forma_pagamento }}</small>
+        <br>
+        {% else %}
+        <small class="text-muted">Forma pgto</small><br>
+        {% endif %}
+        <small>{{ rastreio.venda.forma_pagamento }}</small>
       </div>
     </div>
     {% if rastreio.venda.nf_saida_numero %}

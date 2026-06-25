@@ -4,7 +4,7 @@ camada: L1
 sot_de: —
 hub: CLAUDE.md
 superseded_by: —
-atualizado: 2026-06-03
+atualizado: 2026-06-25
 -->
 # Módulo HORA — Lojas Motochefe
 
@@ -201,11 +201,33 @@ Documentação detalhada na análise de primeiros princípios do módulo (comand
 
 > Substitui o antigo `require_lojas` (mantido apenas para retrocompat). Use sempre `require_hora_perm` em rotas novas.
 
-**10 módulos canônicos** (em `app/hora/models/permissao.py:MODULOS_HORA`):
-`usuarios, dashboard, lojas, modelos, pedidos, nfs, recebimentos, estoque, devolucoes, pecas`.
+**Módulos canônicos**: a lista COMPLETA e fonte de verdade é `MODULOS_HORA` em
+`app/hora/models/permissao.py` (cresceu bem além do núcleo original
+`usuarios, dashboard, lojas, modelos, pedidos, nfs, recebimentos, estoque, devolucoes, pecas` —
+inclui hoje os módulos virtuais de visibilidade fina descritos abaixo). Sempre
+consultar o código, não esta lista, ao contar/conferir módulos.
 
 **5 ações** (`ACOES_HORA`): `ver, criar, editar, apagar, aprovar`.
 A ação `aprovar` é semântica e só tem decorator real no módulo `usuarios` (aprovação de cadastros pendentes). Para os demais, a flag é armazenada mas ignorada — o template marca a célula com `—`.
+
+**Flags de visibilidade fina (módulos virtuais em `MODULOS_SO_VER`)**: além dos
+módulos-CRUD, existem slugs que só usam a ação `ver` para gatear pedaços de UI:
+- `estoque_valores` — exibe os valores R$ no detalhe do chassi (`estoque_chassi_detalhe.html`:
+  Preço esperado do pedido, Valor total + Preço desta moto da NF de entrada, Preço da venda).
+  Sem a flag, o vendedor vê a moto/rastreio mas não os valores.
+- `estoque_exportar` — botão + rota `estoque_exportar_xlsx` (export do estoque).
+- `vendas_exportar` — botão + rota `vendas_exportar_xlsx` (export dos pedidos de venda).
+- `vendas_nf` — **ação fiscal da NF de saída** (emitir/preview/cancelar/CC-e), SEPARADA
+  do pedido de venda. Rotas `venda_nfe_{preview,emitir,cancelar,cce}` e os botões em
+  `pedido_venda_novo.html` / `nfe_status.html` / `venda_preview_nfe.html`. Permite dar
+  ao vendedor o poder de **criar pedido** (`vendas/criar`) SEM o poder de **emitir/cancelar
+  a NFe fiscal**. O módulo `vendas` foi renomeado para "Vendas (Pedido de Venda)" — ele
+  NÃO gateia mais a NF (só o pedido: COTACAO→CONFIRMADO + edição/itens).
+
+São independentes de `estoque/ver` e `vendas/ver` (ver a tela ≠ ver valores / exportar / emitir NF).
+Default `False`: usuário não-admin só ganha cada uma quando o admin marca o checkbox
+correspondente em `/hora/permissoes`. Sem DDL — `hora_user_permissao.modulo` é VARCHAR(40)
+e as linhas são criadas sob demanda por `salvar_matriz_completa`.
 
 **Como usar em rotas novas**:
 ```python
@@ -215,6 +237,21 @@ from app.hora.decorators import require_hora_perm
 @require_hora_perm('pedidos', 'ver')   # admin sempre passa; usuario inativo bloqueado; resto via tabela
 def pedidos_lista(): ...
 ```
+
+**Tela acessivel por mais de um perfil** — use `require_hora_perm_any` (passa se
+QUALQUER par for concedido). Ex.: a fila de **NFs de Saida** (`tagplus_emissoes_lista`)
+e vista tanto pelo vendedor quanto pelo operador de faturamento:
+```python
+from app.hora.decorators import require_hora_perm_any
+
+@hora_bp.route('/tagplus/emissoes')
+@require_hora_perm_any(('vendas', 'ver'), ('tagplus', 'ver'))
+def tagplus_emissoes_lista(): ...
+```
+A rota escopa por loja/vendedor (mesma regra de `vendas_lista` via
+`criterio_pedidos_hora` + `lojas_permitidas_ids`) para o vendedor nao ver NFs de
+outras lojas. O link do menu (`base.html`) deve usar o MESMO OR de permissoes que
+o decorator — caso contrario o usuario ve o link mas leva "acesso negado".
 
 **Como usar em templates**:
 ```jinja
@@ -226,7 +263,7 @@ def pedidos_lista(): ...
 
 **Service** (`app/hora/services/permissao_service.py`):
 - `tem_perm(user, modulo, acao)` — fonte de verdade (admin sempre True; status≠ativo False; sem entry False).
-- `get_matriz(user_id)` — dict `{modulo: {acao: bool}}` com 10 módulos × 5 ações.
+- `get_matriz(user_id)` — dict `{modulo: {acao: bool}}` com todos os módulos de `MODULOS_HORA` × 5 ações.
 - `get_matrizes_batch(user_ids)` — versão N-usuarios em 1 query (usado na tela de gestão).
 - `salvar_matriz_completa(user_id, matriz, atualizado_por_id)` — upsert em batch + commit.
 

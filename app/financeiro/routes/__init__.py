@@ -20,6 +20,9 @@ Estrutura:
 - comprovantes.py        - Upload e listagem de comprovantes de pagamento de boleto (NEW)
 - comprovante_match.py   - Matching de comprovantes com faturas Odoo (NEW)
 - conversor_extrato_srm.py - Conversor de extrato SRM Bank: PDF -> OFX (NEW)
+- validador_titulos.py   - Validador de Titulos x Bancos: cruza boletos dos 4 bancos
+                           (SRM/GRAFENO/AGIS/VORTX) com recompras (CP-NACOM) e
+                           faturamento (contas_a_receber) -> 3 comparativos + Excel (NEW)
 """
 
 import os
@@ -52,3 +55,4 @@ from app.financeiro.routes import comprovantes
 from app.financeiro.routes import comprovante_match
 from app.financeiro.routes import remessa_vortx
 from app.financeiro.routes import conversor_extrato_srm
+from app.financeiro.routes import validador_titulos

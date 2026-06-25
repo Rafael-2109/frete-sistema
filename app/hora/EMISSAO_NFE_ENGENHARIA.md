@@ -1047,6 +1047,14 @@ Erros da API TagPlus são documentados em `scripts/guia.md:376-401`. Mapeamento 
 
 ## 10. Rotas UI propostas
 
+> ⚠️ **Desatualizado (proposta original).** A implementação divergiu desta tabela:
+> as permissões reais NÃO usam o módulo `nfs`. Fonte de verdade atual:
+> `app/hora/CLAUDE.md` (seção "Autorização granular"). Em resumo:
+> - **Pedido de venda** (criar/editar/ver) → módulo `vendas`.
+> - **NF de saída fiscal** (emitir / preview / cancelar / CC-e) → flag `vendas_nf` (ação `ver`).
+> - **Config/admin TagPlus** (conta, OAuth, mapeamentos, backfills) → módulo `tagplus`.
+> - **Fila de NFs de saída** (`/hora/tagplus/emissoes`) → `vendas/ver` OU `tagplus/ver`.
+
 Todas protegidas por `require_hora_perm('nfs', <acao>)` (módulo `nfs` já existe no `MODULOS_HORA`).
 
 | Rota | Método | Permissão | Finalidade |

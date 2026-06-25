@@ -1,0 +1,232 @@
+{% extends "base.html" %}
+
+{% block title %}Validador de Títulos x Bancos{% endblock %}
+
+{% block content %}
+<div class="container py-4" style="max-width: 1100px;">
+
+    <div class="mb-4">
+        <h2 class="mt-2">
+            <i class="fas fa-balance-scale text-primary"></i>
+            Validador de Títulos x Bancos
+        </h2>
+        <p class="text-muted mb-0">
+            Suba as bases dos bancos e o Contas a Pagar. O faturamento é puxado do
+            sistema automaticamente. Os comparativos saem na hora.
+        </p>
+    </div>
+
+    <!-- ============ FORMULÁRIO DE UPLOAD ============ -->
+    <div class="card shadow-sm mb-4">
+        <div class="card-header bg-light">
+            <strong><i class="fas fa-upload me-1"></i> Bases para conferência</strong>
+        </div>
+        <div class="card-body">
+            <form method="POST" action="{{ url_for('financeiro.validador_titulos_processar') }}"
+                  enctype="multipart/form-data">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="row g-3">
+                    {% for banco in bancos %}
+                    <div class="col-md-6 col-lg-3">
+                        <label class="form-label fw-bold">{{ banco }}</label>
+                        <input type="file" name="arquivo_{{ banco }}" class="form-control"
+                               accept=".xlsx,.xlsm,.xlsb,.csv,.txt">
+                    </div>
+                    {% endfor %}
+                </div>
+
+                <hr class="my-3">
+
+                <div class="row g-3 align-items-end">
+                    <div class="col-md-8">
+                        <label class="form-label fw-bold">
+                            Contas a Pagar (aba CP-NACOM)
+                            <span class="text-muted fw-normal">— para validar recompras (opcional)</span>
+                        </label>
+                        <input type="file" name="arquivo_CP" class="form-control"
+                               accept=".xlsx,.xlsm,.xlsb">
+                    </div>
+                    <div class="col-md-4 text-md-end">
+                        <button type="submit" class="btn btn-primary btn-lg w-100">
+                            <i class="fas fa-cogs me-1"></i> Processar
+                        </button>
+                    </div>
+                </div>
+            </form>
+            <p class="text-muted small mb-0 mt-3">
+                <i class="fas fa-info-circle"></i>
+                Formatos aceitos: Excel (.xlsx, .xlsb) ou CSV. Envie pelo menos a base de um banco.
+            </p>
+        </div>
+    </div>
+
+    {% if resultado %}
+    {% set r = resultado.resultado %}
+    {% set s = resultado.resumo %}
+
+    <!-- ============ RESUMO ============ -->
+    <div class="row g-3 mb-4">
+        <div class="col-6 col-md-3">
+            <div class="card text-center shadow-sm h-100">
+                <div class="card-body">
+                    <div class="fs-3 fw-bold text-primary">{{ s.qtd_duplicados }}</div>
+                    <small class="text-muted">Títulos em 2+ bancos</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="card text-center shadow-sm h-100 border-danger">
+                <div class="card-body">
+                    <div class="fs-3 fw-bold text-danger">{{ s.qtd_duplicados_sem_recompra }}</div>
+                    <small class="text-muted">Sem recompra (verificar)</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="card text-center shadow-sm h-100">
+                <div class="card-body">
+                    <div class="fs-3 fw-bold text-warning">{{ s.qtd_faturado_sem_boleto }}</div>
+                    <small class="text-muted">Faturado sem boleto</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="card text-center shadow-sm h-100">
+                <div class="card-body">
+                    <div class="fs-3 fw-bold text-secondary">{{ s.qtd_boleto_sem_nota }}</div>
+                    <small class="text-muted">Boleto sem nota</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <span class="text-muted small">
+            {{ s.qtd_boletos }} boletos lidos · {{ s.qtd_recompras_cp }} recompras no CP ·
+            {{ s.qtd_faturamento }} notas faturadas
+            {% if s.qtd_nao_identificados %}
+            · <span class="text-danger">{{ s.qtd_nao_identificados }} boletos não identificados</span>
+            {% endif %}
+        </span>
+        {% if token_download %}
+        <a href="{{ url_for('financeiro.validador_titulos_download', token=token_download) }}"
+           class="btn btn-success">
+            <i class="fas fa-file-excel me-1"></i> Baixar Excel completo
+        </a>
+        {% endif %}
+    </div>
+
+    <!-- ============ 1. DUPLICADOS ============ -->
+    <div class="card shadow-sm mb-4">
+        <div class="card-header bg-light">
+            <strong>1. Títulos em mais de um banco</strong>
+            <span class="text-muted">— 🔴 verifique os "Sem recompra"</span>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive" style="max-height: 480px;">
+                <table class="table table-sm table-hover mb-0">
+                    <thead class="table-light sticky-top">
+                        <tr><th>NF-PARC</th><th>Bancos</th><th class="text-center">Qtd</th><th>Recompra</th></tr>
+                    </thead>
+                    <tbody>
+                        {% for d in r.duplicados %}
+                        <tr class="{{ '' if d.tem_recompra else 'table-danger' }}">
+                            <td><code>{{ d.nf_parc }}</code></td>
+                            <td>{{ d.bancos | join(', ') }}</td>
+                            <td class="text-center">{{ d.qtd_bancos }}</td>
+                            <td>
+                                {% if d.tem_recompra %}
+                                <span class="badge bg-success">Recompra OK</span>
+                                {% else %}
+                                <span class="badge bg-danger">Verificar</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr><td colspan="4" class="text-center text-muted py-3">Nenhum título em mais de um banco.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============ 2. FATURADO SEM BOLETO ============ -->
+    <div class="card shadow-sm mb-4">
+        <div class="card-header bg-light">
+            <strong>2. Notas faturadas sem boleto</strong>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive" style="max-height: 420px;">
+                <table class="table table-sm table-hover mb-0">
+                    <thead class="table-light sticky-top">
+                        <tr><th>NF-PARC</th><th>Cliente</th><th>UF</th><th>Vencimento</th><th class="text-end">Valor</th><th>Forma</th></tr>
+                    </thead>
+                    <tbody>
+                        {% for f in r.faturado_sem_boleto %}
+                        <tr>
+                            <td><code>{{ f.nf_parc }}</code></td>
+                            <td>{{ f.cliente or '' }}</td>
+                            <td>{{ f.uf or '' }}</td>
+                            <td>{{ f.vencimento or '' }}</td>
+                            <td class="text-end">{{ '%.2f'|format(f.valor) if f.valor is not none else '' }}</td>
+                            <td>{{ f.tipo_titulo or '' }}</td>
+                        </tr>
+                        {% else %}
+                        <tr><td colspan="6" class="text-center text-muted py-3">Todas as notas faturadas têm boleto.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============ 3. BOLETO SEM NOTA + NÃO IDENTIFICADOS ============ -->
+    <div class="row g-4">
+        <div class="col-lg-6">
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-light"><strong>3. Boletos sem nota faturada</strong></div>
+                <div class="card-body p-0">
+                    <div class="table-responsive" style="max-height: 360px;">
+                        <table class="table table-sm table-hover mb-0">
+                            <thead class="table-light sticky-top"><tr><th>NF-PARC</th><th>Bancos</th></tr></thead>
+                            <tbody>
+                                {% for b in r.boleto_sem_nota %}
+                                <tr><td><code>{{ b.nf_parc }}</code></td><td>{{ b.bancos | join(', ') }}</td></tr>
+                                {% else %}
+                                <tr><td colspan="2" class="text-center text-muted py-3">Nenhum.</td></tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-6">
+            <div class="card shadow-sm mb-4 {{ 'border-danger' if r.nao_identificados else '' }}">
+                <div class="card-header bg-light">
+                    <strong>Boletos não identificados</strong>
+                    <span class="text-muted">— sem chave NF-PARC, conferir manual</span>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive" style="max-height: 360px;">
+                        <table class="table table-sm table-hover mb-0">
+                            <thead class="table-light sticky-top"><tr><th>Banco</th><th>Original</th><th class="text-end">Valor</th></tr></thead>
+                            <tbody>
+                                {% for n in r.nao_identificados %}
+                                <tr><td>{{ n.banco }}</td><td><code>{{ n.original }}</code></td>
+                                    <td class="text-end">{{ '%.2f'|format(n.valor) if n.valor is not none else '' }}</td></tr>
+                                {% else %}
+                                <tr><td colspan="3" class="text-center text-muted py-3">Nenhum.</td></tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {% endif %}
+</div>
+{% endblock %}

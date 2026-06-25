@@ -910,7 +910,7 @@ def vendas_resolver_divergencia(venda_id: int, div_id: int):
 # ------------------------------------------------------------------------
 
 @hora_bp.route('/vendas/exportar.xlsx')
-@require_hora_perm('vendas', 'ver')
+@require_hora_perm('vendas_exportar', 'ver')
 def vendas_exportar_xlsx():
     """Exporta pedidos de venda em Excel com 2 abas:
 

@@ -1,6 +1,7 @@
 {% extends "hora/base.html" %}
 
 {% block hora_content %}
+{% set pode_nf = current_user.tem_perm_hora('vendas_nf', 'ver') %}
 {% set badge = {
     'PENDENTE': 'secondary',
     'EM_ENVIO': 'info',
@@ -45,10 +46,14 @@
         <p class="text-muted">O pedido esta CONFIRMADO e pronto para emitir a NFe.</p>
         {# Botao agora leva para preview read-only com totais e margem antes
            de POSTar para venda_nfe_emitir. #}
+        {% if pode_nf %}
         <a href="{{ url_for('hora.venda_nfe_preview', venda_id=venda.id) }}"
            class="btn btn-success">
           <i class="fas fa-paper-plane"></i> Emitir NFe agora
         </a>
+        {% else %}
+        <p class="small text-muted mb-0"><i class="fas fa-lock"></i> Voce nao tem permissao para emitir NF de saida.</p>
+        {% endif %}
       {% elif venda.nf_saida_chave_44 %}
         <p class="text-muted mb-0">
           Este pedido ja tem NF emitida
@@ -276,10 +281,12 @@
           </a>
           {# Botao agora leva para preview read-only com totais e margem antes
              de POSTar para venda_nfe_emitir. #}
+          {% if pode_nf %}
           <a href="{{ url_for('hora.venda_nfe_preview', venda_id=venda.id) }}"
              class="btn btn-warning">
             <i class="fas fa-paper-plane"></i> Re-emitir agora
           </a>
+          {% endif %}
         </div>
       </div>
     </div>
@@ -299,6 +306,7 @@
     {% endif %}
     {% set dentro_janela = restante_horas is not none and restante_horas > 0 %}
 
+    {% if pode_nf %}
     <div class="card mt-3 {% if dentro_janela %}border-danger{% else %}border-secondary{% endif %}">
       <div class="card-body">
         <h5 class="card-title">
@@ -365,6 +373,7 @@
         </form>
       </div>
     </div>
+    {% endif %}{# pode_nf — acoes fiscais (cancelar / CC-e) #}
   {% endif %}
 
   {# ================================================================

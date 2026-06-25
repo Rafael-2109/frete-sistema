@@ -22,19 +22,23 @@ MODULOS_HORA: list[tuple[str, str]] = [
     ('dashboard', 'Dashboard'),
     ('lojas', 'Lojas'),
     ('modelos', 'Modelos'),
-    ('pedidos', 'Pedidos'),
+    ('pedidos', 'Compras (Pedido de Compras)'),
     ('nfs', 'NFs de Entrada'),
     ('recebimentos', 'Recebimentos'),
     ('recebimento_resumo', 'Recebimento: Ver resumo/comparativo'),
     ('recebimento_motos_nf', 'Recebimento: Ver motos da NF'),
     ('estoque', 'Estoque'),
+    ('estoque_valores', 'Estoque: Ver valores (R$)'),
+    ('estoque_exportar', 'Estoque: Exportar Excel'),
     ('devolucoes', 'Devolucoes ao fornecedor (interno - resolucao recebimento)'),
     ('devolucoes_venda', 'Devolucoes de Venda (cliente devolveu)'),
     ('pecas', 'Pecas faltando'),
     ('transferencias', 'Transferencias entre filiais'),
     ('emprestimos', 'Emprestimos com lojas externas'),
     ('avarias', 'Avarias'),
-    ('vendas', 'Vendas (NF saida)'),
+    ('vendas', 'Vendas (Pedido de Venda)'),
+    ('vendas_nf', 'Vendas: Emitir/Cancelar NF de saida (fiscal)'),
+    ('vendas_exportar', 'Vendas: Exportar Excel (pedidos)'),
     ('vendas_descarte', 'Vendas: Descartar (NF teste)'),
     ('tagplus', 'Integracao TagPlus (NFe)'),
     ('pecas_cadastro', 'Cadastro de Pecas'),
@@ -50,6 +54,17 @@ MODULOS_HORA: list[tuple[str, str]] = [
 MODULOS_SO_VER: set[str] = {
     'recebimento_resumo',
     'recebimento_motos_nf',
+    # Flags de visibilidade fina dentro do Estoque/Vendas. Apenas 'ver' tem
+    # semantica: gateiam, respectivamente, exibicao de valores R$ no detalhe
+    # do chassi, exportacao Excel do estoque e exportacao Excel dos pedidos
+    # de venda. Decorator/template checam `(<modulo>, 'ver')`.
+    'estoque_valores',
+    'estoque_exportar',
+    'vendas_exportar',
+    # Acao fiscal da NF de saida (emitir/preview/cancelar/CC-e), separada de
+    # 'vendas' (que agora gateia apenas o PEDIDO de venda). Permite dar a um
+    # vendedor o poder de criar pedido SEM o poder de emitir/cancelar a NFe.
+    'vendas_nf',
 }
 
 # Modulos onde a acao 'aprovar' tem semantica REAL (decorator existe e e
