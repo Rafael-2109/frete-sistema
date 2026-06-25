@@ -28,6 +28,8 @@ MODULOS_HORA: list[tuple[str, str]] = [
     ('recebimento_resumo', 'Recebimento: Ver resumo/comparativo'),
     ('recebimento_motos_nf', 'Recebimento: Ver motos da NF'),
     ('estoque', 'Estoque'),
+    ('estoque_valores', 'Estoque: Ver valores (R$)'),
+    ('estoque_exportar', 'Estoque: Exportar Excel'),
     ('devolucoes', 'Devolucoes ao fornecedor (interno - resolucao recebimento)'),
     ('devolucoes_venda', 'Devolucoes de Venda (cliente devolveu)'),
     ('pecas', 'Pecas faltando'),
@@ -35,6 +37,7 @@ MODULOS_HORA: list[tuple[str, str]] = [
     ('emprestimos', 'Emprestimos com lojas externas'),
     ('avarias', 'Avarias'),
     ('vendas', 'Vendas (NF saida)'),
+    ('vendas_exportar', 'Vendas: Exportar Excel (pedidos)'),
     ('vendas_descarte', 'Vendas: Descartar (NF teste)'),
     ('tagplus', 'Integracao TagPlus (NFe)'),
     ('pecas_cadastro', 'Cadastro de Pecas'),
@@ -50,6 +53,13 @@ MODULOS_HORA: list[tuple[str, str]] = [
 MODULOS_SO_VER: set[str] = {
     'recebimento_resumo',
     'recebimento_motos_nf',
+    # Flags de visibilidade fina dentro do Estoque/Vendas. Apenas 'ver' tem
+    # semantica: gateiam, respectivamente, exibicao de valores R$ no detalhe
+    # do chassi, exportacao Excel do estoque e exportacao Excel dos pedidos
+    # de venda. Decorator/template checam `(<modulo>, 'ver')`.
+    'estoque_valores',
+    'estoque_exportar',
+    'vendas_exportar',
 }
 
 # Modulos onde a acao 'aprovar' tem semantica REAL (decorator existe e e

@@ -134,7 +134,7 @@ def estoque_lista():
 
 
 @hora_bp.route('/estoque/exportar.xlsx')
-@require_hora_perm('estoque', 'ver')
+@require_hora_perm('estoque_exportar', 'ver')
 def estoque_exportar_xlsx():
     """Exporta o estoque em Excel: Chassi, Modelo, Cor e Loja (onde se encontra).
 
