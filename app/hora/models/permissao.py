@@ -22,7 +22,7 @@ MODULOS_HORA: list[tuple[str, str]] = [
     ('dashboard', 'Dashboard'),
     ('lojas', 'Lojas'),
     ('modelos', 'Modelos'),
-    ('pedidos', 'Pedidos'),
+    ('pedidos', 'Compras (Pedido de Compras)'),
     ('nfs', 'NFs de Entrada'),
     ('recebimentos', 'Recebimentos'),
     ('recebimento_resumo', 'Recebimento: Ver resumo/comparativo'),
