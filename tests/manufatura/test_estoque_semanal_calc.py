@@ -28,6 +28,7 @@ def test_classificar_movimento_componente():
 def test_classificar_movimento_produto_acabado():
     assert classificar_movimento("PRODUTO_ACABADO", "PRODUÇÃO", "PRODUCAO") == "ENTRADA"
     assert classificar_movimento("PRODUTO_ACABADO", "PRODUCAO", "PRODUCAO") == "ENTRADA"
+    assert classificar_movimento("PRODUTO_ACABADO", "FATURAMENTO", "VENDA") == "CONSUMO"
     assert classificar_movimento("PRODUTO_ACABADO", "SAIDA", "VENDA") == "CONSUMO"
     assert classificar_movimento("PRODUTO_ACABADO", "ENTRADA", "DEVOLUCAO") == "OUTRO"
 
@@ -48,7 +49,7 @@ def test_montar_abas_fecha_a_conta_e_classifica():
         ("2001", "CONSUMO", "PRODUCAO", -1800.0),
         ("2001", "AJUSTE", "AJUSTE", -200.0),      # outros
         ("4001", "PRODUÇÃO", "PRODUCAO", 100.0),   # entrada PA = produção
-        ("4001", "SAIDA", "VENDA", -150.0),        # saída PA = venda
+        ("4001", "FATURAMENTO", "VENDA", -150.0),    # saída PA = venda (real: FATURAMENTO)
     ]
     abas = montar_abas(estoque0, estoque_hoje, movimentos, cadastro, {})
 

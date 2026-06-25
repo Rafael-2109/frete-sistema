@@ -54,7 +54,7 @@ def classificar_movimento(grupo: str, tipo_mov: str, local_mov: str) -> str:
     if grupo == "PRODUTO_ACABADO":
         if t in _TIPOS_PRODUCAO:
             return "ENTRADA"
-        if t == "SAIDA" and l == "VENDA":
+        if l == "VENDA" and t in ("FATURAMENTO", "SAIDA"):
             return "CONSUMO"
         return "OUTRO"
     return "OUTRO"
@@ -80,7 +80,7 @@ def montar_abas(
     consumos: Dict[str, float] = {}
     for cod, tipo_mov, local_mov, qtd in movimentos:
         canon = mapa_unif.get(str(cod), str(cod))
-        cad = cadastro.get(canon) or cadastro.get(str(cod)) or {}
+        cad = cadastro.get(canon, {})
         grupo = classificar_aba(canon, cad.get("tipo_materia_prima"), contexto="rel2")
         classe = classificar_movimento(grupo, tipo_mov, local_mov)
         if classe == "ENTRADA":
