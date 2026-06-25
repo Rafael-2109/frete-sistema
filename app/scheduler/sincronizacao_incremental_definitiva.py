@@ -2465,6 +2465,32 @@ def executar_faturamento_diario_teams():
         logger.error(f"❌ [FAT-DIARIO] job falhou: {e}", exc_info=True)
 
 
+def executar_estoque_semanal_email():
+    """Job (segunda): envia por e-mail o relatório semanal de estoque.
+
+    Comparativo segunda anterior vs. atual (entradas/consumos/ajustes), anexo
+    .xlsx. Best-effort, NUNCA derruba o scheduler. Atrás da flag
+    ESTOQUE_SEMANAL_EMAIL_ENABLED. Mesmo padrão de executar_faturamento_diario_teams
+    (cria app por execução + dispose de conexões).
+    """
+    try:
+        from app import create_app, db
+        from app.manufatura.services.estoque_semanal_service import (
+            enviar_estoque_semanal_email,
+        )
+        app = create_app()
+        with app.app_context():
+            try:
+                db.session.close()
+                db.engine.dispose()
+            except Exception:
+                pass
+            res = enviar_estoque_semanal_email()
+            logger.info(f"📦 [ESTOQUE-SEMANAL] {res}")
+    except Exception as e:
+        logger.error(f"❌ [ESTOQUE-SEMANAL] job falhou: {e}", exc_info=True)
+
+
 def main():
     """
     Função principal - inicializa services FORA do contexto e configura scheduler
@@ -2542,6 +2568,26 @@ def main():
         logger.info(f"   9. Faturamento diário Teams: seg-sex às {_fat_hour:02d}:00 (ENABLED)")
     else:
         logger.info("   9. Faturamento diário Teams: DESABILITADO (FATURAMENTO_DIARIO_TEAMS_ENABLED=false)")
+
+    # Relatorio semanal de estoque por e-mail (segunda 8h). Default OFF ate o
+    # Rafael definir destinatario e ativar (flag ESTOQUE_SEMANAL_EMAIL_ENABLED).
+    if os.getenv("ESTOQUE_SEMANAL_EMAIL_ENABLED", "false").lower() in ("1", "true", "yes", "on"):
+        _est_hour = int(os.getenv("ESTOQUE_SEMANAL_EMAIL_HOUR", "8"))
+        scheduler.add_job(
+            func=executar_estoque_semanal_email,
+            trigger="cron",
+            day_of_week="mon",
+            hour=_est_hour,
+            minute=0,
+            id="estoque_semanal_email",
+            name="Relatorio semanal de estoque por e-mail (segunda)",
+            max_instances=1,
+            misfire_grace_time=3600,
+            replace_existing=True,
+        )
+        logger.info(f"   10. Estoque semanal e-mail: segunda às {_est_hour:02d}:00 (ENABLED)")
+    else:
+        logger.info("   10. Estoque semanal e-mail: DESABILITADO (ESTOQUE_SEMANAL_EMAIL_ENABLED=false)")
 
     logger.info("=" * 60)
     logger.info("✅ Scheduler configurado com TODAS as correções:")
