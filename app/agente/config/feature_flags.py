@@ -1292,3 +1292,28 @@ def resolve_sql_first_mode(is_admin: bool) -> str:
     if raw == "admin":
         return "on" if is_admin else "shadow"
     return raw  # off | shadow | on
+
+
+_SUBAGENT_CHECKPOINT_VALID = {"off", "shadow", "on", "admin"}
+
+
+def resolve_subagent_checkpoint_mode(is_admin: bool = False) -> str:
+    """Resolve o modo de HANDOFF DE ESTADO entre spawns de subagente (Rota B).
+
+    Conserta o subagente amnesico: o findings do spawn N e persistido em
+    AgentSession.data['subagent_checkpoints'][agent_type] (SubagentStop) e
+    injetado INLINE no prompt do Task do spawn N+1 (PreToolUse). Lido FRESH do
+    env (rollout via env sem redeploy). Default OFF (de-risking: nasce desligado).
+
+    Returns:
+        "off"    -> nada (comportamento atual; cada spawn recomeca do zero)
+        "shadow" -> PERSISTE o checkpoint mas NAO injeta (mede a captura, zero mudanca)
+        "on"     -> persiste + injeta no spawn N+1
+        "admin"  -> "on" para admin (canary), "shadow" para os demais
+    """
+    raw = os.getenv("AGENT_SUBAGENT_CHECKPOINT", "off").strip().lower()
+    if raw not in _SUBAGENT_CHECKPOINT_VALID:
+        return "off"
+    if raw == "admin":
+        return "on" if is_admin else "shadow"
+    return raw  # off | shadow | on

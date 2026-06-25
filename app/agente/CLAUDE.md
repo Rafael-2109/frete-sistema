@@ -32,6 +32,7 @@ atualizado: 2026-06-22
 |---|---|
 | Detalhe de **Artifacts**, **Telemetria de subagent**, **Memoria compartilhada**, **Avaliador de skill** ou o **inventario de eventos SSE** | [`SUBSISTEMAS.md`](SUBSISTEMAS.md) |
 | **Fast-paths deterministicos** (reducao de custo: tarefa rotineira+estruturada resolvida SEM LLM/subagente — `baseline_fastpath.py` p/ baseline do Marcus, `vinculacao_fastpath.py` p/ vincular/desvincular NF×PO da Gabriella). Mecanica: detector regex N0 → executor deterministico; fallback Haiku N1 / LLM N2. Flags `AGENT_BASELINE_FASTPATH`, `AGENT_VINCULACAO_FASTPATH` | planos `docs/superpowers/plans/2026-06-06-reducao-custo-agente-fast-path.md` (F1/F2) e `2026-06-08-fastpath-vinculacao-nf-po.md` (F3) |
+| **Handoff de estado entre spawns de subagente** (Rota B — subagente efemero re-descobre tudo a cada invocacao; o findings do spawn N e persistido em `AgentSession.data['subagent_checkpoints']` no SubagentStop e injetado INLINE no prompt do Task do spawn N+1 no PreToolUse, conserta o `/tmp/subagent-findings` quebrado). Flag `AGENT_SUBAGENT_CHECKPOINT` off/shadow/on. Read-only de contexto — dry-run/R11/R12/gate intactos | `sdk/subagent_checkpoint.py` + memoria `delegacao-subagente-custo-arquitetura` |
 | **Historico do SDK** — features por versao, breaking changes, bug fixes (0.1.49 → 0.2.101) | `SDK_CHANGELOG.md` |
 | **Estado VIVO da evolucao** — flywheel Ondas 0-4, gates, log append-only | `docs/blueprint-agente/EXECUCAO.md` |
 | **Design dos 5 eixos** do flywheel (visao + grafo de dependencias) | `docs/blueprint-agente/BLUEPRINT_MESTRE.md` |
@@ -141,6 +142,7 @@ app/agente/                          # Root — 7 arquivos
 │   ├── sticky_session.py            # Afinidade de sessao por processo (R-SPLIT-NGINX / Pattern 2)
 │   ├── stream_parser.py             # Dataclasses + classificacao de erros de tool
 │   ├── subagent_reader.py           # Wrapper list_subagents + get_subagent_messages (SDK 0.1.60)
+│   ├── subagent_checkpoint.py       # Handoff de estado entre spawns (Rota B; conserta subagente amnesico) — flag AGENT_SUBAGENT_CHECKPOINT off/shadow/on
 │   ├── turn_context_registry.py     # Resolve falante do turno em grupos Teams (client do pool reusado NAO reaplica hooks — Fase B)
 │   ├── verifiers.py                 # Verificadores B2 (verify shadow do super-loop)
 │   └── vincular_teams_fastpath.py   # Fast-path meta-comando `vincular ABC123` (pareamento identidade Teams, sem LLM/sessao)

@@ -356,6 +356,43 @@ def build_hooks(
                 # Hook NUNCA quebra tool — log e segue.
                 logger.debug(f'[bash_prefix_propagacao] {e}')
 
+        # Injecao de checkpoint de estado no Task do spawn N+1 (Rota B, componente 3).
+        # SO' em modo 'on': carrega o findings do spawn anterior do MESMO subagent_type
+        # (persistido pelo SubagentStop) e anexa INLINE ao prompt do Task — o subagente
+        # herda o estado em vez de re-descobrir do zero. NUNCA por /tmp (cross-process
+        # quebrado; regra SUBAGENT_RELIABILITY = handoff de entrada INLINE). Best-effort:
+        # checkpoint ausente -> bloco "" -> Task roda como hoje (degradacao graciosa).
+        elif tool_name == 'Task':
+            try:
+                from ..config.feature_flags import resolve_subagent_checkpoint_mode
+                _ckpt_admin = False
+                try:
+                    from app.pessoal import USUARIOS_SQL_ADMIN as _ADM
+                    _ckpt_admin = bool(user_id) and user_id in _ADM
+                except Exception:
+                    pass
+                if resolve_subagent_checkpoint_mode(is_admin=_ckpt_admin) == 'on':
+                    _tin = hook_input.get('tool_input', {})
+                    if isinstance(_tin, dict):
+                        _sub_type = _tin.get('subagent_type', '')
+                        _prompt = _tin.get('prompt', '')
+                        if _sub_type and isinstance(_prompt, str):
+                            from ..config.permissions import get_current_session_id
+                            _sid = get_current_session_id()
+                            if _sid:
+                                from .subagent_checkpoint import (
+                                    load_checkpoint, montar_contexto_subagente)
+                                _bloco = montar_contexto_subagente(
+                                    _sub_type, load_checkpoint(_sid, _sub_type))
+                                if _bloco:
+                                    updated_input = {**_tin, 'prompt': _prompt + _bloco}
+                                    logger.info(
+                                        f"[subagent_checkpoint] injetado no Task "
+                                        f"subagent_type={_sub_type} "
+                                        f"bloco_len={len(_bloco)}")
+            except Exception as e:
+                logger.debug(f'[subagent_checkpoint_inject] {e}')
+
         if additional or updated_input:
             output = {
                 "continue_": True,
@@ -1090,6 +1127,31 @@ def build_hooks(
                     # Nao tentar rollback aqui — se o with _app_ctx saiu (via
                     # exception), a session ja fez rollback automatico no
                     # __exit__. Tentar rollback fora de context re-explode.
+
+            # #3b Checkpoint de estado entre spawns (Rota B) — persiste o findings
+            # do spawn N em data['subagent_checkpoints'][agent_type] p/ o spawn N+1
+            # herdar (conserta o subagente amnesico; substitui o /tmp/subagent-findings
+            # quebrado — TMPDIR divergente cross-process + efemero no Render).
+            # CAPTURA roda em shadow E on (e inocua); a INJECAO (PreToolUse Task) so' em on.
+            try:
+                from ..config.feature_flags import resolve_subagent_checkpoint_mode
+                if (resolve_subagent_checkpoint_mode() != 'off'
+                        and session_id and agent_id and transcript_path):
+                    from .subagent_checkpoint import (
+                        extract_findings_from_transcript, persist_checkpoint)
+                    _findings = extract_findings_from_transcript(transcript_path)
+                    if _findings:
+                        _ok = persist_checkpoint(
+                            session_id, agent_type, _findings,
+                            {'num_turns': int(num_turns or 0), 'agent_id': agent_id})
+                        logger.info(
+                            f"[HOOK:SubagentStop] checkpoint persistido "
+                            f"agent_type={agent_type} findings_len={len(_findings)} "
+                            f"persist_ok={_ok}")
+            except Exception as ckpt_err:
+                logger.warning(
+                    f"[HOOK:SubagentStop] checkpoint falhou: "
+                    f"{type(ckpt_err).__name__}: {ckpt_err}")
 
             # #6 UI — emite subagent_summary via Redis pubsub para o frontend
             # FIX 2026-04-17: anteriormente usava event_queue local, que corrompia
