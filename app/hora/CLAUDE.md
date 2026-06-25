@@ -4,7 +4,7 @@ camada: L1
 sot_de: —
 hub: CLAUDE.md
 superseded_by: —
-atualizado: 2026-06-03
+atualizado: 2026-06-25
 -->
 # Módulo HORA — Lojas Motochefe
 
@@ -206,6 +206,19 @@ Documentação detalhada na análise de primeiros princípios do módulo (comand
 
 **5 ações** (`ACOES_HORA`): `ver, criar, editar, apagar, aprovar`.
 A ação `aprovar` é semântica e só tem decorator real no módulo `usuarios` (aprovação de cadastros pendentes). Para os demais, a flag é armazenada mas ignorada — o template marca a célula com `—`.
+
+**Flags de visibilidade fina (módulos virtuais em `MODULOS_SO_VER`)**: além dos
+módulos-CRUD, existem slugs que só usam a ação `ver` para gatear pedaços de UI:
+- `estoque_valores` — exibe os valores R$ no detalhe do chassi (`estoque_chassi_detalhe.html`:
+  Preço esperado do pedido, Valor total + Preço desta moto da NF de entrada, Preço da venda).
+  Sem a flag, o vendedor vê a moto/rastreio mas não os valores.
+- `estoque_exportar` — botão + rota `estoque_exportar_xlsx` (export do estoque).
+- `vendas_exportar` — botão + rota `vendas_exportar_xlsx` (export dos pedidos de venda).
+
+São independentes de `estoque/ver` e `vendas/ver` (ver a tela ≠ ver valores / exportar).
+Default `False`: usuário não-admin só ganha cada uma quando o admin marca o checkbox
+correspondente em `/hora/permissoes`. Sem DDL — `hora_user_permissao.modulo` é VARCHAR(40)
+e as linhas são criadas sob demanda por `salvar_matriz_completa`.
 
 **Como usar em rotas novas**:
 ```python

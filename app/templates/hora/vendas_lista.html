@@ -20,12 +20,14 @@
         <i class="fas fa-list-check"></i> NFes emitidas
       </a>
     {% endif %}
+    {% if current_user.tem_perm_hora('vendas_exportar', 'ver') %}
     <a href="{{ url_for('hora.vendas_exportar_xlsx',
                         status=status_filtro or None) }}"
        class="btn btn-outline-success"
        title="Excel com 2 abas: Pedidos (header) + Motos (1 linha por chassi). Respeita o filtro de status atual.">
       <i class="fas fa-file-excel"></i> Exportar Excel
     </a>
+    {% endif %}
   </div>
 </div>
 
