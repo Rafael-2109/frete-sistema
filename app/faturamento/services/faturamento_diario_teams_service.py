@@ -3,7 +3,9 @@ Faturamento diario via Teams
 =============================
 
 Gera uma IMAGEM (PNG) do faturamento do MES CORRENTE e a envia, de forma
-proativa, na conversa 1:1 do destinatario (Marcus) com o Agente no Teams.
+proativa, no Teams. Destino padrao: o GRUPO "Financeiro - Nacom Goya"
+(DEFAULT_CONVERSATION_ID); com fallback para a conversa 1:1 do destinatario
+(Marcus) quando o grupo nao esta definido (env CONVERSATION_ID vazia).
 
 Acionado pelo scheduler de seg a sex as 6h (ver
 `app/scheduler/sincronizacao_incremental_definitiva.py`).
