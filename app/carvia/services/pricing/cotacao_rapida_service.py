@@ -17,7 +17,10 @@ NAO persiste nada — a cotacao rapida e efemera. `uf_origem` fixo SP.
 
 import logging
 from collections import defaultdict
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from app.carvia.models import CarviaCotacaoRapidaPublica
 
 from app import db
 
