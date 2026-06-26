@@ -124,21 +124,50 @@ ORDER BY v2.created_at;
 ```
 
 Para CADA proposta retornada, verificar se virou codigo (a worktree ja esta sincronizada com
-`origin/main`):
+`origin/main`). Usar **DOIS sinais** — o grep-por-key sozinho subconta (ver ARMADILHA abaixo):
 
+**Sinal A — key no commit (alta confianca):**
 ```bash
 git log --all --oneline --grep="<suggestion_key>"
 ```
 
-- **Se houver commit** citando a `suggestion_key` (ou cujo escopo implementa claramente a
-  proposta): gravar **v3** via curl (PASSO 4) com `version: 3`, `author: "claude_code"`,
-  `status: "responded"`, `auto_implemented: true`, `affected_files` = arquivos do commit
-  (`git show --stat <sha>`) e `implementation_notes` citando o SHA. Registrar na secao
-  "Reconciliacao de propostas implementadas" do relatorio (PASSO 5.1) e no status.json.
-- **Se NAO houver commit**: deixar como esta (segue proposta pendente de implementacao pelo Rafael).
+**Sinal B — arquivo/escopo-alvo implementado DEPOIS da proposta (media confianca):**
+A proposta quase sempre tem `affected_files=[]` (proposta nao tem arquivos); o ALVO esta no
+TEXTO (`description`/`implementation_notes`: nome de skill, caminho `*.py`, `*/SKILL.md`).
+Extrair esse(s) alvo(s) e checar se passaram a existir / foram tocados depois de `v2.created_at`:
+```bash
+git log --all --oneline --since="<v2.created_at>" -- "<caminho-alvo>"
+git log --all --diff-filter=A --oneline -- "<caminho-alvo>"   # arquivo CRIADO depois?
+```
 
-Gastar no maximo uma verificacao `git log --grep` por proposta. Estas reconciliacoes contam
-em `suggestions_evaluated` do relatorio (subtotal proprio: "reconciliadas").
+- **Sinal A bate** (key citada): gravar **v3** (alta confianca) — `version: 3`,
+  `author: "claude_code"`, `status: "responded"`, `auto_implemented: true`, `affected_files` =
+  arquivos do commit (`git show --stat <sha>`), `implementation_notes` citando o SHA.
+- **Só Sinal B bate** (arquivo-alvo criado/alterado depois, key NAO citada): **abrir o arquivo e
+  confirmar o ESCOPO** — o codigo faz o que a proposta pede? Se inequivoco, gravar v3 citando o
+  arquivo+SHA. Se cobre so PARTE (ex.: skill grava `valor_cotado` mas a proposta pedia
+  `peso_cubado`), **NAO reconciliar a parte nao coberta** — deixar a proposta aberta e anotar no
+  relatorio o que falta.
+- **Nenhum sinal**: deixar como esta (proposta pendente de implementacao pelo Rafael).
+
+> **ARMADILHA — duplicatas tematicas (descoberto 2026-06-26):** uma mesma necessidade gera N
+> `suggestion_key` ao longo do tempo, e a skill que a resolve cita como "Origem" UMA dessas keys
+> (a mais recente), nao as antigas. Ex.: `adicionando_item_embarque.py` cita `IMP-2026-06-23-007`
+> mas tambem resolve `IMP-2026-06-16-003`; `atualizando_frete_carvia.py` cita
+> `IMP-2026-06-24-001/002/003` mas tambem resolve `IMP-2026-06-08-002`. O Sinal A (grep-por-key)
+> nunca acharia as antigas — por isso o Sinal B (arquivo+escopo) e obrigatorio. Reconciliar pelo
+> ESCOPO do arquivo, NUNCA so pela key citada no commit.
+
+Gastar no maximo uma verificacao por sinal por proposta. Estas reconciliacoes contam em
+`suggestions_evaluated` do relatorio (subtotal proprio: "reconciliadas").
+
+> **DEFERRAL (backlog reconhecido) — estado distinto de "implementada":** quando o Rafael revisa
+> uma proposta em aberto e decide NAO implementar agora mas tira-la da re-listagem, gravar **v3
+> com `status: "closed"` + `auto_implemented: false`** + nota de deferral. O `NOT EXISTS v3`
+> remove-a deste passo SEM marca-la como implementada — `auto_implemented=false` preserva a
+> verdade (closed != virou codigo). Para reabrir: deletar a v3. Aplicado em 2026-06-26 a 15
+> propostas (v3 ids 319-333) em sessao 4-maos. NAO confundir com a v3 de reconciliacao
+> (`status: "responded"`, `auto_implemented: true`), que SIM virou codigo.
 
 ---
 
