@@ -95,6 +95,30 @@
       </div>
     </div>
   </div>
+
+  {% if cotacoes_publicas %}
+  <hr class="my-4">
+  <h5 class="text-muted"><i class="fas fa-globe"></i> Cotações da tela pública (sem login)</h5>
+  <div class="table-responsive">
+    <table class="table table-sm table-hover align-middle">
+      <thead><tr class="text-muted">
+        <th>Data</th><th>Solicitante</th><th>Destino</th>
+        <th class="text-center">Motos</th><th class="text-end">Menor valor</th>
+      </tr></thead>
+      <tbody>
+        {% for c in cotacoes_publicas %}
+        <tr>
+          <td>{{ c.criado_em | datetime_br }}</td>
+          <td>{{ c.solicitante_nome }}{% if c.cnpj_cliente %} <small class="text-muted">({{ c.cnpj_cliente }})</small>{% endif %}</td>
+          <td>{{ c.destino }}</td>
+          <td class="text-center">{{ c.qtd_total_motos or '—' }}</td>
+          <td class="text-end">{% if c.valor_total_min is not none %}R$ {{ c.valor_total_min | valor_br }}{% else %}—{% endif %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
 </div>
 
 <script type="application/json" id="cr-modelos-data">{{ modelos | tojson }}</script>

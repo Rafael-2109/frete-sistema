@@ -167,3 +167,13 @@ def test_cotacao_publica_cep_rate_limit_429(db, client):
     with patch('app.carvia.cotacao_publica.permitir', return_value=False):
         r = client.get('/cotacao/cep/01001000')
     assert r.status_code == 429
+
+
+def test_secao_cotacoes_publicas_na_tela_logada(db, client):
+    from app.carvia.services.pricing.cotacao_rapida_service import CotacaoRapidaService
+    CotacaoRapidaService().registrar_cotacao_publica(_resultado_fake(), solicitante_nome='ZéPúblico')
+    db.session.commit()
+    with patch('flask_login.utils._get_user', return_value=_user_carvia()):
+        html = client.get('/carvia/cotacao-rapida').get_data(as_text=True)
+    assert 'Cotações da tela pública' in html
+    assert 'ZéPúblico' in html

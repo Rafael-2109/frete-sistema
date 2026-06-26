@@ -41,13 +41,15 @@ def register_cotacao_rapida_routes(bp):
             return _sem_acesso()
 
         from app.carvia.services.pricing.cotacao_rapida_service import CotacaoRapidaService
-        modelos = CotacaoRapidaService().listar_modelos()
+        svc = CotacaoRapidaService()
+        modelos = svc.listar_modelos()
         # UFs com tabela CarVia (origem SP) — para o select de destino.
         ufs = _ufs_destino_disponiveis()
         return render_template(
             'carvia/cotacao_rapida/form.html',
             modelos=modelos,
             ufs_destino=ufs,
+            cotacoes_publicas=svc.listar_cotacoes_publicas(20),
         )
 
     @bp.route('/cotacao-rapida/cep/<cep>')  # type: ignore
