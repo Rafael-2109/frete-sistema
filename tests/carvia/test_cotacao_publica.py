@@ -81,3 +81,17 @@ def test_rate_limit_degrada_aberto_sem_redis():
     with patch.object(rate_limit, 'redis_cache') as rc:
         rc.client = None
         assert rate_limit.permitir('upload', '9.9.9.9', limite=1, janela_seg=60) is True
+
+
+def _user_carvia():
+    u = MagicMock()
+    u.is_authenticated = True
+    u.sistema_carvia = True
+    u.perfil = 'administrador'
+    u.email = 'test@bot'
+    return u
+
+
+def test_cotacao_rapida_com_login_renderiza(db, client):
+    with patch('flask_login.utils._get_user', return_value=_user_carvia()):
+        assert client.get('/carvia/cotacao-rapida').status_code == 200
