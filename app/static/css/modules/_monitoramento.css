@@ -512,7 +512,7 @@
     }
 
     .monitoramento-page .table thead th {
-      top: var(--pag-bar-h, 30px); /* altura REAL medida via JS; fallback mobile 30px */
+      top: 0; /* mesma razao do desktop: top!=0 sob zoom:0.8 quebra o sticky (faixa branca) */
     }
 
     .sticky-pagination-simple .pagination {
@@ -625,9 +625,10 @@
      TRADE-OFFS (aceitos — overflow-x cria contexto de scroll proprio):
      1. Por spec, overflow-y:visible e promovido a 'auto' quando o outro eixo e
         'auto'. Como NAO ha max-height aqui, a altura = conteudo -> sem scroll-y
-        interno -> o thead deixa de colar no scroll VERTICAL da pagina (e o
-        `top: var(--pag-bar-h)` do thead fica inocuo, pois sticky so desloca
-        havendo rolagem no proprio container).
+        interno -> o thead deixa de colar no scroll VERTICAL da pagina (por isso
+        o thead usa top:0 — sticky so desloca havendo rolagem no proprio
+        container; alem disso, sob o zoom:0.8 do ancestral, top!=0 dispararia o
+        bug de offset do Chromium = faixa branca + 1a linha atropelada).
      2. .obs-inline-wrapper (absolute, expande ~60px ao focar) pode ser clipado
         SE a linha estiver na borda extrema do container; no miolo da tabela
         nao clipa. Se virar problema, a saida e converter em data-grid
@@ -676,7 +677,13 @@
   .monitoramento-page .table thead th {
     position: -webkit-sticky;
     position: sticky;
-    top: var(--pag-bar-h, 33px); /* altura REAL da barra medida via JS (--pag-bar-h); fallback 33px */
+    /* top:0 (NAO var(--pag-bar-h)): o ancestral .monitoramento-page tem zoom:0.8;
+       um top!=0 em sticky sob zoom dispara o bug de offset do Chromium (o thead
+       ganha deslocamento espurio ~= top mesmo SEM scroll -> faixa branca acima +
+       1a linha atropelada). Com overflow-x:auto no .table-responsive o thead ja
+       nao gruda no scroll vertical (top virou inocuo), entao zerar nao regride
+       nada. A barra de paginacao (sticky top:0 no mesmo zoom) renderiza correta. */
+    top: 0;
     z-index: 40;
     background: var(--bg);
   }

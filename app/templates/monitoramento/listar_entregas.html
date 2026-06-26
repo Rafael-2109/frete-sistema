@@ -1191,15 +1191,11 @@ document.addEventListener('DOMContentLoaded', function() {
 
     observer.observe(stickyPagination);
 
-    // Alinha o cabecalho fixo da tabela logo abaixo da barra, medindo a
-    // altura REAL da barra (--pag-bar-h). Evita gap ou cabecalho atras da barra
-    // qualquer que seja a altura final da barra.
-    const ajustarOffsetThead = () => {
-      const h = Math.round(stickyPagination.getBoundingClientRect().height);
-      if (h > 0) document.documentElement.style.setProperty('--pag-bar-h', h + 'px');
-    };
-    ajustarOffsetThead();
-    window.addEventListener('resize', ajustarOffsetThead);
+    // NOTA: o offset --pag-bar-h foi removido. O thead usa top:0 (ver
+    // _monitoramento.css): sob o zoom:0.8 do ancestral, um top!=0 em sticky
+    // dispara o bug de offset do Chromium (faixa branca + 1a linha atropelada).
+    // Com overflow-x:auto o thead ja nao gruda no scroll vertical, entao medir
+    // a altura da barra para alinhar o thead deixou de ter funcao.
   }
 
   // ===========================
