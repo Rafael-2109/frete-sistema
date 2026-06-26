@@ -154,6 +154,13 @@ def extract_findings_from_transcript(
                     msg = json.loads(line)
                 except json.JSONDecodeError:
                     continue
+                # SO o texto do ASSISTANT = os achados do subagente. O boot do
+                # SDK injeta os SKILL.md como mensagens role=user (<command-message>
+                # + 'Base directory for this skill', 24-34KB cada) — se nao filtrar,
+                # o findings vira lixo de boot truncado e a injecao nao ajuda
+                # (bug PROD 2026-06-25; cada spawn re-descobria mesmo com checkpoint).
+                if msg.get('type') != 'assistant':
+                    continue
                 message = msg.get('message')
                 if not isinstance(message, dict):
                     continue

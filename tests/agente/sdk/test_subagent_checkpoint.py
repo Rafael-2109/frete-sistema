@@ -100,6 +100,34 @@ def test_extract_trunca_em_max_chars(tmp_path):
     assert len(out) <= 1000
 
 
+def test_extract_ignora_boot_de_skills_user_messages(tmp_path):
+    """REGRESSÃO (bug PROD 2026-06-25): o boot do subagente injeta os SKILL.md
+    como mensagens USER (<command-message>... + 'Base directory for this skill').
+    Essas mensagens vêm PRIMEIRO e são enormes (24-34KB/skill). O findings deve
+    ser SÓ o texto do ASSISTANT (os achados); se pegar o boot user, o checkpoint
+    vira 8000 chars de corpo de skill truncado e a injeção não ajuda em nada."""
+    from app.agente.sdk.subagent_checkpoint import extract_findings_from_transcript
+
+    p = tmp_path / 'real.jsonl'
+    with open(p, 'w') as f:
+        # BOOT: o SDK injeta as skills como mensagens role=user (vêm primeiro)
+        f.write(json.dumps({'type': 'user', 'message': {'role': 'user', 'content': [
+            {'type': 'text', 'text': '<command-message>ajustando-quant-odoo</command-message>'},
+            {'type': 'text', 'text': 'Base directory for this skill: /opt/.../skills/ajustando-quant-odoo\n\n# ajustando-quant-odoo (WRITE — átomo C1)...'},
+        ]}}) + '\n')
+        # ACHADOS REAIS: mensagem role=assistant
+        f.write(json.dumps({'type': 'assistant', 'message': {'role': 'assistant', 'content': [
+            {'type': 'text', 'text': 'Quant 218550 lote P-15/05 = 17.004 confirmado ao vivo. Dry-run OK.'},
+            {'type': 'tool_use', 'id': 't1', 'name': 'Bash', 'input': {'command': 'x'}},
+        ]}}) + '\n')
+        f.write(json.dumps({'type': 'result', 'num_turns': 5}) + '\n')
+
+    out = extract_findings_from_transcript(str(p))
+    assert 'Quant 218550' in out                         # pegou o achado do assistant
+    assert 'command-message' not in out                  # NÃO pegou o boot
+    assert 'Base directory for this skill' not in out     # NÃO pegou o corpo da skill
+
+
 # ─────────────────────────────────────────────────────────────────────────
 # Ciclo 3: persist_checkpoint (UPSERT atômico) + load_checkpoint
 # ─────────────────────────────────────────────────────────────────────────
