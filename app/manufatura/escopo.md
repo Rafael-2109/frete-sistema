@@ -164,3 +164,25 @@ Os dados dos produtos deverão ser centralizados no modelo existente CadastroPal
 
 Ao programar a produção de um produto Nivel 0, deverá avaliar o estoque dos itens contidos na estrutura do Nivel 1 e verificando "CadastroPalletizacao.produto_produzido" desses itens, sugerindo tambem programar a produção dos "produto_produzido" através da qtd faltante para se atender o produto Nivel 0.
 
+## Relatório Semanal de Estoque (e-mail, segunda 8h)
+
+Complementa o relatório de "estoques" com a dimensão semanal. Gera
+`estoque_semanal.xlsx` (Insumos / Embalagens / Produto_Acabado) comparando o
+saldo da segunda anterior com o da segunda atual:
+
+| Coluna | Insumos/Embalagens | Produto Acabado |
+|--------|--------------------|-----------------|
+| Entradas | recebimento de compra | produção + devolução de venda (REVERSAO) |
+| Consumos/Saídas | consumo na produção | todo faturamento — vendas e bonificações |
+
+`Outros ajustes` fecha a conta (`seg0 + entradas − consumos + outros = hoje`).
+Fonte: `MovimentacaoEstoque` (`ativo=True`). Código: `estoque_semanal_service.py`
+(+ `estoque_semanal_calc.py`). Envio: job no scheduler `executar_estoque_semanal_email`.
+
+**Variáveis de ambiente:**
+- `ESTOQUE_SEMANAL_EMAIL_ENABLED` (default `false`) — liga o envio automático.
+- `ESTOQUE_SEMANAL_EMAIL_TO` — destinatário(s), separados por vírgula.
+- `ESTOQUE_SEMANAL_EMAIL_HOUR` (default `8`) — hora do envio na segunda.
+- Reusa `EMAIL_*` (SMTP) já existentes.
+
+Teste manual: `enviar_estoque_semanal_email(dry_run=True)` (gera sem enviar).
