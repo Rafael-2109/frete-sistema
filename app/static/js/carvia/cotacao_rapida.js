@@ -5,11 +5,12 @@
 (function () {
   const APP = document.getElementById('cr-app');
   const CFG = {
-    calcular: APP.dataset.endpointCalcular,
-    upload:   APP.dataset.endpointUpload,
-    pdf:      APP.dataset.endpointPdf,
-    cep:      APP.dataset.endpointCep,        // base; o CEP vai no path
-    modo:     APP.dataset.modo || 'login',   // 'login' | 'publico'
+    calcular:    APP.dataset.endpointCalcular,
+    upload:      APP.dataset.endpointUpload,
+    pdf:         APP.dataset.endpointPdf,
+    cep:         APP.dataset.endpointCep,         // base; o CEP vai no path
+    localidades: APP.dataset.endpointLocalidades,  // base; a UF vai no path
+    modo:        APP.dataset.modo || 'login',    // 'login' | 'publico'
   };
   const MODELOS = JSON.parse(document.getElementById('cr-modelos-data').textContent || '[]');
   const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
@@ -73,7 +74,7 @@
     const dl = document.getElementById('cr-cidades-list');
     dl.innerHTML = ''; cidadesIbge = {};
     if (!uf) return;
-    fetch(`/localidades/ajax/cidades_por_uf_ibge/${uf}`)
+    fetch(`${CFG.localidades}/${uf}`)
       .then(r => r.json())
       .then(list => {
         dl.innerHTML = (list || []).map(c => `<option value="${esc(c.nome)}">`).join('');

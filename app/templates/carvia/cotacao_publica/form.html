@@ -1,23 +1,22 @@
 {% extends "base.html" %}
-
-{# Estilos em css/modules/_carvia.css (secao "Cotacao Rapida") #}
-
 {% block content %}
-<div class="container-fluid py-4">
-  <div class="d-flex justify-content-between align-items-center mb-4">
-    <div>
-      <h2><i class="fas fa-bolt text-warning"></i> CarVia — Cotacao Rapida</h2>
-      <p class="text-muted mb-0">Cote o frete de motos por destino. Nada e salvo — so para conferir e emitir.</p>
-    </div>
+<div class="container py-4" style="max-width: 1100px;">
+  <div class="text-center mb-4">
+    <h2><i class="fas fa-bolt text-warning"></i> CarVia — Cotacao de Frete de Motos</h2>
+    <p class="text-muted mb-0">Informe seu nome, o destino e as motos. Cotacao na hora.</p>
   </div>
 
-  {% set carvia_active = 'cotacao_rapida' %}
-  {% include 'carvia/_quick_nav.html' %}
-
   <div class="row g-3">
-    {# ───────────── Coluna de entrada ───────────── #}
     <div class="col-lg-5">
-      {# 1. Destino #}
+      <div class="card mb-3">
+        <div class="card-header"><i class="fas fa-user"></i> Seus dados</div>
+        <div class="card-body">
+          <label class="form-label mb-1">Seu nome <span class="text-danger">*</span></label>
+          <input id="cr-solicitante-nome" class="form-control" placeholder="Nome de quem esta cotando" required>
+        </div>
+      </div>
+
+      {# Card "1. Destino" — copiado do form logado (mesmos ids) #}
       <div class="card mb-3">
         <div class="card-header"><i class="fas fa-map-marker-alt"></i> 1. Destino <small class="text-muted">(origem SP)</small></div>
         <div class="card-body">
@@ -56,7 +55,7 @@
         </div>
       </div>
 
-      {# 2. Motos #}
+      {# Card "2. Motos" — copiado do form logado (mesmos ids) #}
       <div class="card mb-3">
         <div class="card-header"><i class="fas fa-motorcycle"></i> 2. Motos + Quantidade</div>
         <div class="card-body">
@@ -85,12 +84,11 @@
       </div>
     </div>
 
-    {# ───────────── Coluna de resultado ───────────── #}
     <div class="col-lg-7">
       <div id="cr-resultado">
         <div class="text-center text-muted py-5">
           <i class="fas fa-truck-fast fa-2x mb-2"></i>
-          <p>Informe destino + motos e clique em <strong>Calcular Cotacao</strong>.</p>
+          <p>Preencha os dados e clique em <strong>Calcular Cotacao</strong>.</p>
         </div>
       </div>
     </div>
@@ -99,11 +97,11 @@
 
 <script type="application/json" id="cr-modelos-data">{{ modelos | tojson }}</script>
 <div id="cr-app"
-     data-modo="login"
-     data-endpoint-calcular="{{ url_for('carvia.cotacao_rapida_calcular') }}"
-     data-endpoint-upload="{{ url_for('carvia.cotacao_rapida_upload') }}"
-     data-endpoint-pdf="{{ url_for('carvia.cotacao_rapida_pdf') }}"
-     data-endpoint-cep="/carvia/cotacao-rapida/cep"
-     data-endpoint-localidades="/localidades/ajax/cidades_por_uf_ibge"></div>
+     data-modo="publico"
+     data-endpoint-calcular="{{ url_for('cotacao_publica.cotacao_publica_calcular') }}"
+     data-endpoint-upload="{{ url_for('cotacao_publica.cotacao_publica_upload') }}"
+     data-endpoint-pdf="{{ url_for('cotacao_publica.cotacao_publica_pdf') }}"
+     data-endpoint-cep="/cotacao/cep"
+     data-endpoint-localidades="/cotacao/cidades"></div>
 <script src="{{ 'js/carvia/cotacao_rapida.js'|asset_url }}"></script>
 {% endblock %}

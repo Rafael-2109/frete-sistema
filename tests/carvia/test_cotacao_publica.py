@@ -102,3 +102,55 @@ def test_form_login_usa_js_externo(db, client):
         html = client.get('/carvia/cotacao-rapida').get_data(as_text=True)
     assert 'js/carvia/cotacao_rapida.js' in html
     assert 'id="cr-app"' in html
+
+
+def test_cotacao_publica_get_sem_login(db, client):
+    # Sem patch de usuario: rota publica responde 200 mesmo anonimo.
+    assert client.get('/cotacao').status_code == 200
+
+
+def test_cotacao_publica_calcular_exige_nome(db, client):
+    r = client.post('/cotacao/calcular', json={'itens': [{'modelo_id': 1, 'quantidade': 1}],
+                                               'uf_destino': 'RJ'})
+    assert r.status_code == 400
+    assert r.get_json()['ok'] is False
+
+
+def test_cotacao_publica_calcular_persiste(db, client):
+    from app.carvia.models import CarviaCotacaoRapidaPublica
+    antes = CarviaCotacaoRapidaPublica.query.count()
+    with patch('app.carvia.services.pricing.cotacao_rapida_service.CotacaoRapidaService.cotar',
+               return_value=_resultado_fake()):
+        r = client.post('/cotacao/calcular', json={
+            'itens': [{'modelo_id': 1, 'quantidade': 2}],
+            'uf_destino': 'RJ', 'solicitante_nome': 'Joao'})
+    assert r.status_code == 200
+    assert CarviaCotacaoRapidaPublica.query.count() == antes + 1
+
+
+def test_cotacao_publica_sem_opcoes_nao_persiste(db, client):
+    from app.carvia.models import CarviaCotacaoRapidaPublica
+    vazio = {'ok': False, 'opcoes': [], 'itens': [], 'regiao': {'uf_destino': 'RJ', 'cidade_destino': None}}
+    antes = CarviaCotacaoRapidaPublica.query.count()
+    with patch('app.carvia.services.pricing.cotacao_rapida_service.CotacaoRapidaService.cotar',
+               return_value=vazio):
+        r = client.post('/cotacao/calcular', json={
+            'itens': [{'modelo_id': 1, 'quantidade': 2}],
+            'uf_destino': 'RJ', 'solicitante_nome': 'Joao'})
+    assert r.status_code == 200
+    assert CarviaCotacaoRapidaPublica.query.count() == antes
+
+
+def test_cotacao_publica_rate_limit_429(db, client):
+    with patch('app.carvia.cotacao_publica.permitir', return_value=False):
+        r = client.post('/cotacao/calcular', json={
+            'itens': [{'modelo_id': 1, 'quantidade': 1}],
+            'uf_destino': 'RJ', 'solicitante_nome': 'Joao'})
+    assert r.status_code == 429
+
+
+def test_cotacao_publica_cidades_sem_login(db, client):
+    # endpoint publico de cidades (autocomplete) responde 200 sem sessao
+    r = client.get('/cotacao/cidades/SP')
+    assert r.status_code == 200
+    assert isinstance(r.get_json(), list)

@@ -52,3 +52,8 @@ def init_app(app):
     from app.carvia.portal_cliente import portal_cliente_bp
     if 'portal_cliente' not in app.blueprints:
         app.register_blueprint(portal_cliente_bp)
+
+    # Cotacao Publica — tela SEM login, raiz /cotacao. Task 8.
+    from app.carvia.cotacao_publica import cotacao_publica_bp
+    if 'cotacao_publica' not in app.blueprints:
+        app.register_blueprint(cotacao_publica_bp)
