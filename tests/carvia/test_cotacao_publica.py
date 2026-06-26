@@ -1,5 +1,6 @@
 """Cotacao Rapida PUBLICA (tela sem login): modelo, service, rotas, rate-limit."""
 from decimal import Decimal
+from unittest.mock import MagicMock, patch
 
 
 def test_modelo_persiste_e_le(db):
@@ -61,3 +62,22 @@ def test_listar_cotacoes_publicas_ordem_e_limite(db):
     assert lista[0]['solicitante_nome'] == 'C'        # mais recente primeiro
     assert lista[0]['destino'] == 'Rio de Janeiro/RJ'
     assert lista[0]['valor_total_min'] == 180.0
+
+
+def test_rate_limit_bloqueia_apos_limite():
+    from app.carvia.utils import rate_limit
+    fake = MagicMock()
+    fake.incr.side_effect = [1, 2, 3]  # 3a chamada excede limite=2
+    with patch.object(rate_limit, 'redis_cache') as rc:
+        rc.client = fake
+        assert rate_limit.permitir('upload', '9.9.9.9', limite=2, janela_seg=3600) is True
+        assert rate_limit.permitir('upload', '9.9.9.9', limite=2, janela_seg=3600) is True
+        assert rate_limit.permitir('upload', '9.9.9.9', limite=2, janela_seg=3600) is False
+    fake.expire.assert_called_once()  # expire so na 1a (incr==1)
+
+
+def test_rate_limit_degrada_aberto_sem_redis():
+    from app.carvia.utils import rate_limit
+    with patch.object(rate_limit, 'redis_cache') as rc:
+        rc.client = None
+        assert rate_limit.permitir('upload', '9.9.9.9', limite=1, janela_seg=60) is True
