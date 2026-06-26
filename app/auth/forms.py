@@ -2,13 +2,24 @@ from flask_wtf import FlaskForm
 from wtforms.validators import DataRequired, Email, Length, EqualTo, Optional
 from wtforms import StringField, PasswordField, SubmitField, SelectField, TextAreaField, BooleanField
 
+
+def _strip(value):
+    """Filtro WTForms: remove espaco de borda do valor (no-op para nao-str).
+
+    Nome de usuario com espaco no fim (ex.: "Fulano ") quebra o casamento por
+    nome exato no modulo HORA (validacao de vendedor em pedido_venda) — o input
+    do form e stripado mas o nome gravado nao era. Strip na origem evita o drift.
+    """
+    return value.strip() if isinstance(value, str) else value
+
+
 class LoginForm(FlaskForm):
     email = StringField('E-mail', validators=[DataRequired(), Email()])
     senha = PasswordField('Senha', validators=[DataRequired()])
     submit = SubmitField('Entrar')
 
 class RegistroForm(FlaskForm):
-    nome = StringField('Nome Completo', validators=[DataRequired(), Length(min=3, max=100)])
+    nome = StringField('Nome Completo', validators=[DataRequired(), Length(min=3, max=100)], filters=[_strip])
     email = StringField('E-mail', validators=[DataRequired(), Email()])
     empresa = StringField('Empresa', validators=[DataRequired(), Length(min=2, max=100)])
     cargo = StringField('Cargo', validators=[DataRequired(), Length(min=2, max=100)])
@@ -56,7 +67,7 @@ class RejeitarUsuarioForm(FlaskForm):
     submit = SubmitField('Rejeitar Usuário')
 
 class EditarUsuarioForm(FlaskForm):
-    nome = StringField('Nome Completo', validators=[DataRequired(), Length(min=3, max=100)])
+    nome = StringField('Nome Completo', validators=[DataRequired(), Length(min=3, max=100)], filters=[_strip])
     email = StringField('E-mail', validators=[DataRequired(), Email()])
     empresa = StringField('Empresa', validators=[Optional(), Length(max=100)])
     cargo = StringField('Cargo', validators=[Optional(), Length(max=100)])

@@ -1176,8 +1176,12 @@ def tagplus_pedido_venda_criar():
     if not vendedor_raw:
         vendedor_final = _operador()
     else:
+        # Casa por nome NORMALIZADO (strip): `_g` ja stripou o input, mas
+        # `u.nome` pode vir do banco com espaco de borda (cadastro legado sem
+        # filtro) — comparar cru rejeitava vendedor habilitado. Grava o canonico
+        # (= vendedor_raw, ja stripado) para consistencia com o filtro/notificacao.
         nomes_validos = {
-            u.nome for u in permissao_service.listar_usuarios_habilitados()
+            u.nome.strip() for u in permissao_service.listar_usuarios_habilitados()
         }
         if vendedor_raw in nomes_validos:
             vendedor_final = vendedor_raw
