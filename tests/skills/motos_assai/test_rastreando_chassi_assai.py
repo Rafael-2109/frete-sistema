@@ -1,5 +1,6 @@
 """Testes para rastreando-chassi-assai."""
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -37,3 +38,20 @@ def test_chassi_obrigatorio():
 def test_help():
     r = _run('--help')
     assert r.returncode == 0
+
+
+def test_recibo_origem_so_acessa_atributos_existentes(app):
+    """Regressao IMP-2026-06-26-002: o script montava recibo_origem com
+    `recibo.data_recebimento`, atributo inexistente em AssaiReciboMotochefe
+    (o campo real e `data_recibo`) -> AttributeError / exit_code=2 para todo
+    chassi com recibo vinculado. Garante que TODO atributo `recibo.<x>` lido
+    do model existe de fato (trava a regressao sem precisar montar dados)."""
+    from app.motos_assai.models import AssaiReciboMotochefe  # noqa: F401
+
+    source = SCRIPT.read_text(encoding='utf-8')
+    attrs = set(re.findall(r'\brecibo\.([a-z_]+)', source))
+    assert attrs, 'esperava acessos recibo.<attr> no script'
+    faltando = sorted(a for a in attrs if not hasattr(AssaiReciboMotochefe, a))
+    assert not faltando, (
+        f'script acessa atributos inexistentes em AssaiReciboMotochefe: {faltando}'
+    )

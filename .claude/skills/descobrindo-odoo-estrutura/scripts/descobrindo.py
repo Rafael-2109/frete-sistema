@@ -46,7 +46,7 @@ def listar_campos(odoo, modelo: str, buscar: Optional[str] = None) -> Dict[str, 
             modelo,
             'fields_get',
             [],
-            {'attributes': ['string', 'type', 'help', 'required', 'readonly']}
+            {'attributes': ['string', 'type', 'help', 'required', 'readonly', 'groups']}
         )
 
         if not campos:
@@ -63,6 +63,10 @@ def listar_campos(odoo, modelo: str, buscar: Optional[str] = None) -> Dict[str, 
                 'help': info.get('help', ''),
                 'obrigatorio': info.get('required', False),
                 'readonly': info.get('readonly', False),
+                # 'groups' != '' => campo so aparece na UI p/ usuarios desses grupos
+                # de permissao (ex: account.group_warning_account). Campo "sumido"
+                # da tela costuma ser falta de permissao, NAO ausencia do campo.
+                'grupos': info.get('groups', ''),
             }
 
             # Filtrar por termo de busca
@@ -265,6 +269,8 @@ Exemplos:
                         print(f"  Descricao: {campo['descricao']}")
                     if campo['help']:
                         print(f"  Ajuda: {campo['help'][:100]}...")
+                    if campo.get('grupos'):
+                        print(f"  Grupos (so visivel p/): {campo['grupos']}")
                     print()
 
             elif 'registros' in resultado:

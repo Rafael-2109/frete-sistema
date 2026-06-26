@@ -59,7 +59,8 @@ Output: JSON com historico completo.
     {"id": 98, "tipo": "ESTOQUE", "ocorrido_em": "...", "operador": "..."}
   ],
   "recibo_origem": {
-    "id": 5, "compra_id": 3, "data_recebimento": "..."
+    "id": 5, "compra_id": 3, "numero_recibo": "REC-001",
+    "data_recibo": "...", "status": "CONCLUIDO"
   },
   "separacao_ativa": null,
   "nf_qpa": null,

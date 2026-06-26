@@ -46,6 +46,29 @@ que mutam dados.
 
 ---
 
+## Caminho na interface (orientar o operador)
+
+O recebimento fisico de motos com **leitura de QR Code / codigo de barras** acontece
+na TELA (wizard), nao por esta CLI. Quando o usuario perguntar "como recebo / dou
+entrada nas motos?", "qual o caminho p/ escanear o QR Code no recebimento?", oriente
+pelo fluxo abaixo (fonte: `app/motos_assai/routes/recebimento.py` + `recibos.py`):
+
+1. Menu **Motos Assaí → Recibos** (`/motos-assai/recibos`) — lista os recibos Motochefe.
+2. Abrir o recibo pendente e clicar em **Conferir**
+   (`/motos-assai/recibos/<id>/conferir`) — abre o **wizard A→B→C→D**:
+   **A** selecionar recibo → **B** escanear chassi → **C** confirmar modelo/cor →
+   **D** progresso / finalizar.
+3. No passo **B**, o chassi entra por **camera do celular (QR/codigo de barras)**,
+   **leitor USB** (Enter dispara) ou **digitacao manual** — os tres funcionam.
+4. Se o recibo Motochefe ainda nao foi importado: **Compras → [compra] → Upload recibo**
+   (`/motos-assai/compras/<compra_id>/recibos/upload`) antes de conferir.
+
+Esta skill serve para **dizer ao operador quais recibos estao pendentes e o progresso
+de cada um** (`--listar-pendentes` / `--recibo-id`); o escaneio em si ocorre na tela.
+Requer a permissao `sistema_motos_assai` (ou perfil administrador).
+
+---
+
 ## REGRAS CRITICAS
 
 ### 1. WRITE EXIGE --user-id + --confirmar

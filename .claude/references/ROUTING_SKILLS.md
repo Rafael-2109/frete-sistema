@@ -76,7 +76,7 @@ atualizado: 2026-06-08
 | MOTOS ASSAÍ — RASTREAR CHASSI | "cadê chassi MZX...?", "histórico chassi Q.P.A." | -> `rastreando-chassi-assai` |
 | MOTOS ASSAÍ — PEDIDOS/COMPRAS | "pedido VOE", "compra Motochefe MA-", "VOE Q.P.A." | -> `acompanhando-pedido-compra-assai` |
 | MOTOS ASSAÍ — SAÍDA/NFs | "separações Assaí", "NF Q.P.A.", "match BATEU/DIVERGENTE" | -> `acompanhando-saida-assai` |
-| MOTOS ASSAÍ — RECIBO MOTOCHEFE | "recibos pendentes Motochefe", "conferir recibo RM-", "wizard recebimento" | -> `conferindo-recibo-assai` |
+| MOTOS ASSAÍ — RECIBO / RECEBIMENTO FÍSICO (QR) | "recibos pendentes Motochefe", "conferir recibo RM-", "wizard recebimento", "como receber/dar entrada nas motos no CD?", "recebimento físico de motos", "escanear QR Code/chassi no recebimento", "qual o caminho p/ receber moto?" | -> `conferindo-recibo-assai` (lista pendentes + dá o caminho do wizard; o escaneio em si é na TELA) |
 | MOTOS ASSAÍ — EVENTOS WRITE | "registra montagem", "disponibiliza", "reverte", "separar chassi" | -> `registrando-evento-moto-assai` |
 | MOTOS ASSAÍ — CARREGAMENTO (READ+WRITE) | "carregamentos em andamento", "iniciar/finalizar carregamento", "escanear chassi na carga", "reabre carregamento" | -> `carregando-motos-assai` |
 | MOTOS ASSAÍ — BACKFILL/CORREÇÃO (WRITE) | "subir planilha de chassis", "backfill Q.P.A.", "corrigir estado retroativo", "marcar demonstração", "gravar faturamento NF antiga", "alterar chassi em NF", "registrar devolução NFd Q.P.A.", "cadastrar/corrigir loja/modelo" | -> `corrigindo-dados-assai` |

@@ -54,6 +54,43 @@ Indice de execucoes do dialogo de melhoria Agent SDK <-> Claude Code.
 | 49 | 2026-06-25 | 6 | 0 | 1 | 1 | OK (2 avaliaveis + 4 reconciliadas (PASSO 1.5) + 2 F2 listadas. 0 auto-impl. IMP-24-005 REJEITADA falso positivo (TAMIRIS id 44): matriz 2.1.1 codigo-correto+ad-hoc — fluxo oficial `reclassificando-amls-odoo` ja trata `cannot marshal None` via `is_cannot_marshal_none` em connection.py:265-269 desde 305ccb8dd (2026-01-26); falha 53/53 veio de ServerProxy CRU ad-hoc (agent_adhoc ids 3725-3749); JSON-RPC desnecessario+pior (senha real). IMP-24-006 PROPOSTA (TALITA id 17): pedagio ceil NAO e bug (config `pedagio_por_fracao` transportadoras:62); valor_cotado congelado e design (baseline R6), ajuste ja existe via `valor_considerado` editavel em editar_frete:895; proposta = botao recalcular->valor_considerado (toca routes.py). 4 RECONCILIADAS v3: IMP-10-005 (bf4f61bc6), IMP-16-004 (7c13865f0), IMP-19-007 (serie S3), IMP-19-010 (37ca214cc). 2 F2: adhoc-3734 conta-destino CD/OUT (TAMIRIS id 44), adhoc-966 res.partner (Martha id 82/VANDERLEIA id 48). v2 301-302, v3 303-306 HTTP ok. Sem push) |
 | 48 | 2026-06-24 | 9 | 6 | 1 | 2 | OK (cron D8 normal — pega o backlog que o #47 deixou p/ "D8 normal" + CarVia Barbara id 87 + critica Rayssa id 78; relatorio `dialogue-2026-06-24-cron.md`. v2 286-294 HTTP 200. 6 AUTO-IMPL: IMP-23-011 critico BUG REAL (vincular_nf_manualmente nao propagava pedido_id ja validado -> branch ambiguo S1=b, 98/100 NFs backfill; pedido_id curto-circuita inferencia, 22 testes); cluster CarVia escrita IMP-24-001/-002/-003 = 1 script novo `atualizando_frete_carvia.py` (1o WRITE da skill, dry-run default, recalcula requer_aprovacao, NAO calcula — delega a cotando_subcontrato); IMP-24-004 gotcha lancar-cte readonly documentado (regra #9); IMP-23-007 `adicionando_item_embarque.py` modo Nacom reusa gerar_embarque + sincronizar_totais por SOMA (anti-inflacao 1089 vs 863kg), CarVia recusado (fronteira R1). 2 PROPOSTAS: IMP-23-012 causa-raiz faturamento parcial isolada (_calcular_match seta sep FATURADA inteira mas emite evento so por item-da-NF) — decisao de modelo pendente (split-brain 1727/1729/1737/2037); IMP-22-003 principio ja coberto (cannot_do + R3) — recomendacao p/ review trimestral jul/2026, nao auto-edit por governanca PAD-CTX. 1 REJEICAO: IMP-23-006 confirmar diario inter-company = salvaguarda correta (R3) + skill mal-atribuida (lendo-arquivos nao baixa) + sinal fraco; caminho = memoria de perfil. Sem push) |
 | R1 | 2026-06-24 | 2 | 2 | 0 | 0 | OK (RECONCILIACAO MANUAL — nao e execucao do cron. Fecha drift: 2 propostas do #46 viraram codigo e o registro ficou defasado. IMP-22-004 (peso cubado frete, Barbara id 87) implementado em `120f2f61d` (23/06); IMP-22-002 (excluir FT CarVia, Talita id 17) implementado em `3b26ebc02` (24/06, IMP Talita). Gravado v3 `auto_implemented=true` ids 295-296 HTTP 200. Gap de processo corrigido: novo PASSO 1.5 no prompt D8 reabre propostas implementadas via `git log --grep`. Sem push) |
+| 50 | 2026-06-26 | 3 | 3 | 0 | 0 | OK (3 IMP avaliaveis = 3 auto-impl + 2 F2 listadas + 0 reconciliadas (1.5). Rodada Motos Assai/Odoo. IMP-26-002 skill_bug rastreando-chassi-assai (Rayssa id 78): `recibo.data_recebimento` inexistente -> `data_recibo` (model AssaiReciboMotochefe.data_recibo:43); +teste regressao por introspeccao, 4 passed. IMP-26-001 instruction recebimento moto QR (Laura id 76): routing ja existia mas gatilhos sem vocabulario; enriqueci `ROUTING_SKILLS` (recebimento fisico/escanear QR/como receber) + secao 'Caminho na interface' (wizard A-D) no CORPO de conferindo-recibo-assai (camada 3b, sob demanda, sem custo boot; NAO mexi na YAML p/ preservar 8K listing). IMP-25-001 skill_bug descobrindo-odoo-estrutura (Vanderleia id 48): 2.1.1 codigo-correto — agente INVENTOU 'aba Vendas e Compras'; fix de capacidade = `fields_get` expoe `groups` (campo restrito por permissao, ex `account.group_warning_account`) + guard escopo modelo!=UI (consultar ir.ui.view / sinalizar incerteza). v2 ids 314-316 HTTP ok. PASSO 1.5: 17 propostas checadas, matches eram so commits-proposta D8 (codigo de OUTRAS sugestoes da rodada) -> 0 viraram codigo. 2 F2: adhoc-3734 conta-destino CD/OUT (TAMIRIS id 44, reincidente #49), adhoc-1743 patch fretes CarVia (TALITA id 17, 43 membros). Sem push) |
+
+## 2026-06-26 (cron D8 #50)
+
+Cron D8 normal. PASSO 1 = **3 avaliaveis** (2 `warning` + 1 `info`) + **2 F2** (`adhoc-`, gate
+humano). PASSO 1.5 verificou 17 propostas em aberto — **0 viraram codigo**. **3 auto-impl**, 0
+rejeitadas, 0 propostas. Relatorio: `dialogue-2026-06-26.md`.
+
+**3 AUTO-IMPLEMENTADAS:**
+- **IMP-2026-06-26-002 (skill_bug, Rayssa id 78)** — `rastreando-chassi-assai` montava
+  `recibo_origem` com `recibo.data_recebimento`, atributo inexistente: `AssaiReciboMotochefe`
+  (`app/motos_assai/models/recibo.py:43`) tem `data_recibo`. Quebrava (`AttributeError`,
+  exit_code=2) para todo chassi COM recibo vinculado. Fix: script usa `data_recibo` +
+  `numero_recibo`/`status`; SKILL.md alinhada; **teste de regressao por introspeccao** garante que
+  todo `recibo.<x>` lido existe no model (4 testes verdes). Fix pontual direto, sem feature-dev.
+- **IMP-2026-06-26-001 (instruction_request, Laura id 76)** — agente nao orientou recebimento de
+  motos via QR Code. Routing JA tinha a linha, mas sem o vocabulario da pergunta; e a skill (CLI)
+  nao descrevia a TELA. Fix: gatilhos enriquecidos em `ROUTING_SKILLS.md` + secao "Caminho na
+  interface" (wizard A→B→C→D, rotas reais) no CORPO de `conferindo-recibo-assai` (camada 3b PAD-CTX,
+  sob demanda — sem custo de boot; YAML description intocada p/ preservar o orcamento de 8K).
+- **IMP-2026-06-25-001 (skill_bug, Vanderleia id 48)** — `descobrindo-odoo-estrutura` orientou aba
+  de UI errada e nao verificou permissao. Matriz 2.1.1: codigo da skill CORRETO (nao afirma abas —
+  o agente inventou). Gap real = capacidade: `fields_get` agora pede `groups` e expoe `grupos` por
+  campo (campo restrito por permissao, ex `account.group_warning_account` = o caso da sessao) +
+  guard de escopo "MODELO ≠ LAYOUT de UI" (consultar `ir.ui.view` ou sinalizar incerteza; campo
+  sumido da tela = quase sempre permissao). `py_compile` OK, evals nao afetados.
+
+**2 F2 (gate humano — apenas listadas):**
+- `adhoc-cluster-3734` — conta contabil de destino CD/OUT via XML-RPC (TAMIRIS id 44; reincidente #49).
+- `adhoc-cluster-1743` — patch granular de fretes CarVia (valor_cotado/peso_cubado/pedagio) por ID
+  (TALITA id 17; 43 membros).
+
+**PASSO 1.5 — 0 reconciliadas:** os unicos matches `git log --grep` (IMP-2026-06-01-001,
+-06-08-002, -06-16-001, -06-16-003) eram os proprios commits-proposta D8; o codigo neles pertence a
+OUTRAS sugestoes da mesma rodada, nao as propostas. Todas seguem pendentes do Rafael.
+
+**Persistencia:** v2 ids 314/315/316 HTTP ok. Commit na worktree `cron/manutencao`, sem push.
 
 ## 2026-06-25 (cron D8 #49)
 

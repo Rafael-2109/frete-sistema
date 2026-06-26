@@ -64,6 +64,33 @@ Skill de **ULTIMO RECURSO** para descoberta de campos e estrutura de modelos Odo
 
 ---
 
+## Escopo: MODELO, nao LAYOUT da interface
+
+Esta skill introspecta o **modelo** (campos, tipos, obrigatoriedade, grupos de
+permissao). Ela **NAO revela a localizacao do campo na UI** — em qual aba/pagina
+do formulario o campo aparece. Essa informacao vive na **view** (`ir.ui.view`,
+arch XML), nao no `fields_get`.
+
+- **NUNCA afirmar "o campo X fica na aba Y"** so a partir desta skill — isso seria
+  invencao de UI. Se o usuario pergunta "em qual aba esta o campo?", ou (a) consultar
+  a view (`--modelo ir.ui.view --filtro '[["model","=","res.partner"]]'` e ler o
+  `arch`), ou (b) **sinalizar explicitamente a incerteza** ("a localizacao exata na
+  tela depende da view do ambiente; o campo do modelo e `<nome>`").
+
+### Campo "sumido" da tela = quase sempre PERMISSAO, nao ausencia
+
+O `--listar-campos`/`--buscar-campo` agora retorna o atributo **`grupos`** de cada
+campo. Quando `grupos` != `''`, o campo so aparece na interface para usuarios nos
+grupos de permissao listados. Exemplo real: o campo de **bloqueio de fatura** do
+`res.partner` (`invoice_warn` / `invoice_warn_msg`) so e visivel para usuarios no
+grupo `account.group_warning_account`.
+
+> **Antes de orientar "o campo nao aparece para voce"**: rodar `--buscar-campo` e
+> checar `grupos`. Se houver grupo, a causa do campo "sumido" e **falta de permissao**
+> (o usuario nao esta no grupo), nao ausencia do campo. Informar o grupo necessario.
+
+---
+
 ## Script Disponivel
 
 ### descobrindo.py

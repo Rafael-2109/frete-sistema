@@ -75,7 +75,8 @@ def _run(chassi: str):
             recibo_origem = {
                 'id': recibo.id,
                 'compra_id': recibo.compra_id,
-                'data_recebimento': recibo.data_recebimento,
+                'numero_recibo': recibo.numero_recibo,
+                'data_recibo': recibo.data_recibo,
                 'status': recibo.status,
             }
 
