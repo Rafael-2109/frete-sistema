@@ -62,9 +62,10 @@ from app.carvia.models.clientes import (  # noqa: F401
     CarviaCliente, CarviaClienteEndereco,
 )
 
-# Cotacao Comercial
+# Cotacao Comercial + Cotacao Rapida Publica (lead sem login)
 from app.carvia.models.cotacao import (  # noqa: F401
     CarviaCotacao, CarviaCotacaoMoto, CarviaPedido, CarviaPedidoItem,
+    CarviaCotacaoRapidaPublica,
 )
 
 # Tabelas de Frete + Grupos Cliente
@@ -153,6 +154,7 @@ __all__ = [
     'CarviaCliente', 'CarviaClienteEndereco',
     # Cotacao
     'CarviaCotacao', 'CarviaCotacaoMoto', 'CarviaPedido', 'CarviaPedidoItem',
+    'CarviaCotacaoRapidaPublica',
     # Tabelas/Grupos
     'CarviaGrupoCliente', 'CarviaGrupoClienteMembro',
     'CarviaTabelaFrete', 'CarviaCidadeAtendida',

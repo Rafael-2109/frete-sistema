@@ -8,6 +8,11 @@ from app import db
 from app.utils.timezone import agora_utc_naive
 
 
+def _agora_brasil_naive_default():
+    from app.utils.timezone import agora_brasil_naive
+    return agora_brasil_naive()
+
+
 class CarviaCotacao(db.Model):
     """Cotacao comercial CarVia — fluxo proativo de frete"""
     __tablename__ = 'carvia_cotacoes'
@@ -569,3 +574,31 @@ class CarviaPedidoItem(db.Model):
 
     def __repr__(self):
         return f'<CarviaPedidoItem pedido={self.pedido_id} qtd={self.quantidade}>'
+
+
+class CarviaCotacaoRapidaPublica(db.Model):
+    """Cotacao Rapida feita na tela PUBLICA (sem login) — snapshot persistido (lead).
+
+    Diferente de CarviaCotacao (fluxo comercial completo): aqui so guardamos o
+    que o anonimo cotou (destino + motos + opcoes calculadas) + o nome informado,
+    para o time CarVia ver os leads no fim da Cotacao Rapida com login.
+    """
+    __tablename__ = 'carvia_cotacoes_rapidas_publicas'
+
+    id = db.Column(db.Integer, primary_key=True)
+    solicitante_nome = db.Column(db.String(160), nullable=False)
+    cnpj_cliente = db.Column(db.String(20), nullable=True)
+    uf_destino = db.Column(db.String(2), nullable=False)
+    cidade_destino = db.Column(db.String(120), nullable=True)
+    codigo_ibge = db.Column(db.String(7), nullable=True)
+    itens = db.Column(db.JSON, nullable=False)
+    opcoes = db.Column(db.JSON, nullable=False)
+    valor_total_min = db.Column(db.Numeric(15, 2), nullable=True)
+    qtd_total_motos = db.Column(db.Integer, nullable=True)
+    ip_solicitante = db.Column(db.String(45), nullable=True)
+    user_agent = db.Column(db.String(255), nullable=True)
+    criado_em = db.Column(db.DateTime, nullable=False, default=_agora_brasil_naive_default)
+
+    def __repr__(self):
+        return (f'<CarviaCotacaoRapidaPublica {self.id} '
+                f'{self.solicitante_nome!r} {self.uf_destino}>')
