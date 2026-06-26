@@ -269,7 +269,7 @@ class CotacaoRapidaService:
     # ------------------------------------------------------------------ #
     def registrar_cotacao_publica(self, resultado, *, solicitante_nome,
                                   cnpj_cliente=None, codigo_ibge=None,
-                                  ip=None, user_agent=None):
+                                  ip=None, user_agent=None) -> "CarviaCotacaoRapidaPublica":
         """Grava 1 snapshot da cotacao feita na tela publica. Retorna o registro.
 
         Chamar so quando `resultado['opcoes']`. NAO faz commit por si — o caller
@@ -283,7 +283,7 @@ class CotacaoRapidaService:
 
         valores = [o.get('valor_total') for o in opcoes if o.get('valor_total') is not None]
         valor_total_min = min(valores) if valores else None
-        qtd_total_motos = sum(int(i.get('quantidade') or 0) for i in itens) or None
+        qtd_total_motos = sum(int(i.get('quantidade') or 0) for i in itens) if itens else None
 
         registro = CarviaCotacaoRapidaPublica(
             solicitante_nome=(solicitante_nome or '').strip()[:160],
@@ -308,7 +308,8 @@ class CotacaoRapidaService:
 
         regs = (
             CarviaCotacaoRapidaPublica.query
-            .order_by(CarviaCotacaoRapidaPublica.criado_em.desc())
+            .order_by(CarviaCotacaoRapidaPublica.criado_em.desc(),
+                      CarviaCotacaoRapidaPublica.id.desc())
             .limit(limit)
             .all()
         )
