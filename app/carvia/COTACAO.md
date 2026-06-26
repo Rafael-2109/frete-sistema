@@ -117,3 +117,42 @@ CANCELADO <── cancelar (de qualquer estado exceto APROVADO)
 - Cancelar: bloqueado se APROVADO
 - Contra proposta: `valor_contra_proposta` obrigatorio
 - Remover demanda: bloqueado se for a unica
+
+---
+
+## Cotacao Rapida (efemera) — `/carvia/cotacao-rapida` (2026-06-25)
+
+Tela leve para cotar frete de MOTO por destino, **sem persistir nada** (cotacao
+efemera — nenhuma migration). Origem fixa SP.
+
+**Fluxo**: `modelo + qtd` (manual OU upload de PDF/imagem lido por LLM) +
+`cidade/UF` (ou CEP) -> cotacao por TODAS as tabelas da rota + historico + PDF
+em papel timbrado.
+
+| Camada | Arquivo |
+|--------|---------|
+| Rotas | `routes/cotacao_rapida_routes.py` (`register_cotacao_rapida_routes`) — `GET /cotacao-rapida`, `POST .../calcular`, `POST .../upload`, `GET .../cep/<cep>`, `POST .../pdf` |
+| Service cotacao | `services/pricing/cotacao_rapida_service.py` (`CotacaoRapidaService.cotar` / `historico_por_tabela`) |
+| Service LLM | `services/parsers/cotacao_rapida_llm_service.py` (`extrair_motos_regiao`) |
+| CEP -> IBGE | `app/utils/cep_service.py` (`resolver_cep`, via ViaCEP) |
+| Templates | `templates/carvia/cotacao_rapida/{form,pdf}.html` |
+| Menu | `_quick_nav.html` grupo Comercial (`carvia_active='cotacao_rapida'`) |
+
+**Decisoes** (do dono, 2026-06-25):
+- **Modelo -> categoria**: o motor `cotar_carvia` precifica por `categoria_id`;
+  o service agrupa `(modelo_id, qtd)` por categoria e **re-expande** o valor por
+  modelo (valor/moto = `valor_unitario` da categoria; total da opcao = soma, que
+  coincide com o `valor_frete` do motor).
+- **Todas as tabelas detalhadas juntas** — cada `CarviaTabelaFrete` da rota vira
+  um card com breakdown por modelo.
+- **Tabela sem preco por categoria de moto** -> avisada e PULADA (nao cai no
+  calculo por peso). Modelo sem categoria -> avisado, fora do calculo.
+- **Historico**: ultimas 5 `CarviaCotacao(tipo_material='MOTO')` por
+  `nome_tabela + uf_destino` (valor/moto = valor da cotacao / qtd de motos;
+  destinatario = `endereco_destino`, fallback no cliente).
+- **LLM**: Haiku 4.5 -> Sonnet 4.6; lista de modelos+categorias injetada no
+  prompt; nomes normalizados por `MotoRecognitionService.resolver_modelo_em_lista`.
+- **PDF**: weasyprint + logo `static/carvia/logo.jpg`.
+
+Testes: `tests/carvia/test_cotacao_rapida_service.py`, `test_cep_service.py`,
+`test_cotacao_rapida_llm_service.py` (11 casos).

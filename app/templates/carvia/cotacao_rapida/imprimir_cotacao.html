@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Cotacao CarVia</title>
+{# Template de impressao (PDF weasyprint) — auto-contido por design (whitelist
+   do ui_policy_lint via prefixo imprimir_). Inline <style> e cores fixas sao
+   intencionais: PDF nao usa o design system / tema do browser. #}
+<style>
+  @page { size: A4; margin: 1.6cm 1.4cm; }
+  * { box-sizing: border-box; }
+  body { font-family: "Helvetica Neue", Arial, sans-serif; color: #222; font-size: 11px; }
+
+  .timbre { display: flex; align-items: center; border-bottom: 3px solid #0d6efd; padding-bottom: 10px; margin-bottom: 4px; }
+  .timbre img { height: 54px; margin-right: 16px; }
+  .timbre .empresa { font-size: 13px; font-weight: bold; color: #0d6efd; }
+  .timbre .sub { color: #666; font-size: 10px; }
+  .doc-titulo { text-align: right; margin-left: auto; }
+  .doc-titulo h1 { font-size: 18px; margin: 0; color: #0d6efd; letter-spacing: 1px; }
+  .doc-titulo .data { color: #666; font-size: 10px; }
+
+  .meta { width: 100%; margin: 14px 0; border-collapse: collapse; }
+  .meta td { padding: 3px 6px; }
+  .meta .lbl { color: #666; width: 90px; font-size: 10px; text-transform: uppercase; }
+  .meta .val { font-weight: bold; }
+
+  h2.sec { font-size: 12px; color: #0d6efd; border-bottom: 1px solid #ddd; padding-bottom: 3px; margin: 16px 0 6px; }
+
+  .opcao { border: 1px solid #ddd; border-radius: 5px; margin-bottom: 12px; }
+  .opcao .cab { background: #f4f7fb; padding: 6px 10px; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; }
+  .opcao .cab .nome { font-weight: bold; }
+  .opcao .cab .badge { background: #e2e8f0; color: #333; border-radius: 3px; padding: 1px 6px; font-size: 9px; margin-left: 4px; }
+  .opcao .cab .total { font-weight: bold; color: #0d6efd; font-size: 13px; }
+
+  table.itens { width: 100%; border-collapse: collapse; }
+  table.itens th { background: #fafafa; text-align: left; padding: 4px 10px; font-size: 9px; color: #666; text-transform: uppercase; border-bottom: 1px solid #eee; }
+  table.itens td { padding: 4px 10px; border-bottom: 1px solid #f2f2f2; }
+  table.itens td.num, table.itens th.num { text-align: right; }
+  table.itens td.cen, table.itens th.cen { text-align: center; }
+  table.itens tr.total td { font-weight: bold; border-top: 1px solid #ccc; background: #f8f9fa; }
+  .semp { color: #999; font-style: italic; }
+  .lead { padding: 4px 10px; color: #666; font-size: 10px; border-top: 1px solid #f2f2f2; }
+
+  .rodape { margin-top: 22px; padding-top: 8px; border-top: 1px solid #ddd; color: #888; font-size: 9px; }
+</style>
+</head>
+<body>
+
+  <div class="timbre">
+    <img src="{{ url_for('static', filename='carvia/logo.jpg') }}" alt="CarVia">
+    <div>
+      <div class="empresa">CarVia Logistica</div>
+      <div class="sub">Transporte e logistica de motos</div>
+    </div>
+    <div class="doc-titulo">
+      <h1>COTACAO DE FRETE</h1>
+      <div class="data">Emitida em {{ emitido_em | formatar_data_brasil }}</div>
+    </div>
+  </div>
+
+  <table class="meta">
+    <tr>
+      <td class="lbl">Origem</td><td class="val">SP</td>
+      <td class="lbl">Destino</td>
+      <td class="val">{% if destino.cidade_destino %}{{ destino.cidade_destino }}/{% endif %}{{ destino.uf_destino }}</td>
+    </tr>
+    {% if cliente_nome %}
+    <tr>
+      <td class="lbl">Cliente</td><td class="val" colspan="3">{{ cliente_nome }}</td>
+    </tr>
+    {% endif %}
+  </table>
+
+  <h2 class="sec">Opcoes de Frete</h2>
+
+  {% for op in resultado.opcoes %}
+  <div class="opcao">
+    <div class="cab">
+      <span>
+        <span class="nome">{{ op.tabela_nome }}</span>
+        <span class="badge">{{ op.tipo_carga }}</span>
+        <span class="badge">{{ op.modalidade }}</span>
+        {% if op.grupo_cliente %}<span class="badge">{{ op.grupo_cliente }}</span>{% endif %}
+      </span>
+      <span class="total">R$ {{ op.valor_total | valor_br }}</span>
+    </div>
+    <table class="itens">
+      <thead>
+        <tr>
+          <th>Modelo</th><th>Categoria</th><th class="cen">Qtd</th>
+          <th class="num">Valor/moto</th><th class="num">Total</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for m in op.modelos %}
+        <tr>
+          <td>{{ m.modelo_nome }}</td>
+          <td>{{ m.categoria_nome or '—' }}</td>
+          <td class="cen">{{ m.quantidade }}</td>
+          {% if m.sem_preco %}
+          <td class="num semp" colspan="2">sem preco nesta tabela</td>
+          {% else %}
+          <td class="num">R$ {{ m.valor_unitario | valor_br }}</td>
+          <td class="num">R$ {{ m.valor_total | valor_br }}</td>
+          {% endif %}
+        </tr>
+        {% endfor %}
+        <tr class="total">
+          <td colspan="4" class="num">Total da cotacao</td>
+          <td class="num">R$ {{ op.valor_total | valor_br }}</td>
+        </tr>
+      </tbody>
+    </table>
+    {% if op.lead_time is not none %}
+    <div class="lead">Prazo estimado de entrega: {{ op.lead_time }} dia(s).</div>
+    {% endif %}
+  </div>
+  {% endfor %}
+
+  <div class="rodape">
+    Cotacao gerada automaticamente — valores sujeitos a confirmacao. Documento sem valor fiscal.
+  </div>
+
+</body>
+</html>

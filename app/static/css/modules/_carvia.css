@@ -1025,3 +1025,39 @@
     white-space: pre-wrap;
     font-family: inherit;
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   Cotacao Rapida (/carvia/cotacao-rapida) — substitui <style> inline
+   ═══════════════════════════════════════════════════════════════ */
+.cr-moto-row .form-select,
+.cr-moto-row .form-control {
+    min-width: 0;
+}
+
+.cr-dropzone {
+    border: 2px dashed var(--bs-border-color);
+    border-radius: .5rem;
+    padding: 1rem;
+    text-align: center;
+    cursor: pointer;
+    transition: background-color .15s, border-color .15s;
+}
+
+.cr-dropzone:hover,
+.cr-dropzone.dragover {
+    background-color: var(--bs-tertiary-bg);
+    border-color: var(--bs-primary);
+}
+
+.cr-opcao-card {
+    border-top: 3px solid var(--bs-primary);
+}
+
+.cr-total-linha {
+    font-weight: 600;
+}
+
+#cr-resultado .table td,
+#cr-resultado .table th {
+    vertical-align: middle;
+}
