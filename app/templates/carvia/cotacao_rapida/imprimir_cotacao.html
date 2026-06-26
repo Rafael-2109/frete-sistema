@@ -78,8 +78,6 @@
     <div class="cab">
       <span>
         <span class="nome">{{ op.tabela_nome }}</span>
-        <span class="badge">{{ op.tipo_carga }}</span>
-        <span class="badge">{{ op.modalidade }}</span>
         {% if op.grupo_cliente %}<span class="badge">{{ op.grupo_cliente }}</span>{% endif %}
       </span>
       <span class="total">R$ {{ op.valor_total | valor_br }}</span>
