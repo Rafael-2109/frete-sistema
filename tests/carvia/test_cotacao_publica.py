@@ -95,3 +95,10 @@ def _user_carvia():
 def test_cotacao_rapida_com_login_renderiza(db, client):
     with patch('flask_login.utils._get_user', return_value=_user_carvia()):
         assert client.get('/carvia/cotacao-rapida').status_code == 200
+
+
+def test_form_login_usa_js_externo(db, client):
+    with patch('flask_login.utils._get_user', return_value=_user_carvia()):
+        html = client.get('/carvia/cotacao-rapida').get_data(as_text=True)
+    assert 'js/carvia/cotacao_rapida.js' in html
+    assert 'id="cr-app"' in html
