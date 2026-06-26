@@ -24,7 +24,12 @@ LIMITE_UPLOAD = 20      # por IP / hora
 LIMITE_CALCULAR = 60    # por IP / hora
 LIMITE_PDF = 30         # por IP / hora
 LIMITE_CEP = 120        # por IP / hora
+LIMITE_CIDADES = 300    # por IP / hora
 JANELA = 3600
+
+GLOBAL_UPLOAD = 300
+GLOBAL_CALCULAR = 2000
+GLOBAL_PDF = 300
 
 
 def _ip():
@@ -37,6 +42,15 @@ def _ip():
     """
     fwd = request.headers.get('X-Forwarded-For', '')
     return (fwd.split(',')[0].strip() if fwd else request.remote_addr) or ''
+
+
+def _rate_ok(acao, limite_ip, limite_global):
+    """Rate-limit em 2 camadas: por-IP (anti-abuso casual; X-Forwarded-For e
+    spoofavel sem ProxyFix) + teto GLOBAL por janela (chave Redis fixa, indep.
+    de IP) como circuit-breaker de gasto de LLM contra spoofing em escala."""
+    if not permitir(acao, _ip(), limite=limite_ip, janela_seg=JANELA):
+        return False
+    return permitir(f'{acao}:GLOBAL', 'all', limite=limite_global, janela_seg=JANELA)
 
 
 @cotacao_publica_bp.route('')
@@ -52,6 +66,8 @@ def cotacao_publica():
 
 @cotacao_publica_bp.route('/cidades/<uf>')
 def cotacao_publica_cidades(uf):
+    if not permitir('cidades', _ip(), limite=LIMITE_CIDADES, janela_seg=JANELA):
+        return jsonify({'ok': False, 'erro': 'Muitas requisicoes. Tente mais tarde.'}), 429
     from app.localidades.models import Cidade
     cidades = Cidade.query.filter_by(uf=uf).order_by(Cidade.nome).all()
     return jsonify([{'nome': c.nome, 'codigo_ibge': c.codigo_ibge} for c in cidades])
@@ -70,7 +86,7 @@ def cotacao_publica_cep(cep):
 
 @cotacao_publica_bp.route('/upload', methods=['POST'])
 def cotacao_publica_upload():
-    if not permitir('upload', _ip(), limite=LIMITE_UPLOAD, janela_seg=JANELA):
+    if not _rate_ok('upload', LIMITE_UPLOAD, GLOBAL_UPLOAD):
         return jsonify({'ok': False, 'erro': 'Muitas requisicoes. Tente mais tarde.'}), 429
 
     arquivo = request.files.get('arquivo')
@@ -78,8 +94,11 @@ def cotacao_publica_upload():
         return jsonify({'ok': False, 'erro': 'Nenhum arquivo enviado.'}), 400
 
     MAX_BYTES = 20 * 1024 * 1024
-    if (request.content_length or 0) > MAX_BYTES:
-        return jsonify({'ok': False, 'erro': 'Arquivo muito grande (max 20MB).'}), 413
+    # Rejeita ANTES de ler o corpo na RAM: tamanho ausente/zero (chunked sem
+    # Content-Length) ou acima do limite. Endpoint anonimo -> nao materializar
+    # ate 512MB (MAX_CONTENT_LENGTH global) na memoria do worker.
+    if not request.content_length or request.content_length > MAX_BYTES:
+        return jsonify({'ok': False, 'erro': 'Arquivo muito grande ou tamanho ausente (max 20MB).'}), 413
     file_bytes = arquivo.read()
     if len(file_bytes) > MAX_BYTES:
         return jsonify({'ok': False, 'erro': 'Arquivo muito grande (max 20MB).'}), 413
@@ -100,7 +119,7 @@ def cotacao_publica_upload():
 
 @cotacao_publica_bp.route('/calcular', methods=['POST'])
 def cotacao_publica_calcular():
-    if not permitir('calcular', _ip(), limite=LIMITE_CALCULAR, janela_seg=JANELA):
+    if not _rate_ok('calcular', LIMITE_CALCULAR, GLOBAL_CALCULAR):
         return jsonify({'ok': False, 'erro': 'Muitas requisicoes. Tente mais tarde.'}), 429
 
     payload = request.get_json(silent=True) or {}
@@ -138,7 +157,7 @@ def cotacao_publica_calcular():
 
 @cotacao_publica_bp.route('/pdf', methods=['POST'])
 def cotacao_publica_pdf():
-    if not permitir('pdf', _ip(), limite=LIMITE_PDF, janela_seg=JANELA):
+    if not _rate_ok('pdf', LIMITE_PDF, GLOBAL_PDF):
         return jsonify({'ok': False, 'erro': 'Muitas requisicoes. Tente mais tarde.'}), 429
     payload = request.get_json(silent=True) or {}
     contexto = resolver_contexto(payload)

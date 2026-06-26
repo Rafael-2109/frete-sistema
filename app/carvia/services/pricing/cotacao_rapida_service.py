@@ -298,7 +298,7 @@ class CotacaoRapidaService:
             opcoes=opcoes,
             valor_total_min=valor_total_min,
             qtd_total_motos=qtd_total_motos,
-            ip_solicitante=(ip or None),
+            ip_solicitante=((ip or '')[:45] or None),
             user_agent=((user_agent or '')[:255] or None),
         )
         db.session.add(registro)

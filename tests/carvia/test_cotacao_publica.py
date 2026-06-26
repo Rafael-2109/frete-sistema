@@ -169,6 +169,15 @@ def test_cotacao_publica_cep_rate_limit_429(db, client):
     assert r.status_code == 429
 
 
+def test_cotacao_publica_sem_colisao_de_path_com_nacom(app):
+    # /cotacao e compartilhado com o blueprint Nacom `cotacao`; garante que os
+    # paths das duas familias nao colidem (regressao se alguem add rota conflitante).
+    rules = list(app.url_map.iter_rules())
+    pub = {r.rule for r in rules if r.endpoint.startswith('cotacao_publica.')}
+    nacom = {r.rule for r in rules if r.endpoint.startswith('cotacao.')}
+    assert not (pub & nacom), f'colisao de path em /cotacao: {pub & nacom}'
+
+
 def test_secao_cotacoes_publicas_na_tela_logada(db, client):
     from app.carvia.services.pricing.cotacao_rapida_service import CotacaoRapidaService
     CotacaoRapidaService().registrar_cotacao_publica(_resultado_fake(), solicitante_nome='ZéPúblico')
