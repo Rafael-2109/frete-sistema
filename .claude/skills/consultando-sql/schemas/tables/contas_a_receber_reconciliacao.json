@@ -1,6 +1,6 @@
 {
   "name": "contas_a_receber_reconciliacao",
-  "description": "Reconciliações de contas a receber.",
+  "description": "Reconciliações (baixas) de contas a receber. Vincula o título ao pagamento Odoo: payment_odoo_id (account.payment), tipo_baixa, tipo_baixa_odoo. Campos: conta_a_receber_id, odoo_id, payment_odoo_id.",
   "fields": [
     {
       "name": "id",

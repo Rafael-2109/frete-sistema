@@ -1,11 +1,10 @@
 ---
 name: conciliando-odoo-po
 description: >-
-  Operacoes WRITE de split/consolidacao de POs no Odoo para conciliar
-  com NF: "consolida POs da NF 12345", "executa split do pedido", "cria PO
-  Conciliador", "reverte consolidacao", "vincula PO a NF", "troca PO vinculado".
-  Tambem depura erros do fluxo (AttributeError, fornecedor nao encontrado).
-  Match NF×PO -> validacao-nf-po; read-only -> rastreando-odoo; pagamentos ->
+  WRITE split/consolidacao de POs no Odoo p/ conciliar com NF: "consolida POs da
+  NF 12345", "split do pedido", "cria PO Conciliador", "reverte consolidacao",
+  "vincula/troca PO". Tambem depura erros do fluxo. Anti: match NF×PO ->
+  validacao-nf-po; read-only -> rastreando-odoo; pagamentos ->
   executando-odoo-financeiro.
 allowed-tools: Read, Bash, Glob, Grep
 ---

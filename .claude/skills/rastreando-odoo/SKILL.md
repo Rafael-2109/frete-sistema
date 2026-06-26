@@ -1,12 +1,11 @@
 ---
 name: rastreando-odoo
 description: >-
-  Rastreia fluxos documentais completos no Odoo (NF, PO, SO, pagamentos,
-  extratos) — read-only. Gatilhos: "rastreie NF 12345/PO00789/CNPJ
-  18467441000123", "fluxo da nota", "documentos do Atacadao",
-  "pagamentos da NF 12345", "auditoria faturas novembro". Anti: criar
-  pagamento/reconciliar extrato -> executando-odoo-financeiro; exportar razao
-  geral -> razao-geral-odoo; split/consolidar PO -> conciliando-odoo-po.
+  Rastreia fluxos documentais no Odoo (NF, PO, SO, pagamentos, extratos) —
+  read-only. Gatilhos: "rastreie NF 12345/PO00789/CNPJ 18467441000123", "fluxo
+  da nota", "documentos do Atacadao", "pagamentos da NF", "auditoria faturas
+  novembro". Anti: criar pagamento/reconciliar -> executando-odoo-financeiro;
+  razao geral -> razao-geral-odoo; split/consolidar PO -> conciliando-odoo-po.
 allowed-tools: Read, Bash, Glob, Grep
 ---
 

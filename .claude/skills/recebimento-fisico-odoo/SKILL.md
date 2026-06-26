@@ -1,11 +1,10 @@
 ---
 name: recebimento-fisico-odoo
 description: >-
-  Opera o Recebimento Fisico (Fase 4) no Odoo: picking, lotes,
-  quality checks e worker RQ assincrono. Usar quando: "erro ao validar picking",
-  "lote nao criou", "quality check falhou", "picking nao foi para done", "quais
-  passos o worker executa?", "lote duplicado". Fase 2 (match NF x PO) ->
-  validacao-nf-po; Fase 3 (split/consolidar PO) -> conciliando-odoo-po.
+  Recebimento Fisico (Fase 4) no Odoo: picking, lotes, quality checks, worker RQ.
+  Usar: "erro ao validar picking", "lote nao criou", "quality check falhou",
+  "picking nao foi para done", "quais passos o worker executa?", "lote duplicado".
+  Fase 2 (match NF x PO) -> validacao-nf-po; Fase 3 (split PO) -> conciliando-odoo-po.
 allowed-tools: Read, Write, Edit, Bash, Glob, Grep
 ---
 

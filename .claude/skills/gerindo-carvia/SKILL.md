@@ -3,9 +3,9 @@ name: gerindo-carvia
 description: >-
   Operacoes, subcontratos, cotacao e faturas do modulo CarVia (frete
   subcontratado). Gatilhos: "operacoes da CarVia", "subcontratos pendentes",
-  "faturas CarVia do Atacadao", "cotar frete para SP via Braspress", "resumo
-  CarVia". Anti: cotacao frete Nacom (industria) -> cotando-frete; documentacao
-  SSW -> acessando-ssw; embarque/separacao Nacom -> gerindo-expedicao.
+  "faturas CarVia do Atacadao", "cotar frete p/ SP via Braspress", "resumo
+  CarVia". Anti: cotacao frete Nacom -> cotando-frete; doc SSW -> acessando-ssw;
+  embarque/separacao Nacom -> gerindo-expedicao.
 allowed-tools: Read, Bash, Glob, Grep
 ---
 

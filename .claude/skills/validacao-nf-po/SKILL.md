@@ -1,12 +1,11 @@
 ---
 name: validacao-nf-po
 description: >-
-  Fase 2 do Recebimento: match NF-e (DFE) x POs, tolerancias,
-  divergencias e bloqueios. Gatilhos: "erro ao validar DFE", "DFE
-  nao encontrado", "alterar tolerancia de preco/qtd", "modal POs nao abre",
-  "como converte UM fornecedor", "novo tipo de bloqueio na validacao". Fase 3
-  split/consolida PO -> conciliando-odoo-po. Fase 4 recebimento fisico/lotes ->
-  recebimento-fisico-odoo.
+  Fase 2 do Recebimento: match NF-e (DFE) x POs, tolerancias, divergencias e
+  bloqueios. Gatilhos: "erro ao validar DFE", "DFE nao encontrado", "alterar
+  tolerancia de preco/qtd", "modal POs nao abre", "como converte UM fornecedor",
+  "novo bloqueio na validacao". Fase 3 split/consolida PO -> conciliando-odoo-po.
+  Fase 4 recebimento fisico/lotes -> recebimento-fisico-odoo.
 allowed-tools: Read, Write, Edit, Bash, Glob, Grep
 ---
 

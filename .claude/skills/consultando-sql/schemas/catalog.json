@@ -606,7 +606,7 @@
     },
     {
       "name": "baixa_titulo_item",
-      "description": "Itens individuais de baixa de título.",
+      "description": "Itens individuais de baixa de título a receber. Guarda os IDs de pagamento Odoo (account.payment) gerados na baixa em lote: payment_odoo_id, payment_juros_odoo_id (juros), payment_desconto_odoo_id e payment_desconto_odoo_name (desconto). Campos: lote_id, titulo_odoo_id, move_odoo_id, status. Conferência de pagamentos/juros/desconto lançados no Odoo.",
       "key_fields": [
         "lote_id",
         "titulo_odoo_id",
@@ -1469,7 +1469,7 @@
     },
     {
       "name": "contas_a_receber_reconciliacao",
-      "description": "Reconciliações de contas a receber.",
+      "description": "Reconciliações (baixas) de contas a receber. Vincula o título ao pagamento Odoo: payment_odoo_id (account.payment), tipo_baixa, tipo_baixa_odoo. Campos: conta_a_receber_id, odoo_id, payment_odoo_id.",
       "key_fields": [
         "conta_a_receber_id",
         "odoo_id",

@@ -3,8 +3,8 @@ name: operando-portal-atacadao
 description: >-
   Automacao do portal web Atacadao (Hodie Booking) via Playwright; requer mencao
   EXPLICITA a portal/site/Hodie + Atacadao. Gatilhos: "imprimir protocolo/ver
-  agendamentos/agendar entrega/abrir o portal do Atacadao", "navegar no Hodie
-  Booking". Anti: dados Atacadao sem portal -> gerindo-expedicao/monitorando-entregas;
+  agendamentos/agendar entrega/abrir o portal do Atacadao", "navegar no Hodie".
+  Anti: dados Atacadao sem portal -> gerindo-expedicao/monitorando-entregas;
   CarVia -> gerindo-carvia; SSW -> operando-ssw.
 allowed-tools: Read, Bash, Glob, Grep
 ---

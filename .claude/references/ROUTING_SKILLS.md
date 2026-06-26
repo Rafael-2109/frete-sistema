@@ -16,7 +16,7 @@ atualizado: 2026-06-08
 - [Passo 2 (ODOO): Tem dado ESTATICO ja documentado?](#passo-2-odoo-tem-dado-estatico-ja-documentado)
 - [Passo 3 (ODOO): Arvore de Decisao de Skills](#passo-3-odoo-arvore-de-decisao-de-skills)
 - [Desambiguacao (quando 2 skills parecem servir)](#desambiguacao-quando-2-skills-parecem-servir)
-- [Skills — Inventario Completo (54 invocaveis em `.claude/skills/`)](#skills-inventario-completo-54-invocaveis-em-claudeskills)
+- [Skills — Inventario Completo (59 invocaveis em `.claude/skills/`)](#skills-inventario-completo-59-invocaveis-em-claudeskills)
   - [MCP Custom Tools (agente web, in-process)](#mcp-custom-tools-agente-web-in-process)
   - [Skills Odoo (20)](#skills-odoo-20)
   - [Skills SSW (2)](#skills-ssw-2)
@@ -29,7 +29,7 @@ atualizado: 2026-06-08
   - [Skills motos_assai (8)](#skills-motos_assai-8)
   - [Skills SPED ECD audit (4) — USO EXCLUSIVO do subagent `auditor-sped-ecd`](#skills-sped-ecd-audit-4-uso-exclusivo-do-subagent-auditor-sped-ecd)
 
-**Ultima Atualizacao**: 22/06/2026 (58 skills invocaveis — +1 Odoo: `reclassificando-amls-odoo` (Skills Odoo 21→22), skill WRITE de reclassificacao em lote de account.move.line conta_origem->destino preservando chave fiscal (F2 #3 do D8), delegada ao subagente `gestor-estoque-odoo` (deny-list, fora do listing do principal). 20/06/2026 (57 skills) +1 Assai: `corrigindo-dados-assai` (motos_assai 7→8), skill WRITE de backfill/correcao manual, delegada ao subagente `gestor-motos-assai`. Historico de mudancas do inventario: comentario HTML ao fim deste arquivo — F0.4 PAD-CTX moveu o changelog para fora do corpo lido pelo agente.)
+**Ultima Atualizacao**: 25/06/2026 (59 skills invocaveis — +1 Odoo: `consultando-cliente-odoo` (Skills Odoo 22→23 nomes; READ-only AO VIVO de res.partner: busca/contagem por CNPJ/nome/cidade, detalhe+ultimas vendas, agrupamento de pedidos por vendedor; origem cluster 966 F2 do D8; fica no listing do PRINCIPAL — nao delegada). 22/06/2026 (58 skills invocaveis — +1 Odoo: `reclassificando-amls-odoo` (Skills Odoo 21→22), skill WRITE de reclassificacao em lote de account.move.line conta_origem->destino preservando chave fiscal (F2 #3 do D8), delegada ao subagente `gestor-estoque-odoo` (deny-list, fora do listing do principal). 20/06/2026 (57 skills) +1 Assai: `corrigindo-dados-assai` (motos_assai 7→8), skill WRITE de backfill/correcao manual, delegada ao subagente `gestor-motos-assai`. Historico de mudancas do inventario: comentario HTML ao fim deste arquivo — F0.4 PAD-CTX moveu o changelog para fora do corpo lido pelo agente.)
 
 **REGRA**: Use a skill MAIS ESPECIFICA. `descobrindo-odoo-estrutura` e ULTIMO RECURSO.
 
@@ -58,6 +58,7 @@ atualizado: 2026-06-08
 | ESTOQUE/PRODUCAO (ruptura, projecao, programacao — READ) | "vai faltar", "estoque comprometido", "producao vs programada", "giro estoque", "estoque parado" | -> Subagente `gestor-estoque-producao` |
 | ESTOQUE ODOO (WRITE — ajustar quant, transferir, faturar IC, cancelar MO) | "ajusta saldo do quant", "ajuste +/- residuo", "cria saldo do lote X", "ajuste por planilha", "zera quant fantasma", "corrige reserva orfa", "limpa ML orfa", "cancela picking", "valida picking pendurado em assigned", "re-valida picking false-positive G019", "devolve picking (NF errada)", "cancela 854 fantasmas >7d", "transfere lote A para lote B", "move saldo MIGRACAO -> lote canonico", "manda saldo pra Indisponivel", "Pre-Producao -> Estoque", "Indisponivel -> Estoque", "consolidar grafia MIGRACAO/MIGRAÇÃO", "cancela MO 19713", "cancela MOs zumbi antigas FB", "limpa MOs draft/confirmed sem consumo", "cancela MO travada" | -> Subagente `gestor-estoque-odoo` (orquestra todas as skills WRITE de estoque — fluxos>>skills, NUNCA invocar skill atomica direto) |
 | ESTOQUE ODOO (READ AO VIVO — quant/ML/picking) | "saldo restante apos ajuste", "sobrou saldo em loc !=indisp?", "quants em lote MIGRACAO", "auditoria pos-WRITE", "snapshot ao vivo Odoo" | -> `consultando-quant-odoo` |
+| CLIENTE ODOO (READ AO VIVO — cadastro res.partner) | "dados do cliente no Odoo", "CNPJ/cidade/IE do cliente", "quantos clientes ativos", "clientes de <cidade>", "clientes do vendedor X", "ranking de pedidos por vendedor" | -> `consultando-cliente-odoo` (dado que NAO esta no DB local; **cnpj/nome ja em carteira/faturamento -> `consultando-sql`**) |
 | ESTOQUE ODOO (PRE-FLIGHT cadastro fiscal — auditoria antes de SEFAZ) | "audita cadastro fiscal", "pre-flight para faturar", "valida NCM/barcode/weight", "checa duplicacao pipeline", "lote vencido com saldo", "limpa barcodes invalidos" | -> `auditando-cadastro-fiscal-odoo` (sub-skill READ-only + opcional WRITE de G035; perfil V1 'inventario'; delegada pela Skill 8 faturando-odoo v15+) |
 | PERFORMANCE LOGISTICA (entregas, ranking, KPIs) | "entregas atrasadas", "lead time", "ranking transportadoras", "mes a mes", "em transito" | -> Subagente `analista-performance-logistica` |
 | SENTRY (erros, issues, monitoring) | "issues do Sentry", "erros em producao", "bugs no Sentry", "resolver issue", "root cause analysis", "500 errors", "Seer" | -> `consultando-sentry` |
@@ -146,6 +147,12 @@ Se a resposta esta no reference -> NAO usar skill.
    |-- G017 NCM ausente, G035 barcode invalido, G018 weight=0 (warn), G014 lote vencido (warn) -> auditando-cadastro-fiscal-odoo --perfil inventario
    |-- D-OPS-2 duplicacao em pipeline ativo (cod+company em F5a..F5e) -> auditando-cadastro-fiscal-odoo --ciclo X
    |-- Auto-fix G035 (limpar barcode invalido) -> auditando-cadastro-fiscal-odoo --auto-corrigir-barcode --confirmar
+
+9. CADASTRO de CLIENTE/parceiro (res.partner) READ ao vivo — dado que NAO esta no DB local (customer_rank, active, criacao, contato)?
+   |-- Buscar/contar clientes por CNPJ/nome/cidade/ativo -> consultando-cliente-odoo (modo clientes)
+   |-- Cadastro completo de 1 cliente + ultimas vendas -> consultando-cliente-odoo --modo detalhes
+   |-- Ranking/agrupamento de pedidos por VENDEDOR (sale.order) -> consultando-cliente-odoo --modo por-vendedor
+   |-- (cnpj_cliente/nome_cliente que JA estao em carteira/faturamento -> consultando-sql; rastrear NF/PO/SO do cliente -> rastreando-odoo)
 ```
 
 ---
@@ -197,7 +204,7 @@ Se a resposta esta no reference -> NAO usar skill.
 
 ---
 
-## Skills — Inventario Completo (58 invocaveis em `.claude/skills/`)
+## Skills — Inventario Completo (59 invocaveis em `.claude/skills/`)
 
 Cada skill tem `SKILL.md` em `.claude/skills/<nome>/`. `consultando-sql` e invocavel mas expoe data folder (schemas/queries) descoberto via filesystem.
 `SKILL_IMPROVEMENT_ROADMAP.md` na raiz de `.claude/skills/` e DOC, nao skill (nao conta no inventario).
@@ -207,7 +214,7 @@ Cada skill tem `SKILL.md` em `.claude/skills/<nome>/`. `consultando-sql` e invoc
 `mcp__sessions__*` (2 tools), `mcp__render__*` (3 tools: logs, erros, status),
 `mcp__routes__search_routes` (1 tool: busca semantica rotas)
 
-### Skills Odoo (21)
+### Skills Odoo (22)
 `rastreando-odoo`, `executando-odoo-financeiro`, `descobrindo-odoo-estrutura`,
 `validacao-nf-po`, `conciliando-odoo-po`, `recebimento-fisico-odoo`, `razao-geral-odoo`,
 `conciliando-transferencias-internas`, `gerando-baseline-conciliacao`,
@@ -219,6 +226,7 @@ Cada skill tem `SKILL.md` em `.claude/skills/<nome>/`. `consultando-sql` e invoc
 `escriturando-odoo` (WRITE ABRANGENTE v19+ — 7 atomos sobre account.move+DFe/PO/invoice: `buscar_dfe`, `criar_dfe_a_partir_do_invoice_saida` (upload XML autorizado da NF SAIDA), `escriturar_dfe`, `gerar_po_from_dfe` (fire-and-poll robo CIEL IT), `preencher_po`, `confirmar_po`, `criar_invoice_from_po`. Compostos via FLUXOS L3 1.2.1 (caminho A = DFe veio via SEFAZ) e 1.2.2 (caminho B = DFe ausente). Wrapper V1 STRICT `criar_recebimento_orchestrado` LF→FB deprecado v20+ (preservado p/ ETAPA E legacy do orchestrator). Cada atomo dry-run-first + idempotencia por campos Odoo.),
 `planejando-pre-etapa-odoo` (READ Odoo + WRITE banco local — planejar/propor/listar/aprovar pre-etapa D007; hash sha256 anti-replay),
 `consultando-quant-odoo` (READ-only AO VIVO — auditoria pos-WRITE, snapshots de quants),
+`consultando-cliente-odoo` (READ-only AO VIVO — cadastro de clientes res.partner: busca por CNPJ/nome/cidade, contagem, detalhe+ultimas vendas, agrupamento de pedidos por vendedor via sale.order; dado que NAO esta no DB local; origem cluster 966 F2),
 `auditando-cadastro-fiscal-odoo` (PRE-FLIGHT V1 inventario — G017/G018/G035/G014 + D-OPS-2/3; READ-only + WRITE opcional G035 fix),
 `faturando-odoo` (WRITE Skill 8 — faturamento de NF SAIDA inter-company: 5 atomos sobre account.move + orchestrator pipeline A-F + recovery + FLUXO L3 1.2.x; dry-run default, SEFAZ via Playwright IRREVERSIVEL exige confirmar_sefaz=True),
 `auditando-reclassificacao-odoo` (READ-only — auditoria de reclassificacao contabil em lote: 3 modos sobre account.move.line (medir-saldos / validar-lote / monitorar-andamento); origem cluster 4 #164; NAO escreve; **delegada ao subagente auditor-financeiro** — fora do listing do principal por budget PAD-CTX),

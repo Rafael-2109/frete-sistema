@@ -1,12 +1,11 @@
 ---
 name: gerando-artifact
 description: >-
-  Gera bundle.html (React+TS+Tailwind+shadcn/ui) renderizado em modal —
-  EXCLUSIVO do chat web /agente/chat. Usar quando: "monte um
-  dashboard de fretes", "crie visualizacao interativa do estoque", "tela com
-  filtros para P1-P7", "painel interativo multi-componente". Nao usar: Teams
-  (sem render) -> responder texto+link; tabela simples -> markdown; exportar
-  Excel -> exportando-arquivos.
+  Gera bundle.html (React+TS+Tailwind+shadcn/ui) em modal — EXCLUSIVO do chat web
+  /agente/chat. Usar: "monte um dashboard de fretes", "visualizacao interativa do
+  estoque", "tela com filtros para P1-P7", "painel interativo multi-componente".
+  Nao usar: Teams (sem render) -> texto+link; tabela simples -> markdown;
+  exportar Excel -> exportando-arquivos.
 allowed-tools: Bash, Read, Write, Edit
 ---
 
