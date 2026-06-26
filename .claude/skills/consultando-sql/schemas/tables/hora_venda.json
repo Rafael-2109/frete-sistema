@@ -31,6 +31,10 @@
       "type": "varchar(120)"
     },
     {
+      "name": "inscricao_estadual",
+      "type": "varchar(20)"
+    },
+    {
       "name": "consumidor_final",
       "type": "boolean"
     },

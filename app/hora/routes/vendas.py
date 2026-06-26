@@ -518,7 +518,7 @@ def vendas_salvar_pedido(venda_id: int):
 
     header = {k: request.form.get(k) for k in (
         'vendedor', 'forma_pagamento', 'telefone_cliente', 'email_cliente',
-        'observacoes', 'nome_cliente', 'cpf_cliente', 'cep',
+        'observacoes', 'nome_cliente', 'cpf_cliente', 'inscricao_estadual', 'cep',
         'endereco_logradouro', 'endereco_numero', 'endereco_complemento',
         'endereco_bairro', 'endereco_cidade', 'endereco_uf',
         'modalidade_frete', 'numero_parcelas', 'intervalo_parcelas_dias',

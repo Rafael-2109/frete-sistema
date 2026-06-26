@@ -98,9 +98,9 @@ FATURADO   → CONFIRMADO  (webhook nfe_cancelada — NFe cancelada SEFAZ)
 DANFE legado → FATURADO direto (importar_nf_saida_pdf)
 ```
 
-**Reserva de chassi**: COTACAO, CONFIRMADO e FATURADO reservam o chassi (sai do estoque disponível). CANCELADO devolve via evento `DEVOLVIDA`. Implementação via eventos em `hora_moto_evento` (RESERVADA / VENDIDA / NF_EMITIDA / DEVOLVIDA), não via flag.
+**Reserva de chassi**: INCOMPLETO, COTACAO, CONFIRMADO e FATURADO reservam o chassi (sai do estoque disponível). CANCELADO devolve via evento `DEVOLVIDA`. Implementação via eventos em `hora_moto_evento` (RESERVADA / VENDIDA / NF_EMITIDA / DEVOLVIDA), não via flag.
 
-**Lock pessimista**: `criar_venda_manual`, `adicionar_item_pedido` e troca de chassi em `editar_item_pedido` fazem `SELECT FOR UPDATE` em `hora_moto` para impedir reserva concorrente.
+**Lock pessimista**: `criar_venda_manual`, `salvar_pedido_completo`/`_aplicar_itens` (edição de itens em INCOMPLETO/COTACAO, desde 2026-06-25 — ver `app/hora/CLAUDE.md` §23) e as funções granulares deprecadas (`adicionar_item_pedido`, troca de chassi em `editar_item_pedido`) fazem `SELECT FOR UPDATE` em `hora_moto` para impedir reserva concorrente.
 
 **Auditoria obrigatória**: toda transição (CRIOU, CONFIRMOU, EMITIU_NFE, FATURADO, CANCELOU_NFE, NFE_CANCELADA_SEFAZ, EMITIU_CCE, CANCELOU) registra entrada em `hora_venda_auditoria` (append-only).
 

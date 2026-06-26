@@ -175,6 +175,80 @@
     });
   }
 
+  // ----------------- Consulta CNPJ (ReceitaWS) -----------------------------
+  // Botao ao lado do CPF/CNPJ: consulta a ReceitaWS e PRE-PREENCHE apenas os
+  // campos VAZIOS (decisao 2026-06-25) — nao sobrescreve o que o operador ja
+  // digitou. A ReceitaWS (base federal) NAO retorna Inscricao Estadual; o campo
+  // f-ie continua manual.
+  const btnCnpj = document.getElementById('btn-consultar-cnpj');
+  const elCnpjStatus = document.getElementById('cnpj-status');
+  const elNome = document.getElementById('f-nome');
+  const elNumero = document.getElementById('f-numero');
+  // telefone/email nao tem id fixo (name difere criacao vs edicao) -> by name.
+  const elTelefone = document.querySelector('[name="telefone_cliente"], [name="telefone"]');
+  const elEmail = document.querySelector('[name="email_cliente"], [name="email"]');
+
+  function preencherSeVazio(el, valor) {
+    if (el && valor && !(el.value || '').trim()) el.value = valor;
+  }
+
+  async function consultarCnpj() {
+    if (!elDoc) return;
+    const cnpj = (elDoc.value || '').replace(/\D/g, '');
+    if (cnpj.length !== 14) {
+      if (elCnpjStatus) {
+        elCnpjStatus.textContent = 'Informe um CNPJ (14 dígitos) para consultar.';
+        elCnpjStatus.className = 'd-block text-danger';
+      }
+      return;
+    }
+    if (elCnpjStatus) {
+      elCnpjStatus.textContent = 'Consultando ReceitaWS…';
+      elCnpjStatus.className = 'd-block text-muted';
+    }
+    if (btnCnpj) btnCnpj.disabled = true;
+    try {
+      const r = await fetch(
+        `{{ url_for('hora.tagplus_pedido_venda_api_consultar_cnpj') }}?cnpj=${cnpj}`
+      );
+      const data = await r.json();
+      if (!data.ok) {
+        if (elCnpjStatus) {
+          elCnpjStatus.textContent = data.mensagem || 'Falha na consulta.';
+          elCnpjStatus.className = 'd-block text-danger';
+        }
+        return;
+      }
+      const d = data.dados || {};
+      // So preenche o que esta VAZIO (nao sobrescreve ajuste manual).
+      preencherSeVazio(elNome, d.razao_social);
+      preencherSeVazio(elLogradouro, d.logradouro);
+      preencherSeVazio(elNumero, d.numero);
+      preencherSeVazio(elComplemento, d.complemento);
+      preencherSeVazio(elBairro, d.bairro);
+      preencherSeVazio(elCidade, d.cidade);
+      preencherSeVazio(elUf, d.uf);
+      preencherSeVazio(elCep, d.cep);
+      preencherSeVazio(elTelefone, d.telefone);
+      preencherSeVazio(elEmail, d.email);
+      if (elCnpjStatus) {
+        elCnpjStatus.innerHTML =
+          'Dados preenchidos (campos vazios). <strong>Inscrição Estadual não vem da ReceitaWS — preencha manualmente.</strong>';
+        elCnpjStatus.className = 'd-block text-success';
+      }
+      if (typeof detectarTipoDocumento === 'function') detectarTipoDocumento();
+    } catch (e) {
+      if (elCnpjStatus) {
+        elCnpjStatus.textContent = 'Falha ao consultar: ' + e.message;
+        elCnpjStatus.className = 'd-block text-danger';
+      }
+    } finally {
+      if (btnCnpj) btnCnpj.disabled = false;
+    }
+  }
+
+  if (btnCnpj) btnCnpj.addEventListener('click', consultarCnpj);
+
   // ----------------- Cascata Modelo -> Cor -> Chassi -----------------------
   async function carregarCores() {
     if (!elModelo || !elCor || !elChassi) return;
@@ -267,12 +341,18 @@
   // pega ela; senao a primeira a vista. Espelha _classificar_formas_para_preco
   // do backend (regra: qualquer A_PRAZO -> preco a prazo).
   function formaRepresentativaParaPreco() {
-    if (!elPagContainer) return '';
-    const linhas = elPagContainer.querySelectorAll('.pag-linha');
+    // Varre as formas de pagamento da CRIACAO (.pag-linha .pag-forma) E da
+    // EDICAO (#pag-edit-container select[name=pagamento_forma]). Regra: qualquer
+    // A_PRAZO vence (espelha _classificar_formas_para_preco do backend). Le
+    // opt.dataset.tipo (= data-tipo = forma.tipo_pagamento); forma sem
+    // classificacao (NULL) nao entra como representativa.
+    const selects = document.querySelectorAll(
+      '#pagamentos-container .pag-forma, '
+      + '#pag-edit-container select[name="pagamento_forma"]'
+    );
     let primeiraAVista = '';
-    for (const linha of linhas) {
-      const sel = linha.querySelector('.pag-forma');
-      if (!sel || !sel.value) continue;
+    for (const sel of selects) {
+      if (!sel.value) continue;
       const opt = sel.options[sel.selectedIndex];
       const tipo = opt ? opt.dataset.tipo : '';
       if (tipo === 'A_PRAZO') return sel.value;
@@ -331,7 +411,8 @@
       const exigeAut = opt && opt.dataset.aut === '1';
       if (autWrap) autWrap.style.display = exigeAut ? '' : 'none';
       if (autInput) autInput.required = !!exigeAut;
-      atualizarPrecoTabela();
+      atualizarPrecoTabela();       // caminho legado (ids f-*) — no-op no multi-item
+      reprecificarLinhasMoto();     // multi-item: re-resolve preco das linhas-moto
     });
     if (valor) {
       valor.addEventListener('input', atualizarSomaPagamentos);
@@ -344,6 +425,7 @@
       linha.remove();
       atualizarSomaPagamentos();
       atualizarPrecoTabela();
+      reprecificarLinhasMoto();
     });
     atualizarSomaPagamentos();
   }
@@ -795,6 +877,15 @@
     cont.addEventListener('input', function(e) {
       if (e.target && e.target.name === 'pagamento_valor') recalcPagEdit();
     });
+    // Trocar a forma (A_VISTA<->A_PRAZO) re-resolve o preco de tabela das
+    // linhas-moto NOVAS (add-moto na edicao); itens existentes mantem o preco
+    // gravado. Espelha o comportamento da criacao (sem desconto-fantasma).
+    cont.addEventListener('change', function(e) {
+      if (e.target && e.target.name === 'pagamento_forma'
+          && typeof reprecificarLinhasMoto === 'function') {
+        reprecificarLinhasMoto();
+      }
+    });
     // Recalcula ao adicionar/remover linha (botoes usam onclick inline).
     new MutationObserver(recalcPagEdit).observe(cont, { childList: true });
     recalcPagEdit();
@@ -889,11 +980,23 @@
       if (syncCtl) { syncCtl.setPreco(preco); syncCtl.recalc('rs'); }
       atualizarSomaPagamentos();
       if (elInfo) {
-        const tipoLabel = data.tipo_pagamento === 'A_VISTA' ? 'à vista'
-          : (data.tipo_pagamento === 'A_PRAZO' ? 'a prazo' : 'forma sem classificação — usando preço à vista');
+        let tipoLabel, cls = 'text-muted js-preco-info';
+        if (data.tipo_pagamento === 'A_VISTA') {
+          tipoLabel = 'à vista';
+        } else if (data.tipo_pagamento === 'A_PRAZO') {
+          // F3: mostra o preco a vista como REFERENCIA — sem isso o operador
+          // digitava o valor a-vista com forma a-prazo e a diferenca virava
+          // "desconto" silencioso (desconto-fantasma).
+          tipoLabel = 'a prazo';
+          if (data.preco_a_vista != null) {
+            tipoLabel += ` — à vista seria R$ ${fmtBR(data.preco_a_vista)}`;
+          }
+        } else {
+          tipoLabel = 'forma sem classificação — usando preço à vista';
+        }
         const fonteLabel = data.fonte === 'TABELA_LEGADA' ? ' (de tabela legada com vigência)' : '';
         elInfo.textContent = `Preço de tabela ${tipoLabel}${fonteLabel}.`;
-        elInfo.className = 'text-muted js-preco-info';
+        elInfo.className = cls;
       }
     } catch (e) {
       row.dataset.precoTabela = '';
@@ -901,6 +1004,20 @@
       if (syncCtl) syncCtl.setPreco(null);
       if (elInfo) { elInfo.textContent = 'Falha ao buscar preço: ' + e.message; elInfo.className = 'text-danger js-preco-info'; }
     }
+  }
+
+  // Re-resolve o preco de tabela de TODAS as linhas-moto (a forma A_VISTA/
+  // A_PRAZO e compartilhada no pedido). Disparada quando a forma de pagamento
+  // muda — sem isso, a tela ficava no preco resolvido na escolha do modelo
+  // (sem forma => a vista) e ao salvar o backend resolvia a prazo, gerando o
+  // "desconto-fantasma". Item existente (sem .js-modelo) e ignorado por
+  // atualizarPrecoTabelaLinha (mantem o preco gravado).
+  function reprecificarLinhasMoto() {
+    const cont = document.getElementById('motos-container');
+    if (!cont) return;
+    cont.querySelectorAll('[data-row]').forEach(function(row) {
+      atualizarPrecoTabelaLinha(row, row.__horaSyncCtl || null);
+    });
   }
 
   // Liga uma linha-moto: cascata de filtro do chassi (modelo/cor) + sincronia
@@ -915,6 +1032,9 @@
     // Sincronia desconto %/R$/valor por-escopo (preco da linha).
     const precoInicial = parseBR(row.dataset.precoTabela);
     const syncCtl = wireDescontoSync(row, isNaN(precoInicial) ? null : precoInicial);
+    // Expoe o controlador de sincronia da linha p/ reprecificacao externa
+    // (reprecificarLinhasMoto, disparada quando a forma de pagamento muda).
+    row.__horaSyncCtl = syncCtl;
 
     // Notifica o painel de pagamentos quando o valor final/desconto da linha
     // muda — wireDescontoSync recalcula .js-valor mas nao avisa o painel

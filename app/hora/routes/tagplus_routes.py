@@ -1224,6 +1224,7 @@ def tagplus_pedido_venda_criar():
             # Service normaliza para apenas digitos antes de gravar.
             cpf_cliente=_g('cpf', 18),
             nome_cliente=_g('nome', 200),
+            inscricao_estadual=_g('inscricao_estadual', 20) or None,
             cep=_g('cep', 9),
             endereco_logradouro=_g('logradouro', 255),
             endereco_numero=_g('numero_endereco', 20),
@@ -1362,6 +1363,38 @@ def tagplus_pedido_venda_api_preco_modelo():
         'preco_a_vista': _f(info['preco_a_vista']),
         'preco_a_prazo': _f(info['preco_a_prazo']),
     })
+
+
+@hora_bp.route('/tagplus/pedido-venda/api/consultar-cnpj')
+@require_hora_perm_any(('vendas', 'criar'), ('vendas', 'editar'))
+def tagplus_pedido_venda_api_consultar_cnpj():
+    """JSON: consulta ReceitaWS e devolve dados do CNPJ p/ pre-preencher o pedido.
+
+    Query string: cnpj (com ou sem mascara).
+
+    ATENCAO: a ReceitaWS e base FEDERAL — NAO retorna Inscricao Estadual (que e
+    estadual/SEFAZ). A IE continua sendo preenchida manualmente. Esta consulta
+    devolve razao social, endereco completo, telefone e email.
+
+    Retorna {ok, dados} ou {ok: False, mensagem}.
+    """
+    from app.hora.services.receitaws_service import consultar_cnpj, ReceitaWSError
+
+    cnpj = (request.args.get('cnpj') or '').strip()
+    if not cnpj:
+        return jsonify({'ok': False, 'mensagem': 'Informe um CNPJ.'}), 400
+    try:
+        dados = consultar_cnpj(cnpj)
+        # Serializa data_abertura (date) para JSON.
+        if dados.get('data_abertura'):
+            dados['data_abertura'] = dados['data_abertura'].isoformat()
+        return jsonify({'ok': True, 'dados': dados})
+    except ReceitaWSError as exc:
+        return jsonify({'ok': False, 'mensagem': str(exc)}), 502
+    except Exception:  # pragma: no cover
+        # Nao ecoa str(exc) ao cliente (info disclosure) — detalhe so no log.
+        logging.getLogger(__name__).exception('Erro inesperado em pedido-venda consultar-cnpj')
+        return jsonify({'ok': False, 'mensagem': 'Erro inesperado ao consultar CNPJ. Tente novamente.'}), 500
 
 
 # ============================================================

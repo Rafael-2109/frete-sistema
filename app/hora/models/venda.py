@@ -94,6 +94,10 @@ class HoraVenda(db.Model):
     nome_cliente = db.Column(db.String(200), nullable=False)
     telefone_cliente = db.Column(db.String(20), nullable=True)
     email_cliente = db.Column(db.String(120), nullable=True)
+    # Inscricao Estadual do destinatario PJ (migration hora_52, 2026-06-25).
+    # Registro/exibicao apenas — NAO entra no payload da NFe (decisao do dono).
+    # Preenchimento manual: a ReceitaWS (base federal) nao retorna IE (estadual).
+    inscricao_estadual = db.Column(db.String(20), nullable=True)
 
     # Indica se o destinatario eh consumidor final (B2C) ou nao (B2B / revenda).
     # Migration hora_36 (2026-05-07).

@@ -668,6 +668,7 @@ def _normalizar_origem_lead(origem_lead, origem_lead_obs):
 def criar_venda_manual(
     cpf_cliente: str,
     nome_cliente: str,
+    inscricao_estadual: Optional[str] = None,
     cep: Optional[str] = None,
     endereco_logradouro: Optional[str] = None,
     endereco_numero: Optional[str] = None,
@@ -874,6 +875,7 @@ def criar_venda_manual(
         loja_id=loja_id,
         cpf_cliente=cpf_norm,
         nome_cliente=nome_norm[:200],
+        inscricao_estadual=(inscricao_estadual or '').strip()[:20] or None,
         telefone_cliente=(telefone_cliente or '').strip()[:20] or None,
         email_cliente=(email_cliente or '').strip()[:120] or None,
         data_venda=data_venda,
@@ -1213,7 +1215,7 @@ def voltar_para_cotacao(venda_id: int, usuario: Optional[str] = None) -> HoraVen
 # antes de promover via editar_pagamentos.
 _CAMPOS_COTACAO_FULL = {
     'vendedor', 'forma_pagamento', 'telefone_cliente', 'email_cliente',
-    'observacoes', 'nome_cliente', 'cpf_cliente',
+    'observacoes', 'nome_cliente', 'cpf_cliente', 'inscricao_estadual',
     'cep', 'endereco_logradouro', 'endereco_numero', 'endereco_complemento',
     'endereco_bairro', 'endereco_cidade', 'endereco_uf',
     'modalidade_frete', 'numero_parcelas', 'intervalo_parcelas_dias',
@@ -1268,6 +1270,7 @@ def editar_venda(
     observacoes: Optional[str] = None,
     nome_cliente: Optional[str] = None,
     cpf_cliente: Optional[str] = None,
+    inscricao_estadual: Optional[str] = None,
     cep: Optional[str] = None,
     endereco_logradouro: Optional[str] = None,
     endereco_numero: Optional[str] = None,
@@ -1303,6 +1306,7 @@ def editar_venda(
         'observacoes': observacoes,
         'nome_cliente': nome_cliente,
         'cpf_cliente': cpf_cliente,
+        'inscricao_estadual': inscricao_estadual,
         'cep': cep,
         'endereco_logradouro': endereco_logradouro,
         'endereco_numero': endereco_numero,
@@ -1368,6 +1372,7 @@ def _aplicar_header(
     tipo_frete_calc = dados.get('tipo_frete_calc')
     origem_lead = dados.get('origem_lead')
     origem_lead_obs = dados.get('origem_lead_obs')
+    inscricao_estadual = dados.get('inscricao_estadual')
 
     def _atualizar(campo: str, novo_valor):
         antes = getattr(venda, campo)
@@ -1406,6 +1411,10 @@ def _aplicar_header(
                 f'(esperado CPF com 11 digitos ou CNPJ com 14 digitos)'
             )
         _atualizar('cpf_cliente', cpf_norm or venda.cpf_cliente)
+    if inscricao_estadual is not None:
+        # Registro/exibicao (nao vai para a NFe). Texto livre curto: numero da
+        # IE ou "ISENTO". Vazio limpa o campo.
+        _atualizar('inscricao_estadual', inscricao_estadual.strip()[:20] or None)
     if cep is not None:
         cep_norm = ''.join(c for c in cep if c.isdigit()) or None
         if cep_norm and len(cep_norm) != 8:
@@ -1498,6 +1507,7 @@ def _aplicar_itens(
     venda: HoraVenda,
     itens: List[dict],
     usuario: Optional[str] = None,
+    forma_para_preco: Optional[str] = None,
 ) -> HoraVenda:
     """Helper FLUSH-ONLY: reconcilia (diff) os itens-moto de uma venda (sem commit).
 
@@ -1520,7 +1530,17 @@ def _aplicar_itens(
 
     NAO faz commit, NAO seta venda.status nem recalcula valor_total — isso fica
     a cargo do caller (orquestrador salvar_pedido_completo).
+
+    `forma_para_preco`: forma representativa A_VISTA/A_PRAZO usada para resolver o
+    preco de tabela dos itens. Quando None, usa o cache `venda.forma_pagamento`
+    (compat). O caller passa a forma representativa dos pagamentos SUBMETIDOS
+    (nao a forma_pagamento antiga do header) para evitar o "desconto-fantasma":
+    item precificado com a forma antiga enquanto o operador trocou para outra
+    (ex.: cache 'MISTO' resolvia A_VISTA, mas o pagamento e A_PRAZO).
     """
+    forma_preco = (
+        forma_para_preco if forma_para_preco is not None else venda.forma_pagamento
+    )
     existentes = {it.id: it for it in venda.itens}
     ids_submetidos = {i['item_id'] for i in itens if i.get('item_id')}
 
@@ -1577,7 +1597,7 @@ def _aplicar_itens(
                 if moto:
                     preco_ref, desconto, desconto_pct, tabela_id, _ = _resolver_preco_tabela(
                         moto.modelo_id, venda.data_venda, valor_alvo,
-                        forma_pagamento_hora=venda.forma_pagamento,
+                        forma_pagamento_hora=forma_preco,
                     )
                     item.tabela_preco_id = tabela_id
                     item.preco_tabela_referencia = preco_ref
@@ -1604,7 +1624,7 @@ def _aplicar_itens(
                 )
             preco_ref, desconto, desconto_pct, tabela_id, _ = _resolver_preco_tabela(
                 moto.modelo_id, venda.data_venda, valor_final_dec,
-                forma_pagamento_hora=venda.forma_pagamento,
+                forma_pagamento_hora=forma_preco,
             )
             item = HoraVendaItem(
                 venda_id=venda.id,
@@ -1647,13 +1667,15 @@ def salvar_pedido_completo(
 
     Compoe os helpers flush-only `_aplicar_header`, `_aplicar_itens` e
     `_aplicar_pagamentos` e faz o UNICO commit ao final. Itens e pagamentos so
-    sao reconciliados em COTACAO/INCOMPLETO; em CONFIRMADO+ apenas o header e
+    sao reconciliados em INCOMPLETO/COTACAO; em CONFIRMADO+ apenas o header e
     aplicado (matriz `_CAMPOS_EDITAVEIS_HEADER`) e o status fica intacto (nao
     derruba CONFIRMADO/FATURADO).
 
     - Header: sempre aplicado (validado pela matriz por status).
-    - Itens: reconciliados (diff) apenas se o pedido estava em COTACAO.
-    - Pagamentos + valor_total + status: recalculados apenas em INCOMPLETO/COTACAO.
+    - Itens: reconciliados (diff) em INCOMPLETO ou COTACAO (decisao 2026-06-25:
+      o operador pode trocar/remover/adicionar moto enquanto o pedido nao foi
+      confirmado — antes era so COTACAO, o que travava pedidos INCOMPLETOS).
+    - Pagamentos + valor_total + status: recalculados em INCOMPLETO/COTACAO.
     """
     venda = HoraVenda.query.get(venda_id)
     if venda is None:
@@ -1662,14 +1684,27 @@ def salvar_pedido_completo(
     _aplicar_header(venda, header or {}, usuario)
     status_inicial = venda.status
 
-    if status_inicial == VENDA_STATUS_COTACAO:
-        _aplicar_itens(venda, itens or [], usuario)
+    if status_inicial in (VENDA_STATUS_INCOMPLETO, VENDA_STATUS_COTACAO):
+        # Forma representativa dos pagamentos SUBMETIDOS (qualquer A_PRAZO -> a
+        # prazo) para precificar os itens de forma coerente com a tela, em vez
+        # da forma_pagamento antiga do cache (evita desconto-fantasma). Considera
+        # as formas SELECIONADAS independentemente do valor ja digitado — uma
+        # forma a prazo com valor ainda em branco precifica a prazo (o JS faz o
+        # mesmo: le o tipo do <select>, nao o valor); _normalizar_pagamentos
+        # descartaria a linha de valor<=0 e cairia no fallback A_VISTA.
+        forma_para_preco = _classificar_formas_para_preco([
+            {'forma_pagamento_hora': (p.get('forma_pagamento_hora') or '').strip().upper()}
+            for p in (pagamentos or [])
+            if (p.get('forma_pagamento_hora') or '').strip()
+        ])
+        _aplicar_itens(
+            venda, itens or [], usuario, forma_para_preco=forma_para_preco,
+        )
         # _aplicar_itens fez delete()/add() via db.session (NAO mutou a colecao
         # venda.itens em memoria) + flush. Expira a colecao para o sum() abaixo
         # refletir o estado real do banco (sem o item removido, com o novo).
         db.session.expire(venda, ['itens'])
 
-    if status_inicial in (VENDA_STATUS_INCOMPLETO, VENDA_STATUS_COTACAO):
         # valor_total recalculado a partir dos itens ANTES de aplicar os
         # pagamentos — _aplicar_pagamentos avalia o status contra venda.valor_total,
         # entao o total precisa estar correto primeiro.

@@ -409,7 +409,7 @@ Segue o plano aprovado em 2026-04-18:
    - `CANCELADO`: nada (raise `TransicaoInvalidaError`).
    - Defesa adicional: NFe em estado em-voo (`EM_ENVIO`/`ENVIADA_SEFAZ`/`CANCELAMENTO_SOLICITADO`) bloqueia tudo exceto observações.
 
-   **Edição de itens** (só em COTACAO):
+   **Edição de itens** (funções granulares DEPRECADAS — só em COTACAO; o caminho vigente `salvar_pedido_completo` edita itens também em INCOMPLETO desde 2026-06-25, ver §23):
    - `adicionar_item_pedido` (novo chassi → evento `RESERVADA`).
    - `remover_item_pedido` (chassi antigo → evento `DEVOLVIDA`; impede remover último item).
    - `editar_item_pedido` (troca de chassi e/ou novo valor; troca emite `DEVOLVIDA`+`RESERVADA`).
@@ -430,7 +430,7 @@ Segue o plano aprovado em 2026-04-18:
    - `estoque_lista.html` + `estoque_chassi_detalhe.html`: badge "Reservado em Pedido #X (status)".
 
    **Permissões `vendas/editar` vs `vendas/aprovar`** (atualizado 2026-05-13):
-   - `vendas/editar`: vendedor padrao — cria pedido, edita itens em COTACAO, confirma (`vendas_confirmar`).
+   - `vendas/editar`: vendedor padrao — cria pedido, edita itens em INCOMPLETO/COTACAO (via `salvar_pedido_completo`, §23), confirma (`vendas_confirmar`).
    - `vendas/aprovar`: gerente — reabre pedido CONFIRMADO via `vendas_voltar_cotacao` (vendedor comum nao pode).
    - Whitelist `MODULOS_COM_APROVAR` em `app/hora/models/permissao.py` controla quais modulos exibem o checkbox "Aprovar" no gerenciador `/hora/permissoes`. Atualmente: `{'usuarios', 'modelos', 'vendas'}`. Adicionar slug ao adicionar `require_hora_perm(<X>, 'aprovar')` em rota nova.
 
@@ -769,7 +769,7 @@ Resolve os follow-ups v2 da §20. Spec: `docs/superpowers/specs/2026-06-04-hora-
 - **FU-1 — autocomplete lista ao clicar**: `autocomplete_service.chassis(permitir_vazio=)` + rota `/autocomplete/chassi` lê `vazio_ok=1`; `app/static/js/hora/autocomplete.js` ganhou `data-hora-open-on-focus` (focar/clicar com campo vazio lista o top-N). Opt-in (não afeta as ~20 telas). O chassi do componente de moto usa a flag.
 - **FU-3 — N motos na criação**: `criar_venda_manual(itens=[{numero_chassi, valor_final}, ...])` (retrocompatível: sem `itens`, usa `numero_chassi`/`valor_final` singulares). A rota `tagplus_pedido_venda_criar` lê `chassi[]`/`valor[]` via `_parse_itens_form`. Loop cria N `HoraVendaItem` + `RESERVADA` por item, `valor_total` = soma, status avaliado depois; 1 commit.
 - **FU-2 — área de motos idêntica nas 2 telas**: componente de **lista repetível** `_lista_motos.html` + `_linha_moto.html` (substituem `_componente_moto_desconto.html`, removido). Linha = só classes `.js-*` (sem ids `f-*` globais → sem colisão entre N linhas); item existente (edição) = chassi/modelo/cor read-only + hidden `item_id`, só valor/desconto editam; linha nova = cascata completa; `somente_leitura`/`ro_oper` trava tudo. JS por-linha (`wireLinhaMoto`, cascata + `wireDescontoSync` por escopo + add/remove); `atualizarSomaPagamentos` soma os `.js-valor` das linhas (não mais o `f-valor` global).
-- **FU-5 — um único "Salvar Pedido"**: novo `salvar_pedido_completo(venda_id, header, itens, pagamentos, usuario)` **reconcilia** numa transação compondo helpers **flush-only** `_aplicar_header` / `_aplicar_itens` (diff add/remove/update; `DEVOLVIDA`/`RESERVADA` + lock; guard "não remove o último") / `_aplicar_pagamentos`, com **1 commit**. Itens só em COTAÇÃO; pagamentos+`valor_total`+status só em INCOMPLETO/COTAÇÃO (não derruba CONFIRMADO+). **Corrige o gap itens↔pagamentos** (status reavaliado numa passada). Gotcha: `db.session.expire(venda, ['itens'])` após `_aplicar_itens` — a coleção em memória não reflete `delete()`/`add()` via session, sem isso o `sum()` somava estale. Rota `POST /vendas/<id>/salvar` (`vendas_salvar_pedido`); a tela de edição vira **um** form `#form-pedido-venda` → `vendas_salvar_pedido` (mesmo id da criação — branches exclusivas).
+- **FU-5 — um único "Salvar Pedido"**: novo `salvar_pedido_completo(venda_id, header, itens, pagamentos, usuario)` **reconcilia** numa transação compondo helpers **flush-only** `_aplicar_header` / `_aplicar_itens` (diff add/remove/update; `DEVOLVIDA`/`RESERVADA` + lock; guard "não remove o último") / `_aplicar_pagamentos`, com **1 commit**. Itens só em COTAÇÃO; pagamentos+`valor_total`+status só em INCOMPLETO/COTAÇÃO (não derruba CONFIRMADO+). **Corrige o gap itens↔pagamentos** (status reavaliado numa passada). Gotcha: `db.session.expire(venda, ['itens'])` após `_aplicar_itens` — a coleção em memória não reflete `delete()`/`add()` via session, sem isso o `sum()` somava estale. Rota `POST /vendas/<id>/salvar` (`vendas_salvar_pedido`); a tela de edição vira **um** form `#form-pedido-venda` → `vendas_salvar_pedido` (mesmo id da criação — branches exclusivas). **Atualizado 2026-06-25 (§23):** itens são reconciliados em **INCOMPLETO ou COTAÇÃO** (antes só COTAÇÃO).
 - **Rotas granulares deprecadas** (decisão do dono): `vendas_editar`, `vendas_pagamentos_editar`, `vendas_item_adicionar/remover/editar` permanecem registradas (sem link na UI) — só os forms saíram do template; cleanup futuro. As funções de service `editar_venda`/`editar_pagamentos`/`adicionar_item_pedido`/etc. seguem (wrappers `helper + commit`; usadas por testes).
 - **Peças**: ficam inline (fora do v1; `venda_adicionar_item_peca`/`remover` AJAX).
 
@@ -865,6 +865,82 @@ Réplica do fluxo N8N: notifica um **grupo único de vendas** no WhatsApp **e a 
 **Env**: `HORA_TAGPLUS_NOTIFY_GROUP_JID` (JID `...@g.us`, obrigatório) + `HORA_TAGPLUS_NOTIFY_ENABLED` (kill switch) + reuso `OPENCLAW_GATEWAY_*`. Vendedor sem cadastro/autorização → fallback só-grupo (status `ENVIADO`, `enviado_vendedor=NULL`).
 
 **Testes**: `tests/hora/test_notificacao_whatsapp_model.py` (2), `test_notificacao_whatsapp_service.py` (4), `test_notificacao_gatilhos.py` (4), `test_notificacao_tela.py` (4), `tests/test_whatsapp_notify_anexo.py` (2). Gotcha: a tabela acumula resíduo de teste local se o teardown abortar — `DELETE FROM hora_tagplus_notificacao_whatsapp` antes de re-rodar.
+
+---
+
+## 23. Pedido de Venda — edição em INCOMPLETO + preço a prazo na tela + AUT — 2026-06-25
+
+Quatro correções no Pedido de Venda (`HoraVenda`), motivadas por um pedido real (1090)
+criado com forma **a prazo** mas precificado como **à vista** na tela. Sem migration.
+
+**F1 — Editar itens enquanto NÃO confirmado (INCOMPLETO além de COTAÇÃO).**
+Antes, trocar/adicionar/remover moto só era possível em COTAÇÃO — um pedido salvo
+como INCOMPLETO (ex.: falta AUT/valor) travava a edição da moto. Mudança em **dois
+gates que andam juntos** (UI sozinha enganaria o usuário):
+- `pedido_venda_novo.html` (bloco `set itens_editaveis`) → `(is_cotacao or is_incompleto) and pode_editar`.
+- `venda_service.salvar_pedido_completo` → reconcilia itens (`_aplicar_itens`) em
+  `INCOMPLETO` ou `COTAÇÃO` (antes só COTAÇÃO; em INCOMPLETO os itens submetidos
+  eram **descartados em silêncio**). Trocar moto de item existente continua sendo
+  **remover + readicionar** (chassi/modelo/cor de item existente são read-only por design).
+
+**F2 — Tela reflete o preço A PRAZO (bug de JS, NÃO de cadastro).**
+A forma `INFINITE_PAY_PARC` está classificada `A_PRAZO` no banco (não era config). Causa:
+na criação multi-item o preço é resolvido **por linha-moto** (`atualizarPrecoTabelaLinha`),
+disparado só ao mudar modelo/chassi; trocar a **forma de pagamento** chamava o
+`atualizarPrecoTabela()` legado (no-op no multi-item) e **não re-precificava as motos**.
+- Nova `reprecificarLinhasMoto()` (`_pedido_venda_scripts.html`) re-resolve o preço de
+  TODAS as linhas-moto quando a forma muda (criação **e** editor de edição); item
+  existente (sem `.js-modelo`) é ignorado (mantém o preço gravado).
+- `formaRepresentativaParaPreco()` passou a varrer `#pagamentos-container .pag-forma`
+  **e** `#pag-edit-container select[name=pagamento_forma]`; os options do editor de
+  edição ganharam `data-tipo`/`data-aut`.
+- **Backend (gotcha de ordem):** `_aplicar_itens` ganhou `forma_para_preco`; `salvar_pedido_completo`
+  passa a forma representativa dos pagamentos **submetidos** (não o cache `venda.forma_pagamento`
+  antigo, que p/ MISTO resolvia A_VISTA). `criar_venda_manual` já fazia certo via `_classificar_formas_para_preco`.
+
+**F3 — Sem desconto-fantasma.** O desconto sempre foi `preco_tabela − valor_final`
+(`_resolver_preco_tabela`); quando a tela mostrava à vista (11.990) e o backend gravava
+a prazo (12.990), a diferença (1.100) virava "desconto" que ninguém digitou. Corrigido na
+raiz por F2; além disso a linha-moto agora mostra o preço à vista como **referência**
+(“a prazo — à vista seria R$ Y”). Salvaguarda de teto **já existia** em
+`aprovacao_desconto_service` (bloqueia confirmação se `desconto_aplicado >
+hora_modelo.desconto_maximo`) — depende do modelo ter `desconto_maximo` preenchido
+(config; JET MAX estava NULL).
+
+**F4 — AUT obrigatório para AVANÇAR (hard no avanço, soft no rascunho).** Já estava
+fechado no backend e foi **blindado por teste**: forma com `exige_aut_id` sem `aut_id`
+força `INCOMPLETO` (`_avaliar_status_pagamento`); `confirmar_venda` bloqueia INCOMPLETO;
+`EmissorNfeHora.enfileirar` só emite CONFIRMADO/FATURADO. Salvar rascunho continua livre.
+
+**Testes:** `tests/hora/test_pedido_venda_correcoes_2026_06_25.py` (6) — F1 troca/adiciona
+em INCOMPLETO, F2 criar/salvar a prazo, F4 confirmar com/sem AUT. Validação: `node --check`
+no JS renderizado + Jinja compila + suíte de venda (32) verde.
+
+---
+
+## 24. Inscrição Estadual + Consulta CNPJ (ReceitaWS) no Pedido de Venda — 2026-06-25
+
+Dois acréscimos na tela de Pedido de Venda (criação **e** edição):
+
+**Campo Inscrição Estadual** (`hora_venda.inscricao_estadual VARCHAR(20)`, migration
+`hora_52`): registro/exibição do destinatário PJ. **NÃO entra no payload da NFe**
+(decisão do dono) — é só cadastro. Editável em INCOMPLETO/COTAÇÃO (junto com nome/CPF, em
+`_CAMPOS_COTACAO_FULL`). Lido por `criar_venda_manual`, `_aplicar_header` e as rotas
+`tagplus_pedido_venda_criar` / `vendas_salvar_pedido` (campo `name="inscricao_estadual"`,
+id `f-ie`).
+
+**Botão "Consultar CNPJ"** ao lado do CPF/CNPJ: rota AJAX
+`/hora/tagplus/pedido-venda/api/consultar-cnpj` (`require_hora_perm_any(('vendas','criar'),
+('vendas','editar'))`), reusa `receitaws_service.consultar_cnpj` (mesma fonte do cadastro
+de loja). O JS `consultarCnpj()` (em `_pedido_venda_scripts.html`, espelha `buscarCep`)
+pré-preenche **apenas os campos vazios** (decisão do dono) — razão social, endereço,
+telefone, email.
+
+**Limitação:** a ReceitaWS é base **federal** e **NÃO retorna Inscrição Estadual**
+(estadual/SEFAZ). A IE permanece manual; o JS avisa isso após a consulta.
+
+**Testes:** `test_ie_grava_na_criacao`, `test_ie_editavel_em_incompleto`
+(`tests/hora/test_pedido_venda_correcoes_2026_06_25.py`). Migration aplicada em local + PROD.
 
 ---
 

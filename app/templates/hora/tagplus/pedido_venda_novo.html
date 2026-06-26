@@ -282,14 +282,30 @@
       <div class="row g-3">
         <div class="col-md-4" id="campo-cliente-cpfcnpj">
           <label class="form-label">CPF / CNPJ <span class="text-danger">*</span></label>
-          <input type="text" name="cpf_cliente" id="f-cpf" class="form-control" required maxlength="18"
-                 value="{{ venda.cpf_cliente or '' }}" {% if ro_cliente %}readonly{% endif %}>
+          <div class="input-group">
+            <input type="text" name="cpf_cliente" id="f-cpf" class="form-control" required maxlength="18"
+                   value="{{ venda.cpf_cliente or '' }}" {% if ro_cliente %}readonly{% endif %}>
+            {% if not ro_cliente %}
+            <button type="button" class="btn btn-outline-secondary" id="btn-consultar-cnpj"
+                    title="Consultar CNPJ na ReceitaWS e preencher os dados">
+              <i class="fas fa-search"></i> CNPJ
+            </button>
+            {% endif %}
+          </div>
           <small class="text-muted" id="doc-tipo-info">Digite 11 dígitos para CPF ou 14 para CNPJ.</small>
+          <small class="d-block" id="cnpj-status"></small>
         </div>
-        <div class="col-md-8" id="campo-cliente-nome">
+        <div class="col-md-5" id="campo-cliente-nome">
           <label class="form-label">Nome / Razão social <span class="text-danger">*</span></label>
           <input type="text" name="nome_cliente" id="f-nome" class="form-control" required maxlength="200"
                  value="{{ venda.nome_cliente or '' }}" {% if ro_cliente %}readonly{% endif %}>
+        </div>
+        <div class="col-md-3" id="campo-cliente-ie">
+          <label class="form-label">Inscrição Estadual</label>
+          <input type="text" name="inscricao_estadual" id="f-ie" class="form-control" maxlength="20"
+                 placeholder="Nº da IE ou ISENTO"
+                 value="{{ venda.inscricao_estadual or '' }}" {% if ro_cliente %}readonly{% endif %}>
+          <small class="text-muted">Não vem da ReceitaWS — manual.</small>
         </div>
         <div class="col-md-4">
           <label class="form-label">Telefone</label>
@@ -439,7 +455,10 @@
   </div>
 
   <!-- ========================== Moto vendida (itens) ========================== -->
-  {% set itens_editaveis = is_cotacao and pode_editar %}
+  {# Itens editaveis enquanto o pedido NAO foi confirmado (INCOMPLETO ou COTACAO).
+     Decisao 2026-06-25: INCOMPLETO (ex.: falta AUT/valor) tambem permite trocar/
+     remover/adicionar moto — backend casa em salvar_pedido_completo. #}
+  {% set itens_editaveis = (is_cotacao or is_incompleto) and pode_editar %}
   <div class="card mb-3">
     <div class="card-header"><strong><i class="fas fa-motorcycle"></i> Moto vendida ({{ venda.itens|length }})</strong></div>
     <div class="card-body">
@@ -484,8 +503,11 @@
             <label class="form-label small mb-1">Forma</label>
             <select name="pagamento_forma" class="form-select form-select-sm" required>
               {% for f in formas_pagamento %}
-                <option value="{{ f.forma_pagamento_hora }}" {% if f.forma_pagamento_hora == p.forma_pagamento_hora %}selected{% endif %}>
-                  {{ f.forma_pagamento_hora }}{% if f.descricao %} · {{ f.descricao }}{% endif %}
+                <option value="{{ f.forma_pagamento_hora }}"
+                        data-tipo="{{ f.tipo_pagamento or '' }}"
+                        data-aut="{{ '1' if f.exige_aut_id else '0' }}"
+                        {% if f.forma_pagamento_hora == p.forma_pagamento_hora %}selected{% endif %}>
+                  {{ f.forma_pagamento_hora }}{% if f.descricao %} · {{ f.descricao }}{% endif %}{% if f.tipo_pagamento == 'A_VISTA' %} (à vista){% elif f.tipo_pagamento == 'A_PRAZO' %} (a prazo){% endif %}
                 </option>
               {% endfor %}
             </select>
@@ -513,7 +535,7 @@
           <div class="col-md-4"><label class="form-label small mb-1">Forma</label>
             <select name="pagamento_forma" class="form-select form-select-sm" required>
               <option value="">— escolha —</option>
-              {% for f in formas_pagamento %}<option value="{{ f.forma_pagamento_hora }}">{{ f.forma_pagamento_hora }}{% if f.descricao %} · {{ f.descricao }}{% endif %}</option>{% endfor %}
+              {% for f in formas_pagamento %}<option value="{{ f.forma_pagamento_hora }}" data-tipo="{{ f.tipo_pagamento or '' }}" data-aut="{{ '1' if f.exige_aut_id else '0' }}">{{ f.forma_pagamento_hora }}{% if f.descricao %} · {{ f.descricao }}{% endif %}{% if f.tipo_pagamento == 'A_VISTA' %} (à vista){% elif f.tipo_pagamento == 'A_PRAZO' %} (a prazo){% endif %}</option>{% endfor %}
             </select></div>
           <div class="col-md-3"><label class="form-label small mb-1">Valor (R$)</label><input type="text" name="pagamento_valor" class="form-control form-control-sm" required></div>
           <div class="col-md-2"><label class="form-label small mb-1">Parcelas</label><input type="number" name="pagamento_parcelas" class="form-control form-control-sm" min="1" max="60" value="1"></div>
@@ -870,13 +892,26 @@
       <div class="row g-3">
         <div class="col-md-4" id="campo-cliente-cpfcnpj">
           <label class="form-label">CPF / CNPJ <span class="text-danger">*</span></label>
-          <input type="text" name="cpf" id="f-cpf" class="form-control" required
-                 maxlength="18" placeholder="CPF ou CNPJ" pattern="[\d\.\-/]{11,18}">
+          <div class="input-group">
+            <input type="text" name="cpf" id="f-cpf" class="form-control" required
+                   maxlength="18" placeholder="CPF ou CNPJ" pattern="[\d\.\-/]{11,18}">
+            <button type="button" class="btn btn-outline-secondary" id="btn-consultar-cnpj"
+                    title="Consultar CNPJ na ReceitaWS e preencher os dados">
+              <i class="fas fa-search"></i> CNPJ
+            </button>
+          </div>
           <small class="text-muted" id="doc-tipo-info">Digite 11 dígitos para CPF ou 14 para CNPJ.</small>
+          <small class="d-block" id="cnpj-status"></small>
         </div>
-        <div class="col-md-8" id="campo-cliente-nome">
+        <div class="col-md-5" id="campo-cliente-nome">
           <label class="form-label">Nome / Razão social <span class="text-danger">*</span></label>
           <input type="text" name="nome" id="f-nome" class="form-control" required maxlength="200">
+        </div>
+        <div class="col-md-3" id="campo-cliente-ie">
+          <label class="form-label">Inscrição Estadual</label>
+          <input type="text" name="inscricao_estadual" id="f-ie" class="form-control" maxlength="20"
+                 placeholder="Nº da IE ou ISENTO">
+          <small class="text-muted">Não vem da ReceitaWS — manual.</small>
         </div>
         <div class="col-md-4">
           <label class="form-label">Telefone</label>
