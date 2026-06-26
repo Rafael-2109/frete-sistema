@@ -1,0 +1,65 @@
+{
+  "name": "carvia_cotacoes_rapidas_publicas",
+  "description": "Cotacao Rapida feita na tela PUBLICA (sem login) — snapshot persistido (lead).",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "solicitante_nome",
+      "type": "varchar(160)",
+      "nullable": false
+    },
+    {
+      "name": "cnpj_cliente",
+      "type": "varchar(20)"
+    },
+    {
+      "name": "uf_destino",
+      "type": "varchar(2)",
+      "nullable": false
+    },
+    {
+      "name": "cidade_destino",
+      "type": "varchar(120)"
+    },
+    {
+      "name": "codigo_ibge",
+      "type": "varchar(7)"
+    },
+    {
+      "name": "itens",
+      "type": "json",
+      "nullable": false
+    },
+    {
+      "name": "opcoes",
+      "type": "json",
+      "nullable": false
+    },
+    {
+      "name": "valor_total_min",
+      "type": "numeric(15,2)"
+    },
+    {
+      "name": "qtd_total_motos",
+      "type": "integer"
+    },
+    {
+      "name": "ip_solicitante",
+      "type": "varchar(45)"
+    },
+    {
+      "name": "user_agent",
+      "type": "varchar(255)"
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação",
+      "nullable": false
+    }
+  ]
+}

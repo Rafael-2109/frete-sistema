@@ -105,7 +105,7 @@
     "vinculacao_carteira_separacao",
     "webhook_configs"
   ],
-  "total_tabelas": 333,
+  "total_tabelas": 334,
   "tabelas": [
     {
       "name": "agendamentos_entrega",
@@ -936,6 +936,16 @@
         "endereco_origem_id",
         "tipo_material",
         "tipo_carga"
+      ],
+      "dominio": "Carvia"
+    },
+    {
+      "name": "carvia_cotacoes_rapidas_publicas",
+      "description": "Cotacao Rapida feita na tela PUBLICA (sem login) — snapshot persistido (lead).",
+      "key_fields": [
+        "cnpj_cliente",
+        "codigo_ibge",
+        "solicitante_nome"
       ],
       "dominio": "Carvia"
     },
