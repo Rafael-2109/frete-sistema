@@ -264,6 +264,71 @@ class CotacaoRapidaService:
             })
         return out
 
+    # ------------------------------------------------------------------ #
+    # Persistencia da tela PUBLICA (sem login)
+    # ------------------------------------------------------------------ #
+    def registrar_cotacao_publica(self, resultado, *, solicitante_nome,
+                                  cnpj_cliente=None, codigo_ibge=None,
+                                  ip=None, user_agent=None):
+        """Grava 1 snapshot da cotacao feita na tela publica. Retorna o registro.
+
+        Chamar so quando `resultado['opcoes']`. NAO faz commit por si — o caller
+        decide (a rota faz commit). Deriva valor_total_min/qtd_total_motos.
+        """
+        from app.carvia.models import CarviaCotacaoRapidaPublica
+
+        opcoes = resultado.get('opcoes') or []
+        itens = resultado.get('itens') or []
+        regiao = resultado.get('regiao') or {}
+
+        valores = [o.get('valor_total') for o in opcoes if o.get('valor_total') is not None]
+        valor_total_min = min(valores) if valores else None
+        qtd_total_motos = sum(int(i.get('quantidade') or 0) for i in itens) or None
+
+        registro = CarviaCotacaoRapidaPublica(
+            solicitante_nome=(solicitante_nome or '').strip()[:160],
+            cnpj_cliente=(cnpj_cliente or None),
+            uf_destino=(regiao.get('uf_destino') or '')[:2],
+            cidade_destino=(regiao.get('cidade_destino') or None),
+            codigo_ibge=(str(codigo_ibge)[:7] if codigo_ibge else None),
+            itens=itens,
+            opcoes=opcoes,
+            valor_total_min=valor_total_min,
+            qtd_total_motos=qtd_total_motos,
+            ip_solicitante=(ip or None),
+            user_agent=((user_agent or '')[:255] or None),
+        )
+        db.session.add(registro)
+        db.session.flush()
+        return registro
+
+    def listar_cotacoes_publicas(self, limit: int = 20) -> List[Dict]:
+        """Ultimas N cotacoes da tela publica (mais recentes primeiro)."""
+        from app.carvia.models import CarviaCotacaoRapidaPublica
+
+        regs = (
+            CarviaCotacaoRapidaPublica.query
+            .order_by(CarviaCotacaoRapidaPublica.criado_em.desc())
+            .limit(limit)
+            .all()
+        )
+        out = []
+        for r in regs:
+            destino = f"{r.cidade_destino}/{r.uf_destino}" if r.cidade_destino else r.uf_destino
+            out.append({
+                'id': r.id,
+                'criado_em': r.criado_em,
+                'solicitante_nome': r.solicitante_nome,
+                'cnpj_cliente': r.cnpj_cliente,
+                'destino': destino,
+                'uf_destino': r.uf_destino,
+                'cidade_destino': r.cidade_destino,
+                'qtd_total_motos': r.qtd_total_motos,
+                'valor_total_min': float(r.valor_total_min) if r.valor_total_min is not None else None,
+                'opcoes': r.opcoes or [],
+            })
+        return out
+
     @staticmethod
     def _cidade_por_ibge(codigo_ibge):
         """Cidade canonica (DB local) pelo codigo IBGE — chave robusta vinda do CEP."""

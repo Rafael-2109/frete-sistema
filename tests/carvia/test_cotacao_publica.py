@@ -19,3 +19,45 @@ def test_modelo_persiste_e_le(db):
     assert lido.solicitante_nome == 'Fulano'
     assert lido.itens[0]['quantidade'] == 2
     assert lido.criado_em is not None
+
+
+def _resultado_fake():
+    return {
+        'ok': True,
+        'opcoes': [
+            {'tabela_nome': 'T1', 'valor_total': 250.0, 'modelos': [], 'lead_time': 3},
+            {'tabela_nome': 'T2', 'valor_total': 180.0, 'modelos': [], 'lead_time': 5},
+        ],
+        'itens': [
+            {'modelo_id': 1, 'modelo_nome': 'POP', 'categoria_nome': 'A', 'quantidade': 2},
+            {'modelo_id': 2, 'modelo_nome': 'JET', 'categoria_nome': 'B', 'quantidade': 1},
+        ],
+        'regiao': {'uf_destino': 'RJ', 'cidade_destino': 'Rio de Janeiro'},
+    }
+
+
+def test_registrar_cotacao_publica_deriva_campos(db):
+    from app.carvia.services.pricing.cotacao_rapida_service import CotacaoRapidaService
+    reg = CotacaoRapidaService().registrar_cotacao_publica(
+        _resultado_fake(), solicitante_nome='  Maria  ', codigo_ibge='3304557',
+        ip='1.2.3.4', user_agent='UA')
+    db.session.commit()
+    assert reg.id is not None
+    assert reg.solicitante_nome == 'Maria'           # strip
+    assert reg.uf_destino == 'RJ'
+    assert reg.codigo_ibge == '3304557'
+    assert float(reg.valor_total_min) == 180.0        # menor das opcoes
+    assert reg.qtd_total_motos == 3                   # 2 + 1
+
+
+def test_listar_cotacoes_publicas_ordem_e_limite(db):
+    from app.carvia.services.pricing.cotacao_rapida_service import CotacaoRapidaService
+    svc = CotacaoRapidaService()
+    for nome in ('A', 'B', 'C'):
+        svc.registrar_cotacao_publica(_resultado_fake(), solicitante_nome=nome)
+    db.session.commit()
+    lista = svc.listar_cotacoes_publicas(limit=2)
+    assert len(lista) == 2
+    assert lista[0]['solicitante_nome'] == 'C'        # mais recente primeiro
+    assert lista[0]['destino'] == 'Rio de Janeiro/RJ'
+    assert lista[0]['valor_total_min'] == 180.0
