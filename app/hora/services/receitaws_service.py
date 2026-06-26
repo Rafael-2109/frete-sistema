@@ -8,15 +8,25 @@ Retorna payload normalizado com chaves correspondentes aos campos de HoraLoja.
 from __future__ import annotations
 
 import logging
+import threading
 from datetime import date, datetime
 from typing import Dict, Optional
 
 import requests
+from cachetools import TTLCache
 
 logger = logging.getLogger(__name__)
 
 RECEITAWS_URL = 'https://receitaws.com.br/v1/cnpj/{cnpj}'
 TIMEOUT_S = 10
+
+# Cache curto por CNPJ — evita queimar a cota gratuita da ReceitaWS (~3 req/min)
+# quando o operador re-consulta o mesmo CNPJ em sequencia (corrige um digito e
+# re-clica). In-memory por processo (1 cache por worker basta para o caso de uso);
+# TTL 5 min. TTLCache nao e thread-safe -> protegido por lock (gunicorn gthread).
+_CACHE_TTL_S = 300
+_cnpj_cache: TTLCache = TTLCache(maxsize=256, ttl=_CACHE_TTL_S)
+_cnpj_cache_lock = threading.Lock()
 
 
 class ReceitaWSError(Exception):
@@ -56,6 +66,11 @@ def consultar_cnpj(cnpj: str) -> Dict:
     if len(digitos) != 14:
         raise ReceitaWSError(f'CNPJ inválido (esperado 14 dígitos): {cnpj!r}')
 
+    with _cnpj_cache_lock:
+        cacheado = _cnpj_cache.get(digitos)
+    if cacheado is not None:
+        return dict(cacheado)  # copia defensiva — o caller nao muta o cache
+
     url = RECEITAWS_URL.format(cnpj=digitos)
     try:
         resp = requests.get(url, timeout=TIMEOUT_S, headers={'User-Agent': 'frete_sistema/hora'})
@@ -90,7 +105,7 @@ def consultar_cnpj(cnpj: str) -> Dict:
     else:
         cep_formatado = data.get('cep') or ''
 
-    return {
+    resultado = {
         'cnpj': digitos,
         'razao_social': (data.get('nome') or '').strip() or None,
         'nome_fantasia': (data.get('fantasia') or '').strip() or None,
@@ -111,3 +126,6 @@ def consultar_cnpj(cnpj: str) -> Dict:
         'telefone': (data.get('telefone') or '').strip() or None,
         'email': (data.get('email') or '').strip() or None,
     }
+    with _cnpj_cache_lock:
+        _cnpj_cache[digitos] = dict(resultado)  # copia defensiva
+    return resultado

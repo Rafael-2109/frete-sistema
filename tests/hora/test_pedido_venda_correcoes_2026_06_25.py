@@ -316,3 +316,37 @@ def test_ie_editavel_em_incompleto(db):
         usuario='t')
     _db.session.refresh(venda)
     assert venda.inscricao_estadual == 'ISENTO'
+
+
+# --------------------------------------------------------------------------
+# Cache curto da consulta CNPJ (ReceitaWS) — follow-up do review 2026-06-25
+# --------------------------------------------------------------------------
+
+def test_consultar_cnpj_usa_cache_curto():
+    """2a consulta do mesmo CNPJ vem do cache — nao re-bate na ReceitaWS."""
+    from unittest.mock import patch, MagicMock
+    from app.hora.services import receitaws_service
+
+    with receitaws_service._cnpj_cache_lock:
+        receitaws_service._cnpj_cache.clear()
+    fake = MagicMock()
+    fake.status_code = 200
+    fake.json.return_value = {
+        'status': 'OK', 'nome': 'EMPRESA TESTE LTDA',
+        'municipio': 'SAO PAULO', 'uf': 'SP',
+    }
+    cnpj = '11.222.333/0001-81'
+    with patch('app.hora.services.receitaws_service.requests.get',
+               return_value=fake) as mock_get:
+        r1 = receitaws_service.consultar_cnpj(cnpj)
+        r2 = receitaws_service.consultar_cnpj(cnpj)  # 2a: cache hit
+    assert mock_get.call_count == 1  # ReceitaWS chamada uma unica vez
+    assert r1['razao_social'] == 'EMPRESA TESTE LTDA'
+    assert r2 == r1
+    # Copia defensiva: mutar o retorno nao corrompe o cache.
+    r2['razao_social'] = 'MUTADO'
+    with receitaws_service._cnpj_cache_lock:
+        assert receitaws_service._cnpj_cache.get('11222333000181')['razao_social'] \
+            == 'EMPRESA TESTE LTDA'
+    with receitaws_service._cnpj_cache_lock:
+        receitaws_service._cnpj_cache.clear()

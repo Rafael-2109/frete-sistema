@@ -934,7 +934,9 @@ id `f-ie`).
 ('vendas','editar'))`), reusa `receitaws_service.consultar_cnpj` (mesma fonte do cadastro
 de loja). O JS `consultarCnpj()` (em `_pedido_venda_scripts.html`, espelha `buscarCep`)
 pré-preenche **apenas os campos vazios** (decisão do dono) — razão social, endereço,
-telefone, email.
+telefone, email. `consultar_cnpj` tem **cache curto** in-memory por CNPJ
+(`cachetools.TTLCache`, TTL 5 min, com lock) para não queimar a cota da ReceitaWS
+(~3 req/min) em re-consultas; o HTTP 500 da rota não vaza a exceção (só loga).
 
 **Limitação:** a ReceitaWS é base **federal** e **NÃO retorna Inscrição Estadual**
 (estadual/SEFAZ). A IE permanece manual; o JS avisa isso após a consulta.
