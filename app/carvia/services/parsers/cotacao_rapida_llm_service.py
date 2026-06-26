@@ -35,25 +35,28 @@ class CotacaoRapidaLlmError(Exception):
     """Erro irrecuperavel da extracao via LLM (mensagem amigavel para a rota)."""
 
 
-def extrair_motos_regiao(file_bytes: bytes, mime_type: str, modelos: List) -> Dict:
+def extrair_motos_regiao(
+    file_bytes: bytes, mime_type: str, modelos: List, filename: str = None
+) -> Dict:
     """Le um PDF/imagem de cotacao e devolve motos + regiao.
 
     Args:
         file_bytes: conteudo binario do arquivo.
-        mime_type: MIME (application/pdf | image/jpeg|png|webp).
+        mime_type: MIME do cliente (pode vir vazio/octet-stream — resolvido por
+            extensao/magic bytes como fallback).
         modelos: lista de `CarviaModeloMoto` ativos (para o prompt + normalizacao).
+        filename: nome do arquivo (fallback de deteccao por extensao).
 
     Levanta:
-        CotacaoRapidaLlmError: SDK/API ausente, MIME nao suportado, ou o LLM
+        CotacaoRapidaLlmError: SDK/API ausente, formato nao suportado, ou o LLM
         nao retornou nada utilizavel.
     """
     if not file_bytes:
         raise CotacaoRapidaLlmError('Arquivo vazio.')
-    if mime_type not in MIME_ACEITOS:
-        raise CotacaoRapidaLlmError(
-            f'Formato nao suportado: {mime_type}. '
-            f'Aceitos: PDF, JPG, PNG, WEBP.'
-        )
+
+    # mime do cliente nem sempre e confiavel (octet-stream/vazio em drag-drop):
+    # resolve por mime -> extensao -> magic bytes.
+    tipo = _resolver_tipo(file_bytes, mime_type, filename)
 
     try:
         import anthropic
@@ -65,24 +68,27 @@ def extrair_motos_regiao(file_bytes: bytes, mime_type: str, modelos: List) -> Di
         raise CotacaoRapidaLlmError('ANTHROPIC_API_KEY nao configurada.')
 
     client = anthropic.Anthropic(api_key=api_key)
-    bloco = _bloco_arquivo(file_bytes, mime_type)
+    bloco = _bloco_arquivo(file_bytes, tipo)
     prompt_system = _montar_prompt_system(modelos)
 
-    # Haiku -> Sonnet
+    # Haiku -> Sonnet. Aceita a 1a resposta com JSON bem-formado (mesmo motos
+    # vazias = "nenhuma moto no documento"); so escala para Sonnet em erro/parse-fail.
     data = None
     parser_usado = None
+    erros = []
     for model in (HAIKU_MODEL, SONNET_MODEL):
         try:
             data = _chamar_llm(client, bloco, prompt_system, model)
-            if data is not None and data.get('motos'):
-                parser_usado = model
-                break
+            parser_usado = model
+            break
         except Exception as e:  # noqa: BLE001 — tenta o proximo modelo
+            erros.append(f'{model}: {e}')
             logger.warning('Cotacao Rapida LLM (%s) falhou: %s', model, e)
 
     if data is None:
         raise CotacaoRapidaLlmError(
-            'Nao foi possivel ler o arquivo (Haiku e Sonnet falharam).'
+            'Nao foi possivel ler o arquivo (Haiku e Sonnet falharam). '
+            + ' | '.join(erros)
         )
 
     return _normalizar(data, modelos, parser_usado)
@@ -91,6 +97,38 @@ def extrair_motos_regiao(file_bytes: bytes, mime_type: str, modelos: List) -> Di
 # --------------------------------------------------------------------------- #
 # Internos
 # --------------------------------------------------------------------------- #
+
+# Assinaturas (magic bytes) para deteccao robusta quando o mime do cliente falha.
+def _resolver_tipo(file_bytes: bytes, mime_type: str, filename: str) -> str:
+    """Resolve o MIME efetivo: mime do cliente -> extensao -> magic bytes."""
+    mt = (mime_type or '').lower().split(';')[0].strip()
+    if mt in MIME_ACEITOS:
+        return mt
+
+    ext = ''
+    if filename and '.' in filename:
+        ext = filename.rsplit('.', 1)[-1].lower()
+    ext_map = {
+        'pdf': MIME_PDF, 'jpg': 'image/jpeg', 'jpeg': 'image/jpeg',
+        'png': 'image/png', 'webp': 'image/webp',
+    }
+    if ext in ext_map:
+        return ext_map[ext]
+
+    head = file_bytes[:16]
+    if head[:4] == b'%PDF':
+        return MIME_PDF
+    if head[:8] == b'\x89PNG\r\n\x1a\n':
+        return 'image/png'
+    if head[:3] == b'\xff\xd8\xff':
+        return 'image/jpeg'
+    if head[:4] == b'RIFF' and file_bytes[8:12] == b'WEBP':
+        return 'image/webp'
+
+    raise CotacaoRapidaLlmError(
+        f'Formato nao suportado (mime={mime_type or "?"}). Aceitos: PDF, JPG, PNG, WEBP.'
+    )
+
 
 def _bloco_arquivo(file_bytes: bytes, mime_type: str) -> Dict:
     """Bloco de conteudo Anthropic: document (PDF) ou image."""
@@ -155,31 +193,44 @@ def _chamar_llm(client, bloco: Dict, prompt_system: str, model: str) -> Optional
         }],
     )
     if not response.content:
-        return None
+        raise CotacaoRapidaLlmError('resposta vazia do modelo')
     raw = response.content[0].text
     if not isinstance(raw, str) or not raw.strip():
-        return None
+        raise CotacaoRapidaLlmError('resposta nao-textual do modelo')
     return json.loads(_extrair_json(raw))
 
 
 def _extrair_json(raw: str) -> str:
-    """Isola o objeto JSON da resposta (remove cercas markdown)."""
+    """Isola o objeto JSON da resposta (cerca markdown, preambulo E postambulo)."""
     raw = raw.strip()
     m = re.search(r'```(?:json)?\s*(\{.*\})\s*```', raw, re.DOTALL)
     if m:
         return m.group(1)
+    # Recorta do primeiro '{' ao ULTIMO '}' — cobre texto antes E depois do JSON
+    # (Haiku as vezes adiciona "Espero ter ajudado." apos o objeto -> 'Extra data').
     inicio = raw.find('{')
-    if inicio < 0:
+    fim = raw.rfind('}')
+    if inicio < 0 or fim < inicio:
         raise CotacaoRapidaLlmError(f'Resposta sem JSON: {raw[:200]}')
-    return raw[inicio:]
+    return raw[inicio:fim + 1]
 
 
 def _normalizar(data: Dict, modelos: List, parser_usado: Optional[str]) -> Dict:
-    """Normaliza nomes de modelo para CarviaModeloMoto e agrega a regiao."""
+    """Normaliza nomes de modelo para CarviaModeloMoto e agrega a regiao.
+
+    Defensivo contra estrutura malformada (motos=null/str, item nao-dict,
+    regiao=str): degrada para "nada reconhecido" em vez de 500.
+    """
     from app.carvia.services.pricing.moto_recognition_service import MotoRecognitionService
 
+    motos_raw = data.get('motos') if isinstance(data, dict) else None
+    if not isinstance(motos_raw, list):
+        motos_raw = []
+
     motos_out = []
-    for moto in data.get('motos', []) or []:
+    for moto in motos_raw:
+        if not isinstance(moto, dict):
+            continue
         texto = str(moto.get('modelo') or '').strip()
         try:
             qtd = int(moto.get('quantidade') or 0)
@@ -197,7 +248,9 @@ def _normalizar(data: Dict, modelos: List, parser_usado: Optional[str]) -> Dict:
             'reconhecido': modelo is not None,
         })
 
-    regiao_raw = data.get('regiao') or {}
+    regiao_raw = data.get('regiao') if isinstance(data, dict) else None
+    if not isinstance(regiao_raw, dict):
+        regiao_raw = {}
     regiao = {
         'cidade': (str(regiao_raw.get('cidade') or '').strip() or None),
         'uf': (str(regiao_raw.get('uf') or '').strip().upper() or None),

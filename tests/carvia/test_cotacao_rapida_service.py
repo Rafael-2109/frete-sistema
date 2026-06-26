@@ -133,3 +133,89 @@ def test_historico_por_tabela(db):
     assert h['valor_por_moto'] == 200.0
     assert h['destinatario']['nome'] == 'Dest CR'
     assert h['destinatario']['cidade'] == 'Manaus'
+
+
+def _cotacao_moto(db, cliente, e_orig, e_dest, tabela, modelo, *, numero, status, valor, qtd):
+    from app.carvia.models import CarviaCotacao, CarviaCotacaoMoto
+    cot = CarviaCotacao(
+        numero_cotacao=numero, cliente_id=cliente.id,
+        endereco_origem_id=e_orig.id, endereco_destino_id=e_dest.id,
+        tipo_material='MOTO', tabela_carvia_id=tabela.id,
+        valor_final_aprovado=valor, status=status, criado_por='test',
+    )
+    db.session.add(cot)
+    db.session.flush()
+    db.session.add(CarviaCotacaoMoto(cotacao_id=cot.id, modelo_moto_id=modelo.id, quantidade=qtd))
+    db.session.flush()
+    return cot
+
+
+def test_historico_exclui_cancelado_e_recusado(db):
+    s = _seed(db)
+    from app.carvia.models import CarviaCliente, CarviaClienteEndereco
+    from decimal import Decimal
+
+    cli = CarviaCliente(nome_comercial='Cliente CR', criado_por='test')
+    db.session.add(cli)
+    db.session.flush()
+    e_orig = CarviaClienteEndereco(cliente_id=None, tipo='ORIGEM', criado_por='test')
+    e_dest = CarviaClienteEndereco(cliente_id=cli.id, tipo='DESTINO', razao_social='Dest',
+                                   criado_por='test')
+    db.session.add_all([e_orig, e_dest])
+    db.session.flush()
+
+    _cotacao_moto(db, cli, e_orig, e_dest, s['t_dir'], s['m1'],
+                  numero='COT-OK', status='APROVADO', valor=Decimal('600'), qtd=3)
+    _cotacao_moto(db, cli, e_orig, e_dest, s['t_dir'], s['m1'],
+                  numero='COT-CANC', status='CANCELADO', valor=Decimal('999'), qtd=1)
+    _cotacao_moto(db, cli, e_orig, e_dest, s['t_dir'], s['m1'],
+                  numero='COT-REC', status='RECUSADO', valor=Decimal('888'), qtd=1)
+
+    from app.carvia.services.pricing.cotacao_rapida_service import CotacaoRapidaService
+    hist = CotacaoRapidaService().historico_por_tabela('CR_TAB', 'ZZ')
+    numeros = {h['numero_cotacao'] for h in hist}
+    assert 'COT-OK' in numeros
+    assert 'COT-CANC' not in numeros
+    assert 'COT-REC' not in numeros
+
+
+def test_cotar_fallback_uf_quando_cidade_nao_atendida(db):
+    s = _seed(db)
+    from app.carvia.services.pricing.cotacao_rapida_service import CotacaoRapidaService
+    # cidade inexistente em Cidade/CarviaCidadeAtendida -> fallback por UF
+    res = CotacaoRapidaService().cotar(
+        itens=[{'modelo_id': s['m1'].id, 'quantidade': 2}],
+        uf_destino='ZZ',
+        cidade_destino='CidadeQueNaoExiste',
+    )
+    assert res['opcoes']  # caiu para tabelas da UF
+    assert any('cotando por UF' in a for a in res['avisos'])
+
+
+def test_cotar_por_ibge_canonico(db):
+    """CEP->IBGE: resolve a Cidade pelo IBGE (nome canônico) e casa CidadeAtendida."""
+    s = _seed(db)
+    from app.localidades.models import Cidade
+    from app.carvia.models import CarviaCidadeAtendida
+
+    cidade = Cidade(nome='CIDADE CANONICA ZZ', uf='ZZ', codigo_ibge='9999999', icms=0)
+    db.session.add(cidade)
+    db.session.flush()
+    db.session.add(CarviaCidadeAtendida(
+        codigo_ibge='9999999', nome_cidade='CIDADE CANONICA ZZ',
+        uf_origem='SP', uf_destino='ZZ', nome_tabela='CR_TAB', criado_por='test',
+    ))
+    db.session.flush()
+
+    from app.carvia.services.pricing.cotacao_rapida_service import CotacaoRapidaService
+    # uf_destino vazio: a UF deve vir do IBGE
+    res = CotacaoRapidaService().cotar(
+        itens=[{'modelo_id': s['m1'].id, 'quantidade': 1}],
+        uf_destino='',
+        cidade_destino=None,
+        codigo_ibge='9999999',
+    )
+    assert res['ok'] is True
+    assert res['regiao']['uf_destino'] == 'ZZ'
+    assert res['regiao']['cidade_destino'] == 'CIDADE CANONICA ZZ'
+    assert any(op['tabela_nome'] == 'CR_TAB' for op in res['opcoes'])

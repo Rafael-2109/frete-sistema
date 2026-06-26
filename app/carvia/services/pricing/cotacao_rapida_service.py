@@ -64,6 +64,7 @@ class CotacaoRapidaService:
         uf_destino: str,
         cidade_destino: Optional[str] = None,
         cnpj_cliente: Optional[str] = None,
+        codigo_ibge: Optional[str] = None,
     ) -> Dict:
         """Cota a lista de motos para o destino e devolve opcoes + historico.
 
@@ -78,11 +79,21 @@ class CotacaoRapidaService:
             `itens` (resumo) e `regiao`.
         """
         avisos: List[str] = []
+        uf_destino = (uf_destino or '').strip().upper()
+
+        # 0. CEP -> IBGE -> Cidade Atendida: o IBGE e a chave canonica de
+        # CarviaCidadeAtendida. Resolve a cidade PELO IBGE (o nome do ViaCEP pode
+        # divergir do cadastrado por hifen/acento/grafia — ex. BIRITIBA-MIRIM vs
+        # BIRITIBA MIRIM), garantindo o match em buscar_cidade_unificada. Tambem
+        # preenche a UF quando so o CEP/IBGE veio.
+        if codigo_ibge:
+            cidade_canon = self._cidade_por_ibge(codigo_ibge)
+            if cidade_canon:
+                cidade_destino = cidade_canon.nome
+                uf_destino = (cidade_canon.uf or uf_destino).upper()
 
         if not uf_destino:
             return self._vazio(avisos + ['UF de destino obrigatoria.'])
-
-        uf_destino = uf_destino.strip().upper()
 
         # 1. Resolver itens -> modelos -> agrupar por categoria
         itens_validos, modelos_sem_categoria, categorias_qtd = self._resolver_itens(itens)
@@ -127,6 +138,27 @@ class CotacaoRapidaService:
             grupo_cliente_id=grupo_id,
             cidade_destino=cidade_destino,
         )
+
+        # Cidade informada mas SEM vinculo em CarviaCidadeAtendida: em vez de
+        # zerar (footgun de "preencher campo opcional zera o resultado"), cai
+        # para as tabelas da UF com aviso explicito.
+        cidade_usada = cidade_destino
+        if not tabelas and cidade_destino:
+            tabelas_uf = svc.buscar_tabelas_carvia(
+                uf_origem=UF_ORIGEM_PADRAO,
+                uf_destino=uf_destino,
+                grupo_cliente_id=grupo_id,
+                cidade_destino=None,
+            )
+            if tabelas_uf:
+                avisos.append(
+                    f'Cidade "{cidade_destino}" nao esta em Cidades Atendidas '
+                    f'(origem {UF_ORIGEM_PADRAO}); cotando por UF {uf_destino} '
+                    f'(sem prazo por cidade).'
+                )
+                tabelas = tabelas_uf
+                cidade_usada = None
+
         if not tabelas:
             destino = f"{cidade_destino}/{uf_destino}" if cidade_destino else uf_destino
             return self._vazio(
@@ -146,7 +178,7 @@ class CotacaoRapidaService:
             valor_mercadoria=0,
             uf_origem=UF_ORIGEM_PADRAO,
             uf_destino=uf_destino,
-            cidade_destino=cidade_destino,
+            cidade_destino=cidade_usada,
             cnpj_cliente=cnpj_cliente,
             categorias_moto=categorias_moto,
         )
@@ -186,6 +218,7 @@ class CotacaoRapidaService:
     ) -> List[Dict]:
         """Ultimas N cotacoes de MOTO para a tabela (uf_destino + nome_tabela).
 
+        Exclui CANCELADO/RECUSADO (preco rejeitado nao serve de referencia).
         valor_por_moto = valor da cotacao / total de motos (cotacoes manuais sem
         `tabela_carvia_id` ficam de fora — INNER JOIN). Destinatario = endereco
         de destino (razao social + cidade), com fallback no cliente contratante.
@@ -202,6 +235,7 @@ class CotacaoRapidaService:
                 CarviaTabelaFrete.nome_tabela == nome_tabela,
                 CarviaTabelaFrete.uf_destino == uf_destino.upper(),
                 CarviaCotacao.tipo_material == 'MOTO',
+                CarviaCotacao.status.notin_(['CANCELADO', 'RECUSADO']),
             )
             .order_by(CarviaCotacao.data_cotacao.desc())
             .limit(limit)
@@ -211,18 +245,30 @@ class CotacaoRapidaService:
         out = []
         for c in cotacoes:
             qtd = c.qtd_total_motos or 0
-            valor = c.valor_final_aprovado or c.valor_descontado or c.valor_tabela
-            valor_por_moto = (float(valor) / qtd) if (valor and qtd) else None
+            # `is not None` (nao `or`): Decimal('0.00') e falsy mas e valor valido.
+            valor = next(
+                (v for v in (c.valor_final_aprovado, c.valor_descontado,
+                             c.valor_manual, c.valor_tabela) if v is not None),
+                None,
+            )
+            valor_f = float(valor) if valor is not None else None
+            valor_por_moto = (valor_f / qtd) if (valor_f is not None and qtd) else None
             out.append({
                 'numero_cotacao': c.numero_cotacao,
                 'data': c.data_cotacao,
                 'qtd_motos': qtd,
-                'valor_total': float(valor) if valor else None,
-                'valor_por_moto': round(valor_por_moto, 2) if valor_por_moto else None,
+                'valor_total': valor_f,
+                'valor_por_moto': round(valor_por_moto, 2) if valor_por_moto is not None else None,
                 'destinatario': self._destinatario(c),
                 'status': c.status,
             })
         return out
+
+    @staticmethod
+    def _cidade_por_ibge(codigo_ibge):
+        """Cidade canonica (DB local) pelo codigo IBGE — chave robusta vinda do CEP."""
+        from app.localidades.models import Cidade
+        return Cidade.query.filter_by(codigo_ibge=str(codigo_ibge)).first()
 
     # ------------------------------------------------------------------ #
     # Helpers

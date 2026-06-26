@@ -147,12 +147,29 @@ em papel timbrado.
   um card com breakdown por modelo.
 - **Tabela sem preco por categoria de moto** -> avisada e PULADA (nao cai no
   calculo por peso). Modelo sem categoria -> avisado, fora do calculo.
+- **CEP -> IBGE -> Cidade Atendida (chave canonica)**: `cotar(codigo_ibge=...)`
+  resolve a `Cidade` PELO `codigo_ibge` (do ViaCEP/datalist) e usa o nome
+  CANONICO do banco — o nome do ViaCEP pode divergir do cadastrado (hifen/acento:
+  `BIRITIBA-MIRIM` vs `BIRITIBA MIRIM`), o que faria o match por nome falhar mesmo
+  com o IBGE correto. O front propaga `codigo_ibge` (CEP + datalist
+  `cidades_por_uf_ibge`) no payload.
+- **Cidade nao atendida -> fallback por UF + aviso**: se a cidade informada nao
+  tem vinculo em `CarviaCidadeAtendida`, em vez de zerar o resultado a cotacao
+  cai para as tabelas da UF com aviso explicito (evita o footgun "preencher campo
+  opcional zera tudo").
 - **Historico**: ultimas 5 `CarviaCotacao(tipo_material='MOTO')` por
-  `nome_tabela + uf_destino` (valor/moto = valor da cotacao / qtd de motos;
-  destinatario = `endereco_destino`, fallback no cliente).
-- **LLM**: Haiku 4.5 -> Sonnet 4.6; lista de modelos+categorias injetada no
-  prompt; nomes normalizados por `MotoRecognitionService.resolver_modelo_em_lista`.
-- **PDF**: weasyprint + logo `static/carvia/logo.jpg`.
+  `nome_tabela + uf_destino`, EXCLUINDO `CANCELADO`/`RECUSADO` (preco rejeitado
+  nao e referencia). valor/moto = valor da cotacao / qtd de motos (selecao por
+  `is not None`, considera `valor_manual`); destinatario = `endereco_destino`,
+  fallback no cliente.
+- **LLM**: Haiku 4.5 -> Sonnet 4.6 (aceita a 1a resposta com JSON bem-formado);
+  lista de modelos+categorias injetada no prompt; nomes normalizados por
+  `MotoRecognitionService.resolver_modelo_em_lista`. Robustez: formato resolvido
+  por mime->extensao->magic bytes (octet-stream nao rejeita PDF valido); JSON
+  recortado do 1o `{` ao ultimo `}` (tolera pos-ambulo); `_normalizar` defensivo
+  (motos/regiao malformados degradam sem 500). Upload com cap de 20MB.
+- **PDF**: weasyprint + logo `static/carvia/logo.jpg` (geracao em try/except).
 
 Testes: `tests/carvia/test_cotacao_rapida_service.py`, `test_cep_service.py`,
-`test_cotacao_rapida_llm_service.py` (11 casos).
+`test_cotacao_rapida_llm_service.py` (17 casos). Revisao adversarial
+(2026-06-25, 4 agentes): aprovado, achados alto/medio corrigidos.

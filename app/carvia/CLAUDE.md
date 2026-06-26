@@ -81,9 +81,9 @@ Sempre prefira ler o sub-doc correspondente ao topico ao inves de reconstruir co
 
 ```
 app/carvia/
-  routes/          # 35 sub-rotas (dashboard, importacao, nf, nf_transferencia, operacao,
+  routes/          # 36 sub-rotas (dashboard, importacao, nf, nf_transferencia, operacao,
                    #   subcontrato, fatura, despesa, fluxo_caixa, conciliacao, cte_complementar,
-                   #   custo_entrega, admin, cliente, cotacao_v2, pedido, frete, gerencial,
+                   #   custo_entrega, admin, cliente, cotacao_v2, cotacao_rapida, pedido, frete, gerencial,
                    #   aprovacao, comissao, config, conta_corrente, exportacao, receita,
                    #   scanner, simulador, tabela_carvia, importacao_config, api, anexo,
                    #   comprovante, resultado_frete, coleta, portal_admin, portal_operacional)
@@ -108,9 +108,11 @@ app/carvia/
                    #                viabilidade [receita CarVia bruta p/ mapa+embarque],
                    #                resultado_frete [rateio receita vs custo por moto]) — 18
                    #   parsers/ (importacao, importacao_config, cte_xml, danfe_pdf,
-                   #            dacte_pdf, fatura_pdf, nfe_xml) — 7
+                   #            dacte_pdf, fatura_pdf, nfe_xml, cotacao_rapida_llm
+                   #            [Haiku le PDF/imagem -> motos+regiao da Cotacao Rapida]) — 8
                    #   pricing/ (cotacao, cotacao_v2, margem, moto_recognition,
-                   #            carvia_tabela, config) — 6
+                   #            carvia_tabela, config, cotacao_rapida
+                   #            [Cotacao Rapida efemera: modelo->categoria + historico]) — 7
                    # + cte_complementar_persistencia.py + cte_complementar_service.py (root)
   workers/         # 4 workers RQ com SSL-drop resilience (R15):
                    #   _ssw_helpers, ssw_cte_jobs, ssw_cte_complementar_jobs, verificar_ctrc_ssw_jobs

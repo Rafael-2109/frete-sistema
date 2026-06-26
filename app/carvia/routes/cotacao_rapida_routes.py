@@ -70,15 +70,25 @@ def register_cotacao_rapida_routes(bp):
         if not arquivo or not arquivo.filename:
             return jsonify({'ok': False, 'erro': 'Nenhum arquivo enviado.'}), 400
 
+        # Guard de tamanho ANTES de ler tudo na RAM (base64 ~+33%) e gastar 2
+        # chamadas LLM fadadas a rejeicao (limite Anthropic ~32MB PDF / ~5MB img).
+        MAX_BYTES = 20 * 1024 * 1024
+        if (request.content_length or 0) > MAX_BYTES:
+            return jsonify({'ok': False, 'erro': 'Arquivo muito grande (max 20MB).'}), 413
+        file_bytes = arquivo.read()
+        if len(file_bytes) > MAX_BYTES:
+            return jsonify({'ok': False, 'erro': 'Arquivo muito grande (max 20MB).'}), 413
+
         from app.carvia.services.parsers.cotacao_rapida_llm_service import (
             extrair_motos_regiao, CotacaoRapidaLlmError,
         )
         modelos = _modelos_orm()
         try:
             resultado = extrair_motos_regiao(
-                arquivo.read(),
+                file_bytes,
                 arquivo.mimetype or '',
                 modelos,
+                filename=arquivo.filename,
             )
         except CotacaoRapidaLlmError as e:
             return jsonify({'ok': False, 'erro': str(e)}), 422
@@ -106,6 +116,7 @@ def register_cotacao_rapida_routes(bp):
             uf_destino=contexto['uf_destino'],
             cidade_destino=contexto['cidade_destino'],
             cnpj_cliente=contexto['cnpj_cliente'],
+            codigo_ibge=contexto['codigo_ibge'],
         )
         from app.utils.json_helpers import sanitize_for_json
         return jsonify(sanitize_for_json(resultado))
@@ -128,23 +139,28 @@ def register_cotacao_rapida_routes(bp):
             uf_destino=contexto['uf_destino'],
             cidade_destino=contexto['cidade_destino'],
             cnpj_cliente=contexto['cnpj_cliente'],
+            codigo_ibge=contexto['codigo_ibge'],
         )
         if not resultado.get('opcoes'):
             return jsonify({'ok': False, 'erro': 'Nada a cotar para gerar o PDF.'}), 400
 
-        from app.utils.timezone import agora_brasil_naive
-        # Template de impressao auto-contido (imprimir_*): CSS inline por design
-        # (PDF nao usa o design system do browser). base_url resolve o logo.
-        html = render_template(
-            'carvia/cotacao_rapida/imprimir_cotacao.html',
-            resultado=resultado,
-            destino=resultado['regiao'],
-            cliente_nome=(payload.get('cliente_nome') or '').strip() or None,
-            emitido_em=agora_brasil_naive(),
-        )
+        try:
+            from app.utils.timezone import agora_brasil_naive
+            # Template de impressao auto-contido (imprimir_*): CSS inline por design
+            # (PDF nao usa o design system do browser). base_url resolve o logo.
+            html = render_template(
+                'carvia/cotacao_rapida/imprimir_cotacao.html',
+                resultado=resultado,
+                destino=resultado['regiao'],
+                cliente_nome=(payload.get('cliente_nome') or '').strip() or None,
+                emitido_em=agora_brasil_naive(),
+            )
 
-        from weasyprint import HTML  # lazy import (custo de boot)
-        pdf_bytes = HTML(string=html, base_url=request.host_url).write_pdf()
+            from weasyprint import HTML  # lazy import (custo de boot)
+            pdf_bytes = HTML(string=html, base_url=request.host_url).write_pdf()
+        except Exception as e:  # noqa: BLE001
+            logger.exception('Falha ao gerar PDF da Cotacao Rapida')
+            return jsonify({'ok': False, 'erro': f'Falha ao gerar PDF: {e}'}), 500
 
         resp = make_response(pdf_bytes)
         resp.headers['Content-Type'] = 'application/pdf'
@@ -190,7 +206,9 @@ def _ufs_destino_disponiveis():
 def _resolver_contexto(payload):
     """Normaliza o payload (itens + regiao + cnpj), resolvendo CEP se preciso.
 
-    Retorna `{itens, uf_destino, cidade_destino, cnpj_cliente}` ou `{erro}`.
+    Retorna `{itens, uf_destino, cidade_destino, codigo_ibge, cnpj_cliente}` ou
+    `{erro}`. O `codigo_ibge` (do payload — front o recebe do CEP/datalist — ou
+    derivado do CEP aqui) e a chave canonica de Cidade Atendida.
     """
     itens = payload.get('itens') or []
     if not isinstance(itens, list) or not itens:
@@ -198,22 +216,25 @@ def _resolver_contexto(payload):
 
     uf_destino = (payload.get('uf_destino') or '').strip().upper()
     cidade_destino = (payload.get('cidade_destino') or '').strip() or None
+    codigo_ibge = (str(payload.get('codigo_ibge') or '').strip() or None)
     cep = (payload.get('cep') or '').strip()
 
-    # CEP preenchido e sem cidade/uf -> resolve via ViaCEP.
-    if cep and (not uf_destino or not cidade_destino):
+    # CEP preenchido e faltando uf/cidade/ibge -> resolve via ViaCEP.
+    if cep and (not uf_destino or not cidade_destino or not codigo_ibge):
         from app.utils.cep_service import resolver_cep
         dados_cep = resolver_cep(cep)
         if dados_cep:
             uf_destino = uf_destino or dados_cep['uf']
             cidade_destino = cidade_destino or dados_cep['cidade']
+            codigo_ibge = codigo_ibge or dados_cep.get('codigo_ibge')
 
-    if not uf_destino:
+    if not uf_destino and not codigo_ibge:
         return {'erro': 'Informe a UF de destino (ou um CEP valido).'}
 
     return {
         'itens': itens,
         'uf_destino': uf_destino,
         'cidade_destino': cidade_destino,
+        'codigo_ibge': codigo_ibge,
         'cnpj_cliente': (payload.get('cnpj_cliente') or '').strip() or None,
     }

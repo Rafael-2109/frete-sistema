@@ -148,17 +148,28 @@
   document.getElementById('cr-add-moto').addEventListener('click', () => addMotoRow());
   addMotoRow();
 
-  // ---------- cidades por UF ----------
+  // ---------- cidades por UF (com código IBGE — chave canônica) ----------
   const ufSel = document.getElementById('cr-uf');
-  ufSel.addEventListener('change', carregarCidades);
+  const cidadeInput = document.getElementById('cr-cidade');
+  let cidadesIbge = {};      // nome(UPPER) -> codigo_ibge
+  let codigoIbgeSel = null;  // IBGE do destino corrente (enviado no payload)
+  ufSel.addEventListener('change', () => { codigoIbgeSel = null; carregarCidades(); });
+  cidadeInput.addEventListener('input', () => {
+    codigoIbgeSel = cidadesIbge[cidadeInput.value.trim().toUpperCase()] || null;
+  });
   function carregarCidades() {
     const uf = ufSel.value;
     const dl = document.getElementById('cr-cidades-list');
-    dl.innerHTML = '';
+    dl.innerHTML = ''; cidadesIbge = {};
     if (!uf) return;
     fetch(`/localidades/ajax/cidades_por_uf_ibge/${uf}`)
       .then(r => r.json())
-      .then(list => { dl.innerHTML = (list || []).map(c => `<option value="${esc(c.nome)}">`).join(''); })
+      .then(list => {
+        dl.innerHTML = (list || []).map(c => `<option value="${esc(c.nome)}">`).join('');
+        (list || []).forEach(c => { cidadesIbge[(c.nome || '').toUpperCase()] = c.codigo_ibge; });
+        // re-resolve o IBGE da cidade já preenchida (preserva o do CEP se não casar)
+        codigoIbgeSel = cidadesIbge[cidadeInput.value.trim().toUpperCase()] || codigoIbgeSel;
+      })
       .catch(() => {});
   }
 
@@ -178,7 +189,8 @@
         if (![...ufSel.options].some(o => o.value === d.uf)) ufSel.add(new Option(d.uf, d.uf));
         ufSel.value = d.uf;
         carregarCidades();
-        document.getElementById('cr-cidade').value = d.cidade;
+        cidadeInput.value = d.cidade;
+        codigoIbgeSel = d.codigo_ibge || null;  // IBGE autoritativo do ViaCEP
         msg.className = 'text-success'; msg.textContent = `${d.cidade}/${d.uf}`;
       })
       .catch(() => { msg.className = 'text-danger'; msg.textContent = 'Erro ao consultar CEP.'; });
@@ -221,11 +233,18 @@
         if (![...ufSel.options].some(o => o.value === d.regiao.uf)) ufSel.add(new Option(d.regiao.uf, d.regiao.uf));
         ufSel.value = d.regiao.uf; carregarCidades();
       }
-      if (d.regiao.cidade) document.getElementById('cr-cidade').value = d.regiao.cidade;
+      if (d.regiao.cidade) { cidadeInput.value = d.regiao.cidade; codigoIbgeSel = cidadesIbge[d.regiao.cidade.toUpperCase()] || null; }
       if (d.regiao.cep) document.getElementById('cr-cep').value = d.regiao.cep;
     }
-    let txt = `<span class="text-success"><i class="fas fa-check"></i> ${reconhecidas.length} modelo(s) reconhecido(s).</span>`;
-    if (naoRec.length) txt += ` <span class="text-warning">Nao reconhecidos: ${naoRec.map(m => esc(m.texto_original)).join(', ')}.</span>`;
+    let txt;
+    if (reconhecidas.length === 0 && naoRec.length === 0) {
+      txt = '<span class="text-warning"><i class="fas fa-exclamation-triangle"></i> Nenhuma moto identificada no arquivo — adicione manualmente.</span>';
+    } else if (reconhecidas.length === 0) {
+      txt = `<span class="text-warning"><i class="fas fa-exclamation-triangle"></i> Nenhum modelo reconhecido. Não reconhecidos: ${naoRec.map(m => esc(m.texto_original)).join(', ')}.</span>`;
+    } else {
+      txt = `<span class="text-success"><i class="fas fa-check"></i> ${reconhecidas.length} modelo(s) reconhecido(s).</span>`;
+      if (naoRec.length) txt += ` <span class="text-warning">Não reconhecidos: ${naoRec.map(m => esc(m.texto_original)).join(', ')}.</span>`;
+    }
     msg.className = 'small'; msg.innerHTML = txt;
   }
 
@@ -236,7 +255,8 @@
     return {
       itens: coletarMotos(),
       uf_destino: ufSel.value,
-      cidade_destino: document.getElementById('cr-cidade').value.trim(),
+      cidade_destino: cidadeInput.value.trim(),
+      codigo_ibge: codigoIbgeSel || '',
       cep: document.getElementById('cr-cep').value.trim(),
       cnpj_cliente: document.getElementById('cr-cnpj').value.trim(),
       cliente_nome: document.getElementById('cr-cliente-nome').value.trim(),
@@ -362,7 +382,14 @@
       headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrf },
       body: JSON.stringify(payload),
     })
-      .then(r => { if (!r.ok) throw new Error('falha'); return r.blob(); })
+      .then(async r => {
+        if (!r.ok) {
+          let m = 'Nao foi possivel gerar o PDF.';
+          try { const d = await r.json(); if (d && d.erro) m = d.erro; } catch (e) { /* resposta não-JSON */ }
+          throw new Error(m);
+        }
+        return r.blob();
+      })
       .then(blob => {
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -370,7 +397,7 @@
         document.body.appendChild(a); a.click(); a.remove();
         URL.revokeObjectURL(url);
       })
-      .catch(() => alert('Nao foi possivel gerar o PDF.'))
+      .catch(err => alert(err.message || 'Nao foi possivel gerar o PDF.'))
       .finally(() => { btn.disabled = false; btn.innerHTML = orig; });
   }
 })();
