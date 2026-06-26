@@ -24,10 +24,17 @@
             </button>
             {% endif %}
             {% if current_user.sistema_carvia %}
-            <button type="button" class="btn btn-outline-danger" data-bs-toggle="modal" data-bs-target="#modalExcluirFaturaTransp"
-                    title="Excluir fatura (bloqueada se houver subcontrato com CTe)">
+            {% if fatura.status_conferencia == 'CONFERIDO' %}
+            <button type="button" class="btn btn-outline-danger" disabled
+                    title="Fatura CONFERIDA: reabra a conferência antes de excluir">
                 <i class="fas fa-trash"></i> Excluir
             </button>
+            {% else %}
+            <button type="button" class="btn btn-outline-danger" data-bs-toggle="modal" data-bs-target="#modalExcluirFaturaTransp"
+                    title="Excluir fatura (bloqueada se CONFERIDA, subcontrato com CTe ou conciliação)">
+                <i class="fas fa-trash"></i> Excluir
+            </button>
+            {% endif %}
             {% endif %}
             <a href="{{ url_for('carvia.listar_faturas_transportadora') }}" class="btn btn-secondary">
                 <i class="fas fa-arrow-left"></i> Voltar as Faturas
@@ -690,8 +697,10 @@
                         A fatura <strong>{{ fatura.numero_fatura }}</strong> sera excluida permanentemente.
                     </div>
                     <div class="alert alert-warning small mb-3">
-                        Bloqueada se houver <strong>subcontrato com CTe</strong> vinculado ou conciliacao bancaria.
-                        Subcontratos sem CTe voltam para CONFIRMADO (desvinculados).
+                        Bloqueada se a fatura estiver <strong>CONFERIDA</strong> (reabra a conferência antes),
+                        se houver <strong>subcontrato com CTe</strong> vinculado ou conciliacao bancaria.
+                        Subcontratos sem CTe voltam para CONFIRMADO (desvinculados); fretes de freteiro voltam a PENDENTE
+                        e reaparecem no Lançamento Freteiros.
                     </div>
                     <div class="mb-3">
                         <label for="motivoExclusaoFT" class="form-label">

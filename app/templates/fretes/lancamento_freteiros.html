@@ -433,6 +433,73 @@
                                         </div>
                                     </div>
                                 {% endif %}
+
+                                <!-- 🆕 Custos de Entrega CarVia do Embarque (xerox Despesas Extras Nacom) -->
+                                {% if embarque_data.custos_carvia %}
+                                    <div class="mt-3">
+                                        <h6 class="text-primary"><i class="fas fa-receipt"></i> Custos de Entrega CarVia</h6>
+                                        <div class="table-responsive">
+                                            <table class="table table-sm" style="--bs-table-bg: rgba(13,110,253,.06);">
+                                                <thead class="table-dark">
+                                                    <tr>
+                                                        <th width="40">Sel</th>
+                                                        <th>Descrição</th>
+                                                        <th>Cliente</th>
+                                                        <th>NFs</th>
+                                                        <th width="120">Valor Original</th>
+                                                        <th width="150">Valor Considerado</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {% for custo in embarque_data.custos_carvia %}
+                                                    <tr class="table-primary">
+                                                        <td>
+                                                            <input type="checkbox" class="form-check-input custo-carvia-checkbox"
+                                                                   name="carvia_custos_selecionados"
+                                                                   value="{{ custo.id }}"
+                                                                   data-transportadora-id="{{ dados.freteiro.id }}"
+                                                                   data-embarque-id="{{ embarque_id }}"
+                                                                   data-valor-original="{{ custo.valor }}"
+                                                                   data-custo-id="{{ custo.id }}">
+                                                        </td>
+                                                        <td>
+                                                            <strong>{{ custo.tipo_custo }}</strong>
+                                                            <span class="badge bg-primary ms-1" style="font-size: 0.65rem;">CARVIA</span>
+                                                            {% if custo.descricao %}<br><small class="text-muted">{{ custo.descricao }}</small>{% endif %}
+                                                        </td>
+                                                        <td>
+                                                            <small class="fw-bold" title="{{ custo.nome_destino }}">
+                                                                {{ custo.nome_destino[:20] }}{% if custo.nome_destino|length > 20 %}...{% endif %}
+                                                            </small>
+                                                        </td>
+                                                        <td>
+                                                            <small class="text-primary" title="{{ custo.numeros_nfs }}">
+                                                                {{ custo.numeros_nfs[:15] }}{% if custo.numeros_nfs|length > 15 %}...{% endif %}
+                                                            </small>
+                                                        </td>
+                                                        <td class="text-end">
+                                                            <small>{{ "{:,.2f}".format(custo.valor) }}</small>
+                                                        </td>
+                                                        <td class="text-end">
+                                                            <div class="input-group input-group-sm">
+                                                                <span class="input-group-text">R$</span>
+                                                                <input type="number" step="0.01" min="0"
+                                                                       class="form-control valor-custo-carvia-considerado"
+                                                                       data-custo-id="{{ custo.id }}"
+                                                                       data-transportadora-id="{{ dados.freteiro.id }}"
+                                                                       data-valor-original="{{ custo.valor }}"
+                                                                       placeholder="{{ '{:.2f}'.format(custo.valor) }}"
+                                                                       title="Deixe vazio para usar valor original"
+                                                                       name="valor_custo_carvia_{{ custo.id }}">
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                    {% endfor %}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                {% endif %}
                             </div>
                         </div>
                     {% endfor %}
@@ -483,7 +550,7 @@
                                                 <strong>{{ "{:,.2f}".format(total_despesas) }}</strong>
                                             </td>
                                             <td class="text-end bg-success text-white" id="valor_total_final_transportadora_{{ dados.freteiro.id }}">
-                                                <strong>{{ "{:,.2f}".format(dados.total_valor + (dados.total_carvia or 0)) }}</strong>
+                                                <strong>{{ "{:,.2f}".format(dados.total_valor + (dados.total_carvia or 0) + (dados.total_custos_carvia or 0)) }}</strong>
                                             </td>
                                         </tr>
                                     </tbody>
@@ -659,14 +726,25 @@ document.addEventListener('DOMContentLoaded', function() {
         todasDespesas.forEach(despesa => {
             const despesaId = despesa.getAttribute('data-despesa-id');
             const campoValor = document.querySelector(`.valor-despesa-considerado[data-despesa-id="${despesaId}"]`);
-            const valorConsiderado = campoValor && campoValor.value ? 
-                parseFloat(campoValor.value) : 
+            const valorConsiderado = campoValor && campoValor.value ?
+                parseFloat(campoValor.value) :
                 parseFloat(despesa.getAttribute('data-valor-original') || 0);
-            
+
             valorDespesasTotalTransp += valorConsiderado;
         });
-        
-        const valorTotalFinal = valorConsideradoTotalTransp + valorDespesasTotalTransp;
+
+        // 🆕 Custos de Entrega CarVia (xerox DespesaExtra) entram no total geral
+        let valorCustosCarviaTotalTransp = 0;
+        document.querySelectorAll(`input[name="carvia_custos_selecionados"][data-transportadora-id="${transportadoraId}"]`).forEach(custo => {
+            const custoId = custo.getAttribute('data-custo-id');
+            const campoValor = document.querySelector(`.valor-custo-carvia-considerado[data-custo-id="${custoId}"]`);
+            const valorConsiderado = campoValor && campoValor.value ?
+                parseFloat(campoValor.value) :
+                parseFloat(custo.getAttribute('data-valor-original') || 0);
+            valorCustosCarviaTotalTransp += valorConsiderado;
+        });
+
+        const valorTotalFinal = valorConsideradoTotalTransp + valorDespesasTotalTransp + valorCustosCarviaTotalTransp;
         
         // Atualiza elementos da transportadora
         const elementoPeso = document.getElementById(`peso_total_transportadora_${transportadoraId}`);
@@ -792,7 +870,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const botaoEmitir = document.querySelector(`.emitir-fatura-btn[data-transportadora-id="${transportadoraId}"]`);
         const statusText = document.getElementById(`status_${transportadoraId}`);
         
-        const itensSelecionados = document.querySelectorAll(`input[name="fretes_selecionados"][data-transportadora-id="${transportadoraId}"]:checked, input[name="despesas_selecionadas"][data-transportadora-id="${transportadoraId}"]:checked, input[name="carvia_selecionados"][data-transportadora-id="${transportadoraId}"]:checked`).length;
+        const itensSelecionados = document.querySelectorAll(`input[name="fretes_selecionados"][data-transportadora-id="${transportadoraId}"]:checked, input[name="despesas_selecionadas"][data-transportadora-id="${transportadoraId}"]:checked, input[name="carvia_selecionados"][data-transportadora-id="${transportadoraId}"]:checked, input[name="carvia_custos_selecionados"][data-transportadora-id="${transportadoraId}"]:checked`).length;
         const temData = dataVencimento && dataVencimento.value.trim() !== '';
         
         if (!temData) {
@@ -835,7 +913,7 @@ document.addEventListener('DOMContentLoaded', function() {
             
             // Seleciona/deseleciona todos os fretes do embarque
             document.querySelectorAll(`input[data-embarque-id="${embarqueId}"]`).forEach(item => {
-                if (item.name === 'fretes_selecionados' || item.name === 'despesas_selecionadas' || item.name === 'carvia_selecionados') {
+                if (item.name === 'fretes_selecionados' || item.name === 'despesas_selecionadas' || item.name === 'carvia_selecionados' || item.name === 'carvia_custos_selecionados') {
                     item.checked = isChecked;
                 }
             });
@@ -852,7 +930,7 @@ document.addEventListener('DOMContentLoaded', function() {
             
             // Seleciona/deseleciona todos os itens da transportadora
             document.querySelectorAll(`input[data-transportadora-id="${transportadoraId}"]`).forEach(item => {
-                if (item.name === 'fretes_selecionados' || item.name === 'despesas_selecionadas' || item.name === 'carvia_selecionados') {
+                if (item.name === 'fretes_selecionados' || item.name === 'despesas_selecionadas' || item.name === 'carvia_selecionados' || item.name === 'carvia_custos_selecionados') {
                     item.checked = isChecked;
                 }
             });
@@ -909,6 +987,23 @@ document.addEventListener('DOMContentLoaded', function() {
             const embarqueId = this.getAttribute('data-embarque-id');
             atualizarSubtotalEmbarque(embarqueId);
             atualizarStatusBotao(transportadoraId);
+        });
+    });
+
+    // 🆕 Event listeners para checkboxes de Custos de Entrega CarVia (xerox despesas)
+    document.querySelectorAll('input[name="carvia_custos_selecionados"]').forEach(checkbox => {
+        checkbox.addEventListener('change', function() {
+            const transportadoraId = this.getAttribute('data-transportadora-id');
+            atualizarTotalGeral(transportadoraId);
+            atualizarStatusBotao(transportadoraId);
+        });
+    });
+
+    // 🆕 Event listeners para valor considerado dos Custos de Entrega CarVia
+    document.querySelectorAll('.valor-custo-carvia-considerado').forEach(input => {
+        input.addEventListener('change', function() {
+            const transportadoraId = this.getAttribute('data-transportadora-id');
+            atualizarTotalGeral(transportadoraId);
         });
     });
     

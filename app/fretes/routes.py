@@ -5169,19 +5169,27 @@ def lancamento_freteiros():
         # exibidos junto por embarque — processo Nacom = processo CarVia
         # (lazy import: direcao fretes->carvia permitida, R1/R2 CarVia).
         fretes_carvia_pendentes = []
+        custos_carvia_pendentes = []
         try:
             from app.carvia.services.financeiro.lancamento_freteiro_service import (
+                listar_custos_entrega_carvia_pendentes_freteiro,
                 listar_fretes_carvia_pendentes_freteiro,
             )
             fretes_carvia_pendentes = listar_fretes_carvia_pendentes_freteiro(freteiro.id)
+            # 🆕 Custos de entrega CarVia (xerox DespesaExtra Nacom no Lancamento)
+            custos_carvia_pendentes = listar_custos_entrega_carvia_pendentes_freteiro(freteiro.id)
         except Exception as e:
             logger.warning(f"[FRETEIROS] CarVia indisponivel para freteiro {freteiro.id}: {e}")
 
         carvia_por_embarque = {}
         for fc in fretes_carvia_pendentes:
             carvia_por_embarque.setdefault(fc["embarque_id"], []).append(fc)
+        custos_carvia_por_embarque = {}
+        for cc in custos_carvia_pendentes:
+            custos_carvia_por_embarque.setdefault(cc["embarque_id"], []).append(cc)
 
-        if fretes_pendentes or despesas_pendentes or fretes_carvia_pendentes:
+        if (fretes_pendentes or despesas_pendentes or fretes_carvia_pendentes
+                or custos_carvia_pendentes):
             # Organiza fretes por embarque
             fretes_por_embarque = {}
             total_valor = 0
@@ -5277,17 +5285,36 @@ def lancamento_freteiros():
                 fretes_por_embarque[embarque_id]["total_carvia"] = total_carvia_emb
                 total_carvia_transportadora += total_carvia_emb
 
+            # 🆕 Custos de entrega CarVia: injeta nos cards (cria card de
+            # embarque 100% custo se necessario) — paridade Despesas Extras Nacom
+            total_custos_carvia_transportadora = 0
+            for embarque_id, custos_cc in custos_carvia_por_embarque.items():
+                if embarque_id not in fretes_por_embarque:
+                    embarque = db.session.get(Embarque, embarque_id)
+                    fretes_por_embarque[embarque_id] = {
+                        "embarque": embarque,
+                        "fretes": [],
+                        "despesas_extras": despesas_por_embarque.get(embarque_id, []),
+                        "total_cotado": 0,
+                        "total_considerado": 0,
+                    }
+                total_cc = sum(cc["valor"] for cc in custos_cc)
+                fretes_por_embarque[embarque_id]["custos_carvia"] = custos_cc
+                fretes_por_embarque[embarque_id]["total_custos_carvia"] = total_cc
+                total_custos_carvia_transportadora += total_cc
+
             dados_freteiros.append(
                 {
                     "freteiro": freteiro,
                     "fretes_por_embarque": fretes_por_embarque,
                     "total_pendencias": len(fretes_pendentes) + len(despesas_pendentes)
-                    + len(fretes_carvia_pendentes),
+                    + len(fretes_carvia_pendentes) + len(custos_carvia_pendentes),
                     "total_valor": total_valor + sum([d.valor_despesa or 0 for d in despesas_pendentes]),
                     "peso_total": peso_total_transportadora,
                     "valor_nf_total": valor_nf_total_transportadora,
                     "valor_cotado_total": valor_cotado_total_transportadora,
                     "total_carvia": total_carvia_transportadora,
+                    "total_custos_carvia": total_custos_carvia_transportadora,
                 }
             )
 
@@ -5324,8 +5351,11 @@ def emitir_fatura_freteiro(transportadora_id):
             # 🆕 CarVia (2026-06-12): fretes subcontratados do freteiro no
             # mesmo fechamento (processo Nacom = processo CarVia)
             carvia_selecionados = request.form.getlist("carvia_selecionados")
+            # 🆕 Custos de entrega CarVia (xerox DespesaExtra Nacom)
+            carvia_custos_selecionados = request.form.getlist("carvia_custos_selecionados")
 
-            if not fretes_selecionados and not despesas_selecionadas and not carvia_selecionados:
+            if (not fretes_selecionados and not despesas_selecionadas
+                    and not carvia_selecionados and not carvia_custos_selecionados):
                 flash("Selecione pelo menos um lançamento para emitir a fatura", "warning")
                 return redirect(url_for("fretes.lancamento_freteiros"))
 
@@ -5367,6 +5397,16 @@ def emitir_fatura_freteiro(transportadora_id):
                     despesa_id = key.replace("valor_despesa_", "")
                     try:
                         valores_despesas_alterados[int(despesa_id)] = float(value)
+                    except (ValueError, TypeError):
+                        pass
+
+            # 🆕 Captura valores alterados dos custos de entrega CarVia
+            valores_custos_carvia = {}
+            for key, value in request.form.items():
+                if key.startswith("valor_custo_carvia_") and value:
+                    ce_id = key.replace("valor_custo_carvia_", "")
+                    try:
+                        valores_custos_carvia[int(ce_id)] = float(value)
                     except (ValueError, TypeError):
                         pass
 
@@ -5512,7 +5552,7 @@ def emitir_fatura_freteiro(transportadora_id):
             # (CarviaFrete + CarviaSubcontrato + CarviaFaturaTransportadora).
             # Mesma transação — rollback conjunto se qualquer lado falhar.
             resultado_carvia = None
-            if fretes_carvia:
+            if fretes_carvia or carvia_custos_selecionados:
                 from app.carvia.services.financeiro.lancamento_freteiro_service import (
                     emitir_fatura_freteiro_carvia,
                 )
@@ -5524,9 +5564,16 @@ def emitir_fatura_freteiro(transportadora_id):
                     }
                     for cf in fretes_carvia
                 ]
+                # 🆕 Custos de entrega CarVia selecionados (valor None = usa o
+                # original; o service valida transportadora/status/sem-fatura)
+                custos_carvia_itens = [
+                    {"ce_id": int(cid), "valor": valores_custos_carvia.get(int(cid))}
+                    for cid in carvia_custos_selecionados
+                ]
                 resultado_carvia = emitir_fatura_freteiro_carvia(
                     transportadora_id=transportadora_id,
                     itens=itens_carvia,
+                    custos_entrega=custos_carvia_itens,
                     data_vencimento=data_vencimento,
                     usuario_nome=current_user.nome,
                     observacoes=observacoes,
@@ -6830,6 +6877,40 @@ def exportar_fechamento_freteiros():
 
     # ========== ABA 1: DETALHAMENTO ==========
     dados_detalhamento = []
+    dados_inconsistencias = []
+
+    # 🆕 Integridade (decisao Rafael 2026-06-26): so entram nas abas principais
+    # as faturas onde Σ(fretes+despesas) == valor_total_fatura. As demais (orfa
+    # fantasma ou soma divergente) vao p/ a aba 'Inconsistencias' — ocultas do
+    # fechamento, mas rastreaveis. Σ usa a MESMA formula exibida no Detalhamento
+    # (valor_cte or valor_cotado), garantindo que o exibido == valor declarado.
+    faturas_integras = []
+    for fatura in faturas:
+        # Itens CANCELADO nao contam (paridade CarVia, que filtra status != CANCELADO):
+        # um frete/despesa cancelado mas ainda vinculado nao deve ser pago nem somado.
+        fretes_ativos = [fr for fr in fatura.fretes if fr.status != 'CANCELADO']
+        despesas_ativas = [d for d in fatura.todas_despesas_extras()
+                           if (d.status or '').upper() != 'CANCELADO']
+        soma = sum(float(fr.valor_cte or fr.valor_cotado or 0) for fr in fretes_ativos)
+        soma += sum(float(d.valor_despesa or 0) for d in despesas_ativas)
+        vt = round(float(fatura.valor_total_fatura or 0), 2)
+        if round(soma, 2) == vt:
+            faturas_integras.append(fatura)
+        else:
+            tem_itens = bool(fretes_ativos) or bool(despesas_ativas)
+            dados_inconsistencias.append({
+                "Operação": "NACOM",
+                "Fatura": fatura.numero_fatura,
+                "Transportadora": fatura.transportadora.razao_social if fatura.transportadora else "",
+                "Valor Total Declarado": formatar_valor_br(vt),
+                "Soma dos Itens": formatar_valor_br(round(soma, 2)),
+                "Diferença": formatar_valor_br(round(vt - soma, 2)),
+                "Motivo": (
+                    "Soma diverge do valor declarado" if tem_itens
+                    else "Sem itens vinculados (fatura fantasma)"
+                ),
+            })
+    faturas = faturas_integras
 
     for fatura in faturas:
         transportadora = fatura.transportadora
@@ -6842,6 +6923,9 @@ def exportar_fechamento_freteiros():
 
         # Processar FRETES da fatura
         for frete in fatura.fretes:
+            # Itens CANCELADO nao entram no fechamento (paridade CarVia)
+            if frete.status == 'CANCELADO':
+                continue
             # Filtro de origem (se aplicado via querystring)
             if origem_filtro and frete.origem != origem_filtro:
                 continue
@@ -6862,6 +6946,9 @@ def exportar_fechamento_freteiros():
 
         # Processar DESPESAS EXTRAS da fatura
         for despesa in fatura.todas_despesas_extras():
+            # Despesa CANCELADA nao entra no fechamento (paridade CarVia)
+            if (despesa.status or '').upper() == 'CANCELADO':
+                continue
             # Buscar dados do frete vinculado à despesa
             frete_despesa = despesa.frete if despesa.frete else None
             nfs_despesa = frete_despesa.numeros_nfs if frete_despesa else ""
@@ -6915,12 +7002,16 @@ def exportar_fechamento_freteiros():
 
         # Somar fretes (respeitando filtro de origem — paridade com Detalhamento)
         for frete in fatura.fretes:
+            if frete.status == 'CANCELADO':
+                continue
             if origem_filtro and frete.origem != origem_filtro:
                 continue
             resumo_transportadoras[transp_id] += float(frete.valor_cte or frete.valor_cotado or 0)
 
         # Somar despesas extras (respeitando filtro de origem via property)
         for despesa in fatura.todas_despesas_extras():
+            if (despesa.status or '').upper() == 'CANCELADO':
+                continue
             if origem_filtro and despesa.origem != origem_filtro:
                 continue
             resumo_transportadoras[transp_id] += float(despesa.valor_despesa or 0)
@@ -7004,6 +7095,33 @@ def exportar_fechamento_freteiros():
                     CarviaFrete.fatura_transportadora_id == fatura_cv.id,
                     CarviaFrete.status != "CANCELADO",
                 ).all()
+
+                # 🆕 Integridade CarVia: Σ itens (fretes + custos nao-cancelados)
+                # vs valor_total — fatura divergente vai p/ aba Inconsistencias
+                # (oculta do fechamento), espelhando o gate Nacom acima.
+                custos_cv_ativos = [
+                    c for c in fatura_cv.todos_custos_entrega()
+                    if (c.status or "").upper() != "CANCELADO"
+                ]
+                soma_cv = sum(
+                    float(f.valor_considerado or f.valor_cotado or 0) for f in fretes_cv
+                ) + sum(float(c.valor or 0) for c in custos_cv_ativos)
+                vt_cv = round(float(fatura_cv.valor_total or 0), 2)
+                if round(soma_cv, 2) != vt_cv:
+                    tem_itens_cv = bool(fretes_cv) or bool(custos_cv_ativos)
+                    dados_inconsistencias.append({
+                        "Operação": "CARVIA",
+                        "Fatura": fatura_cv.numero_fatura,
+                        "Transportadora": transp_cv.razao_social if transp_cv else "",
+                        "Valor Total Declarado": formatar_valor_br(vt_cv),
+                        "Soma dos Itens": formatar_valor_br(round(soma_cv, 2)),
+                        "Diferença": formatar_valor_br(round(vt_cv - soma_cv, 2)),
+                        "Motivo": (
+                            "Soma diverge do valor declarado" if tem_itens_cv
+                            else "Sem itens vinculados (fatura fantasma)"
+                        ),
+                    })
+                    continue
 
                 # Fretes CarVia -> mesma aba Detalhamento (Operação=CARVIA)
                 for frete_cv in fretes_cv:
@@ -7089,6 +7207,8 @@ def exportar_fechamento_freteiros():
     df_resumo_carvia = pd.DataFrame(dados_resumo_carvia)
     if not df_resumo_carvia.empty:
         df_resumo_carvia = df_resumo_carvia.sort_values("Transportadora", ascending=True)
+    # 🆕 Faturas ocultadas do fechamento por inconsistencia (Nacom + CarVia)
+    df_inconsistencias = pd.DataFrame(dados_inconsistencias)
 
     # ========== GERAR EXCEL ==========
     def _ajustar_larguras(writer, df, sheet_name):
@@ -7114,6 +7234,20 @@ def exportar_fechamento_freteiros():
         if not df_resumo_carvia.empty:
             df_resumo_carvia.to_excel(writer, index=False, sheet_name="Resumo Carvia")
             _ajustar_larguras(writer, df_resumo_carvia, "Resumo Carvia")
+
+        # 🆕 Aba 4: Inconsistencias — faturas ocultadas do fechamento porque
+        # Σ itens != valor_total_fatura (orfa fantasma ou soma divergente).
+        if not df_inconsistencias.empty:
+            df_inconsistencias.to_excel(writer, index=False, sheet_name="Inconsistencias")
+            _ajustar_larguras(writer, df_inconsistencias, "Inconsistencias")
+
+        # Guard: openpyxl exige >=1 sheet visivel. Se nada foi escrito (recorte de
+        # filtros/periodo sem nenhuma fatura elegivel), grava um placeholder em vez
+        # de estourar IndexError ao salvar o workbook vazio.
+        if not writer.sheets:
+            pd.DataFrame(
+                [{"Aviso": "Nenhuma fatura de freteiro elegivel no filtro selecionado."}]
+            ).to_excel(writer, index=False, sheet_name="Vazio")
 
     output.seek(0)
 

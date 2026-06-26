@@ -501,6 +501,47 @@ class CarviaFreteService:
         except Exception as e:
             logger.error("Erro ao limpar frete cancelado #%s: %s", frete.id, e)
 
+    @staticmethod
+    def reverter_frete_ao_desfazer_fatura(frete) -> None:
+        """Reverte CarviaFrete quando a FaturaTransportadora e excluida/desanexada.
+
+        Causa-raiz (embarque 6075): soltar apenas a FK `fatura_transportadora_id`
+        deixava o frete FATURADO + valor_cte preenchido -> invisivel ao Lancamento
+        Freteiros (filtra valor_cte IS NULL). Espelha o `cancelar_cte` Nacom
+        (app/fretes/routes.py:4897), por tipo de transportadora:
+
+        - FRETEIRO: o valor_cte/considerado/pago e a conferencia sao SINTETICOS
+          (gravados na emissao do fechamento, freteiro nao emite CTe). Reverte
+          tudo a PENDENTE => o frete reaparece no Lancamento Freteiros. O
+          valor_cotado (gravado na portaria) e preservado.
+        - DEMAIS: o valor_cte vem do CTe REAL do subcontratado; nao deve ser
+          limpo. So reverte o lifecycle FATURADO -> CONFERIDO (volta a ser
+          faturavel pela fatura normal) preservando conferencia e CTe.
+
+        NAO comita (flush-only) — o caller (excluir_fatura_transportadora /
+        desanexar_subcontrato) controla a transacao.
+        """
+        frete.fatura_transportadora_id = None
+
+        # Frete CANCELADO: apenas desvincula, NUNCA reativa (senao um frete
+        # cancelado reapareceria no Lancamento Freteiros e poderia ser refaturado).
+        # Ex.: cascade de cancelamento marca CANCELADO sem limpar a FK da fatura.
+        if frete.status == 'CANCELADO':
+            return
+
+        eh_freteiro = bool(frete.transportadora and frete.transportadora.freteiro)
+        if eh_freteiro:
+            frete.valor_cte = None          # criterio de pendencia -> reaparece
+            frete.valor_considerado = None
+            frete.valor_pago = None
+            frete.status = 'PENDENTE'
+            frete.status_conferencia = 'PENDENTE'
+            frete.conferido_por = None
+            frete.conferido_em = None
+            frete.detalhes_conferencia = None
+        elif frete.status == 'FATURADO':
+            frete.status = 'CONFERIDO'      # preserva CTe real + conferencia
+
     # ------------------------------------------------------------------
     # Atualizacao de frete existente (NF tardia) — REMOVIDO
     #

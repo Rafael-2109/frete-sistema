@@ -81,27 +81,30 @@ def test_export_inclui_carvia_na_aba_detalhamento_e_resumo(client, db):
     transp = _criar_freteiro(db)
     frete = _criar_frete_carvia(db, transp)
 
-    res = emitir_fatura_freteiro_carvia(
-        transportadora_id=transp.id,
-        itens=[{'frete_id': frete.id, 'valor_considerado': 162.55}],
-        data_vencimento=date(2026, 6, 30),
-        usuario_nome='Rafael Teste',
-    )
-    fatura_id = res['fatura_id']
-
-    # Custo de entrega CarVia vinculado à FT (xerox DespesaExtra Nacom)
+    # CE criado ANTES (pendente) e vinculado VIA emissao (fluxo Parte 2 2026-06-26):
+    # assim a FT nasce integra (valor_total = frete + custo) e entra no fechamento.
+    # Anexar o CE manualmente depois (sem recalcular valor_total) deixaria a FT
+    # inconsistente -> aba Inconsistencias (coberto em test_export_fechamento_integridade).
     custo = CarviaCustoEntrega(
         numero_custo='CE-TEST-1',
         tipo_custo='DIARIA',
         valor=Decimal('50.00'),
         data_custo=date(2026, 6, 30),
-        fatura_transportadora_id=fatura_id,
         frete_id=frete.id,
         status='PENDENTE',
         criado_por='test@bot',
     )
     db.session.add(custo)
     db.session.flush()
+
+    res = emitir_fatura_freteiro_carvia(
+        transportadora_id=transp.id,
+        itens=[{'frete_id': frete.id, 'valor_considerado': 162.55}],
+        custos_entrega=[{'ce_id': custo.id, 'valor': 50.00}],
+        data_vencimento=date(2026, 6, 30),
+        usuario_nome='Rafael Teste',
+    )
+    fatura_id = res['fatura_id']
 
     with client.session_transaction() as sess:
         sess['_user_id'] = str(admin.id)

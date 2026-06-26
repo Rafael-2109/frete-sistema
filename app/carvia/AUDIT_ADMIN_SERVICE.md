@@ -79,13 +79,20 @@ Sao sincronizados? Normalmente sim, mas se divergirem (ex: PAGA sem conciliado, 
 
 **Deveria**: Checar ambos — `if fatura.status == 'PAGA' or fatura.conciliado: block`.
 
-### A-7: `excluir_fatura_transportadora` — nao checa status_conferencia
+### A-7: `excluir_fatura_transportadora` — nao checa status_conferencia ✅ CORRIGIDO (2026-06-26)
 
 **Linha**: 486. Checa apenas `CarviaConciliacao` existente.
 
 **Problema**: Uma fatura CONFERIDA mas nao conciliada passaria. Isso contradiz a regra "CONFERIDO = trava" estabelecida no plano.
 
 **Deveria**: Adicionar check `if fatura.status_conferencia == 'CONFERIDO': block`.
+
+**Status**: CORRIGIDO (2026-06-26). `excluir_fatura_transportadora` agora bloqueia
+`status_conferencia == 'CONFERIDO'` (paridade Nacom `fretes.excluir_fatura`); reabra
+via `reabrir_fatura_transportadora` antes de excluir. Na mesma sessao, a exclusao
+passou a REVERTER o `CarviaFrete` vinculado (`reverter_frete_ao_desfazer_fatura`),
+nao apenas soltar a FK (causa-raiz embarque 6075). Teste:
+`tests/carvia/test_reverter_frete_fatura.py::test_excluir_ft_conferida_bloqueia`.
 
 ### A-8: `excluir_cte_complementar` nao checa CustoEntrega ativos
 
@@ -173,7 +180,7 @@ Cada fix de rota deve ser acompanhado do fix equivalente no admin:
 ### Sprint 2
 
 - A-5: `excluir_subcontrato` checa `frete_id` e `CarviaFrete.subcontrato_id`
-- A-7: `excluir_fatura_transportadora` checa `status_conferencia`
+- A-7: `excluir_fatura_transportadora` checa `status_conferencia` ✅ FEITO (2026-06-26)
 - A-12: `relink_operacao_nfs` usa `pode_desvincular_de_operacao()`
 
 ### Sprint 3

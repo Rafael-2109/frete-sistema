@@ -15,8 +15,28 @@ import pytest
 
 from app.carvia.services.financeiro.lancamento_freteiro_service import (
     emitir_fatura_freteiro_carvia,
+    listar_custos_entrega_carvia_pendentes_freteiro,
     listar_fretes_carvia_pendentes_freteiro,
 )
+
+
+def _criar_custo_entrega(db, transp, frete, *, valor=50.0, status='PENDENTE',
+                         tipo_custo='TAXA_DESCARGA', transportadora_id=None):
+    from app.carvia.models import CarviaCustoEntrega
+    ce = CarviaCustoEntrega(
+        numero_custo=f'CE-{frete.id}-{int(valor)}',
+        tipo_custo=tipo_custo,
+        descricao='custo teste',
+        valor=valor,
+        data_custo=date(2026, 6, 26),
+        status=status,
+        frete_id=frete.id,
+        transportadora_id=transportadora_id,
+        criado_por='test@bot',
+    )
+    db.session.add(ce)
+    db.session.flush()
+    return ce
 
 
 def _criar_embarque(db):
@@ -233,6 +253,29 @@ def test_emitir_reusa_subcontrato_existente(db):
     assert sub_pre.cte_numero and sub_pre.cte_numero.startswith('Sub-')
 
 
+def test_emitir_atualiza_valor_acertado_sub_existente(db):
+    """Reuso de sub na re-emissao deve atualizar valor_acertado (sub sintetico de
+    freteiro nao tem CTe real — resultado_frete usa valor_acertado como custo)."""
+    from app.carvia.models import CarviaSubcontrato
+    transp = _criar_freteiro(db)
+    f1 = _criar_frete_carvia(db, transp)
+    sub_pre = CarviaSubcontrato(
+        transportadora_id=transp.id, cte_numero='Sub-XXX',
+        valor_cotado=Decimal('162.55'), valor_acertado=Decimal('100'),
+        status='CONFIRMADO', criado_por='test@bot', frete_id=f1.id,
+    )
+    db.session.add(sub_pre)
+    db.session.flush()
+
+    emitir_fatura_freteiro_carvia(
+        transportadora_id=transp.id,
+        itens=[{'frete_id': f1.id, 'valor_considerado': 170}],
+        data_vencimento=date(2026, 6, 30),
+        usuario_nome='T',
+    )
+    assert float(sub_pre.valor_acertado) == pytest.approx(170)  # atualizado (era 100)
+
+
 def test_listar_pendentes_criterio(db):
     transp = _criar_freteiro(db)
     pendente = _criar_frete_carvia(db, transp, embarque_id=None)
@@ -253,3 +296,78 @@ def test_listar_pendentes_criterio(db):
     assert res[0]['valor_cotado'] == pytest.approx(162.55)
     assert res[0]['valor_considerado'] == pytest.approx(162.55)  # fallback cotado
     assert res[0]['embarque_id'] == embarque.id
+
+
+def test_listar_custos_entrega_pendentes_criterio(db):
+    """CE PENDENTE + sem fatura + freteiro + frete com embarque aparece;
+    vinculado/cancelado/de outra transportadora/sem embarque nao aparecem."""
+    transp = _criar_freteiro(db)
+    embarque = _criar_embarque(db)
+    frete = _criar_frete_carvia(db, transp, embarque_id=embarque.id)
+
+    ce_ok = _criar_custo_entrega(db, transp, frete, valor=50.0)
+    # ja faturado -> nao aparece
+    ce_fat = _criar_custo_entrega(db, transp, frete, valor=10.0)
+    ce_fat.status = 'PAGO'
+    # cancelado -> nao aparece
+    _criar_custo_entrega(db, transp, frete, valor=20.0, status='CANCELADO')
+    # CE de frete SEM embarque -> nao aparece (paridade Nacom: exige embarque)
+    frete_sem_emb = _criar_frete_carvia(db, transp, embarque_id=None,
+                                        cnpj_destino='55555555000155')
+    _criar_custo_entrega(db, transp, frete_sem_emb, valor=30.0)
+    db.session.flush()
+
+    res = listar_custos_entrega_carvia_pendentes_freteiro(transp.id)
+    assert len(res) == 1
+    assert res[0]['id'] == ce_ok.id
+    assert res[0]['embarque_id'] == embarque.id
+    assert res[0]['valor'] == pytest.approx(50.0)
+    assert res[0]['frete_id'] == frete.id
+
+
+def test_emitir_fatura_freteiro_carvia_com_custos(db):
+    from app.carvia.models import CarviaCustoEntrega, CarviaFaturaTransportadora
+    transp = _criar_freteiro(db)
+    embarque = _criar_embarque(db)
+    f1 = _criar_frete_carvia(db, transp, embarque_id=embarque.id, valor_cotado=160.0)
+    ce = _criar_custo_entrega(db, transp, f1, valor=75.0)
+
+    res = emitir_fatura_freteiro_carvia(
+        transportadora_id=transp.id,
+        itens=[{'frete_id': f1.id, 'valor_considerado': 160.0}],
+        custos_entrega=[{'ce_id': ce.id, 'valor': 75.0}],
+        data_vencimento=date(2026, 6, 30),
+        usuario_nome='Rafael Teste',
+    )
+
+    assert res['fretes'] == 1
+    assert res['custos_entrega'] == 1
+    assert res['valor_total'] == pytest.approx(235.0)  # 160 + 75
+
+    ft = db.session.get(CarviaFaturaTransportadora, res['fatura_id'])
+    assert float(ft.valor_total) == pytest.approx(235.0)
+    ce_db = db.session.get(CarviaCustoEntrega, ce.id)
+    assert ce_db.fatura_transportadora_id == ft.id
+    assert ce_db.numero_documento != 'PENDENTE_FATURA'  # vinculado
+
+    # apos emissao, o CE nao e mais pendente
+    assert listar_custos_entrega_carvia_pendentes_freteiro(transp.id) == []
+
+
+def test_emitir_fatura_carvia_custo_outra_transportadora_bloqueia(db):
+    transp = _criar_freteiro(db)
+    outra = _criar_freteiro(db, cnpj='66666666000166')
+    embarque = _criar_embarque(db)
+    f_outra = _criar_frete_carvia(db, outra, embarque_id=embarque.id)
+    ce_outra = _criar_custo_entrega(db, outra, f_outra, valor=40.0)
+    f1 = _criar_frete_carvia(db, transp, embarque_id=embarque.id,
+                             cnpj_destino='77777777000188')
+
+    with pytest.raises(ValueError, match='outra transportadora'):
+        emitir_fatura_freteiro_carvia(
+            transportadora_id=transp.id,
+            itens=[{'frete_id': f1.id, 'valor_considerado': 100.0}],
+            custos_entrega=[{'ce_id': ce_outra.id, 'valor': 40.0}],
+            data_vencimento=date(2026, 6, 30),
+            usuario_nome='T',
+        )

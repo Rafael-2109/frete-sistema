@@ -75,6 +75,58 @@ def listar_fretes_carvia_pendentes_freteiro(
     ]
 
 
+def listar_custos_entrega_carvia_pendentes_freteiro(
+    transportadora_id: int,
+) -> List[Dict[str, Any]]:
+    """Custos de entrega CarVia pendentes de um freteiro (xerox DespesaExtra Nacom).
+
+    Espelha o criterio Nacom de despesas pendentes (lancamento_freteiros): CE
+    PENDENTE, sem fatura, transportadora efetiva = freteiro, com frete em embarque
+    (agrupamento por embarque na tela). Transportadora efetiva = override
+    (`CarviaCustoEntrega.transportadora_id`) OU a do frete (paridade Nacom
+    `transportadora_efetiva`).
+
+    Returns:
+        lista de dicts {id, frete_id, embarque_id, tipo_custo, descricao, valor,
+        numeros_nfs, nome_destino}
+    """
+    from app import db
+    from app.carvia.models import CarviaCustoEntrega, CarviaFrete
+
+    ces = (
+        CarviaCustoEntrega.query
+        .join(CarviaFrete, CarviaCustoEntrega.frete_id == CarviaFrete.id)
+        .filter(
+            CarviaCustoEntrega.status == 'PENDENTE',
+            CarviaCustoEntrega.fatura_transportadora_id.is_(None),
+            CarviaFrete.embarque_id.isnot(None),
+            db.or_(
+                CarviaCustoEntrega.transportadora_id == transportadora_id,
+                db.and_(
+                    CarviaCustoEntrega.transportadora_id.is_(None),
+                    CarviaFrete.transportadora_id == transportadora_id,
+                ),
+            ),
+        )
+        .order_by(CarviaFrete.embarque_id, CarviaCustoEntrega.id)
+        .all()
+    )
+    resultado = []
+    for ce in ces:
+        frete = ce.frete  # backref CarviaFrete.custos_entrega
+        resultado.append({
+            'id': ce.id,
+            'frete_id': ce.frete_id,
+            'embarque_id': frete.embarque_id if frete else None,
+            'tipo_custo': ce.tipo_custo or '',
+            'descricao': ce.descricao or '',
+            'valor': float(ce.valor or 0),
+            'numeros_nfs': (frete.numeros_nfs if frete else '') or '',
+            'nome_destino': (frete.nome_destino if frete else '') or '',
+        })
+    return resultado
+
+
 def _gerar_numero_fatura_unico(transportadora, data_vencimento) -> str:
     """Nome sintetico espelhando o Nacom ("Fech {nome} {venc}"), com sufixo
     sequencial se colidir (UNIQUE numero_fatura+transportadora_id)."""
@@ -101,6 +153,7 @@ def emitir_fatura_freteiro_carvia(
     data_vencimento,
     usuario_nome: str,
     observacoes: str = '',
+    custos_entrega: List[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """Emite o lado CarVia do fechamento de freteiro (espelho do Nacom).
 
@@ -141,14 +194,16 @@ def emitir_fatura_freteiro_carvia(
 
     from app import db
     from app.carvia.models import (
-        CarviaFaturaTransportadora, CarviaFrete, CarviaSubcontrato,
+        CarviaCustoEntrega, CarviaFaturaTransportadora, CarviaFrete,
+        CarviaSubcontrato,
     )
     from app.carvia.services.documentos.linking_service import LinkingService
     from app.transportadoras.models import Transportadora
     from app.utils.timezone import agora_utc_naive
 
-    if not itens:
-        raise ValueError('Nenhum frete CarVia informado para emissao.')
+    custos_entrega = custos_entrega or []
+    if not itens and not custos_entrega:
+        raise ValueError('Nenhum frete ou custo CarVia informado para emissao.')
 
     transportadora = db.session.get(Transportadora, transportadora_id)
     if not transportadora:
@@ -180,6 +235,38 @@ def emitir_fatura_freteiro_carvia(
             raise ValueError(f'CarviaFrete {frete.id}: valor considerado invalido ({valor}).')
         fretes_validados.append({'frete': frete, 'valor': valor})
         valor_total += valor
+
+    # --- 1b. Validar e carregar custos de entrega (xerox DespesaExtra Nacom) ---
+    custos_validados: List[Dict[str, Any]] = []
+    for c in custos_entrega:
+        ce = db.session.get(CarviaCustoEntrega, int(c['ce_id']))
+        if not ce:
+            raise ValueError(f"CarviaCustoEntrega {c['ce_id']} nao encontrado.")
+        frete_ce = db.session.get(CarviaFrete, ce.frete_id) if ce.frete_id else None
+        # transportadora efetiva = override OU a do frete (paridade Nacom)
+        transp_efetiva = ce.transportadora_id or (
+            frete_ce.transportadora_id if frete_ce else None
+        )
+        if transp_efetiva != transportadora_id:
+            raise ValueError(
+                f'CarviaCustoEntrega {ce.id} pertence a outra transportadora '
+                f'({transp_efetiva} != {transportadora_id}).'
+            )
+        if ce.status in ('CANCELADO', 'PAGO'):
+            raise ValueError(f'CarviaCustoEntrega {ce.id} esta {ce.status}.')
+        if ce.fatura_transportadora_id:
+            raise ValueError(
+                f'CarviaCustoEntrega {ce.id} ja vinculado a fatura '
+                f'{ce.fatura_transportadora_id}.'
+            )
+        valor_ce_in = c.get('valor')
+        valor_ce = Decimal(
+            str(valor_ce_in if valor_ce_in is not None else (ce.valor or 0))
+        ).quantize(Decimal('0.01'))
+        if valor_ce <= 0:
+            raise ValueError(f'CarviaCustoEntrega {ce.id}: valor invalido ({valor_ce}).')
+        custos_validados.append({'ce': ce, 'valor': valor_ce})
+        valor_total += valor_ce
 
     # --- 2. Criar a FT sintetica (espelho FaturaFrete Nacom CONFERIDA) ---
     fatura = CarviaFaturaTransportadora(
@@ -238,8 +325,10 @@ def emitir_fatura_freteiro_carvia(
                 sub.fatura_transportadora_id = fatura.id
             if not sub.cte_numero:
                 sub.cte_numero = CarviaSubcontrato.gerar_numero_sub()
-            if sub.valor_acertado is None:
-                sub.valor_acertado = valor
+            # Sempre sincroniza o valor acertado (sub sintetico de freteiro nao tem
+            # CTe real; resultado_frete usa valor_acertado como custo). Na re-emissao
+            # apos reversao, o `is None` antigo deixava o valor defasado.
+            sub.valor_acertado = valor
             sub.status = 'FATURADO'
         else:
             sub = CarviaSubcontrato(
@@ -264,6 +353,15 @@ def emitir_fatura_freteiro_carvia(
             subs_criados += 1
         sub_ids.append(sub.id)
 
+    # --- 3b. Vincular custos de entrega a FT (paridade DespesaExtra Nacom) ---
+    for cv in custos_validados:
+        ce, valor_ce = cv['ce'], cv['valor']
+        ce.valor = valor_ce
+        ce.fatura_transportadora_id = fatura.id
+        ce.tipo_documento = 'CTE'
+        ce.numero_documento = f'Custo {ce.tipo_custo}'
+        ce.data_vencimento = data_vencimento
+
     # --- 4. Itens de detalhe da FT (pattern lancar_cte) ---
     linker = LinkingService()
     linker.criar_itens_fatura_transportadora_incremental(fatura.id, sub_ids)
@@ -271,13 +369,14 @@ def emitir_fatura_freteiro_carvia(
     db.session.flush()
     logger.info(
         f'[FRETEIRO_CARVIA] FT {fatura.id} ({fatura.numero_fatura}) emitida: '
-        f'{len(fretes_validados)} fretes, R$ {valor_total}, '
-        f'{subs_criados} subcontratos criados, por {usuario_nome}'
+        f'{len(fretes_validados)} fretes, {len(custos_validados)} custos, '
+        f'R$ {valor_total}, {subs_criados} subcontratos criados, por {usuario_nome}'
     )
     return {
         'fatura_id': fatura.id,
         'numero_fatura': fatura.numero_fatura,
         'valor_total': float(valor_total),
         'fretes': len(fretes_validados),
+        'custos_entrega': len(custos_validados),
         'subcontratos_criados': subs_criados,
     }

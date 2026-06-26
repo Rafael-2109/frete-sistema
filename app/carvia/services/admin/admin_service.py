@@ -284,6 +284,19 @@ class AdminService:
         if not fatura:
             return {'sucesso': False, 'mensagem': f'Fatura transportadora {fatura_id} nao encontrada.'}
 
+        # Bloqueio CONFERIDO (paridade Nacom `fretes.excluir_fatura` + fecha gap
+        # A-7 do AUDIT_ADMIN_SERVICE.md): uma FT conferida precisa ser reaberta
+        # (`reabrir_fatura_transportadora`) antes de excluir — evita desfazer um
+        # fechamento sem trilha de reabertura.
+        if fatura.status_conferencia == 'CONFERIDO':
+            return {
+                'sucesso': False,
+                'mensagem': (
+                    'Fatura CONFERIDA nao pode ser excluida. Reabra a conferencia '
+                    'antes de excluir.'
+                ),
+            }
+
         # Verificar conciliacao
         conc_count = CarviaConciliacao.query.filter_by(
             tipo_documento='fatura_transportadora', documento_id=fatura_id
@@ -334,12 +347,24 @@ class AdminService:
             if sub.status == 'FATURADO':
                 sub.status = 'CONFIRMADO'
 
-        # 1b. Nullify CarviaFrete + ContaCorrente (FKs sem ON DELETE = NO ACTION,
+        # 1b. Reverter CarviaFrete + ContaCorrente (FKs sem ON DELETE = NO ACTION,
         # bloqueariam o delete) e reverter status dos CustoEntrega (a FK e
         # SET NULL, mas o DB nao reverte o status). (REVISAO_ARQUITETURA_2026 I4)
-        fretes_desvinculados = CarviaFrete.query.filter_by(
+        #
+        # CarviaFrete: NAO basta soltar a FK — isso deixava o frete FATURADO +
+        # valor_cte preenchido, invisivel ao Lancamento Freteiros (causa-raiz
+        # embarque 6075). `reverter_frete_ao_desfazer_fatura` espelha o
+        # `cancelar_cte` Nacom (freteiro -> PENDENTE limpa valor_cte; demais ->
+        # CONFERIDO). Itera (volume baixo por FT) em vez de bulk update.
+        from app.carvia.services.documentos.carvia_frete_service import (
+            CarviaFreteService,
+        )
+        fretes_vinculados = CarviaFrete.query.filter_by(
             fatura_transportadora_id=fatura_id
-        ).update({'fatura_transportadora_id': None}, synchronize_session=False)
+        ).all()
+        for frete in fretes_vinculados:
+            CarviaFreteService.reverter_frete_ao_desfazer_fatura(frete)
+        fretes_desvinculados = len(fretes_vinculados)
         CarviaContaCorrenteTransportadora.query.filter_by(
             fatura_transportadora_id=fatura_id
         ).update({'fatura_transportadora_id': None}, synchronize_session=False)
@@ -348,6 +373,12 @@ class AdminService:
             fatura_transportadora_id=fatura_id
         ).all():
             ce.fatura_transportadora_id = None
+            # Reset do documento (paridade CustoEntregaFaturaService.desvincular):
+            # o CE volta a "pendente de fatura/documento" para re-aparecer no
+            # Lancamento Freteiros e nao herdar o numero da fatura excluida.
+            ce.numero_documento = 'PENDENTE_FATURA'
+            ce.tipo_documento = 'PENDENTE_DOCUMENTO'
+            ce.data_vencimento = None
             # CE pago via FT (auto-propagacao) volta a PENDENTE ao deletar a FT.
             # (status VINCULADO_FT removido em 2026-06-22; CE vinculado ja era
             # PENDENTE — basta soltar a FK acima.)

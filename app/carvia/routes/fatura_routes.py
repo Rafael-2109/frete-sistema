@@ -1819,15 +1819,24 @@ def register_fatura_routes(bp):
                     motivo=f'Desanexado da fatura #{fatura_id}',
                     usuario=current_user.email,
                 )
-            # Propagar para CarviaFrete via frete_id (novo) ou subcontrato_id (deprecated)
+            # Reverter o CarviaFrete vinculado (via frete_id novo ou subcontrato_id
+            # deprecated). NAO basta soltar a FK — isso deixava o frete FATURADO +
+            # valor_cte preenchido, invisivel ao Lancamento Freteiros (causa-raiz
+            # embarque 6075). `reverter_frete_ao_desfazer_fatura` espelha o
+            # `cancelar_cte` Nacom (freteiro -> PENDENTE limpa valor_cte; demais
+            # -> CONFERIDO).
+            from app.carvia.services.documentos.carvia_frete_service import (
+                CarviaFreteService,
+            )
             if sub.frete_id:
                 frete_vinc = db.session.get(CarviaFrete, sub.frete_id)
                 if frete_vinc:
-                    frete_vinc.fatura_transportadora_id = None
+                    CarviaFreteService.reverter_frete_ao_desfazer_fatura(frete_vinc)
             else:
-                CarviaFrete.query.filter_by(subcontrato_id=sub.id).update(
-                    {'fatura_transportadora_id': None}
-                )
+                for frete_vinc in CarviaFrete.query.filter_by(
+                    subcontrato_id=sub.id
+                ).all():
+                    CarviaFreteService.reverter_frete_ao_desfazer_fatura(frete_vinc)
 
             # Remover item de detalhe
             CarviaFaturaTransportadoraItem.query.filter_by(
