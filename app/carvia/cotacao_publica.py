@@ -22,10 +22,19 @@ cotacao_publica_bp = Blueprint(
 
 LIMITE_UPLOAD = 20      # por IP / hora
 LIMITE_CALCULAR = 60    # por IP / hora
+LIMITE_PDF = 30         # por IP / hora
+LIMITE_CEP = 120        # por IP / hora
 JANELA = 3600
 
 
 def _ip():
+    """Retorna o IP do cliente lendo o primeiro hop de X-Forwarded-For.
+
+    Nota: X-Forwarded-For e' um header controlado pelo cliente — sem ProxyFix
+    configurado no app, o valor nao e' validado. O rate-limit por IP e' uma
+    medida anti-abuso de melhor-esforco, nao uma barreira de seguranca contra
+    um atacante que forje esse header.
+    """
     fwd = request.headers.get('X-Forwarded-For', '')
     return (fwd.split(',')[0].strip() if fwd else request.remote_addr) or ''
 
@@ -50,6 +59,8 @@ def cotacao_publica_cidades(uf):
 
 @cotacao_publica_bp.route('/cep/<cep>')
 def cotacao_publica_cep(cep):
+    if not permitir('cep', _ip(), limite=LIMITE_CEP, janela_seg=JANELA):
+        return jsonify({'ok': False, 'erro': 'Muitas requisicoes. Tente mais tarde.'}), 429
     from app.utils.cep_service import resolver_cep
     dados = resolver_cep(cep)
     if not dados:
@@ -127,6 +138,8 @@ def cotacao_publica_calcular():
 
 @cotacao_publica_bp.route('/pdf', methods=['POST'])
 def cotacao_publica_pdf():
+    if not permitir('pdf', _ip(), limite=LIMITE_PDF, janela_seg=JANELA):
+        return jsonify({'ok': False, 'erro': 'Muitas requisicoes. Tente mais tarde.'}), 429
     payload = request.get_json(silent=True) or {}
     contexto = resolver_contexto(payload)
     if contexto.get('erro'):

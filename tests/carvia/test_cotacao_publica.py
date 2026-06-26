@@ -154,3 +154,16 @@ def test_cotacao_publica_cidades_sem_login(db, client):
     r = client.get('/cotacao/cidades/SP')
     assert r.status_code == 200
     assert isinstance(r.get_json(), list)
+
+
+def test_cotacao_publica_pdf_rate_limit_429(db, client):
+    with patch('app.carvia.cotacao_publica.permitir', return_value=False):
+        r = client.post('/cotacao/pdf', json={
+            'itens': [{'modelo_id': 1, 'quantidade': 1}], 'uf_destino': 'RJ'})
+    assert r.status_code == 429
+
+
+def test_cotacao_publica_cep_rate_limit_429(db, client):
+    with patch('app.carvia.cotacao_publica.permitir', return_value=False):
+        r = client.get('/cotacao/cep/01001000')
+    assert r.status_code == 429
