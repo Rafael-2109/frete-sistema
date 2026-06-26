@@ -1269,6 +1269,17 @@ def listar_entregas():
             except ValueError:
                 pass
 
+    # Filtro checkbox: Entregues S/ Canhoto — finalizadas como 'Entregue' e sem
+    # arquivo de canhoto anexado (NULL ou vazio, igual a property possui_canhoto)
+    if request.args.get('sem_canhoto'):
+        query = query.filter(
+            EntregaMonitorada.status_finalizacao == 'Entregue',
+            db.or_(
+                EntregaMonitorada.canhoto_arquivo.is_(None),
+                EntregaMonitorada.canhoto_arquivo == ''
+            )
+        )
+
     # Faz join para poder ordenar / filtrar por esse valor, se necessário
     # (Se não for filtrar explicitamente, o "outerjoin" nem sempre é necessário)
     # query = query.outerjoin(...)   # Em muitos casos, basta a subquery correlacionada.
