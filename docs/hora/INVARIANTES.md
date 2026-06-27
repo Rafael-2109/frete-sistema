@@ -4,7 +4,7 @@ camada: L3
 sot_de: —
 hub: docs/INDEX.md
 superseded_by: —
-atualizado: 2026-06-02
+atualizado: 2026-06-27
 -->
 # Invariantes do Módulo HORA (Lojas Motochefe)
 
@@ -107,6 +107,16 @@ DANFE legado → FATURADO direto (importar_nf_saida_pdf)
 **Janela de cancelamento NFe**: 24h validadas localmente em `cancelador_nfe._validar_janela` — defesa em profundidade (TagPlus também valida na SEFAZ).
 
 Detalhes do workflow: `app/hora/CLAUDE.md` seção 9.
+
+---
+
+## Exceção: NF provisória e moto sem `HoraNfEntradaItem` (2026-06-27)
+
+O fluxo de **recebimento por filial sem NF** (`criar_recebimento_sem_nf`, `app/hora/CLAUDE.md` §28) introduz dois casos que relaxam invariantes sem quebrá-los:
+
+1. **`hora_nf_entrada.nf_id` NOT NULL para NF provisória.** A NF provisória mantém `nf_id` NOT NULL (usa string sintética única como container), preservando a constraint do schema e evitando efeito-dominó em código que assume `nf_id` presente. A NF provisória é gerencial (`valor_total=0`, sem efeito fiscal SEFAZ); o campo `tipo` distingue `'PROVISORIA'` de `'REAL'`.
+
+2. **Moto de origem provisória sem `HoraNfEntradaItem`.** Uma moto criada durante a conferência de recebimento provisório não tem `HoraNfEntradaItem` correspondente até que a NF real seja anexada via `anexar_nf_real_ao_recebimento`. O invariante "toda moto tem um item de NF de entrada" aplica-se **apenas a NFs REAL** — para o intervalo entre conferência provisória e anexação da NF real, a moto existe em `hora_moto` sem item de NF. Código que assume existência de `HoraNfEntradaItem` para derivar custo/margem deve verificar `nf.provisoria` antes.
 
 ---
 
