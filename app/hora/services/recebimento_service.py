@@ -41,6 +41,14 @@ from app.hora.services import recebimento_audit
 ALLOWED_FOTO_EXT = {'jpg', 'jpeg', 'png', 'webp', 'heic', 'heif'}
 
 
+class RecebimentoDuplicadoError(ValueError):
+    """Chassi ja recebido: possui conferencia ativa em OUTRO recebimento.
+
+    Subclasse de ValueError para que as rotas que ja capturam ValueError
+    (recebimentos_conferir) devolvam 400 + mensagem sem tratamento novo.
+    """
+
+
 def upload_foto_chassi(file_obj, recebimento_id: int) -> Optional[str]:
     """Sobe a foto do chassi conferido ao S3 e retorna a s3_key.
 
@@ -104,6 +112,8 @@ def validar_chassi_contra_recebimento(
         'no_pedido': None,
         'ja_conferido': False,
         'conferencia_ativa_id': None,
+        'ja_recebido_outro': False,
+        'outro_recebimento_id': None,
         'moto_existe': False,
         'modelo_esperado': None,
         'modelo_id_esperado': None,
@@ -170,6 +180,19 @@ def validar_chassi_contra_recebimento(
         resultado['ja_conferido'] = True
         resultado['conferencia_ativa_id'] = existente.id
 
+    # Aviso anti-duplicado: conferencia ATIVA em OUTRO recebimento = ja recebido.
+    # Mesma condicao da trava em registrar_conferencia_cega (consistencia aviso<->bloqueio).
+    outra = (
+        HoraRecebimentoConferencia.query
+        .filter(HoraRecebimentoConferencia.numero_chassi == chassi_norm,
+                HoraRecebimentoConferencia.substituida.is_(False),
+                HoraRecebimentoConferencia.recebimento_id != recebimento_id)
+        .first()
+    )
+    if outra is not None:
+        resultado['ja_recebido_outro'] = True
+        resultado['outro_recebimento_id'] = outra.recebimento_id
+
     # modelos_sugeridos: lista nomes CANONICOS para casar com o select do
     # wizard (que so contem canonicos). Resolve cada texto livre da NF e
     # cada modelo_id de pedido para o canonico correspondente.
@@ -194,7 +217,15 @@ def validar_chassi_contra_recebimento(
     resultado['modelos_sugeridos'] = sorted(modelos_canonicos.values())
     resultado['cores_sugeridas'] = sorted(c for c in cores if c)
 
-    if not resultado['na_nf']:
+    if resultado['ja_recebido_outro'] and not resultado['ja_conferido']:
+        # So avisa bloqueio quando NAO e update-in-place do proprio recebimento
+        # (se ja_conferido neste rec, o submit cai no else e e permitido).
+        resultado['mensagem'] = (
+            f"⛔ Chassi {chassi_norm} JA FOI RECEBIDO no recebimento "
+            f"#{resultado['outro_recebimento_id']}. Nao pode ser recebido de novo. "
+            f"Avaria -> modulo Avarias; devolucao -> modulo Devolucoes."
+        )
+    elif not resultado['na_nf']:
         resultado['mensagem'] = (
             'Chassi NAO consta na NF deste recebimento. Sera registrado como CHASSI_EXTRA.'
         )
@@ -352,6 +383,29 @@ def registrar_conferencia_cega(
 
     is_new = conf is None
     if is_new:
+        # TRAVA anti-recebimento-duplicado (2026-06-27): chassi com conferencia
+        # ATIVA em OUTRO recebimento ja foi recebido e nao pode ser recebido de
+        # novo. So chega aqui se NAO ha conferencia ativa deste chassi NESTE
+        # recebimento (is_new), entao qualquer match e necessariamente de outro
+        # recebimento — zero falso-positivo na reconferencia/update do proprio.
+        # Re-entradas legitimas (transferencia, devolucao) usam registrar_evento,
+        # nao a conferencia, e nao sao afetadas.
+        conf_outro = (
+            HoraRecebimentoConferencia.query
+            .filter(
+                HoraRecebimentoConferencia.numero_chassi == chassi_norm,
+                HoraRecebimentoConferencia.substituida.is_(False),
+                HoraRecebimentoConferencia.recebimento_id != recebimento_id,
+            )
+            .first()
+        )
+        if conf_outro is not None:
+            raise RecebimentoDuplicadoError(
+                f"Chassi {chassi_norm} ja foi recebido no recebimento "
+                f"#{conf_outro.recebimento_id}; nao pode ser recebido novamente. "
+                f"Para registrar avaria use o modulo Avarias; para devolucao use "
+                f"o modulo Devolucoes."
+            )
         ordem_final = ordem if (ordem and ordem >= 1) else proxima_ordem(recebimento_id)
         # Garantir HoraMoto existe (FK)
         item_nf = HoraNfEntradaItem.query.filter_by(
@@ -1422,11 +1476,26 @@ def criar_recebimento_automatico_da_nf(
     conf_ids: List[int] = []
     chassis_sem_modelo_canonico: List[str] = []
     chassis_pulados_ja_fora: List[str] = []
+    chassis_pulados_ja_recebido: List[str] = []
     ordem_conf = 0
     for item in nf.itens_considerados:
         estado_atual = status_atual(item.numero_chassi)
         if estado_atual in ESTADOS_JA_FORA:
             chassis_pulados_ja_fora.append(item.numero_chassi)
+            continue
+        # Anti-duplicado: ja recebido (conf ativa) em OUTRO recebimento -> pula,
+        # nao aborta o lote (espelha a guarda ESTADOS_JA_FORA acima).
+        ja_recebido = (
+            HoraRecebimentoConferencia.query
+            .filter(
+                HoraRecebimentoConferencia.numero_chassi == item.numero_chassi,
+                HoraRecebimentoConferencia.substituida.is_(False),
+                HoraRecebimentoConferencia.recebimento_id != rec.id,
+            )
+            .first()
+        )
+        if ja_recebido is not None:
+            chassis_pulados_ja_recebido.append(item.numero_chassi)
             continue
         ordem_conf += 1
         modelo_canonico = None
@@ -1456,7 +1525,7 @@ def criar_recebimento_automatico_da_nf(
     rec = finalizar_recebimento(
         recebimento_id=rec.id,
         operador=operador,
-        ignorar_chassis=set(chassis_pulados_ja_fora),
+        ignorar_chassis=set(chassis_pulados_ja_fora) | set(chassis_pulados_ja_recebido),
     )
 
     # 5. Auditoria explicita marcando origem AUTOMATICA
@@ -1483,6 +1552,7 @@ def criar_recebimento_automatico_da_nf(
         'conferencias_criadas': len(conf_ids),
         'chassis_sem_modelo_canonico': chassis_sem_modelo_canonico,
         'chassis_pulados_ja_fora': chassis_pulados_ja_fora,
+        'chassis_pulados_ja_recebido': chassis_pulados_ja_recebido,
         'status_final': rec.status,
     }
 
