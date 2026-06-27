@@ -123,8 +123,12 @@ async def _subagent_start_audit(input_data, tool_use_id, context):
 async def _subagent_stop_audit(input_data, tool_use_id, context):
     """Hook SubagentStop — log quando subagent (orientador-loja) termina.
 
-    Em M3 esta funcao integra com cost_tracker para custos granulares.
-    Hoje apenas log informacional.
+    FIX P1.5: read-back de observabilidade. Antes so 'status=done' ia ao log —
+    o subagente rodava "cego". Agora le os findings reais via subagent_reader
+    (padrao canonico SDK 0.1.60+, mesmo do agente web) e os loga para auditoria
+    no Render. Best-effort: None se timing/sessao nao casarem; nunca quebra o
+    fluxo. A VALIDACAO anti-alucinacao (worker Haiku, como subagent_validator do
+    agente web) e o cost tracking granular por subagente ficam para M3/P2.
     """
     try:
         agent_type = input_data.get('agent_type') or input_data.get('subagent_type', 'unknown')
@@ -136,6 +140,21 @@ async def _subagent_stop_audit(input_data, tool_use_id, context):
             (agent_id or '')[:12],
             status,
         )
+        # Read-back dos findings (observabilidade)
+        try:
+            from app.agente_lojas.config.permissions import get_current_session_id
+            from app.agente.sdk.subagent_reader import get_subagent_findings
+            _sid = get_current_session_id()
+            if _sid and agent_type and agent_type != 'unknown':
+                _findings = get_subagent_findings(_sid, agent_type)
+                if _findings:
+                    logger.info(
+                        "[AUDIT_LOJAS] subagent_findings type=%s len=%d preview=%s",
+                        agent_type, len(_findings),
+                        _findings[:500].replace('\n', ' '),
+                    )
+        except Exception as _rb_err:
+            logger.debug("[AUDIT_LOJAS] read-back findings falhou: %s", _rb_err)
     except Exception as e:
         logger.debug("[AUDIT_LOJAS] subagent_stop exception: %s", e)
     return {}

@@ -196,7 +196,13 @@ compartilha com 'web' (nao e critico enquanto nao houver memorias).
    no store (evita --resume de JSONL inexistente). A resposta do **assistant**
    passou a ser persistida em `agent_sessions.data['messages']` (antes so o turno
    do usuario), e o custo e gravado em **delta** via `turn_cost_from_cumulative`
-   (antes somava o acumulado cru do SDK -> inflacao ~Nx).
+   (antes somava o acumulado cru do SDK -> inflacao ~Nx). **Robustez P1 alinhada
+   ao web (2026-06-26):** timeouts 300s/1740s (era 240s/540s — cortavam skill
+   pesada/subagente), `max_turns` removido (era 20 — cortava respostas
+   multi-step) com guard de runaway por `max_budget_usd` default 1.5 USD, stderr
+   do CLI capturado no drain p/ diagnostico de ProcessError, e read-back de
+   observabilidade dos findings do subagente no SubagentStop (validacao
+   anti-alucinacao Haiku = M3/P2).
 
 1. **Nao importar** `app/motochefe/` ou `app/carvia/` direto neste modulo
    (contrato de isolamento HORA). Se precisar de dado da Motochefe como

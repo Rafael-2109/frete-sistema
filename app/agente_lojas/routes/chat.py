@@ -44,8 +44,12 @@ logger = logging.getLogger('sistema_fretes')
 
 
 HEARTBEAT_INTERVAL_SECONDS = 10
-INACTIVITY_TIMEOUT_SECONDS = 240
-STREAM_MAX_DURATION_SECONDS = 540
+# Timeouts alinhados ao agente web (app/agente/routes/_constants.py) apos 3
+# timeouts reais em prod (2026-05): inatividade renovada a cada evento real
+# (heartbeat NAO renova), teto absoluto folgado vs gunicorn (1800s). Antes
+# 240s/540s cortavam skill SQL pesada e o subagente orientador-loja.
+INACTIVITY_TIMEOUT_SECONDS = 300
+STREAM_MAX_DURATION_SECONDS = 1740
 QUEUE_GET_TIMEOUT_SECONDS = 1.0  # poll period para dreno do event_queue
 
 
@@ -150,6 +154,9 @@ async def _drain_async_gen(
     Encerra com sentinel None. `state` mutavel propaga metadata pos-stream
     (sdk_session_id, total_cost_usd) para a thread principal.
     """
+    # FIX P1.4: capturar stderr do CLI subprocess para diagnosticar ProcessError
+    # (exit 1 etc.). Antes o erro exibido era generico. Drenado no except.
+    _stderr_q: 'queue.SimpleQueue[str]' = queue.SimpleQueue()
     try:
         agen = stream_lojas_chat(
             user_message=user_message,
@@ -160,6 +167,7 @@ async def _drain_async_gen(
             sdk_session_id=sdk_session_id,
             our_session_id=our_session_id,
             event_queue=event_queue,
+            stderr_queue=_stderr_q,
         )
         async for event in agen:
             etype = event.get('type')
@@ -187,6 +195,18 @@ async def _drain_async_gen(
             else:
                 event_queue.put(_sse(etype, {'content': content, **meta}))
     except Exception as e:
+        # Drenar stderr do CLI (best-effort) para o log — diagnostico de crash.
+        _stderr_lines = []
+        try:
+            while True:
+                _stderr_lines.append(str(_stderr_q.get_nowait()))
+        except Exception:
+            pass
+        if _stderr_lines:
+            logger.error(
+                "[AGENTE_LOJAS] stderr CLI (ultimas %d linhas): %s",
+                len(_stderr_lines), " | ".join(_stderr_lines[-20:]),
+            )
         logger.exception("[AGENTE_LOJAS] drain erro: %s", e)
         event_queue.put(_sse('error', {'content': str(e)}))
     finally:

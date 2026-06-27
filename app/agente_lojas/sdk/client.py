@@ -220,7 +220,11 @@ class AgentLojasClient:
 
         options_kwargs: Dict[str, Any] = {
             "model": self.settings.model,
-            "max_turns": 20,
+            # max_turns OMITIDO (sem limite) — alinha ao agente web. max_turns
+            # fixo cortava respostas multi-step ("Reached maximum number of turns"
+            # + frontend preso); cada tool_use/Skill/subagente conta turno, e o
+            # antigo 20 estourava facil. Guarda de runaway = max_budget_usd
+            # (default abaixo) + timeouts.
             "max_buffer_size": 10_000_000,  # 10MB para tool_results grandes
             "system_prompt": self._build_system_prompt(),
             "cwd": PROJECT_ROOT,
@@ -297,17 +301,23 @@ class AgentLojasClient:
         # Budget control nativo: protege contra runaway sessions. Configuravel
         # via env var (default 1.5 USD por request — operadores de loja tipicamente
         # gastam <0.10 USD; valor alto eh sinal de loop ou ferramenta travada).
+        # Budget guard de runaway (substitui o teto de max_turns removido acima).
+        # Default 1.5 USD/request — operador de loja gasta tipicamente <0.10 USD;
+        # valor alto = loop ou ferramenta travada. Override via env var; <=0
+        # desliga o guard explicitamente.
+        max_budget = 1.5
         max_budget_env = os.getenv('AGENT_LOJAS_MAX_BUDGET_USD')
         if max_budget_env:
             try:
                 max_budget = float(max_budget_env)
-                if max_budget > 0:
-                    options_kwargs["max_budget_usd"] = max_budget
             except (ValueError, TypeError):
                 logger.warning(
                     "[AGENTE_LOJAS] AGENT_LOJAS_MAX_BUDGET_USD invalido: %s "
-                    "(esperado float, ex: 1.5)", max_budget_env,
+                    "(esperado float, ex: 1.5) — usando default 1.5", max_budget_env,
                 )
+                max_budget = 1.5
+        if max_budget > 0:
+            options_kwargs["max_budget_usd"] = max_budget
 
         return ClaudeAgentOptions(**options_kwargs)
 
