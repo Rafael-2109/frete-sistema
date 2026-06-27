@@ -106,14 +106,11 @@ def recebimentos_lista():
 def recebimentos_novo():
     if request.method == 'POST':
         try:
-            nf_id = int(request.form['nf_id'])
             loja_id = int(request.form['loja_id'])
             if not usuario_tem_acesso_a_loja(loja_id):
                 flash('Acesso negado a essa loja.', 'danger')
                 return redirect(url_for('hora.recebimentos_novo'))
-            rec = recebimento_service.iniciar_recebimento(
-                nf_id=nf_id, loja_id=loja_id, operador=_op_name(),
-            )
+            rec = recebimento_service.criar_recebimento_sem_nf(loja_id=loja_id, operador=_op_name())
             return redirect(url_for('hora.recebimentos_qtd', recebimento_id=rec.id))
         except (ValueError, KeyError) as exc:
             flash(f'Erro: {exc}', 'danger')
@@ -193,19 +190,25 @@ def recebimentos_wizard(recebimento_id: int):
     # listagem usada no cadastro/vendas. Evita poluicao com nao-canonicos (§12).
     modelos = cadastro_service.listar_modelos()
 
-    # Cores: as DESTE recebimento (NF + pedido) viram sugestoes do topo; o resto
-    # do dropdown traz TODAS as grafias ja usadas na base, para o conferente
-    # reaproveitar em vez de redigitar e criar uma variante (BRANCA/BRANCO/...).
+    # Cores: as DESTE recebimento (NF/pedido OU snapshot provisorio sem-NF) viram
+    # sugestoes do topo; o resto do dropdown traz TODAS as grafias ja usadas na base,
+    # para o conferente reaproveitar em vez de redigitar uma variante (BRANCA/BRANCO/...).
     cores_nf = set()
-    for i in rec.nf.itens:
-        n = cor_service.normalizar_cor(i.cor_texto_original)
-        if n:
-            cores_nf.add(n)
-    if rec.nf.pedido_id and rec.nf.pedido:
-        for pi in rec.nf.pedido.itens:
-            n = cor_service.normalizar_cor(pi.cor)
+    if rec.nf.provisoria:
+        for e in rec.esperados:
+            n = cor_service.normalizar_cor(e.cor)
             if n:
                 cores_nf.add(n)
+    else:
+        for i in rec.nf.itens:
+            n = cor_service.normalizar_cor(i.cor_texto_original)
+            if n:
+                cores_nf.add(n)
+        if rec.nf.pedido_id and rec.nf.pedido:
+            for pi in rec.nf.pedido.itens:
+                n = cor_service.normalizar_cor(pi.cor)
+                if n:
+                    cores_nf.add(n)
     cores_existentes = [c for c in cor_service.listar_cores_existentes() if c not in cores_nf]
 
     return render_template(
@@ -479,6 +482,30 @@ def recebimentos_finalizar(recebimento_id: int):
             recebimento_id=rec.id, operador=_op_name(),
         )
         flash(f'Recebimento finalizado. Status: {rec.status}', 'success')
+    except ValueError as exc:
+        flash(f'Erro: {exc}', 'danger')
+    return redirect(url_for('hora.recebimentos_detalhe', recebimento_id=rec.id))
+
+
+# ------------------------------------------------------------------------
+# Anexar NF real a recebimento provisório
+# ------------------------------------------------------------------------
+
+@hora_bp.route('/recebimentos/<int:recebimento_id>/anexar-nf', methods=['POST'])
+@require_hora_perm('recebimentos', 'editar')
+def recebimentos_anexar_nf(recebimento_id: int):
+    rec = HoraRecebimento.query.get_or_404(recebimento_id)
+    if not usuario_tem_acesso_a_loja(rec.loja_id):
+        flash('Acesso negado.', 'danger')
+        return redirect(url_for('hora.recebimentos_lista'))
+    arquivo = request.files.get('pdf')
+    if not arquivo:
+        flash('Envie o PDF da NF.', 'danger')
+        return redirect(url_for('hora.recebimentos_detalhe', recebimento_id=rec.id))
+    try:
+        recebimento_service.anexar_nf_real_ao_recebimento(
+            recebimento_id=rec.id, pdf_bytes=arquivo.read(), operador=_op_name())
+        flash('NF real anexada e recebimento reprocessado.', 'success')
     except ValueError as exc:
         flash(f'Erro: {exc}', 'danger')
     return redirect(url_for('hora.recebimentos_detalhe', recebimento_id=rec.id))
