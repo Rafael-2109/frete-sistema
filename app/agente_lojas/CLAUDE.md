@@ -91,17 +91,30 @@ app/agente_lojas/
 
 ## Reuso vs exclusivo
 
-| Infra reusada (de `app/agente/`) | Exclusivo deste modulo |
-|---------------------------------|------------------------|
-| `sdk/client.py` (AgentClient)   | `prompts/system_prompt.md` |
-| `sdk/client_pool.py`            | `prompts/preset_operacional.md` |
-| `sdk/session_store_adapter.py`  | `config/settings.py` (subclass) |
-| `sdk/memory_injection.py`       | `config/skills_whitelist.py` |
-| `sdk/hooks.py` (build_hooks)    | `services/scope_injector.py` |
-| `config/permissions.py`         | `routes/chat.py` (minimal) |
-| `models.py` (AgentSession, ...)  | `templates/agente_lojas/chat.html` |
+> **ESTADO REAL (corrigido 2026-06-26 apos estudo).** A tabela anterior estava
+> ERRADA: afirmava reuso de `sdk/client.py` (AgentClient), `sdk/hooks.py`
+> (build_hooks), `sdk/memory_injection.py` e `sdk/client_pool.py` que **nunca
+> existiu**. O modulo tem um **fork proprio** `AgentLojasClient` (~350 LOC, NAO
+> herda AgentClient) e reusa o web so por **imports pontuais**. Esse fork driftou
+> para tras (ver Gotcha 0). A intencao original "nao duplicar — parametrize" e o
+> alvo P2, ainda nao realizado.
 
-**Nao duplicar** o SDK — parametrize.
+| Realmente reusado de `app/agente/` (import) | Fork proprio deste modulo |
+|---------------------------------------------|---------------------------|
+| `sdk/session_store_adapter.py` (`get_or_create_session_store`) | `sdk/client.py` (AgentLojasClient — NAO herda AgentClient) |
+| `sdk/pricing.py` (`turn_cost_from_cumulative`) | `sdk/client_pool.py` (so event loop; nao reusa o client) |
+| `sdk/pending_questions.py` (AskUser cross-worker Redis) | `sdk/hooks.py` (proprio; web tem build_hooks) |
+| `sdk/subagent_reader.py` (`get_subagent_findings`) | `config/permissions.py` (proprio; reusa pending_questions) |
+| `models.py` (AgentSession, AgentMemory) | `config/settings.py` (subclass de AgentSettings) |
+| `config/settings.py` (AgentSettings base) | `prompts/*`, `services/scope_injector.py`, `routes/*`, `templates/*` |
+
+**NAO reusado** (gap deliberado): `sdk/memory_injection.py` — o fork NAO injeta
+memoria (isolamento por OMISSAO; M3 pendente); `prompts/` e briefing Nacom.
+
+**Decisao P2 (estudo 2026-06-26):** CONVERGIR para reusar o `AgentClient` web
+parametrizado por perfil (o "nao duplicar" original), **GATED em M3**
+(particionar `memory_injection` por coluna `agente`). Reusar antes disso vaza
+memoria logistica Nacom para o operador de loja. Ver Gotcha 0 + fase M3.
 
 ---
 
