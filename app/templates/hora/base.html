@@ -32,6 +32,17 @@
       </a>
     {% endif %}
 
+    {# ---------------- Aprovações (menu próprio + balão de pendências) ---------------- #}
+    {% if current_user.tem_perm_hora('aprovacoes', 'ver') %}
+      <a id="menu-aprovacoes" class="nav-link position-relative {% if request.endpoint == 'hora.comissao_aprovacoes' %}active{% endif %}"
+         href="{{ url_for('hora.comissao_aprovacoes') }}">
+         <i class="fas fa-stamp"></i> Aprovações
+         {% if hora_aprovacoes_pendentes_qtd and hora_aprovacoes_pendentes_qtd > 0 %}
+           <span class="badge rounded-pill bg-danger ms-1">{{ hora_aprovacoes_pendentes_qtd }}</span>
+         {% endif %}
+      </a>
+    {% endif %}
+
     {# ---------------- 1. Cadastros ---------------- #}
     {% set show_cadastros =
         current_user.tem_perm_hora('modelos', 'ver') or
@@ -92,6 +103,9 @@
         {% if current_user.tem_perm_hora('aprovacoes', 'ver') %}
           <li><a id="menu-comissao-aprovacoes" class="dropdown-item {% if request.endpoint == 'hora.comissao_aprovacoes' %}active{% endif %}" href="{{ url_for('hora.comissao_aprovacoes') }}">
             <i class="fas fa-stamp fa-fw"></i> Aprovações
+            {% if hora_aprovacoes_pendentes_qtd and hora_aprovacoes_pendentes_qtd > 0 %}
+              <span class="badge rounded-pill bg-danger ms-1">{{ hora_aprovacoes_pendentes_qtd }}</span>
+            {% endif %}
           </a></li>
         {% endif %}
         {% if current_user.tem_perm_hora('comissao', 'ver') %}

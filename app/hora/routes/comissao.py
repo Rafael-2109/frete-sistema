@@ -140,6 +140,27 @@ def comissao_rejeitar_desconto(aprovacao_id: int):
     return redirect(url_for('hora.comissao_aprovacoes'))
 
 
+@hora_bp.app_context_processor
+def _hora_aprovacoes_contador():
+    """Injeta `hora_aprovacoes_pendentes_qtd` em todos os templates (badge no menu).
+
+    So conta para quem ve a fila (`aprovacoes/ver`); demais recebem 0 e o menu
+    Aprovacoes nem aparece. Roda em todo request — guard + try/except defensivos.
+    """
+    if not getattr(current_user, 'is_authenticated', False):
+        return {'hora_aprovacoes_pendentes_qtd': 0}
+    try:
+        if not current_user.tem_perm_hora('aprovacoes', 'ver'):
+            return {'hora_aprovacoes_pendentes_qtd': 0}
+        from app.hora.models import HoraAprovacaoDesconto, APROVACAO_STATUS_PENDENTE
+        qtd = HoraAprovacaoDesconto.query.filter_by(
+            status=APROVACAO_STATUS_PENDENTE,
+        ).count()
+    except Exception:
+        qtd = 0
+    return {'hora_aprovacoes_pendentes_qtd': qtd}
+
+
 # ------------------------------------------------------------------------
 # Relatorio de comissao por vendedor (#28, Fatia 3) — vendas FATURADAS
 # ------------------------------------------------------------------------

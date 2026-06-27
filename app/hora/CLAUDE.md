@@ -986,8 +986,9 @@ para habilitar/desabilitar o item do dropdown.
 Logo embutido como data-URI base64 (`app/static/hora/img/motochefe_logo.png`) — não
 depende de `base_url`/servidor (funciona em worker/teste).
 
-**Testes:** `tests/hora/test_documento_venda.py` (11) — título por status, classificação
-ciclomotor, geração dos 4 PDFs, critério de status do pacote, fallback de emitente.
+**Testes:** `tests/hora/test_documento_venda.py` (13) — título por status, classificação
+ciclomotor, geração dos 4 PDFs, critério de status do pacote, emitente matriz fixa +
+`vendido_por` (`test_emitente_matriz_fixa_e_vendido_por`).
 
 ---
 
@@ -1039,6 +1040,17 @@ linha "Aprovações de pedido" em `/hora/permissoes` (`aprovacoes` está em
 `MODULOS_HORA` + `MODULOS_COM_APROVAR`). Migration `hora_54` faz o backfill idempotente
 de quem já tinha `comissao/aprovar` → `aprovacoes`. O menu "Aprovações" passou a ser
 gateado por `aprovacoes/ver` (config/relatório seguem em `comissao/ver`).
+
+**Menu próprio + balão de pendências (2026-06-27):** "Aprovações" ganhou um **item de
+topo** na barra do módulo (`hora/base.html`, logo após o Dashboard) com um **badge**
+(`bg-danger` pílula) exibindo a contagem de aprovações pendentes — **mantendo também**
+o item dentro do dropdown **Cadastros** (decisão do dono: acesso nos dois lugares; o
+badge aparece em ambos). O número vem do context processor `_hora_aprovacoes_contador`
+(`routes/comissao.py`, `@hora_bp.app_context_processor`, espelha
+`_hora_pendencias_contador` de `modelos_unificacao.py`): injeta
+`hora_aprovacoes_pendentes_qtd` = `COUNT(HoraAprovacaoDesconto status=PENDENTE)`, mas
+**só para quem tem `aprovacoes/ver`** (demais recebem 0 e o item nem aparece). O gate
+`show_cadastros` do dropdown segue incluindo `aprovacoes/ver` (inalterado).
 
 ---
 
