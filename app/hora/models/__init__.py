@@ -37,6 +37,7 @@ from app.hora.models.recebimento import (
     HoraRecebimentoConferencia,
     HoraConferenciaDivergencia,
     HoraConferenciaAuditoria,
+    HoraRecebimentoEsperado,
 )
 from app.hora.models.venda import (
     HoraVenda,
@@ -210,6 +211,7 @@ __all__ = [
     'HoraRecebimentoConferencia',
     'HoraConferenciaDivergencia',
     'HoraConferenciaAuditoria',
+    'HoraRecebimentoEsperado',
     'HoraVenda',
     'HoraVendaItem',
     'HoraVendaDivergencia',

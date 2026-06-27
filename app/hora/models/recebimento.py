@@ -196,6 +196,35 @@ class HoraConferenciaDivergencia(db.Model):
         return f'<HoraConferenciaDivergencia conf={self.conferencia_id} tipo={self.tipo}>'
 
 
+class HoraRecebimentoEsperado(db.Model):
+    """Snapshot congelado de um item esperado da filial no momento do recebimento.
+
+    Gabarito do recebimento PROVISORIO (sem NF): copia dos itens pendentes dos
+    pedidos de compra ABERTO/PARCIAL da loja. `chassi_esperado` é NULL quando o
+    pedido ainda não tinha chassi (pedido pré-NF). `consumido_por_conferencia_id`
+    marca qual conferência casou este slot (chassi exato ou modelo fungível).
+    """
+    __tablename__ = 'hora_recebimento_esperado'
+
+    id = db.Column(db.Integer, primary_key=True)
+    recebimento_id = db.Column(db.Integer, db.ForeignKey('hora_recebimento.id'), nullable=False, index=True)
+    pedido_id = db.Column(db.Integer, db.ForeignKey('hora_pedido.id'), nullable=True)
+    pedido_item_id = db.Column(db.Integer, db.ForeignKey('hora_pedido_item.id'), nullable=True)
+    modelo_id = db.Column(db.Integer, db.ForeignKey('hora_modelo.id'), nullable=True)
+    cor = db.Column(db.String(50), nullable=True)
+    chassi_esperado = db.Column(db.String(30), nullable=True)
+    preco_esperado = db.Column(db.Numeric(15, 2), nullable=True)
+    consumido_por_conferencia_id = db.Column(
+        db.Integer, db.ForeignKey('hora_recebimento_conferencia.id'), nullable=True,
+    )
+    criado_em = db.Column(db.DateTime, nullable=False, default=agora_utc_naive)
+
+    recebimento = db.relationship('HoraRecebimento', backref='esperados')
+
+    def __repr__(self):
+        return f'<HoraRecebimentoEsperado rec={self.recebimento_id} modelo={self.modelo_id} chassi={self.chassi_esperado}>'
+
+
 class HoraConferenciaAuditoria(db.Model):
     """Log append-only de toda acao feita em um recebimento.
 

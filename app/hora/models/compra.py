@@ -165,6 +165,13 @@ class HoraNfEntrada(db.Model):
     qtd_declarada_itens = db.Column(db.Integer, nullable=True)
 
     criado_em = db.Column(db.DateTime, nullable=False, default=agora_utc_naive)
+    tipo = db.Column(db.String(20), nullable=False, server_default='REAL', default='REAL')
+    # {'PROVISORIA','REAL'}. PROVISORIA = recebimento criado só com a loja
+    # (gabarito vem de hora_recebimento_esperado). Promovida a REAL ao anexar a NF.
+
+    @property
+    def provisoria(self) -> bool:
+        return self.tipo == 'PROVISORIA'
 
     pedido = db.relationship('HoraPedido', backref='nfs_entrada')
     itens = db.relationship(
