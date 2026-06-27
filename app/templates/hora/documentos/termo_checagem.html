@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="utf-8">
+<style>
+  @page { size: A4; margin: 1.4cm 1.5cm; }
+  body { font-family: Arial, Helvetica, sans-serif; color: #000; font-size: 11px; margin: 0; }
+  .cab { width: 100%; border-collapse: collapse; margin-bottom: 6px; }
+  .cab td { vertical-align: middle; }
+  .logo { height: 42px; }
+  .grupo { text-align: center; font-size: 12px; line-height: 1.3; }
+  .grupo b { font-size: 14px; }
+  h1 { text-align: center; font-size: 15px; margin: 6px 0 14px; }
+  .campos { margin: 0 0 12px; line-height: 2.1; font-size: 12px; }
+  .campos .v { border-bottom: 1px solid #000; padding: 0 6px; font-weight: bold; }
+  .w-lg { display: inline-block; min-width: 260px; }
+  .w-md { display: inline-block; min-width: 150px; }
+  .w-full { display: inline-block; min-width: 540px; }
+
+  .legenda { text-align: center; font-size: 10px; margin: 8px 0 10px; }
+  .gab { display: inline-block; width: 30px; height: 19px; border: 1px solid #000; vertical-align: middle; margin: 0 3px; }
+  .gab-x { background-image:
+      linear-gradient(to top right, transparent 46%, #000 46%, #000 54%, transparent 54%),
+      linear-gradient(to bottom right, transparent 46%, #000 46%, #000 54%, transparent 54%); }
+  .gab-barra { background-image:
+      linear-gradient(to top right, transparent 46%, #000 46%, #000 54%, transparent 54%); }
+
+  table.cl { width: 100%; border-collapse: separate; border-spacing: 0 3px; }
+  table.cl td { font-size: 10px; vertical-align: middle; }
+  .item { background: #d9d9d9; padding: 4px 6px; }
+  .item.dark { background: #1a1a1a; color: #fff; font-weight: bold; }
+  .cbx { width: 22px; height: 16px; border: 1px solid #000; display: inline-block; text-align: center; line-height: 15px; font-weight: bold; font-size: 12px; }
+  .col-mid { width: 24px; }
+  .spacer { width: 18px; }
+
+  .pot { margin-top: 4px; }
+  .pot .cell { display: inline-block; border: 1px solid #000; width: 16px; height: 15px; line-height: 14px; text-align: center; font-weight: bold; font-size: 11px; vertical-align: middle; }
+  .pot .lbl { font-size: 9px; margin: 0 6px 0 2px; }
+
+  .obs { margin-top: 14px; }
+  .obs .ln { border-bottom: 1px solid #000; height: 16px; margin-top: 8px; }
+  .declara { text-align: center; margin-top: 22px; font-size: 11px; }
+  .data { text-align: center; margin-top: 24px; }
+  .data .v { border-bottom: 1px solid #000; padding: 0 18px; font-weight: bold; }
+</style>
+</head>
+<body>
+  <table class="cab">
+    <tr>
+      <td style="width:38%">{% if logo_uri %}<img class="logo" src="{{ logo_uri }}" alt="MOTOCHEFE">{% endif %}</td>
+      <td class="grupo"><b>GRUPO SP</b><br>CNPJ: {{ emitente.cnpj }}</td>
+      <td style="width:38%"></td>
+    </tr>
+  </table>
+
+  <h1>CHECAGEM PARA ENTREGA DE MOTO ZERO KM</h1>
+
+  <div class="campos">
+    CLIENTE: <span class="v w-lg">{{ destinatario.nome or '' }}</span>
+    &nbsp;&nbsp;CPF: <span class="v w-md">{{ destinatario.cpf or '' }}</span><br>
+    MODELO: <span class="v w-lg">{{ item.modelo or '' }}</span>
+    &nbsp;&nbsp;COR: <span class="v w-md">{{ item.cor or '' }}</span><br>
+    CHASSI: <span class="v w-full">{{ item.chassi or '' }}</span>
+  </div>
+
+  <div class="legenda">
+    <b>CÓDIGO DE PREENCHIMENTO:</b>
+    &nbsp; VERIFICADO <span class="gab gab-x"></span>
+    &nbsp; NÃO HÁ <span class="gab gab-barra"></span>
+    &nbsp; DEFEITO <span class="gab"></span>
+  </div>
+
+  {% set col1 = ['RODA TRASEIRA','RODA DIANTEIRA','PARA-LAMA DIANTEIRO','PARA-LAMA TRASEIRO','FAROL E LANTERNA','BANCO E ENCOSTO','PEDALEIRAS','SETAS DIANTEIRAS','SETAS TRASEIRAS','PNEUS CALIBRADOS','FREIO SIS. DIANTEIRO','FREIO SIS. TRASEIRO'] %}
+  {% set col2 = ['FLUIDO DE FREIO','LUZ DE FREIO','SIS. DO ACELERADOR','RETROVISORES','PAINEL','BUZINA','TRAVA DO BANCO','TRAVA DO BAÚ','BAÚ OU CESTA','FIOS E CONEXÕES','CHAVES E NFC','CONTROLE E ALARME'] %}
+  {% set col3 = ['LACRAÇÃO DA BATERIA','CONECTOR DA BATERIA','PLUG DE ACESSO','DISJUNTOR','CARREGADOR'] %}
+
+  <table class="cl">
+    {% for i in range(12) %}
+    <tr>
+      <td class="item">{{ col1[i] }}</td>
+      <td class="col-mid"><span class="cbx"></span></td>
+      <td class="spacer"></td>
+      <td class="item">{{ col2[i] }}</td>
+      <td class="col-mid"><span class="cbx"></span></td>
+      <td class="spacer"></td>
+      {% if i == 0 %}
+        <td class="item dark">CONJUNTO DA BATERIA</td><td class="col-mid"></td>
+      {% elif i >= 1 and i <= 5 %}
+        <td class="item">{{ col3[i-1] }}</td><td class="col-mid"><span class="cbx"></span></td>
+      {% elif i == 7 %}
+        <td class="item dark">TIPO DE VEÍCULO</td><td class="col-mid"></td>
+      {% elif i == 8 %}
+        <td class="item">AUTOPROPELIDO</td>
+        <td class="col-mid"><span class="cbx">{% if item.autopropelido %}X{% endif %}</span></td>
+      {% elif i == 9 %}
+        <td class="item">CICLOMOTOR</td>
+        <td class="col-mid"><span class="cbx">{% if item.eh_ciclomotor %}X{% endif %}</span></td>
+      {% elif i == 10 %}
+        <td class="item dark">POTÊNCIA DO MOTOR</td><td class="col-mid"></td>
+      {% elif i == 11 %}
+        <td colspan="2" class="pot">
+          {% for w in ['1000','2000','3000'] %}
+            <span class="cell">{% if item.potencia_classe == w %}<span class="mark">X</span>{% endif %}</span><span class="lbl">{{ w }}W</span>
+          {% endfor %}
+        </td>
+      {% else %}
+        <td></td><td></td>
+      {% endif %}
+    </tr>
+    {% endfor %}
+  </table>
+
+  <div class="obs">
+    OBSERVAÇÕES:
+    <div class="ln"></div><div class="ln"></div><div class="ln"></div>
+    <div class="ln"></div><div class="ln"></div><div class="ln"></div>
+  </div>
+
+  <div class="declara">Ao assinarem este laudo, as partes concordam integralmente com o que nele é relatado.</div>
+
+  <div class="data">
+    São Paulo, <span class="v">{{ data_extenso.dia }}</span> de
+    <span class="v">{{ data_extenso.mes }}</span> de <span class="v">{{ data_extenso.ano }}</span>.
+  </div>
+</body>
+</html>

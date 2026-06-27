@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="utf-8">
+<style>
+  @page { size: A4; margin: 1.5cm 1.6cm; }
+  body { font-family: Arial, Helvetica, sans-serif; color: #000; font-size: 11px; line-height: 1.55; text-align: justify; margin: 0; }
+  .cab { width: 100%; border-collapse: collapse; margin-bottom: 4px; }
+  .logo { height: 42px; }
+  .grupo { text-align: center; font-size: 12px; line-height: 1.3; }
+  .grupo b { font-size: 14px; }
+  h1 { text-align: center; font-size: 14px; margin: 8px 0 16px; }
+  .ident { font-weight: bold; font-size: 12px; margin-bottom: 14px; }
+  .ident .v { border-bottom: 1px solid #000; padding: 0 6px; }
+  .clausula { font-weight: bold; margin: 12px 0 4px; }
+  p { margin: 6px 0; }
+  ul { margin: 4px 0 4px 4px; padding-left: 18px; }
+  li { margin: 3px 0; }
+  .fim { text-align: center; font-weight: bold; margin: 18px 0 6px; }
+  .data { text-align: right; margin-top: 6px; }
+  .data .v { border-bottom: 1px solid #000; padding: 0 14px; font-weight: bold; }
+  .nome { margin-top: 30px; font-size: 12px; }
+  .nome .v { border-bottom: 1px solid #000; padding: 0 6px; font-weight: bold; }
+  .w-full { display: inline-block; min-width: 520px; }
+</style>
+</head>
+<body>
+  <table class="cab">
+    <tr>
+      <td style="width:38%">{% if logo_uri %}<img class="logo" src="{{ logo_uri }}" alt="MOTOCHEFE">{% endif %}</td>
+      <td class="grupo"><b>GRUPO SP</b><br>CNPJ: {{ emitente.cnpj }}</td>
+      <td style="width:38%"></td>
+    </tr>
+  </table>
+
+  <h1>TERMO DE CIÊNCIA E RESPONSABILIDADE - EMPLACAMENTO CICLOMOTOR</h1>
+
+  <div class="ident">
+    CHASSI: <span class="v">{{ item.chassi or '' }}</span>
+    &nbsp; MODELO: <span class="v">{{ item.modelo or '' }}</span>
+    &nbsp; PDV: <span class="v">{{ numero_pdv }}</span>
+  </div>
+
+  <p>Declaro, para os devidos fins, que estou ciente e de acordo com as condições abaixo relacionadas à aquisição do ciclomotor adquirido junto à MOTOCHEFE:</p>
+
+  <div class="clausula">1. Ciência prévia e retirada do veículo</div>
+  <p>Declaro que todas as informações constantes neste termo me foram devidamente esclarecidas durante o processo de venda e reforçadas no ato da retirada do veículo, ocorrendo a retirada com plena ciência das condições aqui descritas.</p>
+
+  <div class="clausula">2. Documentação fornecida pela loja</div>
+  <p>A MOTOCHEFE é responsável exclusivamente pela emissão e fornecimento dos seguintes documentos obrigatórios:</p>
+  <ul>
+    <li>Nota Fiscal de venda ao consumidor final;</li>
+  </ul>
+  <p>Documento ATPV, emitido pelo SENATRAN, cujo prazo de emissão pode variar entre 10 (dez) e 20 (vinte) dias úteis, a depender do órgão competente e após emitido, será enviado para o e-mail cadastrado no sistema, o mesmo informado ao vendedor no ato da compra.</p>
+  <p>Declaro ainda estar ciente de que não há, sob nenhuma hipótese, apresentação ou fornecimento de Nota Fiscal do importador ou distribuidor, por não se tratar de documento exigido do consumidor final nem integrante das obrigações legais da loja.</p>
+
+  <div class="clausula">3. Emplacamento e responsabilidades legais</div>
+  <ul>
+    <li>O emplacamento do ciclomotor de potência igual ou superior a 3000W, incluindo mas não limitando-se aos modelos ROMA / X11-12 / MC20 / S8-12 / TRICICLO X15, é obrigatório, conforme legislação vigente;</li>
+    <li>A responsabilidade pela realização do emplacamento é exclusivamente do cliente;</li>
+    <li>Todos os custos, taxas, honorários, despesas e eventuais encargos relacionados ao emplacamento ou a quaisquer procedimentos junto aos órgãos competentes são de inteira responsabilidade do cliente, não cabendo à loja qualquer ônus ou reembolso.</li>
+  </ul>
+
+  <div class="clausula">4. Condução do veículo</div>
+  <p>O ciclomotor somente pode ser conduzido por condutor devidamente habilitado, com CNH válida, conforme a legislação de trânsito;</p>
+  <p>O uso do veículo em desacordo com a legislação é de responsabilidade exclusiva do condutor e/ou proprietário.</p>
+
+  <div class="clausula">5. Despachante, quando indicado</div>
+  <p>Declaro ciência de que eventual indicação de despachante pela loja possui caráter meramente informativo, com o objetivo de facilitar o processo.</p>
+  <p>A contratação, valores, prazos e condução do serviço são tratados diretamente entre cliente e despachante, sem qualquer intermediação ou responsabilidade da loja.</p>
+
+  <div class="fim">Por fim, declaro que li, compreendi e concordo integralmente com os termos acima.</div>
+
+  <div class="data">
+    São Paulo, <span class="v">{{ data_extenso.dia }}</span> de
+    <span class="v">{{ data_extenso.mes }}</span> de <span class="v">{{ data_extenso.ano }}</span>.
+  </div>
+
+  <div class="nome">NOME COMPLETO: <span class="v w-full">{{ destinatario.nome or '' }}</span></div>
+</body>
+</html>

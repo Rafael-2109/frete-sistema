@@ -31,7 +31,12 @@ EVENTOS_EM_ESTOQUE = (
 # Eventos que tiram a moto do estoque
 # - RESERVADA: pedido de venda em COTACAO/CONFIRMADO. Reservada por hora_venda.
 # - VENDIDA, NF_EMITIDA: pedido FATURADO (NFe emitida via TagPlus ou DANFE legado).
-# - DEVOLVIDA: moto saiu por devolucao ao fornecedor OU pedido cancelado.
+# - DEVOLVIDA: moto saiu DE VEZ — devolucao ao FORNECEDOR, devolucao do CLIENTE
+#   (transitorio ate conferencia) ou DESCARTE no recebimento. NAO e mais usado
+#   para CANCELAMENTO DE RESERVA de venda (remover item / cancelar / descartar
+#   pedido / NFe cancelada): esse fluxo re-emite o estado-em-estoque anterior
+#   via moto_service.devolver_ao_estoque — antes (bug 2026-06-26) DEVOLVIDA
+#   prendia a moto fora do estoque. Ver app/hora/CLAUDE.md secao 26.
 # - NF_CANCELADA: NFe foi cancelada na SEFAZ; pedido pode estar em CONFIRMADO.
 # - EMPRESTIMO_SAIDA: chassi nosso emprestado para loja externa (fora estoque).
 # - RESSARCIMENTO_ENTRADA: chassi nosso enviado para fechar emprestimo ENTRADA.

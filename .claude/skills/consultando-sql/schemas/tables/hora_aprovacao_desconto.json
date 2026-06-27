@@ -1,6 +1,6 @@
 {
   "name": "hora_aprovacao_desconto",
-  "description": "Solicitacao de aprovacao de desconto acima do teto do modelo (#28).",
+  "description": "Solicitacao de aprovacao gerencial de uma venda (#28 Fatia 2 + #5b).",
   "fields": [
     {
       "name": "id",
@@ -12,6 +12,12 @@
       "type": "integer",
       "description": "FK → hora_venda.id",
       "nullable": false
+    },
+    {
+      "name": "tipo",
+      "type": "varchar(20)",
+      "nullable": false,
+      "default": "DESCONTO"
     },
     {
       "name": "status",
@@ -56,6 +62,13 @@
       "name": "ix_hora_aprovacao_desconto_status",
       "columns": [
         "status"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_hora_aprovacao_desconto_tipo",
+      "columns": [
+        "tipo"
       ],
       "unique": false
     },

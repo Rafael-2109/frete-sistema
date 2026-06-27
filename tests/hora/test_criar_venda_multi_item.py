@@ -101,3 +101,48 @@ def test_itens_lista_vazia_levanta_value_error(db):
                          'numero_parcelas': 1, 'aut_id': None}],
             loja_id_override=loja.id, criado_por='t', **_endereco(),
         )
+
+
+def test_criar_venda_com_brinde(db, peca_factory):
+    """#4a: brindes passados na criacao sao gravados na MESMA transacao,
+    com custo = preco_venda_padrao (snapshot) e SEM somar ao valor cobrado."""
+    from app.hora.models import HoraVendaBrinde
+    loja = _loja(); modelo = _modelo()
+    c1 = _chassi_estoque(modelo.nome_modelo, loja.id)
+    peca = peca_factory()
+    peca.preco_venda_padrao = Decimal('25')
+    _db.session.flush()
+    venda = venda_service.criar_venda_manual(
+        cpf_cliente='12345678909', nome_cliente='Cliente Brinde',
+        itens=[{'numero_chassi': c1, 'valor_final': Decimal('1000.00')}],
+        pagamentos=[{'forma_pagamento_hora': 'DINHEIRO', 'valor': Decimal('1000.00'),
+                     'numero_parcelas': 1, 'aut_id': None}],
+        brindes=[{'peca_id': peca.id, 'qtd': Decimal('2')}],
+        loja_id_override=loja.id, criado_por='t', **_endereco(),
+    )
+    brindes = HoraVendaBrinde.query.filter_by(venda_id=venda.id).all()
+    assert len(brindes) == 1
+    assert brindes[0].peca_id == peca.id
+    assert brindes[0].qtd == Decimal('2')
+    assert brindes[0].custo_total == Decimal('50')  # 2 * 25
+    assert venda.valor_total == Decimal('1000.00')  # brinde nao entra no cobrado
+
+
+def test_criar_venda_incompleto_ainda_grava_brinde(db, peca_factory):
+    """#4a: brinde do orcamento vale mesmo quando o pedido nasce INCOMPLETO
+    (sem pagamento) — o helper flush-only nao aplica o guard de status."""
+    from app.hora.models import HoraVendaBrinde
+    loja = _loja(); modelo = _modelo()
+    c1 = _chassi_estoque(modelo.nome_modelo, loja.id)
+    peca = peca_factory()
+    peca.preco_venda_padrao = Decimal('10')
+    _db.session.flush()
+    venda = venda_service.criar_venda_manual(
+        cpf_cliente='12345678909', nome_cliente='Cliente Inc',
+        itens=[{'numero_chassi': c1, 'valor_final': Decimal('1000.00')}],
+        pagamentos=[],  # sem pagamento -> INCOMPLETO
+        brindes=[{'peca_id': peca.id, 'qtd': Decimal('1')}],
+        loja_id_override=loja.id, criado_por='t', **_endereco(),
+    )
+    assert venda.status == 'INCOMPLETO'
+    assert HoraVendaBrinde.query.filter_by(venda_id=venda.id).count() == 1

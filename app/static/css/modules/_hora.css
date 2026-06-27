@@ -253,4 +253,26 @@
     margin-left: 1rem;
   }
 
+  /* ═══════════════════════════════════════════════════════════════════════════
+     ALERTAS / FLASH — fundo vermelho/amarelo mais marcante (sugestao Isabela).
+     Scoped a .hora-module: nao polui os demais modulos. Usa os tokens
+     proprios --semantic-*-subtle (V15-V17) + barra lateral semantica de 5px +
+     negrito — bem mais marcante que o .alert original (quase invisivel).
+     ═══════════════════════════════════════════════════════════════════════════ */
+  .hora-module .alert-danger {
+    background: var(--semantic-danger-subtle);
+    border-left: 5px solid var(--semantic-danger);
+    font-weight: 500;
+  }
+
+  .hora-module .alert-warning {
+    background: var(--semantic-warning-subtle);
+    border-left: 5px solid var(--semantic-warning);
+    font-weight: 500;
+  }
+
+  .hora-module .alert-success {
+    border-left: 5px solid var(--semantic-success);
+  }
+
 }

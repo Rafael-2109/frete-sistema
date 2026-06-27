@@ -175,6 +175,69 @@ def ultimo_evento(numero_chassi: str) -> Optional[HoraMotoEvento]:
     )
 
 
+def ultimo_evento_em_estoque(numero_chassi: str) -> Optional[HoraMotoEvento]:
+    """Ultimo evento cujo tipo mantem a moto NO estoque (EVENTOS_EM_ESTOQUE).
+
+    Usado para reverter uma reserva cancelada ao estado anterior: como RESERVADA
+    nao esta em EVENTOS_EM_ESTOQUE, o evento de estoque mais recente e
+    necessariamente o que valia ANTES da reserva (RECEBIDA/CONFERIDA/TRANSFERIDA/
+    AVARIADA/...). Ordena por `id` desc para alinhar com a derivacao de "ultimo
+    evento" do estoque_service (MAX(id)).
+    """
+    from app.hora.services.estoque_service import EVENTOS_EM_ESTOQUE
+    return (
+        HoraMotoEvento.query
+        .filter(
+            HoraMotoEvento.numero_chassi == numero_chassi.strip().upper(),
+            HoraMotoEvento.tipo.in_(EVENTOS_EM_ESTOQUE),
+        )
+        .order_by(HoraMotoEvento.id.desc())
+        .first()
+    )
+
+
+def devolver_ao_estoque(
+    numero_chassi: str,
+    origem_tabela: Optional[str] = None,
+    origem_id: Optional[int] = None,
+    loja_id: Optional[int] = None,
+    operador: Optional[str] = None,
+    detalhe: Optional[str] = None,
+) -> HoraMotoEvento:
+    """Recoloca a moto no estoque re-emitindo o ULTIMO estado-em-estoque anterior.
+
+    Para CANCELAMENTO DE RESERVA (remover item de pedido / cancelar pedido /
+    descartar / NFe cancelada): a moto NAO saiu fisicamente, entao deve voltar a
+    ficar disponivel. Em vez de emitir DEVOLVIDA (que esta em EVENTOS_FORA_ESTOQUE
+    e prendia a moto fora do estoque — bug 2026-06-26), re-emite o MESMO tipo do
+    ultimo evento em EVENTOS_EM_ESTOQUE, preservando a loja desse estado, para
+    restaurar exatamente o status anterior a reserva.
+
+    NAO usar para devolucao ao FORNECEDOR, devolucao do CLIENTE ou emprestimo —
+    nesses casos a moto realmente sai do estoque e DEVOLVIDA e o evento correto.
+
+    Fallback (caso degenerado, sem historico de estoque): emite RECEBIDA na
+    `loja_id` informada — na pratica nao ocorre, pois reservar exige estado em
+    estoque (`_lock_chassi_e_validar_disponivel`).
+    """
+    anterior = ultimo_evento_em_estoque(numero_chassi)
+    if anterior is not None:
+        tipo = anterior.tipo
+        loja_efetiva = anterior.loja_id or loja_id
+    else:
+        tipo = 'RECEBIDA'
+        loja_efetiva = loja_id
+    return registrar_evento(
+        numero_chassi=numero_chassi,
+        tipo=tipo,
+        origem_tabela=origem_tabela,
+        origem_id=origem_id,
+        loja_id=loja_efetiva,
+        operador=operador,
+        detalhe=detalhe,
+    )
+
+
 def status_atual(numero_chassi: str) -> Optional[str]:
     """Retorna o tipo do último evento (ou None se moto nunca foi movimentada)."""
     ult = ultimo_evento(numero_chassi)

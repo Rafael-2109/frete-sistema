@@ -4,7 +4,7 @@ camada: L1
 sot_de: —
 hub: CLAUDE.md
 superseded_by: —
-atualizado: 2026-06-25
+atualizado: 2026-06-26
 -->
 # Módulo HORA — Lojas Motochefe
 
@@ -36,6 +36,12 @@ atualizado: 2026-06-25
 - [19. Guarda do recebimento automático (anti-ressurreição) — 2026-06-03](#19-guarda-do-recebimento-automático-anti-ressurreição--2026-06-03)
 - [20. Editar item (moto travada) + Enter=Próximo + chassi autocomplete + restauração de regressões — 2026-06-03](#20-editar-item-moto-travada--enterpróximo--chassi-autocomplete--restauração-de-regressões--2026-06-03)
 - [21. Unificação multi-item do Pedido de Venda + "Salvar Pedido" único (FU-1/2/3/5) — 2026-06-04](#21-unificação-multi-item-do-pedido-de-venda--salvar-pedido-único-fu-1235--2026-06-04)
+- [22. Notificação WhatsApp de NF emitida / pedido confirmado (TagPlus) — 2026-06-06](#22-notificação-whatsapp-de-nf-emitida--pedido-confirmado-tagplus--2026-06-06)
+- [23. Pedido de Venda — edição em INCOMPLETO + preço a prazo na tela + AUT — 2026-06-25](#23-pedido-de-venda--edição-em-incompleto--preço-a-prazo-na-tela--aut--2026-06-25)
+- [24. Inscrição Estadual + Consulta CNPJ (ReceitaWS) no Pedido de Venda — 2026-06-25](#24-inscrição-estadual--consulta-cnpj-receitaws-no-pedido-de-venda--2026-06-25)
+- [25. Impressão de documentos do Pedido de Venda (PDV + termos) — 2026-06-26](#25-impressão-de-documentos-do-pedido-de-venda-pdv--termos--2026-06-26)
+- [26. Reserva cancelada devolve a moto ao estoque (fix DEVOLVIDA) — 2026-06-26](#26-reserva-cancelada-devolve-a-moto-ao-estoque-fix-devolvida--2026-06-26)
+- [27. Correções de campo do Pedido de Venda + aprovação gerencial (frete/brinde) — 2026-06-26](#27-correções-de-campo-do-pedido-de-venda--aprovação-gerencial-fretebrinde--2026-06-26)
 - [Onboarding Tours (2026-05-08)](#onboarding-tours-2026-05-08)
 - [Referências](#referências)
 
@@ -943,6 +949,141 @@ telefone, email. `consultar_cnpj` tem **cache curto** in-memory por CNPJ
 
 **Testes:** `test_ie_grava_na_criacao`, `test_ie_editavel_em_incompleto`
 (`tests/hora/test_pedido_venda_correcoes_2026_06_25.py`). Migration aplicada em local + PROD.
+
+---
+
+## 25. Impressão de documentos do Pedido de Venda (PDV + termos) — 2026-06-26
+
+Dropdown **Imprimir** na barra de topo do detalhe (`pedido_venda_novo.html`) gera 4
+documentos pré-preenchidos via **WeasyPrint** (mesmo padrão de `recibo_service`), com
+merge por **pypdf**. Sem migration, sem permissão nova (reusa `vendas/ver`).
+
+**Service** `app/hora/services/documento_venda_service.py`:
+- `gerar_pdv_pdf` — Pedido/Orçamento. Título dinâmico: `titulo_pdv()` → **"Cotação"**
+  (INCOMPLETO/COTACAO) ou **"Pedido de Venda"** (CONFIRMADO/FATURADO). Emitente =
+  `venda.loja` (dados fiscais), fallback `MATRIZ_FALLBACK` quando `loja_id` é NULL.
+  Tabela de produtos = motos (1 un cada) + `itens_peca`; pagamentos de `venda.pagamentos`
+  (fallback header `forma_pagamento`+`numero_parcelas`).
+- `gerar_termo_garantia_pdf` / `gerar_termo_checagem_pdf` — **1 jogo por moto** (concatenado).
+- `gerar_termo_ciclomotor_pdf` — 1 por moto ciclomotor; levanta `DocumentoVendaError`
+  se nenhuma se aplica.
+- `gerar_pacote_pdf` — PDF único: PDV + (garantia+checagem se CONFIRMADO/FATURADO) +
+  (ciclomotor se houver). É o botão **"Imprimir tudo"**.
+
+**Critério ciclomotor (canônico):** `tem_ciclomotor()` = algum item com
+`moto.modelo.autopropelido is False` (mesmo campo que classifica a NF-e — NÃO
+reimplementar por potência). A rota `vendas_detalhe` passa `tem_ciclomotor` ao template
+para habilitar/desabilitar o item do dropdown.
+
+**Rotas** (`vendas.py`, todas `@require_hora_perm('vendas','ver')` + escopo de loja):
+`vendas_doc_pdv`, `vendas_doc_termo_garantia`, `vendas_doc_termo_checagem`,
+`vendas_doc_termo_ciclomotor`, `vendas_doc_pacote` — servem PDF inline on-the-fly.
+
+**Templates:** `app/templates/hora/documentos/{pdv,termo_garantia,termo_checagem,termo_ciclomotor}.html`.
+Logo embutido como data-URI base64 (`app/static/hora/img/motochefe_logo.png`) — não
+depende de `base_url`/servidor (funciona em worker/teste).
+
+**Testes:** `tests/hora/test_documento_venda.py` (11) — título por status, classificação
+ciclomotor, geração dos 4 PDFs, critério de status do pacote, fallback de emitente.
+
+---
+
+## 27. Correções de campo do Pedido de Venda + aprovação gerencial (frete/brinde) — 2026-06-26
+
+Lote de ajustes na tela de Pedido de Venda (`pedido_venda_novo.html` +
+`_pedido_venda_scripts.html`) a partir de feedback das vendedoras, mais a extensão
+do fluxo de aprovação.
+
+**Correções (UX/bug):**
+- **Criação não apaga mais ao faltar obrigatório**: a validação client-side
+  (`_pedido_venda_scripts.html`, handler de submit) destaca o 1º campo `*` vazio
+  (`is-invalid` + foco + scroll) e bloqueia o submit **sem zerar o form**. Mantém o
+  `novalidate` de propósito (remover tornaria pagamento/AUT obrigatórios e quebraria
+  o rascunho INCOMPLETO); o guard só roda na criação (gate por `action`) e **exclui
+  `pagamento_*`**.
+- **Badge INCOMPLETO mostra o motivo real** (soma divergente E/OU AUT faltando) via
+  `venda_service.motivos_incompleto_venda()` (reusa `_avaliar_status_pagamento`),
+  passado por `vendas_detalhe`. Antes a mensagem fixa citava só a soma.
+- **Bug do autocomplete de peça** (`data-hora-autocomplete="peca"`): faltava
+  `data-hora-target-key="id"` → o hidden recebia a **descrição** e o backend
+  (`.isdigit()`) rejeitava com "Selecione uma peça". O mesmo bug existe em
+  `pedido_detalhe.html`, `nf_detalhe.html` e nos 2 modais de estoque de peças
+  (não corrigidos nesta passada).
+- **Coluna Frete** em `vendas_lista.html`; **alertas mais marcantes** (ícone por
+  categoria em `hora/base.html` + fundo `--bs-*-bg-subtle` em `_hora.css`, scoped a
+  `.hora-module`).
+
+**#4a — Brinde na criação**: `criar_venda_manual(brindes=[{peca_id, qtd}])` cria os
+brindes na MESMA transação via `_criar_brinde_flush_only` (helper sem commit/guard,
+reusado por `adicionar_brinde`). Vale mesmo se o pedido nascer INCOMPLETO. Seção
+"Brindes (opcional)" no form de criação (linhas dinâmicas + autocomplete).
+
+**#5b — Aprovação gerencial de frete e brinde** (estende #28 Fatia 2): a tabela
+`hora_aprovacao_desconto` ganhou coluna **`tipo`** (`DESCONTO`/`FRETE`/`BRINDE`,
+migration `hora_53`). `aprovacao_desconto_service.gatilhos_aprovacao()` detecta os 3
+gatilhos (desconto acima do teto — regra mantida; **frete > 0** e **brinde** sempre
+que houver) e `garantir_aprovacao_para_confirmar` cria **1 pendência por tipo**;
+`confirmar_venda` bloqueia se houver qualquer pendência. A fila
+`/hora/comissao/aprovacoes` ganhou coluna Tipo; o detalhe do pedido mostra aviso de
+aprovação pendente. Decisão do dono (Haroldo/gestores, 2026-06-26): canal = tela web
+com login (sem token WhatsApp). Testes em `test_aprovacao_desconto_service.py` (frete,
+brinde, múltiplos gatilhos) e `test_criar_venda_multi_item.py` (brinde na criação).
+
+**Permissão própria `aprovacoes`** (separada de `comissao` em 2026-06-26): aprovar/
+rejeitar/ver a fila usa `aprovacoes/{aprovar,ver}` (não mais `comissao/aprovar`).
+`comissao` ficou só com config + relatório. Quem concede: admin marca **Aprovar** na
+linha "Aprovações de pedido" em `/hora/permissoes` (`aprovacoes` está em
+`MODULOS_HORA` + `MODULOS_COM_APROVAR`). Migration `hora_54` faz o backfill idempotente
+de quem já tinha `comissao/aprovar` → `aprovacoes`. O menu "Aprovações" passou a ser
+gateado por `aprovacoes/ver` (config/relatório seguem em `comissao/ver`).
+
+---
+
+## 26. Reserva cancelada devolve a moto ao estoque (fix DEVOLVIDA) — 2026-06-26
+
+**Bug:** remover uma moto de um pedido (ou cancelar/descartar o pedido, ou NFe
+cancelada via backfill) emitia o evento `DEVOLVIDA`. Como `DEVOLVIDA` está em
+`EVENTOS_FORA_ESTOQUE` (estoque_service) e o estado da moto = último evento
+(invariante 4), a moto sumia do estoque disponível e **não podia ser revendida**
+— apesar de os comentários do código (e o teste `test_remover_item_devolve_chassi`)
+afirmarem "volta/libera ao estoque". O teste validava só a emissão do evento, nunca
+a disponibilidade — mascarando o bug.
+
+**Causa-raiz:** `DEVOLVIDA` era sobrecarregado para dois sentidos opostos —
+"voltou ao estoque" (cancelar reserva) e "saiu de vez" (devolução ao fornecedor/
+cliente, descarte de recebimento). O segundo é legítimo fora do estoque; o primeiro
+não. Não dava para só mover `DEVOLVIDA` para `EVENTOS_EM_ESTOQUE` (quebraria o
+sentido B + a máquina de devolução de venda que depende de `ult == 'DEVOLVIDA'`).
+
+**Correção (decisão do dono: "volta ao status anterior"):** novo helper
+`moto_service.devolver_ao_estoque(chassi, ...)` re-emite o **último estado-em-estoque
+anterior** à reserva (RECEBIDA/CONFERIDA/TRANSFERIDA/AVARIADA/...), via
+`ultimo_evento_em_estoque` (ordenado por MAX(id), mesma derivação do estoque_service),
+preservando a loja desse estado. Fallback `RECEBIDA` se não houver histórico (não
+ocorre na prática — reservar exige estado em estoque via
+`_lock_chassi_e_validar_disponivel`).
+
+**Call-sites trocados** (`registrar_evento(tipo='DEVOLVIDA')` → `devolver_ao_estoque`)
+— todos do **sentido A** (cancelamento de reserva de venda):
+`venda_service`: `_aplicar_itens` (remover via `salvar_pedido_completo`),
+`remover_item_pedido`, `editar_item_pedido` (troca de chassi devolve o antigo),
+`cancelar_venda`, `descartar_venda_teste`; `tagplus/backfill_service` (NFe
+cancelada/inutilizada). **Não alterados** (sentido B — fora do estoque é correto):
+devolução ao fornecedor (`hora_devolucao_fornecedor_item`), devolução do cliente
+(`hora_devolucao_venda_item`), descarte de recebimento
+(`hora_recebimento_conferencia`), empréstimo (`hora_emprestimo_moto`).
+
+**Passivo PROD:** `scripts/hora/fix_devolvida_reserva_presa.py` (dry-run default,
+`--confirmar`, idempotente) restaura motos cujo último evento é `DEVOLVIDA` com
+`origem_tabela IN ('hora_venda','hora_venda_item')` — discriminador à prova do
+sentido A. Executado em 2026-06-26: **12 motos** restauradas a RECEBIDA (operador
+`FIX_DEVOLVIDA_RESERVA_2026_06_26`); verificação pós zerou.
+
+**Testes:** `tests/hora/test_pedido_workflow.py` — 2 novos
+(`test_remover_item_volta_disponivel_no_status_anterior`,
+`test_cancelar_venda_volta_disponivel_no_status_anterior`, que reproduziam o bug) +
+3 atualizados (cancelar/remover/troca de chassi agora verificam `status_atual` ∈
+`EVENTOS_EM_ESTOQUE`, não a emissão de DEVOLVIDA). Suíte HORA: 229 verdes.
 
 ---
 

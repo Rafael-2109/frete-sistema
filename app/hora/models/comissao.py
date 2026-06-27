@@ -64,20 +64,45 @@ APROVACAO_STATUS_VALIDOS = (
     APROVACAO_STATUS_PENDENTE, APROVACAO_STATUS_APROVADO, APROVACAO_STATUS_REJEITADO,
 )
 
+# Tipo da aprovacao gerencial (#5b, 2026-06-26). A tabela
+# hora_aprovacao_desconto passou a cobrir 3 gatilhos; o nome fisico ficou
+# legado. DESCONTO usa o teto do modelo; FRETE e BRINDE disparam sempre que
+# houver (decisao do dono — Haroldo/gestores).
+APROVACAO_TIPO_DESCONTO = 'DESCONTO'
+APROVACAO_TIPO_FRETE = 'FRETE'
+APROVACAO_TIPO_BRINDE = 'BRINDE'
+APROVACAO_TIPO_VALIDOS = (
+    APROVACAO_TIPO_DESCONTO, APROVACAO_TIPO_FRETE, APROVACAO_TIPO_BRINDE,
+)
+APROVACAO_TIPO_LABELS = {
+    APROVACAO_TIPO_DESCONTO: 'Desconto',
+    APROVACAO_TIPO_FRETE: 'Frete',
+    APROVACAO_TIPO_BRINDE: 'Brinde',
+}
+
 
 class HoraAprovacaoDesconto(db.Model):
-    """Solicitacao de aprovacao de desconto acima do teto do modelo (#28).
+    """Solicitacao de aprovacao gerencial de uma venda (#28 Fatia 2 + #5b).
 
-    Criada por confirmar_venda quando algum item-moto tem desconto acima do
-    teto (hora_modelo.desconto_maximo). Enquanto houver solicitacao PENDENTE
-    (e nenhuma APROVADO vigente), a venda NAO pode ser confirmada. Append-only
-    de fato (status muda de PENDENTE -> APROVADO/REJEITADO; e o log).
+    Nome fisico legado (hora_aprovacao_desconto), mas hoje cobre 3 `tipo`s:
+    DESCONTO (item-moto acima do teto hora_modelo.desconto_maximo), FRETE
+    (valor_frete > 0) e BRINDE (ha brinde no pedido). Criada por confirmar_venda;
+    enquanto houver PENDENTE de qualquer tipo (sem APROVADO vigente daquele
+    tipo), a venda NAO pode ser confirmada. Append-only de fato (status muda de
+    PENDENTE -> APROVADO/REJEITADO; e o log).
     """
     __tablename__ = 'hora_aprovacao_desconto'
 
     id = db.Column(db.Integer, primary_key=True)
     venda_id = db.Column(
         db.Integer, db.ForeignKey('hora_venda.id'), nullable=False, index=True,
+    )
+    # Gatilho da aprovacao (DESCONTO/FRETE/BRINDE). Default DESCONTO p/ as linhas
+    # legadas (a tabela nasceu so para desconto).
+    tipo = db.Column(
+        db.String(20), nullable=False,
+        default=APROVACAO_TIPO_DESCONTO, server_default=APROVACAO_TIPO_DESCONTO,
+        index=True,
     )
     status = db.Column(
         db.String(20), nullable=False, default=APROVACAO_STATUS_PENDENTE, index=True,

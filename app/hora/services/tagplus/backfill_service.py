@@ -44,7 +44,7 @@ from app.hora.models.venda import VENDA_STATUS_CANCELADO, VENDA_STATUS_FATURADO
 from app.hora.services import venda_audit
 from app.hora.services.estoque_service import EVENTOS_EM_ESTOQUE
 from app.hora.services.moto_service import (
-    get_or_create_moto, registrar_evento, ultimo_evento,
+    devolver_ao_estoque, get_or_create_moto, registrar_evento, ultimo_evento,
 )
 from app.hora.services.tagplus.api_client import ApiClient
 from app.utils.timezone import agora_utc_naive
@@ -631,11 +631,11 @@ def _cancelar_via_backfill(
     venda.cancelado_por = operador or 'sistema (backfill)'
     venda.cancelamento_motivo = motivo[:500]
 
-    # Emite DEVOLVIDA para cada chassi (libera ao estoque).
+    # Libera cada chassi ao estoque (re-emite o estado-em-estoque anterior;
+    # NFe cancelada/inutilizada = a moto nao saiu, volta a ficar disponivel).
     for item in venda.itens:
-        registrar_evento(
+        devolver_ao_estoque(
             numero_chassi=item.numero_chassi,
-            tipo='DEVOLVIDA',
             origem_tabela='hora_venda',
             origem_id=venda.id,
             loja_id=venda.loja_id,

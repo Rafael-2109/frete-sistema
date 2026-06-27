@@ -1889,11 +1889,11 @@
     },
     {
       "name": "hora_aprovacao_desconto",
-      "description": "Solicitacao de aprovacao de desconto acima do teto do modelo (#28).",
+      "description": "Solicitacao de aprovacao gerencial de uma venda (#28 Fatia 2 + #5b).",
       "key_fields": [
         "venda_id",
         "status",
-        "detalhe"
+        "tipo"
       ],
       "dominio": "Lojas HORA"
     },

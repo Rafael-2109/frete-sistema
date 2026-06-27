@@ -44,6 +44,54 @@
     <span class="badge bg-{{ status_badge }} ms-2">{{ venda.status }}</span>
   </h2>
   <div class="d-flex gap-2 flex-wrap">
+    {# ---- Dropdown de impressao (PDV + termos) — so no detalhe (venda existente) ---- #}
+    {% if venda and venda.id %}
+    {% set eh_pedido = is_confirmado or is_faturado %}
+    <div class="dropdown">
+      <button class="btn btn-sm btn-primary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+        <i class="fas fa-print"></i> Imprimir
+      </button>
+      <ul class="dropdown-menu dropdown-menu-end">
+        <li><h6 class="dropdown-header">{{ 'Pedido de Venda' if eh_pedido else 'Cotação' }} #{{ venda.id }}</h6></li>
+        <li>
+          <a class="dropdown-item" target="_blank" rel="noopener"
+             href="{{ url_for('hora.vendas_doc_pdv', venda_id=venda.id) }}">
+            <i class="fas fa-file-invoice-dollar text-primary"></i>
+            {{ 'Pedido de Venda' if eh_pedido else 'Cotação' }} (PDV)
+          </a>
+        </li>
+        <li>
+          <a class="dropdown-item fw-semibold" target="_blank" rel="noopener"
+             href="{{ url_for('hora.vendas_doc_pacote', venda_id=venda.id) }}">
+            <i class="fas fa-layer-group text-primary"></i>
+            Imprimir tudo{% if eh_pedido %} (Pedido + Termos){% endif %}
+          </a>
+        </li>
+        <li><hr class="dropdown-divider"></li>
+        {% if eh_pedido %}
+          <li><a class="dropdown-item" target="_blank" rel="noopener"
+                 href="{{ url_for('hora.vendas_doc_termo_garantia', venda_id=venda.id) }}">
+            <i class="fas fa-file-contract"></i> Termo de Garantia e Compra</a></li>
+          <li><a class="dropdown-item" target="_blank" rel="noopener"
+                 href="{{ url_for('hora.vendas_doc_termo_checagem', venda_id=venda.id) }}">
+            <i class="fas fa-clipboard-check"></i> Termo de Checagem 0km</a></li>
+        {% else %}
+          <li><span class="dropdown-item disabled text-muted" title="Disponível após confirmar o pedido">
+            <i class="fas fa-file-contract"></i> Termo de Garantia e Compra</span></li>
+          <li><span class="dropdown-item disabled text-muted" title="Disponível após confirmar o pedido">
+            <i class="fas fa-clipboard-check"></i> Termo de Checagem 0km</span></li>
+        {% endif %}
+        {% if tem_ciclomotor|default(false) %}
+          <li><a class="dropdown-item" target="_blank" rel="noopener"
+                 href="{{ url_for('hora.vendas_doc_termo_ciclomotor', venda_id=venda.id) }}">
+            <i class="fas fa-motorcycle text-danger"></i> Termo Ciclomotor</a></li>
+        {% else %}
+          <li><span class="dropdown-item disabled text-muted" title="Nenhuma moto deste pedido é classificada como ciclomotor">
+            <i class="fas fa-motorcycle"></i> Termo Ciclomotor</span></li>
+        {% endif %}
+      </ul>
+    </div>
+    {% endif %}
     {% if venda.arquivo_pdf_s3_key %}
       <a href="{{ url_for('hora.vendas_download_pdf', venda_id=venda.id) }}" class="btn btn-sm btn-outline-secondary">
         <i class="fas fa-file-pdf"></i> DANFE original
@@ -236,6 +284,24 @@
       </li>
     {% endfor %}
   </ul>
+</div>
+{% endif %}
+
+{# #5b: aprovacoes gerenciais pendentes (desconto/frete/brinde) — o vendedor ve
+   por que o pedido nao confirma, sem precisar clicar Confirmar e tomar o erro. #}
+{% set aprov_pend = (venda.aprovacoes_desconto or [])|selectattr('status', 'equalto', 'PENDENTE')|list %}
+{% if aprov_pend %}
+<div class="alert alert-warning">
+  <h5 class="alert-heading"><i class="fas fa-stamp"></i> Aguardando aprovação do gerente</h5>
+  <p class="mb-1 small">Só é possível confirmar o pedido após a aprovação de:</p>
+  <ul class="mb-0">
+    {% for a in aprov_pend %}
+      <li><strong>{{ {'DESCONTO': 'Desconto', 'FRETE': 'Frete', 'BRINDE': 'Brinde'}.get(a.tipo, a.tipo) }}</strong>{% if a.detalhe %} — {{ a.detalhe }}{% endif %}</li>
+    {% endfor %}
+  </ul>
+  {% if current_user.tem_perm_hora('aprovacoes', 'ver') %}
+  <a href="{{ url_for('hora.comissao_aprovacoes') }}" class="alert-link small">Ir para a fila de aprovações →</a>
+  {% endif %}
 </div>
 {% endif %}
 
@@ -490,9 +556,16 @@
 
   <!-- ========================== Pagamento ========================== -->
   <div class="card mb-3" id="campo-forma-pagamento">
-    <div class="card-header d-flex justify-content-between align-items-center">
+    <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
       <strong><i class="fas fa-money-bill-wave"></i> Pagamento</strong>
-      {% if is_incompleto %}<span class="badge bg-warning text-dark"><i class="fas fa-exclamation-triangle"></i> Pedido INCOMPLETO — soma das formas deve igualar o valor total</span>{% endif %}
+      {% if is_incompleto %}
+      <div class="text-end small">
+        <span class="badge bg-warning text-dark"><i class="fas fa-exclamation-triangle"></i> Pedido INCOMPLETO</span>
+        <div class="text-danger fw-semibold mt-1">
+          {% if motivos_incompleto %}{{ motivos_incompleto|join(' · ') }}{% else %}Complete as formas de pagamento para concluir.{% endif %}
+        </div>
+      </div>
+      {% endif %}
     </div>
     <div class="card-body">
       {% if permite_editar_pagamentos and pode_editar %}
@@ -651,6 +724,7 @@
           <label class="form-label small mb-0">Peça</label>
           <input type="text" id="venda-add-brinde-txt" class="form-control form-control-sm"
                  data-hora-autocomplete="peca" data-hora-target-id="venda-add-brinde-id"
+                 data-hora-target-key="id"
                  placeholder="Buscar peça (min. 2 chars)" autocomplete="off" required>
           <input type="hidden" name="peca_id" id="venda-add-brinde-id" required>
         </div>
@@ -726,6 +800,7 @@
         <label class="form-label small mb-0">Peça</label>
         <input type="text" id="venda-add-peca-txt" class="form-control form-control-sm"
                data-hora-autocomplete="peca" data-hora-target-id="venda-add-peca-id"
+               data-hora-target-key="id"
                placeholder="Buscar peça (min. 2 chars)" autocomplete="off" required>
         <input type="hidden" name="peca_id" id="venda-add-peca-id" required>
       </div>
@@ -1131,6 +1206,47 @@
           <textarea name="observacoes" class="form-control" rows="2" maxlength="500"></textarea>
         </div>
       </div>
+    </div>
+  </div>
+
+  <!-- ========================== Brindes (opcional) ========================== -->
+  {# #4a: capturar brinde ja na criacao (vendedor promete no orcamento). Peca
+     de brinde entra no custo/margem, NAO no valor cobrado, NAO abate estoque.
+     Linhas paralelas brinde_peca_id[]/brinde_qtd[] lidas em tagplus_pedido_venda_criar. #}
+  <div class="card mb-3" id="secao-brindes-criacao">
+    <div class="card-header">
+      <strong><i class="fas fa-gift"></i> Brindes (opcional)</strong>
+      <small class="text-muted">— peças dadas de brinde; entram no custo/margem, não no valor cobrado</small>
+    </div>
+    <div class="card-body">
+      <div id="brindes-container"><!-- linhas adicionadas via JS --></div>
+      <button type="button" class="btn btn-sm btn-outline-primary" id="btn-add-brinde-criacao">
+        <i class="fas fa-plus"></i> Adicionar brinde
+      </button>
+      <template id="tpl-linha-brinde">
+        <div class="row g-2 align-items-end mb-2 brinde-linha">
+          <div class="col-md-6">
+            <label class="form-label small mb-1">Peça</label>
+            <input type="text" class="form-control form-control-sm js-brinde-txt"
+                   data-hora-autocomplete="peca" data-hora-target-key="id"
+                   placeholder="Buscar peça (min. 2 chars)" autocomplete="off">
+            <input type="hidden" name="brinde_peca_id" class="js-brinde-id">
+          </div>
+          <div class="col-md-3">
+            <label class="form-label small mb-1">Qtd</label>
+            <input type="text" name="brinde_qtd" class="form-control form-control-sm"
+                   inputmode="decimal" value="1">
+          </div>
+          <div class="col-md-2 d-flex align-items-end">
+            <button type="button" class="btn btn-sm btn-outline-danger js-brinde-remover" title="Remover">
+              <i class="fas fa-times"></i>
+            </button>
+          </div>
+        </div>
+      </template>
+      <small class="text-muted d-block mt-1">
+        <i class="fas fa-info-circle"></i> Custo = preço de venda da peça. Não é cobrado do cliente nem abate estoque.
+      </small>
     </div>
   </div>
 

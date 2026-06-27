@@ -55,7 +55,11 @@ from app.hora.models.tagplus import (
 )
 from app.hora.services import venda_audit
 from app.hora.services.estoque_service import EVENTOS_EM_ESTOQUE
-from app.hora.services.moto_service import get_or_create_moto, registrar_evento
+from app.hora.services.moto_service import (
+    devolver_ao_estoque,
+    get_or_create_moto,
+    registrar_evento,
+)
 from app.hora.services.parsers import parse_danfe_to_hora_payload
 from app.utils.file_storage import FileStorage
 from app.utils.timezone import agora_utc_naive, agora_brasil
@@ -630,6 +634,31 @@ def _avaliar_status_pagamento(
     return VENDA_STATUS_COTACAO, []
 
 
+def motivos_incompleto_venda(venda) -> List[str]:
+    """Motivos REAIS de a venda estar INCOMPLETA (para exibir na tela).
+
+    Recalcula via `_avaliar_status_pagamento` sobre os pagamentos ja persistidos,
+    para que o badge mostre a causa exata — soma das formas divergente E/OU
+    AUT/ID faltando em forma que exige — em vez de uma mensagem fixa generica
+    (que enganava quando a soma batia mas faltava o AUT). Retorna [] se a venda
+    nao estiver em INCOMPLETO.
+    """
+    if getattr(venda, 'status', None) != VENDA_STATUS_INCOMPLETO:
+        return []
+    pagamentos = [
+        {
+            'forma_pagamento_hora': p.forma_pagamento_hora,
+            'valor': Decimal(str(p.valor or 0)),
+            'aut_id': p.aut_id,
+        }
+        for p in (venda.pagamentos or [])
+    ]
+    _status, motivos = _avaliar_status_pagamento(
+        pagamentos, Decimal(str(venda.valor_total or 0)),
+    )
+    return motivos
+
+
 # --------------------------------------------------------------------------
 # Fluxo de criacao manual: COTACAO/INCOMPLETO + lock pessimista + RESERVADA
 # --------------------------------------------------------------------------
@@ -696,6 +725,7 @@ def criar_venda_manual(
     itens: Optional[List[dict]] = None,
     origem_lead: Optional[str] = None,
     origem_lead_obs: Optional[str] = None,
+    brindes: Optional[List[dict]] = None,
 ) -> HoraVenda:
     """Cria pedido de venda manual em status COTACAO ou INCOMPLETO.
 
@@ -991,6 +1021,14 @@ def criar_venda_manual(
     if pagamentos_norm:
         db.session.flush()
 
+    # Brindes do orcamento (#4a): peca prometida ja na criacao. Criados na MESMA
+    # transacao (flush-only, sem commit proprio) — valem mesmo se o pedido nascer
+    # INCOMPLETO. Linha invalida (peca inexistente / qtd<=0) aborta a criacao toda.
+    for b in (brindes or []):
+        _criar_brinde_flush_only(
+            venda, peca_id=b['peca_id'], qtd=b['qtd'], usuario=criado_por,
+        )
+
     detalhe_audit = (
         f'Pedido manual ({status_final}) chassis={",".join(chassi_norms_criados)} '
         f'cliente={nome_norm} valor_total={valor_total_dec}'
@@ -1034,14 +1072,15 @@ def confirmar_venda(venda_id: int, usuario: Optional[str] = None) -> HoraVenda:
         # Nao bloqueamos aqui — alinhado com fluxo permissivo do import DANFE.
         pass
 
-    # #28 Fatia 2: desconto acima do teto do modelo BLOQUEIA a confirmacao ate
-    # aprovacao (perm comissao/aprovar). Cria a solicitacao PENDENTE e aborta.
+    # #28 Fatia 2 + #5b: desconto acima do teto, frete (>0) e brinde BLOQUEIAM a
+    # confirmacao ate aprovacao gerencial (perm aprovacoes/aprovar). Cria 1
+    # solicitacao PENDENTE por gatilho e aborta.
     from app.hora.services import aprovacao_desconto_service
     pendencia = aprovacao_desconto_service.garantir_aprovacao_para_confirmar(venda, usuario)
     if pendencia:
-        db.session.commit()  # persiste a solicitacao PENDENTE criada (flush -> commit)
+        db.session.commit()  # persiste a(s) solicitacao(oes) PENDENTE (flush -> commit)
         raise TransicaoInvalidaError(
-            f'Desconto acima do teto — enviado para aprovacao do gerente: {pendencia}'
+            f'Pendente de aprovacao do gerente antes de confirmar — {pendencia}'
         )
 
     venda.status = VENDA_STATUS_CONFIRMADO
@@ -1555,9 +1594,8 @@ def _aplicar_itens(
     for iid, item in list(existentes.items()):
         if iid in ids_submetidos:
             continue
-        registrar_evento(
+        devolver_ao_estoque(
             numero_chassi=item.numero_chassi,
-            tipo='DEVOLVIDA',
             origem_tabela='hora_venda_item',
             origem_id=item.id,
             loja_id=venda.loja_id,
@@ -1812,10 +1850,9 @@ def remover_item_pedido(
     chassi = item.numero_chassi
     valor_removido = Decimal(str(item.preco_final))
 
-    # Devolve chassi ao estoque (evento DEVOLVIDA).
-    registrar_evento(
+    # Devolve chassi ao estoque (re-emite o estado-em-estoque anterior).
+    devolver_ao_estoque(
         numero_chassi=chassi,
-        tipo='DEVOLVIDA',
         origem_tabela='hora_venda_item',
         origem_id=item.id,
         loja_id=venda.loja_id,
@@ -1876,10 +1913,9 @@ def editar_item_pedido(
                 f'Chassi {chassi_alvo} esta na loja {ult.loja_id}; pedido e da '
                 f'loja {venda.loja_id}.'
             )
-        # Devolve antigo.
-        registrar_evento(
+        # Devolve antigo ao estoque (re-emite o estado-em-estoque anterior).
+        devolver_ao_estoque(
             numero_chassi=chassi_atual,
-            tipo='DEVOLVIDA',
             origem_tabela='hora_venda_item',
             origem_id=item.id,
             loja_id=venda.loja_id,
@@ -1995,9 +2031,8 @@ def cancelar_venda(
     venda.cancelamento_motivo = motivo_limpo[:500]
 
     for item in venda.itens:
-        registrar_evento(
+        devolver_ao_estoque(
             numero_chassi=item.numero_chassi,
-            tipo='DEVOLVIDA',
             origem_tabela='hora_venda',
             origem_id=venda.id,
             loja_id=venda.loja_id,
@@ -2139,26 +2174,21 @@ def remover_item_peca(venda_id: int, item_id: int, usuario: Optional[str] = None
 # abate estoque (custo = peca.preco_venda_padrao snapshot).
 # --------------------------------------------------------------------------
 
-def adicionar_brinde(venda_id: int, peca_id: int, qtd,
-                     usuario: Optional[str] = None):
-    """Adiciona um brinde (peca) ao pedido em COTACAO.
-
-    Custo = peca.preco_venda_padrao (snapshot). NAO entra no valor cobrado
-    (valor_total) e NAO abate estoque — apenas reduz a margem da venda
-    (venda_preview_service).
+def _criar_brinde_flush_only(venda: HoraVenda, peca_id: int, qtd,
+                             usuario: Optional[str] = None):
+    """Cria um HoraVendaBrinde (add + flush + auditoria) SEM commit e SEM o
+    guard de status. Reuso por `adicionar_brinde` (rota pos-save, que envolve
+    com `_exigir_cotacao` + commit) e por `criar_venda_manual` (#4a — cria os
+    brindes do orcamento na MESMA transacao do pedido, antes do commit unico,
+    permitindo prometer brinde ja na cotacao mesmo quando nasce INCOMPLETO).
     """
     from app.hora.models import HoraVendaBrinde
-    venda = HoraVenda.query.get(venda_id)
-    if not venda:
-        raise ValueError(f'Venda {venda_id} nao encontrada')
-    _exigir_cotacao(venda, 'Adicionar brinde')
     peca = HoraPeca.query.get(peca_id)
     if not peca:
         raise ValueError(f'Peca {peca_id} nao existe')
     qtd_dec = Decimal(str(qtd or 0))
     if qtd_dec <= 0:
         raise ValueError('qtd deve ser positiva')
-
     custo_uni = Decimal(str(peca.preco_venda_padrao or 0))
     brinde = HoraVendaBrinde(
         venda_id=venda.id, peca_id=peca.id, qtd=qtd_dec,
@@ -2171,6 +2201,22 @@ def adicionar_brinde(venda_id: int, peca_id: int, qtd,
         venda_id=venda.id, usuario=usuario or '', acao='ADICIONOU_BRINDE',
         detalhe=f'peca={peca.codigo_interno} qtd={qtd_dec} custo={brinde.custo_total}',
     )
+    return brinde
+
+
+def adicionar_brinde(venda_id: int, peca_id: int, qtd,
+                     usuario: Optional[str] = None):
+    """Adiciona um brinde (peca) ao pedido em COTACAO.
+
+    Custo = peca.preco_venda_padrao (snapshot). NAO entra no valor cobrado
+    (valor_total) e NAO abate estoque — apenas reduz a margem da venda
+    (venda_preview_service).
+    """
+    venda = HoraVenda.query.get(venda_id)
+    if not venda:
+        raise ValueError(f'Venda {venda_id} nao encontrada')
+    _exigir_cotacao(venda, 'Adicionar brinde')
+    brinde = _criar_brinde_flush_only(venda, peca_id, qtd, usuario)
     db.session.commit()
     return brinde
 
@@ -2246,9 +2292,8 @@ def descartar_venda_teste(
     venda.cancelamento_motivo = motivo_persistido
 
     for item in venda.itens:
-        registrar_evento(
+        devolver_ao_estoque(
             numero_chassi=item.numero_chassi,
-            tipo='DEVOLVIDA',
             origem_tabela='hora_venda',
             origem_id=venda.id,
             loja_id=venda.loja_id,

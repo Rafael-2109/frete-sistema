@@ -190,13 +190,10 @@ def test_cancelar_venda_cotacao_devolve_chassi(
     assert cancelada.cancelado_por == 'gerente'
     assert cancelada.cancelamento_motivo == 'cliente desistiu'
 
-    # DEVOLVIDA emitido (chassi volta ao estoque).
-    ev = (
-        HoraMotoEvento.query
-        .filter_by(numero_chassi=chassi_em_estoque, tipo='DEVOLVIDA')
-        .order_by(HoraMotoEvento.id.desc()).first()
-    )
-    assert ev is not None
+    # Chassi VOLTA ao estoque no status anterior (CONFERIDA da fixture), nao
+    # fica preso em DEVOLVIDA (fora do estoque). Bug 2026-06-26.
+    from app.hora.services.moto_service import status_atual
+    assert status_atual(chassi_em_estoque) == 'CONFERIDA'
 
 
 def test_cancelar_venda_motivo_curto_falha(
@@ -313,12 +310,10 @@ def test_remover_item_devolve_chassi(
     )
     assert venda.valor_total == Decimal('12500.00')
     assert HoraVendaItem.query.get(item.id) is None
-    ev = (
-        HoraMotoEvento.query
-        .filter_by(numero_chassi=chassi2, tipo='DEVOLVIDA')
-        .first()
-    )
-    assert ev is not None
+    # Chassi removido volta DISPONIVEL no status anterior (CONFERIDA), nao
+    # fica preso em DEVOLVIDA. Bug 2026-06-26.
+    from app.hora.services.moto_service import status_atual
+    assert status_atual(chassi2) == 'CONFERIDA'
 
 
 def test_remover_ultimo_item_falha(
@@ -345,16 +340,61 @@ def test_editar_item_troca_chassi(
     item_db = HoraVendaItem.query.get(item.id)
     assert item_db.numero_chassi == chassi2
 
-    # Antigo recebeu DEVOLVIDA, novo recebeu RESERVADA.
-    ev_dev = (
-        HoraMotoEvento.query
-        .filter_by(numero_chassi=chassi_em_estoque, tipo='DEVOLVIDA')
-        .first()
-    )
+    # Antigo VOLTA ao estoque (CONFERIDA — disponivel p/ nova venda); novo
+    # recebeu RESERVADA. Bug 2026-06-26: antes o antigo ficava em DEVOLVIDA.
+    from app.hora.services.moto_service import status_atual
+    assert status_atual(chassi_em_estoque) == 'CONFERIDA'
     ev_res = (
         HoraMotoEvento.query
         .filter_by(numero_chassi=chassi2, tipo='RESERVADA')
         .first()
     )
-    assert ev_dev is not None
     assert ev_res is not None
+
+
+# ============================================================
+# Regressao 2026-06-26: remover/cancelar reserva DEVOLVE ao estoque
+# (chassi volta DISPONIVEL no status anterior — nao fica preso em DEVOLVIDA).
+# ============================================================
+
+def test_remover_item_volta_disponivel_no_status_anterior(
+    db, chassi_em_estoque, loja_origem, modelo_moto,
+):
+    from app.hora.services import estoque_service
+    from app.hora.services.moto_service import status_atual
+
+    venda = _criar_pedido_cotacao(chassi_em_estoque)
+    chassi2 = _segundo_chassi(loja_origem, modelo_moto, 'VOLTAESTQ')
+    item = venda_service.adicionar_item_pedido(
+        venda_id=venda.id, numero_chassi=chassi2,
+        valor_final=Decimal('5000.00'), usuario='op',
+    )
+    assert status_atual(chassi2) == 'RESERVADA'  # reservado tira do estoque
+
+    venda_service.remover_item_pedido(
+        venda_id=venda.id, item_id=item.id, usuario='op',
+    )
+    # Volta ao status anterior (CONFERIDA, da fixture _segundo_chassi) — disponivel.
+    assert status_atual(chassi2) == 'CONFERIDA'
+    assert status_atual(chassi2) in estoque_service.EVENTOS_EM_ESTOQUE
+    # E reaparece como disponivel para venda em outro pedido.
+    disp = estoque_service.chassis_disponiveis_para_venda(
+        modelo_id=modelo_moto.id, lojas_permitidas_ids=[loja_origem.id],
+    )
+    assert chassi2 in [d['chassi'] for d in disp]
+
+
+def test_cancelar_venda_volta_disponivel_no_status_anterior(
+    db, chassi_em_estoque, loja_origem,
+):
+    from app.hora.services import estoque_service
+    from app.hora.services.moto_service import status_atual
+
+    venda = _criar_pedido_cotacao(chassi_em_estoque)
+    assert status_atual(chassi_em_estoque) == 'RESERVADA'
+    venda_service.cancelar_venda(
+        venda.id, motivo='cliente desistiu', usuario='gerente',
+    )
+    # chassi_em_estoque nasceu RECEBIDA->CONFERIDA: volta CONFERIDA (disponivel).
+    assert status_atual(chassi_em_estoque) == 'CONFERIDA'
+    assert status_atual(chassi_em_estoque) in estoque_service.EVENTOS_EM_ESTOQUE

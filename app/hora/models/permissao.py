@@ -43,7 +43,8 @@ MODULOS_HORA: list[tuple[str, str]] = [
     ('tagplus', 'Integracao TagPlus (NFe)'),
     ('pecas_cadastro', 'Cadastro de Pecas'),
     ('pecas_estoque', 'Estoque de Pecas'),
-    ('comissao', 'Comissao (config + aprovacao de desconto)'),
+    ('comissao', 'Comissao (config + relatorio)'),
+    ('aprovacoes', 'Aprovacoes de pedido (desconto/frete/brinde)'),
 ]
 
 # Modulos virtuais onde apenas a acao 'ver' tem semantica. As demais colunas
@@ -80,8 +81,10 @@ MODULOS_COM_APROVAR: set[str] = {
     'usuarios',
     'modelos',
     'vendas',
-    # comissao -> aprovacao de desconto acima do teto por modelo (#28, Fatia 2).
-    'comissao',
+    # aprovacoes -> aprovacao gerencial do pedido (desconto acima do teto, frete,
+    # brinde) antes de Confirmar (#28 Fatia 2 + #5b). Separada de 'comissao' (que
+    # ficou so com config + relatorio) em 2026-06-26 — comissao_aprovar/rejeitar.
+    'aprovacoes',
 }
 
 ACOES_HORA: list[tuple[str, str]] = [

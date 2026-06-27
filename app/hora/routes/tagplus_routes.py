@@ -1168,6 +1168,23 @@ def tagplus_pedido_venda_criar():
     if pagamentos_in:
         n_parcelas = pagamentos_in[0]['numero_parcelas'] or 1
 
+    # Brindes do orcamento (#4a): listas paralelas brinde_peca_id[]/brinde_qtd[].
+    # Linha sem peca (peca_id nao-numerico) e ignorada; qtd default 1.
+    brinde_qtds = request.form.getlist('brinde_qtd')
+    brindes_in: list[dict] = []
+    for i, pid_raw in enumerate(request.form.getlist('brinde_peca_id')):
+        pid = (pid_raw or '').strip()
+        if not pid.isdigit():
+            continue
+        qtd_raw = (brinde_qtds[i] if i < len(brinde_qtds) else '1').strip().replace(',', '.')
+        try:
+            qtd_b = Decimal(qtd_raw) if qtd_raw else Decimal('1')
+        except (InvalidOperation, ValueError):
+            qtd_b = Decimal('1')
+        if qtd_b <= 0:
+            continue
+        brindes_in.append({'peca_id': int(pid), 'qtd': qtd_b})
+
     # Vendedor: SELECT no form, default = usuario logado. Server valida que o
     # nome enviado pertence a um usuario HORA-habilitado (defesa em
     # profundidade contra manipulacao do POST). Se vazio, fallback p/ logado.
@@ -1253,6 +1270,7 @@ def tagplus_pedido_venda_criar():
             tipo_frete_calc=tipo_frete_calc_raw,
             origem_lead=origem_lead_raw,
             origem_lead_obs=origem_lead_obs_raw,
+            brindes=brindes_in,
         )
     except ValueError as exc:
         flash(f'Erro ao criar pedido de venda: {exc}', 'danger')

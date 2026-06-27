@@ -406,10 +406,15 @@ def vendas_detalhe(venda_id: int):
     # moto/cor/chassi e o select de vendedor precisam dessas listas em modo
     # edicao do mesmo jeito que em modo criacao.
     ctx = _contexto_lookup_pedido_venda()
+    from app.hora.services import venda_service
+    from app.hora.services import documento_venda_service as docsvc
+    motivos_incompleto = venda_service.motivos_incompleto_venda(venda)
 
     return render_template(
         'hora/tagplus/pedido_venda_novo.html',
         venda=venda,
+        motivos_incompleto=motivos_incompleto,
+        tem_ciclomotor=docsvc.tem_ciclomotor(venda),
         **ctx,
     )
 
@@ -435,6 +440,74 @@ def vendas_download_pdf(venda_id: int):
         flash('Falha ao gerar URL do PDF.', 'danger')
         return redirect(url_for('hora.vendas_detalhe', venda_id=venda.id))
     return redirect(url)
+
+
+# ------------------------------------------------------------------------
+# Documentos imprimíveis (PDV + termos) — geração on-the-fly via WeasyPrint
+# ------------------------------------------------------------------------
+
+def _venda_para_documento(venda_id: int):
+    """Carrega a venda e valida o escopo de loja. Retorna (venda, erro_response)."""
+    venda = HoraVenda.query.get_or_404(venda_id)
+    if venda.loja_id and not usuario_tem_acesso_a_loja(venda.loja_id):
+        flash('Acesso negado.', 'danger')
+        return None, redirect(url_for('hora.vendas_lista'))
+    if not venda.loja_id and lojas_permitidas_ids() is not None:
+        flash('Venda sem loja definida — apenas administradores podem abrir.', 'warning')
+        return None, redirect(url_for('hora.vendas_lista'))
+    return venda, None
+
+
+def _pdf_inline(blob: bytes, filename: str) -> Response:
+    return Response(
+        blob,
+        mimetype='application/pdf',
+        headers={'Content-Disposition': f'inline; filename="{filename}"'},
+    )
+
+
+def _gerar_documento_venda(venda_id: int, gerador, filename_prefixo: str):
+    """Wrapper comum: escopo + geração + tratamento de erro de negócio."""
+    from app.hora.services import documento_venda_service as docsvc
+    venda, erro = _venda_para_documento(venda_id)
+    if erro is not None:
+        return erro
+    try:
+        blob = getattr(docsvc, gerador)(venda)
+    except docsvc.DocumentoVendaError as exc:
+        flash(str(exc), 'warning')
+        return redirect(url_for('hora.vendas_detalhe', venda_id=venda.id))
+    return _pdf_inline(blob, f'{filename_prefixo}_{venda.id}.pdf')
+
+
+@hora_bp.route('/vendas/<int:venda_id>/documentos/pdv.pdf')
+@require_hora_perm('vendas', 'ver')
+def vendas_doc_pdv(venda_id: int):
+    return _gerar_documento_venda(venda_id, 'gerar_pdv_pdf', 'pedido_venda')
+
+
+@hora_bp.route('/vendas/<int:venda_id>/documentos/termo-garantia.pdf')
+@require_hora_perm('vendas', 'ver')
+def vendas_doc_termo_garantia(venda_id: int):
+    return _gerar_documento_venda(venda_id, 'gerar_termo_garantia_pdf', 'termo_garantia')
+
+
+@hora_bp.route('/vendas/<int:venda_id>/documentos/termo-checagem.pdf')
+@require_hora_perm('vendas', 'ver')
+def vendas_doc_termo_checagem(venda_id: int):
+    return _gerar_documento_venda(venda_id, 'gerar_termo_checagem_pdf', 'termo_checagem')
+
+
+@hora_bp.route('/vendas/<int:venda_id>/documentos/termo-ciclomotor.pdf')
+@require_hora_perm('vendas', 'ver')
+def vendas_doc_termo_ciclomotor(venda_id: int):
+    return _gerar_documento_venda(venda_id, 'gerar_termo_ciclomotor_pdf', 'termo_ciclomotor')
+
+
+@hora_bp.route('/vendas/<int:venda_id>/documentos/pacote.pdf')
+@require_hora_perm('vendas', 'ver')
+def vendas_doc_pacote(venda_id: int):
+    return _gerar_documento_venda(venda_id, 'gerar_pacote_pdf', 'pedido_completo')
 
 
 # ------------------------------------------------------------------------

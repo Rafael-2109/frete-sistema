@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="utf-8">
+<style>
+  @page {
+    size: A4; margin: 2.4cm 1.6cm 1.6cm;
+    @top-center { content: element(cabecalho); }
+  }
+  body { font-family: Arial, Helvetica, sans-serif; color: #000; font-size: 10.5px; line-height: 1.5; text-align: justify; margin: 0; }
+  #cabecalho { position: running(cabecalho); width: 100%; }
+  #cabecalho table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+  #cabecalho td.logo-cell { width: 60%; text-align: left; }
+  #cabecalho .logo { height: 30px; }
+  #cabecalho .grupo { text-align: right; font-size: 10px; line-height: 1.3; }
+  #cabecalho .grupo b { font-size: 12px; }
+  h1.titulo { text-align: center; font-size: 13px; margin: 4px 0 14px; }
+  .clausula { font-weight: bold; margin: 12px 0 4px; }
+  .centro { text-align: center; font-weight: bold; margin: 14px 0 4px; }
+  p { margin: 6px 0; }
+  ul { margin: 4px 0 4px 4px; padding-left: 16px; }
+  li { margin: 2px 0; }
+  .fill { border-bottom: 1px solid #000; padding: 0 4px; font-weight: bold; white-space: nowrap; }
+  .assina { text-align: center; margin-top: 60px; }
+  .assina .linha { border-top: 1px solid #000; width: 360px; margin: 0 auto 4px; }
+</style>
+</head>
+<body>
+  <div id="cabecalho">
+    <table>
+      <tr>
+        <td class="logo-cell">{% if logo_uri %}<img class="logo" src="{{ logo_uri }}" alt="MOTOCHEFE">{% endif %}</td>
+        <td class="grupo"><b>GRUPO SP</b><br>CNPJ: {{ emitente.cnpj }}</td>
+      </tr>
+    </table>
+  </div>
+
+  <h1 class="titulo">TERMO DE RESPONSABILIDADE, GARANTIA E COMPRA</h1>
+
+  <div class="clausula">1- DA RESPONSABILIDADE.</div>
+  <p>
+    Pelo presente instrumento o comprador Sr(a). <span class="fill">{{ destinatario.nome or '' }}</span>
+    inscrito no CPF sob n° <span class="fill">{{ destinatario.cpf or '' }}</span>, residente e domiciliado na
+    <span class="fill">{{ destinatario.logradouro or '' }}</span>,
+    Bairro: <span class="fill">{{ destinatario.bairro or '' }}</span>,
+    Cidade: <span class="fill">{{ destinatario.cidade or '' }}</span>,
+    Estado: <span class="fill">{{ destinatario.uf or '' }}</span>,
+    que adquire o veículo de marca MotoChefe modelo <span class="fill">{{ item.modelo or '' }}</span>,
+    na cor <span class="fill">{{ item.cor or '' }}</span>,
+    chassi n° <span class="fill">{{ item.chassi or '' }}</span>, quilometragem 0 km, toma ciência dos termos da
+    garantia sobre o veículo, ora adquirido e declara estar ciente das orientações e advertências constantes
+    neste documento passadas pela empresa MOTOCHEFE.
+  </p>
+  <p>
+    Todos os veículos comercializados estão sujeitos às normas técnicas e de segurança da Resolução CONTRAN
+    n.º 996/2023, que regula, entre outros pontos, os limites de velocidade para veículos classificados como
+    autopropelidos. Modificação na configuração original do veículo - como alterações de velocidade ou desempenho:
+  </p>
+  <ul>
+    <li>Constituem infração à Resolução e ao Código de Trânsito Brasileiro (CTB);</li>
+    <li>Estão sujeitas aplicações legais (multas, apreensão, entre outras medidas);</li>
+    <li>Resultam na perda imediata da garantia do produto;</li>
+  </ul>
+  <p>Mantenha seu veículo conforme as especificações de fábrica para garantir sua segurança, conformidade legal e os benefícios da garantia.</p>
+  <p>
+    Declaro que fui informado e advertido que o produto adquirido se trata de um equipamento de mobilidade
+    individual denominado autopropelido e/ou bicicleta elétrica, totalmente adequado às características e
+    configurações trazidas pelo Artigo 2º da Resolução do CONTRAN nº 996 de 15 de junho de 2023, sendo de
+    inteira responsabilidade do comprador qualquer alteração no produto que o torne incompatível com a referida
+    Resolução do CONTRAN.
+  </p>
+  <p>Pelo presente Termo, declaro que vistoriei e testei o produto, estando em perfeitas condições de uso, não tendo nada a reclamar.</p>
+  <p>
+    Assim sendo, neste ato, a MOTOCHEFE transfere a posse do veículo ao COMPRADOR, que passa ser responsável,
+    Civil e Criminal, por todos os atos praticados, com o referido produto especificado acima e informações
+    constantes neste Termo e seus anexos, a partir deste dia.
+  </p>
+
+  <div class="clausula">2 - DA GARANTIA MOTOCHEFE.</div>
+  <p>Este Termo de Garantia cobre exclusivamente defeitos de fabricação identificados em condições normais de uso nas motocicletas e scooters elétricos comercializados pela HORA Comércio de Motocicletas Elétricas LTDA.</p>
+
+  <div class="clausula">A - VEÍCULOS AUTOPROPELIDOS / BICICLETAS ELÉTRICAS.</div>
+  <p>
+    São considerados veículos autopropelidos/bicicletas elétricas aqueles que atendem integralmente ao critérios
+    técnicos estabelecidos pela Resolução nº 996/2023 do CONTRAN. O COMPRADOR declara ciência de que, desde que
+    respeitados os critérios legais, tais veículos dispensam o uso de CNH e licenciamento, sendo de sua exclusiva
+    responsabilidade observar limites de potência, velocidade e características técnicas e regras de circulação
+    exigidas pela legislação, assim como adaptações exclusivas de sua responsabilidade em caso de mudança da
+    legislação vigente.
+  </p>
+  <p>Os veículos autopropelidos/bicicletas elétricas possuem:</p>
+  <ul>
+    <li>06 (seis) meses de garantia contra defeitos de fabricação;</li>
+    <li>06 (seis) meses de garantia adicional específica para motor, bateria e módulo elétrico, totalizando 12 (doze) meses de garantia para esses componentes, contados a partir da data de retirada do produto na loja.</li>
+  </ul>
+
+  <div class="clausula">B - VEÍCULOS CICLOMOTORES.</div>
+  <p>São considerados CICLOMOTORES todos os veículos com potência acima de 1.000W, incluindo, mas não se limitando, aos modelos: X11-12, MC20, S8-12, Roma, Triciclo X15 ou quaisquer outros que se enquadrem na mesma especificação técnica.</p>
+  <p>Os veículos ciclomotores possuem:</p>
+  <ul>
+    <li>03 (três) meses de garantia contra defeitos de fabricação, contados a partir da data de retirada do veículo na loja;</li>
+    <li>09 (nove) meses de garantia adicional específica para motor, bateria e módulo elétrico, totalizando 12 (doze) meses de garantia exclusivamente para esses componentes.</li>
+  </ul>
+  <p>Para ambos os veículos, indicamos a leitura da Cartilha de uso da bateria, Anexo I deste documento e o Manual, enviado separadamente.</p>
+
+  <div class="clausula">REGULARIZAÇÃO, CNH E CIRCULAÇÃO.</div>
+  <p>O COMPRADOR declara ciência de que os ciclomotores exigem habilitação compatível (CNH), emplacamento e licenciamento, sendo vedada a circulação em vias públicas sem a devida regularização, nos termos da legislação vigente.</p>
+  <p>A responsabilidade pela regularização é exclusiva do COMPRADOR, salvo se houver contratação expressa de serviço específico junto ao VENDEDOR.</p>
+
+  <div class="clausula">2.1 - GARANTIA ADICIONAL CONDICIONADA À MANUTENÇÃO PREVENTIVA NA LOJA DA COMPRA.</div>
+  <p>O VENDEDOR poderá, a seu exclusivo critério, conceder 01 (um) ano adicional de garantia ao produto, além do prazo originalmente contratado, desde que o COMPRADOR cumpra integralmente as seguintes condições:</p>
+  <p>2.1.1 Realização de 04 (quatro) revisões preventivas anuais, a serem efetuadas exclusivamente na loja da compra ou parceiro, se houver e formalmente indicado por esta</p>
+  <p>2.1.2 Observância do intervalo máximo de 90 (noventa) dias entre cada revisão, a partir da data da compra;</p>
+  <p>2.1.3 Quitação integral do valor de cada revisão, conforme tabela vigente à época da prestação do serviço;</p>
+  <p>2.1.4 Registro formal das revisões no histórico do veículo; e</p>
+  <p>2.1.5 Contato apenas nos canais indicados para agendamento da revisão com no mínimo 15 dias de antecedência. O não cumprimento de qualquer das condições acima implicará perda automática do direito à garantia adicional, permanecendo válidos apenas os prazos de garantia originalmente previstos neste termo.</p>
+  <p>A garantia adicional ora prevista não é automática, não integra o preço do produto, possui caráter promocional e condicional, e não substitui nem altera as exclusões de garantia já estabelecidas neste termo.</p>
+
+  <div class="clausula">C - LOCAL DE ATENDIMENTO.</div>
+  <p>O atendimento da garantia será realizado exclusivamente na loja onde a compra foi efetuada ou parceiro, quando aplicável, formalmente indicado pela loja à época da vistoria.</p>
+  <p><b>AGENDAMENTO PRÉVIO:</b> É obrigatório o agendamento prévio por meio de telefone ou e-mail para qualquer atendimento de garantia e o COMPRADOR declara estar ciente de que os atendimentos ocorrerão de acordo com a agenda técnica disponível.</p>
+  <p><b>RESPONSABILIDADE PELO TRANSPORTE:</b> O envio do produto à loja, bem como a retirada após o reparo, é de total responsabilidade do cliente, incluindo custos de transporte e riscos associados.</p>
+
+  <div class="clausula">D - REGRAS GERAIS DA GARANTIA.</div>
+  <p>Para que a garantia seja válida, devem ser observadas as seguintes condições:</p>
+  <p>I. O cliente deve apresentar a Nota Fiscal de compra e o número de série do produto.</p>
+  <p>II. O produto deve ser enviado com todos os acessórios originais e componentes inclusos no momento da compra.</p>
+  <p>III. A garantia não cobre falhas decorrentes de mau uso, negligência ou condições de operação fora das especificações técnicas descritas no manual.</p>
+  <p>IV. É obrigatória a realização da revisão conforme descrito no manual do proprietário. A garantia perde sua validade se não forem cumpridas as revisões constantes no manual do proprietário.</p>
+
+  <div class="clausula">E - PROCEDIMENTO PARA ACIONAMENTO DA GARANTIA.</div>
+  <p>I. O cliente deve agendar previamente o atendimento na loja</p>
+  <p>II. Encaminhar o produto para a loja no endereço indicado, assumindo os custos e riscos do transporte.</p>
+  <p>III. Após a avaliação técnica, a HORA Comércio de Motocicletas Elétricas LTDA, terá até 90 (noventa) dias para realizar o reparo, substituição ou oferecer outra solução, conforme o Art. 18 do Código de Defesa do Consumidor.</p>
+
+  <div class="clausula">F - EXCLUSÕES DE GARANTIA.</div>
+  <p>Não estão cobertos pela garantia:</p>
+  <p>I. Danos causados por exposição indevida à água, incluindo:</p>
+  <ul>
+    <li>Submersão do produto em profundidade que a água encoste nas rodas.</li>
+    <li>Uso prolongado em chuvas fortes ou em áreas alagadas.</li>
+  </ul>
+  <p>II. Danos estéticos ou cosméticos (ex.: arranhões, amassados ou marcas) que não forem reportados no ato da entrega.</p>
+  <p>III. Itens de desgaste natural com vida útil limitada, como:</p>
+  <ul>
+    <li>Pneus.</li>
+    <li>Pastilhas e discos de freio.</li>
+    <li>Lâmpadas.</li>
+    <li>Cabos, correias e rolamentos, porém, não são limitadas a estes itens.</li>
+  </ul>
+  <p>IV. Modificações ou desbloqueios não autorizados, incluindo, mas não se limitando a:</p>
+  <ul>
+    <li>Veículos alterados para operar com potência acima da nominal descrita nas especificações do produto.</li>
+    <li>Alterações que comprometam o funcionamento ou a segurança do veículo.</li>
+    <li>Instalação de peças e acessórios não originais.</li>
+    <li>Uso com carga superior ao permitido, conforme especificação técnica do fabricante.</li>
+  </ul>
+  <p>V. Danos causados por:</p>
+  <ul>
+    <li>Acidentes, quedas ou colisões.</li>
+    <li>Longa permanência de bateria conectada à eletricidade, inversão de polaridade, incêndios, explosões decorrentes do uso de carregador inadequado, sobrecarga ou permanência superior ao tempo indicado em manual;</li>
+    <li>Ocorrências causadas por fatores externos à bateria, como impacto, queda, colisão, exposição prolongada ao sol ou contato com líquidos inflamáveis;</li>
+    <li>Fenômenos da natureza, como descargas atmosféricas ou infiltração de água.</li>
+    <li>Reparos realizados por assistência técnica não autorizada.</li>
+  </ul>
+
+  <div class="clausula">G - PRODUTO FORA DO PORTFÓLIO.</div>
+  <p>Caso o produto não esteja mais disponível no portfólio da HORA Comércio de Motocicletas Elétricas LTDA e apresente defeito dentro do prazo de garantia, a empresa pode:</p>
+  <p>I. Substituí-lo por outro produto de função equivalente, dentro do prazo de 90 (noventa) dias; ou</p>
+  <p>II. Oferecer abatimento proporcional do valor, caso o defeito não inviabilize o uso do produto. A medida a ser adotada será avaliada individualmente e ficará a critério exclusivo da empresa.</p>
+
+  <div class="clausula">H - VALIDADE DA GARANTIA.</div>
+  <p>A garantia será considerada nula ou sem efeito nas seguintes situações:</p>
+  <p>I. Alteração ou modificação das características originais do produto.</p>
+  <p>II. Desbloqueio ou modificação indevida para aumento de potência ou alteração das configurações do produto.</p>
+  <p>III. Uso do produto fora das especificações técnicas do fabricante, como sobrecarga ou operação em condições extremas.</p>
+  <p>IV. Falta de manutenção preventiva e revisões conforme especificado no manual do proprietário.</p>
+  <p>V. Submersão ou exposição inadequada à água, mau uso da parte do cliente ou por falta da calibragem adequada dos pneus.</p>
+
+  <div class="centro">CIÊNCIA E PROCEDIMENTOS DA BATERIA.</div>
+  <p>O COMPRADOR declara, para todos os fins de direito, que recebeu, leu e compreendeu integralmente o conteúdo referente ao USO, SEGURANÇA E CONSERVAÇÃO DA BATERIA, tendo sido devidamente orientado quanto:</p>
+  <p>I. ao uso correto e seguro da bateria;</p>
+  <p>II. às condições adequadas de carregamento, manuseio e armazenamento;</p>
+  <p>III. às situações que caracterizam mau uso, desgaste natural ou uso em desacordo com as recomendações do fabricante; e</p>
+  <p>IV. às hipóteses legais de exclusão de garantia, nos termos do Código de Defesa do Consumidor.</p>
+  <p>O COMPRADOR reconhece que o descumprimento das orientações aqui descritas poderá acarretar danos ao produto, riscos à segurança e a perda da garantia, quando caracterizado o mau uso, conforme previsto na legislação aplicável.</p>
+  <p>A MotoChefe orientar o consumidor quanto ao uso correto, seguro e adequado da bateria, sendo parte integrante das informações prestadas no ato da compra, nos termos do Código de Defesa do Consumidor (Lei nº 8.078/90).</p>
+  <p>A leitura dos intens abaixo são essenciais para a segurança do consumidor e a correta utilização do produto:</p>
+  <p>1. Jamais deixe a bateria carregando da noite para o dia.</p>
+  <p>2. Não exceder o tempo máximo de carregamento de 8 horas (observar a luz verde indicativa de carga completa).</p>
+  <p>3. Sempre ao carregar a bateria, ligar diretamente na tomada da parede, jamais utilizar adaptadores elétricos como régua, “benjamim” ou similares. Recomenda-se o uso de estabilizador adequado, quando indicado.</p>
+  <p>4. Carregar sempre em local aberto, arejado e durante o dia.</p>
+  <p>5. Procure carregar a bateria dentro do tempo médio de 4 a 6 horas, observando se a luz verde de carregamento já está acesa.</p>
+  <p>6. Nunca carregue a bateria se estiver exposta ao sol, seja ela fora do veículo ou carregando diretamente nele. Aguarde o resfriamento completo da bateria antes de iniciar a carga.</p>
+  <p>7. Cuidado ao manusear a bateria para que nenhum objeto metálico encoste na tomada, sob alto risco de curto-circuito e incêndio.</p>
+  <p>8. Sempre deixar a tomada da bateria tampada, não deixar os conectores expostos.</p>
+  <p>9. É proibido qualquer tipo de reparo em nossas baterias. Caso seja constatado, a garantia será automaticamente perdida.</p>
+  <p>10. Não usar baterias recondicionadas, semi novas, de outras fabricantes e nem baterias compradas pela internet sem a devida procedência.</p>
+  <p>11. Não usar carregadores recondicionados, semi novos, de outros fabricantes e nem adquiridos pela internet sem procedência comprovada.</p>
+  <p>12. Após o uso do veículo elétrico, não carregar a bateria imediatamente. É aconselhável aguardar um tempo médio de 20 a 30 minutos para iniciar a recarga, permitindo o resfriamento da bateria.</p>
+  <p>13. Não exceder o peso máximo do produto e não utilizar o veículo com pneus descalibrados.</p>
+  <p>14. Evitar deixar a bateria descarregar por completo.</p>
+  <p>15. Em caso de viagens ou armazenamento prolongado, recomenda-se guardar a bateria com aproximadamente 50% de carga, preferencialmente desconectada do veículo.</p>
+
+  <div class="clausula">3 - DA COMPRA.</div>
+  <div class="clausula">3.1 - CONFIRMAÇÃO DE PAGAMENTO E OPERADORA DE CARTÃO.</div>
+  <p>O COMPRADOR declara estar ciente de que, em operações realizadas por meio de cartão de crédito, débito ou outros meios eletrônicos de pagamento, a operadora poderá, mesmo após a saída do produto da loja, solicitar documentos e/ou informações adicionais para confirmação da transação.</p>
+  <p>O COMPRADOR compromete-se a atender tais solicitações no prazo máximo de 24 (vinte e quatro) horas, sob pena de cancelamento da transação, estorno do valor pago e/ou adoção das medidas cabíveis para resguardar o direito do VENDEDOR.</p>
+
+  <div class="clausula">3.2 - RETIRADA DO PRODUTO E ACEITE.</div>
+  <p>A retirada do produto das dependências da loja caracteriza ciência, concordância e aceite integral das condições aqui descritas, bem como das informações prestadas verbalmente e por escrito no momento da venda, ainda que este termo não venha a ser assinado.</p>
+
+  <div class="clausula">3.3 - RESPONSABILIDADE PELO USO.</div>
+  <p>A partir da retirada do produto, o COMPRADOR assume total responsabilidade por sua guarda, uso, conservação e manutenção, eximindo o VENDEDOR de qualquer responsabilidade por danos decorrentes de uso inadequado ou irregular.</p>
+
+  <div class="clausula">3.4 - EMISSÃO E ENVIO DE NOTA FISCAL.</div>
+  <p>O envio da Nota Fiscal ao COMPRADOR poderá ocorrer em prazo razoável e compatível com os procedimentos operacionais e fiscais do VENDEDOR, incluindo validações da operadora de cartão, ajustes cadastrais ou contingências técnicas, não caracterizando descumprimento contratual, desde que a emissão fiscal esteja regular.</p>
+  <p>O envio da Nota Fiscal ao COMPRADOR poderá ocorrer por meio eletrônico (e-mail ou outro meio digital informado), em prazo razoável, podendo ser posterior à retirada do produto, não caracterizando irregularidade ou prejuízo, desde que o documento tenha sido regularmente emitido.</p>
+  <p>É de responsabilidade do COMPRADOR fornecer corretamente seus dados cadastrais, especialmente endereço eletrônico, bem como verificar sua caixa de entrada, spam ou lixo eletrônico.</p>
+
+  <div class="clausula">3.5 - ANÁLISE TÉCNICA E EVENTUAL COBRANÇA</div>
+  <p>Eventual solicitação de troca após uso somente será analisada em caso de defeito de fabricação, observados os procedimentos e prazos legais de garantia.</p>
+  <p>Constatada a alegação de defeito, o produto será submetido à análise técnica, nos termos do Código de Defesa do Consumidor, não sendo automática a substituição do produto ou a devolução de valores, salvo nos casos legalmente previstos.</p>
+  <p>Fica desde já o COMPRADOR ciente de que, caso a análise técnica constate ausência de defeito de fabricação, bem como a ocorrência de mau uso, uso inadequado, desgaste natural, intervenção de terceiros, modificações, danos acidentais ou qualquer outra causa não atribuível ao VENDEDOR ou ao fabricante, poderá ser cobrada taxa de análise técnica, conforme tabela vigente à época.</p>
+  <p>A retirada do produto da loja caracteriza ciência de que o produto foi entregue em perfeitas condições aparentes de funcionamento e estética.</p>
+
+  <div class="centro">DA DESISTÊNCIA E CANCELAMENTO</div>
+  <p>As compras realizadas presencialmente no estabelecimento do VENDEDOR não estão sujeitas ao direito de arrependimento previsto no artigo 49 do Código de Defesa do Consumidor.</p>
+  <p>Após a conclusão da compra e retirada do produto, não será aceita desistência, cancelamento ou devolução por arrependimento, gosto pessoal, expectativa ou qualquer outro motivo que não configure defeito de fabricação, salvo se expressamente previsto em política comercial específica e formalizada pelo VENDEDOR. O COMPRADOR declara ciência de que a utilização do produto, ainda que por curto período ou único dia, descaracteriza a possibilidade de troca por arrependimento.</p>
+
+  <div class="centro">VEDAÇÃO A PROMESSAS VERBAIS</div>
+  <p>A LOJA VENDEDORA não reconhece promessas verbais de troca, cancelamento ou devolução realizadas fora das condições expressamente previstas neste termo ou em política comercial formal e escrita por seus representantes legais.</p>
+
+  <div class="centro">FORO COMPETENTE</div>
+  <p>Fica eleito o foro da comarca de São Paulo, SP, para resolver quaisquer disputas relacionadas ao presente Termo de Responsabilidade, Garantia e Compra e seus anexos.</p>
+
+  <p style="text-align:center; margin-top:26px;">
+    São Paulo, <span class="fill">{{ data_extenso.dia }}</span> de
+    <span class="fill">{{ data_extenso.mes }}</span> de
+    <span class="fill">{{ data_extenso.ano }}</span>.
+  </p>
+
+  <div class="assina">
+    <div class="linha"></div>
+    Assinatura do cliente por extenso - adicionar rubrica
+  </div>
+</body>
+</html>

@@ -104,7 +104,7 @@ def comissao_set_modelo(modelo_id: int):
 # ------------------------------------------------------------------------
 
 @hora_bp.route('/comissao/aprovacoes')
-@require_hora_perm('comissao', 'ver')
+@require_hora_perm('aprovacoes', 'ver')
 def comissao_aprovacoes():
     from app.hora.services import aprovacao_desconto_service
     from app.hora.models import APROVACAO_STATUS_PENDENTE
@@ -116,7 +116,7 @@ def comissao_aprovacoes():
 
 
 @hora_bp.route('/comissao/aprovacao/<int:aprovacao_id>/aprovar', methods=['POST'])
-@require_hora_perm('comissao', 'aprovar')
+@require_hora_perm('aprovacoes', 'aprovar')
 def comissao_aprovar_desconto(aprovacao_id: int):
     from app.hora.services import aprovacao_desconto_service
     try:
@@ -128,7 +128,7 @@ def comissao_aprovar_desconto(aprovacao_id: int):
 
 
 @hora_bp.route('/comissao/aprovacao/<int:aprovacao_id>/rejeitar', methods=['POST'])
-@require_hora_perm('comissao', 'aprovar')
+@require_hora_perm('aprovacoes', 'aprovar')
 def comissao_rejeitar_desconto(aprovacao_id: int):
     from app.hora.services import aprovacao_desconto_service
     motivo = (request.form.get('motivo') or '').strip() or None

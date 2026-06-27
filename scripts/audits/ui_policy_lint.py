@@ -72,7 +72,11 @@ PRINT_TEMPLATE_PATTERNS = (
 def _eh_template_impressao(file_path: Path) -> bool:
     """True se o template e de impressao (PDF/print) — whitelist do lint."""
     nome = file_path.name
-    return any(p in nome for p in PRINT_TEMPLATE_PATTERNS)
+    if any(p in nome for p in PRINT_TEMPLATE_PATTERNS):
+        return True
+    # Templates sob um diretorio `documentos/` sao documentos gerados em PDF
+    # (WeasyPrint) — auto-contidos por necessidade, mesmo motivo dos imprimir_*.
+    return "documentos" in file_path.parts
 
 # ─── Regex ──────────────────────────────────────────────────────────────────
 

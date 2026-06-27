@@ -95,6 +95,7 @@
       <th>CPF</th>
       <th>Data</th>
       <th>Valor</th>
+      <th>Frete</th>
       <th style="min-width:280px;">Itens (chassi · modelo · cor)</th>
       <th></th>
     </tr></thead>
@@ -135,6 +136,12 @@
           <td><small>{{ v.cpf_cliente }}</small></td>
           <td>{{ v.data_venda.strftime('%d/%m/%Y') }}</td>
           <td>{{ v.valor_total|valor_br }}</td>
+          <td>
+            {% if v.valor_frete %}
+              {{ v.valor_frete|valor_br }}
+              {% if v.tipo_frete_calc %}<small class="text-muted d-block">{{ 'incluso' if v.tipo_frete_calc == 'INCLUSO' else 'adicionar' }}</small>{% endif %}
+            {% else %}<small class="text-muted">—</small>{% endif %}
+          </td>
           <td>
             {# Roadmap #1: badge com qtd de motos (e pecas, se houver) do pedido #}
             <div class="mb-1">
@@ -182,7 +189,7 @@
           </td>
         </tr>
       {% else %}
-        <tr><td colspan="11" class="text-center text-muted">Nenhum pedido cadastrado.</td></tr>
+        <tr><td colspan="12" class="text-center text-muted">Nenhum pedido cadastrado.</td></tr>
       {% endfor %}
     </tbody>
   </table>

@@ -97,3 +97,81 @@ def test_rejeitar_desconto(db, loja_factory):
     ap = HoraAprovacaoDesconto.query.filter_by(venda_id=v.id, status='PENDENTE').first()
     aprovacao_desconto_service.rejeitar(ap.id, usuario='gerente', motivo='fora da alcada')
     assert HoraAprovacaoDesconto.query.get(ap.id).status == 'REJEITADO'
+
+
+# ----------------- #5b: frete e brinde tambem exigem aprovacao --------------
+
+def _venda_com_item(loja, *, desconto=Decimal('0'), teto=None,
+                    valor_frete=None, tipo_frete=None):
+    """Venda COTACAO com 1 item-moto; opcionalmente desconto/teto e frete."""
+    modelo = HoraModelo(
+        nome_modelo=f'TST-{uuid.uuid4().hex[:8].upper()}', ativo=True,
+        desconto_maximo=teto,
+    )
+    _db.session.add(modelo); _db.session.flush()
+    chassi = _chassi()
+    _db.session.add(HoraMoto(numero_chassi=chassi, modelo_id=modelo.id, cor='PRETA'))
+    _db.session.flush()
+    v = HoraVenda(
+        loja_id=loja.id, cpf_cliente='12345678909', nome_cliente='Cli',
+        valor_total=Decimal('1000') - desconto, status='COTACAO',
+        data_venda=agora_utc_naive().date(), origem_criacao='MANUAL',
+        valor_frete=valor_frete, tipo_frete_calc=tipo_frete,
+    )
+    _db.session.add(v); _db.session.flush()
+    _db.session.add(HoraVendaItem(
+        venda_id=v.id, numero_chassi=chassi,
+        preco_tabela_referencia=Decimal('1000'),
+        desconto_aplicado=desconto, desconto_percentual=0,
+        preco_final=Decimal('1000') - desconto,
+    ))
+    _db.session.flush()
+    return v
+
+
+def test_frete_dispara_aprovacao(db, loja_factory):
+    v = _venda_com_item(loja_factory(), valor_frete=Decimal('200'), tipo_frete='INCLUSO')
+    gat = aprovacao_desconto_service.gatilhos_aprovacao(v)
+    assert 'FRETE' in gat and 'DESCONTO' not in gat
+    with pytest.raises(venda_service.TransicaoInvalidaError, match='aprovacao'):
+        venda_service.confirmar_venda(v.id, usuario='vendedor')
+    ap = HoraAprovacaoDesconto.query.filter_by(
+        venda_id=v.id, tipo='FRETE', status='PENDENTE').first()
+    assert ap is not None
+    aprovacao_desconto_service.aprovar(ap.id, usuario='gerente')
+    venda_service.confirmar_venda(v.id, usuario='vendedor')
+    assert HoraVenda.query.get(v.id).status == 'CONFIRMADO'
+
+
+def test_brinde_dispara_aprovacao(db, loja_factory, peca_factory):
+    v = _venda_com_item(loja_factory())
+    peca = peca_factory()
+    peca.preco_venda_padrao = Decimal('10')
+    _db.session.flush()
+    venda_service.adicionar_brinde(v.id, peca.id, qtd=1, usuario='t')
+    gat = aprovacao_desconto_service.gatilhos_aprovacao(v)
+    assert 'BRINDE' in gat
+    with pytest.raises(venda_service.TransicaoInvalidaError):
+        venda_service.confirmar_venda(v.id, usuario='vendedor')
+    assert HoraAprovacaoDesconto.query.filter_by(
+        venda_id=v.id, tipo='BRINDE', status='PENDENTE').first() is not None
+
+
+def test_multiplos_gatilhos_exigem_todas_aprovacoes(db, loja_factory):
+    v = _venda_com_item(loja_factory(), desconto=Decimal('200'), teto=Decimal('100'),
+                        valor_frete=Decimal('50'), tipo_frete='ADICIONAR')
+    with pytest.raises(venda_service.TransicaoInvalidaError):
+        venda_service.confirmar_venda(v.id, usuario='vendedor')
+    # 2 pendencias: DESCONTO e FRETE
+    assert HoraAprovacaoDesconto.query.filter_by(
+        venda_id=v.id, status='PENDENTE').count() == 2
+    # aprovar SO o desconto: ainda bloqueia (frete pendente)
+    ap_desc = HoraAprovacaoDesconto.query.filter_by(venda_id=v.id, tipo='DESCONTO').first()
+    aprovacao_desconto_service.aprovar(ap_desc.id, usuario='gerente')
+    with pytest.raises(venda_service.TransicaoInvalidaError):
+        venda_service.confirmar_venda(v.id, usuario='vendedor')
+    # aprovar o frete tambem: libera
+    ap_frete = HoraAprovacaoDesconto.query.filter_by(venda_id=v.id, tipo='FRETE').first()
+    aprovacao_desconto_service.aprovar(ap_frete.id, usuario='gerente')
+    venda_service.confirmar_venda(v.id, usuario='vendedor')
+    assert HoraVenda.query.get(v.id).status == 'CONFIRMADO'

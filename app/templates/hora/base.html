@@ -39,7 +39,8 @@
         current_user.tem_perm_hora('usuarios', 'ver') or
         current_user.tem_perm_hora('tagplus', 'ver') or
         current_user.tem_perm_hora('pecas_cadastro', 'ver') or
-        current_user.tem_perm_hora('comissao', 'ver') %}
+        current_user.tem_perm_hora('comissao', 'ver') or
+        current_user.tem_perm_hora('aprovacoes', 'ver') %}
     {% if show_cadastros %}
     <div class="nav-item dropdown">
       <a id="menu-trigger-cadastros" class="nav-link dropdown-toggle {% if request.endpoint and (request.endpoint.startswith('hora.modelos') or request.endpoint.startswith('hora.lojas') or request.endpoint.startswith('hora.permissoes') or 'forma_map' in (request.endpoint or '')) %}active{% endif %}"
@@ -87,9 +88,13 @@
           <li><a id="menu-comissao" class="dropdown-item {% if request.endpoint == 'hora.comissao_config' %}active{% endif %}" href="{{ url_for('hora.comissao_config') }}">
             <i class="fas fa-hand-holding-usd fa-fw"></i> Comissão
           </a></li>
+        {% endif %}
+        {% if current_user.tem_perm_hora('aprovacoes', 'ver') %}
           <li><a id="menu-comissao-aprovacoes" class="dropdown-item {% if request.endpoint == 'hora.comissao_aprovacoes' %}active{% endif %}" href="{{ url_for('hora.comissao_aprovacoes') }}">
-            <i class="fas fa-stamp fa-fw"></i> Aprovações de desconto
+            <i class="fas fa-stamp fa-fw"></i> Aprovações
           </a></li>
+        {% endif %}
+        {% if current_user.tem_perm_hora('comissao', 'ver') %}
           <li><a id="menu-comissao-relatorio" class="dropdown-item {% if request.endpoint == 'hora.comissao_relatorio' %}active{% endif %}" href="{{ url_for('hora.comissao_relatorio') }}">
             <i class="fas fa-chart-line fa-fw"></i> Relatório de comissão
           </a></li>
@@ -278,8 +283,12 @@
   {% with messages = get_flashed_messages(with_categories=true) %}
     {% if messages %}
       {% for category, msg in messages %}
-        <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
-          {{ msg }}
+        <div class="alert alert-{{ category }} alert-dismissible fade show d-flex align-items-start gap-2" role="alert">
+          {% if category in ('danger', 'error') %}<i class="fas fa-exclamation-circle mt-1"></i>
+          {% elif category == 'warning' %}<i class="fas fa-exclamation-triangle mt-1"></i>
+          {% elif category == 'success' %}<i class="fas fa-check-circle mt-1"></i>
+          {% else %}<i class="fas fa-info-circle mt-1"></i>{% endif %}
+          <div class="flex-grow-1">{{ msg }}</div>
           <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Fechar"></button>
         </div>
       {% endfor %}

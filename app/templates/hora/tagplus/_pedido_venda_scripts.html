@@ -765,6 +765,32 @@
       recalcRsDeb.flush();
       recalcValorDeb.flush();
 
+      // Validacao de obrigatorios SEM apagar (so na CRIACAO): destaca o 1o campo
+      // marcado com * que esta vazio e impede o submit, preservando tudo que ja
+      // foi preenchido. Antes, faltar um obrigatorio (ex.: Origem) ia ao backend,
+      // que rejeitava com flash+redirect e zerava o formulario inteiro.
+      // EXCLUI pagamento_* — o pedido pode nascer INCOMPLETO sem pagamento
+      // completo (estado valido); por isso nao removemos o `novalidate` (que
+      // tornaria pagamento/AUT obrigatorios pelo browser e quebraria o rascunho).
+      const isCriacaoPedido = (elFormPedido.getAttribute('action') || '')
+        .indexOf('/tagplus/pedido-venda') !== -1;
+      if (isCriacaoPedido) {
+        const faltando = Array.from(elFormPedido.querySelectorAll('[required]'))
+          .filter(el => !el.disabled
+            && el.name && el.name.indexOf('pagamento') !== 0
+            && el.offsetParent !== null            // visivel (ignora d-none e <template>)
+            && !(el.value || '').trim());
+        if (faltando.length) {
+          e.preventDefault();
+          faltando.forEach(el => el.classList.add('is-invalid'));
+          faltando[0].focus();
+          faltando[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
+          return;
+        }
+        elFormPedido.querySelectorAll('.is-invalid')
+          .forEach(el => el.classList.remove('is-invalid'));
+      }
+
       // Aceita CPF (11) ou CNPJ (14). Backend normaliza para apenas digitos
       // (venda_service._normalizar_documento) e grava em String(14). UI deixa
       // o operador digitar com mascara "00.000.000/0000-00".
@@ -801,6 +827,13 @@
           return;
         }
       }
+    });
+    // Limpa o destaque de erro assim que o operador corrige o campo.
+    elFormPedido.addEventListener('input', (ev) => {
+      if (ev.target && ev.target.classList) ev.target.classList.remove('is-invalid');
+    });
+    elFormPedido.addEventListener('change', (ev) => {
+      if (ev.target && ev.target.classList) ev.target.classList.remove('is-invalid');
     });
   }
 
@@ -1176,6 +1209,34 @@
     sel.addEventListener('change', syncOrigemLead);
     syncOrigemLead();  // estado inicial (edicao: reflete origem ja salva)
   });
+
+  // ----------------- Brindes na criacao (#4a) ----------------------------
+  // Linhas dinamicas de brinde (so na criacao). Cada linha tem um autocomplete
+  // de peca cujo id unico (gerado aqui) liga o hidden brinde_peca_id ao input
+  // visivel via data-hora-target-id. Reusa window.HoraAutocomplete.init.
+  (function() {
+    const cont = document.getElementById('brindes-container');
+    const btnAdd = document.getElementById('btn-add-brinde-criacao');
+    const tpl = document.getElementById('tpl-linha-brinde');
+    if (!cont || !btnAdd || !tpl) return;
+    let seq = 0;
+    btnAdd.addEventListener('click', function() {
+      const frag = tpl.content.cloneNode(true);
+      const row = frag.querySelector('.brinde-linha');
+      const txt = row.querySelector('.js-brinde-txt');
+      const hidden = row.querySelector('.js-brinde-id');
+      // id unico p/ o autocomplete saber qual hidden preencher.
+      seq += 1;
+      const hid = 'brinde-peca-id-' + seq;
+      hidden.id = hid;
+      txt.dataset.horaTargetId = hid;
+      const btnRem = row.querySelector('.js-brinde-remover');
+      if (btnRem) btnRem.addEventListener('click', () => row.remove());
+      cont.appendChild(frag);
+      // init APOS inserir no DOM (autocomplete faz getElementById do hidden).
+      if (window.HoraAutocomplete) window.HoraAutocomplete.init(row);
+    });
+  })();
 
 })();
 </script>
