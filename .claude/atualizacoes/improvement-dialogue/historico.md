@@ -55,6 +55,31 @@ Indice de execucoes do dialogo de melhoria Agent SDK <-> Claude Code.
 | 48 | 2026-06-24 | 9 | 6 | 1 | 2 | OK (cron D8 normal — pega o backlog que o #47 deixou p/ "D8 normal" + CarVia Barbara id 87 + critica Rayssa id 78; relatorio `dialogue-2026-06-24-cron.md`. v2 286-294 HTTP 200. 6 AUTO-IMPL: IMP-23-011 critico BUG REAL (vincular_nf_manualmente nao propagava pedido_id ja validado -> branch ambiguo S1=b, 98/100 NFs backfill; pedido_id curto-circuita inferencia, 22 testes); cluster CarVia escrita IMP-24-001/-002/-003 = 1 script novo `atualizando_frete_carvia.py` (1o WRITE da skill, dry-run default, recalcula requer_aprovacao, NAO calcula — delega a cotando_subcontrato); IMP-24-004 gotcha lancar-cte readonly documentado (regra #9); IMP-23-007 `adicionando_item_embarque.py` modo Nacom reusa gerar_embarque + sincronizar_totais por SOMA (anti-inflacao 1089 vs 863kg), CarVia recusado (fronteira R1). 2 PROPOSTAS: IMP-23-012 causa-raiz faturamento parcial isolada (_calcular_match seta sep FATURADA inteira mas emite evento so por item-da-NF) — decisao de modelo pendente (split-brain 1727/1729/1737/2037); IMP-22-003 principio ja coberto (cannot_do + R3) — recomendacao p/ review trimestral jul/2026, nao auto-edit por governanca PAD-CTX. 1 REJEICAO: IMP-23-006 confirmar diario inter-company = salvaguarda correta (R3) + skill mal-atribuida (lendo-arquivos nao baixa) + sinal fraco; caminho = memoria de perfil. Sem push) |
 | R1 | 2026-06-24 | 2 | 2 | 0 | 0 | OK (RECONCILIACAO MANUAL — nao e execucao do cron. Fecha drift: 2 propostas do #46 viraram codigo e o registro ficou defasado. IMP-22-004 (peso cubado frete, Barbara id 87) implementado em `120f2f61d` (23/06); IMP-22-002 (excluir FT CarVia, Talita id 17) implementado em `3b26ebc02` (24/06, IMP Talita). Gravado v3 `auto_implemented=true` ids 295-296 HTTP 200. Gap de processo corrigido: novo PASSO 1.5 no prompt D8 reabre propostas implementadas via `git log --grep`. Sem push) |
 | 50 | 2026-06-26 | 3 | 3 | 0 | 0 | OK (3 IMP avaliaveis = 3 auto-impl + 2 F2 listadas + 0 reconciliadas (1.5). Rodada Motos Assai/Odoo. IMP-26-002 skill_bug rastreando-chassi-assai (Rayssa id 78): `recibo.data_recebimento` inexistente -> `data_recibo` (model AssaiReciboMotochefe.data_recibo:43); +teste regressao por introspeccao, 4 passed. IMP-26-001 instruction recebimento moto QR (Laura id 76): routing ja existia mas gatilhos sem vocabulario; enriqueci `ROUTING_SKILLS` (recebimento fisico/escanear QR/como receber) + secao 'Caminho na interface' (wizard A-D) no CORPO de conferindo-recibo-assai (camada 3b, sob demanda, sem custo boot; NAO mexi na YAML p/ preservar 8K listing). IMP-25-001 skill_bug descobrindo-odoo-estrutura (Vanderleia id 48): 2.1.1 codigo-correto — agente INVENTOU 'aba Vendas e Compras'; fix de capacidade = `fields_get` expoe `groups` (campo restrito por permissao, ex `account.group_warning_account`) + guard escopo modelo!=UI (consultar ir.ui.view / sinalizar incerteza). v2 ids 314-316 HTTP ok. PASSO 1.5: 17 propostas checadas, matches eram so commits-proposta D8 (codigo de OUTRAS sugestoes da rodada) -> 0 viraram codigo. 2 F2: adhoc-3734 conta-destino CD/OUT (TAMIRIS id 44, reincidente #49), adhoc-1743 patch fretes CarVia (TALITA id 17, 43 membros). Sem push) |
+| 51 | 2026-06-27 | 0 | 0 | 0 | 0 | PARCIAL (MCP do Render AUSENTE na sessao cron — auth headless; `query_render_postgres`/`list_services` = "No such tool available", `claude mcp list` mostra `render ✔`. PASSO 1 via fallback REST `/pending`: backlog 100% F2 (gate humano), 0 avaliaveis pelo D8 -> 0 impl/rej/prop, nenhuma escrita no banco. 2 F2 listadas, ambas reincidentes: adhoc-3734 conta-destino CD/OUT Odoo (TAMIRIS id 44, 3d, gap REAL nao coberto) e adhoc-1743 patch fretes CarVia (TALITA id 17, 43 membros, 2d — ARMADILHA overlap: `valor_cotado`-por-id JA coberto por atualizando_frete_carvia.py commit b116d0111; residual = patch lote-dict + regra pedagio/peso-cubado subcontrato). PASSO 1.5 (reconciliacao) BLOQUEADO: exige SQL no Postgres prod, sem fallback REST. origem_usuarios citados do historico #49/#50 (nao re-resolvidos). Relatorio+historico commitados, sem push) |
+
+## 2026-06-27 (cron D8 #51)
+
+Cron D8 com **MCP do Render ausente** na sessao (gate de auth headless/cron — `mcp__render__*` nao
+registrado; `query_render_postgres` e `list_services` retornam "No such tool available", embora
+`claude mcp list` mostre `render ✔ Connected` via health-check com credencial armazenada).
+
+- **PASSO 1 (fallback REST)**: usado `GET /agente/api/improvement-dialogue/pending` (funcional).
+  Backlog = **2 pendentes, 100% F2** (`adhoc-`). 0 avaliaveis pelo pipeline decidir do D8.
+- **F2 listadas (gate Rafael+CC)** — ambas reincidentes de rodadas com MCP:
+  - `adhoc-cluster-3734` — conta contabil destino CD/OUT no Odoo via XML-RPC (skill `rastreando-odoo`,
+    6 membros, 3d, TAMIRIS id 44). Gap REAL: nenhuma skill cobre config de conta destino em
+    stock.picking.type. Reincidente #49/#50.
+  - `adhoc-cluster-1743` — patch de campos de fretes CarVia (valor_cotado/peso_cubado/pedagio,
+    43 membros, 2d, TALITA id 17). **ARMADILHA PASSO 1.5 (overlap tematico)**: `valor_cotado`-por-id
+    JA coberto por `gerindo-carvia/scripts/atualizando_frete_carvia.py` (`--frete-id --valor-cotado`,
+    commit `b116d0111`, Origem IMP-2026-06-24-001/-002/-003). Residual nao coberto: (a) patch em LOTE
+    por dict `{id:valor}`; (b) regra de pedagio por PESO CUBADO em subcontrato. Para o gate: avaliar
+    so o residual. Reincidente #50.
+- **PASSO 1.5 (reconciliacao) NAO executado**: requer SQL no Render Postgres (`agent_improvement_dialogue`
+  v2 sem v3); o endpoint REST nao expoe propostas historicas. Reexecutar em sessao com MCP do Render.
+- **Persistencia DB**: nenhuma escrita necessaria (F2 nao gera v2/status).
+- **origem_usuarios**: citados do historico #49/#50 (rodadas com MCP), nao re-resolvidos nesta sessao.
+- Relatorio `dialogue-2026-06-27.md`. Commit na branch `cron/manutencao`, sem push.
 
 ## 2026-06-26 (cron D8 #50)
 
