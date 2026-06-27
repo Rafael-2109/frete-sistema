@@ -469,7 +469,11 @@ def registrar_conferencia_cega(
         item_nf = HoraNfEntradaItem.query.filter_by(
             nf_id=rec.nf_id, numero_chassi=chassi_norm,
         ).first()
-        _garantir_moto(chassi_norm, item_nf, operador)
+        if rec.nf.provisoria:
+            _garantir_moto(chassi_norm, item_nf, operador,
+                           modelo_id_conf=modelo_id_conferido, cor_conf=cor_norm)
+        else:
+            _garantir_moto(chassi_norm, item_nf, operador)
         conf = HoraRecebimentoConferencia(
             recebimento_id=recebimento_id,
             numero_chassi=chassi_norm,
@@ -665,11 +669,16 @@ def finalizar_recebimento(
         db.session.flush()
         db.session.expire(rec, ['conferencias'])
 
-    ignorar_norm = {(c or '').strip().upper() for c in (ignorar_chassis or ())}
-    chassis_nf = {
-        i.numero_chassi for i in rec.nf.itens_considerados
-        if (i.numero_chassi or '').strip().upper() not in ignorar_norm
-    }
+    if rec.nf.provisoria:
+        # D8: recebimento sem NF nao tem gabarito fechado -> nao ha faltantes
+        # (snapshot e' apenas pista; o que nao chegou nao vira MOTO_FALTANDO).
+        chassis_nf = set()
+    else:
+        ignorar_norm = {(c or '').strip().upper() for c in (ignorar_chassis or ())}
+        chassis_nf = {
+            i.numero_chassi for i in rec.nf.itens_considerados
+            if (i.numero_chassi or '').strip().upper() not in ignorar_norm
+        }
     chassis_conferidos_ativos = {
         c.numero_chassi for c in rec.conferencias if not c.substituida
     }
@@ -1826,16 +1835,21 @@ def excluir_recebimento(
 # Privados
 # ========================================================================
 
-def _garantir_moto(chassi: str, item_nf: Optional[HoraNfEntradaItem], operador: Optional[str]):
+def _garantir_moto(chassi: str, item_nf: Optional[HoraNfEntradaItem], operador: Optional[str],
+                   *, modelo_id_conf: Optional[int] = None, cor_conf: Optional[str] = None):
     """Cria HoraMoto minima se nao existe (FK para conferencia).
 
     Migration hora_29: fallback_sentinela=True garante que recebimento
     nunca bloqueia por modelo desconhecido. Cria pendencia em paralelo.
+
+    `modelo_id_conf`/`cor_conf` (recebimento PROVISORIO sem NF): cria a moto a
+    partir do modelo/cor DECLARADOS pelo operador no wizard, em vez da sentinela
+    CHASSI_EXTRA_DESCONHECIDO. So sao consultados quando nao ha item de NF.
     """
     if HoraMoto.query.get(chassi):
         return
     from app.hora.services.moto_service import get_or_create_moto
-    from app.hora.models import PENDENTE_ORIGEM_RECEBIMENTO
+    from app.hora.models import PENDENTE_ORIGEM_RECEBIMENTO, HoraModelo
     if item_nf:
         get_or_create_moto(
             numero_chassi=chassi,
@@ -1846,15 +1860,44 @@ def _garantir_moto(chassi: str, item_nf: Optional[HoraNfEntradaItem], operador: 
             origem_id=item_nf.id,
             fallback_sentinela=True,
         )
-    else:
+        return
+    if modelo_id_conf:   # recebimento provisorio: usa o que o operador declarou
+        modelo = HoraModelo.query.get(modelo_id_conf)
         get_or_create_moto(
             numero_chassi=chassi,
-            modelo_nome='CHASSI_EXTRA_DESCONHECIDO',
-            cor='NAO_INFORMADA',
+            modelo_nome=modelo.nome_modelo if modelo else None,
+            cor=(cor_conf or 'NAO_INFORMADA'),
             criado_por=operador,
             origem_pendencia=PENDENTE_ORIGEM_RECEBIMENTO,
             fallback_sentinela=True,
         )
+        return
+    get_or_create_moto(
+        numero_chassi=chassi,
+        modelo_nome='CHASSI_EXTRA_DESCONHECIDO',
+        cor='NAO_INFORMADA',
+        criado_por=operador,
+        origem_pendencia=PENDENTE_ORIGEM_RECEBIMENTO,
+        fallback_sentinela=True,
+    )
+
+
+def _gabarito_provisorio(rec, chassi: str, modelo_id_conf: Optional[int]):
+    """Casa um chassi conferido contra o snapshot (hora_recebimento_esperado).
+
+    Retorna o HoraRecebimentoEsperado consumido ou None. NAO toca HoraPedidoItem
+    (D6 — quem atribui chassi ao pedido e a NF real).
+    """
+    from app.hora.models import HoraRecebimentoEsperado
+    chassi = (chassi or '').strip().upper()
+    base = HoraRecebimentoEsperado.query.filter_by(recebimento_id=rec.id, consumido_por_conferencia_id=None)
+    exato = base.filter(HoraRecebimentoEsperado.chassi_esperado == chassi).first()
+    if exato:
+        return exato
+    if modelo_id_conf:
+        return base.filter(HoraRecebimentoEsperado.chassi_esperado.is_(None),
+                           HoraRecebimentoEsperado.modelo_id == modelo_id_conf).first()
+    return None
 
 
 def _aplicar_correcao_moto_se_divergir(conf: HoraRecebimentoConferencia) -> None:
@@ -1893,6 +1936,33 @@ def _aplicar_correcao_moto_se_divergir(conf: HoraRecebimentoConferencia) -> None
 
 def _redefinir_divergencias(conf: HoraRecebimentoConferencia, rec: HoraRecebimento):
     """Recalcula 1-N divergencias da conferencia vs NF."""
+    # Recebimento PROVISORIO (sem NF): o gabarito vem do snapshot
+    # hora_recebimento_esperado, nao dos itens da NF. Casa o chassi conferido
+    # contra um slot esperado (chassi exato ou modelo fungivel); sem slot =>
+    # CHASSI_EXTRA. NAO ha gabarito fechado, logo NAO existe MOTO_FALTANDO aqui.
+    if rec.nf.provisoria:
+        for d in list(conf.divergencias):
+            db.session.delete(d)
+        db.session.flush()
+        slot = _gabarito_provisorio(rec, conf.numero_chassi, conf.modelo_id_conferido)
+        snapshot = None
+        if slot is None:
+            db.session.add(HoraConferenciaDivergencia(
+                conferencia_id=conf.id, tipo='CHASSI_EXTRA',
+                detalhe='Fora dos pedidos pendentes da filial'))
+            snapshot = 'CHASSI_EXTRA'
+        else:
+            slot.consumido_por_conferencia_id = conf.id
+        if conf.avaria_fisica:
+            db.session.add(HoraConferenciaDivergencia(
+                conferencia_id=conf.id, tipo='AVARIA_FISICA',
+                detalhe='Marcado pelo operador no wizard'))
+            snapshot = snapshot or 'AVARIA_FISICA'
+        conf.tipo_divergencia = snapshot
+        conf.detalhe_divergencia = None
+        db.session.flush()
+        return
+
     # Remove divergencias existentes (recria tudo a partir do estado atual)
     for d in list(conf.divergencias):
         db.session.delete(d)

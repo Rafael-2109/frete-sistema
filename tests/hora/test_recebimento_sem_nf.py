@@ -42,3 +42,42 @@ def test_criar_recebimento_sem_nf_materializa_snapshot(db, loja_factory, pedido_
     assert len(esperados) == 1
     assert esperados[0].chassi_esperado == chassi_a
     assert esperados[0].pedido_id == pedido.id
+
+
+def test_conferencia_provisoria_casa_modelo_e_chassi_extra(db, loja_factory, pedido_compra_factory, modelo_moto):
+    chassi_ped = _chassi('PED')           # item do pedido COM chassi
+    pedido = pedido_compra_factory([chassi_ped])
+    loja_id = pedido.loja_destino_id
+    rec = recebimento_service.criar_recebimento_sem_nf(loja_id=loja_id, operador='tester')
+    recebimento_service.definir_qtd_declarada(recebimento_id=rec.id, qtd=2, usuario='tester')
+
+    # (a) chassi do snapshot -> RECEBIDA/CONFERIDA, sem CHASSI_EXTRA
+    recebimento_service.registrar_conferencia_cega(
+        recebimento_id=rec.id, numero_chassi=chassi_ped,
+        modelo_id_conferido=modelo_moto.id, cor_conferida='PRETA',
+        avaria_fisica=False, qr_code_lido=True, operador='tester',
+    )
+    # (b) chassi fora do snapshot -> CHASSI_EXTRA, sem bloquear
+    chassi_extra = _chassi('EXT')
+    recebimento_service.registrar_conferencia_cega(
+        recebimento_id=rec.id, numero_chassi=chassi_extra,
+        modelo_id_conferido=modelo_moto.id, cor_conferida='PRETA',
+        avaria_fisica=False, qr_code_lido=True, operador='tester',
+    )
+    _db.session.expire_all()
+    assert status_atual(chassi_ped) in ('RECEBIDA', 'CONFERIDA')
+    assert HoraMoto.query.get(chassi_ped) is not None
+    # chassi do snapshot CASA (nao vira CHASSI_EXTRA) e consome o slot
+    conf_ped = next(c for c in rec.conferencias if c.numero_chassi == chassi_ped)
+    assert not any(d.tipo == 'CHASSI_EXTRA' for d in conf_ped.divergencias)
+    esperado = HoraRecebimentoEsperado.query.filter_by(
+        recebimento_id=rec.id, chassi_esperado=chassi_ped).first()
+    assert esperado is not None and esperado.consumido_por_conferencia_id == conf_ped.id
+    conf_extra = next(c for c in rec.conferencias if c.numero_chassi == chassi_extra)
+    assert any(d.tipo == 'CHASSI_EXTRA' for d in conf_extra.divergencias)
+
+    rec = recebimento_service.finalizar_recebimento(recebimento_id=rec.id, operador='tester')
+    _db.session.expire_all()
+    # D8: provisorio NAO gera MOTO_FALTANDO
+    faltando = [c for c in rec.conferencias if c.tipo_divergencia == 'MOTO_FALTANDO']
+    assert faltando == []
