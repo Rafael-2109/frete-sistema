@@ -171,6 +171,33 @@ def nf_entrada_factory(db, loja_origem, modelo_moto):
 
 
 @pytest.fixture
+def client_admin(db, app):
+    """Test client autenticado como administrador HORA (renderiza telas de verdade).
+
+    Admin passa em qualquer require_hora_perm. Usado pelos smokes das telas
+    gerenciais (renderização real, não só compilação de template).
+    """
+    import uuid
+    from werkzeug.security import generate_password_hash
+    from app.auth.models import Usuario
+
+    u = Usuario(
+        nome='Admin Gerencial Teste',
+        email=f'admin-ger-{uuid.uuid4().hex[:10]}@test.local',
+        perfil='administrador', status='ativo', sistema_lojas=True,
+    )
+    u.senha_hash = generate_password_hash('x')
+    _db.session.add(u)
+    _db.session.flush()
+
+    c = app.test_client()
+    with c.session_transaction() as sess:
+        sess['_user_id'] = str(u.id)
+        sess['_fresh'] = True
+    return c
+
+
+@pytest.fixture
 def chassi_em_estoque(db, loja_origem, modelo_moto):
     """Cria moto e registra RECEBIDA + CONFERIDA na loja_origem."""
     chassi = '9ABCDTESTFIXTURE0000000000'

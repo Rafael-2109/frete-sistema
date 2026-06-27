@@ -1,8 +1,137 @@
 {% extends "hora/gerencial/base_gerencial.html" %}
-{# Stub F1.3 — conteúdo real nas fases seguintes. #}
+{# Visão Executiva (diretoria): receita, margem c/ cobertura, ticket, volume,
+   tendência temporal e ranking de lojas. #}
+
 {% block gerencial_content %}
-  <div class="ger-empty">
-    <i class="fas fa-hammer fa-2x mb-2 d-block"></i>
-    Dashboard <strong>{{ aba_ativa }}</strong> em construção.
+<div class="row g-3 mb-3">
+
+  <div class="col-xl-3 col-md-6">
+    <div class="ger-kpi accent-primary">
+      <div class="ger-kpi-label"><i class="fas fa-coins"></i> Receita realizada</div>
+      <div class="ger-kpi-valor">R$ {{ kpis.receita.valor | valor_br }}</div>
+      <div class="ger-kpi-sub">{{ kpis.receita.qtd_vendas }} venda(s) faturada(s)</div>
+    </div>
   </div>
+
+  <div class="col-xl-3 col-md-6">
+    <div class="ger-kpi accent-success">
+      <div class="ger-kpi-label"><i class="fas fa-hand-holding-usd"></i> Margem bruta</div>
+      <div class="ger-kpi-valor">R$ {{ kpis.margem.margem_rs | valor_br }}</div>
+      <div class="ger-kpi-sub">
+        <span class="ger-coverage" title="Margem = preço de venda − custo de entrada (por chassi), menos brindes. Sem frete de compra nem custo de peça.">
+          <i class="fas fa-shield-alt"></i>
+          margem sobre {{ kpis.margem.cobertura_pct | valor_br(0) }}% das motos
+          ({{ kpis.margem.itens_com_custo }}/{{ kpis.margem.total_itens }})
+        </span>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-xl-3 col-md-6">
+    <div class="ger-kpi accent-info">
+      <div class="ger-kpi-label"><i class="fas fa-percent"></i> Margem %</div>
+      <div class="ger-kpi-valor">{{ kpis.margem.margem_pct | valor_br(1) }}%</div>
+      <div class="ger-kpi-sub">sobre o custo de aquisição</div>
+    </div>
+  </div>
+
+  <div class="col-xl-3 col-md-6">
+    <div class="ger-kpi accent-warning">
+      <div class="ger-kpi-label"><i class="fas fa-receipt"></i> Ticket médio</div>
+      <div class="ger-kpi-valor">R$ {{ kpis.ticket_medio | valor_br }}</div>
+      <div class="ger-kpi-sub">por venda faturada</div>
+    </div>
+  </div>
+
+  <div class="col-xl-3 col-md-6">
+    <div class="ger-kpi accent-primary">
+      <div class="ger-kpi-label"><i class="fas fa-motorcycle"></i> Motos vendidas</div>
+      <div class="ger-kpi-valor">{{ kpis.motos_vendidas }}</div>
+      <div class="ger-kpi-sub">unidades faturadas no período</div>
+    </div>
+  </div>
+
+  <div class="col-xl-3 col-md-6">
+    <div class="ger-kpi accent-danger">
+      <div class="ger-kpi-label"><i class="fas fa-tags"></i> Desconto concedido</div>
+      <div class="ger-kpi-valor">R$ {{ kpis.desconto_total | valor_br }}</div>
+      <div class="ger-kpi-sub">total que saiu da margem</div>
+    </div>
+  </div>
+
+</div>
+
+<div class="row g-3">
+  <div class="col-lg-7">
+    <div class="ger-panel">
+      <div class="ger-panel-head">
+        <span class="ger-panel-title"><i class="fas fa-chart-line"></i> Receita ao longo do tempo</span>
+        <span class="ger-panel-hint">por {{ filtros.granularidade }}</span>
+      </div>
+      <div class="ger-chart-wrap" style="height: 300px;">
+        <canvas id="ger-chart-receita"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-5">
+    <div class="ger-panel">
+      <div class="ger-panel-head">
+        <span class="ger-panel-title"><i class="fas fa-trophy"></i> Ranking de lojas</span>
+        <span class="ger-panel-hint">receita · unidades</span>
+      </div>
+      {% if kpis.ranking_lojas %}
+        <table class="ger-table">
+          <thead><tr><th>Loja</th><th class="ger-num">Receita</th><th class="ger-num">Un.</th></tr></thead>
+          <tbody>
+            {% for r in kpis.ranking_lojas %}
+              <tr>
+                <td>{{ r.loja_nome }}</td>
+                <td class="ger-num">R$ {{ r.receita | valor_br }}</td>
+                <td class="ger-num">{{ r.unidades }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      {% else %}
+        <div class="ger-empty"><i class="fas fa-store-slash fa-2x mb-2 d-block"></i>Sem vendas no período.</div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block gerencial_js %}
+<script>
+  (function () {
+    if (!window.Chart) return;
+    const t = window.gerTheme();
+    const receita = {{ chart_receita | tojson }};
+
+    const elR = document.getElementById('ger-chart-receita');
+    if (elR && receita.labels.length) {
+      new Chart(elR, {
+        type: 'line',
+        data: {
+          labels: receita.labels,
+          datasets: [{
+            label: 'Receita (R$)',
+            data: receita.data,
+            borderColor: t.primary,
+            backgroundColor: 'rgba(var(--bs-primary-rgb), 0.12)',
+            fill: true, tension: 0.3, pointRadius: 3, borderWidth: 2,
+          }],
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: {
+            x: { grid: { color: t.grid } },
+            y: { grid: { color: t.grid }, ticks: { callback: v => 'R$ ' + v.toLocaleString('pt-BR') } },
+          },
+        },
+      });
+    }
+  })();
+</script>
 {% endblock %}

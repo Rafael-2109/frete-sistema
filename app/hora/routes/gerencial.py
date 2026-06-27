@@ -45,10 +45,23 @@ def gerencial_index():
     return redirect(url_for('hora.gerencial_executivo', **request.args))
 
 
+def _serie_xy(items, label_key, val_key):
+    """Empacota lista de dicts em {labels, data} com data em float (p/ Chart.js)."""
+    return {
+        'labels': [i[label_key] for i in items],
+        'data': [float(i[val_key]) for i in items],
+    }
+
+
 @hora_bp.route('/gerencial/executivo')
 @require_hora_perm('gerencial', 'ver')
 def gerencial_executivo():
+    from app.hora.services.gerencial import kpi_service
     ctx = _contexto_base('executivo')
+    kpis = kpi_service.kpis_executivo(ctx['filtros'])
+    ctx['kpis'] = kpis
+    ctx['chart_receita'] = _serie_xy(kpis['serie_receita'], 'periodo', 'valor')
+    ctx['chart_ranking'] = _serie_xy(kpis['ranking_lojas'], 'loja_nome', 'receita')
     return render_template('hora/gerencial/executivo.html', **ctx)
 
 
