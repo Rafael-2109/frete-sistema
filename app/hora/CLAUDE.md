@@ -1354,7 +1354,7 @@ Spec: `docs/superpowers/specs/2026-06-26-hora-recebimento-sem-nf-design.md`. Pla
 
 ### Campo `tipo` e modelo `HoraRecebimentoEsperado`
 
-**Migration `hora_55_recebimento_sem_nf.{sql,py}`** (idempotente, par usual):
+**Migration `hora_57_recebimento_sem_nf.{sql,py}`** (idempotente, par usual):
 - `ALTER TABLE hora_nf_entrada ADD COLUMN IF NOT EXISTS tipo VARCHAR(20) NOT NULL DEFAULT 'REAL'` — valores `{'PROVISORIA','REAL'}`, default `'REAL'` para NFs existentes.
 - `CREATE TABLE IF NOT EXISTS hora_recebimento_esperado (...)` — snapshot congelado dos pedidos pendentes da filial (ver schema na migration). 3 índices: `recebimento_id`, `(recebimento_id, modelo_id)`, `(recebimento_id, chassi_esperado)`.
 

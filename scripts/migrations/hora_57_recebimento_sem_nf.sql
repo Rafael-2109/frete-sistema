@@ -1,8 +1,8 @@
--- Migration HORA 55: Recebimento por filial sem NF (NF provisória).
+-- Migration HORA 57: Recebimento por filial sem NF (NF provisória).
 -- Adiciona hora_nf_entrada.tipo {PROVISORIA,REAL} (default REAL p/ NFs existentes)
 -- e a tabela de snapshot congelado hora_recebimento_esperado.
 -- Idempotente — pode rodar 2x (IF NOT EXISTS).
--- Nota: planejado como hora_54 no spec, renumerado para 55 porque
+-- Nota: planejado como hora_54 no spec, renumerado para 57 porque
 --       hora_54_aprovacoes_perm já existia no branch main.
 
 ALTER TABLE hora_nf_entrada
