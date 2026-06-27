@@ -46,6 +46,7 @@ atualizado: 2026-06-27
 - [29. Seção Gerencial — dashboards + relatórios — 2026-06-27](#29-seção-gerencial--dashboards--relatórios--2026-06-27)
 - [30. Brinde — gerenciar em INCOMPLETO, exibir no preview e CORTESIA na NF — 2026-06-27](#30-brinde--gerenciar-em-incompleto-exibir-no-preview-e-cortesia-na-nf--2026-06-27)
 - [31. Recebimento — dropdown de modelos canônicos + anti-duplicação de grafia de cor — 2026-06-27](#31-recebimento--dropdown-de-modelos-canônicos--anti-duplicação-de-grafia-de-cor--2026-06-27)
+- [32. Loja real da venda vs matriz (emitente fiscal) — integridade — 2026-06-27](#32-loja-real-da-venda-vs-matriz-emitente-fiscal--integridade--2026-06-27)
 - [32. Recebimento — autocomplete de NF por permissão + guarda anti-duplicado — 2026-06-27](#32-recebimento--autocomplete-de-nf-por-permissão-de-recebimento--guarda-anti-duplicado--2026-06-27)
 - [Onboarding Tours (2026-05-08)](#onboarding-tours-2026-05-08)
 - [Referências](#referências)
@@ -364,6 +365,13 @@ Segue o plano aprovado em 2026-04-18:
    - A loja física é apenas **rastreada gerencialmente** em `inf_contribuinte`
      ("Loja: <nome>") — sem efeito fiscal.
    - Mudança nesta regra exige aprovação explícita do dono fiscal HORA.
+   - **`loja_id` (COMERCIAL) ≠ emitente (FISCAL).** A loja física da venda vive em
+     `hora_venda.loja_id` (verdade comercial: rankings, comissão, relatórios). O
+     import/backfill **nunca** grava `loja_id`=matriz: resolve via `tagplus_departamento`
+     → `hora_tagplus_departamento_map` ou, se só a matriz resolver, grava `NULL` +
+     divergência `CNPJ_DESCONHECIDO` (loja a definir). A matriz é marcada
+     `HoraLoja.is_matriz=True` (migration `hora_57`) e EXCLUÍDA das superfícies de venda.
+     A UF do emitente para o CFOP vem da matriz, não de `venda.loja`. Detalhes: **seção 32**.
 
 8. **Emissão NFe via TagPlus** (2026-04-26). **Concluído** — fluxo (c) do desenho:
    - 5 tabelas em `app/hora/models/tagplus.py` (migration `hora_18_tagplus.{py,sql}`):
@@ -883,7 +891,9 @@ via `buffer` base64, **depende do PC do operador ligado**); `evolution` →
 
 **Tela**: `/hora/tagplus/notificacoes` (`require_hora_perm('tagplus','ver')`; reenviar = `'editar'`) — `app/templates/hora/tagplus/notificacoes.html` (extends `hora/base.html`). Menu: grupo "Faturamento (TagPlus)" no `_sidebar.html`.
 
-**Env**: `HORA_TAGPLUS_NOTIFY_GROUP_JID` (JID `...@g.us`, obrigatório) + `HORA_TAGPLUS_NOTIFY_ENABLED` (kill switch) + **`HORA_WHATSAPP_TRANSPORT`** (`openclaw`|`evolution`). OpenClaw: `OPENCLAW_GATEWAY_*`. Evolution: `EVOLUTION_API_URL`/`EVOLUTION_API_KEY`/`EVOLUTION_INSTANCE`. Vendedor sem cadastro/autorização → fallback só-grupo (status `ENVIADO`, `enviado_vendedor=NULL`).
+**Env**: `HORA_TAGPLUS_NOTIFY_GROUP_JID` (legado/fallback — hoje o grupo vem da loja) + `HORA_TAGPLUS_NOTIFY_ENABLED` (kill switch) + **`HORA_WHATSAPP_TRANSPORT`** (`openclaw`|`evolution`). OpenClaw: `OPENCLAW_GATEWAY_*`. Evolution: `EVOLUTION_API_URL`/`EVOLUTION_API_KEY`/`EVOLUTION_INSTANCE`. **Loja sem grupo configurado → status `ERRO` (não envia)**; coluna `enviado_vendedor` vestigial (sempre NULL — DM desativado 2026-06-27). Grupo por loja em `hora_loja.whatsapp_grupo_jid` (migration `hora_56`), configurável na tela da loja (dropdown ao vivo via `fetch_grupos_evolution`).
+
+**E-mail do HORA (NF + recibo ao cliente) — conta PRÓPRIA, isolada (2026-06-27)**: `nf_email_service` e `recibo_service.enviar_recibo_email` enviam de `financeiro@motochefesp.com.br` (Hostinger) via `app/hora/services/hora_email.py` (`HoraEmailConfig` + `hora_email_sender`), que lê envs **`HORA_EMAIL_*`** (`HOST`/`PORT`/`USERNAME`/`PASSWORD`/`USE_SSL`/`USE_TLS`; defaults `smtp.hostinger.com`/`465`/SSL no código — em PROD só `HORA_EMAIL_PASSWORD` precisa ser setada). **NÃO usar as `EMAIL_*` genéricas** (conta Gmail do sistema, usada por `app/notificacoes` + `app/manufatura`): o `EmailSender.__init__(config=)` aceita config injetada justamente para o HORA ter caixa própria. Remetente fixo: `HORA_NF_EMAIL_FROM`/`HORA_NF_EMAIL_FROM_NAME`. Lição (incidente 2026-06-27): NUNCA sobrescrever `EMAIL_*` para o HORA — são compartilhadas.
 
 **Testes**: `tests/hora/test_notificacao_whatsapp_model.py` (2), `test_notificacao_whatsapp_service.py` (4), `test_notificacao_gatilhos.py` (4), `test_notificacao_tela.py` (4), `tests/test_whatsapp_notify_anexo.py` (2). Gotcha: a tabela acumula resíduo de teste local se o teardown abortar — `DELETE FROM hora_tagplus_notificacao_whatsapp` antes de re-rodar.
 
@@ -1368,6 +1378,45 @@ trava nenhuma**; a guarda `ESTADOS_JA_FORA` do automático trata o caso oposto, 
   **Avarias** (`avaria_service.registrar_avaria` — não tira do estoque, emite `AVARIADA`).
 - **Testes:** `tests/hora/test_recebimento_anti_duplicata.py` (5 — bloqueia cross-rec, permite
   reconferência do mesmo rec, 1º recebimento, aviso, automático pula sem abortar).
+
+---
+
+## 32. Loja real da venda vs matriz (emitente fiscal) — integridade — 2026-06-27
+
+**Problema (provado em produção):** toda NFe sai com o CNPJ da matriz (§7), e o resolver
+`_resolver_loja_por_cnpj` resolvia a loja da venda pelo CNPJ do emitente → caía SEMPRE na
+matriz (MORAH, `is_matriz`). 261 vendas FATURADAS (≈ R$ 2,84 mi) ficaram atribuídas à
+matriz, inflando rankings/KPIs/comissão e subnotificando as lojas reais. A loja real vem
+do `tagplus_departamento` (TagPlus) ou do SELECT do operador (fluxo manual, sempre correto).
+
+**Flag `HoraLoja.is_matriz`** (migration `hora_57`): marca a matriz (CNPJ 62634044000120).
+Permanece `ativa` (default de NF de ENTRADA + alvo do resolver de divergência), mas:
+- NUNCA é gravada como `hora_venda.loja_id`;
+- EXCLUÍDA das superfícies de VENDA: SELECT do pedido (`cadastro_service.listar_lojas_para_pedido_venda`),
+  dropdowns gerenciais (`gerencial._lojas_disponiveis`), contagem "Lojas ativas" (`dashboard`),
+  filtro/troca de loja na listagem (`vendas._lojas_ativas_permitidas` + listagem).
+
+**Prevenção (origem)** — `venda_service._resolver_loja_real_venda(cnpj_emitente, tagplus_departamento)`:
+departamento → CNPJ-se-não-matriz → `None`. Usado por `importar_nf_saida_pdf` (DANFE) e
+`backfill_service.importar_nfe_da_api`. Quando resolve `None`: `loja_id=NULL` + divergência
+`CNPJ_DESCONHECIDO` ("loja a definir"); o evento `VENDIDA` também sai sem a matriz.
+
+**Auto-cura do passivo** — `pedido_backfill_service._aplicar_pedido_em_venda` aplica a loja
+via `definir_loja_venda` assim que o departamento mapeia uma loja (corrige header + re-emite
+`VENDIDA`). O botão `/hora/tagplus/departamento-map` → **Aplicar** segue para correção em massa
+(só header; para header+evento use o script abaixo / `definir_loja_venda`).
+
+**CFOP** — `PayloadBuilder._uf_emitente` deriva a UF do emitente da **matriz** (`is_matriz=True`),
+não de `venda.loja` (que pode ser `NULL` pós-saneamento). Evita flip de CFOP e não quebra com
+loja indefinida.
+
+**Correção do passivo existente** — `scripts/hora/fix_loja_matriz_por_departamento.py`
+(dry-run default; usa `definir_loja_venda`; guarda de UF). 109 vendas recuperáveis via
+departamento; 151 sem departamento → recuperáveis via `backfill-pedidos-legados` (re-fetch
+pela chave-44 grava `tagplus_departamento`) e então a auto-cura/Aplicar resolve a loja.
+
+**Testes:** `test_loja_real_venda_resolver`, `test_import_nf_saida_loja_matriz`,
+`test_pedido_backfill_aplica_loja`, `test_uf_emitente_matriz`, `test_frente_c_exclui_matriz`.
 
 ---
 
