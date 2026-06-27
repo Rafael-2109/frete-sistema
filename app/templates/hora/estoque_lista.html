@@ -7,40 +7,50 @@
    So motos em estoque real (EVENTOS_EM_ESTOQUE). Recebimento e SOT — cor/
    modelo ja refletem a conferencia. #}
 {% if kpis_loja_modelo_cor %}
-<div class="row g-3 mb-4">
+<div class="accordion mb-4" id="acc-estoque-lojas">
   {% for loja in kpis_loja_modelo_cor %}
-  <div class="col-lg-6">
-    <div class="card h-100">
-      <div class="card-header d-flex justify-content-between align-items-center">
-        <strong>{{ loja.loja_nome }}</strong>
-        <span class="badge bg-primary">Total: {{ loja.total_loja }}</span>
-      </div>
-      <div class="table-responsive">
-        <table class="table table-sm table-hover mb-0 align-middle">
-          <thead class="table-light">
-            <tr>
-              <th style="width: 50%">Modelo</th>
-              <th style="width: 30%">Cor</th>
-              <th style="width: 20%" class="text-end">Qtd</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for modelo in loja.modelos %}
-              {% for c in modelo.cores %}
+  <div class="accordion-item">
+    <h2 class="accordion-header" id="acc-loja-head-{{ loja.loja_id }}">
+      <button class="accordion-button collapsed" type="button"
+              data-bs-toggle="collapse"
+              data-bs-target="#acc-loja-body-{{ loja.loja_id }}"
+              aria-expanded="false"
+              aria-controls="acc-loja-body-{{ loja.loja_id }}">
+        <span class="flex-grow-1">{{ loja.loja_nome }}</span>
+        <span class="badge bg-primary me-2">Total: {{ loja.total_loja }}</span>
+      </button>
+    </h2>
+    <div id="acc-loja-body-{{ loja.loja_id }}"
+         class="accordion-collapse collapse"
+         aria-labelledby="acc-loja-head-{{ loja.loja_id }}">
+      <div class="accordion-body p-0">
+        <div class="table-responsive">
+          <table class="table table-sm table-hover mb-0 align-middle">
+            <thead class="table-light">
               <tr>
-                {% if loop.first %}
-                  <td rowspan="{{ modelo.cores|length }}" class="align-middle">
-                    {{ modelo.modelo_nome }}
-                    <div class="small text-muted">Total: {{ modelo.total_modelo }}</div>
-                  </td>
-                {% endif %}
-                <td>{{ c.cor or '—' }}</td>
-                <td class="text-end fw-bold">{{ c.qtd }}</td>
+                <th style="width: 50%">Modelo</th>
+                <th style="width: 30%">Cor</th>
+                <th style="width: 20%" class="text-end">Qtd</th>
               </tr>
+            </thead>
+            <tbody>
+              {% for modelo in loja.modelos %}
+                {% for c in modelo.cores %}
+                <tr>
+                  {% if loop.first %}
+                    <td rowspan="{{ modelo.cores|length }}" class="align-middle">
+                      {{ modelo.modelo_nome }}
+                      <div class="small text-muted">Total: {{ modelo.total_modelo }}</div>
+                    </td>
+                  {% endif %}
+                  <td>{{ c.cor or '—' }}</td>
+                  <td class="text-end fw-bold">{{ c.qtd }}</td>
+                </tr>
+                {% endfor %}
               {% endfor %}
-            {% endfor %}
-          </tbody>
-        </table>
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   </div>
