@@ -46,6 +46,7 @@ atualizado: 2026-06-27
 - [29. Seção Gerencial — dashboards + relatórios — 2026-06-27](#29-seção-gerencial--dashboards--relatórios--2026-06-27)
 - [30. Brinde — gerenciar em INCOMPLETO, exibir no preview e CORTESIA na NF — 2026-06-27](#30-brinde--gerenciar-em-incompleto-exibir-no-preview-e-cortesia-na-nf--2026-06-27)
 - [31. Recebimento — dropdown de modelos canônicos + anti-duplicação de grafia de cor — 2026-06-27](#31-recebimento--dropdown-de-modelos-canônicos--anti-duplicação-de-grafia-de-cor--2026-06-27)
+- [32. Recebimento — autocomplete de NF por permissão + guarda anti-duplicado — 2026-06-27](#32-recebimento--autocomplete-de-nf-por-permissão-de-recebimento--guarda-anti-duplicado--2026-06-27)
 - [Onboarding Tours (2026-05-08)](#onboarding-tours-2026-05-08)
 - [Referências](#referências)
 
@@ -1334,6 +1335,39 @@ sem proteção. `cor_service` é reutilizável lá (mesma mecânica) — fica co
 erro de digitação/gênero/acento/idêntico/par-próximo, `listar_cores_existentes` com DB e
 contrato do endpoint). Validação: 23 verdes (cor + recebimento), `node --check` no JS
 renderizado, Jinja compila.
+
+---
+
+## 32. Recebimento — autocomplete de NF por permissão de recebimento + guarda anti-duplicado — 2026-06-27
+
+Dois fixes no fluxo de recebimento (commits separados na main). Sem migration.
+
+**A — Autocomplete de NF aceita operador de recebimento.** O endpoint
+`GET /hora/autocomplete/nf-entrada` (`routes/autocomplete.py`) exigia **só** `nfs/ver`.
+Um operador de recebimento (vendedor com `recebimentos/criar` mas **sem** `nfs/ver`,
+ex.: Isabela) recebia **302** e o autocomplete da NF em `/hora/recebimentos/novo`
+**falhava em silêncio** — não dava para selecionar a NF. Trocado para
+`require_hora_perm_any(('nfs','ver'), ('recebimentos','criar'))` — **mesmo padrão/causa-raiz
+do autocomplete de peça/brinde** (§30 #4). Provado em PROD (user 84).
+
+**B — Guarda anti-recebimento-duplicado.** Causa-raiz: a moto `92WMCX113SM000988` foi
+conferida em **dois** recebimentos (120 e 121) sem nenhum aviso — `registrar_conferencia_cega`
+não checava se o chassi já fora recebido em outro recebimento (o wizard manual **não tinha
+trava nenhuma**; a guarda `ESTADOS_JA_FORA` do automático trata o caso oposto, "já saiu").
+- **Regra de "já recebido":** existe `HoraRecebimentoConferencia` ativa (`substituida=False`)
+  para o chassi em **outro** `recebimento_id`. É à prova de falso-positivo porque **toda
+  re-entrada legítima** (transferência `confirmar_item_destino`, devolução cancelada,
+  cancelamento de reserva) passa por `registrar_evento` — **fora** da conferência — e a
+  reconferência/re-scan do próprio recebimento cai no ramo `else` (`is_new=False`).
+- **3 pontos** (`recebimento_service.py`): **bloqueio** no ramo `is_new` de
+  `registrar_conferencia_cega` (`RecebimentoDuplicadoError(ValueError)` → a rota já devolve
+  400); **aviso** em `validar_chassi_contra_recebimento` (`ja_recebido_outro` + mensagem);
+  **pré-filtro** em `criar_recebimento_automatico_da_nf` (pula via `chassis_pulados_ja_recebido`,
+  não aborta o lote). Cobre os 3 fluxos (manual / automático / sem-NF) pelo mesmo choke.
+- **Avaria não passa por recebimento:** a mensagem da trava redireciona para o módulo
+  **Avarias** (`avaria_service.registrar_avaria` — não tira do estoque, emite `AVARIADA`).
+- **Testes:** `tests/hora/test_recebimento_anti_duplicata.py` (5 — bloqueia cross-rec, permite
+  reconferência do mesmo rec, 1º recebimento, aviso, automático pula sem abortar).
 
 ---
 
