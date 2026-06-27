@@ -110,6 +110,7 @@
               {% for c in resultado.colunas %}
                 <td class="{% if c.tipo != 'texto' %}ger-num{% endif %}">
                   {% if c.tipo == 'moeda' %}R$ {{ linha[c.key] | valor_br }}
+                  {% elif c.tipo == 'percentual' %}{{ linha[c.key] | valor_br(1) }}%
                   {% else %}{{ linha[c.key] }}{% endif %}
                 </td>
               {% endfor %}

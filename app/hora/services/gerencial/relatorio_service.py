@@ -33,6 +33,16 @@ RELATORIOS_PREDEFINIDOS = [
     {'slug': 'vendas_por_periodo', 'label': 'Vendas por período',
      'descricao': 'Evolução de receita e unidades no tempo.',
      'icone': 'fa-calendar-alt', 'dims': ['periodo'], 'metricas': ['unidades', 'receita']},
+    # Relatórios de grão NÃO-venda-item (chamam services dedicados, não o builder).
+    {'slug': 'comissao_por_vendedor', 'label': 'Comissão por vendedor',
+     'descricao': 'Comissão calculada por vendedor (config vigente, por faturamento).',
+     'icone': 'fa-hand-holding-usd', 'especial': True},
+    {'slug': 'aging_estoque', 'label': 'Aging de estoque',
+     'descricao': 'Distribuição do estoque parado por faixa de dias.',
+     'icone': 'fa-hourglass-half', 'especial': True},
+    {'slug': 'divergencias_recebimento', 'label': 'Divergências de recebimento',
+     'descricao': 'Divergências na conferência por tipo, no período.',
+     'icone': 'fa-exclamation-triangle', 'especial': True},
 ]
 
 
@@ -40,9 +50,44 @@ def gerar_predefinido(slug: str, filtros: Filtros) -> dict:
     rel = next((r for r in RELATORIOS_PREDEFINIDOS if r['slug'] == slug), None)
     if rel is None:
         raise ValueError(f'Relatório desconhecido: {slug}')
-    res = gerar_builder(rel['dims'], rel['metricas'], filtros)
+    res = _gerar_especial(slug, filtros) if rel.get('especial') else gerar_builder(
+        rel['dims'], rel['metricas'], filtros
+    )
     res['titulo'] = rel['label']
     return res
+
+
+def _gerar_especial(slug: str, filtros: Filtros) -> dict:
+    """Relatórios pré-definidos com grão diferente de venda-item (reusam services)."""
+    from app.hora.services.gerencial import (
+        comercial_kpi_service, estoque_kpi_service, suprimento_kpi_service,
+    )
+    if slug == 'comissao_por_vendedor':
+        rows = comercial_kpi_service.comissao_por_vendedor(filtros)
+        colunas = [
+            {'key': 'vendedor', 'label': 'Vendedor', 'tipo': 'texto'},
+            {'key': 'qtd_vendas', 'label': 'Vendas', 'tipo': 'inteiro'},
+            {'key': 'total', 'label': 'Comissão', 'tipo': 'moeda'},
+        ]
+        linhas = [{'vendedor': r['vendedor'], 'qtd_vendas': r['qtd_vendas'], 'total': r['total']} for r in rows]
+    elif slug == 'aging_estoque':
+        aging = estoque_kpi_service.aging_estoque(filtros)
+        colunas = [
+            {'key': 'faixa', 'label': 'Faixa (dias)', 'tipo': 'texto'},
+            {'key': 'qtd', 'label': 'Motos', 'tipo': 'inteiro'},
+        ]
+        linhas = [{'faixa': f, 'qtd': q} for f, q in aging['faixas'].items()]
+    elif slug == 'divergencias_recebimento':
+        divs = suprimento_kpi_service.taxa_divergencia(filtros)
+        colunas = [
+            {'key': 'tipo', 'label': 'Tipo', 'tipo': 'texto'},
+            {'key': 'qtd', 'label': 'Qtd', 'tipo': 'inteiro'},
+            {'key': 'pct', 'label': '%', 'tipo': 'inteiro'},
+        ]
+        linhas = [{'tipo': d['tipo'], 'qtd': d['qtd'], 'pct': d['pct']} for d in divs]
+    else:
+        raise ValueError(f'Relatório especial desconhecido: {slug}')
+    return {'colunas': colunas, 'linhas': linhas, 'dim': slug, 'metricas': []}
 
 
 def gerar_builder(dimensoes, metricas, filtros: Filtros) -> dict:
@@ -56,6 +101,7 @@ def gerar_builder(dimensoes, metricas, filtros: Filtros) -> dict:
         'unidades': func.count(HoraVendaItem.id),
         'receita': func.coalesce(func.sum(HoraVendaItem.preco_final), 0),
         'desconto_rs': func.coalesce(func.sum(HoraVendaItem.desconto_aplicado), 0),
+        'desconto_pct': func.coalesce(func.avg(HoraVendaItem.desconto_percentual), 0),
         'margem_rs': func.coalesce(
             func.sum(case(
                 (custo_sq.c.preco_real.isnot(None), HoraVendaItem.preco_final - custo_sq.c.preco_real),
@@ -70,6 +116,8 @@ def gerar_builder(dimensoes, metricas, filtros: Filtros) -> dict:
         dim_expr = HoraVenda.vendedor
     elif dim == 'modelo':
         dim_expr = HoraModelo.nome_modelo
+    elif dim == 'cor':
+        dim_expr = HoraMoto.cor
     else:  # periodo
         dim_expr = func.date_trunc(trunc, HoraVenda.data_venda)
 
@@ -80,11 +128,10 @@ def gerar_builder(dimensoes, metricas, filtros: Filtros) -> dict:
         .join(HoraVenda, HoraVendaItem.venda_id == HoraVenda.id)
         .outerjoin(custo_sq, custo_sq.c.chassi == HoraVendaItem.numero_chassi)
     )
+    if dim in ('modelo', 'cor'):
+        q = q.join(HoraMoto, HoraMoto.numero_chassi == HoraVendaItem.numero_chassi)
     if dim == 'modelo':
-        q = (
-            q.join(HoraMoto, HoraMoto.numero_chassi == HoraVendaItem.numero_chassi)
-             .join(HoraModelo, HoraModelo.id == HoraMoto.modelo_id)
-        )
+        q = q.join(HoraModelo, HoraModelo.id == HoraMoto.modelo_id)
     q = q.filter(*_cond_venda(filtros)).group_by(dim_expr).order_by(dim_expr)
     rows = q.all()
 

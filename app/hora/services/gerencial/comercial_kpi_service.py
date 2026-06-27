@@ -96,16 +96,33 @@ def comissao_por_vendedor(filtros: Filtros) -> list[dict]:
     vendas é inerente ao cálculo por-venda; o universo (FATURADO no período +
     escopo) é limitado.
     """
-    from app.hora.services.comissao_service import calcular_comissao_venda
-    q = HoraVenda.query.filter(
-        HoraVenda.status == VENDA_STATUS_FATURADO,
-        HoraVenda.faturado_em >= datetime.combine(filtros.data_ini, time.min),
-        HoraVenda.faturado_em < datetime.combine(filtros.data_fim + timedelta(days=1), time.min),
+    from sqlalchemy import DateTime, cast
+    from sqlalchemy.orm import selectinload
+    from app.hora.services.comissao_service import (
+        calcular_comissao_venda, get_config, listar_faixas,
+    )
+    # Âncora temporal: faturado_em; FATURADO legado (DANFE) com faturado_em NULL
+    # cai para data_venda (coalesce) — senão sumiria da comissão silenciosamente.
+    efetiva = func.coalesce(HoraVenda.faturado_em, cast(HoraVenda.data_venda, DateTime))
+    q = (
+        HoraVenda.query
+        .options(
+            selectinload(HoraVenda.itens),
+            selectinload(HoraVenda.itens_peca).selectinload(HoraVendaItemPeca.peca),
+        )
+        .filter(
+            HoraVenda.status == VENDA_STATUS_FATURADO,
+            efetiva >= datetime.combine(filtros.data_ini, time.min),
+            efetiva < datetime.combine(filtros.data_fim + timedelta(days=1), time.min),
+        )
     )
     q = _aplica_escopo_loja(q, filtros)
+    # Pré-carrega config + faixas UMA vez (evita 1 SELECT de faixas por item-moto).
+    base = Decimal(str(get_config().comissao_base_moto or 0))
+    faixas = listar_faixas(apenas_ativas=True)
     por_vendedor: dict = {}
     for v in q.all():
-        c = calcular_comissao_venda(v)
+        c = calcular_comissao_venda(v, faixas=faixas, base=base)
         vend = v.vendedor or '(sem vendedor)'
         agg = por_vendedor.setdefault(vend, {'vendedor': vend, 'qtd_vendas': 0, 'total': ZERO})
         agg['qtd_vendas'] += 1
@@ -114,23 +131,45 @@ def comissao_por_vendedor(filtros: Filtros) -> list[dict]:
 
 
 def desconto_medio_por(filtros: Filtros, dimensao: str = 'loja') -> list[dict]:
-    """Desconto médio (% e R$) por dimensão (loja/vendedor) sobre itens FATURADOS."""
-    coluna = {'loja': HoraVenda.loja_id, 'vendedor': HoraVenda.vendedor}.get(dimensao, HoraVenda.loja_id)
-    rows = (
+    """Desconto médio (% e R$) por dimensão (loja/vendedor/modelo).
+
+    Considera só itens com `tabela_preco_id` (preço de tabela real) — exclui
+    TABELA_PRECO_AUSENTE (legado), que tem desconto 0 artificial e enviesaria a média.
+    """
+    from app.hora.models import HoraLoja, HoraModelo, HoraMoto
+    coluna = {
+        'loja': HoraVenda.loja_id,
+        'vendedor': HoraVenda.vendedor,
+        'modelo': HoraModelo.nome_modelo,
+    }.get(dimensao, HoraVenda.loja_id)
+    q = (
         db.session.query(
             coluna,
             func.avg(HoraVendaItem.desconto_percentual),
             func.avg(HoraVendaItem.desconto_aplicado),
         )
+        .select_from(HoraVendaItem)
         .join(HoraVenda, HoraVendaItem.venda_id == HoraVenda.id)
-        .filter(*_cond_venda(filtros))
-        .group_by(coluna)
-        .all()
     )
-    return [
-        {'chave': chave, 'desconto_pct_medio': _D(pct), 'desconto_rs_medio': _D(rs)}
-        for chave, pct, rs in rows
-    ]
+    if dimensao == 'modelo':
+        q = (
+            q.join(HoraMoto, HoraMoto.numero_chassi == HoraVendaItem.numero_chassi)
+             .join(HoraModelo, HoraModelo.id == HoraMoto.modelo_id)
+        )
+    q = q.filter(*_cond_venda(filtros), HoraVendaItem.tabela_preco_id.isnot(None)).group_by(coluna)
+    nomes = dict(db.session.query(HoraLoja.id, HoraLoja.apelido).all()) if dimensao == 'loja' else {}
+    out = []
+    for chave, pct, rs in q.all():
+        if dimensao == 'loja':
+            label = nomes.get(chave, '(sem loja)') if chave else '(sem loja)'
+        else:
+            label = chave if chave is not None else '(não informado)'
+        out.append({
+            'chave': chave, 'label': label,
+            'desconto_pct_medio': _D(pct), 'desconto_rs_medio': _D(rs),
+        })
+    out.sort(key=lambda r: r['desconto_pct_medio'], reverse=True)
+    return out
 
 
 def mix_pagamento(filtros: Filtros) -> list[dict]:
@@ -195,4 +234,5 @@ def kpis_comercial(filtros: Filtros) -> dict:
         'aprovacoes': aprovacoes_pendentes(filtros),
         'receita_pecas': receita_pecas(filtros),
         'custo_brindes': custo_brindes(filtros),
+        'desconto_loja': desconto_medio_por(filtros, 'loja'),
     }

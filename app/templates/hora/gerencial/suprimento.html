@@ -74,7 +74,7 @@
       {% for r in kpis.desvio_custo %}
         <tr>
           <td>{{ r.modelo }}</td>
-          <td class="ger-num {% if r.desvio_medio > 0 %}text-danger{% elif r.desvio_medio < 0 %}text-success{% endif %}">R$ {{ r.desvio_medio | valor_br }}</td>
+          <td class="ger-num {% if r.desvio_medio and r.desvio_medio > 0 %}text-danger{% elif r.desvio_medio and r.desvio_medio < 0 %}text-success{% endif %}">R$ {{ r.desvio_medio | valor_br }}</td>
           <td class="ger-num">{{ r.qtd }}</td>
         </tr>
       {% endfor %}

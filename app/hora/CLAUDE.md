@@ -1180,6 +1180,10 @@ Plano: `docs/superpowers/plans/2026-06-27-hora-gerencial.md`. **Sem migration.**
 - **Escopo por loja** aplicado no WHERE de cada query via `lojas_permitidas_ids()` →
   `gerencial/filtros.lojas_efetivas` (não só no menu). Bucket `loja_id IS NULL`
   (CNPJ desconhecido) só aparece para acesso irrestrito (admin / sem loja).
+  **Atenção (admin):** conceder `gerencial`/`gerencial_relatorios` a um usuário
+  **não-admin SEM `loja_hora_id`** o trata como IRRESTRITO (vê finanças de TODA a
+  rede) — intencional para diretoria; ao conceder a um gerente de loja, garanta
+  `loja_hora_id` preenchido para escopar.
 
 **Arquitetura** (`app/hora/services/gerencial/` + `routes/gerencial.py` +
 `templates/hora/gerencial/`):

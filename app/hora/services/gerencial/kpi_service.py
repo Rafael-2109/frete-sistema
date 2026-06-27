@@ -41,14 +41,26 @@ def _cond_venda(filtros: Filtros):
 
 
 def _custo_por_chassi_sq():
-    """Subquery: custo real por chassi (NF de entrada não desconsiderada)."""
-    return (
+    """Custo real por chassi = preço da NF de entrada MAIS RECENTE (maior id)
+    não desconsiderada. Determinístico quando o mesmo chassi aparece em mais de
+    uma NF (re-entrada / devolução + recompra) — evita escolher um custo arbitrário.
+    """
+    rn = func.row_number().over(
+        partition_by=HoraNfEntradaItem.numero_chassi,
+        order_by=HoraNfEntradaItem.id.desc(),
+    ).label('rn')
+    inner = (
         db.session.query(
             HoraNfEntradaItem.numero_chassi.label('chassi'),
-            func.min(HoraNfEntradaItem.preco_real).label('preco_real'),
+            HoraNfEntradaItem.preco_real.label('preco_real'),
+            rn,
         )
         .filter(HoraNfEntradaItem.desconsiderado.is_(False))
-        .group_by(HoraNfEntradaItem.numero_chassi)
+        .subquery()
+    )
+    return (
+        db.session.query(inner.c.chassi, inner.c.preco_real)
+        .filter(inner.c.rn == 1)
         .subquery()
     )
 

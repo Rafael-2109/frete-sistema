@@ -2,7 +2,7 @@
 {# Comercial & Vendedores (gerência): funil, vendedores, comissão, descontos,
    mix de pagamento, aprovações pendentes, peças e brindes. #}
 
-{% set ap_total = kpis.aprovacoes.DESCONTO + kpis.aprovacoes.FRETE + kpis.aprovacoes.BRINDE %}
+{% set ap_total = kpis.aprovacoes.get('DESCONTO', 0) + kpis.aprovacoes.get('FRETE', 0) + kpis.aprovacoes.get('BRINDE', 0) %}
 
 {% block gerencial_content %}
 <div class="row g-3 mb-3">
@@ -17,7 +17,7 @@
     <div class="ger-kpi {% if ap_total > 0 %}accent-danger{% else %}accent-success{% endif %}">
       <div class="ger-kpi-label"><i class="fas fa-stamp"></i> Aprovações pendentes</div>
       <div class="ger-kpi-valor">{{ ap_total }}</div>
-      <div class="ger-kpi-sub">desconto {{ kpis.aprovacoes.DESCONTO }} · frete {{ kpis.aprovacoes.FRETE }} · brinde {{ kpis.aprovacoes.BRINDE }}</div>
+      <div class="ger-kpi-sub">desconto {{ kpis.aprovacoes.get('DESCONTO', 0) }} · frete {{ kpis.aprovacoes.get('FRETE', 0) }} · brinde {{ kpis.aprovacoes.get('BRINDE', 0) }}</div>
     </div>
   </div>
   <div class="col-xl-3 col-md-6">
@@ -61,6 +61,27 @@
         <div class="ger-empty"><i class="fas fa-user-slash fa-2x mb-2 d-block"></i>Sem vendas no período.</div>
       {% endif %}
     </div>
+
+    {% if kpis.desconto_loja %}
+    <div class="ger-panel">
+      <div class="ger-panel-head">
+        <span class="ger-panel-title"><i class="fas fa-tags"></i> Desconto médio por loja</span>
+        <span class="ger-panel-hint">só vendas com preço de tabela</span>
+      </div>
+      <table class="ger-table">
+        <thead><tr><th>Loja</th><th class="ger-num">Desc. médio %</th><th class="ger-num">Desc. médio R$</th></tr></thead>
+        <tbody>
+          {% for d in kpis.desconto_loja %}
+            <tr>
+              <td>{{ d.label }}</td>
+              <td class="ger-num">{{ d.desconto_pct_medio | valor_br(1) }}%</td>
+              <td class="ger-num">R$ {{ d.desconto_rs_medio | valor_br }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% endif %}
   </div>
 
   <div class="col-lg-5">

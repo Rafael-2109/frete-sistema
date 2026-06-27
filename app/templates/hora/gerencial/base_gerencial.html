@@ -92,6 +92,8 @@
     const v = (n, d) => (s.getPropertyValue(n) || d).trim();
     return {
       primary: v('--bs-primary', '#f59e0b'),
+      // triplet "R, G, B" p/ montar rgba() no canvas (Chart.js NÃO resolve var()).
+      primaryRgb: v('--bs-primary-rgb', '245, 158, 11'),
       success: v('--bs-success', '#10b981'),
       danger:  v('--bs-danger', '#ef4444'),
       info:    v('--bs-info', '#0dcaf0'),

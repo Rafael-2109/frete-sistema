@@ -96,6 +96,31 @@ def test_margem_ignora_desconsiderado(db, loja_factory, venda_factory):
     assert m['cobertura_pct'] == Decimal('0')
 
 
+def test_margem_usa_custo_da_nf_mais_recente(db, loja_factory, venda_factory):
+    """Chassi com 2 NFs de entrada -> custo = NF mais recente (maior id), não MIN."""
+    import uuid
+    from app.hora.models import HoraNfEntrada, HoraNfEntradaItem
+    from app.utils.timezone import agora_brasil_naive
+    from app.hora.services.gerencial import kpi_service
+    loja = loja_factory()
+    chassi = 'CHS' + uuid.uuid4().hex[:14].upper()
+    venda_factory(loja=loja, itens=[{'chassi': chassi, 'preco_final': 1000, 'preco_real': 600}])
+    uid = uuid.uuid4().hex[:12].upper()
+    nf2 = HoraNfEntrada(
+        chave_44=uid.zfill(44), numero_nf=uid[:8], cnpj_emitente='12345678000199',
+        cnpj_destinatario=loja.cnpj, loja_destino_id=loja.id,
+        data_emissao=date(2026, 6, 16), valor_total=700, criado_em=agora_brasil_naive(),
+    )
+    _db.session.add(nf2)
+    _db.session.flush()
+    _db.session.add(HoraNfEntradaItem(nf_id=nf2.id, numero_chassi=chassi,
+                                      preco_real=Decimal('700'), desconsiderado=False))
+    _db.session.flush()
+    m = kpi_service.margem_bruta(_filtros(lojas_permitidas=[loja.id]))
+    assert m['custo_total'] == Decimal('700')   # NF mais recente, não MIN(600)
+    assert m['margem_rs'] == Decimal('300')
+
+
 # ───────────────────────── Ranking / Tendência / Desconto ─────────────────────────
 
 def test_ranking_lojas_ordena_por_receita(db, loja_factory, venda_factory):

@@ -116,7 +116,7 @@ def set_teto_modelo(modelo_id: int, desconto_maximo) -> HoraModelo:
     return modelo
 
 
-def calcular_comissao_venda(venda) -> dict:
+def calcular_comissao_venda(venda, faixas=None, base=None) -> dict:
     """Calcula a comissao de uma venda (#28, Fatia 3).
 
     - Motos: por item, comissao_base_moto - reducao da faixa do desconto do item
@@ -124,12 +124,19 @@ def calcular_comissao_venda(venda) -> dict:
     - Pecas: soma de peca.valor_comissao * qtd dos itens_peca.
 
     Retorna {comissao_motos, comissao_pecas, total}. Brindes nao geram comissao.
+
+    `faixas`/`base` opcionais: pre-carregados pelo caller (ex.: relatorio
+    gerencial que agrega N vendas) para evitar 1 SELECT de faixas + get_config
+    POR ITEM/VENDA (N+1). Default mantem o comportamento historico.
     """
-    base = Decimal(str(get_config().comissao_base_moto or 0))
+    if base is None:
+        base = Decimal(str(get_config().comissao_base_moto or 0))
+    if faixas is None:
+        faixas = listar_faixas(apenas_ativas=True)
     comissao_motos = ZERO
     for item in (venda.itens or []):
         desconto = Decimal(str(item.desconto_aplicado or 0))
-        c = base - reducao_comissao_para_desconto(desconto)
+        c = base - reducao_comissao_para_desconto(desconto, faixas)
         comissao_motos += c if c > ZERO else ZERO
     comissao_pecas = ZERO
     for ip in (getattr(venda, 'itens_peca', None) or []):
@@ -170,7 +177,7 @@ def relatorio_comissao(data_inicio=None, data_fim=None) -> List[dict]:
     return sorted(por_vendedor.values(), key=lambda x: x['total'], reverse=True)
 
 
-def reducao_comissao_para_desconto(desconto_rs) -> Decimal:
+def reducao_comissao_para_desconto(desconto_rs, faixas=None) -> Decimal:
     """Retorna a reducao de comissao (R$) para um dado valor de desconto (R$).
 
     Aplica a faixa ativa cujo intervalo [desconto_min, desconto_max) contem o
@@ -178,7 +185,8 @@ def reducao_comissao_para_desconto(desconto_rs) -> Decimal:
     reducao = 0. (Usado no calculo de comissao — Fatia 3.)
     """
     d = _to_dec(desconto_rs)
-    for faixa in listar_faixas(apenas_ativas=True):
+    faixas = listar_faixas(apenas_ativas=True) if faixas is None else faixas
+    for faixa in faixas:
         dmin = Decimal(str(faixa.desconto_min or 0))
         dmax = faixa.desconto_max
         if d >= dmin and (dmax is None or d < Decimal(str(dmax))):

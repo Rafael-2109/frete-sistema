@@ -6,7 +6,7 @@ com estoque_service. Escopo por loja via Filtros.lojas.
 """
 from __future__ import annotations
 
-from sqlalchemy import case, func
+from sqlalchemy import func
 
 from app import db
 from app.hora.models import (
@@ -61,7 +61,6 @@ def estoque_por_loja_modelo(filtros: Filtros) -> list[dict]:
             HoraModelo.nome_modelo,
             HoraMoto.cor,
             func.count().label('qtd'),
-            func.sum(case((ult.c.tipo == 'AVARIADA', 1), else_=0)).label('avariada'),
         )
         .select_from(ult)
         .join(HoraMoto, HoraMoto.numero_chassi == ult.c.chassi)
@@ -79,9 +78,8 @@ def estoque_por_loja_modelo(filtros: Filtros) -> list[dict]:
             'modelo': modelo,
             'cor': cor,
             'qtd': int(qtd or 0),
-            'avariada': int(avariada or 0),
         }
-        for loja_id, modelo, cor, qtd, avariada in q.all()
+        for loja_id, modelo, cor, qtd in q.all()
     ]
     rows.sort(key=lambda r: (r['loja_nome'], r['modelo'], r['cor'] or ''))
     return rows

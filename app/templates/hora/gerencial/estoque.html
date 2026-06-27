@@ -5,6 +5,7 @@
 {% block gerencial_toolbar_extra %}{% endblock %}
 
 {% set total_estoque = kpis.estoque | sum(attribute='qtd') %}
+{% set parado90 = kpis.aging.faixas.get('90+', 0) %}
 
 {% block gerencial_content %}
 <div class="row g-3 mb-3">
@@ -30,9 +31,9 @@
     </div>
   </div>
   <div class="col-xl-3 col-md-6">
-    <div class="ger-kpi {% if kpis.aging.faixas['90+'] > 0 %}accent-danger{% else %}accent-success{% endif %}">
+    <div class="ger-kpi {% if parado90 > 0 %}accent-danger{% else %}accent-success{% endif %}">
       <div class="ger-kpi-label"><i class="fas fa-hourglass-half"></i> Parado +90 dias</div>
-      <div class="ger-kpi-valor">{{ kpis.aging.faixas['90+'] }}</div>
+      <div class="ger-kpi-valor">{{ parado90 }}</div>
       <div class="ger-kpi-sub">capital encalhado</div>
     </div>
   </div>
@@ -69,7 +70,7 @@
   </div>
   {% if kpis.estoque %}
     <table class="ger-table">
-      <thead><tr><th>Loja</th><th>Modelo</th><th>Cor</th><th class="ger-num">Qtd</th><th class="ger-num">Avariadas</th></tr></thead>
+      <thead><tr><th>Loja</th><th>Modelo</th><th>Cor</th><th class="ger-num">Qtd</th></tr></thead>
       <tbody>
         {% for r in kpis.estoque %}
           <tr>
@@ -77,7 +78,6 @@
             <td>{{ r.modelo }}</td>
             <td>{{ r.cor or '—' }}</td>
             <td class="ger-num">{{ r.qtd }}</td>
-            <td class="ger-num">{% if r.avariada %}<span class="text-warning">{{ r.avariada }}</span>{% else %}—{% endif %}</td>
           </tr>
         {% endfor %}
       </tbody>
