@@ -45,6 +45,8 @@ MODULOS_HORA: list[tuple[str, str]] = [
     ('pecas_estoque', 'Estoque de Pecas'),
     ('comissao', 'Comissao (config + relatorio)'),
     ('aprovacoes', 'Aprovacoes de pedido (desconto/frete/brinde)'),
+    ('gerencial', 'Gerencial: Dashboards'),
+    ('gerencial_relatorios', 'Gerencial: Relatorios'),
 ]
 
 # Modulos virtuais onde apenas a acao 'ver' tem semantica. As demais colunas
@@ -66,6 +68,13 @@ MODULOS_SO_VER: set[str] = {
     # 'vendas' (que agora gateia apenas o PEDIDO de venda). Permite dar a um
     # vendedor o poder de criar pedido SEM o poder de emitir/cancelar a NFe.
     'vendas_nf',
+    # Secao Gerencial (2026-06-27): dashboards executivos/operacionais + area de
+    # relatorios. Slugs separados — 'gerencial' gateia os 4 dashboards;
+    # 'gerencial_relatorios' gateia a galeria + builder + export (permissao
+    # propria, decisao do dono). Escopo por loja aplicado no WHERE dos services
+    # (lojas_permitidas_ids), nao so no menu. So a acao 'ver' tem semantica.
+    'gerencial',
+    'gerencial_relatorios',
 }
 
 # Modulos onde a acao 'aprovar' tem semantica REAL (decorator existe e e

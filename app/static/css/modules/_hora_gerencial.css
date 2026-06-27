@@ -1,0 +1,212 @@
+/**
+ * _hora_gerencial.css — Seção Gerencial das Lojas HORA
+ *
+ * Dashboards executivos/operacionais + área de relatórios. Estende o design
+ * system do módulo HORA (prefixo ger-*). Usa SOMENTE design tokens --bs-*
+ * (light/dark automático). Nenhum hex em elementos.
+ */
+
+@layer modules {
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     PÁGINA + atmosfera (signature visual #1: radial sutil na cor primária)
+     ═══════════════════════════════════════════════════════════════════════ */
+  .ger-page {
+    position: relative;
+  }
+  .ger-page::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+    background: radial-gradient(
+      ellipse at 80% 0%,
+      rgba(var(--bs-primary-rgb), 0.06) 0%,
+      transparent 55%
+    );
+  }
+  .ger-page > * { position: relative; z-index: 1; }
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     SUB-NAVEGAÇÃO de abas (Executivo / Comercial / Estoque / Suprimento / Relatórios)
+     ═══════════════════════════════════════════════════════════════════════ */
+  .ger-subnav {
+    display: flex;
+    gap: 0.25rem;
+    flex-wrap: wrap;
+    border-bottom: 1px solid var(--bs-border-color);
+    margin-bottom: 1rem;
+  }
+  .ger-subnav a {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.55rem 0.95rem;
+    color: var(--bs-secondary-color);
+    text-decoration: none;
+    border-bottom: 2px solid transparent;
+    border-radius: 0.375rem 0.375rem 0 0;
+    font-weight: 500;
+    transition: color .15s ease, border-color .15s ease, background .15s ease;
+  }
+  .ger-subnav a:hover {
+    color: var(--bs-body-color);
+    background: var(--bs-secondary-bg);
+  }
+  .ger-subnav a.active {
+    color: var(--bs-primary);
+    border-bottom-color: var(--bs-primary);
+    font-weight: 600;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     TOOLBAR de filtros (período / loja / granularidade)
+     ═══════════════════════════════════════════════════════════════════════ */
+  .ger-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 0.75rem;
+    padding: 0.85rem 1rem;
+    background: var(--bs-tertiary-bg);
+    border: 1px solid var(--bs-border-color);
+    border-radius: 0.6rem;
+    margin-bottom: 1.25rem;
+  }
+  .ger-toolbar .ger-field { display: flex; flex-direction: column; gap: 0.2rem; }
+  .ger-toolbar label {
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--bs-secondary-color);
+    font-weight: 600;
+  }
+  .ger-toolbar .ger-presets { display: flex; gap: 0.3rem; margin-left: auto; }
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     KPI CARDS (signature visual #2: glow line progressiva no hover)
+     ═══════════════════════════════════════════════════════════════════════ */
+  .ger-kpi {
+    position: relative;
+    overflow: hidden;
+    height: 100%;
+    background: var(--bs-body-bg);
+    border: 1px solid var(--bs-border-color);
+    border-radius: 0.7rem;
+    padding: 1.1rem 1.2rem;
+    animation: ger-fade-in .45s ease both;
+  }
+  .ger-kpi::after {
+    content: '';
+    position: absolute;
+    left: 0; bottom: 0;
+    height: 3px; width: 0;
+    background: linear-gradient(90deg, var(--bs-primary), rgba(var(--bs-primary-rgb), 0.25));
+    transition: width .4s ease;
+  }
+  .ger-kpi:hover::after { width: 100%; }
+  .ger-kpi-label {
+    font-size: 0.78rem;
+    color: var(--bs-secondary-color);
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    display: flex; align-items: center; gap: 0.4rem;
+  }
+  .ger-kpi-valor {
+    font-size: 1.9rem;
+    font-weight: 700;
+    line-height: 1.15;
+    margin-top: 0.35rem;
+    color: var(--bs-body-color);
+  }
+  .ger-kpi-sub { font-size: 0.8rem; color: var(--bs-secondary-color); margin-top: 0.2rem; }
+  .ger-kpi-delta { font-size: 0.82rem; font-weight: 600; display: inline-flex; align-items: center; gap: 0.2rem; }
+  .ger-kpi-delta.up   { color: var(--bs-success); }
+  .ger-kpi-delta.down { color: var(--bs-danger); }
+  .ger-kpi-delta.flat { color: var(--bs-secondary-color); }
+  .ger-kpi.accent-primary { border-left: 3px solid var(--bs-primary); }
+  .ger-kpi.accent-success { border-left: 3px solid var(--bs-success); }
+  .ger-kpi.accent-info    { border-left: 3px solid var(--bs-info); }
+  .ger-kpi.accent-warning { border-left: 3px solid var(--bs-warning); }
+  .ger-kpi.accent-danger  { border-left: 3px solid var(--bs-danger); }
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     PAINÉIS (gráficos / tabelas)
+     ═══════════════════════════════════════════════════════════════════════ */
+  .ger-panel {
+    background: var(--bs-body-bg);
+    border: 1px solid var(--bs-border-color);
+    border-radius: 0.7rem;
+    padding: 1.1rem 1.2rem;
+    height: 100%;
+  }
+  .ger-panel-head {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 0.5rem; margin-bottom: 0.9rem;
+  }
+  .ger-panel-title {
+    font-size: 0.98rem; font-weight: 600; color: var(--bs-body-color);
+    display: flex; align-items: center; gap: 0.45rem;
+  }
+  .ger-panel-hint { font-size: 0.76rem; color: var(--bs-secondary-color); }
+  .ger-chart-wrap { position: relative; width: 100%; }
+
+  /* Cobertura de margem (transparência) */
+  .ger-coverage {
+    font-size: 0.74rem;
+    color: var(--bs-secondary-color);
+    background: var(--bs-secondary-bg);
+    border: 1px solid var(--bs-border-color);
+    border-radius: 1rem;
+    padding: 0.1rem 0.6rem;
+    display: inline-flex; align-items: center; gap: 0.3rem;
+  }
+
+  /* Heatmap (margem loja x modelo / aging) */
+  .ger-heat { width: 100%; border-collapse: separate; border-spacing: 3px; }
+  .ger-heat th { font-size: 0.74rem; color: var(--bs-secondary-color); font-weight: 600; padding: 0.25rem 0.4rem; text-align: center; }
+  .ger-heat td.label { font-size: 0.8rem; color: var(--bs-body-color); text-align: left; white-space: nowrap; }
+  .ger-heat-cell {
+    text-align: center; font-size: 0.78rem; font-weight: 600;
+    padding: 0.4rem 0.3rem; border-radius: 0.3rem;
+    color: var(--bs-body-color);
+    background: color-mix(in srgb, var(--bs-primary) calc(var(--ger-heat, 0) * 1%), var(--bs-tertiary-bg));
+  }
+
+  /* Tabela compacta de ranking/listas */
+  .ger-table { width: 100%; }
+  .ger-table th {
+    font-size: 0.74rem; text-transform: uppercase; letter-spacing: 0.02em;
+    color: var(--bs-secondary-color); font-weight: 600;
+    border-bottom: 1px solid var(--bs-border-color); padding: 0.45rem 0.6rem;
+  }
+  .ger-table td { padding: 0.5rem 0.6rem; border-bottom: 1px solid var(--bs-border-color); color: var(--bs-body-color); }
+  .ger-table tr:last-child td { border-bottom: none; }
+  .ger-num { font-variant-numeric: tabular-nums; text-align: right; }
+
+  /* Galeria de relatórios */
+  .ger-report-card {
+    display: block; height: 100%;
+    background: var(--bs-body-bg);
+    border: 1px solid var(--bs-border-color);
+    border-radius: 0.6rem; padding: 1rem 1.1rem;
+    text-decoration: none; color: var(--bs-body-color);
+    transition: border-color .15s ease, transform .15s ease;
+  }
+  .ger-report-card:hover { border-color: var(--bs-primary); transform: translateY(-2px); }
+  .ger-report-card .ger-report-ico { color: var(--bs-primary); font-size: 1.3rem; }
+
+  /* Estado vazio */
+  .ger-empty { text-align: center; color: var(--bs-secondary-color); padding: 2rem 1rem; }
+
+  @keyframes ger-fade-in {
+    from { opacity: 0; transform: translateY(12px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .ger-kpi { animation: none; }
+    .ger-kpi::after, .ger-report-card { transition: none; }
+  }
+}
