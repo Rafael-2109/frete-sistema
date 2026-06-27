@@ -334,6 +334,106 @@ def criar_recebimento_sem_nf(loja_id: int, operador: Optional[str] = None) -> Ho
     return rec
 
 
+def anexar_nf_real_ao_recebimento(
+    recebimento_id: int,
+    pdf_bytes: bytes,
+    operador: Optional[str] = None,
+    payload: Optional[dict] = None,
+) -> HoraNfEntrada:
+    """Grava a NF real por cima da provisoria do recebimento (PROVISORIA -> REAL).
+
+    Promove o HoraNfEntrada de PROVISORIA para REAL, gravando chave_44 / numero_nf /
+    cnpj_emitente / valor_total, criando os HoraNfEntradaItem reais (insert-once via
+    get_or_create_moto) e reavaliando as divergencias das conferencias existentes contra
+    a NF real. Se a NF tiver pedido_id, avanca o status fiscal do pedido.
+
+    Args:
+        recebimento_id: id de HoraRecebimento com NF PROVISORIA.
+        pdf_bytes: bytes do PDF da DANFE (ignorado se `payload` for fornecido).
+        operador: rotulo do operador para auditoria.
+        payload: dict com chaves 'nf' e 'itens' — quando fornecido, ignora pdf_bytes
+            (util em testes para nao parsear PDF real).
+
+    Returns:
+        HoraNfEntrada promovida para REAL.
+
+    Raises:
+        ValueError: se recebimento nao encontrado, NF ja real, ou chave_44 duplicada.
+    """
+    from app.hora.models import PENDENTE_ORIGEM_NF_ENTRADA
+    from app.hora.services.moto_service import get_or_create_moto
+
+    rec = HoraRecebimento.query.get(recebimento_id)
+    if not rec:
+        raise ValueError(f'Recebimento {recebimento_id} nao encontrado')
+    nf = rec.nf
+    if not nf.provisoria:
+        raise ValueError('Recebimento ja tem NF real anexada')
+
+    if payload is None:
+        from app.hora.services.parsers import parse_danfe_to_hora_payload
+        payload = parse_danfe_to_hora_payload(pdf_bytes)
+    nf_data, itens_data = payload['nf'], payload['itens']
+
+    # Dedup chave_44 contra outras NFs (nao a propria)
+    dup = HoraNfEntrada.query.filter(
+        HoraNfEntrada.chave_44 == nf_data['chave_44'],
+        HoraNfEntrada.id != nf.id,
+    ).first()
+    if dup:
+        raise ValueError(f"NF {nf_data['chave_44']} ja importada (id={dup.id})")
+
+    # Promove PROVISORIA -> REAL
+    nf.tipo = 'REAL'
+    nf.chave_44 = nf_data['chave_44']
+    nf.numero_nf = nf_data['numero_nf']
+    nf.cnpj_emitente = nf_data.get('cnpj_emitente') or ''
+    nf.nome_emitente = nf_data.get('nome_emitente')
+    nf.data_emissao = nf_data.get('data_emissao') or nf.data_emissao
+    nf.valor_total = nf_data.get('valor_total') or 0
+    nf.parseada_em = agora_utc_naive()
+    db.session.flush()
+
+    # Cria itens reais (get_or_create_moto e insert-once — nao duplica moto existente)
+    for item in itens_data:
+        moto = get_or_create_moto(
+            numero_chassi=item['numero_chassi'],
+            modelo_nome=item.get('modelo_texto_original'),
+            cor=(item.get('cor_texto_original') or 'NAO_INFORMADA'),
+            criado_por=operador,
+            origem_pendencia=PENDENTE_ORIGEM_NF_ENTRADA,
+            origem_id=nf.id,
+            fallback_sentinela=True,
+        )
+        db.session.add(HoraNfEntradaItem(
+            nf_id=nf.id,
+            numero_chassi=moto.numero_chassi,
+            preco_real=item['preco_real'],
+            modelo_texto_original=item.get('modelo_texto_original'),
+            cor_texto_original=item.get('cor_texto_original'),
+        ))
+    db.session.flush()
+
+    # Reavalia divergencias para conferencias ativas (gabarito muda: PROVISORIA -> NF real)
+    db.session.expire(rec, ['conferencias'])
+    for conf in rec.conferencias:
+        if not conf.substituida:
+            _redefinir_divergencias(conf, rec)
+
+    # Recalcula status do recebimento se ja finalizado
+    if rec.status in ('CONCLUIDO', 'COM_DIVERGENCIA'):
+        _recalcular_status_recebimento_finalizado(rec)
+
+    db.session.commit()
+
+    # Avanca status fiscal do pedido (apos commit — best-effort)
+    if nf.pedido_id:
+        from app.hora.services.pedido_service import atualizar_status_pedido_por_faturamento
+        atualizar_status_pedido_por_faturamento(nf.pedido_id)
+
+    return nf
+
+
 def definir_qtd_declarada(
     recebimento_id: int,
     qtd: int,
