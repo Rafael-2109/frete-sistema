@@ -45,17 +45,13 @@ _MESES_PT = (
 # Status que liberam os termos de compra (Garantia/Checagem).
 STATUS_TERMOS = (VENDA_STATUS_CONFIRMADO, VENDA_STATUS_FATURADO)
 
-# Emitente de fallback quando a venda não tem loja vinculada (loja_id=NULL).
-# Dados da matriz HORA (mesmos do cabeçalho dos termos / NF-e).
-MATRIZ_FALLBACK = {
-    'razao_social': 'HORA COMERCIO DE MOTOCICLETAS ELETRICAS LTDA',
+# Cabeçalho dos documentos: a holding HORA é SEMPRE o emitente (razão social,
+# CNPJ e e-mail FIXOS da matriz — regra fiscal: a NF-e sai sempre da matriz). A loja
+# física da venda entra apenas como "Vendido por: <nome>" (sem CNPJ/endereço/telefone).
+EMITENTE_MATRIZ = {
+    'razao_social': 'HORA COMÉRCIO DE MOTOCICLETAS LTDA',
     'cnpj': '62.634.044/0001-20',
-    'inscricao_estadual': None,
-    'endereco_linha1': 'RUA BENTO GONÇALVES, 467',
-    'endereco_linha2': 'VILA REGENTE FEIJO / SAO PAULO - SP',
-    'cep': None,
-    'email': 'FINANCEIRO@MOTOCHEFESP.COM.BR',
-    'telefone': None,
+    'email': 'financeiro@motochefesp.com.br',
 }
 
 
@@ -110,23 +106,12 @@ def titulo_pdv(venda: HoraVenda) -> str:
 # Montagem de contexto
 # ---------------------------------------------------------------------------
 def _emitente(venda: HoraVenda) -> dict:
+    """Cabeçalho dos documentos: razão/CNPJ/e-mail FIXOS da matriz +
+    `vendido_por` = nome da loja física da venda (rótulo amigável, sem CNPJ)."""
     loja = venda.loja
-    if not loja:
-        return dict(MATRIZ_FALLBACK)
-    end1_partes = [p for p in (loja.logradouro, loja.numero) if p]
-    end1 = ', '.join(end1_partes) if end1_partes else (loja.endereco or '')
-    cid = ' / '.join(p for p in (loja.cidade, loja.uf) if p)
-    end2_partes = [p for p in (loja.bairro, cid) if p]
-    end2 = ' - '.join(end2_partes)
     return {
-        'razao_social': loja.razao_social or loja.nome or loja.apelido or MATRIZ_FALLBACK['razao_social'],
-        'cnpj': loja.cnpj or MATRIZ_FALLBACK['cnpj'],
-        'inscricao_estadual': loja.inscricao_estadual,
-        'endereco_linha1': end1,
-        'endereco_linha2': end2,
-        'cep': loja.cep,
-        'email': loja.email,
-        'telefone': loja.telefone,
+        **EMITENTE_MATRIZ,
+        'vendido_por': loja.rotulo_display if loja else None,
     }
 
 

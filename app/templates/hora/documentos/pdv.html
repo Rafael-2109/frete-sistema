@@ -54,11 +54,9 @@
         {% if logo_uri %}<img class="logo" src="{{ logo_uri }}" alt="MOTOCHEFE">{% endif %}
         <div class="emit-nome">{{ emitente.razao_social }}</div>
         <div class="emit-end">
-          {{ emitente.endereco_linha1 }}<br>
-          {{ emitente.endereco_linha2 }}<br>
-          CNPJ/CPF: {{ emitente.cnpj }}{% if emitente.inscricao_estadual %} &nbsp; IE: {{ emitente.inscricao_estadual }}{% endif %}
-          {% if emitente.email %}<br>EMAIL: {{ emitente.email }}{% endif %}
-          {% if emitente.telefone %}<br>TEL: {{ emitente.telefone }}{% endif %}
+          CNPJ: {{ emitente.cnpj }}<br>
+          EMAIL: {{ emitente.email }}
+          {% if emitente.vendido_por %}<br><strong>Vendido por:</strong> {{ emitente.vendido_por }}{% endif %}
         </div>
       </td>
       <td style="text-align:right;">

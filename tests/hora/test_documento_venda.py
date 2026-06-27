@@ -143,11 +143,17 @@ def test_pacote_confirmado_inclui_ciclomotor(db, loja_factory):
     assert _n_paginas(docsvc.gerar_pacote_pdf(v_ciclo)) > _n_paginas(docsvc.gerar_pacote_pdf(v_auto))
 
 
-def test_emitente_fallback_sem_loja(db):
-    """Venda sem loja usa os dados da matriz no emitente do PDV."""
-    v = _venda_com_moto(None, _modelo(), status='CONFIRMADO')
+def test_emitente_matriz_fixa_e_vendido_por(db, loja_factory):
+    """Emitente é sempre a matriz (razão/CNPJ/e-mail fixos); a loja física da venda
+    aparece só como `vendido_por` (nome, sem CNPJ)."""
+    loja = loja_factory()
+    v = _venda_com_moto(loja, _modelo(), status='CONFIRMADO')
     emit = docsvc._emitente(v)
-    assert emit['razao_social'] == docsvc.MATRIZ_FALLBACK['razao_social']
-    assert emit['cnpj'] == docsvc.MATRIZ_FALLBACK['cnpj']
-    # E o PDV ainda gera normalmente.
-    assert docsvc.gerar_pdv_pdf(v)[:4] == b'%PDF'
+    assert emit['razao_social'] == docsvc.EMITENTE_MATRIZ['razao_social']
+    assert emit['cnpj'] == docsvc.EMITENTE_MATRIZ['cnpj']
+    assert emit['email'] == docsvc.EMITENTE_MATRIZ['email']
+    assert emit['vendido_por'] == loja.rotulo_display
+    # Sem loja, vendido_por é None e o PDV ainda gera normalmente.
+    v_sem = _venda_com_moto(None, _modelo(), status='CONFIRMADO')
+    assert docsvc._emitente(v_sem)['vendido_por'] is None
+    assert docsvc.gerar_pdv_pdf(v_sem)[:4] == b'%PDF'

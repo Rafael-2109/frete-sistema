@@ -961,9 +961,12 @@ merge por **pypdf**. Sem migration, sem permissão nova (reusa `vendas/ver`).
 **Service** `app/hora/services/documento_venda_service.py`:
 - `gerar_pdv_pdf` — Pedido/Orçamento. Título dinâmico: `titulo_pdv()` → **"Cotação"**
   (INCOMPLETO/COTACAO) ou **"Pedido de Venda"** (CONFIRMADO/FATURADO). Emitente =
-  `venda.loja` (dados fiscais), fallback `MATRIZ_FALLBACK` quando `loja_id` é NULL.
-  Tabela de produtos = motos (1 un cada) + `itens_peca`; pagamentos de `venda.pagamentos`
-  (fallback header `forma_pagamento`+`numero_parcelas`).
+  **razão social, CNPJ e e-mail FIXOS da matriz** (`EMITENTE_MATRIZ`: "HORA COMÉRCIO
+  DE MOTOCICLETAS LTDA", 62.634.044/0001-20) — **sem endereço, sem telefone, sem CNPJ
+  de loja** (regra fiscal: NF-e sai sempre da matriz). A loja física da venda aparece
+  só como **"Vendido por: <nome>"** (`loja.rotulo_display`, sem CNPJ). O CNPJ fixo também
+  alimenta o cabeçalho "GRUPO SP" dos termos. Tabela de produtos = motos (1 un cada) +
+  `itens_peca`; pagamentos de `venda.pagamentos` (fallback header `forma_pagamento`+`numero_parcelas`).
 - `gerar_termo_garantia_pdf` / `gerar_termo_checagem_pdf` — **1 jogo por moto** (concatenado).
 - `gerar_termo_ciclomotor_pdf` — 1 por moto ciclomotor; levanta `DocumentoVendaError`
   se nenhuma se aplica.
