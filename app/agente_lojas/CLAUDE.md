@@ -4,7 +4,7 @@ camada: L1
 sot_de: —
 hub: CLAUDE.md
 superseded_by: —
-atualizado: 2026-06-03
+atualizado: 2026-06-26
 -->
 # Agente Lojas HORA — Guia de Desenvolvimento
 
@@ -176,12 +176,27 @@ compartilha com 'web' (nao e critico enquanto nao houver memorias).
 | M2 (SDK Fase C) | Hooks PostToolUse audit + permissions hardening | **Concluido** (2026-05-09) |
 | M2 (UX P0) | Markdown rendering (marked + DOMPurify), TodoWrite progress UI, 34 testes (can_use_tool, scope_injector, todos parser) | **Concluido** (2026-05-09) |
 | M2 (UX P1) | PostgresSessionStore opt-in (`AGENT_LOJAS_SESSION_STORE_ENABLED`), historico de sessoes no UI (dropdown + nova sessao) | **Concluido** (2026-05-09) |
-| M3   | Venda + isolamento total de memoria + Cost tracking granular por subagente | **Parcial** — skill `consultando-venda-loja` ja na whitelist (`SKILLS_DOMINIO_HORA`); isolamento total de memoria + cost tracking pendentes |
+| M3   | Venda + isolamento total de memoria + Cost tracking granular por subagente | **Parcial** — skill `consultando-venda-loja` na whitelist (`SKILLS_DOMINIO_HORA`); **cost tracking por turno corrigido** (delta via `turn_cost_from_cumulative`, FIX 2026-06-26); **isolamento total de memoria ainda PENDENTE** (memory_injection nao filtra por coluna `agente` — pre-requisito BLOQUEANTE de qualquer reuso do AgentClient web; ver Gotcha 0) |
 | M4   | Analytics (apos fase financeira HORA) | Planejado |
 
 ---
 
 ## Gotchas
+
+0. **Multi-turno = `resume`, NUNCA `session_id` (FIX S1 2026-06-26).** `build_options`
+   passa `resume=sdk_session_id` (--resume CARREGA o `{id}.jsonl`) a partir do
+   turno 2, **sem** setar `session_id` (--session-id apenas NOMEIA; --session-id +
+   --resume exige --fork-session e forkar X->X = exit code 1). Espelha
+   `_with_resume` do agente web (`app/agente/sdk/client.py:2842`). O bug original:
+   o modulo so passava `session_id` reusando o id do turno anterior -> amnesia +
+   colisao de JSONL ("nao responde 2 perguntas sequenciais"). O `SessionStore`
+   agora e **default ON** (`AGENT_LOJAS_SESSION_STORE_ENABLED=True`) para que o
+   `{id}.jsonl` seja materializavel do Postgres cross-worker; um **probe**
+   (`_store.load`) em `stream_response` REMOVE o `resume` se a sessao nao existir
+   no store (evita --resume de JSONL inexistente). A resposta do **assistant**
+   passou a ser persistida em `agent_sessions.data['messages']` (antes so o turno
+   do usuario), e o custo e gravado em **delta** via `turn_cost_from_cumulative`
+   (antes somava o acumulado cru do SDK -> inflacao ~Nx).
 
 1. **Nao importar** `app/motochefe/` ou `app/carvia/` direto neste modulo
    (contrato de isolamento HORA). Se precisar de dado da Motochefe como

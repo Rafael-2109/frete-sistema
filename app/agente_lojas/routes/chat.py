@@ -32,7 +32,6 @@ from flask_login import current_user
 from app.agente_lojas.routes import agente_lojas_bp
 from app.agente_lojas.decorators import require_acesso_agente_lojas
 from app.agente_lojas.config.settings import AGENTE_ID
-from app.agente_lojas.services.scope_injector import build_loja_context_block
 from app.agente_lojas.sdk import stream_lojas_chat
 from app.agente_lojas.sdk.client_pool import (
     submit_coroutine,
@@ -59,14 +58,10 @@ def _sse(event_type: str, payload: dict) -> str:
 @require_acesso_agente_lojas
 def pagina_chat():
     """Pagina de chat do Agente Lojas HORA."""
-    loja_context = build_loja_context_block(
-        perfil=current_user.perfil,
-        loja_hora_id=getattr(current_user, 'loja_hora_id', None),
-    )
-    return render_template(
-        'agente_lojas/chat.html',
-        loja_context_preview=loja_context,
-    )
+    # FIX S2 (2026-06-26): NAO renderizar o bloco interno <loja_context> na UI
+    # (andaime de prompt). O escopo de loja chega ao modelo via hook
+    # UserPromptSubmit (sdk/hooks.py); a tela do operador nao precisa exibi-lo.
+    return render_template('agente_lojas/chat.html')
 
 
 @agente_lojas_bp.route('/api/chat', methods=['POST'])
@@ -170,6 +165,11 @@ async def _drain_async_gen(
             etype = event.get('type')
             meta = event.get('metadata', {}) or {}
             content = event.get('content', '')
+
+            # FIX S1 (P0.2): acumular o texto do assistant para persistir no DB
+            # (antes so o turno do usuario era gravado). Defesa: so 'text'.
+            if etype == 'text' and content:
+                state['assistant_text'] = (state.get('assistant_text') or '') + content
 
             if etype == 'init':
                 sid = meta.get('sdk_session_id')
@@ -349,6 +349,7 @@ def _generate_sse(
             user_message=user_message,
             sdk_session_id=state.get('sdk_session_id'),
             final_metadata=state.get('final_metadata') or {},
+            assistant_text=state.get('assistant_text'),
         )
 
     finally:
@@ -395,6 +396,7 @@ def _persist_session_after_stream(
     user_message: str,
     sdk_session_id: Optional[str],
     final_metadata: dict,
+    assistant_text: Optional[str] = None,
 ):
     """Atualiza AgentSession com sdk_session_id, message_count, cost, model."""
     try:
@@ -411,19 +413,43 @@ def _persist_session_after_stream(
             'role': 'user',
             'content': user_message[:2000],  # truncate para nao inflar JSONB
         })
+        # FIX S1 (P0.2): persistir TAMBEM a resposta do assistant. Antes so o
+        # turno do usuario era gravado -> historico pela metade (dropdown so
+        # mostrava perguntas) e impossivel reconstruir contexto do DB. Espelha
+        # add_assistant_message do agente web (app/agente/routes/chat.py).
+        _assistant = (assistant_text or '').strip()
+        if _assistant:
+            messages.append({
+                'role': 'assistant',
+                'content': _assistant[:4000],
+            })
         data['messages'] = messages[-50:]  # cap ultimas 50 msgs
         if sdk_session_id:
             data['sdk_session_id'] = sdk_session_id
         data['channel'] = 'web'
 
-        session.data = data
-        session.message_count = (session.message_count or 0) + 1
-        session.last_message = user_message[:500]
-        if final_metadata.get('total_cost_usd'):
-            session.total_cost_usd = (
-                (session.total_cost_usd or 0)
-                + float(final_metadata['total_cost_usd'])
+        # Custo do TURNO a partir do acumulado do SDK (FIX P1.3 2026-06-26).
+        # ResultMessage.total_cost_usd e ACUMULADO da sessao SDK; com o resume
+        # ligado (FIX S1) ele cresce a cada turno, entao somar o acumulado
+        # por-turno inflaria ~Nx (bug 2026-06-19 do agente web). turn_cost_from_
+        # cumulative devolve o DELTA; o acumulado anterior fica em data['_sdk_cost_*']
+        # e um reset de sessao SDK zera o baseline. Espelha app/agente/routes/chat.py.
+        _sdk_cumulative = float(final_metadata.get('total_cost_usd') or 0)
+        if _sdk_cumulative > 0:
+            from app.agente.sdk.pricing import turn_cost_from_cumulative
+            _prev_cumulative = float(data.get('_sdk_cost_cumulative', 0) or 0)
+            _prev_sid = data.get('_sdk_cost_session_id')
+            _curr_sid = sdk_session_id or _prev_sid
+            _turn_cost = turn_cost_from_cumulative(
+                _sdk_cumulative, _prev_cumulative, _prev_sid, _curr_sid,
             )
+            data['_sdk_cost_cumulative'] = _sdk_cumulative
+            data['_sdk_cost_session_id'] = _curr_sid
+            session.total_cost_usd = float(session.total_cost_usd or 0) + _turn_cost
+
+        session.data = data
+        session.message_count = (session.message_count or 0) + (2 if _assistant else 1)
+        session.last_message = user_message[:500]
         if not session.model:
             session.model = 'claude-opus-4-8'
 

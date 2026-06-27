@@ -118,8 +118,11 @@ _SDK_HAS_SKILLS_OPTION = _check_skills_option()
 
 
 # =============================================================================
-# Feature flags via env var (default OFF para SessionStore — ativar apos
-# validar PostgresSessionStore no agente_lojas em DEV)
+# Feature flags via env var. SessionStore default ON (2026-06-26): o resume
+# multi-turno (FIX S1) depende do historico estar materializavel; com o store
+# ligado o {id}.jsonl e materializado do Postgres antes do subprocess, tornando
+# o resume robusto cross-worker (4 gunicorn). Init tem fallback gracioso para o
+# JSONL local se o store falhar. Rollback: AGENT_LOJAS_SESSION_STORE_ENABLED=false.
 # =============================================================================
 def _env_bool(name: str, default: bool = False) -> bool:
     val = os.getenv(name, '').strip().lower()
@@ -129,7 +132,7 @@ def _env_bool(name: str, default: bool = False) -> bool:
 
 
 _LOJAS_SESSION_STORE_ENABLED: bool = _env_bool(
-    'AGENT_LOJAS_SESSION_STORE_ENABLED', default=False,
+    'AGENT_LOJAS_SESSION_STORE_ENABLED', default=True,
 )
 # Timeout em ms para load() do session_store (default 30s — mesmo que Nacom).
 _LOJAS_SESSION_STORE_LOAD_TIMEOUT_MS: int = int(
@@ -251,9 +254,28 @@ class AgentLojasClient:
         if _SDK_HAS_SKILLS_OPTION:
             options_kwargs["skills"] = sorted(SKILLS_PERMITIDAS)
 
-        # SDK 0.1.52+: passar nosso session_id para nomear o JSONL
+        # Continuidade multi-turno (FIX S1 2026-06-26).
+        # - Turno 1 (sem sdk_session_id): o SDK gera o id; capturado no init
+        #   (_parse_message) e persistido. Nao setamos nada aqui.
+        # - Turno 2+ (sdk_session_id UUID valido): RESUME. `resume` -> --resume
+        #   CARREGA o {id}.jsonl; `session_id` -> --session-id apenas NOMEIA.
+        #   Antes este modulo passava SO session_id reusando o id do turno
+        #   anterior, o que NAO carregava o historico (amnesia) e colidia com o
+        #   JSONL ja criado. Espelha _with_resume do agente web
+        #   (app/agente/sdk/client.py:2842): resume=X SEM session_id, pois
+        #   --session-id + --resume exige --fork-session e forkar X->X = exit 1.
+        #   O probe ao session_store em stream_response remove o resume se a
+        #   sessao nao existir (evita --resume de JSONL inexistente / crash).
         if sdk_session_id:
-            options_kwargs["session_id"] = sdk_session_id
+            try:
+                import uuid as _uuid_check
+                _uuid_check.UUID(str(sdk_session_id))
+                options_kwargs["resume"] = sdk_session_id
+            except (ValueError, AttributeError, TypeError):
+                logger.warning(
+                    "[AGENTE_LOJAS] sdk_session_id invalido (nao UUID), "
+                    "ignorando resume: %s", str(sdk_session_id)[:20],
+                )
 
         # Structured output (SDK nativo). ResultMessage.structured_output
         # contera o JSON parseado. Util para skills que retornam tabelas.
@@ -364,6 +386,36 @@ class AgentLojasClient:
                     (our_session_id or 'pending')[:12],
                     _replace_kwargs.get('session_store_flush', 'sdk_default'),
                 )
+
+                # Probe anti-crash (FIX S1): se vamos resumir (options.resume set),
+                # confirmar que a sessao existe no store. Se NAO existir (turno 1
+                # nao mirrorou, ou sessao de outro project_key), REMOVER o resume
+                # para o CLI iniciar sessao nova em vez de crashar com --resume de
+                # JSONL inexistente (exit code 1). Espelha o probe do agente web
+                # (app/agente/sdk/client.py:2187-2208).
+                if getattr(options, 'resume', None):
+                    try:
+                        from claude_agent_sdk import project_key_for_directory
+                        _pk = (
+                            project_key_for_directory(options.cwd)
+                            if options.cwd else project_key_for_directory()
+                        )
+                        _existing = await _store.load({
+                            "project_key": _pk,
+                            "session_id": options.resume,
+                        })
+                        if _existing is None:
+                            logger.warning(
+                                "[AGENTE_LOJAS] probe: sessao %s nao esta no "
+                                "store — iniciando nova (sem --resume)",
+                                str(options.resume)[:12],
+                            )
+                            options = _dc.replace(options, resume=None)
+                    except Exception as _probe_err:
+                        logger.debug(
+                            "[AGENTE_LOJAS] probe session_store falhou "
+                            "(ignorado): %s", _probe_err,
+                        )
             except Exception as _store_err:
                 logger.error(
                     "[AGENTE_LOJAS] SessionStore init falhou — fallback "
