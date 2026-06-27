@@ -47,6 +47,11 @@ class HoraLoja(db.Model):
     # Compat: campo livre antigo (quando não há Receita disponível).
     endereco = db.Column(db.String(255), nullable=True)
 
+    # Grupo WhatsApp de notificação (1 grupo por loja): JID Baileys "...@g.us".
+    # Destino das notificações de pedido confirmado / NF emitida DESTA loja.
+    # Configurado na tela da loja (dropdown ao vivo dos grupos da Evolution).
+    whatsapp_grupo_jid = db.Column(db.String(60), nullable=True)
+
     ativa = db.Column(db.Boolean, nullable=False, default=True)
     receitaws_consultado_em = db.Column(db.DateTime, nullable=True)
 

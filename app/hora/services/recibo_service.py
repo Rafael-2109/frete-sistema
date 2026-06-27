@@ -172,7 +172,7 @@ def enviar_recibo_whatsapp(
 ) -> dict:
     """Envia o PDF do recibo por WhatsApp ao cliente. Levanta ReciboError em falha."""
     import base64
-    from app.utils.whatsapp_notify import send_whatsapp
+    from app.utils.whatsapp_dispatch import send_whatsapp_unificado
 
     recibo = HoraRecibo.query.get(recibo_id)
     if not recibo:
@@ -188,7 +188,7 @@ def enviar_recibo_whatsapp(
         f'Olá, {nome}! Segue o seu recibo {recibo.numero_display} '
         f'(peças/serviços) — Motochefe SP. Documento não-fiscal.'
     )
-    resp = send_whatsapp(
+    resp = send_whatsapp_unificado(
         telefone, texto,
         anexo_b64=base64.b64encode(pdf).decode('ascii'),
         anexo_filename=f'{recibo.numero_display}.pdf',

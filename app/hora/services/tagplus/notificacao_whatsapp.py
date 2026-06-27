@@ -22,7 +22,8 @@ from typing import Optional
 
 from sqlalchemy import func, or_
 
-from app.utils.whatsapp_notify import send_whatsapp, WhatsAppNotifyError
+from app.utils.whatsapp_dispatch import send_whatsapp_unificado
+from app.utils.whatsapp_notify import WhatsAppNotifyError
 from app.utils.timezone import agora_utc_naive
 
 logger = logging.getLogger(__name__)
@@ -55,7 +56,9 @@ def _data_br(s) -> str:
 def _resolver_vendedor(nome: Optional[str]):
     """Busca usuário com WhatsApp autorizado que corresponda ao nome do vendedor.
 
-    Faz match case-insensitive em vendedor_vinculado OU nome.
+    RESERVADA: o DM ao vendedor foi desativado em 2026-06-27 (notificação só ao
+    grupo da loja). Função mantida e testada para reativar o DM trivialmente se
+    o requisito voltar. Faz match case-insensitive em vendedor_vinculado OU nome.
     Retorna instância de Usuario ou None.
     """
     if not nome or not nome.strip():
@@ -227,60 +230,48 @@ def _baixar_danfe_pdf(emissao) -> Optional[bytes]:
 
 # ─── Envio de mensagens ───────────────────────────────────────────────────────
 
-def _enviar_para_destinos(reg, texto: str, anexo_b64: Optional[str],
-                          anexo_filename: Optional[str], vendedor) -> None:
-    """Envia a notificação para o grupo e/ou vendedor de forma idempotente.
+def _enviar_para_destinos(reg, venda, texto: str, anexo_b64: Optional[str],
+                          anexo_filename: Optional[str]) -> None:
+    """Envia a notificação para o grupo da LOJA (regra "1 grupo por loja").
 
-    Atualiza os campos enviado_grupo, enviado_vendedor e status no registro
-    (sem commit — chamador deve commitar).
+    O grupo de destino vem de `venda.loja.whatsapp_grupo_jid`. Loja sem grupo
+    configurado (ou venda sem loja vinculada) → status ERRO, sem enviar (decisão
+    do dono — força configurar a loja em vez de mandar para o grupo errado).
+    NÃO envia DM ao vendedor (decisão do dono 2026-06-27: só o grupo). Atualiza
+    enviado_grupo/status no registro (sem commit — chamador deve commitar).
     """
-    group_jid = os.environ.get('HORA_TAGPLUS_NOTIFY_GROUP_JID', '').strip()
+    loja = getattr(venda, 'loja', None)
+    group_jid = ((getattr(loja, 'whatsapp_grupo_jid', None) or '').strip()) if loja else ''
     if not group_jid:
         reg.status = 'ERRO'
-        reg.erro = 'GROUP_JID não configurado (HORA_TAGPLUS_NOTIFY_GROUP_JID)'
+        nome_loja = (getattr(loja, 'rotulo_display', None) or getattr(loja, 'nome', None)) if loja else None
+        reg.erro = (
+            f'Loja "{nome_loja}" sem grupo WhatsApp configurado'
+            if nome_loja else
+            'Pedido sem loja vinculada — grupo WhatsApp não resolvido'
+        ) + ' (configure em Cadastros › Lojas).'
         return
 
-    grupo_ok = reg.enviado_grupo  # já enviado antes?
-
-    # Envio para o grupo
-    if not grupo_ok:
-        try:
-            send_whatsapp(
-                group_jid, texto,
-                skip_rate_limit=True,
-                anexo_b64=anexo_b64,
-                anexo_filename=anexo_filename,
-            )
-            reg.enviado_grupo = True
-            grupo_ok = True
-        except WhatsAppNotifyError as exc:
-            logger.error('HORA notificacao: falha ao enviar para grupo %s: %s', group_jid, exc)
-            reg.enviado_grupo = False
-            grupo_ok = False
-
-    # Envio para o vendedor (apenas se houver vendedor com telefone)
-    if reg.enviado_vendedor is not True:
-        if vendedor and getattr(vendedor, 'telefone', None):
-            try:
-                send_whatsapp(
-                    vendedor.telefone, texto,
-                    skip_rate_limit=True,
-                    anexo_b64=anexo_b64,
-                    anexo_filename=anexo_filename,
-                )
-                reg.enviado_vendedor = True
-            except WhatsAppNotifyError as exc:
-                logger.warning('HORA notificacao: falha ao enviar para vendedor: %s', exc)
-                reg.enviado_vendedor = False
-        # Se não há vendedor, mantém None (não aplicável)
-
-    # Status final
-    if not grupo_ok:
-        reg.status = 'ERRO'
-    elif reg.enviado_vendedor is False:
-        reg.status = 'PARCIAL'
-    else:
+    # Idempotente: se o grupo já recebeu antes (retry), só confirma o status.
+    if reg.enviado_grupo:
         reg.status = 'ENVIADO'
+        reg.enviado_em = agora_utc_naive()
+        return
+
+    try:
+        send_whatsapp_unificado(
+            group_jid, texto,
+            skip_rate_limit=True,
+            anexo_b64=anexo_b64,
+            anexo_filename=anexo_filename,
+        )
+        reg.enviado_grupo = True
+        reg.status = 'ENVIADO'
+    except WhatsAppNotifyError as exc:
+        logger.error('HORA notificacao: falha ao enviar para grupo %s: %s', group_jid, exc)
+        reg.enviado_grupo = False
+        reg.status = 'ERRO'
+        reg.erro = f'Falha no envio ao grupo: {str(exc)[:200]}'
 
     reg.enviado_em = agora_utc_naive()
 
@@ -378,8 +369,7 @@ def processar_notificacao(registro_id: int) -> None:
             db.session.commit()
             return
 
-        vendedor = _resolver_vendedor(reg.vendedor_nome)
-        _enviar_para_destinos(reg, texto, anexo_b64, anexo_filename, vendedor)
+        _enviar_para_destinos(reg, venda, texto, anexo_b64, anexo_filename)
         db.session.commit()
 
     except Exception as exc:

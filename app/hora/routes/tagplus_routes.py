@@ -1531,7 +1531,7 @@ def venda_nfe_cancelar(venda_id: int):
 def venda_nfe_enviar_email(venda_id: int):
     """Envia a DANFE PDF da venda por e-mail ao cliente (roadmap #4).
 
-    Remetente fixo faturamento@motochefesp.com.br (env HORA_NF_EMAIL_FROM).
+    Remetente fixo financeiro@motochefesp.com.br (env HORA_NF_EMAIL_FROM).
     Destinatario = e-mail do cliente no pedido (override opcional via form).
     Registra historico em hora_venda_auditoria (ENVIOU_NF_EMAIL).
     """

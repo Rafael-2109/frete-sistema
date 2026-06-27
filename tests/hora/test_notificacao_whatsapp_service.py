@@ -31,26 +31,54 @@ def test_formatar_pedido_basico(app):
         assert "|" not in txt  # sem tabela markdown
 
 
-def test_processar_pedido_envia_grupo(app, monkeypatch):
+def test_processar_pedido_envia_so_grupo_sem_dm(app):
+    """Envia SÓ para o grupo da loja — sem DM do vendedor (decisão do dono 2026-06-27)."""
     with app.app_context():
         venda = MagicMock()
-        venda.id = 4321; venda.nome_cliente = "CLI"; venda.vendedor = None
-        venda.valor_total = 100; venda.loja = None; venda.itens = []
+        venda.id = 4321; venda.nome_cliente = "CLI"; venda.vendedor = "Fulano"
+        venda.valor_total = 100; venda.itens = []
+        venda.loja = MagicMock(whatsapp_grupo_jid="120363@g.us",
+                               rotulo_display="Loja Centro", nome="Loja Centro")
         reg = HoraTagPlusNotificacaoWhatsapp(tipo="PEDIDO", ref_id=4321)
         db.session.add(reg); db.session.commit()
         rid = reg.id
-        monkeypatch.setenv("HORA_TAGPLUS_NOTIFY_GROUP_JID", "120363@g.us")
+        # Vendedor resolvível (com telefone), mas NÃO deve receber DM.
+        vendedor = MagicMock(telefone="11988887777")
         enviados = []
         with patch.object(svc, "_carregar_pedido", return_value=venda), \
-             patch.object(svc, "_resolver_vendedor", return_value=None), \
-             patch("app.hora.services.tagplus.notificacao_whatsapp.send_whatsapp",
+             patch.object(svc, "_resolver_vendedor", return_value=vendedor), \
+             patch("app.hora.services.tagplus.notificacao_whatsapp.send_whatsapp_unificado",
                    side_effect=lambda t, x, **k: enviados.append(t) or {"ok": True}):
             svc.processar_notificacao(rid)
         reg = db.session.get(HoraTagPlusNotificacaoWhatsapp, rid)
         assert reg.status == "ENVIADO"
         assert reg.enviado_grupo is True
-        assert reg.enviado_vendedor is None
-        assert enviados == ["120363@g.us"]
+        assert enviados == ["120363@g.us"]  # SÓ o grupo — telefone do vendedor não entra
+        db.session.delete(reg); db.session.commit()
+
+
+def test_processar_pedido_loja_sem_grupo_erro(app, monkeypatch):
+    """Loja sem grupo configurado → status ERRO, não envia (decisão do dono)."""
+    with app.app_context():
+        venda = MagicMock()
+        venda.id = 4323; venda.nome_cliente = "CLI"; venda.vendedor = None
+        venda.valor_total = 100; venda.itens = []
+        venda.loja = MagicMock(whatsapp_grupo_jid=None,
+                               rotulo_display="Loja Sem Grupo", nome="Loja Sem Grupo")
+        reg = HoraTagPlusNotificacaoWhatsapp(tipo="PEDIDO", ref_id=4323)
+        db.session.add(reg); db.session.commit()
+        rid = reg.id
+        enviados = []
+        with patch.object(svc, "_carregar_pedido", return_value=venda), \
+             patch.object(svc, "_resolver_vendedor", return_value=None), \
+             patch("app.hora.services.tagplus.notificacao_whatsapp.send_whatsapp_unificado",
+                   side_effect=lambda t, x, **k: enviados.append(t) or {"ok": True}):
+            svc.processar_notificacao(rid)
+        reg = db.session.get(HoraTagPlusNotificacaoWhatsapp, rid)
+        assert reg.status == "ERRO"
+        assert "grupo" in (reg.erro or "").lower()
+        assert "Loja Sem Grupo" in (reg.erro or "")
+        assert enviados == []  # não envia
         db.session.delete(reg); db.session.commit()
 
 
@@ -62,7 +90,7 @@ def test_kill_switch(app, monkeypatch):
         monkeypatch.setenv("HORA_TAGPLUS_NOTIFY_ENABLED", "false")
         monkeypatch.setenv("HORA_TAGPLUS_NOTIFY_GROUP_JID", "120363@g.us")
         chamado = []
-        with patch("app.hora.services.tagplus.notificacao_whatsapp.send_whatsapp",
+        with patch("app.hora.services.tagplus.notificacao_whatsapp.send_whatsapp_unificado",
                    side_effect=lambda *a, **k: chamado.append(1)):
             svc.processar_notificacao(rid)
         reg = db.session.get(HoraTagPlusNotificacaoWhatsapp, rid)

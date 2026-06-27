@@ -264,6 +264,169 @@ def send_whatsapp_evolution(
     return {"ok": True, "chunks": len(chunks), "results": results}
 
 
+def send_media_evolution(
+    target: str,
+    text: str,
+    *,
+    anexo_b64: str,
+    anexo_filename: str,
+    anexo_mimetype: str = "application/pdf",
+    skip_rate_limit: bool = False,
+    timeout: float = _HTTP_TIMEOUT,
+) -> dict:
+    """Envia um documento (PDF) via Evolution API — paridade com o anexo do OpenClaw.
+
+    Usa o endpoint POST /message/sendMedia/{instance} com `mediatype=document`
+    e a midia em base64 (mesmo `anexo_b64` que o `send_whatsapp` do OpenClaw recebe).
+    O `text` vira a legenda (`caption`) — espelha o comportamento do gateway OpenClaw,
+    onde o anexo carrega a propria mensagem como caption.
+
+    Args:
+        target: Numero E.164 (DM) ou JID de grupo terminando em "@g.us".
+        text: Legenda do documento (caption).
+        anexo_b64: Conteudo do arquivo em base64 (obrigatorio).
+        anexo_filename: Nome do arquivo exibido no WhatsApp.
+        anexo_mimetype: MIME type (default "application/pdf").
+        skip_rate_limit: True desabilita o rate limit local (resposta reativa).
+        timeout: Timeout HTTP em segundos.
+
+    Returns:
+        dict: {"ok": True, "result": <json da Evolution>} em sucesso.
+              {"ok": False, "skipped": True, ...} se desabilitado.
+
+    Raises:
+        WhatsAppAuthError: 401/403 da Evolution (apikey invalida).
+        WhatsAppRateLimitError: limite local excedido.
+        WhatsAppNotifyError: outras falhas (rede, 5xx, config/anexo ausente).
+    """
+    if not _ENABLED:
+        logger.info(
+            f"[WHATSAPP-EVO] Notify desabilitado (EVOLUTION_NOTIFY_ENABLED=false). "
+            f"Skip media target={_redact(target)} file={anexo_filename}"
+        )
+        return {"ok": False, "skipped": True, "reason": "disabled"}
+
+    if not (_API_URL and _API_KEY and _INSTANCE):
+        raise WhatsAppNotifyError(
+            "Evolution API nao configurada. Defina EVOLUTION_API_URL, "
+            "EVOLUTION_API_KEY e EVOLUTION_INSTANCE no ambiente."
+        )
+
+    if not target or not target.strip():
+        raise WhatsAppNotifyError("target vazio")
+    if not anexo_b64:
+        raise WhatsAppNotifyError("anexo_b64 vazio (use send_whatsapp_evolution para texto)")
+
+    number = _normalize_number(target)
+    if not number:
+        raise WhatsAppNotifyError(f"target invalido apos normalizacao: {target!r}")
+
+    if not skip_rate_limit:
+        _rate_limiter.check_and_consume(number)
+
+    url = f"{_API_URL}/message/sendMedia/{_INSTANCE}"
+    headers = {
+        "apikey": _API_KEY,
+        "Content-Type": "application/json",
+    }
+    payload = {
+        "number": number,
+        "mediatype": "document",
+        "mimetype": anexo_mimetype,
+        "media": anexo_b64,
+        "fileName": anexo_filename,
+        "caption": text or "",
+    }
+
+    try:
+        resp = requests.post(url, json=payload, headers=headers, timeout=timeout)
+    except requests.RequestException as exc:
+        raise WhatsAppNotifyError(
+            f"Falha de rede ao chamar Evolution API (sendMedia): {exc}"
+        ) from exc
+
+    if resp.status_code in (401, 403):
+        raise WhatsAppAuthError(
+            f"Evolution API rejeitou apikey (HTTP {resp.status_code}). "
+            f"Verifique EVOLUTION_API_KEY / instancia."
+        )
+    if resp.status_code >= 500:
+        raise WhatsAppNotifyError(
+            f"Evolution API retornou {resp.status_code}: {resp.text[:300]}"
+        )
+    if resp.status_code >= 400:
+        raise WhatsAppNotifyError(
+            f"Evolution API rejeitou sendMedia (HTTP {resp.status_code}): "
+            f"{resp.text[:300]}"
+        )
+
+    try:
+        result = resp.json()
+    except ValueError:
+        result = {"raw": resp.text[:300]}
+
+    logger.info(
+        f"[WHATSAPP-EVO] Documento enviado target={_redact(number)} "
+        f"file={anexo_filename} mime={anexo_mimetype}"
+    )
+    return {"ok": True, "result": result}
+
+
+def fetch_grupos_evolution(*, timeout: float = 45.0) -> list:
+    """Lista os grupos WhatsApp que a instancia enxerga (para o dropdown da loja).
+
+    GET /group/fetchAllGroups/{instance}. Retorna lista de {id, subject} (apenas
+    grupos com id). Levanta WhatsAppNotifyError/WhatsAppAuthError em falha — o
+    caller (rota) decide como exibir (ex.: fallback para campo manual).
+
+    Latencia: o endpoint busca metadata de TODOS os grupos do numero — com
+    centenas de grupos leva ~25-35s (medido: 227 grupos => 28s). Por isso o
+    timeout default e' alto (45s). Obs.: o Baileys so' popula a lista apos
+    SINCRONIZAR — logo apos parear o store fica vazio e a chamada expira ate
+    haver ATIVIDADE no grupo (1 msg basta) ou history-sync.
+    """
+    if not (_API_URL and _API_KEY and _INSTANCE):
+        raise WhatsAppNotifyError(
+            "Evolution API nao configurada. Defina EVOLUTION_API_URL, "
+            "EVOLUTION_API_KEY e EVOLUTION_INSTANCE no ambiente."
+        )
+
+    url = f"{_API_URL}/group/fetchAllGroups/{_INSTANCE}"
+    headers = {"apikey": _API_KEY}
+    try:
+        resp = requests.get(
+            url, headers=headers, params={"getParticipants": "false"}, timeout=timeout
+        )
+    except requests.RequestException as exc:
+        raise WhatsAppNotifyError(
+            f"Falha de rede ao listar grupos na Evolution: {exc}"
+        ) from exc
+
+    if resp.status_code in (401, 403):
+        raise WhatsAppAuthError(
+            f"Evolution API rejeitou apikey ao listar grupos (HTTP {resp.status_code})."
+        )
+    if resp.status_code >= 400:
+        raise WhatsAppNotifyError(
+            f"Evolution API erro ao listar grupos (HTTP {resp.status_code}): "
+            f"{resp.text[:300]}"
+        )
+
+    try:
+        data = resp.json()
+    except ValueError as exc:
+        raise WhatsAppNotifyError("Resposta nao-JSON ao listar grupos") from exc
+
+    if not isinstance(data, list):
+        raise WhatsAppNotifyError(f"Resposta inesperada ao listar grupos: {str(data)[:200]}")
+
+    return [
+        {"id": g.get("id"), "subject": g.get("subject")}
+        for g in data
+        if isinstance(g, dict) and g.get("id")
+    ]
+
+
 def _redact(target: str) -> str:
     """Mascara o numero pra log (mantem 4 ultimos digitos)."""
     digits = "".join(c for c in target if c.isdigit())

@@ -6,9 +6,10 @@ Reusa, como utilitarios compartilhados:
 
 Fronteira do modulo respeitada: nenhuma logica de negocio de modulos vizinhos
 e importada — apenas o utilitario de envio e o download de DANFE ja usado pelo
-HORA. Remetente fixo `faturamento@motochefesp.com.br` (env `HORA_NF_EMAIL_FROM`
-permite sobrescrever). A conta SMTP autenticada (envs EMAIL_*) deve ser a
-propria caixa de faturamento para o envelope bater com o From.
+HORA. Remetente fixo `financeiro@motochefesp.com.br` (conta Hostinger; env
+`HORA_NF_EMAIL_FROM` permite sobrescrever). A conta SMTP autenticada (envs
+EMAIL_*) deve ser a propria caixa `financeiro@` para o envelope bater com o From
+(Hostinger rejeita From divergente do usuario autenticado).
 
 Pre-condicoes para enviar:
   - venda FATURADA;
@@ -26,8 +27,8 @@ from typing import Optional
 
 from app.utils.logging_config import logger
 
-NF_EMAIL_FROM = os.environ.get('HORA_NF_EMAIL_FROM', 'faturamento@motochefesp.com.br')
-NF_EMAIL_FROM_NAME = os.environ.get('HORA_NF_EMAIL_FROM_NAME', 'Motochefe SP — Faturamento')
+NF_EMAIL_FROM = os.environ.get('HORA_NF_EMAIL_FROM', 'financeiro@motochefesp.com.br')
+NF_EMAIL_FROM_NAME = os.environ.get('HORA_NF_EMAIL_FROM_NAME', 'Motochefe SP — Financeiro')
 
 
 class NfEmailError(Exception):

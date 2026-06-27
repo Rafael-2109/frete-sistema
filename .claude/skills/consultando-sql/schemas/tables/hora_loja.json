@@ -94,6 +94,10 @@
       "type": "varchar(255)"
     },
     {
+      "name": "whatsapp_grupo_jid",
+      "type": "varchar(60)"
+    },
+    {
       "name": "ativa",
       "type": "boolean",
       "nullable": false,

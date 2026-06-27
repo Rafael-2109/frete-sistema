@@ -242,6 +242,41 @@
       </div>
     </div>
 
+    <!-- Notificações WhatsApp -->
+    {% if current_user.tem_perm_hora('lojas', 'editar') %}
+    <div class="card mb-3">
+      <div class="card-header"><strong><i class="fab fa-whatsapp"></i> Notificações WhatsApp</strong></div>
+      <div class="card-body">
+        <p class="small text-muted mb-2">
+          Grupo que recebe as notificações de <strong>pedido confirmado</strong> e
+          <strong>NF emitida</strong> desta loja.
+        </p>
+        <form method="post" action="{{ url_for('hora.lojas_salvar_grupo_whatsapp', loja_id=loja.id) }}">
+          <div class="mb-2">
+            <label class="form-label small mb-1" for="hora-grupo-select">Grupo da loja</label>
+            <div class="input-group input-group-sm">
+              <select class="form-select" id="hora-grupo-select" name="whatsapp_grupo_jid"
+                      data-atual="{{ loja.whatsapp_grupo_jid or '' }}">
+                <option value="">— sem grupo —</option>
+                {% if loja.whatsapp_grupo_jid %}
+                  <option value="{{ loja.whatsapp_grupo_jid }}" selected>{{ loja.whatsapp_grupo_jid }}</option>
+                {% endif %}
+              </select>
+              <button type="button" class="btn btn-outline-secondary" id="hora-grupo-reload"
+                      title="Atualizar lista de grupos">
+                <i class="fas fa-sync"></i>
+              </button>
+            </div>
+            <div class="form-text" id="hora-grupo-status">Carregando grupos…</div>
+          </div>
+          <button type="submit" class="btn btn-sm btn-success w-100">
+            <i class="fas fa-save"></i> Salvar grupo
+          </button>
+        </form>
+      </div>
+    </div>
+    {% endif %}
+
     <!-- Ações -->
     <div class="card">
       <div class="card-header"><strong><i class="fas fa-cog"></i> Ações</strong></div>
@@ -381,6 +416,68 @@
       else window.addEventListener('load', initLeafletMini);
     }
   }
+})();
+</script>
+
+<script>
+// ═══════════════════ Grupo WhatsApp da loja (dropdown ao vivo) ═══════════════════
+(function() {
+  const sel = document.getElementById('hora-grupo-select');
+  if (!sel) return;
+  const status = document.getElementById('hora-grupo-status');
+  const reloadBtn = document.getElementById('hora-grupo-reload');
+  const atual = sel.getAttribute('data-atual') || '';
+
+  function tornarManual() {
+    if (sel.tagName !== 'SELECT') return;
+    const inp = document.createElement('input');
+    inp.type = 'text';
+    inp.className = 'form-select';
+    inp.id = 'hora-grupo-select';
+    inp.name = 'whatsapp_grupo_jid';
+    inp.placeholder = '...@g.us';
+    inp.value = atual;
+    sel.replaceWith(inp);
+  }
+
+  function carregar() {
+    if (sel.tagName !== 'SELECT') return;  // já caiu no modo manual
+    status.textContent = 'Carregando grupos…';
+    fetch('{{ url_for("hora.lojas_grupos_whatsapp_api") }}')
+      .then(r => r.json())
+      .then(d => {
+        if (!d.ok) {
+          status.innerHTML = '⚠ ' + (d.erro || 'não foi possível listar os grupos') +
+            ' — cole o JID manualmente (termina em <code>@g.us</code>).';
+          tornarManual();
+          return;
+        }
+        sel.innerHTML = '<option value="">— sem grupo —</option>';
+        let achouAtual = false;
+        (d.grupos || []).forEach(function(g) {
+          const opt = document.createElement('option');
+          opt.value = g.id;
+          opt.textContent = (g.subject || '(sem nome)') + ' — ' + g.id;
+          if (g.id === atual) { opt.selected = true; achouAtual = true; }
+          sel.appendChild(opt);
+        });
+        if (atual && !achouAtual) {
+          const opt = document.createElement('option');
+          opt.value = atual;
+          opt.textContent = atual + ' (atual)';
+          opt.selected = true;
+          sel.appendChild(opt);
+        }
+        const n = (d.grupos || []).length;
+        status.textContent = n + ' grupo(s) encontrados. Selecione e clique em Salvar.';
+      })
+      .catch(function() {
+        status.textContent = '⚠ falha ao carregar — clique no botão atualizar para tentar de novo.';
+      });
+  }
+
+  if (reloadBtn) reloadBtn.addEventListener('click', carregar);
+  carregar();
 })();
 </script>
 {% endblock %}

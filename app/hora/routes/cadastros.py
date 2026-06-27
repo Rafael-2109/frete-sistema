@@ -161,6 +161,43 @@ def lojas_toggle_ativa(loja_id: int):
     return redirect(url_for('hora.lojas_detalhe', loja_id=loja.id))
 
 
+@hora_bp.route('/lojas/api/grupos-whatsapp')
+@require_hora_perm('lojas', 'editar')
+def lojas_grupos_whatsapp_api():
+    """Lista os grupos WhatsApp da Evolution para o dropdown de config da loja.
+
+    Sempre responde HTTP 200 com {ok, grupos, erro?} — o front trata o erro
+    (ex.: instância ainda sincronizando os grupos) caindo no campo manual de JID.
+    """
+    from app.utils.whatsapp_evolution import fetch_grupos_evolution, is_configured
+    if not is_configured():
+        return jsonify({
+            'ok': False, 'grupos': [],
+            'erro': 'Evolution API não configurada (EVOLUTION_API_URL/KEY/INSTANCE).',
+        })
+    try:
+        grupos = fetch_grupos_evolution()
+        grupos.sort(key=lambda g: (g.get('subject') or '').lower())
+        return jsonify({'ok': True, 'grupos': grupos})
+    except Exception as exc:
+        return jsonify({'ok': False, 'grupos': [], 'erro': str(exc)[:200]})
+
+
+@hora_bp.route('/lojas/<int:loja_id>/salvar-grupo-whatsapp', methods=['POST'])
+@require_hora_perm('lojas', 'editar')
+def lojas_salvar_grupo_whatsapp(loja_id: int):
+    """Grava o JID do grupo WhatsApp de notificação da loja (1 grupo por loja)."""
+    loja = HoraLoja.query.get_or_404(loja_id)
+    jid = (request.form.get('whatsapp_grupo_jid') or '').strip() or None
+    if jid and not jid.endswith('@g.us'):
+        flash('JID inválido: um grupo WhatsApp termina em "@g.us".', 'danger')
+        return redirect(url_for('hora.lojas_detalhe', loja_id=loja.id))
+    loja.whatsapp_grupo_jid = jid
+    db.session.commit()
+    flash('Grupo WhatsApp da loja atualizado.' if jid else 'Grupo WhatsApp removido.', 'success')
+    return redirect(url_for('hora.lojas_detalhe', loja_id=loja.id))
+
+
 @hora_bp.route('/lojas/<int:loja_id>/editar-apelido', methods=['POST'])
 @require_hora_perm('lojas', 'editar')
 def lojas_editar_apelido(loja_id: int):
