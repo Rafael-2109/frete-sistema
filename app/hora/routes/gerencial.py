@@ -8,7 +8,7 @@ Fonte exclusiva `hora_*`. KPIs em SQL agregado (services em
 """
 from __future__ import annotations
 
-from flask import redirect, render_template, request, url_for
+from flask import Response, flash, redirect, render_template, request, url_for
 
 from app.hora.decorators import require_hora_perm
 from app.hora.routes import hora_bp
@@ -109,5 +109,52 @@ def gerencial_suprimento():
 @hora_bp.route('/gerencial/relatorios')
 @require_hora_perm('gerencial_relatorios', 'ver')
 def gerencial_relatorios():
+    from app.hora.services.gerencial import relatorio_service as rs
+    from app.hora.services.gerencial.relatorio_catalogo import DIMENSOES, METRICAS
     ctx = _contexto_base('relatorios')
+    ctx['predefinidos'] = rs.RELATORIOS_PREDEFINIDOS
+    ctx['dimensoes'] = DIMENSOES
+    ctx['metricas'] = METRICAS
+    slug = request.args.get('relatorio')
+    dims = request.args.getlist('dim')
+    metricas_sel = request.args.getlist('metrica')
+    resultado, titulo = None, None
+    try:
+        if slug:
+            resultado = rs.gerar_predefinido(slug, ctx['filtros'])
+            titulo = resultado.get('titulo')
+        elif dims and metricas_sel:
+            resultado = rs.gerar_builder(dims, metricas_sel, ctx['filtros'])
+            titulo = 'Relatório personalizado'
+    except ValueError as exc:
+        flash(str(exc), 'warning')
+    ctx.update(resultado=resultado, titulo_resultado=titulo,
+               slug_sel=slug, dims_sel=dims, metricas_sel=metricas_sel)
     return render_template('hora/gerencial/relatorios.html', **ctx)
+
+
+@hora_bp.route('/gerencial/relatorios/export')
+@require_hora_perm('gerencial_relatorios', 'ver')
+def gerencial_relatorios_export():
+    from app.hora.services.gerencial import relatorio_service as rs
+    filtros = parse_filtros(request.args, lojas_permitidas=lojas_permitidas_ids())
+    slug = request.args.get('relatorio')
+    dims = request.args.getlist('dim')
+    metricas_sel = request.args.getlist('metrica')
+    formato = 'csv' if request.args.get('formato') == 'csv' else 'xlsx'
+    try:
+        if slug:
+            resultado = rs.gerar_predefinido(slug, filtros)
+            nome = slug
+        else:
+            resultado = rs.gerar_builder(dims, metricas_sel, filtros)
+            nome = 'personalizado'
+    except ValueError as exc:
+        flash(str(exc), 'warning')
+        return redirect(url_for('hora.gerencial_relatorios', **request.args))
+    conteudo = rs.exportar(resultado, formato)
+    mime = ('text/csv' if formato == 'csv'
+            else 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    return Response(conteudo, mimetype=mime, headers={
+        'Content-Disposition': f'attachment; filename="hora_{nome}.{formato}"',
+    })

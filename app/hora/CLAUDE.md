@@ -43,6 +43,7 @@ atualizado: 2026-06-27
 - [26. Reserva cancelada devolve a moto ao estoque (fix DEVOLVIDA) — 2026-06-26](#26-reserva-cancelada-devolve-a-moto-ao-estoque-fix-devolvida--2026-06-26)
 - [27. Correções de campo do Pedido de Venda + aprovação gerencial (frete/brinde) — 2026-06-26](#27-correções-de-campo-do-pedido-de-venda--aprovação-gerencial-fretebrinde--2026-06-26)
 - [28. Perfis de permissão das Lojas HORA (template de permissões) — 2026-06-27](#28-perfis-de-permissão-das-lojas-hora-template-de-permissões--2026-06-27)
+- [29. Seção Gerencial — dashboards + relatórios — 2026-06-27](#29-seção-gerencial--dashboards--relatórios--2026-06-27)
 - [Onboarding Tours (2026-05-08)](#onboarding-tours-2026-05-08)
 - [Referências](#referências)
 
@@ -1162,6 +1163,63 @@ silencioso — perfis HORA só são GERIDOS no módulo Lojas, nunca o catálogo 
 **Testes**: `tests/hora/test_perfil.py` (12 — slug/dedup/guardas/esqueleto/aplicar/redefinir)
 + `tests/hora/test_perfil_rotas.py` (6 — render accordion/partial/perfil_form/auth + fluxo).
 Suíte HORA: 249 verdes.
+
+---
+
+## 29. Seção Gerencial — dashboards + relatórios — 2026-06-27
+
+Nova seção **Gerencial** (dropdown próprio no menu do módulo) com 4 dashboards
+inteligentes para gerência/diretoria + área de geração/construção de relatórios.
+Fonte exclusiva `hora_*`. Spec: `docs/superpowers/specs/2026-06-27-hora-gerencial-design.md`.
+Plano: `docs/superpowers/plans/2026-06-27-hora-gerencial.md`. **Sem migration.**
+
+**Permissões (2 slugs novos em `MODULOS_HORA` + `MODULOS_SO_VER`, sem DDL):**
+- `gerencial` — gateia os 4 dashboards (Executivo / Comercial / Estoque / Suprimento).
+- `gerencial_relatorios` — gateia a área de relatórios (galeria + builder + export),
+  **separada** (decisão do dono): pode-se dar dashboards a um gerente sem dar os relatórios.
+- **Escopo por loja** aplicado no WHERE de cada query via `lojas_permitidas_ids()` →
+  `gerencial/filtros.lojas_efetivas` (não só no menu). Bucket `loja_id IS NULL`
+  (CNPJ desconhecido) só aparece para acesso irrestrito (admin / sem loja).
+
+**Arquitetura** (`app/hora/services/gerencial/` + `routes/gerencial.py` +
+`templates/hora/gerencial/`):
+- `filtros.py` — `parse_filtros` (período/loja/granularidade) + `lojas_efetivas`
+  (interseção filtro×escopo, PURO/testável).
+- `kpi_service.py` — Executivo: receita (FATURADO), **margem por chassi**
+  (`hora_venda_item.preco_final − hora_nf_entrada_item.preco_real`, `desconsiderado=FALSE`,
+  − brindes) com **transparência de cobertura** (% das motos com custo real), ticket,
+  unidades, ranking de lojas, tendência (`date_trunc`), desconto.
+- `comercial_kpi_service.py` — conversão de funil (só `origem_criacao='MANUAL'`),
+  vendas/comissão por vendedor (reusa `comissao_service.calcular_comissao_venda` por
+  `faturado_em`, com escopo), desconto médio, mix de pagamento, aprovações pendentes
+  por tipo, peças, brindes.
+- `estoque_kpi_service.py` — estado atual via **window function**
+  `ROW_NUMBER() OVER (PARTITION BY chassi ORDER BY id DESC)` (MAX(id), consistente com
+  `estoque_service`); estoque loja>modelo>cor, aging (faixas 0-30/31-60/61-90/90+),
+  giro (RECEBIDA→venda), reservadas/em-trânsito.
+- `suprimento_kpi_service.py` — lead time NF→recebimento, taxa de divergência
+  (`substituida=FALSE`), custo médio de entrada (`desconsiderado=FALSE`), desvio real
+  vs esperado (via pedido).
+- `relatorio_catalogo.py` + `relatorio_service.py` — **builder curado**: whitelist de
+  dimensões (loja/vendedor/modelo/período) × métricas (unidades/receita/desconto/margem);
+  `validar_selecao` rejeita slug fora do catálogo (**nunca SQL livre**); galeria de
+  relatórios pré-definidos + export xlsx (openpyxl)/csv. Rotas `gerencial_relatorios`
+  + `gerencial_relatorios_export`.
+
+**Guard-rails:** anti-N+1 (toda métrica = agregação SQL única); `status='FATURADO'`
+para receita; `MAX(id)` (não `MAX(timestamp)`) para estado; filtros silenciosos
+explicitados; isolamento de módulo (zero cross-join). **Comissão e margem refletem a
+config/cobertura ATUAL** — rotulado nas telas.
+
+**UI:** Bootstrap 5.3 + tokens `--bs-*` (light/dark automático) + Chart.js CDN; CSS
+`app/static/css/modules/_hora_gerencial.css` (prefixo `ger-*`). Telas via skill
+`frontend-design`.
+
+**Testes:** `tests/hora/test_gerencial_{permissao,filtros,kpis,estoque,relatorios}.py`
+(~50, incluindo gate de permissão separada e smokes autenticados via fixture
+`client_admin`). Suíte HORA verde. **Não-objetivos v2:** PDF executivo, agendamento de
+envio, builder multi-dimensão/SQL livre, frete de compra/custo de peça na margem,
+comissão persistida.
 
 ---
 

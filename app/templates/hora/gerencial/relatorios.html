@@ -1,8 +1,126 @@
 {% extends "hora/gerencial/base_gerencial.html" %}
-{# Stub F1.3 — conteúdo real nas fases seguintes. #}
+{# Relatórios: galeria pré-definida + builder curado (dimensão + métricas) + export.
+   Toolbar padrão suprimido — o form do builder contém os filtros. #}
+
+{% block gerencial_toolbar %}{% endblock %}
+
 {% block gerencial_content %}
-  <div class="ger-empty">
-    <i class="fas fa-hammer fa-2x mb-2 d-block"></i>
-    Dashboard <strong>{{ aba_ativa }}</strong> em construção.
+
+{# ---------- Galeria de relatórios pré-definidos ---------- #}
+<h5 class="mb-2"><i class="fas fa-th-large me-1"></i> Relatórios prontos</h5>
+<div class="row g-3 mb-4">
+  {% for r in predefinidos %}
+    <div class="col-xl-3 col-md-6">
+      <a class="ger-report-card" href="{{ url_for('hora.gerencial_relatorios', relatorio=r.slug, data_ini=filtros.data_ini, data_fim=filtros.data_fim, loja_id=filtros.loja_id or '', granularidade=filtros.granularidade) }}">
+        <div class="d-flex align-items-center gap-2 mb-1">
+          <i class="fas {{ r.icone }} ger-report-ico"></i>
+          <strong>{{ r.label }}</strong>
+        </div>
+        <div class="ger-panel-hint">{{ r.descricao }}</div>
+      </a>
+    </div>
+  {% endfor %}
+</div>
+
+{# ---------- Construtor de relatórios ---------- #}
+<div class="ger-panel mb-4">
+  <div class="ger-panel-head">
+    <span class="ger-panel-title"><i class="fas fa-sliders-h"></i> Construtor de relatórios</span>
+    <span class="ger-panel-hint">escolha 1 dimensão + métricas</span>
   </div>
+  <form method="get" class="row g-3 align-items-end">
+    <div class="col-md-3">
+      <label class="form-label small text-muted mb-1">De</label>
+      <input type="date" name="data_ini" class="form-control form-control-sm" value="{{ filtros.data_ini }}">
+    </div>
+    <div class="col-md-3">
+      <label class="form-label small text-muted mb-1">Até</label>
+      <input type="date" name="data_fim" class="form-control form-control-sm" value="{{ filtros.data_fim }}">
+    </div>
+    {% if lojas_disponiveis and lojas_disponiveis|length > 1 %}
+    <div class="col-md-3">
+      <label class="form-label small text-muted mb-1">Loja</label>
+      <select name="loja_id" class="form-select form-select-sm">
+        <option value="">Todas</option>
+        {% for l in lojas_disponiveis %}
+          <option value="{{ l.id }}" {% if filtros.loja_id == l.id %}selected{% endif %}>{{ l.rotulo_display }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    {% endif %}
+    <div class="col-md-3">
+      <label class="form-label small text-muted mb-1">Agrupar período por</label>
+      <select name="granularidade" class="form-select form-select-sm">
+        {% for g, lbl in [('dia','Dia'), ('semana','Semana'), ('mes','Mês')] %}
+          <option value="{{ g }}" {% if filtros.granularidade == g %}selected{% endif %}>{{ lbl }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="col-md-6">
+      <label class="form-label small text-muted mb-1">Dimensão (agrupar por)</label>
+      <div class="d-flex flex-wrap gap-3">
+        {% for slug, d in dimensoes.items() %}
+          <div class="form-check">
+            <input class="form-check-input" type="radio" name="dim" id="dim-{{ slug }}" value="{{ slug }}"
+                   {% if slug in dims_sel or (not dims_sel and loop.first) %}checked{% endif %}>
+            <label class="form-check-label" for="dim-{{ slug }}">{{ d.label }}</label>
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+    <div class="col-md-6">
+      <label class="form-label small text-muted mb-1">Métricas</label>
+      <div class="d-flex flex-wrap gap-3">
+        {% for slug, m in metricas.items() %}
+          <div class="form-check">
+            <input class="form-check-input" type="checkbox" name="metrica" id="met-{{ slug }}" value="{{ slug }}"
+                   {% if slug in metricas_sel or (not metricas_sel and slug in ['unidades','receita']) %}checked{% endif %}>
+            <label class="form-check-label" for="met-{{ slug }}">{{ m.label }}</label>
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div class="col-12">
+      <button type="submit" class="btn btn-primary btn-sm"><i class="fas fa-play me-1"></i> Gerar relatório</button>
+    </div>
+  </form>
+</div>
+
+{# ---------- Resultado ---------- #}
+{% if resultado %}
+<div class="ger-panel">
+  <div class="ger-panel-head">
+    <span class="ger-panel-title"><i class="fas fa-table"></i> {{ titulo_resultado }}</span>
+    <span class="d-flex gap-2">
+      <a class="btn btn-outline-primary btn-sm" href="{{ url_for('hora.gerencial_relatorios_export') }}?{{ request.query_string.decode() }}&formato=xlsx"><i class="fas fa-file-excel me-1"></i> Excel</a>
+      <a class="btn btn-outline-primary btn-sm" href="{{ url_for('hora.gerencial_relatorios_export') }}?{{ request.query_string.decode() }}&formato=csv"><i class="fas fa-file-csv me-1"></i> CSV</a>
+    </span>
+  </div>
+  {% if resultado.linhas %}
+    <div class="table-responsive">
+      <table class="ger-table">
+        <thead><tr>
+          {% for c in resultado.colunas %}<th class="{% if c.tipo != 'texto' %}ger-num{% endif %}">{{ c.label }}</th>{% endfor %}
+        </tr></thead>
+        <tbody>
+          {% for linha in resultado.linhas %}
+            <tr>
+              {% for c in resultado.colunas %}
+                <td class="{% if c.tipo != 'texto' %}ger-num{% endif %}">
+                  {% if c.tipo == 'moeda' %}R$ {{ linha[c.key] | valor_br }}
+                  {% else %}{{ linha[c.key] }}{% endif %}
+                </td>
+              {% endfor %}
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <div class="ger-empty"><i class="fas fa-inbox fa-2x mb-2 d-block"></i>Sem dados para o filtro selecionado.</div>
+  {% endif %}
+</div>
+{% endif %}
 {% endblock %}
