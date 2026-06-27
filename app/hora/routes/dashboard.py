@@ -22,7 +22,12 @@ from app.hora.routes import hora_bp
 def dashboard():
     """Dashboard do módulo HORA."""
     total_motos = db.session.query(func.count(HoraMoto.numero_chassi)).scalar() or 0
-    total_lojas = db.session.query(func.count(HoraLoja.id)).filter_by(ativa=True).scalar() or 0
+    # Conta lojas de VENDA (exclui a matriz/emitente fiscal — is_matriz=True).
+    total_lojas = (
+        db.session.query(func.count(HoraLoja.id))
+        .filter_by(ativa=True, is_matriz=False)
+        .scalar() or 0
+    )
     total_pedidos_abertos = (
         db.session.query(func.count(HoraPedido.id))
         .filter(HoraPedido.status.in_(['ABERTO', 'PARCIALMENTE_FATURADO']))

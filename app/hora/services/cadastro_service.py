@@ -111,8 +111,9 @@ def buscar_loja_por_cnpj(cnpj: str) -> Optional[HoraLoja]:
     return HoraLoja.query.filter_by(cnpj=cnpj_norm).first()
 
 
-# CNPJ que NAO deve aparecer na listagem de lojas para criar pedido de venda
-# (regra de negocio fornecida pelo usuario em 2026-05-06).
+# CNPJ da matriz (emitente fiscal) — mantido por retrocompat/referencia. A
+# exclusao do SELECT de venda agora usa o flag canonico `HoraLoja.is_matriz`
+# (migration hora_57), nao mais o CNPJ hardcoded (2026-06-27).
 CNPJ_EXCLUIDO_PEDIDO_VENDA = '62634044000120'
 
 
@@ -125,15 +126,14 @@ def listar_lojas_para_pedido_venda(
     - Apenas ativas (`ativa=True`).
     - Respeita escopo do operador (`lojas_permitidas_ids`):
       None = sem restricao (admin/global); [] = nenhuma loja; [...] = filtra.
-    - Exclui CNPJ `CNPJ_EXCLUIDO_PEDIDO_VENDA`.
+    - Exclui a matriz (`is_matriz=True`) — emitente fiscal, nunca loja de venda.
     - Ordenadas por nome.
     """
     if lojas_permitidas_ids is not None and not lojas_permitidas_ids:
         return []
-    query = HoraLoja.query.filter_by(ativa=True)
+    query = HoraLoja.query.filter_by(ativa=True, is_matriz=False)
     if lojas_permitidas_ids is not None:
         query = query.filter(HoraLoja.id.in_(lojas_permitidas_ids))
-    query = query.filter(HoraLoja.cnpj != CNPJ_EXCLUIDO_PEDIDO_VENDA)
     return query.order_by(HoraLoja.nome).all()
 
 

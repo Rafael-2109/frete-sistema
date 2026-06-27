@@ -693,7 +693,7 @@ def importar_nfe_da_api(
          'pulada_cancelada', 'pulada_status_invalido'}.
     """
     from app.hora.services.venda_service import (
-        _registrar_divergencia, _resolver_loja_por_cnpj,
+        _registrar_divergencia, _resolver_loja_real_venda,
     )
 
     r = api.get(f'/nfes/{nfe_id_tagplus}')
@@ -823,7 +823,10 @@ def importar_nfe_da_api(
     # ------ emitente -> loja ------
     emit = nfe.get('emitente') or {}
     cnpj_emitente = _so_digitos(emit.get('cnpj'))[:20] or None
-    loja_emitente = _resolver_loja_por_cnpj(cnpj_emitente) if cnpj_emitente else None
+    # loja REAL da venda — NUNCA a matriz (emitente fiscal != loja de venda). Sem
+    # departamento no create (vem do enriquecimento de pedido depois); resolve por
+    # CNPJ NAO-matriz, senao None (loja a definir -> de-para/definir_loja_venda).
+    loja_venda = _resolver_loja_real_venda(cnpj_emitente, None)
 
     # ------ datas / numeros ------
     data_emissao = _parse_data_emissao(nfe.get('data_emissao')) or date.today()
@@ -867,7 +870,7 @@ def importar_nfe_da_api(
             n_parcelas=n_parcelas,
             interv_parcelas=interv_parcelas,
             cnpj_emitente=cnpj_emitente,
-            loja_emitente_id=loja_emitente.id if loja_emitente else None,
+            loja_emitente_id=loja_venda.id if loja_venda else None,
         )
         inf_contribuinte_nf = nfe.get('inf_contribuinte') or ''
         observacoes_nf = nfe.get('observacoes') or ''
@@ -881,7 +884,7 @@ def importar_nfe_da_api(
             _criar_itens_da_api(
                 venda=existente,
                 itens_api=itens_raw,
-                loja_emitente_id=loja_emitente.id if loja_emitente else None,
+                loja_emitente_id=loja_venda.id if loja_venda else None,
                 data_venda=data_emissao,
                 operador=operador,
                 inf_contribuinte_nf=inf_contribuinte_nf,
@@ -899,7 +902,7 @@ def importar_nfe_da_api(
                 inf_contribuinte_nf=inf_contribuinte_nf,
                 observacoes_nf=observacoes_nf,
                 operador=operador,
-                loja_emitente_id=loja_emitente.id if loja_emitente else None,
+                loja_emitente_id=loja_venda.id if loja_venda else None,
             )
 
         # Sincroniza HoraTagPlusNfeEmissao (botao 'Baixar DANFE' funcionar).
@@ -934,7 +937,7 @@ def importar_nfe_da_api(
 
     # ------ Cria HoraVenda (nova) ------
     venda = HoraVenda(
-        loja_id=loja_emitente.id if loja_emitente else None,
+        loja_id=loja_venda.id if loja_venda else None,
         cpf_cliente=cpf[:14],
         nome_cliente=nome_cliente,
         telefone_cliente=(telefone or '')[:20] or None,
@@ -967,12 +970,13 @@ def importar_nfe_da_api(
     db.session.add(venda)
     db.session.flush()
 
-    if not loja_emitente:
+    if loja_venda is None:
         _registrar_divergencia(
             venda_id=venda.id, tipo='CNPJ_DESCONHECIDO',
             detalhe=(
-                f'CNPJ emitente {cnpj_emitente!r} nao bate com nenhuma HoraLoja. '
-                f'Defina manualmente na tela de detalhe.'
+                f'Loja de venda nao definida: emitente {cnpj_emitente!r} e a matriz '
+                f'(ou CNPJ nao cadastrado). Defina a loja fisica (de-para de '
+                f'departamento ou tela de detalhe).'
             ),
             valor_conferido=cnpj_emitente,
         )
@@ -984,7 +988,7 @@ def importar_nfe_da_api(
     _criar_itens_da_api(
         venda=venda,
         itens_api=itens_raw,
-        loja_emitente_id=loja_emitente.id if loja_emitente else None,
+        loja_emitente_id=loja_venda.id if loja_venda else None,
         data_venda=data_emissao,
         operador=operador,
         inf_contribuinte_nf=inf_contribuinte_nf,

@@ -19,7 +19,8 @@ from app.hora.services.gerencial.filtros import parse_filtros
 def _lojas_disponiveis(lojas_permitidas):
     """Lojas ativas visíveis ao usuário (todas se irrestrito; só as do escopo)."""
     from app.hora.models import HoraLoja
-    q = HoraLoja.query.filter_by(ativa=True)
+    # Exclui a matriz (is_matriz=True): emitente fiscal, nunca loja de venda.
+    q = HoraLoja.query.filter_by(ativa=True, is_matriz=False)
     if lojas_permitidas is not None:
         if not lojas_permitidas:
             return []

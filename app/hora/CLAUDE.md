@@ -46,8 +46,8 @@ atualizado: 2026-06-27
 - [29. Seção Gerencial — dashboards + relatórios — 2026-06-27](#29-seção-gerencial--dashboards--relatórios--2026-06-27)
 - [30. Brinde — gerenciar em INCOMPLETO, exibir no preview e CORTESIA na NF — 2026-06-27](#30-brinde--gerenciar-em-incompleto-exibir-no-preview-e-cortesia-na-nf--2026-06-27)
 - [31. Recebimento — dropdown de modelos canônicos + anti-duplicação de grafia de cor — 2026-06-27](#31-recebimento--dropdown-de-modelos-canônicos--anti-duplicação-de-grafia-de-cor--2026-06-27)
-- [32. Loja real da venda vs matriz (emitente fiscal) — integridade — 2026-06-27](#32-loja-real-da-venda-vs-matriz-emitente-fiscal--integridade--2026-06-27)
 - [32. Recebimento — autocomplete de NF por permissão + guarda anti-duplicado — 2026-06-27](#32-recebimento--autocomplete-de-nf-por-permissão-de-recebimento--guarda-anti-duplicado--2026-06-27)
+- [33. Loja real da venda vs matriz (emitente fiscal) — integridade — 2026-06-27](#33-loja-real-da-venda-vs-matriz-emitente-fiscal--integridade--2026-06-27)
 - [Onboarding Tours (2026-05-08)](#onboarding-tours-2026-05-08)
 - [Referências](#referências)
 
@@ -371,7 +371,7 @@ Segue o plano aprovado em 2026-04-18:
      → `hora_tagplus_departamento_map` ou, se só a matriz resolver, grava `NULL` +
      divergência `CNPJ_DESCONHECIDO` (loja a definir). A matriz é marcada
      `HoraLoja.is_matriz=True` (migration `hora_57`) e EXCLUÍDA das superfícies de venda.
-     A UF do emitente para o CFOP vem da matriz, não de `venda.loja`. Detalhes: **seção 32**.
+     A UF do emitente para o CFOP vem da matriz, não de `venda.loja`. Detalhes: **seção 33**.
 
 8. **Emissão NFe via TagPlus** (2026-04-26). **Concluído** — fluxo (c) do desenho:
    - 5 tabelas em `app/hora/models/tagplus.py` (migration `hora_18_tagplus.{py,sql}`):
@@ -1381,7 +1381,7 @@ trava nenhuma**; a guarda `ESTADOS_JA_FORA` do automático trata o caso oposto, 
 
 ---
 
-## 32. Loja real da venda vs matriz (emitente fiscal) — integridade — 2026-06-27
+## 33. Loja real da venda vs matriz (emitente fiscal) — integridade — 2026-06-27
 
 **Problema (provado em produção):** toda NFe sai com o CNPJ da matriz (§7), e o resolver
 `_resolver_loja_por_cnpj` resolvia a loja da venda pelo CNPJ do emitente → caía SEMPRE na

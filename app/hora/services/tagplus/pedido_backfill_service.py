@@ -22,8 +22,10 @@ Campos enriquecidos (so se vazios — preserva edicoes manuais):
   - HoraVenda.tagplus_pedido_payload (sempre — auditoria + reprocessamento)
   - HoraTagPlusNfeEmissao.tagplus_pedido_id (espelho — apenas universo 1)
 
-NAO mexe em HoraVenda.loja_id — fica para job/UI de-para posterior usando
-hora_tagplus_departamento_map.
+HoraVenda.loja_id: quando o departamento ja resolve uma loja real em
+hora_tagplus_departamento_map, a loja e aplicada AQUI via definir_loja_venda
+(corrige loja_id + re-emite VENDIDA). Se o departamento ainda nao estiver mapeado,
+loja_id fica como estava (matriz/NULL) para o botao/script de de-para posterior.
 
 Idempotente: rodar 2x nao causa dano (campos ja preenchidos sao pulados;
 tagplus_pedido_payload e sobrescrito com payload mais recente).
@@ -172,6 +174,16 @@ def _aplicar_pedido_em_venda(
             alteracoes.append(f'departamento={departamento_raw!r}')
         if departamento_norm:
             _upsert_departamento_map(departamento_raw, departamento_norm)
+            # Gap fechado (2026-06-27): se o departamento ja mapeia uma loja real,
+            # aplica a loja AGORA (corrige loja_id=matriz/NULL + re-emite VENDIDA
+            # com a loja correta) em vez de deixar so para o botao/script de de-para.
+            from app.hora.services.venda_service import (
+                _resolver_loja_por_departamento, definir_loja_venda,
+            )
+            loja_real = _resolver_loja_por_departamento(departamento_raw)
+            if loja_real is not None and venda.loja_id != loja_real.id:
+                definir_loja_venda(venda.id, loja_real.id, usuario=operador)
+                alteracoes.append(f'loja_id={loja_real.id} (de-para departamento)')
 
     if not alteracoes:
         return {

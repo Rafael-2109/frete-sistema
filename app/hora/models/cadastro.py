@@ -53,6 +53,16 @@ class HoraLoja(db.Model):
     whatsapp_grupo_jid = db.Column(db.String(60), nullable=True)
 
     ativa = db.Column(db.Boolean, nullable=False, default=True)
+
+    # MATRIZ (emitente fiscal) vs loja de VENDA. Toda NFe da HORA sai com o CNPJ
+    # da matriz (invariante fiscal — CLAUDE.md secao 7), mas a matriz NAO vende.
+    # `is_matriz=True` marca essa pseudo-loja: ela permanece `ativa` (e usada como
+    # default de NF de ENTRADA e como alvo do resolver de divergencia), mas e
+    # EXCLUIDA das superficies de VENDA (rankings, escopos, dropdowns, contagens)
+    # e NUNCA pode ser gravada como loja_id de uma venda. Migration hora_57.
+    is_matriz = db.Column(
+        db.Boolean, nullable=False, default=False, server_default='false',
+    )
     receitaws_consultado_em = db.Column(db.DateTime, nullable=True)
 
     # Coordenadas para renderizar em mapa (cache de geocoding)

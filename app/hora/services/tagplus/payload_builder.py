@@ -923,8 +923,20 @@ class PayloadBuilder:
         return '6.403'
 
     def _uf_emitente(self, venda: 'HoraVenda') -> str | None:
-        if venda.loja and getattr(venda.loja, 'uf', None):
-            return (venda.loja.uf or '').upper() or None
+        # O emitente fiscal e SEMPRE a matriz (invariante CLAUDE.md secao 7), entao
+        # a UF do emitente (base do CFOP intra/inter-estadual) vem da matriz —
+        # NUNCA da loja de venda. `venda.loja` pode ser None (loja a definir, apos
+        # saneamento de loja_id) ou de outra UF: usa-la mudaria o CFOP/quebraria.
+        from app.hora.models import HoraLoja
+        matriz = (
+            HoraLoja.query
+            .filter_by(is_matriz=True)
+            .filter(HoraLoja.uf.isnot(None))
+            .order_by(HoraLoja.id)
+            .first()
+        )
+        if matriz and matriz.uf:
+            return matriz.uf.upper()
         return None
 
     # --------------------------------------------------------------

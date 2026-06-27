@@ -287,6 +287,51 @@ def _resolver_loja_por_cnpj(cnpj_emitente: Optional[str]) -> Optional[HoraLoja]:
     return HoraLoja.query.filter_by(cnpj=digitos, ativa=True).first()
 
 
+def _resolver_loja_por_departamento(
+    tagplus_departamento: Optional[str],
+) -> Optional[HoraLoja]:
+    """Loja fisica via de-para `hora_tagplus_departamento_map` (tagplus_departamento).
+
+    Retorna None se nao ha departamento, se nao existe mapa, ou se o mapa ainda
+    nao tem `loja_id` atribuido (departamento observado mas pendente de mapeamento
+    na tela /hora/tagplus/departamento-map).
+    """
+    if not tagplus_departamento:
+        return None
+    from app.hora.models import HoraTagPlusDepartamentoMap
+    from app.hora.services.tagplus.pedido_service import normalizar_departamento
+    norm = normalizar_departamento(tagplus_departamento)
+    if not norm:
+        return None
+    mapa = HoraTagPlusDepartamentoMap.query.filter_by(departamento_norm=norm).first()
+    if mapa is None or mapa.loja_id is None:
+        return None
+    return HoraLoja.query.get(mapa.loja_id)
+
+
+def _resolver_loja_real_venda(
+    cnpj_emitente: Optional[str],
+    tagplus_departamento: Optional[str] = None,
+) -> Optional[HoraLoja]:
+    """Loja FISICA da venda — NUNCA a matriz (emitente fiscal != loja de venda).
+
+    Toda NFe da HORA sai com o CNPJ da matriz (invariante CLAUDE.md secao 7), entao
+    o CNPJ emitente NAO pode ser usado para atribuir a loja de venda. Ordem:
+      1. de-para de departamento (loja fisica real do pedido TagPlus);
+      2. CNPJ emitente SE a loja resolvida NAO for a matriz (futuro: emissao por
+         CNPJ proprio da filial);
+      3. None — loja a definir (caller registra divergencia; correcao posterior via
+         `definir_loja_venda` ou re-aplicacao do de-para de departamento).
+    """
+    loja = _resolver_loja_por_departamento(tagplus_departamento)
+    if loja is not None:
+        return loja
+    loja = _resolver_loja_por_cnpj(cnpj_emitente)
+    if loja is not None and not loja.is_matriz:
+        return loja
+    return None
+
+
 def _lock_chassi_e_validar_disponivel(chassi: str) -> tuple[HoraMoto, HoraMotoEvento]:
     """SELECT ... FOR UPDATE no HoraMoto + valida disponibilidade.
 
@@ -2467,7 +2512,9 @@ def importar_nf_saida_pdf(
         raise ValueError('NF de saida sem nome do destinatario.')
 
     cnpj_emitente = nf_data.get('cnpj_emitente')
-    loja_emitente = _resolver_loja_por_cnpj(cnpj_emitente)
+    # DANFE nao carrega departamento -> loja real so via CNPJ NAO-matriz; senao
+    # NULL (loja a definir). NUNCA atribuir a venda a matriz (emitente fiscal).
+    loja_venda = _resolver_loja_real_venda(cnpj_emitente, None)
 
     s3_key = _salvar_pdf_storage(
         pdf_bytes=pdf_bytes, chave_44=chave_44,
@@ -2477,7 +2524,7 @@ def importar_nf_saida_pdf(
     data_emissao = nf_data['data_emissao']
     valor_total_nf = Decimal(str(nf_data['valor_total']))
     venda = HoraVenda(
-        loja_id=loja_emitente.id if loja_emitente else None,
+        loja_id=loja_venda.id if loja_venda else None,
         cpf_cliente=cpf_cliente[:14],
         nome_cliente=nome_cliente[:200],
         data_venda=data_emissao,
@@ -2498,12 +2545,12 @@ def importar_nf_saida_pdf(
     db.session.add(venda)
     db.session.flush()
 
-    if not loja_emitente:
+    if loja_venda is None:
         _registrar_divergencia(
             venda_id=venda.id, tipo='CNPJ_DESCONHECIDO',
             detalhe=(
-                'CNPJ emitente da NF nao bate com nenhuma HoraLoja ativa. '
-                'Defina a loja manualmente na tela de detalhe.'
+                'Loja de venda nao definida: emitente da NF e a matriz (ou CNPJ '
+                'nao cadastrado). Defina a loja fisica na tela de detalhe.'
             ),
             valor_conferido=cnpj_emitente,
         )
@@ -2511,7 +2558,7 @@ def importar_nf_saida_pdf(
     _criar_itens_e_eventos(
         venda=venda,
         itens_data=itens_data,
-        loja_emitente_id=loja_emitente.id if loja_emitente else None,
+        loja_emitente_id=loja_venda.id if loja_venda else None,
         data_venda=data_emissao,
         operador=criado_por,
     )

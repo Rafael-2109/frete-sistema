@@ -32,7 +32,8 @@ from app.utils.timezone import agora_utc_naive
 
 def _lojas_ativas_permitidas():
     permitidas = lojas_permitidas_ids()
-    q = HoraLoja.query.filter_by(ativa=True)
+    # Exclui a matriz (is_matriz=True): emitente fiscal, nunca loja de venda.
+    q = HoraLoja.query.filter_by(ativa=True, is_matriz=False)
     if permitidas is not None:
         if not permitidas:
             return []
@@ -267,7 +268,7 @@ def vendas_lista():
         )
 
     # Lojas para filtro
-    lojas_q = HoraLoja.query.filter_by(ativa=True)
+    lojas_q = HoraLoja.query.filter_by(ativa=True, is_matriz=False)
     if permitidas is not None:
         if not permitidas:
             lojas_lista = []
