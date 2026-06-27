@@ -69,8 +69,14 @@ def autocomplete_pedido():
 
 
 @hora_bp.route('/autocomplete/nf-entrada')
-@require_hora_perm('nfs', 'ver')
+@require_hora_perm_any(('nfs', 'ver'), ('recebimentos', 'criar'))
 def autocomplete_nf_entrada():
+    # Permissao via OR: `nfs/ver` (operador de NFs) OU `recebimentos/criar`
+    # (operador de recebimento montando /hora/recebimentos/novo). Antes exigia
+    # SO `nfs/ver`: o operador que so tinha `recebimentos/*` (ex.: vendedor da
+    # loja) recebia 302 e o autocomplete de NF falhava EM SILENCIO, impedindo
+    # selecionar a NF para iniciar o recebimento. Mesmo padrao/causa-raiz do
+    # autocomplete de peca/brinde acima. Corrigido 2026-06-27.
     # `sem_recebimento=1` (usado em /hora/recebimentos/novo): retorna apenas
     # NFs que ainda nao tem recebimento iniciado. Default `False` mantem
     # comportamento legado para outros callers (listagem de recebimentos etc.).
