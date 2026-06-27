@@ -20,7 +20,7 @@ from flask import jsonify, request
 
 from app.hora.decorators import require_hora_perm, require_hora_perm_any
 from app.hora.routes import hora_bp
-from app.hora.services import autocomplete_service
+from app.hora.services import autocomplete_service, cor_service
 from app.hora.services.auth_helper import lojas_permitidas_ids
 
 
@@ -164,3 +164,28 @@ def autocomplete_peca():
         apenas_ativas=apenas_ativas,
         limit=_limit_arg(),
     ))
+
+
+@hora_bp.route('/autocomplete/cor')
+@require_hora_perm_any(('recebimentos', 'ver'), ('recebimentos', 'criar'),
+                       ('recebimentos', 'editar'))
+def autocomplete_cor():
+    """Cores ja usadas na base + checagem anti-duplicata para o wizard.
+
+    Cor nao tem catalogo (texto livre — decisao 2026-04-23). Este endpoint
+    serve o passo C do recebimento: lista as grafias existentes (reaproveitar
+    em vez de redigitar) e, dado `nome`, sinaliza se ja existe identica (`exato`)
+    ou grafias semelhantes (`similares`, ex.: BRANCA/BRANCO/BRANCCA) para um
+    aviso NAO-bloqueante antes de criar. Permissao via OR (mesmo padrao do
+    autocomplete de NF/peca) para nao falhar em silencio a quem so tem
+    `recebimentos/editar`.
+    """
+    nome = (request.args.get('nome') or request.args.get('q') or '').strip()
+    existentes = cor_service.listar_cores_existentes()
+    norm = cor_service.normalizar_cor(nome)
+    return jsonify({
+        'ok': True,
+        'exato': bool(norm and norm in existentes),
+        'similares': cor_service.sugerir_similares(nome, existentes) if nome else [],
+        'cores': existentes,
+    })

@@ -25,6 +25,8 @@ from app.hora.models import (
 )
 from app.hora.routes import hora_bp
 from app.hora.services import (
+    cadastro_service,
+    cor_service,
     devolucao_service,
     recebimento_service,
     recebimento_audit,
@@ -186,17 +188,25 @@ def recebimentos_wizard(recebimento_id: int):
         return redirect(url_for('hora.recebimentos_detalhe', recebimento_id=rec.id))
 
     ordem_atual = pendente.ordem if pendente else recebimento_service.proxima_ordem(rec.id)
-    modelos = HoraModelo.query.order_by(HoraModelo.nome_modelo).all()
+    # Apenas modelos canonicos e ativos no dropdown de conferencia (filtra
+    # aliases absorvidos por merge — merged_em_id IS NULL — e inativos). Mesma
+    # listagem usada no cadastro/vendas. Evita poluicao com nao-canonicos (§12).
+    modelos = cadastro_service.listar_modelos()
 
-    # Cores sugeridas agregadas (NF + pedido)
-    cores = set()
+    # Cores: as DESTE recebimento (NF + pedido) viram sugestoes do topo; o resto
+    # do dropdown traz TODAS as grafias ja usadas na base, para o conferente
+    # reaproveitar em vez de redigitar e criar uma variante (BRANCA/BRANCO/...).
+    cores_nf = set()
     for i in rec.nf.itens:
-        if i.cor_texto_original:
-            cores.add(i.cor_texto_original.strip().upper())
+        n = cor_service.normalizar_cor(i.cor_texto_original)
+        if n:
+            cores_nf.add(n)
     if rec.nf.pedido_id and rec.nf.pedido:
         for pi in rec.nf.pedido.itens:
-            if pi.cor:
-                cores.add(pi.cor.strip().upper())
+            n = cor_service.normalizar_cor(pi.cor)
+            if n:
+                cores_nf.add(n)
+    cores_existentes = [c for c in cor_service.listar_cores_existentes() if c not in cores_nf]
 
     return render_template(
         'hora/recebimento_wizard.html',
@@ -205,7 +215,8 @@ def recebimentos_wizard(recebimento_id: int):
         confirmadas=confirmadas,
         pendente=pendente,
         modelos=modelos,
-        cores_sugeridas=sorted(c for c in cores if c),
+        cores_sugeridas=sorted(cores_nf),
+        cores_existentes=cores_existentes,
     )
 
 

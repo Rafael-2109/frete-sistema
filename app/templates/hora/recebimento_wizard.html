@@ -124,9 +124,20 @@
   <div class="mb-3">
     <select id="select-cor" class="form-select form-select-lg">
       <option value="">— Selecione uma cor —</option>
-      {% for c in cores_sugeridas %}
-        <option value="{{ c }}">{{ c }}</option>
-      {% endfor %}
+      {% if cores_sugeridas %}
+      <optgroup label="Cores desta NF / pedido">
+        {% for c in cores_sugeridas %}
+          <option value="{{ c }}">{{ c }}</option>
+        {% endfor %}
+      </optgroup>
+      {% endif %}
+      {% if cores_existentes %}
+      <optgroup label="Outras cores já cadastradas">
+        {% for c in cores_existentes %}
+          <option value="{{ c }}">{{ c }}</option>
+        {% endfor %}
+      </optgroup>
+      {% endif %}
     </select>
   </div>
 
@@ -156,9 +167,11 @@
         <input type="text" id="input-nova-cor" class="form-control"
                autocomplete="off" maxlength="50" placeholder="Ex.: VERMELHO METALICO">
         <div class="form-text">
-          Cores ficam disponiveis apenas nesta conferencia. Para padronizar
-          entre recebimentos, vincule a cor no pedido ou na NF.
+          Antes de criar, verificamos se já existe uma cor parecida para evitar
+          grafias duplicadas (BRANCA / BRANCO / BRANCCA). Reaproveite a existente
+          sempre que for a mesma cor.
         </div>
+        <div id="aviso-cor-similar" class="alert alert-warning small mt-2 mb-0 d-none"></div>
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
@@ -314,6 +327,7 @@
   const URL_VALIDAR = "{{ url_for('hora.recebimentos_validar_chassi', recebimento_id=recebimento.id) }}";
   const URL_CONFERIR = "{{ url_for('hora.recebimentos_conferir', recebimento_id=recebimento.id) }}";
   const URL_CRIAR_MODELO = "{{ url_for('hora.modelos_criar_rapido') }}";
+  const URL_AUTOCOMPLETE_COR = "{{ url_for('hora.autocomplete_cor') }}";
   const URL_WIZARD = "{{ url_for('hora.recebimentos_wizard', recebimento_id=recebimento.id) }}";
 
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, ch => ({
@@ -553,22 +567,66 @@
   }
   const inputNovaCor = document.getElementById('input-nova-cor');
   const btnSalvarCor = document.getElementById('btn-salvar-cor');
+  const avisoCorSimilar = document.getElementById('aviso-cor-similar');
+
+  function limparAvisoCor() {
+    avisoCorSimilar.classList.add('d-none');
+    avisoCorSimilar.innerHTML = '';
+  }
+
+  // Aviso NAO-bloqueante: ja existe(m) grafia(s) parecida(s). O operador
+  // reaproveita a existente OU cria assim mesmo (pares legitimos como
+  // PRETA/PRATA tambem caem aqui de proposito — quem decide e ele).
+  function mostrarAvisoCorSimilar(nome, similares) {
+    const usar = similares.map(c =>
+      `<button type="button" class="btn btn-sm btn-outline-success me-1 mb-1 js-usar-cor" data-cor="${esc(c)}">Usar ${esc(c)}</button>`
+    ).join('');
+    avisoCorSimilar.innerHTML =
+      `Já existe cor parecida: <strong>${similares.map(esc).join(', ')}</strong>.` +
+      `<div class="mt-2">${usar}` +
+      `<button type="button" class="btn btn-sm btn-outline-danger mb-1 js-criar-cor-assim">Criar "${esc(nome)}" mesmo assim</button></div>`;
+    avisoCorSimilar.classList.remove('d-none');
+    avisoCorSimilar.querySelectorAll('.js-usar-cor').forEach(b =>
+      b.addEventListener('click', () => {
+        adicionarOuSelecionarCor(b.dataset.cor);
+        limparAvisoCor();
+        getModalNovaCor().hide();
+      })
+    );
+    avisoCorSimilar.querySelector('.js-criar-cor-assim').addEventListener('click', () => {
+      adicionarOuSelecionarCor(nome);
+      limparAvisoCor();
+      getModalNovaCor().hide();
+    });
+  }
 
   document.getElementById('btn-nova-cor').addEventListener('click', () => {
     inputNovaCor.value = '';
+    limparAvisoCor();
     getModalNovaCor().show();
     setTimeout(() => inputNovaCor.focus(), 300);
   });
   inputNovaCor.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') { e.preventDefault(); btnSalvarCor.click(); }
   });
-  btnSalvarCor.addEventListener('click', () => {
+  // Cor nao e persistida em tabela propria (decisao 2026-04-23): vive como
+  // texto em hora_recebimento_conferencia.cor_conferida. Antes de adicionar a
+  // option local, consultamos as grafias ja existentes na base para evitar
+  // duplicar a mesma cor com escrita diferente (BRANCA/BRANCO/BRANCCA/BRANA).
+  btnSalvarCor.addEventListener('click', async () => {
     const nome = (inputNovaCor.value || '').trim().toUpperCase();
     if (!nome) return;
-    // Cor nao e persistida em tabela propria (decisao 2026-04-23): vive
-    // apenas como texto em hora_recebimento_conferencia.cor_conferida +
-    // hora_nf_entrada_item.cor_texto_original. Aqui so adicionamos a option
-    // local para uso nesta sessao.
+    limparAvisoCor();
+    let data = null;
+    try {
+      const resp = await fetch(URL_AUTOCOMPLETE_COR + '?nome=' + encodeURIComponent(nome));
+      if (resp.ok) data = await resp.json();
+    } catch (e) { /* offline: cai no caminho otimista abaixo */ }
+    if (data && !data.exato && (data.similares || []).length) {
+      mostrarAvisoCorSimilar(nome, data.similares);
+      return;  // espera a decisao do operador
+    }
+    // Exato (ja existe) ou sem similares: adicionarOuSelecionarCor ja dedupe.
     adicionarOuSelecionarCor(nome);
     getModalNovaCor().hide();
   });

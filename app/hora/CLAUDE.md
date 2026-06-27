@@ -45,6 +45,7 @@ atualizado: 2026-06-27
 - [28. Perfis de permissão das Lojas HORA (template de permissões) — 2026-06-27](#28-perfis-de-permissão-das-lojas-hora-template-de-permissões--2026-06-27)
 - [29. Seção Gerencial — dashboards + relatórios — 2026-06-27](#29-seção-gerencial--dashboards--relatórios--2026-06-27)
 - [30. Brinde — gerenciar em INCOMPLETO, exibir no preview e CORTESIA na NF — 2026-06-27](#30-brinde--gerenciar-em-incompleto-exibir-no-preview-e-cortesia-na-nf--2026-06-27)
+- [31. Recebimento — dropdown de modelos canônicos + anti-duplicação de grafia de cor — 2026-06-27](#31-recebimento--dropdown-de-modelos-canônicos--anti-duplicação-de-grafia-de-cor--2026-06-27)
 - [Onboarding Tours (2026-05-08)](#onboarding-tours-2026-05-08)
 - [Referências](#referências)
 
@@ -856,7 +857,7 @@ Permite marcar um item de NF de entrada (`HoraNfEntradaItem`) como **desconsider
 
 ## 22. Notificação WhatsApp de NF emitida / pedido confirmado (TagPlus) — 2026-06-06
 
-Réplica do fluxo N8N: notifica um **grupo único de vendas** no WhatsApp **e a DM do vendedor** quando uma NFe da loja é aprovada e quando um pedido de venda é confirmado. NF leva o **PDF da DANFE anexado**. Spec: `docs/superpowers/specs/2026-06-06-hora-tagplus-notificacao-whatsapp-design.md`. Plano: `docs/superpowers/plans/2026-06-06-hora-tagplus-notificacao-whatsapp.md`.
+Notifica o **grupo WhatsApp da loja** (regra **1 grupo por loja** desde 2026-06-27 — antes: grupo único global + DM do vendedor) quando uma NFe da loja é aprovada e quando um pedido de venda é confirmado. NF leva o **PDF da DANFE anexado**. **Sem DM do vendedor** (decisão do dono 2026-06-27: só o grupo). Spec: `docs/superpowers/specs/2026-06-06-hora-tagplus-notificacao-whatsapp-design.md`. Plano: `docs/superpowers/plans/2026-06-06-hora-tagplus-notificacao-whatsapp.md`.
 
 > **Origem**: a 1ª tentativa foi feita por engano no TagPlus da Nacom (`app/integracoes/tagplus/`) e **revertida**; a implementação correta vive toda em `app/hora/` (fronteira do módulo).
 
@@ -864,15 +865,24 @@ Réplica do fluxo N8N: notifica um **grupo único de vendas** no WhatsApp **e a 
 - **NF aprovada**: `webhook_handler.WebhookHandler.processar` chama `_disparar_notificacao_nfe_safe(emissao.id)` **após o commit**, só para `nfe_aprovada`.
 - **Pedido confirmado**: `venda_service.confirmar_venda` chama `enfileirar_notificacao('PEDIDO', venda.id)` **após o commit** do status `CONFIRMADO`.
 
-**Processamento**: job `processar_notificacao(registro_id)` na fila RQ **`hora_nfe`** (já em PROD). Service `app/hora/services/tagplus/notificacao_whatsapp.py`: `enfileirar_notificacao(tipo, ref_id)` (dedupe por `UNIQUE(tipo, ref_id)` + enqueue), `processar_notificacao` (busca venda/NFe → formata → resolve vendedor → baixa DANFE via `ApiClient` → envia grupo + DM), `reenfileirar`, `_resolver_vendedor` (casa `HoraVenda.vendedor` com `usuarios.vendedor_vinculado`/`nome` + `whatsapp_autorizado` + `telefone`), `_enviar_para_destinos` (idempotente por destino: `enviado_grupo`/`enviado_vendedor`).
+**Processamento**: job `processar_notificacao(registro_id)` na fila RQ **`hora_nfe`** (já em PROD). Service `app/hora/services/tagplus/notificacao_whatsapp.py`: `enfileirar_notificacao(tipo, ref_id)` (dedupe por `UNIQUE(tipo, ref_id)` + enqueue), `processar_notificacao` (busca venda/NFe → formata → **resolve o grupo pela loja** `venda.loja.whatsapp_grupo_jid` → baixa DANFE via `ApiClient` → **envia só ao grupo**), `reenfileirar`, `_enviar_para_destinos` (idempotente via `enviado_grupo`; **loja sem grupo → status ERRO**, não envia). `_resolver_vendedor` mantida **reservada** (DM desativado 2026-06-27, reativável); coluna `enviado_vendedor` vestigial (sempre NULL).
 
-**Envio**: reusa `app/utils/whatsapp_notify.send_whatsapp(target, text, anexo_b64=, anexo_filename=)` (gateway OpenClaw, anexo via `buffer` base64).
+**Envio (transport-aware desde 2026-06-27)**: passa pelo dispatcher
+`app/utils/whatsapp_dispatch.send_whatsapp_unificado(target, text, anexo_b64=, anexo_filename=)`,
+que roteia por **`HORA_WHATSAPP_TRANSPORT`** (`openclaw` default | `evolution`) — env **própria do
+HORA**, independente do `WHATSAPP_TRANSPORT` do canal do agente (migra o envio do HORA sem tocar no
+agente). Caminhos: `openclaw` → `whatsapp_notify.send_whatsapp` (gateway local loopback:18789, anexo
+via `buffer` base64, **depende do PC do operador ligado**); `evolution` →
+`whatsapp_evolution.send_whatsapp_evolution` (texto) + `send_media_evolution` (anexo via
+`POST /message/sendMedia`, `mediatype=document`, base64), Evolution API 24/7 num Web Service Render
+(`evoapicloud/evolution-api`), **não depende do PC**. O mesmo dispatcher serve o recibo ao cliente
+(`recibo_service.enviar_recibo_whatsapp`).
 
 **Model/migration**: `HoraTagPlusNotificacaoWhatsapp` (`app/hora/models/tagplus.py`) + `scripts/migrations/hora_45_tagplus_notificacao_whatsapp.{py,sql}`.
 
 **Tela**: `/hora/tagplus/notificacoes` (`require_hora_perm('tagplus','ver')`; reenviar = `'editar'`) — `app/templates/hora/tagplus/notificacoes.html` (extends `hora/base.html`). Menu: grupo "Faturamento (TagPlus)" no `_sidebar.html`.
 
-**Env**: `HORA_TAGPLUS_NOTIFY_GROUP_JID` (JID `...@g.us`, obrigatório) + `HORA_TAGPLUS_NOTIFY_ENABLED` (kill switch) + reuso `OPENCLAW_GATEWAY_*`. Vendedor sem cadastro/autorização → fallback só-grupo (status `ENVIADO`, `enviado_vendedor=NULL`).
+**Env**: `HORA_TAGPLUS_NOTIFY_GROUP_JID` (JID `...@g.us`, obrigatório) + `HORA_TAGPLUS_NOTIFY_ENABLED` (kill switch) + **`HORA_WHATSAPP_TRANSPORT`** (`openclaw`|`evolution`). OpenClaw: `OPENCLAW_GATEWAY_*`. Evolution: `EVOLUTION_API_URL`/`EVOLUTION_API_KEY`/`EVOLUTION_INSTANCE`. Vendedor sem cadastro/autorização → fallback só-grupo (status `ENVIADO`, `enviado_vendedor=NULL`).
 
 **Testes**: `tests/hora/test_notificacao_whatsapp_model.py` (2), `test_notificacao_whatsapp_service.py` (4), `test_notificacao_gatilhos.py` (4), `test_notificacao_tela.py` (4), `tests/test_whatsapp_notify_anexo.py` (2). Gotcha: a tabela acumula resíduo de teste local se o teardown abortar — `DELETE FROM hora_tagplus_notificacao_whatsapp` antes de re-rodar.
 
@@ -1280,6 +1290,50 @@ de brinde sem `peca_id` válido sem feedback — defesa em profundidade fica p/ 
 `test_brinde_criacao_post.py` (1: POST end-to-end grava brinde),
 `test_brinde_autocomplete_perm.py` (2: vendedor acessa autocomplete de peça; sem perm
 segue bloqueado). Suíte HORA: 326 verdes.
+
+---
+
+## 31. Recebimento — dropdown de modelos canônicos + anti-duplicação de grafia de cor — 2026-06-27
+
+Dois ajustes de qualidade de dados no **wizard de recebimento**
+(`/hora/recebimentos/<id>/wizard`). Sem migration.
+
+**A — Dropdown de modelo só com canônicos/ativos.** `recebimentos_wizard`
+(`routes/recebimentos.py`) carregava `HoraModelo.query.order_by(...).all()` — **sem**
+filtrar `merged_em_id IS NULL` nem `ativo`, então o `<select id="select-modelo">` da
+conferência listava também os modelos absorvidos por merge (§12) e os inativos. Trocado
+por `cadastro_service.listar_modelos()` (a listagem canônica do módulo, mesma de
+cadastro/vendas).
+
+**B — Anti-duplicação de grafia de cor (prevenção leve, sem catálogo).** Cor segue
+**texto livre** (decisão 2026-04-23 mantida — sem tabela própria). O passo C antes só
+oferecia as cores **da NF/pedido daquele recebimento** e o modal "nova cor" criava
+**texto 100% livre**, sem comparar com nada → nascem BRANCA/BRANCO/BRANCCA/BRANA, que
+viram `HoraMoto.cor` definitiva (`recebimento_service.py:1756`) e ainda geram
+divergência `COR_DIFERENTE` falsa.
+- Novo `app/hora/services/cor_service.py` (lógica pura, sem dependência nova):
+  `normalizar_cor` (upper + colapsa espaços, preserva acento), `listar_cores_existentes()`
+  (DISTINCT global de `hora_moto.cor` + `hora_nf_entrada_item.cor_texto_original` +
+  `hora_pedido_item.cor`, normalizado/dedup/ordenado) e `sugerir_similares(nome)`
+  (`difflib.SequenceMatcher` ≥ 0.8 sobre chave sem acento/pontuação; exclui idênticos).
+- Endpoint `GET /hora/autocomplete/cor` (`routes/autocomplete.py`,
+  `require_hora_perm_any` recebimentos ver/criar/editar) → `{exato, similares, cores}`.
+- `recebimentos_wizard` passa `cores_sugeridas` (desta NF/pedido, no topo) **+**
+  `cores_existentes` (todas as grafias da base) — o `<select>` ganha 2 `<optgroup>`, então
+  o conferente reaproveita em vez de redigitar.
+- Modal "nova cor" (`recebimento_wizard.html`): ao salvar, consulta o endpoint; se houver
+  similar e não for idêntica, mostra aviso **NÃO-bloqueante** ("Usar BRANCA" / "Criar
+  'BRANCCA' mesmo assim") — preserva pares legítimos (PRETA/PRATA) deixando a decisão ao
+  operador.
+
+**Outro vetor NÃO coberto (reportado):** o **pedido de compra** (`pedido_detalhe.html`
+inputs livres de cor → `pedidos.py:1250,1314`) é a outra porta de entrada manual de cor,
+sem proteção. `cor_service` é reutilizável lá (mesma mecânica) — fica como follow-up.
+
+**Testes:** `tests/hora/test_cor_service.py` (13 — normalização, similaridade incl.
+erro de digitação/gênero/acento/idêntico/par-próximo, `listar_cores_existentes` com DB e
+contrato do endpoint). Validação: 23 verdes (cor + recebimento), `node --check` no JS
+renderizado, Jinja compila.
 
 ---
 
