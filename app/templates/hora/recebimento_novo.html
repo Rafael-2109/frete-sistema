@@ -19,13 +19,9 @@
   </div>
 
   <div class="d-flex gap-2">
-    <button id="btn-iniciar-conferencia" type="submit" class="btn btn-primary">Iniciar recebimento</button>
+    <button id="btn-iniciar-recebimento" type="submit" class="btn btn-primary">Iniciar recebimento</button>
     <a href="{{ url_for('hora.recebimentos_lista') }}" class="btn btn-secondary">Cancelar</a>
   </div>
 </form>
 
-{% endblock %}
-
-{% block onboarding_tours %}
-<script src="{{ url_for('static', filename='onboarding/tours/hora/recebimento_nf.js') }}"></script>
 {% endblock %}

@@ -911,7 +911,8 @@ def exportar_nfs_excel(
     import pandas as pd
     from app.hora.models import HoraPedidoItem
 
-    query = HoraNfEntrada.query
+    # Exclui NFs provisorias (sem efeito fiscal — hoje sem itens) do export fiscal.
+    query = HoraNfEntrada.query.filter(HoraNfEntrada.tipo == 'REAL')
     if data_inicio:
         query = query.filter(HoraNfEntrada.data_emissao >= data_inicio)
     if data_fim:

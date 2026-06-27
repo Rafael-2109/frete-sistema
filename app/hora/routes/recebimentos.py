@@ -115,12 +115,6 @@ def recebimentos_novo():
         except (ValueError, KeyError) as exc:
             flash(f'Erro: {exc}', 'danger')
 
-    # NFs pesquisadas via autocomplete on-demand
-    # (endpoint /hora/autocomplete/nf-entrada?sem_recebimento=1, ver
-    # `app/hora/services/autocomplete_service.nfs_entrada`). O filtro
-    # `~HoraNfEntrada.recebimentos.any()` (evitar abrir 2 conferencias
-    # para a mesma NF) e aplicado no service via o parametro
-    # `sem_recebimento=True`, garantindo paridade com o select legado.
     permitidas = lojas_permitidas_ids()
     lojas_q = HoraLoja.query.filter_by(ativa=True)
     if permitidas is not None:

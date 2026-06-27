@@ -195,3 +195,80 @@ def test_assert_item_moto_consistente_nao_falha_apos_anexar_nf_real(
         assert False, 'Esperado ValueError ao tentar desconsiderar moto provisória'
     except ValueError:
         pass  # comportamento correto — moto está bloqueada
+
+
+# ---------------------------------------------------------------------------
+# Fix-wave: slot do snapshot deve continuar disponível para a MESMA conferência
+# (re-derivação) e para a conferência que SUBSTITUI uma inativa (reconferência).
+# ---------------------------------------------------------------------------
+
+def test_reconferir_mesmo_chassi_nao_vira_chassi_extra(
+        db, loja_factory, pedido_compra_factory, modelo_moto):
+    """Re-submeter/ajustar o MESMO chassi (is_new=False) re-roda
+    _redefinir_divergencias para a mesma conferência. O slot do snapshot, já
+    consumido por ela, deve continuar disponível — caso contrário a 2ª derivação
+    marca CHASSI_EXTRA falso e vira COM_DIVERGENCIA.
+    """
+    chassi_ped = _chassi('SAME')
+    pedido = pedido_compra_factory([chassi_ped])
+    loja_id = pedido.loja_destino_id
+    rec = recebimento_service.criar_recebimento_sem_nf(loja_id=loja_id, operador='tester')
+    recebimento_service.definir_qtd_declarada(recebimento_id=rec.id, qtd=1, usuario='tester')
+
+    # 1a conferência: casa o slot do snapshot (limpo, sem CHASSI_EXTRA)
+    recebimento_service.registrar_conferencia_cega(
+        recebimento_id=rec.id, numero_chassi=chassi_ped,
+        modelo_id_conferido=modelo_moto.id, cor_conferida='PRETA',
+        avaria_fisica=False, qr_code_lido=True, operador='tester')
+    _db.session.expire_all()
+    conf = next(c for c in rec.conferencias
+                if c.numero_chassi == chassi_ped and not c.substituida)
+    assert not any(d.tipo == 'CHASSI_EXTRA' for d in conf.divergencias)
+
+    # 2a conferência do MESMO chassi (is_new=False) — toggla avaria/cor
+    recebimento_service.registrar_conferencia_cega(
+        recebimento_id=rec.id, numero_chassi=chassi_ped,
+        modelo_id_conferido=modelo_moto.id, cor_conferida='AZUL',
+        avaria_fisica=True, qr_code_lido=True, operador='tester')
+    _db.session.expire_all()
+    conf = next(c for c in rec.conferencias
+                if c.numero_chassi == chassi_ped and not c.substituida)
+    assert not any(d.tipo == 'CHASSI_EXTRA' for d in conf.divergencias), \
+        'Re-derivar o mesmo chassi não pode virar CHASSI_EXTRA'
+
+
+def test_reconferencia_nao_vira_chassi_extra(
+        db, loja_factory, pedido_compra_factory, modelo_moto):
+    """Reconferência marca a conf antiga como substituida=True e cria uma NOVA
+    conf ativa para o mesmo chassi. O slot do snapshot, consumido pela conf
+    inativa, deve voltar a ficar disponível para a nova — senão vira CHASSI_EXTRA.
+    """
+    chassi_ped = _chassi('RECO')
+    pedido = pedido_compra_factory([chassi_ped])
+    loja_id = pedido.loja_destino_id
+    rec = recebimento_service.criar_recebimento_sem_nf(loja_id=loja_id, operador='tester')
+    recebimento_service.definir_qtd_declarada(recebimento_id=rec.id, qtd=1, usuario='tester')
+
+    conf = recebimento_service.registrar_conferencia_cega(
+        recebimento_id=rec.id, numero_chassi=chassi_ped,
+        modelo_id_conferido=modelo_moto.id, cor_conferida='PRETA',
+        avaria_fisica=False, qr_code_lido=True, operador='tester')
+    conf_id = conf.id
+    recebimento_service.finalizar_recebimento(recebimento_id=rec.id, operador='tester')
+
+    # Reconferência: substitui a conf antiga e enfileira uma nova pendente
+    recebimento_service.reiniciar_conferencia_para_chassis(
+        recebimento_id=rec.id, conferencia_ids=[conf_id], operador='tester')
+
+    # Re-confere o MESMO chassi -> atualiza a nova conf ativa
+    recebimento_service.registrar_conferencia_cega(
+        recebimento_id=rec.id, numero_chassi=chassi_ped,
+        modelo_id_conferido=modelo_moto.id, cor_conferida='PRETA',
+        avaria_fisica=False, qr_code_lido=True, operador='tester')
+    _db.session.expire_all()
+
+    conf_ativa = next(c for c in rec.conferencias
+                      if c.numero_chassi == chassi_ped and not c.substituida)
+    assert conf_ativa.id != conf_id
+    assert not any(d.tipo == 'CHASSI_EXTRA' for d in conf_ativa.divergencias), \
+        'Reconferência do mesmo chassi não pode virar CHASSI_EXTRA'

@@ -15,7 +15,7 @@ from __future__ import annotations
 import uuid
 from typing import List, Optional, Set
 
-from sqlalchemy import func as sa_func
+from sqlalchemy import func as sa_func, or_
 from sqlalchemy.orm import selectinload
 
 from app import db
@@ -1982,15 +1982,39 @@ def _garantir_moto(chassi: str, item_nf: Optional[HoraNfEntradaItem], operador: 
     )
 
 
-def _gabarito_provisorio(rec, chassi: str, modelo_id_conf: Optional[int]):
+def _gabarito_provisorio(rec, chassi: str, modelo_id_conf: Optional[int],
+                         conf_id: Optional[int] = None):
     """Casa um chassi conferido contra o snapshot (hora_recebimento_esperado).
 
     Retorna o HoraRecebimentoEsperado consumido ou None. NAO toca HoraPedidoItem
     (D6 — quem atribui chassi ao pedido e a NF real).
+
+    Um slot esta DISPONIVEL para a conferencia `conf_id` quando:
+      - esta livre (`consumido_por_conferencia_id` IS NULL), OU
+      - ja foi consumido por ESTA conferencia (re-derivacao do mesmo chassi
+        com is_new=False — ela ja e dona do slot), OU
+      - foi consumido por uma conferencia INATIVA (substituida=True) — a
+        reconferencia cria uma nova conf ativa que precisa reivindicar o slot
+        da antiga.
+    Sem isso, a 2a derivacao do mesmo chassi (ou a reconferencia) nao acharia
+    slot livre e marcaria CHASSI_EXTRA falso, virando COM_DIVERGENCIA.
     """
-    from app.hora.models import HoraRecebimentoEsperado
+    from app.hora.models import HoraRecebimentoEsperado, HoraRecebimentoConferencia
     chassi = (chassi or '').strip().upper()
-    base = HoraRecebimentoEsperado.query.filter_by(recebimento_id=rec.id, consumido_por_conferencia_id=None)
+
+    # Slots de conferencias inativas (substituidas) voltam a ficar disponiveis.
+    subst_ids = [
+        c.id for c in HoraRecebimentoConferencia.query
+        .filter_by(recebimento_id=rec.id, substituida=True).all()
+    ]
+    disponivel = [HoraRecebimentoEsperado.consumido_por_conferencia_id.is_(None)]
+    if conf_id is not None:
+        disponivel.append(HoraRecebimentoEsperado.consumido_por_conferencia_id == conf_id)
+    if subst_ids:
+        disponivel.append(HoraRecebimentoEsperado.consumido_por_conferencia_id.in_(subst_ids))
+
+    base = HoraRecebimentoEsperado.query.filter(
+        HoraRecebimentoEsperado.recebimento_id == rec.id, or_(*disponivel))
     exato = base.filter(HoraRecebimentoEsperado.chassi_esperado == chassi).first()
     if exato:
         return exato
@@ -2044,7 +2068,7 @@ def _redefinir_divergencias(conf: HoraRecebimentoConferencia, rec: HoraRecebimen
         for d in list(conf.divergencias):
             db.session.delete(d)
         db.session.flush()
-        slot = _gabarito_provisorio(rec, conf.numero_chassi, conf.modelo_id_conferido)
+        slot = _gabarito_provisorio(rec, conf.numero_chassi, conf.modelo_id_conferido, conf.id)
         snapshot = None
         if slot is None:
             db.session.add(HoraConferenciaDivergencia(
