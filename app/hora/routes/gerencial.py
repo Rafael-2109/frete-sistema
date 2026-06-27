@@ -68,7 +68,15 @@ def gerencial_executivo():
 @hora_bp.route('/gerencial/comercial')
 @require_hora_perm('gerencial', 'ver')
 def gerencial_comercial():
+    from app.hora.services.gerencial import comercial_kpi_service as cks
     ctx = _contexto_base('comercial')
+    kpis = cks.kpis_comercial(ctx['filtros'])
+    # enriquece o ranking de vendedores com a comissão calculada
+    comissao_por_vend = {c['vendedor']: c['total'] for c in kpis['comissao']}
+    for v in kpis['vendedores']:
+        v['comissao'] = comissao_por_vend.get(v['vendedor'], 0)
+    ctx['kpis'] = kpis
+    ctx['chart_mix'] = _serie_xy(kpis['mix_pagamento'], 'forma', 'valor')
     return render_template('hora/gerencial/comercial.html', **ctx)
 
 

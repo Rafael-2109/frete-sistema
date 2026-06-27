@@ -197,6 +197,19 @@
   .ger-report-card:hover { border-color: var(--bs-primary); transform: translateY(-2px); }
   .ger-report-card .ger-report-ico { color: var(--bs-primary); font-size: 1.3rem; }
 
+  /* Funil de conversão (barras proporcionais) */
+  .ger-funnel-row { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem; }
+  .ger-funnel-label { min-width: 110px; font-size: 0.85rem; color: var(--bs-secondary-color); }
+  .ger-funnel-track {
+    flex-grow: 1; height: 22px; overflow: hidden;
+    background: var(--bs-tertiary-bg); border-radius: 0.35rem;
+  }
+  .ger-funnel-bar { height: 100%; }
+  .ger-funnel-bar.s-cotacao { background: var(--bs-secondary); }
+  .ger-funnel-bar.s-confirmado { background: var(--bs-info); }
+  .ger-funnel-bar.s-faturado { background: var(--bs-success); }
+  .ger-funnel-val { min-width: 32px; text-align: right; font-weight: 600; }
+
   /* Estado vazio */
   .ger-empty { text-align: center; color: var(--bs-secondary-color); padding: 2rem 1rem; }
 

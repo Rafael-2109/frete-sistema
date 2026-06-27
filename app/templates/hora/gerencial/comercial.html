@@ -1,8 +1,128 @@
 {% extends "hora/gerencial/base_gerencial.html" %}
-{# Stub F1.3 — conteúdo real nas fases seguintes. #}
+{# Comercial & Vendedores (gerência): funil, vendedores, comissão, descontos,
+   mix de pagamento, aprovações pendentes, peças e brindes. #}
+
+{% set ap_total = kpis.aprovacoes.DESCONTO + kpis.aprovacoes.FRETE + kpis.aprovacoes.BRINDE %}
+
 {% block gerencial_content %}
-  <div class="ger-empty">
-    <i class="fas fa-hammer fa-2x mb-2 d-block"></i>
-    Dashboard <strong>{{ aba_ativa }}</strong> em construção.
+<div class="row g-3 mb-3">
+  <div class="col-xl-3 col-md-6">
+    <div class="ger-kpi accent-info">
+      <div class="ger-kpi-label"><i class="fas fa-filter"></i> Conversão</div>
+      <div class="ger-kpi-valor">{{ kpis.funil.taxa | valor_br(1) }}%</div>
+      <div class="ger-kpi-sub">{{ kpis.funil.faturado }} faturado(s) de {{ kpis.funil.cotacao + kpis.funil.confirmado + kpis.funil.faturado }} no funil (manual)</div>
+    </div>
   </div>
+  <div class="col-xl-3 col-md-6">
+    <div class="ger-kpi {% if ap_total > 0 %}accent-danger{% else %}accent-success{% endif %}">
+      <div class="ger-kpi-label"><i class="fas fa-stamp"></i> Aprovações pendentes</div>
+      <div class="ger-kpi-valor">{{ ap_total }}</div>
+      <div class="ger-kpi-sub">desconto {{ kpis.aprovacoes.DESCONTO }} · frete {{ kpis.aprovacoes.FRETE }} · brinde {{ kpis.aprovacoes.BRINDE }}</div>
+    </div>
+  </div>
+  <div class="col-xl-3 col-md-6">
+    <div class="ger-kpi accent-success">
+      <div class="ger-kpi-label"><i class="fas fa-puzzle-piece"></i> Receita de peças</div>
+      <div class="ger-kpi-valor">R$ {{ kpis.receita_pecas | valor_br }}</div>
+      <div class="ger-kpi-sub">acessórios vendidos no período</div>
+    </div>
+  </div>
+  <div class="col-xl-3 col-md-6">
+    <div class="ger-kpi accent-warning">
+      <div class="ger-kpi-label"><i class="fas fa-gift"></i> Custo de brindes</div>
+      <div class="ger-kpi-valor">R$ {{ kpis.custo_brindes | valor_br }}</div>
+      <div class="ger-kpi-sub">erosão direta da margem</div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-3">
+  <div class="col-lg-7">
+    <div class="ger-panel mb-3">
+      <div class="ger-panel-head">
+        <span class="ger-panel-title"><i class="fas fa-users"></i> Vendedores</span>
+        <span class="ger-panel-hint">comissão reflete a config vigente</span>
+      </div>
+      {% if kpis.vendedores %}
+        <table class="ger-table">
+          <thead><tr><th>Vendedor</th><th class="ger-num">Un.</th><th class="ger-num">Receita</th><th class="ger-num">Comissão</th></tr></thead>
+          <tbody>
+            {% for v in kpis.vendedores %}
+              <tr>
+                <td>{{ v.vendedor }}</td>
+                <td class="ger-num">{{ v.unidades }}</td>
+                <td class="ger-num">R$ {{ v.receita | valor_br }}</td>
+                <td class="ger-num">R$ {{ v.comissao | valor_br }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      {% else %}
+        <div class="ger-empty"><i class="fas fa-user-slash fa-2x mb-2 d-block"></i>Sem vendas no período.</div>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="col-lg-5">
+    <div class="ger-panel mb-3">
+      <div class="ger-panel-head">
+        <span class="ger-panel-title"><i class="fas fa-stream"></i> Funil de conversão</span>
+      </div>
+      {% set fmax = [kpis.funil.cotacao + kpis.funil.confirmado + kpis.funil.faturado, 1] | max %}
+      {% for etapa, valor, cls in [
+          ('Em cotação', kpis.funil.cotacao, 's-cotacao'),
+          ('Confirmados', kpis.funil.confirmado, 's-confirmado'),
+          ('Faturados', kpis.funil.faturado, 's-faturado')] %}
+        <div class="ger-funnel-row">
+          <span class="ger-funnel-label">{{ etapa }}</span>
+          <div class="ger-funnel-track">
+            <div class="ger-funnel-bar {{ cls }}" style="width: {{ (valor / fmax * 100) | round(1) }}%;"></div>
+          </div>
+          <strong class="ger-funnel-val">{{ valor }}</strong>
+        </div>
+      {% endfor %}
+    </div>
+
+    <div class="ger-panel">
+      <div class="ger-panel-head">
+        <span class="ger-panel-title"><i class="fas fa-credit-card"></i> Mix de pagamento</span>
+        <span class="ger-panel-hint">cobertura parcial (fluxo manual)</span>
+      </div>
+      {% if kpis.mix_pagamento %}
+        <div class="ger-chart-wrap" style="height: 240px;"><canvas id="ger-chart-mix"></canvas></div>
+      {% else %}
+        <div class="ger-empty"><i class="fas fa-credit-card fa-2x mb-2 d-block"></i>Sem pagamentos detalhados.</div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block gerencial_js %}
+<script>
+  (function () {
+    if (!window.Chart) return;
+    const t = window.gerTheme();
+    const mix = {{ chart_mix | tojson }};
+    const el = document.getElementById('ger-chart-mix');
+    if (el && mix.labels.length) {
+      const palette = [t.primary, t.info, t.success, t.warning, t.danger, t.secondary];
+      new Chart(el, {
+        type: 'doughnut',
+        data: {
+          labels: mix.labels,
+          datasets: [{
+            data: mix.data,
+            backgroundColor: mix.labels.map((_, i) => palette[i % palette.length]),
+            borderColor: t.grid, borderWidth: 1,
+          }],
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          plugins: { legend: { position: 'bottom', labels: { color: t.muted } } },
+        },
+      });
+    }
+  })();
+</script>
 {% endblock %}

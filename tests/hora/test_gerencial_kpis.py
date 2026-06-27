@@ -230,6 +230,80 @@ def test_escopo_loja_filtra_outra_loja(db, loja_factory, venda_factory):
     assert r['valor'] == Decimal('1000')
 
 
+# ═══════════════════════════ F3 — Comercial & Vendedores ═══════════════════════
+
+def test_conversao_funil_so_manual(db, loja_factory, venda_factory):
+    from app.hora.services.gerencial import comercial_kpi_service as cks
+    loja = loja_factory()
+    venda_factory(loja=loja, status='COTACAO', origem_criacao='MANUAL', itens=[{'preco_final': 1000, 'preco_real': 600}])
+    venda_factory(loja=loja, status='CONFIRMADO', origem_criacao='MANUAL', itens=[{'preco_final': 1000, 'preco_real': 600}])
+    venda_factory(loja=loja, status='FATURADO', origem_criacao='MANUAL', itens=[{'preco_final': 1000, 'preco_real': 600}])
+    venda_factory(loja=loja, status='FATURADO', origem_criacao='DANFE', itens=[{'preco_final': 1000, 'preco_real': 600}])
+    # escopa à loja única do teste (isola de vendas residuais COTACAO/CONFIRMADO no banco local)
+    f = cks.conversao_funil(_filtros(lojas_permitidas=[loja.id]))
+    assert f['cotacao'] == 1 and f['confirmado'] == 1 and f['faturado'] == 1
+    assert f['taxa'] == Decimal('1') / Decimal('3') * 100  # 1 faturado de 3 no funil
+
+
+def test_vendas_por_vendedor_agrupa(db, loja_factory, venda_factory):
+    from app.hora.services.gerencial import comercial_kpi_service as cks
+    loja = loja_factory()
+    venda_factory(loja=loja, vendedor='ANA', itens=[{'preco_final': 1000, 'preco_real': 600}])
+    venda_factory(loja=loja, vendedor='ANA', itens=[{'preco_final': 2000, 'preco_real': 600}])
+    venda_factory(loja=loja, vendedor='BIA', itens=[{'preco_final': 500, 'preco_real': 600}])
+    rows = cks.vendas_por_vendedor(_filtros())
+    ana = next(r for r in rows if r['vendedor'] == 'ANA')
+    assert ana['unidades'] == 2 and ana['receita'] == Decimal('3000')
+    assert rows[0]['vendedor'] == 'ANA'  # ordenado por receita desc
+
+
+def test_comissao_por_vendedor_respeita_escopo(db, loja_factory, venda_factory):
+    from app.hora.services.gerencial import comercial_kpi_service as cks
+    loja_a = loja_factory()
+    loja_b = loja_factory()
+    venda_factory(loja=loja_a, vendedor='ANA', itens=[{'preco_final': 1000, 'preco_real': 600}])
+    venda_factory(loja=loja_b, vendedor='BIA', itens=[{'preco_final': 1000, 'preco_real': 600}])
+    rows = cks.comissao_por_vendedor(_filtros(lojas_permitidas=[loja_a.id]))
+    vendedores = {r['vendedor'] for r in rows}
+    assert 'ANA' in vendedores
+    assert 'BIA' not in vendedores  # escopo de loja oculta vendedor de outra loja
+
+
+def test_aprovacoes_pendentes_por_tipo(db, loja_factory, venda_factory):
+    from app.hora.services.gerencial import comercial_kpi_service as cks
+    from app.hora.models import HoraAprovacaoDesconto
+    loja = loja_factory()
+    v = venda_factory(loja=loja, itens=[{'preco_final': 1000, 'preco_real': 600}])
+    _db.session.add(HoraAprovacaoDesconto(venda_id=v.id, tipo='DESCONTO', status='PENDENTE'))
+    _db.session.add(HoraAprovacaoDesconto(venda_id=v.id, tipo='FRETE', status='PENDENTE'))
+    _db.session.add(HoraAprovacaoDesconto(venda_id=v.id, tipo='DESCONTO', status='APROVADO'))
+    _db.session.flush()
+    # escopa à loja única do teste (isola de aprovações residuais no banco local)
+    ap = cks.aprovacoes_pendentes(_filtros(lojas_permitidas=[loja.id]))
+    assert ap['DESCONTO'] == 1 and ap['FRETE'] == 1 and ap['BRINDE'] == 0
+
+
+def test_mix_pagamento_soma_por_forma(db, loja_factory, venda_factory):
+    from app.hora.services.gerencial import comercial_kpi_service as cks
+    from app.hora.models import HoraVendaPagamento
+    from app.utils.timezone import agora_brasil_naive
+    loja = loja_factory()
+    v = venda_factory(loja=loja, itens=[{'preco_final': 1500, 'preco_real': 600}])
+    _db.session.add(HoraVendaPagamento(venda_id=v.id, forma_pagamento_hora='PIX', valor=Decimal('1000'), criado_em=agora_brasil_naive()))
+    _db.session.add(HoraVendaPagamento(venda_id=v.id, forma_pagamento_hora='CARTAO', valor=Decimal('500'), criado_em=agora_brasil_naive()))
+    _db.session.flush()
+    mix = {m['forma']: m['valor'] for m in cks.mix_pagamento(_filtros())}
+    assert mix['PIX'] == Decimal('1000') and mix['CARTAO'] == Decimal('500')
+
+
+def test_custo_brindes_soma(db, loja_factory, venda_factory, peca_factory):
+    from app.hora.services.gerencial import comercial_kpi_service as cks
+    loja = loja_factory()
+    peca = peca_factory()
+    venda_factory(loja=loja, itens=[{'preco_final': 1000, 'preco_real': 600}], brinde_custo=80, peca=peca)
+    assert cks.custo_brindes(_filtros()) == Decimal('80')
+
+
 # ───────────────────────── Smoke da tela (renderização autenticada) ──────────
 
 def test_executivo_renderiza_autenticado(client_admin, loja_factory, venda_factory):
@@ -242,3 +316,15 @@ def test_executivo_renderiza_autenticado(client_admin, loja_factory, venda_facto
     assert 'Receita realizada' in body
     assert 'ger-chart-receita' in body          # canvas do gráfico de tendência
     assert '1.000,00' in body                   # receita formatada (valor_br)
+
+
+def test_comercial_renderiza_autenticado(client_admin, loja_factory, venda_factory):
+    loja = loja_factory()
+    venda_factory(loja=loja, vendedor='ANA', data_venda=date(2026, 6, 15),
+                  itens=[{'preco_final': 1000, 'preco_real': 600}])
+    r = client_admin.get('/hora/gerencial/comercial?data_ini=2026-06-01&data_fim=2026-06-30')
+    assert r.status_code == 200
+    body = r.get_data(as_text=True)
+    assert 'Conversão' in body
+    assert 'Vendedores' in body
+    assert 'Aprovações pendentes' in body
