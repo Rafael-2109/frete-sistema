@@ -100,6 +100,40 @@ def test_extract_trunca_em_max_chars(tmp_path):
     assert len(out) <= 1000
 
 
+def test_extract_mantem_cauda_descarta_cabeca_quando_trunca(tmp_path):
+    """REGRESSÃO (bug 2026-06-26 cread-flat): quando o texto excede max_chars,
+    o checkpoint deve guardar as CONCLUSÕES (cauda) e descartar a ABERTURA
+    (cabeça). O subagente explora no início e conclui no fim — truncar a cabeça
+    (`findings[:max_chars]`) gravava só 'vou revisar a memória...' e a injeção
+    não cortava a re-descoberta (cache_read FLAT no único caso pós-fix em PROD:
+    motos-assai 37->31 turns, cread 2.055M->2.063M, custo +24%)."""
+    from app.agente.sdk.subagent_checkpoint import extract_findings_from_transcript
+
+    abertura = 'ABERTURA: vou revisar a memória e a documentação do módulo. ' + 'x' * 4000
+    conclusao = 'CONCLUSAO: quant 218550 lote P-15/05 = 17.004 confirmado; dry-run OK.'
+    p = _write_transcript(tmp_path / 'longo.jsonl', [abertura, conclusao])
+    out = extract_findings_from_transcript(p, max_chars=2000)
+
+    assert 'CONCLUSAO' in out          # manteve a cauda (conclusões)
+    assert '218550' in out
+    assert 'ABERTURA' not in out       # descartou a cabeça (abertura/narração)
+    assert len(out) <= 2000
+
+
+def test_extract_ultimo_bloco_gigante_mantem_a_propria_cauda(tmp_path):
+    """Se o ÚLTIMO bloco assistant sozinho já estoura o orçamento, mantém a
+    cauda DELE (não a cabeça) — o fim do bloco final é a conclusão mais recente."""
+    from app.agente.sdk.subagent_checkpoint import extract_findings_from_transcript
+
+    unico = 'INICIO_DO_BLOCO ' + 'y' * 5000 + ' FIM_CONCLUSIVO_DO_BLOCO'
+    p = _write_transcript(tmp_path / 'gigante.jsonl', [unico])
+    out = extract_findings_from_transcript(p, max_chars=1500)
+
+    assert len(out) <= 1500
+    assert 'FIM_CONCLUSIVO_DO_BLOCO' in out   # cauda do bloco
+    assert 'INICIO_DO_BLOCO' not in out       # cabeça do bloco descartada
+
+
 def test_extract_ignora_boot_de_skills_user_messages(tmp_path):
     """REGRESSÃO (bug PROD 2026-06-25): o boot do subagente injeta os SKILL.md
     como mensagens USER (<command-message>... + 'Base directory for this skill').

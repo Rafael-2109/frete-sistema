@@ -176,7 +176,26 @@ def extract_findings_from_transcript(
         return ''
     findings = '\n'.join(parts).strip()
     if max_chars and len(findings) > max_chars:
-        findings = findings[:max_chars]
+        # Mantém a CAUDA, não a cabeça. O subagente EXPLORA no início e
+        # CONCLUI no fim; o que serve ao spawn N+1 (estado validado, achados)
+        # está nas ÚLTIMAS mensagens. Truncar a cabeça (`findings[:max_chars]`,
+        # bug PROD 2026-06-26) gravava só a abertura ("vou revisar a memória e
+        # a documentação...") e o checkpoint NÃO economizava re-descoberta —
+        # cache_read ficou FLAT no único caso pós-fix medido (motos-assai
+        # 37->31 turns, cread 2.055M->2.063M). Acumula blocos INTEIROS do fim
+        # p/ trás até o orçamento; se o último bloco sozinho já estoura, mantém
+        # a cauda dele. Combina com o Componente 4: agente termina com findings
+        # estruturado -> o último bloco JÁ É a conclusão capturada aqui.
+        kept: list[str] = []
+        total = 0
+        for txt in reversed(parts):
+            if kept and total + len(txt) + 1 > max_chars:
+                break
+            kept.append(txt)
+            total += len(txt) + 1
+        findings = '\n'.join(reversed(kept)).strip()
+        if len(findings) > max_chars:
+            findings = findings[-max_chars:]
     return findings
 
 
