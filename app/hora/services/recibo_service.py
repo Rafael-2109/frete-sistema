@@ -127,7 +127,7 @@ def enviar_recibo_email(
     destinatario_override: Optional[str] = None,
 ) -> dict:
     """Envia o PDF do recibo por e-mail ao cliente. Levanta ReciboError em falha."""
-    from app.notificacoes.email_sender import email_sender, EmailConfig
+    from app.hora.services.hora_email import HoraEmailConfig, hora_email_sender
     from app.hora.services.nf_email_service import NF_EMAIL_FROM, NF_EMAIL_FROM_NAME
 
     recibo = HoraRecibo.query.get(recibo_id)
@@ -137,8 +137,8 @@ def enviar_recibo_email(
     destinatario = (destinatario_override or (venda.email_cliente if venda else None) or '').strip()
     if not destinatario:
         raise ReciboError('Venda sem e-mail do cliente — preencha o e-mail antes de enviar.')
-    if not EmailConfig.is_configured():
-        raise ReciboError('Envio de e-mail não configurado no servidor (variáveis EMAIL_*).')
+    if not HoraEmailConfig.is_configured():
+        raise ReciboError('Envio de e-mail não configurado (variáveis HORA_EMAIL_* — falta HORA_EMAIL_PASSWORD).')
 
     pdf = baixar_pdf_bytes(recibo_id)
     filename = f'{recibo.numero_display}.pdf'
@@ -151,7 +151,7 @@ def enviar_recibo_email(
         f'<p style="margin-top:20px; color:#666; font-size:12px;">'
         f'Documento não-fiscal. Motochefe SP.</p></div>'
     )
-    resultado = email_sender.send(
+    resultado = hora_email_sender.send(
         to=destinatario,
         subject=f'Recibo {recibo.numero_display} — Motochefe SP',
         body_html=corpo,

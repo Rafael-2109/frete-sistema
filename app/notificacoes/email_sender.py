@@ -69,8 +69,11 @@ class EmailConfig:
 class EmailSender:
     """Classe principal para envio de emails"""
 
-    def __init__(self):
-        self.config = EmailConfig
+    def __init__(self, config=None):
+        # config injetavel: o HORA passa uma config propria (HoraEmailConfig) p/ usar a
+        # conta financeiro@ Hostinger SEM compartilhar as EMAIL_* genericas do sistema
+        # (usadas por app/notificacoes e app/manufatura). Default = EmailConfig global.
+        self.config = config or EmailConfig
 
     def send(
         self,

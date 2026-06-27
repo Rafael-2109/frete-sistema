@@ -66,7 +66,7 @@ def enviar_nf_por_email(
     from app.hora.models.tagplus import NFE_STATUS_APROVADA
     from app.hora.services import venda_audit
     from app.hora.services.tagplus.notificacao_whatsapp import _baixar_danfe_pdf
-    from app.notificacoes.email_sender import email_sender, EmailConfig
+    from app.hora.services.hora_email import HoraEmailConfig, hora_email_sender
 
     venda = HoraVenda.query.get(venda_id)
     if not venda:
@@ -87,9 +87,9 @@ def enviar_nf_por_email(
     if not emissao or emissao.status != NFE_STATUS_APROVADA or not emissao.tagplus_nfe_id:
         raise NfEmailError('NFe aprovada não encontrada para esta venda.')
 
-    if not EmailConfig.is_configured():
+    if not HoraEmailConfig.is_configured():
         raise NfEmailError(
-            'Envio de e-mail não configurado no servidor (variáveis EMAIL_* ausentes).'
+            'Envio de e-mail não configurado (variáveis HORA_EMAIL_* — falta HORA_EMAIL_PASSWORD).'
         )
 
     pdf = _baixar_danfe_pdf(emissao)
@@ -101,7 +101,7 @@ def enviar_nf_por_email(
     assunto = f'Nota Fiscal {numero_nfe} — Motochefe SP'
     corpo_html = _montar_corpo_html(venda, numero_nfe)
 
-    resultado = email_sender.send(
+    resultado = hora_email_sender.send(
         to=destinatario,
         subject=assunto,
         body_html=corpo_html,
