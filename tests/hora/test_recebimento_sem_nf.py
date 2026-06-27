@@ -25,3 +25,20 @@ def test_nf_provisoria_property(db, loja_factory):
     assert nf.provisoria is True
     nf.tipo = 'REAL'
     assert nf.provisoria is False
+
+
+def test_criar_recebimento_sem_nf_materializa_snapshot(db, loja_factory, pedido_compra_factory):
+    from app.hora.models import HoraPedido
+    chassi_a = _chassi('AAA')
+    pedido = pedido_compra_factory([chassi_a])          # status ABERTO, loja = loja_origem
+    loja_id = pedido.loja_destino_id
+
+    rec = recebimento_service.criar_recebimento_sem_nf(loja_id=loja_id, operador='tester')
+    _db.session.expire_all()
+
+    nf = HoraNfEntrada.query.get(rec.nf_id)
+    assert nf.provisoria is True
+    esperados = HoraRecebimentoEsperado.query.filter_by(recebimento_id=rec.id).all()
+    assert len(esperados) == 1
+    assert esperados[0].chassi_esperado == chassi_a
+    assert esperados[0].pedido_id == pedido.id

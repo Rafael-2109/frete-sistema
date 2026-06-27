@@ -12,6 +12,7 @@ Fluxo:
 """
 from __future__ import annotations
 
+import uuid
 from typing import List, Optional, Set
 
 from sqlalchemy import func as sa_func
@@ -272,6 +273,63 @@ def iniciar_recebimento(
         usuario=operador,
         detalhe=f'NF {nf.numero_nf} -> loja {loja.rotulo_display}',
     )
+    db.session.commit()
+    return rec
+
+
+def criar_recebimento_sem_nf(loja_id: int, operador: Optional[str] = None) -> HoraRecebimento:
+    """Cria um recebimento informando só a loja (sem NF).
+
+    Cria uma NF PROVISORIA (container — mantém nf_id NOT NULL) e materializa o
+    snapshot congelado dos pedidos pendentes da filial em hora_recebimento_esperado.
+    """
+    from app.hora.models import (
+        HoraNfEntrada, HoraLoja, HoraPedido, HoraRecebimentoEsperado,
+    )
+    from app.hora.services.matching_service import STATUS_CANDIDATOS, _chassis_ja_faturados_no_pedido
+
+    loja = HoraLoja.query.get(loja_id)
+    if not loja:
+        raise ValueError(f'Loja {loja_id} nao encontrada')
+
+    nf = HoraNfEntrada(
+        chave_44='PROV' + uuid.uuid4().hex,
+        numero_nf='PROV',
+        cnpj_emitente='',
+        cnpj_destinatario=loja.cnpj,
+        loja_destino_id=loja.id,
+        data_emissao=agora_utc_naive().date(),
+        valor_total=0,
+        tipo='PROVISORIA',
+    )
+    db.session.add(nf)
+    db.session.flush()
+    nf.numero_nf = f'PROV-{nf.id}'
+
+    rec = iniciar_recebimento(nf_id=nf.id, loja_id=loja.id, operador=operador)
+
+    pedidos = (
+        HoraPedido.query
+        .filter(HoraPedido.loja_destino_id == loja.id,
+                HoraPedido.status.in_(STATUS_CANDIDATOS))
+        .all()
+    )
+    for pedido in pedidos:
+        faturados = _chassis_ja_faturados_no_pedido(pedido.id)
+        for item in pedido.itens:
+            if item.is_peca:
+                continue
+            if item.numero_chassi and item.numero_chassi in faturados:
+                continue
+            db.session.add(HoraRecebimentoEsperado(
+                recebimento_id=rec.id,
+                pedido_id=pedido.id,
+                pedido_item_id=item.id,
+                modelo_id=item.modelo_id,
+                cor=item.cor,
+                chassi_esperado=item.numero_chassi,
+                preco_esperado=item.preco_compra_esperado,
+            ))
     db.session.commit()
     return rec
 
