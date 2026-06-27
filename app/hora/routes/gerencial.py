@@ -83,14 +83,26 @@ def gerencial_comercial():
 @hora_bp.route('/gerencial/estoque')
 @require_hora_perm('gerencial', 'ver')
 def gerencial_estoque():
+    from app.hora.services.gerencial import estoque_kpi_service as eks
     ctx = _contexto_base('estoque')
+    kpis = eks.kpis_estoque(ctx['filtros'])
+    ctx['kpis'] = kpis
+    ctx['chart_giro'] = _serie_xy(kpis['giro'], 'modelo', 'dias_medios')
+    ctx['chart_aging'] = {
+        'labels': list(kpis['aging']['faixas'].keys()),
+        'data': list(kpis['aging']['faixas'].values()),
+    }
     return render_template('hora/gerencial/estoque.html', **ctx)
 
 
 @hora_bp.route('/gerencial/suprimento')
 @require_hora_perm('gerencial', 'ver')
 def gerencial_suprimento():
+    from app.hora.services.gerencial import suprimento_kpi_service as sks
     ctx = _contexto_base('suprimento')
+    kpis = sks.kpis_suprimento(ctx['filtros'])
+    ctx['kpis'] = kpis
+    ctx['chart_divergencia'] = _serie_xy(kpis['divergencias'], 'tipo', 'qtd')
     return render_template('hora/gerencial/suprimento.html', **ctx)
 
 

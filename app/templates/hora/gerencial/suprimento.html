@@ -1,8 +1,104 @@
 {% extends "hora/gerencial/base_gerencial.html" %}
-{# Stub F1.3 — conteúdo real nas fases seguintes. #}
+{# Suprimento & Recebimento (gerência): lead time, divergências, custo de entrada. #}
+
+{% block gerencial_toolbar_extra %}{% endblock %}
+
+{% set total_div = kpis.divergencias | sum(attribute='qtd') %}
+
 {% block gerencial_content %}
-  <div class="ger-empty">
-    <i class="fas fa-hammer fa-2x mb-2 d-block"></i>
-    Dashboard <strong>{{ aba_ativa }}</strong> em construção.
+<div class="row g-3 mb-3">
+  <div class="col-md-6">
+    <div class="ger-kpi accent-info">
+      <div class="ger-kpi-label"><i class="fas fa-truck-loading"></i> Lead time NF → recebimento</div>
+      <div class="ger-kpi-valor">
+        {% if kpis.lead_time.dias_medios_nf_recebimento is not none %}
+          {{ kpis.lead_time.dias_medios_nf_recebimento | valor_br(1) }} dias
+        {% else %}—{% endif %}
+      </div>
+      <div class="ger-kpi-sub">média entre emissão e recebimento físico</div>
+    </div>
   </div>
+  <div class="col-md-6">
+    <div class="ger-kpi {% if total_div > 0 %}accent-warning{% else %}accent-success{% endif %}">
+      <div class="ger-kpi-label"><i class="fas fa-exclamation-triangle"></i> Divergências na conferência</div>
+      <div class="ger-kpi-valor">{{ total_div }}</div>
+      <div class="ger-kpi-sub">chassis com divergência no período</div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-3 mb-3">
+  <div class="col-lg-6">
+    <div class="ger-panel">
+      <div class="ger-panel-head">
+        <span class="ger-panel-title"><i class="fas fa-exclamation-triangle"></i> Divergências por tipo</span>
+      </div>
+      {% if kpis.divergencias %}
+        <div class="ger-chart-wrap" style="height: 240px;"><canvas id="ger-chart-divergencia"></canvas></div>
+      {% else %}
+        <div class="ger-empty"><i class="fas fa-check-circle fa-2x mb-2 d-block"></i>Sem divergências no período.</div>
+      {% endif %}
+    </div>
+  </div>
+  <div class="col-lg-6">
+    <div class="ger-panel">
+      <div class="ger-panel-head">
+        <span class="ger-panel-title"><i class="fas fa-tags"></i> Custo médio de entrada</span>
+        <span class="ger-panel-hint">por modelo</span>
+      </div>
+      {% if kpis.custo_medio %}
+        <table class="ger-table">
+          <thead><tr><th>Modelo</th><th class="ger-num">Custo médio</th><th class="ger-num">Un.</th></tr></thead>
+          <tbody>
+            {% for r in kpis.custo_medio %}
+              <tr><td>{{ r.modelo }}</td><td class="ger-num">R$ {{ r.custo_medio | valor_br }}</td><td class="ger-num">{{ r.qtd }}</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      {% else %}
+        <div class="ger-empty"><i class="fas fa-tags fa-2x mb-2 d-block"></i>Sem NFs de entrada no período.</div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+{% if kpis.desvio_custo %}
+<div class="ger-panel">
+  <div class="ger-panel-head">
+    <span class="ger-panel-title"><i class="fas fa-balance-scale"></i> Desvio custo real vs esperado</span>
+    <span class="ger-panel-hint">preço faturado − preço do pedido</span>
+  </div>
+  <table class="ger-table">
+    <thead><tr><th>Modelo</th><th class="ger-num">Desvio médio</th><th class="ger-num">Un.</th></tr></thead>
+    <tbody>
+      {% for r in kpis.desvio_custo %}
+        <tr>
+          <td>{{ r.modelo }}</td>
+          <td class="ger-num {% if r.desvio_medio > 0 %}text-danger{% elif r.desvio_medio < 0 %}text-success{% endif %}">R$ {{ r.desvio_medio | valor_br }}</td>
+          <td class="ger-num">{{ r.qtd }}</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block gerencial_js %}
+<script>
+  (function () {
+    if (!window.Chart) return;
+    const t = window.gerTheme();
+    const div = {{ chart_divergencia | tojson }};
+    const el = document.getElementById('ger-chart-divergencia');
+    if (el && div.labels.length) {
+      new Chart(el, {
+        type: 'bar',
+        data: { labels: div.labels, datasets: [{ label: 'Divergências', data: div.data, backgroundColor: t.warning }] },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } },
+          scales: { x: { grid: { color: t.grid } }, y: { grid: { color: t.grid }, ticks: { precision: 0 } } } },
+      });
+    }
+  })();
+</script>
 {% endblock %}

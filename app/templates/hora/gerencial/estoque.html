@@ -1,8 +1,121 @@
 {% extends "hora/gerencial/base_gerencial.html" %}
-{# Stub F1.3 — conteúdo real nas fases seguintes. #}
+{# Estoque & Giro (gerência): snapshot por loja>modelo>cor, aging, giro, reservadas. #}
+
+{# Estoque é snapshot — período/granularidade não se aplicam. #}
+{% block gerencial_toolbar_extra %}{% endblock %}
+
+{% set total_estoque = kpis.estoque | sum(attribute='qtd') %}
+
 {% block gerencial_content %}
-  <div class="ger-empty">
-    <i class="fas fa-hammer fa-2x mb-2 d-block"></i>
-    Dashboard <strong>{{ aba_ativa }}</strong> em construção.
+<div class="row g-3 mb-3">
+  <div class="col-xl-3 col-md-6">
+    <div class="ger-kpi accent-primary">
+      <div class="ger-kpi-label"><i class="fas fa-warehouse"></i> Em estoque</div>
+      <div class="ger-kpi-valor">{{ total_estoque }}</div>
+      <div class="ger-kpi-sub">motos disponíveis para venda</div>
+    </div>
   </div>
+  <div class="col-xl-3 col-md-6">
+    <div class="ger-kpi accent-info">
+      <div class="ger-kpi-label"><i class="fas fa-bookmark"></i> Reservadas</div>
+      <div class="ger-kpi-valor">{{ kpis.reservadas_transito.reservadas }}</div>
+      <div class="ger-kpi-sub">comprometidas em pedidos</div>
+    </div>
+  </div>
+  <div class="col-xl-3 col-md-6">
+    <div class="ger-kpi accent-warning">
+      <div class="ger-kpi-label"><i class="fas fa-exchange-alt"></i> Em trânsito</div>
+      <div class="ger-kpi-valor">{{ kpis.reservadas_transito.em_transito }}</div>
+      <div class="ger-kpi-sub">transferências em curso</div>
+    </div>
+  </div>
+  <div class="col-xl-3 col-md-6">
+    <div class="ger-kpi {% if kpis.aging.faixas['90+'] > 0 %}accent-danger{% else %}accent-success{% endif %}">
+      <div class="ger-kpi-label"><i class="fas fa-hourglass-half"></i> Parado +90 dias</div>
+      <div class="ger-kpi-valor">{{ kpis.aging.faixas['90+'] }}</div>
+      <div class="ger-kpi-sub">capital encalhado</div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-3 mb-3">
+  <div class="col-lg-5">
+    <div class="ger-panel">
+      <div class="ger-panel-head">
+        <span class="ger-panel-title"><i class="fas fa-hourglass-half"></i> Aging do estoque</span>
+        <span class="ger-panel-hint">dias parado</span>
+      </div>
+      <div class="ger-chart-wrap" style="height: 240px;"><canvas id="ger-chart-aging"></canvas></div>
+    </div>
+  </div>
+  <div class="col-lg-7">
+    <div class="ger-panel">
+      <div class="ger-panel-head">
+        <span class="ger-panel-title"><i class="fas fa-tachometer-alt"></i> Giro — dias até a venda</span>
+        <span class="ger-panel-hint">por modelo</span>
+      </div>
+      {% if kpis.giro %}
+        <div class="ger-chart-wrap" style="height: 240px;"><canvas id="ger-chart-giro"></canvas></div>
+      {% else %}
+        <div class="ger-empty"><i class="fas fa-tachometer-alt fa-2x mb-2 d-block"></i>Sem vendas no período para medir giro.</div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<div class="ger-panel">
+  <div class="ger-panel-head">
+    <span class="ger-panel-title"><i class="fas fa-layer-group"></i> Estoque por loja · modelo · cor</span>
+  </div>
+  {% if kpis.estoque %}
+    <table class="ger-table">
+      <thead><tr><th>Loja</th><th>Modelo</th><th>Cor</th><th class="ger-num">Qtd</th><th class="ger-num">Avariadas</th></tr></thead>
+      <tbody>
+        {% for r in kpis.estoque %}
+          <tr>
+            <td>{{ r.loja_nome }}</td>
+            <td>{{ r.modelo }}</td>
+            <td>{{ r.cor or '—' }}</td>
+            <td class="ger-num">{{ r.qtd }}</td>
+            <td class="ger-num">{% if r.avariada %}<span class="text-warning">{{ r.avariada }}</span>{% else %}—{% endif %}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <div class="ger-empty"><i class="fas fa-warehouse fa-2x mb-2 d-block"></i>Sem motos em estoque.</div>
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block gerencial_js %}
+<script>
+  (function () {
+    if (!window.Chart) return;
+    const t = window.gerTheme();
+    const aging = {{ chart_aging | tojson }};
+    const giro = {{ chart_giro | tojson }};
+
+    const elA = document.getElementById('ger-chart-aging');
+    if (elA) {
+      const cores = [t.success, t.warning, t.info, t.danger];  // 0-30/31-60/61-90/90+
+      new Chart(elA, {
+        type: 'bar',
+        data: { labels: aging.labels, datasets: [{ label: 'Motos', data: aging.data, backgroundColor: aging.labels.map((_, i) => cores[i % cores.length]) }] },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } },
+          scales: { x: { grid: { color: t.grid } }, y: { grid: { color: t.grid }, ticks: { precision: 0 } } } },
+      });
+    }
+
+    const elG = document.getElementById('ger-chart-giro');
+    if (elG && giro.labels.length) {
+      new Chart(elG, {
+        type: 'bar',
+        data: { labels: giro.labels, datasets: [{ label: 'Dias médios', data: giro.data, backgroundColor: t.primary }] },
+        options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } },
+          scales: { x: { grid: { color: t.grid } }, y: { grid: { color: t.grid } } } },
+      });
+    }
+  })();
+</script>
 {% endblock %}

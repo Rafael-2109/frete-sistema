@@ -198,6 +198,84 @@ def client_admin(db, app):
 
 
 @pytest.fixture
+def venda_factory(db, modelo_moto):
+    """Cria HoraVenda (FATURADO/etc.) com itens-moto, custo real (NF entrada por
+    chassi) e brindes — base dos testes de KPI gerencial.
+
+    item dict: {preco_final, preco_real(None=sem custo), preco_tabela,
+    desconsiderado, chassi(opcional p/ reusar uma moto já criada)}
+    """
+    import uuid
+    from decimal import Decimal
+    from app.hora.models import (
+        HoraVenda, HoraVendaItem, HoraMoto, HoraNfEntrada, HoraNfEntradaItem,
+        HoraVendaBrinde,
+    )
+    from app.utils.timezone import agora_brasil_naive
+    from datetime import date as _date
+
+    def make(*, loja, status='FATURADO', data_venda=None, vendedor='VEND A',
+             itens=None, origem_criacao='MANUAL', forma_pagamento='PIX',
+             brinde_custo=None, peca=None):
+        data_venda = data_venda or _date(2026, 6, 15)
+        venda = HoraVenda(
+            loja_id=(loja.id if loja else None),
+            cpf_cliente='12345678901', nome_cliente='Cliente Teste',
+            data_venda=data_venda, status=status, valor_total=0,
+            forma_pagamento=forma_pagamento, vendedor=vendedor,
+            origem_criacao=origem_criacao,
+            faturado_em=agora_brasil_naive(), criado_em=agora_brasil_naive(),
+        )
+        _db.session.add(venda)
+        _db.session.flush()
+        total = Decimal('0')
+        for it in (itens or [{'preco_final': 1000, 'preco_real': 600}]):
+            chassi = it.get('chassi') or f'C{uuid.uuid4().hex[:18].upper()}'
+            if not HoraMoto.query.get(chassi):
+                _db.session.add(HoraMoto(numero_chassi=chassi,
+                                         modelo_id=modelo_moto.id, cor='PRETA'))
+                _db.session.flush()
+            pf = Decimal(str(it['preco_final']))
+            ptab = Decimal(str(it.get('preco_tabela', it['preco_final'])))
+            desc = ptab - pf
+            _db.session.add(HoraVendaItem(
+                venda_id=venda.id, numero_chassi=chassi,
+                preco_tabela_referencia=ptab, preco_final=pf,
+                desconto_aplicado=desc,
+                desconto_percentual=(desc / ptab * 100 if ptab else 0),
+            ))
+            total += pf
+            preco_real = it.get('preco_real')
+            if preco_real is not None:
+                uid = uuid.uuid4().hex[:12].upper()
+                nf = HoraNfEntrada(
+                    chave_44=uid.zfill(44), numero_nf=uid[:8],
+                    cnpj_emitente='12345678000199',
+                    cnpj_destinatario=(loja.cnpj if loja else '99999999000199'),
+                    loja_destino_id=(loja.id if loja else None),
+                    data_emissao=data_venda, valor_total=preco_real,
+                    criado_em=agora_brasil_naive(),
+                )
+                _db.session.add(nf)
+                _db.session.flush()
+                _db.session.add(HoraNfEntradaItem(
+                    nf_id=nf.id, numero_chassi=chassi,
+                    preco_real=Decimal(str(preco_real)),
+                    desconsiderado=it.get('desconsiderado', False),
+                ))
+        if brinde_custo is not None and peca is not None:
+            c = Decimal(str(brinde_custo))
+            _db.session.add(HoraVendaBrinde(
+                venda_id=venda.id, peca_id=peca.id, qtd=1,
+                custo_unitario=c, custo_total=c, criado_em=agora_brasil_naive(),
+            ))
+        venda.valor_total = total
+        _db.session.flush()
+        return venda
+    return make
+
+
+@pytest.fixture
 def chassi_em_estoque(db, loja_origem, modelo_moto):
     """Cria moto e registra RECEBIDA + CONFERIDA na loja_origem."""
     chassi = '9ABCDTESTFIXTURE0000000000'
