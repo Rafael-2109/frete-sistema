@@ -694,7 +694,7 @@
             <td class="text-end">{{ b.custo_unitario|valor_br }}</td>
             <td class="text-end">{{ b.custo_total|valor_br }}</td>
             <td class="text-end">
-              {% if is_cotacao and pode_editar %}
+              {% if (is_cotacao or is_incompleto) and pode_editar %}
               <form method="post" action="{{ url_for('hora.venda_remover_brinde', venda_id=venda.id, brinde_id=b.id) }}"
                     class="d-inline" onsubmit="return confirm('Remover este brinde?');">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -714,7 +714,7 @@
       <small class="text-muted">Nenhum brinde neste pedido.</small>
     {% endif %}
 
-    {% if is_cotacao and pode_editar %}
+    {% if (is_cotacao or is_incompleto) and pode_editar %}
     <div class="border-top pt-2 mt-2">
       <h6 class="mb-2"><i class="fas fa-plus-circle"></i> Adicionar brinde</h6>
       <form method="post" action="{{ url_for('hora.venda_adicionar_brinde', venda_id=venda.id) }}"

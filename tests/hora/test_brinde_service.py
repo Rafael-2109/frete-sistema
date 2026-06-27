@@ -78,9 +78,30 @@ def test_remover_brinde(db, loja_factory, peca_factory):
 
 
 def test_adicionar_brinde_fora_cotacao_falha(db, loja_factory, peca_factory):
+    """CONFIRMADO/FATURADO bloqueiam (preserva a aprovacao gerencial de brinde)."""
     v = _venda(loja_factory())
     v.status = 'CONFIRMADO'
     _db.session.flush()
     p = _peca(peca_factory, Decimal('30'))
     with pytest.raises(venda_service.TransicaoInvalidaError):
         venda_service.adicionar_brinde(v.id, p.id, qtd=1, usuario='tester')
+
+
+def test_adicionar_brinde_em_incompleto_funciona(db, loja_factory, peca_factory):
+    """Brinde gerenciavel em INCOMPLETO (alinha com itens — pedido nasce INCOMPLETO)."""
+    v = _venda(loja_factory())
+    v.status = 'INCOMPLETO'
+    _db.session.flush()
+    p = _peca(peca_factory, Decimal('30'))
+    brinde = venda_service.adicionar_brinde(v.id, p.id, qtd=1, usuario='tester')
+    assert HoraVendaBrinde.query.get(brinde.id) is not None
+
+
+def test_remover_brinde_em_incompleto_funciona(db, loja_factory, peca_factory):
+    v = _venda(loja_factory())
+    p = _peca(peca_factory, Decimal('30'))
+    brinde = venda_service.adicionar_brinde(v.id, p.id, qtd=1, usuario='tester')
+    v.status = 'INCOMPLETO'
+    _db.session.flush()
+    venda_service.remover_brinde(v.id, brinde.id, usuario='tester')
+    assert HoraVendaBrinde.query.get(brinde.id) is None

@@ -18,7 +18,7 @@ from __future__ import annotations
 
 from flask import jsonify, request
 
-from app.hora.decorators import require_hora_perm
+from app.hora.decorators import require_hora_perm, require_hora_perm_any
 from app.hora.routes import hora_bp
 from app.hora.services import autocomplete_service
 from app.hora.services.auth_helper import lojas_permitidas_ids
@@ -136,19 +136,21 @@ def autocomplete_loja():
 
 
 @hora_bp.route('/autocomplete/peca')
-@require_hora_perm('pecas_estoque', 'ver')
+@require_hora_perm_any(('pecas_estoque', 'ver'), ('vendas', 'criar'), ('vendas', 'editar'))
 def autocomplete_peca():
     """Catalogo global de pecas (sem filtro de loja).
 
     Usado em telas de pedido de compra e pedido de venda para selecionar
-    a peca. O backend que recebe `peca_id` revalida saldo por loja antes
-    de gravar (ver `venda_service.adicionar_item_peca`).
+    a peca (item de venda OU brinde). O backend que recebe `peca_id` revalida
+    saldo por loja antes de gravar item cobrado (ver
+    `venda_service.adicionar_item_peca`); brinde nao abate estoque.
 
-    Permissao `pecas_estoque/ver`: qualquer operador que mexe com peca em
-    pedido de compra ou de venda costuma ter essa permissao (vendedor para
-    venda, comprador para pedido de compra). `pecas_cadastro/ver` seria
-    restrito demais (so admin/cadastrador teria), fazendo o autocomplete
-    falhar silenciosamente para vendedores.
+    Permissao via OR: `pecas_estoque/ver` (comprador/estoquista) OU
+    `vendas/criar`/`vendas/editar` (vendedor montando pedido de venda). Antes
+    exigia SO `pecas_estoque/ver` — o vendedor que so tinha `vendas/*` recebia
+    302 e o autocomplete falhava em silencio, derrubando a selecao de peca
+    de BRINDE na criacao do pedido (o `brinde_peca_id` ficava vazio e a rota
+    descartava a linha). Causa-raiz do "brinde nao aparece" (2026-06-27).
     """
     apenas_ativas = (request.args.get('ativas') or '1') == '1'
     return jsonify(autocomplete_service.pecas(

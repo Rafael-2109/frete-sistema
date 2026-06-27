@@ -156,23 +156,41 @@
   </div>
   <div class="card-body">
     <div class="row g-3 mb-3">
-      <div class="col-md-3">
+      <div class="col-6 col-md">
         <div class="small text-muted">Venda</div>
         <div class="fs-5"><strong>{{ preview.venda_total|valor_br }}</strong></div>
       </div>
-      <div class="col-md-3">
+      <div class="col-6 col-md">
         <div class="small text-muted">(-) Frete</div>
         <div class="fs-5 text-danger">{{ preview.frete|valor_br }}</div>
       </div>
-      <div class="col-md-3">
+      <div class="col-6 col-md">
         <div class="small text-muted">(-) Custo Moto</div>
         <div class="fs-5 text-danger">{{ preview.custo_moto_total|valor_br }}</div>
       </div>
-      <div class="col-md-3">
+      <div class="col-6 col-md">
+        <div class="small text-muted">(-) Custo Brindes</div>
+        <div class="fs-5 text-danger">{{ preview.custo_brindes_total|valor_br }}</div>
+      </div>
+      <div class="col-6 col-md">
         <div class="small text-muted">(=) Venda Liquida</div>
         <div class="fs-5"><strong>{{ preview.liquido|valor_br }}</strong></div>
       </div>
     </div>
+
+    {# Detalhe dos brindes que compoem o "Custo Brindes" (transparencia). #}
+    {% if venda.brindes %}
+    <div class="mb-3">
+      <div class="small text-muted mb-1"><i class="fas fa-gift"></i> Brindes (cortesia — entram no custo, nao no valor cobrado):</div>
+      <ul class="small mb-0">
+        {% for b in venda.brindes %}
+        <li>{{ b.peca.descricao if b.peca else '—' }}
+          <span class="text-muted">— {{ b.qtd|numero_br }} x {{ b.custo_unitario|valor_br }} = {{ b.custo_total|valor_br }}</span>
+        </li>
+        {% endfor %}
+      </ul>
+    </div>
+    {% endif %}
     <hr>
     <div class="row g-3 align-items-end">
       <div class="col-md-6">
@@ -188,7 +206,7 @@
     </div>
     <div class="small text-muted mt-3">
       <strong>Formula:</strong>
-      Venda Liquida = Venda - Frete - Custo Moto
+      Venda Liquida = Venda - Frete - Custo Moto - Custo Brindes
       &nbsp;·&nbsp;
       Margem Bruta = Venda - Venda Liquida
       &nbsp;·&nbsp;

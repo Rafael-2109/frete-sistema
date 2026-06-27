@@ -264,7 +264,24 @@ class PayloadBuilder:
             partes.append('ATPV a ser emitido em ate 15 dias uteis da emissao da NF')
             partes.append('')
 
-        # 3) Rastreio interno — sempre por ultimo, para nao atrapalhar a leitura
+        # 3) Brindes (#36) — "CORTESIA" para o cliente: peca dada de brinde (nao
+        #    cobrada, nao abate estoque). Fica no fim do conteudo fiscal, logo
+        #    antes do rastreio gerencial. qtd != 1 prefixa "Nx".
+        brindes = list(getattr(venda, 'brindes', []) or [])
+        if brindes:
+            nomes = []
+            for b in brindes:
+                desc = (b.peca.descricao if b.peca else None) or '-'
+                qd = Decimal(str(b.qtd or 0))
+                qtd_txt = (
+                    str(int(qd)) if qd == qd.to_integral_value()
+                    else format(qd.normalize(), 'f')
+                )
+                nomes.append(f'{qtd_txt}x {desc}' if qd != 1 else desc)
+            partes.append(f'CORTESIA: {", ".join(nomes)}')
+            partes.append('')
+
+        # 4) Rastreio interno — sempre por ultimo, para nao atrapalhar a leitura
         #    fiscal do cliente. Mantem auditoria gerencial existente.
         partes.append(
             f'Venda #{venda.id} | Loja: {loja_label} | '

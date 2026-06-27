@@ -44,6 +44,7 @@ atualizado: 2026-06-27
 - [27. Correções de campo do Pedido de Venda + aprovação gerencial (frete/brinde) — 2026-06-26](#27-correções-de-campo-do-pedido-de-venda--aprovação-gerencial-fretebrinde--2026-06-26)
 - [28. Perfis de permissão das Lojas HORA (template de permissões) — 2026-06-27](#28-perfis-de-permissão-das-lojas-hora-template-de-permissões--2026-06-27)
 - [29. Seção Gerencial — dashboards + relatórios — 2026-06-27](#29-seção-gerencial--dashboards--relatórios--2026-06-27)
+- [30. Brinde — gerenciar em INCOMPLETO, exibir no preview e CORTESIA na NF — 2026-06-27](#30-brinde--gerenciar-em-incompleto-exibir-no-preview-e-cortesia-na-nf--2026-06-27)
 - [Onboarding Tours (2026-05-08)](#onboarding-tours-2026-05-08)
 - [Referências](#referências)
 
@@ -1224,6 +1225,61 @@ config/cobertura ATUAL** — rotulado nas telas.
 `client_admin`). Suíte HORA verde. **Não-objetivos v2:** PDF executivo, agendamento de
 envio, builder multi-dimensão/SQL livre, frete de compra/custo de peça na margem,
 comissão persistida.
+
+---
+
+## 30. Brinde — gerenciar em INCOMPLETO, exibir no preview e CORTESIA na NF — 2026-06-27
+
+Três ajustes no brinde de venda (`HoraVendaBrinde`, #36) a partir de feedback real
+("o brinde não aparece / não consigo adicionar"). Sem migration. A causa de cada
+sintoma foi confirmada por reprodução (testes de render), não por inferência.
+
+**#1 — Gerenciar brinde em INCOMPLETO além de COTAÇÃO.** O sintoma "não aparece" era
+o **form de adicionar/remover** travado em COTAÇÃO: como pedido nasce INCOMPLETO
+(falta pagamento/AUT), o vendedor não tinha onde adicionar. A *tabela* de brindes já
+exibia em todos os status (sem regressão aí). Mudança alinhada à edição de itens
+(§23 F1):
+- `venda_service`: novo guard `_exigir_cotacao_ou_incompleto` em `adicionar_brinde` /
+  `remover_brinde` (aceita INCOMPLETO+COTAÇÃO). **CONFIRMADO/FATURADO continuam
+  bloqueados de propósito** — o brinde dispara aprovação gerencial avaliada na
+  confirmação (§27 #5b); mexer depois furaria o gate.
+- `pedido_venda_novo.html`: os 2 gates do brinde (remover/adicionar) passaram de
+  `is_cotacao and pode_editar` para `(is_cotacao or is_incompleto) and pode_editar`
+  (expressão completa, não `itens_editaveis` — esse `set` é condicional/aninhado e
+  pode não estar no escopo da seção de brindes).
+
+**#2 — Brinde no cálculo da margem do preview da NF.** `montar_preview` **já** subtraía
+`custo_brindes_total` do líquido, mas `venda_preview_nfe.html` só mostrava
+`Venda − Frete − Custo Moto = Líquido` — a conta não fechava e o custo do brinde
+"sumia". Adicionada a coluna **"(-) Custo Brindes"** na seção de margem (layout
+`col-6 col-md` p/ caber 5 colunas), a fórmula atualizada e um **detalhamento** dos
+brindes (peça · qtd · custo) abaixo. Bug de exibição, não de cálculo.
+
+**#3 — CORTESIA nas informações complementares.** `payload_builder._montar_inf_contribuinte`
+ganhou, no fim do conteúdo fiscal (logo **antes** do rastreio gerencial interno
+`Venda # | Loja | Vendedor`), a linha **`CORTESIA: <peça_1>, <peça_2>...`** (qtd ≠ 1
+prefixa `Nx`, ex.: `2x RETROVISOR`). Só aparece quando há brinde.
+
+**#4 — CAUSA-RAIZ do "brinde não aparece quando adiciono na criação"** (achada depois,
+por reprodução). O backend grava o brinde na criação (teste de POST prova); o sumiço
+era **permissão**: `GET /hora/autocomplete/peca` exigia **só** `pecas_estoque/ver`. O
+vendedor que só tem `vendas/*` recebia **302** → o dropdown de peça não abria → ele não
+selecionava a peça → o hidden `brinde_peca_id` ia **vazio** → a rota
+`tagplus_pedido_venda_criar` **descartava a linha em silêncio** (`if not pid.isdigit()`).
+Fix: `autocomplete_peca` passou para
+`require_hora_perm_any(('pecas_estoque','ver'), ('vendas','criar'), ('vendas','editar'))`
+— o catálogo de peças é read-only/global; quem cria/edita venda pode buscar peça (item
+ou brinde). **Gotcha de teste:** admin enxerga tudo, então só reproduz com usuário
+não-admin com matriz granular. (Risco latente NÃO corrigido: a rota ainda descarta linha
+de brinde sem `peca_id` válido sem feedback — defesa em profundidade fica p/ depois.)
+
+**Testes:** `tests/hora/test_brinde_service.py` (+2: add/remove em INCOMPLETO),
+`test_brinde_inf_contribuinte.py` (3: CORTESIA, qtd>1, ausência sem brinde),
+`test_brinde_preview_render.py` (2: render do preview), `test_brinde_detalhe_render.py`
+(2: form aparece em INCOMPLETO, some em CONFIRMADO; tabela em ambos),
+`test_brinde_criacao_post.py` (1: POST end-to-end grava brinde),
+`test_brinde_autocomplete_perm.py` (2: vendedor acessa autocomplete de peça; sem perm
+segue bloqueado). Suíte HORA: 326 verdes.
 
 ---
 

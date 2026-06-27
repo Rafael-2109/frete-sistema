@@ -1765,6 +1765,20 @@ def _exigir_cotacao(venda: HoraVenda, acao: str) -> None:
         )
 
 
+def _exigir_cotacao_ou_incompleto(venda: HoraVenda, acao: str) -> None:
+    """Mesma janela de edicao dos ITENS (pedido nasce INCOMPLETO sem pagamento/AUT).
+
+    CONFIRMADO/FATURADO ficam de fora de proposito: o brinde dispara aprovacao
+    gerencial avaliada na confirmacao (#5b), entao mexer no brinde depois de
+    confirmar furaria esse gate.
+    """
+    if venda.status not in (VENDA_STATUS_COTACAO, VENDA_STATUS_INCOMPLETO):
+        raise TransicaoInvalidaError(
+            f'{acao} so e permitido em pedido INCOMPLETO ou COTACAO '
+            f'(atual: {venda.status}).'
+        )
+
+
 def adicionar_item_pedido(
     venda_id: int,
     numero_chassi: str,
@@ -2215,19 +2229,19 @@ def adicionar_brinde(venda_id: int, peca_id: int, qtd,
     venda = HoraVenda.query.get(venda_id)
     if not venda:
         raise ValueError(f'Venda {venda_id} nao encontrada')
-    _exigir_cotacao(venda, 'Adicionar brinde')
+    _exigir_cotacao_ou_incompleto(venda, 'Adicionar brinde')
     brinde = _criar_brinde_flush_only(venda, peca_id, qtd, usuario)
     db.session.commit()
     return brinde
 
 
 def remover_brinde(venda_id: int, brinde_id: int, usuario: Optional[str] = None) -> None:
-    """Remove um brinde do pedido em COTACAO."""
+    """Remove um brinde do pedido em INCOMPLETO ou COTACAO."""
     from app.hora.models import HoraVendaBrinde
     venda = HoraVenda.query.get(venda_id)
     if not venda:
         raise ValueError(f'Venda {venda_id} nao encontrada')
-    _exigir_cotacao(venda, 'Remover brinde')
+    _exigir_cotacao_ou_incompleto(venda, 'Remover brinde')
     brinde = HoraVendaBrinde.query.get(brinde_id)
     if not brinde or brinde.venda_id != venda.id:
         raise ValueError(f'Brinde {brinde_id} nao pertence ao pedido {venda_id}')
