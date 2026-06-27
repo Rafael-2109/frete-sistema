@@ -79,6 +79,16 @@ echo "CarVia: migration numero_custo CE-### -> numero direto (idempotente)..."
 python scripts/migrations/2026_06_22_carvia_custo_entrega_numero_direto.py \
     || echo "⚠️ migration numero_custo direto falhou — verificar (continuando deploy)..."
 
+# HORA 2026-06-27: coluna whatsapp_grupo_jid em hora_loja (regra "1 grupo por loja")
+# + backfill dos grupos WhatsApp das 4 lojas Comercial. CRITICO: o modelo HoraLoja JA
+# referencia a coluna; sem este ALTER, qualquer SELECT em hora_loja via ORM quebra
+# (UndefinedColumn). Ambos idempotentes (ADD COLUMN IF NOT EXISTS / UPDATE por apelido).
+echo "HORA: migration hora_56 (hora_loja.whatsapp_grupo_jid) + backfill grupos por loja..."
+python scripts/migrations/hora_56_loja_whatsapp_grupo.py \
+    || echo "⚠️ migration hora_56 falhou — verificar (continuando deploy)..."
+python scripts/hora/set_grupos_whatsapp_lojas.py \
+    || echo "⚠️ backfill grupos-loja falhou — verificar (continuando deploy)..."
+
 # Formato canonico de memorias (2026-06-08): coluna meta JSONB + indice GIN +
 # backfill REMOVIDOS do build apos aplicacao em PROD (deploy ad3c78027). Scripts
 # permanecem versionados — re-rodar manual via Render Shell se necessario:
