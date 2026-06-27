@@ -245,7 +245,13 @@
     <div class="modal-content">
       <div class="modal-header">
         <h5 class="modal-title">
-          <i class="fas fa-clipboard-list"></i> Motos da NF {{ recebimento.nf.numero_nf }}
+          <i class="fas fa-clipboard-list"></i>
+          {% if recebimento.nf.provisoria %}
+            Motos esperadas (NF provisória)
+            <span class="badge bg-warning text-dark">Provisória</span>
+          {% else %}
+            Motos da NF {{ recebimento.nf.numero_nf }}
+          {% endif %}
         </h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>

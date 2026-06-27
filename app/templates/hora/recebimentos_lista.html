@@ -58,7 +58,7 @@
         <tr>
           <td><small>{{ r.id }}</small></td>
           <td>{{ r.data_recebimento.strftime('%d/%m/%Y') }}</td>
-          <td>{{ r.nf.numero_nf }}</td>
+          <td>{% if r.nf.provisoria %}<span class="badge bg-warning text-dark">Provisória</span>{% else %}{{ r.nf.numero_nf }}{% endif %}</td>
           <td>{{ r.loja.rotulo_display }}</td>
           {% if pode_ver_motos_nf %}
           <td class="text-center">

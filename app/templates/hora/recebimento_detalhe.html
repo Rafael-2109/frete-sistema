@@ -53,7 +53,9 @@
   <div class="col-md-2"><div class="hora-kpi">
     <div class="hora-kpi-label">NF</div>
     <div>
-      {% if pode_ver_resumo_completo %}
+      {% if recebimento.nf.provisoria %}
+        <span class="badge bg-warning text-dark">Provisória</span>
+      {% elif pode_ver_resumo_completo %}
         <a href="{{ url_for('hora.nfs_detalhe', nf_id=recebimento.nf_id) }}">{{ recebimento.nf.numero_nf }}</a>
       {% else %}
         {{ recebimento.nf.numero_nf }}
@@ -68,7 +70,7 @@
     <div class="hora-kpi-label">Qtd declarada</div>
     <div class="hora-kpi-valor">{{ t.qtd_declarada }}</div>
   </div></div>
-  {% if pode_ver_resumo_completo %}
+  {% if pode_ver_resumo_completo and not recebimento.nf.provisoria %}
     <div class="col-md-2"><div class="hora-kpi">
       <div class="hora-kpi-label">Esperado NF</div>
       <div class="hora-kpi-valor">{{ t.esperado }}</div>
@@ -281,6 +283,32 @@
     </tbody>
   </table>
 </div>
+
+{% if recebimento.nf.provisoria %}
+  {% if current_user.tem_perm_hora('recebimentos', 'editar') %}
+  <div class="card mb-3 border-warning">
+    <div class="card-header bg-warning text-dark">
+      <i class="fas fa-file-invoice"></i> Anexar NF real
+      <span class="badge bg-warning text-dark ms-2">NF Provisória</span>
+    </div>
+    <div class="card-body">
+      <p class="text-muted small mb-2">
+        Este recebimento foi criado sem NF fiscal. Ao receber a NF real, faça o upload do PDF abaixo para vinculá-la.
+      </p>
+      <form method="post"
+            action="{{ url_for('hora.recebimentos_anexar_nf', recebimento_id=recebimento.id) }}"
+            enctype="multipart/form-data">
+        <div class="mb-2">
+          <input type="file" name="pdf" accept=".pdf" class="form-control" required>
+        </div>
+        <button type="submit" class="btn btn-warning">
+          <i class="fas fa-upload"></i> Vincular NF real
+        </button>
+      </form>
+    </div>
+  </div>
+  {% endif %}
+{% endif %}
 
 <a href="{{ url_for('hora.recebimentos_lista') }}" class="btn btn-secondary">Voltar</a>
 
