@@ -221,9 +221,11 @@ def aprovar_usuario(user_id):
     # Carregar lista de vendedores para vinculação
     vendedores = obter_lista_vendedores()
     form.vendedor_vinculado.choices = [('', 'Selecione...')] + [(v, v) for v in vendedores]
-    
+
     # Popular choices de lojas HORA (todas + ativas)
     form.loja_hora_id.choices = _obter_choices_lojas_hora()
+    # Perfil: inclui o perfil HORA atual do usuario (se houver) para nao perde-lo.
+    form.perfil.choices = _choices_perfil_com_hora(usuario)
 
     if form.validate_on_submit():
         usuario.perfil = form.perfil.data
@@ -288,7 +290,11 @@ def listar_usuarios():
         return redirect(url_for('main.dashboard'))
     
     usuarios = db.session.query(Usuario).order_by(Usuario.criado_em.desc()).all()
-    return render_template('auth/listar_usuarios.html', usuarios=usuarios)
+    return render_template(
+        'auth/listar_usuarios.html',
+        usuarios=usuarios,
+        perfis_por_slug=_mapa_perfis_hora(),
+    )
 
 @auth_bp.route('/usuarios/<int:user_id>/editar', methods=['GET', 'POST'])
 @login_required
@@ -307,6 +313,9 @@ def editar_usuario(user_id):
     vendedores = obter_lista_vendedores()
     form.vendedor_vinculado.choices = [('', 'Selecione...')] + [(v, v) for v in vendedores]
     form.loja_hora_id.choices = _obter_choices_lojas_hora()
+    # Perfil: inclui o perfil HORA atual do usuario (se houver) para nao perde-lo
+    # e permitir voltar a um perfil do restante do sistema (requisito #5/#6).
+    form.perfil.choices = _choices_perfil_com_hora(usuario)
 
     if form.validate_on_submit():
         usuario.nome = form.nome.data
@@ -356,7 +365,60 @@ def editar_usuario(user_id):
     form.whatsapp_autorizado.data = usuario.whatsapp_autorizado
     form.agente_fable5.data = usuario.agente_fable5
 
-    return render_template('auth/editar_usuario.html', form=form, usuario=usuario)
+    return render_template(
+        'auth/editar_usuario.html',
+        form=form,
+        usuario=usuario,
+        perfis_por_slug=_mapa_perfis_hora(),
+    )
+
+# Choices do perfil do RESTANTE DO SISTEMA (espelha AprovarUsuarioForm/EditarUsuarioForm).
+_PERFIL_CHOICES_SISTEMA = [
+    ('vendedor', 'Vendedor'),
+    ('portaria', 'Portaria'),
+    ('financeiro', 'Financeiro'),
+    ('logistica', 'Logística'),
+    ('gerente_comercial', 'Gerente Comercial'),
+    ('administrador', 'Administrador'),
+]
+
+
+def _choices_perfil_com_hora(usuario):
+    """Choices do SelectField de perfil para aprovar/editar usuario.
+
+    Se o usuario carrega um slug de perfil HORA (nao um dos 6 reservados do
+    sistema), injeta-o como opcao extra. Isso (a) EXIBE o perfil HORA atual no
+    select e (b) permite trocar de volta a um perfil do restante do sistema sem
+    reset silencioso (o valor atual continua valido na validacao WTForms).
+
+    Perfis HORA so sao GERIDOS no modulo Lojas (/hora/permissoes) — aqui aparece
+    apenas o perfil do proprio usuario, nunca o catalogo (requisito #1/#5/#6).
+    """
+    choices = list(_PERFIL_CHOICES_SISTEMA)
+    perfil_atual = getattr(usuario, 'perfil', None)
+    reservados = {c[0] for c in _PERFIL_CHOICES_SISTEMA}
+    if perfil_atual and perfil_atual not in reservados:
+        nome = perfil_atual
+        try:
+            from app.hora.services import perfil_service
+            p = perfil_service.get_perfil_por_slug(perfil_atual)
+            if p:
+                nome = p.nome
+        except Exception:
+            pass
+        choices.append((perfil_atual, f'🏍 {nome} (perfil Lojas HORA)'))
+    return choices
+
+
+def _mapa_perfis_hora():
+    """{slug: HoraPerfil} para exibir o nome amigavel de um perfil HORA nos templates
+    auth (lista/edicao de usuarios). Lazy + tolerante (tabela pode nao existir)."""
+    try:
+        from app.hora.services import perfil_service
+        return perfil_service.mapa_perfis_por_slug(incluir_inativos=True)
+    except Exception:
+        return {}
+
 
 def _obter_choices_lojas_hora():
     """Retorna choices para SelectField de loja HORA. [('', 'Todas'), ...].

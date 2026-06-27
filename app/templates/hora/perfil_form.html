@@ -1,0 +1,60 @@
+{% extends "hora/base.html" %}
+
+{% block hora_content %}
+<div class="d-flex flex-wrap align-items-center gap-2 mb-1">
+  <h2 class="mb-0">Perfil: {{ perfil.nome }}</h2>
+  <span class="badge {{ 'bg-success' if perfil.ativo else 'bg-secondary' }}">
+    {{ 'Ativo' if perfil.ativo else 'Inativo' }}
+  </span>
+  <a href="{{ url_for('hora.perfis_lista') }}" class="btn btn-sm btn-outline-secondary ms-auto">
+    <i class="fas fa-arrow-left"></i> Voltar para Perfis
+  </a>
+</div>
+<p class="text-muted small mb-3">
+  Identificador interno: <code>{{ perfil.slug }}</code>.
+  Marque o que este perfil concede em cada módulo. Este é o <strong>esqueleto</strong> que
+  pré-preenche as permissões de um usuário ao receber o perfil (e ao usar "Redefinir").
+</p>
+
+<form method="post" action="{{ url_for('hora.perfis_salvar', perfil_id=perfil.id) }}">
+  <div class="row g-2 align-items-end mb-3">
+    <div class="col-md-6">
+      <label class="form-label form-label-sm mb-1">Nome do perfil</label>
+      <input type="text" name="nome" class="form-control form-control-sm"
+             value="{{ perfil.nome }}" maxlength="80" {% if not pode_editar %}disabled{% endif %}>
+    </div>
+  </div>
+
+  {% set scope = 'perfil-' ~ perfil.id %}
+  {% include "hora/_matriz_permissoes.html" %}
+
+  {% if pode_editar %}
+    <div class="p-2 d-flex justify-content-end border-top mt-2">
+      <button type="submit" class="btn btn-sm btn-primary">
+        <i class="fas fa-save"></i> Salvar perfil
+      </button>
+    </div>
+  {% else %}
+    <div class="alert alert-secondary small mt-2">
+      <i class="fas fa-info-circle"></i> Você não tem permissão para editar (precisa de
+      <strong>Editar</strong> em "Usuários").
+    </div>
+  {% endif %}
+</form>
+
+<script>
+// Toggle "todos" por coluna (ação): marca/desmarca todos os checkboxes da mesma ação no mesmo escopo.
+document.querySelectorAll('.hora-perm-toggle-col').forEach(function(btn) {
+  btn.addEventListener('click', function() {
+    var acao = btn.dataset.acao;
+    var scope = btn.dataset.scope;
+    var form = btn.closest('form');
+    if (!form) return;
+    var cbs = form.querySelectorAll('.hora-perm-cb[data-acao="' + acao + '"][data-scope="' + scope + '"]');
+    var algumDesmarcado = false;
+    cbs.forEach(function(cb) { if (!cb.checked) algumDesmarcado = true; });
+    cbs.forEach(function(cb) { cb.checked = algumDesmarcado; });
+  });
+});
+</script>
+{% endblock %}

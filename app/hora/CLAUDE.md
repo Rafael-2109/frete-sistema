@@ -4,7 +4,7 @@ camada: L1
 sot_de: —
 hub: CLAUDE.md
 superseded_by: —
-atualizado: 2026-06-26
+atualizado: 2026-06-27
 -->
 # Módulo HORA — Lojas Motochefe
 
@@ -42,6 +42,7 @@ atualizado: 2026-06-26
 - [25. Impressão de documentos do Pedido de Venda (PDV + termos) — 2026-06-26](#25-impressão-de-documentos-do-pedido-de-venda-pdv--termos--2026-06-26)
 - [26. Reserva cancelada devolve a moto ao estoque (fix DEVOLVIDA) — 2026-06-26](#26-reserva-cancelada-devolve-a-moto-ao-estoque-fix-devolvida--2026-06-26)
 - [27. Correções de campo do Pedido de Venda + aprovação gerencial (frete/brinde) — 2026-06-26](#27-correções-de-campo-do-pedido-de-venda--aprovação-gerencial-fretebrinde--2026-06-26)
+- [28. Perfis de permissão das Lojas HORA (template de permissões) — 2026-06-27](#28-perfis-de-permissão-das-lojas-hora-template-de-permissões--2026-06-27)
 - [Onboarding Tours (2026-05-08)](#onboarding-tours-2026-05-08)
 - [Referências](#referências)
 
@@ -113,7 +114,7 @@ Em 1 linha por invariante:
 
 ---
 
-## Modelo de dados (46 tabelas — núcleo conceitual abaixo)
+## Modelo de dados (48 tabelas — núcleo conceitual abaixo)
 
 > O módulo tem **46 tabelas** `hora_*` em produção (lista completa: `grep -rhoE "__tablename__\s*=\s*['\"]hora_[a-z0-9_]+" app/hora/`). A lista abaixo cobre o núcleo conceitual; as auxiliares (empréstimo, devolução fornecedor/venda, conferência/auditoria, parser DANFE, pagamentos) seguem o mesmo padrão.
 
@@ -140,6 +141,7 @@ Documentação detalhada na análise de primeiros princípios do módulo (comand
 
 **Autorização (adicionada 2026-04-22)**:
 - `hora_user_permissao` — permissões granulares por (`user_id`, `modulo`) com flags `pode_ver/criar/editar/apagar/aprovar`. Sem FK para `usuarios` (mantém `app/hora` independente de `app/auth`). Migration: `scripts/migrations/hora_13_user_permissao.{py,sql}`.
+- `hora_perfil` + `hora_perfil_permissao` — **perfis de permissão HORA** (template que pré-preenche/redefine as permissões de um usuário). Migration: `scripts/migrations/hora_55_perfis.{py,sql}`. Ver seção 28.
 
 ### Tabelas complementares (32)
 
@@ -1099,6 +1101,67 @@ sentido A. Executado em 2026-06-26: **12 motos** restauradas a RECEBIDA (operado
 `test_cancelar_venda_volta_disponivel_no_status_anterior`, que reproduziam o bug) +
 3 atualizados (cancelar/remover/troca de chassi agora verificam `status_atual` ∈
 `EVENTOS_EM_ESTOQUE`, não a emissão de DEVOLVIDA). Suíte HORA: 229 verdes.
+
+---
+
+## 28. Perfis de permissão das Lojas HORA (template de permissões) — 2026-06-27
+
+Perfis **exclusivos das Lojas HORA**: um template de permissões reutilizável que
+**pré-preenche** as permissões granulares de um usuário ao ser atribuído, mantendo-as
+editáveis depois. Atende: criar perfis no módulo, não compartilhá-los nos outros links,
+pré-fill, redefinir, accordion na tela de usuários e compatibilidade com os perfis do
+restante do sistema.
+
+**Decisão de arquitetura (campo único `Usuario.perfil`):** o perfil HORA NÃO é um campo
+novo — reusa o `Usuario.perfil` global (`String(30)`). O slug carrega prefixo `hora_` e
+**nunca colide** com os 6 slugs reservados (`administrador/vendedor/gerente_comercial/
+financeiro/logistica/portaria`), então um usuário com perfil HORA fica HORA-only (todas as
+checagens Nacom `perfil in [...]` / `== 'administrador'` retornam o esperado). O **nome** é
+livre (pode haver perfil HORA "Financeiro"); só o **slug** é que não pode repetir — e é
+**derivado automaticamente** do nome (o admin nunca digita slug). Mapa de impacto: dos ~40
+read-sites de `perfil`, só as 3 `SelectField` auth quebrariam — resolvido com choices
+dinâmicas (ver abaixo).
+
+**Tabelas novas (2)** — migration `scripts/migrations/hora_55_perfis.{py,sql}`:
+- `hora_perfil` — definição (`slug` UNIQUE, `nome`, `ativo`, `criado_em/por`).
+- `hora_perfil_permissao` — o **esqueleto** (1 linha por `(perfil_id, modulo)` × 5 flags),
+  espelha `hora_user_permissao`. É só TEMPLATE: a permissão efetiva continua em
+  `hora_user_permissao` (o perfil NÃO é consultado em runtime).
+
+**Service** (`app/hora/services/perfil_service.py`):
+- `criar_perfil(nome)` — deriva slug `hora_<slugify(nome)>` único (dedup `_2`, `_N`),
+  guarda nome duplicado/inválido, cria esqueleto vazio.
+- `get_skeleton` / `salvar_skeleton` — matriz módulo×ação do perfil.
+- `aplicar_perfil_em_usuario(user_id, slug)` — grava `Usuario.perfil = slug` E **copia** o
+  esqueleto → `hora_user_permissao` (reusa `permissao_service.salvar_matriz_completa`).
+- `redefinir_permissoes_pelo_perfil(user_id)` — re-aplica o esqueleto do perfil atual.
+- `mapa_perfis_por_slug` — `{slug: HoraPerfil}` p/ exibir nome amigável (inclui inativos).
+
+**Rotas** (`app/hora/routes/perfis.py` + extensões em `permissoes.py`):
+- CRUD: `GET /hora/permissoes/perfis`, `POST .../novo`, `GET .../<id>`, `POST .../<id>/salvar`,
+  `POST .../<id>/ativo` (soft-delete: desativar não mexe em quem já usa).
+- Por usuário: `POST /hora/permissoes/<id>/perfil` (aplica + pré-fill) e
+  `POST /hora/permissoes/<id>/redefinir`. A aprovação de pendente aceita perfil opcional.
+- Gating: `usuarios/ver|criar|editar` (admin sempre passa) — quem tem permissão em
+  "Usuários" gerencia perfis e atribui.
+
+**UI**:
+- Tela `/hora/permissoes` reescrita como **accordion** (1 painel por usuário, fechado por
+  padrão, 1º aberto) — escala com nº de usuários. Matriz movida para o partial reusável
+  `app/templates/hora/_matriz_permissoes.html` (mesma matriz na edição do perfil).
+- Telas novas `perfis_lista.html` (lista + criar) e `perfil_form.html` (nome + esqueleto).
+- Link "Perfis de acesso" no dropdown Cadastros (`hora/base.html`, `usuarios/ver`).
+
+**Compatibilidade (auth)** — `app/auth/routes.py` (`aprovar_usuario`/`editar_usuario`):
+`form.perfil.choices` é montado dinamicamente (`_choices_perfil_com_hora`): os 6 do sistema
++ (se o usuário tem perfil HORA) o próprio perfil HORA como opção extra. Assim a tela auth
+**exibe** o perfil HORA atual e permite **voltar** a um perfil do sistema sem reset
+silencioso — perfis HORA só são GERIDOS no módulo Lojas, nunca o catálogo nos links auth.
+`listar_usuarios.html`/`editar_usuario.html` mostram o nome amigável via `perfis_por_slug`.
+
+**Testes**: `tests/hora/test_perfil.py` (12 — slug/dedup/guardas/esqueleto/aplicar/redefinir)
++ `tests/hora/test_perfil_rotas.py` (6 — render accordion/partial/perfil_form/auth + fluxo).
+Suíte HORA: 249 verdes.
 
 ---
 

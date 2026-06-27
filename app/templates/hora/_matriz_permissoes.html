@@ -1,0 +1,62 @@
+{# Matriz de permissoes (modulo x acao) reutilizavel.
+
+   Usada tanto no card de cada usuario (permissoes_lista.html) quanto na edicao do
+   esqueleto de um perfil (perfil_form.html). Os checkboxes seguem
+   name="perm_<modulo>_<acao>" — o parse no backend e identico nos dois casos
+   (permissoes_salvar_granular / perfis_salvar).
+
+   Parametros (passados via contexto do include):
+     matriz_flags        - dict {modulo: {acao: bool}} com o estado atual
+     modulos, acoes      - listas [(slug, label), ...]
+     modulos_so_ver      - set de slugs que so usam a acao 'ver'
+     modulos_com_aprovar - set de slugs onde 'aprovar' tem semantica real
+     scope               - string em data-scope (id do usuario, ou 'perfil-<id>')
+     tabela_id           - (opcional) id do wrapper (ancora de onboarding) #}
+<div {% if tabela_id %}id="{{ tabela_id }}"{% endif %} class="table-responsive">
+  <table class="table table-sm table-hover align-middle mb-0">
+    <thead class="table-light">
+      <tr>
+        <th style="width: 35%;">Módulo</th>
+        {% for acao_slug, acao_label in acoes %}
+          <th class="text-center">
+            <span title="{{ acao_label }}">{{ acao_label }}</span>
+            <br>
+            <button type="button"
+                    class="btn btn-link btn-sm p-0 hora-perm-toggle-col text-muted"
+                    data-acao="{{ acao_slug }}" data-scope="{{ scope }}"
+                    title="Marcar/desmarcar todos para esta ação">
+              <small>todos</small>
+            </button>
+          </th>
+        {% endfor %}
+      </tr>
+    </thead>
+    <tbody>
+      {% for mod_slug, mod_label in modulos %}
+        {% set flags = matriz_flags.get(mod_slug, {'ver': False, 'criar': False, 'editar': False, 'apagar': False, 'aprovar': False}) %}
+        <tr>
+          <td><strong>{{ mod_label }}</strong> <small class="text-muted">({{ mod_slug }})</small></td>
+          {% for acao_slug, _ in acoes %}
+            {# Regras de N/A:
+               - 'aprovar' so aparece para modulos em modulos_com_aprovar.
+               - modulos em modulos_so_ver so usam a acao 'ver'. #}
+            {% if acao_slug == 'aprovar' and mod_slug not in modulos_com_aprovar %}
+              <td class="text-center text-muted" title="Acao 'Aprovar' nao se aplica a este modulo">—</td>
+            {% elif mod_slug in modulos_so_ver and acao_slug != 'ver' %}
+              <td class="text-center text-muted" title="Este modulo so usa a acao 'Ver'">—</td>
+            {% else %}
+              <td class="text-center">
+                <input type="checkbox" class="form-check-input hora-perm-cb"
+                       name="perm_{{ mod_slug }}_{{ acao_slug }}"
+                       value="1"
+                       data-acao="{{ acao_slug }}"
+                       data-scope="{{ scope }}"
+                       {% if flags[acao_slug] %}checked{% endif %}>
+              </td>
+            {% endif %}
+          {% endfor %}
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>

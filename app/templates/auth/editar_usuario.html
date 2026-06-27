@@ -23,10 +23,17 @@
                                             {{ usuario.status.title() if usuario.status else 'Não definido' }}
                                         </span>
                                     </p>
-                                    <p><strong>Perfil Atual:</strong> 
-                                        <span class="{{ usuario.perfil_badge_class }}">
-                                            {{ usuario.perfil_nome if usuario.perfil else 'Não definido' }}
-                                        </span>
+                                    <p><strong>Perfil Atual:</strong>
+                                        {% set _ph = (perfis_por_slug or {}).get(usuario.perfil) %}
+                                        {% if _ph %}
+                                            <span class="badge bg-dark" title="Perfil Lojas HORA">
+                                                <i class="fas fa-id-badge"></i> {{ _ph.nome }} <small>(Lojas HORA)</small>
+                                            </span>
+                                        {% else %}
+                                            <span class="{{ usuario.perfil_badge_class }}">
+                                                {{ usuario.perfil_nome if usuario.perfil else 'Não definido' }}
+                                            </span>
+                                        {% endif %}
                                     </p>
                                 </div>
                                 <div class="col-md-6">

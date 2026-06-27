@@ -120,6 +120,12 @@ from app.hora.models.permissao import (
     MODULOS_SO_VER,
     MODULOS_COM_APROVAR,
 )
+from app.hora.models.perfil import (
+    HoraPerfil,
+    HoraPerfilPermissao,
+    PERFIS_SISTEMA_RESERVADOS,
+    PERFIL_HORA_SLUG_PREFIXO,
+)
 from app.hora.models.transferencia import (
     HoraTransferencia,
     HoraTransferenciaItem,
@@ -280,6 +286,10 @@ __all__ = [
     'ACOES_HORA',
     'MODULOS_SO_VER',
     'MODULOS_COM_APROVAR',
+    'HoraPerfil',
+    'HoraPerfilPermissao',
+    'PERFIS_SISTEMA_RESERVADOS',
+    'PERFIL_HORA_SLUG_PREFIXO',
     'HoraTransferencia',
     'HoraTransferenciaItem',
     'HoraTransferenciaAuditoria',

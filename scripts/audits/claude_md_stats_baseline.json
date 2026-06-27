@@ -1,7 +1,7 @@
 {
   "app/agente": {
     "py": 110,
-    "loc": 57363,
+    "loc": 57382,
     "tpl": 0
   },
   "app/agente/services": {
@@ -11,7 +11,7 @@
   },
   "app/agente_lojas": {
     "py": 17,
-    "loc": 2172,
+    "loc": 2299,
     "tpl": 0
   },
   "app/carteira": {
@@ -20,9 +20,9 @@
     "tpl": 13
   },
   "app/carvia": {
-    "py": 137,
-    "loc": 76339,
-    "tpl": 131
+    "py": 138,
+    "loc": 76718,
+    "tpl": 132
   },
   "app/chat": {
     "py": 22,
@@ -41,13 +41,13 @@
   },
   "app/fretes": {
     "py": 20,
-    "loc": 19794,
+    "loc": 19928,
     "tpl": 43
   },
   "app/hora": {
-    "py": 104,
-    "loc": 41298,
-    "tpl": 90
+    "py": 108,
+    "loc": 42638,
+    "tpl": 97
   },
   "app/motos_assai": {
     "py": 90,

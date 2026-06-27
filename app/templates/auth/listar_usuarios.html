@@ -48,9 +48,16 @@
                                 {{ usuario.empresa or '-' }}
                             </td>
                             <td>
-                                <span class="{{ usuario.perfil_badge_class }}">
-                                    {{ usuario.perfil_nome }}
-                                </span>
+                                {% set _ph = (perfis_por_slug or {}).get(usuario.perfil) %}
+                                {% if _ph %}
+                                    <span class="badge bg-dark" title="Perfil Lojas HORA">
+                                        <i class="fas fa-id-badge"></i> {{ _ph.nome }}
+                                    </span>
+                                {% else %}
+                                    <span class="{{ usuario.perfil_badge_class }}">
+                                        {{ usuario.perfil_nome }}
+                                    </span>
+                                {% endif %}
                             </td>
                             <td>
                                 <span class="{{ usuario.status_badge_class }}">

@@ -22,6 +22,7 @@ from . import (  # noqa: E402, F401
     nfs,
     recebimentos,
     permissoes,
+    perfis,
     estoque,
     devolucoes,
     devolucoes_venda,

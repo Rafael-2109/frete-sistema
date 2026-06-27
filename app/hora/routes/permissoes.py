@@ -20,7 +20,7 @@ from app.auth.models import Usuario
 from app.hora.decorators import require_hora_perm
 from app.hora.models import HoraLoja
 from app.hora.routes import hora_bp
-from app.hora.services import permissao_service
+from app.hora.services import perfil_service, permissao_service
 from app.utils.timezone import agora_utc_naive
 
 
@@ -66,6 +66,11 @@ def permissoes_lista():
     # Carrega matriz granular para todos em 1 query (perf).
     matrizes = permissao_service.get_matrizes_batch([u.id for u in usuarios])
 
+    # Perfis HORA: ativos para os seletores; mapa completo (inc. inativos) para
+    # renderizar o nome amigavel do perfil atual de cada usuario.
+    perfis = perfil_service.listar_perfis(incluir_inativos=False)
+    perfis_por_slug = perfil_service.mapa_perfis_por_slug(incluir_inativos=True)
+
     return render_template(
         'hora/permissoes_lista.html',
         pendentes=pendentes,
@@ -77,6 +82,8 @@ def permissoes_lista():
         matrizes=matrizes,
         modulos_so_ver=permissao_service.modulos_so_ver(),
         modulos_com_aprovar=permissao_service.modulos_com_aprovar(),
+        perfis=perfis,
+        perfis_por_slug=perfis_por_slug,
     )
 
 
@@ -116,9 +123,31 @@ def permissoes_aprovar(user_id: int):
     db.session.commit()
 
     escopo = 'todas as lojas' if loja_id is None else f'loja {loja_id}'
+
+    # Perfil HORA opcional na aprovacao: pre-preenche as permissoes granulares.
+    perfil_slug = (request.form.get('perfil_hora_slug') or '').strip()
+    if perfil_slug:
+        try:
+            perfil = perfil_service.aplicar_perfil_em_usuario(
+                usuario.id, perfil_slug,
+                atualizado_por_id=getattr(current_user, 'id', None),
+            )
+            flash(
+                f'{usuario.nome} aprovado para Lojas HORA ({escopo}) com o perfil '
+                f'"{perfil.nome}". Permissoes pre-preenchidas — ajuste abaixo se precisar.',
+                'success',
+            )
+            return redirect(url_for('hora.permissoes_lista'))
+        except ValueError as e:
+            flash(
+                f'{usuario.nome} aprovado ({escopo}), mas o perfil nao foi aplicado: {e}',
+                'warning',
+            )
+            return redirect(url_for('hora.permissoes_lista'))
+
     flash(
         f'{usuario.nome} aprovado para Lojas HORA ({escopo}). '
-        'Defina abaixo as permissoes granulares (Ver/Criar/Editar/Apagar).',
+        'Defina abaixo o perfil ou as permissoes granulares (Ver/Criar/Editar/Apagar).',
         'success',
     )
     return redirect(url_for('hora.permissoes_lista'))
@@ -181,6 +210,16 @@ def permissoes_set_loja(user_id: int):
     if bloqueio:
         flash(bloqueio, 'danger')
         return redirect(url_for('hora.permissoes_lista'))
+    # loja_hora_id so faz sentido com acesso ao modulo (defesa em profundidade —
+    # a UI desabilita o select, mas request direto contornaria). Espelha o guard
+    # de permissoes_toggle / permissoes_salvar_granular / permissoes_set_perfil.
+    if not usuario.sistema_lojas:
+        flash(
+            f'{usuario.nome} nao tem acesso ao modulo Lojas HORA. '
+            'Habilite "Acesso" primeiro.',
+            'warning',
+        )
+        return redirect(url_for('hora.permissoes_lista'))
     loja_id_str = (request.form.get('loja_hora_id') or '').strip()
 
     if not loja_id_str:
@@ -214,6 +253,15 @@ def permissoes_set_criterio_pedidos(user_id: int):
     bloqueio = _bloqueia_se_alvo_invalido(usuario)
     if bloqueio:
         flash(bloqueio, 'danger')
+        return redirect(url_for('hora.permissoes_lista'))
+    # criterio_pedidos_hora so faz sentido com acesso ao modulo (defesa em
+    # profundidade — mesmo guard das demais rotas de mutacao).
+    if not usuario.sistema_lojas:
+        flash(
+            f'{usuario.nome} nao tem acesso ao modulo Lojas HORA. '
+            'Habilite "Acesso" primeiro.',
+            'warning',
+        )
         return redirect(url_for('hora.permissoes_lista'))
     criterio = (request.form.get('criterio_pedidos_hora') or '').strip().lower()
     if criterio not in ('loja', 'vendedor'):
@@ -266,6 +314,77 @@ def permissoes_salvar_granular(user_id: int):
     )
     flash(
         f'{usuario.nome}: permissoes granulares salvas ({salvos} modulos).',
+        'success',
+    )
+    return redirect(url_for('hora.permissoes_lista'))
+
+
+@hora_bp.route('/permissoes/<int:user_id>/perfil', methods=['POST'])
+@require_hora_perm('usuarios', 'editar')
+def permissoes_set_perfil(user_id: int):
+    """Atribui um perfil HORA ao usuario e PRE-PREENCHE as permissoes granulares.
+
+    Grava Usuario.perfil = slug do perfil e copia o esqueleto para
+    hora_user_permissao (depois fica editavel). Apenas perfis HORA sao oferecidos
+    aqui — para voltar a um perfil do restante do sistema, use a tela auth de
+    Usuarios (requisito #5/#6).
+    """
+    usuario = Usuario.query.get_or_404(user_id)
+    bloqueio = _bloqueia_se_alvo_invalido(usuario)
+    if bloqueio:
+        flash(bloqueio, 'danger')
+        return redirect(url_for('hora.permissoes_lista'))
+    if not usuario.sistema_lojas:
+        flash(
+            f'{usuario.nome} nao tem acesso ao modulo Lojas HORA. '
+            'Habilite "Acesso" antes de atribuir um perfil.',
+            'warning',
+        )
+        return redirect(url_for('hora.permissoes_lista'))
+
+    perfil_slug = (request.form.get('perfil_hora_slug') or '').strip()
+    if not perfil_slug:
+        flash('Selecione um perfil HORA.', 'warning')
+        return redirect(url_for('hora.permissoes_lista'))
+
+    try:
+        perfil = perfil_service.aplicar_perfil_em_usuario(
+            user_id, perfil_slug,
+            atualizado_por_id=getattr(current_user, 'id', None),
+        )
+    except ValueError as e:
+        flash(str(e), 'danger')
+        return redirect(url_for('hora.permissoes_lista'))
+
+    flash(
+        f'{usuario.nome}: perfil "{perfil.nome}" aplicado e permissoes '
+        'pre-preenchidas. Ajuste abaixo se precisar.',
+        'success',
+    )
+    return redirect(url_for('hora.permissoes_lista'))
+
+
+@hora_bp.route('/permissoes/<int:user_id>/redefinir', methods=['POST'])
+@require_hora_perm('usuarios', 'editar')
+def permissoes_redefinir(user_id: int):
+    """Redefine as permissoes granulares do usuario para o esqueleto do seu perfil
+    HORA atual (descarta ajustes manuais)."""
+    usuario = Usuario.query.get_or_404(user_id)
+    bloqueio = _bloqueia_se_alvo_invalido(usuario)
+    if bloqueio:
+        flash(bloqueio, 'danger')
+        return redirect(url_for('hora.permissoes_lista'))
+
+    try:
+        perfil = perfil_service.redefinir_permissoes_pelo_perfil(
+            user_id, atualizado_por_id=getattr(current_user, 'id', None),
+        )
+    except ValueError as e:
+        flash(str(e), 'warning')
+        return redirect(url_for('hora.permissoes_lista'))
+
+    flash(
+        f'{usuario.nome}: permissoes redefinidas pelo perfil "{perfil.nome}".',
         'success',
     )
     return redirect(url_for('hora.permissoes_lista'))

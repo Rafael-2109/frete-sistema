@@ -1,6 +1,6 @@
 {
   "version": "2.0.0",
-  "total_relationships": 444,
+  "total_relationships": 445,
   "relationships": [
     {
       "from_table": "agendamentos_entrega",
@@ -1716,6 +1716,12 @@
       "from_table": "hora_pedido_item",
       "from_column": "pedido_id",
       "to_table": "hora_pedido",
+      "to_column": "id"
+    },
+    {
+      "from_table": "hora_perfil_permissao",
+      "from_column": "perfil_id",
+      "to_table": "hora_perfil",
       "to_column": "id"
     },
     {

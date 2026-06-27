@@ -89,6 +89,9 @@
           <li><a id="menu-permissoes" class="dropdown-item" href="{{ url_for('hora.permissoes_lista') }}">
             <i class="fas fa-user-shield fa-fw"></i> Usuários
           </a></li>
+          <li><a id="menu-perfis" class="dropdown-item" href="{{ url_for('hora.perfis_lista') }}">
+            <i class="fas fa-id-badge fa-fw"></i> Perfis de acesso
+          </a></li>
         {% endif %}
         {% if current_user.tem_perm_hora('tagplus', 'ver') %}
           <li><a class="dropdown-item" href="{{ url_for('hora.tagplus_forma_map_lista') }}">

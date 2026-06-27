@@ -105,7 +105,7 @@
     "vinculacao_carteira_separacao",
     "webhook_configs"
   ],
-  "total_tabelas": 334,
+  "total_tabelas": 336,
   "tabelas": [
     {
       "name": "agendamentos_entrega",
@@ -2170,6 +2170,26 @@
         "pedido_id",
         "numero_chassi",
         "modelo_id"
+      ],
+      "dominio": "Lojas HORA"
+    },
+    {
+      "name": "hora_perfil",
+      "description": "Definicao de um perfil de permissao HORA (template reutilizavel).",
+      "key_fields": [
+        "criado_por_id",
+        "slug",
+        "nome"
+      ],
+      "dominio": "Lojas HORA"
+    },
+    {
+      "name": "hora_perfil_permissao",
+      "description": "Linha do esqueleto: flags de 1 modulo dentro de 1 perfil HORA.",
+      "key_fields": [
+        "perfil_id",
+        "modulo",
+        "pode_ver"
       ],
       "dominio": "Lojas HORA"
     },

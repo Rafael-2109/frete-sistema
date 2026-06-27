@@ -1,0 +1,104 @@
+{% extends "hora/base.html" %}
+
+{% block hora_content %}
+<div class="d-flex flex-wrap align-items-center gap-2 mb-1">
+  <h2 class="mb-0">Perfis de acesso — Lojas HORA</h2>
+  <a href="{{ url_for('hora.permissoes_lista') }}" class="btn btn-sm btn-outline-secondary ms-auto">
+    <i class="fas fa-users"></i> Voltar para Usuários
+  </a>
+</div>
+<p class="text-muted small mb-3">
+  Um <strong>perfil</strong> é um modelo de permissões. Ao atribuí-lo a um usuário (na tela de
+  Usuários), as permissões dele são <strong>pré-preenchidas</strong> pelo esqueleto do perfil —
+  e continuam ajustáveis depois. Estes perfis são <strong>exclusivos das Lojas HORA</strong>:
+  não aparecem na criação de usuários por outros sistemas.
+</p>
+
+{% if pode_criar %}
+  <div class="card mb-4">
+    <div class="card-header bg-light"><i class="fas fa-plus-circle"></i> Novo perfil</div>
+    <div class="card-body">
+      <form method="post" action="{{ url_for('hora.perfis_novo') }}" class="row g-2 align-items-end">
+        <div class="col-md-6">
+          <label class="form-label form-label-sm mb-1">Nome do perfil</label>
+          <input type="text" name="nome" class="form-control form-control-sm"
+                 maxlength="80" required
+                 placeholder="Ex.: Vendedor Loja, Gerente, Financeiro">
+          <small class="text-muted">
+            O identificador interno é gerado automaticamente (prefixo <code>hora_</code>),
+            sem colidir com os perfis do restante do sistema.
+          </small>
+        </div>
+        <div class="col-md-3">
+          <button type="submit" class="btn btn-sm btn-success">
+            <i class="fas fa-plus"></i> Criar perfil
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+{% endif %}
+
+{% if perfis %}
+  <div class="table-responsive">
+    <table class="table table-sm table-hover align-middle">
+      <thead class="table-light">
+        <tr>
+          <th>Perfil</th>
+          <th>Identificador</th>
+          <th class="text-center">Status</th>
+          <th class="text-center">Módulos com permissão</th>
+          <th class="text-end">Ações</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for p in perfis %}
+          <tr>
+            <td><strong>{{ p.nome }}</strong></td>
+            <td><small class="text-muted"><code>{{ p.slug }}</code></small></td>
+            <td class="text-center">
+              {% if p.ativo %}
+                <span class="badge bg-success">Ativo</span>
+              {% else %}
+                <span class="badge bg-secondary">Inativo</span>
+              {% endif %}
+            </td>
+            <td class="text-center">
+              <span class="badge bg-info">{{ contagem.get(p.id, 0) }} / {{ total_modulos }}</span>
+            </td>
+            <td class="text-end">
+              <a href="{{ url_for('hora.perfis_editar', perfil_id=p.id) }}"
+                 class="btn btn-sm btn-outline-primary">
+                <i class="fas fa-sliders-h"></i> Editar permissões
+              </a>
+              {% if pode_editar %}
+                <form method="post" action="{{ url_for('hora.perfis_toggle_ativo', perfil_id=p.id) }}"
+                      class="d-inline m-0"
+                      onsubmit="return confirm('{{ 'Desativar' if p.ativo else 'Ativar' }} o perfil {{ p.nome }}?');">
+                  {% if p.ativo %}
+                    <button type="submit" class="btn btn-sm btn-outline-secondary">
+                      <i class="fas fa-toggle-off"></i> Desativar
+                    </button>
+                  {% else %}
+                    <button type="submit" class="btn btn-sm btn-outline-success">
+                      <i class="fas fa-toggle-on"></i> Ativar
+                    </button>
+                  {% endif %}
+                </form>
+              {% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <p class="text-muted small">
+    Desativar um perfil não altera os usuários que já o usam — apenas o remove da lista de
+    perfis oferecidos para novas atribuições.
+  </p>
+{% else %}
+  <div class="alert alert-info">
+    Nenhum perfil cadastrado ainda. {% if pode_criar %}Crie o primeiro acima.{% endif %}
+  </div>
+{% endif %}
+{% endblock %}
