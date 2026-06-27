@@ -109,3 +109,89 @@ def test_anexar_nf_real_promove_e_reprocessa(db, loja_factory, pedido_compra_fac
     assert nf.numero_nf == '12345'
     from app.hora.models import HoraNfEntradaItem
     assert HoraNfEntradaItem.query.filter_by(nf_id=nf.id, numero_chassi=chassi).count() == 1
+
+
+# ---------------------------------------------------------------------------
+# Task 9: isolamento fiscal + invariante assert_item_moto_consistente (R1)
+# ---------------------------------------------------------------------------
+
+def test_nf_provisoria_isolada_de_listas_de_nf(db, loja_factory, pedido_compra_factory):
+    """Step A: NF provisória nunca aparece no autocomplete sem_recebimento=True.
+
+    A NF provisória sempre tem recebimento (criado em criar_recebimento_sem_nf),
+    portanto o filtro ~HoraNfEntrada.recebimentos.any() já a exclui.
+    Nenhuma alteração de código é necessária — este teste documenta a invariante.
+    """
+    from app.hora.services import autocomplete_service
+    pedido = pedido_compra_factory([_chassi('ISO')])
+    recebimento_service.criar_recebimento_sem_nf(
+        loja_id=pedido.loja_destino_id, operador='t')
+    _db.session.expire_all()
+    # autocomplete de NFs sem_recebimento nunca traz provisória (ela já tem recebimento)
+    res = autocomplete_service.nfs_entrada(
+        'PROV', lojas_permitidas_ids=None, sem_recebimento=True)
+    assert all(not (r['numero_nf'] or '').startswith('PROV') for r in res)
+
+
+def test_assert_item_moto_consistente_nao_falha_apos_anexar_nf_real(
+        db, loja_factory, pedido_compra_factory, modelo_moto):
+    """Step B: R1 não se materializa.
+
+    Moto criada via conferência provisória (sem HoraNfEntradaItem) torna-se
+    consistente logo após anexar_nf_real_ao_recebimento, que cria os itens.
+    assert_item_moto_consistente NÃO deve levantar AssertionError.
+
+    Adicionalmente, desconsiderar_item_nf deve ser bloqueado (ValueError) porque
+    a moto provisória tem eventos (RECEBIDA) e porque a NF já entrou em recebimento —
+    garantindo que a moto não seja apagada por engano.
+    """
+    from app.hora.models import HoraNfEntradaItem
+    from app.hora.services.nf_entrada_service import (
+        assert_item_moto_consistente, desconsiderar_item_nf,
+    )
+
+    chassi = _chassi('R1TST')
+    pedido = pedido_compra_factory([chassi])
+    loja_id = pedido.loja_destino_id
+
+    # Cria recebimento provisório, faz conferência cega e finaliza
+    rec = recebimento_service.criar_recebimento_sem_nf(loja_id=loja_id, operador='tester')
+    recebimento_service.definir_qtd_declarada(recebimento_id=rec.id, qtd=1, usuario='tester')
+    recebimento_service.registrar_conferencia_cega(
+        recebimento_id=rec.id, numero_chassi=chassi,
+        modelo_id_conferido=modelo_moto.id, cor_conferida='PRETA',
+        avaria_fisica=False, qr_code_lido=True, operador='tester',
+    )
+    recebimento_service.finalizar_recebimento(recebimento_id=rec.id, operador='tester')
+
+    # Anexa NF real — cria HoraNfEntradaItem para os chassis conferidos
+    payload = {
+        'nf': {
+            'chave_44': uuid.uuid4().hex.zfill(44),
+            'numero_nf': 'NF-R1TST',
+            'cnpj_emitente': '12345678000199',
+            'cnpj_destinatario': '00000000000000',
+            'data_emissao': _date.today(),
+            'valor_total': 5000,
+        },
+        'itens': [{'numero_chassi': chassi, 'preco_real': 5000,
+                   'modelo_texto_original': modelo_moto.nome_modelo,
+                   'cor_texto_original': 'PRETA'}],
+    }
+    nf = recebimento_service.anexar_nf_real_ao_recebimento(
+        recebimento_id=rec.id, pdf_bytes=b'', operador='tester', payload=payload)
+    _db.session.expire_all()
+
+    # Invariante: todos os itens da NF real devem ser consistentes (não levanta)
+    itens = HoraNfEntradaItem.query.filter_by(nf_id=nf.id).all()
+    assert len(itens) == 1, 'Esperado 1 item após anexar NF real'
+    for item in itens:
+        assert_item_moto_consistente(item)  # não deve levantar AssertionError
+
+    # Guard: desconsiderar é bloqueado (moto tem eventos + NF em recebimento)
+    item = itens[0]
+    try:
+        desconsiderar_item_nf(item.id, operador='tester')
+        assert False, 'Esperado ValueError ao tentar desconsiderar moto provisória'
+    except ValueError:
+        pass  # comportamento correto — moto está bloqueada
