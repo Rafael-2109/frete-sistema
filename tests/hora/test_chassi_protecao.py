@@ -34,3 +34,35 @@ def test_motivos_protecao_lista(db, pedido_compra_factory, nf_entrada_factory):
     motivos = chassi_protecao_service.motivos_protecao(chassi)
     origens = {m['origem'] for m in motivos}
     assert origens == {'pedido', 'nf_entrada'}
+
+
+def test_chassi_protegido_por_conferencia_recebimento(db, loja_factory, modelo_moto):
+    """Chassi que só existe em conferência de recebimento provisório é protegido.
+
+    Cenário: moto chegou via recebimento sem NF (provisório). Ainda não existe
+    HoraPedidoItem nem HoraNfEntradaItem para este chassi. A conferência ativa
+    (substituida=False) deve ser suficiente para proteger o chassi contra o
+    backfill TagPlus.
+    """
+    import uuid as _uuid
+    from app.hora.services.chassi_protecao_service import chassi_protegido
+    from app.hora.services import recebimento_service
+
+    loja = loja_factory()
+    chassi = ('CONF' + _uuid.uuid4().hex.upper())[:25].ljust(25, '0')
+
+    rec = recebimento_service.criar_recebimento_sem_nf(loja_id=loja.id, operador='t')
+    recebimento_service.definir_qtd_declarada(recebimento_id=rec.id, qtd=1, usuario='t')
+    recebimento_service.registrar_conferencia_cega(
+        recebimento_id=rec.id,
+        numero_chassi=chassi,
+        modelo_id_conferido=modelo_moto.id,
+        cor_conferida='PRETA',
+        avaria_fisica=False,
+        qr_code_lido=True,
+        operador='t',
+    )
+
+    from app import db as _db
+    _db.session.expire_all()
+    assert chassi_protegido(chassi) is True
