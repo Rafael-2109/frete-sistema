@@ -49,6 +49,7 @@ atualizado: 2026-06-27
 - [32. Recebimento — autocomplete de NF por permissão + guarda anti-duplicado — 2026-06-27](#32-recebimento--autocomplete-de-nf-por-permissão-de-recebimento--guarda-anti-duplicado--2026-06-27)
 - [33. Loja real da venda vs matriz (emitente fiscal) — integridade — 2026-06-27](#33-loja-real-da-venda-vs-matriz-emitente-fiscal--integridade--2026-06-27)
 - [34. Pedido de Venda — vendedor ao lado da loja + campo Telefone Lead — 2026-06-28](#34-pedido-de-venda--vendedor-ao-lado-da-loja--campo-telefone-lead--2026-06-28)
+- [35. CORTESIA de revisão — texto institucional na NF — 2026-06-28](#35-cortesia-de-revisão--texto-institucional-na-nf--2026-06-28)
 - [Onboarding Tours (2026-05-08)](#onboarding-tours-2026-05-08)
 - [Referências](#referências)
 
@@ -1280,7 +1281,8 @@ brindes (peça · qtd · custo) abaixo. Bug de exibição, não de cálculo.
 **#3 — CORTESIA nas informações complementares.** `payload_builder._montar_inf_contribuinte`
 ganhou, no fim do conteúdo fiscal (logo **antes** do rastreio gerencial interno
 `Venda # | Loja | Vendedor`), a linha **`CORTESIA: <peça_1>, <peça_2>...`** (qtd ≠ 1
-prefixa `Nx`, ex.: `2x RETROVISOR`). Só aparece quando há brinde.
+prefixa `Nx`, ex.: `2x RETROVISOR`). Só aparece quando há brinde. **Exceção (§35):**
+a peça de **revisão** sai da linha de peças e ganha bloco institucional próprio.
 
 **#4 — CAUSA-RAIZ do "brinde não aparece quando adiciono na criação"** (achada depois,
 por reprodução). O backend grava o brinde na criação (teste de POST prova); o sumiço
@@ -1452,6 +1454,34 @@ NOT EXISTS) **aplicada em local + PROD**.
 
 **Validação:** suíte de venda HORA (42) + render dos 2 modos (criação e edição)
 verde; Jinja compila; coluna confirmada em PROD (`character varying(20)`, nullable).
+
+---
+
+## 35. CORTESIA de revisão — texto institucional na NF — 2026-06-28
+
+Estende a §30 #3. Quando a venda tem a **peça de revisão** como brinde, a NF-e
+exibe, em `inf_contribuinte`, um **bloco institucional próprio** em vez de listar a
+peça na linha `CORTESIA: <peças>`. **Sem migration.**
+
+**Texto fixo** (`TEXTO_CORTESIA_REVISAO` em `payload_builder.py` — fonte: dono do
+módulo): "Cortesia: Revisão gratuita de 3 meses, mediante agendamento prévio
+(telefônico ou WhatsApp da loja) e conforme disponibilidade da agenda técnica da loja
+em que foi efetuada a compra/retirada. Será válida em apenas uma das lojas." Os
+marcadores markdown do texto original (`*..*` / `_.._`) foram **removidos de
+propósito**: `infCpl` da NFe é texto plano e os símbolos vazariam literais na DANFE.
+
+**Detecção** (`_eh_peca_revisao`): `codigo_interno` normalizado (upper + sem acento)
+`== 'REVISAO'` — **não** por id (211 em PROD difere de local/dev) nem por descrição
+(é `SE - REVISÃO`). `codigo_interno` é UNIQUE e estável entre ambientes.
+
+**Bloco 3 de `_montar_inf_contribuinte`:** separa os brindes em revisão vs demais. A
+revisão **não entra** na linha `CORTESIA: <peças>` (ganha o bloco próprio, evitando
+duplicar/poluir a leitura fiscal); as demais peças seguem na linha `CORTESIA:` como
+antes. Venda com revisão + peça física exibe **as duas coisas**.
+
+**Testes:** `tests/hora/test_brinde_inf_contribuinte.py` (+3: texto institucional,
+detecção por código sem acento, revisão + peça física). Suíte de brinde/payload (37)
+verde.
 
 ---
 

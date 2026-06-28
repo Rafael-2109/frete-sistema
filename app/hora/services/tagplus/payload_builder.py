@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import logging
 import re
+import unicodedata
 from datetime import date
 from decimal import Decimal, ROUND_HALF_UP
 from typing import TYPE_CHECKING
@@ -31,6 +32,34 @@ if TYPE_CHECKING:
     from app.hora.models.venda import HoraVenda
 
 logger = logging.getLogger(__name__)
+
+
+# Texto institucional da CORTESIA de revisao gratuita, exibido em inf_contribuinte
+# quando a venda tem a peca de REVISAO como brinde (codigo_interno REVISAO,
+# id 211 em PROD). Fonte: dono do modulo HORA (2026-06-28). Os marcadores markdown
+# do texto original (*..* / _.._) foram removidos de proposito: o `infCpl` da NFe e'
+# texto plano (nao renderiza formatacao) e os simbolos vazariam literais na DANFE.
+TEXTO_CORTESIA_REVISAO = (
+    'Cortesia: Revisão gratuita de 3 meses, mediante agendamento prévio '
+    '(telefônico ou WhatsApp da loja) e conforme disponibilidade da agenda '
+    'técnica da loja em que foi efetuada a compra/retirada. Será válida em '
+    'apenas uma das lojas.'
+)
+
+
+def _eh_peca_revisao(peca) -> bool:
+    """True se a peca de brinde e' a 'revisao' (cortesia de revisao gratuita).
+
+    Detecta pelo `codigo_interno` normalizado (upper + sem acento) == 'REVISAO',
+    nao pelo id (211 em PROD, mas difere em local/dev) e nao pela descricao
+    (que e' 'SE - REVISAO'). `codigo_interno` e' UNIQUE e estavel entre ambientes.
+    """
+    cod = getattr(peca, 'codigo_interno', None) if peca else None
+    if not cod:
+        return False
+    nfkd = unicodedata.normalize('NFKD', cod)
+    sem_acento = ''.join(c for c in nfkd if not unicodedata.combining(c))
+    return sem_acento.strip().upper() == 'REVISAO'
 
 
 class PayloadBuilderError(Exception):
@@ -267,10 +296,17 @@ class PayloadBuilder:
         # 3) Brindes (#36) — "CORTESIA" para o cliente: peca dada de brinde (nao
         #    cobrada, nao abate estoque). Fica no fim do conteudo fiscal, logo
         #    antes do rastreio gerencial. qtd != 1 prefixa "Nx".
+        #    A peca de REVISAO (cortesia de revisao gratuita) e' tratada a' parte:
+        #    ganha o bloco institucional `TEXTO_CORTESIA_REVISAO` e NAO entra na
+        #    linha "CORTESIA: <pecas>" (evita duplicar / poluir a leitura fiscal).
         brindes = list(getattr(venda, 'brindes', []) or [])
         if brindes:
             nomes = []
+            tem_revisao = False
             for b in brindes:
+                if _eh_peca_revisao(b.peca):
+                    tem_revisao = True
+                    continue
                 desc = (b.peca.descricao if b.peca else None) or '-'
                 qd = Decimal(str(b.qtd or 0))
                 qtd_txt = (
@@ -278,8 +314,12 @@ class PayloadBuilder:
                     else format(qd.normalize(), 'f')
                 )
                 nomes.append(f'{qtd_txt}x {desc}' if qd != 1 else desc)
-            partes.append(f'CORTESIA: {", ".join(nomes)}')
-            partes.append('')
+            if nomes:
+                partes.append(f'CORTESIA: {", ".join(nomes)}')
+                partes.append('')
+            if tem_revisao:
+                partes.append(TEXTO_CORTESIA_REVISAO)
+                partes.append('')
 
         # 4) Rastreio interno — sempre por ultimo, para nao atrapalhar a leitura
         #    fiscal do cliente. Mantem auditoria gerencial existente.
