@@ -56,6 +56,33 @@ Indice de execucoes do dialogo de melhoria Agent SDK <-> Claude Code.
 | R1 | 2026-06-24 | 2 | 2 | 0 | 0 | OK (RECONCILIACAO MANUAL — nao e execucao do cron. Fecha drift: 2 propostas do #46 viraram codigo e o registro ficou defasado. IMP-22-004 (peso cubado frete, Barbara id 87) implementado em `120f2f61d` (23/06); IMP-22-002 (excluir FT CarVia, Talita id 17) implementado em `3b26ebc02` (24/06, IMP Talita). Gravado v3 `auto_implemented=true` ids 295-296 HTTP 200. Gap de processo corrigido: novo PASSO 1.5 no prompt D8 reabre propostas implementadas via `git log --grep`. Sem push) |
 | 50 | 2026-06-26 | 3 | 3 | 0 | 0 | OK (3 IMP avaliaveis = 3 auto-impl + 2 F2 listadas + 0 reconciliadas (1.5). Rodada Motos Assai/Odoo. IMP-26-002 skill_bug rastreando-chassi-assai (Rayssa id 78): `recibo.data_recebimento` inexistente -> `data_recibo` (model AssaiReciboMotochefe.data_recibo:43); +teste regressao por introspeccao, 4 passed. IMP-26-001 instruction recebimento moto QR (Laura id 76): routing ja existia mas gatilhos sem vocabulario; enriqueci `ROUTING_SKILLS` (recebimento fisico/escanear QR/como receber) + secao 'Caminho na interface' (wizard A-D) no CORPO de conferindo-recibo-assai (camada 3b, sob demanda, sem custo boot; NAO mexi na YAML p/ preservar 8K listing). IMP-25-001 skill_bug descobrindo-odoo-estrutura (Vanderleia id 48): 2.1.1 codigo-correto — agente INVENTOU 'aba Vendas e Compras'; fix de capacidade = `fields_get` expoe `groups` (campo restrito por permissao, ex `account.group_warning_account`) + guard escopo modelo!=UI (consultar ir.ui.view / sinalizar incerteza). v2 ids 314-316 HTTP ok. PASSO 1.5: 17 propostas checadas, matches eram so commits-proposta D8 (codigo de OUTRAS sugestoes da rodada) -> 0 viraram codigo. 2 F2: adhoc-3734 conta-destino CD/OUT (TAMIRIS id 44, reincidente #49), adhoc-1743 patch fretes CarVia (TALITA id 17, 43 membros). Sem push) |
 | 51 | 2026-06-27 | 0 | 0 | 0 | 0 | PARCIAL (MCP do Render AUSENTE na sessao cron — auth headless; `query_render_postgres`/`list_services` = "No such tool available", `claude mcp list` mostra `render ✔`. PASSO 1 via fallback REST `/pending`: backlog 100% F2 (gate humano), 0 avaliaveis pelo D8 -> 0 impl/rej/prop, nenhuma escrita no banco. 2 F2 listadas, ambas reincidentes: adhoc-3734 conta-destino CD/OUT Odoo (TAMIRIS id 44, 3d, gap REAL nao coberto) e adhoc-1743 patch fretes CarVia (TALITA id 17, 43 membros, 2d — ARMADILHA overlap: `valor_cotado`-por-id JA coberto por atualizando_frete_carvia.py commit b116d0111; residual = patch lote-dict + regra pedagio/peso-cubado subcontrato). PASSO 1.5 (reconciliacao) BLOQUEADO: exige SQL no Postgres prod, sem fallback REST. origem_usuarios citados do historico #49/#50 (nao re-resolvidos). Relatorio+historico commitados, sem push) |
+| 52 | 2026-06-28 | 0 | 0 | 0 | 0 | OK (backlog 100% F2 — gate humano; nenhuma avaliavel pelo D8. MESMAS 2 do #51, agora com MCP Render DISPONIVEL: PASSO 1 direto do Postgres, `origem_usuarios` RESOLVIDO via SQL, PASSO 1.5 EXECUTADO (v2-sem-v3 ultimos 45d = 0 linhas). 2 F2 reincidentes: `adhoc-cluster-3734` conta-destino CD/OUT Odoo (TAMIRIS SALLES CORDEIRO id 44, 6 membros, 4d, gap REAL nao coberto) e `adhoc-cluster-1743` patch fretes CarVia (TALITA DE LE LIMA id 17, 43 membros, 3d — reverificado no codigo: `valor_cotado`-por-id JA coberto por `atualizando_frete_carvia.py:203-218` commit b116d0111; residual aberto = (a) patch lote-dict `--frete-id required=True` so single + (b) pedagio/peso-cubado subcontrato, script declara "NAO calcula" :14). Nenhuma escrita no banco (F2 nao gera v2; 1.5 sem v3). Sem bloqueio -> OK. Relatorio+historico commitados, sem push) |
+
+## 2026-06-28 (cron D8 #52)
+
+- **Backlog 100% F2** (gate humano Rafael+CC) — as MESMAS 2 `adhoc-cluster-*` do #51, ainda nao decididas.
+  Acao do D8: apenas LISTAR (PASSO 2.2 EXCECAO F2). 0 avaliadas/implementadas/rejeitadas/propostas, nenhuma
+  escrita no banco (F2 nao gera status v2).
+- **MCP do Render DISPONIVEL** (≠ #51, que ficou PARCIAL por ausencia do MCP). PASSO 1 veio direto do
+  Postgres `dpg-d13m38vfte5s738t6p50-a`; `origem_usuarios` RESOLVIDO via SQL; PASSO 1.5 EXECUTADO.
+- **PASSO 1.5 (reconciliacao):** query de propostas v2 `auto_implemented=false` sem v3 (ultimos 45d)
+  retornou **0 linhas** — nada a reconciliar/gravar (v3).
+- **F2 #1 — `adhoc-cluster-3734`** conta contabil de destino em operacao CD/OUT no Odoo via XML-RPC
+  (skill_suggestion, `tipo_gap=skill_insuficiente`, rel=`rastreando-odoo`, info; **TAMIRIS SALLES CORDEIRO
+  id 44**; 6 membros; 4d; sessao `bf1aff40-...`). Reincidente #49/#50/#51. Gap REAL nao coberto: nenhuma
+  skill configura a conta de destino de um stock.picking.type (CD/OUT -> 3201000001) — candidata a atomo
+  WRITE com dry-run+confirmacao. Decisao no gate.
+- **F2 #2 — `adhoc-cluster-1743`** patch de campos de fretes CarVia por ID/criterio (skill_suggestion,
+  rel=`gerindo-carvia`, info; **TALITA DE LE LIMA id 17**; 43 membros; 3d; sessoes `19f79270-...`,
+  `538873f2-...`, `638a33dc-...`, `a5d68cd5-...`). Reincidente #50/#51. **Overlap reverificado no codigo
+  hoje** (ARMADILHA PASSO 1.5): `valor_cotado`-por-id JA coberto por
+  `.claude/skills/gerindo-carvia/scripts/atualizando_frete_carvia.py:203-218` (espelha `valor_considerado`
+  :108-118), commit `b116d0111` (Origem IMP-2026-06-24-001..004). **Residual aberto:** (a) patch em LOTE
+  por dict `{id: valor}` — hoje `--frete-id required=True`, so single; (b) pedagio por PESO CUBADO em
+  subcontrato — script declara "NAO calcula frete (peso cubado x tabela)" (:14), nenhum script CarVia
+  calcula pedagio. Recomendacao ao gate: avaliar so o residual (a)+(b), nao recriar o existente.
+- **Persistencia:** nenhuma (F2 sem v2; 1.5 sem v3). Status **OK** — tudo que o D8 podia fazer concluido
+  sem bloqueio. Relatorio+historico commitados na `cron/manutencao`, sem push.
 
 ## 2026-06-27 (cron D8 #51)
 
