@@ -169,7 +169,7 @@ Templates (`app/templates/hora/`):
 
 ## Migration
 
-`hora_57_recebimento_sem_nf.{sql,py}` (par idempotente — regra do projeto):
+`hora_58_recebimento_sem_nf.{sql,py}` (par idempotente — regra do projeto):
 - `ALTER TABLE hora_nf_entrada ADD COLUMN IF NOT EXISTS tipo VARCHAR(20) NOT NULL DEFAULT 'REAL';`
 - `CREATE TABLE IF NOT EXISTS hora_recebimento_esperado (...)` + índices.
 - `.py` espelha via `SQL_DDL` + `main()` (template `hora_48`/`hora_53`).

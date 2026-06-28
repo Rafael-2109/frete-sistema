@@ -1,15 +1,15 @@
-"""Migration HORA 57: Recebimento por filial sem NF (NF provisória).
+"""Migration HORA 58: Recebimento por filial sem NF (NF provisória).
 
 Adiciona hora_nf_entrada.tipo {PROVISORIA,REAL} e cria hora_recebimento_esperado
 (snapshot congelado dos pedidos pendentes da filial usado como gabarito).
 
 Idempotente — pode rodar 2x (IF NOT EXISTS).
 
-Nota: planejado como hora_54 no spec, renumerado para 57 porque
-      hora_54_aprovacoes_perm já existia no branch main.
+Nota: planejado como hora_54 no spec; renumerado para 58 porque hora_54..hora_57
+      já existiam no branch main (hora_57 = loja_is_matriz) após o rebase.
 
 Uso:
-    python scripts/migrations/hora_57_recebimento_sem_nf.py
+    python scripts/migrations/hora_58_recebimento_sem_nf.py
 """
 import logging
 import os
@@ -69,9 +69,9 @@ def main() -> None:
         print(f'  hora_nf_entrada.tipo existe? {ok_col}')
         print(f'  hora_recebimento_esperado existe? {ok_tab}')
         if not (ok_col and ok_tab):
-            print('\nERRO: migration HORA 57 incompleta.')
+            print('\nERRO: migration HORA 58 incompleta.')
             sys.exit(1)
-        print('\nMigration HORA 57 concluida com sucesso.')
+        print('\nMigration HORA 58 concluida com sucesso.')
 
 
 if __name__ == '__main__':

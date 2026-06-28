@@ -23,7 +23,7 @@ atualizado: 2026-06-26
 ## Global Constraints
 
 - **Invariante HORA:** `hora_moto` é insert-once; estado via `hora_moto_evento` (nunca `UPDATE hora_moto.status`). Exceção SOT já existente: `_aplicar_correcao_moto_se_divergir` (cor/modelo).
-- **Migrations duais** (regra `~/.claude/CLAUDE.md`): par `.sql` idempotente + `.py` espelho. Próxima = `hora_57`.
+- **Migrations duais** (regra `~/.claude/CLAUDE.md`): par `.sql` idempotente + `.py` espelho. Próxima = `hora_58`.
 - **Testes:** PostgreSQL real, fixture `db` (SAVEPOINT) + `loja_factory`/`pedido_compra_factory`/`modelo_moto`. Services commitam fora do savepoint → **uuid em tudo unique** + `_db.session.expire_all()` após chamar service que commitou.
 - **Rotas:** `@require_hora_perm('recebimentos', <acao>)`; `usuario_tem_acesso_a_loja(loja_id)`.
 
@@ -33,7 +33,7 @@ atualizado: 2026-06-26
 
 - [File Structure](#file-structure)
 - [Convenções do módulo (ler antes)](#convenções-do-módulo-ler-antes)
-- [Task 1: Migration hora_57](#task-1-migration-hora_57)
+- [Task 1: Migration hora_58](#task-1-migration-hora_58)
 - [Task 2: Modelos — tipo/provisoria + HoraRecebimentoEsperado](#task-2-modelos--tipoprovisoria--horarecebimentoesperado)
 - [Task 3: criar_recebimento_sem_nf + snapshot](#task-3-criar_recebimento_sem_nf--snapshot)
 - [Task 4: branches provisória na conferência/finalização](#task-4-branches-provisória-na-conferênciafinalização)
@@ -49,7 +49,7 @@ atualizado: 2026-06-26
 
 | Arquivo | Ação | Responsabilidade |
 |---|---|---|
-| `scripts/migrations/hora_57_recebimento_sem_nf.{sql,py}` | Criar | coluna `tipo` + tabela `hora_recebimento_esperado` |
+| `scripts/migrations/hora_58_recebimento_sem_nf.{sql,py}` | Criar | coluna `tipo` + tabela `hora_recebimento_esperado` |
 | `app/hora/models/compra.py` | Modificar | `tipo` + property `provisoria` em `HoraNfEntrada` |
 | `app/hora/models/recebimento.py` | Modificar | classe `HoraRecebimentoEsperado` |
 | `app/hora/models/__init__.py` | Modificar | exportar `HoraRecebimentoEsperado` |
@@ -68,11 +68,11 @@ atualizado: 2026-06-26
 
 ---
 
-### Task 1: Migration hora_57
+### Task 1: Migration hora_58
 
 **Files:**
-- Create: `scripts/migrations/hora_57_recebimento_sem_nf.sql`
-- Create: `scripts/migrations/hora_57_recebimento_sem_nf.py`
+- Create: `scripts/migrations/hora_58_recebimento_sem_nf.sql`
+- Create: `scripts/migrations/hora_58_recebimento_sem_nf.py`
 
 **Interfaces:**
 - Produces: coluna `hora_nf_entrada.tipo`; tabela `hora_recebimento_esperado`.
@@ -117,7 +117,7 @@ Adiciona hora_nf_entrada.tipo {PROVISORIA,REAL} e cria hora_recebimento_esperado
 Idempotente — pode rodar 2x (IF NOT EXISTS).
 
 Uso:
-    python scripts/migrations/hora_57_recebimento_sem_nf.py
+    python scripts/migrations/hora_58_recebimento_sem_nf.py
 """
 import logging
 import os
@@ -188,14 +188,14 @@ if __name__ == '__main__':
 
 - [ ] **Step 3: Rodar a migration**
 
-Run: `source .venv/bin/activate && python scripts/migrations/hora_57_recebimento_sem_nf.py`
+Run: `source .venv/bin/activate && python scripts/migrations/hora_58_recebimento_sem_nf.py`
 Expected: "Migration HORA 57 concluida com sucesso."
 
 - [ ] **Step 4: Commit**
 
 ```bash
-git add scripts/migrations/hora_57_recebimento_sem_nf.sql scripts/migrations/hora_57_recebimento_sem_nf.py
-git commit -m "feat(hora): migration hora_57 — tipo NF provisoria + hora_recebimento_esperado"
+git add scripts/migrations/hora_58_recebimento_sem_nf.sql scripts/migrations/hora_58_recebimento_sem_nf.py
+git commit -m "feat(hora): migration hora_58 — tipo NF provisoria + hora_recebimento_esperado"
 ```
 
 ---

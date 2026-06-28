@@ -1346,81 +1346,6 @@ sem proteção. `cor_service` é reutilizável lá (mesma mecânica) — fica co
 erro de digitação/gênero/acento/idêntico/par-próximo, `listar_cores_existentes` com DB e
 contrato do endpoint). Validação: 23 verdes (cor + recebimento), `node --check` no JS
 renderizado, Jinja compila.
-## 32. Recebimento por filial sem NF (NF provisória) — 2026-06-27
-
-Permite iniciar um recebimento selecionando apenas a loja, sem uma NF de entrada real.
-Spec: `docs/superpowers/specs/2026-06-26-hora-recebimento-sem-nf-design.md`. Plano:
-`docs/superpowers/plans/2026-06-26-hora-recebimento-sem-nf.md`.
-
-### Campo `tipo` e modelo `HoraRecebimentoEsperado`
-
-**Migration `hora_57_recebimento_sem_nf.{sql,py}`** (idempotente, par usual):
-- `ALTER TABLE hora_nf_entrada ADD COLUMN IF NOT EXISTS tipo VARCHAR(20) NOT NULL DEFAULT 'REAL'` — valores `{'PROVISORIA','REAL'}`, default `'REAL'` para NFs existentes.
-- `CREATE TABLE IF NOT EXISTS hora_recebimento_esperado (...)` — snapshot congelado dos pedidos pendentes da filial (ver schema na migration). 3 índices: `recebimento_id`, `(recebimento_id, modelo_id)`, `(recebimento_id, chassi_esperado)`.
-
-**Modelo** (`app/hora/models/compra.py`):
-- `HoraNfEntrada.tipo` — coluna `VARCHAR(20)`, default `'REAL'`.
-- `HoraNfEntrada.provisoria` — property `bool` (`self.tipo == 'PROVISORIA'`).
-
-**Modelo** (`app/hora/models/recebimento.py`):
-- `HoraRecebimentoEsperado` — snapshot de um item de pedido pendente: `recebimento_id`, `pedido_id`, `pedido_item_id`, `modelo_id`, `cor`, `chassi_esperado`, `preco_esperado`, `consumido_por_conferencia_id`, `criado_em`.
-
-### `criar_recebimento_sem_nf(loja_id, operador)`
-
-Cria um recebimento provisório (`recebimento_service.py`):
-1. Cria uma `HoraNfEntrada` com `tipo='PROVISORIA'` (mantém `nf_id` NOT NULL — usa string sintética única; `valor_total=0`). **`nf_id` é obrigatório no schema** — o provisório não relaxa essa constraint; usa um container sem efeito fiscal.
-2. Cria o `HoraRecebimento` vinculado à NF provisória.
-3. Materializa snapshot congelado de `hora_recebimento_esperado`: itera todos os `HoraPedidoItem` da loja com pedido em status `ABERTO` ou `PARCIALMENTE_FATURADO`, gravando um registro por item esperado. O snapshot é imutável após a criação.
-
-### Conferência/finalização com gabarito provisório
-
-**`_gabarito_provisorio(rec, chassi, modelo_id_conf)`** — helper que busca no snapshot `hora_recebimento_esperado` do recebimento um item compatível com o chassi conferido (exact match por `chassi_esperado`) ou fungível pelo modelo (`modelo_id` == `modelo_id_conf`). Retorna o item mais próximo disponível (não consumido).
-
-**Branch provisória em `_redefinir_divergencias`**:
-- Se gabarito encontra item → marca `consumido_por_conferencia_id` no snapshot; moto criada com modelo/cor declarados pelo operador (não usa sentinel).
-- Se gabarito não encontra nenhum item compatível → cria divergência `CHASSI_EXTRA` (chassi não estava previsto no snapshot).
-- **A conferência é SOT**: modelo/cor conferidos sobrepõem o snapshot.
-
-**`finalizar_recebimento` (branch provisória)**:
-- NÃO gera `MOTO_FALTANDO` para itens do snapshot ainda não consumidos. O recebimento provisório fica "aberto" — itens esperados não chegados não são registrados como faltantes (design deliberado: a NF real resolverá o confronto formal).
-
-### `anexar_nf_real_ao_recebimento(recebimento_id, pdf_bytes, operador, payload=None)`
-
-Promove o recebimento provisório para real (`recebimento_service.py`):
-1. Parseia o PDF (via `danfe_adapter`) ou usa `payload` inline.
-2. Muda `HoraNfEntrada.tipo` de `'PROVISORIA'` para `'REAL'` e atualiza campos fiscais (número, série, chave 44, valor total, emitente).
-3. Cria `HoraNfEntradaItem` para cada chassi da NF real (insert-once moto: reutiliza `HoraMoto` criada na conferência se chassi já existe).
-4. Re-deriva divergências contra a NF real via `reprocessar_recebimentos_para_nf` — substituindo o gabarito provisório pela NF como fonte de verdade fiscal.
-
-**Nota:** `pedido_id` permanece `NULL` na NF provisória (o snapshot abrange MUITOS pedidos, não um). Por isso, o matching `nf.pedido_id →` atualização de status fiscal do pedido está **inativo** para NFs promovidas de provisório (ver Pendências abaixo).
-
-### Proteção de chassi (R2)
-
-`chassi_protecao_service.chassi_protegido(numero_chassi)` foi estendido para também retornar `True` quando o chassi tem uma conferência ativa em recebimento provisório — impede reuso do chassi em outro recebimento enquanto a conferência está em curso.
-
-### Rotas e UI
-
-**Rotas** (`app/hora/routes/recebimentos.py`):
-- `recebimentos_novo` (`POST`) — agora aceita apenas `loja_id` quando não há NF; detecta provisório pelo parâmetro ausente e chama `criar_recebimento_sem_nf`.
-- `recebimentos_anexar_nf` (`POST /recebimentos/<id>/anexar-nf`) — upload do PDF da NF real; chama `anexar_nf_real_ao_recebimento`.
-
-**UI**:
-- `recebimentos_lista.html` + `recebimento_detalhe.html` + `recebimento_wizard.html` — badge "Provisória" no lugar do número fiscal quando `nf.provisoria`; esconde link `nfs_detalhe` e valor "Esperado NF".
-- `recebimento_detalhe.html` — formulário de upload "Anexar NF real" visível enquanto `tipo == 'PROVISORIA'`.
-- Wizard — exibe cores do snapshot provisório como sugestão para seleção de modelo/cor do operador.
-
-### Pendências/follow-up
-
-**Gap A — Avanço de status fiscal do pedido não implementado:**
-A NF provisória é criada sem `pedido_id` (o snapshot abrange muitos pedidos). A chamada de matching `if nf.pedido_id:` em `anexar_nf_real_ao_recebimento` é inerte. Ao promover para REAL, o status fiscal dos pedidos de origem **não avança**. Resolução requer matching NF→pedido por chassi (tarefa futura).
-
-**Gap B — MOTO_FALTANDO não gerada para chassi na NF real não conferido:**
-Se um chassi aparece na NF real (ao anexar) mas não foi conferido fisicamente, o sistema não gera `MOTO_FALTANDO`. É uma questão de design em aberto — a NF real é a lista faturada autorizada; decidir se "faltou" exige confronto explícito (tarefa futura).
-
-**Spec/Plano:**
-- `docs/superpowers/specs/2026-06-26-hora-recebimento-sem-nf-design.md`
-- `docs/superpowers/plans/2026-06-26-hora-recebimento-sem-nf.md`
-
 ---
 
 ## 32. Recebimento — autocomplete de NF por permissão de recebimento + guarda anti-duplicado — 2026-06-27
@@ -1492,6 +1417,87 @@ pela chave-44 grava `tagplus_departamento`) e então a auto-cura/Aplicar resolve
 
 **Testes:** `test_loja_real_venda_resolver`, `test_import_nf_saida_loja_matriz`,
 `test_pedido_backfill_aplica_loja`, `test_uf_emitente_matriz`, `test_frente_c_exclui_matriz`.
+
+---
+
+## 34. Recebimento por filial sem NF (NF provisória) — 2026-06-27
+
+Permite iniciar um recebimento selecionando apenas a loja, sem uma NF de entrada real.
+Spec: `docs/superpowers/specs/2026-06-26-hora-recebimento-sem-nf-design.md`. Plano:
+`docs/superpowers/plans/2026-06-26-hora-recebimento-sem-nf.md`.
+
+### Campo `tipo` e modelo `HoraRecebimentoEsperado`
+
+**Migration `hora_58_recebimento_sem_nf.{sql,py}`** (idempotente, par usual):
+- `ALTER TABLE hora_nf_entrada ADD COLUMN IF NOT EXISTS tipo VARCHAR(20) NOT NULL DEFAULT 'REAL'` — valores `{'PROVISORIA','REAL'}`, default `'REAL'` para NFs existentes.
+- `CREATE TABLE IF NOT EXISTS hora_recebimento_esperado (...)` — snapshot congelado dos pedidos pendentes da filial (ver schema na migration). 3 índices: `recebimento_id`, `(recebimento_id, modelo_id)`, `(recebimento_id, chassi_esperado)`.
+
+**Modelo** (`app/hora/models/compra.py`):
+- `HoraNfEntrada.tipo` — coluna `VARCHAR(20)`, default `'REAL'`.
+- `HoraNfEntrada.provisoria` — property `bool` (`self.tipo == 'PROVISORIA'`).
+
+**Modelo** (`app/hora/models/recebimento.py`):
+- `HoraRecebimentoEsperado` — snapshot de um item de pedido pendente: `recebimento_id`, `pedido_id`, `pedido_item_id`, `modelo_id`, `cor`, `chassi_esperado`, `preco_esperado`, `consumido_por_conferencia_id`, `criado_em`.
+
+### `criar_recebimento_sem_nf(loja_id, operador)`
+
+Cria um recebimento provisório (`recebimento_service.py`):
+1. Cria uma `HoraNfEntrada` com `tipo='PROVISORIA'` (mantém `nf_id` NOT NULL — usa string sintética única; `valor_total=0`). **`nf_id` é obrigatório no schema** — o provisório não relaxa essa constraint; usa um container sem efeito fiscal.
+2. Cria o `HoraRecebimento` vinculado à NF provisória.
+3. Materializa snapshot congelado de `hora_recebimento_esperado`: itera todos os `HoraPedidoItem` da loja com pedido em status `ABERTO` ou `PARCIALMENTE_FATURADO`, gravando um registro por item esperado. O snapshot é imutável após a criação.
+
+### Conferência/finalização com gabarito provisório
+
+**`_gabarito_provisorio(rec, chassi, modelo_id_conf)`** — helper que busca no snapshot `hora_recebimento_esperado` do recebimento um item compatível com o chassi conferido (exact match por `chassi_esperado`) ou fungível pelo modelo (`modelo_id` == `modelo_id_conf`). Retorna o item mais próximo disponível (não consumido).
+
+**Branch provisória em `_redefinir_divergencias`**:
+- Se gabarito encontra item → marca `consumido_por_conferencia_id` no snapshot; moto criada com modelo/cor declarados pelo operador (não usa sentinel).
+- Se gabarito não encontra nenhum item compatível → cria divergência `CHASSI_EXTRA` (chassi não estava previsto no snapshot).
+- **A conferência é SOT**: modelo/cor conferidos sobrepõem o snapshot.
+
+**`finalizar_recebimento` (branch provisória)**:
+- NÃO gera `MOTO_FALTANDO` para itens do snapshot ainda não consumidos. O recebimento provisório fica "aberto" — itens esperados não chegados não são registrados como faltantes (design deliberado: a NF real resolverá o confronto formal).
+
+### `anexar_nf_real_ao_recebimento(recebimento_id, pdf_bytes, operador, payload=None)`
+
+Promove o recebimento provisório para real (`recebimento_service.py`):
+1. Parseia o PDF (via `danfe_adapter`) ou usa `payload` inline.
+2. Muda `HoraNfEntrada.tipo` de `'PROVISORIA'` para `'REAL'` e atualiza campos fiscais (número, série, chave 44, valor total, emitente).
+3. Cria `HoraNfEntradaItem` para cada chassi da NF real (insert-once moto: reutiliza `HoraMoto` criada na conferência se chassi já existe).
+4. Re-deriva divergências contra a NF real via `reprocessar_recebimentos_para_nf` — substituindo o gabarito provisório pela NF como fonte de verdade fiscal.
+
+**Nota (intencional):** `pedido_id` permanece `NULL` na NF provisória (o snapshot abrange MUITOS pedidos, não um). A vinculação NF→pedido **não acontece no anexar** — segue o **mesmo fluxo normal/manual** de qualquer NF importada sem pedido sugerido (`importar_danfe` também deixa `pedido_id` NULL; a vinculação é ação separada). Depois de promovida a `REAL`, a NF fica vinculável pela tela padrão via `candidatos_pedidos_para_nf` (casa por chassi, idêntico a qualquer NF) → `atualizar_status_pedido_por_faturamento`. Por isso o `if nf.pedido_id:` em `anexar_nf_real_ao_recebimento` é o mesmo guard inerte do fluxo normal — **não** um caminho especial. Ver "Decisões de design" abaixo.
+
+### Proteção de chassi (R2)
+
+`chassi_protecao_service.chassi_protegido(numero_chassi)` foi estendido para também retornar `True` quando o chassi tem uma conferência ativa em recebimento provisório — impede reuso do chassi em outro recebimento enquanto a conferência está em curso.
+
+### Rotas e UI
+
+**Rotas** (`app/hora/routes/recebimentos.py`):
+- `recebimentos_novo` (`POST`) — agora aceita apenas `loja_id` quando não há NF; detecta provisório pelo parâmetro ausente e chama `criar_recebimento_sem_nf`.
+- `recebimentos_anexar_nf` (`POST /recebimentos/<id>/anexar-nf`) — upload do PDF da NF real; chama `anexar_nf_real_ao_recebimento`.
+
+**UI**:
+- `recebimentos_lista.html` + `recebimento_detalhe.html` + `recebimento_wizard.html` — badge "Provisória" no lugar do número fiscal quando `nf.provisoria`; esconde link `nfs_detalhe` e valor "Esperado NF".
+- `recebimento_detalhe.html` — formulário de upload "Anexar NF real" visível enquanto `tipo == 'PROVISORIA'`.
+- Wizard — exibe cores do snapshot provisório como sugestão para seleção de modelo/cor do operador.
+
+### Decisões de design (comportamento preservado — NÃO são gaps a "corrigir")
+
+> Confirmado com o dono (2026-06-27): estes comportamentos são **intencionais**. Não os altere
+> em nome de "completar a feature" — fazê-lo quebra o que foi pedido. (Versões anteriores desta
+> seção os chamavam de "Gap A/B — tarefa futura"; era enquadramento errado.)
+
+**A — Vinculação NF→pedido segue o fluxo normal/manual (não automática no anexar):**
+`anexar_nf_real_ao_recebimento` deixa `pedido_id` NULL de propósito; o `if nf.pedido_id:` é o mesmo guard inerte de `importar_danfe` sem pedido sugerido. A NF promovida a `REAL` fica vinculável pela tela padrão (`candidatos_pedidos_para_nf` casa por chassi, igual a qualquer NF) → `atualizar_status_pedido_por_faturamento`. A vinculação é **idêntica pré ou pós recebimento** — exatamente o pedido do dono. **Não** adicionar matching NF→pedido especial no anexar.
+
+**B — `MOTO_FALTANDO` mantém o comportamento atual:**
+O anexar reprocessa via `reprocessar_recebimentos_para_nf` (motor existente), sem lógica nova de faltante. `MOTO_FALTANDO` não é escopo deste fluxo e deve permanecer como está.
+
+**Spec/Plano:**
+- `docs/superpowers/specs/2026-06-26-hora-recebimento-sem-nf-design.md`
+- `docs/superpowers/plans/2026-06-26-hora-recebimento-sem-nf.md`
 
 ---
 

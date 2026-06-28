@@ -1,9 +1,9 @@
--- Migration HORA 57: Recebimento por filial sem NF (NF provisória).
+-- Migration HORA 58: Recebimento por filial sem NF (NF provisória).
 -- Adiciona hora_nf_entrada.tipo {PROVISORIA,REAL} (default REAL p/ NFs existentes)
 -- e a tabela de snapshot congelado hora_recebimento_esperado.
 -- Idempotente — pode rodar 2x (IF NOT EXISTS).
--- Nota: planejado como hora_54 no spec, renumerado para 57 porque
---       hora_54_aprovacoes_perm já existia no branch main.
+-- Nota: planejado como hora_54 no spec; renumerado para 58 porque hora_54..hora_57
+--       já existiam no branch main (hora_57 = loja_is_matriz) após o rebase.
 
 ALTER TABLE hora_nf_entrada
     ADD COLUMN IF NOT EXISTS tipo VARCHAR(20) NOT NULL DEFAULT 'REAL';
