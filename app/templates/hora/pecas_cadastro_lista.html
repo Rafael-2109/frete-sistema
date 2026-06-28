@@ -54,6 +54,7 @@
       <th>CFOP</th>
       <th>Un.</th>
       <th class="text-end">Preço padrão</th>
+      <th class="text-end">Custo</th>
       <th>Status</th>
       <th>TagPlus</th>
       <th class="text-end">Ações</th>
@@ -76,6 +77,7 @@
           <td><span class="badge bg-light">{{ p.cfop_default }}</span></td>
           <td>{{ p.unidade }}</td>
           <td class="text-end">{{ p.preco_venda_padrao|valor_br }}</td>
+          <td class="text-end">{{ p.custo|valor_br }}</td>
           <td>
             {% if p.ativo %}<span class="badge bg-success">Ativa</span>
             {% else %}<span class="badge bg-secondary">Inativa</span>{% endif %}
@@ -113,7 +115,7 @@
           </td>
         </tr>
       {% else %}
-        <tr><td colspan="10" class="text-center text-muted">Nenhuma peça cadastrada.</td></tr>
+        <tr><td colspan="11" class="text-center text-muted">Nenhuma peça cadastrada.</td></tr>
       {% endfor %}
     </tbody>
   </table>

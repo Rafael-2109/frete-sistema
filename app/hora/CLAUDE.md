@@ -50,6 +50,7 @@ atualizado: 2026-06-27
 - [33. Loja real da venda vs matriz (emitente fiscal) — integridade — 2026-06-27](#33-loja-real-da-venda-vs-matriz-emitente-fiscal--integridade--2026-06-27)
 - [34. Pedido de Venda — vendedor ao lado da loja + campo Telefone Lead — 2026-06-28](#34-pedido-de-venda--vendedor-ao-lado-da-loja--campo-telefone-lead--2026-06-28)
 - [35. CORTESIA de revisão — texto institucional na NF — 2026-06-28](#35-cortesia-de-revisão--texto-institucional-na-nf--2026-06-28)
+- [36. Custo de peça + margem do preview da NF por CUSTO — 2026-06-28](#36-custo-de-peça--margem-do-preview-da-nf-por-custo-não-preço-de-venda--2026-06-28)
 - [Onboarding Tours (2026-05-08)](#onboarding-tours-2026-05-08)
 - [Referências](#referências)
 
@@ -1482,6 +1483,48 @@ antes. Venda com revisão + peça física exibe **as duas coisas**.
 **Testes:** `tests/hora/test_brinde_inf_contribuinte.py` (+3: texto institucional,
 detecção por código sem acento, revisão + peça física). Suíte de brinde/payload (37)
 verde.
+
+---
+
+## 36. Custo de peça + margem do preview da NF por CUSTO (não preço de venda) — 2026-06-28
+
+A peça passa a ter **custo de aquisição** próprio, e o preview da NF calcula a
+margem com **custo real** — não mais com o preço de venda como proxy. **Migration: hora_59.**
+
+**Campos novos** (`scripts/migrations/hora_59_peca_custo.{py,sql}`, idempotente,
+ADD COLUMN IF NOT EXISTS):
+- `hora_peca.custo NUMERIC(15,2) NOT NULL DEFAULT 0` — custo de aquisição padrão.
+- `hora_venda_item_peca.custo_unitario NUMERIC(15,2) NOT NULL DEFAULT 0` — **snapshot**
+  de `hora_peca.custo` no momento da venda (mesmo padrão do brinde).
+
+**Cadastro de peças** (a "coluna de custo"): campo Custo no `pecas_cadastro_form.html`,
+coluna na listagem (`pecas_cadastro_lista.html`) e no detalhe; `peca_service.criar_peca`/
+`editar_peca` aceitam `custo`; rotas leem `request.form['custo']`.
+
+**Captura do snapshot** (todos os pontos que criam item de peça):
+- `venda_service.adicionar_item_peca` → `custo_unitario = peca.custo`.
+- `tagplus/backfill_service` (peças de NF já emitida) → `custo_unitario = peca.custo`
+  atual (NF emitida não traz custo; melhor aproximação disponível).
+
+**Brinde** (§30): `_criar_brinde_flush_only` passa a snapshotar `peca.custo`
+(antes `preco_venda_padrao`). Brindes já criados mantêm o snapshot antigo (auditoria).
+
+**Preview** (`venda_preview_service.montar_preview`): nova chave `custo_pecas_total`
+(soma `qtd * custo_unitario` das peças vendidas) entra na fórmula:
+
+    Venda Líquida = Venda − Frete − Custo Moto − **Custo Peças** − Custo Brindes
+
+Expõe também `pecas` (lista para a tabela) e `tem_peca_sem_custo` (alerta quando
+peça vendida está com custo 0 → margem distorcida). Template `venda_preview_nfe.html`:
+nova tabela "Peças do pedido", linha "(-) Custo Peças" na margem e fórmula atualizada.
+
+**Decisões do dono** (2026-06-28): snapshot por item (auditável) em vez de leitura ao
+vivo; brindes passam a usar custo real. Peças existentes nascem com custo 0 — até
+preencher, o alerta `tem_peca_sem_custo` sinaliza a distorção.
+
+**Testes:** `test_preview_custo_peca.py` (+3: subtração do custo, peça sem custo,
+snapshot em `adicionar_item_peca`); `test_peca_cadastro.py` (+1 custo); `test_brinde_*`
+ajustados (custo = `peca.custo`). Suíte peça/brinde/preview/estoque (28) verde.
 
 ---
 

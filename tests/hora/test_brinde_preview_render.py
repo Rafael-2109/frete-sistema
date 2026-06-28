@@ -43,7 +43,8 @@ def test_preview_exibe_custo_brindes(client, db, loja_factory, peca_factory):
     _login(client, _admin(db))
     v = _venda(loja_factory())
     p = peca_factory(descricao='CAPACETE PRETO')
-    p.preco_venda_padrao = Decimal('40')
+    p.preco_venda_padrao = Decimal('140')  # != custo, p/ provar uso do custo
+    p.custo = Decimal('40')
     _db.session.flush()
     venda_service.adicionar_brinde(v.id, p.id, qtd=1, usuario='t')
 

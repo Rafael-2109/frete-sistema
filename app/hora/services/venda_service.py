@@ -2177,12 +2177,14 @@ def adicionar_item_peca(
     preco_ref = Decimal(str(peca.preco_venda_padrao))
     desconto_uni = max(Decimal('0'), preco_ref - valor_uni)
     preco_final_total = qtd_dec * valor_uni
+    custo_uni = Decimal(str(peca.custo or 0))  # snapshot do custo p/ margem (hora_59)
 
     item = HoraVendaItemPeca(
         venda_id=venda.id, peca_id=peca.id, qtd=qtd_dec,
         preco_unitario_referencia=preco_ref,
         desconto_aplicado=desconto_uni,
         preco_final=preco_final_total,
+        custo_unitario=custo_uni,
     )
     db.session.add(item)
     db.session.flush()
@@ -2237,7 +2239,7 @@ def remover_item_peca(venda_id: int, item_id: int, usuario: Optional[str] = None
 
 # --------------------------------------------------------------------------
 # Brindes (#36) — peca dada de brinde: custo na margem, NAO cobrado, NAO
-# abate estoque (custo = peca.preco_venda_padrao snapshot).
+# abate estoque (custo = peca.custo snapshot — hora_59; antes preco_venda_padrao).
 # --------------------------------------------------------------------------
 
 def _criar_brinde_flush_only(venda: HoraVenda, peca_id: int, qtd,
@@ -2255,7 +2257,8 @@ def _criar_brinde_flush_only(venda: HoraVenda, peca_id: int, qtd,
     qtd_dec = Decimal(str(qtd or 0))
     if qtd_dec <= 0:
         raise ValueError('qtd deve ser positiva')
-    custo_uni = Decimal(str(peca.preco_venda_padrao or 0))
+    # Custo real da peca (hora_59) — antes usava preco_venda_padrao como proxy.
+    custo_uni = Decimal(str(peca.custo or 0))
     brinde = HoraVendaBrinde(
         venda_id=venda.id, peca_id=peca.id, qtd=qtd_dec,
         custo_unitario=custo_uni, custo_total=qtd_dec * custo_uni,
@@ -2274,7 +2277,7 @@ def adicionar_brinde(venda_id: int, peca_id: int, qtd,
                      usuario: Optional[str] = None):
     """Adiciona um brinde (peca) ao pedido em COTACAO.
 
-    Custo = peca.preco_venda_padrao (snapshot). NAO entra no valor cobrado
+    Custo = peca.custo (snapshot — hora_59). NAO entra no valor cobrado
     (valor_total) e NAO abate estoque — apenas reduz a margem da venda
     (venda_preview_service).
     """

@@ -59,6 +59,10 @@ class HoraPeca(db.Model):
     cfop_default = db.Column(db.String(5), nullable=False, default='5.102')
     unidade = db.Column(db.String(5), nullable=False, default='UN')
     preco_venda_padrao = db.Column(db.Numeric(15, 2), nullable=False, default=0)
+    # Custo de aquisicao padrao da peca (migration hora_59). Base da margem no
+    # preview da NF: brindes e pecas vendidas usam ESTE valor como custo, nao
+    # mais o preco_venda_padrao.
+    custo = db.Column(db.Numeric(15, 2), nullable=False, default=0)
     # Comissao por unidade vendida desta peca (roadmap #28; migration hora_49).
     valor_comissao = db.Column(db.Numeric(15, 2), nullable=False, default=0)
     foto_s3_key = db.Column(db.String(500), nullable=True)
@@ -200,6 +204,8 @@ class HoraVendaItemPeca(db.Model):
 
     `preco_unitario_referencia` e snapshot de hora_peca.preco_venda_padrao
     no momento da venda (auditoria). `preco_final` = qtd * (referencia - desconto).
+    `custo_unitario` e snapshot de hora_peca.custo no momento da venda — base da
+    margem no preview da NF.
     """
     __tablename__ = 'hora_venda_item_peca'
 
@@ -216,6 +222,9 @@ class HoraVendaItemPeca(db.Model):
     preco_unitario_referencia = db.Column(db.Numeric(15, 2), nullable=False)
     desconto_aplicado = db.Column(db.Numeric(15, 2), nullable=False, default=0)
     preco_final = db.Column(db.Numeric(15, 2), nullable=False)
+    # Snapshot de hora_peca.custo no momento da venda (migration hora_59).
+    # Usado pelo preview da NF para a margem (custo real, nao preco de venda).
+    custo_unitario = db.Column(db.Numeric(15, 2), nullable=False, default=0)
 
     venda = db.relationship('HoraVenda', backref='itens_peca')
     peca = db.relationship('HoraPeca')

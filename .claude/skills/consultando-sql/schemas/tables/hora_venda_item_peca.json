@@ -39,6 +39,12 @@
       "name": "preco_final",
       "type": "numeric(15,2)",
       "nullable": false
+    },
+    {
+      "name": "custo_unitario",
+      "type": "numeric(15,2)",
+      "nullable": false,
+      "default": 0
     }
   ],
   "foreign_keys": [

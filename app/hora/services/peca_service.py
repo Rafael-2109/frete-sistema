@@ -24,6 +24,7 @@ def criar_peca(
     cfop_default: str = '5.102',
     unidade: str = 'UN',
     preco_venda_padrao: Decimal = Decimal('0'),
+    custo: Decimal = Decimal('0'),
     ativo: bool = True,
 ) -> HoraPeca:
     """Cria peca. Levanta ValueError em duplicata de codigo_interno."""
@@ -46,6 +47,7 @@ def criar_peca(
         cfop_default=(cfop_default or '5.102').strip(),
         unidade=(unidade or 'UN').strip().upper(),
         preco_venda_padrao=Decimal(str(preco_venda_padrao or 0)),
+        custo=Decimal(str(custo or 0)),
         ativo=bool(ativo),
     )
     db.session.add(p)
@@ -61,11 +63,11 @@ def editar_peca(peca_id: int, **campos) -> HoraPeca:
 
     editaveis = {
         'descricao', 'ncm', 'cfop_default', 'unidade',
-        'preco_venda_padrao', 'ativo',
+        'preco_venda_padrao', 'custo', 'ativo',
     }
     for k, v in campos.items():
         if k in editaveis:
-            if k == 'preco_venda_padrao':
+            if k in ('preco_venda_padrao', 'custo'):
                 v = Decimal(str(v or 0))
             setattr(p, k, v)
     db.session.commit()

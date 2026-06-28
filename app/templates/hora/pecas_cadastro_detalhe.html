@@ -49,6 +49,8 @@
         <dd class="col-sm-8">{{ peca.unidade }}</dd>
         <dt class="col-sm-4">Preço de venda padrão</dt>
         <dd class="col-sm-8"><strong>{{ peca.preco_venda_padrao|valor_br }}</strong></dd>
+        <dt class="col-sm-4">Custo</dt>
+        <dd class="col-sm-8"><strong>{{ peca.custo|valor_br }}</strong></dd>
         <dt class="col-sm-4">Criada em</dt>
         <dd class="col-sm-8">{{ peca.criado_em.strftime('%d/%m/%Y %H:%M') }}</dd>
       </dl>

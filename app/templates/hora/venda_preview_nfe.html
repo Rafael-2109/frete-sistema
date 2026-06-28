@@ -73,6 +73,16 @@
   </div>
 {% endif %}
 
+{% if preview.tem_peca_sem_custo %}
+  <div class="alert alert-warning">
+    <i class="fas fa-exclamation-triangle"></i>
+    Uma ou mais <strong>pecas</strong> vendidas estao sem <strong>custo</strong>
+    cadastrado. A margem abaixo esta <strong>distorcida</strong> (subestima o
+    custo). Para corrigir, cadastre o custo no
+    <a href="{{ url_for('hora.pecas_cadastro_lista') }}">cadastro de pecas</a>.
+  </div>
+{% endif %}
+
 {# -------------------------------------------------------------
    Resumo do cliente / venda
    ------------------------------------------------------------- #}
@@ -138,7 +148,7 @@
       </tbody>
       <tfoot class="table-light">
         <tr>
-          <th colspan="3" class="text-end">Totais</th>
+          <th colspan="3" class="text-end">Totais (motos)</th>
           <th class="text-end">{{ preview.venda_total|valor_br }}</th>
           <th class="text-end">{{ preview.custo_moto_total|valor_br }}</th>
         </tr>
@@ -146,6 +156,55 @@
     </table>
   </div>
 </div>
+
+{# -------------------------------------------------------------
+   Pecas vendidas (descricao · qtd · venda · custo)
+   ------------------------------------------------------------- #}
+{% if preview.pecas %}
+<div class="card mb-3">
+  <div class="card-header py-2">
+    <strong><i class="fas fa-cogs"></i> Pecas do pedido</strong>
+  </div>
+  <div class="table-responsive">
+    <table class="table table-sm mb-0 align-middle">
+      <thead class="table-light">
+        <tr>
+          <th>Peca</th>
+          <th class="text-end">Qtd</th>
+          <th class="text-end">Preco de venda</th>
+          <th class="text-end">Custo unitario</th>
+          <th class="text-end">Custo total</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for p in preview.pecas %}
+          <tr>
+            <td>{{ p.descricao }}</td>
+            <td class="text-end">{{ p.qtd|numero_br }}</td>
+            <td class="text-end">{{ p.preco_venda|valor_br }}</td>
+            <td class="text-end">
+              {% if p.sem_custo %}
+                <span class="text-warning" title="Peca sem custo cadastrado">
+                  <i class="fas fa-exclamation-triangle"></i> —
+                </span>
+              {% else %}
+                {{ p.custo_unitario|valor_br }}
+              {% endif %}
+            </td>
+            <td class="text-end">{{ p.custo_total|valor_br }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+      <tfoot class="table-light">
+        <tr>
+          <th colspan="4" class="text-end">Custo total (pecas)</th>
+          <th class="text-end">{{ preview.custo_pecas_total|valor_br }}</th>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+</div>
+{% endif %}
 
 {# -------------------------------------------------------------
    Margem (Venda - Frete - Custo Moto = Liquido; Margem = Venda - Liquido)
@@ -167,6 +226,10 @@
       <div class="col-6 col-md">
         <div class="small text-muted">(-) Custo Moto</div>
         <div class="fs-5 text-danger">{{ preview.custo_moto_total|valor_br }}</div>
+      </div>
+      <div class="col-6 col-md">
+        <div class="small text-muted">(-) Custo Pecas</div>
+        <div class="fs-5 text-danger">{{ preview.custo_pecas_total|valor_br }}</div>
       </div>
       <div class="col-6 col-md">
         <div class="small text-muted">(-) Custo Brindes</div>
@@ -206,7 +269,7 @@
     </div>
     <div class="small text-muted mt-3">
       <strong>Formula:</strong>
-      Venda Liquida = Venda - Frete - Custo Moto - Custo Brindes
+      Venda Liquida = Venda - Frete - Custo Moto - Custo Pecas - Custo Brindes
       &nbsp;·&nbsp;
       Margem Bruta = Venda - Venda Liquida
       &nbsp;·&nbsp;
