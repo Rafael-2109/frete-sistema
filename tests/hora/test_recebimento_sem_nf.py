@@ -272,3 +272,54 @@ def test_reconferencia_nao_vira_chassi_extra(
     assert conf_ativa.id != conf_id
     assert not any(d.tipo == 'CHASSI_EXTRA' for d in conf_ativa.divergencias), \
         'Reconferência do mesmo chassi não pode virar CHASSI_EXTRA'
+
+
+# ---------------------------------------------------------------------------
+# excluir_recebimento sobre PROVISORIO: as FKs de hora_recebimento_esperado não
+# têm ON DELETE/cascade — o snapshot precisa ser apagado antes do delete(rec),
+# senão estoura IntegrityError (HTTP 500) de forma determinística.
+# ---------------------------------------------------------------------------
+
+def test_excluir_recebimento_provisorio_sem_conferencia_remove_snapshot(
+        db, loja_factory, pedido_compra_factory):
+    """CASO A: provisório com slots de snapshot mas SEM conferência. Sem o fix,
+    SQLAlchemy tenta nulificar recebimento_id (NOT NULL) -> NotNullViolation."""
+    chassi = _chassi('DELA')
+    pedido = pedido_compra_factory([chassi])
+    rec = recebimento_service.criar_recebimento_sem_nf(
+        loja_id=pedido.loja_destino_id, operador='tester')
+    rec_id = rec.id
+    _db.session.expire_all()
+    assert HoraRecebimentoEsperado.query.filter_by(recebimento_id=rec_id).count() >= 1
+
+    res = recebimento_service.excluir_recebimento(recebimento_id=rec_id, operador='tester')
+    _db.session.expire_all()
+    assert res['ok'] is True
+    assert HoraRecebimento.query.get(rec_id) is None
+    assert HoraRecebimentoEsperado.query.filter_by(recebimento_id=rec_id).count() == 0
+
+
+def test_excluir_recebimento_provisorio_com_conferencia_remove_snapshot(
+        db, loja_factory, pedido_compra_factory, modelo_moto):
+    """CASO B: slot já CONSUMIDO por uma conferência. O cascade deleta a
+    conferência; sem apagar o slot antes, a FK consumido_por_conferencia_id
+    estoura ForeignKeyViolation."""
+    chassi = _chassi('DELB')
+    pedido = pedido_compra_factory([chassi])
+    rec = recebimento_service.criar_recebimento_sem_nf(
+        loja_id=pedido.loja_destino_id, operador='tester')
+    rec_id = rec.id
+    recebimento_service.definir_qtd_declarada(recebimento_id=rec_id, qtd=1, usuario='tester')
+    recebimento_service.registrar_conferencia_cega(
+        recebimento_id=rec_id, numero_chassi=chassi,
+        modelo_id_conferido=modelo_moto.id, cor_conferida='PRETA',
+        avaria_fisica=False, qr_code_lido=True, operador='tester')
+    _db.session.expire_all()
+    slot = HoraRecebimentoEsperado.query.filter_by(recebimento_id=rec_id).first()
+    assert slot.consumido_por_conferencia_id is not None
+
+    res = recebimento_service.excluir_recebimento(recebimento_id=rec_id, operador='tester')
+    _db.session.expire_all()
+    assert res['ok'] is True
+    assert HoraRecebimento.query.get(rec_id) is None
+    assert HoraRecebimentoEsperado.query.filter_by(recebimento_id=rec_id).count() == 0

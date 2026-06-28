@@ -1874,7 +1874,7 @@ def excluir_recebimento(
 
     Retorna dict com totais deletados.
     """
-    from app.hora.models import HoraMotoEvento
+    from app.hora.models import HoraMotoEvento, HoraRecebimentoEsperado
 
     bloqueio_info = verificar_bloqueios_exclusao(recebimento_id)
     if not bloqueio_info['existe']:
@@ -1914,6 +1914,19 @@ def excluir_recebimento(
         rec.id, snap_nf, snap_loja, snap_status,
         snap_qtd_confs, eventos_deletados, snap_qtd_divs, operador,
     )
+
+    # Recebimento PROVISORIO materializa hora_recebimento_esperado (snapshot/slots).
+    # As FKs (recebimento_id NOT NULL; consumido_por_conferencia_id -> conferencia) nao
+    # tem ON DELETE, entao apagamos os slots ANTES do delete(rec): evita NotNullViolation
+    # (slot orfao) e ForeignKeyViolation (slot referencia a conferencia que o cascade do
+    # rec deleta). Recebimento de NF real tem 0 slots — no-op.
+    esperados_deletados = (
+        HoraRecebimentoEsperado.query
+        .filter_by(recebimento_id=recebimento_id)
+        .delete(synchronize_session=False)
+    )
+    if esperados_deletados:
+        db.session.flush()
 
     db.session.delete(rec)
     db.session.commit()
