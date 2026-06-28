@@ -48,6 +48,7 @@ atualizado: 2026-06-27
 - [31. Recebimento — dropdown de modelos canônicos + anti-duplicação de grafia de cor — 2026-06-27](#31-recebimento--dropdown-de-modelos-canônicos--anti-duplicação-de-grafia-de-cor--2026-06-27)
 - [32. Recebimento — autocomplete de NF por permissão + guarda anti-duplicado — 2026-06-27](#32-recebimento--autocomplete-de-nf-por-permissão-de-recebimento--guarda-anti-duplicado--2026-06-27)
 - [33. Loja real da venda vs matriz (emitente fiscal) — integridade — 2026-06-27](#33-loja-real-da-venda-vs-matriz-emitente-fiscal--integridade--2026-06-27)
+- [34. Pedido de Venda — vendedor ao lado da loja + campo Telefone Lead — 2026-06-28](#34-pedido-de-venda--vendedor-ao-lado-da-loja--campo-telefone-lead--2026-06-28)
 - [Onboarding Tours (2026-05-08)](#onboarding-tours-2026-05-08)
 - [Referências](#referências)
 
@@ -1417,6 +1418,40 @@ pela chave-44 grava `tagplus_departamento`) e então a auto-cura/Aplicar resolve
 
 **Testes:** `test_loja_real_venda_resolver`, `test_import_nf_saida_loja_matriz`,
 `test_pedido_backfill_aplica_loja`, `test_uf_emitente_matriz`, `test_frente_c_exclui_matriz`.
+
+---
+
+## 34. Pedido de Venda — vendedor ao lado da loja + campo Telefone Lead — 2026-06-28
+
+Dois ajustes na tela de Pedido de Venda (`pedido_venda_novo.html`). **Migration: hora_58.**
+
+**A — Vendedor ao lado da "Loja física da venda" (modo edição).** O bloco da loja
+é um `<form>` próprio (`vendas_definir_loja`); o vendedor pertence ao
+`form-pedido-venda` (`vendas_salvar_pedido`). Para exibi-los lado a lado **sem**
+aninhar forms nem submeter o vendedor no "Trocar loja", o `<select name="vendedor">`
+usa o atributo HTML **`form="form-pedido-venda"`** (associação por id, independente da
+posição no DOM). O bloco virou um **card de 2 colunas** visível sempre que
+`not is_cancelado` (antes só com `lojas_ativas and pode_editar`): col-8 = loja (form
+de trocar quando editável, **OU** input read-only) + col-4 = vendedor (sempre visível,
+`disabled` quando `not permite_editar_vendedor`). Isso **não regride** a visibilidade
+do vendedor em telas read-only (faturado / sem permissão de editar). O vendedor saiu da
+seção Cliente/Destinatário. **Sem mudança de backend** (o `vendedor` já era lido pelo
+header em `vendas_salvar_pedido` → `_aplicar_header`).
+
+**B — Campo "Telefone Lead"** (`hora_venda.telefone_lead VARCHAR(20)`, migration
+`hora_58`): telefone do **lead/contato que originou a venda**, distinto do
+`telefone_cliente` (destinatário fiscal). **Registro/exibição apenas — NÃO entra no
+payload da NFe** (mesmo critério de `inscricao_estadual`, §24). Aparece **abaixo do
+Telefone** do cliente nos 2 modos (criação e edição). Editável em INCOMPLETO/COTAÇÃO e
+CONFIRMADO (mesmo gate `ro_oper` do `telefone_cliente`; está em `_CAMPOS_COTACAO_FULL`
+**e** no conjunto CONFIRMADO de `_CAMPOS_EDITAVEIS_HEADER`). Lido/gravado por
+`criar_venda_manual`, `_aplicar_header` e as rotas `tagplus_pedido_venda_criar`
+(`name="telefone_lead"`) / `vendas_salvar_pedido` (header dict). Migration dual
+`scripts/migrations/hora_58_venda_telefone_lead.{py,sql}` (idempotente, ADD COLUMN IF
+NOT EXISTS) **aplicada em local + PROD**.
+
+**Validação:** suíte de venda HORA (42) + render dos 2 modos (criação e edição)
+verde; Jinja compila; coluna confirmada em PROD (`character varying(20)`, nullable).
 
 ---
 

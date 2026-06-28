@@ -754,6 +754,7 @@ def criar_venda_manual(
     valor_final: Optional[Decimal] = None,
     forma_pagamento: Optional[str] = None,
     telefone_cliente: Optional[str] = None,
+    telefone_lead: Optional[str] = None,
     email_cliente: Optional[str] = None,
     vendedor: Optional[str] = None,
     observacoes: Optional[str] = None,
@@ -952,6 +953,7 @@ def criar_venda_manual(
         nome_cliente=nome_norm[:200],
         inscricao_estadual=(inscricao_estadual or '').strip()[:20] or None,
         telefone_cliente=(telefone_cliente or '').strip()[:20] or None,
+        telefone_lead=(telefone_lead or '').strip()[:20] or None,
         email_cliente=(email_cliente or '').strip()[:120] or None,
         data_venda=data_venda,
         forma_pagamento=forma_norm[:20],
@@ -1298,7 +1300,8 @@ def voltar_para_cotacao(venda_id: int, usuario: Optional[str] = None) -> HoraVen
 # ser livremente editavel para o vendedor corrigir cliente/endereco/etc.
 # antes de promover via editar_pagamentos.
 _CAMPOS_COTACAO_FULL = {
-    'vendedor', 'forma_pagamento', 'telefone_cliente', 'email_cliente',
+    'vendedor', 'forma_pagamento', 'telefone_cliente', 'telefone_lead',
+    'email_cliente',
     'observacoes', 'nome_cliente', 'cpf_cliente', 'inscricao_estadual',
     'cep', 'endereco_logradouro', 'endereco_numero', 'endereco_complemento',
     'endereco_bairro', 'endereco_cidade', 'endereco_uf',
@@ -1313,7 +1316,8 @@ _CAMPOS_EDITAVEIS_HEADER = {
     VENDA_STATUS_INCOMPLETO: _CAMPOS_COTACAO_FULL,
     VENDA_STATUS_COTACAO: _CAMPOS_COTACAO_FULL,
     VENDA_STATUS_CONFIRMADO: {
-        'vendedor', 'forma_pagamento', 'telefone_cliente', 'email_cliente',
+        'vendedor', 'forma_pagamento', 'telefone_cliente', 'telefone_lead',
+        'email_cliente',
         'observacoes',
         'cep', 'endereco_logradouro', 'endereco_numero', 'endereco_complemento',
         'endereco_bairro', 'endereco_cidade', 'endereco_uf',
@@ -1437,6 +1441,7 @@ def _aplicar_header(
     vendedor = dados.get('vendedor')
     forma_pagamento = dados.get('forma_pagamento')
     telefone_cliente = dados.get('telefone_cliente')
+    telefone_lead = dados.get('telefone_lead')
     email_cliente = dados.get('email_cliente')
     observacoes = dados.get('observacoes')
     nome_cliente = dados.get('nome_cliente')
@@ -1479,6 +1484,8 @@ def _aplicar_header(
         _atualizar('forma_pagamento', fp_norm[:20])
     if telefone_cliente is not None:
         _atualizar('telefone_cliente', telefone_cliente.strip()[:20] or None)
+    if telefone_lead is not None:
+        _atualizar('telefone_lead', telefone_lead.strip()[:20] or None)
     if email_cliente is not None:
         _atualizar('email_cliente', email_cliente.strip()[:120] or None)
     if observacoes is not None:

@@ -27,6 +27,10 @@
       "type": "varchar(20)"
     },
     {
+      "name": "telefone_lead",
+      "type": "varchar(20)"
+    },
+    {
       "name": "email_cliente",
       "type": "varchar(120)"
     },

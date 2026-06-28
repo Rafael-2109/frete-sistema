@@ -93,6 +93,10 @@ class HoraVenda(db.Model):
     cpf_cliente = db.Column(db.String(14), nullable=False, index=True)
     nome_cliente = db.Column(db.String(200), nullable=False)
     telefone_cliente = db.Column(db.String(20), nullable=True)
+    # Telefone do LEAD (contato original que originou a venda) — distinto do
+    # telefone do destinatario fiscal. Registro/exibicao apenas; NAO entra no
+    # payload da NFe. Migration hora_58 (2026-06-28).
+    telefone_lead = db.Column(db.String(20), nullable=True)
     email_cliente = db.Column(db.String(120), nullable=True)
     # Inscricao Estadual do destinatario PJ (migration hora_52, 2026-06-25).
     # Registro/exibicao apenas — NAO entra no payload da NFe (decisao do dono).
