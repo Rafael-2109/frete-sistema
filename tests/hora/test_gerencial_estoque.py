@@ -133,6 +133,28 @@ def test_suprimento_funcoes_retornam_estrutura(db, loja_factory, modelo_moto):
     assert isinstance(sks.desvio_custo(_filtros(loja)), list)
 
 
+def test_lead_time_recebimento_ignora_provisorias(db, loja_factory, modelo_moto):
+    """Recebimento sem NF (provisória, data_emissao=hoje -> lead ~0) não pode
+    diluir o lead time fiscal; só NF REAL conta. (fix auditoria BAIXA #4)"""
+    from app.hora.services.gerencial import suprimento_kpi_service as sks
+    from app.hora.services import recebimento_service
+    hoje = agora_brasil_naive().date()
+    loja = loja_factory()
+
+    # REAL: emissão há 10 dias, recebido hoje -> lead 10
+    nf = _nf_entrada(loja, modelo_moto, [(1000, False)], data_emissao=hoje - timedelta(days=10))
+    nf.tipo = 'REAL'
+    _db.session.flush()
+    recebimento_service.iniciar_recebimento(nf_id=nf.id, loja_id=loja.id, operador='tester')
+
+    # PROVISÓRIO: emissão e recebimento hoje -> lead 0 (não deve entrar na média)
+    recebimento_service.criar_recebimento_sem_nf(loja_id=loja.id, operador='tester')
+    _db.session.expire_all()
+
+    lt = sks.lead_time_recebimento(_filtros(loja, ini=hoje - timedelta(days=30), fim=hoje))
+    assert lt['dias_medios_nf_recebimento'] == 10.0  # só o REAL; provisória excluída
+
+
 # ───────────────────────── Smoke das telas (renderização autenticada) ────────
 
 def test_estoque_renderiza_autenticado(client_admin, loja_factory, modelo_moto):

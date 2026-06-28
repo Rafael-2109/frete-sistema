@@ -1483,6 +1483,14 @@ Promove o recebimento provisório para real (`recebimento_service.py`):
 - `recebimento_detalhe.html` — formulário de upload "Anexar NF real" visível enquanto `tipo == 'PROVISORIA'`.
 - Wizard — exibe cores do snapshot provisório como sugestão para seleção de modelo/cor do operador.
 
+### Correções pós-auditoria (2026-06-27)
+
+Auditoria adversarial pós-rebase confirmou 4 riscos reais (de 12 candidatos) — todos corrigidos:
+- **ALTA** — migration renumerada para `hora_58` e **wired no `build.sh`**: o ORM mapeia `HoraNfEntrada.tipo` incondicionalmente; sem o ALTER, todo SELECT em `hora_nf_entrada` quebra (`UndefinedColumn`) em TODA a tela de recebimento/NF no deploy (`db.create_all` não faz ALTER em tabela existente).
+- **ALTA** — `excluir_recebimento` apaga `hora_recebimento_esperado` antes do `delete(rec)`: as FKs do snapshot (`recebimento_id` NOT NULL, `consumido_por_conferencia_id`) não têm ON DELETE → estourava `IntegrityError` (HTTP 500) em qualquer provisório com ≥1 slot.
+- **BAIXA** — rota `recebimentos_anexar_nf` captura `DanfeParseError` (PDF ilegível → flash amigável, não HTTP 500 genérico; espelha `nfs.py`).
+- **BAIXA** — KPI `lead_time_recebimento` (`suprimento_kpi_service.py`) filtra `tipo == 'REAL'`: a provisória nasce com `data_emissao=hoje` (lead ~0) e diluía a média.
+
 ### Decisões de design (comportamento preservado — NÃO são gaps a "corrigir")
 
 > Confirmado com o dono (2026-06-27): estes comportamentos são **intencionais**. Não os altere

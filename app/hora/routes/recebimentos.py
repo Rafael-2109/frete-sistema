@@ -33,6 +33,7 @@ from app.hora.services import (
     resolucao_service,
 )
 from app.hora.services.auth_helper import lojas_permitidas_ids, usuario_tem_acesso_a_loja
+from app.hora.services.parsers.danfe_adapter import DanfeParseError
 
 
 def _op_name() -> str | None:
@@ -500,7 +501,7 @@ def recebimentos_anexar_nf(recebimento_id: int):
         recebimento_service.anexar_nf_real_ao_recebimento(
             recebimento_id=rec.id, pdf_bytes=arquivo.read(), operador=_op_name())
         flash('NF real anexada e recebimento reprocessado.', 'success')
-    except ValueError as exc:
+    except (ValueError, DanfeParseError) as exc:
         flash(f'Erro: {exc}', 'danger')
     return redirect(url_for('hora.recebimentos_detalhe', recebimento_id=rec.id))
 

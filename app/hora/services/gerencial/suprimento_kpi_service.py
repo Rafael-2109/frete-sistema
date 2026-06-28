@@ -32,6 +32,9 @@ def lead_time_recebimento(filtros: Filtros) -> dict:
         .select_from(HoraRecebimento)
         .join(HoraNfEntrada, HoraRecebimento.nf_id == HoraNfEntrada.id)
         .filter(
+            # NFs provisórias (recebimento sem NF) nascem com data_emissao=hoje -> 0 dias,
+            # diluindo a média; só NF REAL tem lead time fiscal significativo.
+            HoraNfEntrada.tipo == 'REAL',
             HoraRecebimento.data_recebimento >= filtros.data_ini,
             HoraRecebimento.data_recebimento <= filtros.data_fim,
         )
