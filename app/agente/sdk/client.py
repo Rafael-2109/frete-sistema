@@ -70,15 +70,18 @@ except ImportError:
 from app.agente.sdk.sdk_compat import SDK_HAS_SKILLS_OPTION as _SDK_HAS_OPTIONS_SKILLS
 
 
-@lru_cache(maxsize=1)
-def _discover_skills_from_project() -> list[str]:
-    """Descobre skills em .claude/skills/ filtrando as delegadas a subagentes.
+@lru_cache(maxsize=None)
+def _discover_skills_from_project(agente_id: str = 'web') -> list[str]:
+    """Descobre skills em .claude/skills/ filtradas pelo PERFIL do agente.
 
     Retorna lista ordenada de skill names (basename de diretórios que têm SKILL.md),
-    excluindo SKILLS_DELEGADAS_SUBAGENTE — fonte única de verdade em
-    `config/skills_whitelist.py`. Inclui HORA, Assai, Odoo-estoque-WRITE e
-    SPED (reservadas ao subagente auditor-sped-ecd). Ver Solucao B em
-    `config/skills_whitelist.py`.
+    aplicando a política do perfil:
+    - **'web'** (default, domínio ABERTO): DENY-LIST — todas as skills MENOS
+      `SKILLS_DELEGADAS_SUBAGENTE` (fonte única em `config/skills_whitelist.py`;
+      inclui HORA, Assai, Odoo-estoque-WRITE e SPED reservadas a subagentes).
+    - **'lojas'** (domínio FECHADO HORA): ALLOW-LIST — apenas as skills em
+      `SKILLS_PERMITIDAS` (`app/agente_lojas/config/skills_whitelist.py`) que
+      existem no disco. Import lazy: evita acoplar o web ao perfil em import-time.
 
     Esta função é o input para `skills=list[str]` em ClaudeAgentOptions
     (SDK 0.1.77+, ver SDK_CHANGELOG.md:160-167). Skills não listadas aqui:
@@ -88,11 +91,13 @@ def _discover_skills_from_project() -> list[str]:
        continuam disponíveis ao subagente que as declara via AgentDefinition.skills
        (agent_loader.py:111 — listing independente do principal).
 
+    Args:
+        agente_id: perfil do agente ('web' deny-list | 'lojas' allow-list).
+
     Returns:
         Lista ordenada de skill names.
     """
     from pathlib import Path
-    from app.agente.config.skills_whitelist import SKILLS_DELEGADAS_SUBAGENTE
 
     # Path do .claude/skills/ relativo ao root do projeto
     # __file__ = app/agente/sdk/client.py → 4 parents = root
@@ -100,18 +105,27 @@ def _discover_skills_from_project() -> list[str]:
     if not skills_dir.is_dir():
         return []
 
+    if agente_id == 'lojas':
+        # Allow-list fechada do perfil HORA (defesa em profundidade do contrato
+        # de isolamento). Só expõe skills explicitamente permitidas ao operador.
+        from app.agente_lojas.config.skills_whitelist import SKILLS_PERMITIDAS
+        permitidas = set(SKILLS_PERMITIDAS)
+        discovered = [
+            entry.name
+            for entry in skills_dir.iterdir()
+            if entry.is_dir() and (entry / "SKILL.md").is_file() and entry.name in permitidas
+        ]
+        return sorted(discovered)
+
+    # 'web' (default) — deny-list (domínio aberto)
+    from app.agente.config.skills_whitelist import SKILLS_DELEGADAS_SUBAGENTE
     excluidas = SKILLS_DELEGADAS_SUBAGENTE
 
-    discovered: list[str] = []
-    for entry in skills_dir.iterdir():
-        if not entry.is_dir():
-            continue
-        if not (entry / "SKILL.md").is_file():
-            continue
-        if entry.name in excluidas:
-            continue
-        discovered.append(entry.name)
-
+    discovered = [
+        entry.name
+        for entry in skills_dir.iterdir()
+        if entry.is_dir() and (entry / "SKILL.md").is_file() and entry.name not in excluidas
+    ]
     return sorted(discovered)
 
 
@@ -353,10 +367,15 @@ class AgentClient:
                 print(event.content, end='')
     """
 
-    def __init__(self):
+    def __init__(self, settings=None, agente_id: str = 'web'):
         from ..config import get_settings
 
-        self.settings = get_settings()
+        # PERFIL do agente ('web' logístico Nacom | 'lojas' HORA isolado).
+        # Propaga p/ skills (deny vs allow-list) e agents= (filtro de subagentes).
+        self.agente_id = agente_id
+        # settings injetável (testes); senão resolve pelo perfil (default 'web'
+        # => byte-idêntico aos callers históricos de get_settings()).
+        self.settings = settings if settings is not None else get_settings(agente_id)
 
         # Carrega system prompt
         self.system_prompt = self._load_system_prompt()
@@ -435,6 +454,11 @@ class AgentClient:
             String com o conteudo do briefing, ou string vazia se ausente.
         """
         briefing_path = self.settings.empresa_briefing_path
+        # Perfil sem briefing (ex: 'lojas' tem empresa_briefing_path="") — não há
+        # bloco institucional a injetar. _build_full_system_prompt pula o bloco
+        # quando vazio (isolamento HORA: zero contexto Nacom).
+        if not briefing_path:
+            return ""
         try:
             with open(briefing_path, 'r', encoding='utf-8') as f:
                 content = f.read()
@@ -1633,10 +1657,10 @@ Nunca invente informações."""
         # acessiveis via Read/Bash; o filtro complementa can_use_tool.
         # Fallback (SDK < 0.1.77): 'Skill' adicionado em allowed_tools manualmente.
         if _SDK_HAS_OPTIONS_SKILLS:
-            options_dict["skills"] = _discover_skills_from_project()
+            options_dict["skills"] = _discover_skills_from_project(self.agente_id)
             logger.debug(
-                f"[AGENT_CLIENT] skills filtradas: {len(options_dict['skills'])} skills "
-                f"(skills delegadas a subagentes excluídas)"
+                f"[AGENT_CLIENT] skills filtradas (perfil {self.agente_id}): "
+                f"{len(options_dict['skills'])} skills"
             )
         else:
             options_dict["allowed_tools"].append("Skill")
@@ -1706,11 +1730,20 @@ Nunca invente informações."""
             agents_dir = os.path.join(project_cwd, ".claude", "agents")
             if os.path.isdir(agents_dir):
                 agent_definitions = load_agent_definitions(agents_dir)
+                if self.agente_id == 'lojas' and agent_definitions:
+                    # Perfil HORA: só expõe os subagentes permitidos (defesa em
+                    # profundidade — não vaza analista-carteira/especialista-odoo
+                    # ao operador de loja). Import lazy: evita acoplar em import-time.
+                    from app.agente_lojas.config.skills_whitelist import SUBAGENTS_PERMITIDOS
+                    agent_definitions = {
+                        k: v for k, v in agent_definitions.items()
+                        if k in SUBAGENTS_PERMITIDOS
+                    }
                 if agent_definitions:
                     options_dict["agents"] = agent_definitions
                     logger.info(
-                        f"[AGENT_CLIENT] {len(agent_definitions)} agents carregados: "
-                        f"{list(agent_definitions.keys())}"
+                        f"[AGENT_CLIENT] {len(agent_definitions)} agents carregados "
+                        f"(perfil {self.agente_id}): {list(agent_definitions.keys())}"
                     )
         except ImportError:
             logger.debug("[AGENT_CLIENT] agent_loader nao disponivel — agents ignorados")
@@ -2990,24 +3023,38 @@ Nunca invente informações."""
             }
 
 
-# Singleton do cliente
-_client: Optional[AgentClient] = None
+# Singletons do cliente POR PERFIL de agente. Cada agente_id → uma instância
+# (identidade: get_client() is get_client('web')). Substitui o singleton global
+# único — o default 'web' mantém os callers históricos byte-idênticos.
+_clients: Dict[str, AgentClient] = {}
 
 
-def get_client() -> AgentClient:
+def get_client(agente_id: str = 'web') -> AgentClient:
     """
-    Obtém instância do cliente (singleton).
+    Obtém instância do cliente por PERFIL (singleton por agente_id).
+
+    Args:
+        agente_id: 'web' (default) → AgentClient logístico Nacom; 'lojas' →
+            AgentClient com perfil HORA isolado (settings/skills/agents próprios).
 
     Returns:
-        Instância de AgentClient
+        Instância de AgentClient.
     """
-    global _client
-    if _client is None:
-        _client = AgentClient()
-    return _client
+    agente_id = agente_id or 'web'
+    client = _clients.get(agente_id)
+    if client is None:
+        client = AgentClient(agente_id=agente_id)
+        _clients[agente_id] = client
+    return client
 
 
-def reset_client() -> None:
-    """Reseta o singleton do cliente."""
-    global _client
-    _client = None
+def reset_client(agente_id: Optional[str] = None) -> None:
+    """Reseta o(s) singleton(s) do cliente.
+
+    Args:
+        agente_id: se None, reseta TODOS os perfis; caso contrário, só esse.
+    """
+    if agente_id is None:
+        _clients.clear()
+    else:
+        _clients.pop(agente_id, None)
