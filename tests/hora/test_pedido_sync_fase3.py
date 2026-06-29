@@ -34,10 +34,21 @@ def test_busca_pedido_por_numero_vazio_retorna_none():
     assert pedido_service.busca_pedido_por_numero(api, 999) is None
 
 
-def test_busca_pedido_por_numero_erro_http_retorna_none():
+def test_busca_pedido_por_numero_404_retorna_none():
     api = MagicMock()
-    api.get.return_value = SimpleNamespace(status_code=500, json=lambda: {}, text='err')
+    api.get.return_value = SimpleNamespace(status_code=404, json=lambda: {}, text='nf')
     assert pedido_service.busca_pedido_por_numero(api, 943) is None
+
+
+def test_busca_pedido_por_numero_erro_recuperavel_levanta():
+    # Review FIX #6: 401/5xx NAO pode virar "ausente" (queimaria ausencias do walk).
+    import pytest
+    from app.hora.services.tagplus.pedido_service import PedidoTagPlusError
+    for status in (401, 403, 500, 502):
+        api = MagicMock()
+        api.get.return_value = SimpleNamespace(status_code=status, json=lambda: {}, text='err')
+        with pytest.raises(PedidoTagPlusError):
+            pedido_service.busca_pedido_por_numero(api, 943)
 
 
 # --------------------------------------------------------------------------
@@ -186,12 +197,72 @@ def test_reverso_habilitado_default_off(monkeypatch):
     assert rev.reverso_habilitado() is True
 
 
-def test_descobrir_e_replicar_orquestra(db, monkeypatch):
+def _conta():
     from app.hora.models.tagplus import HoraTagPlusConta
-    conta = HoraTagPlusConta(client_id='c', client_secret_encrypted='x', webhook_secret='s')
-    _db.session.add(conta)
+    c = HoraTagPlusConta(client_id='c', client_secret_encrypted='x', webhook_secret='s')
+    _db.session.add(c)
     _db.session.flush()
-    monkeypatch.setattr(rev, 'numero_walk', lambda api, c, **kw: [_pedido_tp(id=1301, numero=971)])
+    return c
+
+
+def test_replicar_cpf_invalido_usa_placeholder(db):
+    # Review FIX #5: documento com digitos != 11 e != 14 (invalido) -> placeholder.
+    venda = rev.replicar(_pedido_tp(id=1400, numero=980,
+                                    cliente={'cpf': '123', 'razao_social': 'X'}))
+    assert venda.cpf_cliente == '00000000000'
+
+
+def test_descobrir_e_replicar_orquestra(db, monkeypatch):
+    monkeypatch.setenv('HORA_TAGPLUS_REVERSO', '1')
+    conta = _conta()
+    monkeypatch.setattr(rev, '_maior_numero_conhecido', lambda: 970)
+    monkeypatch.setattr(rev, '_varrer',
+                        lambda api, base, **kw: ([_pedido_tp(id=1301, numero=971)], 971))
     replicados = rev.descobrir_e_replicar(MagicMock(), conta)
     assert len(replicados) == 1
     assert replicados[0].tagplus_pedido_numero == 971
+    assert conta.ultimo_pedido_numero_reconciliado == 971
+
+
+def test_descobrir_e_replicar_flag_off_noop(db, monkeypatch):
+    # Review FIX #8: gate no service (nao so' no worker).
+    monkeypatch.delenv('HORA_TAGPLUS_REVERSO', raising=False)
+    conta = _conta()
+    chamou = []
+    monkeypatch.setattr(rev, '_varrer', lambda *a, **k: chamou.append(1) or ([], 0))
+    assert rev.descobrir_e_replicar(MagicMock(), conta) == []
+    assert chamou == []
+
+
+def test_descobrir_cursor_nao_avanca_alem_de_pedido_falho(db, monkeypatch):
+    # Review FIX #2/#3: replicar falha em 942 -> cursor fica em 941 (re-tenta 942).
+    monkeypatch.setenv('HORA_TAGPLUS_REVERSO', '1')
+    conta = _conta()
+    monkeypatch.setattr(rev, '_maior_numero_conhecido', lambda: 940)
+    monkeypatch.setattr(rev, '_varrer',
+                        lambda api, base, **kw: (
+                            [_pedido_tp(id=1, numero=941), _pedido_tp(id=2, numero=942)], 942))
+    orig = rev.replicar
+
+    def replicar_stub(pedido):
+        if pedido['numero'] == 942:
+            raise RuntimeError('falha transitoria')
+        return orig(pedido)
+    monkeypatch.setattr(rev, 'replicar', replicar_stub)
+    rev.descobrir_e_replicar(MagicMock(), conta)
+    assert conta.ultimo_pedido_numero_reconciliado == 941
+
+
+def test_descobrir_aborta_sem_avancar_cursor_em_erro_recuperavel(db, monkeypatch):
+    # Review FIX #6: erro auth/outage na varredura -> cursor preservado, [].
+    from app.hora.services.tagplus.pedido_service import PedidoTagPlusError
+    monkeypatch.setenv('HORA_TAGPLUS_REVERSO', '1')
+    conta = _conta()
+    conta.ultimo_pedido_numero_reconciliado = 940
+
+    def varrer_boom(*a, **k):
+        raise PedidoTagPlusError('401 auth')
+    monkeypatch.setattr(rev, '_maior_numero_conhecido', lambda: 940)
+    monkeypatch.setattr(rev, '_varrer', varrer_boom)
+    assert rev.descobrir_e_replicar(MagicMock(), conta) == []
+    assert conta.ultimo_pedido_numero_reconciliado == 940

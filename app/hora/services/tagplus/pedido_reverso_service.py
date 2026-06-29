@@ -144,7 +144,9 @@ def replicar(pedido: dict):
     loja_id = _resolver_loja_id(dep_desc)
 
     venda = HoraVenda(
-        cpf_cliente=(documento or '00000000000')[:14],
+        # _tipo vazio = documento invalido (digitos != 11 e != 14): usa
+        # placeholder em vez do parcial, que estouraria validacoes a jusante.
+        cpf_cliente=((documento if _tipo else '') or '00000000000')[:14],
         nome_cliente=nome or 'CLIENTE TAGPLUS',
         valor_total=Decimal(str(pedido.get('valor_total') or 0)),
         status=VENDA_STATUS_INCOMPLETO,
@@ -184,25 +186,60 @@ def replicar(pedido: dict):
     return venda
 
 
-def descobrir_e_replicar(api, conta, **kw) -> list:
-    """Orquestra a Fase 3: numero_walk (descobre) -> replicar cada nao-nosso.
+def descobrir_e_replicar(api, conta, *, limite_ausencias: int = LIMITE_AUSENCIAS,
+                         limite_varredura: int = LIMITE_VARREDURA) -> list:
+    """Orquestra a Fase 3 (ponto de entrada do cron): varre + replica + cursor.
 
-    Tolerante por pedido: falha em 1 replicacao nao aborta as demais. Retorna a
-    lista de HoraVenda criadas. Ponto de entrada do cron.
+    Gate de flag no proprio service (alem do worker — defesa em profundidade).
+    Cursor avancado de forma SEGURA: so' ate onde TUDO foi processado com
+    sucesso. Se `replicar` falha no pedido N, o cursor para em N-1 — o pedido N
+    e' re-tentado no proximo ciclo (sem isso, o pedido seria perdido para
+    sempre). Erro recuperavel (auth/outage) na varredura ABORTA a rodada sem
+    avancar o cursor.
+
+    Difere de `numero_walk` (descoberta-only, que avanca o cursor ate o maior
+    existente independentemente da replicacao) — NAO usar numero_walk aqui.
     """
-    descobertos = numero_walk(api, conta, **kw)
+    if not reverso_habilitado():
+        return []
+
+    from app.hora.services.tagplus.pedido_service import PedidoTagPlusError
+
+    cursor_atual = conta.ultimo_pedido_numero_reconciliado or 0
+    base = max(_maior_numero_conhecido(), cursor_atual)
+    try:
+        descobertos, maior_existente = _varrer(
+            api, base,
+            limite_ausencias=limite_ausencias, limite_varredura=limite_varredura,
+        )
+    except PedidoTagPlusError as exc:
+        logger.warning(
+            'descobrir_e_replicar: varredura abortada (%s) — cursor preservado em %s.',
+            exc, cursor_atual,
+        )
+        return []
+
     replicados = []
+    menor_falho = None
     for pedido in descobertos:
         try:
             venda = replicar(pedido)
             if venda is not None:
                 replicados.append(venda)
         except Exception as exc:
-            logger.exception(
-                'replicar pedido TP nº%s falhou (tolerante): %s',
-                pedido.get('numero'), exc,
-            )
             db.session.rollback()
+            n = pedido.get('numero')
+            logger.exception(
+                'replicar pedido TP nº%s falhou (sera re-tentado no proximo ciclo): %s',
+                n, exc,
+            )
+            if n is not None and (menor_falho is None or n < menor_falho):
+                menor_falho = n
+
+    novo_cursor = (menor_falho - 1) if menor_falho is not None else maior_existente
+    if novo_cursor > cursor_atual:
+        conta.ultimo_pedido_numero_reconciliado = novo_cursor
+        db.session.commit()
     return replicados
 
 

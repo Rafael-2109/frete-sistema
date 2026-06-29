@@ -92,10 +92,27 @@ def busca_pedido_por_numero(api: ApiClient, numero: int) -> Optional[dict]:
     try:
         r = api.get('/pedidos', params={'numero': numero})
     except Exception as exc:
-        logger.warning('busca_pedido_por_numero(%s) falhou: %s', numero, exc)
-        return None
+        # Erro de rede/timeout e' RECUPERAVEL — propaga p/ o numero-walk ABORTAR
+        # a rodada (sem avancar o cursor), em vez de tratar como "ausente" e
+        # queimar uma das 3 ausencias indevidamente.
+        raise PedidoTagPlusError(
+            f'GET /pedidos?numero={numero} erro de rede: {exc}'
+        ) from exc
+    if r.status_code in (401, 403):
+        raise ScopeInsuficienteError(
+            f'GET /pedidos?numero={numero} retornou {r.status_code} — '
+            f'token invalido / scope read:pedidos ausente.'
+        )
+    if r.status_code == 404:
+        return None  # ausencia legitima
+    if r.status_code >= 500:
+        raise PedidoTagPlusError(
+            f'GET /pedidos?numero={numero} retornou {r.status_code} (TagPlus indisponivel).'
+        )
     if r.status_code != 200:
-        logger.warning('GET /pedidos?numero=%s status=%s', numero, r.status_code)
+        # Outros 4xx (ex.: 422) nao deveriam ocorrer com ?numero=int — loga e
+        # trata como ausente (nao aborta a rodada inteira por 1 numero atipico).
+        logger.warning('GET /pedidos?numero=%s status=%s — tratando como ausente', numero, r.status_code)
         return None
     try:
         body = r.json()

@@ -228,7 +228,10 @@ class HoraVenda(db.Model):
     endereco_cidade = db.Column(db.String(100), nullable=True)
     endereco_uf = db.Column(db.String(2), nullable=True)
 
-    # Discriminador da fonte: 'DANFE' (import legacy) | 'MANUAL' (novo fluxo).
+    # Discriminador da fonte: 'DANFE' (import legacy) | 'MANUAL' (novo fluxo) |
+    # 'TAGPLUS_API' (backfill de NF do TagPlus, com guarda em backfill_service) |
+    # 'TAGPLUS' (replicacao reversa de pedido nascido no TagPlus — Fase 3,
+    # nasce INCOMPLETO aguardando vinculo de chassi).
     origem_criacao = db.Column(db.String(20), nullable=True, default='DANFE', index=True)
 
     # ----- Origem do lead (roadmap #6) — marketing -----
