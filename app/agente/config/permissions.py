@@ -112,6 +112,31 @@ def clear_current_agent_id() -> None:
     _current_agent_id.set('web')
 
 
+# Escopo de loja do perfil 'lojas' — (perfil, loja_hora_id) do operador HORA.
+# Request-scoped: a rota /agente-lojas seta no inicio do stream; o hook
+# UserPromptSubmit do motor unificado le via get_loja_scope e injeta o bloco
+# <loja_context> quando agente_id='lojas'. None = sem escopo (perfil 'web' nunca
+# seta; o hook so injeta loja_context quando ha escopo). Espelha _current_agent_id.
+_current_loja_scope: ContextVar = ContextVar('_agent_loja_scope', default=None)
+
+
+def set_loja_scope(perfil: str, loja_hora_id) -> None:
+    """Define o escopo de loja do operador (perfil HORA). A rota /agente-lojas
+    chama ao iniciar o stream; o hook le via get_loja_scope p/ injetar <loja_context>."""
+    _current_loja_scope.set((perfil, loja_hora_id))
+
+
+def get_loja_scope():
+    """Retorna a tupla (perfil, loja_hora_id) do escopo de loja, ou None se nao
+    setado (perfil 'web' ou fora do stream lojas)."""
+    return _current_loja_scope.get()
+
+
+def clear_loja_scope() -> None:
+    """Limpa o escopo de loja (chamar no finally do stream)."""
+    _current_loja_scope.set(None)
+
+
 def set_debug_mode(enabled: bool) -> None:
     """Define debug mode no contexto atual (validacao admin feita em routes.py)."""
     _debug_mode.set(enabled)

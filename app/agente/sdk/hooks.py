@@ -111,6 +111,7 @@ def _compose_hook_context(
     *,
     resume_fallback: str = '',
     session_context: str = '',
+    loja_context: str = '',
     main_context: str = '',
     correction_hint: str = '',
     debug_context: str = '',
@@ -129,7 +130,7 @@ def _compose_hook_context(
     pendencias_acumuladas por ULTIMO, coladas a mensagem do usuario).
     """
     return (
-        resume_fallback + session_context + main_context + correction_hint
+        resume_fallback + session_context + loja_context + main_context + correction_hint
         + debug_context + sql_admin_context + skill_hints + world_model
         + tail_context
     )
@@ -284,8 +285,11 @@ def build_hooks(
         tool_name = hook_input.get('tool_name', '')
         additional = None
 
-        # Injetar lembrete de campos corretos antes de queries SQL
-        if tool_name == 'mcp__sql__consultar_sql':
+        # Injetar lembrete de campos corretos antes de queries SQL.
+        # E3.8a: hints sao do dominio Nacom (carteira/separacao/fretes) — NAO
+        # injetar p/ o perfil 'lojas' (isolamento HORA). O skill hint (elif) ja
+        # e isolado por agente (E2.4).
+        if agente_id != 'lojas' and tool_name == 'mcp__sql__consultar_sql':
             additional = (
                 "CAMPOS CORRETOS: "
                 "carteira_principal: cnpj_cpf/raz_social (nao cnpj_cliente/nome_cliente), "
@@ -297,7 +301,7 @@ def build_hooks(
                 "tabela fretes: transportadora_id (JOIN transportadoras.razao_social, nao nome_transportadora). "
                 "FIDELIDADE: valores EXATOS do resultado, nao arredondar nem inventar dados."
             )
-        elif tool_name == 'Bash' and 'python' in str(hook_input.get('tool_input', '')).lower():
+        elif agente_id != 'lojas' and tool_name == 'Bash' and 'python' in str(hook_input.get('tool_input', '')).lower():
             additional = (
                 "Se o script usa campos de tabela, valide nomes via consultar_schema ANTES. "
                 "Campos comuns errados: qtd_saldo vs qtd_saldo_produto_pedido, "
@@ -1502,6 +1506,23 @@ def build_hooks(
             # falante errado. Decisao Rafael: memorias = do falante do turno.
             turn_user_id, turn_user_name = _turn_user()
 
+            # E3.8a: bloco <loja_context> p/ o perfil 'lojas' (escopo de loja do
+            # operador HORA, lido do ContextVar setado pela rota /agente-lojas).
+            # 'web' nunca tem escopo -> bloco vazio. Import lazy do scope_injector
+            # (perfil lojas) — best-effort, nunca quebra o hook.
+            loja_context_block = ""
+            if agente_id == 'lojas':
+                try:
+                    from ..config.permissions import get_loja_scope
+                    _scope = get_loja_scope()
+                    if _scope:
+                        from app.agente_lojas.services.scope_injector import build_loja_context_block
+                        loja_context_block = build_loja_context_block(
+                            perfil=_scope[0], loja_hora_id=_scope[1],
+                        ) + "\n\n"
+                except Exception as _loja_err:
+                    logger.debug(f"[HOOK:UserPromptSubmit] loja_context falhou (ignorado): {_loja_err}")
+
             if USE_EXPANDED_HOOKS:
                 logger.info(
                     f"[HOOK:UserPromptSubmit] Prompt recebido: "
@@ -1707,12 +1728,13 @@ def build_hooks(
             except Exception as _d5_err:
                 logger.debug(f"[HOOK:UserPromptSubmit] D5 world_model falhou (best-effort): {_d5_err}")
 
-            if session_context or additional_context or tail_context or correction_hint or debug_context or sql_admin_context or resume_fallback_context or skill_hints_context or world_model_context:
+            if session_context or additional_context or tail_context or correction_hint or debug_context or sql_admin_context or resume_fallback_context or skill_hints_context or world_model_context or loja_context_block:
                 # F4.4 PAD-CTX: montagem na ORDEM-ALVO (funcao pura testavel) —
                 # tail (recent_sessions + pendencias) por ULTIMO, colado a mensagem.
                 full_context = _compose_hook_context(
                     resume_fallback=resume_fallback_context,
                     session_context=session_context,
+                    loja_context=loja_context_block,
                     main_context=additional_context or "",
                     correction_hint=correction_hint,
                     debug_context=debug_context,
