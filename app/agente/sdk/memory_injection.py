@@ -198,9 +198,12 @@ def _is_nivel_5(content_lower: str) -> bool:
     return bool(re.search(r'nivel\s*[=:"\s>]+[5-9]', content_lower))
 
 
-def _build_session_window(user_id: int) -> tuple[Optional[str], Optional[str]]:
+def _build_session_window(user_id: int, agente_id: str = 'web') -> tuple[Optional[str], Optional[str]]:
     """
     Memory v2 — Rolling Window: últimas 5 sessões do banco.
+
+    M3 (F2 fatia 2): `agente_id` isola a janela por agente — a sessao 'lojas'
+    nao ve resumos/pendencias da sessao 'web'. Default 'web' = aditivo.
 
     Query direta em agent_sessions.summary (JSONB) — sem XML intermediário.
     Cada sessão formatada como ~150 chars.
@@ -226,6 +229,7 @@ def _build_session_window(user_id: int) -> tuple[Optional[str], Optional[str]]:
 
         sessions = AgentSession.query.filter(
             AgentSession.user_id == user_id,
+            AgentSession.agente == agente_id,  # M3/M08: janela por agente
             AgentSession.summary.isnot(None),
         ).order_by(
             AgentSession.updated_at.desc()
@@ -284,7 +288,7 @@ def _build_session_window(user_id: int) -> tuple[Optional[str], Optional[str]]:
             unique_pend = list(dict.fromkeys(pendencias_all))[:5]  # Max 5, preserva ordem
 
             # Filtrar pendências já resolvidas (matching normalizado)
-            resolved = _load_resolved_pendencias(user_id)
+            resolved = _load_resolved_pendencias(user_id, agente_id)
             if resolved:
                 unique_pend = [p for p in unique_pend if _normalize_pendencia(p) not in resolved]
 
@@ -308,9 +312,12 @@ def _build_session_window(user_id: int) -> tuple[Optional[str], Optional[str]]:
         return None, None
 
 
-def _load_resolved_pendencias(user_id: int) -> set:
+def _load_resolved_pendencias(user_id: int, agente_id: str = 'web') -> set:
     """
     Carrega pendências resolvidas de /memories/system/resolved_pendencias.json.
+
+    M3 (F2 fatia 2): `agente_id` isola por agente — a sessao 'lojas' nao
+    enxerga as pendencias resolvidas do agente 'web'. Default 'web' = aditivo.
 
     Returns:
         Set de strings normalizadas com pendências resolvidas.
@@ -319,7 +326,8 @@ def _load_resolved_pendencias(user_id: int) -> set:
         from ..models import AgentMemory
         import json
 
-        mem = AgentMemory.get_by_path(user_id, '/memories/system/resolved_pendencias.json')
+        mem = AgentMemory.get_by_path_for_agent(
+            user_id, '/memories/system/resolved_pendencias.json', agente_id)
         if not mem or not mem.content:
             return set()
 
@@ -1247,7 +1255,7 @@ def _load_user_memories_for_context(
                 logger.debug(f"[MEMORY_INJECT] L1 rules falhou (ignorado): {l1_err}")
 
             # ── Itens 12-13 (TAIL): rolling window + pendencias (F4.4a) ──
-            session_window, pendencias_block = _build_session_window(user_id)
+            session_window, pendencias_block = _build_session_window(user_id, agente_id)
 
             # ── Item 8: Briefing inter-sessão (Memory v2 — 3A) ──
             briefing = None

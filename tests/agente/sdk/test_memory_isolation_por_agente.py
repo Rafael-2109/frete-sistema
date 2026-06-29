@@ -8,11 +8,13 @@ memoria `agente='web'` (heuristica/perfil Nacom) e vice-versa. Foca no Tier 1
 Com `agente_id='web'` (default), o comportamento do agente web e PRESERVADO: o
 isolamento so "liga" quando 'lojas' e passado explicitamente (F3).
 """
+import uuid
+
 import pytest
 
 from app import create_app, db
 from app.auth.models import Usuario
-from app.agente.models import AgentMemory
+from app.agente.models import AgentMemory, AgentSession
 from app.agente.sdk import memory_injection
 
 
@@ -58,6 +60,29 @@ def seed_mem(app, test_user):
 
     for mid in criados:
         obj = AgentMemory.query.get(mid)
+        if obj:
+            db.session.delete(obj)
+    db.session.commit()
+
+
+@pytest.fixture
+def seed_session(app, test_user):
+    """Cria AgentSession com `agente=` e summary JSONB (resumo_geral)."""
+    criados = []
+
+    def _criar(agente, resumo, **kwargs):
+        sid = f"iso-{agente}-{uuid.uuid4().hex[:12]}"
+        s = AgentSession(session_id=sid, user_id=test_user.id, agente=agente,
+                         summary={'resumo_geral': resumo}, **kwargs)
+        db.session.add(s)
+        db.session.commit()
+        criados.append(s.id)
+        return s
+
+    yield _criar
+
+    for sid in criados:
+        obj = AgentSession.query.get(sid)
         if obj:
             db.session.delete(obj)
     db.session.commit()
@@ -114,3 +139,32 @@ def test_directives_empresa_nao_vazam_entre_agentes(seed_mem, test_user, monkeyp
     assert f'id="{m_web.id}"' not in blob_lojas, "diretiva empresa 'web' vazou p/ 'lojas'"
     assert f'id="{m_lojas.id}"' in blob_lojas
     assert f'id="{m_lojas.id}"' not in blob_web, "diretiva empresa 'lojas' vazou p/ 'web'"
+
+
+# ─── M08: _build_session_window (AgentSession por agente) ───
+def test_session_window_isola_por_agente(seed_session, test_user):
+    seed_session('web', 'RESUMO_SESSAO_WEB_UNICO')
+    seed_session('lojas', 'RESUMO_SESSAO_LOJA_UNICO')
+
+    block_web, _ = memory_injection._build_session_window(test_user.id, agente_id='web')
+    block_lojas, _ = memory_injection._build_session_window(test_user.id, agente_id='lojas')
+
+    assert 'RESUMO_SESSAO_WEB_UNICO' in (block_web or '')
+    assert 'RESUMO_SESSAO_WEB_UNICO' not in (block_lojas or ''), "sessao 'web' vazou p/ janela 'lojas'"
+    assert 'RESUMO_SESSAO_LOJA_UNICO' in (block_lojas or '')
+    assert 'RESUMO_SESSAO_LOJA_UNICO' not in (block_web or ''), "sessao 'lojas' vazou p/ janela 'web'"
+
+
+# ─── M09/H01: AgentMemory.get_by_path_for_agent ───
+# NOTA: ha UNIQUE(user_id, path) sem agente => mesmo path so existe p/ 1 agente.
+# O isolamento de RETRIEVAL e fail-closed: a memoria 'web' existe e o 'lojas'
+# NAO a enxerga (None), em vez de pegar a do outro agente via .first().
+def test_get_by_path_for_agent_isola(seed_mem, test_user):
+    path = '/memories/system/resolved_pendencias.json'
+    m_web = seed_mem(path, '["pend_web"]', agente='web')
+
+    achado_web = AgentMemory.get_by_path_for_agent(test_user.id, path, 'web')
+    achado_lojas = AgentMemory.get_by_path_for_agent(test_user.id, path, 'lojas')
+
+    assert achado_web is not None and achado_web.id == m_web.id
+    assert achado_lojas is None, "lojas enxergou resolved_pendencias do agente 'web'"

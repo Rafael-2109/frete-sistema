@@ -656,6 +656,21 @@ class AgentMemory(db.Model):
         return cls.query.filter_by(user_id=user_id, path=path).first()
 
     @classmethod
+    def get_by_path_for_agent(cls, user_id: int, path: str,
+                              agente: str) -> Optional['AgentMemory']:
+        """Busca memória por path ISOLADA por agente (M3/F2 fatia 2).
+
+        Variante fail-closed de get_by_path para o caminho de injeção de
+        memória: se a memória naquele path pertence a outro agente, retorna
+        None (nao a do outro agente). NAO substitui get_by_path — ha ~17
+        callers (criacao de diretorio, consolidacao, memory tools) que operam
+        cross-agente por design e devem permanecer com a assinatura original.
+        """
+        return cls.query.filter_by(
+            user_id=user_id, path=path, agente=agente
+        ).first()
+
+    @classmethod
     def list_directory(cls, user_id: int, dir_path: str) -> List['AgentMemory']:
         """
         Lista conteúdo de um diretório.
