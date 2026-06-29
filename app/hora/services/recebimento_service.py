@@ -647,6 +647,25 @@ def registrar_conferencia_cega(
             acao='MARCOU_AVARIA',
             usuario=operador,
         )
+        # REQ 1 (2026-06-28): marcar avaria no recebimento CRIA uma HoraAvaria
+        # (resolvivel + bloqueante de venda), nao so a flag da conferencia. Dedup
+        # por chassi-com-avaria-aberta cobre re-scan (is_new=False) e reconferencia
+        # sem duplicar. registrar_avaria e flush-only -> entra neste commit; o
+        # evento CONFERIDA/RECEBIDA ja foi emitido acima, entao o guard
+        # EVENTOS_EM_ESTOQUE de registrar_avaria passa. Reusa a foto do chassi.
+        from app.hora.services import avaria_service
+        if avaria_service.avarias_abertas_por_chassi([chassi_norm]).get(chassi_norm, 0) == 0:
+            fotos_avaria = (
+                [(conf.foto_s3_key, 'Foto do chassi na conferencia')]
+                if conf.foto_s3_key else []
+            )
+            avaria_service.registrar_avaria(
+                numero_chassi=chassi_norm,
+                descricao=f'Avaria fisica marcada na conferencia do recebimento #{rec.id}',
+                fotos=fotos_avaria,
+                usuario=operador or 'recebimento',
+                loja_id=rec.loja_id,
+            )
 
     db.session.commit()
     return conf

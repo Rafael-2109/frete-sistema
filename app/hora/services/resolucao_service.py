@@ -92,15 +92,27 @@ def resolver_divergencia(
         return {'ok': True, 'acao': acao, 'conferencia_id': conferencia_id}
 
     if acao == 'MARCAR_AVARIA':
-        registrar_evento(
-            numero_chassi=conf.numero_chassi,
-            tipo='AVARIADA',
-            origem_tabela='hora_recebimento_conferencia',
-            origem_id=conf.id,
-            loja_id=rec.loja_id if rec else None,
-            operador=operador,
-            detalhe=(observacoes or motivo or 'Avaria registrada'),
-        )
+        # Cria HoraAvaria (resolvivel + bloqueante de venda), nao so emite AVARIADA
+        # solto. registrar_avaria JA emite o evento AVARIADA. Dedup por
+        # chassi-com-avaria-aberta: se a conferencia (avaria_fisica=True) ja criou a
+        # avaria via req 1, e no-op (nao duplica avaria nem evento).
+        from app.hora.services import avaria_service
+        chassi = conf.numero_chassi
+        if avaria_service.avarias_abertas_por_chassi([chassi]).get(chassi, 0) == 0:
+            descricao = (observacoes or motivo or '').strip()
+            if len(descricao) < 3:
+                descricao = 'Avaria registrada na resolucao de divergencia'
+            fotos_avaria = (
+                [(conf.foto_s3_key, 'Foto do chassi na conferencia')]
+                if conf.foto_s3_key else []
+            )
+            avaria_service.registrar_avaria(
+                numero_chassi=chassi,
+                descricao=descricao,
+                fotos=fotos_avaria,
+                usuario=operador or 'recebimento',
+                loja_id=rec.loja_id if rec else None,
+            )
         db.session.commit()
         return {'ok': True, 'acao': acao, 'conferencia_id': conferencia_id}
 

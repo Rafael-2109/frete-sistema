@@ -323,3 +323,92 @@ def test_excluir_recebimento_provisorio_com_conferencia_remove_snapshot(
     assert res['ok'] is True
     assert HoraRecebimento.query.get(rec_id) is None
     assert HoraRecebimentoEsperado.query.filter_by(recebimento_id=rec_id).count() == 0
+
+
+# ---------------------------------------------------------------------------
+# REQ 1 (2026-06-28): marcar "Avaria física" na conferência CRIA uma HoraAvaria
+# (resolvível + bloqueante de venda), não só a flag de conferência.
+# ---------------------------------------------------------------------------
+
+def test_avaria_fisica_no_recebimento_cria_hora_avaria(
+        db, loja_factory, pedido_compra_factory, modelo_moto):
+    from app.hora.services import avaria_service
+    from app.hora.models import HoraMotoEvento
+    chassi = _chassi('AVR')
+    pedido = pedido_compra_factory([chassi])
+    rec = recebimento_service.criar_recebimento_sem_nf(loja_id=pedido.loja_destino_id, operador='t')
+    recebimento_service.definir_qtd_declarada(recebimento_id=rec.id, qtd=1, usuario='t')
+    recebimento_service.registrar_conferencia_cega(
+        recebimento_id=rec.id, numero_chassi=chassi,
+        modelo_id_conferido=modelo_moto.id, cor_conferida='PRETA',
+        avaria_fisica=True, qr_code_lido=True, operador='t')
+    _db.session.expire_all()
+    # cria 1 HoraAvaria ABERTA (fonte de verdade da não-vendabilidade)
+    assert avaria_service.avarias_abertas_por_chassi([chassi]).get(chassi) == 1
+    # emite evento AVARIADA com origem hora_avaria
+    ev = HoraMotoEvento.query.filter_by(numero_chassi=chassi, tipo='AVARIADA').first()
+    assert ev is not None and ev.origem_tabela == 'hora_avaria'
+
+
+def test_avaria_fisica_rescan_nao_duplica(
+        db, loja_factory, pedido_compra_factory, modelo_moto):
+    from app.hora.services import avaria_service
+    chassi = _chassi('AVR2')
+    pedido = pedido_compra_factory([chassi])
+    rec = recebimento_service.criar_recebimento_sem_nf(loja_id=pedido.loja_destino_id, operador='t')
+    recebimento_service.definir_qtd_declarada(recebimento_id=rec.id, qtd=1, usuario='t')
+    # re-scan/ajuste do MESMO chassi (update-in-place) não pode criar 2ª avaria
+    for _ in range(2):
+        recebimento_service.registrar_conferencia_cega(
+            recebimento_id=rec.id, numero_chassi=chassi,
+            modelo_id_conferido=modelo_moto.id, cor_conferida='PRETA',
+            avaria_fisica=True, qr_code_lido=True, operador='t')
+    _db.session.expire_all()
+    assert avaria_service.avarias_abertas_por_chassi([chassi]).get(chassi) == 1
+
+
+def test_marcar_avaria_na_resolucao_cria_hora_avaria(
+        db, loja_factory, pedido_compra_factory, modelo_moto):
+    """Resolver uma divergência com MARCAR_AVARIA cria HoraAvaria (resolvível +
+    bloqueante), não só emite o evento AVARIADA solto."""
+    from app.hora.services import avaria_service, resolucao_service
+    pedido = pedido_compra_factory([_chassi('PEDX')])
+    rec = recebimento_service.criar_recebimento_sem_nf(loja_id=pedido.loja_destino_id, operador='t')
+    recebimento_service.definir_qtd_declarada(recebimento_id=rec.id, qtd=2, usuario='t')
+    # chassi EXTRA (fora do snapshot), SEM avaria → divergência CHASSI_EXTRA, sem HoraAvaria
+    chassi_extra = _chassi('EXTRA')
+    conf = recebimento_service.registrar_conferencia_cega(
+        recebimento_id=rec.id, numero_chassi=chassi_extra,
+        modelo_id_conferido=modelo_moto.id, cor_conferida='PRETA',
+        avaria_fisica=False, qr_code_lido=True, operador='t')
+    conf_id = conf.id
+    _db.session.expire_all()
+    assert avaria_service.avarias_abertas_por_chassi([chassi_extra]).get(chassi_extra, 0) == 0
+    resolucao_service.resolver_divergencia(
+        conferencia_id=conf_id, acao='MARCAR_AVARIA',
+        observacoes='riscado na lateral durante o transporte', operador='t')
+    _db.session.expire_all()
+    assert avaria_service.avarias_abertas_por_chassi([chassi_extra]).get(chassi_extra) == 1
+
+
+def test_marcar_avaria_dedup_quando_conferencia_ja_criou(
+        db, loja_factory, pedido_compra_factory, modelo_moto):
+    """Se a conferência (avaria_fisica=True) já criou a HoraAvaria, resolver a
+    divergência com MARCAR_AVARIA é no-op (não duplica)."""
+    from app.hora.services import avaria_service, resolucao_service
+    chassi = _chassi('DEDUP')
+    pedido = pedido_compra_factory([chassi])
+    rec = recebimento_service.criar_recebimento_sem_nf(loja_id=pedido.loja_destino_id, operador='t')
+    recebimento_service.definir_qtd_declarada(recebimento_id=rec.id, qtd=1, usuario='t')
+    conf = recebimento_service.registrar_conferencia_cega(
+        recebimento_id=rec.id, numero_chassi=chassi,
+        modelo_id_conferido=modelo_moto.id, cor_conferida='PRETA',
+        avaria_fisica=True, qr_code_lido=True, operador='t')  # req 1 já cria avaria
+    conf_id = conf.id
+    _db.session.expire_all()
+    assert avaria_service.avarias_abertas_por_chassi([chassi]).get(chassi) == 1
+    resolucao_service.resolver_divergencia(
+        conferencia_id=conf_id, acao='MARCAR_AVARIA',
+        observacoes='confirma a avaria ja marcada', operador='t')
+    _db.session.expire_all()
+    assert avaria_service.avarias_abertas_por_chassi([chassi]).get(chassi) == 1
