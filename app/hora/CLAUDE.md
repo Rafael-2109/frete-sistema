@@ -1724,7 +1724,7 @@ LOCAL + **PROD**); `pedido_service.busca_pedido_por_numero` (GET /pedidos?numero
 `numero_walk` persiste cursor, `replicar` cria `HoraVenda` INCOMPLETO `origem_criacao='TAGPLUS'` +
 `HoraVendaDivergencia` `AGUARDANDO_CHASSI` por item — **sem migration nova**, usa
 `detalhe`/`valor_esperado`/`numero_chassi`-NULL; `descobrir_e_replicar` orquestra);
-`pedido_reverso_worker.descobrir_e_replicar_job` (cron). **Vínculo de chassi reusa a tela de
+`pedido_reverso_worker.descobrir_e_replicar_job` (entry point, self-contained: create_app + lock Redis + flag) **agendado no scheduler de PROD** (`app/scheduler/sincronizacao_incremental_definitiva.py` → `executar_descoberta_reversa_hora`, a cada 30min; no-op sem boot enquanto a flag OFF). **Vínculo de chassi reusa a tela de
 edição de pedido INCOMPLETO** (`pedido_venda_novo.html` já exibe a divergência) + badge "TagPlus"
 na listagem. **Decisão de modelagem:** `HoraVendaItem.numero_chassi` é NOT NULL → item-por-modelo
 vira divergência "aguardando chassi", não `HoraVendaItem`; o operador adiciona os itens reais

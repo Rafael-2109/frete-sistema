@@ -197,6 +197,22 @@ def test_reverso_habilitado_default_off(monkeypatch):
     assert rev.reverso_habilitado() is True
 
 
+def test_scheduler_job_reverso_respeita_flag(monkeypatch):
+    # Wiring do scheduler: flag OFF -> nem chama o job (sem create_app); ON -> chama.
+    from app.scheduler.sincronizacao_incremental_definitiva import (
+        executar_descoberta_reversa_hora,
+    )
+    import app.hora.workers.pedido_reverso_worker as w
+    called = []
+    monkeypatch.setattr(w, 'descobrir_e_replicar_job', lambda: called.append(1) or {'ok': True})
+    monkeypatch.delenv('HORA_TAGPLUS_REVERSO', raising=False)
+    executar_descoberta_reversa_hora()
+    assert called == []
+    monkeypatch.setenv('HORA_TAGPLUS_REVERSO', '1')
+    executar_descoberta_reversa_hora()
+    assert called == [1]
+
+
 def _conta():
     from app.hora.models.tagplus import HoraTagPlusConta
     c = HoraTagPlusConta(client_id='c', client_secret_encrypted='x', webhook_secret='s')

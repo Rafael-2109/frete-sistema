@@ -2491,6 +2491,27 @@ def executar_estoque_semanal_email():
         logger.error(f"❌ [ESTOQUE-SEMANAL] job falhou: {e}", exc_info=True)
 
 
+def executar_descoberta_reversa_hora():
+    """Job (interval): descoberta reversa de pedidos TagPlus -> HORA (Fase 3).
+
+    Numero-walk +3: puxa para o HORA os pedidos nascidos direto no TagPlus
+    (cria HoraVenda INCOMPLETO aguardando vinculo de chassi). Gated por
+    HORA_TAGPLUS_REVERSO (default OFF), checado AQUI antes do create_app para
+    nao pagar o boot a cada ciclo enquanto desligado — ligar a env var ativa
+    sem mexer no codigo. Best-effort, NUNCA derruba o scheduler. O job
+    (pedido_reverso_worker) e' self-contained (cria app + lock Redis + re-checa
+    a flag internamente).
+    """
+    if os.environ.get("HORA_TAGPLUS_REVERSO", "0") not in ("1", "true", "True"):
+        return
+    try:
+        from app.hora.workers.pedido_reverso_worker import descobrir_e_replicar_job
+        res = descobrir_e_replicar_job()
+        logger.info(f"🔄 [HORA-REVERSO] {res}")
+    except Exception as e:
+        logger.error(f"❌ [HORA-REVERSO] job falhou: {e}", exc_info=True)
+
+
 def main():
     """
     Função principal - inicializa services FORA do contexto e configura scheduler
@@ -2588,6 +2609,23 @@ def main():
         logger.info(f"   10. Estoque semanal e-mail: segunda às {_est_hour:02d}:00 (ENABLED)")
     else:
         logger.info("   10. Estoque semanal e-mail: DESABILITADO (ESTOQUE_SEMANAL_EMAIL_ENABLED=false)")
+
+    # Descoberta reversa de pedidos TagPlus -> HORA (Fase 3, numero-walk +3):
+    # puxa pedidos nascidos direto no TagPlus de volta p/ o HORA. Registrado
+    # SEMPRE, mas no-op (sem create_app) enquanto HORA_TAGPLUS_REVERSO=OFF —
+    # ligar a env var ativa, sem novo deploy de codigo.
+    _hora_reverso_min = int(os.getenv("HORA_TAGPLUS_REVERSO_INTERVAL_MIN", "30"))
+    scheduler.add_job(
+        func=executar_descoberta_reversa_hora,
+        trigger="interval",
+        minutes=_hora_reverso_min,
+        id="hora_tagplus_reverso",
+        name="Descoberta reversa de pedidos TagPlus (HORA, numero-walk)",
+        max_instances=1,
+        misfire_grace_time=300,
+        replace_existing=True,
+    )
+    logger.info(f"   11. HORA TagPlus reverso: a cada {_hora_reverso_min} min (gated HORA_TAGPLUS_REVERSO, default OFF)")
 
     logger.info("=" * 60)
     logger.info("✅ Scheduler configurado com TODAS as correções:")

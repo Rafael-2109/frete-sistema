@@ -33,7 +33,7 @@ atualizado: 2026-06-29
 
 **PENDENTE (próxima sessão / dono):**
 1. **Go-live 2b**: confirmar com o TagPlus que `pedido_os_vinculada` no `POST /nfes` vincula sem auto-criar outro pedido (#1) e o cancelar-com-NFe (#3); **ligar `HORA_TAGPLUS_PUSH_PEDIDO=1`**. (No pior caso a NFe sai correta; só restaria duplicação a reconciliar.)
-2. **Go-live Fase 3**: agendar o cron (infra — crontab Render/RQ scheduler invocando `descobrir_e_replicar_job`, ~30min, padrão do `reconciliar_emissoes_job`); **ligar `HORA_TAGPLUS_REVERSO=1`** após observar o numero-walk em PROD (a flag OFF garante que nada é replicado antes).
+2. **Go-live Fase 3**: cron **JÁ agendado** no scheduler de PROD (`app/scheduler/sincronizacao_incremental_definitiva.py` → `executar_descoberta_reversa_hora`, a cada 30min, env `HORA_TAGPLUS_REVERSO_INTERVAL_MIN`; o job é no-op sem `create_app` enquanto a flag OFF). Falta só: **deploy** + **ligar `HORA_TAGPLUS_REVERSO=1`** após observar o numero-walk em PROD.
 3. **Push do commit** (aval do dono — dispara deploy).
 4. Melhorias futuras (riscos residuais abaixo): label amigável p/ `AGUARDANDO_CHASSI`, lock anti-TOCTOU, reconciliador por `codigo_externo`.
 
