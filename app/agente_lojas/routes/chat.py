@@ -20,6 +20,7 @@ import asyncio
 import concurrent.futures
 import json
 import logging
+import os
 import queue
 import threading
 import time
@@ -41,6 +42,21 @@ from app.agente.models import AgentSession
 from app import db
 
 logger = logging.getLogger('sistema_fretes')
+
+
+def _env_bool(name: str, default: bool = False) -> bool:
+    val = os.getenv(name, '').strip().lower()
+    if not val:
+        return default
+    return val in ('true', '1', 'yes', 'on')
+
+
+# CUTOVER E3.8b — flag canary do MOTOR UNICO. OFF (default): a rota usa o fork
+# (stream_lojas_chat / AgentLojasClient). ON: a rota usa o motor web por perfil
+# (get_client('lojas').stream_response). Reversivel por env var; a delecao do
+# fork e FASE B (so apos canary validado em PROD). Ver handoff
+# docs/superpowers/plans/2026-06-29-convergencia-agente-lojas-handoff.md §CUTOVER.
+AGENT_LOJAS_USA_MOTOR_UNICO: bool = _env_bool('AGENT_LOJAS_USA_MOTOR_UNICO', default=False)
 
 
 HEARTBEAT_INTERVAL_SECONDS = 10
@@ -299,6 +315,91 @@ async def _drain_async_gen(
         event_queue.put(None)  # sentinel
 
 
+async def _drain_via_motor(
+    *,
+    user_message: str,
+    user_id: int,
+    user_name: str,
+    perfil: str,
+    loja_hora_id: Optional[int],
+    sdk_session_id: Optional[str],
+    our_session_id: str,
+    event_queue: 'queue.Queue',
+    state: dict,
+):
+    """Caminho do MOTOR UNICO (flag AGENT_LOJAS_USA_MOTOR_UNICO ON).
+
+    Reusa o AgentClient web do perfil 'lojas' — `get_client('lojas')` ja produz
+    settings/skills(allow-list)/agents({orientador-loja})/hooks isolados por
+    agente='lojas' (memoria + skill-reminders + enforce), injeta <loja_context> e
+    suprime hints SQL Nacom (ETAPA 1+2+3a). Esta coroutine apenas:
+      (a) seta os ContextVars do registry WEB para o motor/hooks/can_use_tool
+          lerem o perfil 'lojas' e o escopo de loja;
+      (b) serializa cada StreamEvent no SSE que o frontend lojas espera (formato
+          do fork, via _motor_event_to_sse) + acumula state p/ persistencia;
+      (c) limpa os ContextVars no finally. Encerra com sentinel None.
+    """
+    from app.agente.config.permissions import (
+        set_current_session_id,
+        set_current_user_id,
+        set_current_agent_id,
+        set_loja_scope,
+        set_event_queue,
+        clear_current_agent_id,
+        clear_loja_scope,
+        clear_current_user_id,
+        cleanup_session_context,
+    )
+    from app.agente.sdk.client import get_client
+    from app.agente_lojas.config.permissions import can_use_tool as lojas_can_use_tool
+
+    # Wiring do registry WEB: o motor (stream_response) e os hooks (build_hooks
+    # agente_id='lojas') leem destes ContextVars; o can_use_tool do fork le
+    # session_id/event_queue do MESMO registro (C4). set_current_agent_id ANTES de
+    # set_loja_scope — o hook so injeta <loja_context> quando agente='lojas'.
+    set_current_session_id(our_session_id)
+    set_current_user_id(user_id)
+    # memory_mcp_tool tem ContextVar proprio de user_id (espelha o web route).
+    try:
+        from app.agente.tools.memory_mcp_tool import set_current_user_id as _set_mem_uid
+        _set_mem_uid(user_id)
+    except Exception:
+        pass
+    set_current_agent_id(AGENTE_ID)  # 'lojas'
+    set_loja_scope(perfil, loja_hora_id)
+    if event_queue is not None:
+        set_event_queue(our_session_id, event_queue)
+
+    try:
+        client = get_client(AGENTE_ID)  # AgentClient do perfil 'lojas' (E1.2)
+        agen = client.stream_response(
+            prompt=user_message,
+            user_name=user_name,
+            user_id=user_id,
+            sdk_session_id=sdk_session_id,
+            our_session_id=our_session_id,
+            # R4 (MAPA_A5): can_use_tool do FORK preserva os _DANGEROUS_BASH_PATTERNS
+            # HORA (delete from hora_*) + guard /tmp. E param de stream_response —
+            # NAO precisa migrar para o motor.
+            can_use_tool=lojas_can_use_tool,
+        )
+        async for event in agen:
+            sse = _motor_event_to_sse(event, state)
+            if sse is not None:
+                event_queue.put(sse)
+    except Exception as e:
+        logger.exception("[AGENTE_LOJAS] drain motor erro: %s", e)
+        # 'error' reseta o modal no frontend; 'done' destrava o stream.
+        event_queue.put(_sse('error', {'content': str(e)}))
+        event_queue.put(_sse('done', {'error_recovery': True}))
+    finally:
+        clear_current_agent_id()
+        clear_loja_scope()
+        clear_current_user_id()
+        cleanup_session_context(our_session_id)
+        event_queue.put(None)  # sentinel
+
+
 def _streaming_worker(
     *,
     user_message: str,
@@ -321,19 +422,36 @@ def _streaming_worker(
 
     Sinaliza fim com sentinel None em event_queue.
     """
-    coro = _drain_async_gen(
-        user_message=user_message,
-        user_id=user_id,
-        user_name=user_name,
-        perfil=perfil,
-        loja_hora_id=loja_hora_id,
-        sdk_session_id=sdk_session_id,
-        our_session_id=our_session_id,
-        event_queue=event_queue,
-        state=state,
-    )
-
-    fut = submit_coroutine(coro) if USE_PERSISTENT_LOJAS_LOOP else None
+    if AGENT_LOJAS_USA_MOTOR_UNICO:
+        # Caminho do MOTOR UNICO: a coroutine roda no loop do MOTOR (client_pool do
+        # agente web), pois stream_response do motor usa esse pool. Submeter ao loop
+        # do fork cruzaria event loops e o can_use_tool nao veria os ContextVars.
+        from app.agente.sdk.client_pool import submit_coroutine as _submit_motor
+        coro = _drain_via_motor(
+            user_message=user_message,
+            user_id=user_id,
+            user_name=user_name,
+            perfil=perfil,
+            loja_hora_id=loja_hora_id,
+            sdk_session_id=sdk_session_id,
+            our_session_id=our_session_id,
+            event_queue=event_queue,
+            state=state,
+        )
+        fut = _submit_motor(coro)
+    else:
+        coro = _drain_async_gen(
+            user_message=user_message,
+            user_id=user_id,
+            user_name=user_name,
+            perfil=perfil,
+            loja_hora_id=loja_hora_id,
+            sdk_session_id=sdk_session_id,
+            our_session_id=our_session_id,
+            event_queue=event_queue,
+            state=state,
+        )
+        fut = submit_coroutine(coro) if USE_PERSISTENT_LOJAS_LOOP else None
 
     if fut is not None:
         # Expor fut em state para que _generate_sse possa cancelar no
