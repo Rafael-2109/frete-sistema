@@ -1883,6 +1883,8 @@ Nunca invente informações."""
                 # turn_context_registry (client do pool reusado nao reaplica
                 # hooks — closure congelava user_name/user_id no 1o falante).
                 our_session_id=our_session_id,
+                # E2.4: perfil do client -> isola memoria/skills/enforce por agente.
+                agente_id=self.agente_id,
             )
             hooks_list = list(options_dict["hooks"].keys())
             logger.debug(

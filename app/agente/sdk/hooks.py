@@ -171,7 +171,7 @@ def _build_resume_fallback_notice(reason: str) -> str:
     )
 
 
-def _build_skill_pretool_context(user_id: int, skill: str) -> Optional[str]:
+def _build_skill_pretool_context(user_id: int, skill: str, agente_id: str = 'web') -> Optional[str]:
     """Contexto pre-execucao da Skill tool (PreToolUse) — 2 fontes best-effort:
 
     1. Lembrete aprendido do usuario (Task 10 Fase 1 Skill Effectiveness),
@@ -188,7 +188,7 @@ def _build_skill_pretool_context(user_id: int, skill: str) -> Optional[str]:
             from ..config.permissions import get_current_session_id
             from .memory_injection import get_skill_reminders_for_session
             sid = get_current_session_id() or ''
-            rem = get_skill_reminders_for_session(user_id, sid).get(skill)
+            rem = get_skill_reminders_for_session(user_id, sid, agente_id).get(skill)
             if rem:
                 parts.append(
                     f"LEMBRETE para a skill '{skill}' (aprendido de interacoes "
@@ -221,6 +221,7 @@ def build_hooks(
     set_injected_ids: callable,
     resume_state: dict = None,
     our_session_id: str = None,
+    agente_id: str = 'web',
 ) -> dict:
     """Factory que cria hooks para ClaudeAgentOptions.
 
@@ -239,6 +240,11 @@ def build_hooks(
             user_name da closure congelam no falante que CONECTOU. Os hooks
             resolvem o falante ATUAL via turn_context_registry (fallback =
             closure; web 1:1 inalterado).
+        agente_id: PERFIL do agente ('web' default | 'lojas'). Propagado p/ os 3
+            pontos de injecao de memoria por agente (M3): UserPromptSubmit
+            (_load_user_memories_for_context), PreToolUse Skill (skill reminders)
+            e PreToolUse enforce (_load_enforce_directives). Default 'web' =
+            byte-identico (web/Teams/WhatsApp).
 
     Returns:
         Dict formatado para options_dict["hooks"]
@@ -305,7 +311,7 @@ def build_hooks(
                 tinput = hook_input.get('tool_input', {})
                 skill = tinput.get('skill', '') if isinstance(tinput, dict) else ''
                 if skill:
-                    additional = _build_skill_pretool_context(_turn_user()[0], skill)
+                    additional = _build_skill_pretool_context(_turn_user()[0], skill, agente_id)
             except Exception as e:
                 logger.debug(f"[SKILL_CTX] pretool context falhou (ignorado): {e}")
 
@@ -428,7 +434,7 @@ def build_hooks(
             if not USE_MANDATORY_HARD_ENFORCE:
                 return {"continue_": True}
             enforce_uid = _turn_user()[0]
-            directives = _load_enforce_directives(enforce_uid)
+            directives = _load_enforce_directives(enforce_uid, agente_id)
             if not directives:
                 # caminho comum (0 regras): sem serializar tool_input (O(input) evitado)
                 return {"continue_": True}
@@ -1522,16 +1528,15 @@ def build_hooks(
                     # F4.4 PAD-CTX: payload em 2 partes — main (user_rules,
                     # memorias, directives, briefing, routing) + tail
                     # (recent_sessions + pendencias, por ULTIMO na montagem).
-                    # M3: este hook serve o agente WEB (Nacom) — e tambem Teams/
-                    # WhatsApp, todos agente='web'. Passa 'web' EXPLICITO (ponto de
-                    # entrada unico da injecao de memoria). Em F3, quando o fork de
-                    # lojas convergir para reusar este client, o agente_id vira do
-                    # perfil (fail-closed no ponto de entrada do fork).
+                    # M3/E2.4: agente_id vem do PERFIL do client (closure de
+                    # build_hooks). 'web' p/ web/Teams/WhatsApp (default), 'lojas'
+                    # quando o motor unificado serve o perfil HORA — ponto de
+                    # entrada unico da injecao de memoria, isolado por agente.
                     additional_context, tail_context, injected_mem_ids = (
                         _load_user_memories_for_context(
                             turn_user_id, prompt=prompt,
                             model_name=get_model_name(),
-                            agente_id='web',
+                            agente_id=agente_id,
                         )
                     )
                     # Salvar IDs injetados para effectiveness tracking posterior
