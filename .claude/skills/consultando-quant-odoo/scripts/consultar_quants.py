@@ -159,7 +159,21 @@ def _parse_states(s):
 
 def _print_quants(res, args):
     if args.formato == 'json':
-        print(json.dumps(res, ensure_ascii=False, indent=2, default=str))
+        # `agregado` e indexado por tupla (cod, empresa) — json.dumps rejeita
+        # chaves tupla (TypeError: keys must be str/int/...). Serializa uma copia
+        # rasa com a chave achatada em "cod|empresa" SO no caminho JSON; o caminho
+        # texto (abaixo) continua usando a tupla para ordenar/desempacotar.
+        res_json = res
+        agregado = res.get('agregado') if isinstance(res, dict) else None
+        if isinstance(agregado, dict) and any(
+            isinstance(k, tuple) for k in agregado
+        ):
+            res_json = dict(res)
+            res_json['agregado'] = {
+                ('|'.join(map(str, k)) if isinstance(k, tuple) else k): v
+                for k, v in agregado.items()
+            }
+        print(json.dumps(res_json, ensure_ascii=False, indent=2, default=str))
         return 0
     print(f'Total quants: {res["total_quants"]}')
     print()
