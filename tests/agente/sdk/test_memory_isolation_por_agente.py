@@ -82,8 +82,8 @@ def seed_session(app, test_user):
 
     yield _criar
 
-    for sid in criados:
-        obj = AgentSession.query.get(sid)
+    for pk in criados:  # criados guarda AgentSession.id (PK int), nao session_id
+        obj = AgentSession.query.get(pk)
         if obj:
             db.session.delete(obj)
     db.session.commit()
@@ -204,8 +204,8 @@ def test_user_rules_isola_por_agente(seed_mem, test_user):
     seed_mem('/memories/rules/r_loja.xml', 'REGRA_LOJA_HORA_UNICA', agente='lojas',
              priority='mandatory', is_cold=False)
 
-    rules_web = memory_injection_rules._build_user_rules(test_user.id, agente='web') or ''
-    rules_lojas = memory_injection_rules._build_user_rules(test_user.id, agente='lojas') or ''
+    rules_web = memory_injection_rules._build_user_rules(test_user.id, agente_id='web') or ''
+    rules_lojas = memory_injection_rules._build_user_rules(test_user.id, agente_id='lojas') or ''
 
     assert 'REGRA_NACOM_WEB_UNICA' in rules_web
     assert 'REGRA_NACOM_WEB_UNICA' not in rules_lojas, "regra 'web' vazou p/ canal L1 'lojas'"

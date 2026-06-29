@@ -13,11 +13,11 @@ from ._sanitization import xml_escape, sanitize_memory_content
 logger = logging.getLogger('sistema_fretes')
 
 
-def _query_user_rules(user_id: int, agente: str = 'web'):
+def _query_user_rules(user_id: int, agente_id: str = 'web'):
     """
     Query CANONICA das regras do canal L1 (priority='mandatory').
 
-    M3 (F2 fatia 2): `agente` isola as regras por agente (web|lojas) — inclui
+    M3 (F2 fatia 2): `agente_id` isola as regras por agente (web|lojas) — inclui
     as regras EMPRESA (user_id=0) do agente. Default 'web' = aditivo.
 
     Fonte unica compartilhada por _build_user_rules (renderiza o bloco XML) e
@@ -43,7 +43,7 @@ def _query_user_rules(user_id: int, agente: str = 'web'):
     from .memory_injection import TIER1_PROTECTED_PATHS
     return AgentMemory.query.filter(
         AgentMemory.user_id.in_([user_id, 0]),
-        AgentMemory.agente == agente,  # M3/R01: regras (pessoais + empresa) por agente
+        AgentMemory.agente == agente_id,  # M3/R01: regras (pessoais + empresa) por agente
         AgentMemory.is_directory == False,  # noqa: E712
         AgentMemory.is_cold == False,  # noqa: E712
         AgentMemory.priority == 'mandatory',
@@ -58,7 +58,7 @@ def _query_user_rules(user_id: int, agente: str = 'web'):
     ).limit(MANDATORY_RULES_MAX_COUNT).all()
 
 
-def _get_user_rule_ids(user_id: int, agente: str = 'web') -> set:
+def _get_user_rule_ids(user_id: int, agente_id: str = 'web') -> set:
     """
     IDs das memorias que entram no canal L1 <user_rules>.
 
@@ -74,13 +74,13 @@ def _get_user_rule_ids(user_id: int, agente: str = 'web') -> set:
         set de IDs (vazio em qualquer falha — nunca None).
     """
     try:
-        return {r.id for r in _query_user_rules(user_id, agente)}
+        return {r.id for r in _query_user_rules(user_id, agente_id)}
     except Exception as e:
         logger.debug(f"[MEMORY_INJECT_RULES] _get_user_rule_ids failed (ignored): {e}")
         return set()
 
 
-def _build_user_rules(user_id: int, agente: str = 'web') -> Optional[str]:
+def _build_user_rules(user_id: int, agente_id: str = 'web') -> Optional[str]:
     """
     Constroi bloco <user_rules priority="mandatory"> com memorias do usuario
     marcadas como regras obrigatorias.
@@ -92,7 +92,7 @@ def _build_user_rules(user_id: int, agente: str = 'web') -> Optional[str]:
         String XML ou None se nenhuma regra ativa.
     """
     try:
-        rules = _query_user_rules(user_id, agente)
+        rules = _query_user_rules(user_id, agente_id)
 
         if not rules:
             return None
