@@ -1317,3 +1317,24 @@ def resolve_subagent_checkpoint_mode(is_admin: bool = False) -> str:
     if raw == "admin":
         return "on" if is_admin else "shadow"
     return raw  # off | shadow | on
+
+
+_SPECIALIST_HANDOFF_VALID = {"off", "shadow", "on", "admin"}
+
+
+def resolve_specialist_handoff_mode(is_admin: bool = False) -> str:
+    """Resolve o modo do PILOTO de handoff de sessao (F1 — especialista quente).
+
+    Spec: docs/superpowers/specs/2026-06-28-handoff-sessao-agente-custo-design.md.
+    Lido FRESH do env (rollout sem redeploy). Default OFF (de-risking).
+        off    -> nada (comportamento atual; subagente efemero por turno)
+        shadow -> agent_router DECIDE + loga, mas NAO troca o cliente ativo
+        on     -> handoff real (troca para o especialista quente)
+        admin  -> "on" para admin (canary), "shadow" para os demais
+    """
+    raw = os.getenv("AGENT_SPECIALIST_HANDOFF", "off").strip().lower()
+    if raw not in _SPECIALIST_HANDOFF_VALID:
+        return "off"
+    if raw == "admin":
+        return "on" if is_admin else "shadow"
+    return raw  # off | shadow | on
