@@ -199,19 +199,21 @@ GATILHO (leia PRIMEIRO, nesta ordem):
 2. docs/superpowers/plans/2026-06-28-convergencia-agente-lojas.md  (plano; foco em §REVISÃO DE ESCOPO + Apêndice A)
 3. app/agente_lojas/CLAUDE.md  (Gotcha 0 + Fases de evolução) e app/agente/CLAUDE.md
 
-ESTADO: F0+F1 + **F2/M3 COMPLETA** (fatia 1 + fatia 2). TODAS as queries de memória
-empresa/user do módulo isoladas por agente_id (default='web' aditivo): no caminho do
-_load (M08-M12, R01, B01-B03, E01) E nos PreToolUse hooks (M13 skill_reminders +
-_load_enforce_directives). 17 commits, 145 testes verdes + 1 skip. Review adversarial
-4-dim feito. SEM push/merge (aguarda revisão 4-mãos).
+ESTADO: F0+F1 ✅ · F2/M3 isolamento de LEITURA ✅ (fatia 1+2, todas as fontes) ·
+Fase 1 fundação de ESCRITA/UI ✅ estrutural (constraint (user_id,path,agente) +
+migration; create_file/dir(agente=); ContextVar _current_agent_id; rotas
+/agente/api/sessions* filtram 'web'). 23 commits, 554 testes verdes + 1 skip.
+Review adversarial 4-dim + code-review app-wide (34 agentes) feitos. SEM push/merge.
 
-OBJETIVO desta sessão: F2 P1/P2 (memory_mcp_tool + 7 jobs particionam a ESCRITA por
-agente; migrations de defesa) e/ou F3 (AgentClient por perfil — destravar singletons +
-WIRING de agente_id em build_hooks; migrar app/agente_lojas/ p/ get_client('lojas');
-aposentar o fork). Ver "O que falta" + "Achados desta sessão" (UNIQUE constraint na
-escrita, KG na origem P2). GATED: F3 só com F2 verde (está).
+OBJETIVO desta sessão: executar o "MOTOR ÚNICO" (seção ## PLANO DO MOTOR ÚNICO do
+handoff — ETAPAS 1-3, com file:line). Resumo: (1) parametrizar AgentClient/get_settings
+por perfil, web BYTE-IDÊNTICO (suíte tests/agente/ 100% verde); (2) wiring de agente_id
+(build_hooks + rotas set_current_agent_id) + memory_mcp_tool e jobs de consolidação por
+agente; (3) migrar app/agente_lojas/ p/ get_client('lojas'), injetar <loja_context> como
+hook por perfil, aposentar o fork AgentLojasClient, validar isolamento ponta a ponta.
+NÃO migrar Teams/WhatsApp (ficam 'web'). É o coração da produção — TDD por passo.
 
-ANTES de codar: `git rebase main` (a main é ativa); rodar o baseline do handoff. NÃO
-push/merge sem aval (revisão 4-mãos). Cada vetor = um commit TDD; default='web' mantém
-o agente WEB (produção) intacto.
+ANTES de codar: `git rebase main` (a main é ativa); rodar o baseline. NÃO push/merge sem
+aval (revisão 4-mãos). Migration `2026_06_30_constraint_agente_memoria` aplica em PROD no
+deploy. Cada passo = commit TDD; default='web' mantém o agente WEB/Teams/WhatsApp intacto.
 ```
