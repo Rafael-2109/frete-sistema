@@ -95,6 +95,22 @@ a2521fd3e feat(agente-mem): F2 fatia2/R01 — isola canal L1 user_rules por agen
    `skip` em banco com pgvector (json.loads de objeto Vector falha por design — padrão
    herdado de `test_memory_search_cold_filter.py`). O filtro do fallback ESTÁ correto
    (idêntico em padrão ao pgvector, que é coberto); só não é exercitado no CI com pgvector.
+5. **Isolamento de LISTAGEM/UI de sessão — superfície NOVA (achado do code-review app-wide).**
+   A fatia 2 cobriu o caminho de **injeção no LLM**. As **rotas de UI** do agente WEB que
+   LISTAM/operam sessões NÃO filtram por `agente` (`routes/sessions.py` list/messages/
+   delete/rename/summaries; `routes/chat.py` get_or_create/idle-rotation; `routes/subagents.py`;
+   `routes/feedback.py`). Hoje **mitigado**: (a) o fork lojas usa rotas próprias
+   `/agente-lojas/*` que JÁ filtram `agente='lojas'` (air gap); (b) `session_id` é UNIQUE
+   global → queries `filter_by(session_id=...)` (subagents/feedback/chat-rotation) pegam a
+   sessão certa, agente é redundante ali. **Risco real**: um usuário DUAL (admin) abrindo
+   a TELA web `/agente` veria também sessões `'lojas'` na listagem (`sessions.py` list/summaries).
+   Não é injeção no LLM; é isolamento de visualização. Decidir com o dono: tratar junto de
+   F3 (cliente unificado) OU item próprio de "isolamento de UI". NÃO corrigido nesta fatia
+   (fora do escopo de injeção; muda comportamento de UI).
+6. **Jobs de consolidação (pattern_analyzer) leem corpus cross-agente** — confirma o **P1**
+   (escrita): `analyze_and_save`/`generate_and_save_profile` carregam sessões+correções do
+   user sem filtrar agente e gravam padrões (default `'web'`). Seguro hoje (air gap; e a
+   materialização M06 filtra na leitura). É o "particionar a ESCRITA" do P1.
 
 ### F3 — `AgentClient` parametrizado por perfil (GATED por F2 completo)
 Ver `## FASE 3` do plano. Destravar 6 singletons (`get_settings` `@lru_cache`,
