@@ -160,7 +160,7 @@ class TestGetPooledClient:
         """Retorna PooledClient quando existe no registry."""
         client_mock = MagicMock()
         pooled = PooledClient(client=client_mock, session_id='sess-123', connected=True)
-        cp._registry['sess-123'] = pooled
+        cp._registry[cp._pool_key('sess-123')] = pooled
 
         result = get_pooled_client('sess-123')
         assert result is pooled
@@ -188,8 +188,8 @@ class TestGetOrCreateClient:
         assert pooled.user_id == 42
         assert pooled.connected is True
         mock_claude_sdk_client.connect.assert_awaited_once()
-        # Deve estar no registry
-        assert 'sess-new' in cp._registry
+        # Deve estar no registry (chave composta)
+        assert cp._pool_key('sess-new') in cp._registry
 
     @patch('app.agente.config.feature_flags.USE_PERSISTENT_SDK_CLIENT', True)
     def test_get_or_create_grava_model_das_options(self, pool_reset, mock_claude_sdk_client):
@@ -218,7 +218,7 @@ class TestGetOrCreateClient:
             client=client_mock, session_id='sess-reuse',
             user_id=1, connected=True,
         )
-        cp._registry['sess-reuse'] = existing
+        cp._registry[cp._pool_key('sess-reuse')] = existing
         original_last_used = existing.last_used
 
         # Pequena pausa para que last_used mude
@@ -244,7 +244,7 @@ class TestGetOrCreateClient:
             client=old_client, session_id='sess-disc',
             connected=False,
         )
-        cp._registry['sess-disc'] = old_pooled
+        cp._registry[cp._pool_key('sess-disc')] = old_pooled
 
         mock_cls = MagicMock(return_value=mock_claude_sdk_client)
 
@@ -275,13 +275,13 @@ class TestDisconnectClient:
             client=client_mock, session_id='sess-dc',
             connected=True,
         )
-        cp._registry['sess-dc'] = pooled
+        cp._registry[cp._pool_key('sess-dc')] = pooled
 
         future = submit_coroutine(disconnect_client('sess-dc'))
         result = future.result(timeout=5)
 
         assert result is True
-        assert 'sess-dc' not in cp._registry
+        assert cp._pool_key('sess-dc') not in cp._registry
         client_mock.disconnect.assert_awaited_once()
         assert pooled.connected is False
 
@@ -303,13 +303,13 @@ class TestDisconnectClient:
             client=client_mock, session_id='sess-fk',
             connected=True,
         )
-        cp._registry['sess-fk'] = pooled
+        cp._registry[cp._pool_key('sess-fk')] = pooled
 
         future = submit_coroutine(disconnect_client('sess-fk'))
         result = future.result(timeout=5)
 
         assert result is True
-        assert 'sess-fk' not in cp._registry
+        assert cp._pool_key('sess-fk') not in cp._registry
         # disconnect foi tentado
         client_mock.disconnect.assert_awaited_once()
         # force kill via transport.close
@@ -387,13 +387,13 @@ class TestCleanupIdleClients:
         )
         # Forcar last_used no passado (600s atras)
         pooled.last_used = time.time() - 600
-        cp._registry['sess-idle'] = pooled
+        cp._registry[cp._pool_key('sess-idle')] = pooled
 
         future = submit_coroutine(_cleanup_idle_clients(idle_timeout=300))
         future.result(timeout=5)
 
         # Client idle deve ter sido removido
-        assert 'sess-idle' not in cp._registry
+        assert cp._pool_key('sess-idle') not in cp._registry
         assert pooled.connected is False
 
     @patch('app.agente.config.feature_flags.USE_PERSISTENT_SDK_CLIENT', True)
@@ -407,13 +407,13 @@ class TestCleanupIdleClients:
             connected=True,
         )
         # last_used agora (default)
-        cp._registry['sess-active'] = pooled
+        cp._registry[cp._pool_key('sess-active')] = pooled
 
         future = submit_coroutine(_cleanup_idle_clients(idle_timeout=300))
         future.result(timeout=5)
 
         # Client ativo deve permanecer
-        assert 'sess-active' in cp._registry
+        assert cp._pool_key('sess-active') in cp._registry
         assert pooled.connected is True
 
 
@@ -441,7 +441,7 @@ class TestGetPoolStatus:
             client=client_mock, session_id='sess-status-12345678',
             user_id=5, connected=True,
         )
-        cp._registry['sess-status-12345678'] = pooled
+        cp._registry[cp._pool_key('sess-status-12345678')] = pooled
 
         status = get_pool_status()
 
@@ -478,8 +478,8 @@ class TestShutdownPool:
         client2.disconnect = AsyncMock()
         p2 = PooledClient(client=client2, session_id='sess-shut-2', connected=True)
 
-        cp._registry['sess-shut-1'] = p1
-        cp._registry['sess-shut-2'] = p2
+        cp._registry[cp._pool_key('sess-shut-1')] = p1
+        cp._registry[cp._pool_key('sess-shut-2')] = p2
 
         loop_before = cp._sdk_loop
         thread_before = cp._sdk_loop_thread
@@ -489,8 +489,8 @@ class TestShutdownPool:
         assert cp._pool_initialized is False
         assert cp._shutdown_requested is True
         # Registry esvaziado pelo disconnect_client
-        assert 'sess-shut-1' not in cp._registry
-        assert 'sess-shut-2' not in cp._registry
+        assert cp._pool_key('sess-shut-1') not in cp._registry
+        assert cp._pool_key('sess-shut-2') not in cp._registry
         # Loop parado
         assert not loop_before.is_running()
         # Thread encerrada
@@ -524,7 +524,7 @@ class TestCleanupSkipsActiveTurn:
             connected=True,
         )
         pooled.last_used = time.time() - 1200  # bem alem dos 900s
-        cp._registry['sess-turno-ativo'] = pooled
+        cp._registry[cp._pool_key('sess-turno-ativo')] = pooled
 
         async def _segura_lock_e_roda_cleanup():
             async with pooled.lock:  # simula turno em andamento
@@ -532,7 +532,7 @@ class TestCleanupSkipsActiveTurn:
 
         submit_coroutine(_segura_lock_e_roda_cleanup()).result(timeout=5)
 
-        assert 'sess-turno-ativo' in cp._registry
+        assert cp._pool_key('sess-turno-ativo') in cp._registry
         assert pooled.connected is True
         client_mock.disconnect.assert_not_called()
 
@@ -548,7 +548,7 @@ class TestCleanupSkipsActiveTurn:
             connected=True,
         )
         pooled.last_used = time.time() - 4000  # > 4 * 900s? nao — 4*900=3600; 4000 > 3600
-        cp._registry['sess-lock-vazado'] = pooled
+        cp._registry[cp._pool_key('sess-lock-vazado')] = pooled
 
         async def _segura_lock_e_roda_cleanup():
             async with pooled.lock:
@@ -556,7 +556,7 @@ class TestCleanupSkipsActiveTurn:
 
         submit_coroutine(_segura_lock_e_roda_cleanup()).result(timeout=5)
 
-        assert 'sess-lock-vazado' not in cp._registry
+        assert cp._pool_key('sess-lock-vazado') not in cp._registry
 
     @patch('app.agente.config.feature_flags.USE_PERSISTENT_SDK_CLIENT', True)
     def test_touch_client_renova_last_used(self, pool_reset):
@@ -567,7 +567,7 @@ class TestCleanupSkipsActiveTurn:
             client=MagicMock(), session_id='sess-touch', connected=True,
         )
         pooled.last_used = time.time() - 1200
-        cp._registry['sess-touch'] = pooled
+        cp._registry[cp._pool_key('sess-touch')] = pooled
 
         cp.touch_client('sess-touch')
 
