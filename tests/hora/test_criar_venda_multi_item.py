@@ -111,6 +111,7 @@ def test_criar_venda_com_brinde(db, peca_factory):
     c1 = _chassi_estoque(modelo.nome_modelo, loja.id)
     peca = peca_factory()
     peca.preco_venda_padrao = Decimal('25')
+    peca.custo = Decimal('25')  # §36: custo do brinde usa peca.custo (não preco_venda_padrao)
     _db.session.flush()
     venda = venda_service.criar_venda_manual(
         cpf_cliente='12345678909', nome_cliente='Cliente Brinde',
