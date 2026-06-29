@@ -41,6 +41,11 @@ from claude_agent_sdk import (
     ThinkingBlock,
     ToolUseBlock,
     ToolResultBlock,
+    # SDK error classes especializadas (F1.3) — handlers no stream_response.
+    CLINotFoundError,
+    ProcessError,
+    CLIConnectionError,
+    CLIJSONDecodeError,
 )
 
 # Infra compartilhada do SDK (PURA, sem dominio Nacom) — reuso por import de
@@ -132,6 +137,40 @@ _LOJAS_SESSION_STORE_FLUSH: str = os.getenv(
 ).strip().lower() or 'batched'
 if _LOJAS_SESSION_STORE_FLUSH not in ('batched', 'eager'):
     _LOJAS_SESSION_STORE_FLUSH = 'batched'
+
+
+def _drain_stderr(stderr_queue) -> str:
+    """Drena best-effort o stderr capturado do CLI (diagnostico de ProcessError)."""
+    if stderr_queue is None:
+        return ''
+    linhas = []
+    while True:
+        try:
+            linhas.append(stderr_queue.get_nowait())
+        except Exception:
+            break
+    return '\n'.join(linhas)
+
+
+def _build_error_recovery_events(msg: str, error_type: str, exc: Exception,
+                                 extra: Optional[Dict[str, Any]] = None):
+    """Par (error, done) que reporta o erro ao usuario E destrava o frontend.
+
+    O `done` com error_recovery=True e OBRIGATORIO: sem ele o SSE generator
+    termina sem sinalizar fim e o frontend fica preso esperando o evento de fim.
+    Espelha o agente web (client.py:2515-2530).
+    """
+    meta_err: Dict[str, Any] = {
+        'error_type': error_type,
+        'exception_type': type(exc).__name__,
+    }
+    if extra:
+        meta_err.update(extra)
+    return [
+        {'type': 'error', 'content': msg, 'metadata': meta_err},
+        {'type': 'done', 'content': '',
+         'metadata': {'error_type': error_type, 'error_recovery': True}},
+    ]
 
 
 class AgentLojasClient:
@@ -464,6 +503,50 @@ class AgentLojasClient:
                 'content': str(e),
                 'metadata': {'exception_type': type(e).__name__},
             }
+        except ProcessError as e:
+            # CLI crashou (exit code != 0). Drena o stderr capturado p/ a causa raiz.
+            exit_code = getattr(e, 'exit_code', None)
+            stderr_tail = _drain_stderr(stderr_queue)
+            logger.error(
+                "[AGENTE_LOJAS] ProcessError exit=%s | msg=%s | stderr=%s",
+                exit_code, e, stderr_tail[:1000],
+            )
+            for _ev in _build_error_recovery_events(
+                msg=(f"Erro de processo (codigo {exit_code}). Tente novamente."
+                     if exit_code else "Erro de processo. Tente novamente."),
+                error_type='process_error', exc=e, extra={'exit_code': exit_code},
+            ):
+                yield _ev
+        except CLINotFoundError as e:
+            # CLI do Agent SDK ausente no ambiente (deploy quebrado). Critico.
+            logger.critical(
+                "[AGENTE_LOJAS] CLI do Agent SDK nao encontrado (deploy?): %s", e,
+            )
+            for _ev in _build_error_recovery_events(
+                msg="Servico do agente indisponivel (CLI ausente). Avise o suporte.",
+                error_type='cli_not_found', exc=e,
+            ):
+                yield _ev
+        except CLIConnectionError as e:
+            # Process death (SIGTERM) ou falha de resume — sibling de ProcessError.
+            logger.warning(
+                "[AGENTE_LOJAS] CLIConnectionError (process death/resume): %s", e,
+            )
+            for _ev in _build_error_recovery_events(
+                msg="Conexao com o agente caiu. Tente novamente.",
+                error_type='cli_connection_error', exc=e,
+            ):
+                yield _ev
+        except CLIJSONDecodeError as e:
+            # Output do CLI malformado (JSON invalido no stream).
+            logger.error(
+                "[AGENTE_LOJAS] CLIJSONDecodeError (output malformado do CLI): %s", e,
+            )
+            for _ev in _build_error_recovery_events(
+                msg="Resposta malformada do agente. Tente novamente.",
+                error_type='cli_json_decode_error', exc=e,
+            ):
+                yield _ev
         except Exception as e:
             logger.exception("[AGENTE_LOJAS] Erro no stream: %s", e)
             yield {
