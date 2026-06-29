@@ -38,8 +38,15 @@ class HoraTagPlusConta(db.Model):
 
     scope_contratado = db.Column(
         db.String(255), nullable=False,
-        default='write:nfes read:clientes write:clientes read:produtos',
+        default=(
+            'write:nfes read:clientes write:clientes read:produtos '
+            'read:formas_pagamento read:pedidos read:vendas write:pedidos'
+        ),
     )
+    # write:pedidos adicionado (Fase 2 sync HORA->TagPlus): push de pedido
+    # (POST/PATCH/DELETE /pedidos). So vale p/ contas NOVAS — a conta de PROD
+    # existente precisa ter write:pedidos adicionado + REAUTORIZAR OAuth
+    # (refresh_token nao re-emite scope, RFC OAuth2).
 
     ativo = db.Column(db.Boolean, nullable=False, default=True)
     # UNIQUE INDEX parcial em SQL: so 1 ativa.
