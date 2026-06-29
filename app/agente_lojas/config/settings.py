@@ -6,8 +6,9 @@ Subclasse fina de `AgentSettings` (do agente logistico) com:
     - (futuro) whitelist de skills e subagents
     - constante `AGENTE_ID = 'lojas'` usada para filtros de banco
 """
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from functools import lru_cache
+from typing import List
 
 from app.agente.config.settings import AgentSettings
 
@@ -31,6 +32,25 @@ class AgentLojasSettings(AgentSettings):
     # HORA se alguem "corrigir" _build_system_prompt() para inclui-lo. Em F3 o
     # briefing por perfil entra como config declarativa do perfil de agente.
     empresa_briefing_path: str = ""
+
+    # ISOLAMENTO DO TOOL SURFACE (achado CRITICO da revisao adversarial do cutover):
+    # o motor (get_client('lojas')._build_options) usa `allowed_tools = list(
+    # settings.tools_enabled)`. Sem este override, o perfil 'lojas' herdaria o
+    # conjunto WEB completo (Write/Edit/WebSearch/WebFetch/...) + TODOS os mcp__*
+    # Nacom — vazando o dominio logistico ao operador de loja. Aqui restringimos
+    # ao conjunto do FORK (ALLOWED_TOOLS_M1) + AskUserQuestion: o operador so
+    # consulta via Bash+scripts Python das skills (com filtro <loja_context>),
+    # NUNCA SQL livre. 'Skill' entra via option `skills` (allow-list fechada);
+    # os mcp_servers sao pulados em _build_options quando agente_id=='lojas'
+    # (gate em _register_mcp). NAO incluir: Write/Edit/MultiEdit (em
+    # disallowed_tools tambem), WebSearch/WebFetch, mcp__*.
+    tools_enabled: List[str] = field(default_factory=lambda: [
+        'Bash',           # executa os scripts das skills de loja
+        'Read', 'Glob', 'Grep',
+        'Task',           # delega ao subagente orientador-loja
+        'TaskCreate', 'TaskUpdate', 'TaskGet', 'TaskList',  # UI de tarefas
+        'AskUserQuestion',  # perguntas interativas (modal) — seguro, sem dados
+    ])
 
     # M0: sem skills/subagents especificos ainda (padrao vazio). Em M1+
     # sera preenchido pela whitelist importada de skills_whitelist.py.

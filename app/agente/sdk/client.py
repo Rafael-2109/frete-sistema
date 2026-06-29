@@ -1902,6 +1902,19 @@ Nunca invente informações."""
             if server is None:
                 logger.debug(f"[AGENT_CLIENT] {name}_server é None — módulo não disponível")
                 return False
+            # ISOLAMENTO HORA (achado CRITICO da revisao do cutover): o perfil
+            # 'lojas' NAO expoe nenhum MCP server do dominio Nacom (mcp__sql/
+            # memory/sessions/resolver/render/routes/...). Paridade com o fork
+            # (AgentLojasClient nunca registrava mcp_servers). As skills de loja
+            # consultam via Bash+Python com filtro <loja_context>; SQL livre
+            # (mcp__sql) furaria o escopo por loja e vazaria o dominio logistico.
+            # Allow-list vazia hoje; um futuro MCP escopado por loja entraria aqui
+            # explicitamente. Espelha o gate de agents/skills (self.agente_id).
+            if self.agente_id == 'lojas':
+                logger.debug(
+                    f"[AGENT_CLIENT] MCP '{name}' SKIP (perfil lojas — isolamento HORA)"
+                )
+                return False
             if user_id and user_id_setter:
                 user_id_setter(user_id)
             options_dict.setdefault("mcp_servers", {})[name] = server
