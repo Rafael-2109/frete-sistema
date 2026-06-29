@@ -4,7 +4,7 @@ camada: L3
 sot_de: arquitetura de handoff de sessao do Agente Web (reducao de custo + qualidade)
 hub: docs/superpowers/specs/INDEX.md
 superseded_by: —
-atualizado: 2026-06-28
+atualizado: 2026-06-29
 -->
 
 # Handoff de Sessão do Agente Web — redução de custo + qualidade
@@ -29,6 +29,27 @@ atualizado: 2026-06-28
 - [Referências](#referencias)
 
 ---
+
+## Correção de premissa + Verificação pendente (2026-06-29)
+
+> Adendo da sessão de avaliação do PR #28 (Claude Code dev). NÃO reescreve o design abaixo — corrige uma premissa de FATO e registra o que falta TESTAR antes de decidir o 8b. Hipóteses ainda NÃO confirmadas por execução; só por leitura de doc + inspeção do SDK instalado.
+
+**PREMISSA CORRIGIDA.** Esta spec assume que o subagente Task é efêmero/amnésico e NÃO pode ser mantido quente nem re-endereçado (é a justificativa central do handoff). **Isso é FALSO no Claude Agent SDK 0.2.x.** A doc oficial tem a seção **"Resuming subagents"**: a tool `Agent` retorna `agentId` no resultado, e o subagente PODE ser retomado com **contexto completo** (histórico/tool-calls/raciocínio) via `resume=session_id` + `agentId` no prompt + a MESMA `AgentDefinition`. Confirmado contra o SDK INSTALADO (campos `resume`/`fork_session`/`session_store` em `ClaudeAgentOptions`; `SessionStorageKey.subpath="subagents/agent-{id}"`; `_internal/session_resume.py`).
+
+**O que isso abre (3º caminho para o 8b):** **subagente retomável** dentro da sessão do principal — resolve a metade "re-descoberta" do custo, é mais simples que o pool-multi-cliente, e **NÃO tem** o risco de 2 subprocessos no mesmo `sdk_session_id` (o gap que travou o 8b). Porém **NÃO** resolve a outra metade ("principal re-medeia todo turno") — o handoff F1 resolve as duas. **Escolha = MEDIR, não deduzir.**
+
+**HIPÓTESES A VALIDAR/REFUTAR NA PRÓXIMA SESSÃO (empírico > leitura; re-verificar a FONTE):**
+
+| # | Hipótese | Como provar | Fonte a re-verificar |
+|---|---|---|---|
+| H1 | Subagente é retomável por `resume`+`agentId` com contexto completo | **RODAR** o exemplo `query()` da doc no `.venv` e confirmar que o subagente retomado NÃO re-lê arquivos / mantém histórico | doc "Resuming subagents" — `https://code.claude.com/docs/en/agent-sdk/subagents` (obtida via **WebFetch = resumo de modelo pequeno** → re-fetch RAW/browser; confirmar domínio oficial) + CHANGELOG `github.com/anthropics/claude-agent-sdk-python` |
+| H2 | Resume-subagente compõe com `ClaudeSDKClient` (pool quente), não só `query()` | Testar `resume`+`agents`+`session_store` via `ClaudeSDKClient` no harness do pool (a doc só demonstra `query()`) | SDK instalado `_internal/session_resume.py` + `session_mutations.py::fork_session` |
+| H3 | Resume-subagente é mais BARATO que o cliente quente | Spike A/B numa tarefa real de recebimento: `cache_read` vs `cache_creation` + custo/turno | medição própria (sem doc) |
+| H4 | PR #28 flag-off segue behavior-equivalent APÓS reconciliar com `origin/main` (8 commits behind) | merge main → re-rodar F1+permissões+Teams na base RECONSTRUÍDA; smoke Teams; log prod `"Dead client evicted"` | suíte local + MCP Render |
+| H5 | Fix do blocker (eviction) funciona end-to-end (não só `evict_client` unitário) | teste de integração: handler ProcessError/CLIConnectionError → eviction → recriação no próximo turno | `client.py` (3 sites) + `client_pool.evict_client` |
+| H6 | 4º produto **Managed Agents** (server-side, agente persistente por ID) — viável/custo? | só se H1–H3 não bastarem; é reescrita (sai do `claude-agent-sdk`/CLI) | skill `claude-api` §Managed Agents (re-verificar fonte) |
+
+**Achados detalhados desta verificação (sessão CC, efêmeros):** `/tmp/subagent-findings/VEREDITO_SUBAGENT_RESUMIVEL.md` — re-gerar se sumirem.
 
 ## Contexto
 
