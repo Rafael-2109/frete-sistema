@@ -4,7 +4,7 @@ camada: L1
 sot_de: —
 hub: CLAUDE.md
 superseded_by: —
-atualizado: 2026-06-26
+atualizado: 2026-06-29
 -->
 # CarVia — Guia de Desenvolvimento
 
@@ -43,9 +43,9 @@ atualizado: 2026-06-26
 
 ## Contexto
 
-137 arquivos, ~75.0K LOC, 129 templates. Importa NF PDFs/XMLs + CTe XMLs, faz match NF-CTe, subcontrata com cotacao via tabelas existentes, gera faturas de cliente e transportadora e emite CTe direto no SSW via Playwright. Detalhe por topico nos sub-docs (CONFERENCIA, FINANCEIRO, COMPROVANTES, IMPORTACAO, etc.) — prefira ler o sub-doc a reconstruir o contexto a partir do codigo.
+138 arquivos, ~76.7K LOC, 132 templates. Importa NF PDFs/XMLs + CTe XMLs, faz match NF-CTe, subcontrata com cotacao via tabelas existentes, gera faturas de cliente e transportadora e emite CTe direto no SSW via Playwright. Detalhe por topico nos sub-docs (CONFERENCIA, FINANCEIRO, COMPROVANTES, IMPORTACAO, etc.) — prefira ler o sub-doc a reconstruir o contexto a partir do codigo.
 
-**137 arquivos** | **~75.0K LOC** | **129 templates** | **Atualizado**: 2026-06-26
+**138 arquivos** | **~76.7K LOC** | **132 templates** | **Atualizado**: 2026-06-29
 
 Gestao de frete subcontratado: importar NF PDFs/XMLs + CTe XMLs, matchear NF-CTe, subcontratar transportadoras com cotacao via tabelas existentes, gerar faturas cliente e transportadora. Tambem emite CTe diretamente no SSW via Playwright.
 
@@ -82,15 +82,16 @@ Sempre prefira ler o sub-doc correspondente ao topico ao inves de reconstruir co
 
 ```
 app/carvia/
-  routes/          # 36 sub-rotas (dashboard, importacao, nf, nf_transferencia, operacao,
+  routes/          # 37 sub-rotas (dashboard, importacao, nf, nf_transferencia, operacao,
                    #   subcontrato, fatura, despesa, fluxo_caixa, conciliacao, cte_complementar,
                    #   custo_entrega, admin, cliente, cotacao_v2, cotacao_rapida, pedido, frete, gerencial,
                    #   aprovacao, comissao, config, conta_corrente, exportacao, receita,
                    #   scanner, simulador, tabela_carvia, importacao_config, api, anexo,
-                   #   comprovante, resultado_frete, coleta, portal_admin, portal_operacional)
-  services/        # 51 services em 6 sub-pacotes + 2 root:
+                   #   comprovante, resultado_frete, coleta, portal_admin, portal_operacional,
+                   #   carta_correcao [CCe — Carta de Correcao do CTe, R23])
+  services/        # 57 services em 6 sub-pacotes + 2 root:
                    #   admin/ (admin_service)
-                   #   clientes/ (cliente_service)
+                   #   clientes/ (cliente, propagacao_endereco [propaga endereco destino, R23])
                    #   documentos/ (carvia_frete, conferencia, embarque_carvia,
                    #                linking, matching, nf_transferencia, operacao_cancel,
                    #                ssw_emissao, aprovacao_frete, anexo, comprovante,
@@ -98,7 +99,8 @@ app/carvia/
                    #                  qtd_motos_carvia/qtd_motos_de_item = fonte de EmbarqueItem.volumes
                    #                  (max chassis,itens da NF; fallback qtd_total_motos cotacao), R1],
                    #                coleta, coleta_recebimento [coletas porta-a-porta],
-                   #                portal_auth, portal_status [portal do cliente]) — 16
+                   #                portal_auth, portal_status [portal do cliente],
+                   #                carta_correcao, cce_render, _cadeia_nf [CCe — R23]) — 19
                    #   financeiro/ (conciliacao, csv_razao, historico_match, ofx, pagamento,
                    #                sugestao, comissao, conta_corrente, custo_entrega_autolink,
                    #                custo_entrega_cobertura, custo_entrega_fatura, fluxo_caixa,
@@ -117,16 +119,16 @@ app/carvia/
                    # + cte_complementar_persistencia.py + cte_complementar_service.py (root)
   workers/         # 4 workers RQ com SSL-drop resilience (R15):
                    #   _ssw_helpers, ssw_cte_jobs, ssw_cte_complementar_jobs, verificar_ctrc_ssw_jobs
-  utils/           # tomador.py, upload_policies.py, excel_export_helper.py, papeis_frete.py
-  models/          # Pacote 18 modulos: admin, anexos, aprovacao, clientes, comissao,
+  utils/           # tomador.py, upload_policies.py, excel_export_helper.py, papeis_frete.py, rate_limit.py
+  models/          # Pacote 19 modulos: admin, anexos, aprovacao, clientes, comissao,
                    #   comprovante, config_moto, conta_corrente, cotacao, cte_custos,
                    #   documentos, faturas, financeiro, frete, tabelas, coleta,
-                   #   coleta_recebimento, portal
+                   #   coleta_recebimento, portal, carta_correcao
   forms.py         # 4 forms WTForms
   portal_cliente.py # Blueprint do portal do cliente (login/dashboard/cotar/detalhe NF)
   cotacao_publica.py # Blueprint publico /cotacao (sem login) — cotacao rapida para leads (R24)
 
-app/templates/carvia/  # 126 templates (dashboard, listagens, detalhes, wizards, modais)
+app/templates/carvia/  # 132 templates (dashboard, listagens, detalhes, wizards, modais)
 ```
 
 > **Resultado por Frete + Viabilidade (2026-06-19)**: `services/financeiro/resultado_frete_service.py` rateia, na MESMA base de motos por NF, a receita (CTe `CarviaOperacao.cte_valor`) vs o custo (subcontratos `SUM(COALESCE(cte_valor, valor_acertado, valor_cotado))` + coleta `CarviaColeta.valor_coleta` por `qtd_motos` da linha) — cascata `Direto→Motos→Peso→Qtd NFs` REUSANDO `gerencial_service._build_moto_count_per_nf_subquery` (NAO duplicar a contagem). Tela admin-only `/carvia/resultado-frete` (`routes/resultado_frete_routes.py`): resumo agregavel por CTe/embarque/UF-mes + detalhe por NF + export Excel 2 abas (Resumo + Detalhe NF). Flag `REAL`/`ESTIMADO` no custo (havia `cte_valor` do subcontrato vs cotado). `services/financeiro/viabilidade_service.py` (`receita_carvia_por_lotes`/`receita_carvia_por_embarque`) soma a receita CarVia bruta (CTe se houver, senao cotacao) — consumido por `app/carteira` (card de viabilidade no mapa) e `app/embarques` (badge admin-only) via LAZY import (R1). Export `nfs`/`operacoes` ganharam coluna `Cidade Dest`.

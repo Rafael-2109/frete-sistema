@@ -4,7 +4,7 @@ camada: L1
 sot_de: —
 hub: CLAUDE.md
 superseded_by: —
-atualizado: 2026-06-22
+atualizado: 2026-06-29
 -->
 # Odoo — Guia de Desenvolvimento
 
@@ -33,13 +33,13 @@ atualizado: 2026-06-22
 
 ## Contexto
 
-72 arquivos, ~43.4K LOC. API-only (sem models SQLAlchemy proprios, salvo 2 excecoes de inventario/auditoria) — le/escreve models de 8+ outros modulos; e o modulo mais consumido do sistema (37+ arquivos externos importam). O subpacote `estoque/` (orquestrador WRITE + READ ao vivo) tem guia proprio em `app/odoo/estoque/CLAUDE.md`.
+73 arquivos, ~43.9K LOC. API-only (sem models SQLAlchemy proprios, salvo 2 excecoes de inventario/auditoria) — le/escreve models de 8+ outros modulos; e o modulo mais consumido do sistema (37+ arquivos externos importam). O subpacote `estoque/` (orquestrador WRITE + READ ao vivo) tem guia proprio em `app/odoo/estoque/CLAUDE.md`.
 
-**72 arquivos** | **~43.4K LOC** | **Atualizado**: 22/06/2026
+**73 arquivos** | **~43.9K LOC** | **Atualizado**: 29/06/2026
 
 Integracao bidirecional com Odoo ERP via XML-RPC. API-only: sem models SQLAlchemy proprios — le/escreve models de outros modulos (8+). Modulo mais consumido do sistema (37+ arquivos externos importam).
 
-> Subpacote `estoque/` (orquestrador WRITE + READ ao vivo): 21 arquivos / ~20.8K LOC. Guia completo: `app/odoo/estoque/CLAUDE.md`.
+> Subpacote `estoque/` (orquestrador WRITE + READ ao vivo): 22 arquivos / ~21.1K LOC. Guia completo: `app/odoo/estoque/CLAUDE.md`.
 
 ---
 
@@ -103,7 +103,7 @@ app/odoo/
   │   ├── mapeamento_campos_odoo_carteira.md
   │   └── triggers_sale_order.md
   └── estoque/                 # Subpacote ORQUESTRADOR (skills WRITE + READ ao vivo, 2026-05-22+)
-      │                        # 21 arquivos / ~20.8K LOC. Ver app/odoo/estoque/CLAUDE.md
+      │                        # 22 arquivos / ~21.1K LOC. Ver app/odoo/estoque/CLAUDE.md
       ├── __init__.py / _cli_utils.py / _utils.py
       ├── scripts/             # Atomos por skill (Skills 1, 2, 2.4, 5, 4, 6, 7, 8, 9 + PRE-FLIGHT)
       │   ├── _commit_helpers.py   # Helpers de commit/savepoint compartilhados
@@ -119,7 +119,8 @@ app/odoo/
       │   ├── cadastro_fiscal_audit.py # PRE-FLIGHT — auditando-cadastro-fiscal-odoo
       │   ├── consulta_quant.py    # Skill 9 — consultando-quant-odoo (READ-only)
       │   ├── descoberta_industrializacao.py # Descoberta de pickings/MO/saldos do ciclo industrializacao FB-LF
-      │   └── revaloracao.py       # revalorar_custo AVCO (revalorando-custo-odoo)
+      │   ├── revaloracao.py       # revalorar_custo AVCO (revalorando-custo-odoo)
+      │   └── reclassificacao.py   # Skill F2 #3 — reclassificando-amls-odoo (account.move.line conta_origem->destino)
       ├── orchestrators/       # Macros C3 (compoem atomos em fluxos)
       │   ├── inventario_pipeline.py  # Pipeline A-F + recovery (renomeado de faturamento_pipeline v27+ S3)
       │   └── pre_etapa_executor.py
