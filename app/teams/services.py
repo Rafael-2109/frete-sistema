@@ -2262,13 +2262,38 @@ def process_teams_task_async(
                                 f"descartado: {new_sdk_session_id[:20]}..."
                             )
 
-                    # GAP 2: Custo — SDK prioritário, fallback cálculo local
+                    # GAP 2: Custo do TURNO a partir do acumulado do SDK.
+                    # agent_result.cost_usd = ResultMessage.total_cost_usd e o custo
+                    # ACUMULADO da sessao SDK (cresce a cada turno). Somar o acumulado
+                    # por-turno conta N vezes -> total_cost_usd E agent_session_costs.cost_usd
+                    # inflados ~Nx (bug 2026-06-19). turn_cost_from_cumulative devolve o
+                    # DELTA; o acumulado anterior fica em data['_sdk_cost_*'] e um reset
+                    # de sessao SDK (resume/nova) zera o baseline. Espelha o canal web
+                    # (chat.py _save_messages_to_db) e o agente_lojas.
+                    # FIX 2026-06-28: o path Teams ficou de fora do fix `0e9403082` do
+                    # web (so gravava o cumulativo cru) — inflava o custo Teams ~7x.
                     from app.agente.routes import _calculate_cost
-                    sdk_cost = agent_result.cost_usd
+                    from app.agente.sdk.pricing import turn_cost_from_cumulative
+                    from sqlalchemy.orm.attributes import flag_modified
+                    sdk_cumulative = float(agent_result.cost_usd or 0)
                     calc_cost = _calculate_cost(
                         selected_model, agent_result.input_tokens, agent_result.output_tokens
                     )
-                    final_cost = sdk_cost if sdk_cost and sdk_cost > 0 else calc_cost
+                    if sdk_cumulative > 0:
+                        _data = session.data or {}
+                        _prev_cumulative = float(_data.get('_sdk_cost_cumulative', 0) or 0)
+                        _prev_sdk_sid = _data.get('_sdk_cost_session_id')
+                        _curr_sdk_sid = new_sdk_session_id or sdk_session_id or _prev_sdk_sid
+                        final_cost = turn_cost_from_cumulative(
+                            sdk_cumulative, _prev_cumulative, _prev_sdk_sid, _curr_sdk_sid,
+                        )
+                        # Memoriza o acumulado p/ o proximo turno (R7: flag_modified JSONB)
+                        _data['_sdk_cost_cumulative'] = sdk_cumulative
+                        _data['_sdk_cost_session_id'] = _curr_sdk_sid
+                        session.data = _data
+                        flag_modified(session, 'data')
+                    else:
+                        final_cost = calc_cost
                     session.total_cost_usd = float(session.total_cost_usd or 0) + final_cost
 
                     # GAP 6: Model (registra modelo efetivamente usado)
@@ -2285,7 +2310,7 @@ def process_teams_task_async(
 
                     logger.info(
                         f"[TEAMS-ASYNC] Custo sessão {teams_session_id[:8]}: "
-                        f"sdk_cost={sdk_cost}, calc_cost={calc_cost:.6f}, "
+                        f"sdk_cumulative={sdk_cumulative:.6f}, calc_cost={calc_cost:.6f}, "
                         f"final={final_cost:.6f}, "
                         f"tokens=(in={agent_result.input_tokens},out={agent_result.output_tokens},"
                         f"cache_r={agent_result.cache_read_tokens},cache_w={agent_result.cache_creation_tokens}), "
