@@ -37,14 +37,23 @@ COMPLETA** (fatia 1 + fatia 2); este doc é o estado vivo para retomar F3.
 - **Worktree:** `.claude/worktrees/convergencia-agente-lojas` — branch
   `worktree-convergencia-agente-lojas`, rebaseada sobre `main` (2026-06-29,
   inclui Nubank OFX + `hora_recebimento_esperado`).
-- **17 commits** sobre `main`; worktree limpa; **145 testes verdes + 1 skip**
-  (baseline do handoff; suíte ampla F2: 534+ passed, 2 skip).
+- **22 commits** sobre `main`; worktree limpa; **554 testes verdes + 1 skip** (suíte ampla).
 - **SEM push, SEM merge** — aguarda revisão "4-mãos".
-- **Review adversarial** do diff da fatia 2 (4 dims × verificação): web-intacto
-  ZERO achados; fail-closed apontou 2 fontes residuais via PreToolUse hook
-  (`get_skill_reminders`, `_load_enforce_directives`) — **FECHADAS no commit
-  e79411f98**; demais achados são F3/P2 (build_hooks wiring, KG-na-origem) ou
-  refutados (cache por session_id já é 1:1 com agente; hardcode 'web' é by-design).
+- **F2/M3 isolamento de LEITURA: COMPLETO** (fatia 1+2, 7 commits + 1 qualidade).
+  Review adversarial 4-dim + code-review de completude app-wide (34 agentes):
+  web-intacto ZERO achados; fontes PreToolUse fechadas; 2 itens de qualidade
+  corrigidos (naming `agente_id`, `sid`/PK teste). Refutados: cache (session_id
+  1:1 agente), hardcode 'web' (by-design).
+- **Fase 1 (fundação de isolamento de ESCRITA + UI): PARCIAL — estrutural feito:**
+  - `(user_id,path)` → `(user_id,path,agente)` (migration aplicada local; PROD
+    seguro: 0 dup, 1019 mem todas 'web').
+  - `create_file/create_directory/_ensure_parent_dirs(agente='web')` + ContextVar
+    `_current_agent_id` (infra pronta; **wiring nas rotas/client é Fase 2/3**).
+  - Rotas `/agente/api/sessions*` filtram `agente='web'` (corrige vazamento de
+    VISUALIZAÇÃO p/ usuário dual admin — 11 sessões 'lojas' em PROD).
+  - **MOVIDO p/ a sessão do motor único** (só ganham consumidor/wiring lá):
+    `memory_mcp_tool` escrita+leitura por agente; jobs de consolidação
+    (pattern_analyzer etc.) propagarem o agente da sessão de origem.
 
 ```
 # fatia 2 (esta sessão):
@@ -134,6 +143,32 @@ filtra por `user_id` mas não por `agente` na busca primária (entities não tê
 `agente`). O vazamento prático JÁ é fechado fail-closed pela materialização M06
 (`memory_injection.py:~1509`, fatia 1). Filtrar na origem exige migration de coluna em
 `agent_memory_entities` = P2 (defesa em profundidade), conforme REVISÃO DE ESCOPO do plano.
+
+## PLANO DO MOTOR ÚNICO (próxima sessão — contexto cheio)
+
+> Consolidado do design 2026-06-29 (workflow `design-convergencia-final`, 5 áreas
+> mapeadas com file:line). É o "trocar o motor": fazer `app/agente_lojas/` reusar o
+> `AgentClient` web por perfil e aposentar o fork. **Executar com contexto cheio**
+> (toca o coração da produção: web/Teams/WhatsApp). Cada passo TDD, web byte-idêntico,
+> sem push. Ordem por dependência:
+
+**ETAPA 1 — Parametrizar o motor por perfil (web byte-idêntico, atrás de `agente_id='web'`):**
+1. `config/settings.py` `get_settings()` `@lru_cache` → aceitar `agente_id` (chave de cache). `AgentLojasSettings` (`agente_lojas/config/settings.py`) já é o perfil pronto.
+2. `sdk/client.py` `AgentClient.__init__(self, settings=None)` (fallback `get_settings()`); `get_client(agente_id='web')` com dict `_clients`; `_discover_skills_from_project(agente_id)` (web=deny-list, lojas=allow-list `SKILLS_PERMITIDAS`); `_build_options` `agents=` filtrado a `SUBAGENTS_PERMITIDOS` (lojas={orientador-loja}); label `empresa_briefing` por perfil.
+3. **Provar: suíte `tests/agente/` 100% verde** (comportamento idêntico com default 'web').
+
+**ETAPA 2 — Wiring de `agente_id` (liga o ContextVar + as fontes PreToolUse já preparadas):**
+4. `sdk/hooks.py` `build_hooks(...)` recebe `agente_id`; propaga p/ `_load_user_memories_for_context` (hoje hardcoda 'web' em ~1528), `get_skill_reminders_for_session`, `_load_enforce_directives` (já filtram — só falta o valor).
+5. Rotas setam `set_current_agent_id('web'|'lojas')` no início do stream (`permissions.py` ContextVar já existe).
+6. `memory_mcp_tool` (13 ops): escrita (`save/update/delete/clear`) captura `get_current_agent_id()` → `create_file(..., agente=)`; leitura (`view/list/...`) usa `get_by_path_for_agent` / filtro `agente`. (Pré-req feito: `create_file(agente=)`, ContextVar, constraint.)
+7. Jobs de consolidação (`pattern_analyzer.analyze_and_save/generate_and_save_profile`, `session_summarizer`, `memory_consolidator` agrupa por `(dir, agente)`) propagam o `AgentSession.agente` da sessão de origem p/ a memória gravada.
+
+**ETAPA 3 — Migrar o fork e aposentar:**
+8. `app/agente_lojas/` usa `get_client('lojas')` + `AgentLojasSettings`; injetar o `<loja_context>` (hoje no `scope_injector` do fork) como hook por perfil no motor unificado; aposentar `AgentLojasClient`/`client_pool` fork.
+9. Validar contrato de isolamento (F2) + suíte `tests/agente_lojas/` + isolamento ponta a ponta (loja vê ZERO Nacom). Reforçar fail-closed no ponto de entrada.
+10. **NÃO migrar Teams/WhatsApp** (continuam 'web' por default — fora do escopo do "final").
+
+**Migration pendente (rodar em PROD no deploy):** `2026_06_30_constraint_agente_memoria.py` (constraint já aplicada no banco LOCAL; PROD aplica no deploy junto do código). Considerar tb migrations P2 de coluna `agente` em `agent_memory_embeddings`/`agent_memory_entities` (defesa do KG/embeddings na origem — hoje coberto por M06/materialização).
 
 ## Decisões travadas
 - **Corpus `user_id=0` por-agente, fail-closed** (memória empresa não vaza entre agentes).

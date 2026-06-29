@@ -184,10 +184,15 @@ agente web cobre TODAS as queries de memoria empresa/user do modulo de injecao
 - **PreToolUse hooks** (fatia 2): `get_skill_reminders_for_session` (M13) e
   `_load_enforce_directives` (cache key inclui agente) — query JA filtra; o WIRING
   do `agente_id` nesses callers (via `build_hooks`) e F3.
-Review adversarial 4-dim feito; 17 commits, 145 testes + 1 skip. **PENDENTE: F2
-P1/P2** (particionar a ESCRITA — memory_mcp_tool + jobs; migrations de defesa) **+
-F3** (client por perfil, gated). Achados de F3: UNIQUE(`user_id`,`path`) sem agente
-(escrita), KG-na-origem (P2). Ver handoff
+Review adversarial 4-dim + code-review app-wide (34 agentes) feitos.
+**Fase 1 (fundação de ESCRITA/UI) estrutural feita**: constraint
+`(user_id,path,agente)` (migration `2026_06_30_constraint_agente_memoria`),
+`create_file/create_directory(agente=)`, ContextVar `_current_agent_id` (infra),
+rotas `/agente/api/sessions*` filtram `agente='web'`. 22 commits, 554 testes + 1 skip.
+**PENDENTE — "motor único" (sessão de contexto cheio):** parametrizar AgentClient
+por perfil + wiring `agente_id` (build_hooks/rotas) + memory_mcp_tool/jobs por
+agente + migrar `app/agente_lojas/` p/ `get_client('lojas')` e aposentar o fork.
+Plano consolidado (ETAPAS 1-3) no handoff
 `docs/superpowers/plans/2026-06-29-convergencia-agente-lojas-handoff.md`.
 
 ---
