@@ -19,6 +19,8 @@ import time
 from functools import lru_cache
 from typing import AsyncGenerator, Dict, Any, List, Optional, Callable
 from app.utils.timezone import agora_utc_naive
+# Infra compartilhada do SDK (PURA, sem dominio) — tambem consumida pelo agente_lojas.
+from app.agente.sdk.sdk_runtime import build_subprocess_env
 
 # SDK Oficial
 # Ref: https://platform.claude.com/docs/pt-BR/agent-sdk/
@@ -1621,18 +1623,12 @@ Nunca invente informações."""
                 "NotebookEdit",   # Não há Jupyter notebooks no sistema
             ],
 
-            # Env vars passadas ao subprocess CLI do SDK
-            # CLAUDE_CODE_STREAM_CLOSE_TIMEOUT: timeout para hooks/MCP (default 60s).
-            # Em ambiente cloud (Render), MCP tools podem demorar mais (API calls, DB queries).
-            # Skills complexas (cotação, SQL analítico, Odoo) podem levar até 4 min.
+            # Env vars do subprocess CLI do SDK — helper compartilhado com o
+            # agente_lojas (sdk_runtime.build_subprocess_env): CLAUDE_CODE_STREAM_
+            # CLOSE_TIMEOUT (hooks/MCP 240s vs default 60s) + HOME=/tmp (Render usa
+            # HOME=/opt/render read-only → CLI crasha ao salvar .claude.json).
             # FONTE: claude_agent_sdk/_internal/query.py:116
-            "env": {
-                "CLAUDE_CODE_STREAM_CLOSE_TIMEOUT": "240000",  # 240s (4 min) em ms
-                # HOME gravável — Render usa HOME=/opt/render (read-only).
-                # CLI tenta salvar .claude.json em $HOME → ENOENT.
-                # /tmp é sempre gravável em qualquer ambiente.
-                "HOME": "/tmp",
-            },
+            "env": build_subprocess_env(),
         }
 
         # max_turns: injetar apenas se explicitamente definido (default None = sem limite).
