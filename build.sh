@@ -89,6 +89,17 @@ python scripts/migrations/hora_56_loja_whatsapp_grupo.py \
 python scripts/hora/set_grupos_whatsapp_lojas.py \
     || echo "⚠️ backfill grupos-loja falhou — verificar (continuando deploy)..."
 
+# HORA 58/59 (2026-06-28): migrations da main NAO estavam wired no build.sh
+# (telefone_lead em hora_venda; custo em hora_peca + custo_unitario em
+# hora_venda_item_peca). Ambas ADD COLUMN IF NOT EXISTS (idempotentes) — wired
+# aqui defensivamente para garantir as colunas no deploy (o ORM as mapeia).
+echo "HORA: migration hora_58 (hora_venda.telefone_lead)..."
+python scripts/migrations/hora_58_venda_telefone_lead.py \
+    || echo "⚠️ migration hora_58 falhou — verificar (continuando deploy)..."
+echo "HORA: migration hora_59 (hora_peca.custo + hora_venda_item_peca.custo_unitario)..."
+python scripts/migrations/hora_59_peca_custo.py \
+    || echo "⚠️ migration hora_59 falhou — verificar (continuando deploy)..."
+
 # HORA 60 (2026-06-27): recebimento por filial SEM NF (NF provisoria).
 # CRITICO: o ORM mapeia HoraNfEntrada.tipo INCONDICIONALMENTE — sem este ALTER,
 # qualquer SELECT em hora_nf_entrada via ORM quebra (UndefinedColumn) em TODA a tela
