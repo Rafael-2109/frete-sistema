@@ -157,6 +157,11 @@ def _aplicar_pedido_em_venda(
         alteracoes.append(f'tagplus_pedido_id={pedido_id_tp}')
     venda.tagplus_pedido_payload = sanitize_for_json(pedido)
 
+    pnum = pedido.get('numero')
+    if isinstance(pnum, int) and venda.tagplus_pedido_numero != pnum:
+        venda.tagplus_pedido_numero = pnum
+        alteracoes.append(f'tagplus_pedido_numero={pnum}')
+
     if emissao is not None and emissao.tagplus_pedido_id != pedido_id_tp:
         emissao.tagplus_pedido_id = pedido_id_tp
 

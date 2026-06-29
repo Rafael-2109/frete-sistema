@@ -68,3 +68,28 @@ def test_webhook_aprovada_grava_numero_visivel_na_venda(db):
 
     assert emissao.tagplus_pedido_id == 5
     assert venda.tagplus_pedido_numero == 941
+
+
+# --------------------------------------------------------------------------
+# Backfill de enriquecimento grava o numero a partir de GET /pedidos/{id}
+# --------------------------------------------------------------------------
+def test_backfill_enriquecimento_grava_numero(db, monkeypatch):
+    venda = HoraVenda(
+        cpf_cliente='12345678901', nome_cliente='Cli',
+        valor_total=Decimal('100.00'),
+    )
+    _db.session.add(venda)
+    _db.session.flush()
+
+    pedido = {'id': 5, 'numero': 777, 'status': 'B'}
+    monkeypatch.setattr(
+        pedido_backfill_service.pedido_service, 'importar_pedido',
+        lambda api, pid: pedido,
+    )
+
+    res = pedido_backfill_service._aplicar_pedido_em_venda(
+        api=MagicMock(), venda=venda, pedido_id_tp=5, operador='tester',
+    )
+
+    assert res['status'] == 'enriquecida'
+    assert venda.tagplus_pedido_numero == 777
