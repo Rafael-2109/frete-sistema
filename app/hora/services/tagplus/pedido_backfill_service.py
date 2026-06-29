@@ -157,6 +157,11 @@ def _aplicar_pedido_em_venda(
         alteracoes.append(f'tagplus_pedido_id={pedido_id_tp}')
     venda.tagplus_pedido_payload = sanitize_for_json(pedido)
 
+    pnum = pedido.get('numero')
+    if isinstance(pnum, int) and venda.tagplus_pedido_numero != pnum:
+        venda.tagplus_pedido_numero = pnum
+        alteracoes.append(f'tagplus_pedido_numero={pnum}')
+
     if emissao is not None and emissao.tagplus_pedido_id != pedido_id_tp:
         emissao.tagplus_pedido_id = pedido_id_tp
 
@@ -787,3 +792,34 @@ def enfileirar_backfill_pedidos_vendas_legadas_job(
     job.rq_job_id = rq_job.id
     db.session.commit()
     return job.id
+
+
+def backfill_numero_do_payload(limite=None) -> dict:
+    """Popula tagplus_pedido_numero a partir do JSONB tagplus_pedido_payload['numero'].
+
+    Para vendas que ja tem o payload do pedido salvo mas ainda nao tem o numero
+    visivel extraido — NAO chama a API. Retorna {'atualizadas', 'sem_numero'}.
+    """
+    from app.hora.models.venda import HoraVenda
+    q = (
+        HoraVenda.query
+        .filter(HoraVenda.tagplus_pedido_numero.is_(None))
+        .filter(HoraVenda.tagplus_pedido_payload.isnot(None))
+    )
+    if limite:
+        q = q.limit(limite)
+
+    atualizadas = 0
+    sem_numero = 0
+    for venda in q.all():
+        payload = venda.tagplus_pedido_payload or {}
+        pnum = payload.get('numero') if isinstance(payload, dict) else None
+        if isinstance(pnum, int):
+            venda.tagplus_pedido_numero = pnum
+            atualizadas += 1
+        else:
+            sem_numero += 1
+
+    if atualizadas:
+        db.session.commit()
+    return {'atualizadas': atualizadas, 'sem_numero': sem_numero}

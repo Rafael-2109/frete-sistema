@@ -163,6 +163,10 @@
       "type": "jsonb"
     },
     {
+      "name": "tagplus_pedido_numero",
+      "type": "integer"
+    },
+    {
       "name": "tagplus_departamento",
       "type": "varchar(100)"
     },
@@ -293,6 +297,13 @@
       "name": "ix_hora_venda_tagplus_pedido_id",
       "columns": [
         "tagplus_pedido_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_hora_venda_tagplus_pedido_numero",
+      "columns": [
+        "tagplus_pedido_numero"
       ],
       "unique": false
     }

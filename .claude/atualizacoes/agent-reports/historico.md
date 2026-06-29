@@ -4,6 +4,7 @@ Indice de todos os relatorios gerados pelo Dominio 7 do cron de manutencao seman
 
 | Data | Relatorio | Health Score | Recs | Sessoes | Trend |
 |------|-----------|-------------|------|---------|-------|
+| 2026-06-29 | [report-2026-06-29.md](report-2026-06-29.md) | 66 | 11 | 303 | improving |
 | 2026-06-22 | [report-2026-06-22.md](report-2026-06-22.md) | 64 | 12 | 314 | improving |
 | 2026-06-15 | [report-2026-06-15.md](report-2026-06-15.md) | 58 | 13 | 280 | declining |
 | 2026-06-08 | [report-2026-06-08.md](report-2026-06-08.md) | 64 | 13 | 248 | declining |

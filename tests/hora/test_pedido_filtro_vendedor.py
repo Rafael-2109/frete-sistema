@@ -234,3 +234,52 @@ def test_query_vendas_filtro_loja_inalterado(db, loja_vendtest, modelo_vendtest)
     # Loja inexistente -> None (lista vazia)
     q2 = venda_service._query_vendas(lojas_permitidas_ids=[])
     assert q2 is None
+
+
+# ---------------------------------------------------------------------------
+# Multi-status: _query_vendas aceita lista de status (filtro IN) e string (compat)
+# ---------------------------------------------------------------------------
+
+def test_query_vendas_multi_status(db, loja_vendtest, modelo_vendtest):
+    """_query_vendas com `status` lista filtra via IN; string mantem compat;
+    lista vazia nao filtra status."""
+    loja_id = loja_vendtest.id
+
+    chassi_a = '9VENDTESTS01STATUS0000000'
+    _criar_moto_disponivel(chassi_a, modelo_vendtest.nome_modelo, loja_id)
+    va = _criar_pedido_vendtest(chassi_a, 'VENDTEST Joao', criado_por_id=None, loja_id=loja_id)
+
+    chassi_b = '9VENDTESTS02STATUS0000000'
+    _criar_moto_disponivel(chassi_b, modelo_vendtest.nome_modelo, loja_id)
+    vb = _criar_pedido_vendtest(chassi_b, 'VENDTEST Joao', criado_por_id=None, loja_id=loja_id)
+
+    chassi_c = '9VENDTESTS03STATUS0000000'
+    _criar_moto_disponivel(chassi_c, modelo_vendtest.nome_modelo, loja_id)
+    vc = _criar_pedido_vendtest(chassi_c, 'VENDTEST Joao', criado_por_id=None, loja_id=loja_id)
+
+    # Seta status direto (testamos o filtro da query, nao a maquina de estado).
+    va.status = 'COTACAO'
+    vb.status = 'FATURADO'
+    vc.status = 'CANCELADO'
+    _db.session.commit()
+
+    # Lista de 2 status -> filtro IN (A e B sim, C nao).
+    q = venda_service._query_vendas(
+        lojas_permitidas_ids=[loja_id], status=['COTACAO', 'FATURADO'],
+    )
+    ids = {v.id for v in q.all()}
+    assert va.id in ids
+    assert vb.id in ids
+    assert vc.id not in ids
+
+    # String unica (retrocompat) -> filtro ==.
+    q2 = venda_service._query_vendas(lojas_permitidas_ids=[loja_id], status='CANCELADO')
+    ids2 = {v.id for v in q2.all()}
+    assert vc.id in ids2
+    assert va.id not in ids2
+    assert vb.id not in ids2
+
+    # Lista vazia -> nao filtra status (os 3 aparecem no escopo da loja).
+    q3 = venda_service._query_vendas(lojas_permitidas_ids=[loja_id], status=[])
+    ids3 = {v.id for v in q3.all()}
+    assert {va.id, vb.id, vc.id} <= ids3

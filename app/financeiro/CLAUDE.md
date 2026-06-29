@@ -4,7 +4,7 @@ camada: L1
 sot_de: —
 hub: CLAUDE.md
 superseded_by: —
-atualizado: 2026-06-22
+atualizado: 2026-06-29
 -->
 # Financeiro — Guia de Desenvolvimento
 
@@ -64,7 +64,7 @@ atualizado: 2026-06-22
 
 94 arquivos, ~49.1K LOC. Tem o maior `models.py` do projeto (40+ models, ~2.8K linhas). Gotchas completos (80+) em `app/financeiro/GOTCHAS.md`; campos de tabela nos schemas JSON. Processamento pesado via workers RQ (Redis).
 
-**94 arquivos** | **~49.1K LOC** | **Atualizado**: 24/06/2026
+**94 arquivos** | **~49.1K LOC** | **Atualizado**: 29/06/2026
 
 Contas a receber/pagar, extratos bancarios, conciliacao Odoo, CNAB 400, comprovantes e baixas.
 
@@ -77,10 +77,12 @@ Contas a receber/pagar, extratos bancarios, conciliacao Odoo, CNAB 400, comprova
 
 ```
 app/financeiro/
-  ├── routes/       # 19 arquivos de rotas + __init__.py (financeiro_bp + cnab400_bp; inclui conversor_extrato_srm.py)
+  ├── routes/       # 20 arquivos de rotas + __init__.py (financeiro_bp + cnab400_bp; inclui conversor_extrato_srm.py + validador_titulos.py)
   ├── scripts/      # CLI utilitarios. importar_extrato_pdf_srm.py: PDF SRM Bank -> OFX
   │                 #   (FITID sintetico Data/Hora/Sinal/Valor/Saldo; dedup via unique_import_id)
-  ├── services/     # 29 services root (inclui extrato_pdf_srm_service.py + baixa_credores_lote_service.py) + subpacote remessa_vortx/ (8 services)
+  ├── services/     # 30 services root (inclui extrato_pdf_srm_service.py + baixa_credores_lote_service.py + antecipacao_caixinhas.py)
+  │                 #   + subpacote remessa_vortx/ (8 services) + subpacote validador_titulos/ (7 modulos:
+  │                 #     comparador, cp_nacom, exportador, faturamento, normalizador, parsers_bancos, service)
   ├── workers/      # 8 RQ job files + utils.py (batch processing via Redis)
   ├── parsers/      # 4 parsers (dispatcher, pix_sicoob, models)
   ├── models.py     # 40+ models (~2.8K linhas — MAIOR models.py do projeto)

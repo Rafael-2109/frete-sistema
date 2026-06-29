@@ -1,6 +1,6 @@
 {
   "version": "2.0.0",
-  "total_relationships": 445,
+  "total_relationships": 452,
   "relationships": [
     {
       "from_table": "agendamentos_entrega",
@@ -1467,6 +1467,12 @@
       "to_column": "numero_chassi"
     },
     {
+      "from_table": "hora_avaria",
+      "from_column": "recebimento_conferencia_id",
+      "to_table": "hora_recebimento_conferencia",
+      "to_column": "id"
+    },
+    {
       "from_table": "hora_avaria_foto",
       "from_column": "avaria_id",
       "to_table": "hora_avaria",
@@ -1758,6 +1764,36 @@
       "from_table": "hora_recebimento_conferencia",
       "from_column": "substituida_por_id",
       "to_table": "hora_recebimento_conferencia",
+      "to_column": "id"
+    },
+    {
+      "from_table": "hora_recebimento_esperado",
+      "from_column": "consumido_por_conferencia_id",
+      "to_table": "hora_recebimento_conferencia",
+      "to_column": "id"
+    },
+    {
+      "from_table": "hora_recebimento_esperado",
+      "from_column": "modelo_id",
+      "to_table": "hora_modelo",
+      "to_column": "id"
+    },
+    {
+      "from_table": "hora_recebimento_esperado",
+      "from_column": "pedido_id",
+      "to_table": "hora_pedido",
+      "to_column": "id"
+    },
+    {
+      "from_table": "hora_recebimento_esperado",
+      "from_column": "pedido_item_id",
+      "to_table": "hora_pedido_item",
+      "to_column": "id"
+    },
+    {
+      "from_table": "hora_recebimento_esperado",
+      "from_column": "recebimento_id",
+      "to_table": "hora_recebimento",
       "to_column": "id"
     },
     {
@@ -2472,6 +2508,12 @@
       "from_table": "pessoal_transacoes",
       "from_column": "regra_id",
       "to_table": "pessoal_regras_categorizacao",
+      "to_column": "id"
+    },
+    {
+      "from_table": "pessoal_transacoes",
+      "from_column": "transferencia_par_id",
+      "to_table": "pessoal_transacoes",
       "to_column": "id"
     },
     {

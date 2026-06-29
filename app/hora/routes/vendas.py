@@ -218,11 +218,15 @@ def vendas_lista():
     except (TypeError, ValueError):
         per_page = 50
 
-    status_filtro = (request.args.get('status') or '').strip().upper() or None
-    if status_filtro and status_filtro not in (
-        'COTACAO', 'CONFIRMADO', 'FATURADO', 'CANCELADO',
-    ):
-        status_filtro = None
+    # Multi-status: a tela permite marcar mais de 1 status por vez (botoes
+    # toggle). Le todos os `status` da query string, normaliza, valida contra
+    # o conjunto valido e remove duplicatas preservando a ordem.
+    _STATUS_VALIDOS = ('COTACAO', 'CONFIRMADO', 'FATURADO', 'CANCELADO')
+    status_filtros = [
+        s for s in dict.fromkeys(
+            (v or '').strip().upper() for v in request.args.getlist('status')
+        ) if s in _STATUS_VALIDOS
+    ]
 
     busca = (request.args.get('busca') or '').strip() or None
     loja_id_str = (request.args.get('loja_id') or '').strip()
@@ -254,7 +258,7 @@ def vendas_lista():
         permitidas = None
         pagination = venda_service.paginar_vendas(
             page=page, per_page=per_page,
-            status=status_filtro, busca=busca, loja_id=loja_id,
+            status=status_filtros, busca=busca, loja_id=loja_id,
             data_inicio=data_inicio, data_fim=data_fim, chassi=filtro_chassi,
             filtro_vendedor=filtro_vendedor,
         )
@@ -263,7 +267,7 @@ def vendas_lista():
         pagination = venda_service.paginar_vendas(
             page=page, per_page=per_page,
             lojas_permitidas_ids=permitidas,
-            status=status_filtro, busca=busca, loja_id=loja_id,
+            status=status_filtros, busca=busca, loja_id=loja_id,
             data_inicio=data_inicio, data_fim=data_fim, chassi=filtro_chassi,
         )
 
@@ -282,7 +286,7 @@ def vendas_lista():
         'hora/vendas_lista.html',
         pagination=pagination,
         vendas=(pagination.items if pagination else []),
-        status_filtro=status_filtro,
+        status_filtros=status_filtros,
         per_page=per_page,
         filtro_busca=busca,
         filtro_loja_id=loja_id,
@@ -1012,11 +1016,13 @@ def vendas_exportar_xlsx():
     from datetime import date as _date
 
     # ---- Filtros ----
-    status_filtro = (request.args.get('status') or '').strip().upper() or None
-    if status_filtro and status_filtro not in (
-        'COTACAO', 'CONFIRMADO', 'FATURADO', 'CANCELADO',
-    ):
-        status_filtro = None
+    # Multi-status (mesmo padrao da listagem): aceita N `status` na query string.
+    _STATUS_VALIDOS = ('COTACAO', 'CONFIRMADO', 'FATURADO', 'CANCELADO')
+    status_filtros = [
+        s for s in dict.fromkeys(
+            (v or '').strip().upper() for v in request.args.getlist('status')
+        ) if s in _STATUS_VALIDOS
+    ]
 
     origem_filtro = (request.args.get('origem') or '').strip().upper() or None
 
@@ -1042,8 +1048,8 @@ def vendas_exportar_xlsx():
             flash('Sem lojas permitidas — nada a exportar.', 'warning')
             return redirect(url_for('hora.vendas_lista'))
         query = query.filter(HoraVenda.loja_id.in_(permitidas))
-    if status_filtro:
-        query = query.filter(HoraVenda.status == status_filtro)
+    if status_filtros:
+        query = query.filter(HoraVenda.status.in_(status_filtros))
     if origem_filtro:
         query = query.filter(HoraVenda.origem_criacao == origem_filtro)
     if since:
@@ -1204,8 +1210,8 @@ def vendas_exportar_xlsx():
 
     ts = agora_utc_naive().strftime('%Y%m%d_%H%M%S')
     sufixo = []
-    if status_filtro:
-        sufixo.append(status_filtro.lower())
+    if status_filtros:
+        sufixo.append('-'.join(s.lower() for s in status_filtros))
     if origem_filtro:
         sufixo.append(origem_filtro.lower())
     if since:

@@ -4,7 +4,7 @@ camada: L1
 sot_de: —
 hub: CLAUDE.md
 superseded_by: —
-atualizado: 2026-06-27
+atualizado: 2026-06-29
 -->
 # Módulo HORA — Lojas Motochefe
 
@@ -53,6 +53,8 @@ atualizado: 2026-06-27
 - [36. Custo de peça + margem do preview da NF por CUSTO — 2026-06-28](#36-custo-de-peça--margem-do-preview-da-nf-por-custo-não-preço-de-venda--2026-06-28)
 - [37. Recebimento por filial sem NF (NF provisória) — 2026-06-27](#37-recebimento-por-filial-sem-nf-nf-provisória--2026-06-27)
 - [38. Avaria torna a moto NÃO-VENDÁVEL — 2026-06-28](#38-avaria-torna-a-moto-não-vendável--2026-06-28)
+- [39. Filtro multi-status na listagem de Pedidos de Venda — 2026-06-29](#39-filtro-multi-status-na-listagem-de-pedidos-de-venda--2026-06-29)
+- [40. Número visível do pedido TagPlus (`tagplus_pedido_numero`) — 2026-06-29](#40-número-visível-do-pedido-tagplus-tagplus_pedido_numero--2026-06-29)
 - [Onboarding Tours (2026-05-08)](#onboarding-tours-2026-05-08)
 - [Referências](#referências)
 
@@ -1642,6 +1644,60 @@ Inverte a regra anterior ("avaria não bloqueia venda"). Pedido do dono: moto co
 
 ### Testes
 `tests/hora/test_avaria_bloqueia_venda.py` (gate reserva/resolver/ignorar/multi-avaria + offer-for-sale + flag `moto_vendavel`), `test_recebimento_sem_nf.py` (REQ 1 + `MARCAR_AVARIA` dedup), `test_pedido_workflow.py` (confirmação bloqueia). Mapa de impacto: workflow `mapa-avaria-nao-vendavel` (101 pontos).
+
+---
+
+## 39. Filtro multi-status na listagem de Pedidos de Venda — 2026-06-29
+
+A tela `/hora/vendas` (`vendas_lista.html`) passou a permitir filtrar **mais de
+um status por vez** (COTAÇÃO, CONFIRMADO, FATURADO, CANCELADO). Sem migration.
+
+**UX (botões toggle, sem JS):** o macro novo `status_botoes_multi`
+(`templates/hora/_filtros.html`) substitui `status_botoes` **apenas nesta tela**
+(o `status_botoes` single segue em uso por `pedidos_lista.html` — Pedidos de
+Compras, intocado). Cada botão alterna sua presença no filtro via link GET;
+"Todos" limpa; selecionados ficam sólidos (com check), os demais outline.
+`url_for(..., status=[A, B])` serializa como `?status=A&status=B` (Werkzeug);
+lista vazia → sem param = "Todos".
+
+**Rota** (`routes/vendas.py:vendas_lista`): lê `request.args.getlist('status')`,
+normaliza (upper/strip), dedup preservando ordem (`dict.fromkeys`) e valida contra
+`_STATUS_VALIDOS`. Passa a lista `status_filtros` ao service e ao template. Os
+hidden inputs do form de busca/loja/data emitem **N `<input name="status">`** (um
+por status), preservando a seleção ao submeter; links **Limpar** e **Exportar
+Excel** repassam a lista.
+
+**Service** (`venda_service._query_vendas` / `paginar_vendas` / `listar_vendas`):
+`status` aceita `str` **ou** iterável — string usa `== ` (retrocompat), lista usa
+`HoraVenda.status.in_(...)`. **Exportação** (`vendas_exportar_xlsx`) segue o mesmo
+padrão multi-status (filtro `.in_()` + sufixo de filename com os status).
+
+**Testes:** `tests/hora/test_pedido_filtro_vendedor.py::test_query_vendas_multi_status`
+(lista filtra IN, string compat, lista vazia não filtra). Suíte de filtro/venda verde.
+
+---
+
+## 40. Número visível do pedido TagPlus (`tagplus_pedido_numero`) — 2026-06-29
+
+Fase 1 do design `docs/superpowers/specs/2026-06-29-hora-tagplus-sync-bidirecional-design.md`
+(sincronização bidirecional HORA↔TagPlus). Nova coluna `hora_venda.tagplus_pedido_numero`
+(migration `hora_62`) guarda o número **VISÍVEL** do pedido no TagPlus (`pedido['numero']`),
+distinto de `tagplus_pedido_id` (ID interno — a raiz da inconsistência relatada: a tela
+mostrava o ID como se fosse o número).
+
+Capturado em 3 pontos: webhook `nfe_aprovada` (helper `webhook_handler._extrair_pedido_id_numero`
+lê `pedido_os_vinculada.numero`, que já chega no `GET /nfes/{id}` — sem chamada extra à API),
+backfill de enriquecimento (`pedido_backfill_service._aplicar_pedido_em_venda`, de `pedido['numero']`)
+e backfill histórico (`pedido_backfill_service.backfill_numero_do_payload()`, do JSONB
+`tagplus_pedido_payload['numero']` já salvo, sem API). A listagem `vendas_lista.html` passa a
+exibir o número (coluna "Pedido TP (nº)", fallback `#id` quando ainda não capturado).
+
+**Testes:** `tests/hora/test_tagplus_pedido_numero.py` (8). **Estado em PROD (2026-06-29):**
+migration `hora_62` aplicada no banco de produção + backfill de **885 vendas** (todas as que
+tinham `tagplus_pedido_payload`) via UPDATE set-based `(payload->>'numero')::int` — 0 divergências.
+O **código** está em `main` local (deploy pendente): a captura via webhook/backfill só passa a
+valer após o deploy. **Pendente (Fases 2/3 do design):** push HORA→TagPlus (criar/confirmar/cancelar
+pedido) e replicação reversa numero-walk.
 
 ---
 

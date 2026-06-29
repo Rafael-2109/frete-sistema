@@ -30,7 +30,7 @@ Se o modelo NAO esta em `MODELOS_CAMPOS.md` → usar skill `descobrindo-odoo-est
 
 ## Routing de Skills Odoo
 
-Para arvore de decisao completa (qual skill usar): **`ROUTING_SKILLS.md`** Passos 2 e 3.
+Para arvore de decisao completa (qual skill usar): **`.claude/references/ROUTING_SKILLS.md`** Passos 2 e 3.
 
 Resumo rapido:
 

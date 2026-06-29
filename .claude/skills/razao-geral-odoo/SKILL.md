@@ -63,6 +63,21 @@ source .venv/bin/activate && python scripts/exportar_razao_geral.py
 | `calcular_saldos_iniciais(conn, acc_ids, data_ini, company_ids)` | Saldos via read_group | `dict` |
 | `buscar_movimentos_razao(conn, data_ini, data_fim, company_ids, conta_filter)` | Busca com ID-cursor + transformação inline | `tuple(dados_agrupados, contas_info, saldos, total)` |
 | `gerar_excel_razao(dados_agrupados, contas_info, saldos, ...)` | Gera Excel via xlsxwriter | `BytesIO` |
+| `agrupar_por_documento(dados_agrupados, contas_info, por_diario=False)` | Agrega o razão por (conta, documento) somando D/C — base de conciliação | `list[dict]` |
+
+### Schema de retorno de `buscar_movimentos_razao`
+
+Retorna a tupla `(dados_agrupados, contas_info, saldos_iniciais, total_registros)`. **Use direto como DADOS para análise/conciliação — não precisa gerar Excel.**
+
+- **`dados_agrupados`** — `dict {account_id: [movimento, ...]}`. Cada `movimento`:
+  `{date, move_name, partner_name, ref, name, debit, credit, balance, journal_name, matching_number}`
+  (já normalizado: `False` do Odoo vira `''` ou `0`; `debit/credit/balance` são `float`).
+- **`contas_info`** — `dict {account_id: {id, code, name, account_type}}`.
+- **`saldos_iniciais`** — `dict {account_id: {debit, credit, balance}}` (só contas patrimoniais; saldo acumulado até `data_ini - 1`).
+- **`total_registros`** — `int` (linhas contábeis lidas).
+
+> O domain fixa `parent_state='posted'` + `company_id IN company_ids`; `conta_filter` casa `code ILIKE` (parcial, opcional).
+> O **saldo acumulado** NÃO vem pronto na tupla — é calculado linha-a-linha dentro de `gerar_excel_razao` (coluna "Saldo Acumulado"); para análise própria, acumule `mov['balance']` na ordem retornada.
 
 ### Exemplo de Uso
 
@@ -90,6 +105,30 @@ excel = gerar_excel_razao(
 
 # excel é BytesIO pronto para send_file() ou salvar em disco
 ```
+
+### Exemplo: análise/conciliação por documento (sem Excel)
+
+Quando o objetivo é **investigar** uma conta (ex.: "quais notas compõem o saldo da conta de imposto a recuperar e divergem da apuração?"), use os dados direto e agrupe por documento — não gere Excel:
+
+```python
+from app.relatorios_fiscais.services.razao_geral_service import (
+    buscar_movimentos_razao, agrupar_por_documento
+)
+
+dados, contas_info, _saldos, _total = buscar_movimentos_razao(
+    connection, data_ini='2025-09-01', data_fim='2025-09-30',
+    company_ids=[4], conta_filter='1140200003'  # COFINS a recuperar
+)
+
+# 1 linha por (conta, nota), com débito/crédito/saldo somados:
+grupos = agrupar_por_documento(dados, contas_info)            # ou por_diario=True
+for g in grupos:
+    print(g['documento'], g['n_lancamentos'], g['saldo'])    # comparar com a apuração
+```
+
+Cada item de `agrupar_por_documento`:
+`{conta_id, conta_code, conta_nome, documento, diario, n_lancamentos, total_debito, total_credito, saldo}`
+(saldo = `total_debito - total_credito`; ordenado por conta_code → documento → diario).
 
 ---
 

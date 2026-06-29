@@ -20,8 +20,16 @@ curl -fsSL -o "$TESSDATA_DIR/por.traineddata" \
 export TESSDATA_PREFIX="$TESSDATA_DIR"
 
 # 1. Instalar dependências
+# --no-cache-dir: forca re-download (o cache do pip serve artefato com hash
+#   defasado quando um pacote e re-publicado no PyPI -> "DO NOT MATCH THE HASHES"
+#   -> pip exit 1). Incidente 2026-06-29: deploys travados ~3h (gunicorn/flask
+#   ausentes) porque o pip falhava e o build NAO abortava.
+# || exit 1: se as deps principais nao instalam, ABORTA o build (em vez de
+#   publicar um deploy quebrado silenciosamente). NAO usar `set -e` global —
+#   varias linhas abaixo falham de proposito (migrations com `|| echo`).
 echo "Instalando dependências..."
-pip install -r requirements.txt
+pip install --no-cache-dir -r requirements.txt \
+    || { echo "❌ FATAL: pip install -r requirements.txt falhou — abortando build (deps ausentes quebrariam o runtime)"; exit 1; }
 
 # 2. Instalar Playwright e navegadores (para Portal Atacadão)
 echo "Instalando Playwright e nest-asyncio..."

@@ -3,8 +3,11 @@
 {% block content %}
 <div class="container mt-3">
   <div class="d-flex justify-content-between align-items-center mb-3">
-    <h4><i class="fas fa-file-upload"></i> Importar Extrato Bradesco</h4>
+    <h4><i class="fas fa-file-upload"></i> Importar Extrato (Bradesco CSV / Nubank OFX)</h4>
     <div>
+      <a href="{{ url_for('pessoal.pessoal_fluxo_caixa.transferencias_index') }}" class="btn btn-outline-info btn-sm">
+        <i class="fas fa-right-left"></i> Transferencias
+      </a>
       <a href="{{ url_for('pessoal.pessoal_pluggy.painel') }}" class="btn btn-outline-primary btn-sm">
         <i class="fas fa-plug"></i> Open Finance
       </a>
@@ -19,15 +22,15 @@
     <div class="col-md-6">
       <div class="card">
         <div class="card-header">
-          <i class="fas fa-upload"></i> Upload CSV
+          <i class="fas fa-upload"></i> Upload de Extratos
         </div>
         <div class="card-body">
           <form method="POST" enctype="multipart/form-data">
             {{ form.hidden_tag() }}
 
             <div class="mb-3">
-              <label for="arquivos" class="form-label">Arquivos CSV (Bradesco, encoding latin-1)</label>
-              {{ form.arquivos(class="form-control", accept=".csv", multiple=true, id="input-arquivos") }}
+              <label for="arquivos" class="form-label">Arquivos CSV (Bradesco) ou OFX (Nubank)</label>
+              {{ form.arquivos(class="form-control", accept=".csv,.ofx", multiple=true, id="input-arquivos") }}
               <div class="form-text" id="arquivos-selecionados"></div>
             </div>
 
@@ -151,14 +154,16 @@
           <i class="fas fa-info-circle"></i> Instrucoes
         </div>
         <div class="card-body small">
-          <p><strong>Auto-deteccao:</strong> O sistema identifica automaticamente se o CSV e extrato de conta corrente ou fatura de cartao, e resolve a conta correspondente.</p>
-          <p><strong>Multi-arquivo:</strong> Selecione varios CSVs de uma vez. Cada arquivo e processado independentemente.</p>
+          <p><strong>Auto-deteccao:</strong> O sistema identifica automaticamente o formato (CSV Bradesco ou OFX Nubank), se e conta corrente ou cartao, e resolve a conta correspondente.</p>
+          <p><strong>Multi-arquivo:</strong> Selecione varios arquivos de uma vez. Cada um e processado independentemente.</p>
           <p><strong>Formatos aceitos:</strong></p>
           <ul class="mb-2">
-            <li><strong>Extrato CC</strong>: Bradesco Net Empresa/PF &gt; Conta Corrente &gt; Extrato &gt; Exportar CSV</li>
-            <li><strong>Fatura Cartao</strong>: Bradesco &gt; Cartao &gt; Fatura &gt; Exportar CSV</li>
+            <li><strong>Bradesco CC</strong>: Net Empresa/PF &gt; Conta Corrente &gt; Extrato &gt; Exportar CSV</li>
+            <li><strong>Bradesco Cartao</strong>: Cartao &gt; Fatura &gt; Exportar CSV</li>
+            <li><strong>Nubank NuConta</strong>: Conta &gt; Extrato &gt; Exportar OFX</li>
+            <li><strong>Nubank Cartao</strong>: Cartao &gt; Fatura &gt; Exportar OFX</li>
           </ul>
-          <p><strong>Encoding:</strong> latin-1 (padrao Bradesco). Separador: ponto-e-virgula (;)</p>
+          <p><strong>Depositos entre contas</strong> (Bradesco &harr; Nubank) sao casados na tela <em>Transferencias</em> e ficam fora de despesas e do fluxo de caixa.</p>
           <p class="mb-0"><strong>Deduplicacao:</strong> Transacoes duplicadas sao ignoradas automaticamente via hash.</p>
         </div>
       </div>

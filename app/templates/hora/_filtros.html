@@ -130,3 +130,34 @@
     {% endfor %}
   </div>
 {% endmacro %}
+
+
+{# Combo de status como botoes TOGGLE — permite selecionar mais de 1 por vez.
+   `valores` = lista dos status atualmente selecionados (vinda do getlist).
+   Cada botao alterna sua presenca na lista (link GET com N `status`); "Todos"
+   limpa. Botao selecionado fica solido (primary) com check; demais outline.
+   Werkzeug serializa `status=[...]` como `?status=A&status=B`. #}
+{% macro status_botoes_multi(base_url_endpoint, opcoes=[], valores=[], query_extra={}) %}
+  <div class="d-flex gap-1 flex-wrap mb-2">
+    <a href="{{ url_for(base_url_endpoint, **query_extra) }}"
+       class="btn btn-sm btn-{% if not valores %}primary{% else %}outline-primary{% endif %}">
+      Todos
+    </a>
+    {% for opt in opcoes %}
+      {% set v = opt[0] if opt is not string else opt %}
+      {% set l = opt[1] if opt is not string else opt %}
+      {% set ativo = v in valores %}
+      {% if ativo %}
+        {% set nova = valores | reject('equalto', v) | list %}
+      {% else %}
+        {% set nova = valores + [v] %}
+      {% endif %}
+      {% set q = dict(query_extra, **{'status': nova}) %}
+      <a href="{{ url_for(base_url_endpoint, **q) }}"
+         class="btn btn-sm btn-{% if ativo %}primary{% else %}outline-primary{% endif %}"
+         aria-pressed="{{ 'true' if ativo else 'false' }}">
+        {% if ativo %}<i class="fas fa-check"></i> {% endif %}{{ l }}
+      </a>
+    {% endfor %}
+  </div>
+{% endmacro %}

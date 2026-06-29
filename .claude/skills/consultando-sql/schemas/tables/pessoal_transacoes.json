@@ -120,6 +120,11 @@
       "default": false
     },
     {
+      "name": "transferencia_par_id",
+      "type": "integer",
+      "description": "FK → pessoal_transacoes.id"
+    },
+    {
       "name": "observacao",
       "type": "text"
     },
@@ -215,6 +220,10 @@
     {
       "column": "membro_id",
       "references": "pessoal_membros.id"
+    },
+    {
+      "column": "transferencia_par_id",
+      "references": "pessoal_transacoes.id"
     }
   ],
   "indices": [

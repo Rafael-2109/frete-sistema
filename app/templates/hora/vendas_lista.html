@@ -1,6 +1,6 @@
 {% extends "hora/base.html" %}
 {% from "hora/_pagination.html" import render_pagination %}
-{% from "hora/_filtros.html" import filtros_form, filtro_loja, filtro_data, filtros_botoes, status_botoes %}
+{% from "hora/_filtros.html" import filtros_form, filtro_loja, filtro_data, filtros_botoes, status_botoes_multi %}
 
 {% block hora_content %}
 <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
@@ -22,9 +22,9 @@
     {% endif %}
     {% if current_user.tem_perm_hora('vendas_exportar', 'ver') %}
     <a href="{{ url_for('hora.vendas_exportar_xlsx',
-                        status=status_filtro or None) }}"
+                        status=status_filtros or None) }}"
        class="btn btn-outline-success"
-       title="Excel com 2 abas: Pedidos (header) + Motos (1 linha por chassi). Respeita o filtro de status atual.">
+       title="Excel com 2 abas: Pedidos (header) + Motos (1 linha por chassi). Respeita o(s) filtro(s) de status atual(is).">
       <i class="fas fa-file-excel"></i> Exportar Excel
     </a>
     {% endif %}
@@ -38,13 +38,16 @@
 {% endif %}
 
 <div id="filtros-vendas">
-{{ status_botoes('hora.vendas_lista',
+{{ status_botoes_multi('hora.vendas_lista',
                  [('COTACAO','Cotação'),('CONFIRMADO','Confirmado'),('FATURADO','Faturado'),('CANCELADO','Cancelado')],
-                 status_filtro,
+                 status_filtros,
                  query_extra={'per_page': per_page}) }}
 
 {% call filtros_form(url_for('hora.vendas_lista')) %}
-  <input type="hidden" name="status" value="{{ status_filtro or '' }}">
+  {# Preserva o(s) status selecionado(s) ao submeter busca/loja/data/per_page. #}
+  {% for s in status_filtros %}
+    <input type="hidden" name="status" value="{{ s }}">
+  {% endfor %}
   <div class="col-md-3">
     <label class="form-label small mb-1">Busca (NF, cliente ou CPF)</label>
     <input type="text" name="busca"
@@ -68,7 +71,7 @@
     <button type="submit" class="btn btn-sm btn-primary">
       <i class="fas fa-filter"></i> Filtrar
     </button>
-    <a href="{{ url_for('hora.vendas_lista', status=(status_filtro or None), per_page=per_page) }}"
+    <a href="{{ url_for('hora.vendas_lista', status=(status_filtros or None), per_page=per_page) }}"
        class="btn btn-sm btn-outline-secondary"><i class="fas fa-eraser"></i> Limpar</a>
   </div>
   <div class="col-md-auto ms-auto d-flex gap-2 align-items-end">
@@ -89,7 +92,7 @@
       <th>#</th>
       <th>Status</th>
       <th>NF</th>
-      <th>Pedido TP</th>
+      <th>Pedido TP (nº)</th>
       <th>Loja</th>
       <th>Cliente</th>
       <th>CPF</th>
@@ -120,8 +123,10 @@
             {% endif %}
           </td>
           <td>
-            {% if v.tagplus_pedido_id %}
-              <small class="text-muted" title="ID do pedido auto-criado pelo TagPlus">
+            {% if v.tagplus_pedido_numero %}
+              <small title="Número do pedido no TagPlus">nº {{ v.tagplus_pedido_numero }}</small>
+            {% elif v.tagplus_pedido_id %}
+              <small class="text-muted" title="ID interno do TagPlus (número ainda não capturado)">
                 #{{ v.tagplus_pedido_id }}
               </small>
             {% else %}

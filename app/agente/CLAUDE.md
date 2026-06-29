@@ -4,7 +4,7 @@ camada: L1
 sot_de: —
 hub: CLAUDE.md
 superseded_by: —
-atualizado: 2026-06-22
+atualizado: 2026-06-29
 -->
 # Agente Logistico Web — Guia de Desenvolvimento
 
@@ -47,9 +47,9 @@ atualizado: 2026-06-22
 
 ## Contexto
 
-Encapsula o Claude Agent SDK: chat web (SSE) + Teams bot (async); ~57.1K LOC em 109 arquivos. Para o roteiro de onde achar cada detalhe, ver **Mapa de Navegacao** acima.
+Encapsula o Claude Agent SDK: chat web (SSE) + Teams bot (async); ~57.4K LOC em 110 arquivos. Para o roteiro de onde achar cada detalhe, ver **Mapa de Navegacao** acima.
 
-**LOC**: ~57.1K | **Arquivos**: 109 | **Atualizado**: 22/06/2026
+**LOC**: ~57.4K | **Arquivos**: 110 | **Atualizado**: 29/06/2026
 
 > **EVOLUCAO DO AGENTE (flywheel/blueprint Ondas 0-4)**: o rastreador VIVO e o
 > `docs/blueprint-agente/EXECUCAO.md` (estado de cada item, gates, log append-only); o design
@@ -119,7 +119,7 @@ app/agente/                          # Root — 7 arquivos
 │   ├── preset_operacional.md        # Preset customizado (substitui claude_code preset)
 │   ├── prompt_inventario.md         # Prompt operacional inventario 2026-05 (NACOM/LF)
 │   └── system_prompt.md             # System prompt do agente (usuarios finais)
-├── sdk/                             # Integracao com Claude Agent SDK — 26 arquivos
+├── sdk/                             # Integracao com Claude Agent SDK — 27 arquivos
 │   ├── __init__.py
 │   ├── _sanitization.py             # Helpers de sanitizacao PII cross-modulo
 │   ├── baseline_fastpath.py         # Fast-path deterministico do baseline (Marcus user_id=18, sem loop LLM)

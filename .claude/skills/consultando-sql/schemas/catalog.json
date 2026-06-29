@@ -105,7 +105,7 @@
     "vinculacao_carteira_separacao",
     "webhook_configs"
   ],
-  "total_tabelas": 336,
+  "total_tabelas": 337,
   "tabelas": [
     {
       "name": "agendamentos_entrega",
@@ -1903,6 +1903,7 @@
       "key_fields": [
         "numero_chassi",
         "loja_id",
+        "recebimento_conferencia_id",
         "status"
       ],
       "dominio": "Lojas HORA"
@@ -2212,6 +2213,16 @@
         "numero_chassi",
         "substituida_por_id",
         "tipo_divergencia"
+      ],
+      "dominio": "Lojas HORA"
+    },
+    {
+      "name": "hora_recebimento_esperado",
+      "description": "Snapshot congelado de um item esperado da filial no momento do recebimento.",
+      "key_fields": [
+        "recebimento_id",
+        "pedido_id",
+        "pedido_item_id"
       ],
       "dominio": "Lojas HORA"
     },

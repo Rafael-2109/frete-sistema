@@ -55,6 +55,90 @@ Indice de execucoes do dialogo de melhoria Agent SDK <-> Claude Code.
 | 48 | 2026-06-24 | 9 | 6 | 1 | 2 | OK (cron D8 normal — pega o backlog que o #47 deixou p/ "D8 normal" + CarVia Barbara id 87 + critica Rayssa id 78; relatorio `dialogue-2026-06-24-cron.md`. v2 286-294 HTTP 200. 6 AUTO-IMPL: IMP-23-011 critico BUG REAL (vincular_nf_manualmente nao propagava pedido_id ja validado -> branch ambiguo S1=b, 98/100 NFs backfill; pedido_id curto-circuita inferencia, 22 testes); cluster CarVia escrita IMP-24-001/-002/-003 = 1 script novo `atualizando_frete_carvia.py` (1o WRITE da skill, dry-run default, recalcula requer_aprovacao, NAO calcula — delega a cotando_subcontrato); IMP-24-004 gotcha lancar-cte readonly documentado (regra #9); IMP-23-007 `adicionando_item_embarque.py` modo Nacom reusa gerar_embarque + sincronizar_totais por SOMA (anti-inflacao 1089 vs 863kg), CarVia recusado (fronteira R1). 2 PROPOSTAS: IMP-23-012 causa-raiz faturamento parcial isolada (_calcular_match seta sep FATURADA inteira mas emite evento so por item-da-NF) — decisao de modelo pendente (split-brain 1727/1729/1737/2037); IMP-22-003 principio ja coberto (cannot_do + R3) — recomendacao p/ review trimestral jul/2026, nao auto-edit por governanca PAD-CTX. 1 REJEICAO: IMP-23-006 confirmar diario inter-company = salvaguarda correta (R3) + skill mal-atribuida (lendo-arquivos nao baixa) + sinal fraco; caminho = memoria de perfil. Sem push) |
 | R1 | 2026-06-24 | 2 | 2 | 0 | 0 | OK (RECONCILIACAO MANUAL — nao e execucao do cron. Fecha drift: 2 propostas do #46 viraram codigo e o registro ficou defasado. IMP-22-004 (peso cubado frete, Barbara id 87) implementado em `120f2f61d` (23/06); IMP-22-002 (excluir FT CarVia, Talita id 17) implementado em `3b26ebc02` (24/06, IMP Talita). Gravado v3 `auto_implemented=true` ids 295-296 HTTP 200. Gap de processo corrigido: novo PASSO 1.5 no prompt D8 reabre propostas implementadas via `git log --grep`. Sem push) |
 | 50 | 2026-06-26 | 3 | 3 | 0 | 0 | OK (3 IMP avaliaveis = 3 auto-impl + 2 F2 listadas + 0 reconciliadas (1.5). Rodada Motos Assai/Odoo. IMP-26-002 skill_bug rastreando-chassi-assai (Rayssa id 78): `recibo.data_recebimento` inexistente -> `data_recibo` (model AssaiReciboMotochefe.data_recibo:43); +teste regressao por introspeccao, 4 passed. IMP-26-001 instruction recebimento moto QR (Laura id 76): routing ja existia mas gatilhos sem vocabulario; enriqueci `ROUTING_SKILLS` (recebimento fisico/escanear QR/como receber) + secao 'Caminho na interface' (wizard A-D) no CORPO de conferindo-recibo-assai (camada 3b, sob demanda, sem custo boot; NAO mexi na YAML p/ preservar 8K listing). IMP-25-001 skill_bug descobrindo-odoo-estrutura (Vanderleia id 48): 2.1.1 codigo-correto — agente INVENTOU 'aba Vendas e Compras'; fix de capacidade = `fields_get` expoe `groups` (campo restrito por permissao, ex `account.group_warning_account`) + guard escopo modelo!=UI (consultar ir.ui.view / sinalizar incerteza). v2 ids 314-316 HTTP ok. PASSO 1.5: 17 propostas checadas, matches eram so commits-proposta D8 (codigo de OUTRAS sugestoes da rodada) -> 0 viraram codigo. 2 F2: adhoc-3734 conta-destino CD/OUT (TAMIRIS id 44, reincidente #49), adhoc-1743 patch fretes CarVia (TALITA id 17, 43 membros). Sem push) |
+| 51 | 2026-06-27 | 0 | 0 | 0 | 0 | PARCIAL (MCP do Render AUSENTE na sessao cron — auth headless; `query_render_postgres`/`list_services` = "No such tool available", `claude mcp list` mostra `render ✔`. PASSO 1 via fallback REST `/pending`: backlog 100% F2 (gate humano), 0 avaliaveis pelo D8 -> 0 impl/rej/prop, nenhuma escrita no banco. 2 F2 listadas, ambas reincidentes: adhoc-3734 conta-destino CD/OUT Odoo (TAMIRIS id 44, 3d, gap REAL nao coberto) e adhoc-1743 patch fretes CarVia (TALITA id 17, 43 membros, 2d — ARMADILHA overlap: `valor_cotado`-por-id JA coberto por atualizando_frete_carvia.py commit b116d0111; residual = patch lote-dict + regra pedagio/peso-cubado subcontrato). PASSO 1.5 (reconciliacao) BLOQUEADO: exige SQL no Postgres prod, sem fallback REST. origem_usuarios citados do historico #49/#50 (nao re-resolvidos). Relatorio+historico commitados, sem push) |
+| 52 | 2026-06-28 | 0 | 0 | 0 | 0 | OK (backlog 100% F2 — gate humano; nenhuma avaliavel pelo D8. MESMAS 2 do #51, agora com MCP Render DISPONIVEL: PASSO 1 direto do Postgres, `origem_usuarios` RESOLVIDO via SQL, PASSO 1.5 EXECUTADO (v2-sem-v3 ultimos 45d = 0 linhas). 2 F2 reincidentes: `adhoc-cluster-3734` conta-destino CD/OUT Odoo (TAMIRIS SALLES CORDEIRO id 44, 6 membros, 4d, gap REAL nao coberto) e `adhoc-cluster-1743` patch fretes CarVia (TALITA DE LE LIMA id 17, 43 membros, 3d — reverificado no codigo: `valor_cotado`-por-id JA coberto por `atualizando_frete_carvia.py:203-218` commit b116d0111; residual aberto = (a) patch lote-dict `--frete-id required=True` so single + (b) pedagio/peso-cubado subcontrato, script declara "NAO calcula" :14). Nenhuma escrita no banco (F2 nao gera v2; 1.5 sem v3). Sem bloqueio -> OK. Relatorio+historico commitados, sem push) |
+| 53 | 2026-06-29 | 2 | 1 | 0 | 1 | OK (2 IMP avaliaveis + 4 F2 listadas + 0 reconciliadas (1.5). Rodada CarVia, ambas do Rafael id 1. 1 AUTO-IMPL: IMP-2026-06-29-001 critico skill_bug DanfePDFParser layout Consisanet/Alisul SC (NF 986) — BUG REAL pela matriz 2.1.1 (parser versionado seguia bugado; agente SDK so corrigiu o registro inline, nao edita codigo). 3 fixes: (1) get_numero_nf `N[°ºo.]`->`N(?:[°ºo.]|UM\.?)` (prefixo 'Num.'); (2) get_valor_total Strategy 2 reescrita iterando todas ocorrencias e pulando canhoto (proxima linha='Serie' -> 'RIE'), novo helper `_encontrar_linhas`; (3) `_parsear_linha_produto` WITH-CFOP `\s+(\w{1,5})`->`\s*([A-Za-z]+)` (CFOP+UNIDADE colados '6403UNIDADE'). +teste regressao novo `test_danfe_consisanet_layout.py` (4 casos), suite parser 23 passed (4 Consisanet + 19 Bling, 0 regressao). 1 PROPOSTA: IMP-2026-06-29-002 skill/rota reprocessar NF CarVia existente — feature multi-arquivo + verificacao exige S3/PDF real (fora do cron autonomo); plano detalhado citando reuso `_atualizar_nf_existente:1938`+`salvar_importacao:575-585`+`detectar_e_persistir_nf:512`; skill auto-implementavel OU rota POST (PROPOR). v2 ids 338-339 HTTP 200. 4 F2: adhoc-3734 (TAMIRIS id 44, reincidente #49-#52), adhoc-1743 (TALITA id 17, reincidente #50-#52), 2 NOVAS skill-gap razao-geral-odoo cluster 5185 (TAMIRIS id 44). Sem push) |
+
+## 2026-06-29 (cron D8 #53)
+
+- **Backlog PASSO 1 = 6 sugestoes**: 2 avaliaveis (prefixo `IMP-`, ambas do **Rafael De Carvalho
+  Nascimento id 1**, rodada CarVia) + 4 F2 (`adhoc-`/`skill-gap-`, gate humano — so listadas).
+- **PASSO 1.5 (reconciliacao)**: propostas v2 `auto_implemented=false` sem v3 (ultimos 45d) = **0 linhas**.
+- **IMP-2026-06-29-001** (critico, skill_bug) — `DanfePDFParser` 3 bugs do layout **Consisanet (Alisul SC)**,
+  NF 986 (carvia_nfs.id=598). **AUTO-IMPLEMENTADO**. **BUG REAL pela matriz 2.1.1**: o codigo do fluxo
+  oficial (parser versionado) realmente erra — o agente SDK roda em prod e NAO edita codigo-fonte, so'
+  corrigiu o registro da NF 986 via workaround inline; o parser no repo seguia bugado. Linha 316 ainda era
+  `N[°ºo.]`. Fixes em `app/carvia/services/parsers/danfe_pdf_parser.py`:
+  1. `get_numero_nf` Strategy 1: `N[°ºo.]` → `N(?:[°ºo.]|UM\.?)` (prefixo "Num." — o `u` nao casava `[°ºo.]`).
+  2. `get_valor_total` Strategy 2: reescrita p/ iterar TODAS as ocorrencias de "VALOR TOTAL DA NOTA" e pular
+     a do canhoto (proxima linha = "Serie 1" → contem "RIE"; antes pegava o 1o idx → token "1" → 1.0). Novo
+     helper `_encontrar_linhas()` (plural).
+  3. `_parsear_linha_produto` WITH-CFOP: `\s+(\w{1,5})` → `\s*([A-Za-z]+)` (CFOP+UNIDADE colados
+     "6403UNIDADE"; `\s+` exigia espaco e falhava o match inteiro). Retro-compativel com "5405 UN ...".
+  Teste novo `tests/carvia/test_danfe_consisanet_layout.py` (numero_nf='986', valor_total=16473.63, 1 item
+  ncm/cfop/unidade + retrocompat). **Suite parser: 23 passed** (4 Consisanet + 19 Bling, 0 regressao).
+  v2 id 338 HTTP 200.
+- **IMP-2026-06-29-002** (warning, skill_suggestion) — skill/rota de **reprocessar NF CarVia existente**
+  (re-parse PDF + reinserir itens + MotoRecognition). **PROPOSTA** (auto_implemented=false). Skill nao existe.
+  Decisao = propor: feature multi-arquivo no nucleo do pipeline de importacao + verificacao real exige baixar
+  PDF do S3 e rodar (fora do cron autonomo); sugestao lista rota POST (= PROPOR). Plano cita reuso exato:
+  `_atualizar_nf_existente` (:1938), bloco itens `salvar_importacao:575-585`, dedup veiculos `:596-609`,
+  `detectar_e_persistir_nf` (:512), `_parsear_danfe_pdf` (:1621), campo `arquivo_pdf_path` (`models/documentos.py:50`).
+  v2 id 339 HTTP 200.
+- **4 F2 (so listadas, gate humano)**: `adhoc-cluster-3734` conta-destino CD/OUT Odoo (TAMIRIS id 44,
+  reincidente #49-#52); `adhoc-cluster-1743` patch fretes CarVia (TALITA id 17, reincidente #50-#52); 2 NOVAS
+  `skill-gap-razao-geral-odoo-*` (cluster 5185, TAMIRIS id 44) — saldo acumulado + agrupamento por documento/diario.
+- Relatorio: `dialogue-2026-06-29.md`. Branch `cron/manutencao`, sem push.
+
+## 2026-06-28 (cron D8 #52)
+
+- **Backlog 100% F2** (gate humano Rafael+CC) — as MESMAS 2 `adhoc-cluster-*` do #51, ainda nao decididas.
+  Acao do D8: apenas LISTAR (PASSO 2.2 EXCECAO F2). 0 avaliadas/implementadas/rejeitadas/propostas, nenhuma
+  escrita no banco (F2 nao gera status v2).
+- **MCP do Render DISPONIVEL** (≠ #51, que ficou PARCIAL por ausencia do MCP). PASSO 1 veio direto do
+  Postgres `dpg-d13m38vfte5s738t6p50-a`; `origem_usuarios` RESOLVIDO via SQL; PASSO 1.5 EXECUTADO.
+- **PASSO 1.5 (reconciliacao):** query de propostas v2 `auto_implemented=false` sem v3 (ultimos 45d)
+  retornou **0 linhas** — nada a reconciliar/gravar (v3).
+- **F2 #1 — `adhoc-cluster-3734`** conta contabil de destino em operacao CD/OUT no Odoo via XML-RPC
+  (skill_suggestion, `tipo_gap=skill_insuficiente`, rel=`rastreando-odoo`, info; **TAMIRIS SALLES CORDEIRO
+  id 44**; 6 membros; 4d; sessao `bf1aff40-...`). Reincidente #49/#50/#51. Gap REAL nao coberto: nenhuma
+  skill configura a conta de destino de um stock.picking.type (CD/OUT -> 3201000001) — candidata a atomo
+  WRITE com dry-run+confirmacao. Decisao no gate.
+- **F2 #2 — `adhoc-cluster-1743`** patch de campos de fretes CarVia por ID/criterio (skill_suggestion,
+  rel=`gerindo-carvia`, info; **TALITA DE LE LIMA id 17**; 43 membros; 3d; sessoes `19f79270-...`,
+  `538873f2-...`, `638a33dc-...`, `a5d68cd5-...`). Reincidente #50/#51. **Overlap reverificado no codigo
+  hoje** (ARMADILHA PASSO 1.5): `valor_cotado`-por-id JA coberto por
+  `.claude/skills/gerindo-carvia/scripts/atualizando_frete_carvia.py:203-218` (espelha `valor_considerado`
+  :108-118), commit `b116d0111` (Origem IMP-2026-06-24-001..004). **Residual aberto:** (a) patch em LOTE
+  por dict `{id: valor}` — hoje `--frete-id required=True`, so single; (b) pedagio por PESO CUBADO em
+  subcontrato — script declara "NAO calcula frete (peso cubado x tabela)" (:14), nenhum script CarVia
+  calcula pedagio. Recomendacao ao gate: avaliar so o residual (a)+(b), nao recriar o existente.
+- **Persistencia:** nenhuma (F2 sem v2; 1.5 sem v3). Status **OK** — tudo que o D8 podia fazer concluido
+  sem bloqueio. Relatorio+historico commitados na `cron/manutencao`, sem push.
+
+## 2026-06-27 (cron D8 #51)
+
+Cron D8 com **MCP do Render ausente** na sessao (gate de auth headless/cron — `mcp__render__*` nao
+registrado; `query_render_postgres` e `list_services` retornam "No such tool available", embora
+`claude mcp list` mostre `render ✔ Connected` via health-check com credencial armazenada).
+
+- **PASSO 1 (fallback REST)**: usado `GET /agente/api/improvement-dialogue/pending` (funcional).
+  Backlog = **2 pendentes, 100% F2** (`adhoc-`). 0 avaliaveis pelo pipeline decidir do D8.
+- **F2 listadas (gate Rafael+CC)** — ambas reincidentes de rodadas com MCP:
+  - `adhoc-cluster-3734` — conta contabil destino CD/OUT no Odoo via XML-RPC (skill `rastreando-odoo`,
+    6 membros, 3d, TAMIRIS id 44). Gap REAL: nenhuma skill cobre config de conta destino em
+    stock.picking.type. Reincidente #49/#50.
+  - `adhoc-cluster-1743` — patch de campos de fretes CarVia (valor_cotado/peso_cubado/pedagio,
+    43 membros, 2d, TALITA id 17). **ARMADILHA PASSO 1.5 (overlap tematico)**: `valor_cotado`-por-id
+    JA coberto por `gerindo-carvia/scripts/atualizando_frete_carvia.py` (`--frete-id --valor-cotado`,
+    commit `b116d0111`, Origem IMP-2026-06-24-001/-002/-003). Residual nao coberto: (a) patch em LOTE
+    por dict `{id:valor}`; (b) regra de pedagio por PESO CUBADO em subcontrato. Para o gate: avaliar
+    so o residual. Reincidente #50.
+- **PASSO 1.5 (reconciliacao) NAO executado**: requer SQL no Render Postgres (`agent_improvement_dialogue`
+  v2 sem v3); o endpoint REST nao expoe propostas historicas. Reexecutar em sessao com MCP do Render.
+- **Persistencia DB**: nenhuma escrita necessaria (F2 nao gera v2/status).
+- **origem_usuarios**: citados do historico #49/#50 (rodadas com MCP), nao re-resolvidos nesta sessao.
+- Relatorio `dialogue-2026-06-27.md`. Commit na branch `cron/manutencao`, sem push.
 
 ## 2026-06-26 (cron D8 #50)
 

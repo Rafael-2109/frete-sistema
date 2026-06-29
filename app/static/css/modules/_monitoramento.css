@@ -122,7 +122,13 @@
   nav.navbar.nc-filter-navbar {
     background: var(--bg-light);
     position: relative;
-    z-index: 100;
+    /* NAO definir z-index aqui: position:relative sem z-index NAO cria stacking
+       context, deixando o .dropdown-menu (Status Entrega/Agendamento/Especiais)
+       competir direto no contexto-raiz da tela (.pagination-container, que cria
+       o stacking context via zoom:0.8). Um z-index proprio aprisionaria o menu
+       neste nivel e ele renderizaria POR BAIXO da barra de paginacao (z-200) e
+       do obs inline (z-100). Sem z-index, o menu (z-index 1000+ do Bootstrap)
+       vence ambos. Ver comentario em .sticky-pagination-simple. */
   }
 
   .nc-filter-navbar .dropdown-menu {
@@ -879,6 +885,21 @@
   .monitoramento-page .form-select {
     background-color: var(--bg-light);
     border: 1px solid var(--border);
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     MONITORAMENTO - Larguras coerentes dos filtros
+     UF e campos de data nao precisam preencher a coluna inteira do grid. Capar a
+     largura do INPUT (alinhado a esquerda) deixa-os proporcionais ao conteudo
+     sem desalinhar a grade do Bootstrap. UF foi reagrupado ao lado de Cidade.
+     ═══════════════════════════════════════════════════════════════════════════ */
+  .monitoramento-page #form-filtros input.filtro-uf {
+    max-width: 90px;
+    text-transform: uppercase;
+  }
+
+  .monitoramento-page #form-filtros input.filtro-data {
+    max-width: 180px;
   }
 
   .container-fluid .card.shadow {

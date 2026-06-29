@@ -1,8 +1,23 @@
+<!-- doc:meta
+tipo: explanation
+camada: L1
+sot_de: —
+hub: docs/superpowers/specs/INDEX.md
+superseded_by: —
+atualizado: 2026-06-24
+-->
 # Validador de Títulos x Bancos — Design
+
+> **Papel:** spec de design do Validador de Títulos x Bancos (conferência de títulos cedidos a bancos/securitizadoras). Status: implementado em `feature/validador-titulos-bancos`.
 
 > Status: **implementado** em 24/06/2026 na branch `feature/validador-titulos-bancos`.
 > 65 testes verdes + validação ponta a ponta contra a planilha real (duplicados 106/106).
 > Pendente: testar a tela rodando (precisa de Postgres/deploy) e fechar os 3 pontos abertos.
+
+## Indice
+- Estado da implementação
+- Contexto e problema
+- Design (normalizador, parsers, comparador, exportador)
 
 ## Estado da implementação (24/06/2026)
 
@@ -17,9 +32,9 @@
 | Exportador Excel | `.../exportador.py` | ✅ 3 testes |
 | Rota + tela + menu | `app/financeiro/routes/validador_titulos.py`, `app/templates/financeiro/validador_titulos.html`, `_sidebar.html` | ✅ wiring validado |
 
-## Contexto e problema
+## Contexto
 
-Hoje a conferência de títulos cedidos a bancos/securitizadoras é feita manualmente na
+(Contexto e problema.) Hoje a conferência de títulos cedidos a bancos/securitizadoras é feita manualmente na
 planilha `W:\VALIDADOR TITULOS BANCOS.xlsb` (9 abas). O operador (Marcus) baixa as bases
 de cada ambiente externo, cola em abas, cria fórmulas para padronizar uma chave única e
 faz três comparativos. O processo é trabalhoso, manual e propenso a erro.

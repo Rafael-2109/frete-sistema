@@ -30,7 +30,7 @@
     },
     {
       "name": "numero_conta",
-      "type": "varchar(30)"
+      "type": "varchar(50)"
     },
     {
       "name": "ultimos_digitos_cartao",
