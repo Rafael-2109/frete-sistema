@@ -56,17 +56,41 @@ def make_user_prompt_submit_hook(
 
 
 async def _keep_stream_open(input_data, tool_use_id, context):
-    """Hook PreToolUse OBRIGATORIO para can_use_tool funcionar.
+    """Hook PreToolUse OBRIGATORIO para can_use_tool + prefixo de Bash.
 
-    Sem este hook, AskUserQuestion falha com 'stream closed' porque
-    o SDK fecha o stream antes do callback de permissao ser invocado.
-
-    FONTE: https://platform.claude.com/docs/en/agent-sdk/user-input
-
-    Implementacao minimal — apenas mantem o stream aberto. O agente
-    logistico Nacom adiciona injecao de contexto adicional aqui (campos
-    SQL, etc.); o agente lojas nao precisa por enquanto.
+    1) Mantem o stream aberto: sem isto, AskUserQuestion falha com 'stream
+       closed' (o SDK fecha o stream antes do callback de permissao).
+       FONTE: https://platform.claude.com/docs/en/agent-sdk/user-input
+    2) Prefixa cada comando Bash com `export NACOM_QUIET_BOOT=1; ` para silenciar
+       os logs de boot do `import app` nos scripts CLI de skill -> stdout/stderr
+       limpos p/ o agente parsear o resultado (BUG #1 2026-06-08). Race-free via
+       hookSpecificOutput.updatedInput (SDK 0.1.29+, isolado por tool call).
+       NAO inclui as vars de auditoria Odoo do agente web (dominio Nacom — o
+       agente de lojas nao tem audit hook Odoo).
     """
+    updated_input = None
+    if input_data.get('tool_name') == 'Bash':
+        try:
+            tool_input_data = input_data.get('tool_input', {})
+            if isinstance(tool_input_data, dict):
+                command_orig = tool_input_data.get('command', '')
+                if command_orig and isinstance(command_orig, str):
+                    updated_input = {
+                        **tool_input_data,
+                        'command': 'export NACOM_QUIET_BOOT=1; ' + command_orig,
+                    }
+        except Exception as e:
+            # Hook NUNCA quebra a tool — log e segue.
+            logger.debug('[lojas_bash_prefix] %s', e)
+
+    if updated_input:
+        return {
+            "continue_": True,
+            "hookSpecificOutput": {
+                "hookEventName": "PreToolUse",
+                "updatedInput": updated_input,
+            },
+        }
     return {"continue_": True}
 
 
