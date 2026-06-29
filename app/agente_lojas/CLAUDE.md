@@ -188,12 +188,18 @@ Review adversarial 4-dim + code-review app-wide (34 agentes) feitos.
 **Fase 1 (fundação de ESCRITA/UI) estrutural feita**: constraint
 `(user_id,path,agente)` (migration `2026_06_30_constraint_agente_memoria`),
 `create_file/create_directory(agente=)`, ContextVar `_current_agent_id` (infra),
-rotas `/agente/api/sessions*` filtram `agente='web'`. 22 commits, 554 testes + 1 skip.
-**PENDENTE — "motor único" (sessão de contexto cheio):** parametrizar AgentClient
-por perfil + wiring `agente_id` (build_hooks/rotas) + memory_mcp_tool/jobs por
-agente + migrar `app/agente_lojas/` p/ `get_client('lojas')` e aposentar o fork.
-Plano consolidado (ETAPAS 1-3) no handoff
-`docs/superpowers/plans/2026-06-29-convergencia-agente-lojas-handoff.md`.
+rotas `/agente/api/sessions*` filtram `agente='web'`.
+**MOTOR ÚNICO ETAPA 1+2+3a ✅ (2026-06-29):** o `AgentClient` web já é parametrizado
+por perfil — `get_client('lojas')` produz settings/skills(allow-list)/agents({orientador-loja})/
+sem-briefing-Nacom (ETAPA 1); `build_hooks(agente_id='lojas')` isola memória/skill-reminders/
+enforce + injeta `<loja_context>` (ContextVar `_current_loja_scope`) + suprime hints SQL Nacom
+no PreToolUse (ETAPA 2+3a); `memory_mcp_tool`/jobs gravam/leem por `get_current_agent_id()`.
+Tudo INERTE em produção (default `'web'`; gate `tests/agente`+`tests/agente_lojas` = 1691
+passed/40 skip/0 fail, web byte-idêntico). **PENDENTE — CUTOVER (E3.8b+E3.9):** migrar
+`routes/chat.py` p/ `get_client('lojas').stream_response()` + aposentar o fork `AgentLojasClient`
+(este `sdk/client.py`/`client_pool.py`/`sdk/hooks.py`); recomendado atrás de flag canary.
+Plano com file:line: handoff `docs/superpowers/plans/2026-06-29-convergencia-agente-lojas-handoff.md`
+§"CUTOVER PENDENTE (E3.8b + E3.9)".
 
 ---
 

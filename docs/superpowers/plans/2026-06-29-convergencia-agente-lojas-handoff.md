@@ -34,6 +34,32 @@ COMPLETA** (fatia 1 + fatia 2); este doc é o estado vivo para retomar F3.
 
 ## Estado atual
 
+> ### ⚡ ATUALIZAÇÃO 2026-06-29 (sessão MOTOR ÚNICO — ETAPA 1+2+3a FEITAS, cutover PAUSADO)
+>
+> Esta sessão executou **ETAPA 1, ETAPA 2 e ETAPA 3a** do motor único (TDD por passo,
+> web **byte-idêntico**). **+8 commits** sobre `main` (32 no total); worktree limpa;
+> **gate `tests/agente/`+`tests/agente_lojas/` = 1691 passed, 40 skipped, 0 failed**.
+> **SEM push/merge.** Commits desta sessão (do mais novo):
+> ```
+> baa70a9cd E3.8a — motor web serve perfil 'lojas' (loja_context + suprime hints Nacom)
+> db68ca295 E2.7 — jobs de consolidacao gravam memoria pelo agente da sessao
+> af941b9c3 E2.6 — memory_mcp_tool isola CRUD de memoria por agente
+> 71892b4db E2.5 — rota web seta set_current_agent_id('web') no stream
+> 1a2b0a77c E2.4 — build_hooks(agente_id) propaga aos 3 callers de injecao
+> db7ae1bc0 E1.2 — AgentClient parametrizado por perfil (web byte-identico)
+> da79b72e6 E1.1 — get_settings(agente_id) por perfil
+> c9b1a38a2 fix(test): testes-guarda feature_flags reconhecem helper _env_bool (drift baseline)
+> ```
+> **O motor unificado está PRONTO para servir o perfil 'lojas'** (get_client('lojas')
+> → settings/skills/agents/briefing/hooks/memória/loja_context isolados). Tudo INERTE
+> em produção (default 'web'; nenhuma rota seta agente_id='lojas' ainda).
+>
+> **PAUSADO por decisão do dono (2026-06-29):** falta o **CUTOVER** (E3.8b: migrar a
+> rota `/agente-lojas` p/ `get_client('lojas')` + aposentar o fork) e a **validação
+> ponta a ponta** (E3.9). É a mudança de MAIOR risco (reescreve o path de stream do
+> agente lojas em produção) — reservada p/ execução dedicada + revisão 4-mãos.
+> **Plano detalhado do cutover: seção [## CUTOVER PENDENTE (E3.8b + E3.9)](#cutover-pendente-e38b--e39) abaixo.**
+
 - **Worktree:** `.claude/worktrees/convergencia-agente-lojas` — branch
   `worktree-convergencia-agente-lojas`, rebaseada sobre `main` (2026-06-29,
   inclui Nubank OFX + `hora_recebimento_esperado`).
@@ -170,6 +196,66 @@ filtra por `user_id` mas não por `agente` na busca primária (entities não tê
 
 **Migration pendente (rodar em PROD no deploy):** `2026_06_30_constraint_agente_memoria.py` (constraint já aplicada no banco LOCAL; PROD aplica no deploy junto do código). Considerar tb migrations P2 de coluna `agente` em `agent_memory_embeddings`/`agent_memory_entities` (defesa do KG/embeddings na origem — hoje coberto por M06/materialização).
 
+## CUTOVER PENDENTE (E3.8b + E3.9)
+
+> **O QUE FALTA do motor único.** A INFRA (ETAPA 1+2+3a) está pronta, testada e
+> byte-idêntica. Falta só LIGAR a rota lojas ao motor e aposentar o fork. É a
+> mudança de MAIOR risco (path de stream do agente lojas em PRODUÇÃO). Recomendação:
+> **fazer atrás de flag canary `AGENT_LOJAS_USA_MOTOR_UNICO` (default OFF)** para
+> cutover reversível, validar em canary, e só então aposentar o fork.
+
+### Pré-requisitos JÁ PRONTOS (não refazer)
+- `get_client('lojas')` → `AgentClient` com `AgentLojasSettings` (model/prompts próprios,
+  `empresa_briefing_path=''` ⇒ sem briefing Nacom), skills allow-list (`SKILLS_PERMITIDAS`),
+  agents só `{orientador-loja}` (`client.py` E1.2).
+- `build_hooks(agente_id='lojas')` injeta memória/skill-reminders/enforce isolados por
+  `agente='lojas'` (E2.4) + `<loja_context>` via `_current_loja_scope` (E3.8a) + suprime
+  hints SQL Nacom no PreToolUse (E3.8a).
+- ContextVars em `app/agente/config/permissions.py`: `set_current_agent_id('lojas')`,
+  `set_loja_scope(perfil, loja_hora_id)` (+ `clear_*` no finally).
+- `memory_mcp_tool`/jobs gravam/leem por `get_current_agent_id()` (E2.6/E2.7).
+
+### E3.8b — migrar `app/agente_lojas/routes/chat.py` ao motor unificado
+1. No início do stream (dentro do worker, antes de chamar o motor), setar:
+   `set_current_session_id(our_session_id)`, `set_current_user_id(user_id)`,
+   `set_current_agent_id('lojas')`, `set_loja_scope(perfil, loja_hora_id)`,
+   `set_event_queue(our_session_id, event_queue)`. No `finally`: `clear_current_agent_id()`,
+   `clear_loja_scope()`, `cleanup_session_context`.
+2. Trocar `stream_lojas_chat()` (`routes/chat.py:161`, `_drain_async_gen`) por
+   `get_client('lojas').stream_response(prompt=..., user_id=..., user_name=...,
+   our_session_id=..., sdk_session_id=..., can_use_tool=<lojas can_use_tool>,
+   output_format=..., stderr_queue=...)` (assinatura web em `app/agente/sdk/client.py:1461`).
+   - **`can_use_tool`**: passar o do fork (`app/agente_lojas/config/permissions.py:143`,
+     preserva `_DANGEROUS_BASH_PATTERNS` HORA `delete from hora_*` + Write→/tmp). É param
+     de `stream_response`/`_build_options` — NÃO precisa migrar para o motor (R4 do MAPA_A5).
+3. **Serializar `StreamEvent` → SSE**: o motor web emite `StreamEvent` (dataclasses,
+   `stream_parser.py`); o fork emitia dicts via `_parse_message`. Espelhar a serialização
+   de `app/agente/routes/chat.py` (`async_stream`, ~:965+). Os frontends usam o MESMO
+   pattern SSE (CLAUDE.md agente_lojas Gotcha 3) — type: text/tool_call/tool_result/
+   thinking/done/error. VALIDAR campo a campo contra `templates/agente_lojas/chat.html`.
+4. Persistência pós-stream: reusar o padrão do fork (`_persist_session_after_stream`,
+   `routes/chat.py:414`) — custo delta via `turn_cost_from_cumulative`, cap 50 msgs,
+   `agente='lojas'` já setado.
+5. **Aposentar o fork** (só após canary validado): `sdk/client.py` (AgentLojasClient),
+   `sdk/client_pool.py`, `sdk/hooks.py`, `sdk/__init__.py` (re-exports). **MANTER**:
+   `services/scope_injector.py` (reusado pelo hook do motor), `config/{settings,
+   skills_whitelist,permissions}.py` (config-do-perfil + can_use_tool), `routes/{sessions,
+   health,user_answer}.py`, `decorators.py`, `templates/`, `prompts/`.
+
+### E3.9 — validação ponta a ponta
+- Suíte `tests/agente_lojas/` (34 testes) — alguns testam o fork direto (`test_resume_build_options`,
+  `test_build_options_env`, `test_sdk_error_handling`): ATUALIZAR p/ o motor ou aposentar junto.
+- Teste de isolamento ponta a ponta: sessão `'lojas'` → memória gravada `agente='lojas'`,
+  `<loja_context>` presente, ZERO conteúdo Nacom (skills/agents/hints/memória). Reforçar
+  fail-closed no ponto de entrada (perfil derivado da rota, não inferido).
+- Revisão adversarial final (web-intacto + isolamento lojas).
+- Migration `2026_06_30_constraint_agente_memoria` aplica em PROD no deploy (já no working tree).
+
+### Riscos conhecidos (MAPA_A5 §11) — status
+- R1 memória cross-agente: **RESOLVIDO** (E2.4/E2.6). R2 skills: **RESOLVIDO** (E1.2 allow-list).
+  R3 briefing vazio: **RESOLVIDO** (E1.2 guard `empresa_briefing_path=''`). R5 enforce: **RESOLVIDO** (E2.4).
+- R4 Bash patterns HORA: resolver passando o `can_use_tool` do fork ao `stream_response` (E3.8b passo 2).
+
 ## Decisões travadas
 - **Corpus `user_id=0` por-agente, fail-closed** (memória empresa não vaza entre agentes).
 - **Gate = identidade do agente (`AGENTE_ID`)**, não flag do `Usuario` (flag só autoriza endpoint; admin tem ambas).
@@ -193,27 +279,28 @@ python -m pytest tests/agente_lojas/ tests/agente/sdk/test_memory_isolation_por_
 ```
 Continue a convergência agente_lojas ↔ agente web, na worktree dedicada
 .claude/worktrees/convergencia-agente-lojas (branch worktree-convergencia-agente-lojas).
+Falta SÓ o CUTOVER da rota lojas — a INFRA do motor único já está pronta e testada.
 
 GATILHO (leia PRIMEIRO, nesta ordem):
-1. docs/superpowers/plans/2026-06-29-convergencia-agente-lojas-handoff.md  (este handoff — estado + o que falta)
-2. docs/superpowers/plans/2026-06-28-convergencia-agente-lojas.md  (plano; foco em §REVISÃO DE ESCOPO + Apêndice A)
-3. app/agente_lojas/CLAUDE.md  (Gotcha 0 + Fases de evolução) e app/agente/CLAUDE.md
+1. docs/superpowers/plans/2026-06-29-convergencia-agente-lojas-handoff.md
+   — §"ATUALIZAÇÃO 2026-06-29" (estado) + §"CUTOVER PENDENTE (E3.8b + E3.9)" (plano com file:line).
+2. app/agente_lojas/CLAUDE.md (Gotcha 0 + Fases) e app/agente/CLAUDE.md.
 
-ESTADO: F0+F1 ✅ · F2/M3 isolamento de LEITURA ✅ (fatia 1+2, todas as fontes) ·
-Fase 1 fundação de ESCRITA/UI ✅ estrutural (constraint (user_id,path,agente) +
-migration; create_file/dir(agente=); ContextVar _current_agent_id; rotas
-/agente/api/sessions* filtram 'web'). 23 commits, 554 testes verdes + 1 skip.
-Review adversarial 4-dim + code-review app-wide (34 agentes) feitos. SEM push/merge.
+ESTADO: MOTOR ÚNICO ETAPA 1+2+3a ✅ (8 commits, gate tests/agente+tests/agente_lojas
+= 1691 passed / 40 skip / 0 fail, web BYTE-IDÊNTICO). get_client('lojas') já produz
+settings/skills/agents/briefing/hooks/memória/<loja_context> isolados; tudo INERTE em
+produção (default 'web'). SEM push/merge (revisão 4-mãos).
 
-OBJETIVO desta sessão: executar o "MOTOR ÚNICO" (seção ## PLANO DO MOTOR ÚNICO do
-handoff — ETAPAS 1-3, com file:line). Resumo: (1) parametrizar AgentClient/get_settings
-por perfil, web BYTE-IDÊNTICO (suíte tests/agente/ 100% verde); (2) wiring de agente_id
-(build_hooks + rotas set_current_agent_id) + memory_mcp_tool e jobs de consolidação por
-agente; (3) migrar app/agente_lojas/ p/ get_client('lojas'), injetar <loja_context> como
-hook por perfil, aposentar o fork AgentLojasClient, validar isolamento ponta a ponta.
-NÃO migrar Teams/WhatsApp (ficam 'web'). É o coração da produção — TDD por passo.
+OBJETIVO desta sessão: o CUTOVER (§CUTOVER PENDENTE do handoff). Recomendado atrás de
+flag canary `AGENT_LOJAS_USA_MOTOR_UNICO` (default OFF): (E3.8b) rota /agente-lojas
+(app/agente_lojas/routes/chat.py) seta set_current_agent_id('lojas')+set_loja_scope e
+chama get_client('lojas').stream_response(...) com o can_use_tool do fork; serializa
+StreamEvent→SSE espelhando app/agente/routes/chat.py; aposenta AgentLojasClient/
+client_pool/hooks/__init__ do fork (MANTÉM scope_injector/config/sessions/health/
+templates/prompts). (E3.9) suíte tests/agente_lojas/ + teste de isolamento ponta a ponta
+(loja vê ZERO Nacom) + revisão adversarial. NÃO migrar Teams/WhatsApp (ficam 'web').
 
-ANTES de codar: `git rebase main` (a main é ativa); rodar o baseline. NÃO push/merge sem
-aval (revisão 4-mãos). Migration `2026_06_30_constraint_agente_memoria` aplica em PROD no
-deploy. Cada passo = commit TDD; default='web' mantém o agente WEB/Teams/WhatsApp intacto.
+ANTES de codar: `git rebase main` (a main é ativa); rodar o baseline. É o coração da
+produção — TDD por passo, commit TDD. NÃO push/merge sem aval (revisão 4-mãos). Migration
+`2026_06_30_constraint_agente_memoria` aplica em PROD no deploy.
 ```
