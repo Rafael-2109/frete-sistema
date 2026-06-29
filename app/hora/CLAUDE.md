@@ -4,7 +4,7 @@ camada: L1
 sot_de: —
 hub: CLAUDE.md
 superseded_by: —
-atualizado: 2026-06-27
+atualizado: 2026-06-29
 -->
 # Módulo HORA — Lojas Motochefe
 
@@ -54,6 +54,7 @@ atualizado: 2026-06-27
 - [37. Recebimento por filial sem NF (NF provisória) — 2026-06-27](#37-recebimento-por-filial-sem-nf-nf-provisória--2026-06-27)
 - [38. Avaria torna a moto NÃO-VENDÁVEL — 2026-06-28](#38-avaria-torna-a-moto-não-vendável--2026-06-28)
 - [39. Filtro multi-status na listagem de Pedidos de Venda — 2026-06-29](#39-filtro-multi-status-na-listagem-de-pedidos-de-venda--2026-06-29)
+- [40. Número visível do pedido TagPlus (`tagplus_pedido_numero`) — 2026-06-29](#40-número-visível-do-pedido-tagplus-tagplus_pedido_numero--2026-06-29)
 - [Onboarding Tours (2026-05-08)](#onboarding-tours-2026-05-08)
 - [Referências](#referências)
 
@@ -1673,6 +1674,26 @@ padrão multi-status (filtro `.in_()` + sufixo de filename com os status).
 
 **Testes:** `tests/hora/test_pedido_filtro_vendedor.py::test_query_vendas_multi_status`
 (lista filtra IN, string compat, lista vazia não filtra). Suíte de filtro/venda verde.
+
+---
+
+## 40. Número visível do pedido TagPlus (`tagplus_pedido_numero`) — 2026-06-29
+
+Fase 1 do design `docs/superpowers/specs/2026-06-29-hora-tagplus-sync-bidirecional-design.md`
+(sincronização bidirecional HORA↔TagPlus). Nova coluna `hora_venda.tagplus_pedido_numero`
+(migration `hora_62`) guarda o número **VISÍVEL** do pedido no TagPlus (`pedido['numero']`),
+distinto de `tagplus_pedido_id` (ID interno — a raiz da inconsistência relatada: a tela
+mostrava o ID como se fosse o número).
+
+Capturado em 3 pontos: webhook `nfe_aprovada` (helper `webhook_handler._extrair_pedido_id_numero`
+lê `pedido_os_vinculada.numero`, que já chega no `GET /nfes/{id}` — sem chamada extra à API),
+backfill de enriquecimento (`pedido_backfill_service._aplicar_pedido_em_venda`, de `pedido['numero']`)
+e backfill histórico (`pedido_backfill_service.backfill_numero_do_payload()`, do JSONB
+`tagplus_pedido_payload['numero']` já salvo, sem API). A listagem `vendas_lista.html` passa a
+exibir o número (coluna "Pedido TP (nº)", fallback `#id` quando ainda não capturado).
+
+**Testes:** `tests/hora/test_tagplus_pedido_numero.py` (8). **Pendente (Fases 2/3 do design):**
+push HORA→TagPlus (criar/confirmar/cancelar pedido) e replicação reversa numero-walk.
 
 ---
 
