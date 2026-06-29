@@ -121,6 +121,15 @@ def chassis(q: str, lojas_permitidas_ids: Optional[List[int]] = None,
             .subquery()
         )
         base = base.filter(HoraMoto.numero_chassi.in_(disp))
+        # Avaria ABERTA torna a moto NAO-VENDAVEL (2026-06-28): nao oferecer para
+        # venda no autocomplete (continua no estoque, mas fora da oferta).
+        from app.hora.models import HoraAvaria
+        avariados = (
+            db.session.query(HoraAvaria.numero_chassi)
+            .filter(HoraAvaria.status == 'ABERTA')
+            .subquery()
+        )
+        base = base.filter(HoraMoto.numero_chassi.notin_(avariados))
 
     base = base.order_by(HoraMoto.numero_chassi).limit(limit)
     return [

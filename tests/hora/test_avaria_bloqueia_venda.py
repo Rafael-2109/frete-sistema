@@ -20,6 +20,21 @@ def _avaria(chassi, loja, desc='dano que bloqueia a venda'):
     return a
 
 
+def _moto_em_estoque(loja, modelo, cor='PRETA'):
+    """Cria uma moto NOVA (chassi único) em estoque no modelo informado.
+    Chassi único evita o insert-once do fixture chassi_em_estoque (que reusa um
+    chassi fixo e pode ter modelo_id de resíduo) e isola a contagem por modelo."""
+    import uuid
+    from app.hora.services.moto_service import get_or_create_moto, registrar_evento
+    chassi = f'9OFFER{uuid.uuid4().hex[:18].upper()}'[:25]
+    get_or_create_moto(numero_chassi=chassi, modelo_nome=modelo.nome_modelo,
+                       cor=cor, criado_por='t')
+    registrar_evento(numero_chassi=chassi, tipo='RECEBIDA', loja_id=loja.id, operador='t')
+    registrar_evento(numero_chassi=chassi, tipo='CONFERIDA', loja_id=loja.id, operador='t')
+    _db.session.flush()
+    return chassi
+
+
 def test_avaria_aberta_bloqueia_reserva(db, chassi_em_estoque, loja_origem):
     _avaria(chassi_em_estoque, loja_origem)
     with pytest.raises(ChassiIndisponivelError, match=r'(?i)avaria'):
@@ -55,3 +70,37 @@ def test_multi_avaria_so_libera_quando_todas_finalizadas(db, chassi_em_estoque, 
     _db.session.flush()
     moto, _ult = venda_service._lock_chassi_e_validar_disponivel(chassi_em_estoque)
     assert moto.numero_chassi == chassi_em_estoque
+
+
+# --- Offer-for-sale: as listas que oferecem moto para venda excluem a avariada ---
+
+def test_offer_for_sale_exclui_avariada(db, loja_origem, modelo_moto):
+    from app.hora.services import estoque_service, autocomplete_service
+    chassi = _moto_em_estoque(loja_origem, modelo_moto, cor='PRETA')
+    # ANTES da avaria: aparece em todas as listas de venda
+    assert any(c['chassi'] == chassi
+               for c in estoque_service.chassis_disponiveis_para_venda(modelo_moto.id))
+    assert 'PRETA' in estoque_service.cores_disponiveis_por_modelo(modelo_moto.id)
+    assert any(r['chassi'] == chassi
+               for r in autocomplete_service.chassis(chassi[:8], disponivel=True))
+
+    _avaria(chassi, loja_origem)
+
+    # DEPOIS: some das listas de venda (continua no estoque com flag — Task #5)
+    assert all(c['chassi'] != chassi
+               for c in estoque_service.chassis_disponiveis_para_venda(modelo_moto.id))
+    assert 'PRETA' not in estoque_service.cores_disponiveis_por_modelo(modelo_moto.id)
+    assert all(r['chassi'] != chassi
+               for r in autocomplete_service.chassis(chassi[:8], disponivel=True))
+
+
+def test_resolver_avaria_devolve_para_listas_de_venda(db, loja_origem, modelo_moto):
+    from app.hora.services import estoque_service
+    chassi = _moto_em_estoque(loja_origem, modelo_moto, cor='PRETA')
+    a = _avaria(chassi, loja_origem)
+    assert all(c['chassi'] != chassi
+               for c in estoque_service.chassis_disponiveis_para_venda(modelo_moto.id))
+    avaria_service.resolver_avaria(a.id, 'consertada na oficina', 'chefe')
+    _db.session.flush()
+    assert any(c['chassi'] == chassi
+               for c in estoque_service.chassis_disponiveis_para_venda(modelo_moto.id))

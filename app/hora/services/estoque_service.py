@@ -824,8 +824,8 @@ def cores_disponiveis_por_modelo(
     lojas_permitidas_ids: Optional[List[int]] = None,
     incluir_aliases: bool = False,
 ) -> List[str]:
-    """Lista cores distintas com pelo menos 1 chassi em EVENTOS_EM_ESTOQUE
-    para o modelo informado.
+    """Lista cores distintas com pelo menos 1 chassi VENDAVEL (em
+    EVENTOS_EM_ESTOQUE e SEM avaria aberta) para o modelo informado.
 
     Usado pelo SELECT cascateado da tela "Novo Pedido de Venda" (Faturamento):
     operador escolhe modelo -> aparecem cores -> aparecem chassis. Filtra por
@@ -848,6 +848,13 @@ def cores_disponiveis_por_modelo(
     else:
         modelos_ids = [modelo_id]
 
+    # Avaria ABERTA torna a moto NAO-VENDAVEL (2026-06-28): uma cor so aparece se
+    # tiver >= 1 chassi VENDAVEL (sem avaria aberta).
+    from app.hora.models import HoraAvaria
+    _avariados = (
+        db.session.query(HoraAvaria.numero_chassi)
+        .filter(HoraAvaria.status == 'ABERTA').subquery()
+    )
     sub = _subquery_ultimo_evento_id()
     q = (
         db.session.query(HoraMoto.cor)
@@ -857,6 +864,7 @@ def cores_disponiveis_por_modelo(
             HoraMoto.modelo_id.in_(modelos_ids),
             HoraMotoEvento.tipo.in_(EVENTOS_EM_ESTOQUE),
             HoraMoto.cor.isnot(None),
+            HoraMoto.numero_chassi.notin_(_avariados),
         )
     )
     if lojas_permitidas_ids is not None:
@@ -877,9 +885,11 @@ def chassis_disponiveis_para_venda(
     """Lista chassis disponiveis para venda manual (tela Faturamento ->
     Novo Pedido de Venda).
 
-    Considera "disponivel" = ultimo evento em EVENTOS_EM_ESTOQUE. Inclui
-    AVARIADA e FALTANDO_PECA com flag para o operador decidir; UI deve
-    mostrar badge.
+    Considera "disponivel para venda" = ultimo evento em EVENTOS_EM_ESTOQUE E
+    SEM avaria ABERTA. Moto com avaria aberta e NAO-VENDAVEL (2026-06-28) e por
+    isso EXCLUIDA desta lista de oferta (ela continua no estoque — ver
+    listar_estoque, que a mostra com flag). FALTANDO_PECA continua incluida com
+    flag (pecas_faltando_abertas) para o operador decidir.
 
     Retorna lista de dicts ordenada por chassi:
         [{chassi, modelo_id, modelo_nome, cor, motor, ano_modelo,
@@ -949,6 +959,11 @@ def chassis_disponiveis_para_venda(
 
     resultado = []
     for ev, moto, modelo, loja in rows:
+        # Avaria ABERTA torna a moto NAO-VENDAVEL (2026-06-28): nao oferecer para
+        # venda. Continua no estoque (listar_estoque a mostra com flag), mas fora
+        # das listas de OFERTA. Volta ao resolver a ultima avaria.
+        if avarias_map.get(moto.numero_chassi, 0) > 0:
+            continue
         resultado.append({
             'chassi': moto.numero_chassi,
             'modelo_id': modelo.id,
