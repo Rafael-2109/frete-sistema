@@ -72,7 +72,7 @@ def montar_payload_pedido(venda, builder=None) -> dict:
         'integracao': INTEGRACAO_TAG,
     }
     if builder is not None:
-        payload.update(builder.montar_corpo_pedido(venda, estrito=False))
+        payload.update(builder.montar_corpo_pedido(venda))
     if getattr(venda, 'observacoes', None):
         payload['observacoes'] = venda.observacoes
     return payload

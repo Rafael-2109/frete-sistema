@@ -268,21 +268,20 @@ class PayloadBuilder:
             )
         return None
 
-    def montar_corpo_pedido(self, venda: 'HoraVenda', *, estrito: bool = False) -> dict:
-        """Corpo fiscal do POST/PATCH /pedidos (itens/faturas/cliente/valores).
+    def montar_corpo_pedido(self, venda: 'HoraVenda') -> dict:
+        """Corpo fiscal do POST /pedidos (itens/faturas/cliente/valores) — TOLERANTE.
 
         NAO inclui identidade (codigo_externo/status/integracao) — isso e' do
         `pedido_sync_service`. itens/faturas reusam o MESMO formato do POST
         /nfes (contrato `produto_servico`/`forma_pagamento` confirmado ao vivo
         2026-06-29). `cliente` usa o id_cliente (NAO o id_entidade do /nfes).
 
-        - estrito=False (criacao; venda pode estar INCOMPLETO): tolerante —
-          omite blocos que nao resolvem (sem forma -> sem faturas; produto nao
-          mapeado -> sem itens; cliente nao achado -> sem cliente).
-        - estrito=True (imediatamente antes de emitir via to_nfe): propaga
-          PayloadBuilderError — a NFe exige itens/cliente/faturas completos.
-          A montagem de itens vem ANTES de resolver o cliente para falhar cedo,
-          sem criar cliente no TagPlus quando o pedido seria invalido.
+        Sempre tolerante (a venda pode estar INCOMPLETO na criacao): omite
+        blocos que nao resolvem (sem forma -> sem faturas; produto nao mapeado
+        -> sem itens; cliente nao achado -> sem cliente). O FATURAMENTO nao
+        depende deste corpo: a NFe e' montada pelo PayloadBuilder.build()
+        (POST /nfes, com todas as regras fiscais) e VINCULADA ao pedido via
+        `pedido_os_vinculada` — nunca gerada a partir do pedido (to_nfe).
         """
         corpo: dict = {}
 
@@ -291,29 +290,16 @@ class PayloadBuilder:
             if itens:
                 corpo['itens'] = itens
         except PayloadBuilderError:
-            if estrito:
-                raise
+            pass
 
         try:
             corpo['faturas'] = self._montar_faturas(venda)
         except PayloadBuilderError:
-            if estrito:
-                raise
+            pass
 
-        if estrito:
-            self._ultimo_id_cliente = None
-            self._resolver_destinatario(venda)  # resolve/cria + popula id_cliente
-            if not self._ultimo_id_cliente:
-                raise PayloadBuilderError(
-                    'pedido_sem_id_cliente',
-                    f'id_cliente nao resolvido para a venda {getattr(venda, "id", "?")} '
-                    f'— emissao via to_nfe exige cliente no pedido.',
-                )
-            corpo['cliente'] = self._ultimo_id_cliente
-        else:
-            cid = self.resolver_id_cliente(venda)
-            if cid:
-                corpo['cliente'] = cid
+        cid = self.resolver_id_cliente(venda)
+        if cid:
+            corpo['cliente'] = cid
 
         corpo['valor_total'] = self._round2_float(
             getattr(venda, 'valor_total', None) or 0

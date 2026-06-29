@@ -1715,7 +1715,7 @@ mapeado — `itens[].produto_servico` e `faturas[]` iguais ao `/nfes`, `cliente`
 - `PayloadBuilder.resolver_id_cliente` (GET /clientes→id_cliente, best-effort) + `montar_corpo_pedido(venda, estrito)` (reusa `_montar_itens`/`_montar_faturas`; tolerante na criação, estrito antes do `to_nfe`) + `_ultimo_id_cliente` (exposto em `_resolver_destinatario`).
 - `pedido_sync_service`: `montar_payload_pedido(builder=)`/`criar_pedido(builder=)` mesclam o corpo completo; helpers **pós-commit, tolerantes, idempotentes** `push_criar_pedido`/`push_atualizar_status`/`push_cancelar` (no-op se flag OFF; nunca travam a venda local).
 - `venda_service`: 4 wirings — `criar_venda_manual`+`salvar_pedido_completo`→`push_criar_pedido`; `confirmar_venda`→`push_atualizar_status`; `cancelar_venda`→`push_cancelar`.
-- `emissor_nfe._enviar_nfe`: com flag ON + `tagplus_pedido_id`, PATCH /pedidos (corpo estrito+status B) → `GET /pedidos/to_nfe/{id}` (evita pedido duplicado); senão `POST /nfes` **inalterado** (zero regressão com flag OFF).
+- `emissor_nfe._enviar_nfe`: **SEMPRE `POST /nfes`** com o payload RICO do `PayloadBuilder.build()` (inf_contribuinte/CFOP/consumidor_final/peças/cortesia — **inalterado**). Quando flag ON + `tagplus_pedido_id`, adiciona **`pedido_os_vinculada=tagplus_pedido_id`** → o TagPlus VINCULA a NFe ao pedido do push em vez de auto-criar duplicado. **NÃO usa `to_nfe`** (que geraria NFe pobre a partir do pedido — decisão do dono 2026-06-29: o faturamento tem regras fiscais específicas que não se pode perder).
 
 **Fase 3 (descoberta reversa, COMPLETA, atrás da flag `HORA_TAGPLUS_REVERSO` default OFF):**
 migration `hora_63` (`hora_tagplus_conta.ultimo_pedido_numero_reconciliado` — cursor; aplicada
@@ -1732,9 +1732,10 @@ vira divergência "aguardando chassi", não `HoraVendaItem`; o operador adiciona
 
 **Testes:** `tests/hora/test_pedido_sync_fase2b.py` (27) + `test_pedido_sync_fase3.py` (15) — 455 testes HORA verdes.
 
-**⚠️ Go-live (gates do dono):** (1) push/to_nfe — ligar `HORA_TAGPLUS_PUSH_PEDIDO` **só com a 2b
-inteira** (push sem `to_nfe` faz o `POST /nfes` auto-criar 2º pedido = duplicação); validar `to_nfe`
-(transmite SEFAZ? schema da resposta?) e cancelar-com-NFe (#3) com o TagPlus antes. (2) reverso —
+**⚠️ Go-live (gates do dono):** (1) push — ligar `HORA_TAGPLUS_PUSH_PEDIDO`; confirmar com o
+TagPlus que `pedido_os_vinculada` no `POST /nfes` vincula sem auto-criar outro pedido, e o
+cancelar-com-NFe (#3). (No pior caso a NFe sai correta de qualquer forma — só restaria duplicação a
+reconciliar.) (2) reverso —
 agendar o cron (`descobrir_e_replicar_job`, ~30min) e ligar `HORA_TAGPLUS_REVERSO` após observar o
 numero-walk em PROD. Handoff: `docs/superpowers/plans/2026-06-29-hora-tagplus-fase2b-fase3-handoff.md`.
 

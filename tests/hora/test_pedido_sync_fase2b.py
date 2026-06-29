@@ -75,7 +75,7 @@ def test_montar_corpo_pedido_tolerante_omite_blocos_que_falham():
     pb._montar_itens = MagicMock(side_effect=PayloadBuilderError('x', 'sem item'))
     pb._montar_faturas = MagicMock(side_effect=PayloadBuilderError('y', 'sem forma'))
     pb.resolver_id_cliente = MagicMock(return_value=None)
-    corpo = pb.montar_corpo_pedido(venda, estrito=False)
+    corpo = pb.montar_corpo_pedido(venda)
     assert 'itens' not in corpo and 'faturas' not in corpo and 'cliente' not in corpo
     assert corpo['valor_total'] == 1000.0
 
@@ -86,32 +86,10 @@ def test_montar_corpo_pedido_inclui_blocos_resolviveis():
     pb._montar_itens = MagicMock(return_value=[{'produto_servico': '8', 'qtd': 1}])
     pb._montar_faturas = MagicMock(return_value=[{'forma_pagamento': 14, 'parcelas': []}])
     pb.resolver_id_cliente = MagicMock(return_value=957)
-    corpo = pb.montar_corpo_pedido(venda, estrito=False)
+    corpo = pb.montar_corpo_pedido(venda)
     assert corpo['cliente'] == 957
     assert corpo['itens'] == [{'produto_servico': '8', 'qtd': 1}]
     assert corpo['faturas'] == [{'forma_pagamento': 14, 'parcelas': []}]
-
-
-def test_montar_corpo_pedido_estrito_propaga_erro():
-    pb = _builder_com_api_mock()
-    venda = SimpleNamespace(id=940, valor_total=1000, itens=[], cpf_cliente='21348592885')
-    pb._montar_itens = MagicMock(side_effect=PayloadBuilderError('x', 'sem item'))
-    import pytest
-    with pytest.raises(PayloadBuilderError):
-        pb.montar_corpo_pedido(venda, estrito=True)
-
-
-def test_montar_corpo_pedido_estrito_sem_cliente_levanta():
-    # Review FIX B: estrito (antes de to_nfe) exige cliente — omitir em silencio
-    # faria a NFe sair sem destinatario.
-    pb = _builder_com_api_mock()
-    venda = SimpleNamespace(id=940, valor_total=1000, itens=[], cpf_cliente='21348592885')
-    pb._montar_itens = MagicMock(return_value=[{'produto_servico': '8'}])
-    pb._montar_faturas = MagicMock(return_value=[])
-    pb._resolver_destinatario = MagicMock()  # nao popula _ultimo_id_cliente
-    import pytest
-    with pytest.raises(PayloadBuilderError):
-        pb.montar_corpo_pedido(venda, estrito=True)
 
 
 def test_resolver_id_cliente_ambiguo_retorna_none():
@@ -150,7 +128,7 @@ def test_montar_payload_pedido_com_builder_mescla_corpo():
     assert p['codigo_externo'] == '940' and p['status'] == 'A'
     assert p['cliente'] == 957 and p['itens'] == [{'produto_servico': '8'}]
     assert p['observacoes'] == 'obs'
-    builder.montar_corpo_pedido.assert_called_once_with(venda, estrito=False)
+    builder.montar_corpo_pedido.assert_called_once_with(venda)
 
 
 def test_criar_pedido_com_builder_envia_corpo_completo(monkeypatch):
@@ -329,9 +307,11 @@ def test_cancelar_venda_dispara_push_cancelar(db, monkeypatch):
 
 
 # --------------------------------------------------------------------------
-# Emissao via to_nfe (gated: flag ON + tagplus_pedido_id) — evita pedido dup
+# Emissao: POST /nfes (payload RICO do PayloadBuilder) + pedido_os_vinculada
+# (gated: flag ON + tagplus_pedido_id) — vincula ao pedido do push SEM o TagPlus
+# auto-criar duplicado e SEM usar to_nfe (que geraria NFe pobre a partir do pedido).
 # --------------------------------------------------------------------------
-def test_enviar_nfe_flag_off_usa_post_nfes(monkeypatch):
+def test_enviar_nfe_flag_off_nao_vincula_pedido(monkeypatch):
     monkeypatch.delenv('HORA_TAGPLUS_PUSH_PEDIDO', raising=False)
     from app.hora.services.tagplus.emissor_nfe import EmissorNfeHora
     client, builder = MagicMock(), MagicMock()
@@ -339,27 +319,27 @@ def test_enviar_nfe_flag_off_usa_post_nfes(monkeypatch):
     venda = SimpleNamespace(tagplus_pedido_id=7)  # tem pedido, mas flag OFF
     EmissorNfeHora._enviar_nfe(client, builder, venda, {'p': 1})
     assert client.post.call_args.args[0] == '/nfes'
+    assert 'pedido_os_vinculada' not in client.post.call_args.kwargs['json']
     client.get.assert_not_called()
     client.patch.assert_not_called()
 
 
-def test_enviar_nfe_flag_on_com_pedido_usa_to_nfe(monkeypatch):
+def test_enviar_nfe_flag_on_com_pedido_vincula_no_post(monkeypatch):
     monkeypatch.setenv('HORA_TAGPLUS_PUSH_PEDIDO', '1')
     from app.hora.services.tagplus.emissor_nfe import EmissorNfeHora
     client, builder = MagicMock(), MagicMock()
-    builder.montar_corpo_pedido.return_value = {'itens': [], 'cliente': 957}
-    client.patch.return_value = SimpleNamespace(status_code=200)
-    client.get.return_value = SimpleNamespace(status_code=200)
+    client.post.return_value = SimpleNamespace(status_code=201)
     venda = SimpleNamespace(tagplus_pedido_id=7)
-    EmissorNfeHora._enviar_nfe(client, builder, venda, {'p': 1})
-    assert client.patch.call_args.args[0] == '/pedidos/7'
-    assert client.patch.call_args.kwargs['json']['status'] == 'B'
-    assert client.get.call_args.args[0] == '/pedidos/to_nfe/7'
-    client.post.assert_not_called()
-    builder.montar_corpo_pedido.assert_called_once_with(venda, estrito=True)
+    EmissorNfeHora._enviar_nfe(client, builder, venda, {'cfop': '5.403'})
+    assert client.post.call_args.args[0] == '/nfes'
+    enviado = client.post.call_args.kwargs['json']
+    assert enviado['pedido_os_vinculada'] == 7       # vincula ao pedido do push
+    assert enviado['cfop'] == '5.403'                # payload rico preservado
+    client.get.assert_not_called()                   # NAO usa to_nfe
+    client.patch.assert_not_called()                 # NAO altera o pedido
 
 
-def test_enviar_nfe_flag_on_sem_pedido_fallback_post(monkeypatch):
+def test_enviar_nfe_flag_on_sem_pedido_post_puro(monkeypatch):
     monkeypatch.setenv('HORA_TAGPLUS_PUSH_PEDIDO', '1')
     from app.hora.services.tagplus.emissor_nfe import EmissorNfeHora
     client, builder = MagicMock(), MagicMock()
@@ -367,19 +347,4 @@ def test_enviar_nfe_flag_on_sem_pedido_fallback_post(monkeypatch):
     venda = SimpleNamespace(tagplus_pedido_id=None)
     EmissorNfeHora._enviar_nfe(client, builder, venda, {'p': 1})
     assert client.post.call_args.args[0] == '/nfes'
-    client.get.assert_not_called()
-
-
-def test_enviar_nfe_patch_falho_nao_emite_to_nfe(monkeypatch):
-    # Review FIX A/critico: PATCH 4xx (ApiClient nao faz raise_for_status) NAO
-    # pode prosseguir p/ to_nfe sobre pedido nao-atualizado.
-    monkeypatch.setenv('HORA_TAGPLUS_PUSH_PEDIDO', '1')
-    import pytest
-    from app.hora.services.tagplus.emissor_nfe import EmissorNfeHora
-    client, builder = MagicMock(), MagicMock()
-    builder.montar_corpo_pedido.return_value = {'cliente': 957}
-    client.patch.return_value = SimpleNamespace(status_code=422, text='campo invalido')
-    venda = SimpleNamespace(tagplus_pedido_id=7)
-    with pytest.raises(PayloadBuilderError):
-        EmissorNfeHora._enviar_nfe(client, builder, venda, {'p': 1})
-    client.get.assert_not_called()  # nao emitiu to_nfe sobre pedido stale
+    assert 'pedido_os_vinculada' not in client.post.call_args.kwargs['json']
