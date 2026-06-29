@@ -173,7 +173,13 @@ cross-contamination.
 
 **M0**: sessoes sao tagueadas corretamente. Retrieval de memoria ainda
 compartilha com 'web' (nao e critico enquanto nao houver memorias).
-**M3**: isolamento total de memoria (`WHERE agente = 'lojas'`).
+**M3 (convergencia F2 — EM ANDAMENTO 2026-06-29):** fatia 1 do isolamento feita
+no agente web — `_load_user_memories_for_context(..., agente_id)` filtra
+`AgentMemory.agente` em 6 queries (Tier 1/1.5/1.6 + materializacao Tier 2/KG +
+fallback), `default='web'` (aditivo, web inalterado). Fork ainda NAO injeta
+memoria (air gap intacto). Falta fatia 2 (directives/session_window/briefing/
+rules/embeddings-JOIN) + F3 (client por perfil). Ver handoff
+`docs/superpowers/plans/2026-06-29-convergencia-agente-lojas-handoff.md`.
 
 ---
 
@@ -189,7 +195,7 @@ compartilha com 'web' (nao e critico enquanto nao houver memorias).
 | M2 (SDK Fase C) | Hooks PostToolUse audit + permissions hardening | **Concluido** (2026-05-09) |
 | M2 (UX P0) | Markdown rendering (marked + DOMPurify), TodoWrite progress UI, 34 testes (can_use_tool, scope_injector, todos parser) | **Concluido** (2026-05-09) |
 | M2 (UX P1) | PostgresSessionStore opt-in (`AGENT_LOJAS_SESSION_STORE_ENABLED`), historico de sessoes no UI (dropdown + nova sessao) | **Concluido** (2026-05-09) |
-| M3   | Venda + isolamento total de memoria + Cost tracking granular por subagente | **Parcial** — skill `consultando-venda-loja` na whitelist (`SKILLS_DOMINIO_HORA`); **cost tracking por turno corrigido** (delta via `turn_cost_from_cumulative`, FIX 2026-06-26); **isolamento total de memoria ainda PENDENTE** (memory_injection nao filtra por coluna `agente` — pre-requisito BLOQUEANTE de qualquer reuso do AgentClient web; ver Gotcha 0) |
+| M3   | Venda + isolamento total de memoria + Cost tracking granular por subagente | **Parcial** — skill `consultando-venda-loja` na whitelist (`SKILLS_DOMINIO_HORA`); **cost tracking por turno corrigido** (delta via `turn_cost_from_cumulative`, FIX 2026-06-26); **convergencia F0+F1 concluida + F2 fatia 1** (memory_injection ja filtra por `agente` em 6 queries; default='web' aditivo) — branch `worktree-convergencia-agente-lojas`, handoff `2026-06-29-convergencia-agente-lojas-handoff.md`. **PENDENTE: F2 fatia 2 + F3** (reuso do AgentClient web por perfil — gated por isolamento total; ver Gotcha 0) |
 | M4   | Analytics (apos fase financeira HORA) | Planejado |
 
 ---
