@@ -12,6 +12,9 @@ from app.pessoal.services.parsers.base_parser import (
 )
 from app.pessoal.services.parsers.bradesco_cc_parser import BradescoExtratoCC
 from app.pessoal.services.parsers.bradesco_cartao_parser import BradescoFaturaCartao
+from app.pessoal.services.parsers.ofx_parser import (
+    detectar_ofx, parsear_ofx_pessoal, resolver_conta_ofx,
+)
 from app.pessoal.services.categorizacao_service import categorizar_transacao, atribuir_membro
 
 importacao_bp = Blueprint('pessoal_importacao', __name__)
@@ -32,14 +35,15 @@ def importar():
         arquivos = request.files.getlist('arquivos')
         ano_referencia = request.form.get('ano_referencia', type=int)
 
-        # Filtrar arquivos validos (nao-vazios, .csv)
+        # Filtrar arquivos validos (nao-vazios, .csv ou .ofx)
         arquivos_validos = [
             a for a in arquivos
-            if a and a.filename and a.filename.lower().endswith('.csv')
+            if a and a.filename
+            and a.filename.lower().endswith(('.csv', '.ofx'))
         ]
 
         if not arquivos_validos:
-            flash('Selecione pelo menos um arquivo CSV.', 'warning')
+            flash('Selecione pelo menos um arquivo CSV ou OFX.', 'warning')
         else:
             total_importadas = 0
             total_duplicadas = 0
@@ -109,8 +113,13 @@ def _processar_um_arquivo(arquivo, ano_referencia: int = None) -> dict:
     nome_arquivo = arquivo.filename
 
     try:
-        # Ler conteudo com latin-1 (padrao Bradesco)
         conteudo_bytes = arquivo.read()
+
+        # OFX (Nubank): roteia para o parser OFX antes da deteccao CSV
+        if detectar_ofx(conteudo_bytes):
+            return _processar_ofx(nome_arquivo, conteudo_bytes)
+
+        # Ler conteudo com latin-1 (padrao Bradesco)
         conteudo = conteudo_bytes.decode('latin-1')
 
         # Auto-detectar tipo
@@ -179,6 +188,47 @@ def _processar_um_arquivo(arquivo, ano_referencia: int = None) -> dict:
         }
 
 
+def _processar_ofx(nome_arquivo: str, conteudo_bytes: bytes) -> dict:
+    """Processa um arquivo OFX (extrato NuConta ou fatura cartao Nubank).
+
+    Reaproveita _importar_transacoes (mesma dedup + categorizacao do fluxo CSV).
+    Resolve a conta pelo ACCTID; tipo_arquivo = extrato_cc | fatura_cartao.
+    """
+    res = parsear_ofx_pessoal(conteudo_bytes)
+
+    conta_id = resolver_conta_ofx(res.acctid, res.tipo)
+    if conta_id is None:
+        return {
+            'sucesso': False,
+            'arquivo': nome_arquivo,
+            'erro': (
+                f'Conta OFX nao identificada (ACCTID: {res.acctid or "?"}, '
+                f'tipo: {res.tipo}). Cadastre a conta Nubank antes de importar.'
+            ),
+        }
+
+    conta = db.session.get(PessoalConta, conta_id)
+    if not conta:
+        return {
+            'sucesso': False,
+            'arquivo': nome_arquivo,
+            'erro': 'Conta resolvida nao existe no banco de dados.',
+        }
+
+    if not res.transacoes:
+        return {
+            'sucesso': False,
+            'arquivo': nome_arquivo,
+            'erro': 'Nenhuma transacao encontrada no arquivo OFX.',
+        }
+
+    tipo_arquivo = 'fatura_cartao' if res.tipo == 'cartao' else 'extrato_cc'
+    return _importar_transacoes(
+        nome_arquivo, tipo_arquivo, conta, res.transacoes,
+        parser=None, origem_import='ofx',
+    )
+
+
 def _parsear_conteudo(conteudo: str, tipo: str, ano_referencia: int = None) -> tuple:
     """Instancia o parser correto e parseia.
 
@@ -200,7 +250,8 @@ def _parsear_conteudo(conteudo: str, tipo: str, ano_referencia: int = None) -> t
     return ('extrato_cc', transacoes, parser)
 
 
-def _importar_transacoes(nome_arquivo: str, tipo_arquivo: str, conta, transacoes_raw, parser) -> dict:
+def _importar_transacoes(nome_arquivo: str, tipo_arquivo: str, conta, transacoes_raw,
+                         parser, origem_import: str = 'csv') -> dict:
     """Cria PessoalImportacao + PessoalTransacoes. Commit per-file.
 
     Retorna dict resultado com metricas.
@@ -282,6 +333,7 @@ def _importar_transacoes(nome_arquivo: str, tipo_arquivo: str, conta, transacoes
             identificador_parcela=t_raw.identificador_parcela,
             cpf_cnpj_parte=cpf_cnpj,
             hash_transacao=hash_t,
+            origem_import=origem_import,
         )
 
         db.session.add(transacao)

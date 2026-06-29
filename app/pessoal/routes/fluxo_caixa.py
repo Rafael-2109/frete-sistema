@@ -5,7 +5,9 @@ from flask import Blueprint, jsonify, render_template, request
 from flask_login import current_user, login_required
 
 from app.pessoal import pode_acessar_pessoal
-from app.pessoal.services import fatura_service, fluxo_caixa_service
+from app.pessoal.services import (
+    fatura_service, fluxo_caixa_service, transferencia_service,
+)
 
 fluxo_caixa_bp = Blueprint('pessoal_fluxo_caixa', __name__)
 
@@ -41,6 +43,15 @@ def faturas_index():
     if not pode_acessar_pessoal(current_user):
         return 'Acesso restrito.', 403
     return render_template('pessoal/fluxo_caixa_faturas.html')
+
+
+@fluxo_caixa_bp.route('/fluxo-caixa/transferencias')
+@login_required
+def transferencias_index():
+    """Tela de casamento de transferencias entre contas proprias (Bradesco <-> Nubank)."""
+    if not pode_acessar_pessoal(current_user):
+        return 'Acesso restrito.', 403
+    return render_template('pessoal/fluxo_caixa_transferencias.html')
 
 
 # =============================================================================
@@ -316,5 +327,95 @@ def api_backfill():
     try:
         res = fatura_service.backfill_historico(dry_run=dry_run)
         return jsonify({'sucesso': True, **res})
+    except Exception as e:
+        return jsonify({'sucesso': False, 'mensagem': str(e)}), 500
+
+
+# =============================================================================
+# Casamento de transferencias entre contas proprias (Bradesco <-> Nubank)
+# =============================================================================
+@fluxo_caixa_bp.route('/api/fluxo-caixa/transferencias', methods=['GET'])
+@login_required
+def api_transferencias_listar():
+    """Lista os pares de transferencia ja casados."""
+    if not pode_acessar_pessoal(current_user):
+        return jsonify({'sucesso': False, 'mensagem': 'Acesso restrito.'}), 403
+    try:
+        pares = transferencia_service.listar_pares()
+        return jsonify({'sucesso': True, 'pares': pares})
+    except Exception as e:
+        return jsonify({'sucesso': False, 'mensagem': str(e)}), 500
+
+
+@fluxo_caixa_bp.route('/api/fluxo-caixa/transferencias/sugerir', methods=['GET'])
+@login_required
+def api_transferencias_sugerir():
+    """Sugere pares (debito, credito) de transferencia entre contas correntes proprias."""
+    if not pode_acessar_pessoal(current_user):
+        return jsonify({'sucesso': False, 'mensagem': 'Acesso restrito.'}), 403
+
+    janela = request.args.get('janela_dias', 5, type=int)
+
+    def _parse_data(param):
+        raw = request.args.get(param)
+        if not raw:
+            return None
+        try:
+            return datetime.strptime(raw, '%Y-%m-%d').date()
+        except (ValueError, TypeError):
+            return None
+
+    try:
+        sugestoes = transferencia_service.sugerir_pares(
+            janela_dias=janela,
+            data_inicio=_parse_data('data_inicio'),
+            data_fim=_parse_data('data_fim'),
+        )
+        return jsonify({'sucesso': True, 'sugestoes': sugestoes})
+    except Exception as e:
+        return jsonify({'sucesso': False, 'mensagem': str(e)}), 500
+
+
+@fluxo_caixa_bp.route('/api/fluxo-caixa/transferencias/vincular', methods=['POST'])
+@login_required
+def api_transferencias_vincular():
+    """Casa as duas pontas de uma transferencia (debito + credito)."""
+    if not pode_acessar_pessoal(current_user):
+        return jsonify({'sucesso': False, 'mensagem': 'Acesso restrito.'}), 403
+
+    dados = request.get_json() or {}
+    debito_id = dados.get('debito_id')
+    credito_id = dados.get('credito_id')
+    if not debito_id or not credito_id:
+        return jsonify({
+            'sucesso': False, 'mensagem': 'debito_id e credito_id obrigatorios',
+        }), 400
+
+    try:
+        res = transferencia_service.vincular(int(debito_id), int(credito_id))
+        return jsonify({'sucesso': True, **res})
+    except ValueError as e:
+        return jsonify({'sucesso': False, 'mensagem': str(e)}), 400
+    except Exception as e:
+        return jsonify({'sucesso': False, 'mensagem': str(e)}), 500
+
+
+@fluxo_caixa_bp.route('/api/fluxo-caixa/transferencias/desvincular', methods=['POST'])
+@login_required
+def api_transferencias_desvincular():
+    """Desfaz o casamento de uma transferencia."""
+    if not pode_acessar_pessoal(current_user):
+        return jsonify({'sucesso': False, 'mensagem': 'Acesso restrito.'}), 403
+
+    dados = request.get_json() or {}
+    transacao_id = dados.get('transacao_id')
+    if not transacao_id:
+        return jsonify({'sucesso': False, 'mensagem': 'transacao_id obrigatorio'}), 400
+
+    try:
+        res = transferencia_service.desvincular(int(transacao_id))
+        return jsonify({'sucesso': True, **res})
+    except ValueError as e:
+        return jsonify({'sucesso': False, 'mensagem': str(e)}), 400
     except Exception as e:
         return jsonify({'sucesso': False, 'mensagem': str(e)}), 500

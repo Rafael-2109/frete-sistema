@@ -6,7 +6,7 @@ Convencao monetaria: Numeric(15,2) para valores em R$, Numeric(15,4) para USD.
 """
 from app import db
 from app.utils.timezone import agora_utc_naive
-from sqlalchemy import Index, event
+from sqlalchemy import Index, event, select, func, and_
 from sqlalchemy.dialects.postgresql import JSONB
 import json
 
@@ -52,7 +52,8 @@ class PessoalConta(db.Model):
     tipo = db.Column(db.String(20), nullable=False)  # conta_corrente | cartao_credito
     banco = db.Column(db.String(50), nullable=False, default='bradesco')
     agencia = db.Column(db.String(20))
-    numero_conta = db.Column(db.String(30))
+    # 50 chars: comporta o ACCTID UUID do cartao Nubank (OFX), alem de contas numericas.
+    numero_conta = db.Column(db.String(50))
     ultimos_digitos_cartao = db.Column(db.String(10))
     membro_id = db.Column(db.Integer, db.ForeignKey('pessoal_membros.id'))
     ativa = db.Column(db.Boolean, default=True)
@@ -319,6 +320,12 @@ class PessoalTransacao(db.Model):
     excluir_relatorio = db.Column(db.Boolean, default=False)
     eh_pagamento_cartao = db.Column(db.Boolean, default=False)
     eh_transferencia_propria = db.Column(db.Boolean, default=False)
+    # Casamento de transferencia entre contas proprias: aponta para a transacao
+    # contraparte (a outra ponta do mesmo depósito Bradesco<->Nubank). Self-FK.
+    transferencia_par_id = db.Column(
+        db.Integer,
+        db.ForeignKey('pessoal_transacoes.id', ondelete='SET NULL'),
+    )
     observacao = db.Column(db.Text)
     status = db.Column(db.String(20), default='PENDENTE')  # PENDENTE | CATEGORIZADO | REVISADO
 
@@ -413,6 +420,7 @@ class PessoalTransacao(db.Model):
             'excluir_relatorio': self.excluir_relatorio,
             'eh_pagamento_cartao': self.eh_pagamento_cartao,
             'eh_transferencia_propria': self.eh_transferencia_propria,
+            'transferencia_par_id': self.transferencia_par_id,
             'observacao': self.observacao,
             'status': self.status,
             'cpf_cnpj_parte': self.cpf_cnpj_parte,
@@ -999,16 +1007,45 @@ class PessoalPluggyCategoriaMap(db.Model):
 # =============================================================================
 # EVENT LISTENERS — invariantes de consistencia
 # =============================================================================
-@event.listens_for(PessoalTransacao, 'after_delete')
-def _limpar_data_pagamento_em_faturas(mapper, connection, target):
-    """Quando uma PessoalTransacao e deletada, limpar data_pagamento nas faturas
-    que a apontavam via transacao_pagamento_id.
+@event.listens_for(PessoalTransacao, 'before_delete')
+def _limpar_referencias_orfas(mapper, connection, target):
+    """Antes de deletar uma PessoalTransacao, sincroniza campos que ficariam orfaos.
 
-    O FK tem ON DELETE SET NULL (transacao_pagamento_id vira NULL automaticamente),
-    mas data_pagamento ficaria orfa. Aqui sincronizamos.
+    Usa before_delete (e nao after_delete) porque os FKs ON DELETE SET NULL apagam as
+    referencias durante o DELETE — depois dele os WHERE abaixo nao casariam mais nada.
+
+    1. Faturas: o FK transacao_pagamento_id tem ON DELETE SET NULL, mas data_pagamento
+       ficaria orfa — limpamos junto.
+    2. Transferencia propria: o par sobrevivente tem transferencia_par_id NULLado pelo FK
+       (SET NULL), mas eh_transferencia_propria/excluir_relatorio ficariam presos, deixando
+       a transacao excluida de relatorio/fluxo sem causa. Limpamos a flag e RECALCULAMOS
+       excluir_relatorio pelos motivos remanescentes (pagamento cartao, compensacao total,
+       categoria Desconsiderar) — sem desfazer exclusoes legitimas.
     """
+    imp = PessoalImportacao.__table__
     connection.execute(
-        PessoalImportacao.__table__.update().where(
-            PessoalImportacao.__table__.c.transacao_pagamento_id == target.id
+        imp.update().where(
+            imp.c.transacao_pagamento_id == target.id
         ).values(data_pagamento=None)
+    )
+
+    tx = PessoalTransacao.__table__
+    cat = PessoalCategoria.__table__
+    connection.execute(
+        tx.update().where(tx.c.transferencia_par_id == target.id).values(
+            eh_transferencia_propria=False,
+            # coalesce(..., False): categoria_id NULL faria "NULL IN (...)" -> NULL,
+            # e "False OR NULL" -> NULL (logica ternaria do SQL). Nunca gravar NULL aqui.
+            excluir_relatorio=func.coalesce(
+                tx.c.eh_pagamento_cartao
+                | ((tx.c.valor_compensado >= tx.c.valor) & (tx.c.valor > 0))
+                | and_(
+                    tx.c.categoria_id.isnot(None),
+                    tx.c.categoria_id.in_(
+                        select(cat.c.id).where(cat.c.grupo == 'Desconsiderar')
+                    ),
+                ),
+                False,
+            ),
+        )
     )

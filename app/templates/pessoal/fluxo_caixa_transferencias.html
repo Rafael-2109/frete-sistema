@@ -1,0 +1,181 @@
+{% extends 'base.html' %}
+{% block title %}Transferencias entre Contas{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-3">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h4 class="mb-0">
+      <i class="fas fa-right-left text-info"></i> Transferencias entre Contas
+      <span class="badge bg-secondary">Deposito Bradesco &harr; Nubank</span>
+    </h4>
+    <div>
+      <a href="{{ url_for('pessoal.pessoal_fluxo_caixa.index') }}" class="btn btn-outline-secondary btn-sm">
+        <i class="fas fa-water"></i> Fluxo de Caixa
+      </a>
+      <a href="{{ url_for('pessoal.pessoal_fluxo_caixa.faturas_index') }}" class="btn btn-outline-secondary btn-sm">
+        <i class="fas fa-credit-card"></i> Faturas
+      </a>
+    </div>
+  </div>
+
+  <div class="alert alert-info py-2 mb-3">
+    <small>
+      <i class="fas fa-info-circle"></i> Casa as duas pontas de um <strong>deposito entre contas proprias</strong>
+      (saida numa conta &harr; entrada noutra). Ao casar, ambas saem do relatorio de despesas
+      <strong>e</strong> do fluxo de caixa &mdash; e apenas movimentacao entre suas contas.
+    </small>
+  </div>
+
+  {# ===== SUGESTOES ===== #}
+  <div class="card mb-3">
+    <div class="card-header d-flex justify-content-between align-items-center py-2">
+      <span><i class="fas fa-wand-magic-sparkles"></i> Sugestoes de pares</span>
+      <div class="d-flex align-items-center gap-2">
+        <label class="small mb-0">Janela (dias)</label>
+        <input type="number" id="janela" value="5" min="0" max="30"
+               class="form-control form-control-sm" style="width:80px">
+        <button class="btn btn-primary btn-sm" id="btn-sugerir">
+          <i class="fas fa-search"></i> Buscar
+        </button>
+      </div>
+    </div>
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-sm table-hover mb-0 align-middle">
+          <thead class="table-light">
+            <tr>
+              <th>Saida (debito)</th>
+              <th>Entrada (credito)</th>
+              <th class="text-end">Valor</th>
+              <th class="text-center">Dist.</th>
+              <th class="text-center">Sinal</th>
+              <th class="text-center">Acao</th>
+            </tr>
+          </thead>
+          <tbody id="tbody-sugestoes">
+            <tr><td colspan="6" class="text-muted text-center py-3">Clique em "Buscar" para gerar sugestoes.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  {# ===== PARES CASADOS ===== #}
+  <div class="card">
+    <div class="card-header py-2">
+      <i class="fas fa-link"></i> Transferencias casadas
+    </div>
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-sm table-hover mb-0 align-middle">
+          <thead class="table-light">
+            <tr>
+              <th>Saida (debito)</th>
+              <th>Entrada (credito)</th>
+              <th class="text-end">Valor</th>
+              <th class="text-center">Acao</th>
+            </tr>
+          </thead>
+          <tbody id="tbody-pares">
+            <tr><td colspan="4" class="text-muted text-center py-3">Carregando...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const API = {
+  sugerir: "{{ url_for('pessoal.pessoal_fluxo_caixa.api_transferencias_sugerir') }}",
+  vincular: "{{ url_for('pessoal.pessoal_fluxo_caixa.api_transferencias_vincular') }}",
+  desvincular: "{{ url_for('pessoal.pessoal_fluxo_caixa.api_transferencias_desvincular') }}",
+  listar: "{{ url_for('pessoal.pessoal_fluxo_caixa.api_transferencias_listar') }}",
+};
+const CSRF = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+
+function brl(v) {
+  return (v || 0).toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'});
+}
+function esc(s) {
+  const d = document.createElement('div'); d.textContent = s == null ? '' : s; return d.innerHTML;
+}
+function ponta(p) {
+  if (!p) return '<span class="text-muted">-</span>';
+  return `<div class="small"><strong>${esc(p.conta_nome)}</strong> &middot; ${esc(p.data_br)}</div>`
+       + `<div class="small text-muted text-truncate" style="max-width:280px" title="${esc(p.historico)}">${esc(p.historico)}</div>`;
+}
+
+async function postJSON(url, body) {
+  const r = await fetch(url, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF},
+    body: JSON.stringify(body),
+  });
+  return r.json();
+}
+
+async function sugerir() {
+  const tbody = document.getElementById('tbody-sugestoes');
+  tbody.innerHTML = '<tr><td colspan="6" class="text-center py-3"><i class="fas fa-spinner fa-spin"></i></td></tr>';
+  const janela = document.getElementById('janela').value || 5;
+  const r = await fetch(`${API.sugerir}?janela_dias=${janela}`);
+  const data = await r.json();
+  if (!data.sucesso) { tbody.innerHTML = `<tr><td colspan="6" class="text-danger text-center py-3">${esc(data.mensagem)}</td></tr>`; return; }
+  if (!data.sugestoes.length) { tbody.innerHTML = '<tr><td colspan="6" class="text-muted text-center py-3">Nenhum par candidato encontrado.</td></tr>'; return; }
+  tbody.innerHTML = data.sugestoes.map(s => `
+    <tr>
+      <td>${ponta(s.debito)}</td>
+      <td>${ponta(s.credito)}</td>
+      <td class="text-end fw-bold">${brl(s.valor)}</td>
+      <td class="text-center">${s.dist_dias}d</td>
+      <td class="text-center">${s.memo_cruzado ? '<span class="badge bg-success" title="Memo cita a conta da contraparte">forte</span>' : '<span class="badge bg-secondary">valor</span>'}</td>
+      <td class="text-center">
+        <button class="btn btn-success btn-sm" onclick="casar(${s.debito.id}, ${s.credito.id}, this)">
+          <i class="fas fa-link"></i> Casar
+        </button>
+      </td>
+    </tr>`).join('');
+}
+
+async function casar(debito_id, credito_id, btn) {
+  btn.disabled = true;
+  const data = await postJSON(API.vincular, {debito_id, credito_id});
+  if (!data.sucesso) { alert('Erro: ' + data.mensagem); btn.disabled = false; return; }
+  btn.closest('tr').remove();
+  listarPares();
+}
+
+async function desfazer(transacao_id, btn) {
+  if (!confirm('Desfazer o casamento desta transferencia?')) return;
+  btn.disabled = true;
+  const data = await postJSON(API.desvincular, {transacao_id});
+  if (!data.sucesso) { alert('Erro: ' + data.mensagem); btn.disabled = false; return; }
+  listarPares();
+}
+
+async function listarPares() {
+  const tbody = document.getElementById('tbody-pares');
+  const r = await fetch(API.listar);
+  const data = await r.json();
+  if (!data.sucesso) { tbody.innerHTML = `<tr><td colspan="4" class="text-danger text-center py-3">${esc(data.mensagem)}</td></tr>`; return; }
+  if (!data.pares.length) { tbody.innerHTML = '<tr><td colspan="4" class="text-muted text-center py-3">Nenhuma transferencia casada ainda.</td></tr>'; return; }
+  tbody.innerHTML = data.pares.map(p => `
+    <tr>
+      <td>${ponta(p.debito)}</td>
+      <td>${ponta(p.credito)}</td>
+      <td class="text-end fw-bold">${brl(p.valor)}</td>
+      <td class="text-center">
+        <button class="btn btn-outline-danger btn-sm" onclick="desfazer(${p.debito.id}, this)">
+          <i class="fas fa-unlink"></i> Desfazer
+        </button>
+      </td>
+    </tr>`).join('');
+}
+
+document.getElementById('btn-sugerir').addEventListener('click', sugerir);
+document.addEventListener('DOMContentLoaded', listarPares);
+</script>
+{% endblock %}

@@ -6,9 +6,9 @@ from wtforms.validators import Optional, NumberRange
 
 
 class ImportarCSVForm(FlaskForm):
-    """Form para upload de CSVs Bradesco (multi-file, auto-detect)."""
-    arquivos = MultipleFileField('Arquivos CSV', validators=[
-        FileAllowed(['csv'], message='Apenas arquivos CSV sao permitidos.'),
+    """Form para upload de extratos (multi-file, auto-detect): CSV Bradesco e OFX Nubank."""
+    arquivos = MultipleFileField('Arquivos (CSV ou OFX)', validators=[
+        FileAllowed(['csv', 'ofx'], message='Apenas arquivos CSV ou OFX sao permitidos.'),
     ])
     ano_referencia = IntegerField('Ano de referencia', validators=[
         Optional(),

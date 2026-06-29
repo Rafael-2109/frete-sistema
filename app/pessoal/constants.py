@@ -304,7 +304,9 @@ EXCLUSOES_EMPRESA = [
 # HEURISTICAS (Layer 4)
 # =============================================================================
 
-# Padroes que indicam pagamento de fatura de cartao (double-count)
+# Padroes que indicam pagamento de fatura de cartao (double-count).
+# Aplicado APENAS a debitos (saida de caixa que liquida a fatura).
+# "PAGAMENTO DE FATURA" cobre o debito da NuConta Nubank que paga o cartao.
 PADROES_PAGAMENTO_CARTAO = [
     "GASTO C CREDITO",
     "PAG CARTAO CREDITO",
@@ -312,6 +314,14 @@ PADROES_PAGAMENTO_CARTAO = [
     "PGTO CARTAO",
     "PAGTO POR DEB EM C/C",
     "PAGTO. POR DEB EM C/C",
+    "PAGAMENTO DE FATURA",
+]
+
+# Padroes de pagamento ENTRANDO na fatura do cartao (credito no extrato do cartao).
+# Ex.: Nubank "Pagamento recebido" — e o pagamento que veio da conta corrente, NAO
+# e receita. Marca excluir_relatorio (as despesas reais sao as compras da fatura).
+PADROES_PAGAMENTO_RECEBIDO_CARTAO = [
+    "PAGAMENTO RECEBIDO",
 ]
 
 # Padroes que indicam transferencia propria (entre contas)

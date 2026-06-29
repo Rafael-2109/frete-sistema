@@ -19,6 +19,7 @@ Atribuicao de membro (separada):
 2. CC PIX/TED: fuzzy match nome no historico/descricao vs membros
 3. Sem info: NULL, requer manual
 """
+import re
 from dataclasses import dataclass
 from decimal import Decimal
 from typing import Optional
@@ -31,7 +32,8 @@ from app.pessoal.models import (
     PessoalMembro, PessoalConta,
 )
 from app.pessoal.constants import (
-    PADROES_PAGAMENTO_CARTAO, PADROES_TRANSFERENCIA_PROPRIA, PADROES_INVESTIMENTO,
+    PADROES_PAGAMENTO_CARTAO, PADROES_PAGAMENTO_RECEBIDO_CARTAO,
+    PADROES_TRANSFERENCIA_PROPRIA, PADROES_INVESTIMENTO,
 )
 
 
@@ -73,6 +75,48 @@ def invalidar_cache_desconsiderar() -> None:
 def eh_categoria_desconsiderar(categoria_id) -> bool:
     """True se a categoria pertence ao grupo 'Desconsiderar'."""
     return bool(categoria_id) and categoria_id in _ids_desconsiderar()
+
+
+# Candidato a numero de conta no texto: bloco de digitos (>=6) com mascara opcional
+# (ponto/hifen), ex.: "128948-9", "63685323-8", "1847312458-4".
+_RE_NUM_CONTA = re.compile(r'\d[\d.\-]{4,}\d')
+
+
+def _numeros_conta_proprios() -> set:
+    """Numeros (so digitos, len>=6) das contas proprias cadastradas.
+
+    Sem cache: so e consultada quando o memo ja contem um candidato a numero de
+    conta (transferencias/PIX), entao o custo e baixo e nunca fica stale apos
+    cadastrar uma conta nova.
+    """
+    nums = set()
+    for (numero,) in db.session.query(PessoalConta.numero_conta).filter(
+        PessoalConta.numero_conta.isnot(None),
+    ).all():
+        so_digitos = re.sub(r'\D', '', numero or '')
+        if len(so_digitos) >= 6:
+            nums.add(so_digitos)
+    return nums
+
+
+def _memo_cita_conta_propria(texto: str) -> bool:
+    """True se o texto cita o numero de uma conta propria (transferencia entre contas).
+
+    Ex.: memo da NuConta "...BCO BRADESCO ... Conta: 128948-9" cita a conta corrente
+    Bradesco propria -> e transferencia entre contas do mesmo dono, nao despesa.
+    """
+    if not texto:
+        return False
+    candidatos = _RE_NUM_CONTA.findall(texto)
+    if not candidatos:
+        return False
+    proprios = _numeros_conta_proprios()
+    if not proprios:
+        return False
+    for cand in candidatos:
+        if re.sub(r'\D', '', cand) in proprios:
+            return True
+    return False
 
 
 def _valor_no_range(valor, valor_min, valor_max) -> bool:
@@ -140,6 +184,16 @@ def categorizar_transacao(transacao: PessoalTransacao) -> ResultadoCategorizacao
                 resultado.excluir_relatorio = True
             return resultado
 
+    # Layer 0.7: Transferencia entre contas proprias — o memo cita o numero de uma
+    # conta propria (ex.: NuConta recebe/envia PIX da conta corrente Bradesco). Nao e
+    # despesa nem receita; exclui ambas as pontas do relatorio e do fluxo de caixa.
+    # Prioridade alta (antes das regras): o sinal e mais forte que qualquer padrao.
+    if _memo_cita_conta_propria(transacao.historico_completo or transacao.historico or ''):
+        resultado.eh_transferencia_propria = True
+        resultado.excluir_relatorio = True
+        resultado.status = 'CATEGORIZADO'
+        return resultado
+
     # Carregar regras PADRAO ativas ordenadas (compartilhado por F1, Layer 1, Layer 2)
     regras_padrao = PessoalRegraCategorizacao.query.filter_by(
         tipo_regra='PADRAO', ativo=True
@@ -203,12 +257,23 @@ def categorizar_transacao(transacao: PessoalTransacao) -> ResultadoCategorizacao
             return resultado
 
     # Layer 4: Heuristicas de contexto
-    for padrao in PADROES_PAGAMENTO_CARTAO:
-        if _normalizar(padrao) in historico:
-            resultado.eh_pagamento_cartao = True
-            resultado.excluir_relatorio = True
-            resultado.status = 'CATEGORIZADO'
-            return resultado
+    # Pagamento de fatura de cartao — somente DEBITO (saida de caixa que liquida a fatura).
+    if transacao.tipo == 'debito':
+        for padrao in PADROES_PAGAMENTO_CARTAO:
+            if _normalizar(padrao) in historico:
+                resultado.eh_pagamento_cartao = True
+                resultado.excluir_relatorio = True
+                resultado.status = 'CATEGORIZADO'
+                return resultado
+
+    # Pagamento ENTRANDO na fatura (credito no extrato do cartao) — ex.: Nubank
+    # "Pagamento recebido". Nao e receita; exclui do relatorio (despesas reais = compras).
+    if transacao.tipo == 'credito':
+        for padrao in PADROES_PAGAMENTO_RECEBIDO_CARTAO:
+            if _normalizar(padrao) in historico:
+                resultado.excluir_relatorio = True
+                resultado.status = 'CATEGORIZADO'
+                return resultado
 
     for padrao in PADROES_TRANSFERENCIA_PROPRIA:
         if _normalizar(padrao) in historico:
@@ -310,7 +375,6 @@ def _normalizar(texto: str) -> str:
     """Normaliza texto para comparacao: upper, unidecode, colapsar espacos."""
     if not texto:
         return ''
-    import re
     texto = unidecode(texto).upper().strip()
     texto = re.sub(r'\s+', ' ', texto)
     return texto
