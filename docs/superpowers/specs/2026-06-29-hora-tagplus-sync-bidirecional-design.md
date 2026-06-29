@@ -11,7 +11,7 @@ atualizado: 2026-06-29
 
 > **Papel:** spec/design da sincronização de pedidos de venda entre o módulo HORA e o TagPlus (criação, cancelamento, numeração e replicação reversa). Lido antes de executar os planos `docs/superpowers/plans/2026-06-29-hora-tagplus-sync-*`.
 >
-> **Status (2026-06-29):** desenho aprovado nas decisões de escopo; aguardando aval do plano da Fase 1 para implementar. Sessão 4-mãos Claude Code (dev).
+> **Status (2026-06-29):** **Fase 1 (numeração) implementada** — 7 commits em `main` local (não pushados), 404 testes HORA verdes; migration `hora_62` + backfill de **885 vendas** aplicados no **banco de PROD** (Render); **deploy do código pendente** (a captura via webhook só passa a valer após o deploy). **Fases 2 e 3 pendentes**, gated pelas verificações de API abaixo. Sessão 4-mãos Claude Code (dev).
 
 ## Indice
 

@@ -1692,8 +1692,12 @@ e backfill histórico (`pedido_backfill_service.backfill_numero_do_payload()`, d
 `tagplus_pedido_payload['numero']` já salvo, sem API). A listagem `vendas_lista.html` passa a
 exibir o número (coluna "Pedido TP (nº)", fallback `#id` quando ainda não capturado).
 
-**Testes:** `tests/hora/test_tagplus_pedido_numero.py` (8). **Pendente (Fases 2/3 do design):**
-push HORA→TagPlus (criar/confirmar/cancelar pedido) e replicação reversa numero-walk.
+**Testes:** `tests/hora/test_tagplus_pedido_numero.py` (8). **Estado em PROD (2026-06-29):**
+migration `hora_62` aplicada no banco de produção + backfill de **885 vendas** (todas as que
+tinham `tagplus_pedido_payload`) via UPDATE set-based `(payload->>'numero')::int` — 0 divergências.
+O **código** está em `main` local (deploy pendente): a captura via webhook/backfill só passa a
+valer após o deploy. **Pendente (Fases 2/3 do design):** push HORA→TagPlus (criar/confirmar/cancelar
+pedido) e replicação reversa numero-walk.
 
 ---
 
