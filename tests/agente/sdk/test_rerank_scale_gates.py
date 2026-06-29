@@ -58,7 +58,7 @@ class TestBuildSimilarityMaps:
 class _FakeSvc:
     """EmbeddingService fake: 6 candidatos cosine; rerank inverte a ordem."""
 
-    def search_memories(self, query, user_id, limit, min_similarity):
+    def search_memories(self, query, user_id, limit, min_similarity, agente_id='web'):
         return [
             {'memory_id': i, 'path': f'/memories/m{i}.xml',
              'texto_embedado': f'texto {i}', 'similarity': round(0.50 - i * 0.01, 2)}

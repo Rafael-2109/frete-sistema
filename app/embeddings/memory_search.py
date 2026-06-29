@@ -28,6 +28,7 @@ def buscar_memorias_semantica(
     user_id: int,
     limite: int = 10,
     min_similarity: float | None = None,
+    agente_id: str = 'web',
 ) -> List[Dict]:
     """
     Busca semantica em memorias persistentes do usuario.
@@ -80,6 +81,7 @@ def buscar_memorias_semantica(
             user_id=user_id,
             limit=fetch_limit,
             min_similarity=min_similarity,
+            agente_id=agente_id,
         )
 
         if not results:

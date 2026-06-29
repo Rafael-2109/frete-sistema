@@ -788,6 +788,7 @@ class EmbeddingService:
         user_id: int,
         limit: int = 10,
         min_similarity: float = None,
+        agente_id: str = 'web',
     ) -> List[Dict[str, Any]]:
         """
         Busca semantica em memorias persistentes do usuario.
@@ -797,6 +798,8 @@ class EmbeddingService:
             user_id: ID do usuario (filtro obrigatorio)
             limit: Maximo de resultados
             min_similarity: Score minimo (0-1)
+            agente_id: agente ('web'|'lojas') — M3/E01: isola por agente via
+                JOIN com agent_memories.agente. Default 'web' = aditivo.
 
         Returns:
             Lista de dicts com memory_id, path, texto_embedado, similarity
@@ -815,11 +818,11 @@ class EmbeddingService:
 
         if self._is_pgvector_available():
             return self._search_pgvector_memories(
-                query_embedding, user_id, limit, min_similarity
+                query_embedding, user_id, limit, min_similarity, agente_id=agente_id
             )
         else:
             return self._search_fallback_memories(
-                query_embedding, user_id, limit, min_similarity
+                query_embedding, user_id, limit, min_similarity, agente_id=agente_id
             )
 
     def _search_pgvector_memories(
@@ -828,8 +831,9 @@ class EmbeddingService:
         user_id: int,
         limit: int,
         min_similarity: float,
+        agente_id: str = 'web',
     ) -> List[Dict[str, Any]]:
-        """Busca memorias via pgvector."""
+        """Busca memorias via pgvector. M3/E01: isola por agent_memories.agente."""
         # Habilitar iterative_scan para queries com WHERE user_id (pgvector 0.8.0+)
         self._enable_iterative_scan()
 
@@ -857,6 +861,7 @@ class EmbeddingService:
               AND e.embedding IS NOT NULL
               AND e.model_used = :model_used
               AND m.is_cold = false
+              AND m.agente = :agente_id
             ORDER BY e.embedding <=> CAST(:query_embedding AS vector)
             LIMIT :limit
         """)
@@ -865,6 +870,7 @@ class EmbeddingService:
             "query_embedding": embedding_str,
             "user_ids": user_ids,
             "model_used": VOYAGE_MEMORY_MODEL,
+            "agente_id": agente_id,  # M3/E01: isola por agente
             "limit": limit * 2,
         })
 
@@ -887,8 +893,9 @@ class EmbeddingService:
         user_id: int,
         limit: int,
         min_similarity: float,
+        agente_id: str = 'web',
     ) -> List[Dict[str, Any]]:
-        """Busca memorias fallback sem pgvector."""
+        """Busca memorias fallback sem pgvector. M3/E01: isola por agente."""
         from app.embeddings.models import AgentMemoryEmbedding
         from app.embeddings.config import VOYAGE_MEMORY_MODEL
         from app.agente.models import AgentMemory
@@ -905,6 +912,7 @@ class EmbeddingService:
             AgentMemoryEmbedding.embedding.isnot(None),
             AgentMemoryEmbedding.model_used == VOYAGE_MEMORY_MODEL,
             AgentMemory.is_cold.is_(False),
+            AgentMemory.agente == agente_id,  # M3/E01: isola por agente
         ).limit(500).all()
 
         scored = []

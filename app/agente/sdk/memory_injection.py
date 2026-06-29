@@ -1407,6 +1407,7 @@ def _load_user_memories_for_context(
                         prompt, user_id,
                         limite=20,
                         min_similarity=MEMORY_INJECTION_MIN_SIMILARITY,
+                        agente_id=agente_id,  # M3/E01: 2a camada (materializacao ja filtra)
                     )
 
                     if resultados:
