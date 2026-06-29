@@ -332,11 +332,29 @@ def _resolver_loja_real_venda(
     return None
 
 
+def _assert_sem_avaria_aberta(chassi_norm: str) -> None:
+    """Avaria ABERTA torna a moto NAO-VENDAVEL: continua em estoque (visivel), mas
+    nao pode ser reservada/vendida ate a ultima avaria ser resolvida ou ignorada.
+
+    Fonte de verdade da vendabilidade: HoraAvaria status='ABERTA' (via
+    avaria_service.avarias_abertas_por_chassi) — NAO o tipo do ultimo evento, pois
+    AVARIADA permanece em EVENTOS_EM_ESTOQUE (a moto segue contando no estoque).
+    Import lazy: avaria_service importa estoque_service no topo; mantemos lazy p/
+    evitar qualquer ciclo de import.
+    """
+    from app.hora.services import avaria_service
+    if avaria_service.avarias_abertas_por_chassi([chassi_norm]).get(chassi_norm, 0) > 0:
+        raise ChassiIndisponivelError(
+            f'Chassi {chassi_norm} tem avaria aberta — resolva em /hora/avarias '
+            f'antes de vender'
+        )
+
+
 def _lock_chassi_e_validar_disponivel(chassi: str) -> tuple[HoraMoto, HoraMotoEvento]:
     """SELECT ... FOR UPDATE no HoraMoto + valida disponibilidade.
 
     Retorna (moto, ultimo_evento). Levanta ChassiIndisponivelError se nao
-    estiver em EVENTOS_EM_ESTOQUE.
+    estiver em EVENTOS_EM_ESTOQUE ou se tiver avaria ABERTA (nao-vendavel).
     """
     chassi_norm = (chassi or '').strip().upper()
     if not chassi_norm:
@@ -358,6 +376,7 @@ def _lock_chassi_e_validar_disponivel(chassi: str) -> tuple[HoraMoto, HoraMotoEv
             f'Chassi {chassi_norm} nao esta disponivel para reserva '
             f'(ultimo evento: {ult_tipo})'
         )
+    _assert_sem_avaria_aberta(chassi_norm)
     return moto, ult
 
 
@@ -1127,6 +1146,22 @@ def confirmar_venda(venda_id: int, usuario: Optional[str] = None) -> HoraVenda:
         raise TransicaoInvalidaError(
             f'Pendente de aprovacao do gerente antes de confirmar — {pendencia}'
         )
+
+    # Avaria ABERTA bloqueia a confirmacao (decisao do dono 2026-06-28: bloqueio
+    # na reserva + na confirmacao). Cobre o gap de moto reservada e SO DEPOIS
+    # avariada. Fonte de verdade: HoraAvaria status='ABERTA'.
+    chassis_pedido = [it.numero_chassi for it in venda.itens if it.numero_chassi]
+    if chassis_pedido:
+        from app.hora.services import avaria_service
+        avariados = sorted(
+            c for c, n in avaria_service.avarias_abertas_por_chassi(chassis_pedido).items() if n > 0
+        )
+        if avariados:
+            raise TransicaoInvalidaError(
+                'Nao e possivel confirmar: chassi(s) com avaria aberta — '
+                + ', '.join(avariados)
+                + '. Resolva em /hora/avarias antes de confirmar.'
+            )
 
     venda.status = VENDA_STATUS_CONFIRMADO
     venda.confirmado_em = agora_utc_naive()

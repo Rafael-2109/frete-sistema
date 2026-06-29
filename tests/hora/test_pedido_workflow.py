@@ -174,6 +174,22 @@ def test_confirmar_venda_ja_confirmada_falha(
         venda_service.confirmar_venda(venda.id, usuario='x')
 
 
+def test_confirmar_venda_bloqueia_chassi_com_avaria_aberta(
+    db, chassi_em_estoque, loja_origem,
+):
+    """Decisao do dono (2026-06-28): avaria bloqueia tambem na confirmacao.
+    Defesa contra moto reservada que ganha avaria ABERTA depois (ex.: backfill/
+    script direto — o fluxo normal nao avaria moto reservada). confirmar bloqueia."""
+    from app.hora.models import HoraAvaria
+    venda = _criar_pedido_cotacao(chassi_em_estoque)  # reserva ok (sem avaria)
+    _db.session.add(HoraAvaria(
+        numero_chassi=chassi_em_estoque, loja_id=loja_origem.id,
+        descricao='dano detectado apos a reserva', status='ABERTA', criado_por='x'))
+    _db.session.commit()
+    with pytest.raises(venda_service.TransicaoInvalidaError, match=r'(?i)avaria'):
+        venda_service.confirmar_venda(venda.id, usuario='vendedor_y')
+
+
 # ============================================================
 # Cancelamento
 # ============================================================
