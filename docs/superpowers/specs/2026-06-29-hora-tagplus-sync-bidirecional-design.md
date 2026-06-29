@@ -11,7 +11,7 @@ atualizado: 2026-06-29
 
 > **Papel:** spec/design da sincronização de pedidos de venda entre o módulo HORA e o TagPlus (criação, cancelamento, numeração e replicação reversa). Lido antes de executar os planos `docs/superpowers/plans/2026-06-29-hora-tagplus-sync-*`.
 >
-> **Status (2026-06-29):** **Fase 1 (numeração) implementada** — 7 commits em `main` local (não pushados), 404 testes HORA verdes; migration `hora_62` + backfill de **885 vendas** aplicados no **banco de PROD** (Render); **deploy do código pendente** (a captura via webhook só passa a valer após o deploy). **Fases 2 e 3 pendentes**, gated pelas verificações de API abaixo. Sessão 4-mãos Claude Code (dev).
+> **Status (2026-06-29):** **Fase 1 (numeração) implementada** — 7 commits em `main` local (não pushados), 404 testes HORA verdes; migration `hora_62` + backfill de **885 vendas** aplicados no **banco de PROD** (Render); **deploy do código pendente** (a captura via webhook só passa a valer após o deploy). **Fase 2a (push, parte segura)** construída — `pedido_sync_service` atrás da flag `HORA_TAGPLUS_PUSH_PEDIDO` (default OFF), 9 testes, sem caminho fiscal nem wiring; verificações de API **#2 e #4 resolvidas** (ver seção). **Fase 2b** (to_nfe + wiring + cancelamento) e **Fase 3** pendentes — gated por #1/#3 + **reauth OAuth com `write:pedidos`**. Sessão 4-mãos Claude Code (dev).
 
 ## Indice
 
@@ -183,10 +183,10 @@ Após cada migration que altera `hora_venda`, **regenerar** `.claude/skills/cons
 
 (TagPlus **não tem ambiente de homologação** — escrita é produção; `models/tagplus.py:47-49`. Verificar com leitura/dry-run.)
 
-1. **`GET /pedidos/to_nfe/{id}` transmite à SEFAZ?** Ou gera rascunho? Aceita `X-Enviar-Nota`/`X-Calculo-Trib-Automatico`? (gate da Fase 2).
-2. **`GET /pedidos` filtra por `numero`?** Qual o parâmetro (`?numero=` / `?since=`+`X-Data-Filter`)? Define `busca_pedido_por_numero` da Fase 3.
-3. **`PATCH status=C` vs `DELETE`** — comportamento quando há NFe emitida vinculada? (gate do cancelamento, Fase 2).
-4. **Scope OAuth:** push de pedido exige `write:pedidos`? Hoje `scope_contratado` = `write:nfes read:clientes write:clientes read:produtos` (`models/tagplus.py:39-42`) — provavelmente faltam `read:pedidos`/`write:pedidos`; refresh_token não re-emite scope (reautorizar OAuth).
+1. ⛔ **PENDENTE — `GET /pedidos/to_nfe/{id}` transmite à SEFAZ?** Ou gera rascunho? Aceita `X-Enviar-Nota`/`X-Calculo-Trib-Automatico`? **Não testável sem emitir NF real** (sem homologação) — confirmar com TagPlus ou teste controlado. **Gate da Fase 2b.**
+2. ✅ **RESOLVIDO (2026-06-29):** `GET /pedidos?numero={n}` filtra por número **exato** (200 + 1 item; testado ao vivo com numero=942). `numero[eq]`→422; `q`→busca fuzzy. É o parâmetro de `busca_pedido_por_numero` (numero-walk, Fase 3).
+3. ⛔ **PENDENTE — `PATCH status=C` vs `DELETE`** com NFe emitida vinculada — não testável sem alterar pedido real; confirmar com TagPlus. **Default adotado:** `PATCH status=C` (preserva registro). **Gate do cancelamento, Fase 2b.**
+4. ⚠️ **RESOLVIDO (2026-06-29):** o token de PROD tem `read:pedidos` mas **NÃO** `write:pedidos` (`scope_contratado` = `write:nfes read:clientes write:clientes read:produtos read:formas_pagamento read:pedidos read:vendas`). Push real (`POST/PATCH/DELETE /pedidos`) dará **401** até **reautorizar o OAuth** com `write:pedidos` (refresh não re-emite scope). O default do modelo já inclui `write:pedidos`; a **conta de PROD precisa do scope + reauth** (ação do admin).
 
 ## Edge cases e riscos
 
@@ -219,11 +219,13 @@ Mapeamento por fase: a **Fase 1** satisfaz (2); a **Fase 2** satisfaz (1) e (3);
 
 ## Faseamento
 
-1. **Fase 1 — Numeração (item 2).** Independente, baixo risco, ROI imediato. Plano: `docs/superpowers/plans/2026-06-29-hora-tagplus-sync-fase1-numeracao.md`.
-2. **Fase 2 — Push HORA→TagPlus (item 1).** Depende das verificações 1 e 3. Mexe no caminho fiscal (emissão) → dry-run + revisão.
-3. **Fase 3 — Reverso (item 3).** Depende da verificação 2. Scheduler numero-walk + replicação + UI de vínculo de chassi.
+1. **Fase 1 — Numeração (item 2).** ✅ Implementada + PROD (migration/backfill). Plano: `docs/superpowers/plans/2026-06-29-hora-tagplus-sync-fase1-numeracao.md`.
+2. **Fase 2 — Push HORA→TagPlus (item 1).**
+   - **2a (parte segura)** ✅ — `pedido_sync_service` (criar/atualizar/cancelar pedido) atrás da flag `HORA_TAGPLUS_PUSH_PEDIDO` (OFF), dry-run, sem caminho fiscal nem wiring. `app/hora/services/tagplus/pedido_sync_service.py`.
+   - **2b (gated)** — itens/cliente/faturas no payload + emissão via `to_nfe` (verificação #1) + cancelamento PATCH/DELETE (#3) + wiring em `venda_service` (criar/confirmar/cancelar) + ligar a flag. **Pré-requisito:** reauth OAuth com `write:pedidos` (#4).
+3. **Fase 3 — Reverso (item 3).** Verificação #2 ✅ (`?numero=`). Scheduler numero-walk + replicação + UI de vínculo de chassi.
 
-Planos task-by-task das Fases 2 e 3 são escritos após a Fase 1 entrar e as verificações serem feitas.
+Plano task-by-task da Fase 2b e da Fase 3 é escrito quando #1/#3 forem confirmados com o TagPlus e o OAuth for reautorizado.
 
 ## Fora de escopo (YAGNI)
 
