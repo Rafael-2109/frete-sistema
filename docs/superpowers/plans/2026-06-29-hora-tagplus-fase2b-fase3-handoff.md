@@ -37,11 +37,14 @@ atualizado: 2026-06-29
 3. **Push do commit** (aval do dono — dispara deploy).
 4. Melhorias futuras (riscos residuais abaixo): label amigável p/ `AGUARDANDO_CHASSI`, lock anti-TOCTOU, reconciliador por `codigo_externo`.
 
-**Riscos residuais conhecidos (v1, todos no caminho flag ON — review adversarial 2026-06-29):**
-- **Schema da resposta do `GET /pedidos/to_nfe/{id}`** é assumido igual ao `POST /nfes` (`body['id']/['numero']/['serie']`). Se divergir, `tagplus_nfe_id` fica `None` e o polling/reconciliação/webhook não acham a NFe (emissão presa em `ENVIADA_SEFAZ`). **Go-live:** logar o body bruto do `to_nfe` na 1ª emissão real e mapear os campos antes de confiar.
-- **Não-atomicidade `POST /pedidos` + commit local**: se o commit falhar logo após o POST ter sucesso, a venda perde o `tagplus_pedido_id` (rollback) e um retry pode duplicar o pedido no TagPlus (`codigo_externo` não é UNIQUE lá, e o numero-walk trata o órfão como "nosso" → não reconcilia). Janela pequena; mitigação futura: reconciliador que busca pedidos por `codigo_externo` de vendas sem `tagplus_pedido_id`.
-- **TOCTOU** em `push_criar_pedido` (check de `tagplus_pedido_id` sem `SELECT FOR UPDATE`): 2 requests concorrentes na MESMA venda poderiam criar 2 pedidos. Raro (criar/confirmar/cancelar concorrentes da mesma venda); mitigação futura: lock pessimista na venda.
-- **Fixes já aplicados nesta sessão** (com testes): PATCH do pedido validado antes do `to_nfe`; `PayloadBuilderError` do `_enviar_nfe` → `REJEITADA_LOCAL`; `montar_corpo_pedido(estrito)` exige cliente; `push_criar_pedido` no-op para FATURADO/CANCELADO; `resolver_id_cliente` trata CPF ambíguo; warning em `POST /pedidos` 2xx sem id.
+**Review adversarial 2026-06-29 — fixes aplicados (com testes):**
+- *Fase 2b:* PATCH do pedido validado antes do `to_nfe`; `PayloadBuilderError` do `_enviar_nfe` → `REJEITADA_LOCAL`; `montar_corpo_pedido(estrito)` exige cliente; `push_criar_pedido` no-op para FATURADO/CANCELADO; `resolver_id_cliente` trata CPF ambíguo; warning em `POST /pedidos` 2xx sem id.
+- *Fase 3:* cursor avança só até o último pedido replicado OK (falha em `replicar(N)` → cursor em `N-1`, re-tenta); `busca_pedido_por_numero` levanta em 401/403/5xx → `descobrir_e_replicar` aborta sem avançar cursor; lock Redis no worker (anti-concorrência); CPF inválido → placeholder; gate de flag no service; doc `origem_criacao`.
+
+**Riscos residuais conhecidos (v1, caminho flag ON):**
+- **Schema da resposta do `GET /pedidos/to_nfe/{id}`** assumido igual ao `POST /nfes` (`body['id']/['numero']/['serie']`). Se divergir, `tagplus_nfe_id` fica `None` e polling/reconciliação não acham a NFe. **Go-live:** logar o body bruto na 1ª emissão real e mapear antes de confiar.
+- **Não-atomicidade `POST /pedidos` + commit local** (Fase 2b): commit falho logo após POST OK perde o `tagplus_pedido_id`; retry pode duplicar pedido. Mitigação futura: reconciliador por `codigo_externo`.
+- **UNIQUE em `hora_venda.tagplus_pedido_id`** não aplicado: PROD tem **3 duplicatas legadas** (ids 185, 477, 571 — vendas FATURADAS). O lock Redis cobre a concorrência do cron; o UNIQUE parcial (migration futura) exige limpar as duplicatas antes.
 
 ## Indice
 
