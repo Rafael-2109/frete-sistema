@@ -1460,6 +1460,7 @@ Nunca invente informações."""
         resume_messages_fallback: Optional[str] = None,
         resume_fallback_reason: Optional[str] = None,
         thinking_display: Optional[str] = None,
+        agent_role: str = 'principal',
     ) -> AsyncGenerator[StreamEvent, None]:
         """
         Gera resposta em streaming.
@@ -1510,6 +1511,7 @@ Nunca invente informações."""
             resume_messages_fallback=resume_messages_fallback,
             resume_fallback_reason=resume_fallback_reason,
             thinking_display=thinking_display,
+            agent_role=agent_role,
         ):
             yield event
 
@@ -2096,6 +2098,7 @@ Nunca invente informações."""
         resume_messages_fallback: Optional[str] = None,
         resume_fallback_reason: Optional[str] = None,
         thinking_display: Optional[str] = None,
+        agent_role: str = 'principal',
     ) -> AsyncGenerator[StreamEvent, None]:
         """
         Gera resposta em streaming usando ClaudeSDKClient persistente.

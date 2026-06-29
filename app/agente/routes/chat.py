@@ -654,6 +654,7 @@ def api_chat():
                 output_format=output_format,
                 rotated_from_session_id=rotated_from_session_id,
                 thinking_display=thinking_display,
+                agent_role=agent_role,
             )),
             mimetype='text/event-stream',
             headers={
@@ -699,6 +700,7 @@ async def _async_stream_sdk_client(
     output_format: dict = None,
     thinking_display: str = None,
     rotated_from_session_id: str = None,
+    agent_role: str = 'principal',
 ):
     """
     Orquestra streaming via ClaudeSDKClient persistente (v3).
@@ -857,6 +859,7 @@ async def _async_stream_sdk_client(
             resume_messages_fallback=resume_messages_fallback,
             resume_fallback_reason=resume_fallback_reason,
             thinking_display=thinking_display,
+            agent_role=agent_role,
         ):
             should_continue = _process_stream_event(event)
             if should_continue:
@@ -922,6 +925,7 @@ def _stream_chat_response(
     output_format: dict = None,
     rotated_from_session_id: str = None,
     thinking_display: str = None,
+    agent_role: str = 'principal',
 ) -> Generator[str, None, None]:
     """
     Gera resposta em streaming (SSE).
@@ -1371,6 +1375,7 @@ def _stream_chat_response(
                 output_format=output_format,
                 thinking_display=thinking_display,
                 rotated_from_session_id=rotated_from_session_id,
+                agent_role=agent_role,
             )
 
             # =============================================================
