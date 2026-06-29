@@ -43,6 +43,13 @@
              placeholder="0,00" inputmode="decimal">
       <small class="text-muted">Snapshot na venda preserva este valor.</small>
     </div>
+    <div class="col-md-4">
+      <label class="form-label">Custo</label>
+      <input type="text" name="custo" class="form-control"
+             value="{{ peca.custo if peca else '0,00' }}"
+             placeholder="0,00" inputmode="decimal">
+      <small class="text-muted">Base da margem no preview da NF (brindes e peças vendidas).</small>
+    </div>
 
     <div class="col-12">
       <div class="form-check">

@@ -1256,6 +1256,7 @@ def tagplus_pedido_venda_criar():
             itens=itens,
             forma_pagamento=None,  # Legacy fallback: nao mais usado se ha pagamentos.
             telefone_cliente=_g('telefone', 20) or None,
+            telefone_lead=_g('telefone_lead', 20) or None,
             email_cliente=_g('email', 120) or None,
             vendedor=vendedor_final,
             observacoes=_g('observacoes', 500) or None,

@@ -2584,7 +2584,7 @@ def executar_backfill_pecas_faltantes(
     """
     from sqlalchemy import func
     from app.hora.models import (
-        HoraVendaItemPeca, HoraTagPlusConta,
+        HoraVendaItemPeca, HoraTagPlusConta, HoraPeca,
     )
     from app.hora.services.tagplus.api_client import ApiClient
 
@@ -2675,12 +2675,17 @@ def executar_backfill_pecas_faltantes(
                     continue
 
                 preco_final = qtd * (valor_unit - desconto_unit)
+                # Snapshot do custo (hora_59) — melhor aproximacao disponivel:
+                # custo atual do cadastro da peca (NF ja emitida nao traz custo).
+                peca_cad = HoraPeca.query.get(peca_id)
+                custo_uni = Decimal(str((peca_cad.custo if peca_cad else 0) or 0))
                 vp = HoraVendaItemPeca(
                     venda_id=venda.id, peca_id=peca_id,
                     qtd=qtd,
                     preco_unitario_referencia=valor_unit,
                     desconto_aplicado=desconto_unit,
                     preco_final=preco_final,
+                    custo_unitario=custo_uni,
                 )
                 db.session.add(vp)
                 db.session.flush()

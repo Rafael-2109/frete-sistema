@@ -19,7 +19,21 @@ def test_criar_peca_minima(db):
     assert p.cfop_default == '5.102'
     assert p.unidade == 'UN'
     assert p.preco_venda_padrao == Decimal('0')
+    assert p.custo == Decimal('0')  # default (hora_59)
     assert p.ativo is True
+
+
+def test_criar_e_editar_custo(db):
+    import uuid
+    from app.hora.services import peca_service
+    cod = f'CUS-{uuid.uuid4().hex[:6].upper()}'
+    p = peca_service.criar_peca(
+        codigo_interno=cod, descricao='Bateria',
+        preco_venda_padrao=Decimal('200'), custo=Decimal('120'),
+    )
+    assert p.custo == Decimal('120')
+    peca_service.editar_peca(peca_id=p.id, custo=Decimal('135'))
+    assert HoraPeca.query.get(p.id).custo == Decimal('135')
 
 
 def test_codigo_interno_unique(db):

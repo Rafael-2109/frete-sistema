@@ -301,6 +301,23 @@ modelo. Registrar model+cache na MESMA linha mantém isso mensurável pós-fix.
 — FONTE: `services.py:_persist_cost_teams,_gravar_agent_step_teams` (chamados ~L2236);
 memória dev `teams_cache_churn_model_routing.md`
 
+> **⚠️ DRIFT (verificado 2026-06-28):** apesar do default de código ser Sonnet desde
+> 16/06, **produção roda 100% Opus** (118/118 turnos/30d) — a env var
+> `TEAMS_DEFAULT_MODEL=claude-opus-4-8` no Render `sistema-fretes` sobrepõe o default.
+> ✅ EFETIVADO 2026-06-28: env var `TEAMS_DEFAULT_MODEL=claude-sonnet-4-6` aplicada no Render (deploy `dep-d90sbskvikkc738omf8g`).
+
+> **FIX inflação de custo (2026-06-28):** o path Teams gravava `agent_result.cost_usd`
+> (= `ResultMessage.total_cost_usd`, ACUMULADO da sessão SDK) cru em `session.total_cost_usd`
+> e em `agent_session_costs.cost_usd`, somando o acumulado a cada turno → inflação **~7x**
+> (medido: $320,87 gravado vs **$46,65 real** em 30d/Teams, 118 turnos). O fix do web
+> `0e9403082` (2026-06-19) NÃO alcançou o Teams. Agora usa `turn_cost_from_cumulative`
+> (DELTA do turno) com baseline em `data['_sdk_cost_cumulative']`/`_sdk_cost_session_id`,
+> idêntico a `chat.py:_save_messages_to_db`. ✅ BACKFILL HISTÓRICO APLICADO em PROD
+> 2026-06-28 ($320,87→$46,65, verificado via MCP): `scripts/migrations/2026_06_28_backfill_teams_cost.py`
+> (recalc dos tokens, backup `bkp_teams_cost_backfill_*`, `--revert`). ⚠️ O FIX de código acima
+> está no working tree e **ainda NÃO deployado** — até deployar, o dashboard Teams re-infla.
+> — FONTE: `services.py` GAP 2 (~L2265)
+
 ---
 
 ## Feature Flags

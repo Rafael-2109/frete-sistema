@@ -773,6 +773,7 @@ def criar_venda_manual(
     valor_final: Optional[Decimal] = None,
     forma_pagamento: Optional[str] = None,
     telefone_cliente: Optional[str] = None,
+    telefone_lead: Optional[str] = None,
     email_cliente: Optional[str] = None,
     vendedor: Optional[str] = None,
     observacoes: Optional[str] = None,
@@ -971,6 +972,7 @@ def criar_venda_manual(
         nome_cliente=nome_norm[:200],
         inscricao_estadual=(inscricao_estadual or '').strip()[:20] or None,
         telefone_cliente=(telefone_cliente or '').strip()[:20] or None,
+        telefone_lead=(telefone_lead or '').strip()[:20] or None,
         email_cliente=(email_cliente or '').strip()[:120] or None,
         data_venda=data_venda,
         forma_pagamento=forma_norm[:20],
@@ -1333,7 +1335,8 @@ def voltar_para_cotacao(venda_id: int, usuario: Optional[str] = None) -> HoraVen
 # ser livremente editavel para o vendedor corrigir cliente/endereco/etc.
 # antes de promover via editar_pagamentos.
 _CAMPOS_COTACAO_FULL = {
-    'vendedor', 'forma_pagamento', 'telefone_cliente', 'email_cliente',
+    'vendedor', 'forma_pagamento', 'telefone_cliente', 'telefone_lead',
+    'email_cliente',
     'observacoes', 'nome_cliente', 'cpf_cliente', 'inscricao_estadual',
     'cep', 'endereco_logradouro', 'endereco_numero', 'endereco_complemento',
     'endereco_bairro', 'endereco_cidade', 'endereco_uf',
@@ -1348,7 +1351,8 @@ _CAMPOS_EDITAVEIS_HEADER = {
     VENDA_STATUS_INCOMPLETO: _CAMPOS_COTACAO_FULL,
     VENDA_STATUS_COTACAO: _CAMPOS_COTACAO_FULL,
     VENDA_STATUS_CONFIRMADO: {
-        'vendedor', 'forma_pagamento', 'telefone_cliente', 'email_cliente',
+        'vendedor', 'forma_pagamento', 'telefone_cliente', 'telefone_lead',
+        'email_cliente',
         'observacoes',
         'cep', 'endereco_logradouro', 'endereco_numero', 'endereco_complemento',
         'endereco_bairro', 'endereco_cidade', 'endereco_uf',
@@ -1472,6 +1476,7 @@ def _aplicar_header(
     vendedor = dados.get('vendedor')
     forma_pagamento = dados.get('forma_pagamento')
     telefone_cliente = dados.get('telefone_cliente')
+    telefone_lead = dados.get('telefone_lead')
     email_cliente = dados.get('email_cliente')
     observacoes = dados.get('observacoes')
     nome_cliente = dados.get('nome_cliente')
@@ -1514,6 +1519,8 @@ def _aplicar_header(
         _atualizar('forma_pagamento', fp_norm[:20])
     if telefone_cliente is not None:
         _atualizar('telefone_cliente', telefone_cliente.strip()[:20] or None)
+    if telefone_lead is not None:
+        _atualizar('telefone_lead', telefone_lead.strip()[:20] or None)
     if email_cliente is not None:
         _atualizar('email_cliente', email_cliente.strip()[:120] or None)
     if observacoes is not None:
@@ -2205,12 +2212,14 @@ def adicionar_item_peca(
     preco_ref = Decimal(str(peca.preco_venda_padrao))
     desconto_uni = max(Decimal('0'), preco_ref - valor_uni)
     preco_final_total = qtd_dec * valor_uni
+    custo_uni = Decimal(str(peca.custo or 0))  # snapshot do custo p/ margem (hora_59)
 
     item = HoraVendaItemPeca(
         venda_id=venda.id, peca_id=peca.id, qtd=qtd_dec,
         preco_unitario_referencia=preco_ref,
         desconto_aplicado=desconto_uni,
         preco_final=preco_final_total,
+        custo_unitario=custo_uni,
     )
     db.session.add(item)
     db.session.flush()
@@ -2265,7 +2274,7 @@ def remover_item_peca(venda_id: int, item_id: int, usuario: Optional[str] = None
 
 # --------------------------------------------------------------------------
 # Brindes (#36) — peca dada de brinde: custo na margem, NAO cobrado, NAO
-# abate estoque (custo = peca.preco_venda_padrao snapshot).
+# abate estoque (custo = peca.custo snapshot — hora_59; antes preco_venda_padrao).
 # --------------------------------------------------------------------------
 
 def _criar_brinde_flush_only(venda: HoraVenda, peca_id: int, qtd,
@@ -2283,7 +2292,8 @@ def _criar_brinde_flush_only(venda: HoraVenda, peca_id: int, qtd,
     qtd_dec = Decimal(str(qtd or 0))
     if qtd_dec <= 0:
         raise ValueError('qtd deve ser positiva')
-    custo_uni = Decimal(str(peca.preco_venda_padrao or 0))
+    # Custo real da peca (hora_59) — antes usava preco_venda_padrao como proxy.
+    custo_uni = Decimal(str(peca.custo or 0))
     brinde = HoraVendaBrinde(
         venda_id=venda.id, peca_id=peca.id, qtd=qtd_dec,
         custo_unitario=custo_uni, custo_total=qtd_dec * custo_uni,
@@ -2302,7 +2312,7 @@ def adicionar_brinde(venda_id: int, peca_id: int, qtd,
                      usuario: Optional[str] = None):
     """Adiciona um brinde (peca) ao pedido em COTACAO.
 
-    Custo = peca.preco_venda_padrao (snapshot). NAO entra no valor cobrado
+    Custo = peca.custo (snapshot — hora_59). NAO entra no valor cobrado
     (valor_total) e NAO abate estoque — apenas reduz a margem da venda
     (venda_preview_service).
     """

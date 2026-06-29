@@ -305,30 +305,55 @@
 </div>
 {% endif %}
 
-{# Definir/trocar loja fisica (quando sem loja ou para corrigir) #}
-{% if lojas_ativas and pode_editar and not is_cancelado %}
-<form method="post" action="{{ url_for('hora.vendas_definir_loja', venda_id=venda.id) }}"
-      class="card mb-3 p-3 {% if not venda.loja_id %}border-warning{% endif %}">
-  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-  <div class="row g-2 align-items-end">
+{# Loja fisica da venda + Vendedor, lado a lado. Card visivel sempre (exceto
+   cancelado) para nao regredir a visibilidade do vendedor em telas read-only.
+   - Loja: form PROPRIO `vendas_definir_loja` (editavel) OU input read-only.
+   - Vendedor: pertence ao `form-pedido-venda` (via atributo HTML `form=`),
+     NUNCA submetido junto do form de trocar loja. #}
+{% if not is_cancelado %}
+<div class="card mb-3 p-3 {% if not venda.loja_id %}border-warning{% endif %}">
+  <div class="row g-3 align-items-end">
     <div class="col-md-8">
+      {% if lojas_ativas and pode_editar %}
+      <form method="post" action="{{ url_for('hora.vendas_definir_loja', venda_id=venda.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <label class="form-label"><i class="fas fa-store"></i> Loja fisica da venda</label>
+        <div class="input-group">
+          <select name="loja_id" class="form-select" required>
+            {% if not venda.loja_id %}<option value="">— Selecione —</option>{% endif %}
+            {% for loja in lojas_ativas %}
+              <option value="{{ loja.id }}" {% if venda.loja_id == loja.id %}selected{% endif %}>
+                {{ loja.rotulo_display }}{% if loja.cnpj %} · CNPJ {{ loja.cnpj }}{% endif %}
+              </option>
+            {% endfor %}
+          </select>
+          <button type="submit" class="btn {% if not venda.loja_id %}btn-warning{% else %}btn-outline-primary{% endif %}">
+            {% if not venda.loja_id %}Definir loja{% else %}Trocar loja{% endif %}
+          </button>
+        </div>
+      </form>
+      {% else %}
       <label class="form-label"><i class="fas fa-store"></i> Loja fisica da venda</label>
-      <select name="loja_id" class="form-select" required>
-        {% if not venda.loja_id %}<option value="">— Selecione —</option>{% endif %}
-        {% for loja in lojas_ativas %}
-          <option value="{{ loja.id }}" {% if venda.loja_id == loja.id %}selected{% endif %}>
-            {{ loja.rotulo_display }}{% if loja.cnpj %} · CNPJ {{ loja.cnpj }}{% endif %}
-          </option>
-        {% endfor %}
-      </select>
+      <input type="text" class="form-control"
+             value="{{ venda.loja.rotulo_display if venda.loja else '— sem loja —' }}" disabled>
+      {% endif %}
     </div>
     <div class="col-md-4">
-      <button type="submit" class="btn {% if not venda.loja_id %}btn-warning{% else %}btn-outline-primary{% endif %}">
-        {% if not venda.loja_id %}Definir loja{% else %}Trocar loja{% endif %}
-      </button>
+      <label class="form-label"><i class="fas fa-user-tag"></i> Vendedor</label>
+      <select name="vendedor" form="form-pedido-venda" class="form-select"
+              {% if not permite_editar_vendedor %}disabled{% endif %}>
+        <option value="" {% if not venda.vendedor %}selected{% endif %}>— sem vendedor —</option>
+        {% for u in vendedores_disponiveis %}
+          <option value="{{ u.nome }}" {% if u.nome == venda.vendedor %}selected{% endif %}>{{ u.nome }}</option>
+        {% endfor %}
+        {# Fallback: preserva o vendedor legado/desabilitado para nao zerar ao salvar #}
+        {% if venda.vendedor and venda.vendedor not in (vendedores_disponiveis | map(attribute='nome') | list) %}
+          <option value="{{ venda.vendedor }}" selected>{{ venda.vendedor }} · (não habilitado)</option>
+        {% endif %}
+      </select>
     </div>
   </div>
-</form>
+</div>
 {% endif %}
 
 {# ===================== FORM UNICO: Salvar Pedido (FU-5) ===================== #}
@@ -377,6 +402,13 @@
           <label class="form-label">Telefone</label>
           <input type="text" name="telefone_cliente" class="form-control" maxlength="20"
                  value="{{ venda.telefone_cliente or '' }}" {% if ro_oper %}readonly{% endif %}>
+          <div class="mt-2">
+            <label class="form-label">Telefone Lead</label>
+            <input type="text" name="telefone_lead" class="form-control" maxlength="20"
+                   placeholder="Telefone do contato/lead"
+                   value="{{ venda.telefone_lead or '' }}" {% if ro_oper %}readonly{% endif %}>
+            <small class="text-muted">Contato que originou a venda — não vai para a NFe.</small>
+          </div>
         </div>
         <div class="col-md-5">
           <label class="form-label">E-mail</label>
@@ -397,19 +429,6 @@
           <label class="form-label">Qual?</label>
           <input type="text" name="origem_lead_obs" class="form-control js-origem-lead-obs" maxlength="255"
                  value="{{ venda.origem_lead_obs or '' }}" {% if ro_cliente %}disabled{% endif %}>
-        </div>
-        <div class="col-md-3">
-          <label class="form-label">Vendedor</label>
-          <select name="vendedor" class="form-select" {% if not permite_editar_vendedor %}disabled{% endif %}>
-            <option value="" {% if not venda.vendedor %}selected{% endif %}>— sem vendedor —</option>
-            {% for u in vendedores_disponiveis %}
-              <option value="{{ u.nome }}" {% if u.nome == venda.vendedor %}selected{% endif %}>{{ u.nome }}</option>
-            {% endfor %}
-            {# Fallback: preserva o vendedor legado/desabilitado para nao zerar ao salvar #}
-            {% if venda.vendedor and venda.vendedor not in (vendedores_disponiveis | map(attribute='nome') | list) %}
-              <option value="{{ venda.vendedor }}" selected>{{ venda.vendedor }} · (não habilitado)</option>
-            {% endif %}
-          </select>
         </div>
       </div>
     </div>
@@ -992,6 +1011,12 @@
           <label class="form-label">Telefone</label>
           <input type="text" name="telefone" class="form-control" maxlength="20"
                  placeholder="(11) 99999-9999">
+          <div class="mt-2">
+            <label class="form-label">Telefone Lead</label>
+            <input type="text" name="telefone_lead" class="form-control" maxlength="20"
+                   placeholder="Telefone do contato/lead">
+            <small class="text-muted">Contato que originou a venda — não vai para a NFe.</small>
+          </div>
         </div>
         <div class="col-md-4">
           <label class="form-label">E-mail</label>

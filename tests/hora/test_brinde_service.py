@@ -1,6 +1,6 @@
 """Testes de Brindes de venda (roadmap #36).
 
-Brinde = peca do catalogo: custo = preco_venda_padrao (snapshot), NAO cobrado
+Brinde = peca do catalogo: custo = peca.custo (snapshot — hora_59), NAO cobrado
 (fora do valor_total), NAO abate estoque. Custo reduz a margem (preview).
 
 Auto-contidos com uuid — adicionar_brinde faz commit (fura savepoint). Ver
@@ -27,18 +27,20 @@ def _venda(loja):
     return v
 
 
-def _peca(peca_factory, preco=Decimal('30')):
+def _peca(peca_factory, custo=Decimal('30')):
     p = peca_factory()
-    p.preco_venda_padrao = preco  # garante custo conhecido
+    # preco de venda intencionalmente != custo p/ provar que a margem usa o CUSTO.
+    p.preco_venda_padrao = custo + Decimal('100')
+    p.custo = custo  # custo real usado na margem (hora_59)
     _db.session.flush()
     return p
 
 
-def test_adicionar_brinde_custo_e_preco_venda(db, loja_factory, peca_factory):
+def test_adicionar_brinde_usa_custo_real(db, loja_factory, peca_factory):
     v = _venda(loja_factory())
     p = _peca(peca_factory, Decimal('30'))
     brinde = venda_service.adicionar_brinde(v.id, p.id, qtd=2, usuario='tester')
-    assert brinde.custo_unitario == Decimal('30')
+    assert brinde.custo_unitario == Decimal('30')  # custo, NAO preco_venda_padrao
     assert brinde.custo_total == Decimal('60')  # 2 * 30
 
 

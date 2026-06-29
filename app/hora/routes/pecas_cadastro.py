@@ -52,6 +52,7 @@ def pecas_cadastro_novo():
     if request.method == 'POST':
         try:
             preco = (request.form.get('preco_venda_padrao') or '0').replace(',', '.')
+            custo = (request.form.get('custo') or '0').replace(',', '.')
             p = peca_service.criar_peca(
                 codigo_interno=(request.form.get('codigo_interno') or ''),
                 descricao=(request.form.get('descricao') or ''),
@@ -59,6 +60,7 @@ def pecas_cadastro_novo():
                 cfop_default=(request.form.get('cfop_default') or '5.102'),
                 unidade=(request.form.get('unidade') or 'UN'),
                 preco_venda_padrao=Decimal(preco),
+                custo=Decimal(custo),
                 ativo=request.form.get('ativo') == '1',
             )
             tp_id = (request.form.get('tagplus_produto_id') or '').strip()
@@ -100,6 +102,7 @@ def pecas_cadastro_editar(peca_id: int):
     if request.method == 'POST':
         try:
             preco = (request.form.get('preco_venda_padrao') or '0').replace(',', '.')
+            custo = (request.form.get('custo') or '0').replace(',', '.')
             peca_service.editar_peca(
                 peca_id=p.id,
                 descricao=(request.form.get('descricao') or '').strip(),
@@ -107,6 +110,7 @@ def pecas_cadastro_editar(peca_id: int):
                 cfop_default=(request.form.get('cfop_default') or '5.102'),
                 unidade=(request.form.get('unidade') or 'UN'),
                 preco_venda_padrao=Decimal(preco),
+                custo=Decimal(custo),
                 ativo=request.form.get('ativo') == '1',
             )
             tp_id = (request.form.get('tagplus_produto_id') or '').strip()

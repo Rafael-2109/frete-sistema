@@ -48,8 +48,11 @@ atualizado: 2026-06-27
 - [31. Recebimento — dropdown de modelos canônicos + anti-duplicação de grafia de cor — 2026-06-27](#31-recebimento--dropdown-de-modelos-canônicos--anti-duplicação-de-grafia-de-cor--2026-06-27)
 - [32. Recebimento — autocomplete de NF por permissão + guarda anti-duplicado — 2026-06-27](#32-recebimento--autocomplete-de-nf-por-permissão-de-recebimento--guarda-anti-duplicado--2026-06-27)
 - [33. Loja real da venda vs matriz (emitente fiscal) — integridade — 2026-06-27](#33-loja-real-da-venda-vs-matriz-emitente-fiscal--integridade--2026-06-27)
-- [34. Recebimento por filial sem NF (NF provisória) — 2026-06-27](#34-recebimento-por-filial-sem-nf-nf-provisória--2026-06-27)
-- [35. Avaria torna a moto NÃO-VENDÁVEL — 2026-06-28](#35-avaria-torna-a-moto-não-vendável--2026-06-28)
+- [34. Pedido de Venda — vendedor ao lado da loja + campo Telefone Lead — 2026-06-28](#34-pedido-de-venda--vendedor-ao-lado-da-loja--campo-telefone-lead--2026-06-28)
+- [35. CORTESIA de revisão — texto institucional na NF — 2026-06-28](#35-cortesia-de-revisão--texto-institucional-na-nf--2026-06-28)
+- [36. Custo de peça + margem do preview da NF por CUSTO — 2026-06-28](#36-custo-de-peça--margem-do-preview-da-nf-por-custo-não-preço-de-venda--2026-06-28)
+- [37. Recebimento por filial sem NF (NF provisória) — 2026-06-27](#37-recebimento-por-filial-sem-nf-nf-provisória--2026-06-27)
+- [38. Avaria torna a moto NÃO-VENDÁVEL — 2026-06-28](#38-avaria-torna-a-moto-não-vendável--2026-06-28)
 - [Onboarding Tours (2026-05-08)](#onboarding-tours-2026-05-08)
 - [Referências](#referências)
 
@@ -155,7 +158,7 @@ Documentação detalhada na análise de primeiros princípios do módulo (comand
 > Núcleo acima (14) + estas 32 = 46. Padrões recorrentes: header + itens; auditoria append-only (nunca UPDATE/DELETE); fotos/anexos em S3.
 
 **Avaria**:
-- `hora_avaria` — avaria física em moto (`numero_chassi`, `loja_id`, `status`); avaria ABERTA torna a moto **NÃO-VENDÁVEL** (continua em estoque com flag), emite `AVARIADA`. Ver §35.
+- `hora_avaria` — avaria física em moto (`numero_chassi`, `loja_id`, `status`); avaria ABERTA torna a moto **NÃO-VENDÁVEL** (continua em estoque com flag), emite `AVARIADA`. Ver §38.
 - `hora_avaria_foto` — fotos S3 de uma avaria (header + N fotos).
 
 **Devolução fornecedor (HORA → Motochefe)**:
@@ -1281,7 +1284,8 @@ brindes (peça · qtd · custo) abaixo. Bug de exibição, não de cálculo.
 **#3 — CORTESIA nas informações complementares.** `payload_builder._montar_inf_contribuinte`
 ganhou, no fim do conteúdo fiscal (logo **antes** do rastreio gerencial interno
 `Venda # | Loja | Vendedor`), a linha **`CORTESIA: <peça_1>, <peça_2>...`** (qtd ≠ 1
-prefixa `Nx`, ex.: `2x RETROVISOR`). Só aparece quando há brinde.
+prefixa `Nx`, ex.: `2x RETROVISOR`). Só aparece quando há brinde. **Exceção (§35):**
+a peça de **revisão** sai da linha de peças e ganha bloco institucional próprio.
 
 **#4 — CAUSA-RAIZ do "brinde não aparece quando adiciono na criação"** (achada depois,
 por reprodução). O backend grava o brinde na criação (teste de POST prova); o sumiço
@@ -1421,7 +1425,108 @@ pela chave-44 grava `tagplus_departamento`) e então a auto-cura/Aplicar resolve
 
 ---
 
-## 34. Recebimento por filial sem NF (NF provisória) — 2026-06-27
+## 34. Pedido de Venda — vendedor ao lado da loja + campo Telefone Lead — 2026-06-28
+
+Dois ajustes na tela de Pedido de Venda (`pedido_venda_novo.html`). **Migration: hora_58.**
+
+**A — Vendedor ao lado da "Loja física da venda" (modo edição).** O bloco da loja
+é um `<form>` próprio (`vendas_definir_loja`); o vendedor pertence ao
+`form-pedido-venda` (`vendas_salvar_pedido`). Para exibi-los lado a lado **sem**
+aninhar forms nem submeter o vendedor no "Trocar loja", o `<select name="vendedor">`
+usa o atributo HTML **`form="form-pedido-venda"`** (associação por id, independente da
+posição no DOM). O bloco virou um **card de 2 colunas** visível sempre que
+`not is_cancelado` (antes só com `lojas_ativas and pode_editar`): col-8 = loja (form
+de trocar quando editável, **OU** input read-only) + col-4 = vendedor (sempre visível,
+`disabled` quando `not permite_editar_vendedor`). Isso **não regride** a visibilidade
+do vendedor em telas read-only (faturado / sem permissão de editar). O vendedor saiu da
+seção Cliente/Destinatário. **Sem mudança de backend** (o `vendedor` já era lido pelo
+header em `vendas_salvar_pedido` → `_aplicar_header`).
+
+**B — Campo "Telefone Lead"** (`hora_venda.telefone_lead VARCHAR(20)`, migration
+`hora_58`): telefone do **lead/contato que originou a venda**, distinto do
+`telefone_cliente` (destinatário fiscal). **Registro/exibição apenas — NÃO entra no
+payload da NFe** (mesmo critério de `inscricao_estadual`, §24). Aparece **abaixo do
+Telefone** do cliente nos 2 modos (criação e edição). Editável em INCOMPLETO/COTAÇÃO e
+CONFIRMADO (mesmo gate `ro_oper` do `telefone_cliente`; está em `_CAMPOS_COTACAO_FULL`
+**e** no conjunto CONFIRMADO de `_CAMPOS_EDITAVEIS_HEADER`). Lido/gravado por
+`criar_venda_manual`, `_aplicar_header` e as rotas `tagplus_pedido_venda_criar`
+(`name="telefone_lead"`) / `vendas_salvar_pedido` (header dict). Migration dual
+`scripts/migrations/hora_58_venda_telefone_lead.{py,sql}` (idempotente, ADD COLUMN IF
+NOT EXISTS) **aplicada em local + PROD**.
+
+**Validação:** suíte de venda HORA (42) + render dos 2 modos (criação e edição)
+verde; Jinja compila; coluna confirmada em PROD (`character varying(20)`, nullable).
+
+---
+
+## 35. CORTESIA de revisão — texto institucional na NF — 2026-06-28
+
+Estende a §30 #3. Quando a venda tem a **peça de revisão** como brinde, a NF-e
+exibe, em `inf_contribuinte`, um **bloco institucional próprio** em vez de listar a
+peça na linha `CORTESIA: <peças>`. **Sem migration.**
+
+**Texto fixo** (`TEXTO_CORTESIA_REVISAO` em `payload_builder.py` — fonte: dono do
+módulo): "Cortesia: Revisão gratuita de 3 meses, mediante agendamento prévio
+(telefônico ou WhatsApp da loja) e conforme disponibilidade da agenda técnica da loja
+em que foi efetuada a compra/retirada. Será válida em apenas uma das lojas." Os
+marcadores markdown do texto original (`*..*` / `_.._`) foram **removidos de
+propósito**: `infCpl` da NFe é texto plano e os símbolos vazariam literais na DANFE.
+
+**Detecção** (`_eh_peca_revisao`): `codigo_interno` normalizado (upper + sem acento)
+`== 'REVISAO'` — **não** por id (211 em PROD difere de local/dev) nem por descrição
+(é `SE - REVISÃO`). `codigo_interno` é UNIQUE e estável entre ambientes.
+
+**Bloco 3 de `_montar_inf_contribuinte`:** separa os brindes em revisão vs demais. A
+revisão **não entra** na linha `CORTESIA: <peças>` (ganha o bloco próprio, evitando
+duplicar/poluir a leitura fiscal); as demais peças seguem na linha `CORTESIA:` como
+antes. Venda com revisão + peça física exibe **as duas coisas**.
+
+**Testes:** `tests/hora/test_brinde_inf_contribuinte.py` (+3: texto institucional,
+detecção por código sem acento, revisão + peça física). Suíte de brinde/payload (37)
+verde.
+
+---
+
+## 36. Custo de peça + margem do preview da NF por CUSTO (não preço de venda) — 2026-06-28
+
+A peça passa a ter **custo de aquisição** próprio, e o preview da NF calcula a
+margem com **custo real** — não mais com o preço de venda como proxy. **Migration: hora_59.**
+
+**Campos novos** (`scripts/migrations/hora_59_peca_custo.{py,sql}`, idempotente,
+ADD COLUMN IF NOT EXISTS):
+- `hora_peca.custo NUMERIC(15,2) NOT NULL DEFAULT 0` — custo de aquisição padrão.
+- `hora_venda_item_peca.custo_unitario NUMERIC(15,2) NOT NULL DEFAULT 0` — **snapshot**
+  de `hora_peca.custo` no momento da venda (mesmo padrão do brinde).
+
+**Cadastro de peças** (a "coluna de custo"): campo Custo no `pecas_cadastro_form.html`,
+coluna na listagem (`pecas_cadastro_lista.html`) e no detalhe; `peca_service.criar_peca`/
+`editar_peca` aceitam `custo`; rotas leem `request.form['custo']`.
+
+**Captura do snapshot** (todos os pontos que criam item de peça):
+- `venda_service.adicionar_item_peca` → `custo_unitario = peca.custo`.
+- `tagplus/backfill_service` (peças de NF já emitida) → `custo_unitario = peca.custo`
+  atual (NF emitida não traz custo; melhor aproximação disponível).
+
+**Brinde** (§30): `_criar_brinde_flush_only` passa a snapshotar `peca.custo`
+(antes `preco_venda_padrao`). Brindes já criados mantêm o snapshot antigo (auditoria).
+
+**Preview** (`venda_preview_service.montar_preview`): nova chave `custo_pecas_total`
+(soma `qtd * custo_unitario` das peças vendidas) entra na fórmula:
+
+    Venda Líquida = Venda − Frete − Custo Moto − **Custo Peças** − Custo Brindes
+
+Expõe também `pecas` (lista para a tabela) e `tem_peca_sem_custo` (alerta quando
+peça vendida está com custo 0 → margem distorcida). Template `venda_preview_nfe.html`:
+nova tabela "Peças do pedido", linha "(-) Custo Peças" na margem e fórmula atualizada.
+
+**Decisões do dono** (2026-06-28): snapshot por item (auditável) em vez de leitura ao
+vivo; brindes passam a usar custo real. Peças existentes nascem com custo 0 — até
+preencher, o alerta `tem_peca_sem_custo` sinaliza a distorção.
+
+**Testes:** `test_preview_custo_peca.py` (+3: subtração do custo, peça sem custo,
+snapshot em `adicionar_item_peca`); `test_peca_cadastro.py` (+1 custo); `test_brinde_*`
+ajustados (custo = `peca.custo`). Suíte peça/brinde/preview/estoque (28) verde.
+## 37. Recebimento por filial sem NF (NF provisória) — 2026-06-27
 
 Permite iniciar um recebimento selecionando apenas a loja, sem uma NF de entrada real.
 Spec: `docs/superpowers/specs/2026-06-26-hora-recebimento-sem-nf-design.md`. Plano:
@@ -1510,7 +1615,7 @@ O anexar reprocessa via `reprocessar_recebimentos_para_nf` (motor existente), se
 
 ---
 
-## 35. Avaria torna a moto NÃO-VENDÁVEL — 2026-06-28
+## 38. Avaria torna a moto NÃO-VENDÁVEL — 2026-06-28
 
 Inverte a regra anterior ("avaria não bloqueia venda"). Pedido do dono: moto com avaria fica **não-vendável**, **continua aparecendo no estoque com flag**, e **volta ao vendável só ao resolver a avaria**.
 
