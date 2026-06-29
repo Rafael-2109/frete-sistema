@@ -2032,6 +2032,16 @@ Nunca invente informações."""
                 "Ative AGENT_ONTOLOGY=true para expor query_ontology ao agente."
             )
 
+        # Handoff de sessao (F1) — registra a tool MCP fora de 'off'.
+        # (Task 7 adicionara o guard `specialist_profile is None` p/ NAO expor ao especialista.)
+        try:
+            from ..config.feature_flags import resolve_specialist_handoff_mode
+            if resolve_specialist_handoff_mode() != 'off':
+                from ..tools.handoff_mcp_tool import handoff_server
+                _register_mcp('handoff', handoff_server)
+        except Exception as _h_err:
+            logger.debug(f"[handoff] registro da tool pulado: {_h_err}")
+
         # Log de diagnóstico — útil para validar configuração em produção
         logger.info(
             f"[AGENT_CLIENT] Options: model={options_dict.get('model')}, "
