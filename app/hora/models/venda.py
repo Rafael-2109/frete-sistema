@@ -201,6 +201,11 @@ class HoraVenda(db.Model):
     tagplus_pedido_payload = db.Column(JSONB, nullable=True)
     # JSON bruto do GET /pedidos/{id} para auditoria + reprocessamento.
     # Sanitizar com sanitize_for_json antes de atribuir.
+    tagplus_pedido_numero = db.Column(db.Integer, nullable=True, index=True)
+    # Numero VISIVEL do pedido no TagPlus (pedido['numero'] / pedido_os_vinculada.numero).
+    # Distinto de tagplus_pedido_id (ID interno). Exibido ao usuario como "Pedido TP".
+    # Capturado no webhook nfe_aprovada, no backfill de enriquecimento e no backfill
+    # historico (do JSONB tagplus_pedido_payload['numero']). Migration hora_62.
     tagplus_departamento = db.Column(db.String(100), nullable=True, index=True)
     # departamento.descricao raw vinda do pedido TagPlus (ex.: "Praia Grande").
     # Base para de-para hora_tagplus_departamento_map.departamento_norm ->
