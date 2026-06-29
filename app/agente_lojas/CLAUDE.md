@@ -173,12 +173,21 @@ cross-contamination.
 
 **M0**: sessoes sao tagueadas corretamente. Retrieval de memoria ainda
 compartilha com 'web' (nao e critico enquanto nao houver memorias).
-**M3 (convergencia F2 — EM ANDAMENTO 2026-06-29):** fatia 1 do isolamento feita
-no agente web — `_load_user_memories_for_context(..., agente_id)` filtra
-`AgentMemory.agente` em 6 queries (Tier 1/1.5/1.6 + materializacao Tier 2/KG +
-fallback), `default='web'` (aditivo, web inalterado). Fork ainda NAO injeta
-memoria (air gap intacto). Falta fatia 2 (directives/session_window/briefing/
-rules/embeddings-JOIN) + F3 (client por perfil). Ver handoff
+**M3 (convergencia F2 — COMPLETA 2026-06-29):** isolamento por `agente_id` no
+agente web cobre TODAS as queries de memoria empresa/user do modulo de injecao
+(`default='web'` aditivo, web inalterado, fork ainda em air gap):
+- **Caminho do `_load`** (fatia 1+2): Tier 1/1.5/1.6, materializacao Tier 2/KG,
+  fallback, `operational_directives` (M10), `session_window`+`resolved_pendencias`
+  (M08/M09 via `get_by_path_for_agent`), `routing_context`+dominio (M11/M12),
+  canal L1 `user_rules` (R01), `intersession_briefing` (B01-B03), busca semantica
+  pgvector+fallback (E01).
+- **PreToolUse hooks** (fatia 2): `get_skill_reminders_for_session` (M13) e
+  `_load_enforce_directives` (cache key inclui agente) — query JA filtra; o WIRING
+  do `agente_id` nesses callers (via `build_hooks`) e F3.
+Review adversarial 4-dim feito; 17 commits, 145 testes + 1 skip. **PENDENTE: F2
+P1/P2** (particionar a ESCRITA — memory_mcp_tool + jobs; migrations de defesa) **+
+F3** (client por perfil, gated). Achados de F3: UNIQUE(`user_id`,`path`) sem agente
+(escrita), KG-na-origem (P2). Ver handoff
 `docs/superpowers/plans/2026-06-29-convergencia-agente-lojas-handoff.md`.
 
 ---
@@ -195,7 +204,7 @@ rules/embeddings-JOIN) + F3 (client por perfil). Ver handoff
 | M2 (SDK Fase C) | Hooks PostToolUse audit + permissions hardening | **Concluido** (2026-05-09) |
 | M2 (UX P0) | Markdown rendering (marked + DOMPurify), TodoWrite progress UI, 34 testes (can_use_tool, scope_injector, todos parser) | **Concluido** (2026-05-09) |
 | M2 (UX P1) | PostgresSessionStore opt-in (`AGENT_LOJAS_SESSION_STORE_ENABLED`), historico de sessoes no UI (dropdown + nova sessao) | **Concluido** (2026-05-09) |
-| M3   | Venda + isolamento total de memoria + Cost tracking granular por subagente | **Parcial** — skill `consultando-venda-loja` na whitelist (`SKILLS_DOMINIO_HORA`); **cost tracking por turno corrigido** (delta via `turn_cost_from_cumulative`, FIX 2026-06-26); **convergencia F0+F1 concluida + F2 fatia 1** (memory_injection ja filtra por `agente` em 6 queries; default='web' aditivo) — branch `worktree-convergencia-agente-lojas`, handoff `2026-06-29-convergencia-agente-lojas-handoff.md`. **PENDENTE: F2 fatia 2 + F3** (reuso do AgentClient web por perfil — gated por isolamento total; ver Gotcha 0) |
+| M3   | Venda + isolamento total de memoria + Cost tracking granular por subagente | **Parcial** — skill `consultando-venda-loja` na whitelist (`SKILLS_DOMINIO_HORA`); **cost tracking por turno corrigido** (delta via `turn_cost_from_cumulative`, FIX 2026-06-26); **convergencia F0+F1 + F2/M3 COMPLETA** (isolamento de memoria por `agente_id` em TODO o modulo de injecao — `_load` + PreToolUse hooks; default='web' aditivo; review adversarial; 17 commits, 145 testes) — branch `worktree-convergencia-agente-lojas`, handoff `2026-06-29-convergencia-agente-lojas-handoff.md`. **PENDENTE: F2 P1/P2 (escrita) + F3** (reuso do AgentClient web por perfil — gated por F2, agora verde; ver Gotcha 0) |
 | M4   | Analytics (apos fase financeira HORA) | Planejado |
 
 ---

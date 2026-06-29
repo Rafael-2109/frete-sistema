@@ -335,6 +335,23 @@ def build_subprocess_env() -> dict[str, str]:
 > (d) `build_intersession_briefing(agente_id)` + `_build_user_rules(agente_id)`;
 > (e) hook web passa `'web'`; (f) GREEN. ~25 edições aditivas, 4 arquivos, baixo
 > risco (default preserva o web).
+>
+> ### ✅ STATUS — F2/M3 EXECUTADA E COMPLETA (2026-06-29)
+> Fatia 1 (6 queries do `_load`) + fatia 2 (7 commits TDD) entregues. Isolamento
+> por `agente_id` (default `'web'` aditivo) em TODAS as queries de memória
+> empresa/user do módulo de injeção:
+> - **`_load`**: M08 session_window, M09/H01 `get_by_path_for_agent`, M10 directives,
+>   M11/M12 routing+domínio, R01 user_rules, B01-B03 briefing, E01 busca semântica
+>   (pgvector JOIN + fallback).
+> - **PreToolUse hooks**: M13 `get_skill_reminders_for_session` + `_load_enforce_directives`
+>   (filtro + cache key por agente). Wiring do `agente_id` nos callers = F3.
+> - **Review adversarial** (4 dims × verificação): web-intacto limpo; as 2 fontes
+>   PreToolUse apontadas foram fechadas; KG-na-origem e UNIQUE-constraint-na-escrita
+>   confirmados como F3/P2 (materialização M06 já garante fail-closed do KG).
+> - **Zero-migration confirmado.** 17 commits, 145 testes + 1 skip. Detalhe vivo:
+>   handoff `2026-06-29-convergencia-agente-lojas-handoff.md`.
+> Tasks 2.1–2.8 abaixo (versão pré-revisão, com migrations bloqueantes) ficam como
+> registro histórico — substituídas pelo plano P0 acima.
 
 ### Task 2.0: Fechar o escopo (auditoria das lacunas conhecidas)
 
