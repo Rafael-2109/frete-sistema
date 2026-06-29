@@ -167,6 +167,21 @@ class DanfePDFParser:
                 return i
         return None
 
+    def _encontrar_linhas(self, *termos: str) -> List[int]:
+        """Encontra indices de TODAS as linhas que contem TODOS os termos (case-insensitive).
+
+        Usado quando o mesmo cabecalho aparece >1 vez (ex.: 'VALOR TOTAL DA NOTA'
+        no canhoto E no quadro de impostos) e a primeira ocorrencia leva ao valor
+        errado — ver get_valor_total Strategy 2.
+        """
+        linhas = self._linhas()
+        indices = []
+        for i, linha in enumerate(linhas):
+            upper = linha.upper()
+            if all(t.upper() in upper for t in termos):
+                indices.append(i)
+        return indices
+
     def _encontrar_secao_destinatario(self) -> Optional[int]:
         """Encontra a SECAO DESTINATARIO/REMETENTE (ignora 'DESTINATARIO' do canhoto).
 
@@ -311,10 +326,15 @@ class DanfePDFParser:
 
         P2 fix: 'N. 000.001.363' — regex deve capturar numero com separadores
         de milhar e depois remover pontos e zeros a esquerda.
+
+        Consisanet fix (IMP-2026-06-29-001): ERP Consisanet (Alisul SC) imprime
+        'Num. 000.000.986' — o prefixo 'Num.' nao casava `N[°ºo.]` (o `u` nao esta
+        em `[°ºo.]`). Strategy 1 agora cobre `N(?:[°ºo.]|UM\\.?)` (formas compactas
+        Nº/N°/N. + 'NUM.'/'NUM'); IGNORECASE ja resolve maiusc/minusc.
         """
         # Strategy 1: numero formatado com separador de milhar (ex: 000.001.363)
         match = re.search(
-            r'N[°ºo.]\s*[:.]?\s*(\d{1,3}(?:\.\d{3})+)',
+            r'N(?:[°ºo.]|UM\.?)\s*[:.]?\s*(\d{1,3}(?:\.\d{3})+)',
             self.texto_completo,
             re.IGNORECASE,
         )
@@ -464,20 +484,28 @@ class DanfePDFParser:
                     self.confianca += 0.1
                     return valor
 
-        # Strategy 2: layout tabular — cabecalho + valor na proxima linha
-        idx = self._encontrar_linha('VALOR', 'TOTAL', 'NOTA')
-        if idx is None:
-            idx = self._encontrar_linha('V.', 'TOTAL', 'NF')
-        if idx is not None:
-            linhas = self._linhas()
-            if idx + 1 < len(linhas):
-                tokens = self._tokens_numericos(linhas[idx + 1])
-                if tokens:
-                    # Ultimo token numerico da proxima linha (valor total e o ultimo campo)
-                    valor = self._parse_valor_br(tokens[-1])
-                    if valor and valor > 0:
-                        self.confianca += 0.1
-                        return valor
+        # Strategy 2: layout tabular — cabecalho + valor na proxima linha.
+        # Consisanet fix (IMP-2026-06-29-001): o canhoto tambem tem
+        # 'VALOR TOTAL DA NOTA', mas a linha SEGUINTE e a serie ('Serie 1'),
+        # cujo unico token numerico e a serie -> retornaria 1.0. Iterar TODAS as
+        # ocorrencias e pular a do canhoto (proxima linha contem 'RIE' de 'Serie',
+        # detectado sem sensibilidade a case/acento). Retorna o 1o valor > 0 valido.
+        linhas = self._linhas()
+        indices = self._encontrar_linhas('VALOR', 'TOTAL', 'NOTA') or \
+            self._encontrar_linhas('V.', 'TOTAL', 'NF')
+        for idx in indices:
+            if idx + 1 >= len(linhas):
+                continue
+            prox = linhas[idx + 1]
+            if 'RIE' in prox.upper():  # canhoto: proxima linha = 'Serie N'
+                continue
+            tokens = self._tokens_numericos(prox)
+            if tokens:
+                # Ultimo token numerico da proxima linha (valor total e o ultimo campo)
+                valor = self._parse_valor_br(tokens[-1])
+                if valor and valor > 0:
+                    self.confianca += 0.1
+                    return valor
 
         # Strategy 3: secao FATURA (ex: 'Valor Original: R$ 7.360,87')
         match = re.search(
@@ -1429,8 +1457,16 @@ class DanfePDFParser:
         # Tentar com CFOP primeiro (mais especifico, menos falsos positivos)
         # NCM (8 dig) + O/CST skip (1-3 dig, split por espaco ou barra) + CFOP (4 dig, com ponto opcional)
         # Ex: "20057000 3 00 6101" ou "87116000 460 5405" ou "87116000 1/10 6403" — todos funcionam
+        # Consisanet fix (IMP-2026-06-29-001): CFOP e UNIDADE podem vir COLADOS sem
+        # espaco ("6403UNIDADE"). `\s+(\w{1,5})` exigia >=1 espaco e o limite {1,5}
+        # truncava 'UNIDADE' (7 chars) -> falhava o match inteiro. `\s*(\w+)` aceita
+        # zero espacos e unidade de qualquer tamanho.
+        # `\w` (NAO `[A-Za-z]`): preserva retrocompat com unidades que tem digito
+        # (M2, M3 = metro quad/cubico) ou acento (PÇ = peca) — o ramo antigo `\w{1,5}`
+        # as casava; um `[A-Za-z]+` as descartaria em silencio (get_itens_produto so'
+        # loga warning e omite o item -> NF com item faltando e valor_total errado).
         match = re.search(
-            r'(\d{8})\s+\d{1,4}(?:[/\s]+\d{2})?\s+(\d\.?\d{3})\s+(\w{1,5})\s+([\d.,]+)\s+([\d.,]+)',
+            r'(\d{8})\s+\d{1,4}(?:[/\s]+\d{2})?\s+(\d\.?\d{3})\s*(\w+)\s+([\d.,]+)\s+([\d.,]+)',
             ncm_line,
         )
         if match:

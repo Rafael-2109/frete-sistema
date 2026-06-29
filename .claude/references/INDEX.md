@@ -4,13 +4,13 @@ camada: L1
 sot_de: —
 hub: .claude/references/INDEX.md
 superseded_by: —
-atualizado: 2026-06-08
+atualizado: 2026-06-29
 -->
 # Indice de Referencias
 
 > **Papel:** Indice de Referencias.
 
-**Ultima atualizacao**: 2026-06-22 (mapeamento Skill->References: +`corrigindo-dados-assai` (WRITE backfill Assai, 2026-06-19, delegada a `gestor-motos-assai`); inventario 54 -> 57 — tambem ja contava `auditando-reclassificacao-odoo` (2026-06-13), `baixando-credores-lote-odoo` (2026-06-18). Historico anterior: 2026-06-08 ampliacao +3 skills de 2026-06-02; inventario 51 -> 54)
+**Ultima atualizacao**: 2026-06-29 (inventario 57 -> 59: +`reclassificando-amls-odoo` (WRITE reclassificacao em lote account.move.line, 2026-06-13, delegada a `gestor-estoque-odoo` — adicionada ao mapeamento), +`consultando-cliente-odoo` (READ ao vivo res.partner, 2026-06-25, ja mapeada). Anterior 2026-06-22: +`corrigindo-dados-assai` (WRITE backfill Assai, 2026-06-19, delegada a `gestor-motos-assai`); inventario 54 -> 57 — tambem ja contava `auditando-reclassificacao-odoo` (2026-06-13), `baixando-credores-lote-odoo` (2026-06-18). Historico anterior: 2026-06-08 ampliacao +3 skills de 2026-06-02; inventario 51 -> 54)
 
 ---
 
@@ -181,6 +181,7 @@ atualizado: 2026-06-08
 | `auditando-cadastro-fiscal-odoo` (PRE-FLIGHT) | `app/odoo/estoque/CLAUDE.md` (G017/G018/G035/G014 + D-OPS-2/3) |
 | `faturando-odoo` (WRITE Skill 8) | `app/odoo/estoque/CLAUDE.md`, `app/odoo/estoque/orchestrators/inventario_pipeline.py`, `odoo/IDS_FIXOS.md` |
 | `auditando-reclassificacao-odoo` (READ — subagente auditor-financeiro) | `odoo/MODELOS_CAMPOS`, `odoo/AGENT_BOILERPLATE` |
+| `reclassificando-amls-odoo` (WRITE — subagente gestor-estoque-odoo) | `app/odoo/estoque/CLAUDE.md`, `odoo/MODELOS_CAMPOS` (account.move.line) |
 | `baixando-credores-lote-odoo` (subagente auditor-financeiro) | `app/financeiro/CLAUDE.md` |
 | `gerando-controle-recebiveis` | (sem references — banco direto: `contas_a_receber`) |
 | `diagnosticando-banco` | `INFRAESTRUTURA` (postgresId / secao IDs dos Recursos) |

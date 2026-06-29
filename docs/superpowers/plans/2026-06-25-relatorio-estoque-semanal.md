@@ -1,6 +1,21 @@
+<!-- doc:meta
+tipo: how-to
+camada: L1
+sot_de: —
+hub: docs/superpowers/plans/INDEX.md
+superseded_by: —
+atualizado: 2026-06-25
+-->
 # Relatório Semanal de Estoque — Implementation Plan
 
+> **Papel:** plano de implementação task-by-task do relatório semanal de estoque (comparativo segunda-a-segunda, entregue por e-mail toda segunda 8h). Spec par: `docs/superpowers/specs/2026-06-25-relatorio-estoque-semanal-design.md`.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+
+## Indice
+- Goal / Architecture / Tech Stack
+- Global Constraints
+- Tasks (TDD, task-by-task)
 
 **Goal:** Gerar um relatório semanal de estoque (saldo da segunda anterior vs. segunda atual, com entradas, consumos e ajustes) e entregá-lo por e-mail toda segunda às 8h.
 

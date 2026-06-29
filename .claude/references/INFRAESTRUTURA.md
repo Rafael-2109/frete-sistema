@@ -25,7 +25,7 @@ atualizado: 2026-06-02
   - [Tools MCP Disponiveis (20 total)](#tools-mcp-disponiveis-20-total)
 - [Odoo ERP](#odoo-erp)
 
-**Ultima Atualizacao**: 22/04/2026
+**Ultima Atualizacao**: 02/06/2026 (capacity baseline permanece 22/04/2026)
 
 ---
 
