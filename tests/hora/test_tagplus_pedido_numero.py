@@ -93,3 +93,30 @@ def test_backfill_enriquecimento_grava_numero(db, monkeypatch):
 
     assert res['status'] == 'enriquecida'
     assert venda.tagplus_pedido_numero == 777
+
+
+# --------------------------------------------------------------------------
+# Backfill historico: preenche o numero a partir do JSONB ja salvo (sem API)
+# --------------------------------------------------------------------------
+def test_backfill_numero_do_payload_preenche_da_jsonb(db):
+    v1 = HoraVenda(
+        cpf_cliente='12345678901', nome_cliente='Com payload',
+        valor_total=Decimal('100.00'),
+        tagplus_pedido_id=5, tagplus_pedido_payload={'id': 5, 'numero': 888},
+    )
+    v2 = HoraVenda(
+        cpf_cliente='12345678902', nome_cliente='Sem numero no payload',
+        valor_total=Decimal('100.00'),
+        tagplus_pedido_id=6, tagplus_pedido_payload={'id': 6},
+    )
+    _db.session.add_all([v1, v2])
+    _db.session.flush()
+
+    res = pedido_backfill_service.backfill_numero_do_payload()
+
+    assert v1.tagplus_pedido_numero == 888
+    assert v2.tagplus_pedido_numero is None
+    # Contagens com >= por robustez: o fixture `db` deixa commits de services
+    # persistirem, entao pode haver outras vendas elegiveis no DB local.
+    assert res['atualizadas'] >= 1
+    assert res['sem_numero'] >= 1
