@@ -494,9 +494,11 @@ def test_infra_evolution_flags_confronta_feature_flags():
         assert re.search(rf'(?m)^{re.escape(attr)}\s*=', ff_src), (
             f"EVOLUTION_FLAGS: '{attr}' nao e atribuido em feature_flags.py (drift de nome de simbolo?)"
         )
-        # 2) o env var e' lido via os.getenv com o default esperado ('true'/'false').
+        # 2) o env var e' lido (os.getenv legado OU _env_bool helper) com o default
+        #    esperado ('true'/'false'). _env_bool (canonico desde 042705ddc2) envolve
+        #    os.getenv com o mesmo default string — ambos validos.
         default_str = 'true' if default else 'false'
-        pat = rf'os\.getenv\(\s*["\']{re.escape(env_var)}["\']\s*,\s*["\']({default_str})["\']'
+        pat = rf'(?:os\.getenv|_env_bool)\(\s*["\']{re.escape(env_var)}["\']\s*,\s*["\']({default_str})["\']'
         assert re.search(pat, ff_src, re.IGNORECASE), (
             f"feature_flags.py: nao achei os.getenv('{env_var}', '{default_str}') — "
             f"drift de env var ou default de {attr}?"
