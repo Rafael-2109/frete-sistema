@@ -210,6 +210,7 @@ class AgentLojasClient:
         perfil: str,
         loja_hora_id: Optional[int],
         sdk_session_id: Optional[str] = None,
+        our_session_id: Optional[str] = None,
         output_format: Optional[Dict[str, Any]] = None,
         stderr_queue: Optional[Any] = None,
     ) -> ClaudeAgentOptions:
@@ -310,6 +311,25 @@ class AgentLojasClient:
                     "[AGENTE_LOJAS] sdk_session_id invalido (nao UUID), "
                     "ignorando resume: %s", str(sdk_session_id)[:20],
                 )
+        elif our_session_id:
+            # Turno 1 (sem sdk_session_id): pre-nomeia o JSONL com NOSSO UUID via
+            # --session-id (apenas NOMEIA; SEM --resume -> sem conflito de fork).
+            # Elimina a captura assincrona do id via SystemMessage, fragil em race:
+            # se o SystemMessage nao chega, o sdk_session_id fica None e o turno 2
+            # perde o resume -> amnesia. Espelha o web (client.py:1655-1663).
+            # ADITIVO: so ativa quando our_session_id e passado; callers legados
+            # sem o arg mantem o comportamento de deixar o SDK gerar o id. NUNCA
+            # cai aqui no turno 2+ (o ramo `if sdk_session_id` ja tratou o resume),
+            # preservando o invariante FIX S1 (--session-id + --resume = exit 1).
+            try:
+                import uuid as _uuid_check
+                _uuid_check.UUID(str(our_session_id))
+                options_kwargs["session_id"] = our_session_id
+            except (ValueError, AttributeError, TypeError):
+                logger.debug(
+                    "[AGENTE_LOJAS] our_session_id nao-UUID, CLI gerara proprio "
+                    "id: %s", str(our_session_id)[:20],
+                )
 
         # Structured output (SDK nativo). ResultMessage.structured_output
         # contera o JSON parseado. Util para skills que retornam tabelas.
@@ -395,6 +415,7 @@ class AgentLojasClient:
             perfil=perfil,
             loja_hora_id=loja_hora_id,
             sdk_session_id=sdk_session_id,
+            our_session_id=our_session_id,
             output_format=output_format,
             stderr_queue=stderr_queue,
         )

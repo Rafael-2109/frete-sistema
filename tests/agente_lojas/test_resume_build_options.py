@@ -45,3 +45,36 @@ class TestResumeBuildOptions:
         o = _build(bad)
         assert getattr(o, 'resume', None) is None
         assert getattr(o, 'session_id', None) is None
+
+
+class TestSessionIdTurno1:
+    """F1.5(a): turno 1 pre-nomeia o JSONL com NOSSO UUID via --session-id."""
+
+    def _build2(self, sdk_session_id, our_session_id):
+        return get_lojas_client().build_options(
+            user_id=1, user_name='Test', perfil='administrador',
+            loja_hora_id=None, sdk_session_id=sdk_session_id,
+            our_session_id=our_session_id,
+        )
+
+    def test_turno1_com_our_session_id_seta_session_id(self):
+        """Turno 1 (sem sdk_session_id): session_id=our_uuid, SEM resume."""
+        osid = str(uuid.uuid4())
+        o = self._build2(None, osid)
+        assert o.session_id == osid
+        assert getattr(o, 'resume', None) is None
+
+    def test_turno2_com_our_session_id_NAO_seta_session_id(self):
+        """INVARIANTE FIX S1: turno 2 usa resume e NUNCA session_id junto
+        (--session-id + --resume exigiria --fork-session; fork X->X = exit 1)."""
+        sid = str(uuid.uuid4())
+        osid = str(uuid.uuid4())
+        o = self._build2(sid, osid)
+        assert o.resume == sid
+        assert getattr(o, 'session_id', None) is None
+
+    def test_turno1_our_session_id_nao_uuid_e_ignorado(self):
+        """our_session_id invalido nao vira --session-id (CLI gera o proprio)."""
+        o = self._build2(None, 'nao-e-uuid')
+        assert getattr(o, 'session_id', None) is None
+        assert getattr(o, 'resume', None) is None

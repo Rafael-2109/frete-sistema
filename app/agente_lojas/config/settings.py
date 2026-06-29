@@ -24,9 +24,13 @@ class AgentLojasSettings(AgentSettings):
     system_prompt_path: str = "app/agente_lojas/prompts/system_prompt.md"
     operational_preset_path: str = "app/agente_lojas/prompts/preset_operacional.md"
 
-    # M0: reusa empresa_briefing do agente principal (sera substituido em M1
-    # por briefing dedicado das lojas HORA quando existir dominio para isso).
-    empresa_briefing_path: str = "app/agente/config/empresa_briefing.md"
+    # Campo HERDADO de AgentSettings mas NAO lido pelo fork: _build_system_prompt()
+    # do AgentLojasClient concatena APENAS preset + system_prompt (sem briefing).
+    # Mantido VAZIO de proposito — apontar para o briefing Nacom
+    # (app/agente/config/empresa_briefing.md) quebraria o contrato de isolamento
+    # HORA se alguem "corrigir" _build_system_prompt() para inclui-lo. Em F3 o
+    # briefing por perfil entra como config declarativa do perfil de agente.
+    empresa_briefing_path: str = ""
 
     # M0: sem skills/subagents especificos ainda (padrao vazio). Em M1+
     # sera preenchido pela whitelist importada de skills_whitelist.py.

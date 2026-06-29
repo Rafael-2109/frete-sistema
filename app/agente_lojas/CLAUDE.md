@@ -200,7 +200,13 @@ compartilha com 'web' (nao e critico enquanto nao houver memorias).
    passa `resume=sdk_session_id` (--resume CARREGA o `{id}.jsonl`) a partir do
    turno 2, **sem** setar `session_id` (--session-id apenas NOMEIA; --session-id +
    --resume exige --fork-session e forkar X->X = exit code 1). Espelha
-   `_with_resume` do agente web (`app/agente/sdk/client.py:2842`). O bug original:
+   `_with_resume` do agente web (`app/agente/sdk/client.py:2842`).
+   **Turno 1 (F1.5 2026-06-28):** quando `our_session_id` (nosso UUID) e passado,
+   `build_options` PRE-NOMEIA o JSONL via `session_id=our_session_id` (SEM resume)
+   — elimina a captura assincrona fragil via SystemMessage (race: se nao chega, o
+   turno 2 perde o resume -> amnesia). ADITIVO e mutuamente exclusivo com o resume
+   (o ramo `if sdk_session_id` ja tratou o turno 2+), preservando o invariante
+   acima. Espelha web `client.py:1655-1663`. O bug original:
    o modulo so passava `session_id` reusando o id do turno anterior -> amnesia +
    colisao de JSONL ("nao responde 2 perguntas sequenciais"). O `SessionStore`
    agora e **default ON** (`AGENT_LOJAS_SESSION_STORE_ENABLED=True`) para que o
