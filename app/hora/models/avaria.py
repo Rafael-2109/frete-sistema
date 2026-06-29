@@ -2,8 +2,10 @@
 
 Padrao header + N fotos, espelhando hora_peca_faltando + hora_peca_faltando_foto.
 
-Regra de negocio: avaria NAO bloqueia venda — apenas registra + emite
-evento AVARIADA em hora_moto_evento. Moto permanece em estoque vendavel.
+Regra de negocio (2026-06-28): avaria ABERTA torna a moto NAO-VENDAVEL. A moto
+CONTINUA em estoque (evento AVARIADA segue em EVENTOS_EM_ESTOQUE) e aparece com
+flag, mas e bloqueada na venda; volta a vendavel quando a ULTIMA avaria ABERTA e
+resolvida/ignorada. Vendabilidade = HoraAvaria ABERTA (ver avaria_service).
 """
 from app import db
 from app.utils.timezone import agora_utc_naive

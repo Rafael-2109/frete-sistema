@@ -1,11 +1,16 @@
 """Service de avaria em moto de estoque HORA.
 
-Regra-chave: avaria NAO bloqueia venda. Apenas registra + emite evento
-AVARIADA em hora_moto_evento. Moto continua em estoque vendavel (AVARIADA
-esta em EVENTOS_EM_ESTOQUE).
+Regra-chave (2026-06-28): avaria ABERTA torna a moto NAO-VENDAVEL. A moto
+CONTINUA em estoque (AVARIADA segue em EVENTOS_EM_ESTOQUE — aparece em
+listar_estoque com flag moto_vendavel=False), mas e bloqueada na venda (reserva
++ confirmacao) e excluida das listas de oferta. Volta a vendavel quando a ULTIMA
+avaria aberta e resolvida OU ignorada — predicado por CONTAGEM de HoraAvaria
+ABERTA, nao por evento (_finalizar_avaria so flipa status, nao emite evento; o
+ultimo evento da moto pode seguir AVARIADA e nao deve ser usado como gate).
+Fonte de verdade unica da vendabilidade: avarias_abertas_por_chassi.
 
-Foto: opcional desde 2026-05-07 (pedido do dono — UI agora aceita upload
-direto via camera/arquivo, foto deixou de ser bloqueador).
+Foto: opcional desde 2026-05-07 (pedido do dono — UI aceita upload direto via
+camera/arquivo, foto deixou de ser bloqueador).
 """
 from __future__ import annotations
 

@@ -172,11 +172,17 @@ def _run_query(
     sql = "\n".join(sql_parts) + "\nORDER BY nome_modelo, numero_chassi"
     rows = db.session.execute(text(sql), params).fetchall()
 
+    # Avarias ABERTAS por chassi (2026-06-28): moto em estoque com avaria e
+    # NAO-VENDAVEL — continua no estoque (status 'estoque'), porem com flag.
+    from app.hora.services.avaria_service import avarias_abertas_por_chassi
+    _avarias_map = avarias_abertas_por_chassi([r.numero_chassi for r in rows])
+
     # ==========================================================================
     # Classificacao em memoria (dataset pequeno)
     # ==========================================================================
     motos = []
-    totais = {'estoque': 0, 'transito': 0, 'vendido': 0, 'devolvido': 0, 'outro': 0}
+    totais = {'estoque': 0, 'transito': 0, 'vendido': 0, 'devolvido': 0,
+              'outro': 0, 'avariada': 0}
     por_modelo = {}
     por_loja_data = {}
 
@@ -215,6 +221,11 @@ def _run_query(
                 continue
 
         totais[status] = totais.get(status, 0) + 1
+        # Avaria ABERTA: moto em estoque, porem NAO-VENDAVEL (2026-06-28).
+        avarias_abertas = _avarias_map.get(r.numero_chassi, 0)
+        moto_avariada = status == 'estoque' and avarias_abertas > 0
+        if moto_avariada:
+            totais['avariada'] += 1
 
         # Por modelo
         modelo = r.nome_modelo or 'SEM_MODELO'
@@ -244,6 +255,8 @@ def _run_query(
                 'numero_motor': r.numero_motor,
                 'ano_modelo': r.ano_modelo,
                 'status': status,
+                'vendavel': status == 'estoque' and avarias_abertas == 0,
+                'avarias_abertas': avarias_abertas,
                 'loja_atual_id': loja_id if status == 'estoque' else None,
                 'loja_atual': (
                     lojas_map.get(loja_id, {}).get('apelido')

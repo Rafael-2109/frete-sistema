@@ -49,6 +49,7 @@ atualizado: 2026-06-27
 - [32. Recebimento — autocomplete de NF por permissão + guarda anti-duplicado — 2026-06-27](#32-recebimento--autocomplete-de-nf-por-permissão-de-recebimento--guarda-anti-duplicado--2026-06-27)
 - [33. Loja real da venda vs matriz (emitente fiscal) — integridade — 2026-06-27](#33-loja-real-da-venda-vs-matriz-emitente-fiscal--integridade--2026-06-27)
 - [34. Recebimento por filial sem NF (NF provisória) — 2026-06-27](#34-recebimento-por-filial-sem-nf-nf-provisória--2026-06-27)
+- [35. Avaria torna a moto NÃO-VENDÁVEL — 2026-06-28](#35-avaria-torna-a-moto-não-vendável--2026-06-28)
 - [Onboarding Tours (2026-05-08)](#onboarding-tours-2026-05-08)
 - [Referências](#referências)
 
@@ -154,7 +155,7 @@ Documentação detalhada na análise de primeiros princípios do módulo (comand
 > Núcleo acima (14) + estas 32 = 46. Padrões recorrentes: header + itens; auditoria append-only (nunca UPDATE/DELETE); fotos/anexos em S3.
 
 **Avaria**:
-- `hora_avaria` — avaria física em moto (`numero_chassi`, `loja_id`, `status`); NÃO bloqueia venda, emite evento `AVARIADA`.
+- `hora_avaria` — avaria física em moto (`numero_chassi`, `loja_id`, `status`); avaria ABERTA torna a moto **NÃO-VENDÁVEL** (continua em estoque com flag), emite `AVARIADA`. Ver §35.
 - `hora_avaria_foto` — fotos S3 de uma avaria (header + N fotos).
 
 **Devolução fornecedor (HORA → Motochefe)**:
@@ -1506,6 +1507,30 @@ O anexar reprocessa via `reprocessar_recebimentos_para_nf` (motor existente), se
 **Spec/Plano:**
 - `docs/superpowers/specs/2026-06-26-hora-recebimento-sem-nf-design.md`
 - `docs/superpowers/plans/2026-06-26-hora-recebimento-sem-nf.md`
+
+---
+
+## 35. Avaria torna a moto NÃO-VENDÁVEL — 2026-06-28
+
+Inverte a regra anterior ("avaria não bloqueia venda"). Pedido do dono: moto com avaria fica **não-vendável**, **continua aparecendo no estoque com flag**, e **volta ao vendável só ao resolver a avaria**.
+
+### REQ 1 — marcar avaria CRIA uma `HoraAvaria`
+- `registrar_conferencia_cega` (`avaria_fisica=True`): além da flag de conferência e da divergência `AVARIA_FISICA`, chama `avaria_service.registrar_avaria` (descrição **default no backend** + reusa a **foto do chassi**), com **dedup** por chassi-com-avaria-aberta (cobre re-scan `is_new=False` e reconferência).
+- `resolucao_service` ação `MARCAR_AVARIA`: idem com dedup (no-op se a conferência já criou).
+- `registrar_avaria` já emite o evento `AVARIADA` (antes, ambos só emitiam o evento solto, sem `HoraAvaria` resolvível).
+
+### REQ 2 — avariada = em estoque, mas não-vendável
+- **Fonte de verdade da vendabilidade**: `avaria_service.avarias_abertas_por_chassi` (`HoraAvaria` status `ABERTA`) — **NÃO** o tipo do último evento. `AVARIADA` permanece em `EVENTOS_EM_ESTOQUE` (a moto continua no estoque). Regra: `vendável = (em estoque) AND (avarias_abertas == 0)`.
+- **Gate de venda** (`venda_service`): `_lock_chassi_e_validar_disponivel` (reserva, helper `_assert_sem_avaria_aberta`) e `confirmar_venda` (re-checa os chassis) bloqueiam. Decisão do dono: bloqueio na **reserva + confirmação** (NÃO na emissão da NFe). **Empréstimo permitido** mesmo com avaria; transferência também (a avaria viaja com o chassi).
+- **Listas de oferta** excluem avariada: `chassis_disponiveis_para_venda`, `cores_disponiveis_por_modelo`, `autocomplete_service.chassis(disponivel=True)`.
+- **Flag no estoque**: `listar_estoque` retorna `moto_vendavel`; `estoque_lista.html` mostra badge **"NÃO vendável"** (+ o "⚠ N avaria" já existente). A moto segue `moto_disponivel=True` (aparece).
+- **Resolver/ignorar** a última avaria zera a contagem → a moto volta ao vendável **automaticamente**. `_finalizar_avaria` **NÃO** emite evento (predicado por contagem; respeita o insert-once — o último evento pode seguir `AVARIADA`). `IGNORADA` também desbloqueia.
+
+### Decisão de escopo (contagem agregada)
+`kpis_loja_modelo_cor` e os KPIs gerenciais **mantêm a avariada no total** (ela ESTÁ em estoque); a não-vendabilidade é tratada por chassi (gate + `moto_vendavel` + badge + exclusão da oferta). Separar um bucket "avariada" na contagem agregada é follow-up — não foi pedido.
+
+### Testes
+`tests/hora/test_avaria_bloqueia_venda.py` (gate reserva/resolver/ignorar/multi-avaria + offer-for-sale + flag `moto_vendavel`), `test_recebimento_sem_nf.py` (REQ 1 + `MARCAR_AVARIA` dedup), `test_pedido_workflow.py` (confirmação bloqueia). Mapa de impacto: workflow `mapa-avaria-nao-vendavel` (101 pontos).
 
 ---
 

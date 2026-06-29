@@ -59,6 +59,13 @@ esta em `EVENTOS_EM_ESTOQUE` (fonte de verdade: `estoque_service.py`) E tem
 `loja_id=<loja>`. Inclui RECEBIDA, CONFERIDA, TRANSFERIDA, CANCELADA, AVARIADA,
 FALTANDO_PECA, EMPRESTIMO_ENTRADA, RESSARCIMENTO_SAIDA — NAO apenas 'RECEBIDA'.
 
+### 5. AVARIADA = EM ESTOQUE PORÉM NÃO-VENDÁVEL (2026-06-28)
+Moto com avaria ABERTA continua no estoque (status `estoque`), mas NAO pode ser
+vendida ate a avaria ser resolvida. O script marca cada moto com `vendavel`
+(bool) e `avarias_abertas` (int), e traz `totais['avariada']` (motos em estoque
+nao-vendaveis). Ao relatar estoque, distinga "em estoque" de "disponivel para
+venda": se houver avariadas, avise (ex.: "5 em estoque, 1 com avaria → 4 vendaveis").
+
 ---
 
 ## DECISION TREE
