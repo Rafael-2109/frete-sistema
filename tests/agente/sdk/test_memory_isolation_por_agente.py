@@ -161,14 +161,20 @@ def test_session_window_isola_por_agente(seed_session, test_user):
 # O isolamento de RETRIEVAL e fail-closed: a memoria 'web' existe e o 'lojas'
 # NAO a enxerga (None), em vez de pegar a do outro agente via .first().
 def test_get_by_path_for_agent_isola(seed_mem, test_user):
-    path = '/memories/system/resolved_pendencias.json'
-    m_web = seed_mem(path, '["pend_web"]', agente='web')
+    # path_web e path_lojas distintos (UNIQUE user_id,path) — prova ambos os lados:
+    # cada agente acha A SUA e NAO acha a do outro.
+    path_web = '/memories/system/resolved_pendencias.json'
+    path_lojas = '/memories/system/resolved_pendencias_loja.json'
+    m_web = seed_mem(path_web, '["pend_web"]', agente='web')
+    m_lojas = seed_mem(path_lojas, '["pend_loja"]', agente='lojas')
 
-    achado_web = AgentMemory.get_by_path_for_agent(test_user.id, path, 'web')
-    achado_lojas = AgentMemory.get_by_path_for_agent(test_user.id, path, 'lojas')
-
-    assert achado_web is not None and achado_web.id == m_web.id
-    assert achado_lojas is None, "lojas enxergou resolved_pendencias do agente 'web'"
+    # web acha a sua; nao acha a de lojas (mesmo passando o path da lojas)
+    assert AgentMemory.get_by_path_for_agent(test_user.id, path_web, 'web').id == m_web.id
+    assert AgentMemory.get_by_path_for_agent(test_user.id, path_lojas, 'web') is None
+    # lojas acha a sua; nao acha a do web (mesmo passando o path do web)
+    assert AgentMemory.get_by_path_for_agent(test_user.id, path_lojas, 'lojas').id == m_lojas.id
+    assert AgentMemory.get_by_path_for_agent(test_user.id, path_web, 'lojas') is None, \
+        "lojas enxergou resolved_pendencias do agente 'web'"
 
 
 # ─── M11/M12: _build_routing_context (armadilhas empresa + dominio) ───
@@ -222,3 +228,33 @@ def test_briefing_continuidade_isola_por_agente(seed_session, test_user):
     assert 'CONTINUE_TAREFA_WEB_UNICA' not in brief_lojas, "continuidade 'web' vazou p/ briefing 'lojas'"
     assert 'CONTINUE_TAREFA_LOJA_UNICA' in brief_lojas
     assert 'CONTINUE_TAREFA_LOJA_UNICA' not in brief_web, "continuidade 'lojas' vazou p/ briefing 'web'"
+
+
+# ─── Defesa residual: fontes via PreToolUse hook (M13 + enforce) ───
+def test_skill_reminders_isola_por_agente(seed_mem, test_user, monkeypatch):
+    monkeypatch.setattr('app.agente.config.feature_flags.AGENT_SKILL_EVAL', True)
+    seed_mem('/memories/lembretes_skill/skillweb.xml', 'LEMBRETE', agente='web')
+    seed_mem('/memories/lembretes_skill/skillloja.xml', 'LEMBRETE', agente='lojas')
+
+    rem_web = memory_injection.get_skill_reminders_for_session(
+        test_user.id, 'sid-web-' + uuid.uuid4().hex[:8], agente_id='web')
+    rem_lojas = memory_injection.get_skill_reminders_for_session(
+        test_user.id, 'sid-lojas-' + uuid.uuid4().hex[:8], agente_id='lojas')
+
+    assert 'skillweb' in rem_web and 'skillloja' not in rem_web, "lembrete 'lojas' vazou p/ 'web'"
+    assert 'skillloja' in rem_lojas and 'skillweb' not in rem_lojas, "lembrete 'web' vazou p/ 'lojas'"
+
+
+def test_enforce_directives_isola_por_agente(seed_mem, test_user):
+    from app.agente.sdk import hooks
+    seed_mem('/memories/rules/enf_web.xml', 'ENFORCE_DENY_SUBSTR: TOKEN_WEB_X',
+             agente='web', priority='mandatory', is_cold=False)
+    seed_mem('/memories/rules/enf_loja.xml', 'ENFORCE_DENY_SUBSTR: TOKEN_LOJA_X',
+             agente='lojas', priority='mandatory', is_cold=False)
+
+    tokens_web = {t for t, _ in hooks._load_enforce_directives(test_user.id, agente_id='web')}
+    tokens_lojas = {t for t, _ in hooks._load_enforce_directives(test_user.id, agente_id='lojas')}
+
+    assert 'TOKEN_WEB_X' in tokens_web and 'TOKEN_LOJA_X' not in tokens_web
+    assert 'TOKEN_LOJA_X' in tokens_lojas and 'TOKEN_WEB_X' not in tokens_lojas, \
+        "invariante DENY 'web' vazou p/ enforcement 'lojas'"

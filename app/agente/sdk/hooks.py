@@ -52,16 +52,20 @@ def _enforce_decision(directives, tool_input_str):
     return None
 
 
-def _load_enforce_directives(user_id: int):
+def _load_enforce_directives(user_id: int, agente_id: str = 'web'):
     """Carrega (cacheado, TTL 30s) as diretivas DENY formalizaveis das regras duras do usuario.
 
     Convencao: uma regra 'mandatory' que carrega 'ENFORCE_DENY_SUBSTR: <token>' no content vira
     um invariante DURO. So invariantes EXPLICITAMENTE formalizados (curadoria humana) entram;
     o error_signature (slug de metrica) NAO e usado. Retorna [(token, rule_path), ...]. Fail-open
     (qualquer erro -> []). Roda fora do Flask context (padrao memory_injection: probe + create_app).
+
+    M3 (F2 fatia 2): `agente_id` isola por agente. Default 'web' = aditivo. A chave
+    do cache INCLUI agente_id (senao web/lojas no mesmo bucket de 30s compartilhariam
+    cache). Wiring do agente_id no caller PreToolUse e F3 (build_hooks).
     """
     bucket = int(_enf_time.time() // _ENFORCE_TTL_SECONDS)
-    key = (user_id, bucket)
+    key = (user_id, agente_id, bucket)
     with _ENFORCE_CACHE_LOCK:
         if key in _ENFORCE_CACHE:
             return _ENFORCE_CACHE[key]
@@ -79,6 +83,7 @@ def _load_enforce_directives(user_id: int):
             import re as _re
             rules = AgentMemory.query.filter(
                 AgentMemory.user_id.in_([user_id, 0]),
+                AgentMemory.agente == agente_id,  # M3: invariantes DENY por agente
                 AgentMemory.is_directory == False,  # noqa: E712
                 AgentMemory.is_cold == False,  # noqa: E712
                 AgentMemory.priority == 'mandatory',
@@ -93,9 +98,10 @@ def _load_enforce_directives(user_id: int):
         logger.debug(f"[ENFORCE] load directives falhou (fail-open): {e}")
         directives = []
     with _ENFORCE_CACHE_LOCK:
-        # prune buckets antigos (cache nao cresce indefinidamente)
+        # prune buckets antigos (cache nao cresce indefinidamente). Chave agora e
+        # (user_id, agente_id, bucket) — o bucket esta em k[2].
         for k in list(_ENFORCE_CACHE.keys()):
-            if k[1] != bucket:
+            if k[2] != bucket:
                 del _ENFORCE_CACHE[k]
         _ENFORCE_CACHE[key] = directives
     return directives

@@ -1959,11 +1959,16 @@ def invalidate_skill_reminders_cache() -> None:
     logger.debug("[memory_injection] skill reminders cache cleared")
 
 
-def get_skill_reminders_for_session(user_id: int, session_id: str) -> dict:
+def get_skill_reminders_for_session(user_id: int, session_id: str,
+                                    agente_id: str = 'web') -> dict:
     """{skill_name: conteudo} dos lembretes ATIVOS (directive_status NULL/'ativa') do usuario.
 
     Cache por session_id (TTL 30min). Flag-gated por AGENT_SKILL_EVAL.
     Shadow NAO injeta (mesmo criterio do Tier 0c operational_directives).
+
+    M3 (F2 fatia 2): `agente_id` isola por agente. Default 'web' = aditivo.
+    Cache key continua session_id (UNIQUE, 1:1 com agente — sem colisao). O
+    wiring do agente_id no caller PreToolUse (hooks.py) e F3 (build_hooks).
     """
     import time as _t
     try:
@@ -1995,6 +2000,7 @@ def get_skill_reminders_for_session(user_id: int, session_id: str) -> dict:
             from ..models import AgentMemory
             rows = AgentMemory.query.filter(
                 AgentMemory.user_id == user_id,
+                AgentMemory.agente == agente_id,  # M3/M13: lembretes de skill por agente
                 AgentMemory.path.like('/memories/lembretes_skill/%'),
                 db.or_(
                     AgentMemory.directive_status.is_(None),
