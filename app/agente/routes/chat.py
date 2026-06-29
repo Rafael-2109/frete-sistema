@@ -723,7 +723,7 @@ async def _async_stream_sdk_client(
                     session_id=our_session_id
                 ).first()
                 if db_session:
-                    sdk_session_id_for_resume = db_session.get_sdk_session_id()
+                    sdk_session_id_for_resume = db_session.get_sdk_session_id(role=agent_role)
                     if sdk_session_id_for_resume:
                         logger.info(
                             f"[AGENTE] sdk_session_id para resume: "
@@ -974,6 +974,9 @@ def _stream_chat_response(
         'cache_creation_tokens': 0,
         'sdk_session_id': None,
         'our_session_id': session_id,
+        # 8b: papel do turno (handoff de sessao) — lido por _save_messages_dedup
+        # para gravar o sdk_session_id NO PAPEL certo (default 'principal').
+        'agent_role': agent_role,
         'session_expired': False,
         'error_message': None,
         # FIX 2026-05-07: persistencia idempotente entre thread daemon (primary)
@@ -2009,6 +2012,7 @@ def _save_messages_dedup(
             cache_creation_tokens=response_state.get('cache_creation_tokens', 0),
             plan_dict=_plan_dict,
             message_id=response_state.get('message_id'),
+            agent_role=response_state.get('agent_role', 'principal'),
         )
         # Marca flag SO SE o commit do DB foi bem-sucedido.
         # Falhas de pos-processamento NAO afetam o retorno (isolados na propria
@@ -2112,6 +2116,7 @@ def _save_messages_to_db(
     cache_creation_tokens: int = 0,
     plan_dict: Optional[dict] = None,
     message_id: Optional[str] = None,
+    agent_role: str = 'principal',
 ) -> bool:
     """
     FEAT-030: Salva mensagens do usuário e assistente no banco.
@@ -2241,7 +2246,7 @@ def _save_messages_to_db(
                 try:
                     import uuid as _uuid_validate
                     _uuid_validate.UUID(sdk_session_id)
-                    session.set_sdk_session_id(sdk_session_id)
+                    session.set_sdk_session_id(sdk_session_id, role=agent_role)
                     _sdk_id_valid = True
                 except (ValueError, AttributeError):
                     logger.warning(
@@ -2251,7 +2256,7 @@ def _save_messages_to_db(
 
             elif session_expired:
                 # Limpa sdk_session_id para forçar nova sessão no próximo request
-                session.set_sdk_session_id(None)
+                session.set_sdk_session_id(None, role=agent_role)
                 logger.info(f"[AGENTE] SDK session_id limpo devido à expiração")
 
             # Atualiza model e custo
