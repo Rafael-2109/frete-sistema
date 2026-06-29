@@ -29,15 +29,19 @@ def custo_medio_por_sessao(session_ids: list[str]) -> dict:
 
 def compara_baseline(baseline: dict, atual: dict) -> dict:
     """Gate da spec: custo cai E cache nao regride E num_turns nao sobe (>5% =
-    perdeu contexto). `.get()` com default 0.0 — entrada incompleta nao explode
-    (e nao passa: custo 0 < 0 e' False)."""
+    perdeu contexto). `.get()` com default 0.0 — entrada incompleta nao explode.
+
+    GUARD DE AMOSTRA: exige `atual['custo_medio'] > 0`. Sem ele, um `atual`
+    degenerado (zero sessao medida -> custo_medio=0) com baseline de cache 0
+    passaria o gate (0 < custo_baseline = 'custo caiu' + 0 >= 0 = 'cache ok'),
+    aprovando dados INEXISTENTES — o exato failure mode que o gate existe p/ barrar."""
     b_custo, a_custo = baseline.get("custo_medio", 0.0), atual.get("custo_medio", 0.0)
     b_cache, a_cache = baseline.get("cache_hit_rate", 0.0), atual.get("cache_hit_rate", 0.0)
     b_turns, a_turns = baseline.get("num_turns", 0.0), atual.get("num_turns", 0.0)
     delta_custo = round(a_custo - b_custo, 4)
     delta_cache = round(a_cache - b_cache, 4)
     delta_turns = round(a_turns - b_turns, 2)
-    passou = (a_custo < b_custo and a_cache >= b_cache
+    passou = (a_custo > 0 and a_custo < b_custo and a_cache >= b_cache
               and delta_turns <= max(b_turns * 0.05, 0.0))
     return {"delta_custo_medio": delta_custo, "delta_cache_hit_rate": delta_cache,
             "delta_num_turns": delta_turns, "passou_gate": passou}

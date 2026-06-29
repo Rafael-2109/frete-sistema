@@ -1328,8 +1328,12 @@ def resolve_specialist_handoff_mode(is_admin: bool = False) -> str:
     Spec: docs/superpowers/specs/2026-06-28-handoff-sessao-agente-custo-design.md.
     Lido FRESH do env (rollout sem redeploy). Default OFF (de-risking).
         off    -> nada (comportamento atual; subagente efemero por turno)
-        shadow -> agent_router DECIDE + loga, mas NAO troca o cliente ativo
-        on     -> handoff real (troca para o especialista quente)
+        shadow -> agent_router DECIDE + loga + persiste o papel, mas NAO troca o
+                  cliente ativo (medicao pura)
+        on     -> DECIDE + persiste o papel; mas o SWAP do stream e' 8b (DEFERIDO):
+                  hoje 'on' mede/registra e NAO troca o cliente (== shadow no
+                  stream). NAO ligar esperando economia ate o 8b ser implementado
+                  (chat._resolve_agent_role emite um warning unico nesse caso).
         admin  -> "on" para admin (canary), "shadow" para os demais
     """
     raw = os.getenv("AGENT_SPECIALIST_HANDOFF", "off").strip().lower()

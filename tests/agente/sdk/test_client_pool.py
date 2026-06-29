@@ -324,6 +324,70 @@ class TestDisconnectClient:
         )
         assert result is False
 
+    @patch('app.agente.config.feature_flags.USE_PERSISTENT_SDK_CLIENT', True)
+    def test_disconnect_isola_por_papel(self, pool_reset):
+        """disconnect de UM papel NAO afeta o outro papel da mesma sessao
+        (lifecycle multi-agente — base do handoff). Antes do refactor da chave
+        composta, disconnect por session_id cru poderia derrubar ambos."""
+        _ensure_pool_initialized()
+        c1 = AsyncMock(); c1.disconnect = AsyncMock()
+        c2 = AsyncMock(); c2.disconnect = AsyncMock()
+        principal = PooledClient(client=c1, session_id='s-multi', role='principal', connected=True)
+        especialista = PooledClient(client=c2, session_id='s-multi',
+                                    role='gestor-recebimento', connected=True)
+        cp._registry[cp._pool_key('s-multi', 'principal')] = principal
+        cp._registry[cp._pool_key('s-multi', 'gestor-recebimento')] = especialista
+
+        future = submit_coroutine(disconnect_client('s-multi', role='principal'))
+        assert future.result(timeout=5) is True
+
+        assert cp._pool_key('s-multi', 'principal') not in cp._registry
+        assert cp._pool_key('s-multi', 'gestor-recebimento') in cp._registry  # intacto
+        assert especialista.connected is True
+        c2.disconnect.assert_not_called()
+
+
+# ─── 6b. evict_client (regressao do blocker da chave composta) ──────────
+# Os error-handlers de client.py (ProcessError / CLIConnectionError) precisam
+# evictar o client MORTO pela MESMA chave composta que get_or_create_client
+# gravou (session_id::role), NAO pelo session_id cru. Antes do fix, o
+# _registry.pop(session_id) dava MISS -> client morto sobrevivia connected=True
+# -> fast-path reusava o subprocess morto (reintroduzia o loop R-CLI-CRASH em
+# flag-off, pois o stream sempre usa role='principal'). evict_client centraliza
+# a evicção LEVE (pop + connected=False, SEM disconnect SDK) sob a chave certa.
+
+class TestEvictClient:
+
+    def test_evict_client_remove_pela_chave_composta(self, pool_reset):
+        """evict_client(session_id) encontra o que get_or_create gravou sob
+        _pool_key(session_id, 'principal') — caller passa só o session_id cru."""
+        client_mock = MagicMock()
+        pooled = PooledClient(client=client_mock, session_id='sess-evict', connected=True)
+        cp._registry[cp._pool_key('sess-evict')] = pooled  # == 'sess-evict::principal'
+
+        evicted = cp.evict_client('sess-evict')  # role default 'principal'
+
+        assert evicted is True
+        assert cp._pool_key('sess-evict') not in cp._registry
+        assert pooled.connected is False
+
+    def test_evict_client_sessao_desconhecida_retorna_false(self, pool_reset):
+        """Sessao ausente do registry -> False, sem crash (no-op)."""
+        assert cp.evict_client('nao-existe') is False
+
+    def test_evict_client_respeita_papel(self, pool_reset):
+        """Evicta só o papel pedido; outro papel da mesma sessao sobrevive."""
+        principal = PooledClient(client=MagicMock(), session_id='s', role='principal', connected=True)
+        especialista = PooledClient(client=MagicMock(), session_id='s', role='gestor-recebimento', connected=True)
+        cp._registry[cp._pool_key('s', 'principal')] = principal
+        cp._registry[cp._pool_key('s', 'gestor-recebimento')] = especialista
+
+        assert cp.evict_client('s', role='principal') is True
+
+        assert cp._pool_key('s', 'principal') not in cp._registry
+        assert cp._pool_key('s', 'gestor-recebimento') in cp._registry  # intacto
+        assert especialista.connected is True
+
 
 # ─── 7. _force_kill_subprocess ──────────────────────────────────────
 

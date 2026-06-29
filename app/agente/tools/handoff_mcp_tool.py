@@ -1,5 +1,5 @@
 """Tools MCP de handoff de sessao (F1): transferir_para + devolver_ao_principal.
-Espelha resolver_mcp_tool.py. So' registradas se AGENT_SPECIALIST_HANDOFF != off."""
+Espelha resolver_mcp_tool.py. Registro gated por should_register_handoff()."""
 from __future__ import annotations
 import logging
 from contextlib import nullcontext
@@ -8,6 +8,20 @@ from sqlalchemy.orm.attributes import flag_modified
 from app.agente.tools._mcp_enhanced import enhanced_tool, create_enhanced_mcp_server
 
 logger = logging.getLogger(__name__)
+
+
+def should_register_handoff(mode: str, specialist_profile) -> bool:
+    """Regra de exposicao da tool de handoff (consumida por client._build_options).
+
+    Registra `transferir_para` SOMENTE:
+      - no cliente PRINCIPAL (`specialist_profile is None`) — o ESPECIALISTA usa o
+        executor atomico, NAO re-delega (anti multi-spawn, spec F1); e
+      - em modo 'on' — 'shadow' e' medicao PURA (o agent_router decide+persiste,
+        mas a tool de TROCA nao deve existir onde nada troca). O swap real do
+        stream (8b) ainda esta deferido; ate la 'on' expoe a tool ao principal
+        mas o stream segue no principal (no-op medido).
+    'off' (default) nunca registra -> behavior-equivalente ao main."""
+    return mode == 'on' and specialist_profile is None
 
 
 def _app_context():

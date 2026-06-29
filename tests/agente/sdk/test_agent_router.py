@@ -28,3 +28,42 @@ def test_prompt_complexo_longo_fica_no_principal_mesmo_com_keyword():
     role, reason = select_specialist(msg)
     assert role == "principal"
     assert reason == "prompt_complexo"
+
+
+# ─── Precisão da heurística (alinhada à disciplina do model_router) ──────────
+
+def test_terceira_pessoa_pergunta_diagnostica_nao_entra():
+    """'concilia/consolida' (3a pessoa, pergunta) NAO deve casar — só o infinitivo
+    completo (conciliar/consolidar) é comando de recebimento. Bug que o
+    model_router já pagou (2026-05-11)."""
+    for msg in ("o sistema concilia a nota com o pedido automaticamente?",
+                "como o odoo consolida a nota com o pedido?"):
+        role, reason = select_specialist(msg)
+        assert role == "principal", msg
+        assert reason == "default", msg
+
+
+def test_coocorrencia_sem_verbo_nao_entra():
+    """Mera co-ocorrência de 'nota N' + 'pedido' SEM verbo de vínculo é conversa
+    de cobrança/financeiro, não match NF×PO — fica no principal."""
+    for msg in ("o pedido do cliente atrasou, mandei nota 5 vezes ao financeiro",
+                "a nota 100 ja foi paga pelo pedido recorrente do cliente"):
+        role, reason = select_specialist(msg)
+        assert role == "principal", msg
+
+
+def test_plural_pedidos_entra_no_especialista():
+    """'\\bpedido\\b' não casava 'pedidos' (o 's' quebra a fronteira) — turno real
+    de recebimento ia para o principal. Plural deve casar."""
+    role, reason = select_specialist("vincular os pedidos nas notas pelo odoo")
+    assert role == "gestor-recebimento"
+    assert reason == "padrao_recebimento"
+
+
+def test_infinitivo_conciliar_consolidar_ainda_entra():
+    """Garante que o aperto (infinitivo) NÃO derruba os comandos legítimos."""
+    for msg in ("conciliar a nota 12345 com o pedido C99",
+                "consolidar as POs da nota 48862"):
+        role, reason = select_specialist(msg)
+        assert role == "gestor-recebimento", msg
+        assert reason == "padrao_recebimento", msg

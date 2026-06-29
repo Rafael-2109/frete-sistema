@@ -17,8 +17,11 @@ import queue
 import re
 import time
 from functools import lru_cache
-from typing import AsyncGenerator, Dict, Any, List, Optional, Callable
+from typing import AsyncGenerator, Dict, Any, List, Optional, Callable, TYPE_CHECKING
 from app.utils.timezone import agora_utc_naive
+
+if TYPE_CHECKING:  # forward-ref p/ o type hint specialist_profile em _build_options (F1)
+    from .specialist_profiles import SpecialistProfile
 
 # SDK Oficial
 # Ref: https://platform.claude.com/docs/pt-BR/agent-sdk/
@@ -2059,13 +2062,20 @@ Nunca invente informações."""
                 "Ative AGENT_ONTOLOGY=true para expor query_ontology ao agente."
             )
 
-        # Handoff de sessao (F1) — registra a tool MCP fora de 'off'.
-        # (Task 7 adicionara o guard `specialist_profile is None` p/ NAO expor ao especialista.)
+        # Handoff de sessao (F1) — registra transferir_para SO' no cliente PRINCIPAL
+        # (specialist_profile is None) e SO' em modo 'on'. Regra em
+        # should_register_handoff: shadow=medicao pura (sem tool de troca); o
+        # especialista nao re-delega; swap real do stream = 8b (deferido). 'off'
+        # (default) nao registra -> behavior-equivalente ao main.
         try:
             from ..config.feature_flags import resolve_specialist_handoff_mode
-            if resolve_specialist_handoff_mode() != 'off':
-                from ..tools.handoff_mcp_tool import handoff_server
-                _register_mcp('handoff', handoff_server)
+            _handoff_mode = resolve_specialist_handoff_mode()
+            # Em 'off' (default) nem carrega o modulo handoff (equivalencia ESTRITA
+            # ao main); fora de 'off', should_register_handoff decide (on+principal).
+            if _handoff_mode != 'off':
+                from ..tools.handoff_mcp_tool import should_register_handoff, handoff_server
+                if should_register_handoff(_handoff_mode, specialist_profile):
+                    _register_mcp('handoff', handoff_server)
         except Exception as _h_err:
             logger.debug(f"[handoff] registro da tool pulado: {_h_err}")
 
@@ -2581,13 +2591,12 @@ Nunca invente informações."""
                     metadata={'error_type': 'process_error'}
                 )
 
-            # Evictar client morto do pool para que próximo request crie um novo
+            # Evictar client morto do pool para que próximo request crie um novo.
+            # evict_client usa a chave composta (_pool_key) — pop pela chave crua
+            # daria MISS e o client morto sobreviveria connected=True (R-CLI-CRASH).
             try:
-                from .client_pool import _registry, _registry_lock
-                with _registry_lock:
-                    evicted = _registry.pop(pool_key, None)
-                if evicted:
-                    evicted.connected = False
+                from .client_pool import evict_client
+                if evict_client(pool_key):
                     logger.info(
                         f"[AGENT_SDK_PERSISTENT] Dead client evicted after ProcessError: "
                         f"{pool_key[:8]}..."
@@ -2645,11 +2654,8 @@ Nunca invente informações."""
 
                 # Evict dead client + cleanup JSONL stale (igual ao handler ProcessError)
                 try:
-                    from .client_pool import _registry, _registry_lock
-                    with _registry_lock:
-                        evicted = _registry.pop(pool_key, None)
-                    if evicted:
-                        evicted.connected = False
+                    from .client_pool import evict_client
+                    evict_client(pool_key)  # chave composta (_pool_key); ver evict_client
                 except Exception as evict_err:
                     logger.debug(f"[AGENT_SDK_PERSISTENT] Pool eviction ignored: {evict_err}")
 
@@ -2717,11 +2723,8 @@ Nunca invente informações."""
 
             # Evict dead client from pool to force fresh connection on retry.
             try:
-                from .client_pool import _registry, _registry_lock
-                with _registry_lock:
-                    evicted = _registry.pop(pool_key, None)
-                if evicted:
-                    evicted.connected = False
+                from .client_pool import evict_client
+                if evict_client(pool_key):  # chave composta (_pool_key); ver evict_client
                     logger.info(f"[AGENT_SDK_PERSISTENT] Dead client evicted from pool: {pool_key[:8]}...")
             except Exception as evict_err:
                 logger.debug(f"[AGENT_SDK_PERSISTENT] Pool eviction ignored: {evict_err}")

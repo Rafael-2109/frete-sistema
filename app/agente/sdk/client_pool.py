@@ -459,6 +459,29 @@ async def get_or_create_client(
         return pooled
 
 
+def evict_client(session_id: str, role: str = "principal") -> bool:
+    """Evicção LEVE de um client morto do registry (error-handlers de client.py).
+
+    Remove a entrada `session_id::role` e marca `connected=False`, SEM desconectar
+    o SDK nem liberar sticky/JSONL (isso é trabalho do disconnect_client). É a
+    operação que os handlers de ProcessError/CLIConnectionError fazem para forçar
+    a recriação do client no próximo turno.
+
+    CRÍTICO: usa a chave composta `_pool_key`. O registry é keyed por
+    `session_id::role` (não pelo session_id cru); um `_registry.pop(session_id)`
+    direto dá MISS e o client morto sobrevive `connected=True`, sendo reusado pelo
+    fast-path de get_or_create_client (reintroduzia o loop R-CLI-CRASH).
+
+    Thread-safe (pode ser chamado de qualquer thread). Retorna True se evictou.
+    """
+    with _registry_lock:
+        pooled = _registry.pop(_pool_key(session_id, role), None)
+    if pooled is not None:
+        pooled.connected = False
+        return True
+    return False
+
+
 async def disconnect_client(session_id: str, role: str = "principal") -> bool:
     """Desconecta e remove client do pool.
 
@@ -688,9 +711,13 @@ def get_pool_status() -> Dict[str, Any]:
 
     with _registry_lock:
         clients_info = []
-        for session_id, pooled in _registry.items():
+        # Itera com _key (chave composta session_id::role) mas usa os FIELDS do
+        # PooledClient — nunca fatiar a chave como se fosse o session_id puro
+        # (consistente com _cleanup_idle_clients/shutdown_pool).
+        for _key, pooled in _registry.items():
             clients_info.append({
-                'session_id': session_id[:8] + '...',
+                'session_id': pooled.session_id[:8] + '...',
+                'role': pooled.role,
                 'user_id': pooled.user_id,
                 'connected': pooled.connected,
                 'idle_seconds': round(time.time() - pooled.last_used, 1),

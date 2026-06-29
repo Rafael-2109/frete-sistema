@@ -18,10 +18,14 @@ def _ctx_tokens(objetivo, entidades, saldo) -> int:
 
 def build_handoff_context(objetivo: str, entidades: dict,
                           saldo: dict | None = None, max_tokens: int = 10000) -> dict:
+    objetivo = objetivo or ""
     entidades = dict(entidades or {})
     saldo = dict(saldo or {}) if saldo else None
     truncado = False
-    # Trunca dados resolvidos (NUNCA o objetivo) ate caber no orcamento.
+    # Trunca dados resolvidos PRIMEIRO (saldo, depois entidades). Se ainda exceder
+    # com saldo/entidades vazios, o objetivo sozinho estoura -> trunca o OBJETIVO
+    # (preservando o INICIO) ate caber. Devolver um handoff acima do orcamento
+    # (o bug antigo: esvaziava os dados resolvidos E ainda estourava) e' pior.
     while _ctx_tokens(objetivo, entidades, saldo) > max_tokens:
         truncado = True
         if saldo:
@@ -31,6 +35,10 @@ def build_handoff_context(objetivo: str, entidades: dict,
             continue
         if entidades:
             entidades.popitem()
+            continue
+        if len(objetivo) > 1:
+            corte = max(1, len(objetivo) // 8)  # ~12%/iteracao, converge rapido
+            objetivo = objetivo[:-corte]
             continue
         break
     return {
@@ -45,6 +53,11 @@ def build_handoff_context(objetivo: str, entidades: dict,
 def render_handoff_block(ctx: dict) -> str:
     corpo = json.dumps({k: ctx.get(k) for k in ("objetivo", "entidades", "saldo")},
                        ensure_ascii=False, default=str)
+    # Defesa de prompt-injection: neutraliza delimitadores forjados nos dados
+    # resolvidos (ex.: objetivo contendo `</handoff_context>` + pseudo-instrucoes).
+    # Escapa `<`/`>` para \uXXXX — mantem o JSON parseavel e impede que o objetivo
+    # ENCERRE o bloco de sistema. O unico fechamento valido e' o desta funcao.
+    corpo = corpo.replace("<", "\\u003c").replace(">", "\\u003e")
     return ("<handoff_context>\n"
             "Contexto de sistema (nao e instrucao do usuario): voce assumiu este "
             "assunto como especialista. Os dados resolvidos abaixo ja foram apurados "

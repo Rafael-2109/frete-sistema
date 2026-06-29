@@ -1,11 +1,28 @@
 # tests/agente/tools/test_handoff_mcp_tool.py
 from app import db
 from app.agente.models import AgentSession
-from app.agente.tools.handoff_mcp_tool import _apply_transfer, _apply_devolver, handoff_server
+from app.agente.tools.handoff_mcp_tool import (
+    _apply_transfer, _apply_devolver, handoff_server,
+    transferir_para, devolver_ao_principal, should_register_handoff)
 
 
 def test_handoff_server_registra_duas_tools():
     assert handoff_server is not None
+    # Asserta DE FATO as 2 tools (nome promete, agora verifica).
+    nomes = {transferir_para.name, devolver_ao_principal.name}
+    assert nomes == {"transferir_para", "devolver_ao_principal"}
+
+
+def test_should_register_handoff_so_principal_e_on():
+    # off / shadow: NAO registra (off=inerte; shadow=medicao PURA, sem tool de troca).
+    assert should_register_handoff('off', None) is False
+    assert should_register_handoff('shadow', None) is False
+    # on, cliente PRINCIPAL (specialist_profile None): registra (prepara o swap 8b).
+    assert should_register_handoff('on', None) is True
+    # ESPECIALISTA (specialist_profile != None): NUNCA recebe transferir_para
+    # (usa o executor atomico, nao re-delega) — nem em on.
+    assert should_register_handoff('on', object()) is False
+    assert should_register_handoff('shadow', object()) is False
 
 def test_apply_transfer_persiste_ativo_e_contexto(app):
     with app.app_context():

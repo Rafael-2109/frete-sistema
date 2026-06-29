@@ -67,6 +67,24 @@ def pagina_chat():
 # API - CHAT (FEAT-030: Refatorado)
 # =============================================================================
 
+_ON_NOOP_WARNED = False
+
+
+def _warn_on_mode_noop_once():
+    """Avisa UMA vez (por processo) que 'on' ainda nao troca o cliente do stream
+    (swap 8b deferido) — evita decisao de rollout errada ('liguei on, cade a
+    economia?'). O log 'Role: gestor-recebimento' e o agente_ativo persistido NAO
+    significam handoff real ate o 8b."""
+    global _ON_NOOP_WARNED
+    if not _ON_NOOP_WARNED:
+        _ON_NOOP_WARNED = True
+        import logging
+        logging.getLogger('sistema_fretes').warning(
+            "[agent_router] AGENT_SPECIALIST_HANDOFF=on ainda NAO troca o cliente do "
+            "stream (swap 8b pendente) — comporta-se como 'shadow' (decide/mede, nao "
+            "executa o handoff). NAO esperar reducao de custo ate o 8b ser ligado.")
+
+
 def _resolve_agent_role(session_id, message, is_admin=False):
     """F1: decide o papel do turno. Persiste a DECISAO (agente_ativo) sempre que
     fora de 'off' (mede em shadow); retorna o papel EFETIVO (principal em shadow,
@@ -75,6 +93,8 @@ def _resolve_agent_role(session_id, message, is_admin=False):
     mode = resolve_specialist_handoff_mode(is_admin=is_admin)
     if mode == 'off':
         return 'principal'
+    if mode == 'on':
+        _warn_on_mode_noop_once()
     try:
         from app.agente.models import AgentSession
         from app.agente.sdk.agent_router import select_specialist, log_specialist_decision

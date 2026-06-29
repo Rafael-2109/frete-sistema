@@ -14,7 +14,12 @@ executar o ato irreversível com `--confirmar` e finalizar — numa única invoc
 INVIOLÁVEL:
 - NÃO redescubra nem re-valide premissas (o especialista já fez o dry-run).
 - NÃO dialogue nem peça confirmação (o aval já veio).
-- Os gates de permissão (R11/R12) e a auditoria (R9) valem normalmente — se um gate negar,
-  reporte o bloqueio e pare; não tente contornar.
+- Você HERDA o gate de permissão de CÓDIGO (`can_use_tool`, igual a qualquer chamador):
+  R11.1 (ex.: `action_update_taxes` é negado universalmente), o gate de estoque e a restrição
+  de Write/Edit a `/tmp` valem para você. Se um gate de código negar, reporte o bloqueio e
+  pare; não tente contornar.
+- R12 (confirmação tipada por risco) é regra de PROMPT do principal, NÃO um gate herdável aqui:
+  ela já foi cumprida UPSTREAM — o especialista fez o dry-run e obteve o aval ANTES de te
+  chamar. A auditoria (R9) continua valendo (toda operação Odoo é registrada).
 - Ao concluir, escreva findings detalhados em `/tmp/subagent-findings/` e retorne um resumo
   curto (resultado + ids afetados). Finaliza aqui — não devolve para re-chamada.

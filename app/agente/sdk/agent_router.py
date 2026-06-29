@@ -14,10 +14,16 @@ logger = logging.getLogger(__name__)
 PILOT_SPECIALIST = "gestor-recebimento"
 
 # Frase de recebimento (vinculacao/conciliacao/match NF x PO). Ancorada nos
-# padroes reais (model_router padrao_nf_po + vinculacao_fastpath).
+# padroes reais (model_router padrao_nf_po + vinculacao_fastpath). Disciplina
+# espelhada do model_router (2026-05-11):
+#  - INFINITIVO completo (conciliar/consolidar, SEM '?'): 'concilia'/'consolida'
+#    (3a pessoa) eh pergunta diagnostica, NAO comando -> fica no principal.
+#  - VERBO obrigatorio: a mera co-ocorrencia de 'nota N' + 'pedido' sem verbo de
+#    vinculo eh conversa de cobranca/financeiro (falso positivo) -> nao casa.
+#  - PLURAL aceito (notas?/pedidos?/pos?): '\bpedido\b' nao casava 'pedidos'.
 _RE_RECEBIMENTO = re.compile(
-    r"\b(vincul\w+|desvincul\w+|conciliar?|consolidar?|split)\b.*\b(nota|nf|pedido|po)\b"
-    r"|\bmatch\s+(da\s+)?nf\b|\bnota\s+\d+\b.*\bpedido\b|\bpedido\s+\S+\b.*\bnota\s+\d+\b",
+    r"\b(vincul\w+|desvincul\w+|conciliar|consolidar|split)\b.*\b(notas?|nfe?s?|pedidos?|pos?)\b"
+    r"|\bmatch\s+(da\s+)?nf\b",
     re.IGNORECASE)
 
 # Sinais de OUTRO dominio (reversao do especialista de recebimento).

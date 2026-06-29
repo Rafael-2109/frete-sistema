@@ -1,12 +1,12 @@
 {
   "app/agente": {
     "py": 115,
-    "loc": 57846,
+    "loc": 57933,
     "tpl": 0
   },
   "app/agente/services": {
     "py": 27,
-    "loc": 15041,
+    "loc": 15045,
     "tpl": 0
   },
   "app/agente_lojas": {
