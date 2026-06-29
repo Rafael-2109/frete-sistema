@@ -33,7 +33,9 @@ MODEL_PRICING: dict[str, tuple[float, float]] = {
     'claude-opus-4-1-20250805': (15.00, 75.00),   # Opus 4.1 legacy
     'claude-sonnet-4-6': (3.00, 15.00),
     'claude-sonnet-4-5-20250929': (3.00, 15.00),
-    'claude-haiku-4-5-20251001': (0.25, 1.25),
+    # B8 (2026-06-28): Haiku 4.5 = $1/$5 (skill claude-api). Estava (0.25, 1.25),
+    # preco do Haiku 3.5 — subestimava o custo do Haiku 4.5 em 4x.
+    'claude-haiku-4-5-20251001': (1.00, 5.00),
     'claude-haiku-3-5-20241022': (0.80, 4.00),
 }
 

@@ -3,9 +3,12 @@
 PROBLEMA (provado no transcript da sessão 50c98562): subagentes invocados via
 Task tool são sub-sessões EFÊMERAS — cada spawn recomeça do zero (re-lê o escudo
 de proteção, re-consulta memórias, re-pesquisa o estado). O subagente gravava os
-achados em /tmp/subagent-findings, que NÃO atravessa processo (TMPDIR divergente,
-_constants.py) e é efêmero no Render; e o principal nem lia nem repassava ao spawn
-seguinte. Resultado: re-descoberta a cada invocação (o grosso do cache_read).
+achados em /tmp/subagent-findings, mas o principal nem lia (get_subagent_findings
+era órfão) nem repassava ao spawn seguinte; e o /tmp é efêmero ENTRE DEPLOYS no
+Render (container reciclado). NB (correção factual, B3 2026-06-28): /tmp absoluto
+ATRAVESSA processo no MESMO container — o TMPDIR divergente (/tmp/claude-{uid},
+_constants.py) só afeta quem usa tempfile.gettempdir(), NÃO um caminho absoluto.
+Resultado: re-descoberta a cada invocação (o grosso do cache_read).
 
 SOLUÇÃO (handoff via principal, 100% sem mudança de SDK): o findings do spawn N é
 persistido em AgentSession.data['subagent_checkpoints'][agent_type] (no SubagentStop

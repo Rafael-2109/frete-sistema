@@ -78,12 +78,12 @@ Investigação de custo conduzida em 2026-06-28 a partir do **SOT real** (export
 |---|---|---|---|
 | B1 | **Inflação ~7x no custo Teams** — `_persist_cost_teams` gravava `agent_result.cost_usd` (cumulativo do SDK) cru, somando por turno. Medido: **$320,87 gravado vs $46,65 real** (30d, 118 turnos). | ✅ **CÓDIGO FEITO** (`services.py` GAP 2 ~L2265, working tree, não deployado) + ✅ **BACKFILL APLICADO PROD 2026-06-28** ($320,87→$46,65, verificado via MCP; `scripts/migrations/2026_06_28_backfill_teams_cost.py`, backup/revert). | Deployar o fix de código (senão re-infla). |
 | B2 | **Teams 100% Opus em prod** — env var `TEAMS_DEFAULT_MODEL=claude-opus-4-8` no Render sobrepõe o default Sonnet do código (decisão 16/06 nunca efetivada). | ✅ **FEITO 2026-06-28** — env `TEAMS_DEFAULT_MODEL=claude-sonnet-4-6` aplicada (deploy `dep-d90sbskvikkc738omf8g`). | — |
-| B3 | **`/tmp` "não atravessa processo" — IMPRECISO** (ver secao A imprecisão do /tmp). | Aberto | Corrigir comentários em `subagent_checkpoint.py:6`, `hooks.py:1134`. |
+| B3 | **`/tmp` "não atravessa processo" — IMPRECISO** (ver secao A imprecisão do /tmp). | ✅ **FEITO 2026-06-28** | Comentários corrigidos em `subagent_checkpoint.py:3-11` e `hooks.py` (#3b). /tmp absoluto ATRAVESSA processo; o elo partido era órfandade + efemeridade entre DEPLOYS. |
 | B4 | **Checkpoint de subagente** (`AGENT_SUBAGENT_CHECKPOINT`) — shadow, nunca injeta nos alvos interativos; `PendingRollbackError` em 50%+ dos persists; bug truncação-de-cabeça corrigido 26/06 (`c34dac743`) mas efeito **inconclusivo** (data-starved). | Aberto / paliativo | **Substituído** pela arquitetura desta spec. Manter como rede até o handoff provar-se; depois aposentar. |
-| B5 | **`vinculacao_fastpath` 0% eficácia** — N0 (regex) não casa; tudo cai no N2 (Opus). Só adiciona latência. | Aberto | Consertar regex N0 OU desligar `AGENT_VINCULACAO_FASTPATH`. |
-| B6 | **Fast-paths do `model_router` em parte letra-morta** — 8 dos 14 padrões com 0 hits; só 21 redirects web em junho (dead-zone de continuações curtas 3-15 palavras não coberto). | Aberto | Adicionar padrões de continuação/status curto; manter guard de 15 palavras. |
-| B7 | **`tool_name` 100% NULL** em `agent_session_costs` — impossível saber qual MCP tool consome mais output. | Aberto | Instrumentar `tool_name` no registro (pré-requisito p/ próxima rodada de otimização). |
-| B8 | **`pricing.py` Haiku 4x subestimado**. | Aberto | Corrigir tabela. |
+| B5 | **`vinculacao_fastpath` 0% eficácia** — N0 (regex) não casa; tudo cai no N2 (Opus). Só adiciona latência. | **DECISÃO 2026-06-28: DESLIGAR** | Recomendado `AGENT_VINCULACAO_FASTPATH=false` (env Render, reversível, como B2 — sem deploy). Racional: SOT diz 0% eficácia + tax de Haiku-N1 por mensagem; a F1 substitui o spawn de `gestor-recebimento` (caminho-feliz do fastpath fica redundante). NÃO consertar regex às cegas (sem telemetria que aponte a falha; N1 Haiku já existia p/ variações e tb não casa → problema não é só N0). Código (default `true`) **inalterado** — flag-off é o lever instantâneo. **Ação pendente do usuário** (aval prod). |
+| B6 | **Fast-paths do `model_router` em parte letra-morta** — 8 dos 14 padrões com 0 hits; só 21 redirects web em junho (dead-zone de continuações curtas 3-15 palavras não coberto). | **DECISÃO 2026-06-28: NÃO adicionar padrões (defer p/ F1)** | Achado decisivo: `select_model` no web **só roda em sessão FRIA (1ª mensagem)** — sessão quente usa `pick_warm_model` e NÃO roteia; Teams está com `TEAMS_SMART_MODEL_ROUTING=false` (Sonnet fixo, B2). Logo as "continuações curtas" mid-sessão **nunca chegam** ao `select_model` → adicionar padrões = ROI ~zero + risco de rebaixar 1ª-msg complexa. O tratamento real de continuação é a **própria F1** (especialista quente acumula contexto). Sem mudança de código. |
+| B7 | **`tool_name` 100% NULL** em `agent_session_costs` — impossível saber qual MCP tool consome mais output. | ✅ **FEITO 2026-06-28** | `_primary_tool_for_cost` (heurística documentada: delegação > skill > MCP > builtin) atribui 1 tool representativo do turno; threaded em `_persist_session_cost`. TDD em `tests/agente/sdk/test_cost_tool_attribution.py`. |
+| B8 | **`pricing.py` Haiku 4x subestimado**. | ✅ **FEITO 2026-06-28** | `claude-haiku-4-5-20251001` = `(1.00, 5.00)`. Regressão em `tests/agente/sdk/test_pricing_table.py`. |
 
 ---
 
@@ -97,7 +97,7 @@ A análise anterior afirmava que findings em `/tmp/subagent-findings` "não atra
 4. **S3:** `session_archive.py:47-50` arquiva `/tmp/subagent-findings/<session>*.md` em tar.gz no S3 (`agent-archive/`) na expiração da sessão.
 
 **O "elo partido" real NÃO é isolamento de filesystem. É:**
-- (a) o principal **nunca lê** os findings — `get_subagent_findings` (`subagent_reader.py:604`) tinha **zero callers**;
+- (a) o principal **nunca lia** os findings — `get_subagent_findings` (`subagent_reader.py:604`) tinha **zero callers** no agente web. ✅ **LIGADO 2026-06-28**: read-back canônico (#3c) no `_subagent_stop_hook` do web, espelhando `_subagent_stop_audit` do agente_lojas — hoje observabilidade (prova de leitura); a F1 consome na retomada do especialista quente;
 - (b) **efemeridade entre DEPLOYS** (Render recicla container) — não entre processos;
 - (c) S3 só guarda no archive **pós-expiração** (cold), sem leitura ativa durante a sessão.
 
@@ -168,11 +168,11 @@ Elimina os dois drivers do multi-spawn: **re-boot por turno** (sessão quente = 
 
 ## Plano faseado (gated)
 
-- **F0 — quick wins independentes (baixo risco, rápido):**
-  - Corrigir comentários `/tmp` (B3) + ligar `get_subagent_findings` (leitura dos findings já gravados) — ganho de re-descoberta isolado.
-  - Corrigir `pricing.py` Haiku (B8). Instrumentar `tool_name` (B7).
-  - Remover env var Teams Opus (B2). Backfill custo Teams (B1).
-  - Decidir B5 (consertar/desligar `vinculacao_fastpath`) e B6 (padrões dead-zone).
+- **F0 — quick wins independentes (baixo risco, rápido):** ✅ **CONCLUÍDA 2026-06-28** (resta a ação de prod de B5 — flag-off — a cargo do usuário).
+  - ✅ Corrigir comentários `/tmp` (B3) + ligar `get_subagent_findings` (read-back canônico no SubagentStop do web).
+  - ✅ Corrigir `pricing.py` Haiku (B8). ✅ Instrumentar `tool_name` (B7).
+  - ✅ Remover env var Teams Opus (B2). ✅ Backfill custo Teams (B1). *(já fechados antes desta sessão)*
+  - ✅ Decidido B5 (**desligar** via env — pendente aval prod) e B6 (**não adicionar** padrões; defer p/ F1 — `select_model` só roda em sessão fria).
 - **F1 — piloto handoff (UM especialista):** `gestor-estoque-odoo` OU `gestor-recebimento` (interativos plano→confirma→executa). Pool multi-agente + roteador + tool `transferir_para` + handoff magro + reversão + executor atômico. Atrás de flag (off/shadow/on/admin). **Métrica de gate:** cache_read/creation e custo/sessão dos spawns não-primeiros, antes vs depois.
 - **F2 — estender + memória de trabalho:** demais especialistas interativos + leitura de findings `/tmp` vivo + S3 retomada cross-deploy. Aposentar o checkpoint (B4) se o handoff superá-lo.
 - **F3 — governança:** critério "merece especialista quente vs executor atômico vs principal direto"; baseline de custo com alarme.
@@ -183,7 +183,7 @@ Elimina os dois drivers do multi-spawn: **re-boot por turno** (sessão quente = 
 
 ## Critérios de aceite
 
-- [ ] F0: comentários `/tmp` corrigidos; `get_subagent_findings` com caller ativo; `pricing.py` Haiku = $1/$5; `tool_name` populado; env var Teams = Sonnet (ou removida); backfill Teams aplicado (idempotente/reversível).
+- [x] F0: comentários `/tmp` corrigidos; `get_subagent_findings` com caller ativo (read-back #3c no web); `pricing.py` Haiku = $1/$5; `tool_name` populado (`_primary_tool_for_cost`); env var Teams = Sonnet; backfill Teams aplicado (idempotente/reversível). *(B5 decidido = desligar; ação de env a cargo do usuário.)*
 - [ ] F1: handoff de UM especialista em produção atrás de flag, com rollback instantâneo (flag off).
 - [ ] F1: handoff magro mensurável (<10k tokens injetados no handoff típico).
 - [ ] F1: GATE — custo médio por sessão multi-assunto do especialista cai vs baseline de multi-spawn, SEM aumento de num_turns por degradação (se turns sobe = perdeu contexto = reverter).

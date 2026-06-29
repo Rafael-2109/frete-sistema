@@ -1130,8 +1130,11 @@ def build_hooks(
 
             # #3b Checkpoint de estado entre spawns (Rota B) — persiste o findings
             # do spawn N em data['subagent_checkpoints'][agent_type] p/ o spawn N+1
-            # herdar (conserta o subagente amnesico; substitui o /tmp/subagent-findings
-            # quebrado — TMPDIR divergente cross-process + efemero no Render).
+            # herdar (conserta o subagente amnesico). Substitui o /tmp/subagent-findings
+            # que ficava ORFAO: o principal nao lia (get_subagent_findings sem caller)
+            # e o /tmp e efemero ENTRE DEPLOYS no Render. B3 (correcao factual
+            # 2026-06-28): /tmp absoluto ATRAVESSA processo no mesmo container — o
+            # TMPDIR divergente so afeta tempfile.gettempdir(), nao caminho absoluto.
             # CAPTURA roda em shadow E on (e inocua); a INJECAO (PreToolUse Task) so' em on.
             try:
                 from ..config.feature_flags import resolve_subagent_checkpoint_mode
@@ -1152,6 +1155,28 @@ def build_hooks(
                 logger.warning(
                     f"[HOOK:SubagentStop] checkpoint falhou: "
                     f"{type(ckpt_err).__name__}: {ckpt_err}")
+
+            # #3c Read-back canonico dos findings (F0 2026-06-28) — LIGA o
+            # get_subagent_findings que estava ORFAO no agente web (0 callers; so'
+            # o agente_lojas o chamava). Le os findings que o subagente ja gravou,
+            # pelo reader canonico SDK 0.1.60+ (list_subagents -> summary), espelhando
+            # _subagent_stop_audit do agente_lojas (P1.5). Hoje e' observabilidade
+            # (prova que o principal CONSEGUE ler os findings sem re-extrair do
+            # transcript); a F1 (handoff de sessao) consome isto na retomada do
+            # especialista quente. Best-effort: nunca quebra o hook.
+            try:
+                from .subagent_reader import get_subagent_findings
+                if session_id and agent_type:
+                    _rb = get_subagent_findings(session_id, agent_type)
+                    if _rb:
+                        _rb_preview = _rb[:300].replace('\n', ' ')
+                        logger.info(
+                            "[HOOK:SubagentStop] findings_readback "
+                            "agent_type=%s len=%d preview=%s",
+                            agent_type, len(_rb), _rb_preview)
+            except Exception as _rb_err:
+                logger.debug(
+                    "[HOOK:SubagentStop] findings_readback falhou: %s", _rb_err)
 
             # #6 UI — emite subagent_summary via Redis pubsub para o frontend
             # FIX 2026-04-17: anteriormente usava event_queue local, que corrompia

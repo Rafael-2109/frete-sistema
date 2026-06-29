@@ -1984,6 +1984,30 @@ def _save_messages_dedup(
             )
 
 
+def _primary_tool_for_cost(tools_used: Optional[List[str]]) -> Optional[str]:
+    """Tool representativo do TURNO p/ atribuir custo em agent_session_costs (B7).
+
+    O custo do ResultMessage e do turno INTEIRO (nao ha breakdown de token
+    por-tool a esta granularidade). Para que `tool_name` deixe de ser 100% NULL
+    (e `aggregate_summary.by_tool` deixe de vir vazio), atribuimos UM tool
+    representativo, priorizando o maior driver de custo medido no SOT 2026-06:
+    delegacao a subagente > skill > MCP tool > builtin. `tools_used` ja chega
+    enriquecido (`Agent:<type>`, `Skill:<name>`, `mcp__*`, builtins) de
+    `tool_call` (chat.py ~L1043). Marcadores crus 'Skill'/'Agent' (duplicados de
+    backward-compat) NAO sao atribuicao util sozinhos -> ignorados.
+    """
+    if not tools_used:
+        return None
+    for prefix in ('Agent:', 'Skill:', 'mcp__'):
+        for t in tools_used:
+            if t.startswith(prefix):
+                return t
+    for t in tools_used:
+        if t not in ('Skill', 'Agent'):
+            return t
+    return None
+
+
 def _persist_session_cost(
     message_id: Optional[str],
     session_id: Optional[str],
@@ -1994,6 +2018,7 @@ def _persist_session_cost(
     cache_creation_tokens: int,
     cost_usd: float,
     model: Optional[str],
+    tools_used: Optional[List[str]] = None,
 ) -> None:
     """Persiste o breakdown de custo per-message em agent_session_costs.
 
@@ -2018,7 +2043,7 @@ def _persist_session_cost(
             message_id=message_id,
             session_id=session_id,
             user_id=user_id,
-            tool_name=None,
+            tool_name=_primary_tool_for_cost(tools_used),
             model=model,
             input_tokens=input_tokens,
             output_tokens=output_tokens,
@@ -2261,6 +2286,7 @@ def _save_messages_to_db(
                 cache_creation_tokens=cache_creation_tokens,
                 cost_usd=cost_usd,
                 model=model,
+                tools_used=tools_used,  # B7: atribui tool representativo do turno
             )
 
             db.session.commit()
