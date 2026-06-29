@@ -92,7 +92,7 @@
       <th>#</th>
       <th>Status</th>
       <th>NF</th>
-      <th>Pedido TP</th>
+      <th>Pedido TP (nº)</th>
       <th>Loja</th>
       <th>Cliente</th>
       <th>CPF</th>
@@ -123,8 +123,10 @@
             {% endif %}
           </td>
           <td>
-            {% if v.tagplus_pedido_id %}
-              <small class="text-muted" title="ID do pedido auto-criado pelo TagPlus">
+            {% if v.tagplus_pedido_numero %}
+              <small title="Número do pedido no TagPlus">nº {{ v.tagplus_pedido_numero }}</small>
+            {% elif v.tagplus_pedido_id %}
+              <small class="text-muted" title="ID interno do TagPlus (número ainda não capturado)">
                 #{{ v.tagplus_pedido_id }}
               </small>
             {% else %}

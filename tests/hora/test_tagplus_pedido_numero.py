@@ -5,7 +5,10 @@ pedido_os_vinculada.numero) no webhook nfe_aprovada, no backfill de
 enriquecimento e no backfill historico do JSONB; e a logica de exibicao.
 """
 from decimal import Decimal
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
+
+from flask import render_template_string
 
 from app import db as _db
 from app.hora.models.tagplus import (
@@ -120,3 +123,41 @@ def test_backfill_numero_do_payload_preenche_da_jsonb(db):
     # persistirem, entao pode haver outras vendas elegiveis no DB local.
     assert res['atualizadas'] >= 1
     assert res['sem_numero'] >= 1
+
+
+# --------------------------------------------------------------------------
+# Logica de exibicao da celula "Pedido TP" (numero > id interno > traco).
+# Espelha vendas_lista.html (Task 5) — manter as duas em sincronia.
+# --------------------------------------------------------------------------
+CELL_TPL = (
+    "{% if v.tagplus_pedido_numero %}"
+    "<small title=\"Numero do pedido no TagPlus\">nº {{ v.tagplus_pedido_numero }}</small>"
+    "{% elif v.tagplus_pedido_id %}"
+    "<small class=\"text-muted\" title=\"ID interno (numero ausente)\">#{{ v.tagplus_pedido_id }}</small>"
+    "{% else %}<small class=\"text-muted\">—</small>{% endif %}"
+)
+
+
+def test_celula_pedido_tp_prefere_numero(app):
+    with app.app_context():
+        out = render_template_string(
+            CELL_TPL, v=SimpleNamespace(tagplus_pedido_numero=941, tagplus_pedido_id=5),
+        )
+        assert 'nº 941' in out
+        assert '#5' not in out
+
+
+def test_celula_pedido_tp_fallback_id_quando_sem_numero(app):
+    with app.app_context():
+        out = render_template_string(
+            CELL_TPL, v=SimpleNamespace(tagplus_pedido_numero=None, tagplus_pedido_id=5),
+        )
+        assert '#5' in out
+
+
+def test_celula_pedido_tp_traco_quando_vazio(app):
+    with app.app_context():
+        out = render_template_string(
+            CELL_TPL, v=SimpleNamespace(tagplus_pedido_numero=None, tagplus_pedido_id=None),
+        )
+        assert '—' in out
