@@ -404,3 +404,78 @@ def gerar_excel_razao(dados_agrupados, contas_info, saldos_iniciais, data_ini=''
 
     logger.info(f"Excel gerado: {row - 4} linhas de dados")
     return output
+
+
+# ============================================================
+# AGREGACAO PARA CONCILIACAO (por documento / diario)
+# ============================================================
+
+def agrupar_por_documento(dados_agrupados, contas_info, por_diario=False):
+    """Agrega o razao por (conta, documento) — base de CONCILIACAO.
+
+    Reduz as N linhas de `account.move.line` retornadas por
+    `buscar_movimentos_razao` a 1 linha por (conta contabil, documento =
+    `move_name`), somando debito e credito. Responde "quais notas/documentos
+    compoem o saldo desta conta" — ex.: conciliar o razao de uma conta de
+    imposto a recuperar contra a apuracao fiscal e isolar as notas divergentes
+    (caso real: IMP da contadora, conta '1140200003 cofins a recuperar', 09/2025).
+
+    NAO consulta o Odoo: opera sobre o retorno ja' em memoria de
+    `buscar_movimentos_razao` (zero round-trip adicional).
+
+    Args:
+        dados_agrupados: dict {account_id: [movimentos]} — 1o elemento do retorno
+            de `buscar_movimentos_razao`. Cada movimento usa as chaves
+            `move_name`, `journal_name`, `debit`, `credit` (ausentes viram 0/'').
+        contas_info: dict {account_id: {code, name, account_type}} — 2o elemento
+            do retorno de `buscar_movimentos_razao`.
+        por_diario: se True, a chave de agrupamento inclui o diario
+            (`journal_name`), separando o mesmo documento por diario; se False
+            (default), some-se o documento inteiro e o campo `diario` fica ''.
+
+    Returns:
+        list[dict] ordenada por (conta_code, documento, diario). Cada item:
+            conta_id, conta_code, conta_nome, documento, diario,
+            n_lancamentos, total_debito, total_credito,
+            saldo (= total_debito - total_credito, padrao contabil).
+    """
+    grupos = {}
+
+    for acc_id, movimentos in (dados_agrupados or {}).items():
+        info = (contas_info or {}).get(acc_id) or {}
+        code = info.get('code', '') or ''
+        nome = info.get('name', '') or ''
+
+        for mov in (movimentos or []):
+            documento = mov.get('move_name') or ''
+            diario_val = (mov.get('journal_name') or '') if por_diario else ''
+            chave = (acc_id, documento, diario_val)
+
+            grupo = grupos.get(chave)
+            if grupo is None:
+                grupo = {
+                    'conta_id': acc_id,
+                    'conta_code': code,
+                    'conta_nome': nome,
+                    'documento': documento,
+                    'diario': diario_val,
+                    'n_lancamentos': 0,
+                    'total_debito': 0.0,
+                    'total_credito': 0.0,
+                    'saldo': 0.0,
+                }
+                grupos[chave] = grupo
+
+            grupo['n_lancamentos'] += 1
+            grupo['total_debito'] += float(mov.get('debit') or 0)
+            grupo['total_credito'] += float(mov.get('credit') or 0)
+
+    resultado = []
+    for grupo in grupos.values():
+        grupo['total_debito'] = round(grupo['total_debito'], 2)
+        grupo['total_credito'] = round(grupo['total_credito'], 2)
+        grupo['saldo'] = round(grupo['total_debito'] - grupo['total_credito'], 2)
+        resultado.append(grupo)
+
+    resultado.sort(key=lambda r: (r['conta_code'], r['documento'], r['diario']))
+    return resultado
