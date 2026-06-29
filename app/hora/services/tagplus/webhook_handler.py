@@ -40,6 +40,23 @@ EVENT_NFE_DENEGADA = 'nfe_denegada'
 EVENT_NFE_CANCELADA = 'nfe_cancelada'
 
 
+def _extrair_pedido_id_numero(detalhes: dict) -> tuple:
+    """Extrai (id, numero) de detalhes['pedido_os_vinculada'].
+
+    A NFe (GET /nfes/{id}) traz pedido_os_vinculada={id, numero, tipo} — o
+    `numero` e o numero VISIVEL do pedido. Retorna (None, None) quando ausente.
+    """
+    pv = detalhes.get('pedido_os_vinculada') or {}
+    if not isinstance(pv, dict):
+        return None, None
+    pid = pv.get('id')
+    pnum = pv.get('numero')
+    return (
+        pid if isinstance(pid, int) else None,
+        pnum if isinstance(pnum, int) else None,
+    )
+
+
 class WebhookHandler:
     @staticmethod
     def processar(conta_id: int, event_type: str, data: list[dict]) -> None:
@@ -157,11 +174,9 @@ class WebhookHandler:
         # Captura pedido_os_vinculada.id da NFe (auto-criado pelo TagPlus
         # quando NFe e confirmada). Habilita backfill futuro de pedidos
         # sem precisar refazer GET /nfes/{id}.
-        pedido_vincul = detalhes.get('pedido_os_vinculada') or {}
-        if isinstance(pedido_vincul, dict):
-            pid = pedido_vincul.get('id')
-            if isinstance(pid, int):
-                emissao.tagplus_pedido_id = pid
+        pid, pnum = _extrair_pedido_id_numero(detalhes)
+        if pid is not None:
+            emissao.tagplus_pedido_id = pid
 
         # Atualiza HoraVenda + emite eventos por chassi (idempotente: query antes).
         venda = emissao.venda
@@ -175,6 +190,10 @@ class WebhookHandler:
             # via GET /pedidos/{id} usa esse ID.
             if emissao.tagplus_pedido_id and not venda.tagplus_pedido_id:
                 venda.tagplus_pedido_id = emissao.tagplus_pedido_id
+            # Numero VISIVEL do pedido (item 2): pedido_os_vinculada.numero ja
+            # vem no GET /nfes/{id}, sem chamada extra.
+            if pnum is not None and not venda.tagplus_pedido_numero:
+                venda.tagplus_pedido_numero = pnum
             # Transicao de status: CONFIRMADO -> FATURADO (NFe aprovada).
             if venda.status == VENDA_STATUS_CONFIRMADO:
                 venda.status = VENDA_STATUS_FATURADO
