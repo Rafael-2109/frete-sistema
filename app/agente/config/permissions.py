@@ -87,6 +87,30 @@ _current_user_id: ContextVar[int | None] = ContextVar('_agent_user_id', default=
 # Validacao de perfil e em routes.py; aqui apenas armazena estado no contexto.
 _debug_mode: ContextVar[bool] = ContextVar('_agent_debug_mode', default=False)
 
+# Agente da sessao atual ('web' = Nacom logistico | 'lojas' = Lojas HORA).
+# M3/F2 Fase 1: a ESCRITA de memoria (memory tools) e os jobs de consolidacao
+# leem este ContextVar para taguear/filtrar por agente. Default 'web' =
+# fail-closed aditivo: codigo que nao setar explicitamente grava/le como 'web'
+# (preserva o agente web). As rotas setam no inicio do stream (web='web',
+# lojas='lojas'). Espelha o padrao de _current_user_id.
+_current_agent_id: ContextVar[str] = ContextVar('_agent_agent_id', default='web')
+
+
+def set_current_agent_id(agent_id: str) -> None:
+    """Define o agente da sessao atual ('web'|'lojas'). Rotas chamam ao iniciar
+    o stream. Isola escrita/leitura de memoria por agente (M3/F2 Fase 1)."""
+    _current_agent_id.set(agent_id or 'web')
+
+
+def get_current_agent_id() -> str:
+    """Obtem o agente da sessao atual (default 'web' — fail-closed)."""
+    return _current_agent_id.get()
+
+
+def clear_current_agent_id() -> None:
+    """Reseta o agente para 'web' (chamar no finally do stream)."""
+    _current_agent_id.set('web')
+
 
 def set_debug_mode(enabled: bool) -> None:
     """Define debug mode no contexto atual (validacao admin feita em routes.py)."""

@@ -637,7 +637,9 @@ class AgentMemory(db.Model):
 
     # Constraint única: um usuário não pode ter dois arquivos com mesmo path
     __table_args__ = (
-        db.UniqueConstraint('user_id', 'path', name='uq_user_memory_path'),
+        # M3/F2 Fase 1: agente faz parte da chave — web e lojas coexistem no
+        # mesmo path por usuario (migration 2026_06_30_constraint_agente_memoria).
+        db.UniqueConstraint('user_id', 'path', 'agente', name='uq_user_memory_path_agente'),
         # Fase 3 (loop corretivo): metrica conta reincidencia por (user, assinatura)
         db.Index('ix_agent_memories_user_errsig', 'user_id', 'error_signature'),
     )
@@ -705,7 +707,8 @@ class AgentMemory(db.Model):
         return direct_children
 
     @classmethod
-    def create_file(cls, user_id: int, path: str, content: str) -> 'AgentMemory':
+    def create_file(cls, user_id: int, path: str, content: str,
+                    agente: str = 'web') -> 'AgentMemory':
         """
         Cria arquivo de memória.
 
@@ -713,44 +716,50 @@ class AgentMemory(db.Model):
             user_id: ID do usuário
             path: Path do arquivo
             content: Conteúdo
+            agente: agente dono da memória ('web'|'lojas'). M3/F2 Fase 1 —
+                isola a escrita por agente; default 'web' = aditivo.
 
         Returns:
             AgentMemory criado
         """
-        # Cria diretórios pai se necessário
-        cls._ensure_parent_dirs(user_id, path)
+        # Cria diretórios pai se necessário (mesmo agente do arquivo)
+        cls._ensure_parent_dirs(user_id, path, agente)
 
         memory = cls(
             user_id=user_id,
             path=path,
             content=content,
+            agente=agente,
             is_directory=False
         )
         db.session.add(memory)
         return memory
 
     @classmethod
-    def create_directory(cls, user_id: int, path: str) -> 'AgentMemory':
-        """Cria diretório de memória."""
-        existing = cls.get_by_path(user_id, path)
+    def create_directory(cls, user_id: int, path: str,
+                         agente: str = 'web') -> 'AgentMemory':
+        """Cria diretório de memória (M3/F2 Fase 1: `agente` isola; default 'web')."""
+        existing = cls.get_by_path_for_agent(user_id, path, agente)
         if existing:
             return existing
 
         # Cria diretórios pai se necessário
-        cls._ensure_parent_dirs(user_id, path)
+        cls._ensure_parent_dirs(user_id, path, agente)
 
         memory = cls(
             user_id=user_id,
             path=path,
             content=None,
+            agente=agente,
             is_directory=True
         )
         db.session.add(memory)
         return memory
 
     @classmethod
-    def _ensure_parent_dirs(cls, user_id: int, path: str) -> None:
-        """Cria diretórios pai se não existirem."""
+    def _ensure_parent_dirs(cls, user_id: int, path: str,
+                            agente: str = 'web') -> None:
+        """Cria diretórios pai se não existirem (M3/F2 Fase 1: por agente)."""
         parts = path.split('/')
         # Remove o último elemento (arquivo) e elementos vazios
         parts = [p for p in parts[:-1] if p]
@@ -758,12 +767,13 @@ class AgentMemory(db.Model):
         current_path = ''
         for part in parts:
             current_path = f'{current_path}/{part}'
-            existing = cls.get_by_path(user_id, current_path)
+            existing = cls.get_by_path_for_agent(user_id, current_path, agente)
             if not existing:
                 dir_memory = cls(
                     user_id=user_id,
                     path=current_path,
                     content=None,
+                    agente=agente,
                     is_directory=True
                 )
                 db.session.add(dir_memory)
