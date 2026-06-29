@@ -389,6 +389,98 @@ class TestEvictClient:
         assert especialista.connected is True
 
 
+# ─── 6c. INTEGRAÇÃO: eviction (handler) → recriação no próximo turno ──
+# Os testes unitários acima cobrem evict_client ISOLADO. Esta seção prova a
+# CADEIA end-to-end no pool (H5): o que os 3 error-handlers de client.py fazem
+# após ProcessError/CLIConnectionError (`evict_client(pool_key)` com pool_key =
+# our_session_id, role 'principal') realmente força get_or_create_client a
+# RECRIAR um client novo no turno seguinte — e a chave composta impede que o
+# client morto sobreviva connected=True ao fast-path (regressão do blocker
+# 326316d82). Exercita get_or_create_client + evict_client + _registry REAIS.
+
+def _fake_sdk_client():
+    """ClaudeSDKClient fake conectável (connect/get_mcp_status/disconnect async)."""
+    c = MagicMock()
+    c.connect = AsyncMock()
+    c.disconnect = AsyncMock()
+    c.get_mcp_status = AsyncMock(return_value={})
+    return c
+
+
+class TestEvictionRecreationIntegration:
+
+    @patch('app.agente.config.feature_flags.USE_PERSISTENT_SDK_CLIENT', True)
+    def test_eviction_handler_forca_recriacao_no_proximo_turno(self, pool_reset):
+        """Turno 1 cria C1; o handler (evict_client(pool_key)) o remove; Turno 2 recria C2≠C1.
+
+        Simula a sequência real: cliente vivo no pool → ProcessError no stream →
+        handler de client.py:2599 chama evict_client(pool_key) → próximo request
+        cai no slow-path de get_or_create_client (fast-path não acha o morto).
+        """
+        _ensure_pool_initialized()
+        sess = 'sess-evict-e2e'
+
+        # ── Turno 1: get_or_create cria e registra C1 ──
+        c1 = _fake_sdk_client()
+        with patch('claude_agent_sdk.ClaudeSDKClient', MagicMock(return_value=c1), create=True):
+            pooled1 = submit_coroutine(
+                get_or_create_client(sess, options=MagicMock(), user_id=5)
+            ).result(timeout=5)
+        assert pooled1.connected is True
+        assert cp._registry[cp._pool_key(sess)] is pooled1
+        c1.connect.assert_awaited_once()
+
+        # ── Crash do turno: o que os error-handlers de client.py executam ──
+        evicted = cp.evict_client(sess)  # role default 'principal' == pool_key dos handlers
+        assert evicted is True
+        assert cp._pool_key(sess) not in cp._registry
+        assert pooled1.connected is False
+
+        # ── Turno 2: get_or_create RECRIA (fast-path miss porque foi evictado) ──
+        c2 = _fake_sdk_client()
+        with patch('claude_agent_sdk.ClaudeSDKClient', MagicMock(return_value=c2), create=True):
+            pooled2 = submit_coroutine(
+                get_or_create_client(sess, options=MagicMock(), user_id=5)
+            ).result(timeout=5)
+
+        assert pooled2 is not pooled1            # client NOVO (não reusou o morto)
+        assert pooled2.client is c2
+        assert pooled2.connected is True
+        assert cp._registry[cp._pool_key(sess)] is pooled2
+        c2.connect.assert_awaited_once()
+
+    @patch('app.agente.config.feature_flags.USE_PERSISTENT_SDK_CLIENT', True)
+    def test_eviction_chave_composta_nao_deixa_morto_no_fastpath(self, pool_reset):
+        """Regressão direta do blocker (326316d82): com a chave COMPOSTA o client
+        morto some do registry; o fast-path do turno seguinte não o encontra e cria
+        um novo. (Com a chave CRUA do bug antigo, evict daria MISS e o fast-path
+        reusaria o subprocess morto → loop R-CLI-CRASH.)
+        """
+        _ensure_pool_initialized()
+        sess = 'sess-chave-composta'
+
+        c1 = _fake_sdk_client()
+        with patch('claude_agent_sdk.ClaudeSDKClient', MagicMock(return_value=c1), create=True):
+            submit_coroutine(get_or_create_client(sess, options=MagicMock())).result(timeout=5)
+
+        # Registrado sob a chave COMPOSTA, NUNCA sob a crua
+        assert cp._pool_key(sess) == f'{sess}::principal'
+        assert cp._pool_key(sess) in cp._registry
+        assert sess not in cp._registry  # a chave crua não existe — pop(sess) daria MISS (o bug)
+
+        # Handler evicta pela chave composta (correto)
+        assert cp.evict_client(sess) is True
+
+        # Fast-path do próximo turno NÃO encontra c1 (morto) → cria c2
+        c2 = _fake_sdk_client()
+        with patch('claude_agent_sdk.ClaudeSDKClient', MagicMock(return_value=c2), create=True):
+            pooled2 = submit_coroutine(get_or_create_client(sess, options=MagicMock())).result(timeout=5)
+
+        assert pooled2.client is c2          # novo
+        assert pooled2.client is not c1      # NÃO reusou o morto
+        assert pooled2.connected is True
+
+
 # ─── 7. _force_kill_subprocess ──────────────────────────────────────
 
 class TestForceKillSubprocess:
