@@ -1516,10 +1516,16 @@ def build_hooks(
                     # F4.4 PAD-CTX: payload em 2 partes — main (user_rules,
                     # memorias, directives, briefing, routing) + tail
                     # (recent_sessions + pendencias, por ULTIMO na montagem).
+                    # M3: este hook serve o agente WEB (Nacom) — e tambem Teams/
+                    # WhatsApp, todos agente='web'. Passa 'web' EXPLICITO (ponto de
+                    # entrada unico da injecao de memoria). Em F3, quando o fork de
+                    # lojas convergir para reusar este client, o agente_id vira do
+                    # perfil (fail-closed no ponto de entrada do fork).
                     additional_context, tail_context, injected_mem_ids = (
                         _load_user_memories_for_context(
                             turn_user_id, prompt=prompt,
                             model_name=get_model_name(),
+                            agente_id='web',
                         )
                     )
                     # Salvar IDs injetados para effectiveness tracking posterior

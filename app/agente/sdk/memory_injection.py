@@ -1139,7 +1139,8 @@ def _composite_score(decay: float, importance: float,
 
 
 def _load_user_memories_for_context(
-    user_id: int, prompt: str = None, model_name: str = None
+    user_id: int, prompt: str = None, model_name: str = None,
+    agente_id: str = 'web',
 ) -> tuple[Optional[str], Optional[str], list[int]]:
     """
     Carrega memórias do usuário e formata como contexto para injeção.
@@ -1290,6 +1291,7 @@ def _load_user_memories_for_context(
             # unica — tambem exclui esses paths do canal L1 <user_rules>).
             protected_memories = AgentMemory.query.filter(
                 AgentMemory.user_id == user_id,
+                AgentMemory.agente == agente_id,  # M3: isola por agente (web|lojas)
                 AgentMemory.path.in_(TIER1_PROTECTED_PATHS),
                 AgentMemory.is_directory == False,  # noqa: E712
             ).all()
@@ -1306,6 +1308,7 @@ def _load_user_memories_for_context(
             try:
                 tier15_query = AgentMemory.query.filter(
                     AgentMemory.user_id == 0,  # empresa
+                    AgentMemory.agente == agente_id,  # M3: empresa por agente
                     AgentMemory.is_directory == False,  # noqa: E712
                     AgentMemory.is_cold == False,  # noqa: E712
                     AgentMemory.path.like('/memories/empresa/usuarios/%'),
@@ -1343,6 +1346,7 @@ def _load_user_memories_for_context(
                 else:
                     tier16_query = AgentMemory.query.filter(
                         AgentMemory.user_id == 0,  # empresa
+                        AgentMemory.agente == agente_id,  # M3: empresa por agente
                         AgentMemory.is_directory == False,  # noqa: E712
                         AgentMemory.is_cold == False,  # noqa: E712
                         AgentMemory.path.like('/memories/empresa/heuristicas/%'),
@@ -1400,6 +1404,7 @@ def _load_user_memories_for_context(
                             from sqlalchemy import or_ as sql_or
                             mem_objects = AgentMemory.query.filter(
                                 AgentMemory.id.in_(memory_ids),
+                                AgentMemory.agente == agente_id,  # M3: defesa — IDs cross-agente nao materializam
                                 AgentMemory.is_directory == False,  # noqa: E712
                                 AgentMemory.is_cold == False,  # noqa: E712 — v2: excluir cold
                                 # Nao injetar diretiva nao-promovida (shadow/candidata/
@@ -1480,6 +1485,7 @@ def _load_user_memories_for_context(
 
                         graph_mem_objects = AgentMemory.query.filter(
                             AgentMemory.id.in_(graph_memory_ids),
+                            AgentMemory.agente == agente_id,  # M3: defesa KG por agente
                             AgentMemory.is_directory == False,  # noqa: E712
                             AgentMemory.is_cold == False,  # noqa: E712 — v2: excluir cold
                         ).all()
@@ -1513,6 +1519,7 @@ def _load_user_memories_for_context(
                 fallback_user_ids = [user_id, 0] if user_id != 0 else [0]
                 fallback_query = AgentMemory.query.filter(
                     AgentMemory.user_id.in_(fallback_user_ids),
+                    AgentMemory.agente == agente_id,  # M3: fallback por agente
                     AgentMemory.is_directory == False,  # noqa: E712
                     AgentMemory.is_cold == False,  # noqa: E712 — v2: excluir cold
                 )
