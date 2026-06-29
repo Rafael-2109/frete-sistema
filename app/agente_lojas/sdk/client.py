@@ -233,6 +233,15 @@ class AgentLojasClient:
             "permission_mode": "acceptEdits",
             "fallback_model": "sonnet",
             "disallowed_tools": ["Write", "Edit", "MultiEdit", "NotebookEdit"],
+            # env do subprocesso CLI (espelha agente web client.py:1629-1634):
+            # - HOME=/tmp: no Render $HOME=/opt/render e read-only -> o CLI crasha
+            #   ao salvar .claude.json (ENOENT/EROFS).
+            # - CLAUDE_CODE_STREAM_CLOSE_TIMEOUT=240000 (ms): timeout de hooks/MCP.
+            #   Default SDK = 60s, corta skill pesada (SQL analitico)/subagente.
+            "env": {
+                "CLAUDE_CODE_STREAM_CLOSE_TIMEOUT": "240000",
+                "HOME": "/tmp",
+            },
             # can_use_tool: validacao dinamica de tools. Roteia AskUserQuestion
             # para pending_questions + event_queue. Callback global le session_id
             # da ContextVar setada em stream_response().
