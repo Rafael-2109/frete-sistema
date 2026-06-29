@@ -97,9 +97,13 @@ class PessoalCategoria(db.Model):
     icone = db.Column(db.String(50))
     ativa = db.Column(db.Boolean, default=True)
     # Compensacao Empresa: 'S' saida compensavel, 'E' entrada compensavel, NULL nao participa.
-    # Categorias marcadas como 'S'/'E' automaticamente ficam em excluir_relatorio=True quando
-    # atribuidas a uma transacao (mesmo comportamento do grupo Desconsiderar), mas permitem
-    # pareamento em pessoal_compensacoes.
+    # ATENCAO: ao contrario do grupo 'Desconsiderar', categorias 'S'/'E' NAO sao excluidas do
+    # relatorio quando atribuidas a uma transacao. A transacao so recebe excluir_relatorio=True
+    # quando fica 100% compensada (recalcular_valor_compensado em compensacao_service.py).
+    # Enquanto ha residuo (nao-compensada ou parcial), permanece visivel e CONTA nos KPIs do
+    # dashboard — comportamento INTENCIONAL: o residuo que "fica" e tratado como receita/despesa
+    # real; so a parte que "entra e sai" e neutralizada via pareamento em pessoal_compensacoes
+    # (tela Matches Empresa).
     compensavel_tipo = db.Column(db.String(1))  # 'S' | 'E' | None
     criado_em = db.Column(db.DateTime, default=agora_utc_naive)
 

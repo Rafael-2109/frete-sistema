@@ -55,7 +55,7 @@
             {% endfor %}
           </select>
         </div>
-        <div class="col-md-2">
+        <div class="col-md-3">
           <label class="form-label small mb-0">Categoria</label>
           <select name="categoria_id" class="form-select form-select-sm">
             <option value="">Todas</option>
@@ -64,15 +64,6 @@
               {{ cat.grupo }} / {{ cat.nome }}
             </option>
             {% endfor %}
-          </select>
-        </div>
-        <div class="col-md-1">
-          <label class="form-label small mb-0">Status</label>
-          <select name="status" class="form-select form-select-sm">
-            <option value="">Todos</option>
-            <option value="PENDENTE" {{ 'selected' if filtros.status == 'PENDENTE' }}>Pendente</option>
-            <option value="CATEGORIZADO" {{ 'selected' if filtros.status == 'CATEGORIZADO' }}>Categorizado</option>
-            <option value="REVISADO" {{ 'selected' if filtros.status == 'REVISADO' }}>Revisado</option>
           </select>
         </div>
         <div class="col-md-2">
@@ -110,7 +101,7 @@
         </div>
 
         {# Linha colapsavel com filtros avançados #}
-        <div class="collapse col-12 {% if filtros.valor_min or filtros.valor_max or filtros.tipo or filtros.membro_id or filtros.tem_categoria %}show{% endif %}"
+        <div class="collapse col-12 {% if filtros.valor_min or filtros.valor_max or filtros.tipo or filtros.membro_id or filtros.tem_categoria or filtros.status %}show{% endif %}"
              id="filtrosAvancados">
           <div class="row g-2 mt-1">
             <div class="col-md-2">
@@ -129,8 +120,8 @@
               <label class="form-label small mb-0">Tipo</label>
               <select name="tipo" class="form-select form-select-sm">
                 <option value="">Todos</option>
-                <option value="debito" {{ 'selected' if filtros.tipo == 'debito' }}>Débito</option>
-                <option value="credito" {{ 'selected' if filtros.tipo == 'credito' }}>Crédito</option>
+                <option value="debito" {{ 'selected' if filtros.tipo == 'debito' }}>Débito (saída)</option>
+                <option value="credito" {{ 'selected' if filtros.tipo == 'credito' }}>Crédito (entrada)</option>
               </select>
             </div>
             <div class="col-md-2">
@@ -143,85 +134,116 @@
               </select>
             </div>
             <div class="col-md-2">
-              <label class="form-label small mb-0">Categoria</label>
-              <select name="tem_categoria" class="form-select form-select-sm">
-                <option value="">Qualquer</option>
-                <option value="sim" {{ 'selected' if filtros.tem_categoria == 'sim' }}>Categorizada</option>
-                <option value="nao" {{ 'selected' if filtros.tem_categoria == 'nao' }}>Sem categoria</option>
+              <label class="form-label small mb-0">Situação</label>
+              <select name="status" class="form-select form-select-sm">
+                <option value="">Todas</option>
+                <option value="PENDENTE" {{ 'selected' if filtros.status == 'PENDENTE' }}>Falta classificar</option>
+                <option value="CATEGORIZADO" {{ 'selected' if filtros.status == 'CATEGORIZADO' }}>Já classificada</option>
+                <option value="REVISADO" {{ 'selected' if filtros.status == 'REVISADO' }}>Revisada</option>
               </select>
             </div>
-            <div class="col-md-3">
-              <label class="form-label small mb-0">
-                Motivo da exclusao
-                <i class="fas fa-question-circle text-muted"
-                   title="Por que uma transacao esta com excluir_relatorio=True"></i>
-              </label>
-              <select name="motivo_exclusao" class="form-select form-select-sm">
-                <option value="">Qualquer</option>
-                <option value="SALDO_ANTERIOR" {{ 'selected' if filtros.motivo_exclusao == 'SALDO_ANTERIOR' }}>
-                  Saldo Anterior (ruido fatura){% if contadores_motivo %} — {{ contadores_motivo.SALDO_ANTERIOR }}{% endif %}
-                </option>
-                <option value="EMPRESA" {{ 'selected' if filtros.motivo_exclusao == 'EMPRESA' }}>
-                  Empresa (categoria Desconsiderar/compensavel){% if contadores_motivo %} — {{ contadores_motivo.EMPRESA }}{% endif %}
-                </option>
-                <option value="PAGAMENTO_CARTAO" {{ 'selected' if filtros.motivo_exclusao == 'PAGAMENTO_CARTAO' }}>
-                  Pagamento de Cartao{% if contadores_motivo %} — {{ contadores_motivo.PAGAMENTO_CARTAO }}{% endif %}
-                </option>
-                <option value="TRANSF_PROPRIA" {{ 'selected' if filtros.motivo_exclusao == 'TRANSF_PROPRIA' }}>
-                  Transferencia Propria{% if contadores_motivo %} — {{ contadores_motivo.TRANSF_PROPRIA }}{% endif %}
-                </option>
-                <option value="COMPENSADA" {{ 'selected' if filtros.motivo_exclusao == 'COMPENSADA' }}>
-                  Compensada 100%{% if contadores_motivo %} — {{ contadores_motivo.COMPENSADA }}{% endif %}
-                </option>
-                <option value="OUTRO" {{ 'selected' if filtros.motivo_exclusao == 'OUTRO' }}>
-                  Outro (revisar){% if contadores_motivo %} — {{ contadores_motivo.OUTRO }}{% endif %}
-                </option>
+            <div class="col-md-2">
+              <label class="form-label small mb-0">Classificação</label>
+              <select name="tem_categoria" class="form-select form-select-sm">
+                <option value="">Tanto faz</option>
+                <option value="sim" {{ 'selected' if filtros.tem_categoria == 'sim' }}>Tem categoria</option>
+                <option value="nao" {{ 'selected' if filtros.tem_categoria == 'nao' }}>Sem categoria</option>
               </select>
             </div>
           </div>
         </div>
+
+        {# Hidden: preserva o modo de visibilidade (chave "O que mostrar") ao submeter o form.
+           status ja viaja pelo <select> de Situacao acima. #}
+        {% if filtros.excluir_filtradas == '0' %}
+        <input type="hidden" name="excluir_filtradas" value="0">
+        {% elif filtros.somente_excluidas == '1' or filtros.motivo_exclusao %}
+        <input type="hidden" name="somente_excluidas" value="1">
+        {% if filtros.motivo_exclusao %}<input type="hidden" name="motivo_exclusao" value="{{ filtros.motivo_exclusao }}">{% endif %}
+        {% endif %}
       </form>
     </div>
   </div>
 
-  {# ===== Atalhos por motivo de exclusao =====
-       Preservam filtros ativos (exceto motivo_exclusao e page) via urlencode,
-       alinhado com o padrao do ns_sort.qs para links de sort. #}
-  {% if contadores_motivo %}
-  {% set ns_atalho = namespace(qs='') %}
+  {# ===== Chave "O que mostrar" =====
+       Esconde 3 eixos tecnicos (status / excluir_filtradas+somente_excluidas / motivo_exclusao)
+       atras de 4 opcoes em linguagem do dia-a-dia. O botao do modo vigente fica PREENCHIDO
+       (estado sempre visivel — antes so dava pra saber pela URL).
+       _vis deriva dos filtros (mesma fonte dos <select> que ja usam 'selected'). #}
+  {% set _vis = 'reais' %}
+  {% if filtros.excluir_filtradas == '0' %}
+    {% set _vis = 'tudo' %}
+  {% elif filtros.somente_excluidas == '1' or filtros.motivo_exclusao %}
+    {% set _vis = 'ignoradas' %}
+  {% elif filtros.status == 'PENDENTE' %}
+    {% set _vis = 'classificar' %}
+  {% endif %}
+
+  {# QS preserva filtros de conteudo; reseta os eixos de visibilidade + page #}
+  {% set ns_vis = namespace(qs='') %}
   {% for key, value in request.args.items(multi=True) %}
-    {% if key not in ('page', 'motivo_exclusao') and value %}
-      {% set ns_atalho.qs = ns_atalho.qs ~ '&' ~ key|urlencode ~ '=' ~ value|urlencode %}
+    {% if key not in ('page', 'status', 'motivo_exclusao', 'somente_excluidas', 'excluir_filtradas') and value %}
+      {% set ns_vis.qs = ns_vis.qs ~ '&' ~ key|urlencode ~ '=' ~ value|urlencode %}
     {% endif %}
   {% endfor %}
+
   <div class="mb-3">
-    <small class="text-muted me-2">Atalhos excluidas:</small>
-    <a href="?motivo_exclusao=SALDO_ANTERIOR{{ ns_atalho.qs }}" class="btn btn-sm btn-outline-secondary">
-      <i class="fas fa-clock"></i> Saldo Anterior
-      <span class="badge bg-secondary">{{ contadores_motivo.SALDO_ANTERIOR }}</span>
-    </a>
-    <a href="?motivo_exclusao=EMPRESA{{ ns_atalho.qs }}" class="btn btn-sm btn-outline-warning">
-      <i class="fas fa-briefcase"></i> Empresa
-      <span class="badge bg-warning">{{ contadores_motivo.EMPRESA }}</span>
-    </a>
-    <a href="?motivo_exclusao=OUTRO{{ ns_atalho.qs }}" class="btn btn-sm btn-outline-danger">
-      <i class="fas fa-question"></i> Outro (revisar)
-      <span class="badge bg-danger">{{ contadores_motivo.OUTRO }}</span>
-    </a>
-    <a href="?motivo_exclusao=PAGAMENTO_CARTAO{{ ns_atalho.qs }}" class="btn btn-sm btn-outline-secondary">
-      <i class="fas fa-credit-card"></i> Pagto Cartao
-      <span class="badge bg-secondary">{{ contadores_motivo.PAGAMENTO_CARTAO }}</span>
-    </a>
-    <a href="?motivo_exclusao=TRANSF_PROPRIA{{ ns_atalho.qs }}" class="btn btn-sm btn-outline-secondary">
-      <i class="fas fa-exchange-alt"></i> Transf Propria
-      <span class="badge bg-secondary">{{ contadores_motivo.TRANSF_PROPRIA }}</span>
-    </a>
-    <a href="?motivo_exclusao=COMPENSADA{{ ns_atalho.qs }}" class="btn btn-sm btn-outline-info">
-      <i class="fas fa-balance-scale"></i> Compensada
-      <span class="badge bg-info">{{ contadores_motivo.COMPENSADA }}</span>
-    </a>
+    <div class="d-flex align-items-center flex-wrap gap-2">
+      <small class="text-muted me-1"><i class="fas fa-eye"></i> O que mostrar:</small>
+      <a href="?status=PENDENTE{{ ns_vis.qs }}"
+         class="btn btn-sm {{ 'btn-primary' if _vis == 'classificar' else 'btn-outline-secondary' }}">
+        Pra classificar
+        {% if total_pendentes %}<span class="badge {{ 'bg-light text-dark' if _vis == 'classificar' else 'bg-warning' }}">{{ total_pendentes }}</span>{% endif %}
+      </a>
+      <a href="{{ url_for('pessoal.pessoal_transacoes.listar') }}?{{ ns_vis.qs }}"
+         class="btn btn-sm {{ 'btn-primary' if _vis == 'reais' else 'btn-outline-secondary' }}">
+        Nossas movimentações
+      </a>
+      <a href="?somente_excluidas=1{{ ns_vis.qs }}"
+         class="btn btn-sm {{ 'btn-primary' if _vis == 'ignoradas' else 'btn-outline-secondary' }}">
+        Ignoradas
+        {% if total_excluidas %}<span class="badge {{ 'bg-light text-dark' if _vis == 'ignoradas' else 'bg-secondary' }}">{{ total_excluidas }}</span>{% endif %}
+      </a>
+      <a href="?excluir_filtradas=0{{ ns_vis.qs }}"
+         class="btn btn-sm {{ 'btn-primary' if _vis == 'tudo' else 'btn-outline-secondary' }}">
+        Tudo
+      </a>
+    </div>
+
+    {# Sub-linha: detalhamento dos motivos (so no modo "Ignoradas") — labels leigos, termo tecnico no tooltip #}
+    {% if _vis == 'ignoradas' and contadores_motivo %}
+    <div class="d-flex align-items-center flex-wrap gap-1 mt-2 ms-1">
+      <small class="text-muted me-1">Por que foi ignorada?</small>
+      <a href="?somente_excluidas=1{{ ns_vis.qs }}"
+         class="btn btn-sm {{ 'btn-info' if not filtros.motivo_exclusao else 'btn-outline-info' }}">
+        Todas <span class="badge bg-light text-dark">{{ total_excluidas }}</span>
+      </a>
+      {% for cod, rotulo, dica in [
+          ('SALDO_ANTERIOR', 'Saldo do extrato (não é gasto)', 'Saldo Anterior — linha de saldo da fatura/extrato, não é movimentação'),
+          ('PAGAMENTO_CARTAO', 'Pagamento da fatura do cartão', 'Pagamento de cartão — saída que já vem detalhada na fatura (não contar 2x)'),
+          ('TRANSF_PROPRIA', 'Dinheiro entre nossas contas', 'Transferência própria — só mudou de uma conta nossa para outra'),
+          ('EMPRESA', 'Coisas da empresa (não é nosso)', 'Empresa — categoria Desconsiderar/compensável, não é gasto pessoal'),
+          ('COMPENSADA', 'Entrou e saiu (se anulou)', 'Compensada 100% — entrada e saída que se cancelam'),
+          ('OUTRO', 'Sem motivo claro (revisar)', 'Excluída sem motivo claro — revisar')
+      ] %}
+      <a href="?motivo_exclusao={{ cod }}{{ ns_vis.qs }}"
+         class="btn btn-sm {{ 'btn-warning' if filtros.motivo_exclusao == cod else 'btn-outline-secondary' }}"
+         title="{{ dica }}">
+        {{ rotulo }} <span class="badge bg-secondary">{{ contadores_motivo[cod] }}</span>
+      </a>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    <small class="text-muted d-block mt-1">
+      Mostrando:
+      {% if _vis == 'classificar' %}o que falta classificar (as ignoradas não aparecem).
+      {% elif _vis == 'ignoradas' %}movimentações que você ignora (não contam no orçamento).
+      {% elif _vis == 'tudo' %}todas as transações, inclusive as ignoradas.
+      {% else %}nossas movimentações reais (sem as ignoradas).
+      {% endif %}
+    </small>
   </div>
-  {% endif %}
 
   {# ===== QS para links de sort (sem page/sort_by/sort_order) ===== #}
   {% set ns_sort = namespace(qs='') %}
@@ -247,6 +269,7 @@
               {{ sort_th('Descricao', 'descricao', _qs, _sb, _so) }}
               {{ sort_th('Valor', 'valor', _qs, _sb, _so, '110px', 'text-end') }}
               {{ sort_th('Tipo', 'tipo', _qs, _sb, _so, '70px') }}
+              <th style="width:130px">Conta</th>
               <th style="width:200px">Categoria</th>
               <th style="width:90px">Membro</th>
               {{ sort_th('Status', 'status', _qs, _sb, _so, '80px') }}
@@ -300,6 +323,17 @@
                 {% endif %}
               </td>
               <td class="small">
+                {% if t.conta %}
+                <span class="badge rounded-pill text-bg-light border d-inline-block text-truncate align-middle"
+                      style="max-width:118px" title="{{ t.conta.nome }}">
+                  <i class="fas {{ 'fa-credit-card' if t.conta.tipo == 'cartao_credito' else 'fa-university' }} text-muted"></i>
+                  {{ t.conta.nome }}
+                </span>
+                {% else %}
+                <span class="text-muted">-</span>
+                {% endif %}
+              </td>
+              <td class="small">
                 {% if t.categoria %}
                 <span>
                   <i class="fas {{ t.categoria.icone or 'fa-tag' }} me-1"></i>
@@ -344,16 +378,16 @@
                 {% endif %}
               </td>
               <td>
-                {% if t.status == 'PENDENTE' and not t.excluir_relatorio %}
                 <button class="btn btn-outline-primary btn-sm py-0 px-1 btn-categorizar"
                         data-id="{{ t.id }}" data-historico="{{ t.historico }}"
                         data-descricao="{{ t.descricao or '' }}"
                         data-hist-completo="{{ t.historico_completo or '' }}"
                         data-cpf-cnpj="{{ t.cpf_cnpj_parte or '' }}"
-                        title="Categorizar">
-                  <i class="fas fa-tag"></i>
+                        data-categoria-id="{{ t.categoria_id or '' }}"
+                        data-categoria-label="{{ (t.categoria.grupo ~ ' / ' ~ t.categoria.nome) if t.categoria else '' }}"
+                        title="{{ 'Reclassificar' if t.categoria_id else 'Categorizar' }}">
+                  <i class="fas {{ 'fa-edit' if t.categoria_id else 'fa-tag' }}"></i>
                 </button>
-                {% endif %}
                 <button class="btn btn-outline-secondary btn-sm py-0 px-1 btn-regras-transacao"
                         data-id="{{ t.id }}"
                         data-historico="{{ t.historico }}"
@@ -364,7 +398,7 @@
               </td>
             </tr>
             {% else %}
-            <tr><td colspan="11" class="text-center text-muted py-3">Nenhuma transacao encontrada.</td></tr>
+            <tr><td colspan="12" class="text-center text-muted py-3">Nenhuma transacao encontrada.</td></tr>
             {% endfor %}
           </tbody>
         </table>
@@ -851,28 +885,42 @@ $(function() {
     $('#btnPreview').removeClass('d-none');
   }
 
-  // Modal individual
+  // Modal individual (categorizar OU reclassificar uma transacao ja categorizada)
   $(document).on('click', '.btn-categorizar', function() {
-    const id = $(this).data('id');
-    const historico = $(this).data('historico');
-    const descricao = $(this).data('descricao');
-    const histCompleto = $(this).data('hist-completo');
+    const $btn = $(this);
+    const id = $btn.data('id');
+    const historico = $btn.data('historico');
+    const descricao = $btn.data('descricao');
+    const histCompleto = $btn.data('hist-completo');
+    const categoriaId = $btn.data('categoria-id');
+    const categoriaLabel = $btn.data('categoria-label');
+    // data-categoria-id vazio vem como '' (string); numero quando ha categoria
+    const temCategoria = categoriaId !== undefined && categoriaId !== null && categoriaId !== '';
     $('#modalTransacaoId').val(id);
     // Mostrar historico + descricao para contexto
     let displayText = historico || '';
     if (descricao) displayText += ' | ' + descricao;
     $('#modalHistorico').text(displayText);
-    // Reset estado do modal
-    $('#modalCategoria').val('');
-    $('#modalCategoriaBusca').val('');
+    // Titulo conforme o caso (novo x reclassificacao)
+    $('#modalCategorizar .modal-title').html(
+      temCategoria
+        ? '<i class="fas fa-edit"></i> Reclassificar transacao'
+        : '<i class="fas fa-tag"></i> Categorizar transacao'
+    );
+    // Pre-popular a categoria atual ao reclassificar; limpar ao categorizar do zero
+    $('#modalCategoria').val(temCategoria ? categoriaId : '');
+    $('#modalCategoriaBusca').val(temCategoria ? (categoriaLabel || '') : '');
     $('#modalMembro').val('');
-    $('#modalCriarRegra').prop('checked', true);
-    $('#divTipoRegra, #divPadrao, #divCpfCnpj, #divValorRange').show();
+    // Reclassificacao pontual NAO cria/altera regra por padrao (muda so esta transacao).
+    // Categorizacao nova mantem o fluxo de aprender regra + propagar similares.
+    const criarRegra = !temCategoria;
+    $('#modalCriarRegra').prop('checked', criarRegra);
+    $('#divTipoRegra, #divPadrao, #divCpfCnpj, #divValorRange').toggle(criarRegra);
     $('#tipoRegraPadrao').prop('checked', true);
     // Pre-popular padrao com historico_completo (ja normalizado, contem descricao)
     $('#modalPadrao').val(histCompleto || (historico || '').toUpperCase());
     // Pre-popular CPF/CNPJ se houver na transacao (F1)
-    $('#modalCpfCnpj').val($(this).data('cpf-cnpj') || '');
+    $('#modalCpfCnpj').val($btn.data('cpf-cnpj') || '');
     $('#modalValorMin').val('');
     $('#modalValorMax').val('');
     resetPreview();
