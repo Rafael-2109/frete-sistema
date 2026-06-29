@@ -2265,7 +2265,11 @@ Nunca invente informações."""
         # Fallback para our_session_id causava --resume com JSONL inexistente
         # em sessões novas → CLI exit code 1 (ProcessError).
         pool_key = our_session_id or ''
-        existing = get_pooled_client(pool_key)
+        # 8b: cada papel (principal/especialista) tem seu PROPRIO client no pool
+        # sob a chave '{session_id}::{role}'. resume_id ja' vem do slot do papel
+        # (sdk_session_id role-aware, passo 3); no 1o turno do especialista e' None
+        # -> sessao SDK nova, sem --resume.
+        existing = get_pooled_client(pool_key, role=agent_role)
         resume_id = sdk_session_id
         # Validar que resume_id é UUID válido — dados envenenados no DB
         # (ex: "teams_19:xxx") causam exit code 1 permanente se não filtrados.
@@ -2322,6 +2326,7 @@ Nunca invente informações."""
                     session_id=pool_key,
                     options=options,
                     user_id=user_id or 0,
+                    role=agent_role,
                 )
             except ProcessError as pe:
                 exit_code = getattr(pe, 'exit_code', None)
@@ -2373,6 +2378,7 @@ Nunca invente informações."""
                         session_id=pool_key,
                         options=options,
                         user_id=user_id or 0,
+                        role=agent_role,
                     )
                 else:
                     raise  # Re-raise se não é falha de resume
@@ -2586,9 +2592,9 @@ Nunca invente informações."""
 
             # Evictar client morto do pool para que próximo request crie um novo
             try:
-                from .client_pool import _registry, _registry_lock
+                from .client_pool import _registry, _registry_lock, _pool_key
                 with _registry_lock:
-                    evicted = _registry.pop(pool_key, None)
+                    evicted = _registry.pop(_pool_key(pool_key, agent_role), None)
                 if evicted:
                     evicted.connected = False
                     logger.info(
@@ -2648,9 +2654,9 @@ Nunca invente informações."""
 
                 # Evict dead client + cleanup JSONL stale (igual ao handler ProcessError)
                 try:
-                    from .client_pool import _registry, _registry_lock
+                    from .client_pool import _registry, _registry_lock, _pool_key
                     with _registry_lock:
-                        evicted = _registry.pop(pool_key, None)
+                        evicted = _registry.pop(_pool_key(pool_key, agent_role), None)
                     if evicted:
                         evicted.connected = False
                 except Exception as evict_err:
@@ -2720,9 +2726,9 @@ Nunca invente informações."""
 
             # Evict dead client from pool to force fresh connection on retry.
             try:
-                from .client_pool import _registry, _registry_lock
+                from .client_pool import _registry, _registry_lock, _pool_key
                 with _registry_lock:
-                    evicted = _registry.pop(pool_key, None)
+                    evicted = _registry.pop(_pool_key(pool_key, agent_role), None)
                 if evicted:
                     evicted.connected = False
                     logger.info(f"[AGENT_SDK_PERSISTENT] Dead client evicted from pool: {pool_key[:8]}...")
