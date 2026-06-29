@@ -255,9 +255,14 @@ def _build_memory_index(
     else:
         user_ids = [user_id, 0]
 
+    # E2.6: isolar index por agente (fail-closed 'web')
+    from app.agente.config.permissions import get_current_agent_id as _get_agent_id
+    _agente = _get_agent_id()
+
     q = AgentMemory.query.filter(
         AgentMemory.user_id.in_(user_ids),
         AgentMemory.is_directory == False,  # noqa: E712
+        AgentMemory.agente == _agente,  # E2.6
     )
     if not incluir_frias:
         q = q.filter(AgentMemory.is_cold == False)  # noqa: E712
@@ -1213,11 +1218,13 @@ def _regenerate_pitfalls_xml(user_id: int, pitfalls: list) -> None:
 
         content = '\n'.join(lines)
 
-        existing = AgentMemory.get_by_path(user_id, path)
+        from app.agente.config.permissions import get_current_agent_id
+        _agente = get_current_agent_id()  # E2.6: indice de pitfalls do agente atual
+        existing = AgentMemory.get_by_path_for_agent(user_id, path, _agente)
         if existing:
             existing.content = content
         else:
-            mem = AgentMemory.create_file(user_id, path, content)
+            mem = AgentMemory.create_file(user_id, path, content, agente=_agente)
             mem.category = 'structural'
             mem.escopo = 'empresa'
     except Exception as e:
@@ -1942,12 +1949,14 @@ try:
 
             def _view():
                 from ..models import AgentMemory
+                from app.agente.config.permissions import get_current_agent_id
+                _agente = get_current_agent_id()  # E2.6: isolar listagem por agente
 
-                memory = AgentMemory.get_by_path(actual_user_id, path)
+                memory = AgentMemory.get_by_path_for_agent(actual_user_id, path, _agente)  # E2.6
 
                 # Caso especial: /memories é diretório virtual raiz
                 if path == '/memories':
-                    items = AgentMemory.list_directory(actual_user_id, path)
+                    items = AgentMemory.list_directory_for_agent(actual_user_id, path, _agente)  # E2.6
                     if not items:
                         text = "Diretório: /memories\n(vazio — nenhuma memória salva)"
                         return text, {"path": path, "is_directory": True, "content": None, "items": []}
@@ -1968,7 +1977,7 @@ try:
 
                 # Se diretório, lista conteúdo
                 if memory.is_directory:
-                    items = AgentMemory.list_directory(actual_user_id, path)
+                    items = AgentMemory.list_directory_for_agent(actual_user_id, path, _agente)  # E2.6
                     if not items:
                         text = f"Diretório: {path}\n(vazio)"
                         return text, {"path": path, "is_directory": True, "content": None, "items": []}
@@ -2105,6 +2114,8 @@ try:
                 from ..models import AgentMemory, AgentMemoryVersion
                 from app import db
                 from app.utils.timezone import agora_utc_naive
+                from app.agente.config.permissions import get_current_agent_id
+                _agente = get_current_agent_id()  # E2.6: isolar save por agente
 
                 # Calcular importance score heurístico (QW-1)
                 importance = _calculate_importance_score(path, content)
@@ -2116,7 +2127,7 @@ try:
                 else:
                     category = _classify_memory_category(path, content)
 
-                existing = AgentMemory.get_by_path(actual_user_id, path)
+                existing = AgentMemory.get_by_path_for_agent(actual_user_id, path, _agente)  # E2.6
 
                 if existing:
                     # Salvar versão anterior antes de atualizar
@@ -2163,7 +2174,7 @@ try:
                             f"(allowing save): {dedup_gate_err}"
                         )
 
-                    mem = AgentMemory.create_file(actual_user_id, path, content)
+                    mem = AgentMemory.create_file(actual_user_id, path, content, agente=_agente)  # E2.6
                     mem.meta = meta
                     mem.importance_score = importance
                     mem.category = category
@@ -2422,8 +2433,11 @@ try:
             def _update():
                 from ..models import AgentMemory, AgentMemoryVersion
                 from app import db
+                from app.agente.config.permissions import get_current_agent_id
 
-                memory = AgentMemory.get_by_path(actual_user_id, path)
+                memory = AgentMemory.get_by_path_for_agent(  # E2.6
+                    actual_user_id, path, get_current_agent_id()
+                )
                 if not memory:
                     raise FileNotFoundError(f"Arquivo não encontrado: {path}")
                 if memory.is_directory:
@@ -2629,8 +2643,13 @@ try:
                 from ..models import AgentMemory
                 from app import db
                 from sqlalchemy import text as sql_text
+                from app.agente.config.permissions import get_current_agent_id
 
-                memory = AgentMemory.get_by_path(actual_user_id, path)
+                # E2.6: deletar apenas a memória do agente atual (NÃO a do outro
+                # agente no mesmo path — evita delete destrutivo cross-agente).
+                memory = AgentMemory.get_by_path_for_agent(
+                    actual_user_id, path, get_current_agent_id()
+                )
                 if not memory:
                     raise FileNotFoundError(f"Path não encontrado: {path}")
 
@@ -2811,15 +2830,17 @@ try:
             def _clear():
                 from ..models import AgentMemory
                 from app import db
+                from app.agente.config.permissions import get_current_agent_id
 
-                count = AgentMemory.clear_all_for_user(user_id)
+                # E2.6: limpar apenas memórias do agente atual (fail-closed 'web')
+                count = AgentMemory.clear_all_for_user(user_id, agente=get_current_agent_id())
                 db.session.commit()
                 return count
 
             count = _execute_with_context(_clear)
             logger.info(f"[MEMORY_MCP] clear_memories: user={user_id}, count={count}")
             return {
-                "content": [{"type": "text", "text": f"Todas as memórias limpas ({count} itens removidos)"}],
+                "content": [{"type": "text", "text": f"Memórias deste agente limpas ({count} itens removidos)"}],
                 "structuredContent": {"count": count},
             }
 
@@ -2888,11 +2909,14 @@ try:
 
                 # Buscar memórias cold que contenham o query no conteúdo ou path
                 # Incluir pessoais (user_id) E empresa (user_id=0)
+                # E2.6: isolar busca por agente (fail-closed 'web')
+                from app.agente.config.permissions import get_current_agent_id
                 query_lower = f"%{query.lower()}%"
                 cold_memories = AgentMemory.query.filter(
                     AgentMemory.user_id.in_([user_id, 0]),
                     AgentMemory.is_directory == False,  # noqa: E712
                     AgentMemory.is_cold == True,  # noqa: E712
+                    AgentMemory.agente == get_current_agent_id(),  # E2.6
                     db.or_(
                         AgentMemory.content.ilike(query_lower),
                         AgentMemory.path.ilike(query_lower),
@@ -2993,8 +3017,11 @@ try:
 
             def _view_history():
                 from ..models import AgentMemory, AgentMemoryVersion
+                from app.agente.config.permissions import get_current_agent_id
 
-                memory = AgentMemory.get_by_path(actual_user_id, path)
+                memory = AgentMemory.get_by_path_for_agent(  # E2.6: histórico do agente atual
+                    actual_user_id, path, get_current_agent_id()
+                )
                 if not memory:
                     text = f"Memória não encontrada: {path}"
                     return None, text, {"path": path, "version_count": 0, "versions": []}
@@ -3124,8 +3151,11 @@ try:
                 from ..models import AgentMemory, AgentMemoryVersion
                 from app import db
                 from app.utils.timezone import agora_utc_naive
+                from app.agente.config.permissions import get_current_agent_id
 
-                memory = AgentMemory.get_by_path(actual_user_id, path)
+                memory = AgentMemory.get_by_path_for_agent(  # E2.6: restaura a do agente atual
+                    actual_user_id, path, get_current_agent_id()
+                )
                 if not memory:
                     text = f"Memória não encontrada: {path}"
                     return None, text, {"path": path, "restored_to_version": version_num, "backup_version": None, "preview": None}
@@ -3256,8 +3286,10 @@ try:
 
                 path = '/memories/system/resolved_pendencias.json'
 
+                from app.agente.config.permissions import get_current_agent_id
+                _agente = get_current_agent_id()  # E2.6: pendências resolvidas do agente atual
                 # Carregar lista existente
-                existing = AgentMemory.get_by_path(user_id, path)
+                existing = AgentMemory.get_by_path_for_agent(user_id, path, _agente)
                 if existing and existing.content:
                     try:
                         resolved_list = json.loads(existing.content)
@@ -3277,7 +3309,7 @@ try:
                 if existing:
                     existing.content = content
                 else:
-                    AgentMemory.create_file(user_id, path, content)
+                    AgentMemory.create_file(user_id, path, content, agente=_agente)
 
                 db.session.commit()
                 return len(resolved_list)
@@ -3377,8 +3409,10 @@ try:
                 old_path = '/memories/system/pitfalls.json'
                 now = agora_utc_naive()
 
+                from app.agente.config.permissions import get_current_agent_id
+                _agente = get_current_agent_id()  # E2.6: pitfalls empresa do agente atual
                 # Carregar lista existente (novo path empresa)
-                existing = AgentMemory.get_by_path(empresa_user_id, new_path)
+                existing = AgentMemory.get_by_path_for_agent(empresa_user_id, new_path, _agente)
                 if existing and existing.content:
                     try:
                         pitfalls = json.loads(existing.content)
@@ -3389,7 +3423,11 @@ try:
                 else:
                     pitfalls = []
 
-                # Backward-compat: migrar conteudo do path antigo (qualquer user)
+                # Backward-compat: migrar conteudo do path antigo (qualquer user).
+                # INTENCIONAL: usa get_by_path (cross-agente) — esta e' uma migracao
+                # one-time de dados legados gravados ANTES do isolamento por agente (E2.6).
+                # O path antigo pode ter sido escrito por qualquer agente; nao restringir
+                # por agente aqui garante que os dados sejam migrados corretamente.
                 if not pitfalls:
                     old_existing = AgentMemory.get_by_path(caller_user_id, old_path)
                     if old_existing and old_existing.content:
@@ -3432,7 +3470,7 @@ try:
                 if existing:
                     existing.content = content
                 else:
-                    mem = AgentMemory.create_file(empresa_user_id, new_path, content)
+                    mem = AgentMemory.create_file(empresa_user_id, new_path, content, agente=_agente)
                     mem.category = 'structural'  # Lento decay, sempre relevante
                     mem.escopo = 'empresa'
                     mem.created_by = caller_user_id  # Auditoria: quem originou

@@ -671,8 +671,12 @@ class AgentMemory(db.Model):
         Variante fail-closed de get_by_path para o caminho de injeção de
         memória: se a memória naquele path pertence a outro agente, retorna
         None (nao a do outro agente). NAO substitui get_by_path — ha ~17
-        callers (criacao de diretorio, consolidacao, memory tools) que operam
-        cross-agente por design e devem permanecer com a assinatura original.
+        callers (criacao de diretorio, consolidacao, tasks de background)
+        que operam cross-agente por design. A partir de E2.6, memory_mcp_tool
+        usa esta variante nos callers de CRUD (save/update/view/clear) para
+        isolar leitura e listagem por agente; callers de background (embed,
+        KG, conflict-detect) permanecem com get_by_path para nao falhar
+        quando o ContextVar nao e propagado para a thread do daemon.
         """
         return cls.query.filter_by(
             user_id=user_id, path=path, agente=agente
@@ -707,6 +711,34 @@ class AgentMemory(db.Model):
             # Remove o prefixo do diretório
             relative = item.path[len(dir_path):]
             # Se não tem '/', é filho direto
+            if '/' not in relative:
+                direct_children.append(item)
+
+        return direct_children
+
+    @classmethod
+    def list_directory_for_agent(cls, user_id: int, dir_path: str,
+                                 agente: str) -> List['AgentMemory']:
+        """Lista conteúdo de um diretório filtrado por agente (E2.6).
+
+        Variante isolada de list_directory: filtra por agente para que
+        view_memories no memory_mcp_tool retorne apenas itens do agente
+        atual. Callers cross-agente (consolidacao, admin) permanecem com
+        list_directory sem filtro.
+        """
+        if not dir_path.endswith('/'):
+            dir_path = dir_path + '/'
+
+        all_children = cls.query.filter(
+            cls.user_id == user_id,
+            cls.path.like(f'{dir_path}%'),
+            cls.path != dir_path.rstrip('/'),
+            cls.agente == agente,
+        ).all()
+
+        direct_children = []
+        for item in all_children:
+            relative = item.path[len(dir_path):]
             if '/' not in relative:
                 direct_children.append(item)
 
@@ -804,29 +836,55 @@ class AgentMemory(db.Model):
         return count
 
     @classmethod
-    def clear_all_for_user(cls, user_id: int) -> int:
-        """Limpa todas as memórias de um usuário, incluindo tabelas dependentes.
+    def clear_all_for_user(cls, user_id: int, agente: str = None) -> int:
+        """Limpa memórias de um usuário, incluindo tabelas dependentes.
+
+        Args:
+            user_id: ID do usuário.
+            agente: Se fornecido, remove apenas memórias deste agente
+                ('web'|'lojas'). Se None (default), remove tudo —
+                comportamento original preservado para compat.
 
         Bulk delete (.delete()) não dispara cascade ORM nem triggers SQL.
         Limpar dependentes ANTES para evitar orphans em:
         - agent_memory_embeddings (FK lógica, sem constraint SQL)
         - agent_memory_entity_links (FK SQL com ON DELETE CASCADE, mas bulk ignora)
+
+        E2.6: clear_memories handler passa agente=get_current_agent_id()
+        para isolar o clear por agente; callers sem agente= preservam
+        o comportamento de limpar tudo (admin, testes globais).
         """
         from sqlalchemy import text
 
-        # Limpar tabelas dependentes primeiro
-        db.session.execute(
-            text("DELETE FROM agent_memory_embeddings WHERE memory_id IN "
-                 "(SELECT id FROM agent_memories WHERE user_id = :uid)"),
-            {"uid": user_id}
-        )
-        db.session.execute(
-            text("DELETE FROM agent_memory_entity_links WHERE memory_id IN "
-                 "(SELECT id FROM agent_memories WHERE user_id = :uid)"),
-            {"uid": user_id}
-        )
+        if agente is not None:
+            # Limpar dependentes apenas para memórias do agente especificado
+            db.session.execute(
+                text("DELETE FROM agent_memory_embeddings WHERE memory_id IN "
+                     "(SELECT id FROM agent_memories WHERE user_id = :uid AND agente = :agente)"),
+                {"uid": user_id, "agente": agente}
+            )
+            db.session.execute(
+                text("DELETE FROM agent_memory_entity_links WHERE memory_id IN "
+                     "(SELECT id FROM agent_memories WHERE user_id = :uid AND agente = :agente)"),
+                {"uid": user_id, "agente": agente}
+            )
+            count = cls.query.filter_by(
+                user_id=user_id, agente=agente
+            ).delete(synchronize_session=False)
+        else:
+            # Compat: limpar tudo (sem filtro de agente)
+            db.session.execute(
+                text("DELETE FROM agent_memory_embeddings WHERE memory_id IN "
+                     "(SELECT id FROM agent_memories WHERE user_id = :uid)"),
+                {"uid": user_id}
+            )
+            db.session.execute(
+                text("DELETE FROM agent_memory_entity_links WHERE memory_id IN "
+                     "(SELECT id FROM agent_memories WHERE user_id = :uid)"),
+                {"uid": user_id}
+            )
+            count = cls.query.filter_by(user_id=user_id).delete(synchronize_session=False)
 
-        count = cls.query.filter_by(user_id=user_id).delete(synchronize_session=False)
         return count
 
 
