@@ -1571,7 +1571,13 @@ Nunca invente informações."""
                 _spec_system_prompt = self._build_full_system_prompt(_spec_prompt)
                 _spec_skills = sorted(specialist_profile.skills)
             except Exception as _sp_err:
-                logger.warning(f"[specialist] profile load falhou, fallback principal: {_sp_err}")
+                # Alarme explicito (nao silencioso): perfil pedido mas prompt ausente/
+                # ilegivel -> o turno cai no PRINCIPAL. Logar role + path para acao.
+                logger.warning(
+                    f"[specialist] ALARME: perfil '{specialist_profile.role}' nao "
+                    f"carregou (path={specialist_profile.system_prompt_path}) -> "
+                    f"FALLBACK principal: {_sp_err}"
+                )
                 specialist_profile = None
 
         # Diretório do projeto para carregar Skills
@@ -2159,6 +2165,23 @@ Nunca invente informações."""
         }
 
         # ─── Construir options ───
+        # 8b: cliente ESPECIALISTA usa system_prompt + skills proprios (handoff de
+        # sessao). Resolve o perfil pelo PAPEL do turno; 'principal' -> None (path
+        # atual, byte-equivalente). Papel sem perfil registrado -> None + WARNING
+        # (fallback principal, nunca quebra). O proprio _build_options ainda faz
+        # fallback transparente se o system_prompt_path do perfil faltar.
+        _specialist_profile = None
+        if agent_role and agent_role != 'principal':
+            try:
+                from .specialist_profiles import SPECIALIST_PROFILES
+                _specialist_profile = SPECIALIST_PROFILES.get(agent_role)
+                if _specialist_profile is None:
+                    logger.warning(
+                        f"[specialist] papel '{agent_role}' sem perfil em "
+                        f"SPECIALIST_PROFILES -> fallback principal"
+                    )
+            except Exception as _sp_err:
+                logger.warning(f"[specialist] resolucao de perfil falhou: {_sp_err}")
         options = self._build_options(
             user_name=user_name,
             user_id=user_id,
@@ -2171,6 +2194,7 @@ Nunca invente informações."""
             stderr_queue=stderr_q,
             resume_state=resume_state,
             thinking_display=thinking_display,
+            specialist_profile=_specialist_profile,
         )
 
         # ─── SDK 0.1.64 SessionStore (Fase B cutover — flag default ON) ───
