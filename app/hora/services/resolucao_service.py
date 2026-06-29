@@ -112,6 +112,7 @@ def resolver_divergencia(
                 fotos=fotos_avaria,
                 usuario=operador or 'recebimento',
                 loja_id=rec.loja_id if rec else None,
+                recebimento_conferencia_id=conf.id,
             )
         db.session.commit()
         return {'ok': True, 'acao': acao, 'conferencia_id': conferencia_id}

@@ -123,3 +123,25 @@ def test_listar_estoque_flag_nao_vendavel(db, loja_origem, modelo_moto):
     # continua NO estoque (moto_disponivel True), mas NÃO-vendável (flag)
     assert r and r['moto_disponivel'] is True and r['moto_vendavel'] is False
     assert r['avarias_abertas'] == 1
+
+
+def test_filtro_incluir_avariadas_usa_contagem(db, loja_origem, modelo_moto):
+    """incluir_avariadas=False ESCONDE moto com avaria ABERTA e MOSTRA moto cuja
+    avaria foi resolvida (último evento ainda AVARIADA — resolver não emite
+    evento). Visibilidade pela contagem HoraAvaria, não pelo tipo. #3 do review."""
+    from app.hora.services import estoque_service
+    chassi = _moto_em_estoque(loja_origem, modelo_moto)
+    a = _avaria(chassi, loja_origem)  # último evento vira AVARIADA, count=1
+
+    def _listar(incluir):
+        return [r['chassi'] for r in estoque_service.listar_estoque(
+            lojas_permitidas_ids=[loja_origem.id], incluir_avariadas=incluir)]
+
+    assert chassi in _listar(True)
+    assert chassi not in _listar(False)
+
+    avaria_service.resolver_avaria(a.id, 'consertada na oficina', 'chefe')
+    _db.session.flush()
+    # resolvida: count=0 → aparece nas duas (último evento segue AVARIADA, mas não esconde)
+    assert chassi in _listar(True)
+    assert chassi in _listar(False)

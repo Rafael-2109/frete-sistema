@@ -44,6 +44,7 @@ def registrar_avaria(
     fotos: Iterable[Tuple[str, Optional[str]]],
     usuario: str,
     loja_id: int,
+    recebimento_conferencia_id: Optional[int] = None,
 ) -> HoraAvaria:
     """Cria avaria + 0..N fotos na mesma transaction. Emite evento AVARIADA.
 
@@ -86,6 +87,7 @@ def registrar_avaria(
         descricao=desc_limpa,
         status='ABERTA',
         criado_por=usuario,
+        recebimento_conferencia_id=recebimento_conferencia_id,
     )
     db.session.add(avaria)
     db.session.flush()

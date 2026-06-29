@@ -665,7 +665,30 @@ def registrar_conferencia_cega(
                 fotos=fotos_avaria,
                 usuario=operador or 'recebimento',
                 loja_id=rec.loja_id,
+                recebimento_conferencia_id=conf.id,
             )
+    else:
+        # Desmarcar avaria (avaria_fisica=False) auto-resolve a(s) HoraAvaria
+        # criada(s) por conferencia(s) DESTE recebimento para ESTE chassi — cobre
+        # update-in-place (True->False) e reconferencia herdada. Escopo via FK
+        # recebimento_conferencia_id -> NUNCA toca avaria manual (FK NULL,
+        # registrada em /hora/avarias). #2 do review (2026-06-28).
+        from app.hora.models import HoraAvaria
+        from app.hora.services import avaria_service
+        conf_ids_chassi = [
+            cid for (cid,) in db.session.query(HoraRecebimentoConferencia.id)
+            .filter_by(recebimento_id=recebimento_id, numero_chassi=chassi_norm).all()
+        ]
+        if conf_ids_chassi:
+            for a in HoraAvaria.query.filter(
+                HoraAvaria.recebimento_conferencia_id.in_(conf_ids_chassi),
+                HoraAvaria.status == 'ABERTA',
+            ).all():
+                avaria_service.ignorar_avaria(
+                    a.id,
+                    f'Avaria desmarcada na reconferencia do recebimento #{rec.id}',
+                    operador or 'recebimento',
+                )
 
     db.session.commit()
     return conf
@@ -1893,7 +1916,7 @@ def excluir_recebimento(
 
     Retorna dict com totais deletados.
     """
-    from app.hora.models import HoraMotoEvento, HoraRecebimentoEsperado
+    from app.hora.models import HoraAvaria, HoraMotoEvento, HoraRecebimentoEsperado
 
     bloqueio_info = verificar_bloqueios_exclusao(recebimento_id)
     if not bloqueio_info['existe']:
@@ -1946,6 +1969,29 @@ def excluir_recebimento(
     )
     if esperados_deletados:
         db.session.flush()
+
+    # Avarias criadas POR ESTE recebimento (avaria_fisica / MARCAR_AVARIA) ficam
+    # orfas se nao limpas: o evento AVARIADA tem origem 'hora_avaria' (nao
+    # 'hora_recebimento_conferencia'), entao nao caiu no delete de eventos acima, e
+    # a HoraAvaria nao e cascateada -> moto-fantasma no estoque (vendavel se a
+    # avaria orfa for resolvida). Apaga as avarias deste recebimento via FK
+    # recebimento_conferencia_id (NAO toca avaria manual, FK NULL) + seus eventos
+    # AVARIADA; as fotos somem pelo cascade delete-orphan de db.session.delete.
+    if conf_ids:
+        avarias_rec = (
+            HoraAvaria.query
+            .filter(HoraAvaria.recebimento_conferencia_id.in_(conf_ids))
+            .all()
+        )
+        if avarias_rec:
+            avaria_ids = [a.id for a in avarias_rec]
+            HoraMotoEvento.query.filter(
+                HoraMotoEvento.origem_tabela == 'hora_avaria',
+                HoraMotoEvento.origem_id.in_(avaria_ids),
+            ).delete(synchronize_session=False)
+            for a in avarias_rec:
+                db.session.delete(a)
+            db.session.flush()
 
     db.session.delete(rec)
     db.session.commit()

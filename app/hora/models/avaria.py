@@ -33,6 +33,12 @@ class HoraAvaria(db.Model):
     resolvido_em = db.Column(db.DateTime, nullable=True)
     resolvido_por = db.Column(db.String(100), nullable=True)
     resolucao_observacao = db.Column(db.Text, nullable=True)
+    # Ref opcional a conferencia de recebimento que originou a avaria (criada via
+    # avaria_fisica / MARCAR_AVARIA). Espelha hora_peca_faltando.recebimento_conferencia_id.
+    # NULL = avaria registrada manualmente em /hora/avarias.
+    recebimento_conferencia_id = db.Column(
+        db.Integer, db.ForeignKey('hora_recebimento_conferencia.id'), nullable=True,
+    )
 
     loja = db.relationship('HoraLoja')
     fotos = db.relationship(

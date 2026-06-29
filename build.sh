@@ -98,6 +98,14 @@ echo "HORA: migration hora_58 (hora_nf_entrada.tipo + hora_recebimento_esperado)
 python scripts/migrations/hora_58_recebimento_sem_nf.py \
     || echo "⚠️ migration hora_58 falhou — verificar (continuando deploy)..."
 
+# HORA 59 (2026-06-28): hora_avaria.recebimento_conferencia_id (FK) — vincula a
+# avaria criada no recebimento a' conferencia (regra avaria=NAO-vendavel). O ORM
+# mapeia a coluna; sem o ALTER, SELECT em hora_avaria quebra (UndefinedColumn).
+# Idempotente (ADD COLUMN IF NOT EXISTS).
+echo "HORA: migration hora_59 (hora_avaria.recebimento_conferencia_id)..."
+python scripts/migrations/hora_59_avaria_recebimento_conferencia.py \
+    || echo "⚠️ migration hora_59 falhou — verificar (continuando deploy)..."
+
 # Formato canonico de memorias (2026-06-08): coluna meta JSONB + indice GIN +
 # backfill REMOVIDOS do build apos aplicacao em PROD (deploy ad3c78027). Scripts
 # permanecem versionados — re-rodar manual via Render Shell se necessario:

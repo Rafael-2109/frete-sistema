@@ -296,8 +296,10 @@ def listar_estoque(
         tipos = None  # sem filtro de tipo
     else:
         tipos = list(EVENTOS_EM_ESTOQUE)
-        if not incluir_avariadas:
-            tipos = [t for t in tipos if t != 'AVARIADA']
+        # incluir_avariadas NAO filtra pelo tipo do evento: AVARIADA permanece em
+        # estoque mesmo apos resolver (resolver nao emite evento). A exclusao de
+        # avariadas e feita pela CONTAGEM de HoraAvaria ABERTA na query (§35) — assim
+        # uma moto resolvida (ultimo evento ainda AVARIADA) volta a aparecer.
         if not incluir_faltando_peca:
             tipos = [t for t in tipos if t != 'FALTANDO_PECA']
 
@@ -317,6 +319,17 @@ def listar_estoque(
     )
     if tipos is not None:
         q = q.filter(HoraMotoEvento.tipo.in_(tipos))
+
+    if not incluir_avariadas:
+        # Exclui motos com avaria ABERTA (NAO-vendaveis) pela CONTAGEM, nao pelo
+        # tipo do evento — moto avariada-e-resolvida (ultimo evento ainda AVARIADA,
+        # count 0) volta a aparecer; avariada-e-transferida (avaria aberta) some. #3.
+        from app.hora.models import HoraAvaria
+        _avariados = (
+            db.session.query(HoraAvaria.numero_chassi)
+            .filter(HoraAvaria.status == 'ABERTA').subquery()
+        )
+        q = q.filter(HoraMoto.numero_chassi.notin_(_avariados))
 
     if loja_id:
         q = q.filter(HoraMotoEvento.loja_id == loja_id)

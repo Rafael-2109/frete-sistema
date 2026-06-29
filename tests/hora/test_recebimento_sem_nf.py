@@ -412,3 +412,83 @@ def test_marcar_avaria_dedup_quando_conferencia_ja_criou(
         observacoes='confirma a avaria ja marcada', operador='t')
     _db.session.expire_all()
     assert avaria_service.avarias_abertas_por_chassi([chassi]).get(chassi) == 1
+
+
+def test_excluir_recebimento_limpa_avaria_criada(
+        db, loja_factory, pedido_compra_factory, modelo_moto):
+    """Excluir um recebimento cuja conferência criou avaria (avaria_fisica=True)
+    remove a HoraAvaria + evento AVARIADA — senão a moto vira fantasma no estoque
+    (e vendável se a avaria órfã for resolvida). #1 do review adversarial."""
+    from app.hora.services import avaria_service
+    from app.hora.services.estoque_service import listar_estoque
+    chassi = _chassi('AVDEL')
+    pedido = pedido_compra_factory([chassi])
+    loja_id = pedido.loja_destino_id
+    rec = recebimento_service.criar_recebimento_sem_nf(loja_id=loja_id, operador='t')
+    rec_id = rec.id
+    recebimento_service.definir_qtd_declarada(recebimento_id=rec_id, qtd=1, usuario='t')
+    recebimento_service.registrar_conferencia_cega(
+        recebimento_id=rec_id, numero_chassi=chassi,
+        modelo_id_conferido=modelo_moto.id, cor_conferida='PRETA',
+        avaria_fisica=True, qr_code_lido=True, operador='t')
+    _db.session.expire_all()
+    assert avaria_service.avarias_abertas_por_chassi([chassi]).get(chassi) == 1
+
+    recebimento_service.excluir_recebimento(recebimento_id=rec_id, operador='t')
+    _db.session.expire_all()
+    # avaria removida + moto sumiu do estoque (sem eventos restantes)
+    assert avaria_service.avarias_abertas_por_chassi([chassi]).get(chassi, 0) == 0
+    assert all(r['chassi'] != chassi for r in listar_estoque(lojas_permitidas_ids=[loja_id]))
+
+
+def test_desmarcar_avaria_na_reconferencia_resolve(
+        db, loja_factory, pedido_compra_factory, modelo_moto):
+    """Marcar avaria cria HoraAvaria; desmarcar (True→False, update-in-place)
+    auto-resolve a avaria daquela conferência → moto volta vendável. #2 do review."""
+    from app.hora.services import avaria_service
+    chassi = _chassi('AVTOG')
+    pedido = pedido_compra_factory([chassi])
+    rec = recebimento_service.criar_recebimento_sem_nf(loja_id=pedido.loja_destino_id, operador='t')
+    recebimento_service.definir_qtd_declarada(recebimento_id=rec.id, qtd=1, usuario='t')
+    recebimento_service.registrar_conferencia_cega(
+        recebimento_id=rec.id, numero_chassi=chassi,
+        modelo_id_conferido=modelo_moto.id, cor_conferida='PRETA',
+        avaria_fisica=True, qr_code_lido=True, operador='t')
+    _db.session.expire_all()
+    assert avaria_service.avarias_abertas_por_chassi([chassi]).get(chassi) == 1
+    # desmarca na re-conferência → resolve
+    recebimento_service.registrar_conferencia_cega(
+        recebimento_id=rec.id, numero_chassi=chassi,
+        modelo_id_conferido=modelo_moto.id, cor_conferida='PRETA',
+        avaria_fisica=False, qr_code_lido=True, operador='t')
+    _db.session.expire_all()
+    assert avaria_service.avarias_abertas_por_chassi([chassi]).get(chassi, 0) == 0
+
+
+def test_desmarcar_nao_resolve_avaria_manual(
+        db, loja_factory, pedido_compra_factory, modelo_moto):
+    """Desmarcar avaria no recebimento NÃO resolve avaria registrada manualmente
+    (/hora/avarias, recebimento_conferencia_id NULL)."""
+    from app.hora.services import avaria_service
+    chassi = _chassi('AVMAN')
+    pedido = pedido_compra_factory([chassi])
+    loja_id = pedido.loja_destino_id
+    rec = recebimento_service.criar_recebimento_sem_nf(loja_id=loja_id, operador='t')
+    recebimento_service.definir_qtd_declarada(recebimento_id=rec.id, qtd=1, usuario='t')
+    recebimento_service.registrar_conferencia_cega(
+        recebimento_id=rec.id, numero_chassi=chassi,
+        modelo_id_conferido=modelo_moto.id, cor_conferida='PRETA',
+        avaria_fisica=False, qr_code_lido=True, operador='t')
+    _db.session.expire_all()
+    # avaria MANUAL (sem vínculo a conferência)
+    avaria_service.registrar_avaria(numero_chassi=chassi, descricao='dano manual reportado',
+                                    fotos=[], usuario='gerente', loja_id=loja_id)
+    _db.session.flush()
+    assert avaria_service.avarias_abertas_por_chassi([chassi]).get(chassi) == 1
+    # re-confere desmarcado → NÃO resolve a manual
+    recebimento_service.registrar_conferencia_cega(
+        recebimento_id=rec.id, numero_chassi=chassi,
+        modelo_id_conferido=modelo_moto.id, cor_conferida='PRETA',
+        avaria_fisica=False, qr_code_lido=True, operador='t')
+    _db.session.expire_all()
+    assert avaria_service.avarias_abertas_por_chassi([chassi]).get(chassi) == 1
