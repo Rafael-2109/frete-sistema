@@ -2583,7 +2583,22 @@ def api_interrupt():
 
     from app.agente.sdk.client_pool import get_pooled_client, submit_coroutine
 
-    pooled = get_pooled_client(session_id)
+    # 8b: interrompe o client do PAPEL ATIVO (handoff de sessao). Em 'on' com
+    # especialista, o stream vivo e o client '::gestor-recebimento'; interromper
+    # o principal nao pararia a geracao. Fallback ao principal quando o client do
+    # papel nao existe (shadow persiste agente_ativo=especialista mas o stream
+    # rodou no principal) — best-effort na leitura do papel.
+    _ativo = 'principal'
+    try:
+        from app.agente.models import AgentSession
+        _s = AgentSession.query.filter_by(session_id=session_id).first()
+        if _s:
+            _ativo = _s.get_agente_ativo()
+    except Exception:
+        _ativo = 'principal'
+    pooled = get_pooled_client(session_id, role=_ativo)
+    if (not pooled or not pooled.connected) and _ativo != 'principal':
+        pooled = get_pooled_client(session_id, role='principal')
     if not pooled or not pooled.connected:
         return jsonify({
             'success': False,
