@@ -22,7 +22,7 @@ from __future__ import annotations
 import io
 from datetime import date, datetime, time
 from decimal import Decimal
-from typing import Iterable, List, Optional
+from typing import Iterable, List, Optional, Union
 
 from flask import current_app
 
@@ -2819,7 +2819,7 @@ def listar_vendas(
 
 def _query_vendas(
     lojas_permitidas_ids: Optional[Iterable[int]] = None,
-    status: Optional[str] = None,
+    status: Optional[Union[str, Iterable[str]]] = None,
     *,
     busca: Optional[str] = None,
     loja_id: Optional[int] = None,
@@ -2861,7 +2861,14 @@ def _query_vendas(
         HoraVenda.data_venda.desc(), HoraVenda.id.desc()
     )
     if status:
-        query = query.filter(HoraVenda.status == status)
+        # Aceita str (1 status) OU iteravel de status (multi-selecao da tela).
+        # Retrocompativel com chamadas legadas que passam string.
+        if isinstance(status, str):
+            query = query.filter(HoraVenda.status == status)
+        else:
+            status_list = [s for s in status if s]
+            if status_list:
+                query = query.filter(HoraVenda.status.in_(status_list))
     if filtro_vendedor is not None:
         # Criterio 'vendedor': ignora escopo de loja; pedidos do proprio usuario.
         nomes = [n for n in (filtro_vendedor.get('nomes') or []) if n]
@@ -2915,7 +2922,7 @@ def paginar_vendas(
     page: int = 1,
     per_page: int = 50,
     lojas_permitidas_ids: Optional[Iterable[int]] = None,
-    status: Optional[str] = None,
+    status: Optional[Union[str, Iterable[str]]] = None,
     *,
     busca: Optional[str] = None,
     loja_id: Optional[int] = None,
