@@ -8,7 +8,13 @@ turno e as proximas mensagens acumulam na sessao DELE. Sessoes SDK separadas
 evitam o gap dos "2 subprocessos no mesmo sdk_session_id" (R1) e o cache fica
 MODEL-scoped por papel. Confirmado por execucao: spec §Componentes #1 + §Correcao
 de premissa (arranjo B do H3 = sessao propria; 1.32x mais barato que subagente-
-retomavel). Resume com `resume=session_id` so' e' necessario cross-deploy."""
+retomavel). Resume com `resume=session_id` so' e' necessario cross-deploy.
+
+ESCOPO DESTE MODULO: aqui SO' se monta/renderiza o handoff magro. O SWAP real do
+cliente (que efetiva a sessao SDK propria por papel) vive em `client.py`/
+`client_pool.py` (8b) — ativado por `AGENT_SPECIALIST_HANDOFF` (default `off`; em
+`on` o stream troca o cliente do papel). Ver `app/agente/CLAUDE.md` secao "Handoff
+de SESSAO"."""
 from __future__ import annotations
 import json
 import math
