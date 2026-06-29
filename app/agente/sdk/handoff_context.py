@@ -1,6 +1,14 @@
 """Handoff magro: empacota o MINIMO p/ o especialista quente assumir (entidades
-resolvidas, saldo, objetivo) — NUNCA a conversa inteira. Guard de orcamento
-<10k tok (a conversa fica no cliente especialista que herda a sessao SDK)."""
+resolvidas, saldo, objetivo) — NUNCA a conversa inteira. Guard de orcamento <10k tok.
+
+ESTRATEGIA DE SESSAO (decisao central, anti-gap): o especialista tem SESSAO SDK
+PROPRIA por papel (cliente proprio no pool, chave `session_id::role`). NAO herda
+nem forka a sessao/transcript do principal — recebe SO' este handoff magro no 1o
+turno e as proximas mensagens acumulam na sessao DELE. Sessoes SDK separadas
+evitam o gap dos "2 subprocessos no mesmo sdk_session_id" (R1) e o cache fica
+MODEL-scoped por papel. Confirmado por execucao: spec §Componentes #1 + §Correcao
+de premissa (arranjo B do H3 = sessao propria; 1.32x mais barato que subagente-
+retomavel). Resume com `resume=session_id` so' e' necessario cross-deploy."""
 from __future__ import annotations
 import json
 import math
