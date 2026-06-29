@@ -50,25 +50,25 @@ def summarize_session_job(session_id: str, user_id: int) -> bool:
         return False
 
 
-def analyze_patterns_job(user_id: int) -> bool:
+def analyze_patterns_job(user_id: int, agente: str = 'web') -> bool:
     """Job RQ: analisa padroes do usuario via Sonnet + salva memoria + perfil."""
     try:
         from app import create_app
         from app.agente.services.pattern_analyzer import analyze_and_save
         app = create_app()
-        return analyze_and_save(app=app, user_id=user_id)
+        return analyze_and_save(app=app, user_id=user_id, agente=agente)
     except Exception as e:
         logger.error(f"[RQ_JOB patterns] user={user_id} erro: {e}", exc_info=True)
         return False
 
 
-def generate_profile_job(user_id: int) -> bool:
+def generate_profile_job(user_id: int, agente: str = 'web') -> bool:
     """Job RQ: gera/atualiza user.xml (perfil comportamental) via Sonnet."""
     try:
         from app import create_app
         from app.agente.services.pattern_analyzer import generate_and_save_profile
         app = create_app()
-        return generate_and_save_profile(app=app, user_id=user_id)
+        return generate_and_save_profile(app=app, user_id=user_id, agente=agente)
     except Exception as e:
         logger.error(f"[RQ_JOB profile] user={user_id} erro: {e}", exc_info=True)
         return False
@@ -79,6 +79,7 @@ def extract_knowledge_job(
     session_messages: List[Any],
     session_id: str,
     include_subagents: bool = True,
+    agente: str = 'web',
 ) -> bool:
     """Job RQ: extrai memoria empresa (taxonomia 5 niveis) via Sonnet."""
     try:
@@ -91,6 +92,7 @@ def extract_knowledge_job(
             session_messages=session_messages,
             include_subagents=include_subagents,
             session_id=session_id,
+            agente=agente,
         )
         return True
     except Exception as e:
@@ -98,7 +100,11 @@ def extract_knowledge_job(
         return False
 
 
-def extract_personal_insights_job(user_id: int, session_messages: List[Any]) -> bool:
+def extract_personal_insights_job(
+    user_id: int,
+    session_messages: List[Any],
+    agente: str = 'web',
+) -> bool:
     """Job RQ: extrai memorias pessoais (correcao/preferencia/expertise) via Sonnet."""
     try:
         from app import create_app
@@ -108,6 +114,7 @@ def extract_personal_insights_job(user_id: int, session_messages: List[Any]) -> 
             app=app,
             user_id=user_id,
             session_messages=session_messages,
+            agente=agente,
         )
         return True
     except Exception as e:
@@ -162,7 +169,7 @@ def try_enqueue_summarize(session_id: str, user_id: int) -> bool:
         return False
 
 
-def try_enqueue_analyze_patterns(user_id: int) -> bool:
+def try_enqueue_analyze_patterns(user_id: int, agente: str = 'web') -> bool:
     if not _is_rq_enabled():
         return False
     q = _get_queue()
@@ -171,7 +178,7 @@ def try_enqueue_analyze_patterns(user_id: int) -> bool:
     try:
         q.enqueue(
             analyze_patterns_job,
-            user_id,
+            user_id, agente,
             job_timeout=180,  # 3min — Sonnet + piggyback user.xml
             description=f"patterns user={user_id}",
         )
@@ -181,7 +188,7 @@ def try_enqueue_analyze_patterns(user_id: int) -> bool:
         return False
 
 
-def try_enqueue_generate_profile(user_id: int) -> bool:
+def try_enqueue_generate_profile(user_id: int, agente: str = 'web') -> bool:
     if not _is_rq_enabled():
         return False
     q = _get_queue()
@@ -190,7 +197,7 @@ def try_enqueue_generate_profile(user_id: int) -> bool:
     try:
         q.enqueue(
             generate_profile_job,
-            user_id,
+            user_id, agente,
             job_timeout=180,
             description=f"profile user={user_id}",
         )
@@ -205,6 +212,7 @@ def try_enqueue_extract_knowledge(
     session_messages: List[Any],
     session_id: str,
     include_subagents: bool = True,
+    agente: str = 'web',
 ) -> bool:
     if not _is_rq_enabled():
         return False
@@ -214,7 +222,7 @@ def try_enqueue_extract_knowledge(
     try:
         q.enqueue(
             extract_knowledge_job,
-            user_id, session_messages, session_id, include_subagents,
+            user_id, session_messages, session_id, include_subagents, agente,
             job_timeout=180,
             description=f"knowledge user={user_id} session={session_id[:8]}",
         )
@@ -227,6 +235,7 @@ def try_enqueue_extract_knowledge(
 def try_enqueue_extract_personal_insights(
     user_id: int,
     session_messages: List[Any],
+    agente: str = 'web',
 ) -> bool:
     if not _is_rq_enabled():
         return False
@@ -236,7 +245,7 @@ def try_enqueue_extract_personal_insights(
     try:
         q.enqueue(
             extract_personal_insights_job,
-            user_id, session_messages,
+            user_id, session_messages, agente,
             job_timeout=180,
             description=f"personal user={user_id}",
         )

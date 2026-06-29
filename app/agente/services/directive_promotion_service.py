@@ -404,6 +404,19 @@ def _persist_directive(candidata: dict) -> int:
     slug = _slug_titulo(candidata.get('titulo', ''))
     path = f'/memories/empresa/heuristicas/{slug}.xml'
 
+    # E2.7: derivar agente da sessão de origem para não contaminar corpus 'web'
+    # com memórias de sessões 'lojas' e vice-versa.
+    _agente = 'web'
+    _src_session_id = candidata.get('source_session_id')
+    if _src_session_id:
+        try:
+            from app.agente.models import AgentSession
+            _src_sess = AgentSession.get_by_session_id(_src_session_id)
+            if _src_sess:
+                _agente = getattr(_src_sess, 'agente', None) or 'web'
+        except Exception:
+            pass  # fallback 'web'
+
     existente = AgentMemory.query.filter_by(user_id=0, path=path).first()
     if existente is not None:
         logger.info(
@@ -433,6 +446,7 @@ def _persist_directive(candidata: dict) -> int:
         escopo='empresa',
         directive_status='shadow',
         created_by=None,  # nullable — sem FK obrigatória; user_id=0 já estabelece autoria
+        agente=_agente,  # E2.7: herdado da sessão de origem
     )
     db.session.add(mem)
     db.session.flush()  # popula mem.id; commit fica com o caller (batch)

@@ -372,6 +372,7 @@ def _parse_json_response(result_text: str, user_id: int) -> Optional[Dict[str, A
 def analyze_and_save(
     app,
     user_id: int,
+    agente: str = 'web',
 ) -> bool:
     """
     Carrega sessões do usuário, analisa padrões e salva em memória.
@@ -455,8 +456,8 @@ def analyze_and_save(
                 )
                 # Continuar para user_profile piggyback (pode ter perfil valido)
             else:
-                # Salvar em /memories/learned/patterns.xml
-                _save_patterns_to_memory(user_id, patterns)
+                # Salvar em /memories/learned/patterns.xml (E2.7: propaga agente)
+                _save_patterns_to_memory(user_id, patterns, agente=agente)
 
             # Piggyback: salvar user_profile como user.xml (Tier 1)
             # Evita Sonnet call duplicado quando patterns E profile trigam juntos
@@ -468,6 +469,7 @@ def analyze_and_save(
                         user_id, user_profile,
                         sessions_analyzed=len(sessions),
                         confianca=patterns.get('confianca', 'baixa'),
+                        agente=agente,
                     )
                     logger.info(f"[PATTERNS] user.xml salvo via piggyback para usuário {user_id}")
 
@@ -491,6 +493,7 @@ def analyze_and_save(
 def _save_patterns_to_memory(
     user_id: int,
     patterns: Dict[str, Any],
+    agente: str = 'web',
 ) -> None:
     """
     Salva padrões prescritivos na memória persistente do usuário.
@@ -560,7 +563,7 @@ def _save_patterns_to_memory(
         if existing:
             existing.content = content
         else:
-            AgentMemory.create_file(user_id, path, content)
+            AgentMemory.create_file(user_id, path, content, agente=agente)
 
         logger.debug(f"[PATTERNS] Memory prescritiva salva em {path}")
     except Exception as e:
@@ -570,7 +573,8 @@ def _save_patterns_to_memory(
     profile = patterns.get('user_profile', {})
     if profile and isinstance(profile, dict) and profile.get('resumo'):
         try:
-            _save_profile_as_user_xml(user_id, profile, sessions_analyzed, confianca)
+            _save_profile_as_user_xml(user_id, profile, sessions_analyzed, confianca,
+                                      agente=agente)
         except Exception as e:
             logger.warning(f"[PATTERNS] Erro ao salvar user.xml: {e}")
 
@@ -580,6 +584,7 @@ def _save_profile_as_user_xml(
     profile: Dict[str, Any],
     sessions_analyzed: int,
     confianca: str,
+    agente: str = 'web',
 ) -> None:
     """
     Salva o user_profile como /memories/user.xml (Tier 1 — SEMPRE injetado).
@@ -643,7 +648,7 @@ def _save_profile_as_user_xml(
             existing.importance_score = 0.9
             existing.category = 'permanent'
         else:
-            mem = AgentMemory.create_file(user_id, path, content)
+            mem = AgentMemory.create_file(user_id, path, content, agente=agente)
             mem.importance_score = 0.9
             mem.category = 'permanent'
 
@@ -757,7 +762,7 @@ def should_generate_profile(user_id: int, threshold: int = 5) -> bool:
         return False
 
 
-def generate_and_save_profile(app, user_id: int) -> bool:
+def generate_and_save_profile(app, user_id: int, agente: str = 'web') -> bool:
     """
     Gera perfil comportamental e salva como /memories/user.xml.
 
@@ -839,7 +844,8 @@ def generate_and_save_profile(app, user_id: int) -> bool:
             sessions_analyzed = len(sessions_data)
             confianca = patterns.get('confianca', 'baixa')
 
-            _save_profile_as_user_xml(user_id, profile, sessions_analyzed, confianca)
+            _save_profile_as_user_xml(user_id, profile, sessions_analyzed, confianca,
+                                      agente=agente)
 
             db.session.commit()
             logger.info(
@@ -1336,6 +1342,17 @@ def _save_empresa_memory(
         from app.utils.timezone import agora_utc_naive
         from .memory_format import normalize_for_storage
 
+        # E2.7: derivar agente da sessão de origem (worker RQ não tem ContextVar válido)
+        _agente = 'web'
+        if session_id:
+            try:
+                from ..models import AgentSession
+                _sess = AgentSession.get_by_session_id(session_id)
+                if _sess:
+                    _agente = getattr(_sess, 'agente', None) or 'web'
+            except Exception:
+                pass  # fallback 'web'
+
         # meta explicito (gerador estruturado) tem precedencia; senao deriva.
         if meta is None:
             content, meta = normalize_for_storage(content, path)
@@ -1367,7 +1384,7 @@ def _save_empresa_memory(
             except Exception:
                 pass  # Se dedup falhar, continuar salvando
 
-            mem = AgentMemory.create_file(0, path, content)
+            mem = AgentMemory.create_file(0, path, content, agente=_agente)
             mem.meta = meta
             mem.escopo = 'empresa'
             mem.created_by = created_by
@@ -2060,6 +2077,7 @@ def extrair_conhecimento_sessao(
     session_messages: list[dict],
     include_subagents: bool = True,
     session_id: Optional[str] = None,
+    agente: str = 'web',
 ) -> bool:
     """
     Extrai conhecimento organizacional de TODAS as mensagens de uma sessao via Sonnet.
@@ -2397,6 +2415,7 @@ def _save_personal_insight(
     descricao: str,
     prescricao: str,
     error_signature: str = '',
+    agente: str = 'web',
 ) -> bool:
     """
     Salva insight pessoal como memoria do usuario.
@@ -2546,7 +2565,8 @@ def _save_personal_insight(
                 else:
                     existing.content = new_content
             else:
-                mem = AgentMemory.create_file(user_id, path, f"<preferences>\n{content}\n</preferences>")
+                mem = AgentMemory.create_file(user_id, path, f"<preferences>\n{content}\n</preferences>",
+                                              agente=agente)
                 mem.category = 'permanent'
                 mem.importance_score = 0.8
 
@@ -2584,7 +2604,8 @@ def _save_personal_insight(
             else:
                 mem = AgentMemory.create_file(
                     user_id, path,
-                    f"<user_expertise>\n{content}\n</user_expertise>"
+                    f"<user_expertise>\n{content}\n</user_expertise>",
+                    agente=agente,
                 )
                 mem.category = 'structural'
                 mem.importance_score = 0.6
@@ -2595,7 +2616,7 @@ def _save_personal_insight(
             if existing:
                 existing.content = content
             else:
-                mem = AgentMemory.create_file(user_id, path, content)
+                mem = AgentMemory.create_file(user_id, path, content, agente=agente)
                 mem.category = 'contextual'
                 mem.importance_score = 0.5
 
@@ -2608,7 +2629,7 @@ def _save_personal_insight(
             # popula meta + normaliza content (sentinela). Ver memory_format.py.
             from .memory_format import normalize_for_storage
             _content_norm, _meta = normalize_for_storage(content, path)
-            mem = AgentMemory.create_file(user_id, path, _content_norm)
+            mem = AgentMemory.create_file(user_id, path, _content_norm, agente=agente)
             mem.meta = _meta
             mem.category = 'structural'
             mem.importance_score = 0.7
@@ -2647,6 +2668,7 @@ def extrair_insights_pessoais_sessao(
     app,
     user_id: int,
     session_messages: list[dict],
+    agente: str = 'web',
 ) -> bool:
     """
     Extrai insights pessoais (correcoes, preferencias, expertise, contexto)
@@ -2719,7 +2741,8 @@ def extrair_insights_pessoais_sessao(
                     filtered += 1
                     continue
 
-                if _save_personal_insight(user_id, tipo, descricao, prescricao, error_signature=error_signature):
+                if _save_personal_insight(user_id, tipo, descricao, prescricao,
+                                          error_signature=error_signature, agente=agente):
                     saved += 1
                 else:
                     filtered += 1

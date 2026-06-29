@@ -312,11 +312,17 @@ def maybe_consolidate(user_id: int) -> Optional[Dict[str, Any]]:
         if not USE_MEMORY_CONSOLIDATION:
             return None
 
+        # E2.7: maybe_consolidate é chamado síncrono do stream (save_memory MCP tool)
+        # onde o ContextVar _current_agent_id É válido — capturar antes do call chain.
+        from ..config.permissions import get_current_agent_id
+        _agente = get_current_agent_id()
+
         result = _consolidate_if_needed(
             user_id=user_id,
             threshold_files=MEMORY_CONSOLIDATION_THRESHOLD_FILES,
             threshold_chars=MEMORY_CONSOLIDATION_THRESHOLD_CHARS,
             min_group=MEMORY_CONSOLIDATION_MIN_GROUP,
+            agente=_agente,
         )
 
         # Consolidar empresa (user_id=0) também — aproveitando o trigger
@@ -328,6 +334,7 @@ def maybe_consolidate(user_id: int) -> Optional[Dict[str, Any]]:
                     threshold_chars=EMPRESA_CONSOLIDATION_THRESHOLD_CHARS,
                     min_group=MEMORY_CONSOLIDATION_MIN_GROUP,
                     consolidation_dirs=CONSOLIDATION_DIRS_EMPRESA,
+                    agente=_agente,
                 )
             except Exception as emp_err:
                 logger.debug(f"[MEMORY_CONSOLIDATOR] Empresa consolidation falhou (ignorado): {emp_err}")
@@ -345,6 +352,7 @@ def _consolidate_if_needed(
     threshold_chars: int = 6000,
     min_group: int = 3,
     consolidation_dirs: Optional[list] = None,
+    agente: str = 'web',
 ) -> Optional[Dict[str, Any]]:
     """
     Core da consolidação. Verifica thresholds e executa.
@@ -439,7 +447,7 @@ def _consolidate_if_needed(
             if len(to_consolidate) < min_group:
                 continue
 
-            result = _consolidate_group(user_id, dir_path, to_consolidate)
+            result = _consolidate_group(user_id, dir_path, to_consolidate, agente=agente)
             if result:
                 consolidated_count += 1
                 archived_count += result["archived"]
@@ -483,6 +491,7 @@ def _consolidate_group(
     user_id: int,
     dir_path: str,
     memories: list,
+    agente: str = 'web',
 ) -> Optional[Dict[str, Any]]:
     """
     Consolida um grupo de memórias em um único arquivo via Sonnet.
@@ -664,7 +673,7 @@ def _consolidate_group(
             )
         existing.content = consolidated_content
     else:
-        AgentMemory.create_file(user_id, consolidated_path, consolidated_content)
+        AgentMemory.create_file(user_id, consolidated_path, consolidated_content, agente=agente)
 
     # Arquivar originais (renomear com prefixo _archived_)
     # PYTHON-FLASK-Q9 fix: gerar nome unico com timestamp + dedup defensivo

@@ -343,6 +343,10 @@ def run_post_session_processing(
     except Exception as alert_err:
         logger.debug(f"[MEMORY_ALERT] Verificacao falhou (ignorado): {alert_err}")
 
+    # E2.7: agente da sessão de origem — propagado a todos os jobs de memória.
+    # Derivado UMA vez aqui; jobs RQ não têm ContextVar válido.
+    _agente = getattr(session, 'agente', None) or 'web'
+
     # =================================================================
     # P0-2: Sumarizacao Estruturada
     # =================================================================
@@ -389,8 +393,8 @@ def run_post_session_processing(
                 )
                 # Tenta RQ primeiro (libera worker do chat). Fallback inline.
                 from app.agente.workers.background_jobs import try_enqueue_analyze_patterns
-                if not try_enqueue_analyze_patterns(user_id):
-                    analyze_patterns_and_save(app=app, user_id=user_id)
+                if not try_enqueue_analyze_patterns(user_id, agente=_agente):
+                    analyze_patterns_and_save(app=app, user_id=user_id, agente=_agente)
                 patterns_already_ran = True
     except Exception as pattern_error:
         logger.warning(f"[POST_SESSION] Erro na analise de padroes (ignorado): {pattern_error}")
@@ -412,8 +416,8 @@ def run_post_session_processing(
                     )
                     # Tenta RQ primeiro. Fallback inline.
                     from app.agente.workers.background_jobs import try_enqueue_generate_profile
-                    if not try_enqueue_generate_profile(user_id):
-                        generate_and_save_profile(app=app, user_id=user_id)
+                    if not try_enqueue_generate_profile(user_id, agente=_agente):
+                        generate_and_save_profile(app=app, user_id=user_id, agente=_agente)
         except Exception as profile_err:
             logger.warning(f"[POST_SESSION] Erro geracao perfil (ignorado): {profile_err}")
 
@@ -438,6 +442,7 @@ def run_post_session_processing(
                     session_messages=messages_for_extraction,
                     session_id=session_id,
                     include_subagents=True,
+                    agente=_agente,
                 )
 
                 if not enqueued:
@@ -454,6 +459,7 @@ def run_post_session_processing(
                                     session_messages=messages_for_extraction,
                                     include_subagents=True,
                                     session_id=session_id,
+                                    agente=_agente,
                                 )
                         except Exception as bg_err:
                             logger.warning(
@@ -504,6 +510,7 @@ def run_post_session_processing(
                 enqueued_personal = try_enqueue_extract_personal_insights(
                     user_id=user_id,
                     session_messages=personal_messages,
+                    agente=_agente,
                 )
 
                 if not enqueued_personal:
@@ -518,6 +525,7 @@ def run_post_session_processing(
                                     app=app,
                                     user_id=user_id,
                                     session_messages=personal_messages,
+                                    agente=_agente,
                                 )
                         except Exception as bg_err:
                             logger.warning(

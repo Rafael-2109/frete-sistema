@@ -338,8 +338,9 @@ def summarize_and_save(
             # 1. Salva no campo summary da sessão
             session.set_summary(summary)
 
-            # 2. Salva na memória do usuário
-            _save_summary_to_memory(user_id, session_id, summary)
+            # 2. Salva na memória do usuário (agente derivado da sessão — E2.7)
+            _agente = getattr(session, 'agente', None) or 'web'
+            _save_summary_to_memory(user_id, session_id, summary, agente=_agente)
 
             db.session.commit()
             logger.info(
@@ -362,6 +363,7 @@ def _save_summary_to_memory(
     user_id: int,
     session_id: str,
     summary: Dict[str, Any],
+    agente: str = 'web',
 ) -> None:
     """
     Salva resumo na memória persistente do usuário.
@@ -464,7 +466,7 @@ def _save_summary_to_memory(
             existing.content = content
             mem = existing
         else:
-            mem = AgentMemory.create_file(user_id, path, content)
+            mem = AgentMemory.create_file(user_id, path, content, agente=agente)
 
         # F5.2 proveniencia: o conteudo e SEMPRE da sessao recem-sumarizada
         # (memoria sobrescrita a cada sessao) — origem acompanha o conteudo.
