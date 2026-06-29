@@ -282,6 +282,60 @@ def build_subprocess_env() -> dict[str, str]:
 > `WHERE agente=`, 4 parâmetros de perfil/allow-list, **2 migrações de schema**).
 > Ver [Apêndice A](#apêndice-a--os-28-vetores-de-m3).
 
+> ### ⚠ REVISÃO DE ESCOPO — auditoria Task 2.0 (2026-06-29)
+>
+> A Task 2.0 foi executada e **o gate disparou** (escopo real ≠ 28). Achados
+> medidos (file:line confirmados), que **re-dimensionam e des-arriscam** a fase:
+>
+> **1. O núcleo P0 é ZERO-MIGRATION.** `_search_memories_pgvector`
+> (`app/embeddings/service.py:855`) **já faz `JOIN agent_memories m`** e retorna
+> `memory_id` (não conteúdo); os `memory_id`s materializam via `AgentMemory.query`
+> (`memory_injection.py:1401`, tabela que **já tem** coluna `agente`). Logo,
+> **filtrar `AgentMemory.agente == agente_id` na materialização cobre embeddings
+> E knowledge-graph fail-closed, sem nova coluna**. As migrations de
+> `agent_memory_embeddings` / `agent_memory_entities` (M04/E01/K01) viram **P2 de
+> defesa-em-profundidade**, NÃO bloqueantes. As 6 tabelas sem coluna `agente`
+> (embeddings, 4 KG, intelligence_report, versions) não bloqueiam o P0.
+>
+> **2. Taxonomia por prioridade (re-escopo):**
+> - **P0 — memória INJETADA automaticamente** (caminho de vazamento real na
+>   sessão): `_load_user_memories_for_context` (**14 queries** `AgentMemory`/
+>   `AgentSession`, ponto de entrada **único** em `hooks.py:1520`) +
+>   `_build_session_window` + `_build_user_rules` (`memory_injection_rules`) +
+>   `build_intersession_briefing` + `buscar_memorias_semantica` (JOIN
+>   `m.agente`). Zero-migration. **É o único P0.**
+> - **P1 — só vaza PÓS-F3** (o fork NÃO injeta memória NEM registra as memory
+>   tools hoje — air gap confirmado): `memory_mcp_tool` (13 ops, 83 refs a
+>   `AgentMemory`, zero filtro) + **7 jobs de consolidação** (escrita/leitura
+>   background: `insights_service` 101 refs, `pattern_analyzer` 60,
+>   `directive_promotion` 21, `memory_consolidator` 21...). Particionar na origem.
+> - **P2 — defesa extra:** migrations de coluna `agente` em embeddings/KG +
+>   `world_model`/`ontology_query` (N05) por perfil.
+>
+> **3. `agente_id` com DEFAULT `'web'` em F2 (revisão pragmática de D3).** Mudar a
+> assinatura para fail-closed estrito quebraria **14 callers de teste** + código
+> de produção (`_load_user_memories_for_context` 1+7, `buscar_memorias_semantica`
+> 2+2, `build_intersession_briefing` 2+5) — e **não há caller `'lojas'` em F2** (o
+> fork não usa). Logo: `agente_id: str = 'web'` (aditivo, zero quebra); o hook web
+> passa `'web'` explícito; o **fail-closed de D3 é reforçado no ponto de entrada
+> ÚNICO do fork em F3** (1 lugar, + lint/teste que falha se um caller `'lojas'`
+> omitir `agente_id`).
+>
+> **4. F2 não tem consumidor funcional até F3** (air gap real). É infra
+> preparatória — entrega valor só quando F3 liga o reuso. Isso, somado ao fato de
+> tocar o **coração do agente Nacom em produção**, recomenda executar P0 (F2) +
+> F3 **juntos, em sessão com budget de contexto cheio**, não no resíduo de uma
+> sessão longa.
+>
+> **Plano de execução revisado do P0** (substitui Tasks 2.1–2.8 para o núcleo;
+> P1/P2 viram follow-up pós-F3): (a) teste-contrato RED com `agente_id='lojas'`
+> sobre Tier 1/1.6/directives (determinísticos, sem embedding); (b) `agente_id=
+> 'web'` propagado por `_load_user_memories_for_context` → 14 queries + helpers;
+> (c) JOIN `m.agente` em `_search_memories_pgvector` + filtro na materialização;
+> (d) `build_intersession_briefing(agente_id)` + `_build_user_rules(agente_id)`;
+> (e) hook web passa `'web'`; (f) GREEN. ~25 edições aditivas, 4 arquivos, baixo
+> risco (default preserva o web).
+
 ### Task 2.0: Fechar o escopo (auditoria das lacunas conhecidas)
 
 **Files (auditar, ainda não medidos):**
