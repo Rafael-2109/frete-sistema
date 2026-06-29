@@ -706,10 +706,14 @@ _DOMAIN_PATH_SEGMENTS = {
 }
 
 
-def _compute_user_domain(user_id: int) -> Optional[str]:
+def _compute_user_domain(user_id: int, agente_id: str = 'web') -> Optional[str]:
     """
     Computa domínio predominante do usuário a partir das últimas sessões.
     Zero-LLM: usa keyword matching nos summaries JSONB.
+
+    M3 (F2 fatia 2): `agente_id` restringe as sessoes analisadas ao agente —
+    o dominio do operador de loja nao e inferido das sessoes Nacom. Default
+    'web' = aditivo.
 
     Returns:
         Nome do domínio predominante ou None se insuficiente.
@@ -718,6 +722,7 @@ def _compute_user_domain(user_id: int) -> Optional[str]:
         from ..models import AgentSession
         sessions = AgentSession.query.filter(
             AgentSession.user_id == user_id,
+            AgentSession.agente == agente_id,  # M3/M12: dominio por agente
             AgentSession.summary.isnot(None),
         ).order_by(AgentSession.created_at.desc()).limit(10).all()
 
@@ -999,10 +1004,13 @@ def _build_operational_directives_parts(
         return [], []
 
 
-def _build_routing_context(user_id: int) -> Optional[str]:
+def _build_routing_context(user_id: int, agente_id: str = 'web') -> Optional[str]:
     """
     Constrói contexto de despacho para routing do agente principal.
     Zero-LLM: SQL queries apenas. Max ~500 chars.
+
+    M3 (F2 fatia 2): `agente_id` isola dominio + armadilhas empresa por agente.
+    Default 'web' = aditivo.
 
     F4.4 PAD-CTX: operational_directives NAO vem mais embutido aqui — o caller
     (_load_user_memories_for_context) monta directives (item 7) e routing
@@ -1020,7 +1028,7 @@ def _build_routing_context(user_id: int) -> Optional[str]:
         from ..models import AgentMemory
         import re
 
-        domain = _compute_user_domain(user_id)
+        domain = _compute_user_domain(user_id, agente_id)
 
         parts = ['<routing_context priority="advisory">']
 
@@ -1035,6 +1043,7 @@ def _build_routing_context(user_id: int) -> Optional[str]:
         # Armadilhas ativas (filtradas por domínio se disponível)
         armadilha_filter = AgentMemory.query.filter(
             AgentMemory.user_id == 0,
+            AgentMemory.agente == agente_id,  # M3/M11: armadilhas empresa por agente
             AgentMemory.is_directory == False,  # noqa: E712
             AgentMemory.is_cold == False,  # noqa: E712
         )
@@ -1292,7 +1301,7 @@ def _load_user_memories_for_context(
             # ── Item 9: Routing context (domínio + armadilhas) ──
             routing_ctx = None
             try:
-                routing_ctx = _build_routing_context(user_id)
+                routing_ctx = _build_routing_context(user_id, agente_id)
             except Exception as route_err:
                 logger.debug(f"[MEMORY_INJECT] Routing context falhou (ignorado): {route_err}")
 

@@ -168,3 +168,22 @@ def test_get_by_path_for_agent_isola(seed_mem, test_user):
 
     assert achado_web is not None and achado_web.id == m_web.id
     assert achado_lojas is None, "lojas enxergou resolved_pendencias do agente 'web'"
+
+
+# ─── M11/M12: _build_routing_context (armadilhas empresa + dominio) ───
+def test_routing_context_armadilhas_isola_por_agente(seed_mem, test_user):
+    # paths /geral/ p/ nao casar segmento de dominio; sem sessions => domain=None
+    seed_mem('/memories/empresa/armadilhas/geral/aw.xml', 'titulo', agente='web',
+             user_id=0, effective_count=10,
+             meta={'titulo': 'ARMADILHA_WEB_UNICA', 'do': 'x'})
+    seed_mem('/memories/empresa/armadilhas/geral/al.xml', 'titulo', agente='lojas',
+             user_id=0, effective_count=10,
+             meta={'titulo': 'ARMADILHA_LOJA_UNICA', 'do': 'y'})
+
+    rc_web = memory_injection._build_routing_context(test_user.id, agente_id='web') or ''
+    rc_lojas = memory_injection._build_routing_context(test_user.id, agente_id='lojas') or ''
+
+    assert 'ARMADILHA_WEB_UNICA' in rc_web
+    assert 'ARMADILHA_WEB_UNICA' not in rc_lojas, "armadilha empresa 'web' vazou p/ 'lojas'"
+    assert 'ARMADILHA_LOJA_UNICA' in rc_lojas
+    assert 'ARMADILHA_LOJA_UNICA' not in rc_web, "armadilha empresa 'lojas' vazou p/ 'web'"
