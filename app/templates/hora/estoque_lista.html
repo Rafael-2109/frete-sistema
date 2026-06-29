@@ -483,6 +483,11 @@
             {% if not m.moto_disponivel and not m.moto_faltando %}
               <span class="badge bg-secondary" title="Moto não disponível em estoque">Fora</span>
             {% endif %}
+            {% if m.moto_disponivel and not m.moto_vendavel %}
+              <span class="badge bg-warning text-dark" title="Em estoque, mas NÃO vendável (avaria aberta) — resolva a avaria para liberar a venda">
+                NÃO vendável
+              </span>
+            {% endif %}
           {% else %}
             <span class="badge bg-warning"
                   title="Chassi cadastrado em pedido/NF, mas ainda sem evento físico (não recebido).">

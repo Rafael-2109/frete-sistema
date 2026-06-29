@@ -498,6 +498,10 @@ def listar_estoque(
         r['nf_serie'] = nf.get('nf_serie')
         r['recebimento_id'] = nf.get('recebimento_id')
         r['avarias_abertas'] = avarias_map.get(r['chassi'], 0)
+        # moto_vendavel (2026-06-28): em estoque E sem avaria ABERTA. Avaria mantem
+        # a moto em estoque (moto_disponivel=True, continua aparecendo) mas
+        # NAO-VENDAVEL ate ser resolvida. Fonte de verdade = avarias_abertas.
+        r['moto_vendavel'] = bool(r.get('moto_disponivel')) and r['avarias_abertas'] == 0
         r['pecas_faltando_abertas'] = pecas_map.get(r['chassi'], 0)
         r['transferencias_em_transito'] = transf_map.get(r['chassi'], 0)
         venda = venda_map.get(r['chassi']) or {}

@@ -104,3 +104,22 @@ def test_resolver_avaria_devolve_para_listas_de_venda(db, loja_origem, modelo_mo
     _db.session.flush()
     assert any(c['chassi'] == chassi
                for c in estoque_service.chassis_disponiveis_para_venda(modelo_moto.id))
+
+
+# --- Estoque (req 2): avariada CONTINUA no estoque, com flag não-vendável ---
+
+def test_listar_estoque_flag_nao_vendavel(db, loja_origem, modelo_moto):
+    from app.hora.services import estoque_service
+    chassi = _moto_em_estoque(loja_origem, modelo_moto)
+
+    def _row():
+        return next((r for r in estoque_service.listar_estoque(
+            lojas_permitidas_ids=[loja_origem.id]) if r['chassi'] == chassi), None)
+
+    r = _row()
+    assert r and r['moto_disponivel'] is True and r['moto_vendavel'] is True
+    _avaria(chassi, loja_origem)
+    r = _row()
+    # continua NO estoque (moto_disponivel True), mas NÃO-vendável (flag)
+    assert r and r['moto_disponivel'] is True and r['moto_vendavel'] is False
+    assert r['avarias_abertas'] == 1
