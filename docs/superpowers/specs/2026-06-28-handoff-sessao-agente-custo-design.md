@@ -4,14 +4,14 @@ camada: L3
 sot_de: arquitetura de handoff de sessao do Agente Web (reducao de custo + qualidade)
 hub: docs/superpowers/specs/INDEX.md
 superseded_by: —
-atualizado: 2026-06-28
+atualizado: 2026-06-29
 -->
 
 # Handoff de Sessão do Agente Web — redução de custo + qualidade
 
 > **Papel:** spec de design da rearquitetura de delegação do Agente Web — substituir o subagente efêmero (Task one-shot, re-spawnado a cada turno) por **handoff de sessão** (um especialista quente assume a conversa) + **subagente dedicado como executor atômico**. Consolida TODOS os achados, bugs e correções da sessão de investigação de custo de 2026-06-28 (SOT = export do Claude Console). Documento autossuficiente: feito para uma sessão limpa de implementação começar daqui sem re-descobrir.
 >
-> **Status:** PROPOSTA — aguardando aval para implementar. Bugs marcados ✅ FEITO já foram aplicados nesta sessão.
+> **Status (2026-06-29):** F0 + B5 **LIVE em prod** (deploy `3ba13fe6f`). **F1 IMPLEMENTADA em PR #28** (flag-OFF/shadow-first; modo `on` real = 8b, deferido p/ design humano). Próxima sessão: avaliar PR #28 + worktree `f1-handoff-piloto`. Bugs marcados ✅ FEITO já aplicados.
 
 ## Indice
 
@@ -174,6 +174,7 @@ Elimina os dois drivers do multi-spawn: **re-boot por turno** (sessão quente = 
   - ✅ Remover env var Teams Opus (B2). ✅ Backfill custo Teams (B1). *(já fechados antes desta sessão)*
   - ✅ Decidido B5 (**desligar** via env — pendente aval prod) e B6 (**não adicionar** padrões; defer p/ F1 — `select_model` só roda em sessão fria).
 - **F1 — piloto handoff (UM especialista):** `gestor-estoque-odoo` OU `gestor-recebimento` (interativos plano→confirma→executa). Pool multi-agente + roteador + tool `transferir_para` + handoff magro + reversão + executor atômico. Atrás de flag (off/shadow/on/admin). **Métrica de gate:** cache_read/creation e custo/sessão dos spawns não-primeiros, antes vs depois.
+  - ✅ **IMPLEMENTADA 2026-06-29 (piloto = `gestor-recebimento`) — PR #28** (branch `worktree-f1-handoff-piloto`, NÃO mergeada). 9 tasks TDD subagent-driven, 125 testes verdes, revisão de branch inteira = READY-TO-MERGE **flag-OFF** (`permissions.py` byte-idêntico, path principal/Teams behavior-equivalent). **8b (client-swap real do modo `on`) DEFERIDO p/ design humano** — interação com `pick_warm_model`/model stickiness + SessionStore + injeção do `handoff_context` + guard `specialist_profile is None` no registro do `handoff_server`. Hoje `on` = no-op medido (decide+persiste papel, NÃO troca cliente). **NÃO ligar `on` antes do 8b.**
 - **F2 — estender + memória de trabalho:** demais especialistas interativos + leitura de findings `/tmp` vivo + S3 retomada cross-deploy. Aposentar o checkpoint (B4) se o handoff superá-lo.
 - **F3 — governança:** critério "merece especialista quente vs executor atômico vs principal direto"; baseline de custo com alarme.
 
