@@ -303,6 +303,19 @@ class AgentSession(db.Model):
         from sqlalchemy.orm.attributes import flag_modified
         flag_modified(self, 'data')
 
+    def get_agente_ativo(self) -> str:
+        """Papel ativo no handoff de sessao (F1). 'principal' por default."""
+        return (self.data or {}).get('agente_ativo', 'principal')
+
+    def set_agente_ativo(self, role: str) -> None:
+        """Grava o papel ativo em data['agente_ativo'] (R7 flag_modified).
+        Preserva o restante de data. Caller comita no app_context."""
+        from sqlalchemy.orm.attributes import flag_modified
+        _data = self.data or {}
+        _data['agente_ativo'] = role
+        self.data = _data
+        flag_modified(self, 'data')
+
     # =========================================================================
     # MÉTODOS DE PERSISTÊNCIA DE TRANSCRIPT — REMOVIDOS (Fase C, 2026-04-21)
     # =========================================================================
