@@ -42,14 +42,28 @@ atualizado: 2026-06-29
 
 | # | Hipótese | Como provar | Fonte a re-verificar |
 |---|---|---|---|
-| H1 | Subagente é retomável por `resume`+`agentId` com contexto completo | **RODAR** o exemplo `query()` da doc no `.venv` e confirmar que o subagente retomado NÃO re-lê arquivos / mantém histórico | doc "Resuming subagents" — `https://code.claude.com/docs/en/agent-sdk/subagents` (obtida via **WebFetch = resumo de modelo pequeno** → re-fetch RAW/browser; confirmar domínio oficial) + CHANGELOG `github.com/anthropics/claude-agent-sdk-python` |
+| H1 ✅ | Subagente é retomável por `resume`+`agentId` com contexto completo — **CONFIRMADO POR EXECUÇÃO 2026-06-29** (ver bloco abaixo) | **RODAR** o exemplo `query()` da doc no `.venv` e confirmar que o subagente retomado NÃO re-lê arquivos / mantém histórico | doc "Resuming subagents" — `https://code.claude.com/docs/en/agent-sdk/subagents` (obtida via **WebFetch = resumo de modelo pequeno** → re-fetch RAW/browser; confirmar domínio oficial) + CHANGELOG `github.com/anthropics/claude-agent-sdk-python` |
 | H2 | Resume-subagente compõe com `ClaudeSDKClient` (pool quente), não só `query()` | Testar `resume`+`agents`+`session_store` via `ClaudeSDKClient` no harness do pool (a doc só demonstra `query()`) | SDK instalado `_internal/session_resume.py` + `session_mutations.py::fork_session` |
-| H3 | Resume-subagente é mais BARATO que o cliente quente | Spike A/B numa tarefa real de recebimento: `cache_read` vs `cache_creation` + custo/turno | medição própria (sem doc) |
+| H3 ❌ | Resume-subagente é mais BARATO que o cliente quente — **REFUTADA 2026-06-29** (A custa 1.32x B; ver bloco abaixo) | Spike A/B numa tarefa real de recebimento: `cache_read` vs `cache_creation` + custo/turno | medição própria (sem doc) |
 | H4 | PR #28 flag-off segue behavior-equivalent APÓS reconciliar com `origin/main` (8 commits behind) | merge main → re-rodar F1+permissões+Teams na base RECONSTRUÍDA; smoke Teams; log prod `"Dead client evicted"` | suíte local + MCP Render |
 | H5 | Fix do blocker (eviction) funciona end-to-end (não só `evict_client` unitário) | teste de integração: handler ProcessError/CLIConnectionError → eviction → recriação no próximo turno | `client.py` (3 sites) + `client_pool.evict_client` |
 | H6 | 4º produto **Managed Agents** (server-side, agente persistente por ID) — viável/custo? | só se H1–H3 não bastarem; é reescrita (sai do `claude-agent-sdk`/CLI) | skill `claude-api` §Managed Agents (re-verificar fonte) |
 
 **Achados detalhados desta verificação (sessão CC, efêmeros):** `/tmp/subagent-findings/VEREDITO_SUBAGENT_RESUMIVEL.md` — re-gerar se sumirem.
+
+### Resultado H1 — ✅ CONFIRMADO POR EXECUÇÃO (2026-06-29)
+
+**Provado** (2 spikes no `.venv`, SDK 0.2.101 + CLI 2.1.195, custo total ~$0.21): o subagente Task **retém seu próprio transcript e é retomável por `agentId`**, condicionado a `resume=session_id`. Prova **isolada** (v2): segredo gerado DENTRO do subagente (passphrase 5 palavras), com o principal **sem** `Read/Grep/Bash` e que nunca viu o segredo → ao retomar, o subagente devolveu o segredo exato (iniciais batem com a âncora da 1ª invocação: `Q-M-T-V-S` → `Quixotic-Melancholy-Turbulent-Velvet-Serendipity`); **sem** `resume`, "no transcript / cleaned up". Fonte re-verificada em 3 níveis (doc `.md` oficial + CHANGELOG raw `#825`/`#805`/`#905` + símbolos do SDK instalado) — não mais WebFetch=resumo.
+
+**Achado de design (muda o desenho do 8b):** no runtime atual o resume concreto é a tool **`SendMessage(to:<agentId>)`**, **ASSÍNCRONO** ("resumed from transcript in the background… you'll be notified when it finishes" + `Output:` path) — **não** "agentId em texto no prompt" como a doc conceitua. O handoff precisa lidar com notificação assíncrona (`TaskNotification`). SOT detalhado: `/tmp/subagent-findings/VEREDITO_SUBAGENT_RESUMIVEL.md`.
+
+**Pendências reais (não cobertas por H1):** **H2** (compõe com `ClaudeSDKClient` quente? o padrão async cabe no loop request/response web/Teams?) e **H3** (custo A/B). H1 confirma a **viabilidade técnica** do 3º caminho; a ESCOLHA do 8b segue dependendo de H2+H3.
+
+### Resultado H2+H3 (2026-06-29)
+
+- **H2 ✅ CONFIRMADO** — `h2_client_resume.py`: dentro de UM `ClaudeSDKClient` persistente (pool quente), o subagente do turno 1 foi re-endereçado no turno 2 via `SendMessage` (mesma sessão automática, **sem** `resume` explícito; resposta assíncrona entregue no mesmo turno). O "subagente retomável" cabe no pool quente existente **sem 2º subprocesso** — derruba o gap "2 subprocessos no mesmo `sdk_session_id`".
+- **H3 ❌ REFUTADA (direção)** — `h3_cost_ab.py` (4 turnos, mesmo doc de recebimento, Haiku): **A** subagente-retomável (principal re-medeia) = **$0.2704**; **B** especialista-quente direto = **$0.2056** → **A custa 1.32x B**. O subagente-retomável NÃO captura a economia (paga a mediação do principal todo turno; `cache_read` 4,7x maior). Em prod a vantagem de B tende a crescer (principal real carrega system_prompt + skills + MCP).
+- **Direção do 8b (a ratificar 4-mãos):** manter o **handoff F1 (especialista quente conduz)** como solução de custo; **subagente-retomável** reservado ao **executor atômico** do ato irreversível — convergente com o design já escrito abaixo. Tabela comparativa dos 3 caminhos: `/tmp/subagent-findings/VEREDITO_SUBAGENT_RESUMIVEL.md` §Recomendação consolidada.
 
 ## Contexto
 
