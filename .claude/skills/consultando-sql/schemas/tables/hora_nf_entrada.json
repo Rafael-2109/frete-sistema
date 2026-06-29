@@ -80,6 +80,12 @@
       "type": "timestamp",
       "description": "Data de criação",
       "nullable": false
+    },
+    {
+      "name": "tipo",
+      "type": "varchar(20)",
+      "nullable": false,
+      "default": "REAL"
     }
   ],
   "foreign_keys": [
