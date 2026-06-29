@@ -982,11 +982,17 @@ def _stream_chat_response(
                 set_current_session_id,
                 set_current_user_id as set_perm_user_id,
                 set_event_queue,
+                set_current_agent_id,
             )
             set_current_session_id(our_session_id)
             # Restricao Estoque (2026-05-26): registra user_id para can_use_tool
             # avaliar gating de skills WRITE de ajuste/Indisponivel.
             set_perm_user_id(user_id)
+            # E2.5: perfil deste stream = 'web' (Nacom). memory_mcp_tool e jobs de
+            # consolidacao leem este ContextVar p/ gravar/filtrar memoria por agente.
+            # Set explicito reseta qualquer residuo 'lojas' de thread reusada (a rota
+            # /agente-lojas seta 'lojas' no seu proprio stream — ETAPA 3).
+            set_current_agent_id('web')
             set_event_queue(our_session_id, event_queue)
 
             # Garantir que AgentSession existe no DB ANTES do stream iniciar.
