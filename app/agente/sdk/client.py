@@ -1527,6 +1527,7 @@ Nunca invente informações."""
         stderr_queue: Optional['queue.SimpleQueue'] = None,
         resume_state: Optional[Dict] = None,
         thinking_display: Optional[str] = None,
+        specialist_profile: Optional['SpecialistProfile'] = None,
     ) -> 'ClaudeAgentOptions':
         """
         Constrói ClaudeAgentOptions para ClaudeSDKClient.
@@ -1554,6 +1555,22 @@ Nunca invente informações."""
 
         # System prompt customizado (com user_id para Memory Tool)
         custom_instructions = self._format_system_prompt(user_name, user_id)
+
+        # F1: se for cliente ESPECIALISTA, troca prompt + skills (allow-list propria).
+        # specialist_profile (SpecialistProfile) tem system_prompt_path proprio e uma
+        # allow-list de skills. Falha de leitura -> fallback transparente ao principal
+        # (profile=None), garantindo que o path do principal nunca quebra.
+        _spec_skills = None
+        _spec_system_prompt = None
+        if specialist_profile is not None:
+            try:
+                with open(specialist_profile.system_prompt_path, 'r', encoding='utf-8') as _f:
+                    _spec_prompt = _f.read()
+                _spec_system_prompt = self._build_full_system_prompt(_spec_prompt)
+                _spec_skills = sorted(specialist_profile.skills)
+            except Exception as _sp_err:
+                logger.warning(f"[specialist] profile load falhou, fallback principal: {_sp_err}")
+                specialist_profile = None
 
         # Diretório do projeto para carregar Skills
         project_cwd = os.path.dirname(
@@ -1648,10 +1665,13 @@ Nunca invente informações."""
         # acessiveis via Read/Bash; o filtro complementa can_use_tool.
         # Fallback (SDK < 0.1.77): 'Skill' adicionado em allowed_tools manualmente.
         if _SDK_HAS_OPTIONS_SKILLS:
-            options_dict["skills"] = _discover_skills_from_project()
+            # Especialista: allow-list propria (como agente_lojas); principal: deny-list.
+            options_dict["skills"] = (
+                _spec_skills if _spec_skills is not None else _discover_skills_from_project()
+            )
             logger.debug(
                 f"[AGENT_CLIENT] skills filtradas: {len(options_dict['skills'])} skills "
-                f"(skills delegadas a subagentes excluídas)"
+                f"({'especialista allow-list' if _spec_skills is not None else 'skills delegadas a subagentes excluídas'})"
             )
         else:
             options_dict["allowed_tools"].append("Skill")
@@ -1692,7 +1712,14 @@ Nunca invente informações."""
         # =================================================================
         from ..config.feature_flags import USE_CUSTOM_SYSTEM_PROMPT
 
-        if USE_CUSTOM_SYSTEM_PROMPT:
+        if _spec_system_prompt is not None:
+            # F1 especialista: prompt proprio (ja' montado via _build_full_system_prompt
+            # a partir do system_prompt_path do perfil). Substitui o do principal.
+            options_dict["system_prompt"] = _spec_system_prompt
+            logger.info(
+                f"[AGENT_CLIENT] System prompt: ESPECIALISTA ({specialist_profile.role})"
+            )
+        elif USE_CUSTOM_SYSTEM_PROMPT:
             # Prompt Architecture v2: string pura (preset_operacional + system_prompt)
             # Elimina ~3-4K tokens do preset claude_code (git, CSS, dev identity)
             options_dict["system_prompt"] = self._build_full_system_prompt(custom_instructions)

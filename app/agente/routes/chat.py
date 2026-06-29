@@ -67,6 +67,32 @@ def pagina_chat():
 # API - CHAT (FEAT-030: Refatorado)
 # =============================================================================
 
+def _resolve_agent_role(session_id, message, is_admin=False):
+    """F1: decide o papel do turno. Persiste a DECISAO (agente_ativo) sempre que
+    fora de 'off' (mede em shadow); retorna o papel EFETIVO (principal em shadow,
+    especialista em on). Best-effort: erro -> principal."""
+    from app.agente.config.feature_flags import resolve_specialist_handoff_mode
+    mode = resolve_specialist_handoff_mode(is_admin=is_admin)
+    if mode == 'off':
+        return 'principal'
+    try:
+        from app.agente.models import AgentSession
+        from app.agente.sdk.agent_router import select_specialist, log_specialist_decision
+        from app import db
+        s = AgentSession.query.filter_by(session_id=session_id).first()
+        current = s.get_agente_ativo() if s else 'principal'
+        role, reason = select_specialist(message, current_active=current)
+        log_specialist_decision(session_id, None, message, role, reason)
+        if s is not None:
+            s.set_agente_ativo(role)   # registra decisao (mede em shadow)
+            db.session.commit()
+        return role if mode == 'on' else 'principal'   # shadow NAO troca
+    except Exception as _ar_err:
+        import logging
+        logging.getLogger('sistema_fretes').warning(f"[agent_router] falhou: {_ar_err}")
+        return 'principal'
+
+
 @agente_bp.route('/api/chat', methods=['POST'])
 @login_required
 def api_chat():
@@ -232,6 +258,15 @@ def api_chat():
             else:
                 logger.warning(f"[AGENTE] DEBUG MODE ativado por {user_name} (ID:{user_id})")
 
+        # F1 agent_router (gated por AGENT_SPECIALIST_HANDOFF). Decide o papel do
+        # turno apos o model_router, antes do plan_mode/stream. is_admin=debug_mode
+        # (ja' validado server-side acima). Em 'off' (default) e' no-op -> 'principal'.
+        # Em 'shadow' DECIDE + loga + persiste agente_ativo (MEDE), mas continua no
+        # cliente principal. Em 'on' retorna o especialista — porem a COSTURA do swap
+        # no path de streaming (8b) ainda NAO esta ligada (ver .superpowers/sdd/
+        # task-7-report.md §8b); hoje a decisao e' medida/registrada, nao executada.
+        agent_role = _resolve_agent_role(session_id, message, is_admin=bool(debug_mode))
+
         # Thinking display (SDK 0.1.65+): preferencia per-user sobrescreve env flag.
         # Valores aceitos: 'summarized' (raciocinio visivel, custo extra), 'omitted'
         # (sem resumo, mais rapido). None = usa AGENT_THINKING_DISPLAY env default.
@@ -251,7 +286,7 @@ def api_chat():
         logger.info(
             f"[AGENTE] {user_name} (ID:{user_id}): '{message[:100]}' | "
             f"Modelo: {model or 'default'} | Effort: {effort_level} | "
-            f"Plan: {plan_mode}{files_info}{debug_info}{sanitize_info}"
+            f"Plan: {plan_mode} | Role: {agent_role}{files_info}{debug_info}{sanitize_info}"
         )
 
         # FEAT-032 / Fase B (2026-04-14): Processar arquivos
