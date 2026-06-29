@@ -285,20 +285,48 @@ class AgentSession(db.Model):
         self._ensure_data_structure()
         return self.data.get('total_tokens', 0)
 
-    def get_sdk_session_id(self) -> Optional[str]:
-        """Retorna o session_id atual do SDK."""
-        self._ensure_data_structure()
-        return self.data.get('sdk_session_id')
+    def get_sdk_session_id(self, role: str = 'principal') -> Optional[str]:
+        """Retorna o sdk_session_id do PAPEL (handoff de sessao — 8b).
 
-    def set_sdk_session_id(self, sdk_session_id: Optional[str]) -> None:
+        Slot por papel em ``data['sdk_session_ids'][role]``. Cada papel
+        (principal, gestor-recebimento, ...) tem seu proprio sdk_session_id;
+        sem isso, principal e especialista resumiriam o MESMO sdk_session_id e
+        escreveriam na MESMA chave do PostgresSessionStore (project_key,
+        session_id=sdk_session_id, subpath='') -> corrupcao do transcript.
+
+        Retrocompat (export-critico Teams/WhatsApp): ``role`` default
+        ``'principal'``; sessoes legadas (string em ``data['sdk_session_id']``,
+        gravadas antes do 8b) sao lidas como ``'principal'`` (leitura dual).
         """
-        Define o session_id do SDK.
+        self._ensure_data_structure()
+        by_role = self.data.get('sdk_session_ids')
+        if isinstance(by_role, dict) and role in by_role:
+            return by_role.get(role)
+        if role == 'principal':
+            return self.data.get('sdk_session_id')  # leitura dual (legado)
+        return None
+
+    def set_sdk_session_id(self, sdk_session_id: Optional[str],
+                           role: str = 'principal') -> None:
+        """Define o sdk_session_id do PAPEL (handoff de sessao — 8b).
+
+        Escreve ``data['sdk_session_ids'][role]``. Para ``'principal'`` tambem
+        espelha o slot string legado ``data['sdk_session_id']`` — leitores
+        antigos que nao passam role (Teams/WhatsApp, rotacao de sessao em
+        ``chat.py``) continuam byte-equivalentes. R7: ``flag_modified``.
 
         Args:
-            sdk_session_id: ID da sessão no SDK (ou None para limpar)
+            sdk_session_id: ID da sessao no SDK (ou None para limpar).
+            role: Papel dono do slot (default 'principal', retrocompat).
         """
         self._ensure_data_structure()
-        self.data['sdk_session_id'] = sdk_session_id
+        by_role = self.data.get('sdk_session_ids')
+        if not isinstance(by_role, dict):
+            by_role = {}
+        by_role[role] = sdk_session_id
+        self.data['sdk_session_ids'] = by_role
+        if role == 'principal':
+            self.data['sdk_session_id'] = sdk_session_id  # espelho legado
 
         from sqlalchemy.orm.attributes import flag_modified
         flag_modified(self, 'data')
