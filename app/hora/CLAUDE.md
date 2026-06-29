@@ -1526,6 +1526,12 @@ Inverte a regra anterior ("avaria não bloqueia venda"). Pedido do dono: moto co
 - **Flag no estoque**: `listar_estoque` retorna `moto_vendavel`; `estoque_lista.html` mostra badge **"NÃO vendável"** (+ o "⚠ N avaria" já existente). A moto segue `moto_disponivel=True` (aparece).
 - **Resolver/ignorar** a última avaria zera a contagem → a moto volta ao vendável **automaticamente**. `_finalizar_avaria` **NÃO** emite evento (predicado por contagem; respeita o insert-once — o último evento pode seguir `AVARIADA`). `IGNORADA` também desbloqueia.
 
+### Ciclo de vida (vínculo conferência — migration hora_59)
+`HoraAvaria.recebimento_conferencia_id` (FK opcional, espelha `HoraPecaFaltando`) liga a avaria criada no recebimento à conferência que a originou. `NULL` = avaria registrada manualmente em /hora/avarias. Consequências:
+- **Excluir recebimento** apaga as `HoraAvaria` daquele recebimento + os eventos `AVARIADA` (via FK) — evita moto-fantasma vendável; nunca toca avaria manual.
+- **Desmarcar** a avaria na (re)conferência (`avaria_fisica` True→False) auto-resolve (`ignorar_avaria`) **apenas** a avaria daquela conferência (escopo pela FK); avaria manual fica intacta.
+- Filtro "incluir avariadas" do estoque exclui por **contagem** de `HoraAvaria` ABERTA (não pelo tipo do evento) — moto avariada-e-resolvida (último evento ainda `AVARIADA`) volta a aparecer.
+
 ### Decisão de escopo (contagem agregada)
 `kpis_loja_modelo_cor` e os KPIs gerenciais **mantêm a avariada no total** (ela ESTÁ em estoque); a não-vendabilidade é tratada por chassi (gate + `moto_vendavel` + badge + exclusão da oferta). Separar um bucket "avariada" na contagem agregada é follow-up — não foi pedido.
 
