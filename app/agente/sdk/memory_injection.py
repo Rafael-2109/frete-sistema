@@ -1249,9 +1249,9 @@ def _load_user_memories_for_context(
                 from ..config.feature_flags import USE_USER_RULES_CHANNEL, USE_USER_RULES_TOP
                 if USE_USER_RULES_CHANNEL:
                     from .memory_injection_rules import _build_user_rules, _get_user_rule_ids
-                    rules_block = _build_user_rules(user_id)
+                    rules_block = _build_user_rules(user_id, agente_id)
                     if rules_block:
-                        l1_rule_ids = _get_user_rule_ids(user_id)
+                        l1_rule_ids = _get_user_rule_ids(user_id, agente_id)
                         if USE_USER_RULES_TOP:
                             rules_block_top = rules_block  # TOPO (maior atencao) na montagem final
                         else:

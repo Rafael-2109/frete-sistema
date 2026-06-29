@@ -187,3 +187,20 @@ def test_routing_context_armadilhas_isola_por_agente(seed_mem, test_user):
     assert 'ARMADILHA_WEB_UNICA' not in rc_lojas, "armadilha empresa 'web' vazou p/ 'lojas'"
     assert 'ARMADILHA_LOJA_UNICA' in rc_lojas
     assert 'ARMADILHA_LOJA_UNICA' not in rc_web, "armadilha empresa 'lojas' vazou p/ 'web'"
+
+
+# ─── R01: _build_user_rules (canal L1 priority=mandatory) ───
+def test_user_rules_isola_por_agente(seed_mem, test_user):
+    from app.agente.sdk import memory_injection_rules
+    seed_mem('/memories/rules/r_web.xml', 'REGRA_NACOM_WEB_UNICA', agente='web',
+             priority='mandatory', is_cold=False)
+    seed_mem('/memories/rules/r_loja.xml', 'REGRA_LOJA_HORA_UNICA', agente='lojas',
+             priority='mandatory', is_cold=False)
+
+    rules_web = memory_injection_rules._build_user_rules(test_user.id, agente='web') or ''
+    rules_lojas = memory_injection_rules._build_user_rules(test_user.id, agente='lojas') or ''
+
+    assert 'REGRA_NACOM_WEB_UNICA' in rules_web
+    assert 'REGRA_NACOM_WEB_UNICA' not in rules_lojas, "regra 'web' vazou p/ canal L1 'lojas'"
+    assert 'REGRA_LOJA_HORA_UNICA' in rules_lojas
+    assert 'REGRA_LOJA_HORA_UNICA' not in rules_web, "regra 'lojas' vazou p/ canal L1 'web'"
