@@ -23,8 +23,6 @@ import json
 import logging
 import os
 import tempfile
-import threading
-from contextvars import ContextVar
 from typing import Any, Dict
 
 from claude_agent_sdk import (
@@ -37,55 +35,25 @@ logger = logging.getLogger('sistema_fretes')
 
 
 # =============================================================================
-# Registry global thread-safe para event_queue cross-thread
+# Registry de contexto — UNIFICADO com o agente web (CUTOVER E3.8b/C4)
 # =============================================================================
-# Motivacao: can_use_tool roda em thread daemon do ClaudeSDKClient (subprocess),
-# mas event_queue e criado na thread Flask. dict global + lock thread-safe.
-# Separado do _stream_context do agente Nacom para isolamento de runtime.
+# Antes este modulo tinha um registry proprio (_stream_context_lojas +
+# _current_session_id_lojas). Sob o MOTOR UNICO, a rota /agente-lojas seta
+# session_id/event_queue no registry do agente WEB (app/agente/config/
+# permissions) — o mesmo que o motor e os hooks leem. Para o can_use_tool
+# (abaixo) encontrar o event_queue do AskUserQuestion, ele DEVE ler do MESMO
+# registry. Re-exportamos as 5 funcoes de contexto do web (registro unico —
+# session_id e UUID global, sem colisao web<->lojas). O caminho legado do fork
+# (flag AGENT_LOJAS_USA_MOTOR_UNICO OFF) tambem passa a setar nesse registro,
+# que e consistente: o stream_response do fork chama estas mesmas funcoes.
 # =============================================================================
-_stream_context_lojas: Dict[str, Any] = {}  # session_id -> {'event_queue': Queue}
-_context_lock = threading.Lock()
-
-# ContextVar funciona em threads E em coroutines (vs threading.local apenas threads).
-# Mesmo padrao do agente Nacom (config/permissions.py:78).
-_current_session_id_lojas: ContextVar[str | None] = ContextVar(
-    '_agent_lojas_session_id', default=None,
+from app.agente.config.permissions import (  # noqa: F401  (re-export do registro unico)
+    set_current_session_id,
+    get_current_session_id,
+    set_event_queue,
+    get_event_queue,
+    cleanup_session_context,
 )
-
-
-def set_current_session_id(session_id: str) -> None:
-    """Define session_id no contexto atual (threads E coroutines)."""
-    _current_session_id_lojas.set(session_id)
-    with _context_lock:
-        if session_id not in _stream_context_lojas:
-            _stream_context_lojas[session_id] = {}
-        _stream_context_lojas[session_id]['_active'] = True
-
-
-def get_current_session_id() -> str | None:
-    """Retorna session_id do contexto atual."""
-    return _current_session_id_lojas.get()
-
-
-def set_event_queue(session_id: str, event_queue: Any) -> None:
-    """Registra event_queue para uma sessao (cross-thread)."""
-    with _context_lock:
-        if session_id not in _stream_context_lojas:
-            _stream_context_lojas[session_id] = {}
-        _stream_context_lojas[session_id]['event_queue'] = event_queue
-
-
-def get_event_queue(session_id: str) -> Any:
-    """Retorna event_queue de uma sessao."""
-    with _context_lock:
-        ctx = _stream_context_lojas.get(session_id, {})
-        return ctx.get('event_queue')
-
-
-def cleanup_session_context(session_id: str) -> None:
-    """Remove contexto da sessao apos stream encerrar."""
-    with _context_lock:
-        _stream_context_lojas.pop(session_id, None)
 
 
 # =============================================================================
