@@ -1,8 +1,31 @@
+<!-- doc:meta
+tipo: explanation
+camada: L1
+sot_de: —
+hub: docs/superpowers/specs/INDEX.md
+superseded_by: —
+atualizado: 2026-06-25
+-->
 # Relatório Semanal de Estoque (comparativo segunda-a-segunda) — Design
+
+> **Papel:** spec de design do relatório semanal de estoque entregue por e-mail (comparativo segunda-a-segunda). Plano par: `docs/superpowers/plans/2026-06-25-relatorio-estoque-semanal.md`.
 
 > **Data:** 2026-06-25
 > **Autor:** Marcus (via Claude Code)
 > **Status:** Em revisão (aguardando aprovação da spec)
+
+## Indice
+- Objetivo
+- Contexto
+- Escopo
+- Design (cálculo, serviço, job, e-mail)
+
+## Contexto
+
+Complementa (sem substituir) o relatório de **estoques** já existente em
+`/manufatura/relatorios-semanais/` (snapshot do saldo atual) com a **dimensão
+semanal** — o que entrou e saiu comparando uma segunda com a anterior — e entrega
+automática por e-mail.
 
 ## 1. Objetivo
 
