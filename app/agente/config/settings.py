@@ -11,7 +11,6 @@ O SDK gerencia sessions automaticamente. Não é necessário configurar Redis/TT
 import os
 from dataclasses import dataclass, field
 from typing import ClassVar, List, Optional
-from functools import lru_cache
 
 from app.agente.config.skills_whitelist import SKILLS_SPED_RESERVED
 
@@ -159,23 +158,60 @@ class AgentSettings:
         return round(input_cost + output_cost, 6)
 
 
-@lru_cache(maxsize=1)
-def get_settings() -> AgentSettings:
+# Cache de settings POR PERFIL de agente. Cada agente_id mapeia para UMA
+# instancia — identidade preservada: get_settings() is get_settings('web').
+# (Substitui o lru_cache(maxsize=1) global; o default 'web' mantem os ~8
+#  callers existentes byte-identicos — todos chamam sem argumento.)
+_settings_by_agent: dict = {}
+
+
+def get_settings(agente_id: str = 'web') -> AgentSettings:
     """
-    Obtém configurações do agente (singleton cacheado).
+    Obtém configurações do agente por PERFIL (singleton por agente_id).
+
+    Args:
+        agente_id: 'web' (default) → AgentSettings (logístico Nacom, comportamento
+            histórico); 'lojas' → AgentLojasSettings (perfil isolado HORA, sem
+            briefing Nacom). O default preserva os callers sem argumento.
 
     Returns:
-        Instância de AgentSettings
+        Instância de AgentSettings (ou subclasse de perfil).
+
+    Raises:
+        ValueError: agente_id desconhecido (fail-closed — D3: sem default silencioso).
     """
-    return AgentSettings()
+    agente_id = agente_id or 'web'
+    cached = _settings_by_agent.get(agente_id)
+    if cached is not None:
+        return cached
+    if agente_id == 'web':
+        settings: AgentSettings = AgentSettings()
+    elif agente_id == 'lojas':
+        # Import lazy: agente_lojas.config.settings importa ESTE módulo no topo;
+        # o lazy quebra o ciclo e mantém o web sem dependência de import-time
+        # do perfil (só carrega o perfil lojas quando alguém o pede).
+        from app.agente_lojas.config.settings import AgentLojasSettings
+        settings = AgentLojasSettings()
+    else:
+        raise ValueError(
+            f"agente_id desconhecido: {agente_id!r} (esperado 'web' ou 'lojas')"
+        )
+    _settings_by_agent[agente_id] = settings
+    return settings
 
 
-def reload_settings() -> AgentSettings:
+def reload_settings(agente_id: Optional[str] = None) -> AgentSettings:
     """
     Recarrega configurações (limpa cache).
 
+    Args:
+        agente_id: se None, limpa TODOS os perfis; caso contrário, limpa só esse.
+
     Returns:
-        Nova instância de AgentSettings
+        Instância recarregada do perfil 'web' (ou do agente_id informado).
     """
-    get_settings.cache_clear()
-    return get_settings()
+    if agente_id is None:
+        _settings_by_agent.clear()
+        return get_settings()
+    _settings_by_agent.pop(agente_id, None)
+    return get_settings(agente_id)
