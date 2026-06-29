@@ -1,12 +1,12 @@
 {
   "app/agente": {
-    "py": 110,
-    "loc": 57382,
+    "py": 115,
+    "loc": 57846,
     "tpl": 0
   },
   "app/agente/services": {
-    "py": 26,
-    "loc": 14998,
+    "py": 27,
+    "loc": 15041,
     "tpl": 0
   },
   "app/agente_lojas": {
@@ -45,8 +45,8 @@
     "tpl": 43
   },
   "app/hora": {
-    "py": 117,
-    "loc": 43889,
+    "py": 119,
+    "loc": 44933,
     "tpl": 103
   },
   "app/motos_assai": {
@@ -76,7 +76,7 @@
   },
   "app/teams": {
     "py": 5,
-    "loc": 3703,
+    "loc": 3728,
     "tpl": 0
   },
   "app/whatsapp": {
