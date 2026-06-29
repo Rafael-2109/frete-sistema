@@ -553,8 +553,10 @@ class TestRunBatch:
         ff_path = (Path(__file__).resolve().parents[3]
                    / 'app' / 'agente' / 'config' / 'feature_flags.py')
         ff_src = ff_path.read_text(encoding='utf-8')
+        # Aceita os.getenv OU o helper _env_bool (refactor que padronizou a
+        # leitura de flags); ambos preservam nome da env var + default.
         assert re.search(
-            r'AGENT_DIRECTIVE_JUDGE_SOURCE\s*=\s*os\.getenv\(\s*"AGENT_DIRECTIVE_JUDGE_SOURCE"\s*,\s*"false"',
+            r'AGENT_DIRECTIVE_JUDGE_SOURCE\s*=\s*(?:os\.getenv|_env_bool)\(\s*"AGENT_DIRECTIVE_JUDGE_SOURCE"\s*,\s*"false"',
             ff_src,
         ), "AGENT_DIRECTIVE_JUDGE_SOURCE deve existir com default 'false' (R3)"
 
