@@ -25,15 +25,17 @@ atualizado: 2026-06-29
 - `venda_service`: 4 wirings (`criar_venda_manual`, `salvar_pedido_completo`, `confirmar_venda`, `cancelar_venda`).
 - `emissor_nfe._enviar_nfe`: `to_nfe` (PATCH corpo estrito + status B → GET /pedidos/to_nfe) quando flag ON + `tagplus_pedido_id`; senão `POST /nfes` (intacto).
 
-**Fase 3 — MOTOR DE DESCOBERTA IMPLEMENTADO (10 testes em `tests/hora/test_pedido_sync_fase3.py`):**
-- Migration `hora_63` (cursor `ultimo_pedido_numero_reconciliado`) — **aplicada LOCAL; FALTA aplicar em PROD.**
-- `pedido_service.busca_pedido_por_numero`; `pedido_reverso_service`: `_maior_numero_conhecido`, `pedido_e_nosso` (anti-loop+idempotência), `_varrer` (numero-walk +3), `numero_walk` (persiste cursor).
+**Fase 3 — COMPLETA (15 testes em `tests/hora/test_pedido_sync_fase3.py`):**
+- Migration `hora_63` (cursor `ultimo_pedido_numero_reconciliado`) — **aplicada LOCAL e em PROD ✅.**
+- `pedido_service.busca_pedido_por_numero`; `pedido_reverso_service`: `_maior_numero_conhecido`, `pedido_e_nosso` (anti-loop+idempotência), `_varrer` (numero-walk +3), `numero_walk` (persiste cursor), `_resolver_loja_id`, `replicar` (cria `HoraVenda` INCOMPLETO `origem_criacao='TAGPLUS'` + `HoraVendaDivergencia` `AGUARDANDO_CHASSI` por item — **sem migration nova**: usa `detalhe`/`valor_esperado`/`numero_chassi`-NULL), `descobrir_e_replicar` (orquestra, tolerante por pedido), `reverso_habilitado` (flag `HORA_TAGPLUS_REVERSO`, default OFF).
+- `pedido_reverso_worker.descobrir_e_replicar_job` (entry point do cron, gated pela flag).
+- **UI:** vínculo de chassi **reusa a tela de edição de pedido INCOMPLETO** (`pedido_venda_novo.html`, que já exibe a divergência `AGUARDANDO_CHASSI`); badge "TagPlus" na listagem (`vendas_lista.html`).
 
-**PENDENTE (próxima sessão):**
-1. **Fase 3 replicação**: `replicar(pedido)` → cria `HoraVenda` INCOMPLETO (`origem_criacao='TAGPLUS'`) — **decisão de modelagem:** `HoraVendaItem.numero_chassi` é NOT NULL, então itens-por-modelo não viram `HoraVendaItem`; criar só o header + registrar `HoraVendaDivergencia` "aguardando chassi" com modelos/qtds esperados.
-2. **UI de vínculo de chassi** (operador) + **cron** numero-walk (padrão `reconciliacao_worker`).
-3. **Go-live**: aplicar `hora_63` em PROD; validar `to_nfe` (#2 SEFAZ) e cancelar-com-NFe (#3) com o TagPlus; **ligar `HORA_TAGPLUS_PUSH_PEDIDO=1`** (só com 2b inteira — senão duplica pedido).
-4. **Push do commit** (aval do dono — dispara deploy).
+**PENDENTE (próxima sessão / dono):**
+1. **Go-live 2b**: validar `to_nfe` (#2 SEFAZ + schema da resposta) e cancelar-com-NFe (#3) com o TagPlus; **ligar `HORA_TAGPLUS_PUSH_PEDIDO=1`** (só com 2b inteira — senão duplica pedido).
+2. **Go-live Fase 3**: agendar o cron (infra — crontab Render/RQ scheduler invocando `descobrir_e_replicar_job`, ~30min, padrão do `reconciliar_emissoes_job`); **ligar `HORA_TAGPLUS_REVERSO=1`** após observar o numero-walk em PROD (a flag OFF garante que nada é replicado antes).
+3. **Push do commit** (aval do dono — dispara deploy).
+4. Melhorias futuras (riscos residuais abaixo): label amigável p/ `AGUARDANDO_CHASSI`, lock anti-TOCTOU, reconciliador por `codigo_externo`.
 
 **Riscos residuais conhecidos (v1, todos no caminho flag ON — review adversarial 2026-06-29):**
 - **Schema da resposta do `GET /pedidos/to_nfe/{id}`** é assumido igual ao `POST /nfes` (`body['id']/['numero']/['serie']`). Se divergir, `tagplus_nfe_id` fica `None` e o polling/reconciliação/webhook não acham a NFe (emissão presa em `ENVIADA_SEFAZ`). **Go-live:** logar o body bruto do `to_nfe` na 1ª emissão real e mapear os campos antes de confiar.

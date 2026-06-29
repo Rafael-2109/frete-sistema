@@ -123,3 +123,75 @@ def test_numero_walk_persiste_cursor(db, monkeypatch):
     descobertos = rev.numero_walk(MagicMock(), conta)
     assert [d['numero'] for d in descobertos] == [941]
     assert conta.ultimo_pedido_numero_reconciliado == 941
+
+
+# --------------------------------------------------------------------------
+# replicar: pedido TagPlus -> HoraVenda INCOMPLETO (origem TAGPLUS)
+# --------------------------------------------------------------------------
+def _pedido_tp(**kw):
+    base = {
+        'id': 1300, 'numero': 970, 'codigo_externo': '',
+        'valor_total': 9990,
+        'cliente': {'cpf': '213.485.928-85', 'razao_social': 'Fulano de Tal'},
+        'departamento': {'descricao': 'Praia Grande'},
+        'itens': [{'produto_servico': {'id': 8, 'codigo': 'MT-X12', 'descricao': 'Scooter X12'},
+                   'qtd': 1}],
+    }
+    base.update(kw)
+    return base
+
+
+def test_replicar_cria_venda_incompleto_tagplus(db):
+    venda = rev.replicar(_pedido_tp())
+    assert venda is not None
+    assert venda.origem_criacao == 'TAGPLUS'
+    assert venda.status == 'INCOMPLETO'
+    assert venda.tagplus_pedido_id == 1300
+    assert venda.tagplus_pedido_numero == 970
+    assert venda.cpf_cliente == '21348592885'
+    assert venda.nome_cliente == 'Fulano de Tal'
+    assert venda.tagplus_departamento == 'Praia Grande'
+    divs = [d for d in venda.divergencias if d.tipo == 'AGUARDANDO_CHASSI']
+    assert len(divs) == 1
+    assert divs[0].numero_chassi is None
+
+
+def test_replicar_resolve_loja_via_departamento_map(db):
+    from app.hora.models import HoraLoja
+    from app.hora.models.tagplus import HoraTagPlusDepartamentoMap
+    from app.utils.timezone import agora_utc_naive
+    import uuid
+    cnpj = str(uuid.uuid4().int)[:14].ljust(14, '0')
+    loja = HoraLoja(cnpj=cnpj, apelido='PG', nome='Praia Grande', razao_social='PG LTDA',
+                    nome_fantasia='PG', ativa=True, atualizado_em=agora_utc_naive())
+    _db.session.add(loja)
+    _db.session.flush()
+    _db.session.add(HoraTagPlusDepartamentoMap(
+        departamento_norm='praia grande', departamento_raw='Praia Grande', loja_id=loja.id))
+    _db.session.flush()
+    venda = rev.replicar(_pedido_tp())
+    assert venda.loja_id == loja.id
+
+
+def test_replicar_idempotente_nao_duplica(db):
+    v1 = rev.replicar(_pedido_tp())
+    v2 = rev.replicar(_pedido_tp())
+    assert v1 is not None and v2 is None  # 2a chamada e' no-op (ja existe)
+
+
+def test_reverso_habilitado_default_off(monkeypatch):
+    monkeypatch.delenv('HORA_TAGPLUS_REVERSO', raising=False)
+    assert rev.reverso_habilitado() is False
+    monkeypatch.setenv('HORA_TAGPLUS_REVERSO', '1')
+    assert rev.reverso_habilitado() is True
+
+
+def test_descobrir_e_replicar_orquestra(db, monkeypatch):
+    from app.hora.models.tagplus import HoraTagPlusConta
+    conta = HoraTagPlusConta(client_id='c', client_secret_encrypted='x', webhook_secret='s')
+    _db.session.add(conta)
+    _db.session.flush()
+    monkeypatch.setattr(rev, 'numero_walk', lambda api, c, **kw: [_pedido_tp(id=1301, numero=971)])
+    replicados = rev.descobrir_e_replicar(MagicMock(), conta)
+    assert len(replicados) == 1
+    assert replicados[0].tagplus_pedido_numero == 971

@@ -1717,16 +1717,26 @@ mapeado — `itens[].produto_servico` e `faturas[]` iguais ao `/nfes`, `cliente`
 - `venda_service`: 4 wirings — `criar_venda_manual`+`salvar_pedido_completo`→`push_criar_pedido`; `confirmar_venda`→`push_atualizar_status`; `cancelar_venda`→`push_cancelar`.
 - `emissor_nfe._enviar_nfe`: com flag ON + `tagplus_pedido_id`, PATCH /pedidos (corpo estrito+status B) → `GET /pedidos/to_nfe/{id}` (evita pedido duplicado); senão `POST /nfes` **inalterado** (zero regressão com flag OFF).
 
-**Fase 3 (motor de descoberta):** migration `hora_63` (`hora_tagplus_conta.ultimo_pedido_numero_reconciliado` — cursor; aplicada LOCAL, **falta PROD**); `pedido_service.busca_pedido_por_numero` (GET /pedidos?numero=n); `pedido_reverso_service` (`pedido_e_nosso` anti-loop+idempotência, `_varrer` numero-walk +3, `numero_walk` persiste cursor).
+**Fase 3 (descoberta reversa, COMPLETA, atrás da flag `HORA_TAGPLUS_REVERSO` default OFF):**
+migration `hora_63` (`hora_tagplus_conta.ultimo_pedido_numero_reconciliado` — cursor; aplicada
+LOCAL + **PROD**); `pedido_service.busca_pedido_por_numero` (GET /pedidos?numero=n);
+`pedido_reverso_service` (`pedido_e_nosso` anti-loop+idempotência, `_varrer` numero-walk +3,
+`numero_walk` persiste cursor, `replicar` cria `HoraVenda` INCOMPLETO `origem_criacao='TAGPLUS'` +
+`HoraVendaDivergencia` `AGUARDANDO_CHASSI` por item — **sem migration nova**, usa
+`detalhe`/`valor_esperado`/`numero_chassi`-NULL; `descobrir_e_replicar` orquestra);
+`pedido_reverso_worker.descobrir_e_replicar_job` (cron). **Vínculo de chassi reusa a tela de
+edição de pedido INCOMPLETO** (`pedido_venda_novo.html` já exibe a divergência) + badge "TagPlus"
+na listagem. **Decisão de modelagem:** `HoraVendaItem.numero_chassi` é NOT NULL → item-por-modelo
+vira divergência "aguardando chassi", não `HoraVendaItem`; o operador adiciona os itens reais
+(com chassi) na edição, disparando reserva.
 
-**Testes:** `tests/hora/test_pedido_sync_fase2b.py` (23) + `test_pedido_sync_fase3.py` (10) — 446 testes HORA verdes.
+**Testes:** `tests/hora/test_pedido_sync_fase2b.py` (27) + `test_pedido_sync_fase3.py` (15) — 455 testes HORA verdes.
 
-**⚠️ Go-live (gate do dono):** ligar a flag **só com a 2b inteira** — ligar o push sem o `to_nfe`
-faria o `POST /nfes` auto-criar um 2º pedido (duplicação). Validar `to_nfe` (transmite SEFAZ?) e
-cancelar-com-NFe (#3) com o TagPlus antes. **Pendente:** replicação reversa (criar `HoraVenda`
-INCOMPLETO — `HoraVendaItem.numero_chassi` é NOT NULL, então item-por-modelo vira divergência
-"aguardando chassi", não `HoraVendaItem`), UI de vínculo de chassi, cron. Handoff:
-`docs/superpowers/plans/2026-06-29-hora-tagplus-fase2b-fase3-handoff.md`.
+**⚠️ Go-live (gates do dono):** (1) push/to_nfe — ligar `HORA_TAGPLUS_PUSH_PEDIDO` **só com a 2b
+inteira** (push sem `to_nfe` faz o `POST /nfes` auto-criar 2º pedido = duplicação); validar `to_nfe`
+(transmite SEFAZ? schema da resposta?) e cancelar-com-NFe (#3) com o TagPlus antes. (2) reverso —
+agendar o cron (`descobrir_e_replicar_job`, ~30min) e ligar `HORA_TAGPLUS_REVERSO` após observar o
+numero-walk em PROD. Handoff: `docs/superpowers/plans/2026-06-29-hora-tagplus-fase2b-fase3-handoff.md`.
 
 ---
 
