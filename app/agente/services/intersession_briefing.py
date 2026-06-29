@@ -33,14 +33,21 @@ from app.utils.timezone import agora_utc_naive
 logger = logging.getLogger(__name__)
 
 
-def build_intersession_briefing(user_id: int) -> Optional[str]:
+def build_intersession_briefing(user_id: int, agente_id: str = 'web') -> Optional[str]:
     """
     Gera briefing inter-sessão: o que mudou desde a última sessão do usuário.
 
     Queries leves em tabelas existentes. Retorna XML compacto ou None.
 
+    M3 (F2 fatia 2): `agente_id` isola as fontes por-agente (sessoes anteriores,
+    intent de continuidade, alertas de memoria) — a sessao 'lojas' nao recebe
+    continuidade/alertas das sessoes Nacom 'web'. Default 'web' = aditivo.
+    NOTA: _check_recurring_errors (AgentSkillEffectiveness) e GLOBAL e nao tem
+    coluna agente — fica fora desta fatia (P2/defesa).
+
     Args:
         user_id: ID do usuário no banco
+        agente_id: agente da sessao ('web' | 'lojas')
 
     Returns:
         XML string (~400 chars) ou None se não houver eventos relevantes.
@@ -49,10 +56,10 @@ def build_intersession_briefing(user_id: int) -> Optional[str]:
         parts = []
 
         # 1. Última sessão do usuário (para saber "desde quando" informar)
-        last_session_at = _get_last_session_time(user_id)
+        last_session_at = _get_last_session_time(user_id, agente_id)
 
         # 1b. Último intent/tarefa da sessão anterior (continuidade)
-        last_intent = _check_last_session_intent(user_id)
+        last_intent = _check_last_session_intent(user_id, agente_id)
         if last_intent:
             parts.append(last_intent)
 
@@ -67,7 +74,7 @@ def build_intersession_briefing(user_id: int) -> Optional[str]:
             parts.append(import_failures)
 
         # 4. Memórias com conflito pendente
-        memory_alerts = _check_memory_alerts(user_id)
+        memory_alerts = _check_memory_alerts(user_id, agente_id)
         if memory_alerts:
             parts.append(memory_alerts)
 
@@ -121,13 +128,13 @@ def build_intersession_briefing(user_id: int) -> Optional[str]:
         return None
 
 
-def _get_last_session_time(user_id: int):
-    """Retorna timestamp da última sessão do usuário ou None."""
+def _get_last_session_time(user_id: int, agente_id: str = 'web'):
+    """Retorna timestamp da última sessão do usuário (do agente) ou None."""
     try:
         from ..models import AgentSession
 
         last = AgentSession.query.filter_by(
-            user_id=user_id,
+            user_id=user_id, agente=agente_id,  # M3/B01: por agente
         ).order_by(
             AgentSession.updated_at.desc()
         ).first()
@@ -137,13 +144,15 @@ def _get_last_session_time(user_id: int):
         return None
 
 
-def _check_last_session_intent(user_id: int) -> Optional[str]:
+def _check_last_session_intent(user_id: int, agente_id: str = 'web') -> Optional[str]:
     """
     Extrai intent/tarefa da última sessão do usuário para continuidade.
 
     Busca summary JSONB da última sessão e extrai:
     - tarefas_pendentes[0] (prioridade: é o que o usuário precisa continuar)
     - resumo_geral (fallback: o que foi feito na sessão anterior)
+
+    M3 (F2 fatia 2): `agente_id` isola por agente. Default 'web' = aditivo.
 
     Returns:
         XML tag com último intent ou None se não houver sessão/summary.
@@ -152,7 +161,7 @@ def _check_last_session_intent(user_id: int) -> Optional[str]:
         from ..models import AgentSession
 
         last = AgentSession.query.filter_by(
-            user_id=user_id,
+            user_id=user_id, agente=agente_id,  # M3/B01: por agente
         ).order_by(
             AgentSession.updated_at.desc()
         ).first()
@@ -271,13 +280,15 @@ def _check_import_failures(since) -> Optional[str]:
         return None
 
 
-def _check_memory_alerts(user_id: int) -> Optional[str]:
+def _check_memory_alerts(user_id: int, agente_id: str = 'web') -> Optional[str]:
     """
     Verifica alertas de memória: conflitos pendentes, cold candidates.
 
     Alertas:
     - Memórias com has_potential_conflict=True
     - Memórias candidatas a tier frio (usage_count >= 20, effectiveness_score < 0.1)
+
+    M3 (F2 fatia 2): `agente_id` isola por agente. Default 'web' = aditivo.
     """
     try:
         from ..models import AgentMemory
@@ -288,6 +299,7 @@ def _check_memory_alerts(user_id: int) -> Optional[str]:
         try:
             conflict_memories = AgentMemory.query.filter(
                 AgentMemory.user_id.in_([user_id, 0]),
+                AgentMemory.agente == agente_id,  # M3/B02: por agente
                 AgentMemory.has_potential_conflict == True,  # noqa: E712
                 AgentMemory.is_directory == False,  # noqa: E712
             ).with_entities(AgentMemory.path).limit(5).all()
@@ -303,6 +315,7 @@ def _check_memory_alerts(user_id: int) -> Optional[str]:
         try:
             cold_candidates = AgentMemory.query.filter(
                 AgentMemory.user_id == user_id,
+                AgentMemory.agente == agente_id,  # M3/B03: por agente
                 AgentMemory.is_directory == False,  # noqa: E712
                 AgentMemory.is_cold == False,  # noqa: E712
                 AgentMemory.usage_count >= 20,

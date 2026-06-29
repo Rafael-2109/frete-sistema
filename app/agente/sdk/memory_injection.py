@@ -1272,7 +1272,7 @@ def _load_user_memories_for_context(
                 from ..config.feature_flags import USE_INTERSESSION_BRIEFING
                 if USE_INTERSESSION_BRIEFING:
                     from ..services.intersession_briefing import build_intersession_briefing
-                    briefing = build_intersession_briefing(user_id)
+                    briefing = build_intersession_briefing(user_id, agente_id)
             except Exception as brief_err:
                 logger.debug(f"[MEMORY_INJECT] Briefing inter-sessão falhou (ignorado): {brief_err}")
 

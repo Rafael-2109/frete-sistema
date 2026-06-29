@@ -70,10 +70,11 @@ def seed_session(app, test_user):
     """Cria AgentSession com `agente=` e summary JSONB (resumo_geral)."""
     criados = []
 
-    def _criar(agente, resumo, **kwargs):
+    def _criar(agente, resumo, tarefas=None, **kwargs):
         sid = f"iso-{agente}-{uuid.uuid4().hex[:12]}"
+        summary = {'resumo_geral': resumo, 'tarefas_pendentes': tarefas or []}
         s = AgentSession(session_id=sid, user_id=test_user.id, agente=agente,
-                         summary={'resumo_geral': resumo}, **kwargs)
+                         summary=summary, **kwargs)
         db.session.add(s)
         db.session.commit()
         criados.append(s.id)
@@ -204,3 +205,20 @@ def test_user_rules_isola_por_agente(seed_mem, test_user):
     assert 'REGRA_NACOM_WEB_UNICA' not in rules_lojas, "regra 'web' vazou p/ canal L1 'lojas'"
     assert 'REGRA_LOJA_HORA_UNICA' in rules_lojas
     assert 'REGRA_LOJA_HORA_UNICA' not in rules_web, "regra 'lojas' vazou p/ canal L1 'web'"
+
+
+# ─── B01-B03: build_intersession_briefing (continuidade por agente) ───
+def test_briefing_continuidade_isola_por_agente(seed_session, test_user):
+    from app.agente.services import intersession_briefing
+    seed_session('web', 'r', tarefas=['CONTINUE_TAREFA_WEB_UNICA'])
+    seed_session('lojas', 'r', tarefas=['CONTINUE_TAREFA_LOJA_UNICA'])
+
+    brief_web = intersession_briefing.build_intersession_briefing(
+        test_user.id, agente_id='web') or ''
+    brief_lojas = intersession_briefing.build_intersession_briefing(
+        test_user.id, agente_id='lojas') or ''
+
+    assert 'CONTINUE_TAREFA_WEB_UNICA' in brief_web
+    assert 'CONTINUE_TAREFA_WEB_UNICA' not in brief_lojas, "continuidade 'web' vazou p/ briefing 'lojas'"
+    assert 'CONTINUE_TAREFA_LOJA_UNICA' in brief_lojas
+    assert 'CONTINUE_TAREFA_LOJA_UNICA' not in brief_web, "continuidade 'lojas' vazou p/ briefing 'web'"
