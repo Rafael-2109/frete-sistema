@@ -33,6 +33,7 @@ def api_list_sessions():
             search_term = f'%{safe_query}%'
             sessions = AgentSession.query.filter(
                 AgentSession.user_id == current_user.id,
+                AgentSession.agente == 'web',  # M3: rota web nao lista sessoes 'lojas'
                 db.or_(
                     AgentSession.title.ilike(search_term, escape='\\'),
                     AgentSession.last_message.ilike(search_term, escape='\\'),
@@ -44,6 +45,7 @@ def api_list_sessions():
             sessions = AgentSession.list_for_user(
                 user_id=current_user.id,
                 limit=limit,
+                agente='web',  # M3: isola a listagem do agente web
             )
 
         return jsonify({
@@ -96,6 +98,7 @@ def api_get_session_messages(session_id: str):
         session = AgentSession.query.filter_by(
             session_id=session_id,
             user_id=current_user.id,
+            agente='web',  # M3: rota web nao acessa sessao 'lojas' (usuario dual)
         ).first()
 
         if not session:
@@ -152,6 +155,7 @@ def api_delete_session(session_db_id: int):
         session = AgentSession.query.filter_by(
             id=session_db_id,
             user_id=current_user.id,
+            agente='web',  # M3: rota web nao deleta sessao 'lojas' (usuario dual)
         ).first()
 
         if not session:
@@ -223,6 +227,7 @@ def api_rename_session(session_db_id: int):
         session = AgentSession.query.filter_by(
             id=session_db_id,
             user_id=current_user.id,
+            agente='web',  # M3: rota web nao renomeia sessao 'lojas' (usuario dual)
         ).first()
 
         if not session:
@@ -285,6 +290,7 @@ def api_list_session_summaries():
 
         sessions = AgentSession.query.filter(
             AgentSession.user_id == current_user.id,
+            AgentSession.agente == 'web',  # M3: rota web nao lista resumos 'lojas'
             AgentSession.summary.isnot(None),
         ).order_by(
             AgentSession.updated_at.desc(),
@@ -355,6 +361,7 @@ def api_fork_session(session_id: str):
         parent = AgentSession.query.filter_by(
             session_id=session_id,
             user_id=current_user.id,
+            agente='web',  # M3: fork de sessao web nao herda sessao 'lojas'
         ).first()
         if not parent:
             return jsonify({

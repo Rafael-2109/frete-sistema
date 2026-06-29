@@ -441,19 +441,25 @@ class AgentSession(db.Model):
         return cls.query.filter_by(session_id=session_id).first()
 
     @classmethod
-    def list_for_user(cls, user_id: int, limit: int = 20) -> List['AgentSession']:
+    def list_for_user(cls, user_id: int, limit: int = 20,
+                      agente: str = None) -> List['AgentSession']:
         """
         Lista sessões de um usuário.
 
         Args:
             user_id: ID do usuário
             limit: Máximo de sessões
+            agente: se informado ('web'|'lojas'), isola por agente — a tela do
+                agente web não mistura sessões 'lojas' (M3/F2 Fase 1). None =
+                legado (todas). As rotas /agente/* passam 'web'.
 
         Returns:
             Lista de sessões ordenadas por updated_at DESC
         """
-        return cls.query.filter_by(user_id=user_id)\
-            .order_by(cls.updated_at.desc())\
+        q = cls.query.filter_by(user_id=user_id)
+        if agente is not None:
+            q = q.filter(cls.agente == agente)
+        return q.order_by(cls.updated_at.desc())\
             .limit(limit)\
             .all()
 
