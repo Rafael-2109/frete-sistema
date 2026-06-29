@@ -58,6 +58,92 @@ def _sse(event_type: str, payload: dict) -> str:
     return f"event: {event_type}\ndata: {json.dumps(payload, default=str)}\n\n"
 
 
+def _motor_event_to_sse(event, state: dict) -> Optional[str]:
+    """Converte um StreamEvent do motor web (app/agente/sdk) no SSE que o
+    frontend lojas espera — mesmo SHAPE que o fork `_drain_async_gen` produzia.
+
+    CUTOVER E3.8b passo 3: o frontend (templates/agente_lojas/chat.html) trata
+    text/thinking/tool_call/tool_result/todos/task_event/error/init/done. Os
+    campos DIVERGEM do agente web: `tool_call` usa tool_name+tool_input e
+    `tool_result` usa content+is_error (o motor web serializa tool_result como
+    {tool_name, result}). Por isso espelhamos o FORK, nao a serializacao do web.
+
+    Efeito colateral: acumula em `state` o assistant_text (persistencia), o
+    sdk_session_id (resume) e o final_metadata (custo/tokens). Retorna None para
+    eventos que o frontend lojas NAO consome (nao vira SSE).
+    """
+    etype = event.type
+    meta = event.metadata or {}
+    content = event.content
+
+    if etype == 'init':
+        sid = content.get('session_id') if isinstance(content, dict) else None
+        if sid and sid != 'pending':
+            state['sdk_session_id'] = sid
+        return _sse('init', {'sdk_session_id': sid})
+
+    if etype == 'text':
+        state['assistant_text'] = (state.get('assistant_text') or '') + (content or '')
+        return _sse('text', {'content': content})
+
+    if etype == 'thinking':
+        return _sse('thinking', {'content': content})
+
+    if etype == 'tool_call':
+        # Motor: content=tool_name, metadata['input']=tool_input.
+        return _sse('tool_call', {
+            'content': '',
+            'tool_name': content,
+            'tool_id': meta.get('tool_id'),
+            'tool_input': meta.get('input'),
+        })
+
+    if etype == 'tool_result':
+        # Motor: content=result, metadata['is_error']. Frontend lojas le
+        # payload.content + payload.is_error.
+        return _sse('tool_result', {
+            'content': str(content if content is not None else ''),
+            'tool_use_id': meta.get('tool_use_id'),
+            'is_error': bool(meta.get('is_error', False)),
+        })
+
+    if etype == 'todos':
+        todos = (content or {}).get('todos', []) if isinstance(content, dict) else []
+        if todos:
+            return _sse('todos', {'todos': todos})
+        return None
+
+    if etype == 'task_event':
+        # Motor: content = dict {action, task_id?, subject?, tasks?, status?}.
+        if isinstance(content, dict) and content.get('action'):
+            return _sse('task_event', content)
+        return None
+
+    if etype == 'done':
+        c = content if isinstance(content, dict) else {}
+        sdk_sid = c.get('session_id')
+        if sdk_sid and sdk_sid != 'pending':
+            state['sdk_session_id'] = sdk_sid
+        final_meta = {
+            'total_cost_usd': c.get('total_cost_usd', 0),
+            'input_tokens': c.get('input_tokens', 0),
+            'output_tokens': c.get('output_tokens', 0),
+        }
+        state['final_metadata'] = final_meta
+        return _sse('done', final_meta)
+
+    if etype == 'error':
+        payload = {'content': content}
+        if meta.get('error_type'):
+            payload['error_type'] = meta['error_type']
+        return _sse('error', payload)
+
+    # Tipos do motor web que o frontend lojas NAO consome (warning/queued/
+    # task_started/task_progress/task_notification/rate_limit/stderr/
+    # subagent_summary/interrupt_ack): nao emitir SSE.
+    return None
+
+
 @agente_lojas_bp.route('/', methods=['GET'])
 @require_acesso_agente_lojas
 def pagina_chat():
