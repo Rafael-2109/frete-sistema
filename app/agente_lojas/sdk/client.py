@@ -25,7 +25,6 @@ Pendente (M3):
     - Memoria injection (cross-agente contaminante; em M3)
     - Cost tracking granular por subagente (em M3)
 """
-import dataclasses
 import logging
 import os
 from typing import AsyncGenerator, Optional, Dict, Any
@@ -99,26 +98,10 @@ ALLOWED_TOOLS_M1 = [
 ]
 
 
-def _check_skills_option() -> bool:
-    """Verifica se ClaudeAgentOptions tem campo `skills` nativo (SDK 0.1.77+).
-
-    SDK 0.1.77 deprecou "Skill" em allowed_tools em favor da option
-    `skills: list[str] | Literal["all"] | None` em ClaudeAgentOptions.
-    Quando set, SDK auto-configura "Skill" em allowed_tools E
-    setting_sources, alem de filtrar o listing do model.
-
-    Returns:
-        True se SDK >= 0.1.77 (campo skills presente), False caso contrario.
-    """
-    try:
-        fields = {f.name for f in dataclasses.fields(ClaudeAgentOptions)}
-        return 'skills' in fields
-    except Exception:
-        return False
-
-
-# Detectado uma vez no import — zero overhead por request
-_SDK_HAS_SKILLS_OPTION = _check_skills_option()
+# Deteccao do campo `skills` (SDK 0.1.77+) — modulo compartilhado sdk_compat
+# (mesma logica do agente web). Alias preserva o nome local usado em
+# build_options (:222, :266). Import de submodulo (sem circular).
+from app.agente.sdk.sdk_compat import SDK_HAS_SKILLS_OPTION as _SDK_HAS_SKILLS_OPTION
 
 
 # =============================================================================

@@ -65,20 +65,9 @@ except ImportError:
 
 
 # SDK 0.1.77+: option `skills` em ClaudeAgentOptions deprecou "Skill" em
-# allowed_tools. Quando set, SDK auto-configura "Skill" em allowed_tools E
-# setting_sources, alem de filtrar o listing do model. Detectado uma vez no
-# import (zero overhead por request).
-def _check_options_skills_field() -> bool:
-    """Retorna True se ClaudeAgentOptions tem campo `skills` nativo (SDK 0.1.77+)."""
-    try:
-        import dataclasses
-        fields = {f.name for f in dataclasses.fields(ClaudeAgentOptions)}
-        return 'skills' in fields
-    except Exception:
-        return False
-
-
-_SDK_HAS_OPTIONS_SKILLS = _check_options_skills_field()
+# allowed_tools. Deteccao no modulo compartilhado sdk_compat (tambem usado pelo
+# agente_lojas). Alias preserva o nome local nos call sites (ex: :1646).
+from app.agente.sdk.sdk_compat import SDK_HAS_SKILLS_OPTION as _SDK_HAS_OPTIONS_SKILLS
 
 
 @lru_cache(maxsize=1)
