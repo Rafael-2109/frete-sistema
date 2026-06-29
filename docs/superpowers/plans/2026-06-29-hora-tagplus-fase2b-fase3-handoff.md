@@ -12,6 +12,35 @@ atualizado: 2026-06-29
 
 > **Spec (SOT do design):** `docs/superpowers/specs/2026-06-29-hora-tagplus-sync-bidirecional-design.md`.
 
+## Progresso (2026-06-29 — sessão de execução, commit LOCAL, flag OFF, sem push)
+
+**Pré-requisitos confirmados AO VIVO (testes controlados cria+apaga, zero resíduo):**
+- **#1 `write:pedidos` → ✅ JÁ EFETIVO** (POST /pedidos = 201, pedido 1220/nº966 criado e deletado). `scope_efetivo=null` é falso-negativo (TagPlus não devolve scope no refresh). **NÃO precisa reauth OAuth.**
+- **Contrato `POST /pedidos` mapeado:** `itens[].produto_servico` (= /nfes), `cliente`=id_cliente (≠ id_entidade), `departamento`/`vendedor` int opcionais.
+- **#2 `?numero=` ✅** (já era). **#3 `DELETE` sem-NFe ✅** comprovado; com-NFe pendente. **#1-`to_nfe`-SEFAZ ⛔** não testável sem emitir NF (gate de LIGAR a flag, não de codar).
+
+**Fase 2b — IMPLEMENTADA (flag OFF, 23 testes em `tests/hora/test_pedido_sync_fase2b.py`):**
+- `PayloadBuilder.resolver_id_cliente` + `montar_corpo_pedido(estrito)` + `_ultimo_id_cliente` (reusa `_montar_itens`/`_montar_faturas`).
+- `pedido_sync_service`: `montar_payload_pedido(builder=)`, `criar_pedido(builder=)`, helpers `push_criar_pedido`/`push_atualizar_status`/`push_cancelar` (pós-commit, tolerantes, idempotentes).
+- `venda_service`: 4 wirings (`criar_venda_manual`, `salvar_pedido_completo`, `confirmar_venda`, `cancelar_venda`).
+- `emissor_nfe._enviar_nfe`: `to_nfe` (PATCH corpo estrito + status B → GET /pedidos/to_nfe) quando flag ON + `tagplus_pedido_id`; senão `POST /nfes` (intacto).
+
+**Fase 3 — MOTOR DE DESCOBERTA IMPLEMENTADO (10 testes em `tests/hora/test_pedido_sync_fase3.py`):**
+- Migration `hora_63` (cursor `ultimo_pedido_numero_reconciliado`) — **aplicada LOCAL; FALTA aplicar em PROD.**
+- `pedido_service.busca_pedido_por_numero`; `pedido_reverso_service`: `_maior_numero_conhecido`, `pedido_e_nosso` (anti-loop+idempotência), `_varrer` (numero-walk +3), `numero_walk` (persiste cursor).
+
+**PENDENTE (próxima sessão):**
+1. **Fase 3 replicação**: `replicar(pedido)` → cria `HoraVenda` INCOMPLETO (`origem_criacao='TAGPLUS'`) — **decisão de modelagem:** `HoraVendaItem.numero_chassi` é NOT NULL, então itens-por-modelo não viram `HoraVendaItem`; criar só o header + registrar `HoraVendaDivergencia` "aguardando chassi" com modelos/qtds esperados.
+2. **UI de vínculo de chassi** (operador) + **cron** numero-walk (padrão `reconciliacao_worker`).
+3. **Go-live**: aplicar `hora_63` em PROD; validar `to_nfe` (#2 SEFAZ) e cancelar-com-NFe (#3) com o TagPlus; **ligar `HORA_TAGPLUS_PUSH_PEDIDO=1`** (só com 2b inteira — senão duplica pedido).
+4. **Push do commit** (aval do dono — dispara deploy).
+
+**Riscos residuais conhecidos (v1, todos no caminho flag ON — review adversarial 2026-06-29):**
+- **Schema da resposta do `GET /pedidos/to_nfe/{id}`** é assumido igual ao `POST /nfes` (`body['id']/['numero']/['serie']`). Se divergir, `tagplus_nfe_id` fica `None` e o polling/reconciliação/webhook não acham a NFe (emissão presa em `ENVIADA_SEFAZ`). **Go-live:** logar o body bruto do `to_nfe` na 1ª emissão real e mapear os campos antes de confiar.
+- **Não-atomicidade `POST /pedidos` + commit local**: se o commit falhar logo após o POST ter sucesso, a venda perde o `tagplus_pedido_id` (rollback) e um retry pode duplicar o pedido no TagPlus (`codigo_externo` não é UNIQUE lá, e o numero-walk trata o órfão como "nosso" → não reconcilia). Janela pequena; mitigação futura: reconciliador que busca pedidos por `codigo_externo` de vendas sem `tagplus_pedido_id`.
+- **TOCTOU** em `push_criar_pedido` (check de `tagplus_pedido_id` sem `SELECT FOR UPDATE`): 2 requests concorrentes na MESMA venda poderiam criar 2 pedidos. Raro (criar/confirmar/cancelar concorrentes da mesma venda); mitigação futura: lock pessimista na venda.
+- **Fixes já aplicados nesta sessão** (com testes): PATCH do pedido validado antes do `to_nfe`; `PayloadBuilderError` do `_enviar_nfe` → `REJEITADA_LOCAL`; `montar_corpo_pedido(estrito)` exige cliente; `push_criar_pedido` no-op para FATURADO/CANCELADO; `resolver_id_cliente` trata CPF ambíguo; warning em `POST /pedidos` 2xx sem id.
+
 ## Indice
 
 - [Estado atual (o que já está pronto)](#estado-atual-o-que-ja-esta-pronto)

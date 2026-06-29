@@ -81,6 +81,33 @@ def importar_pedido(api: ApiClient, pedido_id: int) -> dict:
         )
 
 
+def busca_pedido_por_numero(api: ApiClient, numero: int) -> Optional[dict]:
+    """GET /pedidos?numero={numero} -> 1o pedido (dict) ou None.
+
+    Filtro EXATO por numero visivel (verificacao #2 confirmada ao vivo
+    2026-06-29: `?numero=` retorna 200 + lista com 0/1 item; `numero[eq]`->422).
+    Usado pelo numero-walk (Fase 3, descoberta reversa). Tolerante: erros HTTP
+    ou corpo inesperado -> None (o walk apenas trata como ausencia).
+    """
+    try:
+        r = api.get('/pedidos', params={'numero': numero})
+    except Exception as exc:
+        logger.warning('busca_pedido_por_numero(%s) falhou: %s', numero, exc)
+        return None
+    if r.status_code != 200:
+        logger.warning('GET /pedidos?numero=%s status=%s', numero, r.status_code)
+        return None
+    try:
+        body = r.json()
+    except ValueError:
+        return None
+    if isinstance(body, dict):
+        body = body.get('data') or body.get('pedidos') or body.get('results') or []
+    if isinstance(body, list) and body and isinstance(body[0], dict):
+        return body[0]
+    return None
+
+
 def extrair_vendedor_nome(pedido: dict) -> Optional[str]:
     """vendedor.nome -> string ou None.
 

@@ -1108,6 +1108,12 @@ def criar_venda_manual(
     )
 
     db.session.commit()
+
+    # Push pos-commit do pedido p/ TagPlus (Fase 2b — atras da flag
+    # HORA_TAGPLUS_PUSH_PEDIDO, tolerante a falha: NUNCA trava a venda local).
+    from app.hora.services.tagplus import pedido_sync_service
+    pedido_sync_service.push_criar_pedido(venda)
+
     return venda
 
 
@@ -1185,6 +1191,10 @@ def confirmar_venda(venda_id: int, usuario: Optional[str] = None) -> HoraVenda:
         _logging.getLogger(__name__).exception(
             'Falha ao enfileirar notificacao WhatsApp pedido (venda=%s)', venda.id,
         )
+
+    # Espelha a confirmacao no pedido TagPlus (PATCH status=B) — Fase 2b, flag, tolerante.
+    from app.hora.services.tagplus import pedido_sync_service
+    pedido_sync_service.push_atualizar_status(venda)
 
     return venda
 
@@ -1838,6 +1848,12 @@ def salvar_pedido_completo(
         venda.status = novo_status
 
     db.session.commit()
+
+    # Push pos-commit (idempotente: no-op se ja tem tagplus_pedido_id) — cobre
+    # vendas criadas antes da flag ligar. Fase 2b, atras da flag, tolerante.
+    from app.hora.services.tagplus import pedido_sync_service
+    pedido_sync_service.push_criar_pedido(venda)
+
     return venda
 
 
@@ -2160,6 +2176,11 @@ def cancelar_venda(
     )
 
     db.session.commit()
+
+    # Espelha o cancelamento no pedido TagPlus (PATCH status=C) — Fase 2b, flag, tolerante.
+    from app.hora.services.tagplus import pedido_sync_service
+    pedido_sync_service.push_cancelar(venda)
+
     return venda
 
 

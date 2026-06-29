@@ -11,7 +11,9 @@ atualizado: 2026-06-29
 
 > **Papel:** spec/design da sincronização de pedidos de venda entre o módulo HORA e o TagPlus (criação, cancelamento, numeração e replicação reversa). Lido antes de executar os planos `docs/superpowers/plans/2026-06-29-hora-tagplus-sync-*`.
 >
-> **Status (2026-06-29):** **Fase 1 (numeração) + Fase 2a (push, flag-OFF) DEPLOYADAS** (commit `5027048c7` na `main`/PROD). Migration `hora_62` + backfill de **885 vendas** já no banco de PROD (0 divergências); 413 testes HORA verdes. Verificações **#2 e #4 resolvidas**; `scope_contratado` de PROD já com `write:pedidos` (**escopo efetivo a confirmar** no início da 2b — token parece refresh, não authorize fresco). **Fase 2b** (to_nfe + wiring + cancelamento, gated por #1/#3) e **Fase 3** (numero-walk, #2 ok) pendentes — **handoff:** `docs/superpowers/plans/2026-06-29-hora-tagplus-fase2b-fase3-handoff.md`. Sessão 4-mãos Claude Code (dev).
+> **Status (2026-06-29):** **Fase 1 + Fase 2a DEPLOYADAS** (commit `5027048c7`, PROD). **Fase 2b IMPLEMENTADA (flag-OFF, NÃO deployada — commit local)**: payload completo de pedido (reusa `PayloadBuilder`), `criar/atualizar/cancelar` wired nos 4 pontos do `venda_service`, emissão via `to_nfe` condicional (`emissor_nfe._enviar_nfe`) — tudo atrás de `HORA_TAGPLUS_PUSH_PEDIDO` (default OFF, `POST /nfes` intacto). **Fase 3 motor de descoberta IMPLEMENTADO**: migration `hora_63` (cursor) + `busca_pedido_por_numero` + `numero_walk` (anti-loop/idempotência). **446 testes HORA verdes** (33 novos). Verificações **#1 (write:pedidos)/#2/contrato `/pedidos` resolvidos AO VIVO**; **#1-to_nfe e #3-cancelar-com-NFe** são gate de **ligar a flag** (não de escrever o código). **Pendente:** replicação reversa (criar `HoraVenda` INCOMPLETO) + UI de vínculo de chassi + cron; validação `to_nfe` no go-live. **Handoff:** `docs/superpowers/plans/2026-06-29-hora-tagplus-fase2b-fase3-handoff.md`. Sessão 4-mãos Claude Code (dev).
+>
+> ⚠️ **Nuance de go-live (descoberta nesta sessão):** ligar a flag **só com a 2b inteira** (push + `to_nfe`). Ligar o push **sem** o `to_nfe` faria o `POST /nfes` auto-criar um 2º pedido → **duplicação**. Por isso a flag fica OFF até o dono validar o `to_nfe` com o TagPlus.
 
 ## Indice
 
@@ -183,10 +185,16 @@ Após cada migration que altera `hora_venda`, **regenerar** `.claude/skills/cons
 
 (TagPlus **não tem ambiente de homologação** — escrita é produção; `models/tagplus.py:47-49`. Verificar com leitura/dry-run.)
 
-1. ⛔ **PENDENTE — `GET /pedidos/to_nfe/{id}` transmite à SEFAZ?** Ou gera rascunho? Aceita `X-Enviar-Nota`/`X-Calculo-Trib-Automatico`? **Não testável sem emitir NF real** (sem homologação) — confirmar com TagPlus ou teste controlado. **Gate da Fase 2b.**
-2. ✅ **RESOLVIDO (2026-06-29):** `GET /pedidos?numero={n}` filtra por número **exato** (200 + 1 item; testado ao vivo com numero=942). `numero[eq]`→422; `q`→busca fuzzy. É o parâmetro de `busca_pedido_por_numero` (numero-walk, Fase 3).
-3. ⛔ **PENDENTE — `PATCH status=C` vs `DELETE`** com NFe emitida vinculada — não testável sem alterar pedido real; confirmar com TagPlus. **Default adotado:** `PATCH status=C` (preserva registro). **Gate do cancelamento, Fase 2b.**
-4. ⚠️ **RESOLVIDO (2026-06-29):** o token de PROD tem `read:pedidos` mas **NÃO** `write:pedidos` (`scope_contratado` = `write:nfes read:clientes write:clientes read:produtos read:formas_pagamento read:pedidos read:vendas`). Push real (`POST/PATCH/DELETE /pedidos`) dará **401** até **reautorizar o OAuth** com `write:pedidos` (refresh não re-emite scope). O default do modelo já inclui `write:pedidos`; a **conta de PROD precisa do scope + reauth** (ação do admin).
+1. ⛔ **PENDENTE — `GET /pedidos/to_nfe/{id}` transmite à SEFAZ?** Ou gera rascunho? Aceita `X-Enviar-Nota`/`X-Calculo-Trib-Automatico`? **Não testável sem emitir NF real** (sem homologação) — confirmar com TagPlus ou go-live controlado. **Gate de LIGAR a flag** (o código da Fase 2b já está pronto atrás da flag OFF, usando esses headers como melhor aposta).
+2. ✅ **RESOLVIDO (2026-06-29):** `GET /pedidos?numero={n}` filtra por número **exato** (200 + 1 item; testado ao vivo com numero=942). `numero[eq]`→422; `q`→busca fuzzy. É o parâmetro de `busca_pedido_por_numero` (numero-walk, Fase 3 — implementado).
+3. 🟡 **PARCIAL (2026-06-29):** `DELETE /pedidos/{id}` funciona em pedido **sem NFe** (comprovado ao vivo: criou+apagou pedido de teste, `{"message":"Deletado com sucesso"}`). Comportamento **com NFe vinculada** ainda não testado (precisa de NF emitida). **Default adotado:** `PATCH status=C` (preserva registro). **Gate do cancelamento com-NFe.**
+4. ✅ **RESOLVIDO AO VIVO (2026-06-29):** `write:pedidos` **JÁ está efetivo** no token de PROD — `POST /pedidos` retornou **201** (pedido 1220/nº966, criado e deletado no teste controlado). O `scope_efetivo=null` no banco é **falso-negativo** (o TagPlus não devolve `scope` no refresh response, então o campo nunca foi populado), **não** prova de escopo ausente. **NÃO é preciso reautorizar OAuth.**
+
+**Contrato `POST /pedidos` confirmado ao vivo (2026-06-29, testes controlados cria+apaga):**
+- `itens[]` usa **`produto_servico`** (igual `/nfes`); `produto` → 422 "Campo adicional não permitido".
+- `cliente` = **id_cliente** (id-space REST), **não** `id_entidade` (que é o do `destinatario` do `/nfes`).
+- `departamento`/`vendedor` = `int` (id), **opcionais** (omitidos no v1 — HORA não tem mapa loja→departamento_id; rastreio fiscal já vai no `inf_contribuinte`).
+- `faturas[]` = `forma_pagamento`+`parcelas` (igual `/nfes`). → permite **reusar `PayloadBuilder._montar_itens`/`_montar_faturas`**.
 
 ## Edge cases e riscos
 

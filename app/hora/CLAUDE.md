@@ -55,6 +55,7 @@ atualizado: 2026-06-29
 - [38. Avaria torna a moto NÃO-VENDÁVEL — 2026-06-28](#38-avaria-torna-a-moto-não-vendável--2026-06-28)
 - [39. Filtro multi-status na listagem de Pedidos de Venda — 2026-06-29](#39-filtro-multi-status-na-listagem-de-pedidos-de-venda--2026-06-29)
 - [40. Número visível do pedido TagPlus (`tagplus_pedido_numero`) — 2026-06-29](#40-número-visível-do-pedido-tagplus-tagplus_pedido_numero--2026-06-29)
+- [41. Push de pedido HORA→TagPlus (Fase 2b) + descoberta reversa (Fase 3 motor) — 2026-06-29](#41-push-de-pedido-horatagplus-fase-2b--descoberta-reversa-fase-3-motor--2026-06-29)
 - [Onboarding Tours (2026-05-08)](#onboarding-tours-2026-05-08)
 - [Referências](#referências)
 
@@ -1698,6 +1699,34 @@ tinham `tagplus_pedido_payload`) via UPDATE set-based `(payload->>'numero')::int
 O **código** está em `main` local (deploy pendente): a captura via webhook/backfill só passa a
 valer após o deploy. **Pendente (Fases 2/3 do design):** push HORA→TagPlus (criar/confirmar/cancelar
 pedido) e replicação reversa numero-walk.
+
+---
+
+## 41. Push de pedido HORA→TagPlus (Fase 2b) + descoberta reversa (Fase 3 motor) — 2026-06-29
+
+Fases 2b e 3 do design HORA↔TagPlus, **atrás da flag `HORA_TAGPLUS_PUSH_PEDIDO` (default OFF)** —
+commit LOCAL, **não deployado**. Pré-requisitos confirmados **ao vivo** (testes controlados
+cria+apaga no TagPlus de PROD, zero resíduo): `write:pedidos` **já efetivo** (POST /pedidos=201;
+`scope_efetivo=null` é falso-negativo, **não** precisa reauth); contrato `POST /pedidos`
+mapeado — `itens[].produto_servico` e `faturas[]` iguais ao `/nfes`, `cliente`=**id_cliente**
+(≠ `id_entidade` do `destinatario`), `departamento`/`vendedor` int opcionais (omitidos no v1).
+
+**Fase 2b (push, flag OFF):**
+- `PayloadBuilder.resolver_id_cliente` (GET /clientes→id_cliente, best-effort) + `montar_corpo_pedido(venda, estrito)` (reusa `_montar_itens`/`_montar_faturas`; tolerante na criação, estrito antes do `to_nfe`) + `_ultimo_id_cliente` (exposto em `_resolver_destinatario`).
+- `pedido_sync_service`: `montar_payload_pedido(builder=)`/`criar_pedido(builder=)` mesclam o corpo completo; helpers **pós-commit, tolerantes, idempotentes** `push_criar_pedido`/`push_atualizar_status`/`push_cancelar` (no-op se flag OFF; nunca travam a venda local).
+- `venda_service`: 4 wirings — `criar_venda_manual`+`salvar_pedido_completo`→`push_criar_pedido`; `confirmar_venda`→`push_atualizar_status`; `cancelar_venda`→`push_cancelar`.
+- `emissor_nfe._enviar_nfe`: com flag ON + `tagplus_pedido_id`, PATCH /pedidos (corpo estrito+status B) → `GET /pedidos/to_nfe/{id}` (evita pedido duplicado); senão `POST /nfes` **inalterado** (zero regressão com flag OFF).
+
+**Fase 3 (motor de descoberta):** migration `hora_63` (`hora_tagplus_conta.ultimo_pedido_numero_reconciliado` — cursor; aplicada LOCAL, **falta PROD**); `pedido_service.busca_pedido_por_numero` (GET /pedidos?numero=n); `pedido_reverso_service` (`pedido_e_nosso` anti-loop+idempotência, `_varrer` numero-walk +3, `numero_walk` persiste cursor).
+
+**Testes:** `tests/hora/test_pedido_sync_fase2b.py` (23) + `test_pedido_sync_fase3.py` (10) — 446 testes HORA verdes.
+
+**⚠️ Go-live (gate do dono):** ligar a flag **só com a 2b inteira** — ligar o push sem o `to_nfe`
+faria o `POST /nfes` auto-criar um 2º pedido (duplicação). Validar `to_nfe` (transmite SEFAZ?) e
+cancelar-com-NFe (#3) com o TagPlus antes. **Pendente:** replicação reversa (criar `HoraVenda`
+INCOMPLETO — `HoraVendaItem.numero_chassi` é NOT NULL, então item-por-modelo vira divergência
+"aguardando chassi", não `HoraVendaItem`), UI de vínculo de chassi, cron. Handoff:
+`docs/superpowers/plans/2026-06-29-hora-tagplus-fase2b-fase3-handoff.md`.
 
 ---
 

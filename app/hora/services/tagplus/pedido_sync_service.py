@@ -57,31 +57,37 @@ def push_habilitado() -> bool:
     return os.environ.get('HORA_TAGPLUS_PUSH_PEDIDO', '0') in ('1', 'true', 'True')
 
 
-def montar_payload_pedido(venda) -> dict:
-    """HoraVenda -> corpo do POST /pedidos (campos de IDENTIDADE + status).
+def montar_payload_pedido(venda, builder=None) -> dict:
+    """HoraVenda -> corpo do POST /pedidos.
 
-    NAO inclui itens/cliente/faturas — isso entra na Fase 2b (wiring + to_nfe),
-    reusando o mapeamento de produto/cliente do PayloadBuilder. O contrato
-    TagPlus aceita pedido sem produtos ("corpo vazio"). `codigo_externo` e o
-    elo com a venda (anti-loop na replicacao reversa).
+    Sempre inclui IDENTIDADE (`codigo_externo` = elo com a venda p/ anti-loop,
+    `status` A/B/C, `integracao`). Quando `builder` (PayloadBuilder) e' passado,
+    mescla o CORPO FISCAL completo (cliente/itens/faturas/valores) em modo
+    TOLERANTE (Fase 2b) — campos que nao resolvem sao omitidos. Sem builder,
+    devolve so a identidade (compat Fase 2a / pedido "corpo vazio").
     """
     payload = {
         'codigo_externo': str(venda.id),
         'status': mapear_status(venda.status),
         'integracao': INTEGRACAO_TAG,
     }
+    if builder is not None:
+        payload.update(builder.montar_corpo_pedido(venda, estrito=False))
     if getattr(venda, 'observacoes', None):
         payload['observacoes'] = venda.observacoes
     return payload
 
 
-def criar_pedido(api, venda, *, dry_run: bool = True) -> dict:
+def criar_pedido(api, venda, *, dry_run: bool = True, builder=None) -> dict:
     """POST /pedidos. dry_run (default) ou flag OFF NAO chamam a API.
+
+    `builder` (PayloadBuilder) opcional: quando presente, o payload leva o corpo
+    fiscal completo (cliente/itens/faturas) alem da identidade (Fase 2b).
 
     Retorna {'dry_run', 'payload', 'tagplus_pedido_id', 'tagplus_pedido_numero',
              'status_code'}.
     """
-    payload = montar_payload_pedido(venda)
+    payload = montar_payload_pedido(venda, builder=builder)
     if dry_run or not push_habilitado():
         return {
             'dry_run': True, 'payload': payload,
@@ -92,9 +98,18 @@ def criar_pedido(api, venda, *, dry_run: bool = True) -> dict:
     body = r.json() if r.status_code in (200, 201) else {}
     if not isinstance(body, dict):
         body = {}
+    pedido_id = body.get('id')
+    if r.status_code in (200, 201) and not pedido_id:
+        # 2xx sem id deixaria tagplus_pedido_id NULL e abriria espaco p/
+        # duplicar num retry — logar para visibilidade operacional.
+        logger.warning(
+            'POST /pedidos retornou %s SEM id no body (venda=%s) — '
+            'tagplus_pedido_id ficara NULL. Body: %s',
+            r.status_code, getattr(venda, 'id', None), str(body)[:300],
+        )
     return {
         'dry_run': False, 'payload': payload,
-        'tagplus_pedido_id': body.get('id'),
+        'tagplus_pedido_id': pedido_id,
         'tagplus_pedido_numero': body.get('numero'),
         'status_code': r.status_code,
     }
@@ -117,3 +132,97 @@ def cancelar_pedido(api, tagplus_pedido_id: int, *, dry_run: bool = True) -> dic
     e PATCH status=C por ser reversivel e preservar historico.
     """
     return atualizar_status_pedido(api, tagplus_pedido_id, TP_STATUS_CANCELADO, dry_run=dry_run)
+
+
+# --------------------------------------------------------------------
+# Wiring de alto nivel (chamado POS-COMMIT pelos pontos de transicao do
+# venda_service). Regras invioláveis:
+#   - No-op silencioso se a flag HORA_TAGPLUS_PUSH_PEDIDO estiver OFF.
+#   - TOLERANTE a falha: NUNCA levanta — uma falha de rede/TagPlus jamais
+#     pode travar/reverter a venda local (que ja foi commitada). O scheduler
+#     reverso (Fase 3) reconcilia o que faltar.
+# --------------------------------------------------------------------
+# Status da venda em que faz sentido CRIAR o pedido no TagPlus (push). FATURADO
+# ja tem NF (criar = pedido orfao desvinculado da NF original); CANCELADO nao
+# deve nascer como pedido. So' estes 3 disparam POST /pedidos.
+_STATUS_PERMITE_CRIAR = (
+    VENDA_STATUS_INCOMPLETO, VENDA_STATUS_COTACAO, VENDA_STATUS_CONFIRMADO,
+)
+
+
+def _conta_builder():
+    """(conta ativa, PayloadBuilder). Isolado p/ mock em teste."""
+    from app.hora.models.tagplus import HoraTagPlusConta
+    from app.hora.services.tagplus.payload_builder import PayloadBuilder
+    conta = HoraTagPlusConta.ativa()
+    return conta, PayloadBuilder(conta)
+
+
+def push_criar_pedido(venda):
+    """POST /pedidos pos-commit; grava tagplus_pedido_id + tagplus_pedido_numero.
+
+    Idempotente: no-op se a venda ja tem `tagplus_pedido_id` (evita duplicar).
+    No-op tambem se o status nao permite criar (FATURADO ja tem NF; CANCELADO).
+    """
+    if not push_habilitado():
+        return None
+    if getattr(venda, 'status', None) not in _STATUS_PERMITE_CRIAR:
+        return None
+    from app import db
+    try:
+        if getattr(venda, 'tagplus_pedido_id', None):
+            return None
+        _conta, builder = _conta_builder()
+        res = criar_pedido(builder.api, venda, dry_run=False, builder=builder)
+        if res and res.get('tagplus_pedido_id'):
+            venda.tagplus_pedido_id = res['tagplus_pedido_id']
+            if res.get('tagplus_pedido_numero') is not None:
+                venda.tagplus_pedido_numero = res['tagplus_pedido_numero']
+            db.session.commit()
+        return res
+    except Exception as exc:
+        logger.exception(
+            'push_criar_pedido venda=%s falhou (tolerante, venda local preservada): %s',
+            getattr(venda, 'id', None), exc,
+        )
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        return None
+
+
+def push_atualizar_status(venda):
+    """PATCH /pedidos/{id} status = mapear_status(venda.status). No-op sem pedido."""
+    if not push_habilitado():
+        return None
+    try:
+        pid = getattr(venda, 'tagplus_pedido_id', None)
+        if not pid:
+            return None
+        _conta, builder = _conta_builder()
+        return atualizar_status_pedido(builder.api, pid, mapear_status(venda.status), dry_run=False)
+    except Exception as exc:
+        logger.exception(
+            'push_atualizar_status venda=%s falhou (tolerante): %s',
+            getattr(venda, 'id', None), exc,
+        )
+        return None
+
+
+def push_cancelar(venda):
+    """Cancela o pedido no TagPlus (PATCH status=C). No-op sem pedido."""
+    if not push_habilitado():
+        return None
+    try:
+        pid = getattr(venda, 'tagplus_pedido_id', None)
+        if not pid:
+            return None
+        _conta, builder = _conta_builder()
+        return cancelar_pedido(builder.api, pid, dry_run=False)
+    except Exception as exc:
+        logger.exception(
+            'push_cancelar venda=%s falhou (tolerante): %s',
+            getattr(venda, 'id', None), exc,
+        )
+        return None

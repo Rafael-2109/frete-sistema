@@ -58,6 +58,11 @@ class HoraTagPlusConta(db.Model):
     redirect_uri = db.Column(db.String(500), nullable=True)
     # Configurado no portal TagPlus; armazenado para conferencia no checklist.
 
+    ultimo_pedido_numero_reconciliado = db.Column(db.Integer, nullable=True)
+    # Cursor do numero-walk +3 (Fase 3 sync HORA<->TagPlus): maior numero de
+    # pedido ja varrido na descoberta reversa. O scheduler retoma daqui.
+    # Migration hora_63 (2026-06-29).
+
     criado_em = db.Column(db.DateTime, nullable=False, default=agora_utc_naive)
     atualizado_em = db.Column(db.DateTime, nullable=True, onupdate=agora_utc_naive)
 

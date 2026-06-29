@@ -41,7 +41,6 @@ from app.hora.models.venda import (
     VENDA_STATUS_FATURADO,
 )
 from app.hora.services import venda_audit
-from app.hora.services.tagplus.api_client import ApiClient
 from app.hora.services.tagplus.payload_builder import PayloadBuilder, PayloadBuilderError
 from app.utils.json_helpers import sanitize_for_json
 from app.utils.timezone import agora_utc_naive
@@ -183,8 +182,9 @@ class EmissorNfeHora:
         conta = emissao.conta
 
         # 1) Build payload (validacao local). Pode levantar PayloadBuilderError.
+        builder = PayloadBuilder(conta)
         try:
-            payload = PayloadBuilder(conta).build(venda)
+            payload = builder.build(venda)
         except PayloadBuilderError as exc:
             db.session.rollback()
             emissao = HoraTagPlusNfeEmissao.query.get(emissao_id)
@@ -208,17 +208,20 @@ class EmissorNfeHora:
         emissao.payload_enviado = sanitize_for_json(payload)
         db.session.commit()
 
-        # 2) POST /nfes.
-        client = ApiClient(conta)
+        # 2) Emissao: to_nfe (a partir do pedido, sem duplicar) quando a flag
+        #    HORA_TAGPLUS_PUSH_PEDIDO esta ON e a venda tem pedido; senao POST /nfes.
+        client = builder.api
         try:
-            response = client.post(
-                '/nfes',
-                json=payload,
-                headers={
-                    'X-Enviar-Nota': 'true',
-                    'X-Calculo-Trib-Automatico': 'true',
-                },
-            )
+            response = cls._enviar_nfe(client, builder, venda, payload)
+        except PayloadBuilderError as exc:
+            # Caminho to_nfe (flag ON): corpo estrito invalido ou PATCH do pedido
+            # rejeitado -> erro de DADOS, nao de infra. Marca REJEITADA_LOCAL
+            # (nao re-tenta) em vez de deixar a emissao presa em EM_ENVIO.
+            emissao.status = NFE_STATUS_REJEITADA_LOCAL
+            emissao.error_code = exc.code
+            emissao.error_message = exc.message
+            db.session.commit()
+            return
         except (ReqConnError, Timeout) as exc:
             emissao.status = NFE_STATUS_ERRO_INFRA
             emissao.error_code = 'rede_timeout'
@@ -269,6 +272,51 @@ class EmissorNfeHora:
             )
 
         db.session.commit()
+
+    # ----------------------------------------------------------
+    # Caminho de emissao (POST /nfes vs to_nfe a partir do pedido)
+    # ----------------------------------------------------------
+    @staticmethod
+    def _enviar_nfe(client, builder, venda, payload):
+        """Decide o caminho de emissao da NFe e devolve a requests.Response.
+
+        - Flag HORA_TAGPLUS_PUSH_PEDIDO ON E `venda.tagplus_pedido_id` presente:
+          emite A PARTIR DO PEDIDO via GET /pedidos/to_nfe/{id} — evita o pedido
+          duplicado que o POST /nfes auto-cria (Fase 2b, spec secao 4). Antes,
+          PATCH /pedidos/{id} com o corpo COMPLETO (estrito) + status=B para a
+          NFe sair consistente com o estado atual da venda (o pedido pode ter
+          sido criado incompleto, ex.: sem faturas, quando a venda nasceu
+          INCOMPLETO).
+        - Senao (DEFAULT, flag OFF): POST /nfes — caminho fiscal vigente,
+          inalterado (zero regressao quando a flag esta desligada).
+
+        GATE (verificacao #1 da spec, NAO resolvida): nao foi confirmado se o
+        `to_nfe` transmite a SEFAZ / aceita X-Enviar-Nota — nao testavel sem
+        emitir NF fiscal real (TagPlus sem homologacao). A flag OFF mantem o
+        POST /nfes ate o dono validar o comportamento e ligar a flag em PROD.
+        Os headers X-Enviar-Nota / X-Calculo-Trib-Automatico sao os mesmos do
+        POST /nfes (melhor aposta a confirmar no go-live).
+        """
+        from app.hora.services.tagplus import pedido_sync_service
+        headers = {'X-Enviar-Nota': 'true', 'X-Calculo-Trib-Automatico': 'true'}
+        pid = getattr(venda, 'tagplus_pedido_id', None)
+        if pedido_sync_service.push_habilitado() and pid:
+            corpo = builder.montar_corpo_pedido(venda, estrito=True)
+            corpo['status'] = 'B'
+            # ApiClient NAO faz raise_for_status: um 4xx/5xx no PATCH passaria
+            # silencioso e o to_nfe emitiria a NFe a partir do pedido NAO
+            # atualizado (status A, sem faturas). Validar antes de emitir.
+            r_patch = client.patch(f'/pedidos/{pid}', json=corpo)
+            if getattr(r_patch, 'status_code', None) not in (200, 201, 202, 204):
+                raise PayloadBuilderError(
+                    'patch_pedido_falhou',
+                    f'PATCH /pedidos/{pid} retornou '
+                    f'{getattr(r_patch, "status_code", "?")}: '
+                    f'{getattr(r_patch, "text", "")[:200]} — to_nfe abortado para '
+                    f'nao emitir NFe de pedido desatualizado.',
+                )
+            return client.get(f'/pedidos/to_nfe/{pid}', extra_headers=headers)
+        return client.post('/nfes', json=payload, headers=headers)
 
     # ----------------------------------------------------------
     # RQ enqueue

@@ -30,7 +30,7 @@
       "name": "scope_contratado",
       "type": "varchar(255)",
       "nullable": false,
-      "default": "write:nfes read:clientes write:clientes read:produtos"
+      "default": "write:nfes read:clientes write:clientes read:produtos read:formas_pagamento read:pedidos read:vendas write:pedidos"
     },
     {
       "name": "ativo",
@@ -48,6 +48,10 @@
     {
       "name": "redirect_uri",
       "type": "varchar(500)"
+    },
+    {
+      "name": "ultimo_pedido_numero_reconciliado",
+      "type": "integer"
     },
     {
       "name": "criado_em",
