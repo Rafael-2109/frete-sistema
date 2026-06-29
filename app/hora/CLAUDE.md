@@ -1534,7 +1534,7 @@ Spec: `docs/superpowers/specs/2026-06-26-hora-recebimento-sem-nf-design.md`. Pla
 
 ### Campo `tipo` e modelo `HoraRecebimentoEsperado`
 
-**Migration `hora_58_recebimento_sem_nf.{sql,py}`** (idempotente, par usual):
+**Migration `hora_60_recebimento_sem_nf.{sql,py}`** (idempotente, par usual):
 - `ALTER TABLE hora_nf_entrada ADD COLUMN IF NOT EXISTS tipo VARCHAR(20) NOT NULL DEFAULT 'REAL'` — valores `{'PROVISORIA','REAL'}`, default `'REAL'` para NFs existentes.
 - `CREATE TABLE IF NOT EXISTS hora_recebimento_esperado (...)` — snapshot congelado dos pedidos pendentes da filial (ver schema na migration). 3 índices: `recebimento_id`, `(recebimento_id, modelo_id)`, `(recebimento_id, chassi_esperado)`.
 
@@ -1592,7 +1592,7 @@ Promove o recebimento provisório para real (`recebimento_service.py`):
 ### Correções pós-auditoria (2026-06-27)
 
 Auditoria adversarial pós-rebase confirmou 4 riscos reais (de 12 candidatos) — todos corrigidos:
-- **ALTA** — migration renumerada para `hora_58` e **wired no `build.sh`**: o ORM mapeia `HoraNfEntrada.tipo` incondicionalmente; sem o ALTER, todo SELECT em `hora_nf_entrada` quebra (`UndefinedColumn`) em TODA a tela de recebimento/NF no deploy (`db.create_all` não faz ALTER em tabela existente).
+- **ALTA** — migration renumerada para `hora_60` e **wired no `build.sh`**: o ORM mapeia `HoraNfEntrada.tipo` incondicionalmente; sem o ALTER, todo SELECT em `hora_nf_entrada` quebra (`UndefinedColumn`) em TODA a tela de recebimento/NF no deploy (`db.create_all` não faz ALTER em tabela existente).
 - **ALTA** — `excluir_recebimento` apaga `hora_recebimento_esperado` antes do `delete(rec)`: as FKs do snapshot (`recebimento_id` NOT NULL, `consumido_por_conferencia_id`) não têm ON DELETE → estourava `IntegrityError` (HTTP 500) em qualquer provisório com ≥1 slot.
 - **BAIXA** — rota `recebimentos_anexar_nf` captura `DanfeParseError` (PDF ilegível → flash amigável, não HTTP 500 genérico; espelha `nfs.py`).
 - **BAIXA** — KPI `lead_time_recebimento` (`suprimento_kpi_service.py`) filtra `tipo == 'REAL'`: a provisória nasce com `data_emissao=hoje` (lead ~0) e diluía a média.
@@ -1631,7 +1631,7 @@ Inverte a regra anterior ("avaria não bloqueia venda"). Pedido do dono: moto co
 - **Flag no estoque**: `listar_estoque` retorna `moto_vendavel`; `estoque_lista.html` mostra badge **"NÃO vendável"** (+ o "⚠ N avaria" já existente). A moto segue `moto_disponivel=True` (aparece).
 - **Resolver/ignorar** a última avaria zera a contagem → a moto volta ao vendável **automaticamente**. `_finalizar_avaria` **NÃO** emite evento (predicado por contagem; respeita o insert-once — o último evento pode seguir `AVARIADA`). `IGNORADA` também desbloqueia.
 
-### Ciclo de vida (vínculo conferência — migration hora_59)
+### Ciclo de vida (vínculo conferência — migration hora_61)
 `HoraAvaria.recebimento_conferencia_id` (FK opcional, espelha `HoraPecaFaltando`) liga a avaria criada no recebimento à conferência que a originou. `NULL` = avaria registrada manualmente em /hora/avarias. Consequências:
 - **Excluir recebimento** apaga as `HoraAvaria` daquele recebimento + os eventos `AVARIADA` (via FK) — evita moto-fantasma vendável; nunca toca avaria manual.
 - **Desmarcar** a avaria na (re)conferência (`avaria_fisica` True→False) auto-resolve (`ignorar_avaria`) **apenas** a avaria daquela conferência (escopo pela FK); avaria manual fica intacta.

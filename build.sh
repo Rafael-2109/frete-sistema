@@ -89,22 +89,22 @@ python scripts/migrations/hora_56_loja_whatsapp_grupo.py \
 python scripts/hora/set_grupos_whatsapp_lojas.py \
     || echo "⚠️ backfill grupos-loja falhou — verificar (continuando deploy)..."
 
-# HORA 58 (2026-06-27): recebimento por filial SEM NF (NF provisoria).
+# HORA 60 (2026-06-27): recebimento por filial SEM NF (NF provisoria).
 # CRITICO: o ORM mapeia HoraNfEntrada.tipo INCONDICIONALMENTE — sem este ALTER,
 # qualquer SELECT em hora_nf_entrada via ORM quebra (UndefinedColumn) em TODA a tela
 # de recebimento/NF, nao so' o fluxo sem-NF. db.create_all() NAO faz ALTER de coluna
 # em tabela existente. Idempotente (ADD COLUMN IF NOT EXISTS / CREATE TABLE IF NOT EXISTS).
-echo "HORA: migration hora_58 (hora_nf_entrada.tipo + hora_recebimento_esperado)..."
-python scripts/migrations/hora_58_recebimento_sem_nf.py \
-    || echo "⚠️ migration hora_58 falhou — verificar (continuando deploy)..."
+echo "HORA: migration hora_60 (hora_nf_entrada.tipo + hora_recebimento_esperado)..."
+python scripts/migrations/hora_60_recebimento_sem_nf.py \
+    || echo "⚠️ migration hora_60 falhou — verificar (continuando deploy)..."
 
-# HORA 59 (2026-06-28): hora_avaria.recebimento_conferencia_id (FK) — vincula a
+# HORA 61 (2026-06-28): hora_avaria.recebimento_conferencia_id (FK) — vincula a
 # avaria criada no recebimento a' conferencia (regra avaria=NAO-vendavel). O ORM
 # mapeia a coluna; sem o ALTER, SELECT em hora_avaria quebra (UndefinedColumn).
 # Idempotente (ADD COLUMN IF NOT EXISTS).
-echo "HORA: migration hora_59 (hora_avaria.recebimento_conferencia_id)..."
-python scripts/migrations/hora_59_avaria_recebimento_conferencia.py \
-    || echo "⚠️ migration hora_59 falhou — verificar (continuando deploy)..."
+echo "HORA: migration hora_61 (hora_avaria.recebimento_conferencia_id)..."
+python scripts/migrations/hora_61_avaria_recebimento_conferencia.py \
+    || echo "⚠️ migration hora_61 falhou — verificar (continuando deploy)..."
 
 # Formato canonico de memorias (2026-06-08): coluna meta JSONB + indice GIN +
 # backfill REMOVIDOS do build apos aplicacao em PROD (deploy ad3c78027). Scripts

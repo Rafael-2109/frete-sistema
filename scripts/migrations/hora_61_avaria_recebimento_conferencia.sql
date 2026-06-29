@@ -1,4 +1,4 @@
--- Migration HORA 59: vinculo HoraAvaria -> conferencia de recebimento.
+-- Migration HORA 61: vinculo HoraAvaria -> conferencia de recebimento.
 -- Adiciona hora_avaria.recebimento_conferencia_id (FK opcional) para vincular a
 -- avaria criada no recebimento (regra avaria=NAO-vendavel, 2026-06-28) a
 -- conferencia que a originou. Espelha hora_peca_faltando.recebimento_conferencia_id.

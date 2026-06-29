@@ -1,4 +1,4 @@
-"""Migration HORA 59: vinculo HoraAvaria -> conferencia de recebimento.
+"""Migration HORA 61: vinculo HoraAvaria -> conferencia de recebimento.
 
 Adiciona hora_avaria.recebimento_conferencia_id (FK opcional, espelha
 hora_peca_faltando.recebimento_conferencia_id) para vincular a avaria criada no
@@ -9,7 +9,7 @@ reconferencia resolver so a avaria daquela conferencia (nao a avaria manual).
 Idempotente — pode rodar 2x (IF NOT EXISTS).
 
 Uso:
-    python scripts/migrations/hora_59_avaria_recebimento_conferencia.py
+    python scripts/migrations/hora_61_avaria_recebimento_conferencia.py
 """
 import logging
 import os
@@ -51,9 +51,9 @@ def main() -> None:
         print('\nEstado depois:')
         print(f'  hora_avaria.recebimento_conferencia_id existe? {ok}')
         if not ok:
-            print('\nERRO: migration HORA 59 incompleta.')
+            print('\nERRO: migration HORA 61 incompleta.')
             sys.exit(1)
-        print('\nMigration HORA 59 concluida com sucesso.')
+        print('\nMigration HORA 61 concluida com sucesso.')
 
 
 if __name__ == '__main__':
