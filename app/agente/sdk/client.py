@@ -2067,13 +2067,20 @@ Nunca invente informações."""
                 "Ative AGENT_ONTOLOGY=true para expor query_ontology ao agente."
             )
 
-        # Handoff de sessao (F1) — registra a tool MCP fora de 'off'.
-        # (Task 7 adicionara o guard `specialist_profile is None` p/ NAO expor ao especialista.)
+        # Handoff de sessao — registra a tool MCP fora de 'off'.
+        # 8b guard: PRINCIPAL (specialist_profile is None) expoe transferir_para
+        # (+ devolver, no-op); o ESPECIALISTA expoe SO' devolver_ao_principal
+        # (NAO re-delega -> evita recriar o multi-spawn). Sem o guard, o
+        # especialista veria transferir_para e o principal do Teams tambem (inerte).
         try:
             from ..config.feature_flags import resolve_specialist_handoff_mode
             if resolve_specialist_handoff_mode() != 'off':
-                from ..tools.handoff_mcp_tool import handoff_server
-                _register_mcp('handoff', handoff_server)
+                if specialist_profile is None:
+                    from ..tools.handoff_mcp_tool import handoff_server
+                    _register_mcp('handoff', handoff_server)
+                else:
+                    from ..tools.handoff_mcp_tool import handoff_devolver_server
+                    _register_mcp('handoff', handoff_devolver_server)
         except Exception as _h_err:
             logger.debug(f"[handoff] registro da tool pulado: {_h_err}")
 
