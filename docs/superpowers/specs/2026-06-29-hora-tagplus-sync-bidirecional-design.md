@@ -11,7 +11,7 @@ atualizado: 2026-06-29
 
 > **Papel:** spec/design da sincronização de pedidos de venda entre o módulo HORA e o TagPlus (criação, cancelamento, numeração e replicação reversa). Lido antes de executar os planos `docs/superpowers/plans/2026-06-29-hora-tagplus-sync-*`.
 >
-> **Status (2026-06-29):** **Fase 1 (numeração) implementada** — 7 commits em `main` local (não pushados), 404 testes HORA verdes; migration `hora_62` + backfill de **885 vendas** aplicados no **banco de PROD** (Render); **deploy do código pendente** (a captura via webhook só passa a valer após o deploy). **Fase 2a (push, parte segura)** construída — `pedido_sync_service` atrás da flag `HORA_TAGPLUS_PUSH_PEDIDO` (default OFF), 9 testes, sem caminho fiscal nem wiring; verificações de API **#2 e #4 resolvidas** (ver seção). **Fase 2b** (to_nfe + wiring + cancelamento) e **Fase 3** pendentes — gated por #1/#3 + **reauth OAuth com `write:pedidos`**. Sessão 4-mãos Claude Code (dev).
+> **Status (2026-06-29):** **Fase 1 (numeração) + Fase 2a (push, flag-OFF) DEPLOYADAS** (commit `5027048c7` na `main`/PROD). Migration `hora_62` + backfill de **885 vendas** já no banco de PROD (0 divergências); 413 testes HORA verdes. Verificações **#2 e #4 resolvidas**; `scope_contratado` de PROD já com `write:pedidos` (**escopo efetivo a confirmar** no início da 2b — token parece refresh, não authorize fresco). **Fase 2b** (to_nfe + wiring + cancelamento, gated por #1/#3) e **Fase 3** (numero-walk, #2 ok) pendentes — **handoff:** `docs/superpowers/plans/2026-06-29-hora-tagplus-fase2b-fase3-handoff.md`. Sessão 4-mãos Claude Code (dev).
 
 ## Indice
 
