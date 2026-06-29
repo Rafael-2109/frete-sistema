@@ -794,7 +794,7 @@ def _render_operational_directives(directives: list[str]) -> Optional[str]:
     return '\n'.join(parts)
 
 
-def _build_operational_directives(user_id: int) -> Optional[str]:
+def _build_operational_directives(user_id: int, agente_id: str = 'web') -> Optional[str]:
     """
     Constroi bloco <operational_directives> com heuristicas empresa nivel 5
     de alta confianca (importance >= 0.7). Estas sao promovidas de "contexto
@@ -803,8 +803,11 @@ def _build_operational_directives(user_id: int) -> Optional[str]:
 
     Wrapper de compatibilidade sobre _build_operational_directives_parts
     (F4.3 separa constitucional/organicas p/ a politica de overflow).
+
+    M3 (F2 fatia 2): `agente_id` isola a memoria-empresa por agente (web|lojas).
+    Default 'web' = aditivo (web inalterado).
     """
-    const_items, org_items = _build_operational_directives_parts(user_id)
+    const_items, org_items = _build_operational_directives_parts(user_id, agente_id=agente_id)
     result = _render_operational_directives(const_items + org_items)
     if result:
         logger.info(
@@ -815,7 +818,7 @@ def _build_operational_directives(user_id: int) -> Optional[str]:
 
 
 def _build_operational_directives_parts(
-    user_id: int, include_organicas: bool = True
+    user_id: int, agente_id: str = 'web', include_organicas: bool = True
 ) -> tuple[list[str], list[str]]:
     """
     Itens <directive> renderizados, separados em (constitucionais, organicas).
@@ -884,6 +887,7 @@ def _build_operational_directives_parts(
         from sqlalchemy import or_ as sql_or
         candidates = AgentMemory.query.filter(
             AgentMemory.user_id == 0,
+            AgentMemory.agente == agente_id,  # M3/M10: empresa por agente (web|lojas)
             AgentMemory.is_directory == False,  # noqa: E712
             AgentMemory.is_cold == False,  # noqa: E712
             sql_or(
@@ -1263,7 +1267,8 @@ def _load_user_memories_for_context(
             try:
                 from ..config.feature_flags import AGENT_DIRECTIVES_INTENT_ONLY
                 const_items, org_items = _build_operational_directives_parts(
-                    user_id, include_organicas=not AGENT_DIRECTIVES_INTENT_ONLY
+                    user_id, agente_id=agente_id,
+                    include_organicas=not AGENT_DIRECTIVES_INTENT_ONLY,
                 )
                 directives_full = _render_operational_directives(const_items + org_items)
                 directives_const = _render_operational_directives(const_items)

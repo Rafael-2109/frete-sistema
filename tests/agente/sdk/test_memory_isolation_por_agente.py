@@ -38,12 +38,17 @@ def test_user(app):
 
 @pytest.fixture
 def seed_mem(app, test_user):
-    """Cria AgentMemory com `agente=` (create_file nao aceita o campo)."""
+    """Cria AgentMemory com `agente=` (create_file nao aceita o campo).
+
+    `user_id=None` => memoria do usuario de teste; `user_id=0` => memoria
+    empresa. `**kwargs` permite setar importance_score, meta, priority, etc.
+    """
     criados = []
 
-    def _criar(path, content, agente):
-        m = AgentMemory(user_id=test_user.id, path=path, content=content,
-                        agente=agente, is_directory=False)
+    def _criar(path, content, agente, user_id=None, **kwargs):
+        m = AgentMemory(user_id=test_user.id if user_id is None else user_id,
+                        path=path, content=content, agente=agente,
+                        is_directory=False, **kwargs)
         db.session.add(m)
         db.session.commit()
         criados.append(m.id)
@@ -81,3 +86,31 @@ def test_sessao_web_nao_injeta_memoria_lojas_tier1(seed_mem, test_user):
     ids = _ids(test_user.id, 'web')
     assert m_web.id in ids
     assert m_lojas.id not in ids, "id de memoria 'lojas' vazou p/ sessao 'web'"
+
+
+# ─── M10: operational_directives (memoria empresa user_id=0, nivel 5) ───
+def test_directives_empresa_nao_vazam_entre_agentes(seed_mem, test_user, monkeypatch):
+    """A FONTE CRITICA: heuristicas/protocolos empresa (user_id=0) injetadas
+    como diretiva operacional NAO podem cruzar a fronteira de agente."""
+    monkeypatch.setattr(
+        'app.agente.config.feature_flags.USE_OPERATIONAL_DIRECTIVES', True
+    )
+    m_web = seed_mem('/memories/empresa/heuristicas/odoo/dw.xml',
+                     'WHEN: x\nDO: y\nnivel=5', agente='web', user_id=0,
+                     importance_score=0.95,
+                     meta={'nivel': 5, 'do': 'DIRETRIZ_NACOM_WEB', 'titulo': 'TW'})
+    m_lojas = seed_mem('/memories/empresa/heuristicas/loja/dl.xml',
+                       'WHEN: x\nDO: y\nnivel=5', agente='lojas', user_id=0,
+                       importance_score=0.95,
+                       meta={'nivel': 5, 'do': 'DIRETRIZ_LOJA', 'titulo': 'TL'})
+
+    _, org_web = memory_injection._build_operational_directives_parts(
+        test_user.id, agente_id='web')
+    _, org_lojas = memory_injection._build_operational_directives_parts(
+        test_user.id, agente_id='lojas')
+    blob_web, blob_lojas = '\n'.join(org_web), '\n'.join(org_lojas)
+
+    assert f'id="{m_web.id}"' in blob_web
+    assert f'id="{m_web.id}"' not in blob_lojas, "diretiva empresa 'web' vazou p/ 'lojas'"
+    assert f'id="{m_lojas.id}"' in blob_lojas
+    assert f'id="{m_lojas.id}"' not in blob_web, "diretiva empresa 'lojas' vazou p/ 'web'"
