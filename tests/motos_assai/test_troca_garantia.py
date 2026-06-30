@@ -138,3 +138,114 @@ def test_trocar_chassi_no_espelho_preserva_numero_nf(app, admin_user):
         assert Separacao.query.filter_by(separacao_lote_id=lote, chassi_assai=c['chassi_a']).count() == 0
         linha_b = Separacao.query.filter_by(separacao_lote_id=lote, chassi_assai=c['chassi_b']).one()
         assert linha_b.numero_nf == c['nf'].numero
+
+
+from app.motos_assai.services.troca_garantia_service import (
+    registrar_troca, TrocaGarantiaError,
+)
+
+
+def test_registrar_troca_swap_completo(app, admin_user):
+    """B vira FATURADA, A vira PENDENTE, NF/sep/espelho apontam para B, ocorrencia criada."""
+    with app.app_context():
+        c = _cenario(admin_user)
+
+        res = registrar_troca(
+            nf_id=c['nf'].id, chassi_a=c['chassi_a'], chassi_b=c['chassi_b'],
+            operador_id=admin_user.id, motivo='Motor com defeito', dry_run=False,
+        )
+        assert res['ok'] is True
+        assert res['dry_run'] is False
+
+        assert status_efetivo(c['chassi_b']) == EVENTO_FATURADA
+        assert status_efetivo(c['chassi_a']) == EVENTO_PENDENTE
+
+        nf_item = AssaiNfQpaItem.query.get(c['nf_item'].id)
+        assert nf_item.chassi == c['chassi_b']
+        assert nf_item.separacao_item_id == c['sep_item'].id
+
+        sep_item = AssaiSeparacaoItem.query.get(c['sep_item'].id)
+        assert sep_item.chassi == c['chassi_b']
+
+        lote = lote_id_de(c['sep'].id)
+        linha_b = Separacao.query.filter_by(separacao_lote_id=lote, chassi_assai=c['chassi_b']).one()
+        assert linha_b.numero_nf == c['nf'].numero
+
+        hist = AssaiNfQpaItemVinculoHistorico.query.filter_by(
+            nf_qpa_item_id=c['nf_item'].id, motivo=VINCULO_MOTIVO_TROCA_GARANTIA,
+        ).one()
+        assert hist.chassi_no_momento == c['chassi_a']
+
+        oc = AssaiPosVendaOcorrencia.query.get(res['ocorrencia_id'])
+        assert oc.tipo == TIPO_TROCA_GARANTIA
+        assert oc.chassi == c['chassi_a']
+        assert oc.chassi_substituto == c['chassi_b']
+        assert oc.nf_qpa_id == c['nf'].id
+        assert oc.descricao == 'Motor com defeito'
+
+        assert AssaiNfQpa.query.get(c['nf'].id).status_match == NF_STATUS_BATEU
+        assert nf_item.devolvido is False
+
+
+def test_registrar_troca_dry_run_nao_escreve(app, admin_user):
+    with app.app_context():
+        c = _cenario(admin_user)
+        res = registrar_troca(
+            nf_id=c['nf'].id, chassi_a=c['chassi_a'], chassi_b=c['chassi_b'],
+            operador_id=admin_user.id, motivo='Motor com defeito',
+        )
+        assert res['ok'] is True
+        assert res['dry_run'] is True
+        assert res['ocorrencia_id'] is None
+        assert isinstance(res['plano'], list) and res['plano']
+
+        assert status_efetivo(c['chassi_a']) == EVENTO_FATURADA
+        assert status_efetivo(c['chassi_b']) == EVENTO_DISPONIVEL
+        assert AssaiNfQpaItem.query.get(c['nf_item'].id).chassi == c['chassi_a']
+        assert AssaiPosVendaOcorrencia.query.filter_by(nf_qpa_id=c['nf'].id).count() == 0
+
+
+def test_registrar_troca_rejeita_a_nao_faturada(app, admin_user):
+    with app.app_context():
+        c = _cenario(admin_user)
+        emitir_evento(c['chassi_a'], EVENTO_PENDENTE, operador_id=admin_user.id)
+        db.session.commit()
+        with pytest.raises(TrocaGarantiaError):
+            registrar_troca(
+                nf_id=c['nf'].id, chassi_a=c['chassi_a'], chassi_b=c['chassi_b'],
+                operador_id=admin_user.id, motivo='x', dry_run=False,
+            )
+
+
+def test_registrar_troca_rejeita_b_nao_disponivel(app, admin_user):
+    with app.app_context():
+        c = _cenario(admin_user, estado_b=EVENTO_FATURADA)
+        with pytest.raises(TrocaGarantiaError):
+            registrar_troca(
+                nf_id=c['nf'].id, chassi_a=c['chassi_a'], chassi_b=c['chassi_b'],
+                operador_id=admin_user.id, motivo='x', dry_run=False,
+            )
+
+
+def test_registrar_troca_rejeita_modelo_diferente(app, admin_user):
+    with app.app_context():
+        c = _cenario(admin_user, mesmo_modelo=False)
+        with pytest.raises(TrocaGarantiaError):
+            registrar_troca(
+                nf_id=c['nf'].id, chassi_a=c['chassi_a'], chassi_b=c['chassi_b'],
+                operador_id=admin_user.id, motivo='x', dry_run=False,
+            )
+
+
+def test_registrar_troca_idempotente(app, admin_user):
+    with app.app_context():
+        c = _cenario(admin_user)
+        registrar_troca(
+            nf_id=c['nf'].id, chassi_a=c['chassi_a'], chassi_b=c['chassi_b'],
+            operador_id=admin_user.id, motivo='x', dry_run=False,
+        )
+        with pytest.raises(TrocaGarantiaError):
+            registrar_troca(
+                nf_id=c['nf'].id, chassi_a=c['chassi_a'], chassi_b=c['chassi_b'],
+                operador_id=admin_user.id, motivo='x', dry_run=False,
+            )
