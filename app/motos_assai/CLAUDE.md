@@ -634,8 +634,8 @@ abrir → [solicitar_compra] → resolver / cancelar
 
 - `abrir`: cria ficha (categoria + origem obrigatórios); se `origem ∈ {GALPAO, TRANSPORTE, DEVOLUCAO}` ou `devolucao_item_id` ou `retorno_fisico=True`, emite evento `PENDENTE` na moto.
 - `solicitar_compra`: cria `AssaiPecaCompra` (PC-AAAA-NNNN) vinculando a ficha.
-- `resolver`: preenche `tratativa` + `resolvida_em`; se a ficha afetava o estado, emite evento subsequente (ex.: `DISPONIVEL`).
-- `cancelar`: preenche `cancelada_em`; se afetava o estado, reverte o evento `PENDENTE`.
+- `resolver`: preenche `tratativa` + `resolvida_em` + `resolucao_descricao` (1:1 na ficha) e executa o movimento de estoque da tratativa via `movimento_service` (`consumir`/`canibalizar`); se a ficha era física E era a **última** física aberta do chassi, emite `PENDENCIA_RESOLVIDA` + `MONTADA` (R4/O1). Se ainda há outra física aberta, a moto segue `PENDENTE`. Idempotente (guard pós-`pg_advisory_xact_lock` com `db.session.refresh`).
+- `cancelar`: preenche `cancelada_em`; **mesmo gate** — se era a última física aberta, emite `PENDENCIA_RESOLVIDA` + `MONTADA`. Não movimenta estoque.
 
 ### Predicado `afeta_estado_moto`
 
@@ -643,11 +643,19 @@ A ficha afeta o estado da moto quando: `origem ∈ {GALPAO, TRANSPORTE, DEVOLUCA
 
 ### Shim `montagem_service.resolver_pendencia`
 
-`montagem_service.resolver_pendencia(chassi, tratativa)` delega para `pendencia_service.resolver_pendencia(pendencia_id=...)`. Se houver mais de 1 ficha física aberta no chassi, levanta erro (caller deve abrir ficha explicitamente). Callers legados passam a usar este shim sem alteração de assinatura.
+`montagem_service.resolver_pendencia(chassi, descricao_resolucao, operador_id)` (assinatura legada preservada) delega para `pendencia_service.resolver_pendencia(pendencia_id=..., tratativa=None, ...)`, resolvendo a **única** ficha física aberta do chassi e **commitando** (a rota `POST /pendencias/resolver` não commita). Se houver >1 ficha física aberta, levanta erro claro; se houver 0 (pendência legada sem ficha), erro apontando o backfill 35. Callers legados (rota, `services/__init__.py`) usam sem alteração.
 
 ### Backfill
 
-`scripts/migrations/motos_assai_35_backfill_pendencias.py` — migra eventos `PENDENTE` históricos para fichas `assai_pendencia`. Usa `--check` (dry-run, default) e `--confirmar` (executa). **NÃO incluído no `build.sh`** — rodar manualmente uma vez em produção.
+`scripts/migrations/motos_assai_35_backfill_pendencias.py` — cria fichas `assai_pendencia` para chassis com último evento `PENDENTE` sem ficha (devolução→REVISAO/DEVOLUCAO; senão INDETERMINADA/GALPAO). `--check` (gate de cobertura, exit≠0 se houver gap), dry-run default, `--confirmar` executa. **NÃO incluído no `build.sh`** — rodar manualmente uma vez em produção, APÓS o deploy do código.
+
+### Status de implementação (2026-06-30)
+
+**Spec 1 (back-end) IMPLEMENTADO** — 6 tabelas + serviços + integração + backfill; 13 commits (`125224c01`..`751178d50`); **372 testes do módulo verdes**; review final whole-branch (opus) = pronto para merge. **NÃO pushado** — deploy bundlado com o Spec 2. **Spec 2 (UI) PENDENTE** (escopo na §15 do spec).
+
+**Deploy (quando for):** migration 34 → deploy do código → `motos_assai_35 --confirmar` → `--check`. Até o backfill 35 rodar, pendências já abertas não resolvem pela UI (o shim falha alto, **sem corromper**).
+
+**Follow-ups conhecidos (Spec 2):** `_gerar_numero` → `CREATE SEQUENCE` na migration 34 (item 1, antes do deploy em prod); guards de canibalização (anti-cascata A→B→A, `_exigir_peca`, doador-vendido); `.query.get()`→`db.session.get()`; `lazy='joined'`→`select`+joinedload; `dados_extras` via `sanitize_for_json`; imports mortos; refinar hint do `assai_pendencia.json`. Estado completo + prompt de continuação: `docs/superpowers/plans/2026-06-30-motos-assai-estoque-pendencia-spec1-handoff.md`.
 
 ---
 
