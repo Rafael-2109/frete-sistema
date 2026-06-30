@@ -479,6 +479,12 @@ def categorizar():
     # F1 / F4 (opcionais) vindos do modal de categorizacao
     cpf_cnpj_padrao = dados.get('cpf_cnpj_padrao')
 
+    # Caso 2: condicao por conta de destino (opcional)
+    try:
+        contas_ids = [int(i) for i in (dados.get('contas_ids') or [])]
+    except (TypeError, ValueError):
+        return jsonify({'sucesso': False, 'mensagem': 'contas_ids invalido.'}), 400
+
     def _parse_valor(raw):
         if raw is None or raw == '' or raw == 0:
             return None
@@ -528,6 +534,7 @@ def categorizar():
                 tipo_regra=tipo_regra, padrao_historico=padrao_historico,
                 cpf_cnpj_padrao=cpf_cnpj_padrao,
                 valor_min=valor_min, valor_max=valor_max,
+                contas_ids=contas_ids,
             )
             if regra:
                 transacao.regra_id = regra.id
@@ -671,6 +678,12 @@ def categorizar_lote():
     padrao_historico = dados.get('padrao_historico')
     cpf_cnpj_padrao = dados.get('cpf_cnpj_padrao')
 
+    # Caso 2: condicao por conta de destino (opcional)
+    try:
+        contas_ids = [int(i) for i in (dados.get('contas_ids') or [])]
+    except (TypeError, ValueError):
+        return jsonify({'sucesso': False, 'mensagem': 'contas_ids invalido.'}), 400
+
     def _parse_valor(raw):
         if raw is None or raw == '' or raw == 0:
             return None
@@ -722,6 +735,7 @@ def categorizar_lote():
                         cpf_cnpj_padrao=cpf_cnpj_padrao,
                         valor_min=valor_min,
                         valor_max=valor_max,
+                        contas_ids=contas_ids,
                     )
                     if regra:
                         transacao.regra_id = regra.id

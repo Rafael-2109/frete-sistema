@@ -200,7 +200,8 @@
                     data-regra-restritas="{{ regra.get_categorias_restritas()|tojson }}"
                     data-regra-cpfcnpj="{{ regra.cpf_cnpj_padrao or '' }}"
                     data-regra-vmin="{{ regra.valor_min if regra.valor_min is not none else '' }}"
-                    data-regra-vmax="{{ regra.valor_max if regra.valor_max is not none else '' }}">
+                    data-regra-vmax="{{ regra.valor_max if regra.valor_max is not none else '' }}"
+                    data-regra-contasids="{{ regra.get_contas_ids()|tojson }}">
                   <td class="small fw-bold cel-padrao" data-val="{{ regra.padrao_historico }}">
                     <button class="btn btn-link btn-sm btn-toggle-transacoes p-0 me-1" title="Ver transacoes categorizadas por esta regra">
                       <i class="fas fa-chevron-right toggle-icon"></i>
@@ -421,6 +422,19 @@
             <input type="number" step="0.01" min="0" id="regraValorMax" class="form-control" placeholder="ex: 5000.00">
           </div>
           <small class="text-muted ps-2">Restringe a aplicacao da regra a transacoes dentro do range. Deixe vazio para sem restricao.</small>
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label">
+            Contas (opcional)
+            <i class="fas fa-info-circle text-muted" title="Restringe a regra a transacoes destas contas de destino. Permite 2 regras com o mesmo padrao e contas diferentes (ex: deposito no Bradesco = Salario; no Nubank = Transferencia)."></i>
+          </label>
+          <select id="regraContasIds" class="form-select" multiple size="4">
+            {% for c in contas %}
+            <option value="{{ c.id }}">{{ c.nome }}</option>
+            {% endfor %}
+          </select>
+          <small class="text-muted">Vazio = vale para qualquer conta. Regra com conta tem prioridade sobre a generica.</small>
         </div>
       </div>
       <div class="modal-footer">
@@ -1190,6 +1204,7 @@ $(function() {
     $('#regraCpfCnpj').val('');
     $('#regraValorMin').val('');
     $('#regraValorMax').val('');
+    $('#regraContasIds').val([]);
     $('#modalRegraTitulo').text('Nova Regra');
   });
 
@@ -1209,6 +1224,7 @@ $(function() {
     tr.attr('data-regra-cpfcnpj', payload.cpf_cnpj_padrao || '');
     tr.attr('data-regra-vmin', payload.valor_min !== null && payload.valor_min !== undefined ? payload.valor_min : '');
     tr.attr('data-regra-vmax', payload.valor_max !== null && payload.valor_max !== undefined ? payload.valor_max : '');
+    tr.attr('data-regra-contasids', JSON.stringify(payload.contas_ids || []));
     tr.attr('data-regra-filtro', [
       payload.padrao_historico, payload.tipo_regra, payload.categoria_label || '',
       payload.cpf_cnpj_padrao || '', payload.origem,
@@ -1470,6 +1486,14 @@ $(function() {
     $('#regraCpfCnpj').val(tr.data('regra-cpfcnpj') || '');
     $('#regraValorMin').val(tr.data('regra-vmin') || '');
     $('#regraValorMax').val(tr.data('regra-vmax') || '');
+    // Contas (array JSON) — espelha o tratamento de categorias restritas
+    try {
+      const contas = tr.data('regra-contasids');
+      const cids = Array.isArray(contas) ? contas.map(String) : [];
+      $('#regraContasIds').val(cids);
+    } catch(e) {
+      $('#regraContasIds').val([]);
+    }
     $('#modalRegraTitulo').text('Editar Regra');
     openModal('#modalRegra');
   });
@@ -1490,6 +1514,7 @@ $(function() {
       cpf_cnpj_padrao: cpfCnpjDigits || null,
       valor_min: parseFloat($('#regraValorMin').val()) || null,
       valor_max: parseFloat($('#regraValorMax').val()) || null,
+      contas_ids: ($('#regraContasIds').val() || []).map(Number),
     };
 
     // Incluir ID para edicao

@@ -138,6 +138,17 @@ def _valor_no_range(valor, valor_min, valor_max) -> bool:
     return True
 
 
+def _conta_no_filtro(conta_id, contas_ids_list) -> bool:
+    """Caso 2: regra restrita por conta de destino.
+
+    Lista vazia/None = regra vale para qualquer conta (retrocompativel).
+    Senao, so casa se conta_id da transacao estiver na lista da regra.
+    """
+    if not contas_ids_list:
+        return True
+    return conta_id in contas_ids_list
+
+
 def _aplicar_regra(resultado: ResultadoCategorizacao,
                     regra: PessoalRegraCategorizacao,
                     confianca: float) -> ResultadoCategorizacao:
@@ -207,10 +218,13 @@ def categorizar_transacao(transacao: PessoalTransacao) -> ResultadoCategorizacao
         return resultado
 
     # Carregar regras PADRAO ativas ordenadas (compartilhado por F1, Layer 1, Layer 2)
+    # Especificidade: padrao mais longo primeiro; entre padroes de mesmo tamanho, a regra
+    # restrita por conta (contas_ids != NULL) vence a generica (Caso 2 — desempate).
     regras_padrao = PessoalRegraCategorizacao.query.filter_by(
         tipo_regra='PADRAO', ativo=True
     ).order_by(
         db.func.length(PessoalRegraCategorizacao.padrao_historico).desc(),
+        PessoalRegraCategorizacao.contas_ids.isnot(None).desc(),
         PessoalRegraCategorizacao.confianca.desc(),
         PessoalRegraCategorizacao.vezes_usado.desc(),
     ).all()
@@ -220,7 +234,8 @@ def categorizar_transacao(transacao: PessoalTransacao) -> ResultadoCategorizacao
         for regra in regras_padrao:
             if (regra.cpf_cnpj_padrao
                     and regra.cpf_cnpj_padrao == transacao.cpf_cnpj_parte
-                    and _valor_no_range(transacao.valor, regra.valor_min, regra.valor_max)):
+                    and _valor_no_range(transacao.valor, regra.valor_min, regra.valor_max)
+                    and _conta_no_filtro(transacao.conta_id, regra.get_contas_ids())):
                 return _aplicar_regra(resultado, regra, 100.0)
 
     # Layer 1: Match exato PADRAO (substring)
@@ -229,7 +244,8 @@ def categorizar_transacao(transacao: PessoalTransacao) -> ResultadoCategorizacao
     for regra in regras_padrao:
         padrao_norm = _normalizar(regra.padrao_historico)
         if (padrao_norm and padrao_norm in historico
-                and _valor_no_range(transacao.valor, regra.valor_min, regra.valor_max)):
+                and _valor_no_range(transacao.valor, regra.valor_min, regra.valor_max)
+                and _conta_no_filtro(transacao.conta_id, regra.get_contas_ids())):
             return _aplicar_regra(resultado, regra, 100.0)
 
     # Layer 2: Match fuzzy PADRAO (rapidfuzz >= 85)
@@ -240,6 +256,8 @@ def categorizar_transacao(transacao: PessoalTransacao) -> ResultadoCategorizacao
         if not padrao_norm:
             continue
         if not _valor_no_range(transacao.valor, regra.valor_min, regra.valor_max):
+            continue
+        if not _conta_no_filtro(transacao.conta_id, regra.get_contas_ids()):
             continue
         score = fuzz.token_set_ratio(padrao_norm, historico)
         if score >= 85 and score > melhor_score:
