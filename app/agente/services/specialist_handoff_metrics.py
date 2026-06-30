@@ -45,3 +45,22 @@ def compara_baseline(baseline: dict, atual: dict) -> dict:
               and delta_turns <= max(b_turns * 0.05, 0.0))
     return {"delta_custo_medio": delta_custo, "delta_cache_hit_rate": delta_cache,
             "delta_num_turns": delta_turns, "passou_gate": passou}
+
+
+def gate_handoff(baseline_session_ids: list[str],
+                 atual_session_ids: list[str]) -> dict:
+    """Caller do gate (8b): compoe custo_medio_por_sessao (antes vs depois) e
+    compara_baseline numa unica chamada. Entrada = sessoes pre-handoff (multi-spawn)
+    vs sessoes pos-handoff (especialista quente). Mede; NAO bloqueia o swap.
+    Best-effort: NUNCA propaga excecao (R1 services) — devolve estrutura inerte."""
+    try:
+        baseline = custo_medio_por_sessao(baseline_session_ids)
+        atual = custo_medio_por_sessao(atual_session_ids)
+        gate = compara_baseline(baseline, atual)
+        return {"baseline": baseline, "atual": atual, "gate": gate}
+    except Exception as _err:
+        import logging
+        logging.getLogger("sistema_fretes").warning(
+            f"[handoff_metrics] gate_handoff falhou (ignorado): {_err}")
+        return {"baseline": {}, "atual": {}, "gate": {"passou_gate": False},
+                "erro": str(_err)}

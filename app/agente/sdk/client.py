@@ -1463,6 +1463,7 @@ Nunca invente informações."""
         resume_messages_fallback: Optional[str] = None,
         resume_fallback_reason: Optional[str] = None,
         thinking_display: Optional[str] = None,
+        agent_role: str = 'principal',
     ) -> AsyncGenerator[StreamEvent, None]:
         """
         Gera resposta em streaming.
@@ -1513,6 +1514,7 @@ Nunca invente informações."""
             resume_messages_fallback=resume_messages_fallback,
             resume_fallback_reason=resume_fallback_reason,
             thinking_display=thinking_display,
+            agent_role=agent_role,
         ):
             yield event
 
@@ -1572,7 +1574,13 @@ Nunca invente informações."""
                 _spec_system_prompt = self._build_full_system_prompt(_spec_prompt)
                 _spec_skills = sorted(specialist_profile.skills)
             except Exception as _sp_err:
-                logger.warning(f"[specialist] profile load falhou, fallback principal: {_sp_err}")
+                # Alarme explicito (nao silencioso): perfil pedido mas prompt ausente/
+                # ilegivel -> o turno cai no PRINCIPAL. Logar role + path para acao.
+                logger.warning(
+                    f"[specialist] ALARME: perfil '{specialist_profile.role}' nao "
+                    f"carregou (path={specialist_profile.system_prompt_path}) -> "
+                    f"FALLBACK principal: {_sp_err}"
+                )
                 specialist_profile = None
 
         # Diretório do projeto para carregar Skills
@@ -2062,20 +2070,20 @@ Nunca invente informações."""
                 "Ative AGENT_ONTOLOGY=true para expor query_ontology ao agente."
             )
 
-        # Handoff de sessao (F1) — registra transferir_para SO' no cliente PRINCIPAL
-        # (specialist_profile is None) e SO' em modo 'on'. Regra em
-        # should_register_handoff: shadow=medicao pura (sem tool de troca); o
-        # especialista nao re-delega; swap real do stream = 8b (deferido). 'off'
-        # (default) nao registra -> behavior-equivalente ao main.
+        # Handoff de sessao — registra a tool MCP fora de 'off'.
+        # 8b guard: PRINCIPAL (specialist_profile is None) expoe transferir_para
+        # (+ devolver, no-op); o ESPECIALISTA expoe SO' devolver_ao_principal
+        # (NAO re-delega -> evita recriar o multi-spawn). Sem o guard, o
+        # especialista veria transferir_para e o principal do Teams tambem (inerte).
         try:
             from ..config.feature_flags import resolve_specialist_handoff_mode
-            _handoff_mode = resolve_specialist_handoff_mode()
-            # Em 'off' (default) nem carrega o modulo handoff (equivalencia ESTRITA
-            # ao main); fora de 'off', should_register_handoff decide (on+principal).
-            if _handoff_mode != 'off':
-                from ..tools.handoff_mcp_tool import should_register_handoff, handoff_server
-                if should_register_handoff(_handoff_mode, specialist_profile):
+            if resolve_specialist_handoff_mode() != 'off':
+                if specialist_profile is None:
+                    from ..tools.handoff_mcp_tool import handoff_server
                     _register_mcp('handoff', handoff_server)
+                else:
+                    from ..tools.handoff_mcp_tool import handoff_devolver_server
+                    _register_mcp('handoff', handoff_devolver_server)
         except Exception as _h_err:
             logger.debug(f"[handoff] registro da tool pulado: {_h_err}")
 
@@ -2106,6 +2114,7 @@ Nunca invente informações."""
         resume_messages_fallback: Optional[str] = None,
         resume_fallback_reason: Optional[str] = None,
         thinking_display: Optional[str] = None,
+        agent_role: str = 'principal',
     ) -> AsyncGenerator[StreamEvent, None]:
         """
         Gera resposta em streaming usando ClaudeSDKClient persistente.
@@ -2166,6 +2175,23 @@ Nunca invente informações."""
         }
 
         # ─── Construir options ───
+        # 8b: cliente ESPECIALISTA usa system_prompt + skills proprios (handoff de
+        # sessao). Resolve o perfil pelo PAPEL do turno; 'principal' -> None (path
+        # atual, byte-equivalente). Papel sem perfil registrado -> None + WARNING
+        # (fallback principal, nunca quebra). O proprio _build_options ainda faz
+        # fallback transparente se o system_prompt_path do perfil faltar.
+        _specialist_profile = None
+        if agent_role and agent_role != 'principal':
+            try:
+                from .specialist_profiles import SPECIALIST_PROFILES
+                _specialist_profile = SPECIALIST_PROFILES.get(agent_role)
+                if _specialist_profile is None:
+                    logger.warning(
+                        f"[specialist] papel '{agent_role}' sem perfil em "
+                        f"SPECIALIST_PROFILES -> fallback principal"
+                    )
+            except Exception as _sp_err:
+                logger.warning(f"[specialist] resolucao de perfil falhou: {_sp_err}")
         options = self._build_options(
             user_name=user_name,
             user_id=user_id,
@@ -2178,6 +2204,7 @@ Nunca invente informações."""
             stderr_queue=stderr_q,
             resume_state=resume_state,
             thinking_display=thinking_display,
+            specialist_profile=_specialist_profile,
         )
 
         # ─── SDK 0.1.64 SessionStore (Fase B cutover — flag default ON) ───
@@ -2272,7 +2299,11 @@ Nunca invente informações."""
         # Fallback para our_session_id causava --resume com JSONL inexistente
         # em sessões novas → CLI exit code 1 (ProcessError).
         pool_key = our_session_id or ''
-        existing = get_pooled_client(pool_key)
+        # 8b: cada papel (principal/especialista) tem seu PROPRIO client no pool
+        # sob a chave '{session_id}::{role}'. resume_id ja' vem do slot do papel
+        # (sdk_session_id role-aware, passo 3); no 1o turno do especialista e' None
+        # -> sessao SDK nova, sem --resume.
+        existing = get_pooled_client(pool_key, role=agent_role)
         resume_id = sdk_session_id
         # Validar que resume_id é UUID válido — dados envenenados no DB
         # (ex: "teams_19:xxx") causam exit code 1 permanente se não filtrados.
@@ -2329,6 +2360,7 @@ Nunca invente informações."""
                     session_id=pool_key,
                     options=options,
                     user_id=user_id or 0,
+                    role=agent_role,
                 )
             except ProcessError as pe:
                 exit_code = getattr(pe, 'exit_code', None)
@@ -2380,6 +2412,7 @@ Nunca invente informações."""
                         session_id=pool_key,
                         options=options,
                         user_id=user_id or 0,
+                        role=agent_role,
                     )
                 else:
                     raise  # Re-raise se não é falha de resume
@@ -2596,7 +2629,7 @@ Nunca invente informações."""
             # daria MISS e o client morto sobreviveria connected=True (R-CLI-CRASH).
             try:
                 from .client_pool import evict_client
-                if evict_client(pool_key):
+                if evict_client(pool_key, role=agent_role):  # chave composta + papel; ver evict_client
                     logger.info(
                         f"[AGENT_SDK_PERSISTENT] Dead client evicted after ProcessError: "
                         f"{pool_key[:8]}..."
@@ -2655,7 +2688,7 @@ Nunca invente informações."""
                 # Evict dead client + cleanup JSONL stale (igual ao handler ProcessError)
                 try:
                     from .client_pool import evict_client
-                    evict_client(pool_key)  # chave composta (_pool_key); ver evict_client
+                    evict_client(pool_key, role=agent_role)  # chave composta + papel; ver evict_client
                 except Exception as evict_err:
                     logger.debug(f"[AGENT_SDK_PERSISTENT] Pool eviction ignored: {evict_err}")
 
@@ -2724,7 +2757,7 @@ Nunca invente informações."""
             # Evict dead client from pool to force fresh connection on retry.
             try:
                 from .client_pool import evict_client
-                if evict_client(pool_key):  # chave composta (_pool_key); ver evict_client
+                if evict_client(pool_key, role=agent_role):  # chave composta + papel; ver evict_client
                     logger.info(f"[AGENT_SDK_PERSISTENT] Dead client evicted from pool: {pool_key[:8]}...")
             except Exception as evict_err:
                 logger.debug(f"[AGENT_SDK_PERSISTENT] Pool eviction ignored: {evict_err}")

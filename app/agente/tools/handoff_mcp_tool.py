@@ -69,6 +69,9 @@ def _apply_devolver(session_id) -> dict:
         s.set_agente_ativo('principal')
         _data = s.data or {}
         _data.pop('handoff_context', None)
+        # 8b: reseta o flag de injecao p/ um proximo handoff re-injetar o bloco
+        # no 1o turno do especialista (hooks.py UserPromptSubmit).
+        _data.pop('handoff_context_injected', None)
         s.data = _data
         flag_modified(s, 'data')
         db.session.commit()
@@ -111,5 +114,12 @@ async def devolver_ao_principal(args: dict) -> dict:
     return {"content": [{"type": "text", "text": str(out)}], "structuredContent": out}
 
 
+# Server do PRINCIPAL: pode transferir o assunto (e devolver, no-op se ja' principal).
 handoff_server = create_enhanced_mcp_server(
     "handoff", version="1.0.0", tools=[transferir_para, devolver_ao_principal])
+
+# Server do ESPECIALISTA (8b): SO' devolver_ao_principal. Nao expoe transferir_para
+# ao especialista — ele NAO re-delega (recria o multi-spawn caro); quando o assunto
+# sai do escopo, devolve ao principal.
+handoff_devolver_server = create_enhanced_mcp_server(
+    "handoff", version="1.0.0", tools=[devolver_ao_principal])
