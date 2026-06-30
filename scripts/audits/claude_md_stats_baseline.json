@@ -36,7 +36,7 @@
   },
   "app/financeiro": {
     "py": 94,
-    "loc": 49075,
+    "loc": 49103,
     "tpl": 31
   },
   "app/fretes": {
@@ -46,12 +46,12 @@
   },
   "app/hora": {
     "py": 122,
-    "loc": 45794,
+    "loc": 45817,
     "tpl": 103
   },
   "app/motos_assai": {
-    "py": 90,
-    "loc": 20600,
+    "py": 95,
+    "loc": 21091,
     "tpl": 71
   },
   "app/odoo": {
