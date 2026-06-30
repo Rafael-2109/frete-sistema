@@ -101,6 +101,15 @@ class AssaiPendencia(db.Model):
         'AssaiPendencia',
         backref=db.backref('pai', remote_side=[id]),
     )
+    aberta_por = db.relationship(
+        'Usuario', foreign_keys=[aberta_por_id], lazy='joined',
+    )
+    resolvida_por = db.relationship(
+        'Usuario', foreign_keys=[resolvida_por_id], lazy='joined',
+    )
+    cancelada_por = db.relationship(
+        'Usuario', foreign_keys=[cancelada_por_id], lazy='joined',
+    )
 
     @property
     def esta_aberta(self):
