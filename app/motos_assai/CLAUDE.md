@@ -68,6 +68,7 @@ atualizado: 2026-07-01
 - [Onboarding Tours (2026-05-08)](#onboarding-tours-2026-05-08)
 - [Fix parser zero-padding + edição manual (2026-06-18)](#fix-parser-zero-padding--edição-manual-2026-06-18)
 - [Guards de import de NF Q.P.A. (2026-06-23)](#guards-de-import-de-nf-qpa-2026-06-23)
+- [Troca em Garantia (2026-06-30)](#troca-em-garantia-2026-06-30)
 - [Referências](#referências)
 
 ## Contexto
@@ -940,6 +941,153 @@ do parser de NF (LLM) é follow-up.
 
 ---
 
+## Troca em Garantia (2026-06-30)
+
+Cliente final do Assaí troca moto defeituosa por outra do mesmo modelo — **sem NF de devolução
+nem de saída**. O swap é puramente de controle interno.
+
+**Spec completa:** `docs/superpowers/specs/2026-06-30-motos-assai-troca-garantia-design.md`
+
+### O processo (swap A→B)
+
+Convenção:
+- **Moto A** = defeituosa; hoje `FATURADA` em `assai_nf_qpa_item`; **retorna** fisicamente ao CD.
+- **Moto B** = substituta; hoje `DISPONIVEL` no estoque; **sai** para o cliente final.
+
+Resultado do swap:
+
+```
+ANTES                                  DEPOIS
+NF item.chassi      : A                NF item.chassi      : B
+sep_item.chassi     : A                sep_item.chassi     : B   (mesma linha, mutada)
+status_efetivo(A)   : FATURADA         status_efetivo(A)   : PENDENTE  (volta ao estoque)
+status_efetivo(B)   : DISPONIVEL       status_efetivo(B)   : FATURADA  (consistência fiscal)
+espelho Nacom       : chassi_assai = A espelho Nacom       : chassi_assai = B
+pós-venda           : —                pós-venda           : ocorrência TROCA_GARANTIA (link nf_qpa_id)
+```
+
+**Escopo fiscal = só controle interno** (D1 — deliberado). `devolvido` / `qtd_faturada`
+**intocados**: B substitui A na mesma NF, o saldo de venda é idêntico; `recalcular_status_pedido`
+**não** é chamado. Sem NF de devolução; sem cotação/leg nova de frete.
+
+### Extensão de `assai_pos_venda_ocorrencia` (Migration 34)
+
+Três colunas adicionadas:
+
+| Coluna | Tipo | Função |
+|--------|------|--------|
+| `tipo` | varchar(20) NOT NULL default `'RELATO'` | `RELATO` (comportamento pré-existente) \| `TROCA_GARANTIA` |
+| `chassi_substituto` | varchar(50) nullable | A moto B que saiu para o cliente |
+| `nf_qpa_id` | FK → `assai_nf_qpa.id` nullable | Link consultado pelo Faturamento |
+
+Constante `TIPO_TROCA_GARANTIA = 'TROCA_GARANTIA'` em `models/pos_venda.py`.
+Index em `nf_qpa_id` para a query do Faturamento.
+
+**Motivo de vínculo** — `ck_assai_nf_qpa_item_vinculo_motivo` ganhou `TROCA_GARANTIA`
+(padrão idempotente DROP/ADD de Migration 33). Constante `VINCULO_MOTIVO_TROCA_GARANTIA`
+em `models/nf_qpa_vinculo.py`.
+
+⚠️ **A Migration 34 NÃO consta no build.sh**: foi aplicada manualmente no dev nesta worktree
+(padrão da 32/33); os arquivos `scripts/migrations/motos_assai_34_*` ficam como registro
+do DDL (idempotente — pode ser re-rodado).
+
+### Serviço `troca_garantia_service`
+
+**Arquivo:** `app/motos_assai/services/troca_garantia_service.py`
+
+#### Por que NÃO usa `_calcular_match` nem `sincronizar_espelho_com_separacao`
+
+Dois bloqueios descobertos ao rastrear o código (§5.1 da spec):
+
+1. **`_calcular_match` ignora seps `FATURADA`** (`nf_qpa_adapter.py:599-609`). A sep de A
+   já é `FATURADA` (a NF bateu) — o match nunca encontraria o slot de B, devolvendo
+   `CHASSI_SEM_SEPARACAO → DIVERGENTE`.
+
+2. **`sincronizar_espelho_com_separacao` reconcilia por delta** (create/delete). O delete
+   da linha de A é **bloqueado** porque tem `numero_nf` preenchido
+   (`separacao_mirror_service.py:563-574`) — A e B ficariam duplicados no espelho.
+
+**Solução — swap cirúrgico direto:** como o vínculo 1:1 é conhecido (`AssaiNfQpaItem.
+separacao_item_id`), mutamos `sep_item.chassi` e `nf_item.chassi` in-place, emitimos
+eventos diretamente (padrão de `cancelamento_nf_service` / `devolucao_service`) e
+trocamos `chassi_assai` no espelho via helper próprio — **sem** `_calcular_match`,
+**sem** delta de sincronização.
+
+#### `registrar_troca`
+
+```python
+registrar_troca(*, nf_id, chassi_a, chassi_b, operador_id, motivo, dry_run=True) -> dict
+```
+
+`dry_run=True` é o **default** (padrão WRITE do módulo): valida + retorna o plano, sem escrever.
+
+Sequência de 10 passos (ver spec §5.2):
+1. Valida pré-condições (§5.3); `dry_run` retorna aqui.
+2. Lock pessimista `with_for_update` em `AssaiMoto(A)` e `AssaiMoto(B)` — anti-TOCTOU.
+3. Localiza `nf_item` e `sep_item` (via `separacao_item_id`).
+4. Grava `AssaiNfQpaItemVinculoHistorico` com `motivo=TROCA_GARANTIA`.
+5. Muta `sep_item.chassi = B` e `nf_item.chassi = B` in-place.
+6. `emitir_evento(B, SEPARADA)` → `emitir_evento(B, FATURADA)` (B = nova moto vendida).
+7. `emitir_evento(A, PENDENTE)` — A volta ao estoque (D2).
+8. `trocar_chassi_no_espelho(sep_id, A, B)` — espelho Nacom vê B (D5).
+9. Cria `AssaiPosVendaOcorrencia(tipo=TROCA_GARANTIA, chassi=A, chassi_substituto=B, nf_qpa_id, ...)`.
+10. `db.session.commit()`.
+
+Pré-condições (§5.3): A em `assai_nf_qpa_item` da NF com `separacao_item_id` não-nulo;
+`status_efetivo(A) == FATURADA`; NF não-CANCELADA; `status_efetivo(B) == DISPONIVEL`;
+B mesmo modelo de A; par `(nf_qpa_id, chassi=A)` sem ocorrência `TROCA_GARANTIA` prévia.
+
+#### `trocar_chassi_no_espelho`
+
+**Em `separacao_mirror_service.py`** — novo helper:
+
+```python
+trocar_chassi_no_espelho(assai_sep_id, chassi_de, chassi_para) -> int
+```
+
+`UPDATE` direto em `separacao SET chassi_assai=B WHERE separacao_lote_id='ASSAI-SEP-{id}'
+AND chassi_assai=A`. Preserva `numero_nf` e status da linha — **sem leg nova de frete** (D5).
+Retorna o número de linhas afetadas.
+
+#### `listar_substitutos`
+
+```python
+listar_substitutos(modelo_id) -> dict  # {disponiveis: [...], outros_estados: [...]}
+```
+
+Picker para a UI de pós-venda:
+- `disponiveis`: chassis `DISPONIVEL` do mesmo modelo — **selecionáveis**.
+- `outros_estados`: chassis `SEPARADA` / `MONTADA` / `ESTOQUE` — **bloqueados**, com
+  aviso de tratativa (MONTADA → Disponibilizar; ESTOQUE → Montar+Disponibilizar; SEPARADA
+  → liberar da sep ativa).
+
+#### Guards de imutabilidade em `pos_venda_service`
+
+Ocorrências `tipo='TROCA_GARANTIA'` têm campos estruturais **congelados** após criação:
+- `atualizar_ocorrencia`: rejeita alteração de `chassi`, `chassi_substituto`, `nf_qpa_id`, `tipo`.
+- `excluir_ocorrencia`: **bloqueado** para `tipo='TROCA_GARANTIA'`.
+- `descricao` e anexos continuam editáveis (documentação).
+
+`listar_trocas_da_nf(nf_id) -> list` — helper read-only que retorna ocorrências
+`TROCA_GARANTIA` vinculadas a uma NF (consultado pelo Faturamento).
+
+### Reflexo no Faturamento
+
+Faturamento **não** ganhou colunas de troca; consulta o pós-venda via `nf_qpa_id`:
+- **Detalhe da NF** (`nf_detalhe.html`): seção "Troca em Garantia" (A → B, data, motivo),
+  espelhando o bloco de devoluções. Link para a ocorrência de pós-venda.
+- **Lista de NFs** (`lista_separacoes.html`): badge "Troca" por linha de NF.
+
+Query base: `AssaiPosVendaOcorrencia.query.filter_by(nf_qpa_id=nf.id, tipo='TROCA_GARANTIA')`.
+
+### Testes
+
+`tests/motos_assai/test_troca_garantia.py` — 15 casos cobrindo: swap feliz, `dry_run`,
+guards (A não-FATURADA, B não-DISPONIVEL, modelo divergente), idempotência, imutabilidade
+de campos estruturais, link Faturamento, espelho Nacom preservando `numero_nf`.
+
+---
+
 ## Referências
 
 - Spec: `docs/superpowers/specs/2026-05-07-motos-assai-design.md`
@@ -951,6 +1099,7 @@ do parser de NF (LLM) é follow-up.
 - Plano fase 2-3 (carregamento): `docs/superpowers/plans/2026-05-12-motos-assai-fase2-3-carregamento.md`
 - Plano fase 4 (NF + divergencias): `docs/superpowers/plans/2026-05-12-motos-assai-fase4-nf-divergencias.md`
 - Plano fase 5 (auxiliares): `docs/superpowers/plans/2026-05-12-motos-assai-fase5-auxiliares.md`
+- Spec Troca em Garantia: `docs/superpowers/specs/2026-06-30-motos-assai-troca-garantia-design.md`
 - Padrão arquitetural de referência: `app/hora/CLAUDE.md`
 - Identificador de documento (rede QPA): `app/pedidos/leitura/identificador.py`
 - Parser base de PDF: `app/pedidos/leitura/base.py:PDFExtractor`
