@@ -58,6 +58,15 @@ def main():
         )).scalar()
         print(f'  indice parcial: {idx or "AUSENTE"}')
 
+        seq = db.session.execute(text(
+            "SELECT relname FROM pg_class "
+            "WHERE relkind = 'S' AND relname = 'assai_peca_compra_numero_seq'"
+        )).scalar()
+        print(f'  sequence numero: {seq or "AUSENTE"}')
+        if not seq:
+            print('[ERRO] Sequence assai_peca_compra_numero_seq ausente')
+            sys.exit(1)
+
 
 if __name__ == '__main__':
     main()

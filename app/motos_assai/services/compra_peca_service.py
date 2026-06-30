@@ -1,12 +1,12 @@
 """compra_peca_service — pedido de compra de peca (GARANTIA/COMPRA) (Spec 1 §11).
 
-Numeracao 'PC-AAAA-NNNN' via sequence/retry com SAVEPOINT (nunca MAX()+1, §13.4).
-receber_item alimenta o ledger (registrar_entrada) e recalcula status do cabecalho.
-add+flush SEM commit.
+Numeracao 'PC-AAAA-NNNN' via sequence GLOBAL (nextval atomico, nunca COUNT()/MAX()+1
+§13.4; precedente hora_recibo_numero_seq). receber_item alimenta o ledger
+(registrar_entrada) e recalcula status do cabecalho. add+flush SEM commit.
 """
 from decimal import Decimal
 
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy import text
 
 from app import db
 from app.motos_assai.models import (
@@ -17,8 +17,6 @@ from app.motos_assai.models import (
 )
 from app.motos_assai.services import movimento_service
 from app.utils.timezone import agora_brasil_naive
-
-_MAX_TENTATIVAS_NUMERO = 25
 
 
 class CompraPecaError(Exception):
@@ -33,10 +31,15 @@ def _decimal(valor, campo):
 
 
 def _gerar_numero(ano=None):
+    """Proximo 'PC-AAAA-NNNN' via sequence global (nextval — atomico, sem corrida).
+
+    O sufixo NNNN e contador GLOBAL (nao reinicia por ano; o ano e so rotulo do
+    prefixo). Unicidade garantida pelo nextval + UNIQUE em assai_peca_compra.numero.
+    """
     ano = ano or agora_brasil_naive().year
-    prefixo = f'PC-{ano}-'
-    base = AssaiPecaCompra.query.filter(AssaiPecaCompra.numero.like(f'{prefixo}%')).count()
-    return prefixo, base
+    seq = int(db.session.execute(
+        text("SELECT nextval('assai_peca_compra_numero_seq')")).scalar())
+    return f'PC-{ano}-{seq:04d}'
 
 
 def criar_compra(*, tipo, itens, operador_id, fornecedor='MOTOCHEFE'):
@@ -46,25 +49,13 @@ def criar_compra(*, tipo, itens, operador_id, fornecedor='MOTOCHEFE'):
     if not itens:
         raise CompraPecaError('pelo menos 1 item e obrigatorio')
 
-    prefixo, base = _gerar_numero()
-    compra = None
-    for tentativa in range(_MAX_TENTATIVAS_NUMERO):
-        numero = f'{prefixo}{base + 1 + tentativa:04d}'
-        try:
-            with db.session.begin_nested():
-                compra = AssaiPecaCompra(
-                    numero=numero, tipo=tipo, status=COMPRA_PECA_STATUS_ABERTA,
-                    fornecedor=fornecedor, criada_por_id=operador_id,
-                    criada_em=agora_brasil_naive(),
-                )
-                db.session.add(compra)
-                db.session.flush()
-            break
-        except IntegrityError:
-            compra = None
-            continue
-    if compra is None:
-        raise CompraPecaError('nao foi possivel gerar numero unico para a compra')
+    compra = AssaiPecaCompra(
+        numero=_gerar_numero(), tipo=tipo, status=COMPRA_PECA_STATUS_ABERTA,
+        fornecedor=fornecedor, criada_por_id=operador_id,
+        criada_em=agora_brasil_naive(),
+    )
+    db.session.add(compra)
+    db.session.flush()
 
     for it in itens:
         adicionar_item(

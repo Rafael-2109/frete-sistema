@@ -43,6 +43,10 @@ CREATE TABLE IF NOT EXISTS assai_peca_compra (
     observacao TEXT,
     dados_extras JSONB DEFAULT '{}'::jsonb
 );
+-- Numeracao 'PC-AAAA-NNNN' via sequence GLOBAL (nextval atomico, nunca COUNT()/MAX()+1 §13.4;
+-- precedente hora_recibo_numero_seq). O sufixo NNNN e contador global, nao reinicia por ano;
+-- o ano e so rotulo do prefixo. Unicidade ja garantida pelo UNIQUE em numero + nextval.
+CREATE SEQUENCE IF NOT EXISTS assai_peca_compra_numero_seq START 1;
 
 -- 4.3 ficha de pendencia categorizada
 CREATE TABLE IF NOT EXISTS assai_pendencia (

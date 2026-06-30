@@ -45,6 +45,22 @@ def test_numeros_sao_unicos(app, admin_user):
         db.session.rollback()
 
 
+def test_numero_usa_sequence_global_nao_count(app, admin_user):
+    # Discriminante sequence vs COUNT(): duas chamadas a _gerar_numero SEM inserir
+    # linha entre elas. Com COUNT(linhas) os dois numeros seriam iguais; com nextval
+    # o segundo e estritamente o sucessor (+1). Prova o §13.4 ("NUNCA COUNT()").
+    from app.motos_assai.services.compra_peca_service import _gerar_numero
+    with app.app_context():
+        n1 = _gerar_numero()
+        n2 = _gerar_numero()
+        assert re.match(r'^PC-\d{4}-\d{4,}$', n1)
+        assert n1 != n2
+        seq1 = int(n1.rsplit('-', 1)[1])
+        seq2 = int(n2.rsplit('-', 1)[1])
+        assert seq2 == seq1 + 1
+        db.session.rollback()
+
+
 def test_receber_item_parcial_depois_total(app, admin_user):
     with app.app_context():
         p = _peca(admin_user)
