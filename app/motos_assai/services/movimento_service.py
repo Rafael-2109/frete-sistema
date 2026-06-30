@@ -158,3 +158,116 @@ def ajustar(*, peca_id, delta, operador_id, motivo, custo_unitario=None):
     db.session.add(mov)
     db.session.flush()
     return mov
+
+
+def consumir(
+    *, peca_id, quantidade, pendencia_id, chassi_destino, operador_id,
+    receita_unitaria=None,
+):
+    """Baixa de saldo (CONSUMO, delta -qtd) atendendo uma pendencia (USAR_ESTOQUE).
+
+    Congela custo_unitario = custo_medio(peca) na linha (auditavel). Se a ficha
+    atendida e categoria=VENDA e receita_unitaria foi informada, grava receita.
+    add + flush, SEM commit (caller commita).
+    """
+    from app.motos_assai.models import (
+        AssaiPendencia, AssaiEstoqueMovimento, MOVIMENTO_CONSUMO,
+        PENDENCIA_CATEGORIA_VENDA,
+    )
+
+    qtd = Decimal(str(quantidade))
+    if qtd <= 0:
+        raise EstoqueError('Quantidade deve ser positiva.')
+    ficha = AssaiPendencia.query.get(pendencia_id)
+    if ficha is None:
+        raise EstoqueError(f'Pendencia {pendencia_id} nao encontrada.')
+
+    custo = custo_medio(peca_id)
+    mov = AssaiEstoqueMovimento(
+        peca_id=peca_id,
+        tipo=MOVIMENTO_CONSUMO,
+        quantidade=qtd,
+        delta_almoxarifado=-qtd,
+        chassi_destino=(chassi_destino or '').strip().upper() or None,
+        pendencia_id=pendencia_id,
+        custo_unitario=custo,
+        custo_total=(qtd * custo).quantize(Decimal('0.01')),
+        operador_id=operador_id,
+        ocorrido_em=agora_brasil_naive(),
+        dados_extras={},
+    )
+    if ficha.categoria == PENDENCIA_CATEGORIA_VENDA and receita_unitaria is not None:
+        rec = Decimal(str(receita_unitaria))
+        mov.receita_unitaria = rec
+        mov.receita_total = (qtd * rec).quantize(Decimal('0.01'))
+
+    db.session.add(mov)
+    db.session.flush()
+    return mov
+
+
+def canibalizar(
+    *, peca_id, quantidade, chassi_origem, chassi_destino, pendencia_id,
+    operador_id, receita_unitaria=None,
+):
+    """Transfere peca de outra moto (CANIBALIZACAO, delta 0, custo 0) E abre uma
+    FALTA_PECA ROOT no doador — a falta "viaja" (O4). Transacao unica.
+
+    Guard: chassi_origem (doador) != chassi_destino (receptor). Se a ficha
+    atendida e categoria=VENDA e receita_unitaria informada, grava receita na
+    linha. add + flush, SEM commit.
+    """
+    from app.motos_assai.models import (
+        AssaiPendencia, AssaiEstoqueMovimento, MOVIMENTO_CANIBALIZACAO,
+        PENDENCIA_CATEGORIA_VENDA, PENDENCIA_CATEGORIA_FALTA_PECA,
+        PENDENCIA_ORIGEM_GALPAO,
+    )
+
+    origem = (chassi_origem or '').strip().upper()
+    destino = (chassi_destino or '').strip().upper()
+    if not origem or not destino:
+        raise EstoqueError('chassi_origem e chassi_destino obrigatorios.')
+    if origem == destino:
+        raise EstoqueError('Chassi doador nao pode ser igual ao receptor.')
+    qtd = Decimal(str(quantidade))
+    if qtd <= 0:
+        raise EstoqueError('Quantidade deve ser positiva.')
+    ficha = AssaiPendencia.query.get(pendencia_id)
+    if ficha is None:
+        raise EstoqueError(f'Pendencia {pendencia_id} nao encontrada.')
+
+    mov = AssaiEstoqueMovimento(
+        peca_id=peca_id,
+        tipo=MOVIMENTO_CANIBALIZACAO,
+        quantidade=qtd,
+        delta_almoxarifado=Decimal('0'),
+        chassi_origem=origem,
+        chassi_destino=destino,
+        pendencia_id=pendencia_id,
+        custo_unitario=Decimal('0'),
+        custo_total=Decimal('0'),
+        operador_id=operador_id,
+        ocorrido_em=agora_brasil_naive(),
+        dados_extras={'custo_estimado': True},
+    )
+    if ficha.categoria == PENDENCIA_CATEGORIA_VENDA and receita_unitaria is not None:
+        rec = Decimal(str(receita_unitaria))
+        mov.receita_unitaria = rec
+        mov.receita_total = (qtd * rec).quantize(Decimal('0.01'))
+
+    db.session.add(mov)
+    db.session.flush()
+
+    # A falta "viaja": FALTA_PECA root no doador (origem/descricao default — ambos NOT NULL).
+    # Import LAZY para evitar import circular (movimento_service <-> pendencia_service).
+    from app.motos_assai.services.pendencia_service import abrir_pendencia
+    abrir_pendencia(
+        chassi=origem,
+        categoria=PENDENCIA_CATEGORIA_FALTA_PECA,
+        origem=PENDENCIA_ORIGEM_GALPAO,
+        descricao=f'Peca canibalizada para chassi {destino}',
+        peca_id=peca_id,
+        operador_id=operador_id,
+        detalhes={'movimento_origem_id': mov.id, 'canibalizado_para': destino},
+    )
+    return mov

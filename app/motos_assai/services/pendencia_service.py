@@ -547,3 +547,33 @@ def cancelar_pendencia(
     _emitir_resolucao_fisica(ficha, motivo_norm, operador_id)
     db.session.flush()
     return ficha
+
+
+def solicitar_compra(
+    *, pendencia_id: int, tipo: str, itens, operador_id: int,
+    fornecedor: str = 'MOTOCHEFE',
+):
+    """Provisao (R3): cria assai_peca_compra (tipo GARANTIA/COMPRA) + itens
+    ligados a esta ficha por pendencia_id, e seta fase=AGUARDANDO_PECA. NAO
+    resolve a ficha (nao grava resolvida_em). Delega ao compra_peca_service.
+    add + flush, SEM commit.
+    """
+    from app.motos_assai.services import compra_peca_service
+
+    ficha = AssaiPendencia.query.get(pendencia_id)
+    if ficha is None:
+        raise PendenciaError(f'Pendencia {pendencia_id} nao encontrada.')
+
+    itens_com_pendencia = []
+    for it in (itens or []):
+        d = dict(it)
+        d.setdefault('pendencia_id', pendencia_id)
+        itens_com_pendencia.append(d)
+
+    compra = compra_peca_service.criar_compra(
+        tipo=tipo, itens=itens_com_pendencia,
+        operador_id=operador_id, fornecedor=fornecedor,
+    )
+    ficha.fase = PENDENCIA_FASE_AGUARDANDO_PECA
+    db.session.flush()
+    return compra
