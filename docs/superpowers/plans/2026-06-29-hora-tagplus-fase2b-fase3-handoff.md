@@ -31,11 +31,16 @@ atualizado: 2026-06-29
 - `pedido_reverso_worker.descobrir_e_replicar_job` (entry point do cron, gated pela flag).
 - **UI:** vínculo de chassi **reusa a tela de edição de pedido INCOMPLETO** (`pedido_venda_novo.html`, que já exibe a divergência `AGUARDANDO_CHASSI`); badge "TagPlus" na listagem (`vendas_lista.html`).
 
-**PENDENTE (próxima sessão / dono):**
-1. **Go-live 2b**: confirmar com o TagPlus que `pedido_os_vinculada` no `POST /nfes` vincula sem auto-criar outro pedido (#1) e o cancelar-com-NFe (#3); **ligar `HORA_TAGPLUS_PUSH_PEDIDO=1`**. (No pior caso a NFe sai correta; só restaria duplicação a reconciliar.)
-2. **Go-live Fase 3**: cron **JÁ agendado** no scheduler de PROD (`app/scheduler/sincronizacao_incremental_definitiva.py` → `executar_descoberta_reversa_hora`, a cada 30min, env `HORA_TAGPLUS_REVERSO_INTERVAL_MIN`; o job é no-op sem `create_app` enquanto a flag OFF). Falta só: **deploy** + **ligar `HORA_TAGPLUS_REVERSO=1`** após observar o numero-walk em PROD.
-3. **Push do commit** (aval do dono — dispara deploy).
-4. Melhorias futuras (riscos residuais abaixo): label amigável p/ `AGUARDANDO_CHASSI`, lock anti-TOCTOU, reconciliador por `codigo_externo`.
+**GO-LIVE EXECUTADO (2026-06-29 ~23:55):** deploy `4c8943800` LIVE (web+worker). Flags LIGADAS em PROD (confirmado via API): **web** `HORA_TAGPLUS_PUSH_PEDIDO=1`+`HORA_TAGPLUS_REVERSO=1`; **worker** (`...worker-atacadao`, queue `hora_nfe`) `HORA_TAGPLUS_PUSH_PEDIDO=1`. Job `HORA TagPlus reverso` registrado no scheduler. Pré-requisito do reverso resolvido antes: backfills (pedidos legados + NF) capturaram o vínculo até nº 965 → **dry-run do numero-walk = 0** (não duplica).
+
+**MONITORAR (validação ao vivo — pendente):**
+1. **1º ciclo do reverso** (~30min após o boot): `hora_venda` `origem_criacao='TAGPLUS'` deve seguir baixo/zero e o cursor (`ultimo_pedido_numero_reconciliado`) avançar p/ 965.
+2. **Push**: 1ª venda nova ganha `tagplus_pedido_id`; confirmar/cancelar espelham status no TagPlus.
+3. **Gate #1 ao vivo (crítico)**: 1ª emissão de NFe com push ON → conferir no TagPlus que `pedido_os_vinculada` **vinculou sem criar 2º pedido**. Se duplicar, a NFe sai correta mesmo assim — só reconciliar.
+
+**Pendência separada (numeração / Fase 1):** captura do `tagplus_pedido_numero` via webhook tinha parado (8 faturadas órfãs); resolvida pelos backfills nesta sessão, mas vale checar por que o webhook `nfe_aprovada` não capturou — pode repetir.
+
+**Melhorias futuras:** label amigável p/ `AGUARDANDO_CHASSI`, UNIQUE em `tagplus_pedido_id` (após limpar 3 dups legadas), reconciliador por `codigo_externo`.
 
 **Review adversarial 2026-06-29 — fixes aplicados (com testes):**
 - *Fase 2b:* `push_criar_pedido` no-op para FATURADO/CANCELADO; `resolver_id_cliente` trata CPF ambíguo; warning em `POST /pedidos` 2xx sem id. (Os fixes do caminho `to_nfe` — PATCH validado, cliente estrito — foram **removidos junto com o `to_nfe`** na revisão para `pedido_os_vinculada`.)
