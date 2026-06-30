@@ -1,12 +1,12 @@
 {
   "app/agente": {
-    "py": 110,
-    "loc": 57438,
+    "py": 115,
+    "loc": 58163,
     "tpl": 0
   },
   "app/agente/services": {
-    "py": 26,
-    "loc": 14998,
+    "py": 27,
+    "loc": 15064,
     "tpl": 0
   },
   "app/agente_lojas": {
@@ -21,7 +21,7 @@
   },
   "app/carvia": {
     "py": 138,
-    "loc": 76754,
+    "loc": 76845,
     "tpl": 132
   },
   "app/chat": {
@@ -46,7 +46,7 @@
   },
   "app/hora": {
     "py": 122,
-    "loc": 45732,
+    "loc": 45794,
     "tpl": 103
   },
   "app/motos_assai": {
