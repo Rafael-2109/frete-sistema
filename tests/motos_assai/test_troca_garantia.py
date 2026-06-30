@@ -249,3 +249,33 @@ def test_registrar_troca_idempotente(app, admin_user):
                 nf_id=c['nf'].id, chassi_a=c['chassi_a'], chassi_b=c['chassi_b'],
                 operador_id=admin_user.id, motivo='x', dry_run=False,
             )
+
+
+from app.motos_assai.services.troca_garantia_service import listar_substitutos
+from app.motos_assai.models import EVENTO_MONTADA, EVENTO_ESTOQUE
+
+
+def test_listar_substitutos_separa_disponivel_de_outros(app, admin_user):
+    with app.app_context():
+        import uuid as _uuid
+        suf = _uuid.uuid4().hex[:6].upper()
+        modelo = AssaiModelo(codigo=f'SUB{suf}', nome=f'Sub {suf}', peso_kg=Decimal('40'))
+        db.session.add(modelo)
+        db.session.flush()
+
+        disp = AssaiMoto(chassi=f'DISP{suf}AAAA', modelo_id=modelo.id, cor='AZUL')
+        mont = AssaiMoto(chassi=f'MONT{suf}BBBB', modelo_id=modelo.id, cor='ROSA')
+        est = AssaiMoto(chassi=f'ESTQ{suf}CCCC', modelo_id=modelo.id, cor='CINZA')
+        db.session.add_all([disp, mont, est])
+        db.session.flush()
+        emitir_evento(disp.chassi, EVENTO_DISPONIVEL, operador_id=admin_user.id)
+        emitir_evento(mont.chassi, EVENTO_MONTADA, operador_id=admin_user.id)
+        emitir_evento(est.chassi, EVENTO_ESTOQUE, operador_id=admin_user.id)
+        db.session.commit()
+
+        res = listar_substitutos(modelo.id)
+        chassis_disp = {d['chassi'] for d in res['disponiveis']}
+        assert disp.chassi.upper() in chassis_disp
+        assert mont.chassi.upper() not in chassis_disp
+        assert any(o['chassi'] == mont.chassi.upper() for o in res['outros_estados']['MONTADA'])
+        assert any(o['chassi'] == est.chassi.upper() for o in res['outros_estados']['ESTOQUE'])

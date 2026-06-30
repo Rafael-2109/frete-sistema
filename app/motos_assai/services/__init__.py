@@ -112,7 +112,7 @@ from .devolucao_service import (
     DevolucaoValidationError,
 )
 from .resolucao_service import resolver_com_tratativa, ResolucaoError
-from .troca_garantia_service import registrar_troca, TrocaGarantiaError
+from .troca_garantia_service import registrar_troca, TrocaGarantiaError, listar_substitutos
 
 __all__ = [
     'listar_lojas', 'criar_loja', 'atualizar_loja', 'get_loja', 'LojaJaExisteError',
@@ -175,5 +175,5 @@ __all__ = [
     'get_devolucao', 'pendencias_do_chassi', 'itens_da_nf_para_tela',
     'DevolucaoValidationError',
     'resolver_com_tratativa', 'ResolucaoError',
-    'registrar_troca', 'TrocaGarantiaError',
+    'registrar_troca', 'TrocaGarantiaError', 'listar_substitutos',
 ]

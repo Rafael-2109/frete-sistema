@@ -11,8 +11,11 @@ FATURADA) nem sincronizar_espelho_com_separacao (delta bloqueado por numero_nf).
 """
 from __future__ import annotations
 
+from sqlalchemy import func
+
 from app import db
 from app.motos_assai.models import (
+    AssaiMotoEvento, EVENTO_MONTADA, EVENTO_ESTOQUE,
     AssaiMoto, AssaiNfQpa, AssaiNfQpaItem, AssaiNfQpaItemVinculoHistorico,
     AssaiSeparacaoItem, AssaiPosVendaOcorrencia,
     EVENTO_FATURADA, EVENTO_PENDENTE, EVENTO_SEPARADA, EVENTO_DISPONIVEL,
@@ -174,3 +177,40 @@ def registrar_troca(*, nf_id, chassi_a, chassi_b, operador_id, motivo, dry_run=T
         'chassi_a': chassi_a, 'chassi_b': chassi_b, 'sep_id': sep_id,
         'ocorrencia_id': oc.id, 'plano': plano,
     }
+
+
+def listar_substitutos(modelo_id: int) -> dict:
+    """Lista candidatos a moto substituta (B) do mesmo modelo.
+
+    `disponiveis`: motos cujo ULTIMO evento e DISPONIVEL — selecionaveis.
+    `outros_estados`: motos em MONTADA/ESTOQUE/SEPARADA (precisam de tratativa
+    para virar DISPONIVEL) — exibidas como alerta, NAO selecionaveis.
+    """
+    sub = (
+        db.session.query(
+            AssaiMotoEvento.chassi.label('chassi'),
+            func.max(AssaiMotoEvento.id).label('ultimo_id'),
+        )
+        .group_by(AssaiMotoEvento.chassi)
+        .subquery()
+    )
+    rows = (
+        db.session.query(AssaiMoto.chassi, AssaiMoto.cor, AssaiMotoEvento.tipo)
+        .join(sub, sub.c.chassi == AssaiMoto.chassi)
+        .join(AssaiMotoEvento, AssaiMotoEvento.id == sub.c.ultimo_id)
+        .filter(AssaiMoto.modelo_id == modelo_id)
+        .filter(AssaiMotoEvento.tipo.in_(
+            [EVENTO_DISPONIVEL, EVENTO_MONTADA, EVENTO_ESTOQUE, EVENTO_SEPARADA]
+        ))
+        .order_by(AssaiMoto.chassi.asc())
+        .all()
+    )
+    disponiveis = []
+    outros = {EVENTO_MONTADA: [], EVENTO_ESTOQUE: [], EVENTO_SEPARADA: []}
+    for chassi, cor, tipo in rows:
+        item = {'chassi': chassi, 'cor': cor or ''}
+        if tipo == EVENTO_DISPONIVEL:
+            disponiveis.append(item)
+        else:
+            outros[tipo].append(item)
+    return {'disponiveis': disponiveis, 'outros_estados': outros}
