@@ -132,6 +132,30 @@
 </div>
 {% endif %}
 
+{% if trocas_garantia %}
+<div class="card mt-3">
+  <div class="card-header">
+    <span class="badge bg-warning text-dark">Troca em Garantia</span>
+    Registros de Pós-venda vinculados a esta NF
+  </div>
+  <div class="card-body p-0">
+    <table class="table table-sm mb-0">
+      <thead><tr><th>Defeituosa (A)</th><th>Substituta (B)</th><th>Motivo</th><th>Data</th></tr></thead>
+      <tbody>
+        {% for t in trocas_garantia %}
+        <tr>
+          <td>{{ t.chassi }}</td>
+          <td>{{ t.chassi_substituto }}</td>
+          <td>{{ t.descricao }}</td>
+          <td>{{ t.criado_em.strftime('%d/%m/%Y %H:%M') if t.criado_em else '' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
 {# ==============================================================================
    Modal Devolução pela NFd (Migration 29)
    Form completo dentro do modal: cabecalho (data, NFd, motivo, anexos) +

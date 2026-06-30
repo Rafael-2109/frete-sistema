@@ -355,3 +355,18 @@ def test_rota_registrar_troca(app, admin_user, login_admin):
     with app.app_context():
         assert status_efetivo(chassi_b) == EVENTO_FATURADA
         assert status_efetivo(chassi_a) == EVENTO_PENDENTE
+
+
+def test_faturamento_detalhe_mostra_troca(app, admin_user, login_admin):
+    with app.app_context():
+        c = _cenario(admin_user)
+        registrar_troca(
+            nf_id=c['nf'].id, chassi_a=c['chassi_a'], chassi_b=c['chassi_b'],
+            operador_id=admin_user.id, motivo='defeito do motor', dry_run=False,
+        )
+        nf_id, chassi_b = c['nf'].id, c['chassi_b']
+    resp = login_admin.get(f'/motos-assai/faturamento/nfs/{nf_id}')
+    assert resp.status_code == 200
+    html = resp.get_data(as_text=True)
+    assert 'Troca em Garantia' in html
+    assert chassi_b in html

@@ -151,6 +151,21 @@ def faturamento_lista():
                 'status': c.status,
             })
 
+    # Trocas em garantia vinculadas às NFs da tela (batch)
+    from app.motos_assai.models import AssaiPosVendaOcorrencia, TIPO_TROCA_GARANTIA
+    trocas_por_nf: dict = {}
+    _nf_ids = todos_nf_ids
+    if _nf_ids:
+        for (nid,) in (
+            db.session.query(AssaiPosVendaOcorrencia.nf_qpa_id)
+            .filter(
+                AssaiPosVendaOcorrencia.nf_qpa_id.in_(_nf_ids),
+                AssaiPosVendaOcorrencia.tipo == TIPO_TROCA_GARANTIA,
+            )
+            .distinct().all()
+        ):
+            trocas_por_nf[nid] = True
+
     # Fallback CNPJ → AssaiLoja: pre-carrega para NFs orfas sem loja_id.
     # Evita exibir UF/cidade "-" quando o regex LJ\d+ falhou mas existe AssaiLoja
     # com o mesmo CNPJ destinatario.
@@ -248,6 +263,7 @@ def faturamento_lista():
         separacoes=separacoes_prontas + separacoes_faturadas,
         filtros_aplicados=filtros,
         modelos=listar_modelos(somente_ativos=True),
+        trocas_por_nf=trocas_por_nf,
     )
 
 
@@ -458,9 +474,10 @@ def faturamento_nf_detalhe(nf_id):
         )
 
     # Migration 29: devolucoes vinculadas a esta NF (NFds).
-    from app.motos_assai.services import listar_devolucoes_da_nf, itens_da_nf_para_tela
+    from app.motos_assai.services import listar_devolucoes_da_nf, itens_da_nf_para_tela, listar_trocas_da_nf
     from app.motos_assai.forms import DevolucaoNfForm
     devolucoes_da_nf = listar_devolucoes_da_nf(nf_id)
+    trocas_garantia = listar_trocas_da_nf(nf_id)
     # Form + itens carregados para popular o modal de devolucao embutido na propria tela.
     # Modal so e renderizado se nf.status_match != 'CANCELADA' (template controla).
     form_devolucao = DevolucaoNfForm() if nf.status_match != 'CANCELADA' else None
@@ -473,6 +490,7 @@ def faturamento_nf_detalhe(nf_id):
         nf=nf, items=items,
         sep_criada_via_nf=sep_criada_via_nf,
         devolucoes_da_nf=devolucoes_da_nf,
+        trocas_garantia=trocas_garantia,
         form_devolucao=form_devolucao,
         itens_devolucao=itens_devolucao,
     )

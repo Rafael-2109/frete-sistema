@@ -286,6 +286,7 @@
           {% else %}
             <span class="text-muted">-</span>
           {% endif %}
+          {% if trocas_por_nf.get(nf.id) %}<span class="badge bg-warning text-dark">Troca</span>{% endif %}
         </td>
         <td class="text-end">
           {# === Excel: abre tela de Separacao === #}
@@ -445,6 +446,7 @@
           {% else %}
             <span class="text-muted">-</span>
           {% endif %}
+          {% if trocas_por_nf.get(nf.id) %}<span class="badge bg-warning text-dark">Troca</span>{% endif %}
         </td>
         <td>
           {% if nf.status_match == 'DIVERGENTE' %}
