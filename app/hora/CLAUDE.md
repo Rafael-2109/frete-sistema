@@ -1704,8 +1704,11 @@ pedido) e replicação reversa numero-walk.
 
 ## 41. Push de pedido HORA→TagPlus (Fase 2b) + descoberta reversa (Fase 3 motor) — 2026-06-29
 
-Fases 2b e 3 do design HORA↔TagPlus, **atrás da flag `HORA_TAGPLUS_PUSH_PEDIDO` (default OFF)** —
-commit LOCAL, **não deployado**. Pré-requisitos confirmados **ao vivo** (testes controlados
+Fases 2b e 3 do design HORA↔TagPlus. **GO-LIVE 2026-06-29: DEPLOYADO e LIGADO em PROD** —
+`HORA_TAGPLUS_PUSH_PEDIDO=1` no **web** (push criar/confirmar/cancelar) e no **worker**
+`...worker-atacadao` (emissão, queue `hora_nfe` → `pedido_os_vinculada`); `HORA_TAGPLUS_REVERSO=1`
+no **web** (scheduler). Default do CÓDIGO continua OFF (as flags ativam por env var). Pré-go-live:
+backfills capturaram vínculo até nº 965 → dry-run do numero-walk = 0. Pré-requisitos confirmados **ao vivo** (testes controlados
 cria+apaga no TagPlus de PROD, zero resíduo): `write:pedidos` **já efetivo** (POST /pedidos=201;
 `scope_efetivo=null` é falso-negativo, **não** precisa reauth); contrato `POST /pedidos`
 mapeado — `itens[].produto_servico` e `faturas[]` iguais ao `/nfes`, `cliente`=**id_cliente**
