@@ -45,8 +45,8 @@ def _cenario(admin, *, chassi_a=None, chassi_b=None, mesmo_modelo=True,
         db.session.flush()
 
     loja = AssaiLoja(
-        numero=f'9{suf[:3]}', nome='Loja Troca', razao_social='Loja Troca LTDA',
-        cnpj='12345678000199', cidade='SAO PAULO', uf='SP',
+        numero=f'TG{suf}', nome='Loja Troca', razao_social='Loja Troca LTDA',
+        cnpj=f'{suf}00000199'[:18], cidade='SAO PAULO', uf='SP',
     )
     db.session.add(loja)
     db.session.flush()
