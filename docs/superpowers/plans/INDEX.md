@@ -4,10 +4,12 @@ camada: L1
 sot_de: —
 hub: docs/superpowers/plans/INDEX.md
 superseded_by: —
-atualizado: 2026-06-28
+atualizado: 2026-06-30
 -->
 # Plans — indice
 > **Papel:** mapa dos planos de implementacao. So ponteiros.
+
+- [Motos Assaí — Estoque de Peças + Pendência categorizada (Spec 1, back-end)](2026-06-30-motos-assai-estoque-pecas-pendencia.md) — plano TDD 12 tasks: migration 34 (6 tabelas) → models+services (peca/movimento/compra) → núcleo da pendência (abrir/resolver sob `pg_advisory_xact_lock`, N fichas=1 evento PENDENTE, gate última física→MONTADA) → tratativas (consumir/canibalizar+solicitar_compra) → migrar leituras p/ a tabela → ganchos (montagem/enviar/devolução)+shim retrocompatível → backfill (`--check`) → schema/docs; spec par em `specs/2026-06-30-motos-assai-estoque-pecas-pendencia-design.md`
 
 - [HORA ↔ TagPlus — Handoff Fase 2b + Fase 3](2026-06-29-hora-tagplus-fase2b-fase3-handoff.md) — retomada p/ sessão limpa: estado (Fase 1+2a deployadas, flag `HORA_TAGPLUS_PUSH_PEDIDO` OFF, 885 vendas backfilladas em PROD), 3 pré-requisitos a confirmar (write:pedidos real, `to_nfe` transmite?, cancelar pedido com NFe), roteiro Fase 2b (payload completo + `to_nfe` sem duplicar + wiring em venda_service) e Fase 3 (numero-walk `?numero=` + replicação→INCOMPLETO + UI chassi); spec par em `specs/2026-06-29-hora-tagplus-sync-bidirecional-design.md`
 - [HORA ↔ TagPlus — Fase 1: número visível do pedido](2026-06-29-hora-tagplus-sync-fase1-numeracao.md) — plano TDD 6 tasks: coluna `hora_venda.tagplus_pedido_numero` (migration hora_62) + captura no webhook `nfe_aprovada` (de `pedido_os_vinculada.numero`) + no backfill de enriquecimento + backfill histórico do JSONB (sem API) + exibição na listagem (fallback `#id`); spec par em `specs/2026-06-29-hora-tagplus-sync-bidirecional-design.md`
