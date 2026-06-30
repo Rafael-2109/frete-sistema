@@ -172,10 +172,16 @@ def desfazer_mojibake(texto: Optional[str]) -> Optional[str]:
 
 
 def normalizar_historico(texto: str) -> str:
-    """Normaliza historico: desfaz mojibake, upper, strip, unidecode, colapsar espacos."""
+    """Normaliza historico: upper, strip, unidecode, colapsar espacos.
+
+    NAO desfaz mojibake aqui de proposito: esta funcao alimenta o hash_transacao de
+    deduplicacao, que precisa ser ESTAVEL (registros legados foram gravados com o texto
+    mojibake; mudar a normalizacao mudaria o hash e reimportar o mesmo extrato duplicaria).
+    A correcao de mojibake e feita na EXIBICAO (campo historico/historico_completo) via
+    desfazer_mojibake/backfill, sem tocar o hash.
+    """
     if not texto:
         return ''
-    texto = desfazer_mojibake(texto) or texto
     texto = unidecode(texto).upper().strip()
     texto = re.sub(r'\s+', ' ', texto)
     return texto
