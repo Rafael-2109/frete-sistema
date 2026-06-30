@@ -200,3 +200,79 @@ def test_cancelar_motivo_curto_falha(app, admin_user):
         with pytest.raises(PendenciaError, match='Motivo'):
             cancelar_pendencia(pendencia_id=ficha.id, motivo='x', operador_id=admin_user.id)
         db.session.rollback()
+
+
+# ---------------------------------------------------------------------------
+# Cenario 7: idempotencia pos-lock — resolver apos commit (TOCTOU fix)
+#
+# Simula o cenario de double-click: tx1 resolve + commit; tx2 (stale pre-lock)
+# chega ao post-lock, faz db.session.refresh e enxerga resolvida_em != None.
+# Aqui simulamos via commit da 1a chamada + 2a chamada na mesma sessao — a
+# session expira o objeto no commit, entao a 2a chamada carrega do DB (estado
+# committed) e o post-lock refresh + re-check garante no-op sem 2o MONTADA.
+# ---------------------------------------------------------------------------
+
+def test_resolver_idempotente_pos_lock(app, admin_user):
+    """Prova que pos-commit a 2a chamada e no-op sem 2o evento MONTADA (TOCTOU fix)."""
+    with app.app_context():
+        chassi = f'TST_{_uid()}'
+        _moto(chassi, admin_user)
+        ficha = abrir_pendencia(
+            chassi=chassi, categoria=PENDENCIA_CATEGORIA_FALTA_PECA,
+            origem=PENDENCIA_ORIGEM_GALPAO, descricao='Falta peca',
+            operador_id=admin_user.id,
+        )
+        db.session.commit()  # persiste estado inicial limpo
+
+        # 1a resolucao — persiste no banco (simula 1a tx do double-click completo)
+        resolver_pendencia(
+            pendencia_id=ficha.id, tratativa=PENDENCIA_TRATATIVA_CONSERTAR,
+            resolucao_descricao='1a resolucao', operador_id=admin_user.id,
+        )
+        db.session.commit()  # simula commit da 1a tx concorrente
+        assert _conta(chassi, EVENTO_MONTADA) == 1
+
+        # 2a chamada — session expirou o objeto no commit; 2a carga le do DB (resolvida)
+        # O post-lock refresh garante que mesmo quem passou pelo pre-lock com dado stale
+        # nao re-escreve nem emite 2o MONTADA
+        r2 = resolver_pendencia(
+            pendencia_id=ficha.id, tratativa=PENDENCIA_TRATATIVA_REVISAR,
+            resolucao_descricao='nao deve sobrescrever', operador_id=admin_user.id,
+        )
+        assert r2.tratativa == PENDENCIA_TRATATIVA_CONSERTAR  # nao sobrescreveu
+        assert _conta(chassi, EVENTO_MONTADA) == 1            # nao emitiu 2o MONTADA
+        db.session.rollback()
+
+
+# ---------------------------------------------------------------------------
+# Cenario 8: idempotencia pos-lock — cancelar apos commit (TOCTOU fix)
+# ---------------------------------------------------------------------------
+
+def test_cancelar_idempotente_pos_lock(app, admin_user):
+    """Prova que pos-commit a 2a chamada a cancelar_pendencia e no-op (TOCTOU fix)."""
+    with app.app_context():
+        chassi = f'TST_{_uid()}'
+        _moto(chassi, admin_user)
+        ficha = abrir_pendencia(
+            chassi=chassi, categoria=PENDENCIA_CATEGORIA_FALTA_PECA,
+            origem=PENDENCIA_ORIGEM_GALPAO, descricao='Falta peca',
+            operador_id=admin_user.id,
+        )
+        db.session.commit()
+
+        cancelar_pendencia(
+            pendencia_id=ficha.id, motivo='Aberta por engano',
+            operador_id=admin_user.id,
+        )
+        db.session.commit()  # simula commit da 1a tx concorrente
+        assert _conta(chassi, EVENTO_MONTADA) == 1
+        cancelada_em_original = ficha.cancelada_em
+
+        # 2a chamada deveria ser no-op sem 2o MONTADA
+        c2 = cancelar_pendencia(
+            pendencia_id=ficha.id, motivo='Segundo cancelamento nao deve gravar',
+            operador_id=admin_user.id,
+        )
+        assert c2.cancelada_em == cancelada_em_original  # nao re-gravou
+        assert _conta(chassi, EVENTO_MONTADA) == 1       # nao emitiu 2o MONTADA
+        db.session.rollback()

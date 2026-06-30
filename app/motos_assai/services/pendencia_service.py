@@ -499,6 +499,9 @@ def resolver_pendencia(
         db.text('SELECT pg_advisory_xact_lock(hashtext(:c))'),
         {'c': ficha.chassi},
     )
+    db.session.refresh(ficha)               # re-le estado committed (double-click / tx concorrente)
+    if ficha.resolvida_em is not None or ficha.cancelada_em is not None:
+        return ficha                        # idempotente sob concorrencia (TOCTOU guard)
 
     ficha.resolvida_em = agora_brasil_naive()
     ficha.resolvida_por_id = operador_id
@@ -530,6 +533,9 @@ def cancelar_pendencia(
         db.text('SELECT pg_advisory_xact_lock(hashtext(:c))'),
         {'c': ficha.chassi},
     )
+    db.session.refresh(ficha)               # re-le estado committed (double-click / tx concorrente)
+    if ficha.resolvida_em is not None or ficha.cancelada_em is not None:
+        return ficha                        # idempotente sob concorrencia (TOCTOU guard)
 
     ficha.cancelada_em = agora_brasil_naive()
     ficha.cancelada_por_id = operador_id
