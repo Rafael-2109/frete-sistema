@@ -371,6 +371,18 @@ def _importar_transacoes(nome_arquivo: str, tipo_arquivo: str, conta, transacoes
 
     db.session.commit()
 
+    # Pos-importacao (Caso 1): casar trios "Pix no Credito" do Nubank e splitar juros.
+    # Roda APOS o commit (as 3 pernas vem de contas/arquivos diferentes e podem nao
+    # coexistir durante o parse). Idempotente; nao quebra a importacao se falhar.
+    try:
+        from app.pessoal.services.pix_credito_service import detectar_e_processar
+        detectar_e_processar()
+    except Exception:
+        import logging
+        logging.getLogger(__name__).exception(
+            'Pos-processamento Pix no Credito falhou (importacao %s)', importacao.id
+        )
+
     periodo = ''
     if importacao.periodo_inicio and importacao.periodo_fim:
         periodo = (

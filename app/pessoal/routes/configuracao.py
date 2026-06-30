@@ -329,6 +329,7 @@ def _regra_payload(regra):
         'ativo': regra.ativo,
         'match_count': contagem.get(regra.id, 0),
         'categorias_restritas_ids': regra.get_categorias_restritas(),
+        'contas_ids': regra.get_contas_ids(),
     }
 
 
@@ -361,6 +362,12 @@ def salvar_regra():
     tipo_regra = dados.get('tipo_regra', 'PADRAO')
     categoria_id = dados.get('categoria_id')
     categorias_restritas = dados.get('categorias_restritas_ids', [])
+
+    # Caso 2: condicao por conta de destino (opcional) — lista de PessoalConta.id
+    try:
+        contas_ids = [int(i) for i in (dados.get('contas_ids') or [])]
+    except (TypeError, ValueError):
+        return jsonify({'sucesso': False, 'mensagem': 'contas_ids invalido.'}), 400
 
     # F1: CPF/CNPJ (opcional) — normaliza para so digitos
     cpf_cnpj_raw = (dados.get('cpf_cnpj_padrao') or '').strip()
@@ -416,6 +423,7 @@ def salvar_regra():
             cpf_anterior = regra.cpf_cnpj_padrao
             vmin_anterior = regra.valor_min
             vmax_anterior = regra.valor_max
+            contas_anterior = regra.get_contas_ids()
 
             # Atualizar campos
             regra.padrao_historico = padrao
@@ -425,6 +433,7 @@ def salvar_regra():
             regra.cpf_cnpj_padrao = cpf_cnpj_padrao
             regra.valor_min = valor_min
             regra.valor_max = valor_max
+            regra.set_contas_ids(contas_ids)
             regra.atualizado_em = agora_utc_naive()
 
             # Detectar se precisa repropagar
@@ -434,10 +443,12 @@ def salvar_regra():
             mudou_cpf = (cpf_cnpj_padrao != cpf_anterior)
             mudou_valor = (valor_min != (float(vmin_anterior) if vmin_anterior is not None else None)
                            or valor_max != (float(vmax_anterior) if vmax_anterior is not None else None))
+            mudou_contas = (sorted(contas_anterior) != sorted(contas_ids))
 
             needs_repropagation = (
                 (tipo_anterior == 'PADRAO' and mudou_tipo) or  # PADRAO→RELATIVO
-                (tipo_regra == 'PADRAO' and (mudou_padrao or mudou_categoria or mudou_cpf or mudou_valor))
+                (tipo_regra == 'PADRAO' and (mudou_padrao or mudou_categoria or mudou_cpf
+                                             or mudou_valor or mudou_contas))
             )
 
             if needs_repropagation:
@@ -462,6 +473,7 @@ def salvar_regra():
                 valor_max=valor_max,
                 origem='manual',
             )
+            regra.set_contas_ids(contas_ids)
             if tipo_regra == 'RELATIVO':
                 regra.set_categorias_restritas(categorias_restritas)
             db.session.add(regra)
@@ -544,7 +556,7 @@ def regras_aplicaveis_transacao(transacao_id):
     """
     from rapidfuzz import fuzz
     from app.pessoal.services.aprendizado_service import _normalizar
-    from app.pessoal.services.categorizacao_service import _valor_no_range
+    from app.pessoal.services.categorizacao_service import _valor_no_range, _conta_no_filtro
 
     if not pode_acessar_pessoal(current_user):
         return jsonify({'sucesso': False, 'mensagem': 'Acesso restrito.'}), 403
@@ -559,6 +571,7 @@ def regras_aplicaveis_transacao(transacao_id):
         tipo_regra='PADRAO', ativo=True,
     ).order_by(
         db.func.length(PessoalRegraCategorizacao.padrao_historico).desc(),
+        PessoalRegraCategorizacao.contas_ids.isnot(None).desc(),
         PessoalRegraCategorizacao.confianca.desc(),
         PessoalRegraCategorizacao.vezes_usado.desc(),
     ).all()
@@ -570,7 +583,8 @@ def regras_aplicaveis_transacao(transacao_id):
     if t.cpf_cnpj_parte:
         for r in regras_padrao:
             if (r.cpf_cnpj_padrao and r.cpf_cnpj_padrao == t.cpf_cnpj_parte
-                    and _valor_no_range(t.valor, r.valor_min, r.valor_max)):
+                    and _valor_no_range(t.valor, r.valor_min, r.valor_max)
+                    and _conta_no_filtro(t.conta_id, r.get_contas_ids())):
                 aplicaveis.append({'regra_id': r.id, 'layer': 'F1-CPF', 'score': 100.0})
                 if top_level_id is None:
                     top_level_id = r.id
@@ -579,7 +593,8 @@ def regras_aplicaveis_transacao(transacao_id):
     for r in regras_padrao:
         padrao_norm = _normalizar(r.padrao_historico or '')
         if (padrao_norm and padrao_norm in historico
-                and _valor_no_range(t.valor, r.valor_min, r.valor_max)):
+                and _valor_no_range(t.valor, r.valor_min, r.valor_max)
+                and _conta_no_filtro(t.conta_id, r.get_contas_ids())):
             if not any(a['regra_id'] == r.id for a in aplicaveis):
                 aplicaveis.append({'regra_id': r.id, 'layer': 'PADRAO-substring', 'score': 100.0})
             if top_level_id is None:
@@ -588,7 +603,8 @@ def regras_aplicaveis_transacao(transacao_id):
     # Layer 2: fuzzy
     for r in regras_padrao:
         padrao_norm = _normalizar(r.padrao_historico or '')
-        if not padrao_norm or not _valor_no_range(t.valor, r.valor_min, r.valor_max):
+        if (not padrao_norm or not _valor_no_range(t.valor, r.valor_min, r.valor_max)
+                or not _conta_no_filtro(t.conta_id, r.get_contas_ids())):
             continue
         score = fuzz.token_set_ratio(padrao_norm, historico)
         if score >= 85 and not any(a['regra_id'] == r.id for a in aplicaveis):

@@ -151,6 +151,10 @@ class PessoalRegraCategorizacao(db.Model):
     # F4: Condicoes por valor (NULL = sem restricao)
     valor_min = db.Column(db.Numeric(15, 2))
     valor_max = db.Column(db.Numeric(15, 2))
+    # Condicao por conta de DESTINO (NULL/[] = vale para qualquer conta). JSON array de
+    # PessoalConta.id. Permite 2 regras com o mesmo padrao textual e contas diferentes
+    # (ex.: "RAFAEL" no Bradesco -> Salario; "RAFAEL" no Nubank -> Transferencia).
+    contas_ids = db.Column(db.Text)  # JSON array de PessoalConta.id
     vezes_usado = db.Column(db.Integer, default=0)
     confianca = db.Column(db.Numeric(5, 2), default=100)
     origem = db.Column(db.String(30), default='semente')  # semente | manual | aprendido
@@ -178,6 +182,22 @@ class PessoalRegraCategorizacao(db.Model):
         """Salva lista de IDs das categorias restritas como JSON."""
         self.categorias_restritas_ids = json.dumps(ids_list) if ids_list else None
 
+    def get_contas_ids(self):
+        """Retorna lista de IDs de conta (PessoalConta.id) que restringem a regra.
+
+        Lista vazia = regra vale para qualquer conta de destino.
+        """
+        if not self.contas_ids:
+            return []
+        try:
+            return json.loads(self.contas_ids)
+        except (json.JSONDecodeError, TypeError):
+            return []
+
+    def set_contas_ids(self, ids_list):
+        """Salva lista de IDs de conta como JSON (None quando vazia = sem restricao)."""
+        self.contas_ids = json.dumps([int(i) for i in ids_list]) if ids_list else None
+
     def to_dict(self):
         return {
             'id': self.id,
@@ -189,6 +209,7 @@ class PessoalRegraCategorizacao(db.Model):
             'cpf_cnpj_padrao': self.cpf_cnpj_padrao,
             'valor_min': float(self.valor_min) if self.valor_min is not None else None,
             'valor_max': float(self.valor_max) if self.valor_max is not None else None,
+            'contas_ids': self.get_contas_ids(),
             'vezes_usado': self.vezes_usado,
             'confianca': float(self.confianca) if self.confianca else 100,
             'origem': self.origem,
@@ -330,6 +351,12 @@ class PessoalTransacao(db.Model):
         db.Integer,
         db.ForeignKey('pessoal_transacoes.id', ondelete='SET NULL'),
     )
+    # Pix no Credito do Nubank (Caso 1): marca as pernas de uma operacao (funding,
+    # pix-saida, compra-cartao splitada em principal+juros). pix_credito_grupo agrupa
+    # as pernas da MESMA operacao para auditoria/reversao do split.
+    # Ver app/pessoal/services/pix_credito_service.py.
+    eh_pix_credito = db.Column(db.Boolean, default=False)
+    pix_credito_grupo = db.Column(db.String(40))
     observacao = db.Column(db.Text)
     status = db.Column(db.String(20), default='PENDENTE')  # PENDENTE | CATEGORIZADO | REVISADO
 
@@ -425,6 +452,8 @@ class PessoalTransacao(db.Model):
             'eh_pagamento_cartao': self.eh_pagamento_cartao,
             'eh_transferencia_propria': self.eh_transferencia_propria,
             'transferencia_par_id': self.transferencia_par_id,
+            'eh_pix_credito': self.eh_pix_credito,
+            'pix_credito_grupo': self.pix_credito_grupo,
             'observacao': self.observacao,
             'status': self.status,
             'cpf_cnpj_parte': self.cpf_cnpj_parte,

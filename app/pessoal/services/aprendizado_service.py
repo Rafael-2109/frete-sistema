@@ -29,12 +29,13 @@ logger = logging.getLogger(__name__)
 
 
 def _mesmo_escopo_regra(regra: 'PessoalRegraCategorizacao',
-                         cpf_cnpj_norm, valor_min, valor_max) -> bool:
-    """Retorna True se a regra tem o mesmo escopo (cpf_cnpj + range de valor).
+                         cpf_cnpj_norm, valor_min, valor_max,
+                         contas_ids=None) -> bool:
+    """Retorna True se a regra tem o mesmo escopo (cpf_cnpj + range de valor + contas).
 
     Regras com mesmo padrao textual mas escopos diferentes sao consideradas
-    distintas (ex: ">=100" vs "<100"), permitindo coexistencia.
-    None == None; senao compara valor numerico.
+    distintas (ex: ">=100" vs "<100", ou Bradesco vs Nubank), permitindo
+    coexistencia. None == None; senao compara valor numerico / listas ordenadas.
     """
     def _num(v):
         return float(v) if v is not None else None
@@ -47,6 +48,9 @@ def _mesmo_escopo_regra(regra: 'PessoalRegraCategorizacao',
         return False
     if _num(regra.valor_max) != _num(valor_max):
         return False
+    # Caso 2: contas diferentes = escopos distintos (Bradesco->Salario vs Nubank->Transf)
+    if sorted(regra.get_contas_ids()) != sorted(int(i) for i in (contas_ids or [])):
+        return False
     return True
 
 
@@ -56,7 +60,8 @@ def aprender_de_categorizacao(transacao_id: int, categoria_id: int,
                                padrao_historico: str = None,
                                cpf_cnpj_padrao: str = None,
                                valor_min=None,
-                               valor_max=None) -> Optional[PessoalRegraCategorizacao]:
+                               valor_max=None,
+                               contas_ids=None) -> Optional[PessoalRegraCategorizacao]:
     """Aprende uma nova regra a partir de categorizacao manual.
 
     Args:
@@ -83,6 +88,9 @@ def aprender_de_categorizacao(transacao_id: int, categoria_id: int,
     cpf_cnpj_norm = None
     if cpf_cnpj_padrao:
         cpf_cnpj_norm = ''.join(ch for ch in cpf_cnpj_padrao if ch.isdigit()) or None
+
+    # Caso 2: normalizar lista de contas que restringem a regra
+    contas_norm = [int(i) for i in contas_ids] if contas_ids else None
 
     # 1. Normalizar historico — usa padrao editado se fornecido
     #    Senao, usa historico_completo (historico + descricao normalizado)
@@ -113,7 +121,7 @@ def aprender_de_categorizacao(transacao_id: int, categoria_id: int,
         score = fuzz.token_set_ratio(padrao_norm, historico_norm)
         if score < 90:
             continue
-        if not _mesmo_escopo_regra(regra, cpf_cnpj_norm, valor_min, valor_max):
+        if not _mesmo_escopo_regra(regra, cpf_cnpj_norm, valor_min, valor_max, contas_norm):
             continue
         if score > melhor_score:
             melhor_score = score
@@ -165,6 +173,7 @@ def aprender_de_categorizacao(transacao_id: int, categoria_id: int,
             origem='aprendido',
         )
         nova_regra.set_categorias_restritas([categoria_id])
+        nova_regra.set_contas_ids(contas_norm)
     else:
         nova_regra = PessoalRegraCategorizacao(
             padrao_historico=historico_norm,
@@ -178,6 +187,7 @@ def aprender_de_categorizacao(transacao_id: int, categoria_id: int,
             confianca=80,
             origem='aprendido',
         )
+        nova_regra.set_contas_ids(contas_norm)
     db.session.add(nova_regra)
     db.session.flush()
     return nova_regra
@@ -272,13 +282,15 @@ def propagar_regra_para_pendentes(regra: PessoalRegraCategorizacao,
 
     Returns: {'propagados': N, 'total_pendentes': M}
     """
-    from app.pessoal.services.categorizacao_service import _valor_no_range
+    from app.pessoal.services.categorizacao_service import _valor_no_range, _conta_no_filtro
 
     if not regra or regra.tipo_regra != 'PADRAO' or not regra.ativo:
         return {'propagados': 0, 'total_pendentes': 0}
 
     padrao_norm = _normalizar(padrao_override or regra.padrao_historico or '')
     cpf_cnpj_regra = regra.cpf_cnpj_padrao
+    # Caso 2: pre-carregar contas da regra (deserializa JSON uma vez, fora do loop)
+    contas_regra = regra.get_contas_ids()
 
     # Regra precisa ter pelo menos um criterio de match
     if not padrao_norm and not cpf_cnpj_regra:
@@ -302,6 +314,10 @@ def propagar_regra_para_pendentes(regra: PessoalRegraCategorizacao,
 
         # F4: filtro de valor
         if not _valor_no_range(transacao.valor, regra.valor_min, regra.valor_max):
+            continue
+
+        # Caso 2: filtro por conta de destino
+        if not _conta_no_filtro(transacao.conta_id, contas_regra):
             continue
 
         # Match por CPF/CNPJ (F1) ou substring
@@ -388,25 +404,28 @@ def contar_matches_por_regra(regras: list[PessoalRegraCategorizacao]) -> dict[in
 
     Returns: {regra_id: count_pendentes_que_matcham}
     """
+    from app.pessoal.services.categorizacao_service import _conta_no_filtro
+
     pendentes = PessoalTransacao.query.filter_by(
         status='PENDENTE',
         excluir_relatorio=False,
     ).all()
 
-    # Pre-normalizar historicos uma vez
-    pendentes_norm = []
-    for t in pendentes:
-        pendentes_norm.append(
-            _normalizar(t.historico_completo or t.historico or '')
-        )
+    # Pre-normalizar historicos uma vez, guardando a conta para o filtro do Caso 2
+    pendentes_norm = [
+        (_normalizar(t.historico_completo or t.historico or ''), t.conta_id)
+        for t in pendentes
+    ]
 
     contagem = {}
     for regra in regras:
         if regra.tipo_regra == 'PADRAO' and regra.ativo:
             padrao_norm = _normalizar(regra.padrao_historico or '')
             if padrao_norm:
+                contas_regra = regra.get_contas_ids()
                 contagem[regra.id] = sum(
-                    1 for h in pendentes_norm if padrao_norm in h
+                    1 for h, conta_id in pendentes_norm
+                    if padrao_norm in h and _conta_no_filtro(conta_id, contas_regra)
                 )
             else:
                 contagem[regra.id] = 0
@@ -578,7 +597,8 @@ def propagar_regra_forcado(regra: PessoalRegraCategorizacao) -> dict:
 def simular_propagacao(padrao_historico: str = None,
                        cpf_cnpj_padrao: str = None,
                        valor_min=None,
-                       valor_max=None) -> list[dict]:
+                       valor_max=None,
+                       contas_ids=None) -> list[dict]:
     """Simula propagacao — retorna transacoes PENDENTES que seriam afetadas.
 
     Quando padrao_historico ou cpf_cnpj_padrao fornecido: replica a logica de
@@ -590,7 +610,7 @@ def simular_propagacao(padrao_historico: str = None,
 
     Returns: lista de dicts com {id, data, historico, valor, tipo}
     """
-    from app.pessoal.services.categorizacao_service import _valor_no_range
+    from app.pessoal.services.categorizacao_service import _valor_no_range, _conta_no_filtro
 
     pendentes = PessoalTransacao.query.filter_by(
         status='PENDENTE',
@@ -605,6 +625,8 @@ def simular_propagacao(padrao_historico: str = None,
     if tem_match_criterio:
         padrao_norm = _normalizar(padrao_historico or '')
         cpf_cnpj_norm = (cpf_cnpj_padrao or '').strip() or None
+        # Caso 2: restricao por conta (None/[] = qualquer conta)
+        contas_norm = [int(i) for i in contas_ids] if contas_ids else None
 
         if not padrao_norm and not cpf_cnpj_norm:
             return []
@@ -619,6 +641,10 @@ def simular_propagacao(padrao_historico: str = None,
 
             # F4: filtro de valor (range aberto nao restringe)
             if not _valor_no_range(transacao.valor, valor_min, valor_max):
+                continue
+
+            # Caso 2: filtro por conta de destino
+            if not _conta_no_filtro(transacao.conta_id, contas_norm):
                 continue
 
             # Match por CPF/CNPJ (F1) OU substring de padrao

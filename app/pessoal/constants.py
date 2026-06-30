@@ -324,6 +324,17 @@ PADROES_PAGAMENTO_RECEBIDO_CARTAO = [
     "PAGAMENTO RECEBIDO",
 ]
 
+# Funding do "Pix no Credito" do Nubank (Caso 1). O Nubank credita o limite do cartao
+# na NuConta ("Valor adicionado na conta por cartao de credito - Valor adicionado para
+# Pix no Credito") para em seguida enviar o Pix. Esse credito e PERNA DE LIQUIDEZ, nao
+# receita: a despesa real e o Pix-saida (principal) + a compra no cartao (principal+juros).
+# Excluir do relatorio. Detectado com PRIORIDADE (antes das regras/heuristicas) porque o
+# texto e univoco. Casamento das pernas: app/pessoal/services/pix_credito_service.py.
+PADROES_FUNDING_PIX_CREDITO = [
+    "VALOR ADICIONADO NA CONTA POR CARTAO DE CREDITO",
+    "VALOR ADICIONADO PARA PIX NO CREDITO",
+]
+
 # Padroes que indicam transferencia propria (entre contas)
 PADROES_TRANSFERENCIA_PROPRIA = [
     "TRANSF.AUT. NG PROMO",
