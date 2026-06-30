@@ -33,11 +33,13 @@ from app.motos_assai.services import (
     PosVendaValidationError,
     gerar_pendencia_de_ocorrencia, pendencias_da_ocorrencia,
     contar_pendencias_abertas_por_chassis,
+    registrar_troca, listar_substitutos, TrocaGarantiaError,
 )
 from app.motos_assai.services.pendencia_service import PendenciaError
 from app.motos_assai.models import (
     AssaiPosVendaOcorrencia, AssaiPosVendaOcorrenciaAnexo,
     CATEGORIA_LOJA, CATEGORIA_CLIENTE,
+    AssaiMoto, AssaiNfQpa,
 )
 
 
@@ -255,6 +257,71 @@ def pos_venda_gerar_pendencia(oc_id):
             'url': url_for('motos_assai.pendencia_detalhe', pid=ficha.id),
         },
     })
+
+
+# ---------------------------------------------------------------------------
+# Troca em Garantia
+# ---------------------------------------------------------------------------
+
+@motos_assai_bp.route('/pos-venda/troca/<chassi_a>', methods=['GET'])
+@login_required
+@require_motos_assai
+def pos_venda_troca_form(chassi_a):
+    """Tela de registro de troca em garantia para a moto defeituosa (A)."""
+    chassi_a = (chassi_a or '').strip().upper()
+    ctx = contexto_moto_por_chassi(chassi_a)
+    if not ctx:
+        abort(404)
+    moto_a = AssaiMoto.query.filter_by(chassi=chassi_a).first()
+    if not moto_a:
+        abort(404)
+    nfs = (
+        AssaiNfQpa.query
+        .join(AssaiNfQpa.itens)
+        .filter_by(chassi=chassi_a)
+        .all()
+    )
+    return render_template(
+        'motos_assai/pos_venda/troca_garantia.html',
+        chassi_a=chassi_a, ctx=ctx, modelo_id=moto_a.modelo_id, nfs=nfs,
+    )
+
+
+@motos_assai_bp.route('/pos-venda/troca/<chassi_a>/substitutos', methods=['GET'])
+@login_required
+@require_motos_assai
+def pos_venda_troca_substitutos(chassi_a):
+    """AJAX: candidatos a substituto (B) do mesmo modelo de A."""
+    chassi_a = (chassi_a or '').strip().upper()
+    moto_a = AssaiMoto.query.filter_by(chassi=chassi_a).first()
+    if not moto_a:
+        return jsonify({'ok': False, 'erro': 'moto A nao encontrada'}), 404
+    return jsonify(listar_substitutos(moto_a.modelo_id))
+
+
+@motos_assai_bp.route('/pos-venda/troca/<chassi_a>', methods=['POST'])
+@login_required
+@require_motos_assai
+def pos_venda_troca_registrar(chassi_a):
+    """POST AJAX: executa a troca A->B. Body JSON: {chassi_b, nf_id, motivo}."""
+    data = request.get_json(silent=True) or request.form
+    chassi_b = (data.get('chassi_b') or '').strip().upper()
+    motivo = (data.get('motivo') or '').strip()
+    try:
+        nf_id = int(data.get('nf_id'))
+    except (TypeError, ValueError):
+        return jsonify({'ok': False, 'erro': 'nf_id invalido'}), 400
+    try:
+        res = registrar_troca(
+            nf_id=nf_id, chassi_a=chassi_a, chassi_b=chassi_b,
+            operador_id=current_user.id, motivo=motivo, dry_run=False,
+        )
+    except TrocaGarantiaError as e:
+        return jsonify({'ok': False, 'erro': str(e)}), 400
+    except Exception:
+        current_app.logger.exception('Erro ao registrar troca em garantia')
+        return jsonify({'ok': False, 'erro': 'Erro interno ao registrar troca'}), 500
+    return jsonify(res)
 
 
 # ---------------------------------------------------------------------------

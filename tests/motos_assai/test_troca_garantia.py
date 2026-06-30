@@ -329,3 +329,29 @@ def test_listar_substitutos_separa_disponivel_de_outros(app, admin_user):
         assert mont.chassi.upper() not in chassis_disp
         assert any(o['chassi'] == mont.chassi.upper() for o in res['outros_estados']['MONTADA'])
         assert any(o['chassi'] == est.chassi.upper() for o in res['outros_estados']['ESTOQUE'])
+
+
+def test_rota_substitutos_json(app, admin_user, login_admin):
+    with app.app_context():
+        c = _cenario(admin_user)
+        chassi_a, chassi_b = c['chassi_a'], c['chassi_b']
+    resp = login_admin.get(f'/motos-assai/pos-venda/troca/{chassi_a}/substitutos')
+    assert resp.status_code == 200
+    data = resp.get_json()
+    assert 'disponiveis' in data
+    assert any(d['chassi'] == chassi_b for d in data['disponiveis'])
+
+
+def test_rota_registrar_troca(app, admin_user, login_admin):
+    with app.app_context():
+        c = _cenario(admin_user)
+        chassi_a, chassi_b, nf_id = c['chassi_a'], c['chassi_b'], c['nf'].id
+    resp = login_admin.post(
+        f'/motos-assai/pos-venda/troca/{chassi_a}',
+        json={'chassi_b': chassi_b, 'nf_id': nf_id, 'motivo': 'defeito'},
+    )
+    assert resp.status_code == 200, resp.get_data(as_text=True)
+    assert resp.get_json()['ok'] is True
+    with app.app_context():
+        assert status_efetivo(chassi_b) == EVENTO_FATURADA
+        assert status_efetivo(chassi_a) == EVENTO_PENDENTE

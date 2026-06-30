@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container py-3">
+  <h4>Troca em Garantia</h4>
+  <p class="text-muted">
+    Moto defeituosa (A): <strong>{{ chassi_a }}</strong>
+    — {{ ctx.modelo_nome }} {{ ctx.cor }} — NF {{ ctx.nf_numero }}
+  </p>
+
+  <form id="form-troca">
+    <div class="mb-2">
+      <label class="form-label">NF de venda</label>
+      <select class="form-select" id="nf_id" required>
+        {% for nf in nfs %}
+        <option value="{{ nf.id }}">NF {{ nf.numero }} ({{ nf.status_match }})</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="mb-2">
+      <label class="form-label">Moto substituta (B) — DISPONIVEL, mesmo modelo</label>
+      <select class="form-select" id="chassi_b" required>
+        <option value="">Carregando...</option>
+      </select>
+      <div class="form-text" id="aviso-outros"></div>
+    </div>
+
+    <div class="mb-2">
+      <label class="form-label">Motivo do defeito</label>
+      <textarea class="form-control" id="motivo" required></textarea>
+    </div>
+
+    <button type="submit" class="btn btn-primary">Registrar troca</button>
+    <div id="resultado" class="mt-2"></div>
+  </form>
+</div>
+
+<script>
+const CHASSI_A = {{ chassi_a|tojson }};
+const URL_SUB = `/motos-assai/pos-venda/troca/${CHASSI_A}/substitutos`;
+const URL_REG = `/motos-assai/pos-venda/troca/${CHASSI_A}`;
+
+async function carregarSubstitutos() {
+  const r = await fetch(URL_SUB);
+  const d = await r.json();
+  const sel = document.getElementById('chassi_b');
+  sel.innerHTML = '';
+  if (!d.disponiveis || !d.disponiveis.length) {
+    sel.innerHTML = '<option value="">Nenhuma DISPONIVEL deste modelo</option>';
+  } else {
+    for (const m of d.disponiveis) {
+      const o = document.createElement('option');
+      o.value = m.chassi;
+      o.textContent = `${m.chassi} — ${m.cor}`;
+      sel.appendChild(o);
+    }
+  }
+  const outros = d.outros_estados || {};
+  const tot = (outros.MONTADA||[]).length + (outros.ESTOQUE||[]).length + (outros.SEPARADA||[]).length;
+  document.getElementById('aviso-outros').textContent = tot
+    ? `Existem ${tot} unidade(s) deste modelo em outros estados (MONTADA/ESTOQUE/SEPARADA) que precisam de tratativa para virar DISPONIVEL.`
+    : '';
+}
+
+document.getElementById('form-troca').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const body = {
+    chassi_b: document.getElementById('chassi_b').value,
+    nf_id: document.getElementById('nf_id').value,
+    motivo: document.getElementById('motivo').value,
+  };
+  const r = await fetch(URL_REG, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(body),
+  });
+  const d = await r.json();
+  const box = document.getElementById('resultado');
+  box.className = d.ok ? 'mt-2 alert alert-success' : 'mt-2 alert alert-danger';
+  box.textContent = d.ok
+    ? `Troca registrada: ${d.chassi_a} -> ${d.chassi_b} (NF ${d.nf_numero}).`
+    : (d.erro || 'Erro');
+});
+
+carregarSubstitutos();
+</script>
+{% endblock %}
