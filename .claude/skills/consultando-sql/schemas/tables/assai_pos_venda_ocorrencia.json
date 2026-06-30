@@ -23,6 +23,22 @@
       "nullable": false
     },
     {
+      "name": "tipo",
+      "type": "varchar(20)",
+      "nullable": false,
+      "description": "Tipo da ocorrência: RELATO (padrão) ou TROCA_GARANTIA"
+    },
+    {
+      "name": "chassi_substituto",
+      "type": "varchar(50)",
+      "description": "Chassi substituto na troca em garantia"
+    },
+    {
+      "name": "nf_qpa_id",
+      "type": "integer",
+      "description": "FK → assai_nf_qpa.id — NF Q.P.A. origem da troca"
+    },
+    {
       "name": "criado_em",
       "type": "timestamp",
       "description": "Data de criação",
@@ -52,6 +68,10 @@
     {
       "column": "atualizado_por_id",
       "references": "usuarios.id"
+    },
+    {
+      "column": "nf_qpa_id",
+      "references": "assai_nf_qpa.id"
     }
   ],
   "indices": [
@@ -73,6 +93,13 @@
       "name": "ix_assai_pos_venda_ocorrencia_criado_em",
       "columns": [
         "criado_em"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_assai_pos_venda_ocorrencia_nf_qpa_id",
+      "columns": [
+        "nf_qpa_id"
       ],
       "unique": false
     }

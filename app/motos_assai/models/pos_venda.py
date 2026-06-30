@@ -27,6 +27,10 @@ ANEXO_TIPOS_VALIDOS = {
     ANEXO_TIPO_FOTO, ANEXO_TIPO_VIDEO, ANEXO_TIPO_AUDIO, ANEXO_TIPO_OUTRO,
 }
 
+TIPO_RELATO = 'RELATO'
+TIPO_TROCA_GARANTIA = 'TROCA_GARANTIA'
+POS_VENDA_TIPOS_VALIDOS = {TIPO_RELATO, TIPO_TROCA_GARANTIA}
+
 
 class AssaiPosVendaOcorrencia(db.Model):
     __tablename__ = 'assai_pos_venda_ocorrencia'
@@ -35,6 +39,13 @@ class AssaiPosVendaOcorrencia(db.Model):
     chassi = db.Column(db.String(50), nullable=False, index=True)
     categoria = db.Column(db.String(10), nullable=False, index=True)
     descricao = db.Column(db.Text, nullable=False)
+    tipo = db.Column(
+        db.String(20), nullable=False, default=TIPO_RELATO, server_default='RELATO',
+    )
+    chassi_substituto = db.Column(db.String(50))
+    nf_qpa_id = db.Column(
+        db.Integer, db.ForeignKey('assai_nf_qpa.id'), index=True,
+    )
     criado_em = db.Column(
         db.DateTime, default=agora_brasil_naive, nullable=False, index=True,
     )
