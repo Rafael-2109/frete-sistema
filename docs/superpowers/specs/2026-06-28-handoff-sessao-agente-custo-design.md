@@ -11,7 +11,7 @@ atualizado: 2026-06-29
 
 > **Papel:** spec de design da rearquitetura de delegação do Agente Web — substituir o subagente efêmero (Task one-shot, re-spawnado a cada turno) por **handoff de sessão** (um especialista quente assume a conversa) + **subagente dedicado como executor atômico**. Consolida TODOS os achados, bugs e correções da sessão de investigação de custo de 2026-06-28 (SOT = export do Claude Console). Documento autossuficiente: feito para uma sessão limpa de implementação começar daqui sem re-descobrir.
 >
-> **Status (2026-06-29):** F0 + B5 **LIVE em prod** (deploy `3ba13fe6f`). **F1 IMPLEMENTADA em PR #28** (flag-OFF/shadow-first; modo `on` real = 8b, deferido p/ design humano). Próxima sessão: avaliar PR #28 + worktree `f1-handoff-piloto`. Bugs marcados ✅ FEITO já aplicados.
+> **Status (2026-06-29):** F0 + B5 **LIVE em prod** (deploy `3ba13fe6f`). **F1 + 8b INTEGRADOS** na worktree `f1-handoff-piloto`: PR #29 (8b, sessão Ultraplan na nuvem) **reconciliado** com o trabalho local + **review adversarial** (6 achados aplicados: gate `should_register_handoff`, warning/docs, interrupt resiliente, telemetria role-aware) + merge `origin/main`; suíte agente+teams **1721✓**. **Flag `AGENT_SPECIALIST_HANDOFF=off` (default) = behavior-equivalente ao main**; em `on` o especialista troca o cliente do stream (sessão SDK própria por papel). **PENDENTE antes de ligar `on`:** validação em EXECUÇÃO REAL do swap (só rodou em teste/mock) + canary (`admin`) + medição de custo em prod. Bugs marcados ✅ FEITO já aplicados.
 
 ## Indice
 
