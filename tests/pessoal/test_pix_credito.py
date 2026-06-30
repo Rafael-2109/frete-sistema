@@ -60,6 +60,18 @@ def test_funding_tem_prioridade_sobre_regra_existente(make_transacao):
 
 
 # ---------------------------------------------------------------------------
+# Extracao do beneficiario (historico_completo e UPPERCASE em producao)
+# ---------------------------------------------------------------------------
+def test_beneficiario_extrai_de_historico_completo_uppercase():
+    """Em producao historico_completo vem normalizado (MAIUSCULO). O extrator
+    precisa casar 'PIX' independente de caixa (regressao do dry-run de prod)."""
+    from app.pessoal.services.pix_credito_service import _beneficiario
+    h = ('TRANSFERENCIA ENVIADA PELO PIX - ESTHERCITA A C B PIOVACCARI - '
+         '***.871.568-** - ITAU UNIBANCO S.A. (0341) AGENCIA: 9635 CONTA: 910-4')
+    assert _beneficiario(h) == 'ESTHERCITA A C B PIOVACCARI'
+
+
+# ---------------------------------------------------------------------------
 # Deteccao do trio + split (pix_credito_service)
 # ---------------------------------------------------------------------------
 def _conta(ctx, membro, nome, tipo, numero=None):
@@ -84,10 +96,11 @@ def _imp(ctx, conta):
     return imp
 
 
-def _tx(ctx, imp, conta, historico, valor, tipo, data, categoria_id=None):
+def _tx(ctx, imp, conta, historico, valor, tipo, data, categoria_id=None, historico_completo=None):
     t = PessoalTransacao(
         importacao_id=imp.id, conta_id=conta.id, data=data,
-        historico=historico, historico_completo=historico, valor=Decimal(str(valor)),
+        historico=historico, historico_completo=historico_completo or historico,
+        valor=Decimal(str(valor)),
         tipo=tipo, status='PENDENTE', excluir_relatorio=False, categoria_id=categoria_id,
         hash_transacao=f'h{uuid4().hex[:16]}',
     )
@@ -142,6 +155,8 @@ def trio(pessoal_ctx, membro, cat_juros):
         pessoal_ctx, imp_n, nuconta,
         f'Transferência enviada pelo Pix - {benef} - •••.871.568-•• - ITAÚ UNIBANCO',
         1500.00, 'debito', D, categoria_id=cat_benef.id,
+        # historico_completo em MAIUSCULO, como o normalizador grava em producao
+        historico_completo=f'TRANSFERENCIA ENVIADA PELO PIX - {benef} - ***.871.568-** - ITAU UNIBANCO',
     )
     compra = _tx(
         pessoal_ctx, imp_c, cartao, benef, 1642.71, 'debito', D, categoria_id=cat_benef.id,
@@ -205,6 +220,36 @@ def test_detecta_trio_e_faz_split(trio, pessoal_ctx):
 
     # Soma da fatura preservada (principal + juros == valor original da compra)
     assert float(compra.valor) + float(juros.valor) == 1642.71
+
+
+def test_split_rejeita_compra_com_juros_absurdo(pessoal_ctx, membro):
+    """Nome repetido (ex.: RENATA recebe varios Pix) pode casar a compra errada, com
+    juros desproporcional. Compra com juros > 50% do principal NAO splita (parcial)."""
+    from app.pessoal.services import pix_credito_service as pcs
+
+    nuconta = _conta(pessoal_ctx, membro, 'NuConta', 'conta_corrente', '63685323-8')
+    cartao = _conta(pessoal_ctx, membro, 'Nubank Cartao', 'cartao_credito')
+    imp_n = _imp(pessoal_ctx, nuconta)
+    imp_c = _imp(pessoal_ctx, cartao)
+    D = date(2099, 3, 1)
+    benef = 'FULANO REPETIDO DE TAL'
+    _tx(pessoal_ctx, imp_n, nuconta,
+        'Valor adicionado na conta por cartão de crédito - Valor adicionado para Pix no Crédito',
+        1000.00, 'credito', D)
+    _tx(pessoal_ctx, imp_n, nuconta,
+        f'Transferência enviada pelo Pix - {benef} - ITAÚ', 1000.00, 'debito', D,
+        historico_completo=f'TRANSFERENCIA ENVIADA PELO PIX - {benef} - ITAU')
+    compra = _tx(pessoal_ctx, imp_c, cartao, benef, 1700.00, 'debito', D)  # juros 700 = 70%
+
+    pcs.detectar_e_processar(janela_dias=10)
+    c = _db.session.get(PessoalTransacao, compra.id)
+    # registrar eventuais marcacoes para cleanup
+    for f in PessoalTransacao.query.filter(PessoalTransacao.conta_id.in_([nuconta.id, cartao.id])).all():
+        if f.pix_credito_grupo and f.id not in pessoal_ctx['transacoes']:
+            pessoal_ctx['transacoes'].append(f.id)
+    # compra NAO foi splitada (juros desproporcional)
+    assert c.eh_pix_credito is False
+    assert float(c.valor) == 1700.00
 
 
 def test_deteccao_idempotente(trio, pessoal_ctx):

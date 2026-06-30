@@ -24,7 +24,7 @@ from app.pessoal.services.pix_credito_service import detectar_e_processar
 def main(apply: bool):
     app = create_app()
     with app.app_context():
-        res = detectar_e_processar(janela_dias=7, commit=apply)
+        res = detectar_e_processar(commit=apply)
         print("=== Reprocessamento Pix no Credito ===")
         print(f"  Trios processados : {res['trios_processados']}")
         print(f"  Splits (com cartao): {res['splits']}")

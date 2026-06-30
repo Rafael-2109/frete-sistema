@@ -35,7 +35,12 @@ from app.utils.timezone import agora_utc_naive
 
 logger = logging.getLogger(__name__)
 
-_JANELA_PIX = 2  # funding <-> pix-saida ocorrem no mesmo dia (validado: ±2 cobre folga)
+_JANELA_PIX = 2          # funding <-> pix-saida ocorrem no mesmo dia (validado: ±2 cobre folga)
+_JANELA_COMPRA = 10      # pix-saida <-> compra cartao: a compra posta ate ~9 dias depois
+# Teto de juros (fracao do principal). Juros real de Pix no Credito observado < 15%;
+# uma "compra" com juros acima disso e quase sempre casamento errado (nome repetido,
+# ex.: mesmo beneficiario recebendo varios Pix). Protege contra juros inventado.
+_TETO_JUROS = Decimal('0.5')
 
 
 def _norm(texto: str) -> str:
@@ -52,14 +57,17 @@ def _eh_funding(texto: str) -> bool:
 
 
 def _beneficiario(texto: str) -> str:
-    """Extrai o nome do beneficiario de 'Transferencia enviada pelo Pix - NOME - ...'."""
+    """Extrai o nome do beneficiario de 'Transferencia enviada pelo Pix - NOME - ...'.
+
+    IGNORECASE: em producao historico_completo vem normalizado (MAIUSCULO, 'PIX').
+    """
     if not texto:
         return ''
-    m = re.search(r'[Pp]ix\s*-\s*([^-]+?)\s*-', texto)
+    m = re.search(r'pix\s*-\s*([^-]+?)\s*-', texto, re.IGNORECASE)
     if m:
         return _norm(m.group(1))
     # Fallback: tudo apos "Pix - "
-    m = re.search(r'[Pp]ix\s*-\s*(.+)', texto)
+    m = re.search(r'pix\s*-\s*(.+)', texto, re.IGNORECASE)
     return _norm(m.group(1)) if m else ''
 
 
@@ -81,7 +89,7 @@ def _categoria_juros_id():
     return cat.id if cat else None
 
 
-def detectar_e_processar(janela_dias: int = 5, commit: bool = True) -> dict:
+def detectar_e_processar(janela_dias: int = _JANELA_COMPRA, commit: bool = True) -> dict:
     """Detecta trios "Pix no Credito" e aplica funding-exclusao + split principal/juros.
 
     Idempotente: so processa fundings ainda nao vinculados (pix_credito_grupo IS NULL).
@@ -212,6 +220,10 @@ def _melhor_compra(pix, benef, compras, usadas, janela_dias):
         if benef not in hist and hist not in benef:
             continue
         juros = c.valor - pix.valor
+        # Teto de juros: protege contra casamento errado (nome repetido casa compra
+        # de outro Pix, gerando juros desproporcional).
+        if juros > pix.valor * _TETO_JUROS:
+            continue
         chave = (juros, dist)
         if melhor_chave is None or chave < melhor_chave:
             melhor_chave = chave
