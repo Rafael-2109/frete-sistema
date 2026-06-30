@@ -1551,6 +1551,7 @@ Nunca invente informações."""
         resume_state: Optional[Dict] = None,
         thinking_display: Optional[str] = None,
         specialist_profile: Optional['SpecialistProfile'] = None,
+        is_admin: bool = False,
     ) -> 'ClaudeAgentOptions':
         """
         Constrói ClaudeAgentOptions para ClaudeSDKClient.
@@ -2110,22 +2111,25 @@ Nunca invente informações."""
                 "Ative AGENT_ONTOLOGY=true para expor query_ontology ao agente."
             )
 
-        # Handoff de sessao — registro gated por should_register_handoff:
-        # PRINCIPAL + modo 'on' expoe transferir_para; o ESPECIALISTA (em 'on')
-        # expoe SO' devolver_ao_principal (NAO re-delega -> anti multi-spawn).
-        # shadow/off NAO registram nada (medicao PURA / behavior-equivalente ao
-        # main) — expor transferir_para em shadow poluiria as metricas que o
-        # shadow existe para medir limpo (review 2026-06-29).
+        # Handoff de sessao — registro do par de tools:
+        # - ESPECIALISTA (specialist_profile is not None == swap JA efetivo, modo
+        #   'on'/'admin'-on): expoe SO' devolver_ao_principal (NAO re-delega ->
+        #   anti multi-spawn). NAO re-resolve o modo aqui — o profile so' e' setado
+        #   quando o caminho do papel (is_admin-aware) ja' decidiu trocar o cliente.
+        # - PRINCIPAL (specialist_profile is None): expoe transferir_para SO' em
+        #   modo efetivo 'on' (should_register_handoff). is_admin propaga o canary
+        #   'admin'-on; sem ele 'admin' colapsaria p/ 'shadow' e o canary nao
+        #   registraria nenhuma tool (review 2026-06-30).
+        # shadow/off NAO registram nada (medicao PURA / behavior-equivalente ao main).
         try:
             from ..config.feature_flags import resolve_specialist_handoff_mode
             from ..tools.handoff_mcp_tool import should_register_handoff
-            _hmode = resolve_specialist_handoff_mode()
-            if should_register_handoff(_hmode, specialist_profile):
-                from ..tools.handoff_mcp_tool import handoff_server
-                _register_mcp('handoff', handoff_server)
-            elif _hmode == 'on' and specialist_profile is not None:
+            if specialist_profile is not None:
                 from ..tools.handoff_mcp_tool import handoff_devolver_server
                 _register_mcp('handoff', handoff_devolver_server)
+            elif should_register_handoff(resolve_specialist_handoff_mode(is_admin=is_admin), specialist_profile):
+                from ..tools.handoff_mcp_tool import handoff_server
+                _register_mcp('handoff', handoff_server)
         except Exception as _h_err:
             logger.debug(f"[handoff] registro da tool pulado: {_h_err}")
 
@@ -2247,6 +2251,7 @@ Nunca invente informações."""
             resume_state=resume_state,
             thinking_display=thinking_display,
             specialist_profile=_specialist_profile,
+            is_admin=bool(debug_mode),
         )
 
         # ─── SDK 0.1.64 SessionStore (Fase B cutover — flag default ON) ───

@@ -47,9 +47,9 @@ atualizado: 2026-06-29
 
 ## Contexto
 
-Encapsula o Claude Agent SDK: chat web (SSE) + Teams bot (async); ~58.7K LOC em 117 arquivos. Para o roteiro de onde achar cada detalhe, ver **Mapa de Navegacao** acima.
+Encapsula o Claude Agent SDK: chat web (SSE) + Teams bot (async); ~58.2K LOC em 115 arquivos. Para o roteiro de onde achar cada detalhe, ver **Mapa de Navegacao** acima.
 
-**LOC**: ~58.7K | **Arquivos**: 117 | **Atualizado**: 29/06/2026
+**LOC**: ~58.2K | **Arquivos**: 115 | **Atualizado**: 30/06/2026
 
 > **EVOLUCAO DO AGENTE (flywheel/blueprint Ondas 0-4)**: o rastreador VIVO e o
 > `docs/blueprint-agente/EXECUCAO.md` (estado de cada item, gates, log append-only); o design

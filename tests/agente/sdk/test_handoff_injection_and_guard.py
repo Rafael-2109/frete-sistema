@@ -64,6 +64,24 @@ def test_client_guard_especialista_so_devolver():
     assert 'handoff_devolver_server' in src
 
 
+def test_client_guard_admin_canary_registra_tools():
+    """Fix (re-review 2026-06-30): no modo 'admin' (canary) o caminho do papel e'
+    is_admin-aware, mas o registro da tool re-resolvia o modo SEM is_admin -> 'admin'
+    colapsava p/ 'shadow' e NENHUMA tool de handoff era registrada (canary infiel ao
+    'on' real). Agora: (1) is_admin e' param de _build_options e propaga
+    resolve_specialist_handoff_mode(is_admin=is_admin); (2) o ESPECIALISTA registra
+    devolver pelo SINAL specialist_profile is not None, sem re-resolver o modo."""
+    from app.agente.sdk.client import AgentClient
+    import inspect as _i
+    src = _i.getsource(AgentClient._build_options)
+    assert 'resolve_specialist_handoff_mode(is_admin=is_admin)' in src
+    assert 'is_admin' in str(_i.signature(AgentClient._build_options))
+    assert 'if specialist_profile is not None:' in src
+    # o caller (stream persistente) propaga is_admin = bool(debug_mode)
+    psrc = _i.getsource(AgentClient._stream_response_persistent)
+    assert 'is_admin=bool(debug_mode)' in psrc
+
+
 def test_hook_injecao_wiring():
     from app.agente.sdk import hooks
     src = inspect.getsource(hooks.build_hooks)
