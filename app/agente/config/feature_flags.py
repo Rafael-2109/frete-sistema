@@ -1330,10 +1330,10 @@ def resolve_specialist_handoff_mode(is_admin: bool = False) -> str:
         off    -> nada (comportamento atual; subagente efemero por turno)
         shadow -> agent_router DECIDE + loga + persiste o papel, mas NAO troca o
                   cliente ativo (medicao pura)
-        on     -> DECIDE + persiste o papel; mas o SWAP do stream e' 8b (DEFERIDO):
-                  hoje 'on' mede/registra e NAO troca o cliente (== shadow no
-                  stream). NAO ligar esperando economia ate o 8b ser implementado
-                  (chat._resolve_agent_role emite um warning unico nesse caso).
+        on     -> DECIDE + persiste o papel E TROCA o cliente do stream (8b ATIVO):
+                  o especialista assume com cliente/sessao SDK proprios por papel
+                  (custo separado). Ligar com canary + observar custo/concorrencia
+                  (chat._resolve_agent_role emite um warning unico ao ativar).
         admin  -> "on" para admin (canary), "shadow" para os demais
     """
     raw = os.getenv("AGENT_SPECIALIST_HANDOFF", "off").strip().lower()

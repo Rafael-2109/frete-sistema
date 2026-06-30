@@ -600,6 +600,20 @@ def get_pooled_client(session_id: str, role: str = "principal") -> Optional[Pool
         return _registry.get(_pool_key(session_id, role))
 
 
+def get_any_connected_client(session_id: str) -> Optional[PooledClient]:
+    """Retorna o 1o PooledClient CONECTADO de QUALQUER papel desta sessao
+    (chaves '{session_id}::*'). Usado pelo interrupt (8b) quando o papel ativo
+    persistido nao bate com o client vivo — ex.: sessao rotacionada por idle,
+    onde agente_ativo ficou na sessao velha e o client do especialista vive sob
+    o session_id novo. Thread-safe."""
+    prefix = f"{session_id}::"
+    with _registry_lock:
+        for _key, _pc in _registry.items():
+            if _key.startswith(prefix) and _pc.connected:
+                return _pc
+    return None
+
+
 # =============================================================================
 # Cleanup periódico
 # =============================================================================

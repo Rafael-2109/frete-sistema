@@ -67,22 +67,21 @@ def pagina_chat():
 # API - CHAT (FEAT-030: Refatorado)
 # =============================================================================
 
-_ON_NOOP_WARNED = False
+_ON_SWAP_WARNED = False
 
 
-def _warn_on_mode_noop_once():
-    """Avisa UMA vez (por processo) que 'on' ainda nao troca o cliente do stream
-    (swap 8b deferido) — evita decisao de rollout errada ('liguei on, cade a
-    economia?'). O log 'Role: gestor-recebimento' e o agente_ativo persistido NAO
-    significam handoff real ate o 8b."""
-    global _ON_NOOP_WARNED
-    if not _ON_NOOP_WARNED:
-        _ON_NOOP_WARNED = True
+def _warn_on_swap_active_once():
+    """Avisa UMA vez (por processo) que 'on' ATIVA o swap real do especialista (8b):
+    o stream troca para o cliente/sessao SDK proprios do papel, com custo separado.
+    Operacional: ligar com canary + monitorar custo/concorrencia; rollback = off."""
+    global _ON_SWAP_WARNED
+    if not _ON_SWAP_WARNED:
+        _ON_SWAP_WARNED = True
         import logging
         logging.getLogger('sistema_fretes').warning(
-            "[agent_router] AGENT_SPECIALIST_HANDOFF=on ainda NAO troca o cliente do "
-            "stream (swap 8b pendente) — comporta-se como 'shadow' (decide/mede, nao "
-            "executa o handoff). NAO esperar reducao de custo ate o 8b ser ligado.")
+            "[agent_router] AGENT_SPECIALIST_HANDOFF=on ATIVA o swap real do "
+            "especialista (cliente/sessao SDK proprios por papel, custo separado). "
+            "Monitorar custo/concorrencia; rollback instantaneo = off.")
 
 
 def _resolve_agent_role(session_id, message, is_admin=False):
@@ -94,7 +93,7 @@ def _resolve_agent_role(session_id, message, is_admin=False):
     if mode == 'off':
         return 'principal'
     if mode == 'on':
-        _warn_on_mode_noop_once()
+        _warn_on_swap_active_once()
     try:
         from app.agente.models import AgentSession
         from app.agente.sdk.agent_router import select_specialist, log_specialist_decision
@@ -1411,7 +1410,7 @@ def _stream_chat_response(
             # pode awaitar). Frontend: case 'context_usage' → updateContextUsage(data).
             # =============================================================
             try:
-                context_usage = await client.get_context_usage_async(our_session_id)
+                context_usage = await client.get_context_usage_async(our_session_id, role=agent_role)
                 if context_usage:
                     event_queue.put(_sse_event('context_usage', context_usage))
             except Exception as ctx_err:
@@ -2619,6 +2618,12 @@ def api_interrupt():
     pooled = get_pooled_client(session_id, role=_ativo)
     if (not pooled or not pooled.connected) and _ativo != 'principal':
         pooled = get_pooled_client(session_id, role='principal')
+    if not pooled or not pooled.connected:
+        # 8b: a sessao pode ter rotacionado por idle (agente_ativo ficou na sessao
+        # velha; o client do especialista vive sob o session_id novo). Varre
+        # qualquer client VIVO desta sessao no pool, independente do papel.
+        from app.agente.sdk.client_pool import get_any_connected_client
+        pooled = get_any_connected_client(session_id)
     if not pooled or not pooled.connected:
         return jsonify({
             'success': False,

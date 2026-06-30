@@ -730,3 +730,27 @@ class TestCleanupSkipsActiveTurn:
         assert time.time() - pooled.last_used < 5
         # sessao desconhecida nao levanta
         cp.touch_client('sess-inexistente')
+
+
+# ─── 9. get_any_connected_client (fix C do review 8b — interrupt resiliente) ──
+# O interrupt usa este fallback quando o papel ativo persistido nao bate com o
+# client vivo (ex.: sessao rotacionada por idle: agente_ativo ficou na sessao
+# velha; o client do especialista vive sob o session_id novo).
+
+class TestGetAnyConnectedClient:
+
+    def test_acha_qualquer_papel_conectado(self, pool_reset):
+        espec = PooledClient(client=MagicMock(), session_id='s-any',
+                             role='gestor-recebimento', connected=True)
+        cp._registry[cp._pool_key('s-any', 'gestor-recebimento')] = espec
+        # mesmo lendo role='principal' (sessao nova sem agente_ativo), acha o vivo
+        assert cp.get_pooled_client('s-any', role='principal') is None
+        assert cp.get_any_connected_client('s-any') is espec
+
+    def test_ignora_desconectado_e_outra_sessao(self, pool_reset):
+        morto = PooledClient(client=MagicMock(), session_id='s-any', connected=False)
+        outra = PooledClient(client=MagicMock(), session_id='s-outra', connected=True)
+        cp._registry[cp._pool_key('s-any', 'principal')] = morto
+        cp._registry[cp._pool_key('s-outra', 'principal')] = outra
+        assert cp.get_any_connected_client('s-any') is None       # so' desconectado
+        assert cp.get_any_connected_client('s-nao-existe') is None  # sessao ausente

@@ -55,7 +55,12 @@ def test_dois_servers_de_handoff_distintos():
 def test_client_guard_especialista_so_devolver():
     from app.agente.sdk.client import AgentClient
     src = inspect.getsource(AgentClient._build_options)
-    assert 'specialist_profile is None' in src
+    # Fix A (review 2026-06-29): registro do handoff gated por should_register_handoff
+    # (principal + 'on' -> transferir_para). should_register_handoff('shadow', None) is
+    # False (test_handoff_mcp_tool), logo shadow NAO expoe a tool de troca (medicao pura).
+    assert 'should_register_handoff(' in src
+    # ESPECIALISTA ('on' + specialist_profile is not None) expoe so' devolver.
+    assert 'specialist_profile is not None' in src
     assert 'handoff_devolver_server' in src
 
 

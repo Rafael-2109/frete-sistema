@@ -17,9 +17,9 @@ def should_register_handoff(mode: str, specialist_profile) -> bool:
       - no cliente PRINCIPAL (`specialist_profile is None`) — o ESPECIALISTA usa o
         executor atomico, NAO re-delega (anti multi-spawn, spec F1); e
       - em modo 'on' — 'shadow' e' medicao PURA (o agent_router decide+persiste,
-        mas a tool de TROCA nao deve existir onde nada troca). O swap real do
-        stream (8b) ainda esta deferido; ate la 'on' expoe a tool ao principal
-        mas o stream segue no principal (no-op medido).
+        mas a tool de TROCA nao deve existir onde nada troca). Em 'on' o stream
+        TROCA para o especialista (8b ATIVO): o principal expoe transferir_para
+        para iniciar o handoff; o especialista expoe so' devolver_ao_principal.
     'off' (default) nunca registra -> behavior-equivalente ao main."""
     return mode == 'on' and specialist_profile is None
 

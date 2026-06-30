@@ -461,7 +461,7 @@ class AgentClient:
             )
             return ""
 
-    async def get_context_usage_async(self, session_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    async def get_context_usage_async(self, session_id: Optional[str] = None, role: str = 'principal') -> Optional[Dict[str, Any]]:
         """
         Uso do context window via SDK get_context_usage() (control request ASYNC).
 
@@ -474,6 +474,9 @@ class AgentClient:
 
         Args:
             session_id: nosso UUID de sessao (pool key). Se None, usa o ContextVar.
+            role: papel do cliente no pool (8b). Em turno de especialista
+                  ('gestor-recebimento') o client vivo esta sob '{session}::{role}';
+                  default 'principal'. Sem ele, mediria o cliente do papel errado.
 
         Returns:
             {"used": int, "total": int, "percent": float, "categories": [...]} ou None
@@ -483,7 +486,7 @@ class AgentClient:
             from ..config.permissions import get_session_id
 
             pool_key = session_id or get_session_id() or ''
-            pooled = get_pooled_client(pool_key)
+            pooled = get_pooled_client(pool_key, role=role)
             if not pooled or not pooled.connected:
                 return None
 
@@ -2070,20 +2073,22 @@ Nunca invente informações."""
                 "Ative AGENT_ONTOLOGY=true para expor query_ontology ao agente."
             )
 
-        # Handoff de sessao — registra a tool MCP fora de 'off'.
-        # 8b guard: PRINCIPAL (specialist_profile is None) expoe transferir_para
-        # (+ devolver, no-op); o ESPECIALISTA expoe SO' devolver_ao_principal
-        # (NAO re-delega -> evita recriar o multi-spawn). Sem o guard, o
-        # especialista veria transferir_para e o principal do Teams tambem (inerte).
+        # Handoff de sessao — registro gated por should_register_handoff:
+        # PRINCIPAL + modo 'on' expoe transferir_para; o ESPECIALISTA (em 'on')
+        # expoe SO' devolver_ao_principal (NAO re-delega -> anti multi-spawn).
+        # shadow/off NAO registram nada (medicao PURA / behavior-equivalente ao
+        # main) — expor transferir_para em shadow poluiria as metricas que o
+        # shadow existe para medir limpo (review 2026-06-29).
         try:
             from ..config.feature_flags import resolve_specialist_handoff_mode
-            if resolve_specialist_handoff_mode() != 'off':
-                if specialist_profile is None:
-                    from ..tools.handoff_mcp_tool import handoff_server
-                    _register_mcp('handoff', handoff_server)
-                else:
-                    from ..tools.handoff_mcp_tool import handoff_devolver_server
-                    _register_mcp('handoff', handoff_devolver_server)
+            from ..tools.handoff_mcp_tool import should_register_handoff
+            _hmode = resolve_specialist_handoff_mode()
+            if should_register_handoff(_hmode, specialist_profile):
+                from ..tools.handoff_mcp_tool import handoff_server
+                _register_mcp('handoff', handoff_server)
+            elif _hmode == 'on' and specialist_profile is not None:
+                from ..tools.handoff_mcp_tool import handoff_devolver_server
+                _register_mcp('handoff', handoff_devolver_server)
         except Exception as _h_err:
             logger.debug(f"[handoff] registro da tool pulado: {_h_err}")
 
