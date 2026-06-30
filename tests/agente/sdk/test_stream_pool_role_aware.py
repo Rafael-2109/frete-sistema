@@ -34,10 +34,12 @@ def test_get_or_create_client_chamado_com_role():
 def test_eviction_usa_chave_composta_por_papel():
     """Os 3 sites de eviction de cliente morto popavam a chave NUA (pool_key),
     mas o registry e' keyed por '{session_id}::{role}' (F1) -> eviction era no-op
-    (bug latente). O 8b corrige para _pool_key(pool_key, agent_role)."""
+    (bug latente). Reconciliacao 8b + fix 326316d82: os 3 sites usam o helper
+    centralizado evict_client(pool_key, role=agent_role) (chave composta
+    '{session_id}::{role}' + papel + connected=False, dentro de client_pool)."""
     src = _persistent_src()
-    assert '_registry.pop(pool_key, None)' not in src
-    assert src.count('_registry.pop(_pool_key(pool_key, agent_role), None)') == 3
+    assert '_registry.pop(pool_key, None)' not in src  # nunca o pop cru (bug)
+    assert src.count('evict_client(pool_key, role=agent_role)') == 3
 
 
 def test_pool_isola_principal_e_especialista_mesma_sessao():
