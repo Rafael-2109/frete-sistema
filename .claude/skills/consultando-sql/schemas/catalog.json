@@ -105,7 +105,7 @@
     "vinculacao_carteira_separacao",
     "webhook_configs"
   ],
-  "total_tabelas": 337,
+  "total_tabelas": 343,
   "tabelas": [
     {
       "name": "agendamentos_entrega",
@@ -385,6 +385,16 @@
       "dominio": "Motos Assaí"
     },
     {
+      "name": "assai_estoque_movimento",
+      "description": "Ledger append-only de pecas (o elo central). tipo: ENTRADA/CONSUMO/CANIBALIZACAO/DESCARTE/AJUSTE. Saldo da peca = SUM(delta_almoxarifado) por peca_id (CANIBALIZACAO tem delta 0). custo_unitario congelado por linha; receita_* so em pendencia VENDA. Liga chassi_origem/chassi_destino, pendencia_id, compra_item_id.",
+      "key_fields": [
+        "peca_id",
+        "pendencia_id",
+        "compra_item_id"
+      ],
+      "dominio": "Motos Assaí"
+    },
+    {
       "name": "assai_loja",
       "description": "Tabela assai_loja",
       "key_fields": [
@@ -468,6 +478,45 @@
       "dominio": "Motos Assaí"
     },
     {
+      "name": "assai_peca",
+      "description": "Catalogo de pecas de reposicao Motos Assai (B2B Q.P.A.). Compatibilidade por modelo via assai_peca_modelo. Campos: codigo, nome, custo_referencia (fallback do custo medio), ativo. Saldo NAO mora aqui: e SUM(delta_almoxarifado) em assai_estoque_movimento.",
+      "key_fields": [
+        "criado_por_id",
+        "codigo",
+        "nome"
+      ],
+      "dominio": "Motos Assaí"
+    },
+    {
+      "name": "assai_peca_compra",
+      "description": "Cabecalho de pedido de compra/garantia de pecas a Motochefe. numero PC-AAAA-NNNN (sequence/retry). tipo GARANTIA/COMPRA; status ABERTA/PARCIAL/RECEBIDA/CANCELADA. Itens em assai_peca_compra_item.",
+      "key_fields": [
+        "criada_por_id",
+        "status",
+        "numero"
+      ],
+      "dominio": "Motos Assaí"
+    },
+    {
+      "name": "assai_peca_compra_item",
+      "description": "Item de assai_peca_compra. quantidade vs quantidade_recebida (recebimento gera ENTRADA no ledger e recalcula o status do cabecalho). pendencia_id = a ficha que motivou o item.",
+      "key_fields": [
+        "compra_id",
+        "peca_id",
+        "pendencia_id"
+      ],
+      "dominio": "Motos Assaí"
+    },
+    {
+      "name": "assai_peca_modelo",
+      "description": "Compatibilidade N:N peca x modelo (assai_peca <-> assai_modelo). UNIQUE (peca_id, modelo_id).",
+      "key_fields": [
+        "peca_id",
+        "modelo_id"
+      ],
+      "dominio": "Motos Assaí"
+    },
+    {
       "name": "assai_pedido_excel",
       "description": "Tabela assai_pedido_excel",
       "key_fields": [
@@ -505,6 +554,16 @@
         "loja_id",
         "expedicao",
         "agendamento"
+      ],
+      "dominio": "Motos Assaí"
+    },
+    {
+      "name": "assai_pendencia",
+      "description": "Ficha categorizada de pendencia de uma moto (chassi por valor). categoria (AVARIA/FALTA_PECA/REVISAO/VENDA/INDETERMINADA), origem (GALPAO/TRANSPORTE/POS_VENDA_CLIENTE/POS_VENDA_LOJA/DEVOLUCAO), tratativa (preenchida na resolucao), fase. Aberta = resolvida_em IS NULL AND cancelada_em IS NULL. evento_pendente_id NULL = nao afeta o estado da moto (pos-venda). pendencia_pai_id = filhas de REVISAO. Substitui a leitura de pendencias por eventos.",
+      "key_fields": [
+        "pendencia_pai_id",
+        "evento_pendente_id",
+        "peca_id"
       ],
       "dominio": "Motos Assaí"
     },

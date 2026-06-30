@@ -1,0 +1,61 @@
+{
+  "name": "assai_peca",
+  "description": "Catalogo de pecas de reposicao Motos Assai (B2B Q.P.A.). Compatibilidade por modelo via assai_peca_modelo. Campos: codigo, nome, custo_referencia (fallback do custo medio), ativo. Saldo NAO mora aqui: e SUM(delta_almoxarifado) em assai_estoque_movimento.",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "codigo",
+      "type": "varchar(40)"
+    },
+    {
+      "name": "nome",
+      "type": "varchar(120)",
+      "nullable": false
+    },
+    {
+      "name": "custo_referencia",
+      "type": "numeric(15,4)"
+    },
+    {
+      "name": "ativo",
+      "type": "boolean",
+      "description": "True = registro ativo",
+      "nullable": false,
+      "default": true
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação",
+      "nullable": false
+    },
+    {
+      "name": "criado_por_id",
+      "type": "integer",
+      "description": "FK → usuarios.id"
+    },
+    {
+      "name": "dados_extras",
+      "type": "jsonb"
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "criado_por_id",
+      "references": "usuarios.id"
+    }
+  ],
+  "indices": [
+    {
+      "name": "ix_assai_peca_codigo",
+      "columns": [
+        "codigo"
+      ],
+      "unique": false
+    }
+  ]
+}

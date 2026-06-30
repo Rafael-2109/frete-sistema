@@ -1,0 +1,57 @@
+{
+  "name": "assai_peca_compra",
+  "description": "Cabecalho de pedido de compra/garantia de pecas a Motochefe. numero PC-AAAA-NNNN (sequence/retry). tipo GARANTIA/COMPRA; status ABERTA/PARCIAL/RECEBIDA/CANCELADA. Itens em assai_peca_compra_item.",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "numero",
+      "type": "varchar(20)",
+      "nullable": false
+    },
+    {
+      "name": "tipo",
+      "type": "varchar(20)",
+      "nullable": false
+    },
+    {
+      "name": "status",
+      "type": "varchar(30)",
+      "nullable": false,
+      "default": "ABERTA"
+    },
+    {
+      "name": "fornecedor",
+      "type": "varchar(120)",
+      "nullable": false,
+      "default": "MOTOCHEFE"
+    },
+    {
+      "name": "criada_em",
+      "type": "timestamp",
+      "nullable": false
+    },
+    {
+      "name": "criada_por_id",
+      "type": "integer",
+      "description": "FK → usuarios.id"
+    },
+    {
+      "name": "observacao",
+      "type": "text"
+    },
+    {
+      "name": "dados_extras",
+      "type": "jsonb"
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "criada_por_id",
+      "references": "usuarios.id"
+    }
+  ]
+}

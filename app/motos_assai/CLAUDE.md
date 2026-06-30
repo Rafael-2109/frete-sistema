@@ -4,7 +4,7 @@ camada: L1
 sot_de: —
 hub: CLAUDE.md
 superseded_by: —
-atualizado: 2026-06-23
+atualizado: 2026-06-30
 -->
 # Módulo Motos Assaí
 
@@ -21,7 +21,7 @@ atualizado: 2026-06-23
   - [4. Menu](#4-menu)
 - [Invariante central](#invariante-central)
 - [Eventos por chassi (`assai_moto_evento.tipo`)](#eventos-por-chassi-assai_moto_eventotipo)
-- [Modelo de dados (29 tabelas)](#modelo-de-dados-29-tabelas)
+- [Modelo de dados (35 tabelas)](#modelo-de-dados-35-tabelas)
 - [Lista de constantes/aliases por arquivo](#lista-de-constantesaliases-por-arquivo)
 - [Services complementares (responsabilidades)](#services-complementares-responsabilidades)
 - [Plano 3 implementado (2026-05-07)](#plano-3-implementado-2026-05-07)
@@ -53,6 +53,7 @@ atualizado: 2026-06-23
   - [Estados de evento finais (Plano 4)](#estados-de-evento-finais-plano-4)
 - [Módulo completo — visão geral arquitetural](#módulo-completo-visão-geral-arquitetural)
 - [Skills + Agente disponíveis](#skills-agente-disponíveis)
+- [Estoque de Peças + Pendência categorizada (Spec 1, 2026-06-30)](#estoque-de-peças--pendência-categorizada-spec-1-2026-06-30)
 - [Manutenção / Roadmap futuro](#manutenção-roadmap-futuro)
 - [CCe como entidade (2026-05-13)](#cce-como-entidade-2026-05-13)
   - [Por que esse design](#por-que-esse-design)
@@ -71,7 +72,7 @@ atualizado: 2026-06-23
 
 ## Contexto
 
-29 tabelas com prefixo `assai_`, blueprint isolado. Pipeline completo implementado: Cadastros -> Parser VOE -> Pedido -> Compra -> Recibo Motochefe -> Recebimento fisico -> Saida (NF Q.P.A.). Fronteira estrita contra HORA/CarVia/Motochefe (reuso so via adapter/subclasse).
+35 tabelas com prefixo `assai_`, blueprint isolado. Pipeline completo implementado: Cadastros -> Parser VOE -> Pedido -> Compra -> Recibo Motochefe -> Recebimento fisico -> Saida (NF Q.P.A.) -> Estoque de Peças + Pendência categorizada (Spec 1). Fronteira estrita contra HORA/CarVia/Motochefe (reuso so via adapter/subclasse).
 
 **Data da implementacao**: 2026-05-13
 **Status**: Foundation + Cadastros (Plano 1) + Parser VOE + Pedido + Compra (Plano 2) + Recibo Motochefe + Recebimento físico (Plano 3) + Pipeline de saída completo (Plano 4) + **Integração lista_pedidos.html (Plano 5)** + **CCe como entidade com match reverso (2026-05-13)** — TODOS implementados.
@@ -94,7 +95,7 @@ atualizado: 2026-06-23
 
 ### 1. Prefixo de tabela `assai_`
 
-Todas as tabelas começam com `assai_`. **29 tabelas** no schema atual
+Todas as tabelas começam com `assai_`. **35 tabelas** no schema atual
 (lista completa: `grep -rhoE "__tablename__\s*=\s*['\"]assai_[a-z0-9_]+" app/motos_assai/`).
 
 ### 2. Blueprint isolado
@@ -156,7 +157,7 @@ Link em `app/templates/base.html` condicionado a
 
 ---
 
-## Modelo de dados (29 tabelas)
+## Modelo de dados (35 tabelas)
 
 Ver spec em `docs/superpowers/specs/2026-05-07-motos-assai-design.md` §4.
 
@@ -175,6 +176,15 @@ Divergências: `assai_divergencia` (sistema centralizado: 8 tipos + 5 resoluçõ
 Excel Q.P.A.: `assai_pedido_excel` (histórico versionado do Excel por separação em S3; `versao`, `ativo`).
 Devolução NFd: `assai_devolucao_nfd` + `assai_devolucao_item` + `assai_devolucao_anexo` (cliente devolve chassi FATURADO → volta a PENDENTE; UNIQUE `(nf_qpa_origem_id, numero_nfd)`).
 Pós-venda: `assai_pos_venda_ocorrencia` + `assai_pos_venda_ocorrencia_anexo` (ocorrências LOJA/CLIENTE sobre chassi vendido; NÃO append-only — admite UPDATE/DELETE).
+
+Estoque de Peças + Pendência (Spec 1, Migration 34 — 6 tabelas): `assai_peca` +
+`assai_peca_modelo` (catálogo + compatibilidade N:N por modelo); `assai_pendencia`
+(ficha categorizada — categoria/origem/tratativa/fase, `pendencia_pai_id` p/ filhas
+de REVISÃO, `evento_pendente_id` NULL = não afeta estado da moto); `assai_estoque_movimento`
+(ledger append-only — saldo = `SUM(delta_almoxarifado)`); `assai_peca_compra` +
+`assai_peca_compra_item` (pedido de compra/garantia à Motochefe, nº `PC-AAAA-NNNN`).
+A pendência deixou de ser só o evento `PENDENTE`: o evento segue como verdade do
+**estado físico** (1 por chassi), a ficha é a verdade do **tratamento** (N por chassi).
 
 ⭐ = adicionadas no Plano 5 (2026-05-12).
 
@@ -198,6 +208,9 @@ Pós-venda: `assai_pos_venda_ocorrencia` + `assai_pos_venda_ocorrencia_anexo` (o
 - `app/motos_assai/services/separacao_service.py`: `SeparacaoError`, `SeparacaoConflictError` (race condition → 409)
 - `app/motos_assai/services/faturamento_service.py`: `gerar_excel_qpa()`, `FaturamentoError`
 - `app/motos_assai/services/parsers/nf_qpa_adapter.py`: `NfQpaAdapter`, `extrair_nf_qpa()`, `match_nf_separacao()`
+- `app/motos_assai/models/pendencia.py`: `PENDENCIA_CATEGORIA_*`, `PENDENCIA_CATEGORIAS_VALIDAS`, `PENDENCIA_ORIGEM_*`, `PENDENCIA_ORIGENS_VALIDAS`, `ORIGENS_FISICAS`, `PENDENCIA_FASE_*`, `PENDENCIA_FASES_VALIDAS`, `PENDENCIA_TRATATIVA_*`, `PENDENCIA_TRATATIVAS_VALIDAS`
+- `app/motos_assai/models/estoque_movimento.py`: `MOVIMENTO_*`, `MOVIMENTO_TIPOS_VALIDOS`
+- `app/motos_assai/models/peca_compra.py`: `COMPRA_PECA_TIPO_*`, `COMPRA_PECA_TIPOS_VALIDOS`, `COMPRA_PECA_STATUS_*`, `COMPRA_PECA_STATUS_VALIDOS`
 
 ---
 
@@ -569,7 +582,7 @@ Os seguintes tipos de evento em `assai_moto_evento` foram ativados neste plano:
 
 ## Módulo completo — visão geral arquitetural
 
-- **29 tabelas** com prefixo `assai_` (ver secao "Modelo de dados (29 tabelas)" acima; a spec inicial `docs/superpowers/specs/2026-05-07-motos-assai-design.md` descreve as 16 tabelas da fundacao, expandidas pelos Planos 2-5)
+- **35 tabelas** com prefixo `assai_` (ver secao "Modelo de dados (35 tabelas)" acima; a spec inicial `docs/superpowers/specs/2026-05-07-motos-assai-design.md` descreve as 16 tabelas da fundacao, expandidas pelos Planos 2-5 + Spec 1 Migration 34)
 - **Toggle master** `sistema_motos_assai` em `usuarios` → decorator `@require_motos_assai`
 - **9 etapas do pipeline** implementadas (ESTOQUE → MONTADA → DISPONIVEL → SEPARADA → FATURADA)
 - **Parsers determinísticos** com fallback LLM (Haiku 4.5 → Sonnet 4.6) em PDFs e Excel
@@ -601,16 +614,52 @@ Plan: `docs/superpowers/plans/2026-05-08-motos-assai-skills-agents.md`
 
 ---
 
+## Estoque de Peças + Pendência categorizada (Spec 1, 2026-06-30)
+
+Referência completa: `docs/superpowers/specs/2026-06-30-motos-assai-estoque-pecas-pendencia-design.md`
+
+### 3 verdades
+
+| Entidade | Tabela | Papel |
+|----------|--------|-------|
+| Evento físico | `assai_moto_evento` | Estado atual da moto (1 evento PENDENTE por chassi) — append-only, imutável |
+| Ficha de tratamento | `assai_pendencia` | Categoriza e rastreia a resolução (N fichas por chassi) |
+| Ledger de peça | `assai_estoque_movimento` | Saldo de peças = `SUM(delta_almoxarifado)` por `peca_id` |
+
+### Ciclo de vida da pendência
+
+```
+abrir → [solicitar_compra] → resolver / cancelar
+```
+
+- `abrir`: cria ficha (categoria + origem obrigatórios); se `origem ∈ {GALPAO, TRANSPORTE, DEVOLUCAO}` ou `devolucao_item_id` ou `retorno_fisico=True`, emite evento `PENDENTE` na moto.
+- `solicitar_compra`: cria `AssaiPecaCompra` (PC-AAAA-NNNN) vinculando a ficha.
+- `resolver`: preenche `tratativa` + `resolvida_em`; se a ficha afetava o estado, emite evento subsequente (ex.: `DISPONIVEL`).
+- `cancelar`: preenche `cancelada_em`; se afetava o estado, reverte o evento `PENDENTE`.
+
+### Predicado `afeta_estado_moto`
+
+A ficha afeta o estado da moto quando: `origem ∈ {GALPAO, TRANSPORTE, DEVOLUCAO}` OU `devolucao_item_id IS NOT NULL` OU `retorno_fisico=True`.
+
+### Shim `montagem_service.resolver_pendencia`
+
+`montagem_service.resolver_pendencia(chassi, tratativa)` delega para `pendencia_service.resolver_pendencia(pendencia_id=...)`. Se houver mais de 1 ficha física aberta no chassi, levanta erro (caller deve abrir ficha explicitamente). Callers legados passam a usar este shim sem alteração de assinatura.
+
+### Backfill
+
+`scripts/migrations/motos_assai_35_backfill_pendencias.py` — migra eventos `PENDENTE` históricos para fichas `assai_pendencia`. Usa `--check` (dry-run, default) e `--confirmar` (executa). **NÃO incluído no `build.sh`** — rodar manualmente uma vez em produção.
+
+---
+
 ## Manutenção / Roadmap futuro
 
-Planos 1-5 completos (2026-05-12). Evoluções futuras:
+Planos 1-5 completos (2026-05-12) + Spec 1 (2026-06-30). Evoluções futuras:
 
-- `assai_avaria` — tabela para avarias detectadas pós-recebimento (acréscimo ao wizard)
 - Permissões granulares (`assai_user_permissao`) — atualmente toggle único
 - Múltiplos CDs — transferência inter-CD
 - Modelo MIA — atualmente fora do escopo
 - Automação envio Excel à Q.P.A. via SMTP
-- Resolver pendência via UI (atualmente só via service diretamente)
+- Telas de gestão de pendências e peças (Spec 2) — resolução por ficha via UI, histórico de compras, recebimento de peças
 - Skills atualizadas com novos campos (agendamento por loja + plano por modelo)
 
 ---

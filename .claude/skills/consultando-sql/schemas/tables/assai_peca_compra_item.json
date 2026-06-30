@@ -1,0 +1,72 @@
+{
+  "name": "assai_peca_compra_item",
+  "description": "Item de assai_peca_compra. quantidade vs quantidade_recebida (recebimento gera ENTRADA no ledger e recalcula o status do cabecalho). pendencia_id = a ficha que motivou o item.",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "compra_id",
+      "type": "integer",
+      "description": "FK → assai_peca_compra.id",
+      "nullable": false
+    },
+    {
+      "name": "peca_id",
+      "type": "integer",
+      "description": "FK → assai_peca.id",
+      "nullable": false
+    },
+    {
+      "name": "quantidade",
+      "type": "numeric(15,3)",
+      "nullable": false
+    },
+    {
+      "name": "quantidade_recebida",
+      "type": "numeric(15,3)",
+      "nullable": false,
+      "default": 0
+    },
+    {
+      "name": "custo_estimado",
+      "type": "numeric(15,4)"
+    },
+    {
+      "name": "pendencia_id",
+      "type": "integer",
+      "description": "FK → assai_pendencia.id"
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação",
+      "nullable": false
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "compra_id",
+      "references": "assai_peca_compra.id"
+    },
+    {
+      "column": "peca_id",
+      "references": "assai_peca.id"
+    },
+    {
+      "column": "pendencia_id",
+      "references": "assai_pendencia.id"
+    }
+  ],
+  "indices": [
+    {
+      "name": "ix_assai_peca_compra_item_compra_id",
+      "columns": [
+        "compra_id"
+      ],
+      "unique": false
+    }
+  ]
+}

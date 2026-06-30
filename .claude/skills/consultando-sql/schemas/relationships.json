@@ -1,6 +1,6 @@
 {
   "version": "2.0.0",
-  "total_relationships": 452,
+  "total_relationships": 466,
   "relationships": [
     {
       "from_table": "agendamentos_entrega",
@@ -153,6 +153,24 @@
       "to_column": "id"
     },
     {
+      "from_table": "assai_estoque_movimento",
+      "from_column": "compra_item_id",
+      "to_table": "assai_peca_compra_item",
+      "to_column": "id"
+    },
+    {
+      "from_table": "assai_estoque_movimento",
+      "from_column": "peca_id",
+      "to_table": "assai_peca",
+      "to_column": "id"
+    },
+    {
+      "from_table": "assai_estoque_movimento",
+      "from_column": "pendencia_id",
+      "to_table": "assai_pendencia",
+      "to_column": "id"
+    },
+    {
       "from_table": "assai_modelo_alias",
       "from_column": "modelo_id",
       "to_table": "assai_modelo",
@@ -207,6 +225,36 @@
       "to_column": "id"
     },
     {
+      "from_table": "assai_peca_compra_item",
+      "from_column": "compra_id",
+      "to_table": "assai_peca_compra",
+      "to_column": "id"
+    },
+    {
+      "from_table": "assai_peca_compra_item",
+      "from_column": "peca_id",
+      "to_table": "assai_peca",
+      "to_column": "id"
+    },
+    {
+      "from_table": "assai_peca_compra_item",
+      "from_column": "pendencia_id",
+      "to_table": "assai_pendencia",
+      "to_column": "id"
+    },
+    {
+      "from_table": "assai_peca_modelo",
+      "from_column": "modelo_id",
+      "to_table": "assai_modelo",
+      "to_column": "id"
+    },
+    {
+      "from_table": "assai_peca_modelo",
+      "from_column": "peca_id",
+      "to_table": "assai_peca",
+      "to_column": "id"
+    },
+    {
       "from_table": "assai_pedido_excel",
       "from_column": "pedido_id",
       "to_table": "assai_pedido_venda",
@@ -252,6 +300,42 @@
       "from_table": "assai_pedido_venda_loja",
       "from_column": "pedido_id",
       "to_table": "assai_pedido_venda",
+      "to_column": "id"
+    },
+    {
+      "from_table": "assai_pendencia",
+      "from_column": "devolucao_item_id",
+      "to_table": "assai_devolucao_item",
+      "to_column": "id"
+    },
+    {
+      "from_table": "assai_pendencia",
+      "from_column": "divergencia_origem_id",
+      "to_table": "assai_divergencia",
+      "to_column": "id"
+    },
+    {
+      "from_table": "assai_pendencia",
+      "from_column": "evento_pendente_id",
+      "to_table": "assai_moto_evento",
+      "to_column": "id"
+    },
+    {
+      "from_table": "assai_pendencia",
+      "from_column": "peca_id",
+      "to_table": "assai_peca",
+      "to_column": "id"
+    },
+    {
+      "from_table": "assai_pendencia",
+      "from_column": "pendencia_pai_id",
+      "to_table": "assai_pendencia",
+      "to_column": "id"
+    },
+    {
+      "from_table": "assai_pendencia",
+      "from_column": "pos_venda_ocorrencia_id",
+      "to_table": "assai_pos_venda_ocorrencia",
       "to_column": "id"
     },
     {

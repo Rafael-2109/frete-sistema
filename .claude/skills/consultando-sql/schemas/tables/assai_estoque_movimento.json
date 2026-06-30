@@ -1,0 +1,133 @@
+{
+  "name": "assai_estoque_movimento",
+  "description": "Ledger append-only de pecas (o elo central). tipo: ENTRADA/CONSUMO/CANIBALIZACAO/DESCARTE/AJUSTE. Saldo da peca = SUM(delta_almoxarifado) por peca_id (CANIBALIZACAO tem delta 0). custo_unitario congelado por linha; receita_* so em pendencia VENDA. Liga chassi_origem/chassi_destino, pendencia_id, compra_item_id.",
+  "fields": [
+    {
+      "name": "id",
+      "type": "bigint",
+      "description": "Primary key"
+    },
+    {
+      "name": "peca_id",
+      "type": "integer",
+      "description": "FK → assai_peca.id",
+      "nullable": false
+    },
+    {
+      "name": "tipo",
+      "type": "varchar(40)",
+      "nullable": false
+    },
+    {
+      "name": "quantidade",
+      "type": "numeric(15,3)",
+      "nullable": false
+    },
+    {
+      "name": "delta_almoxarifado",
+      "type": "numeric(15,3)",
+      "nullable": false,
+      "default": 0
+    },
+    {
+      "name": "chassi_origem",
+      "type": "varchar(50)"
+    },
+    {
+      "name": "chassi_destino",
+      "type": "varchar(50)"
+    },
+    {
+      "name": "pendencia_id",
+      "type": "integer",
+      "description": "FK → assai_pendencia.id"
+    },
+    {
+      "name": "compra_item_id",
+      "type": "integer",
+      "description": "FK → assai_peca_compra_item.id"
+    },
+    {
+      "name": "custo_unitario",
+      "type": "numeric(15,4)"
+    },
+    {
+      "name": "custo_total",
+      "type": "numeric(15,2)"
+    },
+    {
+      "name": "receita_unitaria",
+      "type": "numeric(15,4)"
+    },
+    {
+      "name": "receita_total",
+      "type": "numeric(15,2)"
+    },
+    {
+      "name": "operador_id",
+      "type": "integer",
+      "description": "FK → usuarios.id"
+    },
+    {
+      "name": "ocorrido_em",
+      "type": "timestamp",
+      "nullable": false
+    },
+    {
+      "name": "observacao",
+      "type": "text"
+    },
+    {
+      "name": "dados_extras",
+      "type": "jsonb"
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "peca_id",
+      "references": "assai_peca.id"
+    },
+    {
+      "column": "pendencia_id",
+      "references": "assai_pendencia.id"
+    },
+    {
+      "column": "compra_item_id",
+      "references": "assai_peca_compra_item.id"
+    },
+    {
+      "column": "operador_id",
+      "references": "usuarios.id"
+    }
+  ],
+  "indices": [
+    {
+      "name": "ix_assai_estoque_movimento_chassi_destino",
+      "columns": [
+        "chassi_destino"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_assai_estoque_movimento_chassi_origem",
+      "columns": [
+        "chassi_origem"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_assai_estoque_movimento_peca_id",
+      "columns": [
+        "peca_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_assai_estoque_movimento_pendencia_id",
+      "columns": [
+        "pendencia_id"
+      ],
+      "unique": false
+    }
+  ]
+}

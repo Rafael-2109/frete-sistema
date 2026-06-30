@@ -1,0 +1,39 @@
+{
+  "name": "assai_peca_modelo",
+  "description": "Compatibilidade N:N peca x modelo (assai_peca <-> assai_modelo). UNIQUE (peca_id, modelo_id).",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "peca_id",
+      "type": "integer",
+      "description": "FK → assai_peca.id",
+      "nullable": false
+    },
+    {
+      "name": "modelo_id",
+      "type": "integer",
+      "description": "FK → assai_modelo.id",
+      "nullable": false
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "peca_id",
+      "references": "assai_peca.id"
+    },
+    {
+      "column": "modelo_id",
+      "references": "assai_modelo.id"
+    }
+  ],
+  "unique_constraints": [
+    [
+      "peca_id",
+      "modelo_id"
+    ]
+  ]
+}
