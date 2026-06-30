@@ -35,8 +35,7 @@ class AssaiEstoqueMovimento(db.Model):
     chassi_origem = db.Column(db.String(50), index=True)
     chassi_destino = db.Column(db.String(50), index=True)
     pendencia_id = db.Column(db.Integer, db.ForeignKey('assai_pendencia.id', ondelete='SET NULL'), index=True)
-    # FK real no banco (Task 1); ORM FK adicionado quando Task 5 definir AssaiPecaCompraItem
-    compra_item_id = db.Column(db.Integer)
+    compra_item_id = db.Column(db.Integer, db.ForeignKey('assai_peca_compra_item.id', ondelete='SET NULL'))
     custo_unitario = db.Column(db.Numeric(15, 4))
     custo_total = db.Column(db.Numeric(15, 2))
     receita_unitaria = db.Column(db.Numeric(15, 4))
