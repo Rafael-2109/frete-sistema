@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from datetime import date, datetime, time
 from typing import List, Dict, Any, Optional, TypedDict
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from sqlalchemy.orm import joinedload
 
 from app import db
@@ -23,6 +23,15 @@ from app.motos_assai.models import (
     AssaiMoto, AssaiMotoEvento, AssaiModelo,
     EVENTO_PENDENTE, EVENTO_PENDENCIA_RESOLVIDA,
 )
+from app.utils.json_helpers import sanitize_for_json
+from app.utils.timezone import agora_brasil_naive
+from app.motos_assai.models import (
+    AssaiPendencia,
+    EVENTO_MONTADA,
+    PENDENCIA_CATEGORIAS_VALIDAS, PENDENCIA_ORIGENS_VALIDAS, ORIGENS_FISICAS,
+    PENDENCIA_TRATATIVAS_VALIDAS, PENDENCIA_FASE_AGUARDANDO_PECA,
+)
+from app.motos_assai.services.moto_evento_service import emitir_evento
 
 
 class FiltrosPendencias(TypedDict, total=False):
@@ -303,3 +312,142 @@ def modelos_com_pendencias(tipos: Optional[List[str]] = None) -> List[Dict[str, 
         .all()
     )
     return [{'id': m.id, 'codigo': m.codigo, 'nome': m.nome} for m in modelos]
+
+
+# ===========================================================================
+# Escrita: ciclo de vida da ficha de pendencia (Spec 1 — back-end)
+# ===========================================================================
+
+
+class PendenciaError(Exception):
+    """Erro de dominio de pendencia_service (escrita)."""
+
+
+def afeta_estado_moto(p) -> bool:
+    """Predicado fisico (derivado, nao-coluna): a ficha trava o estado da moto?
+
+    Fisica  => origem em ORIGENS_FISICAS, OU veio de devolucao (NFd), OU a moto
+    retornou fisicamente sem NFd (retorno_fisico). So fichas fisicas emitem/
+    compartilham o evento PENDENTE.
+    """
+    return (
+        (p.origem in ORIGENS_FISICAS)
+        or (p.devolucao_item_id is not None)
+        or bool(p.retorno_fisico)
+    )
+
+
+def _get_or_emit_pendente_event(chassi: str, operador_id: int) -> int:
+    """Reusa o PENDENTE vivo do chassi (D1: 1 evento por chassi) ou emite um novo.
+
+    DEVE rodar sob pg_advisory_xact_lock(hashtext(chassi)) — garantido pelos
+    callers (abrir_pendencia). Uma ficha so recebe evento_pendente_id quando e
+    fisica, logo `evento_pendente_id IS NOT NULL` ja implica ficha fisica.
+    """
+    existente = (
+        AssaiPendencia.query
+        .filter(
+            AssaiPendencia.chassi == chassi,
+            AssaiPendencia.evento_pendente_id.isnot(None),
+            AssaiPendencia.resolvida_em.is_(None),
+            AssaiPendencia.cancelada_em.is_(None),
+        )
+        .first()
+    )
+    if existente is not None:
+        return existente.evento_pendente_id
+    ev = emitir_evento(chassi, EVENTO_PENDENTE, operador_id=operador_id)
+    return ev.id
+
+
+def count_fisicas_abertas(chassi: str) -> int:
+    """Conta fichas FISICAS abertas (nao resolvidas e nao canceladas) do chassi."""
+    return (
+        AssaiPendencia.query
+        .filter(
+            AssaiPendencia.chassi == chassi,
+            AssaiPendencia.resolvida_em.is_(None),
+            AssaiPendencia.cancelada_em.is_(None),
+            or_(
+                AssaiPendencia.origem.in_(list(ORIGENS_FISICAS)),
+                AssaiPendencia.devolucao_item_id.isnot(None),
+                AssaiPendencia.retorno_fisico.is_(True),
+            ),
+        )
+        .count()
+    )
+
+
+def abrir_pendencia(
+    *,
+    chassi: str,
+    categoria: str,
+    origem: str,
+    descricao: str,
+    operador_id: int,
+    retorno_fisico: bool = False,
+    evento_pendente_id: Optional[int] = None,
+    peca_id: Optional[int] = None,
+    pendencia_pai_id: Optional[int] = None,
+    devolucao_item_id: Optional[int] = None,
+    pos_venda_ocorrencia_id: Optional[int] = None,
+    divergencia_origem_id: Optional[int] = None,
+    detalhes: Optional[Dict[str, Any]] = None,
+) -> AssaiPendencia:
+    """Abre uma ficha de pendencia (add + flush, SEM commit — caller commita).
+
+    Acoplamento com o evento PENDENTE (Spec 1 §6):
+      - `evento_pendente_id` explicito (emissores legados que JA emitiram o
+        PENDENTE): usa-o direto e PULA `_get_or_emit_pendente_event` (sem 2o PENDENTE);
+      - senao, se `afeta_estado_moto(ficha)`: reusa/emite via helper travado
+        (N fisicas no mesmo chassi = 1 evento, D1);
+      - senao (nao fisica — pos-venda sem retorno): `evento_pendente_id = NULL`.
+    """
+    chassi_norm = (chassi or '').strip().upper()
+    if not chassi_norm:
+        raise PendenciaError('Chassi obrigatorio.')
+    if categoria not in PENDENCIA_CATEGORIAS_VALIDAS:
+        raise PendenciaError(
+            f'Categoria invalida: {categoria}. Validas: {sorted(PENDENCIA_CATEGORIAS_VALIDAS)}'
+        )
+    if origem not in PENDENCIA_ORIGENS_VALIDAS:
+        raise PendenciaError(
+            f'Origem invalida: {origem}. Validas: {sorted(PENDENCIA_ORIGENS_VALIDAS)}'
+        )
+    descricao_norm = (descricao or '').strip()
+    if len(descricao_norm) < 3:
+        raise PendenciaError('Descricao obrigatoria (>= 3 caracteres).')
+
+    # Serializa emissao/consulta do PENDENTE compartilhado por chassi.
+    db.session.execute(
+        db.text('SELECT pg_advisory_xact_lock(hashtext(:c))'),
+        {'c': chassi_norm},
+    )
+
+    ficha = AssaiPendencia(
+        chassi=chassi_norm,
+        categoria=categoria,
+        origem=origem,
+        retorno_fisico=bool(retorno_fisico),
+        descricao=descricao_norm,
+        peca_id=peca_id,
+        pendencia_pai_id=pendencia_pai_id,
+        devolucao_item_id=devolucao_item_id,
+        pos_venda_ocorrencia_id=pos_venda_ocorrencia_id,
+        divergencia_origem_id=divergencia_origem_id,
+        detalhes=sanitize_for_json(dict(detalhes or {})),
+        aberta_em=agora_brasil_naive(),
+        aberta_por_id=operador_id,
+    )
+    db.session.add(ficha)
+    db.session.flush()  # ficha.id disponivel; evento_pendente_id ainda NULL
+
+    if evento_pendente_id is not None:
+        ficha.evento_pendente_id = evento_pendente_id
+    elif afeta_estado_moto(ficha):
+        ficha.evento_pendente_id = _get_or_emit_pendente_event(chassi_norm, operador_id)
+    else:
+        ficha.evento_pendente_id = None
+
+    db.session.flush()
+    return ficha
