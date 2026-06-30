@@ -598,6 +598,8 @@ Isso permite ao Agent SABER que pode usar `target_user_id`, `channel`, e `list_s
 Sem essa injecao, o Agent opera com debug mode nos bastidores mas NAO sabe que pode usar
 as capacidades extras — resultado: falha em investigacao cross-user.
 
+**Como ligar (admin only):** toggle 🐛 "Modo Debug" no header (desktop) OU no painel **mobile-settings** (☰ no mobile — o toggle do header vive em `.chat-header-center`, `display:none` em `≤768px`, ex.: iPhone). Ambos passam por `syncMobileSetting('debug')` (`chat.js`) que dispara o listener de `#debug-mode-toggle` — **fonte unica**: estado `debugModeEnabled` + `localStorage 'agent-debug-mode'` (persiste no mesmo navegador) + banner + debug panel. O canary do handoff F1 (`AGENT_SPECIALIST_HANDOFF=admin`) so' troca o cliente com debug mode ON (`is_admin=bool(debug_mode)`).
+
 ---
 
 ## Pipeline SSE — Contrato de 3 Camadas
