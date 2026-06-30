@@ -1,7 +1,12 @@
-{% extends "base.html" %}
-{% block content %}
+{% extends "motos_assai/base_motos_assai.html" %}
+{% block motos_assai_content %}
 <div class="container py-3">
-  <h4>Troca em Garantia</h4>
+  <div class="d-flex justify-content-between align-items-center mb-2">
+    <h4 class="mb-0">Troca em Garantia</h4>
+    <a href="{{ url_for('motos_assai.pos_venda_lista') }}" class="btn btn-sm btn-outline-secondary">
+      <i class="fas fa-arrow-left"></i> Voltar ao Pós-Venda
+    </a>
+  </div>
   <p class="text-muted">
     Moto defeituosa (A): <strong>{{ chassi_a }}</strong>
     — {{ ctx.modelo_nome }} {{ ctx.cor }} — NF {{ ctx.nf_numero }}

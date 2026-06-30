@@ -370,3 +370,27 @@ def test_faturamento_detalhe_mostra_troca(app, admin_user, login_admin):
     html = resp.get_data(as_text=True)
     assert 'Troca em Garantia' in html
     assert chassi_b in html
+
+
+def test_lista_pos_venda_tem_botao_troca(app, admin_user, login_admin):
+    """A lista do Pos-venda expoe o botao 'Troca' linkando para o form da moto vendida."""
+    with app.app_context():
+        c = _cenario(admin_user)
+        chassi_a = c['chassi_a']
+    resp = login_admin.get('/motos-assai/pos-venda')
+    assert resp.status_code == 200
+    html = resp.get_data(as_text=True)
+    assert f'/motos-assai/pos-venda/troca/{chassi_a}' in html
+
+
+def test_rota_form_troca_renderiza(app, admin_user, login_admin):
+    """O GET do form de troca renderiza 200 com o chrome do modulo (base_motos_assai)."""
+    with app.app_context():
+        c = _cenario(admin_user)
+        chassi_a = c['chassi_a']
+    resp = login_admin.get(f'/motos-assai/pos-venda/troca/{chassi_a}')
+    assert resp.status_code == 200
+    html = resp.get_data(as_text=True)
+    assert 'Troca em Garantia' in html
+    # chrome do modulo: o base_motos_assai injeta o link de Voltar ao Pos-Venda
+    assert 'Voltar ao Pós-Venda' in html

@@ -129,6 +129,11 @@
                 title="Pendências abertas geradas a partir de ocorrências pós-venda">
             Pendências (<span class="qtd-pendencias">{{ linha.qtd_pendencias_abertas }}</span>)
           </span>
+          <a href="{{ url_for('motos_assai.pos_venda_troca_form', chassi_a=linha.chassi) }}"
+             class="btn btn-sm btn-outline-warning ms-1"
+             title="Registrar troca em garantia">
+            <i class="fas fa-right-left"></i> Troca
+          </a>
         </td>
       </tr>
       {% else %}
