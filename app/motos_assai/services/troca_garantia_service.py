@@ -115,6 +115,19 @@ def registrar_troca(*, nf_id, chassi_a, chassi_b, operador_id, motivo, dry_run=T
         AssaiMoto.chassi.in_([chassi_a, chassi_b])
     ).with_for_update(of=AssaiMoto).all()
 
+    # Re-valida sob o lock (anti-TOCTOU): o estado pode ter mudado entre o
+    # _validar (sem lock) e a aquisicao do lock. Mirror de separacao_service.py:304-308.
+    if status_efetivo(chassi_a) != EVENTO_FATURADA:
+        raise TrocaGarantiaError(
+            f'chassi {chassi_a} deixou de estar FATURADA antes do lock '
+            f'(estado={status_efetivo(chassi_a)}) — troca abortada'
+        )
+    if status_efetivo(chassi_b) != EVENTO_DISPONIVEL:
+        raise TrocaGarantiaError(
+            f'chassi substituto {chassi_b} deixou de estar DISPONIVEL antes do lock '
+            f'(estado={status_efetivo(chassi_b)}) — troca abortada'
+        )
+
     # 1) Vinculo historico (auditoria do swap na NF) — antes de mudar o item
     db.session.add(AssaiNfQpaItemVinculoHistorico(
         nf_qpa_item_id=nf_item.id,
