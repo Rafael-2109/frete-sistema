@@ -10,8 +10,8 @@
     "tpl": 0
   },
   "app/agente_lojas": {
-    "py": 17,
-    "loc": 2640,
+    "py": 13,
+    "loc": 1305,
     "tpl": 0
   },
   "app/carteira": {

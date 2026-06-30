@@ -1,12 +1,12 @@
 """
-CUTOVER E3.8b/C2+C3 — flag + drain do motor unico.
+CUTOVER (FASE B) — drain do motor unico na rota /agente-lojas.
 
-Quando AGENT_LOJAS_USA_MOTOR_UNICO=ON, a rota /agente-lojas usa
-`_drain_via_motor`: seta os ContextVars do registry WEB (agente_id='lojas' +
-loja_scope), chama get_client('lojas').stream_response(...) com o can_use_tool do
-fork, e serializa cada StreamEvent no SSE que o frontend lojas espera. No finally
-limpa os ContextVars. Estes testes usam um cliente FAKE (sem SDK real) para travar
-o wiring, a serializacao integrada e o cleanup.
+A rota usa SEMPRE `_drain_via_motor` (fork aposentado): seta os ContextVars do
+registry WEB (agente_id='lojas' + loja_scope), chama get_client('lojas').
+stream_response(...) com o can_use_tool do agente_lojas (config/permissions), e
+serializa cada StreamEvent no SSE que o frontend lojas espera. No finally limpa os
+ContextVars. Estes testes usam um cliente FAKE (sem SDK real) para travar o wiring,
+a serializacao integrada e o cleanup.
 """
 import asyncio
 import queue
@@ -43,11 +43,6 @@ class _FakeClient:
         self._capture['kwargs'] = kwargs
         for ev in self._events:
             yield ev
-
-
-def test_flag_default_off():
-    # Canary: o caminho do motor fica INERTE em producao ate ligarem a flag.
-    assert chat_mod.AGENT_LOJAS_USA_MOTOR_UNICO is False
 
 
 def test_drain_via_motor_wiring_serializacao_e_persistencia(monkeypatch):
@@ -124,11 +119,12 @@ def test_drain_via_motor_erro_emite_error_e_done(monkeypatch):
     assert get_loja_scope() is None
 
 
-def test_streaming_worker_flag_on_despacha_para_motor(monkeypatch):
+def test_streaming_worker_despacha_para_o_motor(monkeypatch):
+    # FASE B: o fork foi aposentado — o worker SEMPRE roda _drain_via_motor no
+    # loop do client_pool do motor (sem mais a flag AGENT_LOJAS_USA_MOTOR_UNICO).
     import concurrent.futures as cf
 
-    monkeypatch.setattr(chat_mod, 'AGENT_LOJAS_USA_MOTOR_UNICO', True)
-    chamadas = {'motor': 0, 'fork': 0}
+    chamadas = {'motor': 0}
 
     async def _noop():
         return
@@ -137,12 +133,7 @@ def test_streaming_worker_flag_on_despacha_para_motor(monkeypatch):
         chamadas['motor'] += 1
         return _noop()
 
-    def _fake_drain_fork(**kwargs):
-        chamadas['fork'] += 1
-        return _noop()
-
     monkeypatch.setattr(chat_mod, '_drain_via_motor', _fake_drain_motor)
-    monkeypatch.setattr(chat_mod, '_drain_async_gen', _fake_drain_fork)
 
     def _fake_submit_motor(coro):
         coro.close()  # evita 'coroutine never awaited'
@@ -157,7 +148,6 @@ def test_streaming_worker_flag_on_despacha_para_motor(monkeypatch):
         sdk_session_id=None, our_session_id='s', event_queue=queue.Queue(), state={},
     )
     assert chamadas['motor'] == 1
-    assert chamadas['fork'] == 0
 
 
 def test_streaming_worker_motor_submit_falha_emite_error_e_sentinel(monkeypatch):
@@ -166,8 +156,6 @@ def test_streaming_worker_motor_submit_falha_emite_error_e_sentinel(monkeypatch)
     # que retorna None. Sem tratamento, a thread daemon morre ANTES do sentinel None
     # -> o SSE generator trava ate o timeout de inatividade (~300s). O worker deve
     # capturar e emitir error + None para destravar o frontend.
-    monkeypatch.setattr(chat_mod, 'AGENT_LOJAS_USA_MOTOR_UNICO', True)
-
     async def _noop():
         return
 

@@ -16,11 +16,9 @@ Implementacao M2:
     - Persiste sessao + sdk_session_id + total_cost_usd + message_count.
     - Cleanup robusto: cancel_pending + cleanup_session_context no finally.
 """
-import asyncio
 import concurrent.futures
 import json
 import logging
-import os
 import queue
 import threading
 import time
@@ -33,30 +31,16 @@ from flask_login import current_user
 from app.agente_lojas.routes import agente_lojas_bp
 from app.agente_lojas.decorators import require_acesso_agente_lojas
 from app.agente_lojas.config.settings import AGENTE_ID
-from app.agente_lojas.sdk import stream_lojas_chat
-from app.agente_lojas.sdk.client_pool import (
-    submit_coroutine,
-    USE_PERSISTENT_LOJAS_LOOP,
-)
 from app.agente.models import AgentSession
 from app import db
 
 logger = logging.getLogger('sistema_fretes')
 
 
-def _env_bool(name: str, default: bool = False) -> bool:
-    val = os.getenv(name, '').strip().lower()
-    if not val:
-        return default
-    return val in ('true', '1', 'yes', 'on')
-
-
-# CUTOVER E3.8b — flag canary do MOTOR UNICO. OFF (default): a rota usa o fork
-# (stream_lojas_chat / AgentLojasClient). ON: a rota usa o motor web por perfil
-# (get_client('lojas').stream_response). Reversivel por env var; a delecao do
-# fork e FASE B (so apos canary validado em PROD). Ver handoff
-# docs/superpowers/plans/2026-06-29-convergencia-agente-lojas-handoff.md §CUTOVER.
-AGENT_LOJAS_USA_MOTOR_UNICO: bool = _env_bool('AGENT_LOJAS_USA_MOTOR_UNICO', default=False)
+# CUTOVER FEITO (FASE B, 2026-06-30): o fork AgentLojasClient foi aposentado. A
+# rota /agente-lojas usa SEMPRE o motor web por perfil (get_client('lojas').
+# stream_response) — ver _drain_via_motor. A antiga flag AGENT_LOJAS_USA_MOTOR_UNICO
+# (canary) foi removida apos validacao em PROD.
 
 
 HEARTBEAT_INTERVAL_SECONDS = 10
@@ -246,82 +230,6 @@ def api_chat():
         }), 500
 
 
-async def _drain_async_gen(
-    *,
-    user_message: str,
-    user_id: int,
-    user_name: str,
-    perfil: str,
-    loja_hora_id: Optional[int],
-    sdk_session_id: Optional[str],
-    our_session_id: str,
-    event_queue: 'queue.Queue',
-    state: dict,
-):
-    """Coroutine que processa async gen do SDK e empurra para event_queue.
-
-    Encerra com sentinel None. `state` mutavel propaga metadata pos-stream
-    (sdk_session_id, total_cost_usd) para a thread principal.
-    """
-    # FIX P1.4: capturar stderr do CLI subprocess para diagnosticar ProcessError
-    # (exit 1 etc.). Antes o erro exibido era generico. Drenado no except.
-    _stderr_q: 'queue.SimpleQueue[str]' = queue.SimpleQueue()
-    try:
-        agen = stream_lojas_chat(
-            user_message=user_message,
-            user_id=user_id,
-            user_name=user_name,
-            perfil=perfil,
-            loja_hora_id=loja_hora_id,
-            sdk_session_id=sdk_session_id,
-            our_session_id=our_session_id,
-            event_queue=event_queue,
-            stderr_queue=_stderr_q,
-        )
-        async for event in agen:
-            etype = event.get('type')
-            meta = event.get('metadata', {}) or {}
-            content = event.get('content', '')
-
-            # FIX S1 (P0.2): acumular o texto do assistant para persistir no DB
-            # (antes so o turno do usuario era gravado). Defesa: so 'text'.
-            if etype == 'text' and content:
-                state['assistant_text'] = (state.get('assistant_text') or '') + content
-
-            if etype == 'init':
-                sid = meta.get('sdk_session_id')
-                if sid:
-                    state['sdk_session_id'] = sid
-                event_queue.put(_sse('init', {'sdk_session_id': sid}))
-            elif etype == 'done':
-                state['final_metadata'] = meta
-                event_queue.put(_sse('done', meta))
-            elif etype == 'task_event':
-                # SDK 0.2.82+: handler dedicado (matches Nacom contract — payload
-                # e o task_evt direto, sem prefix 'content'). Garante shape
-                # identico ao Nacom para o frontend (CR MED #6).
-                event_queue.put(_sse('task_event', meta))
-            else:
-                event_queue.put(_sse(etype, {'content': content, **meta}))
-    except Exception as e:
-        # Drenar stderr do CLI (best-effort) para o log — diagnostico de crash.
-        _stderr_lines = []
-        try:
-            while True:
-                _stderr_lines.append(str(_stderr_q.get_nowait()))
-        except Exception:
-            pass
-        if _stderr_lines:
-            logger.error(
-                "[AGENTE_LOJAS] stderr CLI (ultimas %d linhas): %s",
-                len(_stderr_lines), " | ".join(_stderr_lines[-20:]),
-            )
-        logger.exception("[AGENTE_LOJAS] drain erro: %s", e)
-        event_queue.put(_sse('error', {'content': str(e)}))
-    finally:
-        event_queue.put(None)  # sentinel
-
-
 async def _drain_via_motor(
     *,
     user_message: str,
@@ -334,7 +242,7 @@ async def _drain_via_motor(
     event_queue: 'queue.Queue',
     state: dict,
 ):
-    """Caminho do MOTOR UNICO (flag AGENT_LOJAS_USA_MOTOR_UNICO ON).
+    """Drena o stream do MOTOR UNICO (get_client('lojas')) para o frontend lojas.
 
     Reusa o AgentClient web do perfil 'lojas' — `get_client('lojas')` ja produz
     settings/skills(allow-list)/agents({orientador-loja})/hooks isolados por
@@ -361,9 +269,10 @@ async def _drain_via_motor(
     from app.agente_lojas.config.permissions import can_use_tool as lojas_can_use_tool
 
     # Wiring do registry WEB: o motor (stream_response) e os hooks (build_hooks
-    # agente_id='lojas') leem destes ContextVars; o can_use_tool do fork le
-    # session_id/event_queue do MESMO registro (C4). set_current_agent_id ANTES de
-    # set_loja_scope — o hook so injeta <loja_context> quando agente='lojas'.
+    # agente_id='lojas') leem destes ContextVars; o can_use_tool do agente_lojas
+    # (config/permissions) le session_id/event_queue do MESMO registro (C4).
+    # set_current_agent_id ANTES de set_loja_scope — o hook so injeta
+    # <loja_context> quando agente='lojas'.
     set_current_session_id(our_session_id)
     set_current_user_id(user_id)
     # memory_mcp_tool tem ContextVar proprio de user_id (espelha o web route).
@@ -387,9 +296,9 @@ async def _drain_via_motor(
             user_id=user_id,
             sdk_session_id=sdk_session_id,
             our_session_id=our_session_id,
-            # R4 (MAPA_A5): can_use_tool do FORK preserva os _DANGEROUS_BASH_PATTERNS
-            # HORA (delete from hora_*) + guard /tmp. E param de stream_response —
-            # NAO precisa migrar para o motor.
+            # R4 (MAPA_A5): can_use_tool do agente_lojas (config/permissions) preserva
+            # os _DANGEROUS_BASH_PATTERNS HORA (delete from hora_*) + guard /tmp. E param
+            # de stream_response — fica no perfil, nao migra para o motor.
             can_use_tool=lojas_can_use_tool,
         )
         async for event in agen:
@@ -421,101 +330,55 @@ def _streaming_worker(
     event_queue: 'queue.Queue',
     state: dict,
 ):
-    """Worker em daemon thread que processa async gen do SDK.
-
-    Estrategia:
-        - Se pool persistente ativo (USE_PERSISTENT_LOJAS_LOOP=true): submete
-          coroutine ao loop daemon compartilhado via submit_coroutine —
-          economiza ~50-100ms de loop creation por request.
-        - Caso contrario: cria novo event loop por request (fallback).
-
-    Sinaliza fim com sentinel None em event_queue.
-    """
-    if AGENT_LOJAS_USA_MOTOR_UNICO:
-        # Caminho do MOTOR UNICO: a coroutine roda no loop do MOTOR (client_pool do
-        # agente web), pois stream_response do motor usa esse pool. Submeter ao loop
-        # do fork cruzaria event loops e o can_use_tool nao veria os ContextVars.
-        from app.agente.sdk.client_pool import submit_coroutine as _submit_motor
-        coro = _drain_via_motor(
-            user_message=user_message,
-            user_id=user_id,
-            user_name=user_name,
-            perfil=perfil,
-            loja_hora_id=loja_hora_id,
-            sdk_session_id=sdk_session_id,
-            our_session_id=our_session_id,
-            event_queue=event_queue,
-            state=state,
-        )
+    """Worker em daemon thread: roda o motor unico (get_client('lojas')) no loop
+    do client_pool do agente WEB (stream_response do motor usa esse pool) e drena
+    o stream para event_queue. Sinaliza fim com sentinel None."""
+    # A coroutine roda no loop do MOTOR (client_pool do agente web); submeter a
+    # outro loop cruzaria event loops e o can_use_tool nao veria os ContextVars.
+    from app.agente.sdk.client_pool import submit_coroutine as _submit_motor
+    coro = _drain_via_motor(
+        user_message=user_message,
+        user_id=user_id,
+        user_name=user_name,
+        perfil=perfil,
+        loja_hora_id=loja_hora_id,
+        sdk_session_id=sdk_session_id,
+        our_session_id=our_session_id,
+        event_queue=event_queue,
+        state=state,
+    )
+    try:
+        fut = _submit_motor(coro)
+    except Exception as e:
+        # submit_coroutine do motor LEVANTA RuntimeError se o pool web estiver off
+        # (USE_PERSISTENT_SDK_CLIENT=false) ou o loop fechado. Sem este guard a
+        # thread daemon morreria ANTES do sentinel None e o SSE generator travaria
+        # ate o timeout de inatividade (~300s). Destrava o frontend com error+sentinel.
+        logger.exception("[AGENTE_LOJAS] submit ao loop do motor falhou: %s", e)
         try:
-            fut = _submit_motor(coro)
-        except Exception as e:
-            # submit_coroutine do MOTOR LEVANTA RuntimeError se o pool web estiver
-            # off (USE_PERSISTENT_SDK_CLIENT=false) ou o loop fechado — diferente
-            # do fork (retorna None). Sem este guard a thread daemon morreria ANTES
-            # do sentinel None e o SSE generator travaria ate o timeout de
-            # inatividade (~300s). Destrava o frontend com error + sentinel.
-            logger.exception("[AGENTE_LOJAS] submit ao loop do motor falhou: %s", e)
-            try:
-                coro.close()  # evita 'coroutine never awaited'
-            except Exception:
-                pass
-            event_queue.put(_sse('error', {
-                'content': 'Servico do agente temporariamente indisponivel. Tente novamente.',
-            }))
-            event_queue.put(None)  # sentinel — destrava o SSE generator
-            return
-    else:
-        coro = _drain_async_gen(
-            user_message=user_message,
-            user_id=user_id,
-            user_name=user_name,
-            perfil=perfil,
-            loja_hora_id=loja_hora_id,
-            sdk_session_id=sdk_session_id,
-            our_session_id=our_session_id,
-            event_queue=event_queue,
-            state=state,
-        )
-        fut = submit_coroutine(coro) if USE_PERSISTENT_LOJAS_LOOP else None
-
-    if fut is not None:
-        # Expor fut em state para que _generate_sse possa cancelar no
-        # disconnect (cliente desconectou o SSE). Sem isso, coroutine
-        # continua viva no loop persistente ate STREAM_MAX_DURATION_SECONDS,
-        # vazando subprocess SDK + entry em pending_questions.
-        # Fix code-reviewer (2026-05-09).
-        state['_fut'] = fut
-        try:
-            fut.result(timeout=STREAM_MAX_DURATION_SECONDS + 30)
-        except concurrent.futures.CancelledError:
-            # Cancelamento esperado quando cliente desconectou — coroutine
-            # foi sinalizada via fut.cancel() em _generate_sse finally.
-            logger.info("[AGENTE_LOJAS] worker (pool) cancelado (cliente desconectou)")
-        except Exception as e:
-            logger.exception("[AGENTE_LOJAS] worker (pool) erro: %s", e)
-            try:
-                event_queue.put(_sse('error', {'content': str(e)}))
-                event_queue.put(None)
-            except Exception:
-                pass
+            coro.close()  # evita 'coroutine never awaited'
+        except Exception:
+            pass
+        event_queue.put(_sse('error', {
+            'content': 'Servico do agente temporariamente indisponivel. Tente novamente.',
+        }))
+        event_queue.put(None)  # sentinel — destrava o SSE generator
         return
 
-    # Path fallback — loop por request (USE_PERSISTENT_LOJAS_LOOP=false)
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
+    # Expor fut em state para que _generate_sse possa cancelar no disconnect
+    # (cliente desconectou o SSE) — sem isso a coroutine fica viva no pool ate
+    # STREAM_MAX_DURATION_SECONDS, vazando subprocess SDK + entry em pending_questions.
+    state['_fut'] = fut
     try:
-        loop.run_until_complete(coro)
+        fut.result(timeout=STREAM_MAX_DURATION_SECONDS + 30)
+    except concurrent.futures.CancelledError:
+        # Cancelamento esperado quando cliente desconectou (fut.cancel em _generate_sse).
+        logger.info("[AGENTE_LOJAS] worker cancelado (cliente desconectou)")
     except Exception as e:
-        logger.exception("[AGENTE_LOJAS] worker (fallback) erro: %s", e)
+        logger.exception("[AGENTE_LOJAS] worker erro: %s", e)
         try:
             event_queue.put(_sse('error', {'content': str(e)}))
             event_queue.put(None)
-        except Exception:
-            pass
-    finally:
-        try:
-            loop.close()
         except Exception:
             pass
 

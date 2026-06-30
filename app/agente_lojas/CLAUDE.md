@@ -4,7 +4,7 @@ camada: L1
 sot_de: —
 hub: CLAUDE.md
 superseded_by: —
-atualizado: 2026-06-29
+atualizado: 2026-06-30
 -->
 # Agente Lojas HORA — Guia de Desenvolvimento
 
@@ -25,9 +25,9 @@ atualizado: 2026-06-29
 
 ## Contexto
 
-Agente separado (decisao 2026-04-22) que reusa a infra do SDK mas atende so o operador de loja, sem o contexto logistico Nacom. Reforca em camada-tool o contrato de isolamento de `app/hora/CLAUDE.md` via `skills=sorted(SKILLS_PERMITIDAS)` (SDK 0.1.77+): skills do dominio Nacom Goya ficam rejeitadas pelo Skill tool. ~2172 LOC, 17 arquivos Python, status M2.
+Agente separado (decisao 2026-04-22) que REUSA o motor do SDK do agente web por perfil (`get_client('lojas')`) mas atende so o operador de loja, sem o contexto logistico Nacom. Reforca em camada-tool o contrato de isolamento de `app/hora/CLAUDE.md` via `skills` (allow-list) + tool surface fechado (ZERO MCP Nacom): skills/dados do dominio Nacom Goya ficam fora do alcance da loja. ~1305 LOC, 13 arquivos Python; o fork proprio `AgentLojasClient` foi APOSENTADO na FASE B.
 
-**LOC**: ~2172 (+34 testes em tests/agente_lojas) | **Arquivos**: 17 (Python) | **Status**: M2 SDK completo + UX hardened (markdown render, TodoWrite UI, SessionStore opcional, historico de sessoes na UI, 34 testes automatizados) | **Atualizado**: 06/06/2026
+**LOC**: ~1305 (config/services/routes/prompts; o MOTOR do SDK vem de `app/agente/`) | **Arquivos**: 13 (Python) | **Status**: MOTOR UNICO em PROD — cutover (E3.8b+E3.9) + FASE B (fork aposentado, flag removida) | **Atualizado**: 30/06/2026
 
 Agente dedicado ao pessoal das Lojas Motochefe (HORA), endpoint `/agente-lojas/*`.
 Compartilha SDK com `app/agente/` mas com system_prompt, skills, subagents e
@@ -63,20 +63,17 @@ app/agente_lojas/
 |-- decorators.py                  # @require_acesso_agente_lojas
 |-- config/
 |   |-- __init__.py
-|   |-- settings.py                # AgentLojasSettings (model, prompt paths, skills)
-|   |-- skills_whitelist.py        # Lista de skills permitidas (M1+)
-|   `-- permissions.py             # can_use_tool (M2 SDK — AskUserQuestion + /tmp)
+|   |-- settings.py                # AgentLojasSettings (model, prompts, tools_enabled RESTRITO, skills) — perfil do motor
+|   |-- skills_whitelist.py        # Allow-list HORA (SKILLS_PERMITIDAS) + SUBAGENTS_PERMITIDOS={orientador-loja}
+|   `-- permissions.py             # can_use_tool HORA (_DANGEROUS_BASH_PATTERNS + /tmp); le o registry de contexto do motor web (re-export)
 |-- prompts/
 |   |-- system_prompt.md           # Identidade + regras operacionais da loja
 |   `-- preset_operacional.md      # Tools + safety + /tmp
 |-- services/
 |   |-- __init__.py
-|   `-- scope_injector.py          # Injeta loja_hora_id no user_prompt_submit
-|-- sdk/
-|   |-- __init__.py                # Re-exports (get_lojas_client, stream_lojas_chat)
-|   |-- client.py                  # AgentLojasClient (build_options + stream_response)
-|   |-- client_pool.py             # Event loop persistente (M2 SDK Fase B)
-|   `-- hooks.py                   # UserPromptSubmit + PreToolUse (M2 SDK)
+|   `-- scope_injector.py          # Monta <loja_context> (consumido pelo hook E3.8a do motor)
+|   # NOTA: o SDK NAO vive aqui — o motor vem de app/agente/sdk/ via get_client('lojas')
+|   #       (fork sdk/ APOSENTADO na FASE B 2026-06-30)
 |-- routes/
 |   |-- __init__.py                # Blueprint agente_lojas_bp
 |   |-- chat.py                    # POST /agente-lojas/api/chat (SSE)
@@ -89,32 +86,24 @@ app/agente_lojas/
 
 ---
 
-## Reuso vs exclusivo
+## Reuso do motor web (cutover CONCLUIDO)
 
-> **ESTADO REAL (corrigido 2026-06-26 apos estudo).** A tabela anterior estava
-> ERRADA: afirmava reuso de `sdk/client.py` (AgentClient), `sdk/hooks.py`
-> (build_hooks), `sdk/memory_injection.py` e `sdk/client_pool.py` que **nunca
-> existiu**. O modulo tem um **fork proprio** `AgentLojasClient` (~350 LOC, NAO
-> herda AgentClient) e reusa o web so por **imports pontuais**. Esse fork driftou
-> para tras (ver Gotcha 0). A intencao original "nao duplicar — parametrize" e o
-> alvo P2, ainda nao realizado.
+> **ESTADO (2026-06-30, FASE B).** O cutover do MOTOR UNICO esta concluido em PROD:
+> a rota `/agente-lojas` usa o `AgentClient` web por perfil — `get_client('lojas')`
+> produz settings/skills(allow-list)/agents({orientador-loja})/hooks/memoria/
+> `<loja_context>` isolados por `agente='lojas'`. O fork proprio `AgentLojasClient`
+> (`sdk/`) foi **APOSENTADO** (deletado). O "nao duplicar — parametrize" foi realizado.
 
-| Realmente reusado de `app/agente/` (import) | Fork proprio deste modulo |
-|---------------------------------------------|---------------------------|
-| `sdk/session_store_adapter.py` (`get_or_create_session_store`) | `sdk/client.py` (AgentLojasClient — NAO herda AgentClient) |
-| `sdk/pricing.py` (`turn_cost_from_cumulative`) | `sdk/client_pool.py` (so event loop; nao reusa o client) |
-| `sdk/pending_questions.py` (AskUser cross-worker Redis) | `sdk/hooks.py` (proprio; web tem build_hooks) |
-| `sdk/subagent_reader.py` (`get_subagent_findings`) | `config/permissions.py` (proprio; reusa pending_questions) |
-| `models.py` (AgentSession, AgentMemory) | `config/settings.py` (subclass de AgentSettings) |
-| `config/settings.py` (AgentSettings base) | `prompts/*`, `services/scope_injector.py`, `routes/*`, `templates/*` |
+| Vem do MOTOR web `app/agente/` | EXCLUSIVO do perfil 'lojas' (este modulo) |
+|--------------------------------|-------------------------------------------|
+| `sdk/client.py` (AgentClient via `get_client('lojas')`), `sdk/client_pool.py` (loop), `sdk/hooks.py` (`build_hooks(agente_id='lojas')`), `sdk/memory_injection.py` (isolada por agente), `config/permissions.py` (registry de contexto UNICO + ContextVars) | `config/settings.py` (AgentLojasSettings: model/prompts/`tools_enabled` restrito/`empresa_briefing_path=''`), `config/skills_whitelist.py`, `config/permissions.py` (`can_use_tool` HORA — `_DANGEROUS_BASH_PATTERNS`), `services/scope_injector.py` (`<loja_context>`), `prompts/*`, `routes/*`, `templates/*` |
 
-**NAO reusado** (gap deliberado): `sdk/memory_injection.py` — o fork NAO injeta
-memoria (isolamento por OMISSAO; M3 pendente); `prompts/` e briefing Nacom.
-
-**Decisao P2 (estudo 2026-06-26):** CONVERGIR para reusar o `AgentClient` web
-parametrizado por perfil (o "nao duplicar" original), **GATED em M3**
-(particionar `memory_injection` por coluna `agente`). Reusar antes disso vaza
-memoria logistica Nacom para o operador de loja. Ver Gotcha 0 + fase M3.
+O isolamento (briefing vazio, skills allow-list, agents={orientador-loja}, **ZERO MCP
+Nacom**, `<loja_context>`, memoria por agente, sem hints/contexto Nacom) e' garantido
+por gates por `agente_id` no motor (E1.2/E2.4/E3.8a + fix do tool surface) — provado por
+`tests/agente/test_client_por_perfil.py`, `test_tool_surface_isolamento_perfil.py`,
+`sdk/test_loja_context_perfil.py`, `sdk/test_memory_isolation_por_agente.py`. Detalhe +
+file:line: handoff `docs/superpowers/plans/2026-06-29-convergencia-agente-lojas-handoff.md`.
 
 ---
 
@@ -189,23 +178,21 @@ Review adversarial 4-dim + code-review app-wide (34 agentes) feitos.
 `(user_id,path,agente)` (migration `2026_06_30_constraint_agente_memoria`),
 `create_file/create_directory(agente=)`, ContextVar `_current_agent_id` (infra),
 rotas `/agente/api/sessions*` filtram `agente='web'`.
-**MOTOR ÚNICO ETAPA 1+2+3a ✅ (2026-06-29):** o `AgentClient` web já é parametrizado
-por perfil — `get_client('lojas')` produz settings/skills(allow-list)/agents({orientador-loja})/
-sem-briefing-Nacom (ETAPA 1); `build_hooks(agente_id='lojas')` isola memória/skill-reminders/
-enforce + injeta `<loja_context>` (ContextVar `_current_loja_scope`) + suprime hints SQL Nacom
-no PreToolUse (ETAPA 2+3a); `memory_mcp_tool`/jobs gravam/leem por `get_current_agent_id()`.
-Tudo INERTE em produção (default `'web'`). **CUTOVER FEITO — E3.8b+E3.9 (2026-06-29, atrás de
-flag `AGENT_LOJAS_USA_MOTOR_UNICO`, default OFF):** `routes/chat.py` usa
-`get_client('lojas').stream_response()` no caminho ON (`_drain_via_motor`: seta ContextVars web
-`agente='lojas'`+`loja_scope`, serializa `StreamEvent`→SSE no formato do frontend lojas,
-`can_use_tool` do fork); OFF mantém o fork como rollback. **Revisão adversarial (2 rodadas)**
-corrigiu o **CRÍTICO** de isolamento — o perfil 'lojas' herdava o tool surface Nacom
-(`allowed_tools` web + `mcp__*`): agora `AgentLojasSettings.tools_enabled` é restrito e
-`_register_mcp` pula MCP p/ 'lojas' (ZERO MCP, como o fork). Gate `tests/agente`+`tests/agente_lojas`
-= 1753 passed/40 skip/0 fail, web byte-idêntico. **FASE B (pós-canary): DELETAR o fork**
-(`sdk/client.py`/`client_pool.py`/`sdk/hooks.py`/`sdk/__init__.py`) + flip default ON. Plano com
-file:line: handoff `docs/superpowers/plans/2026-06-29-convergencia-agente-lojas-handoff.md`
-§"CUTOVER FEITO (E3.8b + E3.9)".
+**MOTOR ÚNICO — CUTOVER + FASE B CONCLUIDOS EM PROD (2026-06-30):** a rota
+`/agente-lojas` usa SEMPRE `get_client('lojas').stream_response()` (`routes/chat.py`
+`_drain_via_motor`: seta os ContextVars web `agente='lojas'`+`loja_scope`, serializa
+`StreamEvent`→SSE no formato do frontend lojas, `can_use_tool` HORA de `config/permissions`).
+O motor produz settings/skills(allow-list)/agents({orientador-loja})/sem-briefing-Nacom
+(E1.2); `build_hooks(agente_id='lojas')` isola memória/skill-reminders/enforce + injeta
+`<loja_context>` (ContextVar `_current_loja_scope`) + suprime hints Nacom no PreToolUse
+(E2.4/E3.8a); `memory_mcp_tool`/jobs gravam/leem por `get_current_agent_id()`. **2 rodadas
+de revisão adversarial** corrigiram o **CRÍTICO** de isolamento — o perfil 'lojas' herdava o
+tool surface Nacom (`allowed_tools` web + `mcp__*`): agora `AgentLojasSettings.tools_enabled`
+é restrito e `_register_mcp` pula MCP p/ 'lojas' (**ZERO MCP**). **FASE B:** o fork
+`AgentLojasClient` (`sdk/client.py`/`client_pool.py`/`hooks.py`/`__init__.py`) foi APOSENTADO
+e a flag `AGENT_LOJAS_USA_MOTOR_UNICO` removida (rota usa o motor incondicionalmente). Migration
+`uq_user_memory_path_agente` aplicada em PROD. Plano/file:line: handoff
+`docs/superpowers/plans/2026-06-29-convergencia-agente-lojas-handoff.md` §"CUTOVER FEITO".
 
 ---
 
@@ -221,46 +208,32 @@ file:line: handoff `docs/superpowers/plans/2026-06-29-convergencia-agente-lojas-
 | M2 (SDK Fase C) | Hooks PostToolUse audit + permissions hardening | **Concluido** (2026-05-09) |
 | M2 (UX P0) | Markdown rendering (marked + DOMPurify), TodoWrite progress UI, 34 testes (can_use_tool, scope_injector, todos parser) | **Concluido** (2026-05-09) |
 | M2 (UX P1) | PostgresSessionStore opt-in (`AGENT_LOJAS_SESSION_STORE_ENABLED`), historico de sessoes no UI (dropdown + nova sessao) | **Concluido** (2026-05-09) |
-| M3   | Venda + isolamento total de memoria + Cost tracking granular por subagente | **Parcial** — skill `consultando-venda-loja` na whitelist (`SKILLS_DOMINIO_HORA`); **cost tracking por turno corrigido** (delta via `turn_cost_from_cumulative`, FIX 2026-06-26); **convergencia F0+F1 + F2/M3 COMPLETA** (isolamento de memoria por `agente_id` em TODO o modulo de injecao — `_load` + PreToolUse hooks; default='web' aditivo; review adversarial; 17 commits, 145 testes) — branch `worktree-convergencia-agente-lojas`, handoff `2026-06-29-convergencia-agente-lojas-handoff.md`. **PENDENTE: F2 P1/P2 (escrita) + F3** (reuso do AgentClient web por perfil — gated por F2, agora verde; ver Gotcha 0) |
+| M3   | Venda + isolamento total de memoria + Cost tracking granular por subagente | **Parcial** — skill `consultando-venda-loja` na whitelist (`SKILLS_DOMINIO_HORA`); **cost tracking por turno corrigido** (delta via `turn_cost_from_cumulative`, FIX 2026-06-26); **convergencia F0+F1 + F2/M3 COMPLETA** (isolamento de memoria por `agente_id` em TODO o modulo de injecao — `_load` + PreToolUse hooks; default='web' aditivo; review adversarial; 17 commits, 145 testes) — handoff `2026-06-29-convergencia-agente-lojas-handoff.md`. **F3 (MOTOR UNICO) CONCLUIDO em PROD (2026-06-30):** cutover E3.8b+E3.9 + FASE B (fork aposentado, flag removida, tool surface fechado) — ver seção "Particao de sessoes". |
 | M4   | Analytics (apos fase financeira HORA) | Planejado |
 
 ---
 
 ## Gotchas
 
-0. **Multi-turno = `resume`, NUNCA `session_id` (FIX S1 2026-06-26).** `build_options`
-   passa `resume=sdk_session_id` (--resume CARREGA o `{id}.jsonl`) a partir do
-   turno 2, **sem** setar `session_id` (--session-id apenas NOMEIA; --session-id +
-   --resume exige --fork-session e forkar X->X = exit code 1). Espelha
-   `_with_resume` do agente web (`app/agente/sdk/client.py:2842`).
-   **Turno 1 (F1.5 2026-06-28):** quando `our_session_id` (nosso UUID) e passado,
-   `build_options` PRE-NOMEIA o JSONL via `session_id=our_session_id` (SEM resume)
-   — elimina a captura assincrona fragil via SystemMessage (race: se nao chega, o
-   turno 2 perde o resume -> amnesia). ADITIVO e mutuamente exclusivo com o resume
-   (o ramo `if sdk_session_id` ja tratou o turno 2+), preservando o invariante
-   acima. Espelha web `client.py:1655-1663`. O bug original:
-   o modulo so passava `session_id` reusando o id do turno anterior -> amnesia +
-   colisao de JSONL ("nao responde 2 perguntas sequenciais"). O `SessionStore`
-   agora e **default ON** (`AGENT_LOJAS_SESSION_STORE_ENABLED=True`) para que o
-   `{id}.jsonl` seja materializavel do Postgres cross-worker; um **probe**
-   (`_store.load`) em `stream_response` REMOVE o `resume` se a sessao nao existir
-   no store (evita --resume de JSONL inexistente). A resposta do **assistant**
-   passou a ser persistida em `agent_sessions.data['messages']` (antes so o turno
-   do usuario), e o custo e gravado em **delta** via `turn_cost_from_cumulative`
-   (antes somava o acumulado cru do SDK -> inflacao ~Nx). **Robustez P1 alinhada
-   ao web (2026-06-26):** timeouts 300s/1740s (era 240s/540s — cortavam skill
-   pesada/subagente), `max_turns` removido (era 20 — cortava respostas
-   multi-step) com guard de runaway por `max_budget_usd` default 1.5 USD, stderr
-   do CLI capturado no drain p/ diagnostico de ProcessError, e read-back de
-   observabilidade dos findings do subagente no SubagentStop (validacao
-   anti-alucinacao Haiku = M3/P2).
+0. **Multi-turno = `resume`, NUNCA `session_id` (FIX S1).** O MOTOR (`get_client('lojas')`)
+   trata o resume: turno 2+ usa `resume=sdk_session_id` (--resume CARREGA o `{id}.jsonl`)
+   **sem** `session_id` (--session-id + --resume = exit code 1); turno 1 PRE-NOMEIA o JSONL
+   via `session_id=our_session_id` (anti-amnesia — elimina a captura assincrona fragil do
+   sdk_session_id). Mecanica GENERICA do motor web (`_with_resume` `client.py:2842`,
+   `_build_options`), identica para 'web' e 'lojas'. O `SessionStore` (default ON via
+   `AGENT_LOJAS_SESSION_STORE_ENABLED`) materializa o `{id}.jsonl` do Postgres cross-worker;
+   o custo e gravado em **delta** via `turn_cost_from_cumulative`. Garantia do perfil lojas:
+   `tests/agente_lojas/test_motor_resume_options.py`.
 
 1. **Nao importar** `app/motochefe/` ou `app/carvia/` direto neste modulo
    (contrato de isolamento HORA). Se precisar de dado da Motochefe como
    fornecedor, consultar via `hora_nf_entrada`.
 
-2. **AgentClient esta em `app/agente/sdk/client.py`** — reuso por import,
-   nao copiar.
+2. **O motor do SDK vive em `app/agente/sdk/` (NAO neste modulo).** O perfil lojas e
+   servido por `get_client('lojas')` — NAO ha mais fork `AgentLojasClient` (aposentado na
+   FASE B). Para mudar o comportamento do agente lojas: editar o PERFIL (`config/settings.py`
+   tools_enabled/skills, `config/permissions.py` can_use_tool) ou o gate por `agente_id` no
+   motor; NUNCA recriar um client proprio neste modulo.
 
 3. **Template `chat.html`** usa mesmo pattern SSE do `agente/templates/agente/chat.html`
    mas aponta para `/agente-lojas/api/chat`. URLs DEVEM usar `url_for('agente_lojas.X')`.

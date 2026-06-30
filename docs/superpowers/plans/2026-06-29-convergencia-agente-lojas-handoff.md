@@ -206,10 +206,11 @@ filtra por `user_id` mas não por `agente` na busca primária (entities não tê
 
 ## CUTOVER FEITO (E3.8b + E3.9)
 
-> **FEITO (2026-06-29) atrás de flag `AGENT_LOJAS_USA_MOTOR_UNICO` (default OFF).**
-> A rota lojas usa o motor quando ON; o fork segue como rollback (default OFF). Os
-> passos do plano abaixo (pré-requisitos + E3.8b + E3.9) foram executados — TDD por
-> passo, web byte-idêntico. A DELEÇÃO do fork é FASE B (pós-canary).
+> **CONCLUÍDO EM PROD (2026-06-30).** A rota lojas usa o motor INCONDICIONALMENTE
+> (`get_client('lojas')`); o **fork foi APOSENTADO** e a flag `AGENT_LOJAS_USA_MOTOR_UNICO`
+> removida (ver §FASE B). Histórico: o cutover foi primeiro entregue atrás de flag canary
+> (E3.8b+E3.9, default OFF), validado em PROD, e então o fork deletado. Os passos do plano
+> abaixo (pré-requisitos + E3.8b + E3.9) foram executados — TDD por passo, web byte-idêntico.
 
 ### Commits (7, sobre os 8 da infra)
 ```
@@ -241,14 +242,19 @@ c95b69224 fix CRITICO — isola tool surface por perfil (tools_enabled restrito 
   afeta o web — mexer quebra byte-idêntico); SKILL.md Nacom legíveis via Read/Bash
   (**PARIDADE com o fork** — `setting_sources=["project"]` idêntico).
 
-### FASE B — DELETAR o fork (pós-canary validado em PROD; NÃO feita nesta sessão)
-- Deletar: `sdk/client.py` (AgentLojasClient), `sdk/client_pool.py`, `sdk/hooks.py`, `sdk/__init__.py`.
-- Migrar os **31 testes** do fork (`test_resume_build_options`, `test_build_options_env`,
-  `test_sdk_error_handling`, `test_nacom_quiet_boot`, `test_briefing_isolamento`,
-  `test_task_event_parser`) p/ o motor ou aposentar.
-- Flip default `AGENT_LOJAS_USA_MOTOR_UNICO=ON`.
-- MANTER: `services/scope_injector.py`, `config/{settings,skills_whitelist,permissions}.py`,
+### FASE B — fork APOSENTADO ✅ (FEITA 2026-06-30, validada em PROD)
+- ✅ Deletados: `sdk/client.py` (AgentLojasClient), `sdk/client_pool.py`, `sdk/hooks.py`, `sdk/__init__.py`.
+- ✅ Os 6 testes do fork: **4 APOSENTADOS** (env/error/quiet_boot/briefing — invariantes já cobertos
+  pelo motor: `test_sdk_runtime`, `test_motor_drain`, `test_hooks_propagacao_env`, `test_client_por_perfil`)
+  + **2 MIGRADOS** (`tests/agente/sdk/test_build_task_event.py` p/ `_build_task_event` do motor;
+  `tests/agente_lojas/test_motor_resume_options.py` p/ o naming determinístico do turno 1).
+- ✅ Flag `AGENT_LOJAS_USA_MOTOR_UNICO` **REMOVIDA** — a rota usa o motor incondicionalmente
+  (`_streaming_worker` → `_drain_via_motor` sempre; `_drain_async_gen`/fallback de loop deletados).
+- ✅ Migration `uq_user_memory_path_agente` aplicada em PROD; cutover live e validado (logs:
+  `[AGENT_CLIENT] perfil lojas` + AskUserQuestion 200, zero erro).
+- MANTIDOS: `services/scope_injector.py`, `config/{settings,skills_whitelist,permissions}.py`,
   `routes/{sessions,health,user_answer}.py`, `decorators.py`, `templates/`, `prompts/`.
+- Gate pós-FASE-B: **1825 passed / 40 skip / 0 fail**.
 
 ---
 
