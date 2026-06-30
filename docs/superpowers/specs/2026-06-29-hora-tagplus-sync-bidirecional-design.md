@@ -11,7 +11,14 @@ atualizado: 2026-06-29
 
 > **Papel:** spec/design da sincronização de pedidos de venda entre o módulo HORA e o TagPlus (criação, cancelamento, numeração e replicação reversa). Lido antes de executar os planos `docs/superpowers/plans/2026-06-29-hora-tagplus-sync-*`.
 >
-> **Status (2026-06-29):** **Fase 1 (numeração) + Fase 2a (push, flag-OFF) DEPLOYADAS** (commit `5027048c7` na `main`/PROD). Migration `hora_62` + backfill de **885 vendas** já no banco de PROD (0 divergências); 413 testes HORA verdes. Verificações **#2 e #4 resolvidas**; `scope_contratado` de PROD já com `write:pedidos` (**escopo efetivo a confirmar** no início da 2b — token parece refresh, não authorize fresco). **Fase 2b** (to_nfe + wiring + cancelamento, gated por #1/#3) e **Fase 3** (numero-walk, #2 ok) pendentes — **handoff:** `docs/superpowers/plans/2026-06-29-hora-tagplus-fase2b-fase3-handoff.md`. Sessão 4-mãos Claude Code (dev).
+> **Status (2026-06-29): GO-LIVE EXECUTADO — Fases 1, 2a, 2b e 3 EM PROD e LIGADAS.** Deploy `4c8943800` live (web+worker). Flags ON (env var; default do código continua OFF): **web** `HORA_TAGPLUS_PUSH_PEDIDO=1`+`HORA_TAGPLUS_REVERSO=1`; **worker** `...worker-atacadao` (queue `hora_nfe`) `HORA_TAGPLUS_PUSH_PEDIDO=1`.
+> - **Fase 2b (push):** payload completo de pedido (reusa `PayloadBuilder`), `criar/atualizar/cancelar` wired nos 4 pontos do `venda_service`; emissão **mantém `POST /nfes` rico** + `pedido_os_vinculada` (`emissor_nfe._enviar_nfe`) — **NÃO usa `to_nfe`** (decisão do dono, ver §4).
+> - **Fase 3 (reverso):** `busca_pedido_por_numero` + `numero_walk` (anti-loop/idempotência) + `replicar` (`HoraVenda` INCOMPLETO `origem='TAGPLUS'` + divergência `AGUARDANDO_CHASSI`, sem migration nova) + `descobrir_e_replicar` + cron (`executar_descoberta_reversa_hora` no scheduler). Migration `hora_63` em PROD; backfills zeraram o backlog → **dry-run do numero-walk = 0**.
+> - **457 testes HORA verdes** (44 novos). Verificações #1(write:pedidos)/#2/contrato `/pedidos` resolvidas AO VIVO.
+> - **Pendente — validação ao vivo:** (a) **gate crítico** — 1ª emissão com push ON: confirmar que `pedido_os_vinculada` vincula **sem criar 2º pedido**; (b) 1º ciclo do reverso (cria 0, cursor→965); (c) por que o webhook `nfe_aprovada` parou de capturar nº (8 órfãs resolvidas por backfill).
+> - **Handoff:** `docs/superpowers/plans/2026-06-29-hora-tagplus-fase2b-fase3-handoff.md`. Sessão 4-mãos Claude Code (dev).
+>
+> ⚠️ **Nuance de go-live:** com a flag ON, o push cria o pedido e o `POST /nfes` envia `pedido_os_vinculada` para vincular a NFe a ele (sem auto-criar 2º pedido). Gate: confirmar com o TagPlus que esse vínculo funciona sem duplicar. O faturamento permanece pelo `POST /nfes` rico (decisão do dono — não usar `to_nfe`).
 
 ## Indice
 
@@ -99,7 +106,7 @@ Confirmado pelo dono do módulo a partir do portal (apidoc.tagplus.com.br — "P
 | **Descoberta reversa** | **Numero-walk +3** (algoritmo do usuário, ver Arquitetura §5): a partir do maior número conhecido, varre +1..+3; achando novos, estende +3 a partir do novo máximo; para após 3 ausências seguidas. |
 | **Mapeamento de chassi** | **Operador escolhe o chassi.** Pedido replicado entra em `INCOMPLETO` e o operador vincula a moto física antes de confirmar. |
 | **Numeração (item 2)** | **Exibir o número visível do TagPlus** (`pedido['numero']`). |
-| **Emissão NFe** | Para evitar pedido duplicado, emitir a NFe **a partir do pedido** via `GET /pedidos/to_nfe/{id}` (ver Arquitetura §4 e verificações). |
+| **Emissão NFe** | **Manter `POST /nfes` rico** (todas as regras fiscais) e vincular ao pedido via `pedido_os_vinculada` p/ não duplicar. **NÃO** usar `to_nfe` (decisão do dono 2026-06-29 — ver §4). |
 
 ## Arquitetura alvo
 
@@ -115,7 +122,7 @@ Confirmado pelo dono do módulo a partir do portal (apidoc.tagplus.com.br — "P
 |---|---|---|
 | `INCOMPLETO` / `COTACAO` | `A` (Em aberto) | `POST /pedidos` na criação |
 | `CONFIRMADO` | `B` (Confirmado) | `PATCH /pedidos/{id}` status=B |
-| `FATURADO` | `B` + NFe gerada (`to_nfe`) | emissão consome o pedido (sem duplicar) |
+| `FATURADO` | `B` + NFe via `POST /nfes` com `pedido_os_vinculada` | NFe rica vinculada ao pedido (sem duplicar) |
 | `CANCELADO` | `C` (Cancelado) | `PATCH /pedidos/{id}` status=C (DELETE só se nunca houve NFe) |
 
 Reverso (TagPlus→HORA): `A`→`INCOMPLETO` (aguardando chassi), `B`→operador vincula chassi e confirma, `C`→`CANCELADO`.
@@ -126,16 +133,18 @@ Gancho nos pontos de transição de `venda_service`, **após** o commit local (o
 
 - **Criar** (`criar_venda_manual` / `salvar_pedido_completo`, `venda_service.py:761-872`): `POST /pedidos` com `codigo_externo`, `status='A'`, `integracao='SISTEMA_HORA'`, `departamento`/`vendedor`/`cliente`/`itens`/`faturas` quando resolvíveis → grava `tagplus_pedido_id` + `tagplus_pedido_numero`.
 - **Confirmar** (`confirmar_venda`, `venda_service.py:1118`): `PATCH status='B'`.
-- **Emitir NFe**: trocar `POST /nfes` por `GET /pedidos/to_nfe/{tagplus_pedido_id}` (ver §4).
+- **Emitir NFe**: manter `POST /nfes` (payload rico) + `pedido_os_vinculada=tagplus_pedido_id` (ver §4).
 - **Cancelar** (`cancelar_venda`, `venda_service.py:2083`): `PATCH status='C'` (respeitando os guards atuais de NFe em-voo/aprovada).
 
 Resiliência: push idempotente por `codigo_externo` e tolerante a falha (registra erro + permite reprocesso; o scheduler reverso reconcilia o que faltar). **Não** abortar a operação local se o TagPlus falhar.
 
-### §4 Fluxo de emissão NFe (to_nfe)
+### §4 Fluxo de emissão NFe (POST /nfes + `pedido_os_vinculada`) — REVISADO 2026-06-29
 
-Hoje `emissor_nfe.processar` faz `POST /nfes` (`emissor_nfe.py:214`), o que faz o TagPlus **auto-criar um segundo pedido**. Com o pedido já criado no push (§3), passamos a emitir **a partir do pedido**: `GET /pedidos/to_nfe/{tagplus_pedido_id}`. A NFe resultante já fica vinculada (`pedido_os_vinculada`), sem duplicar.
+`emissor_nfe.processar` **continua fazendo `POST /nfes`** com o payload rico do `PayloadBuilder.build()`. Para evitar o pedido duplicado que o TagPlus auto-cria, a emissão passa a enviar **`pedido_os_vinculada = tagplus_pedido_id`** no corpo do `POST /nfes` (campo confirmado na doc: *"ID do Pedido vinculado a nota"*) — o TagPlus vincula a NFe ao pedido criado no push em vez de criar outro.
 
-> **Verificação obrigatória antes da Fase 2:** confirmar se `to_nfe` transmite à SEFAZ (equivalente a `X-Enviar-Nota: true`) ou só gera rascunho exigindo transmissão posterior; e se aceita `X-Calculo-Trib-Automatico`. Até confirmar, manter `POST /nfes` e tratar duplicado por reconciliação é o fallback.
+> **Decisão do dono (2026-06-29):** **NÃO** usar `GET /pedidos/to_nfe/{id}`. O `to_nfe` geraria a NFe a partir dos dados do *pedido* (pobres), perdendo todas as regras fiscais que o `PayloadBuilder.build()` aplica hoje (`inf_contribuinte` com Modelo/Cor/Chassi/Motor + garantia CONTRAN, CFOP por UF, `consumidor_final`, peças, cortesia de revisão). O faturamento por `POST /nfes` é o caminho rico e específico do sistema; só o **vínculo** muda.
+>
+> **Gate de go-live (não-validável sem emitir NF):** confirmar que `pedido_os_vinculada` vincula **sem** auto-criar outro pedido. No pior caso a NFe sai correta de qualquer forma — restaria só a duplicação a reconciliar.
 
 ### §5 Fluxo TagPlus → HORA (replicação reversa — item 3)
 
@@ -183,14 +192,20 @@ Após cada migration que altera `hora_venda`, **regenerar** `.claude/skills/cons
 
 (TagPlus **não tem ambiente de homologação** — escrita é produção; `models/tagplus.py:47-49`. Verificar com leitura/dry-run.)
 
-1. ⛔ **PENDENTE — `GET /pedidos/to_nfe/{id}` transmite à SEFAZ?** Ou gera rascunho? Aceita `X-Enviar-Nota`/`X-Calculo-Trib-Automatico`? **Não testável sem emitir NF real** (sem homologação) — confirmar com TagPlus ou teste controlado. **Gate da Fase 2b.**
-2. ✅ **RESOLVIDO (2026-06-29):** `GET /pedidos?numero={n}` filtra por número **exato** (200 + 1 item; testado ao vivo com numero=942). `numero[eq]`→422; `q`→busca fuzzy. É o parâmetro de `busca_pedido_por_numero` (numero-walk, Fase 3).
-3. ⛔ **PENDENTE — `PATCH status=C` vs `DELETE`** com NFe emitida vinculada — não testável sem alterar pedido real; confirmar com TagPlus. **Default adotado:** `PATCH status=C` (preserva registro). **Gate do cancelamento, Fase 2b.**
-4. ⚠️ **RESOLVIDO (2026-06-29):** o token de PROD tem `read:pedidos` mas **NÃO** `write:pedidos` (`scope_contratado` = `write:nfes read:clientes write:clientes read:produtos read:formas_pagamento read:pedidos read:vendas`). Push real (`POST/PATCH/DELETE /pedidos`) dará **401** até **reautorizar o OAuth** com `write:pedidos` (refresh não re-emite scope). O default do modelo já inclui `write:pedidos`; a **conta de PROD precisa do scope + reauth** (ação do admin).
+1. ⛔ **PENDENTE — `pedido_os_vinculada` no `POST /nfes` vincula a NFe ao pedido SEM auto-criar outro?** **Não testável sem emitir NF real** (sem homologação) — confirmar com TagPlus ou go-live controlado. **Gate de LIGAR a flag.** (O `to_nfe` foi **descartado** — decisão do dono 2026-06-29, ver §4: preserva as regras fiscais do `POST /nfes`. No pior caso a NFe sai correta de qualquer forma.)
+2. ✅ **RESOLVIDO (2026-06-29):** `GET /pedidos?numero={n}` filtra por número **exato** (200 + 1 item; testado ao vivo com numero=942). `numero[eq]`→422; `q`→busca fuzzy. É o parâmetro de `busca_pedido_por_numero` (numero-walk, Fase 3 — implementado).
+3. 🟡 **PARCIAL (2026-06-29):** `DELETE /pedidos/{id}` funciona em pedido **sem NFe** (comprovado ao vivo: criou+apagou pedido de teste, `{"message":"Deletado com sucesso"}`). Comportamento **com NFe vinculada** ainda não testado (precisa de NF emitida). **Default adotado:** `PATCH status=C` (preserva registro). **Gate do cancelamento com-NFe.**
+4. ✅ **RESOLVIDO AO VIVO (2026-06-29):** `write:pedidos` **JÁ está efetivo** no token de PROD — `POST /pedidos` retornou **201** (pedido 1220/nº966, criado e deletado no teste controlado). O `scope_efetivo=null` no banco é **falso-negativo** (o TagPlus não devolve `scope` no refresh response, então o campo nunca foi populado), **não** prova de escopo ausente. **NÃO é preciso reautorizar OAuth.**
+
+**Contrato `POST /pedidos` confirmado ao vivo (2026-06-29, testes controlados cria+apaga):**
+- `itens[]` usa **`produto_servico`** (igual `/nfes`); `produto` → 422 "Campo adicional não permitido".
+- `cliente` = **id_cliente** (id-space REST), **não** `id_entidade` (que é o do `destinatario` do `/nfes`).
+- `departamento`/`vendedor` = `int` (id), **opcionais** (omitidos no v1 — HORA não tem mapa loja→departamento_id; rastreio fiscal já vai no `inf_contribuinte`).
+- `faturas[]` = `forma_pagamento`+`parcelas` (igual `/nfes`). → permite **reusar `PayloadBuilder._montar_itens`/`_montar_faturas`**.
 
 ## Edge cases e riscos
 
-- **Duplicidade de pedido** se emitir `POST /nfes` com pedido já criado → mitigado por `to_nfe` (§4); enquanto não confirmado, manter fluxo atual.
+- **Duplicidade de pedido** se emitir `POST /nfes` com pedido já criado → mitigado por `pedido_os_vinculada` no corpo do `POST /nfes` (§4); confirmar o vínculo com o TagPlus no go-live.
 - **Falha de push não pode travar a venda local** — push pós-commit, tolerante a falha, reconciliado pelo scheduler.
 - **Numero-walk e gaps reais:** o `numero` é por conta e pode ter saltos legítimos (outros canais). Parar após 3 ausências pode perder pedidos além do gap; mitigação futura: varredura por data como rede de segurança (não nesta versão — decisão foi numero-walk).
 - **Chassi fungível:** nunca auto-vincular; sempre operador (evita furar lock pessimista e a máquina de estados).

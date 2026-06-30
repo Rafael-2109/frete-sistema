@@ -112,7 +112,12 @@
         }.get(v.status, 'secondary') %}
         <tr class="{% if v.status == 'CANCELADO' %}text-muted{% endif %}">
           <td><small>{{ v.id }}</small></td>
-          <td><span class="badge bg-{{ badge }}">{{ v.status }}</span></td>
+          <td>
+            <span class="badge bg-{{ badge }}">{{ v.status }}</span>
+            {% if v.origem_criacao == 'TAGPLUS' %}
+              <span class="badge bg-info" title="Pedido nascido no TagPlus, replicado para o HORA — vincule o(s) chassi(s) para confirmar">TagPlus</span>
+            {% endif %}
+          </td>
           <td>
             <strong>{{ v.nf_saida_numero or '—' }}</strong>
             {% if v.tem_divergencia_aberta %}

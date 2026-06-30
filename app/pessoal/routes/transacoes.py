@@ -253,11 +253,12 @@ def listar():
     else:
         query = query.order_by(sort_col.desc(), PessoalTransacao.id.desc())
 
-    # Eager-load categoria para evitar N+1 no template (usado por motivos_map
-    # e pela coluna Categoria renderizada pelo Jinja).
+    # Eager-load categoria/membro/conta para evitar N+1 no template (usado por
+    # motivos_map e pelas colunas Categoria, Membro e Conta renderizadas pelo Jinja).
     query = query.options(
         joinedload(PessoalTransacao.categoria),
         joinedload(PessoalTransacao.membro),
+        joinedload(PessoalTransacao.conta),
     )
 
     # Paginar
@@ -274,6 +275,10 @@ def listar():
     total_pendentes = PessoalTransacao.query.filter_by(
         status='PENDENTE', excluir_relatorio=False
     ).count()
+    # Total de excluidas (badge do modo "Ignoradas" da chave "O que mostrar").
+    # Nao usar soma de contadores_motivo: COMPENSADA conta parciais (sem excluir_relatorio)
+    # e divergiria da contagem de fato excluidas.
+    total_excluidas = PessoalTransacao.query.filter_by(excluir_relatorio=True).count()
 
     # Contador de similares: quantas PENDENTES tem o mesmo historico composto (1 query)
     pendentes_hist = db.session.query(
@@ -302,6 +307,7 @@ def listar():
         categorias=categorias,
         membros=membros,
         total_pendentes=total_pendentes,
+        total_excluidas=total_excluidas,
         similares_map=similares_map,
         motivos_map=motivos_map,
         contadores_motivo=contadores_motivo,

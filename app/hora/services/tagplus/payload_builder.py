@@ -82,6 +82,12 @@ class PayloadBuilder:
         # e cacheava `None` em falha transiente, envenenando emissoes
         # subsequentes para a mesma cidade. Ver R1 do code review 2026-04-30.
         self._cache_id_cidade: dict[tuple[str, str], int | None] = {}
+        # Ultimo id_cliente (id-space REST) resolvido/criado por
+        # `_resolver_destinatario`. O destinatario do POST /nfes usa id_entidade,
+        # mas o `cliente` do POST /pedidos usa id_cliente (confirmado ao vivo
+        # 2026-06-29). Guardado aqui para `montar_corpo_pedido(estrito=True)`
+        # ler sem duplicar a logica de busca/criacao do cliente.
+        self._ultimo_id_cliente: int | None = None
 
     # --------------------------------------------------------------
     # Public
@@ -204,6 +210,101 @@ class PayloadBuilder:
             'numero_pedido': str(venda.id),
         }
         return payload
+
+    # --------------------------------------------------------------
+    # Pedido (/pedidos) — push HORA->TagPlus (Fase 2b)
+    # --------------------------------------------------------------
+    def resolver_id_cliente(self, venda: 'HoraVenda') -> int | None:
+        """GET /clientes -> id_cliente (id-space REST) por match exato de documento.
+
+        Best-effort: NAO cria cliente (diferente de `_resolver_destinatario`).
+        Retorna None se documento invalido, sem match, ou match com documento
+        divergente (defesa contra o LIKE do TagPlus pegar candidato errado).
+        Usado no push de pedido em modo tolerante (criacao). Na emissao via
+        to_nfe o `_resolver_destinatario` (estrito) resolve/cria e popula
+        `_ultimo_id_cliente` (que `montar_corpo_pedido(estrito=True)` le).
+        """
+        from app.hora.services.tagplus._documento import normalizar_documento
+        documento, tipo_doc = normalizar_documento(getattr(venda, 'cpf_cliente', None))
+        if not tipo_doc:
+            return None
+        try:
+            r = self.api.get(
+                '/clientes', params={'q': documento, 'fields': '*', 'per_page': 30},
+            )
+        except Exception as exc:
+            logger.warning('resolver_id_cliente GET /clientes falhou: %s', exc)
+            return None
+        if r.status_code != 200:
+            return None
+        try:
+            resultados = r.json()
+        except ValueError:
+            return None
+        if isinstance(resultados, dict):
+            resultados = (
+                resultados.get('data') or resultados.get('clientes')
+                or resultados.get('results') or []
+            )
+        if not isinstance(resultados, list):
+            return None
+        # Coleta TODOS os matches exatos de documento (defesa contra CPF/CNPJ
+        # duplicado no TagPlus). So' vincula se houver exatamente 1 — ambiguo
+        # vira None (nao chuta cliente errado), espelhando a regra
+        # destinatario_ambiguo de _resolver_destinatario.
+        matches = [
+            item for item in resultados
+            if isinstance(item, dict)
+            and self._so_digitos(item.get('cpf') or item.get('cpf_cnpj') or item.get('cnpj') or '') == documento
+            and item.get('id')
+        ]
+        if len(matches) == 1:
+            return int(matches[0]['id'])
+        if len(matches) > 1:
+            logger.warning(
+                'resolver_id_cliente: %s clientes com documento=%s — ambiguo, '
+                'omitindo cliente do pedido (resolver no portal).',
+                len(matches), documento,
+            )
+        return None
+
+    def montar_corpo_pedido(self, venda: 'HoraVenda') -> dict:
+        """Corpo fiscal do POST /pedidos (itens/faturas/cliente/valores) — TOLERANTE.
+
+        NAO inclui identidade (codigo_externo/status/integracao) — isso e' do
+        `pedido_sync_service`. itens/faturas reusam o MESMO formato do POST
+        /nfes (contrato `produto_servico`/`forma_pagamento` confirmado ao vivo
+        2026-06-29). `cliente` usa o id_cliente (NAO o id_entidade do /nfes).
+
+        Sempre tolerante (a venda pode estar INCOMPLETO na criacao): omite
+        blocos que nao resolvem (sem forma -> sem faturas; produto nao mapeado
+        -> sem itens; cliente nao achado -> sem cliente). O FATURAMENTO nao
+        depende deste corpo: a NFe e' montada pelo PayloadBuilder.build()
+        (POST /nfes, com todas as regras fiscais) e VINCULADA ao pedido via
+        `pedido_os_vinculada` — nunca gerada a partir do pedido (to_nfe).
+        """
+        corpo: dict = {}
+
+        try:
+            itens = self._montar_itens(venda)
+            if itens:
+                corpo['itens'] = itens
+        except PayloadBuilderError:
+            pass
+
+        try:
+            corpo['faturas'] = self._montar_faturas(venda)
+        except PayloadBuilderError:
+            pass
+
+        cid = self.resolver_id_cliente(venda)
+        if cid:
+            corpo['cliente'] = cid
+
+        corpo['valor_total'] = self._round2_float(
+            getattr(venda, 'valor_total', None) or 0
+        )
+        return corpo
 
     # --------------------------------------------------------------
     # Informacoes complementares (inf_contribuinte)
@@ -479,6 +580,7 @@ class PayloadBuilder:
                     cpf, m.get('id'), id_entidade,
                     m.get('razao_social') or m.get('nome'),
                 )
+                self._ultimo_id_cliente = int(m['id']) if m.get('id') else None
                 return int(id_entidade)
             if len(matches) > 1:
                 rotulo_doc = 'CNPJ' if is_pj else 'CPF'
@@ -548,6 +650,7 @@ class PayloadBuilder:
                     'id_entidade=%s (destinatario)',
                     'J' if is_pj else 'F', cpf, id_cliente, id_entidade,
                 )
+                self._ultimo_id_cliente = int(id_cliente) if id_cliente else None
                 return int(id_entidade)
 
             raise PayloadBuilderError(

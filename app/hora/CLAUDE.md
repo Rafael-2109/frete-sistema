@@ -55,6 +55,7 @@ atualizado: 2026-06-29
 - [38. Avaria torna a moto NÃO-VENDÁVEL — 2026-06-28](#38-avaria-torna-a-moto-não-vendável--2026-06-28)
 - [39. Filtro multi-status na listagem de Pedidos de Venda — 2026-06-29](#39-filtro-multi-status-na-listagem-de-pedidos-de-venda--2026-06-29)
 - [40. Número visível do pedido TagPlus (`tagplus_pedido_numero`) — 2026-06-29](#40-número-visível-do-pedido-tagplus-tagplus_pedido_numero--2026-06-29)
+- [41. Push de pedido HORA→TagPlus (Fase 2b) + descoberta reversa (Fase 3 motor) — 2026-06-29](#41-push-de-pedido-horatagplus-fase-2b--descoberta-reversa-fase-3-motor--2026-06-29)
 - [Onboarding Tours (2026-05-08)](#onboarding-tours-2026-05-08)
 - [Referências](#referências)
 
@@ -1698,6 +1699,48 @@ tinham `tagplus_pedido_payload`) via UPDATE set-based `(payload->>'numero')::int
 O **código** está em `main` local (deploy pendente): a captura via webhook/backfill só passa a
 valer após o deploy. **Pendente (Fases 2/3 do design):** push HORA→TagPlus (criar/confirmar/cancelar
 pedido) e replicação reversa numero-walk.
+
+---
+
+## 41. Push de pedido HORA→TagPlus (Fase 2b) + descoberta reversa (Fase 3 motor) — 2026-06-29
+
+Fases 2b e 3 do design HORA↔TagPlus. **GO-LIVE 2026-06-29: DEPLOYADO e LIGADO em PROD** —
+`HORA_TAGPLUS_PUSH_PEDIDO=1` no **web** (push criar/confirmar/cancelar) e no **worker**
+`...worker-atacadao` (emissão, queue `hora_nfe` → `pedido_os_vinculada`); `HORA_TAGPLUS_REVERSO=1`
+no **web** (scheduler). Default do CÓDIGO continua OFF (as flags ativam por env var). Pré-go-live:
+backfills capturaram vínculo até nº 965 → dry-run do numero-walk = 0. Pré-requisitos confirmados **ao vivo** (testes controlados
+cria+apaga no TagPlus de PROD, zero resíduo): `write:pedidos` **já efetivo** (POST /pedidos=201;
+`scope_efetivo=null` é falso-negativo, **não** precisa reauth); contrato `POST /pedidos`
+mapeado — `itens[].produto_servico` e `faturas[]` iguais ao `/nfes`, `cliente`=**id_cliente**
+(≠ `id_entidade` do `destinatario`), `departamento`/`vendedor` int opcionais (omitidos no v1).
+
+**Fase 2b (push, flag OFF):**
+- `PayloadBuilder.resolver_id_cliente` (GET /clientes→id_cliente, best-effort) + `montar_corpo_pedido(venda, estrito)` (reusa `_montar_itens`/`_montar_faturas`; tolerante na criação, estrito antes do `to_nfe`) + `_ultimo_id_cliente` (exposto em `_resolver_destinatario`).
+- `pedido_sync_service`: `montar_payload_pedido(builder=)`/`criar_pedido(builder=)` mesclam o corpo completo; helpers **pós-commit, tolerantes, idempotentes** `push_criar_pedido`/`push_atualizar_status`/`push_cancelar` (no-op se flag OFF; nunca travam a venda local).
+- `venda_service`: 4 wirings — `criar_venda_manual`+`salvar_pedido_completo`→`push_criar_pedido`; `confirmar_venda`→`push_atualizar_status`; `cancelar_venda`→`push_cancelar`.
+- `emissor_nfe._enviar_nfe`: **SEMPRE `POST /nfes`** com o payload RICO do `PayloadBuilder.build()` (inf_contribuinte/CFOP/consumidor_final/peças/cortesia — **inalterado**). Quando flag ON + `tagplus_pedido_id`, adiciona **`pedido_os_vinculada=tagplus_pedido_id`** → o TagPlus VINCULA a NFe ao pedido do push em vez de auto-criar duplicado. **NÃO usa `to_nfe`** (que geraria NFe pobre a partir do pedido — decisão do dono 2026-06-29: o faturamento tem regras fiscais específicas que não se pode perder).
+
+**Fase 3 (descoberta reversa, COMPLETA, atrás da flag `HORA_TAGPLUS_REVERSO` default OFF):**
+migration `hora_63` (`hora_tagplus_conta.ultimo_pedido_numero_reconciliado` — cursor; aplicada
+LOCAL + **PROD**); `pedido_service.busca_pedido_por_numero` (GET /pedidos?numero=n);
+`pedido_reverso_service` (`pedido_e_nosso` anti-loop+idempotência, `_varrer` numero-walk +3,
+`numero_walk` persiste cursor, `replicar` cria `HoraVenda` INCOMPLETO `origem_criacao='TAGPLUS'` +
+`HoraVendaDivergencia` `AGUARDANDO_CHASSI` por item — **sem migration nova**, usa
+`detalhe`/`valor_esperado`/`numero_chassi`-NULL; `descobrir_e_replicar` orquestra);
+`pedido_reverso_worker.descobrir_e_replicar_job` (entry point, self-contained: create_app + lock Redis + flag) **agendado no scheduler de PROD** (`app/scheduler/sincronizacao_incremental_definitiva.py` → `executar_descoberta_reversa_hora`, a cada 30min; no-op sem boot enquanto a flag OFF). **Vínculo de chassi reusa a tela de
+edição de pedido INCOMPLETO** (`pedido_venda_novo.html` já exibe a divergência) + badge "TagPlus"
+na listagem. **Decisão de modelagem:** `HoraVendaItem.numero_chassi` é NOT NULL → item-por-modelo
+vira divergência "aguardando chassi", não `HoraVendaItem`; o operador adiciona os itens reais
+(com chassi) na edição, disparando reserva.
+
+**Testes:** `tests/hora/test_pedido_sync_fase2b.py` (27) + `test_pedido_sync_fase3.py` (15) — 455 testes HORA verdes.
+
+**⚠️ Go-live (gates do dono):** (1) push — ligar `HORA_TAGPLUS_PUSH_PEDIDO`; confirmar com o
+TagPlus que `pedido_os_vinculada` no `POST /nfes` vincula sem auto-criar outro pedido, e o
+cancelar-com-NFe (#3). (No pior caso a NFe sai correta de qualquer forma — só restaria duplicação a
+reconciliar.) (2) reverso —
+agendar o cron (`descobrir_e_replicar_job`, ~30min) e ligar `HORA_TAGPLUS_REVERSO` após observar o
+numero-walk em PROD. Handoff: `docs/superpowers/plans/2026-06-29-hora-tagplus-fase2b-fase3-handoff.md`.
 
 ---
 

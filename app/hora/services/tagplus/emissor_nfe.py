@@ -41,7 +41,6 @@ from app.hora.models.venda import (
     VENDA_STATUS_FATURADO,
 )
 from app.hora.services import venda_audit
-from app.hora.services.tagplus.api_client import ApiClient
 from app.hora.services.tagplus.payload_builder import PayloadBuilder, PayloadBuilderError
 from app.utils.json_helpers import sanitize_for_json
 from app.utils.timezone import agora_utc_naive
@@ -183,8 +182,9 @@ class EmissorNfeHora:
         conta = emissao.conta
 
         # 1) Build payload (validacao local). Pode levantar PayloadBuilderError.
+        builder = PayloadBuilder(conta)
         try:
-            payload = PayloadBuilder(conta).build(venda)
+            payload = builder.build(venda)
         except PayloadBuilderError as exc:
             db.session.rollback()
             emissao = HoraTagPlusNfeEmissao.query.get(emissao_id)
@@ -208,17 +208,11 @@ class EmissorNfeHora:
         emissao.payload_enviado = sanitize_for_json(payload)
         db.session.commit()
 
-        # 2) POST /nfes.
-        client = ApiClient(conta)
+        # 2) Emissao: to_nfe (a partir do pedido, sem duplicar) quando a flag
+        #    HORA_TAGPLUS_PUSH_PEDIDO esta ON e a venda tem pedido; senao POST /nfes.
+        client = builder.api
         try:
-            response = client.post(
-                '/nfes',
-                json=payload,
-                headers={
-                    'X-Enviar-Nota': 'true',
-                    'X-Calculo-Trib-Automatico': 'true',
-                },
-            )
+            response = cls._enviar_nfe(client, builder, venda, payload)
         except (ReqConnError, Timeout) as exc:
             emissao.status = NFE_STATUS_ERRO_INFRA
             emissao.error_code = 'rede_timeout'
@@ -269,6 +263,36 @@ class EmissorNfeHora:
             )
 
         db.session.commit()
+
+    # ----------------------------------------------------------
+    # Caminho de emissao (POST /nfes vs to_nfe a partir do pedido)
+    # ----------------------------------------------------------
+    @staticmethod
+    def _enviar_nfe(client, builder, venda, payload):
+        """Emite a NFe via POST /nfes e devolve a requests.Response.
+
+        SEMPRE POST /nfes — a NFe usa o payload RICO do PayloadBuilder.build()
+        (inf_contribuinte com Modelo/Cor/Chassi/Motor + garantia CONTRAN, CFOP
+        por UF, consumidor_final, pecas, cortesia). NUNCA gera a NFe a partir do
+        pedido (to_nfe), que produziria uma NFe pobre.
+
+        Quando o pedido ja foi criado no push (flag HORA_TAGPLUS_PUSH_PEDIDO ON
+        E `venda.tagplus_pedido_id` presente), adiciona `pedido_os_vinculada` ao
+        corpo — o TagPlus VINCULA a NFe a esse pedido em vez de auto-criar um
+        duplicado (campo confirmado na doc do POST /nfes: "ID do Pedido vinculado
+        a nota"). Com a flag OFF (default) o payload e' identico ao de hoje:
+        zero regressao.
+
+        GATE (go-live): confirmar que `pedido_os_vinculada` vincula sem auto-criar
+        outro pedido — nao testavel sem emitir NF fiscal real. No pior caso a NFe
+        sai correta de qualquer forma (so' restaria a duplicacao a reconciliar).
+        """
+        from app.hora.services.tagplus import pedido_sync_service
+        headers = {'X-Enviar-Nota': 'true', 'X-Calculo-Trib-Automatico': 'true'}
+        pid = getattr(venda, 'tagplus_pedido_id', None)
+        if pedido_sync_service.push_habilitado() and pid:
+            payload = {**payload, 'pedido_os_vinculada': pid}
+        return client.post('/nfes', json=payload, headers=headers)
 
     # ----------------------------------------------------------
     # RQ enqueue
