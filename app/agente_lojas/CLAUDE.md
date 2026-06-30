@@ -4,7 +4,7 @@ camada: L1
 sot_de: —
 hub: CLAUDE.md
 superseded_by: —
-atualizado: 2026-06-26
+atualizado: 2026-06-29
 -->
 # Agente Lojas HORA — Guia de Desenvolvimento
 
@@ -194,12 +194,18 @@ por perfil — `get_client('lojas')` produz settings/skills(allow-list)/agents({
 sem-briefing-Nacom (ETAPA 1); `build_hooks(agente_id='lojas')` isola memória/skill-reminders/
 enforce + injeta `<loja_context>` (ContextVar `_current_loja_scope`) + suprime hints SQL Nacom
 no PreToolUse (ETAPA 2+3a); `memory_mcp_tool`/jobs gravam/leem por `get_current_agent_id()`.
-Tudo INERTE em produção (default `'web'`; gate `tests/agente`+`tests/agente_lojas` = 1691
-passed/40 skip/0 fail, web byte-idêntico). **PENDENTE — CUTOVER (E3.8b+E3.9):** migrar
-`routes/chat.py` p/ `get_client('lojas').stream_response()` + aposentar o fork `AgentLojasClient`
-(este `sdk/client.py`/`client_pool.py`/`sdk/hooks.py`); recomendado atrás de flag canary.
-Plano com file:line: handoff `docs/superpowers/plans/2026-06-29-convergencia-agente-lojas-handoff.md`
-§"CUTOVER PENDENTE (E3.8b + E3.9)".
+Tudo INERTE em produção (default `'web'`). **CUTOVER FEITO — E3.8b+E3.9 (2026-06-29, atrás de
+flag `AGENT_LOJAS_USA_MOTOR_UNICO`, default OFF):** `routes/chat.py` usa
+`get_client('lojas').stream_response()` no caminho ON (`_drain_via_motor`: seta ContextVars web
+`agente='lojas'`+`loja_scope`, serializa `StreamEvent`→SSE no formato do frontend lojas,
+`can_use_tool` do fork); OFF mantém o fork como rollback. **Revisão adversarial (2 rodadas)**
+corrigiu o **CRÍTICO** de isolamento — o perfil 'lojas' herdava o tool surface Nacom
+(`allowed_tools` web + `mcp__*`): agora `AgentLojasSettings.tools_enabled` é restrito e
+`_register_mcp` pula MCP p/ 'lojas' (ZERO MCP, como o fork). Gate `tests/agente`+`tests/agente_lojas`
+= 1753 passed/40 skip/0 fail, web byte-idêntico. **FASE B (pós-canary): DELETAR o fork**
+(`sdk/client.py`/`client_pool.py`/`sdk/hooks.py`/`sdk/__init__.py`) + flip default ON. Plano com
+file:line: handoff `docs/superpowers/plans/2026-06-29-convergencia-agente-lojas-handoff.md`
+§"CUTOVER FEITO (E3.8b + E3.9)".
 
 ---
 

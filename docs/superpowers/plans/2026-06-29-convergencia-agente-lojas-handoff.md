@@ -54,11 +54,19 @@ COMPLETA** (fatia 1 + fatia 2); este doc é o estado vivo para retomar F3.
 > → settings/skills/agents/briefing/hooks/memória/loja_context isolados). Tudo INERTE
 > em produção (default 'web'; nenhuma rota seta agente_id='lojas' ainda).
 >
-> **PAUSADO por decisão do dono (2026-06-29):** falta o **CUTOVER** (E3.8b: migrar a
-> rota `/agente-lojas` p/ `get_client('lojas')` + aposentar o fork) e a **validação
-> ponta a ponta** (E3.9). É a mudança de MAIOR risco (reescreve o path de stream do
-> agente lojas em produção) — reservada p/ execução dedicada + revisão 4-mãos.
-> **Plano detalhado do cutover: seção [## CUTOVER PENDENTE (E3.8b + E3.9)](#cutover-pendente-e38b--e39) abaixo.**
+> **CUTOVER FEITO (2026-06-29, atrás de flag canary):** E3.8b + E3.9 implementados
+> (TDD por passo, web **byte-idêntico**). A rota `/agente-lojas` usa
+> `get_client('lojas').stream_response()` quando `AGENT_LOJAS_USA_MOTOR_UNICO=ON`
+> (default **OFF** — fork intacto como rollback). **+7 commits** sobre os 8 anteriores
+> (33→40 sobre `origin/main`). **2 rodadas de revisão adversarial** (14 achados): 1
+> **CRÍTICO** corrigido (tool surface — o perfil 'lojas' herdava o `allowed_tools` web
+> + TODOS os `mcp__*` Nacom; agora gateado, zero MCP como o fork), médios/baixos
+> corrigidos, **0 brecha de dados residual, 0 regressão web/fork**. Gate
+> `tests/agente`+`tests/agente_lojas` = **1753 passed / 40 skip / 0 fail**. SEM
+> push/merge (revisão 4-mãos). **FASE B (pós-canary validado em PROD): DELETAR o fork**
+> (`AgentLojasClient`/`client_pool`/`sdk/hooks`/`sdk/__init__`) + migrar os 31 testes
+> do fork + flip default ON. Detalhe + file:line: seção
+> [## CUTOVER FEITO (E3.8b + E3.9)](#cutover-feito-e38b--e39) abaixo.
 
 - **Worktree:** `.claude/worktrees/convergencia-agente-lojas` — branch
   `worktree-convergencia-agente-lojas`, rebaseada sobre `main` (2026-06-29,
@@ -196,13 +204,56 @@ filtra por `user_id` mas não por `agente` na busca primária (entities não tê
 
 **Migration pendente (rodar em PROD no deploy):** `2026_06_30_constraint_agente_memoria.py` (constraint já aplicada no banco LOCAL; PROD aplica no deploy junto do código). Considerar tb migrations P2 de coluna `agente` em `agent_memory_embeddings`/`agent_memory_entities` (defesa do KG/embeddings na origem — hoje coberto por M06/materialização).
 
-## CUTOVER PENDENTE (E3.8b + E3.9)
+## CUTOVER FEITO (E3.8b + E3.9)
 
-> **O QUE FALTA do motor único.** A INFRA (ETAPA 1+2+3a) está pronta, testada e
-> byte-idêntica. Falta só LIGAR a rota lojas ao motor e aposentar o fork. É a
-> mudança de MAIOR risco (path de stream do agente lojas em PRODUÇÃO). Recomendação:
-> **fazer atrás de flag canary `AGENT_LOJAS_USA_MOTOR_UNICO` (default OFF)** para
-> cutover reversível, validar em canary, e só então aposentar o fork.
+> **FEITO (2026-06-29) atrás de flag `AGENT_LOJAS_USA_MOTOR_UNICO` (default OFF).**
+> A rota lojas usa o motor quando ON; o fork segue como rollback (default OFF). Os
+> passos do plano abaixo (pré-requisitos + E3.8b + E3.9) foram executados — TDD por
+> passo, web byte-idêntico. A DELEÇÃO do fork é FASE B (pós-canary).
+
+### Commits (7, sobre os 8 da infra)
+```
+3fe1d7e0f C1   — _motor_event_to_sse: serializa StreamEvent (motor) -> SSE formato-fork
+19b52ad0f C4   — can_use_tool do fork le do registry web (registro unico)
+9a78beede C2+C3 — flag AGENT_LOJAS_USA_MOTOR_UNICO + _drain_via_motor (wiring ContextVars + dispatch)
+8e27b9a7f E3.9 — isolamento ponta a ponta (rota -> perfil 'lojas')
+c95b69224 fix CRITICO — isola tool surface por perfil (tools_enabled restrito + _register_mcp gate; zero MCP)
+79b3a58e5 fix — submit sentinel + tool_result Task* dup + log
+6c755914c fix — suprime contexto Nacom residual no perfil lojas (sql_admin/pessoal_grant/_pre_compact)
+```
+
+### Revisão adversarial (2 rodadas) — achados e status
+- **CRÍTICO (r1) tool surface**: E1.2 isolou só `Skill`+`Task`; `allowed_tools` herdava o
+  conjunto web (Write/WebSearch) e `_register_mcp` registrava TODOS os `mcp__*` Nacom.
+  **CORRIGIDO** (`c95b69224`): `AgentLojasSettings.tools_enabled` restrito (paridade
+  `ALLOWED_TOOLS_M1`) + `_register_mcp` pula MCP quando `agente_id=='lojas'`.
+- **HIGH** memory MCP `agent_id` não propaga ao handler (sdk-pool-daemon): **resolvido junto**
+  (memory MCP não mais exposto a 'lojas').
+- **MÉDIO** `submit_coroutine` motor LEVANTA (vs fork retorna None) → hang ~300s sem sentinel:
+  guard error+sentinel no dispatch ON (`79b3a58e5`).
+- **LOW** `tool_result` Task* duplicado (motor emite tool_result+task_event), `except pass`
+  mudo: corrigidos (`79b3a58e5`).
+- **3 regressões de QUALIDADE (r2)**: `sql_admin_context`/`pessoal_grant`/`_pre_compact_hook`
+  injetavam TEXTO Nacom p/ 'lojas' (inócuo — `mcp__sql`/`mcp__memory` bloqueadas, mas
+  confunde). **CORRIGIDO** (`6c755914c`): gate `agente_id != 'lojas'`.
+- **0 brecha de DADOS residual; 0 regressão web/fork** (gate **1753 passed / 40 skip / 0 fail**).
+- **Dívidas LOW aceitas**: `tool_result` truncado a 500c (comportamento do MOTOR `client.py:1219-1222`,
+  afeta o web — mexer quebra byte-idêntico); SKILL.md Nacom legíveis via Read/Bash
+  (**PARIDADE com o fork** — `setting_sources=["project"]` idêntico).
+
+### FASE B — DELETAR o fork (pós-canary validado em PROD; NÃO feita nesta sessão)
+- Deletar: `sdk/client.py` (AgentLojasClient), `sdk/client_pool.py`, `sdk/hooks.py`, `sdk/__init__.py`.
+- Migrar os **31 testes** do fork (`test_resume_build_options`, `test_build_options_env`,
+  `test_sdk_error_handling`, `test_nacom_quiet_boot`, `test_briefing_isolamento`,
+  `test_task_event_parser`) p/ o motor ou aposentar.
+- Flip default `AGENT_LOJAS_USA_MOTOR_UNICO=ON`.
+- MANTER: `services/scope_injector.py`, `config/{settings,skills_whitelist,permissions}.py`,
+  `routes/{sessions,health,user_answer}.py`, `decorators.py`, `templates/`, `prompts/`.
+
+---
+
+> O plano detalhado abaixo (pré-requisitos + E3.8b + E3.9) foi o roteiro EXECUTADO —
+> mantido como referência file:line.
 
 ### Pré-requisitos JÁ PRONTOS (não refazer)
 - `get_client('lojas')` → `AgentClient` com `AgentLojasSettings` (model/prompts próprios,
