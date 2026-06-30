@@ -34,6 +34,7 @@ from app.pessoal.models import (
 from app.pessoal.constants import (
     PADROES_PAGAMENTO_CARTAO, PADROES_PAGAMENTO_RECEBIDO_CARTAO,
     PADROES_TRANSFERENCIA_PROPRIA, PADROES_INVESTIMENTO,
+    PADROES_FUNDING_PIX_CREDITO,
 )
 
 
@@ -182,6 +183,17 @@ def categorizar_transacao(transacao: PessoalTransacao) -> ResultadoCategorizacao
             resultado.status = 'CATEGORIZADO'
             if eh_categoria_desconsiderar(irma.categoria_id):
                 resultado.excluir_relatorio = True
+            return resultado
+
+    # Layer 0.6: Funding do "Pix no Credito" do Nubank — o credito "Valor adicionado na
+    # conta por cartao de credito" e a perna de liquidez (limite do cartao entrando na
+    # NuConta para custear o Pix). NAO e receita; a despesa real e o Pix-saida (principal)
+    # + a compra no cartao (principal+juros). Excluir. Prioridade alta (antes das regras):
+    # o texto e univoco e nao deve ser sequestrado por regra/categoria manual.
+    for padrao in PADROES_FUNDING_PIX_CREDITO:
+        if _normalizar(padrao) in historico:
+            resultado.excluir_relatorio = True
+            resultado.status = 'CATEGORIZADO'
             return resultado
 
     # Layer 0.7: Transferencia entre contas proprias — o memo cita o numero de uma

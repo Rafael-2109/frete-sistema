@@ -330,6 +330,12 @@ class PessoalTransacao(db.Model):
         db.Integer,
         db.ForeignKey('pessoal_transacoes.id', ondelete='SET NULL'),
     )
+    # Pix no Credito do Nubank (Caso 1): marca as pernas de uma operacao (funding,
+    # pix-saida, compra-cartao splitada em principal+juros). pix_credito_grupo agrupa
+    # as pernas da MESMA operacao para auditoria/reversao do split.
+    # Ver app/pessoal/services/pix_credito_service.py.
+    eh_pix_credito = db.Column(db.Boolean, default=False)
+    pix_credito_grupo = db.Column(db.String(40))
     observacao = db.Column(db.Text)
     status = db.Column(db.String(20), default='PENDENTE')  # PENDENTE | CATEGORIZADO | REVISADO
 
@@ -425,6 +431,8 @@ class PessoalTransacao(db.Model):
             'eh_pagamento_cartao': self.eh_pagamento_cartao,
             'eh_transferencia_propria': self.eh_transferencia_propria,
             'transferencia_par_id': self.transferencia_par_id,
+            'eh_pix_credito': self.eh_pix_credito,
+            'pix_credito_grupo': self.pix_credito_grupo,
             'observacao': self.observacao,
             'status': self.status,
             'cpf_cnpj_parte': self.cpf_cnpj_parte,

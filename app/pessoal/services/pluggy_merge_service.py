@@ -372,6 +372,13 @@ def merge_item(pluggy_item_pk: int, auto_vincular: bool = True) -> dict:
                 logger.exception(f"Erro migrando stg={stg.id}: {exc}")
                 erros += 1
 
+    # Pos-merge (Caso 1): casar trios "Pix no Credito" do Nubank e splitar juros. Idempotente.
+    try:
+        from app.pessoal.services.pix_credito_service import detectar_e_processar
+        detectar_e_processar()
+    except Exception as exc:
+        logger.exception(f"Pos-processamento Pix no Credito falhou (item {pluggy_item_pk}): {exc}")
+
     return {
         "item_id": item.pluggy_item_id,
         "accounts": len(accounts),
