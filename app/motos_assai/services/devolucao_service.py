@@ -217,6 +217,22 @@ def criar_devolucao(
         db.session.add(item)
         db.session.flush()
 
+        # Spec 1: toda devolucao gera ficha REVISAO/DEVOLUCAO (origem fisica).
+        # Reusa o PENDENTE ja emitido (evento.id) -> sem 2o PENDENTE.
+        from app.motos_assai.services import pendencia_service
+        from app.motos_assai.models import (
+            PENDENCIA_CATEGORIA_REVISAO, PENDENCIA_ORIGEM_DEVOLUCAO,
+        )
+        pendencia_service.abrir_pendencia(
+            chassi=chassi,
+            categoria=PENDENCIA_CATEGORIA_REVISAO,
+            origem=PENDENCIA_ORIGEM_DEVOLUCAO,
+            descricao=motivo_norm,
+            evento_pendente_id=evento.id,
+            devolucao_item_id=item.id,
+            operador_id=operador_id,
+        )
+
         # Marca AssaiNfQpaItem.devolvido = True (regra: definido pelo MODELO).
         # `recalcular_status_pedido` exclui o SeparacaoItem referenciado por
         # nf_item.separacao_item_id da contagem de qtd_faturada.

@@ -100,6 +100,23 @@ def registrar_montagem(
                 'chassi_doador': (chassi_doador or '').strip().upper() or None,
             },
         )
+        # Spec 1: toda PENDENTE fisica nasce com uma ficha assai_pendencia.
+        # Categoria INDETERMINADA (reclassificada na UI do Spec 2). Passa o
+        # evento_pendente_id JA emitido -> abrir_pendencia nao emite 2o PENDENTE.
+        from app.motos_assai.services import pendencia_service
+        from app.motos_assai.models import (
+            PENDENCIA_CATEGORIA_INDETERMINADA, PENDENCIA_ORIGEM_GALPAO,
+        )
+        doador_norm = (chassi_doador or '').strip().upper() or None
+        pendencia_service.abrir_pendencia(
+            chassi=chassi_norm,
+            categoria=PENDENCIA_CATEGORIA_INDETERMINADA,
+            origem=PENDENCIA_ORIGEM_GALPAO,
+            descricao=descricao_pendencia.strip(),
+            evento_pendente_id=ev.id,
+            operador_id=operador_id,
+            detalhes={'chassi_doador': doador_norm} if doador_norm else None,
+        )
     else:
         ev = emitir_evento(chassi_norm, EVENTO_MONTADA, operador_id=operador_id)
 
@@ -113,11 +130,19 @@ def registrar_montagem(
 def resolver_pendencia(
     chassi: str, descricao_resolucao: str, operador_id: int,
 ) -> Dict[str, Any]:
-    """PENDENTE → MONTADA via PENDENCIA_RESOLVIDA + MONTADA.
+    """SHIM retrocompativel (Spec 1): resolve a UNICA ficha fisica aberta do chassi.
 
-    Sequência de eventos: ... → PENDENTE → PENDENCIA_RESOLVIDA → MONTADA
-    O `status_efetivo` final = MONTADA.
+    Delegado real: pendencia_service.resolver_pendencia(pendencia_id=...). A rota
+    POST /pendencias/resolver e os imports de services/__init__.py seguem intactos
+    (assinatura por chassi). No gap Spec 1->Spec 2 nao ha multi-pendencia por moto
+    (a UI que cria N so chega no Spec 2); >1 ficha fisica aberta -> erro claro.
+
+    Sequencia efetiva: pendencia_service fecha a ficha e, sendo a ultima fisica,
+    emite PENDENCIA_RESOLVIDA + MONTADA. status_efetivo final = MONTADA.
     """
+    from app.motos_assai.services import pendencia_service
+    from app.motos_assai.models import AssaiPendencia
+
     chassi_norm = chassi.strip().upper()
     status = status_efetivo(chassi_norm)
     if status != EVENTO_PENDENTE:
@@ -125,19 +150,45 @@ def resolver_pendencia(
         raise MontagemValidationError(
             _msg_a6_por_status_montagem(chassi_norm, status, esperado='PENDENTE')
         )
-
     if not descricao_resolucao or len(descricao_resolucao.strip()) < 3:
         raise MontagemValidationError('Descrição da resolução obrigatória (≥3 chars)')
 
-    emitir_evento(
-        chassi_norm, EVENTO_PENDENCIA_RESOLVIDA,
-        operador_id=operador_id,
-        observacao=descricao_resolucao.strip(),
+    # Fichas FISICAS abertas = as que carregam o evento PENDENTE (evento_pendente_id).
+    fichas = (
+        AssaiPendencia.query
+        .filter(
+            AssaiPendencia.chassi == chassi_norm,
+            AssaiPendencia.resolvida_em.is_(None),
+            AssaiPendencia.cancelada_em.is_(None),
+            AssaiPendencia.evento_pendente_id.isnot(None),
+        )
+        .all()
     )
-    ev_montada = emitir_evento(chassi_norm, EVENTO_MONTADA, operador_id=operador_id)
+    if not fichas:
+        raise MontagemValidationError(
+            f'Chassi {chassi_norm} esta PENDENTE mas nao tem ficha de pendencia '
+            'fisica aberta (rode o backfill motos_assai_35).'
+        )
+    if len(fichas) > 1:
+        raise MontagemValidationError(
+            f'Multiplas ({len(fichas)}) pendencias abertas para o chassi '
+            f'{chassi_norm} — use a tela de resolucao por ficha (Spec 2).'
+        )
 
+    pendencia_service.resolver_pendencia(
+        pendencia_id=fichas[0].id,
+        tratativa=None,
+        resolucao_descricao=descricao_resolucao.strip(),
+        operador_id=operador_id,
+    )
     db.session.commit()
-    return {'evento_id': ev_montada.id, 'chassi': chassi_norm, 'tipo': EVENTO_MONTADA}
+
+    ev_final = ultimo_evento(chassi_norm)
+    return {
+        'evento_id': ev_final.id if ev_final else None,
+        'chassi': chassi_norm,
+        'tipo': EVENTO_MONTADA,
+    }
 
 
 # Estados a partir dos quais o operador pode marcar uma moto como PENDENTE
@@ -246,6 +297,22 @@ def enviar_para_pendencia(
             'origem_status': status,
             'separacao_liberada_id': sep_liberada_id,
         },
+    )
+    # Spec 1: abre a ficha INDETERMINADA/GALPAO reusando o PENDENTE ja emitido.
+    from app.motos_assai.services import pendencia_service
+    from app.motos_assai.models import (
+        PENDENCIA_CATEGORIA_INDETERMINADA, PENDENCIA_ORIGEM_GALPAO,
+    )
+    doador_norm = (chassi_doador or '').strip().upper() or None
+    pendencia_service.abrir_pendencia(
+        chassi=chassi_norm,
+        categoria=PENDENCIA_CATEGORIA_INDETERMINADA,
+        origem=PENDENCIA_ORIGEM_GALPAO,
+        descricao=descricao_pendencia.strip(),
+        evento_pendente_id=ev.id,
+        operador_id=operador_id,
+        detalhes={'chassi_doador': doador_norm, 'origem_status': status}
+        if (doador_norm or status) else None,
     )
     db.session.commit()
 
