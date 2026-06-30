@@ -451,3 +451,93 @@ def abrir_pendencia(
 
     db.session.flush()
     return ficha
+
+
+# ===========================================================================
+# Fechamento: resolver_pendencia + cancelar_pendencia (Spec 1 Task 7)
+# ===========================================================================
+
+
+def _emitir_resolucao_fisica(ficha, observacao, operador_id):
+    """Gate de fechamento fisico: se esta era a ULTIMA ficha fisica aberta do
+    chassi, emite PENDENCIA_RESOLVIDA (marcador) + MONTADA (O1). Caso contrario
+    nao emite (chassi segue PENDENTE). Chamado SOB advisory lock, APOS marcar a
+    ficha como fechada (para que ela ja nao conte em count_fisicas_abertas).
+    """
+    if not afeta_estado_moto(ficha):
+        return
+    if count_fisicas_abertas(ficha.chassi) == 0:
+        emitir_evento(
+            ficha.chassi, EVENTO_PENDENCIA_RESOLVIDA,
+            operador_id=operador_id, observacao=observacao,
+        )
+        emitir_evento(ficha.chassi, EVENTO_MONTADA, operador_id=operador_id)
+
+
+def resolver_pendencia(
+    *, pendencia_id: int, tratativa: Optional[str],
+    resolucao_descricao: str, operador_id: int,
+) -> AssaiPendencia:
+    """Fecha a ficha (E1: resolucao mora na ficha) e dispara o gate fisico.
+
+    Idempotente: ficha ja resolvida/cancelada => no-op (retorna a ficha).
+    O movimento de estoque da tratativa (CONSUMO/CANIBALIZACAO) e responsabilidade
+    de chamadas separadas a movimento_service (Task 8) ligadas por pendencia_id —
+    esta funcao NAO movimenta estoque.
+    """
+    ficha = AssaiPendencia.query.get(pendencia_id)
+    if ficha is None:
+        raise PendenciaError(f'Pendencia {pendencia_id} nao encontrada.')
+    if ficha.resolvida_em is not None or ficha.cancelada_em is not None:
+        return ficha  # idempotente
+    if tratativa is not None and tratativa not in PENDENCIA_TRATATIVAS_VALIDAS:
+        raise PendenciaError(
+            f'Tratativa invalida: {tratativa}. Validas: {sorted(PENDENCIA_TRATATIVAS_VALIDAS)}'
+        )
+
+    db.session.execute(
+        db.text('SELECT pg_advisory_xact_lock(hashtext(:c))'),
+        {'c': ficha.chassi},
+    )
+
+    ficha.resolvida_em = agora_brasil_naive()
+    ficha.resolvida_por_id = operador_id
+    ficha.tratativa = tratativa
+    ficha.resolucao_descricao = (resolucao_descricao or '').strip() or None
+    db.session.flush()  # ficha sai da contagem de fisicas abertas
+
+    _emitir_resolucao_fisica(ficha, ficha.resolucao_descricao, operador_id)
+    db.session.flush()
+    return ficha
+
+
+def cancelar_pendencia(
+    *, pendencia_id: int, motivo: str, operador_id: int,
+) -> AssaiPendencia:
+    """Fecha a ficha SEM resolver (sem movimento de estoque). Mesmo gate fisico:
+    se era a ultima fisica aberta, a moto volta a MONTADA. Idempotente.
+    """
+    ficha = AssaiPendencia.query.get(pendencia_id)
+    if ficha is None:
+        raise PendenciaError(f'Pendencia {pendencia_id} nao encontrada.')
+    if ficha.resolvida_em is not None or ficha.cancelada_em is not None:
+        return ficha  # idempotente
+    motivo_norm = (motivo or '').strip()
+    if len(motivo_norm) < 3:
+        raise PendenciaError('Motivo de cancelamento obrigatorio (>= 3 caracteres).')
+
+    db.session.execute(
+        db.text('SELECT pg_advisory_xact_lock(hashtext(:c))'),
+        {'c': ficha.chassi},
+    )
+
+    ficha.cancelada_em = agora_brasil_naive()
+    ficha.cancelada_por_id = operador_id
+    det = dict(ficha.detalhes or {})
+    det['cancelamento_motivo'] = motivo_norm
+    ficha.detalhes = sanitize_for_json(det)
+    db.session.flush()
+
+    _emitir_resolucao_fisica(ficha, motivo_norm, operador_id)
+    db.session.flush()
+    return ficha
