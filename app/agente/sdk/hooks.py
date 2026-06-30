@@ -613,6 +613,13 @@ def build_hooks(
                 f"structured={USE_STRUCTURED_COMPACTION}"
             )
 
+            # ISOLAMENTO HORA: o perfil 'lojas' nao tem mcp__memory (tool bloqueada)
+            # e nao usa o vocabulario Nacom (pedidos VCD/VFB, separacao) do template
+            # estruturado. Nao injetar instrucoes de compactacao Nacom — deixa o SDK
+            # compactar nativamente (o resume via SessionStore preserva o historico).
+            if agente_id == 'lojas':
+                return {}
+
             if not USE_STRUCTURED_COMPACTION:
                 return {
                     "custom_instructions": (
@@ -1621,7 +1628,10 @@ def build_hooks(
             sql_admin_context = ""
             try:
                 from app.pessoal import USUARIOS_SQL_ADMIN as _SQL_ADMIN
-                if turn_user_id and turn_user_id in _SQL_ADMIN:
+                # ISOLAMENTO HORA (E3.8a parte 2): nao injetar instrucoes de SQL
+                # admin (mcp__sql, tabelas Nacom) p/ o perfil 'lojas' — a tool nem
+                # existe la; so confunde o operador. Mesmo um admin operando a loja.
+                if turn_user_id and turn_user_id in _SQL_ADMIN and agente_id != 'lojas':
                     # F4.2 PAD-CTX (R-8): comprimido 12->6 linhas (condicional admin)
                     sql_admin_context = (
                         "\n<sql_admin_context>"
@@ -1658,7 +1668,9 @@ def build_hooks(
                     pessoal_grant = ""
                     try:
                         from app.pessoal import USUARIOS_PESSOAL, USUARIOS_SQL_ADMIN
-                        if turn_user_id in USUARIOS_SQL_ADMIN or turn_user_id in USUARIOS_PESSOAL:
+                        # ISOLAMENTO HORA: pessoal_* e dominio Nacom/pessoal, nunca
+                        # da loja — nao conceder p/ o perfil 'lojas'.
+                        if (turn_user_id in USUARIOS_SQL_ADMIN or turn_user_id in USUARIOS_PESSOAL) and agente_id != 'lojas':
                             pessoal_grant = (
                                 "\n  <pessoal_access>CONCEDIDO: tabelas pessoal_* "
                                 "acessiveis para este usuario.</pessoal_access>"
