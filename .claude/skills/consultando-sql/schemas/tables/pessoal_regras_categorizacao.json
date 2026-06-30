@@ -46,6 +46,11 @@
       "type": "numeric(15,2)"
     },
     {
+      "name": "contas_ids",
+      "type": "text",
+      "description": "JSON array de PessoalConta.id"
+    },
+    {
       "name": "vezes_usado",
       "type": "integer",
       "default": 0

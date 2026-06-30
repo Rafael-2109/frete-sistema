@@ -125,6 +125,15 @@
       "description": "FK → pessoal_transacoes.id"
     },
     {
+      "name": "eh_pix_credito",
+      "type": "boolean",
+      "default": false
+    },
+    {
+      "name": "pix_credito_grupo",
+      "type": "varchar(40)"
+    },
+    {
       "name": "observacao",
       "type": "text"
     },
