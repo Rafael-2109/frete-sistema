@@ -104,6 +104,7 @@ from .devolucao import (
     DEVOLUCAO_ANEXO_TIPO_IMAGEM, DEVOLUCAO_ANEXO_TIPO_OUTRO,
     DEVOLUCAO_ANEXO_TIPOS_VALIDOS,
 )
+from .peca import AssaiPeca, AssaiPecaModelo
 
 __all__ = [
     'AssaiCd', 'AssaiLoja',
@@ -180,4 +181,5 @@ __all__ = [
     'DEVOLUCAO_ANEXO_TIPO_PDF', 'DEVOLUCAO_ANEXO_TIPO_XML',
     'DEVOLUCAO_ANEXO_TIPO_IMAGEM', 'DEVOLUCAO_ANEXO_TIPO_OUTRO',
     'DEVOLUCAO_ANEXO_TIPOS_VALIDOS',
+    'AssaiPeca', 'AssaiPecaModelo',
 ]
