@@ -1037,7 +1037,17 @@ Sequência de 10 passos (ver spec §5.2):
 
 Pré-condições (§5.3): A em `assai_nf_qpa_item` da NF com `separacao_item_id` não-nulo;
 `status_efetivo(A) == FATURADA`; NF não-CANCELADA; `status_efetivo(B) == DISPONIVEL`;
-B mesmo modelo de A; par `(nf_qpa_id, chassi=A)` sem ocorrência `TROCA_GARANTIA` prévia.
+B mesmo modelo de A; par `(nf_qpa_id, chassi=A)` sem ocorrência `TROCA_GARANTIA` prévia
+(idempotência implícita: após a 1ª troca A deixa de ser FATURADA e sai da NF → guards barram a 2ª).
+
+**Robustez:**
+- **Anti-TOCTOU**: após adquirir o lock (`with_for_update(of=AssaiMoto)` — `of=` evita
+  erro de `FOR UPDATE` no lado nullable do outer-join de `modelo` lazy=joined), os status
+  de A e B são **re-validados sob o lock** antes de qualquer escrita (espelha `separacao_service`).
+- **Transacional**: os passos 4-10 + commit ficam em `try/except` com `db.session.rollback()`
+  — seguro chamar fora de uma request (worker/CLI), não só via rota.
+- `trocar_chassi_no_espelho` retornando 0 (linha-espelho ausente) emite `logger.warning`
+  (frete Nacom poderia ficar desatualizado) — não aborta a troca.
 
 #### `trocar_chassi_no_espelho`
 
@@ -1073,6 +1083,22 @@ Ocorrências `tipo='TROCA_GARANTIA'` têm campos estruturais **congelados** apó
 `listar_trocas_da_nf(nf_id) -> list` — helper read-only que retorna ocorrências
 `TROCA_GARANTIA` vinculadas a uma NF (consultado pelo Faturamento).
 
+### Fluxo de operação (UI)
+
+Acesso pelo **Pós-Venda** (`/motos-assai/pos-venda`):
+1. Lista de motos vendidas → botão **"Troca"** por linha (ao lado de "Ocorrências"),
+   linkando `GET /motos-assai/pos-venda/troca/<chassi_a>`.
+2. Tela de registro (`templates/motos_assai/pos_venda/troca_garantia.html`): escolhe a NF,
+   o substituto B (picker AJAX `…/troca/<chassi_a>/substitutos` → `listar_substitutos`,
+   com aviso de outros estados) e o motivo → `POST …/troca/<chassi_a>` → `registrar_troca`.
+
+**Rotas** (`routes/pos_venda.py`, todas `@login_required`+`@require_motos_assai`):
+`pos_venda_troca_form` (GET tela), `pos_venda_troca_substitutos` (GET AJAX),
+`pos_venda_troca_registrar` (POST, `dry_run=False`; trata `TrocaGarantiaError`→400, genérico→500).
+
+⚠️ A tela estende **`base_motos_assai.html`** (chrome do módulo) — não `base.html`. O CSRF do
+POST via `fetch` é injetado pelo interceptor global de `base.html` (`window.fetch` monkey-patch).
+
 ### Reflexo no Faturamento
 
 Faturamento **não** ganhou colunas de troca; consulta o pós-venda via `nf_qpa_id`:
@@ -1084,9 +1110,18 @@ Query base: `AssaiPosVendaOcorrencia.query.filter_by(nf_qpa_id=nf.id, tipo='TROC
 
 ### Testes
 
-`tests/motos_assai/test_troca_garantia.py` — 15 casos cobrindo: swap feliz, `dry_run`,
-guards (A não-FATURADA, B não-DISPONIVEL, modelo divergente), idempotência, imutabilidade
-de campos estruturais, link Faturamento, espelho Nacom preservando `numero_nf`.
+`tests/motos_assai/test_troca_garantia.py` — **24 casos** cobrindo: swap feliz, `dry_run`,
+guards (A não-FATURADA, B não-DISPONIVEL, modelo divergente, motivo vazio, A==B, NF CANCELADA,
+A fora da NF, sep_item nulo), idempotência, **rollback transacional** (falha forçada no
+espelho → estado intacto), imutabilidade de campos estruturais, `listar_substitutos`
+(buckets DISPONIVEL/MONTADA/ESTOQUE/SEPARADA), rotas (form/substitutos/registrar), tela
+com chrome, link Faturamento (detalhe + badge na lista), espelho preservando `numero_nf`.
+
+> **Gotcha de teste** (ver memória `motos_assai_testes_commitam_dev_db`): a suíte do módulo
+> **commita no dev DB sem rollback** — o helper `_cenario` usa fixtures de alta entropia
+> (`loja.numero=f'TG{uuid}'`, cnpj por-cenário) para não colidir com fixtures hardcoded.
+> O teste do badge da lista filtra por `?chassi=` (aplicado antes do `limit(250)` da rota)
+> para ser determinístico mesmo com as ~1k separações FATURADA acumuladas no dev DB.
 
 ---
 
