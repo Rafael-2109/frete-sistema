@@ -397,6 +397,27 @@ Helper `_esperar(target, cond_js, timeout)` (polling) substituiu os `asyncio.sle
 **Pendente (proxima sessao)**: sessao reutilizavel (1 login/lote) + baixar XML na 101 interna (mata
 a 2a sessao Playwright/NF) → alvo ~15-20s/NF. Ver backlog.
 
+### Limite de concorrencia — semaforo Redis (2026-06-29)
+
+**Problema**: `emitir_cte_ssw_job` e enfileirado na fila `high`, consumida por VARIOS workers
+(`start_workers` `NUM_WORKERS` + `worker_atacadao --workers 2`). Ao emitir N CTes (ex.: 10 NFs de
+destinatarios diferentes), N jobs Playwright rodavam **simultaneos** e saturavam o SSW — o popup do
+frete nao abria em 30s e a salvaguarda abortava. Medido: **~55% de erro com 9-12 simultaneas vs ~0%
+com ≤5**.
+
+**Correcao** (`ssw_cte_jobs.py`): um **semaforo Redis** (`_adquirir_slot_ssw`/`_liberar_slot_ssw`,
+chave `carvia:ssw:emissao:slots`) limita as emissoes **concorrentes** a `CARVIA_SSW_MAX_CONCORRENTES`
+(env, **default 1 = SERIAL**, 1 emissao por vez — zero concorrencia no SSW). No `emitir_cte_ssw_job`:
+adquire 1 slot antes de rodar; se esta no teto, **re-enfileira** (backoff 12s) sem abrir sessao SSW e
+segue PENDENTE; libera o slot no `finally`. **Fail-open**: sem Redis nao limita (degrada para o
+comportamento anterior). Contador com TTL 30min (auto-cura slot vazado por crash apos a rajada). NAO
+ha mudanca de UI nem de fila — cada emissao continua sendo 1 job; o semaforo so as serializa.
+
+> Ajuste fino: `CARVIA_SSW_MAX_CONCORRENTES` no worker. Default **1** (serial, pedido do dono).
+> Subir so se o SSW comprovadamente aguentar mais (medido ~0% de erro ate ~5 simultaneas).
+> Os outros jobs Playwright SSW (`emitir_cte_complementar_job`, `verificar_ctrc_operacao_job`) NAO
+> compartilham este slot hoje — esporadicos; se virarem fonte de saturacao, usar a mesma chave.
+
 ---
 
 ## Endpoints REST
