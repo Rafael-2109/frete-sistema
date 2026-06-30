@@ -157,10 +157,25 @@ def gerar_hash_transacao(conta_id: int, data: date, historico: str, valor: Decim
     return hashlib.sha256(conteudo.encode('utf-8')).hexdigest()
 
 
+def desfazer_mojibake(texto: Optional[str]) -> Optional[str]:
+    """Desfaz encoding duplo (UTF-8 lido como Latin-1): 'AndrÃ©a' -> 'Andréa'.
+
+    So atua quando ha sinais de mojibake ('Ã'/'Â'); texto limpo passa inalterado.
+    Falha de codificacao (char fora de Latin-1) retorna o texto original.
+    """
+    if not texto or ('Ã' not in texto and 'Â' not in texto):
+        return texto
+    try:
+        return texto.encode('latin-1').decode('utf-8')
+    except (UnicodeEncodeError, UnicodeDecodeError):
+        return texto
+
+
 def normalizar_historico(texto: str) -> str:
-    """Normaliza historico: upper, strip, unidecode, colapsar espacos."""
+    """Normaliza historico: desfaz mojibake, upper, strip, unidecode, colapsar espacos."""
     if not texto:
         return ''
+    texto = desfazer_mojibake(texto) or texto
     texto = unidecode(texto).upper().strip()
     texto = re.sub(r'\s+', ' ', texto)
     return texto
