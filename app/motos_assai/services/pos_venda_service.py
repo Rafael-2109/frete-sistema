@@ -23,7 +23,7 @@ from app.motos_assai.models import (
     AssaiMoto, AssaiModelo, AssaiLoja,
     AssaiNfQpa, AssaiNfQpaItem,
     AssaiPosVendaOcorrencia, AssaiPosVendaOcorrenciaAnexo,
-    CATEGORIA_LOJA, CATEGORIAS_VALIDAS,
+    CATEGORIA_LOJA, CATEGORIAS_VALIDAS, TIPO_TROCA_GARANTIA,
     ANEXO_TIPO_FOTO, ANEXO_TIPO_VIDEO, ANEXO_TIPO_AUDIO, ANEXO_TIPO_OUTRO,
 )
 from app.utils.file_storage import get_file_storage
@@ -282,6 +282,11 @@ def atualizar_ocorrencia(
     if not oc:
         raise PosVendaValidationError(f'ocorrencia {ocorrencia_id} nao encontrada')
 
+    if oc.tipo == TIPO_TROCA_GARANTIA and categoria is not None and categoria != oc.categoria:
+        raise PosVendaValidationError(
+            'ocorrencia de TROCA_GARANTIA: categoria/chassi sao imutaveis (so descricao e editavel)'
+        )
+
     mudou = False
     if descricao is not None:
         descricao = descricao.strip()
@@ -312,6 +317,11 @@ def excluir_ocorrencia(ocorrencia_id: int) -> None:
     if not oc:
         raise PosVendaValidationError(f'ocorrencia {ocorrencia_id} nao encontrada')
 
+    if oc.tipo == TIPO_TROCA_GARANTIA:
+        raise PosVendaValidationError(
+            'ocorrencia de TROCA_GARANTIA nao pode ser excluida (efeito fiscal ja aplicado)'
+        )
+
     # Coleta s3_keys antes do delete cascade
     s3_keys = [a.s3_key for a in oc.anexos if a.s3_key]
     db.session.delete(oc)
@@ -326,6 +336,19 @@ def excluir_ocorrencia(ocorrencia_id: int) -> None:
             except Exception:
                 # Falha silenciosa: registro DB ja foi removido
                 pass
+
+
+def listar_trocas_da_nf(nf_id: int) -> list[AssaiPosVendaOcorrencia]:
+    """Ocorrencias de TROCA_GARANTIA vinculadas a uma NF (para o Faturamento)."""
+    return (
+        AssaiPosVendaOcorrencia.query
+        .filter(
+            AssaiPosVendaOcorrencia.nf_qpa_id == nf_id,
+            AssaiPosVendaOcorrencia.tipo == TIPO_TROCA_GARANTIA,
+        )
+        .order_by(AssaiPosVendaOcorrencia.criado_em.desc())
+        .all()
+    )
 
 
 # ----- Anexos -----------------------------------------------------------------

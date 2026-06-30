@@ -98,6 +98,7 @@ from .geocoding_service import geocodar_loja, geocodar_lote, GeocodingError
 from .pos_venda_service import (
     listar_motos_vendidas, contexto_moto_por_chassi, chassi_foi_vendido,
     listar_ocorrencias, criar_ocorrencia, atualizar_ocorrencia, excluir_ocorrencia,
+    listar_trocas_da_nf,
     adicionar_anexo, excluir_anexo,
     url_visualizacao_anexo, url_download_anexo,
     detectar_tipo_anexo, EXTENSOES_PERMITIDAS,
@@ -164,6 +165,7 @@ __all__ = [
     'geocodar_loja', 'geocodar_lote', 'GeocodingError',
     'listar_motos_vendidas', 'contexto_moto_por_chassi', 'chassi_foi_vendido',
     'listar_ocorrencias', 'criar_ocorrencia', 'atualizar_ocorrencia', 'excluir_ocorrencia',
+    'listar_trocas_da_nf',
     'adicionar_anexo', 'excluir_anexo',
     'url_visualizacao_anexo', 'url_download_anexo',
     'detectar_tipo_anexo', 'EXTENSOES_PERMITIDAS',

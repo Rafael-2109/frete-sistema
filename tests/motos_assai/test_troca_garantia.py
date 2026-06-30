@@ -255,6 +255,56 @@ from app.motos_assai.services.troca_garantia_service import listar_substitutos
 from app.motos_assai.models import EVENTO_MONTADA, EVENTO_ESTOQUE
 
 
+from app.motos_assai.services.pos_venda_service import (
+    excluir_ocorrencia, atualizar_ocorrencia, listar_trocas_da_nf,
+    PosVendaValidationError,
+)
+from app.motos_assai.models import CATEGORIA_LOJA
+
+
+def test_listar_trocas_da_nf(app, admin_user):
+    with app.app_context():
+        c = _cenario(admin_user)
+        res = registrar_troca(
+            nf_id=c['nf'].id, chassi_a=c['chassi_a'], chassi_b=c['chassi_b'],
+            operador_id=admin_user.id, motivo='defeito', dry_run=False,
+        )
+        trocas = listar_trocas_da_nf(c['nf'].id)
+        assert len(trocas) == 1
+        assert trocas[0].id == res['ocorrencia_id']
+        assert trocas[0].chassi_substituto == c['chassi_b']
+
+
+def test_troca_garantia_nao_pode_ser_excluida(app, admin_user):
+    with app.app_context():
+        c = _cenario(admin_user)
+        res = registrar_troca(
+            nf_id=c['nf'].id, chassi_a=c['chassi_a'], chassi_b=c['chassi_b'],
+            operador_id=admin_user.id, motivo='defeito', dry_run=False,
+        )
+        with pytest.raises(PosVendaValidationError):
+            excluir_ocorrencia(res['ocorrencia_id'])
+
+
+def test_troca_garantia_categoria_imutavel_descricao_editavel(app, admin_user):
+    with app.app_context():
+        c = _cenario(admin_user)
+        res = registrar_troca(
+            nf_id=c['nf'].id, chassi_a=c['chassi_a'], chassi_b=c['chassi_b'],
+            operador_id=admin_user.id, motivo='defeito', dry_run=False,
+        )
+        with pytest.raises(PosVendaValidationError):
+            atualizar_ocorrencia(
+                ocorrencia_id=res['ocorrencia_id'], categoria=CATEGORIA_LOJA,
+                operador_id=admin_user.id,
+            )
+        oc = atualizar_ocorrencia(
+            ocorrencia_id=res['ocorrencia_id'], descricao='defeito detalhado',
+            operador_id=admin_user.id,
+        )
+        assert oc.descricao == 'defeito detalhado'
+
+
 def test_listar_substitutos_separa_disponivel_de_outros(app, admin_user):
     with app.app_context():
         import uuid as _uuid
