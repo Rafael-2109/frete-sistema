@@ -115,12 +115,19 @@ def _motor_event_to_sse(event, state: dict) -> Optional[str]:
         })
 
     if etype == 'tool_result':
-        # Motor: content=result, metadata['is_error']. Frontend lojas le
-        # payload.content + payload.is_error.
+        # Motor: content=result, metadata['is_error']/['tool_name']. Frontend lojas
+        # le payload.content + payload.is_error.
+        _is_error = bool(meta.get('is_error', False))
+        # Task* (TaskCreate/TaskUpdate/TaskList): o motor emite tool_result E
+        # task_event (client.py:1239 + :1280). O fork suprimia o tool_result
+        # generico — replicamos para nao duplicar no UI. Excecao: com erro o motor
+        # NAO emite task_event, entao o tool_result (carregando o erro) deve passar.
+        if (meta.get('tool_name') or '') in ('TaskCreate', 'TaskUpdate', 'TaskList') and not _is_error:
+            return None
         return _sse('tool_result', {
             'content': str(content if content is not None else ''),
             'tool_use_id': meta.get('tool_use_id'),
-            'is_error': bool(meta.get('is_error', False)),
+            'is_error': _is_error,
         })
 
     if etype == 'todos':
@@ -363,8 +370,10 @@ async def _drain_via_motor(
     try:
         from app.agente.tools.memory_mcp_tool import set_current_user_id as _set_mem_uid
         _set_mem_uid(user_id)
-    except Exception:
-        pass
+    except Exception as _mem_uid_err:
+        logger.debug(
+            "[AGENTE_LOJAS] set_current_user_id(memory) ignorado: %s", _mem_uid_err,
+        )
     set_current_agent_id(AGENTE_ID)  # 'lojas'
     set_loja_scope(perfil, loja_hora_id)
     if event_queue is not None:
@@ -438,7 +447,24 @@ def _streaming_worker(
             event_queue=event_queue,
             state=state,
         )
-        fut = _submit_motor(coro)
+        try:
+            fut = _submit_motor(coro)
+        except Exception as e:
+            # submit_coroutine do MOTOR LEVANTA RuntimeError se o pool web estiver
+            # off (USE_PERSISTENT_SDK_CLIENT=false) ou o loop fechado — diferente
+            # do fork (retorna None). Sem este guard a thread daemon morreria ANTES
+            # do sentinel None e o SSE generator travaria ate o timeout de
+            # inatividade (~300s). Destrava o frontend com error + sentinel.
+            logger.exception("[AGENTE_LOJAS] submit ao loop do motor falhou: %s", e)
+            try:
+                coro.close()  # evita 'coroutine never awaited'
+            except Exception:
+                pass
+            event_queue.put(_sse('error', {
+                'content': 'Servico do agente temporariamente indisponivel. Tente novamente.',
+            }))
+            event_queue.put(None)  # sentinel — destrava o SSE generator
+            return
     else:
         coro = _drain_async_gen(
             user_message=user_message,

@@ -93,6 +93,32 @@ def test_tool_result_is_error_default_false():
     assert data['is_error'] is False
 
 
+@pytest.mark.parametrize('tname', ['TaskCreate', 'TaskUpdate', 'TaskList'])
+def test_tool_result_de_task_star_suprimido_quando_sucesso(tname):
+    # O motor emite tool_result E task_event para Task* (client.py:1239 + :1280).
+    # O fork suprimia o tool_result generico (continue apos task_event). Replicamos:
+    # so o task_event renderiza no UI — evita duplicata visual para o operador.
+    ev = StreamEvent(type='tool_result', content='Task #1 created successfully: X',
+                     metadata={'tool_name': tname, 'is_error': False})
+    assert _motor_event_to_sse(ev, {}) is None
+
+
+def test_tool_result_de_task_star_com_erro_e_emitido():
+    # Task* com erro: o motor NAO emite task_event (client.py:1253 `and not is_error`),
+    # entao o tool_result (carregando o erro) DEVE aparecer para o operador.
+    ev = StreamEvent(type='tool_result', content='boom', metadata={'tool_name': 'TaskCreate', 'is_error': True})
+    et, data = _parse_sse(_motor_event_to_sse(ev, {}))
+    assert et == 'tool_result'
+    assert data['is_error'] is True
+
+
+def test_tool_result_de_tool_normal_nao_e_suprimido():
+    ev = StreamEvent(type='tool_result', content='saida', metadata={'tool_name': 'Bash', 'is_error': False})
+    et, data = _parse_sse(_motor_event_to_sse(ev, {}))
+    assert et == 'tool_result'
+    assert data['content'] == 'saida'
+
+
 def test_task_event_com_action_emite_payload_direto():
     ev = StreamEvent(type='task_event', content={'action': 'created', 'task_id': '1', 'subject': 'X'})
     et, data = _parse_sse(_motor_event_to_sse(ev, {}))

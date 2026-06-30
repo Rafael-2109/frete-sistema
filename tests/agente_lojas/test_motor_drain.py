@@ -158,3 +158,43 @@ def test_streaming_worker_flag_on_despacha_para_motor(monkeypatch):
     )
     assert chamadas['motor'] == 1
     assert chamadas['fork'] == 0
+
+
+def test_streaming_worker_motor_submit_falha_emite_error_e_sentinel(monkeypatch):
+    # Robustez: submit_coroutine do MOTOR LEVANTA RuntimeError se o pool web estiver
+    # off (USE_PERSISTENT_SDK_CLIENT=false) ou o loop fechado — diferente do fork,
+    # que retorna None. Sem tratamento, a thread daemon morre ANTES do sentinel None
+    # -> o SSE generator trava ate o timeout de inatividade (~300s). O worker deve
+    # capturar e emitir error + None para destravar o frontend.
+    monkeypatch.setattr(chat_mod, 'AGENT_LOJAS_USA_MOTOR_UNICO', True)
+
+    async def _noop():
+        return
+
+    def _make_drain(**kwargs):
+        return _noop()
+
+    monkeypatch.setattr(chat_mod, '_drain_via_motor', _make_drain)
+
+    def _submit_boom(coro):
+        coro.close()  # evita 'coroutine never awaited'
+        raise RuntimeError("[SDK_POOL] Pool não inicializado")
+
+    monkeypatch.setattr('app.agente.sdk.client_pool.submit_coroutine', _submit_boom)
+
+    q = queue.Queue()
+    # NAO deve propagar a excecao (senao a thread daemon morreria sem sentinel)
+    chat_mod._streaming_worker(
+        user_message='x', user_id=1, user_name='u', perfil='p', loja_hora_id=1,
+        sdk_session_id=None, our_session_id='s', event_queue=q, state={},
+    )
+
+    items = []
+    while True:
+        it = q.get_nowait()
+        items.append(it)
+        if it is None:
+            break
+    blob = '\n'.join(str(i) for i in items if i is not None)
+    assert 'event: error' in blob, "deve emitir error ao falhar o submit"
+    assert items[-1] is None, "deve emitir sentinel None para destravar o SSE"
