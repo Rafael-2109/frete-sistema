@@ -147,11 +147,13 @@ EXCECOES_SYSTEM_PROMPT = {
     "controlador-custo-frete": "fora do loader web por medicao T2.1 (0 invocacoes web/90d + dev/30d); disponivel via Task no CC dev",
     "gestor-devolucoes": "fora do loader web por medicao T2.1 (0 invocacoes web/90d + dev/30d); disponivel via Task no CC dev",
     "gestor-ssw": "fora do loader web por medicao T2.1 (0 invocacoes web/90d + dev/30d); disponivel via Task no CC dev",
+    "executor-recebimento-nfpo": "executor INTERNO do gestor-recebimento (nao delegado pelo principal); F1 T8",
 }
 # Agentes intencionalmente FORA da tabela SUBAGENTES do CLAUDE.md raiz.
 EXCECOES_CLAUDE_MD = {
     "orientador-loja": "superficie isolada agente_lojas",
     "auditor-sped-ecd": "fluxo dev SPED ECD",
+    "executor-recebimento-nfpo": "executor INTERNO do gestor-recebimento; F1 T8",
 }
 # Skills declaraveis em agents SEM SKILL.md proprio (design intencional).
 SKILLS_SEM_SKILL_MD = {

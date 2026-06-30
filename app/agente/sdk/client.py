@@ -17,10 +17,13 @@ import queue
 import re
 import time
 from functools import lru_cache
-from typing import AsyncGenerator, Dict, Any, List, Optional, Callable
+from typing import AsyncGenerator, Dict, Any, List, Optional, Callable, TYPE_CHECKING
 from app.utils.timezone import agora_utc_naive
 # Infra compartilhada do SDK (PURA, sem dominio) — tambem consumida pelo agente_lojas.
 from app.agente.sdk.sdk_runtime import build_subprocess_env
+
+if TYPE_CHECKING:  # forward-ref p/ o type hint specialist_profile em _build_options (F1)
+    from .specialist_profiles import SpecialistProfile
 
 # SDK Oficial
 # Ref: https://platform.claude.com/docs/pt-BR/agent-sdk/
@@ -473,7 +476,7 @@ class AgentClient:
             )
             return ""
 
-    async def get_context_usage_async(self, session_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    async def get_context_usage_async(self, session_id: Optional[str] = None, role: str = 'principal') -> Optional[Dict[str, Any]]:
         """
         Uso do context window via SDK get_context_usage() (control request ASYNC).
 
@@ -486,6 +489,9 @@ class AgentClient:
 
         Args:
             session_id: nosso UUID de sessao (pool key). Se None, usa o ContextVar.
+            role: papel do cliente no pool (8b). Em turno de especialista
+                  ('gestor-recebimento') o client vivo esta sob '{session}::{role}';
+                  default 'principal'. Sem ele, mediria o cliente do papel errado.
 
         Returns:
             {"used": int, "total": int, "percent": float, "categories": [...]} ou None
@@ -495,7 +501,7 @@ class AgentClient:
             from ..config.permissions import get_session_id
 
             pool_key = session_id or get_session_id() or ''
-            pooled = get_pooled_client(pool_key)
+            pooled = get_pooled_client(pool_key, role=role)
             if not pooled or not pooled.connected:
                 return None
 
@@ -1475,6 +1481,7 @@ Nunca invente informações."""
         resume_messages_fallback: Optional[str] = None,
         resume_fallback_reason: Optional[str] = None,
         thinking_display: Optional[str] = None,
+        agent_role: str = 'principal',
     ) -> AsyncGenerator[StreamEvent, None]:
         """
         Gera resposta em streaming.
@@ -1525,6 +1532,7 @@ Nunca invente informações."""
             resume_messages_fallback=resume_messages_fallback,
             resume_fallback_reason=resume_fallback_reason,
             thinking_display=thinking_display,
+            agent_role=agent_role,
         ):
             yield event
 
@@ -1542,6 +1550,7 @@ Nunca invente informações."""
         stderr_queue: Optional['queue.SimpleQueue'] = None,
         resume_state: Optional[Dict] = None,
         thinking_display: Optional[str] = None,
+        specialist_profile: Optional['SpecialistProfile'] = None,
     ) -> 'ClaudeAgentOptions':
         """
         Constrói ClaudeAgentOptions para ClaudeSDKClient.
@@ -1569,6 +1578,28 @@ Nunca invente informações."""
 
         # System prompt customizado (com user_id para Memory Tool)
         custom_instructions = self._format_system_prompt(user_name, user_id)
+
+        # F1: se for cliente ESPECIALISTA, troca prompt + skills (allow-list propria).
+        # specialist_profile (SpecialistProfile) tem system_prompt_path proprio e uma
+        # allow-list de skills. Falha de leitura -> fallback transparente ao principal
+        # (profile=None), garantindo que o path do principal nunca quebra.
+        _spec_skills = None
+        _spec_system_prompt = None
+        if specialist_profile is not None:
+            try:
+                with open(specialist_profile.system_prompt_path, 'r', encoding='utf-8') as _f:
+                    _spec_prompt = _f.read()
+                _spec_system_prompt = self._build_full_system_prompt(_spec_prompt)
+                _spec_skills = sorted(specialist_profile.skills)
+            except Exception as _sp_err:
+                # Alarme explicito (nao silencioso): perfil pedido mas prompt ausente/
+                # ilegivel -> o turno cai no PRINCIPAL. Logar role + path para acao.
+                logger.warning(
+                    f"[specialist] ALARME: perfil '{specialist_profile.role}' nao "
+                    f"carregou (path={specialist_profile.system_prompt_path}) -> "
+                    f"FALLBACK principal: {_sp_err}"
+                )
+                specialist_profile = None
 
         # Diretório do projeto para carregar Skills
         project_cwd = os.path.dirname(
@@ -1657,10 +1688,17 @@ Nunca invente informações."""
         # acessiveis via Read/Bash; o filtro complementa can_use_tool.
         # Fallback (SDK < 0.1.77): 'Skill' adicionado em allowed_tools manualmente.
         if _SDK_HAS_OPTIONS_SKILLS:
-            options_dict["skills"] = _discover_skills_from_project(self.agente_id)
+            # MERGE (convergencia lojas + 8b especialista): especialista usa
+            # allow-list propria; principal/lojas usam _discover_skills_from_project
+            # por PERFIL (agente_id) — 'lojas' filtra para SKILLS_PERMITIDAS, 'web' deny-list.
+            options_dict["skills"] = (
+                _spec_skills if _spec_skills is not None
+                else _discover_skills_from_project(self.agente_id)
+            )
             logger.debug(
                 f"[AGENT_CLIENT] skills filtradas (perfil {self.agente_id}): "
-                f"{len(options_dict['skills'])} skills"
+                f"{len(options_dict['skills'])} skills "
+                f"({'especialista allow-list' if _spec_skills is not None else 'por perfil/deny-list'})"
             )
         else:
             options_dict["allowed_tools"].append("Skill")
@@ -1701,7 +1739,14 @@ Nunca invente informações."""
         # =================================================================
         from ..config.feature_flags import USE_CUSTOM_SYSTEM_PROMPT
 
-        if USE_CUSTOM_SYSTEM_PROMPT:
+        if _spec_system_prompt is not None:
+            # F1 especialista: prompt proprio (ja' montado via _build_full_system_prompt
+            # a partir do system_prompt_path do perfil). Substitui o do principal.
+            options_dict["system_prompt"] = _spec_system_prompt
+            logger.info(
+                f"[AGENT_CLIENT] System prompt: ESPECIALISTA ({specialist_profile.role})"
+            )
+        elif USE_CUSTOM_SYSTEM_PROMPT:
             # Prompt Architecture v2: string pura (preset_operacional + system_prompt)
             # Elimina ~3-4K tokens do preset claude_code (git, CSS, dev identity)
             options_dict["system_prompt"] = self._build_full_system_prompt(custom_instructions)
@@ -2065,6 +2110,25 @@ Nunca invente informações."""
                 "Ative AGENT_ONTOLOGY=true para expor query_ontology ao agente."
             )
 
+        # Handoff de sessao — registro gated por should_register_handoff:
+        # PRINCIPAL + modo 'on' expoe transferir_para; o ESPECIALISTA (em 'on')
+        # expoe SO' devolver_ao_principal (NAO re-delega -> anti multi-spawn).
+        # shadow/off NAO registram nada (medicao PURA / behavior-equivalente ao
+        # main) — expor transferir_para em shadow poluiria as metricas que o
+        # shadow existe para medir limpo (review 2026-06-29).
+        try:
+            from ..config.feature_flags import resolve_specialist_handoff_mode
+            from ..tools.handoff_mcp_tool import should_register_handoff
+            _hmode = resolve_specialist_handoff_mode()
+            if should_register_handoff(_hmode, specialist_profile):
+                from ..tools.handoff_mcp_tool import handoff_server
+                _register_mcp('handoff', handoff_server)
+            elif _hmode == 'on' and specialist_profile is not None:
+                from ..tools.handoff_mcp_tool import handoff_devolver_server
+                _register_mcp('handoff', handoff_devolver_server)
+        except Exception as _h_err:
+            logger.debug(f"[handoff] registro da tool pulado: {_h_err}")
+
         # Log de diagnóstico — útil para validar configuração em produção
         logger.info(
             f"[AGENT_CLIENT] Options: model={options_dict.get('model')}, "
@@ -2092,6 +2156,7 @@ Nunca invente informações."""
         resume_messages_fallback: Optional[str] = None,
         resume_fallback_reason: Optional[str] = None,
         thinking_display: Optional[str] = None,
+        agent_role: str = 'principal',
     ) -> AsyncGenerator[StreamEvent, None]:
         """
         Gera resposta em streaming usando ClaudeSDKClient persistente.
@@ -2152,6 +2217,23 @@ Nunca invente informações."""
         }
 
         # ─── Construir options ───
+        # 8b: cliente ESPECIALISTA usa system_prompt + skills proprios (handoff de
+        # sessao). Resolve o perfil pelo PAPEL do turno; 'principal' -> None (path
+        # atual, byte-equivalente). Papel sem perfil registrado -> None + WARNING
+        # (fallback principal, nunca quebra). O proprio _build_options ainda faz
+        # fallback transparente se o system_prompt_path do perfil faltar.
+        _specialist_profile = None
+        if agent_role and agent_role != 'principal':
+            try:
+                from .specialist_profiles import SPECIALIST_PROFILES
+                _specialist_profile = SPECIALIST_PROFILES.get(agent_role)
+                if _specialist_profile is None:
+                    logger.warning(
+                        f"[specialist] papel '{agent_role}' sem perfil em "
+                        f"SPECIALIST_PROFILES -> fallback principal"
+                    )
+            except Exception as _sp_err:
+                logger.warning(f"[specialist] resolucao de perfil falhou: {_sp_err}")
         options = self._build_options(
             user_name=user_name,
             user_id=user_id,
@@ -2164,6 +2246,7 @@ Nunca invente informações."""
             stderr_queue=stderr_q,
             resume_state=resume_state,
             thinking_display=thinking_display,
+            specialist_profile=_specialist_profile,
         )
 
         # ─── SDK 0.1.64 SessionStore (Fase B cutover — flag default ON) ───
@@ -2258,7 +2341,11 @@ Nunca invente informações."""
         # Fallback para our_session_id causava --resume com JSONL inexistente
         # em sessões novas → CLI exit code 1 (ProcessError).
         pool_key = our_session_id or ''
-        existing = get_pooled_client(pool_key)
+        # 8b: cada papel (principal/especialista) tem seu PROPRIO client no pool
+        # sob a chave '{session_id}::{role}'. resume_id ja' vem do slot do papel
+        # (sdk_session_id role-aware, passo 3); no 1o turno do especialista e' None
+        # -> sessao SDK nova, sem --resume.
+        existing = get_pooled_client(pool_key, role=agent_role)
         resume_id = sdk_session_id
         # Validar que resume_id é UUID válido — dados envenenados no DB
         # (ex: "teams_19:xxx") causam exit code 1 permanente se não filtrados.
@@ -2315,6 +2402,7 @@ Nunca invente informações."""
                     session_id=pool_key,
                     options=options,
                     user_id=user_id or 0,
+                    role=agent_role,
                 )
             except ProcessError as pe:
                 exit_code = getattr(pe, 'exit_code', None)
@@ -2366,6 +2454,7 @@ Nunca invente informações."""
                         session_id=pool_key,
                         options=options,
                         user_id=user_id or 0,
+                        role=agent_role,
                     )
                 else:
                     raise  # Re-raise se não é falha de resume
@@ -2577,13 +2666,12 @@ Nunca invente informações."""
                     metadata={'error_type': 'process_error'}
                 )
 
-            # Evictar client morto do pool para que próximo request crie um novo
+            # Evictar client morto do pool para que próximo request crie um novo.
+            # evict_client usa a chave composta (_pool_key) — pop pela chave crua
+            # daria MISS e o client morto sobreviveria connected=True (R-CLI-CRASH).
             try:
-                from .client_pool import _registry, _registry_lock
-                with _registry_lock:
-                    evicted = _registry.pop(pool_key, None)
-                if evicted:
-                    evicted.connected = False
+                from .client_pool import evict_client
+                if evict_client(pool_key, role=agent_role):  # chave composta + papel; ver evict_client
                     logger.info(
                         f"[AGENT_SDK_PERSISTENT] Dead client evicted after ProcessError: "
                         f"{pool_key[:8]}..."
@@ -2641,11 +2729,8 @@ Nunca invente informações."""
 
                 # Evict dead client + cleanup JSONL stale (igual ao handler ProcessError)
                 try:
-                    from .client_pool import _registry, _registry_lock
-                    with _registry_lock:
-                        evicted = _registry.pop(pool_key, None)
-                    if evicted:
-                        evicted.connected = False
+                    from .client_pool import evict_client
+                    evict_client(pool_key, role=agent_role)  # chave composta + papel; ver evict_client
                 except Exception as evict_err:
                     logger.debug(f"[AGENT_SDK_PERSISTENT] Pool eviction ignored: {evict_err}")
 
@@ -2713,11 +2798,8 @@ Nunca invente informações."""
 
             # Evict dead client from pool to force fresh connection on retry.
             try:
-                from .client_pool import _registry, _registry_lock
-                with _registry_lock:
-                    evicted = _registry.pop(pool_key, None)
-                if evicted:
-                    evicted.connected = False
+                from .client_pool import evict_client
+                if evict_client(pool_key, role=agent_role):  # chave composta + papel; ver evict_client
                     logger.info(f"[AGENT_SDK_PERSISTENT] Dead client evicted from pool: {pool_key[:8]}...")
             except Exception as evict_err:
                 logger.debug(f"[AGENT_SDK_PERSISTENT] Pool eviction ignored: {evict_err}")

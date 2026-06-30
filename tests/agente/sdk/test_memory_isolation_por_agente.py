@@ -47,6 +47,21 @@ def seed_mem(app, test_user):
     """
     criados = []
 
+    # Isolamento robusto: zera memorias residuais do test_user antes de semear.
+    # A suite roda outros testes que tocam o mesmo user/path e podem deixar a
+    # db.session suja; sem este reset, uma memoria 'web' residual num path Tier 1
+    # faz o _load retornar id diferente do recem-criado (flaky so em suite, verde
+    # isolado). NAO mexe em user_id=0 (memoria empresa, compartilhada).
+    db.session.rollback()
+    AgentMemory.query.filter_by(user_id=test_user.id).delete()
+    db.session.commit()
+    # Limpa o cache de injecao process-global: _load consulta-o por
+    # get_current_session_id() (ContextVar que pode reter um session_id de teste
+    # anterior); como o seed_mem cria via ORM direto (NAO via memory tool), o
+    # cache nao e invalidado e devolveria mem_ids STALE (flaky so em suite).
+    memory_injection._SESSION_INJECTION_CACHE.clear()
+    memory_injection._INVALIDATED_USERS.clear()
+
     def _criar(path, content, agente, user_id=None, **kwargs):
         m = AgentMemory(user_id=test_user.id if user_id is None else user_id,
                         path=path, content=content, agente=agente,

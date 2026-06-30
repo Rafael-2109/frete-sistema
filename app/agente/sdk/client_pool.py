@@ -149,15 +149,25 @@ class PooledClient:
     lock: asyncio.Lock = field(default_factory=asyncio.Lock)
     sdk_session_id: Optional[str] = None
     model: Optional[str] = None
+    role: str = "principal"
 
 
 # =============================================================================
 # Estado global do pool (module-level)
 # =============================================================================
 
-# Registry: session_id → PooledClient
+# Registry: _pool_key(session_id, role) → PooledClient
 _registry: Dict[str, PooledClient] = {}
 _registry_lock = threading.Lock()
+
+
+def _pool_key(session_id: str, role: str = "principal") -> str:
+    """Chave composta do registry/creation_locks (retrocompat: role default).
+
+    Permite múltiplos clients por sessão, um por papel. O papel 'principal'
+    é o default e mantém compatibilidade com callers que não passam role.
+    """
+    return f"{session_id}::{role}"
 
 # Locks de criação por sessão (asyncio): serializam o connect() concorrente.
 # Sem isso, 2 requests da MESMA sessão chegando DENTRO da janela do
@@ -287,18 +297,19 @@ def submit_coroutine(
 # Gerenciamento de clients
 # =============================================================================
 
-def _get_creation_lock(session_id: str) -> "asyncio.Lock":
-    """Retorna (criando se preciso) o asyncio.Lock de criação desta sessão.
+def _get_creation_lock(session_id: str, role: str = "principal") -> "asyncio.Lock":
+    """Retorna (criando se preciso) o asyncio.Lock de criação desta sessão+papel.
 
     DEVE ser chamado de dentro do _sdk_loop (o asyncio.Lock liga-se ao loop
     corrente). O dict é protegido pelo _registry_lock (threading) por defesa,
     embora todas as chamadas rodem na thread única do daemon.
     """
     with _registry_lock:
-        lock = _creation_locks.get(session_id)
+        key = _pool_key(session_id, role)
+        lock = _creation_locks.get(key)
         if lock is None:
             lock = asyncio.Lock()
-            _creation_locks[session_id] = lock
+            _creation_locks[key] = lock
         return lock
 
 
@@ -306,8 +317,9 @@ async def get_or_create_client(
     session_id: str,
     options: Any,  # ClaudeAgentOptions
     user_id: int = 0,
+    role: str = "principal",
 ) -> PooledClient:
-    """Obtém client existente ou cria novo para a sessão.
+    """Obtém client existente ou cria novo para a sessão+papel.
 
     DEVE ser chamada dentro do daemon thread (via submit_coroutine).
 
@@ -315,6 +327,7 @@ async def get_or_create_client(
         session_id: Nosso UUID de sessão
         options: ClaudeAgentOptions para connect()
         user_id: ID do usuário
+        role: Papel do client no pool (default 'principal', retrocompat)
 
     Returns:
         PooledClient conectado e pronto para query()
@@ -324,17 +337,17 @@ async def get_or_create_client(
     """
     # Fast path: client já existe e está conectado
     with _registry_lock:
-        pooled = _registry.get(session_id)
+        pooled = _registry.get(_pool_key(session_id, role))
 
     if pooled and pooled.connected:
         pooled.last_used = time.time()
         logger.debug(
             f"[SDK_POOL] Reusing client: session={session_id[:8]}... "
-            f"age={time.time() - pooled.created_at:.0f}s"
+            f"role={role} age={time.time() - pooled.created_at:.0f}s"
         )
         return pooled
 
-    # Serializa a criação POR SESSÃO: requests concorrentes da mesma sessão
+    # Serializa a criação POR SESSÃO+PAPEL: requests concorrentes da mesma sessão
     # aguardam aqui em vez de cada uma criar+conectar um client (e a 2ª
     # desconectar a 1ª). Quem chega depois reusa o client da 1ª e cai na fila
     # do pooled.lock normalmente. Ver _creation_locks (race fix 2026-06-06).
@@ -346,23 +359,23 @@ async def get_or_create_client(
     # propaga normalmente ao caller, que já trata ProcessError/retry).
     import contextlib
     if os.getenv("AGENT_POOL_CREATION_LOCK", "true").lower() == "true":
-        creation_lock = _get_creation_lock(session_id)
+        creation_lock = _get_creation_lock(session_id, role)
     else:
         creation_lock = contextlib.nullcontext()  # async-safe desde py3.10
     async with creation_lock:
         # Re-check após adquirir o lock: outra request pode ter criado o
         # client enquanto esperávamos (caminho feliz da serialização).
         with _registry_lock:
-            pooled = _registry.get(session_id)
+            pooled = _registry.get(_pool_key(session_id, role))
         if pooled and pooled.connected:
             pooled.last_used = time.time()
             logger.debug(
                 f"[SDK_POOL] Reusing client (pós creation-lock): "
-                f"session={session_id[:8]}..."
+                f"session={session_id[:8]}... role={role}"
             )
             return pooled
 
-        # Slow path: criar novo client (exclusivo p/ esta sessão sob o lock)
+        # Slow path: criar novo client (exclusivo p/ esta sessão+papel sob o lock)
         from claude_agent_sdk import ClaudeSDKClient
 
         client = ClaudeSDKClient(options)
@@ -401,12 +414,13 @@ async def get_or_create_client(
             connected=True,
             # Modelo de criacao = modelo da sessao (stickiness, bug 2026-06-15).
             model=getattr(options, 'model', None),
+            role=role,
         )
 
         with _registry_lock:
             # Se havia um client antigo desconectado, limpar
-            old = _registry.get(session_id)
-            _registry[session_id] = pooled
+            old = _registry.get(_pool_key(session_id, role))
+            _registry[_pool_key(session_id, role)] = pooled
 
         # Defesa em profundidade: sob o creation_lock, um 'old' AINDA conectado
         # não deveria mais ocorrer. Mantido como rede de segurança (ex.: client
@@ -445,25 +459,49 @@ async def get_or_create_client(
         return pooled
 
 
-async def disconnect_client(session_id: str) -> bool:
+def evict_client(session_id: str, role: str = "principal") -> bool:
+    """Evicção LEVE de um client morto do registry (error-handlers de client.py).
+
+    Remove a entrada `session_id::role` e marca `connected=False`, SEM desconectar
+    o SDK nem liberar sticky/JSONL (isso é trabalho do disconnect_client). É a
+    operação que os handlers de ProcessError/CLIConnectionError fazem para forçar
+    a recriação do client no próximo turno.
+
+    CRÍTICO: usa a chave composta `_pool_key`. O registry é keyed por
+    `session_id::role` (não pelo session_id cru); um `_registry.pop(session_id)`
+    direto dá MISS e o client morto sobrevive `connected=True`, sendo reusado pelo
+    fast-path de get_or_create_client (reintroduzia o loop R-CLI-CRASH).
+
+    Thread-safe (pode ser chamado de qualquer thread). Retorna True se evictou.
+    """
+    with _registry_lock:
+        pooled = _registry.pop(_pool_key(session_id, role), None)
+    if pooled is not None:
+        pooled.connected = False
+        return True
+    return False
+
+
+async def disconnect_client(session_id: str, role: str = "principal") -> bool:
     """Desconecta e remove client do pool.
 
     DEVE ser chamada dentro do daemon thread (via submit_coroutine).
 
     Args:
         session_id: Nosso UUID de sessão
+        role: Papel do client (default 'principal', retrocompat)
 
     Returns:
         True se havia client para desconectar, False se não encontrado
     """
     with _registry_lock:
-        pooled = _registry.pop(session_id, None)
-        # Hygiene: descarta o creation-lock da sessão se ninguém o estiver
+        pooled = _registry.pop(_pool_key(session_id, role), None)
+        # Hygiene: descarta o creation-lock da sessão+papel se ninguém o estiver
         # segurando (evita crescimento do dict ao longo do processo). Se
         # estiver locked (criação em voo), preserva para não reintroduzir race.
-        _clk = _creation_locks.get(session_id)
+        _clk = _creation_locks.get(_pool_key(session_id, role))
         if _clk is not None and not _clk.locked():
-            _creation_locks.pop(session_id, None)
+            _creation_locks.pop(_pool_key(session_id, role), None)
 
     if not pooled:
         return False
@@ -546,19 +584,34 @@ def _cleanup_stale_jsonl(sdk_session_id: Optional[str]) -> None:
         logger.debug(f"[SDK_POOL] JSONL cleanup ignorado: {e}")
 
 
-def get_pooled_client(session_id: str) -> Optional[PooledClient]:
+def get_pooled_client(session_id: str, role: str = "principal") -> Optional[PooledClient]:
     """Obtém PooledClient do registry (sem criar).
 
     Thread-safe — pode ser chamado de qualquer thread.
 
     Args:
         session_id: Nosso UUID de sessão
+        role: Papel do client (default 'principal', retrocompat)
 
     Returns:
         PooledClient ou None se não encontrado
     """
     with _registry_lock:
-        return _registry.get(session_id)
+        return _registry.get(_pool_key(session_id, role))
+
+
+def get_any_connected_client(session_id: str) -> Optional[PooledClient]:
+    """Retorna o 1o PooledClient CONECTADO de QUALQUER papel desta sessao
+    (chaves '{session_id}::*'). Usado pelo interrupt (8b) quando o papel ativo
+    persistido nao bate com o client vivo — ex.: sessao rotacionada por idle,
+    onde agente_ativo ficou na sessao velha e o client do especialista vive sob
+    o session_id novo. Thread-safe."""
+    prefix = f"{session_id}::"
+    with _registry_lock:
+        for _key, _pc in _registry.items():
+            if _key.startswith(prefix) and _pc.connected:
+                return _pc
+    return None
 
 
 # =============================================================================
@@ -601,33 +654,33 @@ async def _cleanup_idle_clients(idle_timeout: float):
         idle_timeout: Segundos de inatividade antes de desconectar
     """
     now = time.time()
-    to_disconnect = []
+    to_disconnect = []  # lista de (session_id, role) usando os FIELDS do PooledClient
 
     with _registry_lock:
-        for session_id, pooled in _registry.items():
+        for _key, pooled in _registry.items():
             idle_seconds = now - pooled.last_used
             if idle_seconds > idle_timeout and pooled.connected:
                 if pooled.lock.locked() and idle_seconds <= idle_timeout * 4:
                     logger.info(
                         f"[SDK_POOL] Cleanup pulado (turno ativo): "
-                        f"session={session_id[:8]}... idle={idle_seconds:.0f}s"
+                        f"session={pooled.session_id[:8]}... idle={idle_seconds:.0f}s"
                     )
                     continue
-                to_disconnect.append(session_id)
+                to_disconnect.append((pooled.session_id, pooled.role))
 
     if not to_disconnect:
         return
 
-    for session_id in to_disconnect:
+    for session_id, role in to_disconnect:
         try:
-            await disconnect_client(session_id)
+            await disconnect_client(session_id, role=role)
             logger.info(
                 f"[SDK_POOL] Idle cleanup: session={session_id[:8]}... "
-                f"(idle > {idle_timeout}s)"
+                f"role={role} (idle > {idle_timeout}s)"
             )
         except Exception as e:
             logger.warning(
-                f"[SDK_POOL] Cleanup failed: session={session_id[:8]}... error={e}"
+                f"[SDK_POOL] Cleanup failed: session={session_id[:8]}... role={role} error={e}"
             )
 
     logger.info(
@@ -636,8 +689,8 @@ async def _cleanup_idle_clients(idle_timeout: float):
     )
 
 
-def touch_client(session_id: str) -> None:
-    """Renova last_used do client da sessão (marca atividade do turno).
+def touch_client(session_id: str, role: str = "principal") -> None:
+    """Renova last_used do client da sessão+papel (marca atividade do turno).
 
     API pública para marcar atividade sem expor o registry: o idle do
     cleanup passa a contar da ÚLTIMA atividade real — não do início do
@@ -645,7 +698,7 @@ def touch_client(session_id: str) -> None:
     `pooled.last_used` por mensagem.) Sessão desconhecida é no-op.
     """
     with _registry_lock:
-        pooled = _registry.get(session_id)
+        pooled = _registry.get(_pool_key(session_id, role))
     if pooled is not None:
         pooled.last_used = time.time()
 
@@ -672,9 +725,13 @@ def get_pool_status() -> Dict[str, Any]:
 
     with _registry_lock:
         clients_info = []
-        for session_id, pooled in _registry.items():
+        # Itera com _key (chave composta session_id::role) mas usa os FIELDS do
+        # PooledClient — nunca fatiar a chave como se fosse o session_id puro
+        # (consistente com _cleanup_idle_clients/shutdown_pool).
+        for _key, pooled in _registry.items():
             clients_info.append({
-                'session_id': session_id[:8] + '...',
+                'session_id': pooled.session_id[:8] + '...',
+                'role': pooled.role,
                 'user_id': pooled.user_id,
                 'connected': pooled.connected,
                 'idle_seconds': round(time.time() - pooled.last_used, 1),
@@ -719,21 +776,21 @@ def shutdown_pool():
         logger.debug("[SDK_POOL] Cleanup task cancelada")
     _cleanup_task = None
 
-    # Desconectar todos os clients
+    # Desconectar todos os clients — usar FIELDS do PooledClient, não a chave composta
     with _registry_lock:
-        session_ids = list(_registry.keys())
+        client_pairs = [(p.session_id, p.role) for p in _registry.values()]
 
-    for session_id in session_ids:
+    for session_id, role in client_pairs:
         try:
             future = asyncio.run_coroutine_threadsafe(
-                disconnect_client(session_id),
+                disconnect_client(session_id, role=role),
                 _sdk_loop,
             )
             future.result(timeout=10)
         except Exception as e:
             logger.warning(
                 f"[SDK_POOL] Shutdown disconnect failed: "
-                f"session={session_id[:8]}... error={e}"
+                f"session={session_id[:8]}... role={role} error={e}"
             )
 
     # Parar event loop
@@ -747,5 +804,5 @@ def shutdown_pool():
     _pool_initialized = False
     logger.info(
         f"[SDK_POOL] Shutdown concluído: "
-        f"{len(session_ids)} clients desconectados"
+        f"{len(client_pairs)} clients desconectados"
     )

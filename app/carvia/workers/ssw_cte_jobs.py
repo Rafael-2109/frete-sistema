@@ -1,9 +1,14 @@
 """
 Job RQ: Emissao automatica de CTe no SSW + Fatura.
 
-Executado pelo worker_ssw_carvia.py na fila 'ssw_carvia'.
+Enfileirado na fila 'high' (consumida por start_workers + worker_atacadao).
 Cada job dura 60-120s (Playwright headless) e atualiza
 CarviaEmissaoCte.etapa para tracking de progresso via polling.
+
+CONCORRENCIA: a fila 'high' tem varios workers, entao N emissoes Playwright
+rodavam ao mesmo tempo e SATURAVAM o SSW (~55% de erro com 9-12 simultaneas).
+Um semaforo Redis (_adquirir_slot_ssw) limita a CARVIA_SSW_MAX_CONCORRENTES
+(default 1 = SERIAL, 1 emissao por vez) — o excedente re-enfileira sem rodar.
 
 Etapas:
   1. LOGIN — Login SSW
@@ -35,6 +40,65 @@ PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..
 SSW_SCRIPTS = os.path.join(
     PROJECT_ROOT, '.claude', 'skills', 'operando-ssw', 'scripts'
 )
+
+
+# ===================================================================== #
+# Semaforo Redis — limita emissoes de CTe SSW CONCORRENTES
+# ===================================================================== #
+# A fila `high` e consumida por varios workers (start_workers NUM_WORKERS +
+# worker_atacadao --workers 2), entao N emissoes Playwright rodavam ao mesmo
+# tempo e SATURAVAM o SSW (popup do frete nao abria em 30s -> ~55% de erro com
+# 9-12 simultaneas). Limitamos a K concorrentes (default 3; ~0% de erro medido
+# com <=5). Job excedente re-enfileira sem rodar. Sem Redis -> fail-open.
+_SSW_SLOTS_KEY = 'carvia:ssw:emissao:slots'
+_SSW_SLOT_TTL = 1800        # safety: contador expira em 30min de inatividade
+_SSW_BACKOFF_S = 12         # espera antes de re-enfileirar quando no teto
+
+
+def _ssw_max_concorrentes():
+    """Teto de emissoes SSW concorrentes (env CARVIA_SSW_MAX_CONCORRENTES, >=1).
+
+    Default 1 = SERIAL (1 emissao por vez, zero concorrencia no SSW).
+    """
+    try:
+        return max(1, int(os.environ.get('CARVIA_SSW_MAX_CONCORRENTES', '1')))
+    except (TypeError, ValueError):
+        return 1
+
+
+def _adquirir_slot_ssw():
+    """Ocupa 1 de K slots de emissao SSW. True se obteve, False se no teto.
+
+    Fail-open: sem Redis (ou erro), NAO limita (retorna True) — degrada para o
+    comportamento de hoje em vez de bloquear a emissao.
+    """
+    from app.portal.workers import get_redis_connection
+    try:
+        conn = get_redis_connection()
+        if not conn:
+            return True
+        n = conn.incr(_SSW_SLOTS_KEY)
+        conn.expire(_SSW_SLOTS_KEY, _SSW_SLOT_TTL)
+        if n <= _ssw_max_concorrentes():
+            return True
+        conn.decr(_SSW_SLOTS_KEY)   # nao coube — devolve o slot
+        return False
+    except Exception as e:
+        logger.warning("Slot SSW indisponivel (%s) — rodando sem limite", e)
+        return True
+
+
+def _liberar_slot_ssw():
+    """Devolve 1 slot ao pool (no-op sem Redis; nunca deixa o contador < 0)."""
+    from app.portal.workers import get_redis_connection
+    try:
+        conn = get_redis_connection()
+        if not conn:
+            return
+        if conn.decr(_SSW_SLOTS_KEY) < 0:
+            conn.set(_SSW_SLOTS_KEY, 0)
+    except Exception:
+        pass
 
 
 def _liberar_conexao_antes_playwright():
@@ -172,6 +236,28 @@ def emitir_cte_ssw_job(emissao_id: int) -> dict:
                 emissao_id, emissao.status
             )
             return {'status': emissao.status}
+
+        # Semaforo: limita emissoes SSW CONCORRENTES (causa-raiz da saturacao —
+        # ~55% de erro com 9-12 simultaneas). No teto, re-enfileira sem rodar:
+        # a emissao segue PENDENTE e tenta de novo quando um slot liberar.
+        if not _adquirir_slot_ssw():
+            logger.info(
+                "Emissao %s: SSW no limite de concorrencia (%s) — re-enfileirando",
+                emissao_id, _ssw_max_concorrentes(),
+            )
+            time.sleep(_SSW_BACKOFF_S)
+            try:
+                from app.portal.workers import enqueue_job
+                enqueue_job(
+                    emitir_cte_ssw_job, emissao_id,
+                    queue_name='high', timeout='10m',
+                )
+            except Exception as e_rq:
+                logger.warning(
+                    "Falha ao re-enfileirar emissao %s (slot SSW): %s",
+                    emissao_id, e_rq,
+                )
+            return {'status': emissao.status, 'motivo': 'aguardando_slot_ssw'}
 
         emissao.status = 'EM_PROCESSAMENTO'
         emissao.etapa = 'LOGIN'
@@ -462,6 +548,11 @@ def emitir_cte_ssw_job(emissao_id: int) -> dict:
                     emissao_id, e_commit
                 )
             return {'status': 'ERRO', 'erro': str(e)}
+
+        finally:
+            # Libera o slot do semaforo — sempre, mesmo em sucesso/erro, para
+            # a proxima emissao da fila poder entrar.
+            _liberar_slot_ssw()
 
 
 def _montar_args_cte(emissao):

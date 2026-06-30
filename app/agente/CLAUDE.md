@@ -33,6 +33,7 @@ atualizado: 2026-06-29
 | Detalhe de **Artifacts**, **Telemetria de subagent**, **Memoria compartilhada**, **Avaliador de skill** ou o **inventario de eventos SSE** | [`SUBSISTEMAS.md`](SUBSISTEMAS.md) |
 | **Fast-paths deterministicos** (reducao de custo: tarefa rotineira+estruturada resolvida SEM LLM/subagente — `baseline_fastpath.py` p/ baseline do Marcus, `vinculacao_fastpath.py` p/ vincular/desvincular NF×PO da Gabriella). Mecanica: detector regex N0 → executor deterministico; fallback Haiku N1 / LLM N2. Flags `AGENT_BASELINE_FASTPATH`, `AGENT_VINCULACAO_FASTPATH` | planos `docs/superpowers/plans/2026-06-06-reducao-custo-agente-fast-path.md` (F1/F2) e `2026-06-08-fastpath-vinculacao-nf-po.md` (F3) |
 | **Handoff de estado entre spawns de subagente** (Rota B — subagente efemero re-descobre tudo a cada invocacao; o findings do spawn N e persistido em `AgentSession.data['subagent_checkpoints']` no SubagentStop e injetado INLINE no prompt do Task do spawn N+1 no PreToolUse, conserta o `/tmp/subagent-findings` quebrado). Flag `AGENT_SUBAGENT_CHECKPOINT` off/shadow/on. Read-only de contexto — dry-run/R11/R12/gate intactos | `sdk/subagent_checkpoint.py` + memoria `delegacao-subagente-custo-arquitetura` |
+| **Handoff de SESSAO (F1 — especialista quente)** — substitui o subagente efemero por um especialista quente que conduz o assunto: pool multi-papel (chave `session_id::role`) + `agent_router` decide o papel/turno + tool `transferir_para` (so' no principal, so' em `on`) + handoff magro `<10k` + executor atomico (herda gate de codigo R11.1; R12 e' cumprido UPSTREAM pelo especialista, nao e' gate herdavel). Flag `AGENT_SPECIALIST_HANDOFF` **off**(default=behavior-equivalente ao main)/shadow/on/admin. **Swap real do cliente no stream = 8b, INTEGRADO** (PR #29 reconciliado + review 2026-06-29; flag-gated): em `off` (default) behavior-equivalente ao main; em `on` o especialista assume o turno com **cliente/sessao SDK PRÓPRIOS por papel** (`sdk_session_id` por papel em `data['sdk_session_ids'][role]`, leitura dual do legado — resolve o gap R1 dos 2 subprocessos no MESMO `sdk_session_id`/JSONL), `pick_warm_model` lê o cliente do PAPEL, `handoff_context` injetado 1x no 1o turno (flag `handoff_context_injected`, reset no `devolver_ao_principal`), `transferir_para` só no principal+`on` e o especialista expoe so' `devolver_ao_principal` (`should_register_handoff`; shadow=medição PURA). **ANTES de ligar `on` em prod: validar em EXECUÇÃO REAL (o swap com 2 subprocessos SDK só rodou em teste/mock) + canary (modo `admin`) + observar custo/concorrência** — ganho é por-sessao amortizado (1o turno do especialista paga `cache_creation`; H3 spike sintetico Haiku deu subagente-retomavel 1.32x o cliente-quente — DIRECIONAL) | `sdk/agent_router.py` + `sdk/handoff_context.py` + `sdk/specialist_profiles.py` + `tools/handoff_mcp_tool.py` + `services/specialist_handoff_metrics.py` + `.claude/agents/executor-recebimento-nfpo.md`; spec `docs/superpowers/specs/2026-06-28-handoff-sessao-agente-custo-design.md` |
 | **Historico do SDK** — features por versao, breaking changes, bug fixes (0.1.49 → 0.2.101) | `SDK_CHANGELOG.md` |
 | **Estado VIVO da evolucao** — flywheel Ondas 0-4, gates, log append-only | `docs/blueprint-agente/EXECUCAO.md` |
 | **Design dos 5 eixos** do flywheel (visao + grafo de dependencias) | `docs/blueprint-agente/BLUEPRINT_MESTRE.md` |
@@ -46,9 +47,9 @@ atualizado: 2026-06-29
 
 ## Contexto
 
-Encapsula o Claude Agent SDK: chat web (SSE) + Teams bot (async); ~57.4K LOC em 110 arquivos. Para o roteiro de onde achar cada detalhe, ver **Mapa de Navegacao** acima.
+Encapsula o Claude Agent SDK: chat web (SSE) + Teams bot (async); ~58.7K LOC em 117 arquivos. Para o roteiro de onde achar cada detalhe, ver **Mapa de Navegacao** acima.
 
-**LOC**: ~57.4K | **Arquivos**: 110 | **Atualizado**: 29/06/2026
+**LOC**: ~58.7K | **Arquivos**: 117 | **Atualizado**: 29/06/2026
 
 > **EVOLUCAO DO AGENTE (flywheel/blueprint Ondas 0-4)**: o rastreador VIVO e o
 > `docs/blueprint-agente/EXECUCAO.md` (estado de cada item, gates, log append-only); o design
@@ -124,7 +125,10 @@ app/agente/                          # Root — 7 arquivos
 │   ├── baseline_fastpath.py         # Fast-path deterministico do baseline (Marcus user_id=18, sem loop LLM)
 │   ├── vinculacao_fastpath.py       # Fast-path deterministico vinculacao NF×PO (Gabriella; N0 regex + N1 Haiku; sem subagente gestor-recebimento)
 │   ├── client.py                    # Client principal (streaming, build_options, parse)
-│   ├── client_pool.py               # Pool de clients reutilizaveis
+│   ├── client_pool.py               # Pool de clients reutilizaveis (chave composta session_id::role; evict_client p/ error-handlers)
+│   ├── agent_router.py              # F1 handoff de SESSAO: decide o PAPEL (principal vs especialista) do turno — irmao do model_router; flag AGENT_SPECIALIST_HANDOFF
+│   ├── handoff_context.py           # F1 handoff de SESSAO: handoff MAGRO (<10k tok) + render_handoff_block (anti prompt-injection)
+│   ├── specialist_profiles.py       # F1 handoff de SESSAO: perfis do especialista quente (system_prompt proprio + allow-list skills); piloto gestor-recebimento
 │   ├── context_enrichment.py        # Enriquecimento de contexto per-request (blueprint agente)
 │   ├── cost_tracker.py              # Rastreamento de custos por sessao
 │   ├── hooks.py                     # 8 SDK hook closures (build_hooks() factory)
@@ -172,6 +176,7 @@ app/agente/                          # Root — 7 arquivos
 │   ├── sql_evaluator_falses_service.py # Detector de falsos negativos em SQL evaluator
 │   ├── suggestion_generator.py      # Gerador de sugestoes proativas
 │   ├── teams_observability_service.py # KPIs observabilidade canal Teams (teams_tasks + agent_step, read-only)
+│   ├── specialist_handoff_metrics.py # F1 handoff de SESSAO: gate de metrica (custo/sessao + cache + num_turns) antes vs depois
 │   ├── tool_skill_mapper.py         # Mapeamento tool → skill
 │   └── upload_recovery_service.py   # Recuperacao de uploads (dual-write /tmp + S3 agente-uploads/{user_id}/)
 ├── templates/agente/                # Templates Jinja2 — 7 arquivos
@@ -193,6 +198,7 @@ app/agente/                          # Root — 7 arquivos
 │   ├── resolver_mcp_tool.py         # Resolvedores deterministicos (app.resolvedores) — fonte-que-prova entidade
 │   ├── render_logs_tool.py          # Consulta logs Render
 │   ├── routes_search_tool.py        # Busca em rotas Flask
+│   ├── handoff_mcp_tool.py          # F1 handoff de SESSAO: tools transferir_para/devolver_ao_principal + should_register_handoff (gate principal/on)
 │   ├── schema_mcp_tool.py           # Consulta schemas de tabelas
 │   ├── session_search_tool.py       # 5 operacoes de busca em sessoes (Enhanced v4.1.0)
 │   ├── sql_session_context.py       # Helpers de contexto SQL por sessao

@@ -242,6 +242,8 @@ Workers Playwright (60-120s+) DEVEM isolar a conexao de banco. PostgreSQL do Ren
 
 **Implementacao canonica + fluxos completos**: [SSW_INTEGRATION.md](SSW_INTEGRATION.md).
 
+**Concorrencia — emissao SERIAL (2026-06-29)**: a fila `high` tem varios workers, entao emitir N NFs disparava N sessoes Playwright simultaneas e SATURAVA o SSW (~55% de erro com 9-12 vs ~0% com <=5). `emitir_cte_ssw_job` agora serializa via **semaforo Redis** (`_adquirir_slot_ssw`, chave `carvia:ssw:emissao:slots`): limita a `CARVIA_SSW_MAX_CONCORRENTES` (env, **default 1 = 1 por vez**); no teto, re-enfileira com backoff sem rodar; libera no `finally`. Fail-open sem Redis. Detalhe em [SSW_INTEGRATION.md](SSW_INTEGRATION.md) secao "Limite de concorrencia".
+
 Aplicar em TODOS os workers que chamam Playwright: `ssw_cte_jobs.py`, `ssw_cte_complementar_jobs.py`, `verificar_ctrc_ssw_jobs.py`.
 
 ### R16 + R17: Pre-vinculo e historico de match

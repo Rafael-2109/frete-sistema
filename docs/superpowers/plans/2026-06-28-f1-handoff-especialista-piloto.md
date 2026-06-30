@@ -554,8 +554,11 @@ Expected: FAIL — `ModuleNotFoundError: app.agente.sdk.handoff_context`
 ```python
 # app/agente/sdk/handoff_context.py
 """Handoff magro: empacota o MINIMO p/ o especialista quente assumir (entidades
-resolvidas, saldo, objetivo) — NUNCA a conversa inteira. Guard de orcamento
-<10k tok (a conversa fica no cliente especialista que herda a sessao SDK)."""
+resolvidas, saldo, objetivo) — NUNCA a conversa inteira. Guard de orcamento <10k tok.
+O especialista tem SESSAO SDK PROPRIA por papel (chave de pool session_id::role) —
+NAO herda nem forka a sessao do principal; recebe so' este handoff magro no 1o turno
+e as proximas mensagens acumulam na sessao DELE (sessoes separadas evitam o gap dos
+2 subprocessos; spec §Componentes #1 / §Correcao de premissa, arranjo B do H3)."""
 from __future__ import annotations
 import json
 import math

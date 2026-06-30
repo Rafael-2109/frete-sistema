@@ -110,6 +110,7 @@ def _load_enforce_directives(user_id: int, agente_id: str = 'web'):
 def _compose_hook_context(
     *,
     resume_fallback: str = '',
+    handoff_context: str = '',
     session_context: str = '',
     loja_context: str = '',
     main_context: str = '',
@@ -123,16 +124,17 @@ def _compose_hook_context(
     """PURO/testavel — montagem do additionalContext na ORDEM-ALVO do PAD-CTX
     (F4.4, tabela "Hook dinamico — layout, orcamento e ordem"):
 
-    resume_fallback(1) -> session_context(2) -> main_context(3-9: user_rules,
-    user_memories, directives, briefing, routing) -> correction_hint(10) ->
-    debug/sql_admin(11) -> [skill_hints/world_model: flag-gated, OFF por
-    default — decisao R-1] -> tail_context(12-13: recent_sessions +
-    pendencias_acumuladas por ULTIMO, coladas a mensagem do usuario).
+    resume_fallback(1) -> handoff_context(1.5: 8b — bloco do handoff de sessao
+    UMA vez no 1o turno do especialista) -> session_context(2) -> main_context
+    (3-9: user_rules, user_memories, directives, briefing, routing) ->
+    correction_hint(10) -> debug/sql_admin(11) -> [skill_hints/world_model:
+    flag-gated, OFF por default — decisao R-1] -> tail_context(12-13:
+    recent_sessions + pendencias_acumuladas por ULTIMO, coladas a mensagem).
     """
     return (
-        resume_fallback + session_context + loja_context + main_context + correction_hint
-        + debug_context + sql_admin_context + skill_hints + world_model
-        + tail_context
+        resume_fallback + handoff_context + session_context + loja_context + main_context
+        + correction_hint + debug_context + sql_admin_context + skill_hints
+        + world_model + tail_context
     )
 
 
@@ -1711,6 +1713,46 @@ def build_hooks(
                 resume_state['failed'] = False
 
             # ============================================================
+            # 8b: handoff de sessao — bloco do handoff_context UMA VEZ no 1o
+            # turno do especialista. agente_ativo != principal + handoff_context
+            # presente + ainda nao injetado (flag data['handoff_context_injected'],
+            # resetada no devolver_ao_principal). Espelha o read+commit direto do
+            # deliberation_log (mesmo hook). Best-effort: nunca quebra o turno.
+            # Em 'off'/'shadow' (agente_ativo=principal) o bloco e vazio ->
+            # additionalContext byte-equivalente.
+            # ============================================================
+            handoff_context_block = ""
+            try:
+                from ..config.permissions import get_current_session_id
+                _hsid = get_current_session_id()
+                if _hsid:
+                    from ..models import AgentSession
+                    from app import db
+                    _hs = AgentSession.query.filter_by(session_id=_hsid).first()
+                    if _hs:
+                        _hdata = _hs.data or {}
+                        if (_hdata.get('agente_ativo', 'principal') != 'principal'
+                                and _hdata.get('handoff_context')
+                                and not _hdata.get('handoff_context_injected')):
+                            from .handoff_context import render_handoff_block
+                            handoff_context_block = (
+                                "\n" + render_handoff_block(_hdata['handoff_context']) + "\n"
+                            )
+                            _hdata['handoff_context_injected'] = True
+                            _hs.data = _hdata
+                            from sqlalchemy.orm.attributes import flag_modified
+                            flag_modified(_hs, 'data')
+                            db.session.commit()
+                            logger.info(
+                                f"[HOOK:UserPromptSubmit] handoff_context injetado "
+                                f"(1o turno especialista) session={_hsid[:12]}"
+                            )
+            except Exception as _ho_err:
+                logger.debug(
+                    f"[HOOK:UserPromptSubmit] handoff inject falhou (ignorado): {_ho_err}"
+                )
+
+            # ============================================================
             # Onda 4 — F4/F5: Skill Hints Advisory (flag-gated)
             # ============================================================
             skill_hints_context = ""
@@ -1740,11 +1782,12 @@ def build_hooks(
             except Exception as _d5_err:
                 logger.debug(f"[HOOK:UserPromptSubmit] D5 world_model falhou (best-effort): {_d5_err}")
 
-            if session_context or additional_context or tail_context or correction_hint or debug_context or sql_admin_context or resume_fallback_context or skill_hints_context or world_model_context or loja_context_block:
+            if session_context or additional_context or tail_context or correction_hint or debug_context or sql_admin_context or resume_fallback_context or skill_hints_context or world_model_context or loja_context_block or handoff_context_block:
                 # F4.4 PAD-CTX: montagem na ORDEM-ALVO (funcao pura testavel) —
                 # tail (recent_sessions + pendencias) por ULTIMO, colado a mensagem.
                 full_context = _compose_hook_context(
                     resume_fallback=resume_fallback_context,
+                    handoff_context=handoff_context_block,
                     session_context=session_context,
                     loja_context=loja_context_block,
                     main_context=additional_context or "",

@@ -67,6 +67,51 @@ def pagina_chat():
 # API - CHAT (FEAT-030: Refatorado)
 # =============================================================================
 
+_ON_SWAP_WARNED = False
+
+
+def _warn_on_swap_active_once():
+    """Avisa UMA vez (por processo) que 'on' ATIVA o swap real do especialista (8b):
+    o stream troca para o cliente/sessao SDK proprios do papel, com custo separado.
+    Operacional: ligar com canary + monitorar custo/concorrencia; rollback = off."""
+    global _ON_SWAP_WARNED
+    if not _ON_SWAP_WARNED:
+        _ON_SWAP_WARNED = True
+        import logging
+        logging.getLogger('sistema_fretes').warning(
+            "[agent_router] AGENT_SPECIALIST_HANDOFF=on ATIVA o swap real do "
+            "especialista (cliente/sessao SDK proprios por papel, custo separado). "
+            "Monitorar custo/concorrencia; rollback instantaneo = off.")
+
+
+def _resolve_agent_role(session_id, message, is_admin=False):
+    """F1: decide o papel do turno. Persiste a DECISAO (agente_ativo) sempre que
+    fora de 'off' (mede em shadow); retorna o papel EFETIVO (principal em shadow,
+    especialista em on). Best-effort: erro -> principal."""
+    from app.agente.config.feature_flags import resolve_specialist_handoff_mode
+    mode = resolve_specialist_handoff_mode(is_admin=is_admin)
+    if mode == 'off':
+        return 'principal'
+    if mode == 'on':
+        _warn_on_swap_active_once()
+    try:
+        from app.agente.models import AgentSession
+        from app.agente.sdk.agent_router import select_specialist, log_specialist_decision
+        from app import db
+        s = AgentSession.query.filter_by(session_id=session_id).first()
+        current = s.get_agente_ativo() if s else 'principal'
+        role, reason = select_specialist(message, current_active=current)
+        log_specialist_decision(session_id, None, message, role, reason)
+        if s is not None:
+            s.set_agente_ativo(role)   # registra decisao (mede em shadow)
+            db.session.commit()
+        return role if mode == 'on' else 'principal'   # shadow NAO troca
+    except Exception as _ar_err:
+        import logging
+        logging.getLogger('sistema_fretes').warning(f"[agent_router] falhou: {_ar_err}")
+        return 'principal'
+
+
 @agente_bp.route('/api/chat', methods=['POST'])
 @login_required
 def api_chat():
@@ -153,6 +198,29 @@ def api_chat():
                 from flask import current_app as _ca
                 _ca.logger.debug(f"[STICKY] check ignorado: {_sticky_err}")
 
+        user_id = current_user.id
+        user_name = getattr(current_user, 'nome', 'Usuário')
+
+        # Debug Mode: validação determinística server-side
+        debug_mode = data.get('debug_mode', False)
+        if debug_mode:
+            from app.agente.config.feature_flags import USE_DEBUG_MODE
+            if not USE_DEBUG_MODE:
+                debug_mode = False
+            elif current_user.perfil != 'administrador':
+                logger.warning(f"[AGENTE] DEBUG MODE rejeitado: user {user_id} nao e admin")
+                debug_mode = False
+            else:
+                logger.warning(f"[AGENTE] DEBUG MODE ativado por {user_name} (ID:{user_id})")
+
+        # 8b: agent_router decidido ANTES do bloco model_router para que
+        # pick_warm_model consulte o PooledClient do PAPEL ativo (handoff de
+        # sessao). Gated por AGENT_SPECIALIST_HANDOFF: 'off' (default) -> 'principal'
+        # (no-op, byte-equivalente); 'shadow' decide+persiste+mede (continua no
+        # principal); 'on' retorna o especialista e o stream troca o cliente.
+        # is_admin=bool(debug_mode) preserva a semantica F1 do modo 'admin' (canary).
+        agent_role = _resolve_agent_role(session_id, message, is_admin=bool(debug_mode))
+
         # Fase 1 (2026-04-21): Smart model routing no canal Web.
         # Modelo decidido 1x por sessao (bug 2026-06-15): em sessao QUENTE (client
         # conectado no pool) a config do usuario PERSISTE — pick_warm_model so troca
@@ -163,7 +231,9 @@ def api_chat():
         # (client.py) e a rede de seguranca: so chama set_model em troca real.
         try:
             from app.agente.sdk.client_pool import get_pooled_client
-            _pc = get_pooled_client(session_id) if session_id else None
+            # 8b: consulta o client do PAPEL ativo (role='principal' default ==
+            # comportamento atual; especialista quente le o proprio client).
+            _pc = get_pooled_client(session_id, role=agent_role) if session_id else None
             if _pc and _pc.connected and _pc.model:
                 # Sessao quente: a config do usuario PERSISTE. So troca se ele
                 # alterou EXPLICITAMENTE o seletor (pick_warm_model) — aí custa
@@ -208,10 +278,8 @@ def api_chat():
             if len(_json.dumps(output_format)) > 4096:
                 return jsonify({'success': False, 'error': 'output_format excede limite de 4KB'}), 400
 
-        user_id = current_user.id
-        user_name = getattr(current_user, 'nome', 'Usuário')
-
-        # Sentry: tags para observabilidade do agente
+        # Sentry: tags para observabilidade do agente (user_id/user_name e
+        # debug_mode/agent_role agora resolvidos ANTES do bloco model_router — 8b).
         try:
             import sentry_sdk as _sentry
             _sentry.set_tag("agent.active", "true")
@@ -219,18 +287,6 @@ def api_chat():
             _sentry.set_tag("agent.user_name", user_name)
         except Exception:
             pass
-
-        # Debug Mode: validação determinística server-side
-        debug_mode = data.get('debug_mode', False)
-        if debug_mode:
-            from app.agente.config.feature_flags import USE_DEBUG_MODE
-            if not USE_DEBUG_MODE:
-                debug_mode = False
-            elif current_user.perfil != 'administrador':
-                logger.warning(f"[AGENTE] DEBUG MODE rejeitado: user {user_id} nao e admin")
-                debug_mode = False
-            else:
-                logger.warning(f"[AGENTE] DEBUG MODE ativado por {user_name} (ID:{user_id})")
 
         # Thinking display (SDK 0.1.65+): preferencia per-user sobrescreve env flag.
         # Valores aceitos: 'summarized' (raciocinio visivel, custo extra), 'omitted'
@@ -251,7 +307,7 @@ def api_chat():
         logger.info(
             f"[AGENTE] {user_name} (ID:{user_id}): '{message[:100]}' | "
             f"Modelo: {model or 'default'} | Effort: {effort_level} | "
-            f"Plan: {plan_mode}{files_info}{debug_info}{sanitize_info}"
+            f"Plan: {plan_mode} | Role: {agent_role}{files_info}{debug_info}{sanitize_info}"
         )
 
         # FEAT-032 / Fase B (2026-04-14): Processar arquivos
@@ -619,6 +675,7 @@ def api_chat():
                 output_format=output_format,
                 rotated_from_session_id=rotated_from_session_id,
                 thinking_display=thinking_display,
+                agent_role=agent_role,
             )),
             mimetype='text/event-stream',
             headers={
@@ -664,6 +721,7 @@ async def _async_stream_sdk_client(
     output_format: dict = None,
     thinking_display: str = None,
     rotated_from_session_id: str = None,
+    agent_role: str = 'principal',
 ):
     """
     Orquestra streaming via ClaudeSDKClient persistente (v3).
@@ -686,7 +744,7 @@ async def _async_stream_sdk_client(
                     session_id=our_session_id
                 ).first()
                 if db_session:
-                    sdk_session_id_for_resume = db_session.get_sdk_session_id()
+                    sdk_session_id_for_resume = db_session.get_sdk_session_id(role=agent_role)
                     if sdk_session_id_for_resume:
                         logger.info(
                             f"[AGENTE] sdk_session_id para resume: "
@@ -822,6 +880,7 @@ async def _async_stream_sdk_client(
             resume_messages_fallback=resume_messages_fallback,
             resume_fallback_reason=resume_fallback_reason,
             thinking_display=thinking_display,
+            agent_role=agent_role,
         ):
             should_continue = _process_stream_event(event)
             if should_continue:
@@ -887,6 +946,7 @@ def _stream_chat_response(
     output_format: dict = None,
     rotated_from_session_id: str = None,
     thinking_display: str = None,
+    agent_role: str = 'principal',
 ) -> Generator[str, None, None]:
     """
     Gera resposta em streaming (SSE).
@@ -935,6 +995,9 @@ def _stream_chat_response(
         'cache_creation_tokens': 0,
         'sdk_session_id': None,
         'our_session_id': session_id,
+        # 8b: papel do turno (handoff de sessao) — lido por _save_messages_dedup
+        # para gravar o sdk_session_id NO PAPEL certo (default 'principal').
+        'agent_role': agent_role,
         'session_expired': False,
         'error_message': None,
         # FIX 2026-05-07: persistencia idempotente entre thread daemon (primary)
@@ -1342,6 +1405,7 @@ def _stream_chat_response(
                 output_format=output_format,
                 thinking_display=thinking_display,
                 rotated_from_session_id=rotated_from_session_id,
+                agent_role=agent_role,
             )
 
             # =============================================================
@@ -1352,7 +1416,7 @@ def _stream_chat_response(
             # pode awaitar). Frontend: case 'context_usage' → updateContextUsage(data).
             # =============================================================
             try:
-                context_usage = await client.get_context_usage_async(our_session_id)
+                context_usage = await client.get_context_usage_async(our_session_id, role=agent_role)
                 if context_usage:
                     event_queue.put(_sse_event('context_usage', context_usage))
             except Exception as ctx_err:
@@ -1975,6 +2039,7 @@ def _save_messages_dedup(
             cache_creation_tokens=response_state.get('cache_creation_tokens', 0),
             plan_dict=_plan_dict,
             message_id=response_state.get('message_id'),
+            agent_role=response_state.get('agent_role', 'principal'),
         )
         # Marca flag SO SE o commit do DB foi bem-sucedido.
         # Falhas de pos-processamento NAO afetam o retorno (isolados na propria
@@ -2078,6 +2143,7 @@ def _save_messages_to_db(
     cache_creation_tokens: int = 0,
     plan_dict: Optional[dict] = None,
     message_id: Optional[str] = None,
+    agent_role: str = 'principal',
 ) -> bool:
     """
     FEAT-030: Salva mensagens do usuário e assistente no banco.
@@ -2207,7 +2273,7 @@ def _save_messages_to_db(
                 try:
                     import uuid as _uuid_validate
                     _uuid_validate.UUID(sdk_session_id)
-                    session.set_sdk_session_id(sdk_session_id)
+                    session.set_sdk_session_id(sdk_session_id, role=agent_role)
                     _sdk_id_valid = True
                 except (ValueError, AttributeError):
                     logger.warning(
@@ -2217,7 +2283,7 @@ def _save_messages_to_db(
 
             elif session_expired:
                 # Limpa sdk_session_id para forçar nova sessão no próximo request
-                session.set_sdk_session_id(None)
+                session.set_sdk_session_id(None, role=agent_role)
                 logger.info(f"[AGENTE] SDK session_id limpo devido à expiração")
 
             # Atualiza model e custo
@@ -2237,15 +2303,38 @@ def _save_messages_to_db(
                 from app.agente.sdk.pricing import turn_cost_from_cumulative
                 from sqlalchemy.orm.attributes import flag_modified
                 _data = session.data or {}
-                _prev_cumulative = float(_data.get('_sdk_cost_cumulative', 0) or 0)
-                _prev_sdk_sid = _data.get('_sdk_cost_session_id')
+                # 8b: baseline de custo POR PAPEL. Cada papel (principal/especialista)
+                # tem sua PROPRIA sessao SDK, logo seu PROPRIO total_cost_usd acumulado.
+                # Sem isto, alternar principal<->especialista flipa o sdk_session_id a
+                # cada turno -> turn_cost_from_cumulative detecta "reset" -> zera o
+                # baseline -> conta o acumulado inteiro do papel como custo do turno
+                # (inflacao). Retrocompat: para 'principal' sem slot por papel, herda
+                # os slots legados _sdk_cost_* (sessao em andamento antes do 8b).
+                _by_role = _data.get('_sdk_cost_by_role')
+                if not isinstance(_by_role, dict):
+                    _by_role = {}
+                _role_state = _by_role.get(agent_role)
+                if _role_state is None and agent_role == 'principal':
+                    _role_state = {
+                        'cumulative': _data.get('_sdk_cost_cumulative', 0),
+                        'sdk_session_id': _data.get('_sdk_cost_session_id'),
+                    }
+                _role_state = _role_state or {}
+                _prev_cumulative = float(_role_state.get('cumulative', 0) or 0)
+                _prev_sdk_sid = _role_state.get('sdk_session_id')
                 _curr_sdk_sid = sdk_session_id if _sdk_id_valid else _prev_sdk_sid
                 cost_usd = turn_cost_from_cumulative(
                     sdk_cumulative, _prev_cumulative, _prev_sdk_sid, _curr_sdk_sid,
                 )
-                # Memoriza o acumulado para o proximo turno (R7: flag_modified JSONB)
-                _data['_sdk_cost_cumulative'] = sdk_cumulative
-                _data['_sdk_cost_session_id'] = _curr_sdk_sid
+                # Memoriza o acumulado do PAPEL para o proximo turno (R7 flag_modified).
+                _by_role[agent_role] = {
+                    'cumulative': sdk_cumulative, 'sdk_session_id': _curr_sdk_sid,
+                }
+                _data['_sdk_cost_by_role'] = _by_role
+                # Espelho legado (observabilidade/retrocompat) apenas para principal.
+                if agent_role == 'principal':
+                    _data['_sdk_cost_cumulative'] = sdk_cumulative
+                    _data['_sdk_cost_session_id'] = _curr_sdk_sid
                 session.data = _data
                 flag_modified(session, 'data')
             else:
@@ -2519,7 +2608,28 @@ def api_interrupt():
 
     from app.agente.sdk.client_pool import get_pooled_client, submit_coroutine
 
-    pooled = get_pooled_client(session_id)
+    # 8b: interrompe o client do PAPEL ATIVO (handoff de sessao). Em 'on' com
+    # especialista, o stream vivo e o client '::gestor-recebimento'; interromper
+    # o principal nao pararia a geracao. Fallback ao principal quando o client do
+    # papel nao existe (shadow persiste agente_ativo=especialista mas o stream
+    # rodou no principal) — best-effort na leitura do papel.
+    _ativo = 'principal'
+    try:
+        from app.agente.models import AgentSession
+        _s = AgentSession.query.filter_by(session_id=session_id).first()
+        if _s:
+            _ativo = _s.get_agente_ativo()
+    except Exception:
+        _ativo = 'principal'
+    pooled = get_pooled_client(session_id, role=_ativo)
+    if (not pooled or not pooled.connected) and _ativo != 'principal':
+        pooled = get_pooled_client(session_id, role='principal')
+    if not pooled or not pooled.connected:
+        # 8b: a sessao pode ter rotacionado por idle (agente_ativo ficou na sessao
+        # velha; o client do especialista vive sob o session_id novo). Varre
+        # qualquer client VIVO desta sessao no pool, independente do papel.
+        from app.agente.sdk.client_pool import get_any_connected_client
+        pooled = get_any_connected_client(session_id)
     if not pooled or not pooled.connected:
         return jsonify({
             'success': False,
