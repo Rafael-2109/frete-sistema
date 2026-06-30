@@ -16,6 +16,13 @@ def test_desfaz_mojibake_passa_texto_limpo():
     assert desfazer_mojibake(None) is None
 
 
-def test_normalizar_historico_trata_mojibake():
-    """O normalizado de um historico com mojibake deve sair legivel (sem 'A(C)A')."""
-    assert normalizar_historico('AndrÃ©a PatrÃ­cia da Silva') == 'ANDREA PATRICIA DA SILVA'
+def test_normalizar_historico_estavel_para_hash():
+    """normalizar_historico NAO desfaz mojibake — estabilidade do hash de dedup.
+
+    Se desfizesse, o hash de registros legados (gravados com mojibake) mudaria e
+    reimportar o mesmo extrato duplicaria. A correcao de mojibake e so na exibicao.
+    """
+    mojibake = 'AndrÃ©a PatrÃ­cia da Silva'
+    assert normalizar_historico(mojibake) == normalizar_historico(mojibake)  # deterministico
+    assert normalizar_historico(mojibake) != 'ANDREA PATRICIA DA SILVA'       # nao recupera acento
+    assert normalizar_historico('Andréa Patrícia') == 'ANDREA PATRICIA'       # texto limpo ok
