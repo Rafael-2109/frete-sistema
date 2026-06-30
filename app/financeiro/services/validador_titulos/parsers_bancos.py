@@ -19,7 +19,10 @@ import os
 import unicodedata
 from typing import List, Optional
 
-from app.financeiro.services.validador_titulos.normalizador import montar_nf_parc
+from app.financeiro.services.validador_titulos.normalizador import (
+    limpar_controle,
+    montar_nf_parc,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -156,7 +159,7 @@ def extrair_boletos(linhas: List[list], banco: str) -> List[dict]:
     boletos = []
     for linha in linhas[idx_header + 1:]:
         identificador = _celula(linha, mapa["id"])
-        ident_txt = "" if identificador is None else str(identificador).strip()
+        ident_txt = limpar_controle(identificador).strip()
         if not ident_txt:
             continue
         boletos.append({

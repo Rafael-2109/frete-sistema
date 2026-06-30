@@ -102,3 +102,20 @@ class TestMontarNfParcPartes:
     def test_parcela_vazia_retorna_none(self):
         assert montar_nf_parc_partes("148990", None) is None
         assert montar_nf_parc_partes("148990", "") is None
+
+
+class TestCaracteresDeControle:
+    """Bancos as vezes trazem caracteres invisiveis (NUL) grudados no numero.
+    A chave precisa sair limpa (senao quebra o Excel e nao casa entre fontes)."""
+
+    def test_nul_no_identificador_combinado(self):
+        assert montar_nf_parc("\x00\x00147768/2") == "147768-2"
+
+    def test_nul_no_meio_e_fim(self):
+        assert montar_nf_parc("147768\x00-2\x00") == "147768-2"
+
+    def test_nul_em_partes_separadas(self):
+        assert montar_nf_parc_partes("\x00147768", "2\x00") == "147768-2"
+
+    def test_outros_controles(self):
+        assert montar_nf_parc("\t148990-1\r") == "148990-1"

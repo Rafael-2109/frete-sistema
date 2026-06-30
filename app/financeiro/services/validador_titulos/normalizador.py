@@ -15,6 +15,16 @@ from typing import Optional
 from app.financeiro.parcela_utils import parcela_to_int
 
 _FLOAT_INTEIRO = re.compile(r"^\d+\.0+$")
+# Caracteres de controle (NUL e demais C0/DEL) que alguns bancos grudam no numero.
+# Precisam ser removidos: quebram o Excel e impedem o casamento da chave entre fontes.
+_CONTROLE = re.compile(r"[\x00-\x1f\x7f]")
+
+
+def limpar_controle(valor) -> str:
+    """Remove caracteres de controle (NUL, etc.) de um valor textual."""
+    if valor is None:
+        return ""
+    return _CONTROLE.sub("", str(valor))
 
 
 def montar_nf_parc(identificador) -> Optional[str]:
@@ -34,7 +44,7 @@ def montar_nf_parc(identificador) -> Optional[str]:
     if identificador is None:
         return None
 
-    ident = str(identificador).strip()
+    ident = limpar_controle(identificador).strip()
     if not ident:
         return None
 
@@ -68,7 +78,7 @@ def _limpar_nf(nf) -> str:
         return str(int(nf))
     if isinstance(nf, int):
         return str(nf)
-    txt = str(nf).strip()
+    txt = limpar_controle(nf).strip()
     if _FLOAT_INTEIRO.match(txt):
         txt = txt.split(".")[0]
     return txt
@@ -86,6 +96,8 @@ def montar_nf_parc_partes(nf, parcela) -> Optional[str]:
     if not nf_limpo:
         return None
 
+    if isinstance(parcela, str):
+        parcela = limpar_controle(parcela)
     parc_int = parcela_to_int(parcela)
     if parc_int is None:
         return None
