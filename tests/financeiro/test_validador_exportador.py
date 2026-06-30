@@ -50,3 +50,19 @@ def test_faturado_sem_boleto_tem_cliente():
     ws = wb["FATURADO SEM BOLETO"]
     linhas = list(ws.iter_rows(values_only=True))
     assert any("ACME" in str(c) for c in linhas[1])
+
+
+def test_caractere_ilegal_nao_quebra_excel():
+    """Valores com caractere de controle (NUL) nao podem derrubar a geracao."""
+    comp = ResultadoComparacao(
+        boleto_sem_nota=[{"nf_parc": "\x00\x00147768-2", "bancos": ["VORTX"]}],
+        nao_identificados=[{"banco": "VORTX", "original": "lixo\x00aqui",
+                            "valor": 10.0, "vencimento": None}],
+    )
+    rv = ResultadoValidacao(resultado=comp, resumo={})
+    buffer = gerar_excel(rv)  # nao deve levantar
+    wb = load_workbook(buffer)
+    ws = wb["BOLETO SEM NOTA"]
+    linhas = list(ws.iter_rows(values_only=True))
+    # valor saiu limpo, sem o NUL
+    assert linhas[1][0] == "147768-2"
