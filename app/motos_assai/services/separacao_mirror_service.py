@@ -672,7 +672,8 @@ def trocar_chassi_no_espelho(assai_sep_id: int, chassi_de: str, chassi_para: str
     ).all()
     for ln in linhas:
         ln.chassi_assai = chassi_para
-    db.session.flush()
+    if linhas:
+        db.session.flush()
     logger.info(
         'trocar_chassi_no_espelho: lote %s %s->%s em %d linha(s)',
         lote_id, chassi_de, chassi_para, len(linhas),

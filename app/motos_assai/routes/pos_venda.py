@@ -304,6 +304,7 @@ def pos_venda_troca_substitutos(chassi_a):
 @require_motos_assai
 def pos_venda_troca_registrar(chassi_a):
     """POST AJAX: executa a troca A->B. Body JSON: {chassi_b, nf_id, motivo}."""
+    chassi_a = (chassi_a or '').strip().upper()
     data = request.get_json(silent=True) or request.form
     chassi_b = (data.get('chassi_b') or '').strip().upper()
     motivo = (data.get('motivo') or '').strip()

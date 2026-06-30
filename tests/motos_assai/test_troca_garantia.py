@@ -11,13 +11,21 @@ from app.motos_assai.models import (
     AssaiNfQpa, AssaiNfQpaItem, AssaiNfQpaItemVinculoHistorico,
     AssaiPosVendaOcorrencia,
     EVENTO_FATURADA, EVENTO_PENDENTE, EVENTO_DISPONIVEL,
-    NF_STATUS_BATEU, SEPARACAO_STATUS_FATURADA,
-    TIPO_RELATO, TIPO_TROCA_GARANTIA, VINCULO_MOTIVO_TROCA_GARANTIA,
-    CATEGORIA_CLIENTE,
+    EVENTO_MONTADA, EVENTO_ESTOQUE, EVENTO_SEPARADA,
+    NF_STATUS_BATEU, NF_STATUS_CANCELADA, SEPARACAO_STATUS_FATURADA,
+    TIPO_TROCA_GARANTIA, VINCULO_MOTIVO_TROCA_GARANTIA,
+    CATEGORIA_CLIENTE, CATEGORIA_LOJA,
 )
 from app.motos_assai.services.moto_evento_service import emitir_evento, status_efetivo
 from app.motos_assai.services.separacao_mirror_service import (
-    mirror_assai_to_separacao, lote_id_de,
+    mirror_assai_to_separacao, lote_id_de, trocar_chassi_no_espelho,
+)
+from app.motos_assai.services.troca_garantia_service import (
+    registrar_troca, listar_substitutos, TrocaGarantiaError,
+)
+from app.motos_assai.services.pos_venda_service import (
+    excluir_ocorrencia, atualizar_ocorrencia, listar_trocas_da_nf,
+    PosVendaValidationError,
 )
 from app.separacao.models import Separacao
 
@@ -118,9 +126,6 @@ def test_pos_venda_ocorrencia_aceita_campos_de_troca(app, admin_user):
         assert lido.nf_qpa_id == c['nf'].id
 
 
-from app.motos_assai.services.separacao_mirror_service import trocar_chassi_no_espelho
-
-
 def test_trocar_chassi_no_espelho_preserva_numero_nf(app, admin_user):
     """Troca chassi_assai A->B na linha espelho, preservando numero_nf/status."""
     with app.app_context():
@@ -138,11 +143,6 @@ def test_trocar_chassi_no_espelho_preserva_numero_nf(app, admin_user):
         assert Separacao.query.filter_by(separacao_lote_id=lote, chassi_assai=c['chassi_a']).count() == 0
         linha_b = Separacao.query.filter_by(separacao_lote_id=lote, chassi_assai=c['chassi_b']).one()
         assert linha_b.numero_nf == c['nf'].numero
-
-
-from app.motos_assai.services.troca_garantia_service import (
-    registrar_troca, TrocaGarantiaError,
-)
 
 
 def test_registrar_troca_swap_completo(app, admin_user):
@@ -251,17 +251,6 @@ def test_registrar_troca_idempotente(app, admin_user):
             )
 
 
-from app.motos_assai.services.troca_garantia_service import listar_substitutos
-from app.motos_assai.models import EVENTO_MONTADA, EVENTO_ESTOQUE
-
-
-from app.motos_assai.services.pos_venda_service import (
-    excluir_ocorrencia, atualizar_ocorrencia, listar_trocas_da_nf,
-    PosVendaValidationError,
-)
-from app.motos_assai.models import CATEGORIA_LOJA
-
-
 def test_listar_trocas_da_nf(app, admin_user):
     with app.app_context():
         c = _cenario(admin_user)
@@ -307,8 +296,7 @@ def test_troca_garantia_categoria_imutavel_descricao_editavel(app, admin_user):
 
 def test_listar_substitutos_separa_disponivel_de_outros(app, admin_user):
     with app.app_context():
-        import uuid as _uuid
-        suf = _uuid.uuid4().hex[:6].upper()
+        suf = uuid.uuid4().hex[:6].upper()
         modelo = AssaiModelo(codigo=f'SUB{suf}', nome=f'Sub {suf}', peso_kg=Decimal('40'))
         db.session.add(modelo)
         db.session.flush()
@@ -316,11 +304,13 @@ def test_listar_substitutos_separa_disponivel_de_outros(app, admin_user):
         disp = AssaiMoto(chassi=f'DISP{suf}AAAA', modelo_id=modelo.id, cor='AZUL')
         mont = AssaiMoto(chassi=f'MONT{suf}BBBB', modelo_id=modelo.id, cor='ROSA')
         est = AssaiMoto(chassi=f'ESTQ{suf}CCCC', modelo_id=modelo.id, cor='CINZA')
-        db.session.add_all([disp, mont, est])
+        sep = AssaiMoto(chassi=f'SEPR{suf}DDDD', modelo_id=modelo.id, cor='VERDE')
+        db.session.add_all([disp, mont, est, sep])
         db.session.flush()
         emitir_evento(disp.chassi, EVENTO_DISPONIVEL, operador_id=admin_user.id)
         emitir_evento(mont.chassi, EVENTO_MONTADA, operador_id=admin_user.id)
         emitir_evento(est.chassi, EVENTO_ESTOQUE, operador_id=admin_user.id)
+        emitir_evento(sep.chassi, EVENTO_SEPARADA, operador_id=admin_user.id)
         db.session.commit()
 
         res = listar_substitutos(modelo.id)
@@ -329,6 +319,8 @@ def test_listar_substitutos_separa_disponivel_de_outros(app, admin_user):
         assert mont.chassi.upper() not in chassis_disp
         assert any(o['chassi'] == mont.chassi.upper() for o in res['outros_estados']['MONTADA'])
         assert any(o['chassi'] == est.chassi.upper() for o in res['outros_estados']['ESTOQUE'])
+        # bucket SEPARADA tambem isolado (mesma rota de roteamento)
+        assert any(o['chassi'] == sep.chassi.upper() for o in res['outros_estados']['SEPARADA'])
 
 
 def test_rota_substitutos_json(app, admin_user, login_admin):
@@ -394,3 +386,111 @@ def test_rota_form_troca_renderiza(app, admin_user, login_admin):
     assert 'Troca em Garantia' in html
     # chrome do modulo: o base_motos_assai injeta o link de Voltar ao Pos-Venda
     assert 'Voltar ao Pós-Venda' in html
+
+
+# --- Guards adicionais de registrar_troca (A3) ---
+
+def test_registrar_troca_rejeita_motivo_vazio(app, admin_user):
+    with app.app_context():
+        c = _cenario(admin_user)
+        with pytest.raises(TrocaGarantiaError):
+            registrar_troca(
+                nf_id=c['nf'].id, chassi_a=c['chassi_a'], chassi_b=c['chassi_b'],
+                operador_id=admin_user.id, motivo='   ', dry_run=False,
+            )
+
+
+def test_registrar_troca_rejeita_a_igual_b(app, admin_user):
+    with app.app_context():
+        c = _cenario(admin_user)
+        with pytest.raises(TrocaGarantiaError):
+            registrar_troca(
+                nf_id=c['nf'].id, chassi_a=c['chassi_a'], chassi_b=c['chassi_a'],
+                operador_id=admin_user.id, motivo='x', dry_run=False,
+            )
+
+
+def test_registrar_troca_rejeita_nf_cancelada(app, admin_user):
+    with app.app_context():
+        c = _cenario(admin_user)
+        AssaiNfQpa.query.get(c['nf'].id).status_match = NF_STATUS_CANCELADA
+        db.session.commit()
+        with pytest.raises(TrocaGarantiaError):
+            registrar_troca(
+                nf_id=c['nf'].id, chassi_a=c['chassi_a'], chassi_b=c['chassi_b'],
+                operador_id=admin_user.id, motivo='x', dry_run=False,
+            )
+
+
+def test_registrar_troca_rejeita_a_fora_da_nf(app, admin_user):
+    """chassi_a FATURADA mas que nao consta na NF informada -> rejeita."""
+    with app.app_context():
+        c = _cenario(admin_user)
+        # chassi_b existe como moto mas nao esta em nenhum item desta NF
+        with pytest.raises(TrocaGarantiaError):
+            registrar_troca(
+                nf_id=c['nf'].id, chassi_a=c['chassi_b'], chassi_b=c['chassi_a'],
+                operador_id=admin_user.id, motivo='x', dry_run=False,
+            )
+
+
+def test_registrar_troca_rejeita_sem_vinculo_separacao(app, admin_user):
+    """nf_item de A existe mas com separacao_item_id nulo -> rejeita."""
+    with app.app_context():
+        c = _cenario(admin_user)
+        AssaiNfQpaItem.query.get(c['nf_item'].id).separacao_item_id = None
+        db.session.commit()
+        with pytest.raises(TrocaGarantiaError):
+            registrar_troca(
+                nf_id=c['nf'].id, chassi_a=c['chassi_a'], chassi_b=c['chassi_b'],
+                operador_id=admin_user.id, motivo='x', dry_run=False,
+            )
+
+
+# --- Rollback transacional (B4) ---
+
+def test_registrar_troca_rollback_em_falha_no_meio(app, admin_user):
+    """Se um passo de escrita falhar, a transacao inteira e revertida:
+    A continua FATURADA, sem ocorrencia, nf_item ainda em A."""
+    from unittest.mock import patch
+    with app.app_context():
+        c = _cenario(admin_user)
+        chassi_a, chassi_b = c['chassi_a'], c['chassi_b']
+        nf_id, nf_item_id = c['nf'].id, c['nf_item'].id
+
+        # forca falha no passo do espelho (apos varias escritas ja flushadas)
+        with patch(
+            'app.motos_assai.services.troca_garantia_service.trocar_chassi_no_espelho',
+            side_effect=RuntimeError('boom'),
+        ):
+            with pytest.raises(RuntimeError):
+                registrar_troca(
+                    nf_id=nf_id, chassi_a=chassi_a, chassi_b=chassi_b,
+                    operador_id=admin_user.id, motivo='defeito', dry_run=False,
+                )
+
+        # estado intacto apos rollback
+        assert status_efetivo(chassi_a) == EVENTO_FATURADA
+        assert status_efetivo(chassi_b) == EVENTO_DISPONIVEL
+        assert AssaiNfQpaItem.query.get(nf_item_id).chassi == chassi_a
+        assert AssaiPosVendaOcorrencia.query.filter_by(nf_qpa_id=nf_id).count() == 0
+
+
+# --- Badge "Troca" na lista do Faturamento (A3) ---
+
+def test_faturamento_lista_badge_troca(app, admin_user, login_admin):
+    with app.app_context():
+        c = _cenario(admin_user)
+        registrar_troca(
+            nf_id=c['nf'].id, chassi_a=c['chassi_a'], chassi_b=c['chassi_b'],
+            operador_id=admin_user.id, motivo='defeito', dry_run=False,
+        )
+        nf_numero, chassi_b = c['nf'].numero, c['chassi_b']
+    # Filtra pelo chassi B (aplicado ANTES do limit 250 da rota) — deterministico
+    # mesmo com o dev DB compartilhado cheio de separacoes FATURADA acumuladas.
+    resp = login_admin.get(f'/motos-assai/faturamento?chassi={chassi_b}')
+    assert resp.status_code == 200
+    html = resp.get_data(as_text=True)
+    # a NF trocada aparece com o badge "Troca" na lista
+    assert nf_numero in html
+    assert '>Troca<' in html
