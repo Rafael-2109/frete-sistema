@@ -18,14 +18,16 @@ import os
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 
 from app import create_app, db
-from app.pessoal.services.pix_credito_service import detectar_e_processar
+from app.pessoal.services.pix_credito_service import detectar_e_processar, reabrir_parciais
 
 
 def main(apply: bool):
     app = create_app()
     with app.app_context():
+        reab = reabrir_parciais(commit=apply)
         res = detectar_e_processar(commit=apply)
         print("=== Reprocessamento Pix no Credito ===")
+        print(f"  Parciais reabertos (de versao anterior): {reab['parciais_reabertos']}")
         print(f"  Trios processados : {res['trios_processados']}")
         print(f"  Splits (com cartao): {res['splits']}")
         print(f"  Parciais (sem cartao importado): {res['parciais']}")

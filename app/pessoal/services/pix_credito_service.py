@@ -133,7 +133,6 @@ def detectar_e_processar(janela_dias: int = _JANELA_COMPRA, commit: bool = True)
     compra_usadas: set[int] = set()
     agora = agora_utc_naive()
 
-    trios = 0
     splits = 0
     parciais = 0
 
@@ -141,42 +140,68 @@ def detectar_e_processar(janela_dias: int = _JANELA_COMPRA, commit: bool = True)
         # 1. Casar o Pix-saida (mesma NuConta, mesmo valor, mesma data ±_JANELA_PIX)
         pix = _melhor_pix_saida(f, pix_saidas, pix_usados)
         if not pix:
-            continue  # funding sem par -> nao forma grupo (funding ja excluido pela heuristica)
+            continue  # funding sem par
 
         benef = _beneficiario(pix.historico_completo or pix.historico)
 
         # 2. Casar a compra no cartao (mesmo beneficiario, valor >= principal, data na janela)
         compra = _melhor_compra(pix, benef, compras, compra_usadas, janela_dias)
 
-        # 3. Formar o grupo e vincular as pernas
+        # Funding e sempre excluido (perna de liquidez), completo ou parcial.
+        f.excluir_relatorio = True
+
+        if compra is None:
+            # PARCIAL: a compra (fatura do cartao) ainda nao existe. NAO forma grupo —
+            # o trio fica "aberto" e fecha numa proxima deteccao quando a compra chegar.
+            # (Marcar grupo aqui impediria o reprocessamento futuro.)
+            parciais += 1
+            continue
+
+        # COMPLETO: forma o grupo, marca as 3 pernas e splita a compra.
         grupo = uuid4().hex  # 32 chars (<= VARCHAR 40)
         pix_usados.add(pix.id)
-
+        compra_usadas.add(compra.id)
         f.eh_pix_credito = True
-        f.excluir_relatorio = True
         f.pix_credito_grupo = grupo
-
         pix.eh_pix_credito = True
         pix.pix_credito_grupo = grupo
         # pix-saida permanece como a despesa PRINCIPAL (nao toca excluir_relatorio/categoria)
-
-        if compra is not None:
-            compra_usadas.add(compra.id)
-            _split_compra(compra, pix, grupo, benef, cat_juros_id, agora)
-            splits += 1
-        else:
-            parciais += 1
-
-        trios += 1
+        _split_compra(compra, pix, grupo, benef, cat_juros_id, agora)
+        splits += 1
 
     if commit:
         db.session.commit()
 
     logger.info(
-        'pix_credito: %d trios processados (%d splits, %d parciais sem cartao)',
-        trios, splits, parciais,
+        'pix_credito: %d splits, %d parciais (sem cartao importado ainda)',
+        splits, parciais,
     )
-    return {'trios_processados': trios, 'splits': splits, 'parciais': parciais}
+    return {'trios_processados': splits + parciais, 'splits': splits, 'parciais': parciais}
+
+
+def reabrir_parciais(commit: bool = True) -> dict:
+    """Limpa o vinculo de grupos PARCIAIS (sem perna no cartao) marcados por uma versao
+    anterior do detector, para que a proxima deteccao os feche quando a compra chegar.
+
+    Idempotente. Nao re-inclui o funding no relatorio (continua excluido pela heuristica).
+    """
+    _, cartao_ids = _contas_nubank()
+    grupos = [g for (g,) in db.session.query(PessoalTransacao.pix_credito_grupo).filter(
+        PessoalTransacao.pix_credito_grupo.isnot(None)).distinct().all()]
+    reabertos = 0
+    for g in grupos:
+        tem_cartao = cartao_ids and PessoalTransacao.query.filter_by(pix_credito_grupo=g).filter(
+            PessoalTransacao.conta_id.in_(cartao_ids)).count() > 0
+        if tem_cartao:
+            continue  # grupo completo (com split) — preservar
+        for t in PessoalTransacao.query.filter_by(pix_credito_grupo=g).all():
+            t.pix_credito_grupo = None
+            t.eh_pix_credito = False
+        reabertos += 1
+    if commit:
+        db.session.commit()
+    logger.info('pix_credito: %d grupos parciais reabertos', reabertos)
+    return {'parciais_reabertos': reabertos}
 
 
 def _melhor_pix_saida(funding, pix_saidas, usados):

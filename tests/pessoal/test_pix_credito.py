@@ -252,6 +252,49 @@ def test_split_rejeita_compra_com_juros_absurdo(pessoal_ctx, membro):
     assert float(c.valor) == 1700.00
 
 
+def test_parcial_fecha_quando_compra_chega(pessoal_ctx, membro, cat_juros):
+    """Parcial (sem compra) NAO forma grupo e fica reprocessavel: quando a compra do
+    cartao e importada depois, a deteccao seguinte fecha o trio (split)."""
+    from app.pessoal.services import pix_credito_service as pcs
+
+    nuconta = _conta(pessoal_ctx, membro, 'NuConta', 'conta_corrente', '63685323-8')
+    cartao = _conta(pessoal_ctx, membro, 'Nubank Cartao', 'cartao_credito')
+    imp_n = _imp(pessoal_ctx, nuconta)
+    imp_c = _imp(pessoal_ctx, cartao)
+    D = date(2099, 4, 1)
+    benef = 'BENEFICIARIO PARCIAL UNICO'
+    funding = _tx(pessoal_ctx, imp_n, nuconta,
+                  'Valor adicionado na conta por cartão de crédito - Valor adicionado para Pix no Crédito',
+                  800.00, 'credito', D)
+    _tx(pessoal_ctx, imp_n, nuconta,
+        f'Transferência enviada pelo Pix - {benef} - ITAÚ', 800.00, 'debito', D,
+        historico_completo=f'TRANSFERENCIA ENVIADA PELO PIX - {benef} - ITAU')
+
+    # 1a deteccao: sem compra -> parcial (funding excluido, SEM grupo)
+    pcs.detectar_e_processar(janela_dias=10)
+    f1 = _db.session.get(PessoalTransacao, funding.id)
+    assert f1.pix_credito_grupo is None
+    assert f1.excluir_relatorio is True
+
+    # A fatura do cartao chega depois
+    compra = _tx(pessoal_ctx, imp_c, cartao, benef, 880.00, 'debito', D)  # juros 80 = 10%
+
+    # 2a deteccao: agora fecha o trio
+    pcs.detectar_e_processar(janela_dias=10)
+    f2 = _db.session.get(PessoalTransacao, funding.id)
+    assert f2.pix_credito_grupo is not None
+    _registrar_grupo(pessoal_ctx, f2.pix_credito_grupo)
+    c2 = _db.session.get(PessoalTransacao, compra.id)
+    assert c2.eh_pix_credito is True
+    assert float(c2.valor) == 800.00
+    juros = PessoalTransacao.query.filter(
+        PessoalTransacao.pix_credito_grupo == f2.pix_credito_grupo,
+        PessoalTransacao.excluir_relatorio.is_(False),
+        PessoalTransacao.conta_id == cartao.id,
+    ).first()
+    assert juros is not None and float(juros.valor) == 80.00
+
+
 def test_deteccao_idempotente(trio, pessoal_ctx):
     """Rodar duas vezes nao duplica a linha de juros nem re-splita."""
     from app.pessoal.services import pix_credito_service as pcs
