@@ -243,6 +243,29 @@ def descobrir_e_replicar(api, conta, *, limite_ausencias: int = LIMITE_AUSENCIAS
     return replicados
 
 
+def observar_descoberta(api, conta, *, limite_ausencias: int = LIMITE_AUSENCIAS,
+                        limite_varredura: int = LIMITE_VARREDURA) -> dict:
+    """DRY-RUN read-only: o que o numero-walk REPLICARIA, sem criar nada.
+
+    Varre a partir do mesmo `base` do cron mas NAO replica e NAO persiste o
+    cursor. Independe da flag — serve para validar a descoberta em PROD antes de
+    ligar `HORA_TAGPLUS_REVERSO`. Retorna {base, cursor_atual, maior_existente,
+    descobertos} onde `descobertos` sao os pedidos nao-nossos que virariam
+    HoraVenda.
+    """
+    cursor_atual = conta.ultimo_pedido_numero_reconciliado or 0
+    base = max(_maior_numero_conhecido(), cursor_atual)
+    descobertos, maior = _varrer(
+        api, base, limite_ausencias=limite_ausencias, limite_varredura=limite_varredura,
+    )
+    return {
+        'base': base,
+        'cursor_atual': cursor_atual,
+        'maior_existente': maior,
+        'descobertos': descobertos,
+    }
+
+
 def numero_walk(api, conta, *, limite_ausencias: int = LIMITE_AUSENCIAS,
                 limite_varredura: int = LIMITE_VARREDURA) -> list[dict]:
     """Executa a descoberta reversa e persiste o cursor. Retorna os descobertos.

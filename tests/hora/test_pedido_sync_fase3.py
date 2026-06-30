@@ -282,3 +282,17 @@ def test_descobrir_aborta_sem_avancar_cursor_em_erro_recuperavel(db, monkeypatch
     monkeypatch.setattr(rev, '_varrer', varrer_boom)
     assert rev.descobrir_e_replicar(MagicMock(), conta) == []
     assert conta.ultimo_pedido_numero_reconciliado == 940
+
+
+def test_observar_descoberta_dry_run_nao_persiste_cursor(db, monkeypatch):
+    # DRY-RUN read-only: devolve o que SERIA replicado, sem criar nada nem mover
+    # o cursor. Independe da flag (usado p/ validar antes de ligar o reverso).
+    conta = _conta()
+    conta.ultimo_pedido_numero_reconciliado = 940
+    monkeypatch.setattr(rev, '_maior_numero_conhecido', lambda: 940)
+    monkeypatch.setattr(rev, '_varrer',
+                        lambda api, base, **kw: ([_pedido_tp(numero=941)], 941))
+    res = rev.observar_descoberta(MagicMock(), conta)
+    assert res['base'] == 940 and res['maior_existente'] == 941
+    assert [p['numero'] for p in res['descobertos']] == [941]
+    assert conta.ultimo_pedido_numero_reconciliado == 940  # cursor intacto
