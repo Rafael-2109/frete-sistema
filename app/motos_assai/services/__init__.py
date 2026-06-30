@@ -75,7 +75,7 @@ from .separacao_service import (
     # Plano 4 Task 1
     substituir_chassi_entre_seps,
 )
-from .separacao_mirror_service import sincronizar_espelho_com_separacao
+from .separacao_mirror_service import sincronizar_espelho_com_separacao, trocar_chassi_no_espelho
 from .faturamento_service import gerar_excel_qpa, regenerar_excel_qpa, FaturamentoError
 # Code review fix M7 (2026-05-13): exportar services novos via __init__.py
 # para consistencia com padrao do modulo (antes routes importavam diretamente
@@ -158,6 +158,7 @@ __all__ = [
     'criar_separacao_com_saldos',
     'substituir_chassi_entre_seps',
     'sincronizar_espelho_com_separacao',
+    'trocar_chassi_no_espelho',
     'gerar_excel_qpa', 'regenerar_excel_qpa', 'FaturamentoError',
     'geocodar_loja', 'geocodar_lote', 'GeocodingError',
     'listar_motos_vendidas', 'contexto_moto_por_chassi', 'chassi_foi_vendido',

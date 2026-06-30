@@ -116,3 +116,25 @@ def test_pos_venda_ocorrencia_aceita_campos_de_troca(app, admin_user):
         assert lido.tipo == TIPO_TROCA_GARANTIA
         assert lido.chassi_substituto == c['chassi_b']
         assert lido.nf_qpa_id == c['nf'].id
+
+
+from app.motos_assai.services.separacao_mirror_service import trocar_chassi_no_espelho
+
+
+def test_trocar_chassi_no_espelho_preserva_numero_nf(app, admin_user):
+    """Troca chassi_assai A->B na linha espelho, preservando numero_nf/status."""
+    with app.app_context():
+        c = _cenario(admin_user)
+        lote = lote_id_de(c['sep'].id)
+
+        antes = Separacao.query.filter_by(separacao_lote_id=lote, chassi_assai=c['chassi_a']).all()
+        assert len(antes) == 1
+        assert antes[0].numero_nf == c['nf'].numero
+
+        n = trocar_chassi_no_espelho(c['sep'].id, c['chassi_a'], c['chassi_b'])
+        db.session.commit()
+
+        assert n == 1
+        assert Separacao.query.filter_by(separacao_lote_id=lote, chassi_assai=c['chassi_a']).count() == 0
+        linha_b = Separacao.query.filter_by(separacao_lote_id=lote, chassi_assai=c['chassi_b']).one()
+        assert linha_b.numero_nf == c['nf'].numero

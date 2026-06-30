@@ -651,3 +651,30 @@ def sincronizar_espelho_com_separacao(assai_sep_id: int) -> dict:
         lote_id, assai_sep_id, criadas, deletadas, len(bloqueadas),
     )
     return {'criadas': criadas, 'deletadas': deletadas, 'bloqueadas': bloqueadas}
+
+
+def trocar_chassi_no_espelho(assai_sep_id: int, chassi_de: str, chassi_para: str) -> int:
+    """Troca `chassi_assai` (de->para) IN-PLACE nas linhas espelho do lote.
+
+    Usado pela troca em garantia: a linha espelho de A ja tem `numero_nf`
+    preenchido, entao `sincronizar_espelho_com_separacao` (delta) bloquearia a
+    remocao. Aqui apenas renomeamos o chassi na MESMA linha, preservando
+    `numero_nf`/status. Como A e B sao do MESMO modelo, os demais campos
+    (cod_produto/nome_produto/peso/valor) sao identicos — so `chassi_assai` muda.
+
+    NAO commita (caller decide). Retorna o numero de linhas atualizadas.
+    """
+    chassi_de = (chassi_de or '').strip().upper()
+    chassi_para = (chassi_para or '').strip().upper()
+    lote_id = lote_id_de(assai_sep_id)
+    linhas = Separacao.query.filter_by(
+        separacao_lote_id=lote_id, chassi_assai=chassi_de,
+    ).all()
+    for ln in linhas:
+        ln.chassi_assai = chassi_para
+    db.session.flush()
+    logger.info(
+        'trocar_chassi_no_espelho: lote %s %s->%s em %d linha(s)',
+        lote_id, chassi_de, chassi_para, len(linhas),
+    )
+    return len(linhas)
