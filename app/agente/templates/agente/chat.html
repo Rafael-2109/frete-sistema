@@ -573,6 +573,20 @@
                 </label>
             </div>
         </div>
+
+        {% if current_user.perfil == 'administrador' %}
+        <!-- Modo Debug (admin only) — espelha o toggle do header (oculto em <=768px) -->
+        <div class="mobile-settings-group">
+            <label class="mobile-settings-label"><i class="fas fa-bug me-1"></i>Modo Debug</label>
+            <div class="mobile-settings-toggle-row">
+                <span class="mobile-settings-desc">Desbloqueia tabelas internas e memorias cross-user (todas as acoes sao auditadas)</span>
+                <label class="toggle-switch debug">
+                    <input type="checkbox" id="mobile-debug-mode-toggle" onchange="syncMobileSetting('debug', this.checked)">
+                    <span class="toggle-slider"></span>
+                </label>
+            </div>
+        </div>
+        {% endif %}
     </div>
 </div>
 

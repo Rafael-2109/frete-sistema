@@ -6044,6 +6044,13 @@ function openMobileSettings() {
         mobileThinking.checked = desktopThinking.checked;
     }
 
+    // Sync debug mode (admin) — reflete o toggle do header
+    const desktopDebug = document.getElementById('debug-mode-toggle');
+    const mobileDebug = document.getElementById('mobile-debug-mode-toggle');
+    if (desktopDebug && mobileDebug) {
+        mobileDebug.checked = desktopDebug.checked;
+    }
+
     sheet.style.display = 'block';
     backdrop.style.display = 'block';
 }
@@ -6095,6 +6102,16 @@ function syncMobileSetting(type, value) {
             if (desktopThinking && desktopThinking.checked !== value) {
                 desktopThinking.checked = value;
                 desktopThinking.dispatchEvent(new Event('change'));
+            }
+            break;
+        }
+        case 'debug': {
+            // Admin: reusa o listener do toggle do header (atualiza estado +
+            // localStorage + banner + debug panel) — fonte unica de verdade.
+            const desktopDebug = document.getElementById('debug-mode-toggle');
+            if (desktopDebug && desktopDebug.checked !== value) {
+                desktopDebug.checked = value;
+                desktopDebug.dispatchEvent(new Event('change'));
             }
             break;
         }
