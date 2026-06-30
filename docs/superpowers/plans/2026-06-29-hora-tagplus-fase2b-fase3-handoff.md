@@ -12,7 +12,7 @@ atualizado: 2026-06-29
 
 > **Spec (SOT do design):** `docs/superpowers/specs/2026-06-29-hora-tagplus-sync-bidirecional-design.md`.
 
-## Progresso (2026-06-29 — sessão de execução, commit LOCAL, flag OFF, sem push)
+## Progresso (2026-06-29 — sessão de execução; GO-LIVE EXECUTADO, flags ON em PROD)
 
 **Pré-requisitos confirmados AO VIVO (testes controlados cria+apaga, zero resíduo):**
 - **#1 `write:pedidos` → ✅ JÁ EFETIVO** (POST /pedidos = 201, pedido 1220/nº966 criado e deletado). `scope_efetivo=null` é falso-negativo (TagPlus não devolve scope no refresh). **NÃO precisa reauth OAuth.**
