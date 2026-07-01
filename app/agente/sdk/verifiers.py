@@ -22,7 +22,7 @@ from typing import Callable, List, Optional
 
 logger = logging.getLogger('sistema_fretes')
 
-SONNET_MODEL = 'claude-sonnet-4-6'
+SONNET_MODEL = 'claude-sonnet-5'
 
 ARITHMETIC_SYSTEM_PROMPT = (
     "Você verifica EXCLUSIVAMENTE inconsistências ARITMÉTICAS em respostas.\n"

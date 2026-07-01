@@ -52,7 +52,7 @@ from app.hora.services.parsers.pedido_xlsx_parser import (
 
 logger = logging.getLogger(__name__)
 
-SONNET_MODEL = 'claude-sonnet-4-6'
+SONNET_MODEL = 'claude-sonnet-5'
 SONNET_MAX_TOKENS = 4096
 
 # Tolerancia para validacao de soma vs total_declarado (R$).

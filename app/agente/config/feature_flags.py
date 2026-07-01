@@ -408,7 +408,7 @@ if AGENTE_PDF_STRATEGY not in _VALID_PDF_STRATEGIES:
 # Sonnet+high da qualidade suficiente — alem de eliminar o churn de cache ~4x que a
 # alternancia Sonnet<->Opus causava (memoria dev teams_cache_churn_model_routing).
 # Rollback p/ Opus+routing: TEAMS_DEFAULT_MODEL=claude-opus-4-8 + TEAMS_SMART_MODEL_ROUTING=true
-TEAMS_DEFAULT_MODEL = os.getenv("TEAMS_DEFAULT_MODEL", "claude-sonnet-4-6")
+TEAMS_DEFAULT_MODEL = os.getenv("TEAMS_DEFAULT_MODEL", "claude-sonnet-5")
 
 # Modo assincrono para o bot do Teams
 # Quando true: retorna task_id imediatamente, processa em daemon thread, Azure Function faz polling
@@ -438,7 +438,7 @@ TEAMS_STREAM_FLUSH_INTERVAL = _env_float("TEAMS_STREAM_FLUSH_INTERVAL", "4.0")
 TEAMS_SMART_MODEL_ROUTING = _env_bool("TEAMS_SMART_MODEL_ROUTING", "false")
 
 # Modelo rápido para mensagens simples (usado quando SMART_MODEL_ROUTING=true)
-TEAMS_FAST_MODEL = os.getenv("TEAMS_FAST_MODEL", "claude-sonnet-4-6")
+TEAMS_FAST_MODEL = os.getenv("TEAMS_FAST_MODEL", "claude-sonnet-5")
 
 # Thinking level do Teams (diretriz Rafael 2026-06-16): "high" com Sonnet fixo.
 # Valores: off|low|medium|high|max. Rollback: TEAMS_EFFORT_LEVEL=medium.
@@ -452,7 +452,7 @@ USE_WEB_SMART_MODEL_ROUTING = _env_bool("AGENT_WEB_SMART_MODEL_ROUTING", "true")
 
 # Modelo rapido para Web quando router decide rebaixar.
 # Default Sonnet 4.6 (mesmo do Teams). Rollback: deixar Opus setando igual.
-WEB_FAST_MODEL = os.getenv("AGENT_WEB_FAST_MODEL", "claude-sonnet-4-6")
+WEB_FAST_MODEL = os.getenv("AGENT_WEB_FAST_MODEL", "claude-sonnet-5")
 
 # FASE 1 (plano 2026-06-06-reducao-custo-agente-fast-path): fast-path
 # DETERMINISTICO do baseline de conciliacao (Marcus). Quando "atualizar baseline"

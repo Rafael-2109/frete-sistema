@@ -36,7 +36,7 @@ from app.utils.timezone import agora_utc_naive
 
 logger = logging.getLogger(__name__)
 
-SONNET_MODEL = "claude-sonnet-4-6"
+SONNET_MODEL = "claude-sonnet-5"
 
 # Truncamento por mensagem (regra R3 services/CLAUDE.md)
 MAX_CHARS_PER_MESSAGE = 3000

@@ -160,7 +160,7 @@ def api_admin_generate_correction():
         "correction": "Quando o usuario perguntar sobre preco de frete...",
         "suggested_path": "/memories/corrections/usar-cotando-frete-para-precos.xml",
         "session_id": "abc123",
-        "model_used": "claude-sonnet-4-6"
+        "model_used": "claude-sonnet-5"
     }
     """
     if current_user.perfil != 'administrador':
@@ -197,7 +197,7 @@ def api_admin_generate_correction():
         import anthropic
         import re as _re
 
-        SONNET_MODEL = 'claude-sonnet-4-6'
+        SONNET_MODEL = 'claude-sonnet-5'
 
         prompt = (
             "Voce e um agente logistico que cometeu um erro numa conversa.\n"

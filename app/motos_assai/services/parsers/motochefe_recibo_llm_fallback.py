@@ -21,7 +21,7 @@ from typing import Dict, List, Any
 
 logger = logging.getLogger(__name__)
 
-SONNET_MODEL = 'claude-sonnet-4-6'
+SONNET_MODEL = 'claude-sonnet-5'
 LLM_MODELS = [SONNET_MODEL]  # ordem de fallback (atualmente unico)
 
 PROMPT_SYSTEM = """Você é um parser de recibos da Motochefe (contra-prova de entrega de motos elétricas para um CD).

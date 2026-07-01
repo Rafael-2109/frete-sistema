@@ -100,7 +100,8 @@ class AgentSettings:
         'claude-opus-4-7': (5.00, 25.00),              # Legacy: sessões existentes
         'claude-opus-4-6': (5.00, 25.00),              # Legacy: sessões existentes
         'claude-opus-4-5-20251101': (5.00, 25.00),     # Legacy: sessões antigas
-        'claude-sonnet-4-6': (3.00, 15.00),
+        'claude-sonnet-5': (3.00, 15.00),              # Sonnet 5: $3/$15 sticker (intro $2/$10 ate 31/08/2026)
+        'claude-sonnet-4-6': (3.00, 15.00),            # Legacy: sessoes existentes
         'claude-haiku-4-5-20251001': (0.25, 1.25),
     })
 

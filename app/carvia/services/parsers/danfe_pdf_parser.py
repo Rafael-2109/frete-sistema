@@ -35,7 +35,7 @@ class DanfePDFParser:
     """Parser para extrair informacoes de DANFE em PDF"""
 
     HAIKU_MODEL = "claude-haiku-4-5-20251001"
-    SONNET_MODEL = "claude-sonnet-4-6"
+    SONNET_MODEL = "claude-sonnet-5"
 
     _UFS_BRASIL = frozenset({
         'AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA',

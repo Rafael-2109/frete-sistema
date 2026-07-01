@@ -22,7 +22,7 @@ import anthropic
 
 logger = logging.getLogger(__name__)
 
-SONNET_MODEL = "claude-sonnet-4-6"
+SONNET_MODEL = "claude-sonnet-5"
 
 # Limite de caracteres da resposta do assistente para enviar ao Sonnet
 MAX_RESPONSE_CHARS = 5000

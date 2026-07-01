@@ -22,7 +22,7 @@ from typing import Dict, List, Optional, Any
 logger = logging.getLogger(__name__)
 
 HAIKU_MODEL = 'claude-haiku-4-5-20251001'
-SONNET_MODEL = 'claude-sonnet-4-6'
+SONNET_MODEL = 'claude-sonnet-5'
 
 PROMPT_SYSTEM = """Você é um parser de PDFs de Pedido de Compras (sistema Consinco) emitidos pela Q.P.A. Distribuição LTDA para a Sendas Distribuidora (Assaí).
 

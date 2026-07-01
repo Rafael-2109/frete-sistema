@@ -30,7 +30,7 @@ logger = logging.getLogger('sistema_fretes')
 
 # Sonnet (não Haiku): o adversarial audita respostas produzidas por modelos
 # fortes (Opus/Fable) — modelo fraco não audita forte. ~263 calls/semana.
-ADVERSARIAL_MODEL = 'claude-sonnet-4-6'
+ADVERSARIAL_MODEL = 'claude-sonnet-5'
 
 # Fila RQ (LEVE) onde o varredor batch enfileira verify_step_shadow.
 # REUSA a mesma fila do step_judge ('agent_judge') — ambos são jobs leves de

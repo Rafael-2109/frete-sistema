@@ -197,13 +197,13 @@ def _alert_cache_miss(
         model_str = (model or "").lower()
         # Threshold por familia (Anthropic prompt-caching docs):
         #   Opus 4.x, Haiku 4.5  -> 4096 tokens
-        #   Sonnet 4.x, Haiku 3.x (3 e 3.5) -> 2048 tokens
+        #   Sonnet 4.x/5, Haiku 3.x (3 e 3.5) -> 2048 tokens
         # IDs reais: claude-3-haiku-20240307, claude-3-5-haiku-20241022,
-        # claude-haiku-4-5-20251001, claude-sonnet-4-6, claude-opus-4-8.
+        # claude-haiku-4-5-20251001, claude-sonnet-5, claude-opus-4-8.
         # Match explicito por familia — substring "haiku-3" NAO casa "3-5-haiku".
         is_haiku_3x = ("3-haiku" in model_str) or ("3-5-haiku" in model_str)
-        is_sonnet_4x = "sonnet-4" in model_str
-        if is_sonnet_4x or is_haiku_3x:
+        is_sonnet = ("sonnet-4" in model_str) or ("sonnet-5" in model_str)
+        if is_sonnet or is_haiku_3x:
             min_prefix = _CACHE_MIN_PREFIX_SONNET
         else:
             # Opus 4.x, Haiku 4.5, ou desconhecido -> threshold mais alto (conservador)
@@ -861,7 +861,7 @@ Nunca invente informações."""
             client = anthropic.Anthropic()
 
             validation = client.messages.create(
-                model="claude-sonnet-4-6",
+                model="claude-sonnet-5",
                 max_tokens=500,
                 messages=[{
                     "role": "user",

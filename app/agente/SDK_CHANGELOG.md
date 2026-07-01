@@ -1,9 +1,36 @@
-# Agente Web — SDK Changelog (0.1.49 → 0.2.101)
+# Agente Web — SDK Changelog (0.1.49 → 0.2.110)
 
 > Historico de adocoes, breaking changes, bug fixes e features NAO adotadas do
 > Claude Agent SDK + Anthropic SDK Python. Extraido de `CLAUDE.md` para reducao de ruido.
 >
-> **Atualizado**: 2026-06-19 (reconciliação de drift vs código — `get_context_usage`/`list_subagents`/`fork_session` marcados ADOTADOS; `tag_session` = recusa consciente). Último bump de versão: 2026-06-13 (SDK 0.2.101 + CLI bundled 2.1.177 + anthropic 0.98.1 → 0.109.1 — bumps CLI + 1 feature aditiva; zero breaking)
+> **Atualizado**: 2026-06-30 (bump SDK 0.2.110 + anthropic 0.115.0 + migração de modelo Sonnet 4.6 → Sonnet 5). Bump anterior: 2026-06-13 (SDK 0.2.101 + CLI bundled 2.1.177 + anthropic 0.98.1 → 0.109.1 — bumps CLI + 1 feature aditiva; zero breaking)
+
+---
+
+## SDK 0.2.101 → 0.2.110 + anthropic 0.109.1 → 0.115.0 (2026-06-30) — CLI bundled 2.1.177 → 2.1.191
+
+**Versao**: `claude-agent-sdk==0.2.110` (CLI bundled 2.1.191) + `anthropic==0.115.0` + `mcp>=1.26.0,<2.0.0` (mcp 1.26.0 satisfaz o floor `>=1.23.0` que o SDK 0.2.110 exige; pin inalterado).
+
+### claude-agent-sdk 0.2.102 → 0.2.110 — ZERO breaking
+Todas as 9 versoes sao **so bump do CLI bundled** (2.1.178 → 2.1.191), sem mudanca de API publica (`ClaudeAgentOptions`, `AgentDefinition`, model handling, thinking/effort, hooks, MCP inalterados). FONTE: CHANGELOG oficial `anthropics/claude-agent-sdk-python`. Adotado automaticamente via upgrade — mesmo perfil dos bumps 0.2.96→0.2.101.
+
+### anthropic 0.110 → 0.115 — sem breaking nos padroes usados
+- **0.114**: suporte tipado a `claude-sonnet-5` (motivo real do bump p/ migrar o Sonnet).
+- 0.113: fix `async count_tokens` + merge `output_config`/`output_format` (neutro-positivo; o projeto usa `messages.parse` com `output_format`).
+- 0.110–0.112: `code_execution_20260120` tool, refusal-fallback middleware tag, `system.message` streaming, fix perms do memory tool (aditivos, nao usados hoje).
+- 0.115: Managed Agents event-delta/overrides/pagination (nao usado).
+- Padroes do projeto intactos: `Anthropic()` / `messages.create` / `messages.parse` / `APIStatusError` / `APIError`.
+
+### Migracao de modelo: Sonnet 4.6 → Sonnet 5 (2026-06-30)
+Trocado `claude-sonnet-4-6` → `claude-sonnet-5` em **23 arquivos de codigo** (Teams/web fast-model defaults em `feature_flags`, `client.py`, model_router docstrings, parsers De-Para/PDF de CarVia/HORA/Assai, `session_summarizer`, `memory_consolidator`, `pattern_analyzer`, `suggestion_generator`, `verifiers`, `plan_verifier`, `skill_effectiveness`, `improvement_suggester`, `memory_mcp_tool`, `admin_learning`, `chat`). Pricing `claude-sonnet-5` = **$3/$15 sticker** (intro $2/$10 ate 31/08/2026) adicionado em `sdk/pricing.py` + `config/settings.py`; `claude-sonnet-4-6` **MANTIDO** para sessoes/legado. `agent_loader._MODEL_MAP` ganhou `sonnet-5`/`sonnet_5` → alias `sonnet`.
+
+**Breaking fixes aplicados** (FONTE: skill `claude-api`, migration Sonnet 5 — itens `[BLOCKS]`):
+- `devolucao/ai_resolver_service.py` — removido `temperature=0` das **2 chamadas Sonnet** (`.parse`/`.create` do De-Para, L627/L651). Sonnet 5 rejeita `temperature`/`top_p`/`top_k` non-default com HTTP 400. As **4 chamadas Haiku** (De-Para termos/observacao + `pattern_analyzer` signature) MANTIVERAM `temperature=0` — Haiku 4.5 aceita.
+- `sdk/client.py` — `is_sonnet_4x` → `is_sonnet` (inclui `sonnet-5`) no threshold de cache-miss alert (familia Sonnet = 2048 tokens; sem o fix, Sonnet 5 cairia no threshold Opus 4096).
+
+**Comportamento (nao-breaking)**: Sonnet 5 usa tokenizer novo (~30% mais tokens/texto) → custo/request sobe mesmo no preco intro; `effort` default `high`; adaptive thinking on quando `thinking` omitido. O app ja passa `effort`/`thinking` explicitos.
+
+**⚠️ PENDENTE — env vars Render**: o Teams roda pelo valor de `TEAMS_DEFAULT_MODEL` **setado no Render** (`claude-sonnet-4-6`, aplicado 2026-06-28), que **sobrepoe** o default do codigo. Para efetivar Sonnet 5 no Teams — e nos fast-paths se `AGENT_WEB_FAST_MODEL`/`TEAMS_FAST_MODEL` estiverem setados no Render — atualizar as env vars p/ `claude-sonnet-5` (ou remove-las p/ herdar o default do codigo). O modelo default do **web** (Opus 4.8) nao muda.
 
 ---
 

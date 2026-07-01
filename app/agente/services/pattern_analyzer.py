@@ -58,7 +58,7 @@ _DOMINIO_ALIASES: dict = {
 TITLE_DEDUP_THRESHOLD: float = 0.85
 
 
-SONNET_MODEL = "claude-sonnet-4-6"
+SONNET_MODEL = "claude-sonnet-5"
 HAIKU_MODEL = "claude-haiku-4-5-20251001"
 
 # Limite de caracteres totais das sessões para enviar ao Sonnet

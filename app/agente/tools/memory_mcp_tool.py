@@ -607,7 +607,7 @@ def _run_with_session_guard(func):
 # em vez de só `memória`, melhorando precision do retrieval em até 49-67%.
 # Custo: ~$0.0012 por save_memory (1 chamada Sonnet).
 
-_SONNET_MODEL = "claude-sonnet-4-6"
+_SONNET_MODEL = "claude-sonnet-5"
 
 _CONTEXTUAL_SYSTEM_PROMPT = """\
 Voce eh um analisador de memorias de um sistema de logistica (Nacom Goya).

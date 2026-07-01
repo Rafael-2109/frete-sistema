@@ -14,7 +14,7 @@ import pytest
 from app.agente.sdk.model_router import select_model
 
 OPUS = "claude-opus-4-8"
-SONNET = "claude-sonnet-4-6"
+SONNET = "claude-sonnet-5"
 
 
 def _model(msg):

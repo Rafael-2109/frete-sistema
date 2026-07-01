@@ -29,7 +29,7 @@ from app.motos_assai.services.parsers.cce_pdf_extractor import (  # noqa: E402
 )
 
 HAIKU_MODEL = 'claude-haiku-4-5-20251001'
-SONNET_MODEL = 'claude-sonnet-4-6'
+SONNET_MODEL = 'claude-sonnet-5'
 
 _TIPOS_VALIDOS = {TIPO_CHASSI, TIPO_DUPLICATAS, TIPO_ENDERECO, TIPO_OUTRO}
 

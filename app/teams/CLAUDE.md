@@ -295,7 +295,7 @@ O path async (`process_teams_task_async`, ATIVO) grava DUAS telemetrias logo ap�
 **Por quê importa:** o prompt cache é MODEL-SCOPED e trocar de modelo invalida o
 cache inteiro. Medido em PROD: Teams re-escrevia cache ~4x o web (34% vs 8,7% em
 <5min) pela alternância Sonnet↔Opus do smart routing. **Mitigado em 2026-06-16**:
-o Teams roda em **Sonnet FIXO + thinking high** (`TEAMS_DEFAULT_MODEL=claude-sonnet-4-6`,
+o Teams roda em **Sonnet FIXO + thinking high** (`TEAMS_DEFAULT_MODEL=claude-sonnet-5`,
 `TEAMS_SMART_MODEL_ROUTING=false`, `TEAMS_EFFORT_LEVEL=high`) — sem alternância de
 modelo. Registrar model+cache na MESMA linha mantém isso mensurável pós-fix.
 — FONTE: `services.py:_persist_cost_teams,_gravar_agent_step_teams` (chamados ~L2236);
@@ -305,6 +305,7 @@ memória dev `teams_cache_churn_model_routing.md`
 > 16/06, **produção roda 100% Opus** (118/118 turnos/30d) — a env var
 > `TEAMS_DEFAULT_MODEL=claude-opus-4-8` no Render `sistema-fretes` sobrepõe o default.
 > ✅ EFETIVADO 2026-06-28: env var `TEAMS_DEFAULT_MODEL=claude-sonnet-4-6` aplicada no Render (deploy `dep-d90sbskvikkc738omf8g`).
+> ⚠️ 2026-06-30: default do código migrado `claude-sonnet-4-6`→`claude-sonnet-5` (Sonnet 5). A env var Render acima **sobrepõe** o default — p/ o Teams migrar de fato, atualizar `TEAMS_DEFAULT_MODEL=claude-sonnet-5` no Render (ou remover a env var p/ herdar o default do código). Mesma consideração vale p/ `AGENT_WEB_FAST_MODEL`/`TEAMS_FAST_MODEL` se estiverem setados no Render.
 
 > **FIX inflação de custo (2026-06-28):** o path Teams gravava `agent_result.cost_usd`
 > (= `ResultMessage.total_cost_usd`, ACUMULADO da sessão SDK) cru em `session.total_cost_usd`
@@ -324,7 +325,7 @@ memória dev `teams_cache_churn_model_routing.md`
 
 | Flag | Default | Impacto |
 |------|---------|---------|
-| `TEAMS_DEFAULT_MODEL` | `claude-sonnet-4-6` | Modelo LLM — **Sonnet fixo** desde 2026-06-16 (rollback p/ Opus: `claude-opus-4-8`) |
+| `TEAMS_DEFAULT_MODEL` | `claude-sonnet-5` | Modelo LLM — **Sonnet fixo** (Sonnet 5 no código desde 2026-06-30; ⚠️ env var Render pode sobrepor — ver nota de drift; rollback p/ Opus: `claude-opus-4-8`) |
 | `TEAMS_SMART_MODEL_ROUTING` | `false` | Routing dinâmico de modelo — **OFF** (Teams é Sonnet fixo; alternar só trazia churn de cache MODEL-SCOPED). Religar só faz sentido com `TEAMS_DEFAULT_MODEL=claude-opus-4-8` |
 | `TEAMS_EFFORT_LEVEL` | `high` | Thinking level (off\|low\|medium\|high\|max) aplicado em `services.py` get_response/stream_response. Rollback: `medium` |
 | `TEAMS_ASYNC_MODE` | `true` | Async (thread) vs sync |

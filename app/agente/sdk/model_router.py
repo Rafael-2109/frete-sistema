@@ -180,9 +180,9 @@ def select_model(
         >>> select_model(
         ...     "vincular pedido C123 na nota 456 pelo odoo",
         ...     "claude-opus-4-8",
-        ...     "claude-sonnet-4-6",
+        ...     "claude-sonnet-5",
         ... )
-        ('claude-sonnet-4-6', 'padrao_nf_po')
+        ('claude-sonnet-5', 'padrao_nf_po')
     """
     if not prompt or not prompt.strip():
         return default_model, "empty"

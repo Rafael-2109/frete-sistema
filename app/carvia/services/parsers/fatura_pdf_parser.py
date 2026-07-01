@@ -48,7 +48,7 @@ class FaturaPDFParser:
     """Parser de faturas PDF com regex + LLM escalonado"""
 
     HAIKU_MODEL = "claude-haiku-4-5-20251001"
-    SONNET_MODEL = "claude-sonnet-4-6"
+    SONNET_MODEL = "claude-sonnet-5"
 
     # Campos obrigatorios para considerar extracao valida
     # cnpj_pagador substitui cnpj_emissor (beneficiario = sempre CarVia)

@@ -13,7 +13,8 @@ def test_haiku_4_5_corrigido_1_por_5():
 
 def test_opus_e_sonnet_inalterados():
     assert MODEL_PRICING['claude-opus-4-8'] == (5.00, 25.00)
-    assert MODEL_PRICING['claude-sonnet-4-6'] == (3.00, 15.00)
+    assert MODEL_PRICING['claude-sonnet-4-6'] == (3.00, 15.00)   # legado mantido
+    assert MODEL_PRICING['claude-sonnet-5'] == (3.00, 15.00)     # Sonnet 5 (2026-06, sticker $3/$15)
 
 
 def test_calculo_haiku_usa_preco_corrigido():

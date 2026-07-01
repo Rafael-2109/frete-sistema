@@ -24,7 +24,7 @@ import anthropic
 from app.utils.timezone import agora_utc_naive
 logger = logging.getLogger(__name__)
 
-SONNET_MODEL = "claude-sonnet-4-6"
+SONNET_MODEL = "claude-sonnet-5"
 
 # Path da memoria de resumo de sessao (sobrescrita a cada sumarizacao).
 # Module-level p/ testes isolarem o path (F5 PAD-CTX proveniencia).

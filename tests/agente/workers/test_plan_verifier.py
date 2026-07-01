@@ -247,7 +247,7 @@ def test_modelo_adversarial_sonnet():
     """Doutrina: modelo fraco não audita forte — adversarial roda em Sonnet."""
     from app.agente.workers.plan_verifier import ADVERSARIAL_MODEL
 
-    assert ADVERSARIAL_MODEL == 'claude-sonnet-4-6'
+    assert ADVERSARIAL_MODEL == 'claude-sonnet-5'
 
 
 def test_verify_plan_adversarial_uid_inexistente_nao_crasha(app_ctx, monkeypatch):

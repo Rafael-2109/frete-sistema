@@ -31,7 +31,10 @@ MODEL_PRICING: dict[str, tuple[float, float]] = {
     'claude-opus-4-6': (5.00, 25.00),
     'claude-opus-4-5-20251101': (5.00, 25.00),
     'claude-opus-4-1-20250805': (15.00, 75.00),   # Opus 4.1 legacy
-    'claude-sonnet-4-6': (3.00, 15.00),
+    # Sonnet 5 (2026-06): $3/$15 sticker. Intro $2/$10 ate 31/08/2026 — usamos o
+    # sticker (nao subestima custo apos o fim do intro). Tokenizer novo ~30% mais tokens.
+    'claude-sonnet-5': (3.00, 15.00),
+    'claude-sonnet-4-6': (3.00, 15.00),           # Legacy: sessoes existentes
     'claude-sonnet-4-5-20250929': (3.00, 15.00),
     # B8 (2026-06-28): Haiku 4.5 = $1/$5 (skill claude-api). Estava (0.25, 1.25),
     # preco do Haiku 3.5 — subestimava o custo do Haiku 4.5 em 4x.

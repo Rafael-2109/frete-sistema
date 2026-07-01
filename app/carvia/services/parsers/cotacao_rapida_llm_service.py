@@ -23,7 +23,7 @@ from typing import Dict, List, Optional
 logger = logging.getLogger(__name__)
 
 HAIKU_MODEL = 'claude-haiku-4-5-20251001'
-SONNET_MODEL = 'claude-sonnet-4-6'
+SONNET_MODEL = 'claude-sonnet-5'
 MAX_TOKENS = 4096
 
 MIME_PDF = 'application/pdf'

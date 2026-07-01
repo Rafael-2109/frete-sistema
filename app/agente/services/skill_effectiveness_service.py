@@ -137,7 +137,7 @@ def stage0_has_signal(window: SkillWindow) -> bool:
 # Task 5: Estagios 1 e 2 — Haiku e Sonnet
 # ---------------------------------------------------------------------------
 HAIKU_MODEL = "claude-haiku-4-5-20251001"
-SONNET_MODEL = "claude-sonnet-4-6"
+SONNET_MODEL = "claude-sonnet-5"
 _VALID_RAMOS = ("lembrete_usuario", "lembrete_todos", "ajuste_codigo", "nada")
 
 _STAGE1_SYSTEM = (

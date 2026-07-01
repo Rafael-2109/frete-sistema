@@ -24,7 +24,7 @@ import anthropic
 
 logger = logging.getLogger(__name__)
 
-SONNET_MODEL = "claude-sonnet-4-6"
+SONNET_MODEL = "claude-sonnet-5"
 CONSOLIDATION_MAX_TOKENS = 1200  # Tokens max para consolidação inicial
 VERIFICATION_MAX_TOKENS = 800    # Tokens max para verificação de fatos
 RETRY_MAX_TOKENS = 1200          # Tokens max para retry (mesmo que consolidação)

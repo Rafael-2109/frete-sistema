@@ -36,7 +36,7 @@ logger = logging.getLogger(__name__)
 
 # Modelos Anthropic (alinhados com parser CarVia).
 HAIKU_MODEL = 'claude-haiku-4-5-20251001'
-SONNET_MODEL = 'claude-sonnet-4-6'
+SONNET_MODEL = 'claude-sonnet-5'
 
 # Regras CONSOLIDADAS de extracao chassi/motor de moto eletrica.
 # Adaptado do prompt do parser CarVia

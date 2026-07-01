@@ -36,6 +36,8 @@ _MODEL_MAP: Dict[str, str] = {
     "opus-4-6": "opus",
     "opus_4_6": "opus",
     "sonnet": "sonnet",
+    "sonnet-5": "sonnet",
+    "sonnet_5": "sonnet",
     "sonnet-4-6": "sonnet",
     "sonnet_4_6": "sonnet",
     "haiku": "haiku",

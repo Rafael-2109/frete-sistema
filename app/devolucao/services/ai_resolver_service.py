@@ -86,7 +86,7 @@ class ObservacaoResponse(BaseModel):
 # Modelo Haiku 4.5 para micro-tarefas (extrair_termos, extrair_motivo, normalizar_unidade)
 HAIKU_MODEL = "claude-haiku-4-5-20251001"
 # Sonnet para resolucao semantica complexa (resolver_produto_completo)
-SONNET_MODEL = "claude-sonnet-4-6"
+SONNET_MODEL = "claude-sonnet-5"
 
 
 # =============================================================================
@@ -624,10 +624,10 @@ class AIResolverService:
 
             # 5. Structured Outputs via parse() — constrained decoding garante JSON valido
             try:
+                # Sonnet 5 rejeita `temperature` non-default (HTTP 400) — omitido.
                 parsed_response = client.messages.parse(
                     model=SONNET_MODEL,
                     max_tokens=1500,
-                    temperature=0,
                     output_format=DeParaResponse,
                     system=[{
                         "type": "text",
@@ -651,7 +651,6 @@ class AIResolverService:
                 response = client.messages.create(
                     model=SONNET_MODEL,
                     max_tokens=1500,
-                    temperature=0,
                     system=[{
                         "type": "text",
                         "text": DEPARA_SYSTEM_PROMPT,
