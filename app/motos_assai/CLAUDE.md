@@ -678,6 +678,16 @@ via `pendencia_service.detalhe_pendencia`).
 
 **Deploy (REALIZADO 2026-07-01):** migration 34 → push/deploy do código → `motos_assai_35 --confirmar` (35 fichas) → `--check` (0 gap). A UI de resolução opera sobre `assai_pendencia`; o backfill já cobriu as pendências legadas (evento `PENDENTE` sem ficha).
 
+### Correções pós-review 4-mãos (2026-07-01)
+
+Revisão em contexto fresco (5 finders adversariais + verificação + repro por execução) achou **5 defeitos Important** de correctness no Spec 2, todos corrigidos via TDD (`tests/motos_assai/test_spec2_review_fixes.py`, 6 casos):
+
+1. **`resolucao_service.resolver_com_tratativa`** — guard de idempotência (advisory lock por chassi + `refresh` + recusa se ficha já fechada) **antes** do movimento. Double-submit / POST concorrente não duplica mais CONSUMO/CANIBALIZACAO no ledger (o `resolver_pendencia` era idempotente na ficha, mas o movimento não).
+2. **`pendencia_resolver_tela`** (rota) — `except` passou a capturar `EstoqueError` além de `ResolucaoError`/`PendenciaError`. Doador inexistente / cascata bloqueada / peça inválida viram flash, não HTTP 500.
+3. **`pendencia_service.reclassificar`** — guard S6 agora **bidirecional** e computado sobre os valores candidatos (não muta a ficha antes de validar). Transição não-física→física: se a moto está **fora do estoque** (FATURADA/SEPARADA/…) **bloqueia** (`PendenciaError`; retorno legítimo = fluxo de Devolução); se em estoque, emite/reusa o `PENDENTE` (lastro coerente). Antes, resolver depois emitia `MONTADA` e ressuscitava moto vendida.
+4. **`movimento_service.canibalizar`** — valida `status_efetivo(doador) ∈ EVENTOS_EM_ESTOQUE` antes de abrir a FALTA_PECA no doador. Canibalizar de moto FATURADA/SEPARADA não a ressuscita mais ao estoque.
+5. **`compra_peca_nova`** (rota) — `getlist('peca_id')` sem `type=int` + alinhamento posicional. Linha com peça vazia não desloca mais quantidade/custo das outras linhas (gravava item com qtd errada, silencioso).
+
 **Follow-ups remanescentes (não bloqueantes):** imports mortos `AssaiModelo` em `devolucao_service.py` e `recebimento_service.py` (não usados); imports não-usados residuais (`pytest`/símbolos) em vários testes do módulo. Todos detectados via pyflakes, sem efeito em runtime. Estado completo + prompt de continuação: `docs/superpowers/plans/2026-06-30-motos-assai-estoque-pendencia-spec1-handoff.md`.
 
 ---

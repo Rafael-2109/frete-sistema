@@ -183,6 +183,7 @@ def pendencia_resolver_tela(pid):
     from app.motos_assai.services import pendencia_service, peca_service, movimento_service
     from app.motos_assai.services.resolucao_service import resolver_com_tratativa, ResolucaoError
     from app.motos_assai.services.pendencia_service import PendenciaError
+    from app.motos_assai.services.movimento_service import EstoqueError
     from app.motos_assai.models import AssaiMoto
 
     detalhe = pendencia_service.detalhe_pendencia(pid)
@@ -222,7 +223,7 @@ def pendencia_resolver_tela(pid):
                 db.session.commit()
                 flash('Pendência resolvida.', 'success')
                 return redirect(url_for('motos_assai.pendencias_abertas'))
-        except (ResolucaoError, PendenciaError) as e:
+        except (ResolucaoError, PendenciaError, EstoqueError) as e:
             db.session.rollback()
             flash(str(e), 'danger')
         return redirect(url_for('motos_assai.pendencia_resolver_tela', pid=pid))

@@ -12,7 +12,9 @@ from app import db
 from app.motos_assai.models import (
     AssaiPeca, AssaiEstoqueMovimento, AssaiPendencia,
     MOVIMENTO_ENTRADA, MOVIMENTO_DESCARTE, MOVIMENTO_AJUSTE,
+    EVENTOS_FORA_ESTOQUE,
 )
+from app.motos_assai.services.moto_evento_service import status_efetivo
 from app.utils.json_helpers import sanitize_for_json
 from app.utils.timezone import agora_brasil_naive
 
@@ -237,6 +239,14 @@ def canibalizar(
     from app.motos_assai.models import AssaiMoto, PENDENCIA_CATEGORIA_FALTA_PECA
     if not AssaiMoto.query.filter_by(chassi=origem).first():
         raise EstoqueError(f'Doador {origem} nao encontrado em assai_moto.')
+    # doador nao pode estar FORA do estoque: abrir FALTA_PECA fisica (evento
+    # PENDENTE) num doador FATURADO/SEPARADO/CANCELADO/... ressuscitaria uma moto
+    # ja vendida. (status None ou efetivo-montada REVERTIDA/PENDENCIA_RESOLVIDA e' ok.)
+    status_doador = status_efetivo(origem)
+    if status_doador in EVENTOS_FORA_ESTOQUE:
+        raise EstoqueError(
+            f'Doador {origem} nao esta em estoque (status atual: {status_doador}); '
+            'nao pode ser canibalizado.')
     # anti-cascata A->B->A: doador ja tem FALTA_PECA aberta DESTA peca
     ja_falta = (
         AssaiPendencia.query.filter(

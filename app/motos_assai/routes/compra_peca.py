@@ -45,12 +45,20 @@ def compra_peca_lista():
 @require_motos_assai
 def compra_peca_nova():
     if request.method == 'POST':
-        peca_ids = request.form.getlist('peca_id', type=int)
+        # SEM type=int: uma linha com peca vazia (int('') levantaria ValueError e o
+        # Werkzeug a DESCARTARIA) desalinharia os indices vs quantidade/custo_estimado,
+        # gravando itens com a quantidade/custo da linha errada. Mantem alinhamento
+        # posicional e converte para int so apos validar que a linha esta preenchida.
+        peca_ids = request.form.getlist('peca_id')
         qtds = request.form.getlist('quantidade')
         custos = request.form.getlist('custo_estimado')
-        itens = [{'peca_id': pid, 'quantidade': _br(qtds[i]),
-                  'custo_estimado': _br(custos[i]) if i < len(custos) else None}
-                 for i, pid in enumerate(peca_ids) if pid and i < len(qtds) and _br(qtds[i])]
+        itens = []
+        for i, pid_raw in enumerate(peca_ids):
+            q = _br(qtds[i]) if i < len(qtds) else None
+            if not (pid_raw and q):
+                continue
+            itens.append({'peca_id': int(pid_raw), 'quantidade': q,
+                          'custo_estimado': _br(custos[i]) if i < len(custos) else None})
         try:
             c = compra_peca_service.criar_compra(
                 tipo=request.form.get('tipo'), itens=itens,

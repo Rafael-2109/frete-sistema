@@ -31,6 +31,17 @@ def resolver_com_tratativa(
     if ficha is None:
         raise ResolucaoError(f'Pendencia {pendencia_id} nao encontrada.')
 
+    # Guard de idempotencia ANTES de qualquer movimento de estoque: serializa por
+    # chassi (o mesmo advisory lock reentrante de resolver_pendencia) e recusa
+    # re-submit de ficha ja fechada. Sem isto, um double-submit/POST concorrente
+    # grava um 2o CONSUMO/CANIBALIZACAO (o ledger e append-only) enquanto
+    # resolver_pendencia vira no-op idempotente — baixando o saldo em duplicidade.
+    db.session.execute(
+        db.text('SELECT pg_advisory_xact_lock(hashtext(:c))'), {'c': ficha.chassi})
+    db.session.refresh(ficha)
+    if ficha.resolvida_em is not None or ficha.cancelada_em is not None:
+        raise ResolucaoError(f'Pendencia {pendencia_id} ja esta fechada.')
+
     saldo_apos = None
     if tratativa in _MOVIMENTA:
         if not peca_id or quantidade is None:

@@ -22,12 +22,13 @@ from app.auth.models import Usuario
 from app.motos_assai.models import (
     AssaiMoto, AssaiModelo, AssaiPendencia,
     EVENTO_PENDENTE, EVENTO_PENDENCIA_RESOLVIDA, EVENTO_MONTADA,
+    EVENTOS_FORA_ESTOQUE,
     PENDENCIA_CATEGORIAS_VALIDAS, PENDENCIA_ORIGENS_VALIDAS, ORIGENS_FISICAS,
     PENDENCIA_TRATATIVAS_VALIDAS, PENDENCIA_FASE_AGUARDANDO_PECA,
 )
 from app.utils.json_helpers import sanitize_for_json
 from app.utils.timezone import agora_brasil_naive
-from app.motos_assai.services.moto_evento_service import emitir_evento
+from app.motos_assai.services.moto_evento_service import emitir_evento, status_efetivo
 
 
 class FiltrosPendencias(TypedDict, total=False):
@@ -430,14 +431,40 @@ def reclassificar(*, pendencia_id, categoria, origem, operador_id):
     if origem not in PENDENCIA_ORIGENS_VALIDAS:
         raise PendenciaError(f'Origem invalida: {origem}.')
 
-    de = {'categoria': ficha.categoria, 'origem': ficha.origem}
-    ficha.categoria = categoria
-    ficha.origem = origem
-    # guard S6: nao tornar nao-fisica uma ficha que ja trava a moto
-    if ficha.evento_pendente_id is not None and not afeta_estado_moto(ficha):
+    # Avalia o predicado fisico sobre os valores CANDIDATOS, ANTES de mutar a ficha
+    # (guard robusto: se qualquer guard levantar, o objeto ORM nao fica sujo num
+    # estado invalido — so origem muda na reclassificacao).
+    afeta_depois = (
+        (origem in ORIGENS_FISICAS)
+        or (ficha.devolucao_item_id is not None)
+        or bool(ficha.retorno_fisico)
+    )
+    # Guard S6 (fisica -> nao-fisica): nao destravar a moto via troca de origem.
+    if ficha.evento_pendente_id is not None and not afeta_depois:
         raise PendenciaError(
             'Nao e possivel tornar nao-fisica uma pendencia que ja trava a moto '
             '(evento PENDENTE ja emitido).')
+    # Guard inverso (nao-fisica -> fisica): a ficha passa a afetar o estado mas ainda
+    # nao tem evento PENDENTE. Precisa de lastro coerente sob advisory lock:
+    #   - moto EM estoque  -> emite/reusa o PENDENTE (a moto de fato vai a PENDENTE);
+    #   - moto FORA do estoque (FATURADA/SEPARADA/...) -> BLOQUEIA. Sem isto, ao
+    #     resolver, o gate fisico emitiria MONTADA e ressuscitaria uma moto vendida.
+    #     Retorno pos-venda legitimo deve entrar pelo fluxo de Devolucao (NFd).
+    novo_evento_id = None
+    if ficha.evento_pendente_id is None and afeta_depois:
+        db.session.execute(
+            db.text('SELECT pg_advisory_xact_lock(hashtext(:c))'), {'c': ficha.chassi})
+        if status_efetivo(ficha.chassi) in EVENTOS_FORA_ESTOQUE:
+            raise PendenciaError(
+                'Nao e possivel tornar fisica uma pendencia de moto fora do estoque '
+                '(ex.: FATURADA/SEPARADA). Para retorno pos-venda use o fluxo de Devolucao.')
+        novo_evento_id = _get_or_emit_pendente_event(ficha.chassi, operador_id)
+
+    de = {'categoria': ficha.categoria, 'origem': ficha.origem}
+    ficha.categoria = categoria
+    ficha.origem = origem
+    if novo_evento_id is not None:
+        ficha.evento_pendente_id = novo_evento_id
 
     det = dict(ficha.detalhes or {})
     det['reclassificacao'] = {
