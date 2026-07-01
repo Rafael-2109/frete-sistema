@@ -50,9 +50,9 @@
     "tpl": 103
   },
   "app/motos_assai": {
-    "py": 100,
-    "loc": 22060,
-    "tpl": 76
+    "py": 102,
+    "loc": 22304,
+    "tpl": 81
   },
   "app/odoo": {
     "py": 73,

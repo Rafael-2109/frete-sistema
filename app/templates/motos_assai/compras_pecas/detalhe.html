@@ -1,0 +1,106 @@
+{% extends "motos_assai/base_motos_assai.html" %}
+
+{% block motos_assai_content %}
+<header class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+  <h2 class="mb-0">Compra de Peça — {{ c.numero }}
+    {% if c.status == 'RECEBIDA' %}<span class="badge bg-success">RECEBIDA</span>
+    {% elif c.status == 'PARCIAL' %}<span class="badge bg-warning">PARCIAL</span>
+    {% elif c.status == 'CANCELADA' %}<span class="badge bg-danger">CANCELADA</span>
+    {% else %}<span class="badge bg-secondary">ABERTA</span>{% endif %}
+  </h2>
+  {% if c.status not in ('CANCELADA', 'RECEBIDA') %}
+  <form method="POST" action="{{ url_for('motos_assai.compra_peca_cancelar', cid=c.id) }}"
+        onsubmit="return confirm('Cancelar este pedido de compra?');">
+    {{ form.hidden_tag() }}
+    <button type="submit" class="btn btn-outline-danger">
+      <i class="fas fa-ban"></i> Cancelar pedido
+    </button>
+  </form>
+  {% endif %}
+</header>
+
+<dl class="row small">
+  <dt class="col-sm-2">Tipo</dt><dd class="col-sm-4">{{ c.tipo }}</dd>
+  <dt class="col-sm-2">Fornecedor</dt><dd class="col-sm-4">{{ c.fornecedor }}</dd>
+  <dt class="col-sm-2">Criada em</dt>
+  <dd class="col-sm-10">{{ c.criada_em.strftime('%d/%m/%Y %H:%M') if c.criada_em else '-' }}</dd>
+</dl>
+
+<h4>Itens ({{ c.itens|length }})</h4>
+<div class="table-responsive">
+<table class="table table-sm table-hover">
+  <thead>
+    <tr>
+      <th>Peça</th><th class="text-end">Qtd pedida</th>
+      <th class="text-end">Qtd recebida</th><th class="text-end">Saldo</th>
+      <th class="text-end">Custo estimado</th><th></th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for it in c.itens %}
+    {% set saldo_item = it.quantidade - it.quantidade_recebida %}
+    <tr>
+      <td>{{ it.peca.nome }}{% if it.peca.codigo %} <small class="text-muted">({{ it.peca.codigo }})</small>{% endif %}</td>
+      <td class="text-end">{{ it.quantidade }}</td>
+      <td class="text-end">{{ it.quantidade_recebida }}</td>
+      <td class="text-end">{{ saldo_item }}</td>
+      <td class="text-end">
+        {% if it.custo_estimado is not none %}R$ {{ it.custo_estimado|numero_br(2) }}{% else %}-{% endif %}
+      </td>
+      <td class="text-end">
+        {% if c.status not in ('CANCELADA',) and saldo_item > 0 %}
+        <button type="button" class="btn btn-sm btn-outline-success"
+                data-bs-toggle="modal" data-bs-target="#modal-receber-{{ it.id }}">
+          <i class="fas fa-check"></i> Receber
+        </button>
+        {% endif %}
+      </td>
+    </tr>
+    {% else %}
+    <tr><td colspan="6" class="text-center text-muted">Nenhum item.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+
+<a href="{{ url_for('motos_assai.compra_peca_lista') }}" class="btn btn-outline-secondary mt-3">
+  <i class="fas fa-arrow-left"></i> Voltar à lista
+</a>
+
+{% for it in c.itens %}
+{% set saldo_item = it.quantidade - it.quantidade_recebida %}
+{% if c.status not in ('CANCELADA',) and saldo_item > 0 %}
+<div class="modal fade" id="modal-receber-{{ it.id }}" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form method="POST" action="{{ url_for('motos_assai.compra_peca_receber_item', cid=c.id) }}">
+        {{ form.hidden_tag() }}
+        <input type="hidden" name="compra_item_id" value="{{ it.id }}">
+        <div class="modal-header">
+          <h5 class="modal-title">Receber — {{ it.peca.nome }}</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <p class="text-muted small">Saldo pendente: {{ saldo_item }}</p>
+          <div class="mb-3">
+            <label class="form-label">Quantidade recebida</label>
+            <input type="text" name="quantidade" class="form-control" required
+                   placeholder="Ex: {{ saldo_item }}">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Custo unitário (R$)</label>
+            <input type="text" name="custo_unitario" class="form-control" required
+                   placeholder="Ex: 12,50">
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-success">Registrar recebimento</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endfor %}
+{% endblock %}

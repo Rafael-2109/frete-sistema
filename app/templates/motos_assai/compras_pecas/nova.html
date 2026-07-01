@@ -1,0 +1,85 @@
+{% extends "motos_assai/base_motos_assai.html" %}
+
+{% block motos_assai_content %}
+<header class="mb-3">
+  <h2>Novo Pedido de Compra de Peça</h2>
+  <p class="text-muted">Solicitação de GARANTIA ou COMPRA de peças ao fornecedor.</p>
+</header>
+
+<form method="POST" id="form-compra-peca">
+  {{ form.hidden_tag() }}
+
+  <div class="row g-3 mb-3">
+    <div class="col-md-4">
+      <label class="form-label">Tipo</label>
+      <select name="tipo" class="form-select" required>
+        <option value="COMPRA">COMPRA</option>
+        <option value="GARANTIA">GARANTIA</option>
+      </select>
+    </div>
+    <div class="col-md-4">
+      <label class="form-label">Fornecedor</label>
+      <input type="text" name="fornecedor" class="form-control" value="MOTOCHEFE">
+    </div>
+  </div>
+
+  <h5>Itens</h5>
+  {% if not pecas %}
+  <p class="text-muted">Nenhuma peça ativa cadastrada. Cadastre uma peça primeiro.</p>
+  {% endif %}
+
+  <div id="itens-container">
+    <div class="row g-2 mb-2 item-row">
+      <div class="col-md-5">
+        <select name="peca_id" class="form-select">
+          <option value="">Selecione a peça...</option>
+          {% for p in pecas %}
+          <option value="{{ p.id }}">{{ p.nome }}{% if p.codigo %} ({{ p.codigo }}){% endif %}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-3">
+        <input type="text" name="quantidade" class="form-control" placeholder="Qtd (ex: 3)">
+      </div>
+      <div class="col-md-3">
+        <input type="text" name="custo_estimado" class="form-control" placeholder="Custo estimado (R$)">
+      </div>
+      <div class="col-md-1">
+        <button type="button" class="btn btn-outline-danger btn-remove-row" title="Remover linha">
+          <i class="fas fa-trash"></i>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <button type="button" id="btn-add-row" class="btn btn-outline-secondary btn-sm mb-3">
+    <i class="fas fa-plus"></i> Adicionar linha
+  </button>
+
+  <div>
+    <button type="submit" class="btn btn-primary">
+      <i class="fas fa-check"></i> Gerar pedido de compra
+    </button>
+    <a href="{{ url_for('motos_assai.compra_peca_lista') }}" class="btn btn-outline-secondary">Cancelar</a>
+  </div>
+</form>
+
+<script>
+document.getElementById('btn-add-row').addEventListener('click', () => {
+  const container = document.getElementById('itens-container');
+  const linha = container.querySelector('.item-row').cloneNode(true);
+  linha.querySelectorAll('input').forEach(i => i.value = '');
+  linha.querySelectorAll('select').forEach(s => s.selectedIndex = 0);
+  container.appendChild(linha);
+});
+
+document.getElementById('itens-container').addEventListener('click', (e) => {
+  const btn = e.target.closest('.btn-remove-row');
+  if (!btn) return;
+  const container = document.getElementById('itens-container');
+  if (container.querySelectorAll('.item-row').length > 1) {
+    btn.closest('.item-row').remove();
+  }
+});
+</script>
+{% endblock %}

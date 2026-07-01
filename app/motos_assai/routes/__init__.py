@@ -40,6 +40,7 @@ from app.motos_assai.routes import devolucao  # noqa: E402,F401
 from app.motos_assai.routes import api  # noqa: E402,F401
 from app.motos_assai.routes import peca  # noqa: E402,F401
 from app.motos_assai.routes import estoque_peca  # noqa: E402,F401
+from app.motos_assai.routes import compra_peca  # noqa: E402,F401
 
 
 @motos_assai_bp.before_request
