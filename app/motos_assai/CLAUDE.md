@@ -238,7 +238,7 @@ Não indexados na lista de constantes acima:
 
 - `MotochefeReciboPdfExtractor` (`services/parsers/motochefe_recibo_pdf_extractor.py`): pdfplumber + `extract_tables()` com lines strategy. Detecta colunas CHASSI/MOTOR/COR no header. Extrai data, equipe (HAROLDO SP), conferente, total declarado.
 - `MotochefeReciboXlsxExtractor` (`services/parsers/motochefe_recibo_xlsx_extractor.py`): openpyxl `data_only=True`. Localiza header da tabela pela presença de células CHASSI.
-- `motochefe_recibo_llm_fallback.py`: Haiku 4.5 → Sonnet 4.6. Aceita PDF (document block) ou XLSX serializado como texto.
+- `motochefe_recibo_llm_fallback.py`: Haiku 4.5 → Sonnet 5. Aceita PDF (document block) ou XLSX serializado como texto.
 - **Limiar de confiança**: `CONFIANCA_LIMIAR = 0.80` em `recibo_service`. Acionado quando `chassis_extraidos / total_declarado < 0.80`.
 
 ### chassi_validator e moto_evento_service
@@ -317,8 +317,8 @@ Exemplos de arquivos recibo em `.gitignore` (não commitados):
 
 **Fallback LLM** (`services/parsers/qpa_pedido_llm_fallback.py`):
 - Acionado quando `confianca < CONFIANCA_LIMIAR` ou zero itens extraídos.
-- Escalada: Haiku 4.5 (`claude-haiku-4-5-20251001`) → Sonnet 4.6 (`claude-sonnet-4-6`).
-- Anthropic SDK 0.98.1, lazy init (não constrói cliente se não acionado).
+- Escalada: Haiku 4.5 (`claude-haiku-4-5-20251001`) → Sonnet 5 (`claude-sonnet-5`).
+- Anthropic SDK 0.115.0, lazy init (não constrói cliente se não acionado).
 
 **Confiança** — DOIS momentos (corrigido em 2026-06-18, ver seção
 "Fix parser zero-padding + edição manual" abaixo):
@@ -378,7 +378,7 @@ Função de conveniência: `resolver_por_codigo_qpa(codigo_str)` para lookup dir
 
 **Montagem** (`montagem_service`):
 - ESTOQUE → MONTADA (caminho feliz) ou ESTOQUE → PENDENTE (com descrição obrigatória)
-- PENDENTE → PENDENCIA_RESOLVIDA → MONTADA efetivo (via `resolver_pendencia()`)
+- PENDENTE → PENDENCIA_RESOLVIDA → MONTADA efetivo (via `pendencia_service.resolver_pendencia`, por ficha — ver seção "Resolução de pendência (Spec 2)")
 - Tela rápida `/motos-assai/montagem` com input QR/manual (operação de chão de fábrica)
 - Histórico 3 últimas ações exibido em `partials/_historico_3_ultimas.html`
 
@@ -585,7 +585,7 @@ Os seguintes tipos de evento em `assai_moto_evento` foram ativados neste plano:
 - **35 tabelas** com prefixo `assai_` (ver secao "Modelo de dados (35 tabelas)" acima; a spec inicial `docs/superpowers/specs/2026-05-07-motos-assai-design.md` descreve as 16 tabelas da fundacao, expandidas pelos Planos 2-5 + Spec 1 Migration 34)
 - **Toggle master** `sistema_motos_assai` em `usuarios` → decorator `@require_motos_assai`
 - **9 etapas do pipeline** implementadas (ESTOQUE → MONTADA → DISPONIVEL → SEPARADA → FATURADA)
-- **Parsers determinísticos** com fallback LLM (Haiku 4.5 → Sonnet 4.6) em PDFs e Excel
+- **Parsers determinísticos** com fallback LLM (Haiku 4.5 → Sonnet 5) em PDFs e Excel
 - **Wizard QR/Barcode** adaptado de Hora (`html5-qrcode@2.3.8`) — reutilizado em recebimento/montagem/disponibilizar
 - **Reuso CarVia** DANFE parser via adapter (zero modificação ao módulo CarVia)
 - **Concorrência** controlada por UNIQUE parcial + `with_for_update` + IntegrityError → 409
@@ -641,9 +641,19 @@ abrir → [solicitar_compra] → resolver / cancelar
 
 A ficha afeta o estado da moto quando: `origem ∈ {GALPAO, TRANSPORTE, DEVOLUCAO}` OU `devolucao_item_id IS NOT NULL` OU `retorno_fisico=True`.
 
-### Shim `montagem_service.resolver_pendencia`
+### Resolução de pendência (Spec 2 — por ficha)
 
-`montagem_service.resolver_pendencia(chassi, descricao_resolucao, operador_id)` (assinatura legada preservada) delega para `pendencia_service.resolver_pendencia(pendencia_id=..., tratativa=None, ...)`, resolvendo a **única** ficha física aberta do chassi e **commitando** (a rota `POST /pendencias/resolver` não commita). Se houver >1 ficha física aberta, levanta erro claro; se houver 0 (pendência legada sem ficha), erro apontando o backfill 35. Callers legados (rota, `services/__init__.py`) usam sem alteração.
+A resolução é **por ficha** (`pendencia_id`), não por chassi: tela `pendencia_resolver_tela`
+(GET/POST `/pendencias/<pid>/resolver`, Spec 2 Task 7) → `resolucao_service.resolver_com_tratativa`
+→ `pendencia_service.resolver_pendencia(pendencia_id=..., ...)`. A reclassificação avulsa
+(INDETERMINADA → categoria/origem real) tem rota própria `pendencia_reclassificar`
+(POST `/pendencias/<pid>/reclassificar`).
+
+> **Shim removido (Spec 2 Task 9):** o átomo legado `montagem_service.resolver_pendencia(chassi, ...)`,
+> a rota JSON `POST /pendencias/resolver` e o `pendencias_resolver.js` foram **REMOVIDOS**.
+> O único `resolver_pendencia` vivo é o átomo `pendencia_service.resolver_pendencia`. O gate
+> físico (última ficha física aberta → `PENDENCIA_RESOLVIDA` + `MONTADA`) segue no
+> `pendencia_service`, e a máquina de estados da ficha já garante o estado correto.
 
 ### Backfill
 
@@ -653,7 +663,7 @@ A ficha afeta o estado da moto quando: `origem ∈ {GALPAO, TRANSPORTE, DEVOLUCA
 
 **Spec 1 (back-end) IMPLEMENTADO** — 6 tabelas + serviços + integração + backfill; 13 commits (`125224c01`..`751178d50`); **372 testes do módulo verdes**; review final whole-branch (opus) = pronto para merge. **NÃO pushado** — deploy bundlado com o Spec 2. **Spec 2 (UI) PENDENTE** (escopo na §15 do spec).
 
-**Deploy (quando for):** migration 34 → deploy do código → `motos_assai_35 --confirmar` → `--check`. Até o backfill 35 rodar, pendências já abertas não resolvem pela UI (o shim falha alto, **sem corromper**).
+**Deploy (quando for):** migration 34 → deploy do código → `motos_assai_35 --confirmar` → `--check`. Até o backfill 35 rodar, pendências legadas (evento `PENDENTE` sem ficha) não aparecem nas listas por-ficha; a UI de resolução opera sobre `assai_pendencia`, então rodar o backfill é pré-requisito para resolvê-las.
 
 **Follow-ups conhecidos (Spec 2):** `_gerar_numero` → `CREATE SEQUENCE` na migration 34 (item 1, antes do deploy em prod); guards de canibalização (anti-cascata A→B→A, `_exigir_peca`, doador-vendido); `.query.get()`→`db.session.get()`; `lazy='joined'`→`select`+joinedload; `dados_extras` via `sanitize_for_json`; imports mortos; refinar hint do `assai_pendencia.json`. Estado completo + prompt de continuação: `docs/superpowers/plans/2026-06-30-motos-assai-estoque-pendencia-spec1-handoff.md`.
 

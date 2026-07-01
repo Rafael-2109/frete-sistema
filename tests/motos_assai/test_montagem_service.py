@@ -6,7 +6,7 @@ from app.motos_assai.models import (
     EVENTO_ESTOQUE, EVENTO_MONTADA, EVENTO_PENDENTE,
 )
 from app.motos_assai.services import (
-    registrar_montagem, resolver_pendencia, historico_3_ultimas_montagens,
+    registrar_montagem, historico_3_ultimas_montagens,
     emitir_evento, status_efetivo, MontagemValidationError,
 )
 
@@ -67,14 +67,4 @@ def test_montagem_status_invalido_falha(app, admin_user):
         registrar_montagem(chassi, False, None, None, admin_user.id)
         with pytest.raises(MontagemValidationError, match='ESTOQUE'):
             registrar_montagem(chassi, False, None, None, admin_user.id)
-        db.session.rollback()
-
-
-def test_resolver_pendencia(app, admin_user):
-    with app.app_context():
-        chassi = f'TST_M_{_uid()}'
-        _criar_moto_em_estoque(chassi, admin_user)
-        registrar_montagem(chassi, True, 'Defeito X', None, admin_user.id)
-        resolver_pendencia(chassi, 'Peça trocada', admin_user.id)
-        assert status_efetivo(chassi) == EVENTO_MONTADA
         db.session.rollback()

@@ -44,6 +44,39 @@
     </div>
 
     <div class="col-md-2">
+      <label class="form-label small mb-1" for="fh-categoria">Categoria</label>
+      <select name="categoria" id="fh-categoria" class="form-select form-select-sm">
+        <option value="">Todas</option>
+        {% for c in categorias %}
+          <option value="{{ c }}"
+                  {% if filtros_aplicados.categoria == c %}selected{% endif %}>{{ c }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="col-md-2">
+      <label class="form-label small mb-1" for="fh-origem">Origem</label>
+      <select name="origem" id="fh-origem" class="form-select form-select-sm">
+        <option value="">Todas</option>
+        {% for o in origens %}
+          <option value="{{ o }}"
+                  {% if filtros_aplicados.origem == o %}selected{% endif %}>{{ o }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="col-md-2">
+      <label class="form-label small mb-1" for="fh-tratativa">Tratativa</label>
+      <select name="tratativa" id="fh-tratativa" class="form-select form-select-sm">
+        <option value="">Todas</option>
+        {% for t in tratativas %}
+          <option value="{{ t }}"
+                  {% if filtros_aplicados.tratativa == t %}selected{% endif %}>{{ t }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="col-md-2">
       <label class="form-label small mb-1" for="fh-data-inicio">De (resolução)</label>
       <input type="date" name="data_inicio" id="fh-data-inicio"
              class="form-control form-control-sm"
@@ -79,7 +112,8 @@
       </a>
       {% set num_filtros = (filtros_aplicados.chassi or filtros_aplicados.modelo_id or
                             filtros_aplicados.data_inicio or filtros_aplicados.data_fim or
-                            filtros_aplicados.operador_id) %}
+                            filtros_aplicados.operador_id or filtros_aplicados.categoria or
+                            filtros_aplicados.origem or filtros_aplicados.tratativa) %}
       {% if num_filtros %}
         <small class="text-muted ms-auto align-self-center">
           <i class="fas fa-info-circle"></i> Filtros aplicados — exibindo {{ historico|length }} resultado(s).
@@ -101,6 +135,7 @@
       <th>Pendência (original)</th>
       <th>Operador Pend.</th>
       <th>Data Pend.</th>
+      <th>Tratativa</th>
       <th>Resolução</th>
       <th>Operador Resol.</th>
       <th>Data Resol.</th>
@@ -109,13 +144,17 @@
   <tbody>
     {% for h in historico %}
     <tr>
-      <td>{{ loop.index }}</td>
+      <td>
+        <a href="{{ url_for('motos_assai.pendencia_detalhe', pid=h.pendencia_id) }}"
+           title="Ver ficha #{{ h.pendencia_id }}">#{{ h.pendencia_id }}</a>
+      </td>
       <td><code>{{ h.chassi }}</code></td>
       <td><strong>{{ h.modelo_codigo }}</strong></td>
       <td>{{ h.cor }}</td>
       <td><small>{{ h.observacao_pendencia }}</small></td>
       <td><small>{{ h.operador_pendencia }}</small></td>
       <td><small class="text-muted">{{ h.data_pendencia }}</small></td>
+      <td><small>{{ h.tratativa or '-' }}</small></td>
       <td><small>{{ h.descricao_resolucao }}</small></td>
       <td><small>{{ h.operador_resolucao }}</small></td>
       <td><small class="text-muted">{{ h.data_resolucao }}</small></td>

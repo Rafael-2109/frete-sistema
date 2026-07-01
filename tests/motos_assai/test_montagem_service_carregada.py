@@ -1,6 +1,6 @@
 """Testes A6: montagem_service deve emitir mensagem especifica conforme o
-status efetivo do chassi (CARREGADA/SEPARADA/FATURADA/DISPONIVEL) — tanto
-em registrar_montagem quanto em resolver_pendencia.
+status efetivo do chassi (CARREGADA/SEPARADA/FATURADA/DISPONIVEL) em
+registrar_montagem.
 
 Plano: docs/superpowers/plans/2026-05-12-motos-assai-fase1-fundacao.md (Task 22)
 """
@@ -15,7 +15,7 @@ from app.motos_assai.models import (
     EVENTO_SEPARADA, EVENTO_CARREGADA, EVENTO_FATURADA,
 )
 from app.motos_assai.services import (
-    registrar_montagem, resolver_pendencia, emitir_evento,
+    registrar_montagem, emitir_evento,
     MontagemValidationError,
 )
 
@@ -117,47 +117,4 @@ def test_registrar_montagem_chassi_disponivel_mensagem_especifica(app, admin_use
         msg = str(exc_info.value)
         assert 'DISPONIVEL' in msg
         assert 'ja esta DISPONIVEL' in msg
-        db.session.rollback()
-
-
-# ---- resolver_pendencia ----
-
-def test_resolver_pendencia_chassi_carregada_levanta_mensagem_especifica(app, admin_user):
-    """A6: resolver_pendencia em CARREGADA orienta a cancelar/substituir."""
-    with app.app_context():
-        chassi = f'TST_MR_{_uid()}'
-        _criar_moto(chassi)
-        _avancar_ate(
-            chassi,
-            [EVENTO_ESTOQUE, EVENTO_MONTADA, EVENTO_DISPONIVEL,
-             EVENTO_SEPARADA, EVENTO_CARREGADA],
-            admin_user.id,
-        )
-
-        with pytest.raises(MontagemValidationError) as exc_info:
-            resolver_pendencia(chassi, 'Peca trocada', admin_user.id)
-
-        msg = str(exc_info.value)
-        assert 'CARREGADA' in msg
-        assert ('cancele o Carregamento' in msg) or ('substitua' in msg)
-        db.session.rollback()
-
-
-def test_resolver_pendencia_chassi_faturada_orienta_cancelar_nf(app, admin_user):
-    with app.app_context():
-        chassi = f'TST_MR_{_uid()}'
-        _criar_moto(chassi)
-        _avancar_ate(
-            chassi,
-            [EVENTO_ESTOQUE, EVENTO_MONTADA, EVENTO_DISPONIVEL,
-             EVENTO_SEPARADA, EVENTO_CARREGADA, EVENTO_FATURADA],
-            admin_user.id,
-        )
-
-        with pytest.raises(MontagemValidationError) as exc_info:
-            resolver_pendencia(chassi, 'Peca trocada', admin_user.id)
-
-        msg = str(exc_info.value)
-        assert 'FATURADA' in msg
-        assert 'cancele a NF' in msg
         db.session.rollback()

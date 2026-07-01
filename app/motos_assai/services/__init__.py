@@ -48,8 +48,8 @@ from .recebimento_service import (
     RecebimentoConflictError, RecebimentoValidationError,
 )
 from .montagem_service import (
-    registrar_montagem, resolver_pendencia, historico_3_ultimas_montagens,
-    MontagemValidationError,
+    registrar_montagem, historico_3_ultimas_montagens,
+    enviar_para_pendencia, MontagemValidationError,
 )
 from .disponibilizar_service import (
     disponibilizar, reverter_para_montada, historico_3_ultimas_disponibilizacoes,
@@ -135,8 +135,8 @@ __all__ = [
     'chassis_em_estoque', 'EventoInvalidoError',
     'validar_chassi_contra_recibo', 'registrar_conferencia', 'finalizar_recebimento',
     'RecebimentoConflictError', 'RecebimentoValidationError',
-    'registrar_montagem', 'resolver_pendencia', 'historico_3_ultimas_montagens',
-    'MontagemValidationError',
+    'registrar_montagem', 'historico_3_ultimas_montagens',
+    'enviar_para_pendencia', 'MontagemValidationError',
     'disponibilizar', 'reverter_para_montada', 'historico_3_ultimas_disponibilizacoes',
     'DisponibilizarValidationError',
     'get_separacao_ativa', 'saldo_pendente_por_modelo', 'registrar_chassi',

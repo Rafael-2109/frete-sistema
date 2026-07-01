@@ -55,3 +55,71 @@ def test_get_detalhe_200(login_admin, app, admin_user):
         db.session.commit(); pid = f.id
     resp = login_admin.get(f'/motos-assai/pendencias/{pid}')
     assert resp.status_code == 200
+
+
+def test_abertas_lista_renderiza_200(login_admin, app, admin_user):
+    """Spec 2 Task 9: lista de abertas com categoria/reclassificar renderiza."""
+    from app.motos_assai.services.pendencia_service import abrir_pendencia
+    from app.motos_assai.models import (
+        PENDENCIA_CATEGORIA_INDETERMINADA, PENDENCIA_ORIGEM_GALPAO,
+    )
+    with app.app_context():
+        chassi = f'TSTAB{uuid.uuid4().hex[:6].upper()}'
+        _moto(chassi)
+        abrir_pendencia(chassi=chassi, categoria=PENDENCIA_CATEGORIA_INDETERMINADA,
+                        origem=PENDENCIA_ORIGEM_GALPAO, descricao='defeito a classificar',
+                        operador_id=admin_user.id)
+        db.session.commit()
+    resp = login_admin.get('/motos-assai/pendencias/abertas')
+    assert resp.status_code == 200
+    html = resp.get_data(as_text=True)
+    assert 'INDETERMINADA' in html
+    assert 'Reclassificar' in html
+
+
+def test_historico_lista_renderiza_200(login_admin, app, admin_user):
+    """Spec 2 Task 9: historico com coluna Tratativa renderiza."""
+    from app.motos_assai.services.pendencia_service import (
+        abrir_pendencia, resolver_pendencia,
+    )
+    from app.motos_assai.models import (
+        PENDENCIA_CATEGORIA_AVARIA, PENDENCIA_ORIGEM_GALPAO,
+        PENDENCIA_TRATATIVA_CONSERTAR,
+    )
+    with app.app_context():
+        chassi = f'TSTHI{uuid.uuid4().hex[:6].upper()}'
+        _moto(chassi)
+        f = abrir_pendencia(chassi=chassi, categoria=PENDENCIA_CATEGORIA_AVARIA,
+                            origem=PENDENCIA_ORIGEM_GALPAO, descricao='fio solto',
+                            operador_id=admin_user.id)
+        db.session.commit()
+        resolver_pendencia(pendencia_id=f.id, tratativa=PENDENCIA_TRATATIVA_CONSERTAR,
+                           resolucao_descricao='soldado', operador_id=admin_user.id)
+        db.session.commit()
+    resp = login_admin.get('/motos-assai/pendencias/historico')
+    assert resp.status_code == 200
+    html = resp.get_data(as_text=True)
+    assert 'Tratativa' in html
+
+
+def test_reclassificar_avulso_troca_categoria(login_admin, app, admin_user):
+    """Spec 2 Task 9: POST /pendencias/<pid>/reclassificar troca categoria/origem."""
+    from app.motos_assai.services.pendencia_service import abrir_pendencia
+    from app.motos_assai.models import (
+        AssaiPendencia,
+        PENDENCIA_CATEGORIA_INDETERMINADA, PENDENCIA_ORIGEM_GALPAO,
+    )
+    with app.app_context():
+        chassi = f'TSTRC{uuid.uuid4().hex[:6].upper()}'
+        _moto(chassi)
+        f = abrir_pendencia(chassi=chassi, categoria=PENDENCIA_CATEGORIA_INDETERMINADA,
+                            origem=PENDENCIA_ORIGEM_GALPAO, descricao='a classificar',
+                            operador_id=admin_user.id)
+        db.session.commit(); pid = f.id
+    resp = login_admin.post(f'/motos-assai/pendencias/{pid}/reclassificar', data={
+        'categoria': 'AVARIA', 'origem': 'GALPAO'})
+    assert resp.status_code in (302, 200)
+    with app.app_context():
+        f2 = db.session.get(AssaiPendencia, pid)
+        assert f2.categoria == 'AVARIA'
+        assert f2.origem == 'GALPAO'

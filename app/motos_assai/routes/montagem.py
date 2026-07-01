@@ -56,8 +56,8 @@ def montagem_registrar():
 
 #
 # 2026-05-13 (#12 fix): rota POST /montagem/resolver-pendencia REMOVIDA por
-# ser duplicata exata de POST /pendencias/resolver (mesmo body, mesmo service
-# `resolver_pendencia`, mesma exception). Toda UI consome /pendencias/resolver
-# via pendencias_resolver.js. Mantida apenas pendencias_resolver como
-# endpoint canonico (single source of truth).
+# ser duplicata da resolucao de pendencia.
+# Spec 2 (2026-06-30): a resolucao virou por ficha — tela `pendencia_resolver_tela`
+# (GET/POST /pendencias/<pid>/resolver). O antigo shim por chassi, a rota JSON
+# de resolucao por chassi e seu JS dedicado foram REMOVIDOS.
 #

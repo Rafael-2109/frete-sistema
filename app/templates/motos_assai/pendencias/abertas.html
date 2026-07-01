@@ -11,7 +11,7 @@
   </a>
 </header>
 
-{# 2026-05-13: filtros chassi/modelo/data/operador #}
+{# 2026-05-13: filtros chassi/modelo/data/operador · Spec 2: categoria/origem/tratativa #}
 <form method="GET" class="card p-3 mb-3 bg-light border" id="form-filtros-pendencias">
   <div class="row g-2 align-items-end">
     <div class="col-md-3">
@@ -37,6 +37,39 @@
     </div>
 
     <div class="col-md-2">
+      <label class="form-label small mb-1" for="f-categoria">Categoria</label>
+      <select name="categoria" id="f-categoria" class="form-select form-select-sm">
+        <option value="">Todas</option>
+        {% for c in categorias %}
+          <option value="{{ c }}"
+                  {% if filtros_aplicados.categoria == c %}selected{% endif %}>{{ c }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="col-md-2">
+      <label class="form-label small mb-1" for="f-origem">Origem</label>
+      <select name="origem" id="f-origem" class="form-select form-select-sm">
+        <option value="">Todas</option>
+        {% for o in origens %}
+          <option value="{{ o }}"
+                  {% if filtros_aplicados.origem == o %}selected{% endif %}>{{ o }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="col-md-3">
+      <label class="form-label small mb-1" for="f-tratativa">Tratativa</label>
+      <select name="tratativa" id="f-tratativa" class="form-select form-select-sm">
+        <option value="">Todas</option>
+        {% for t in tratativas %}
+          <option value="{{ t }}"
+                  {% if filtros_aplicados.tratativa == t %}selected{% endif %}>{{ t }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="col-md-2">
       <label class="form-label small mb-1" for="f-data-inicio">De (data)</label>
       <input type="date" name="data_inicio" id="f-data-inicio"
              class="form-control form-control-sm"
@@ -52,8 +85,6 @@
 
     <div class="col-md-3">
       <label class="form-label small mb-1" for="f-operador">Operador (criou pendência)</label>
-      {# Select + datalist (autocomplete via teclado): operadores listados a partir da relacao #}
-      {# de quem ja registrou PENDENTE. Volume baixo — select OK. #}
       <select name="operador_id" id="f-operador" class="form-select form-select-sm">
         <option value="">Todos</option>
         {% for op in operadores %}
@@ -74,7 +105,8 @@
       </a>
       {% set num_filtros = (filtros_aplicados.chassi or filtros_aplicados.modelo_id or
                             filtros_aplicados.data_inicio or filtros_aplicados.data_fim or
-                            filtros_aplicados.operador_id) %}
+                            filtros_aplicados.operador_id or filtros_aplicados.categoria or
+                            filtros_aplicados.origem or filtros_aplicados.tratativa) %}
       {% if num_filtros %}
         <small class="text-muted ms-auto align-self-center">
           <i class="fas fa-info-circle"></i> Filtros aplicados — exibindo {{ abertas|length }} resultado(s).
@@ -93,6 +125,9 @@
       <th>Chassi</th>
       <th>Modelo</th>
       <th>Cor</th>
+      <th>Categoria</th>
+      <th>Origem</th>
+      <th>Fase</th>
       <th>Pendência</th>
       <th>Operador</th>
       <th>Quando</th>
@@ -102,10 +137,24 @@
   <tbody>
     {% for p in abertas %}
     <tr>
-      <td>{{ loop.index }}</td>
+      <td>
+        <a href="{{ url_for('motos_assai.pendencia_detalhe', pid=p.pendencia_id) }}"
+           title="Ver ficha #{{ p.pendencia_id }}">#{{ p.pendencia_id }}</a>
+      </td>
       <td><code>{{ p.chassi }}</code></td>
       <td><strong>{{ p.modelo_codigo }}</strong><br><small class="text-muted">{{ p.modelo_nome }}</small></td>
       <td>{{ p.cor }}</td>
+      <td>
+        {% if p.categoria == 'INDETERMINADA' %}
+          <span class="badge bg-warning text-dark" title="Reclassifique antes de resolver">
+            <i class="fas fa-question-circle"></i> INDETERMINADA
+          </span>
+        {% else %}
+          <span class="badge bg-secondary">{{ p.categoria }}</span>
+        {% endif %}
+      </td>
+      <td><small>{{ p.origem }}</small></td>
+      <td><small class="text-muted">{{ p.fase }}</small></td>
       <td>
         {{ p.observacao }}
         {% if p.chassi_doador %}
@@ -114,12 +163,14 @@
       </td>
       <td>{{ p.operador }}</td>
       <td><small>{{ p.ocorrido_em.strftime('%d/%m/%Y %H:%M') if p.ocorrido_em else '-' }}</small></td>
-      <td class="text-end">
-        <button type="button"
-                class="btn btn-sm btn-success btn-resolver-pendencia"
-                data-chassi="{{ p.chassi }}"
-                data-observacao='{{ p.observacao|tojson }}'>
+      <td class="text-end text-nowrap">
+        <a href="{{ url_for('motos_assai.pendencia_resolver_tela', pid=p.pendencia_id) }}"
+           class="btn btn-sm btn-success">
           <i class="fas fa-check"></i> Resolver
+        </a>
+        <button type="button" class="btn btn-sm btn-outline-warning"
+                data-bs-toggle="modal" data-bs-target="#modal-reclass-{{ p.pendencia_id }}">
+          <i class="fas fa-tag"></i> Reclassificar
         </button>
       </td>
     </tr>
@@ -127,6 +178,56 @@
   </tbody>
 </table>
 </div>
+
+{# Modais de reclassificacao (um por ficha) — POST /pendencias/<pid>/reclassificar #}
+{% for p in abertas %}
+<div class="modal fade" id="modal-reclass-{{ p.pendencia_id }}" tabindex="-1">
+  <div class="modal-dialog">
+    <form method="POST"
+          action="{{ url_for('motos_assai.pendencia_reclassificar', pid=p.pendencia_id) }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">
+            <i class="fas fa-tag text-warning"></i> Reclassificar — <code>{{ p.chassi }}</code>
+          </h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="row g-2">
+            <div class="col-sm-6">
+              <label class="form-label" for="rc-cat-{{ p.pendencia_id }}">Categoria</label>
+              <select name="categoria" id="rc-cat-{{ p.pendencia_id }}" class="form-select" required>
+                <option value="">Selecione...</option>
+                {% for c in categorias if c != 'INDETERMINADA' %}
+                  <option value="{{ c }}"
+                          {% if p.categoria == c %}selected{% endif %}>{{ c }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-sm-6">
+              <label class="form-label" for="rc-ori-{{ p.pendencia_id }}">Origem</label>
+              <select name="origem" id="rc-ori-{{ p.pendencia_id }}" class="form-select" required>
+                <option value="">Selecione...</option>
+                {% for o in origens %}
+                  <option value="{{ o }}"
+                          {% if p.origem == o %}selected{% endif %}>{{ o }}</option>
+                {% endfor %}
+              </select>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-warning">
+            <i class="fas fa-tag"></i> Reclassificar
+          </button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+{% endfor %}
 {% else %}
 <div class="alert alert-success">
   <i class="fas fa-check-circle"></i>
@@ -137,43 +238,4 @@
   {% endif %}
 </div>
 {% endif %}
-
-<!-- Modal Resolver Pendencia -->
-<div class="modal fade" id="modal-resolver-pendencia" tabindex="-1">
-  <div class="modal-dialog">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title">
-          <i class="fas fa-check text-success"></i> Resolver Pendência
-        </h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-      </div>
-      <div class="modal-body">
-        <p class="mb-2">Chassi <code id="resolver-chassi"></code></p>
-        <div class="alert alert-light border small mb-3">
-          <strong>Pendência original:</strong>
-          <span id="resolver-observacao-original" class="text-muted"></span>
-        </div>
-        <label class="form-label">Descrição da resolução (≥3 chars, obrigatório)</label>
-        <textarea id="resolver-descricao" class="form-control" rows="3"
-                  placeholder="Ex: troca de bateria realizada, retrovisor instalado..."
-                  autocapitalize="sentences"></textarea>
-        <div id="resolver-erro" class="text-danger small mt-2 d-none"></div>
-      </div>
-      <div class="modal-footer">
-        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-        <button type="button" class="btn btn-success" id="btn-confirmar-resolver">
-          <i class="fas fa-check"></i> Confirmar resolução
-        </button>
-      </div>
-    </div>
-  </div>
-</div>
-
-<script>
-window.MOTOS_ASSAI_PENDENCIAS = {
-  endpointResolver: '{{ url_for("motos_assai.pendencias_resolver") }}',
-};
-</script>
-<script src="{{ url_for('static', filename='motos_assai/js/pendencias_resolver.js') }}" defer></script>
 {% endblock %}

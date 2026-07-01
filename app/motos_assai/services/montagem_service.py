@@ -2,8 +2,9 @@
 
 PENDENTE bloqueia transição para DISPONIVEL até evento PENDENCIA_RESOLVIDA.
 
-Resolução de pendência: cria evento PENDENCIA_RESOLVIDA + (via service) MONTADA novo,
-de modo que `status_efetivo` volte a MONTADA antes de poder DISPONIBILIZAR.
+A resolução de pendência mora em `pendencia_service` (por ficha/pendencia_id):
+o gate físico (última ficha física aberta → PENDENCIA_RESOLVIDA + MONTADA) é
+responsabilidade de `pendencia_service.resolver_pendencia`, não deste módulo.
 """
 
 from __future__ import annotations
@@ -12,12 +13,11 @@ from typing import Optional, Dict, Any
 from app import db
 from app.motos_assai.models import (
     AssaiMoto, EVENTO_ESTOQUE, EVENTO_MONTADA, EVENTO_PENDENTE,
-    EVENTO_PENDENCIA_RESOLVIDA,
     EVENTO_DISPONIVEL, EVENTO_REVERTIDA_PARA_MONTADA,
     EVENTO_SEPARADA, EVENTO_CARREGADA, EVENTO_FATURADA,
 )
 from app.motos_assai.services.moto_evento_service import (
-    emitir_evento, status_efetivo, ultimo_evento,
+    emitir_evento, status_efetivo,
 )
 
 
@@ -30,7 +30,7 @@ MontagemError = MontagemValidationError
 
 
 def _msg_a6_por_status_montagem(chassi_norm: str, status: Optional[str], esperado: str) -> str:
-    """A6: dispatch de mensagens especificas para registrar_montagem/resolver_pendencia.
+    """A6: dispatch de mensagens especificas para registrar_montagem.
 
     Retorna orientacao especifica para DISPONIVEL/SEPARADA/CARREGADA/FATURADA;
     fallback generico para estados nao mapeados (ex: MONTADA, ESTOQUE quando
@@ -124,70 +124,6 @@ def registrar_montagem(
     return {
         'evento_id': ev.id, 'chassi': chassi_norm, 'tipo': ev.tipo,
         'modelo_id': moto.modelo_id, 'cor': moto.cor,
-    }
-
-
-def resolver_pendencia(
-    chassi: str, descricao_resolucao: str, operador_id: int,
-) -> Dict[str, Any]:
-    """SHIM retrocompativel (Spec 1): resolve a UNICA ficha fisica aberta do chassi.
-
-    Delegado real: pendencia_service.resolver_pendencia(pendencia_id=...). A rota
-    POST /pendencias/resolver e os imports de services/__init__.py seguem intactos
-    (assinatura por chassi). No gap Spec 1->Spec 2 nao ha multi-pendencia por moto
-    (a UI que cria N so chega no Spec 2); >1 ficha fisica aberta -> erro claro.
-
-    Sequencia efetiva: pendencia_service fecha a ficha e, sendo a ultima fisica,
-    emite PENDENCIA_RESOLVIDA + MONTADA. status_efetivo final = MONTADA.
-    """
-    from app.motos_assai.services import pendencia_service
-    from app.motos_assai.models import AssaiPendencia
-
-    chassi_norm = chassi.strip().upper()
-    status = status_efetivo(chassi_norm)
-    if status != EVENTO_PENDENTE:
-        # A6: dispatch de mensagens especificas (CARREGADA/SEPARADA/FATURADA/DISPONIVEL)
-        raise MontagemValidationError(
-            _msg_a6_por_status_montagem(chassi_norm, status, esperado='PENDENTE')
-        )
-    if not descricao_resolucao or len(descricao_resolucao.strip()) < 3:
-        raise MontagemValidationError('Descrição da resolução obrigatória (≥3 chars)')
-
-    # Fichas FISICAS abertas = as que carregam o evento PENDENTE (evento_pendente_id).
-    fichas = (
-        AssaiPendencia.query
-        .filter(
-            AssaiPendencia.chassi == chassi_norm,
-            AssaiPendencia.resolvida_em.is_(None),
-            AssaiPendencia.cancelada_em.is_(None),
-            AssaiPendencia.evento_pendente_id.isnot(None),
-        )
-        .all()
-    )
-    if not fichas:
-        raise MontagemValidationError(
-            f'Chassi {chassi_norm} esta PENDENTE mas nao tem ficha de pendencia '
-            'fisica aberta (rode o backfill motos_assai_35).'
-        )
-    if len(fichas) > 1:
-        raise MontagemValidationError(
-            f'Multiplas ({len(fichas)}) pendencias abertas para o chassi '
-            f'{chassi_norm} — use a tela de resolucao por ficha (Spec 2).'
-        )
-
-    pendencia_service.resolver_pendencia(
-        pendencia_id=fichas[0].id,
-        tratativa=None,
-        resolucao_descricao=descricao_resolucao.strip(),
-        operador_id=operador_id,
-    )
-    db.session.commit()
-
-    ev_final = ultimo_evento(chassi_norm)
-    return {
-        'evento_id': ev_final.id if ev_final else None,
-        'chassi': chassi_norm,
-        'tipo': EVENTO_MONTADA,
     }
 
 

@@ -1,12 +1,14 @@
 """Rotas para gestao de pendencias de montagem (defeito de peca).
 
-Pendencia aberta: chassi com ultimo evento PENDENTE.
-Resolucao: chama montagem_service.resolver_pendencia() ja existente.
-Historico: lista append-only de eventos PENDENCIA_RESOLVIDA.
+Pendencia aberta: ficha assai_pendencia sem resolvida_em/cancelada_em.
+Resolucao por ficha: tela pendencia_resolver_tela (Spec 2 Task 7).
+Reclassificacao avulsa: pendencia_reclassificar (INDETERMINADA -> categoria/origem real).
+Historico: fichas resolvidas (assai_pendencia.resolvida_em IS NOT NULL).
 
 2026-05-13: filtros chassi/modelo/data/operador adicionados as duas telas
 (abertas e historico). Operadores e modelos populados via servicos auxiliares
 para autocomplete (datalist HTML5 + select).
+Spec 2: filtros categoria/origem/tratativa (constantes do model) nas duas telas.
 """
 
 from datetime import date, datetime
@@ -16,13 +18,17 @@ from flask_login import login_required, current_user
 from app import db
 from app.motos_assai.routes import motos_assai_bp
 from app.motos_assai.decorators import require_motos_assai
-from app.motos_assai.models import EVENTO_PENDENTE, EVENTO_PENDENCIA_RESOLVIDA
+from app.motos_assai.models import (
+    EVENTO_PENDENTE, EVENTO_PENDENCIA_RESOLVIDA,
+    PENDENCIA_CATEGORIAS_VALIDAS, PENDENCIA_ORIGENS_VALIDAS,
+    PENDENCIA_TRATATIVAS_VALIDAS,
+)
 from app.motos_assai.services.pendencia_service import (
     listar_abertas, listar_historico_resolvidas, contar_pendencias_abertas,
     operadores_que_registraram_pendencia, modelos_com_pendencias,
 )
 from app.motos_assai.services.montagem_service import (
-    resolver_pendencia, enviar_para_pendencia, MontagemValidationError,
+    enviar_para_pendencia, MontagemValidationError,
 )
 
 
@@ -44,6 +50,9 @@ def _coletar_filtros() -> dict:
         'data_inicio': _parse_date(request.args.get('data_inicio')),
         'data_fim': _parse_date(request.args.get('data_fim')),
         'operador_id': request.args.get('operador_id', type=int) or None,
+        'categoria': (request.args.get('categoria') or '').strip() or None,
+        'origem': (request.args.get('origem') or '').strip() or None,
+        'tratativa': (request.args.get('tratativa') or '').strip() or None,
     }
 
 
@@ -74,6 +83,9 @@ def pendencias_abertas():
         filtros_aplicados=filtros,
         operadores=operadores,
         modelos=modelos,
+        categorias=sorted(PENDENCIA_CATEGORIAS_VALIDAS),
+        origens=sorted(PENDENCIA_ORIGENS_VALIDAS),
+        tratativas=sorted(PENDENCIA_TRATATIVAS_VALIDAS),
     )
 
 
@@ -96,31 +108,33 @@ def pendencias_historico():
         filtros_aplicados=filtros,
         operadores=operadores,
         modelos=modelos,
+        categorias=sorted(PENDENCIA_CATEGORIAS_VALIDAS),
+        origens=sorted(PENDENCIA_ORIGENS_VALIDAS),
+        tratativas=sorted(PENDENCIA_TRATATIVAS_VALIDAS),
     )
 
 
-@motos_assai_bp.route('/pendencias/resolver', methods=['POST'])
+@motos_assai_bp.route('/pendencias/<int:pid>/reclassificar', methods=['POST'])
 @login_required
 @require_motos_assai
-def pendencias_resolver():
-    """Resolve pendencia: PENDENTE -> PENDENCIA_RESOLVIDA -> MONTADA.
+def pendencia_reclassificar(pid):
+    """Reclassifica categoria/origem de uma ficha (INDETERMINADA -> real).
 
-    Espera JSON: {chassi, descricao_resolucao}
+    Form POST (categoria, origem) a partir da lista de abertas. Redireciona
+    de volta para a lista (referrer).
     """
-    data = request.get_json(silent=True) or {}
-    chassi = (data.get('chassi') or '').strip().upper()
-    descricao = (data.get('descricao_resolucao') or '').strip()
-    if not chassi:
-        return jsonify({'ok': False, 'erro': 'Chassi obrigatorio'}), 400
+    from app.motos_assai.services import pendencia_service
+    from app.motos_assai.services.pendencia_service import PendenciaError
     try:
-        result = resolver_pendencia(
-            chassi=chassi,
-            descricao_resolucao=descricao,
-            operador_id=current_user.id,
-        )
-    except MontagemValidationError as e:
-        return jsonify({'ok': False, 'erro': str(e)}), 400
-    return jsonify({'ok': True, **(result if isinstance(result, dict) else {})})
+        pendencia_service.reclassificar(
+            pendencia_id=pid, categoria=request.form.get('categoria'),
+            origem=request.form.get('origem'), operador_id=current_user.id)
+        db.session.commit()
+        flash('Pendência reclassificada.', 'success')
+    except PendenciaError as e:
+        db.session.rollback()
+        flash(str(e), 'danger')
+    return redirect(request.referrer or url_for('motos_assai.pendencias_abertas'))
 
 
 @motos_assai_bp.route('/pendencias/criar', methods=['POST'])
