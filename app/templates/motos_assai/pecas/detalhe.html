@@ -1,0 +1,47 @@
+{% extends "motos_assai/base_motos_assai.html" %}
+
+{% block motos_assai_content %}
+<header class="d-flex justify-content-between mb-3">
+  <h2>{{ peca.nome }}
+    {% if peca.ativo %}<span class="badge bg-success">ATIVA</span>
+    {% else %}<span class="badge bg-secondary">INATIVA</span>{% endif %}
+  </h2>
+  <a href="{{ url_for('motos_assai.peca_editar', pid=peca.id) }}" class="btn btn-outline-primary">
+    <i class="fas fa-edit"></i> Editar
+  </a>
+</header>
+
+<dl class="row">
+  <dt class="col-sm-3">Código</dt><dd class="col-sm-9">{{ peca.codigo or '-' }}</dd>
+  <dt class="col-sm-3">Custo referência</dt>
+  <dd class="col-sm-9">
+    {% if peca.custo_referencia is not none %}R$ {{ peca.custo_referencia|numero_br(2) }}
+    {% else %}<span class="text-warning">não cadastrado</span>{% endif %}
+  </dd>
+  <dt class="col-sm-3">Saldo em estoque</dt><dd class="col-sm-9">{{ saldo }}</dd>
+  <dt class="col-sm-3">Custo médio</dt>
+  <dd class="col-sm-9">
+    {% if custo_medio is not none %}R$ {{ custo_medio|numero_br(2) }}
+    {% else %}<span class="text-warning">sem movimentação</span>{% endif %}
+  </dd>
+  <dt class="col-sm-3">Ledger de movimentações</dt>
+  <dd class="col-sm-9 text-muted">(ver no Estoque de Peça)</dd>
+</dl>
+
+<h4>Modelos compatíveis ({{ peca.modelos|length }})</h4>
+<table class="table table-sm">
+  <thead><tr><th>Código</th><th>Nome</th></tr></thead>
+  <tbody>
+    {% for pm in peca.modelos %}
+    <tr>
+      <td>{{ pm.modelo.codigo }}</td>
+      <td>{{ pm.modelo.nome }}</td>
+    </tr>
+    {% else %}
+    <tr><td colspan="2" class="text-center text-muted">Nenhum modelo vinculado.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<a href="{{ url_for('motos_assai.peca_lista') }}" class="btn btn-outline-secondary">Voltar</a>
+{% endblock %}

@@ -1,0 +1,53 @@
+{% extends "motos_assai/base_motos_assai.html" %}
+
+{% block motos_assai_content %}
+<header class="d-flex justify-content-between align-items-center mb-3">
+  <h2>Catálogo de Peças</h2>
+  <a href="{{ url_for('motos_assai.peca_novo') }}" class="btn btn-primary">
+    <i class="fas fa-plus"></i> Nova peça
+  </a>
+</header>
+
+<form method="GET" class="row g-2 mb-3">
+  <div class="col-md-6">
+    <input type="text" name="q" value="{{ q or '' }}" class="form-control"
+           placeholder="Buscar por nome ou código...">
+  </div>
+  <div class="col-md-3">
+    <button class="btn btn-outline-secondary w-100">Filtrar</button>
+  </div>
+</form>
+
+<div id="tabela-pecas" class="table-responsive">
+<table class="table table-hover">
+  <thead>
+    <tr>
+      <th>Nome</th><th>Código</th><th class="text-end">Saldo</th><th>Status</th><th></th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for linha in linhas %}
+    {% set p = linha.p %}
+    <tr>
+      <td><a href="{{ url_for('motos_assai.peca_detalhe', pid=p.id) }}">{{ p.nome }}</a></td>
+      <td>{{ p.codigo or '-' }}</td>
+      <td class="text-end">{{ linha.saldo }}</td>
+      <td>
+        {% if p.ativo %}<span class="badge bg-success">ATIVA</span>
+        {% else %}<span class="badge bg-secondary">INATIVA</span>{% endif %}
+      </td>
+      <td class="text-end">
+        <a href="{{ url_for('motos_assai.peca_editar', pid=p.id) }}" class="btn btn-sm btn-outline-primary">
+          <i class="fas fa-edit"></i> Editar
+        </a>
+      </td>
+    </tr>
+    {% else %}
+    <tr><td colspan="5" class="text-center text-muted">Nenhuma peça cadastrada.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>{# /#tabela-pecas #}
+
+<p class="text-muted">Total: {{ linhas|length }} peça(s)</p>
+{% endblock %}

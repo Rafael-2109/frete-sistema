@@ -1,7 +1,7 @@
 {
   "app/agente": {
     "py": 117,
-    "loc": 58664,
+    "loc": 58670,
     "tpl": 0
   },
   "app/agente/services": {
@@ -31,7 +31,7 @@
   },
   "app/devolucao": {
     "py": 17,
-    "loc": 13957,
+    "loc": 13956,
     "tpl": 7
   },
   "app/financeiro": {
@@ -50,9 +50,9 @@
     "tpl": 103
   },
   "app/motos_assai": {
-    "py": 95,
-    "loc": 21091,
-    "tpl": 71
+    "py": 100,
+    "loc": 22060,
+    "tpl": 76
   },
   "app/odoo": {
     "py": 73,

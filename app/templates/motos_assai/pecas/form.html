@@ -1,0 +1,48 @@
+{% extends "motos_assai/base_motos_assai.html" %}
+
+{% block motos_assai_content %}
+<h2>{% if modo == 'novo' %}Nova peça{% else %}Editar peça {{ peca.nome }}{% endif %}</h2>
+
+<form method="POST" class="row g-3">
+  {{ form.hidden_tag() }}
+
+  <div class="col-md-8">
+    {{ form.nome.label(class="form-label") }}
+    {{ form.nome(class="form-control") }}
+    {% for e in form.nome.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+  </div>
+  <div class="col-md-4">
+    {{ form.codigo.label(class="form-label") }}
+    {{ form.codigo(class="form-control") }}
+    {% for e in form.codigo.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+  </div>
+
+  <div class="col-md-4">
+    {{ form.custo_referencia.label(class="form-label") }}
+    {{ form.custo_referencia(class="form-control", placeholder="Ex: 12,50") }}
+    {% for e in form.custo_referencia.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+    <small class="text-muted">Formato brasileiro (vírgula decimal).</small>
+  </div>
+
+  {% if modo == 'editar' %}
+  <div class="col-md-4 d-flex align-items-end">
+    <div class="form-check">
+      {{ form.ativo(class="form-check-input") }}
+      {{ form.ativo.label(class="form-check-label") }}
+    </div>
+  </div>
+  {% endif %}
+
+  <div class="col-12">
+    {{ form.modelo_ids.label(class="form-label") }}
+    {{ form.modelo_ids(class="form-select", size=8) }}
+    {% for e in form.modelo_ids.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+    <small class="text-muted">Segure Ctrl (ou Cmd) para selecionar múltiplos modelos.</small>
+  </div>
+
+  <div class="col-12">
+    <button type="submit" class="btn btn-primary">Salvar</button>
+    <a href="{{ url_for('motos_assai.peca_lista') }}" class="btn btn-outline-secondary">Cancelar</a>
+  </div>
+</form>
+{% endblock %}
