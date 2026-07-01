@@ -40,3 +40,18 @@ def test_post_resolver_consertar_monta(login_admin, app, admin_user):
     assert resp.status_code in (302, 200)
     with app.app_context():
         assert status_efetivo(ch) == EVENTO_MONTADA
+
+
+def test_get_detalhe_200(login_admin, app, admin_user):
+    import uuid
+    from app.motos_assai.services.pendencia_service import abrir_pendencia
+    from app.motos_assai.models import PENDENCIA_CATEGORIA_AVARIA, PENDENCIA_ORIGEM_GALPAO
+    with app.app_context():
+        chassi = f'TSTDT{uuid.uuid4().hex[:6].upper()}'
+        _moto(chassi)
+        f = abrir_pendencia(chassi=chassi, categoria=PENDENCIA_CATEGORIA_AVARIA,
+                            origem=PENDENCIA_ORIGEM_GALPAO, descricao='avaria detectada',
+                            operador_id=admin_user.id)
+        db.session.commit(); pid = f.id
+    resp = login_admin.get(f'/motos-assai/pendencias/{pid}')
+    assert resp.status_code == 200

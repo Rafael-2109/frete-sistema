@@ -148,6 +148,19 @@ def pendencias_criar():
     return jsonify({'ok': True, **result})
 
 
+@motos_assai_bp.route('/pendencias/<int:pid>')
+@login_required
+@require_motos_assai
+def pendencia_detalhe(pid):
+    """Visao 360 read-only de uma ficha de pendencia (Spec 2 Task 8)."""
+    from app.motos_assai.services import pendencia_service
+    d = pendencia_service.detalhe_pendencia(pid)
+    if d is None:
+        flash('Pendência não encontrada.', 'danger')
+        return redirect(url_for('motos_assai.pendencias_abertas'))
+    return render_template('motos_assai/pendencias/detalhe.html', d=d)
+
+
 @motos_assai_bp.route('/pendencias/<int:pid>/resolver', methods=['GET', 'POST'])
 @login_required
 @require_motos_assai

@@ -1,0 +1,210 @@
+{% extends "motos_assai/base_motos_assai.html" %}
+
+{% block motos_assai_content %}
+<header class="d-flex justify-content-between align-items-center mb-3">
+  <h2 class="mb-0">
+    <i class="fas fa-clipboard-list text-primary"></i> Pendência
+    <span class="badge bg-secondary ms-1">#{{ d.ficha.id }}</span>
+  </h2>
+  <div class="d-flex gap-2">
+    {% if d.ficha.esta_aberta %}
+    <a href="{{ url_for('motos_assai.pendencia_resolver_tela', pid=d.ficha.id) }}"
+       class="btn btn-sm btn-warning">
+      <i class="fas fa-wrench"></i> Resolver
+    </a>
+    {% endif %}
+    <a href="{{ url_for('motos_assai.pendencias_abertas') }}"
+       class="btn btn-sm btn-outline-secondary">
+      <i class="fas fa-arrow-left"></i> Voltar
+    </a>
+  </div>
+</header>
+
+{# ── Cabeçalho da ficha ─────────────────────────────────────────────────── #}
+<div class="card mb-3">
+  <div class="card-header fw-semibold">
+    {% set cat_cores = {'AVARIA': 'danger', 'FALTA_PECA': 'warning', 'REVISAO': 'info', 'VENDA': 'primary', 'INDETERMINADA': 'secondary'} %}
+    <span class="badge bg-{{ cat_cores.get(d.ficha.categoria, 'secondary') }} me-1">{{ d.ficha.categoria }}</span>
+    <span class="badge bg-secondary me-1">{{ d.ficha.origem }}</span>
+    <span class="badge bg-light text-dark border me-1">{{ d.ficha.fase }}</span>
+    {% if d.ficha.esta_aberta %}
+    <span class="badge bg-warning text-dark">ABERTA</span>
+    {% elif d.ficha.resolvida_em %}
+    <span class="badge bg-success">RESOLVIDA</span>
+    {% else %}
+    <span class="badge bg-dark">CANCELADA</span>
+    {% endif %}
+  </div>
+  <div class="card-body">
+    <dl class="row mb-0">
+      <dt class="col-sm-3">Chassi</dt>
+      <dd class="col-sm-9">
+        <code>{{ d.ficha.chassi }}</code>
+        {% if d.moto %}
+          &nbsp;<span class="text-muted">{{ d.moto.modelo_codigo }} — {{ d.moto.modelo_nome }}</span>
+          <span class="badge bg-secondary ms-1">{{ d.moto.cor }}</span>
+        {% endif %}
+      </dd>
+
+      <dt class="col-sm-3">Tratativa</dt>
+      <dd class="col-sm-9">{{ d.ficha.tratativa or '—' }}</dd>
+
+      <dt class="col-sm-3">Descrição</dt>
+      <dd class="col-sm-9">{{ d.ficha.descricao or '—' }}</dd>
+
+      <dt class="col-sm-3">Aberta em</dt>
+      <dd class="col-sm-9">
+        {{ d.ficha.aberta_em.strftime('%d/%m/%Y %H:%M') if d.ficha.aberta_em else '—' }}
+        {% if d.ficha.aberta_por %} por <strong>{{ d.ficha.aberta_por }}</strong>{% endif %}
+      </dd>
+
+      {% if d.ficha.chassi_doador %}
+      <dt class="col-sm-3">Chassi doador</dt>
+      <dd class="col-sm-9"><code>{{ d.ficha.chassi_doador }}</code></dd>
+      {% endif %}
+
+      {% if d.ficha.resolvida_em %}
+      <dt class="col-sm-3">Resolvida em</dt>
+      <dd class="col-sm-9">
+        {{ d.ficha.resolvida_em.strftime('%d/%m/%Y %H:%M') }}
+        {% if d.ficha.resolvida_por %} por <strong>{{ d.ficha.resolvida_por }}</strong>{% endif %}
+      </dd>
+      {% if d.ficha.resolucao_descricao %}
+      <dt class="col-sm-3">Resolução</dt>
+      <dd class="col-sm-9">{{ d.ficha.resolucao_descricao }}</dd>
+      {% endif %}
+      {% endif %}
+
+      {% if d.ficha.cancelada_em %}
+      <dt class="col-sm-3">Cancelada em</dt>
+      <dd class="col-sm-9">{{ d.ficha.cancelada_em.strftime('%d/%m/%Y %H:%M') }}</dd>
+      {% endif %}
+    </dl>
+  </div>
+</div>
+
+{# ── Origens vinculadas ──────────────────────────────────────────────────── #}
+{% if d.ficha.devolucao_item_id or d.ficha.pos_venda_ocorrencia_id or d.ficha.divergencia_origem_id %}
+<div class="card mb-3">
+  <div class="card-header fw-semibold">Origens vinculadas</div>
+  <div class="card-body">
+    <ul class="mb-0">
+      {% if d.ficha.devolucao_item_id %}
+      <li>Devolução item <strong>#{{ d.ficha.devolucao_item_id }}</strong></li>
+      {% endif %}
+      {% if d.ficha.pos_venda_ocorrencia_id %}
+      <li>Ocorrência pós-venda <strong>#{{ d.ficha.pos_venda_ocorrencia_id }}</strong></li>
+      {% endif %}
+      {% if d.ficha.divergencia_origem_id %}
+      <li>Divergência <strong>#{{ d.ficha.divergencia_origem_id }}</strong></li>
+      {% endif %}
+    </ul>
+  </div>
+</div>
+{% endif %}
+
+{# ── Movimentos de estoque ───────────────────────────────────────────────── #}
+<div class="card mb-3">
+  <div class="card-header fw-semibold">
+    Movimentos de estoque
+    {% if d.custo_total %}
+    <span class="float-end text-muted">
+      Custo total: <strong>R$ {{ '%.2f'|format(d.custo_total|float) }}</strong>
+    </span>
+    {% endif %}
+  </div>
+  {% if d.movimentos %}
+  <div class="table-responsive">
+    <table class="table table-sm mb-0">
+      <thead class="table-light">
+        <tr>
+          <th>Tipo</th>
+          <th>Peça</th>
+          <th class="text-end">Qtd</th>
+          <th class="text-end">Custo unit.</th>
+          <th class="text-end">Custo total</th>
+          <th class="text-end">Receita total</th>
+          <th>Chassi origem</th>
+          <th>Chassi destino</th>
+          <th>Data</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for m in d.movimentos %}
+        <tr>
+          <td><code>{{ m.tipo }}</code></td>
+          <td>{{ m.peca_nome }}</td>
+          <td class="text-end">{{ m.quantidade }}</td>
+          <td class="text-end">{% if m.custo_unitario %}R$ {{ '%.2f'|format(m.custo_unitario|float) }}{% else %}—{% endif %}</td>
+          <td class="text-end">{% if m.custo_total %}R$ {{ '%.2f'|format(m.custo_total|float) }}{% else %}—{% endif %}</td>
+          <td class="text-end">{% if m.receita_total %}R$ {{ '%.2f'|format(m.receita_total|float) }}{% else %}—{% endif %}</td>
+          <td>{% if m.chassi_origem %}<code>{{ m.chassi_origem }}</code>{% else %}—{% endif %}</td>
+          <td>{% if m.chassi_destino %}<code>{{ m.chassi_destino }}</code>{% else %}—{% endif %}</td>
+          <td>{{ m.ocorrido_em.strftime('%d/%m/%Y %H:%M') if m.ocorrido_em else '—' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="card-body text-muted">Nenhum movimento registrado.</div>
+  {% endif %}
+</div>
+
+{# ── Compras / garantias ─────────────────────────────────────────────────── #}
+<div class="card mb-3">
+  <div class="card-header fw-semibold">Compras / garantias</div>
+  {% if d.compras %}
+  <div class="table-responsive">
+    <table class="table table-sm mb-0">
+      <thead class="table-light">
+        <tr>
+          <th>Nº</th>
+          <th>Tipo</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for c in d.compras %}
+        <tr>
+          <td><code>{{ c.numero }}</code></td>
+          <td>{{ c.tipo }}</td>
+          <td>{{ c.status }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="card-body text-muted">Nenhuma compra/garantia vinculada.</div>
+  {% endif %}
+</div>
+
+{# ── Pai / filhas ────────────────────────────────────────────────────────── #}
+{% if d.pai or d.filhas %}
+<div class="card mb-3">
+  <div class="card-header fw-semibold">Hierarquia</div>
+  <div class="card-body">
+    {% if d.pai %}
+    <p class="mb-1">
+      <strong>Pendência pai:</strong>
+      <a href="{{ url_for('motos_assai.pendencia_detalhe', pid=d.pai.id) }}">#{{ d.pai.id }}</a>
+    </p>
+    {% endif %}
+    {% if d.filhas %}
+    <strong>Filhas ({{ d.filhas|length }}):</strong>
+    <ul class="mb-0">
+      {% for fi in d.filhas %}
+      <li>
+        <a href="{{ url_for('motos_assai.pendencia_detalhe', pid=fi.id) }}">#{{ fi.id }}</a>
+        — {{ fi.categoria }}
+        {% if fi.esta_aberta %}<span class="badge bg-warning text-dark ms-1">ABERTA</span>
+        {% else %}<span class="badge bg-success ms-1">FECHADA</span>{% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
+{% endblock %}
