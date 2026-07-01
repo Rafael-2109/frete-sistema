@@ -1,9 +1,30 @@
 import re
 import uuid
+from decimal import Decimal
 
 from app import db
-from app.motos_assai.models import AssaiPecaCompra, AssaiPecaCompraItem
+from app.motos_assai.models import (
+    AssaiEstoqueMovimento, AssaiPeca, AssaiPecaCompra, AssaiPecaCompraItem,
+    COMPRA_PECA_STATUS_PARCIAL, COMPRA_PECA_TIPO_COMPRA,
+)
 from app.motos_assai.services.peca_service import criar_peca
+from app.motos_assai.services.movimento_service import saldo
+from app.motos_assai.services.compra_peca_service import criar_compra
+
+
+def _limpar_peca(app, pid):
+    """Limpa a peça de teste + seu ledger + compras (FK ondelete='RESTRICT' em
+    assai_estoque_movimento.peca_id e assai_peca_compra_item.peca_id exige apagar
+    movimentações e compras antes da peça — espelha `test_estoque_peca_rotas.py`)."""
+    with app.app_context():
+        AssaiEstoqueMovimento.query.filter_by(peca_id=pid).delete()
+        for item in AssaiPecaCompraItem.query.filter_by(peca_id=pid).all():
+            db.session.delete(item.compra)  # cascade apaga os itens da mesma compra
+        db.session.flush()
+        p = db.session.get(AssaiPeca, pid)
+        if p:
+            db.session.delete(p)
+        db.session.commit()
 
 
 def test_lista_compras_200(login_admin):
@@ -42,3 +63,42 @@ def test_criar_compra_malformada_nao_500(login_admin, app, admin_user):
         # Nenhum item de compra deve ter sido persistido para essa peça
         # (rollback ao capturar CompraPecaError/InvalidOperation na rota).
         assert AssaiPecaCompraItem.query.filter_by(peca_id=pid).count() == 0
+
+
+def test_receber_item_entra_no_ledger(login_admin, app, admin_user):
+    with app.app_context():
+        p = criar_peca(nome=f'PZR{uuid.uuid4().hex[:6].upper()}', operador_id=admin_user.id)
+        db.session.commit(); pid = p.id
+        c = criar_compra(tipo=COMPRA_PECA_TIPO_COMPRA,
+                         itens=[{'peca_id': pid, 'quantidade': 5}], operador_id=admin_user.id)
+        db.session.commit(); cid = c.id; item_id = c.itens[0].id
+    try:
+        resp = login_admin.post(f'/motos-assai/compras-peca/{cid}/receber-item', data={
+            'compra_item_id': item_id, 'quantidade': '3', 'custo_unitario': '10,00'})
+        assert resp.status_code in (200, 302)
+        with app.app_context():
+            assert saldo(pid) == Decimal('3.000')
+            assert db.session.get(AssaiPecaCompra, cid).status == COMPRA_PECA_STATUS_PARCIAL
+    finally:
+        _limpar_peca(app, pid)
+
+
+def test_receber_item_custo_invalido_nao_500(login_admin, app, admin_user):
+    """Espelha a lição do Task 12 review: custo_unitario malformado no
+    receber-item levanta EstoqueError (não CompraPecaError) dentro de
+    movimento_service.registrar_entrada — precisa virar flash gracioso, não 500,
+    e não pode gravar ENTRADA parcial no ledger."""
+    with app.app_context():
+        p = criar_peca(nome=f'PZRBAD{uuid.uuid4().hex[:6].upper()}', operador_id=admin_user.id)
+        db.session.commit(); pid = p.id
+        c = criar_compra(tipo=COMPRA_PECA_TIPO_COMPRA,
+                         itens=[{'peca_id': pid, 'quantidade': 5}], operador_id=admin_user.id)
+        db.session.commit(); cid = c.id; item_id = c.itens[0].id
+    try:
+        resp = login_admin.post(f'/motos-assai/compras-peca/{cid}/receber-item', data={
+            'compra_item_id': item_id, 'quantidade': '3', 'custo_unitario': 'abc'})
+        assert resp.status_code in (200, 302)
+        with app.app_context():
+            assert saldo(pid) == Decimal('0')
+    finally:
+        _limpar_peca(app, pid)

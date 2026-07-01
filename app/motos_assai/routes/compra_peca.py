@@ -15,6 +15,7 @@ from app.motos_assai.routes import motos_assai_bp
 from app.motos_assai.decorators import require_motos_assai
 from app.motos_assai.services import compra_peca_service, peca_service
 from app.motos_assai.services.compra_peca_service import CompraPecaError
+from app.motos_assai.services.movimento_service import EstoqueError
 from app.motos_assai.models import AssaiPecaCompra
 
 # Erros de conversão numérica que devem virar flash gracioso, não 500.
@@ -22,6 +23,12 @@ from app.motos_assai.models import AssaiPecaCompra
 # mas capturamos também InvalidOperation/ValueError como defesa em profundidade
 # (mesma classe de bug do Task 10/11 — não confiar cegamente que o service cobre tudo).
 _ERROS_ENTRADA_INVALIDA = (CompraPecaError, InvalidOperation, ValueError)
+
+# `receber_item` repassa `custo_unitario` para `movimento_service.registrar_entrada`,
+# cujo `_decimal` levanta `EstoqueError` (não `CompraPecaError`) para valor malformado.
+# Tupla dedicada só para essa rota — não alarga o catch de `nova`/`cancelar`, que
+# nunca tocam `movimento_service` (Task 12 review — fix do 500 em custo malformado).
+_ERROS_RECEBER_ITEM = _ERROS_ENTRADA_INVALIDA + (EstoqueError,)
 
 
 def _br(s):
@@ -83,7 +90,7 @@ def compra_peca_receber_item(cid):
             custo_unitario=_br(request.form.get('custo_unitario')),
             operador_id=current_user.id)
         db.session.commit(); flash('Item recebido (entrada no estoque).', 'success')
-    except _ERROS_ENTRADA_INVALIDA as e:
+    except _ERROS_RECEBER_ITEM as e:
         db.session.rollback(); flash(str(e), 'danger')
     return redirect(url_for('motos_assai.compra_peca_detalhe', cid=cid))
 
