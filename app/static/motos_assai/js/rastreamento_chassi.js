@@ -62,6 +62,16 @@
     CONCLUIDO: 'bg-success', COM_DIVERGENCIA: 'bg-warning',
     EM_CONFERENCIA: 'bg-info', RECEBIDO_AGUARDANDO_CONFERENCIA: 'bg-secondary',
     RESOLVENDO_DUPLICIDADE: 'bg-warning',
+    // ficha de pendencia: categoria + origem + status
+    AVARIA: 'bg-danger', FALTA_PECA: 'bg-warning', REVISAO: 'bg-info',
+    VENDA: 'bg-primary', INDETERMINADA: 'bg-secondary',
+    GALPAO: 'bg-primary', TRANSPORTE: 'bg-info',
+    POS_VENDA_CLIENTE: 'bg-danger', POS_VENDA_LOJA: 'bg-warning',
+    DEVOLUCAO: 'bg-dark', aberta: 'bg-warning', resolvida: 'bg-success',
+    cancelada: 'bg-secondary',
+    // movimento de peca: tipo
+    ENTRADA: 'bg-success', CONSUMO: 'bg-primary', CANIBALIZACAO: 'bg-warning',
+    DESCARTE: 'bg-danger', AJUSTE: 'bg-secondary',
   };
 
   function badge(value) {
@@ -211,6 +221,37 @@
     }).join('');
   }
 
+  function renderFichasPendencia(tbody, itens) {
+    tbody.innerHTML = itens.map(function (it) {
+      return '<tr>'
+        + '<td><a href="/motos-assai/pendencias/' + encodeURIComponent(it.pendencia_id) + '">#'
+          + escapeHtml(txt(it.pendencia_id)) + '</a></td>'
+        + '<td>' + badge(it.categoria) + '</td>'
+        + '<td>' + badge(it.origem) + '</td>'
+        + td(it.fase)
+        + td(it.tratativa)
+        + '<td>' + badge(it.status) + '</td>'
+        + td(it.descricao)
+        + td(it.aberta_em)
+        + '</tr>';
+    }).join('');
+  }
+
+  function renderMovimentosPeca(tbody, itens) {
+    tbody.innerHTML = itens.map(function (it) {
+      var custo = (it.custo_total !== null && it.custo_total !== undefined) ? valorBr(it.custo_total) : '-';
+      return '<tr>'
+        + '<td>' + badge(it.tipo) + '</td>'
+        + td(it.peca_nome)
+        + '<td class="text-end">' + escapeHtml(txt(it.quantidade)) + '</td>'
+        + '<td class="text-end">' + escapeHtml(custo) + '</td>'
+        + tdCode(it.chassi_origem)
+        + tdCode(it.chassi_destino)
+        + td(it.ocorrido_em)
+        + '</tr>';
+    }).join('');
+  }
+
   // ---- cabecalho da moto + chips ----------------------------------------
   function colInfo(label, value) {
     return '<div class="col-6 col-md-3">'
@@ -254,6 +295,8 @@
     ['nfs', 'NFe', 'fa-file-invoice-dollar'],
     ['cces', 'CCe', 'fa-edit'],
     ['divergencias', 'Divergência', 'fa-triangle-exclamation'],
+    ['fichas_pendencia', 'Ficha Pendência', 'fa-clipboard-list'],
+    ['movimentos_peca', 'Movimento Peça', 'fa-right-left'],
     ['eventos', 'Eventos', 'fa-clock-rotate-left'],
   ];
 
@@ -279,6 +322,8 @@
     nfs: renderNfs,
     cces: renderCces,
     divergencias: renderDivergencias,
+    fichas_pendencia: renderFichasPendencia,
+    movimentos_peca: renderMovimentosPeca,
     eventos: renderEventosLike,
   };
 
@@ -310,6 +355,8 @@
     setSection('nfs', data.nfs);
     setSection('cces', data.cces);
     setSection('divergencias', data.divergencias);
+    setSection('fichas_pendencia', data.fichas_pendencia);
+    setSection('movimentos_peca', data.movimentos_peca);
     setSection('eventos', data.eventos);
   }
 

@@ -244,6 +244,59 @@
             </div>
           </div>
 
+          {# ---------- FICHAS DE PENDENCIA ---------- #}
+          <div class="card mb-3 rastreio-secao" id="rastreio-sec-fichas_pendencia" hidden>
+            <div class="card-header d-flex justify-content-between align-items-center">
+              <span class="fw-semibold"><i class="fas fa-clipboard-list text-warning"></i> Fichas de Pendência</span>
+              <span class="badge bg-secondary" data-count-for="fichas_pendencia">0</span>
+            </div>
+            <div class="card-body p-0">
+              <div class="table-responsive">
+                <table class="table table-sm table-hover align-middle mb-0">
+                  <thead class="table-light">
+                    <tr>
+                      <th>#</th>
+                      <th>Categoria</th>
+                      <th>Origem</th>
+                      <th>Fase</th>
+                      <th>Tratativa</th>
+                      <th>Status</th>
+                      <th>Descrição</th>
+                      <th>Aberta em</th>
+                    </tr>
+                  </thead>
+                  <tbody id="rastreio-fichas_pendencia-body"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          {# ---------- MOVIMENTOS DE PECA ---------- #}
+          <div class="card mb-3 rastreio-secao" id="rastreio-sec-movimentos_peca" hidden>
+            <div class="card-header d-flex justify-content-between align-items-center">
+              <span class="fw-semibold"><i class="fas fa-right-left text-info"></i> Movimentos de Peça</span>
+              <span class="badge bg-secondary" data-count-for="movimentos_peca">0</span>
+            </div>
+            <div class="card-body p-0">
+              <div class="table-responsive">
+                <table class="table table-sm table-hover align-middle mb-0">
+                  <thead class="table-light">
+                    <tr>
+                      <th>Tipo</th>
+                      <th>Peça</th>
+                      <th class="text-end">Quantidade</th>
+                      <th class="text-end">Custo total</th>
+                      <th>Chassi origem</th>
+                      <th>Chassi destino</th>
+                      <th>Ocorrido em</th>
+                    </tr>
+                  </thead>
+                  <tbody id="rastreio-movimentos_peca-body"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
           {# ---------- LINHA DO TEMPO COMPLETA ---------- #}
           <div class="card mb-3 rastreio-secao" id="rastreio-sec-eventos" hidden>
             <div class="card-header d-flex justify-content-between align-items-center">

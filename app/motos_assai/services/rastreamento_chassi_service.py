@@ -73,7 +73,8 @@ def rastrear_chassi(chassi: str) -> Dict[str, Any]:
     Estrutura:
         {ok, encontrado, chassi, [mensagem], moto, status_efetivo,
          recibos[], montagem[], pendencias[], separacoes[], carregamentos[],
-         nfs[], cces[], divergencias[], eventos[], contadores{}}
+         nfs[], cces[], divergencias[], fichas_pendencia[], movimentos_peca[],
+         eventos[], contadores{}}
     """
     chassi_norm = (chassi or '').strip().upper()
     if not chassi_norm:
@@ -93,6 +94,8 @@ def rastrear_chassi(chassi: str) -> Dict[str, Any]:
     nf_ids = [n['nf_id'] for n in nfs]
     cces = _buscar_cces(chassi_norm, nf_ids)
     divergencias = _buscar_divergencias(chassi_norm)
+    fichas_pendencia = _buscar_fichas_pendencia(chassi_norm)
+    movimentos_peca = _buscar_movimentos_peca(chassi_norm)
 
     montagem = [_evento_dict(e) for e in eventos if e.tipo in _TIPOS_MONTAGEM]
     pendencias = [_pendencia_dict(e) for e in eventos if e.tipo == EVENTO_PENDENTE]
@@ -100,7 +103,7 @@ def rastrear_chassi(chassi: str) -> Dict[str, Any]:
 
     encontrado = bool(
         moto or eventos or recibos or separacoes or carregamentos
-        or nfs or cces or divergencias
+        or nfs or cces or divergencias or fichas_pendencia or movimentos_peca
     )
 
     if not encontrado:
@@ -125,6 +128,8 @@ def rastrear_chassi(chassi: str) -> Dict[str, Any]:
         'nfs': nfs,
         'cces': cces,
         'divergencias': divergencias,
+        'fichas_pendencia': fichas_pendencia,
+        'movimentos_peca': movimentos_peca,
         'eventos': timeline,
         'contadores': {
             'recibos': len(recibos),
@@ -135,6 +140,8 @@ def rastrear_chassi(chassi: str) -> Dict[str, Any]:
             'nfs': len(nfs),
             'cces': len(cces),
             'divergencias': len(divergencias),
+            'fichas_pendencia': len(fichas_pendencia),
+            'movimentos_peca': len(movimentos_peca),
             'eventos': len(timeline),
         },
     }
@@ -371,3 +378,42 @@ def _buscar_divergencias(chassi: str) -> List[Dict[str, Any]]:
             'resolvida': d.resolvida_em is not None,
         })
     return result
+
+
+def _buscar_fichas_pendencia(chassi: str) -> List[Dict[str, Any]]:
+    """Fichas de tratamento (`assai_pendencia`) do chassi — Spec 1/2.
+
+    Distinto de `pendencias` (eventos fisicos `PENDENTE`): a ficha e' a
+    verdade do TRATAMENTO (N por chassi), o evento e' a verdade do ESTADO
+    FISICO (1 por chassi). Ver app/motos_assai/CLAUDE.md secao "3 verdades".
+    """
+    from app.motos_assai.models import AssaiPendencia
+    fichas = (AssaiPendencia.query.filter(AssaiPendencia.chassi == chassi)
+              .order_by(AssaiPendencia.aberta_em.desc()).all())
+    out = []
+    for f in fichas:
+        status = 'aberta' if f.esta_aberta else ('resolvida' if f.resolvida_em else 'cancelada')
+        out.append({
+            'pendencia_id': f.id, 'categoria': f.categoria, 'origem': f.origem,
+            'fase': f.fase, 'tratativa': f.tratativa, 'status': status,
+            'descricao': f.descricao, 'resolucao_descricao': f.resolucao_descricao,
+            'aberta_em': _dt(f.aberta_em), 'resolvida_em': _dt(f.resolvida_em),
+        })
+    return out
+
+
+def _buscar_movimentos_peca(chassi: str) -> List[Dict[str, Any]]:
+    """Movimentos do ledger de pecas (`assai_estoque_movimento`) com o chassi
+    como origem OU destino (ex: canibalizacao entre motos)."""
+    from app.motos_assai.models import AssaiEstoqueMovimento
+    from sqlalchemy import or_
+    movs = (AssaiEstoqueMovimento.query.filter(
+        or_(AssaiEstoqueMovimento.chassi_origem == chassi,
+            AssaiEstoqueMovimento.chassi_destino == chassi))
+        .order_by(AssaiEstoqueMovimento.id.desc()).all())
+    return [{
+        'tipo': m.tipo, 'peca_nome': m.peca.nome if m.peca else '-',
+        'quantidade': m.quantidade, 'custo_total': m.custo_total,
+        'chassi_origem': m.chassi_origem, 'chassi_destino': m.chassi_destino,
+        'ocorrido_em': _dt(m.ocorrido_em),
+    } for m in movs]
