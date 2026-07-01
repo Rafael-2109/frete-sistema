@@ -45,6 +45,10 @@ def test_listar_abertas_le_a_tabela(app, admin_user):
             assert achou[0]['observacao'] == 'Bateria com defeito'
             assert achou[0]['modelo_codigo'] == 'DOT'
             assert pendencia_service.contar_pendencias_abertas() >= 1
+            linha = achou[0]
+            assert 'pendencia_id' in linha and linha['pendencia_id']
+            assert linha['categoria'] and linha['origem']
+            assert 'fase' in linha and 'tratativa' in linha
         finally:
             AssaiPendencia.query.filter_by(id=ficha.id).delete()
             db.session.commit()
@@ -122,6 +126,14 @@ def test_operadores_que_registraram_pendencia_le_tabela(app, admin_user):
         finally:
             AssaiPendencia.query.filter_by(id=ficha.id).delete()
             db.session.commit()
+
+
+def test_listar_abertas_filtra_categoria(app, admin_user):
+    from app.motos_assai.services.pendencia_service import listar_abertas
+    from app.motos_assai.models import PENDENCIA_CATEGORIA_AVARIA
+    with app.app_context():
+        r = listar_abertas(filtros={'categoria': PENDENCIA_CATEGORIA_AVARIA})
+        assert all(x['categoria'] == PENDENCIA_CATEGORIA_AVARIA for x in r)
 
 
 def test_modelos_com_pendencias_le_tabela(app, admin_user):

@@ -36,6 +36,9 @@ class FiltrosPendencias(TypedDict, total=False):
     data_inicio: Optional[date]      # ocorrido_em >= data_inicio (00:00)
     data_fim: Optional[date]         # ocorrido_em <= data_fim (23:59:59)
     operador_id: Optional[int]
+    categoria: Optional[str]
+    origem: Optional[str]
+    tratativa: Optional[str]
 
 
 def listar_abertas(filtros: Optional[FiltrosPendencias] = None) -> List[Dict[str, Any]]:
@@ -73,6 +76,15 @@ def listar_abertas(filtros: Optional[FiltrosPendencias] = None) -> List[Dict[str
             q = q.filter(
                 AssaiPendencia.aberta_em <= datetime.combine(data_fim, time.max)
             )
+        categoria = filtros.get('categoria')
+        if categoria:
+            q = q.filter(AssaiPendencia.categoria == categoria)
+        origem = filtros.get('origem')
+        if origem:
+            q = q.filter(AssaiPendencia.origem == origem)
+        tratativa = filtros.get('tratativa')
+        if tratativa:
+            q = q.filter(AssaiPendencia.tratativa == tratativa)
 
     fichas = q.order_by(AssaiPendencia.aberta_em.desc()).all()
     if not fichas:
@@ -96,6 +108,7 @@ def listar_abertas(filtros: Optional[FiltrosPendencias] = None) -> List[Dict[str
             continue
         result.append({
             'evento_id': f.id,
+            'pendencia_id': f.id,
             'chassi': f.chassi,
             'modelo_id': moto.modelo_id if moto else None,
             'modelo_codigo': moto.modelo.codigo if moto and moto.modelo else '-',
@@ -106,6 +119,10 @@ def listar_abertas(filtros: Optional[FiltrosPendencias] = None) -> List[Dict[str
             'operador': f.aberta_por.nome if f.aberta_por else '-',
             'operador_id': f.aberta_por_id,
             'ocorrido_em': f.aberta_em,
+            'categoria': f.categoria,
+            'origem': f.origem,
+            'tratativa': f.tratativa,
+            'fase': f.fase,
         })
     return result
 
@@ -145,6 +162,15 @@ def listar_historico_resolvidas(
             q = q.filter(
                 AssaiPendencia.resolvida_em <= datetime.combine(data_fim, time.max)
             )
+        categoria = filtros.get('categoria')
+        if categoria:
+            q = q.filter(AssaiPendencia.categoria == categoria)
+        origem = filtros.get('origem')
+        if origem:
+            q = q.filter(AssaiPendencia.origem == origem)
+        tratativa = filtros.get('tratativa')
+        if tratativa:
+            q = q.filter(AssaiPendencia.tratativa == tratativa)
 
     fichas = q.order_by(AssaiPendencia.resolvida_em.desc()).limit(limit).all()
     if not fichas:
@@ -168,6 +194,7 @@ def listar_historico_resolvidas(
             continue
         result.append({
             'evento_id': f.id,
+            'pendencia_id': f.id,
             'chassi': f.chassi,
             'modelo_id': moto.modelo_id if moto else None,
             'modelo_codigo': moto.modelo.codigo if moto and moto.modelo else '-',
@@ -180,6 +207,10 @@ def listar_historico_resolvidas(
             'operador_resolucao_id': f.resolvida_por_id,
             'data_pendencia': f.aberta_em.strftime('%d/%m/%Y %H:%M') if f.aberta_em else '-',
             'data_resolucao': f.resolvida_em.strftime('%d/%m/%Y %H:%M') if f.resolvida_em else '-',
+            'categoria': f.categoria,
+            'origem': f.origem,
+            'tratativa': f.tratativa,
+            'fase': f.fase,
         })
     return result
 
