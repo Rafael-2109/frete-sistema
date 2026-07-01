@@ -1140,7 +1140,17 @@ class FaturamentoService:
                 
             except ImportError as e:
                 stats_sincronizacao['erros_sincronizacao'].append(f"Módulo fretes não disponível: {e}")
-            
+
+            # 🚀 SINCRONIZAÇÃO 5: Alertas de faturamento por CNPJ (e-mail + Teams)
+            try:
+                from app.faturamento.services.alerta_faturamento_service import processar_alertas_faturamento
+                if nfs_novas:
+                    resumo_alertas = processar_alertas_faturamento(nfs_novas)
+                    stats_sincronizacao['alertas_faturamento'] = resumo_alertas
+                    logger.info(f"🔔 Alertas de faturamento: {resumo_alertas}")
+            except Exception as e:
+                logger.error(f"Alertas de faturamento falharam (ignorado): {e}", exc_info=True)
+
             # ⏱️ CALCULAR PERFORMANCE REAL
             tempo_execucao = time.time() - start_time
             total_processados = contador_novos + contador_atualizados
