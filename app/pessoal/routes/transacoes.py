@@ -14,6 +14,7 @@ from app.pessoal.services.aprendizado_service import (
     simular_propagacao, propagar_regra_para_pendentes, propagar_parcelas,
 )
 from app.pessoal.services.categorizacao_service import eh_categoria_desconsiderar
+from app.pessoal.services.pix_credito_service import deve_permanecer_excluida_pix_credito
 from app.pessoal.services.fluxo_caixa_service import motivos_exclusao_batch
 from app.utils.timezone import agora_utc_naive
 
@@ -519,8 +520,12 @@ def categorizar():
         transacao.status = 'CATEGORIZADO'
         transacao.categorizado_em = agora_utc_naive()
         transacao.categorizado_por = current_user.nome if hasattr(current_user, 'nome') else str(current_user.id)
-        # Desconsiderar: exclui do relatorio; remover: volta a entrar
-        transacao.excluir_relatorio = eh_categoria_desconsiderar(categoria_id)
+        # Desconsiderar: exclui do relatorio; remover: volta a entrar.
+        # B2: perna principal do Pix-no-Credito permanece excluida (nao duplicar o principal).
+        transacao.excluir_relatorio = (
+            eh_categoria_desconsiderar(categoria_id)
+            or deve_permanecer_excluida_pix_credito(transacao)
+        )
 
         if membro_id:
             transacao.membro_id = membro_id
@@ -630,8 +635,8 @@ def descategorizar():
         transacao.status = 'PENDENTE'
         transacao.categorizado_em = None
         transacao.categorizado_por = None
-        # Sair de Desconsiderar => volta ao relatorio
-        transacao.excluir_relatorio = False
+        # Sair de Desconsiderar => volta ao relatorio (exceto perna principal Pix-credito).
+        transacao.excluir_relatorio = deve_permanecer_excluida_pix_credito(transacao)
 
         # Re-rodar pipeline em pendentes (inclui esta + as resetadas)
         propagados_info = propagar_para_pendentes()
@@ -722,7 +727,9 @@ def categorizar_lote():
                 transacao.status = 'CATEGORIZADO'
                 transacao.categorizado_em = agora_utc_naive()
                 transacao.categorizado_por = current_user.nome if hasattr(current_user, 'nome') else str(current_user.id)
-                transacao.excluir_relatorio = desconsiderar
+                transacao.excluir_relatorio = (
+                    desconsiderar or deve_permanecer_excluida_pix_credito(transacao)
+                )
                 if membro_id:
                     transacao.membro_id = membro_id
                     transacao.membro_auto = False

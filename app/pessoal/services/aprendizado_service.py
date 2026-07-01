@@ -23,6 +23,7 @@ from app.pessoal.models import (
     PessoalTransacao, PessoalCategoria, PessoalRegraCategorizacao,
 )
 from app.pessoal.services.categorizacao_service import categorizar_transacao
+from app.pessoal.services.pix_credito_service import deve_permanecer_excluida_pix_credito
 from app.utils.timezone import agora_utc_naive
 
 logger = logging.getLogger(__name__)
@@ -240,7 +241,10 @@ def propagar_para_pendentes() -> dict:
         # SEM categoria_id. Aplicar as flags mesmo nesse caso, senao a
         # transacao volta ao relatorio incorretamente apos um descategorizar
         # que reseta excluir_relatorio=False (bug 2026-05-10).
-        transacao.excluir_relatorio = resultado.excluir_relatorio
+        transacao.excluir_relatorio = (
+            resultado.excluir_relatorio
+            or deve_permanecer_excluida_pix_credito(transacao)
+        )
         transacao.eh_pagamento_cartao = resultado.eh_pagamento_cartao
         transacao.eh_transferencia_propria = resultado.eh_transferencia_propria
         transacao.status = 'CATEGORIZADO'
@@ -336,7 +340,10 @@ def propagar_regra_para_pendentes(regra: PessoalRegraCategorizacao,
             transacao.status = 'CATEGORIZADO'
             transacao.categorizado_em = agora_utc_naive()
             transacao.categorizado_por = 'sistema (propagacao)'
-            transacao.excluir_relatorio = eh_categoria_desconsiderar(regra.categoria_id)
+            transacao.excluir_relatorio = (
+                eh_categoria_desconsiderar(regra.categoria_id)
+                or deve_permanecer_excluida_pix_credito(transacao)
+            )
             regra.vezes_usado = (regra.vezes_usado or 0) + 1
             propagados += 1
 
@@ -382,7 +389,7 @@ def propagar_parcelas(transacao: PessoalTransacao) -> int:
         irma.status = 'CATEGORIZADO'
         irma.categorizado_em = agora_utc_naive()
         irma.categorizado_por = 'sistema (parcela)'
-        irma.excluir_relatorio = desconsiderar
+        irma.excluir_relatorio = desconsiderar or deve_permanecer_excluida_pix_credito(irma)
         if transacao.membro_id and not irma.membro_id:
             irma.membro_id = transacao.membro_id
             irma.membro_auto = True
@@ -459,7 +466,8 @@ def despropagar_regra(regra_id: int) -> int:
         # Sair de categoria Desconsiderar => volta ao relatorio.
         # propagar_para_pendentes() em seguida re-aplica heuristica (PAGTO,
         # transferencia propria) e ajusta excluir_relatorio se for o caso.
-        transacao.excluir_relatorio = False
+        # B2: perna principal do Pix-no-Credito permanece excluida (nao duplicar o principal).
+        transacao.excluir_relatorio = deve_permanecer_excluida_pix_credito(transacao)
         transacao.eh_pagamento_cartao = False
         transacao.eh_transferencia_propria = False
 
@@ -533,8 +541,9 @@ def propagar_regra_forcado(regra: PessoalRegraCategorizacao) -> dict:
         if t.categoria_id != regra.categoria_id:
             t.categoria_id = regra.categoria_id
             mudou = True
-        if t.excluir_relatorio != excluir:
-            t.excluir_relatorio = excluir
+        excluir_t = excluir or deve_permanecer_excluida_pix_credito(t)
+        if t.excluir_relatorio != excluir_t:
+            t.excluir_relatorio = excluir_t
             mudou = True
         # Se esta com status PENDENTE mas tem regra_id, promove a CATEGORIZADO
         if regra.categoria_id and t.status == 'PENDENTE':

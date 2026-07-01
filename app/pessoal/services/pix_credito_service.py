@@ -56,6 +56,30 @@ def _eh_funding(texto: str) -> bool:
     return any(_norm(p) in h for p in PADROES_FUNDING_PIX_CREDITO)
 
 
+# Marca carimbada por _split_compra na observacao da compra-principal.
+_MARCA_COMPRA_PRINCIPAL = '[Pix no Credito: original'
+
+
+def deve_permanecer_excluida_pix_credito(transacao) -> bool:
+    """Guard (B2): True se a transacao e uma perna do Pix-no-Credito cuja exclusao do
+    relatorio e ESTRUTURAL e NAO deve ser desfeita por recategorizacao/descategorizacao
+    manual — senao o principal (ja contado no Pix-saida) passa a contar 2x.
+
+    Protege:
+    - compra-principal do split (observacao carimbada por _split_compra)
+    - funding de liquidez (credito NuConta "Valor adicionado ... cartao de credito")
+
+    NAO protege juros nem Pix-saida (sao despesa VISIVEL). Puro: le atributos, sem DB.
+    """
+    if not getattr(transacao, 'eh_pix_credito', False):
+        return False
+    if transacao.observacao and _MARCA_COMPRA_PRINCIPAL in transacao.observacao:
+        return True
+    if _eh_funding(transacao.historico_completo or transacao.historico or ''):
+        return True
+    return False
+
+
 def _beneficiario(texto: str) -> str:
     """Extrai o nome do beneficiario de 'Transferencia enviada pelo Pix - NOME - ...'.
 

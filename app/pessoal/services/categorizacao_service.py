@@ -36,6 +36,7 @@ from app.pessoal.constants import (
     PADROES_TRANSFERENCIA_PROPRIA, PADROES_INVESTIMENTO,
     PADROES_FUNDING_PIX_CREDITO,
 )
+from app.pessoal.services.pix_credito_service import deve_permanecer_excluida_pix_credito
 
 
 @dataclass
@@ -386,7 +387,10 @@ def categorizar_lote(transacoes: list[PessoalTransacao]) -> dict:
         transacao.regra_id = resultado.regra_id
         transacao.categorizacao_auto = resultado.categorizacao_auto
         transacao.categorizacao_confianca = resultado.categorizacao_confianca
-        transacao.excluir_relatorio = resultado.excluir_relatorio
+        transacao.excluir_relatorio = (
+            resultado.excluir_relatorio
+            or deve_permanecer_excluida_pix_credito(transacao)
+        )
         transacao.eh_pagamento_cartao = resultado.eh_pagamento_cartao
         transacao.eh_transferencia_propria = resultado.eh_transferencia_propria
         transacao.status = resultado.status
