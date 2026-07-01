@@ -351,6 +351,16 @@ def categorizar_transacao(transacao: PessoalTransacao) -> ResultadoCategorizacao
     return resultado
 
 
+def _palavra_no_texto(palavra: str, texto: str) -> bool:
+    """True se `palavra` aparece como palavra INTEIRA (fronteira \\b) em `texto`.
+
+    D1: substring cru fazia 'RAFAEL' casar dentro de 'RAFAELA'/'AMAZON*RAFAELCAM' e
+    taguear terceiros como familiares. Ambos ja normalizados (upper/unidecode)."""
+    if not palavra or not texto:
+        return False
+    return re.search(r'\b' + re.escape(palavra) + r'\b', texto) is not None
+
+
 def atribuir_membro(transacao: PessoalTransacao, titular_cartao: str = None,
                      ultimos_digitos: str = None) -> tuple[Optional[int], bool]:
     """Atribui membro da familia a transacao.
@@ -380,16 +390,23 @@ def atribuir_membro(transacao: PessoalTransacao, titular_cartao: str = None,
         if conta and conta.membro_id:
             return (conta.membro_id, True)
 
-    # 3. CC PIX/TED: fuzzy match nome no historico
+    # 2.5 (D2): Cartao — NUNCA deduzir membro pelo nome do lojista/contraparte no historico.
+    # O cartao pertence a UMA pessoa; o historico e o estabelecimento. Se titular/digitos
+    # nao resolveram (ex.: OFX Nubank), usa o DONO da conta e fecha o path 3 para cartoes.
+    conta_tx = getattr(transacao, 'conta', None)
+    if conta_tx is not None and conta_tx.tipo == 'cartao_credito':
+        return (conta_tx.membro_id, bool(conta_tx.membro_id))
+
+    # 3. CC PIX/TED: match do nome no historico por palavra INTEIRA (D1)
     historico = _normalizar(transacao.historico_completo or transacao.historico or '')
     if historico:
         membros = PessoalMembro.query.filter_by(ativo=True).all()
         for membro in membros:
             nome_completo = _normalizar(membro.nome_completo or '')
             nome = _normalizar(membro.nome)
-            if nome_completo and nome_completo in historico:
+            if nome_completo and _palavra_no_texto(nome_completo, historico):
                 return (membro.id, True)
-            if nome and len(nome) > 3 and nome in historico:
+            if nome and len(nome) > 3 and _palavra_no_texto(nome, historico):
                 return (membro.id, True)
 
     # 4. Sem info
