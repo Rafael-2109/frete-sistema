@@ -1,6 +1,6 @@
 {
   "name": "assai_pendencia",
-  "description": "Ficha categorizada de pendencia de uma moto (chassi por valor). categoria (AVARIA/FALTA_PECA/REVISAO/VENDA/INDETERMINADA), origem (GALPAO/TRANSPORTE/POS_VENDA_CLIENTE/POS_VENDA_LOJA/DEVOLUCAO), tratativa (preenchida na resolucao), fase. Aberta = resolvida_em IS NULL AND cancelada_em IS NULL. evento_pendente_id NULL = nao afeta o estado da moto (pos-venda). pendencia_pai_id = filhas de REVISAO. Substitui a leitura de pendencias por eventos.",
+  "description": "Ficha categorizada de pendencia de uma moto (chassi por valor). categoria (AVARIA/FALTA_PECA/REVISAO/VENDA/INDETERMINADA), origem (GALPAO/TRANSPORTE/POS_VENDA_CLIENTE/POS_VENDA_LOJA/DEVOLUCAO), tratativa (preenchida na resolucao), fase. Aberta = resolvida_em IS NULL AND cancelada_em IS NULL. A ficha afeta o estado da moto (trava com evento PENDENTE) quando origem IN (GALPAO,TRANSPORTE,DEVOLUCAO) OU devolucao_item_id IS NOT NULL OU retorno_fisico=True; evento_pendente_id NULL = ficha nao-fisica (ex: pos-venda), nao afeta o estado da moto. pendencia_pai_id = filhas de REVISAO. Substitui a leitura de pendencias por eventos.",
   "fields": [
     {
       "name": "id",

@@ -4,7 +4,7 @@ camada: L1
 sot_de: —
 hub: CLAUDE.md
 superseded_by: —
-atualizado: 2026-06-30
+atualizado: 2026-07-01
 -->
 # Módulo Motos Assaí
 
@@ -225,7 +225,8 @@ Não indexados na lista de constantes acima:
 - `geocoding_service` — geocodifica `AssaiLoja` (Google Geocoding API → fallback Nominatim 1 req/s); cacheia `latitude/longitude/geocoded_at`.
 - `resumo_service` — agrega pipeline por modelo × status efetivo (último evento); `resumo_por_modelo`, `metricas_por_pedido[_loja]`.
 - `pedido_status_service` — recalcula `AssaiPedidoVenda.status` (qtd_faturada vs qtd_pedida); não recalcula CANCELADO (estado terminal).
-- `pendencia_service` — consultas read-only de pendências de montagem (abertas, histórico resolvidas, contagens, por operador/modelo).
+- `pendencia_service` — ciclo de vida da ficha `assai_pendencia` (`abrir_pendencia`/`resolver_pendencia`/`cancelar_pendencia`/`solicitar_compra`/`reclassificar`, Spec 1/2) + leituras (abertas, histórico resolvidas, contagens, `detalhe_pendencia` visão 360, por operador/modelo). Exc.: `PendenciaError`.
+- `resolucao_service` — orquestrador `resolver_com_tratativa(pendencia_id, tratativa, ...)` (Spec 2, usado por `pendencia_resolver_tela`): compõe os átomos do Spec 1 (`movimento_service.consumir`/`canibalizar` + `pendencia_service.resolver_pendencia`); add+flush sem commit (a rota commita). Exc.: `ResolucaoError`.
 - `reprocessar_match_service` — re-roda `_calcular_match` em NFs quando a fonte muda (cadastro de chassi, criação de loja, cancelamento de separação); helpers `nfs_afetadas_por_*`.
 - `chassi_autocomplete_service` — autocomplete read-only de chassi por contexto (recebimento/montagem/disponibilizar/separacao/montagem_doador); `buscar_chassis(q, contexto, ...)`.
 - `separacao_mirror_service` — espelha `AssaiSeparacao` FECHADA → `separacao` Nacom (`separacao_lote_id='ASSAI-SEP-{id}'`) p/ integrar ao fluxo Cotação/Embarque/Frete; resolve os 4 campos (expedicao/agendamento/protocolo/confirmado).
@@ -647,7 +648,9 @@ A resolução é **por ficha** (`pendencia_id`), não por chassi: tela `pendenci
 (GET/POST `/pendencias/<pid>/resolver`, Spec 2 Task 7) → `resolucao_service.resolver_com_tratativa`
 → `pendencia_service.resolver_pendencia(pendencia_id=..., ...)`. A reclassificação avulsa
 (INDETERMINADA → categoria/origem real) tem rota própria `pendencia_reclassificar`
-(POST `/pendencias/<pid>/reclassificar`).
+(POST `/pendencias/<pid>/reclassificar`). Detalhe read-only (visão 360 — ficha, movimentos,
+custo total, compras, filhas/pai) em `pendencia_detalhe` (GET `/pendencias/<pid>`, Spec 2 Task 8,
+via `pendencia_service.detalhe_pendencia`).
 
 > **Shim removido (Spec 2 Task 9):** o átomo legado `montagem_service.resolver_pendencia(chassi, ...)`,
 > a rota JSON `POST /pendencias/resolver` e o `pendencias_resolver.js` foram **REMOVIDOS**.
@@ -661,23 +664,32 @@ A resolução é **por ficha** (`pendencia_id`), não por chassi: tela `pendenci
 
 ### Status de implementação (2026-06-30)
 
-**Spec 1 (back-end) IMPLEMENTADO** — 6 tabelas + serviços + integração + backfill; 13 commits (`125224c01`..`751178d50`); **372 testes do módulo verdes**; review final whole-branch (opus) = pronto para merge. **NÃO pushado** — deploy bundlado com o Spec 2. **Spec 2 (UI) PENDENTE** (escopo na §15 do spec).
+**Spec 1 (back-end) + Spec 2 (UI) IMPLEMENTADOS** — 6 tabelas + serviços + integração + backfill (Spec 1) e UI completa por-ficha (Spec 2); 34 commits (`125224c01`..`3cd815315`); **407 testes do módulo verdes, 0 falhas** (34 skipped — fixtures binárias não commitadas, pré-existente). **NÃO pushado** — deploy bundlado Spec 1+2, pendente de aval do dono.
+
+**Spec 2 (UI) entregou:**
+- **Resolução por ficha**: tela `/pendencias/<id>/resolver` (`resolucao_service.resolver_com_tratativa`) + detalhe read-only `/pendencias/<id>` (visão 360 — ver seção "Resolução de pendência" acima).
+- **Reclassificação**: inline na tela de resolução (INDETERMINADA → categoria/origem real) + rota avulsa `POST /pendencias/<id>/reclassificar` (guard S6: bloqueia tornar a ficha não-física se ela já trava a moto).
+- **Telas de Peça**: catálogo `/pecas` (CRUD + compatibilidade N:N por modelo), estoque/ledger `/estoque-pecas` (entrada/ajuste/descarte) e compra `/compras-peca` (criar/receber item/cancelar).
+- **Gancho pós-venda**: `POST /pos-venda/ocorrencias/<id>/gerar-pendencia` gera `assai_pendencia` a partir de uma ocorrência + acompanhamento (contagem de pendências abertas por chassi na listagem).
+- **Timeline no rastreamento de chassi**: `rastreamento_chassi_service` inclui `fichas_pendencia` e `movimentos_peca` no modal de rastreamento.
+- **Menu**: links `Peças` / `Estoque Peça` / `Compras Peça` / `Pendências` em `base_motos_assai.html`.
+- **Shim removido**: `montagem_service.resolver_pendencia` (por chassi), a rota JSON `POST /pendencias/resolver` e `pendencias_resolver.js` foram **REMOVIDOS** — resolução hoje é SEMPRE por `pendencia_id`.
+- **Follow-ups técnicos aplicados**: guards de canibalização (anti-cascata A→B→A, `_exigir_peca`, doador-vendido, em `movimento_service`); SA2.0 (`.query.get()`→`db.session.get()` nos services tocados; `lazy='joined'`→`select`+joinedload explícito nas 3 relations `Usuario` de `models/pendencia.py`); hint do `assai_pendencia.json` refinada (`afeta_estado_moto` agora cita `retorno_fisico`/origem física, não só pós-venda).
 
 **Deploy (quando for):** migration 34 → deploy do código → `motos_assai_35 --confirmar` → `--check`. Até o backfill 35 rodar, pendências legadas (evento `PENDENTE` sem ficha) não aparecem nas listas por-ficha; a UI de resolução opera sobre `assai_pendencia`, então rodar o backfill é pré-requisito para resolvê-las.
 
-**Follow-ups conhecidos (Spec 2):** `_gerar_numero` → `CREATE SEQUENCE` na migration 34 (item 1, antes do deploy em prod); guards de canibalização (anti-cascata A→B→A, `_exigir_peca`, doador-vendido); `.query.get()`→`db.session.get()`; `lazy='joined'`→`select`+joinedload; `dados_extras` via `sanitize_for_json`; imports mortos; refinar hint do `assai_pendencia.json`. Estado completo + prompt de continuação: `docs/superpowers/plans/2026-06-30-motos-assai-estoque-pendencia-spec1-handoff.md`.
+**Follow-up remanescente:** import morto `AssaiModelo` em `devolucao_service.py` (detectado via pyflakes; não usado, não bloqueante). Estado completo + prompt de continuação: `docs/superpowers/plans/2026-06-30-motos-assai-estoque-pendencia-spec1-handoff.md`.
 
 ---
 
 ## Manutenção / Roadmap futuro
 
-Planos 1-5 completos (2026-05-12) + Spec 1 (2026-06-30). Evoluções futuras:
+Planos 1-5 completos (2026-05-12) + Spec 1 + Spec 2 (2026-06-30, ambos não pushados — deploy bundlado pendente de aval do dono). Evoluções futuras:
 
 - Permissões granulares (`assai_user_permissao`) — atualmente toggle único
 - Múltiplos CDs — transferência inter-CD
 - Modelo MIA — atualmente fora do escopo
 - Automação envio Excel à Q.P.A. via SMTP
-- Telas de gestão de pendências e peças (Spec 2) — resolução por ficha via UI, histórico de compras, recebimento de peças
 - Skills atualizadas com novos campos (agendamento por loja + plano por modelo)
 
 ---
