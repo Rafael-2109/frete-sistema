@@ -506,3 +506,34 @@ def contar_pendencias_abertas_por_chassi(chassi: str) -> int:
         )
         .count()
     )
+
+
+def contar_pendencias_abertas_por_chassis(chassis: list[str]) -> dict[str, int]:
+    """Conta fichas AssaiPendencia abertas (nao resolvida/cancelada), agrupado
+    por chassi, em UMA query (evita N+1 — ver `contar_pendencias_abertas_por_chassi`
+    para o equivalente pontual, mantido por compatibilidade/uso em outros pontos).
+
+    Retorna dict {chassi: count}; chassis sem pendencia aberta simplesmente nao
+    aparecem no dict (caller usa `.get(chassi, 0)`). Lista vazia -> {} sem query.
+    """
+    chassis_normalizados = [
+        (c or '').strip().upper() for c in (chassis or []) if (c or '').strip()
+    ]
+    if not chassis_normalizados:
+        return {}
+
+    from app.motos_assai.models import AssaiPendencia
+    rows = (
+        db.session.query(
+            AssaiPendencia.chassi,
+            func.count(AssaiPendencia.id),
+        )
+        .filter(
+            AssaiPendencia.chassi.in_(chassis_normalizados),
+            AssaiPendencia.resolvida_em.is_(None),
+            AssaiPendencia.cancelada_em.is_(None),
+        )
+        .group_by(AssaiPendencia.chassi)
+        .all()
+    )
+    return {chassi: int(qtd) for chassi, qtd in rows}

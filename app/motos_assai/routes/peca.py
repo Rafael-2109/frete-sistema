@@ -9,6 +9,9 @@ from app.motos_assai.forms.peca_forms import PecaForm
 from app.motos_assai.services import peca_service, movimento_service
 from app.motos_assai.services.peca_service import PecaError
 from app.motos_assai.models import AssaiModelo, AssaiPeca
+from app.motos_assai.routes._form_helpers import (
+    br_para_decimal_str as _br_decimal, decimal_para_br as _decimal_to_br,
+)
 
 # Erros de conversão numérica que devem virar mensagem de formulário, não 500.
 _ERROS_CUSTO_INVALIDO = (PecaError, InvalidOperation, ValueError)
@@ -16,31 +19,6 @@ _ERROS_CUSTO_INVALIDO = (PecaError, InvalidOperation, ValueError)
 
 def _modelo_choices():
     return [(m.id, f'{m.codigo} — {m.nome}') for m in AssaiModelo.query.order_by(AssaiModelo.codigo).all()]
-
-
-def _br_decimal(s):
-    s = (s or '').strip().replace('.', '').replace(',', '.')
-    return s or None
-
-
-def _decimal_to_br(d):
-    """Formata um Decimal para string BR (vírgula decimal), round-trip com `_br_decimal`.
-
-    Ex: Decimal('12.5000') -> '12,50'. NÃO insere separador de milhar — `_br_decimal`
-    assume que qualquer '.' é separador de milhar, então incluí-lo aqui quebraria o
-    round-trip (era exatamente o bug: `str(Decimal)` usa '.' como decimal, não milhar).
-    """
-    if d is None:
-        return ''
-    texto = format(d, 'f')  # notação fixa, nunca científica
-    if '.' in texto:
-        inteiro, frac = texto.split('.')
-        frac = frac.rstrip('0')
-        if len(frac) < 2:
-            frac = frac.ljust(2, '0')
-    else:
-        inteiro, frac = texto, '00'
-    return f'{inteiro},{frac}'
 
 
 def _flash_erro_custo(e):

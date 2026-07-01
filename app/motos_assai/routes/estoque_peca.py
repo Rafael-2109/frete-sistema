@@ -16,17 +16,13 @@ from app.motos_assai.decorators import require_motos_assai
 from app.motos_assai.services import peca_service, movimento_service
 from app.motos_assai.services.movimento_service import EstoqueError
 from app.motos_assai.models import AssaiPeca, AssaiEstoqueMovimento
+from app.motos_assai.routes._form_helpers import br_para_decimal_str as _br
 
 # Erros de conversão numérica que devem virar flash gracioso, não 500.
 # `movimento_service._decimal` já embrulha `Decimal(str(valor))` em EstoqueError,
 # mas capturamos também InvalidOperation/ValueError como defesa em profundidade
 # (mesma classe de bug do Task 10 — não confiar cegamente que o service cobre tudo).
 _ERROS_ENTRADA_INVALIDA = (EstoqueError, InvalidOperation, ValueError)
-
-
-def _br(s):
-    s = (s or '').strip().replace('.', '').replace(',', '.')
-    return s or None
 
 
 @motos_assai_bp.route('/estoque-pecas')

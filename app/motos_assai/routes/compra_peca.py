@@ -16,7 +16,8 @@ from app.motos_assai.decorators import require_motos_assai
 from app.motos_assai.services import compra_peca_service, peca_service
 from app.motos_assai.services.compra_peca_service import CompraPecaError
 from app.motos_assai.services.movimento_service import EstoqueError
-from app.motos_assai.models import AssaiPecaCompra
+from app.motos_assai.models import AssaiPecaCompra, AssaiPecaCompraItem
+from app.motos_assai.routes._form_helpers import br_para_decimal_str as _br
 
 # Erros de conversão numérica que devem virar flash gracioso, não 500.
 # `compra_peca_service._decimal` já embrulha `Decimal(str(valor))` em CompraPecaError,
@@ -29,11 +30,6 @@ _ERROS_ENTRADA_INVALIDA = (CompraPecaError, InvalidOperation, ValueError)
 # Tupla dedicada só para essa rota — não alarga o catch de `nova`/`cancelar`, que
 # nunca tocam `movimento_service` (Task 12 review — fix do 500 em custo malformado).
 _ERROS_RECEBER_ITEM = _ERROS_ENTRADA_INVALIDA + (EstoqueError,)
-
-
-def _br(s):
-    s = (s or '').strip().replace('.', '').replace(',', '.')
-    return s or None
 
 
 @motos_assai_bp.route('/compras-peca')
@@ -83,9 +79,14 @@ def compra_peca_detalhe(cid):
 @login_required
 @require_motos_assai
 def compra_peca_receber_item(cid):
+    compra_item_id = request.form.get('compra_item_id', type=int)
+    item = db.session.get(AssaiPecaCompraItem, compra_item_id) if compra_item_id else None
+    if not item or item.compra_id != cid:
+        flash('Item não pertence a esta compra.', 'danger')
+        return redirect(url_for('motos_assai.compra_peca_detalhe', cid=cid))
     try:
         compra_peca_service.receber_item(
-            compra_item_id=request.form.get('compra_item_id', type=int),
+            compra_item_id=compra_item_id,
             quantidade=_br(request.form.get('quantidade')),
             custo_unitario=_br(request.form.get('custo_unitario')),
             operador_id=current_user.id)

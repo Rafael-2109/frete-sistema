@@ -104,6 +104,7 @@ from .pos_venda_service import (
     PosVendaValidationError, LinhaPosVenda,
     gerar_pendencia_de_ocorrencia, pendencias_da_ocorrencia,
     contar_pendencias_abertas_por_chassi,
+    contar_pendencias_abertas_por_chassis,
 )
 from .devolucao_service import (
     criar_devolucao, listar_devolucoes, listar_devolucoes_da_nf,
@@ -167,6 +168,7 @@ __all__ = [
     'PosVendaValidationError', 'LinhaPosVenda',
     'gerar_pendencia_de_ocorrencia', 'pendencias_da_ocorrencia',
     'contar_pendencias_abertas_por_chassi',
+    'contar_pendencias_abertas_por_chassis',
     'criar_devolucao', 'listar_devolucoes', 'listar_devolucoes_da_nf',
     'get_devolucao', 'pendencias_do_chassi', 'itens_da_nf_para_tela',
     'DevolucaoValidationError',

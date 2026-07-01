@@ -32,7 +32,7 @@ from app.motos_assai.services import (
     listar_lojas, listar_modelos,
     PosVendaValidationError,
     gerar_pendencia_de_ocorrencia, pendencias_da_ocorrencia,
-    contar_pendencias_abertas_por_chassi,
+    contar_pendencias_abertas_por_chassis,
 )
 from app.motos_assai.services.pendencia_service import PendenciaError
 from app.motos_assai.models import (
@@ -75,8 +75,11 @@ def pos_venda_lista():
     )
     # Enriquece cada linha com a contagem de pendencias abertas do chassi
     # (geradas via pos-venda ou qualquer outra origem) — badge "Pendências (N)".
+    # Batched em 1 query (evita N+1 — ate 500 round-trips antes desta troca).
+    contagens = contar_pendencias_abertas_por_chassis([linha.chassi for linha in linhas])
     for linha in linhas:
-        linha.qtd_pendencias_abertas = contar_pendencias_abertas_por_chassi(linha.chassi)
+        chave = (linha.chassi or '').strip().upper()
+        linha.qtd_pendencias_abertas = contagens.get(chave, 0)
 
     return render_template(
         'motos_assai/pos_venda/lista.html',

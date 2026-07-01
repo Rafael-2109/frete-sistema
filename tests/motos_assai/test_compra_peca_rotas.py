@@ -83,6 +83,35 @@ def test_receber_item_entra_no_ledger(login_admin, app, admin_user):
         _limpar_peca(app, pid)
 
 
+def test_receber_item_cross_compra_bloqueado(login_admin, app, admin_user):
+    """Item da compra B nao pode ser recebido via URL da compra A (guard
+    fast-follow pos-review Spec 2): resposta graciosa (nao 500), saldo/quantidade
+    recebida do item permanecem intocados."""
+    with app.app_context():
+        p_a = criar_peca(nome=f'PZXA{uuid.uuid4().hex[:6].upper()}', operador_id=admin_user.id)
+        p_b = criar_peca(nome=f'PZXB{uuid.uuid4().hex[:6].upper()}', operador_id=admin_user.id)
+        db.session.commit(); pid_a = p_a.id; pid_b = p_b.id
+
+        c_a = criar_compra(tipo=COMPRA_PECA_TIPO_COMPRA,
+                           itens=[{'peca_id': pid_a, 'quantidade': 5}], operador_id=admin_user.id)
+        c_b = criar_compra(tipo=COMPRA_PECA_TIPO_COMPRA,
+                           itens=[{'peca_id': pid_b, 'quantidade': 5}], operador_id=admin_user.id)
+        db.session.commit()
+        cid_a = c_a.id
+        item_b_id = c_b.itens[0].id
+    try:
+        resp = login_admin.post(f'/motos-assai/compras-peca/{cid_a}/receber-item', data={
+            'compra_item_id': item_b_id, 'quantidade': '2', 'custo_unitario': '10,00'})
+        assert resp.status_code in (200, 302)
+        with app.app_context():
+            item_b = db.session.get(AssaiPecaCompraItem, item_b_id)
+            assert item_b.quantidade_recebida == Decimal('0')
+            assert saldo(pid_b) == Decimal('0')
+    finally:
+        _limpar_peca(app, pid_a)
+        _limpar_peca(app, pid_b)
+
+
 def test_receber_item_custo_invalido_nao_500(login_admin, app, admin_user):
     """Espelha a lição do Task 12 review: custo_unitario malformado no
     receber-item levanta EstoqueError (não CompraPecaError) dentro de
