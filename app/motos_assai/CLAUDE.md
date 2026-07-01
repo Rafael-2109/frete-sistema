@@ -678,7 +678,7 @@ via `pendencia_service.detalhe_pendencia`).
 
 **Deploy (quando for):** migration 34 → deploy do código → `motos_assai_35 --confirmar` → `--check`. Até o backfill 35 rodar, pendências legadas (evento `PENDENTE` sem ficha) não aparecem nas listas por-ficha; a UI de resolução opera sobre `assai_pendencia`, então rodar o backfill é pré-requisito para resolvê-las.
 
-**Follow-up remanescente:** import morto `AssaiModelo` em `devolucao_service.py` (detectado via pyflakes; não usado, não bloqueante). Estado completo + prompt de continuação: `docs/superpowers/plans/2026-06-30-motos-assai-estoque-pendencia-spec1-handoff.md`.
+**Follow-ups remanescentes (não bloqueantes):** imports mortos `AssaiModelo` em `devolucao_service.py` e `recebimento_service.py` (não usados); imports não-usados residuais (`pytest`/símbolos) em vários testes do módulo. Todos detectados via pyflakes, sem efeito em runtime. Estado completo + prompt de continuação: `docs/superpowers/plans/2026-06-30-motos-assai-estoque-pendencia-spec1-handoff.md`.
 
 ---
 
