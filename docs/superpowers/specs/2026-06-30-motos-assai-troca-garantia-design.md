@@ -209,7 +209,7 @@ Query base: `AssaiPosVendaOcorrencia.query.filter_by(nf_qpa_id=nf.id, tipo='TROC
 
 ## 7. Migrations
 
-> Toda migration = par DDL `.sql` + `.py` (regra do projeto). Schema JSON regenerado via `generate_schemas.py`. Próximo número livre: `motos_assai_34_troca_garantia`.
+> Toda migration = par DDL `.sql` + `.py` (regra do projeto). Schema JSON regenerado via `generate_schemas.py`. Próximo número livre: `motos_assai_36_troca_garantia`.
 
 1. **`assai_pos_venda_ocorrencia`**: `ADD COLUMN tipo varchar(20) NOT NULL DEFAULT 'RELATO'`, `ADD COLUMN chassi_substituto varchar(50)`, `ADD COLUMN nf_qpa_id integer REFERENCES assai_nf_qpa(id)`. Index em `nf_qpa_id`. Backfill: linhas existentes recebem `tipo='RELATO'` (default cobre).
 2. **`ck_assai_nf_qpa_item_vinculo_motivo`**: `DROP CONSTRAINT IF EXISTS` + `ADD CONSTRAINT ... CHECK (motivo IN ('NF_CANCELADA','CCE_ALTEROU_CHASSI','SUBSTITUICAO_CROSS_LOJA','TROCA_GARANTIA'))` (idempotente, padrão Migration 33).

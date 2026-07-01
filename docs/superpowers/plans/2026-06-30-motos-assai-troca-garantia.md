@@ -53,7 +53,7 @@ Processo de negócio não mapeado: vendemos motos ao Assaí (com NF Q.P.A.), o A
 
 | Arquivo | Responsabilidade | Ação |
 |---|---|---|
-| `scripts/migrations/motos_assai_34_troca_garantia.sql` / `.py` | 3 colunas em `assai_pos_venda_ocorrencia` + `TROCA_GARANTIA` no CHECK `ck_assai_nf_qpa_item_vinculo_motivo` | Criar |
+| `scripts/migrations/motos_assai_36_troca_garantia.sql` / `.py` | 3 colunas em `assai_pos_venda_ocorrencia` + `TROCA_GARANTIA` no CHECK `ck_assai_nf_qpa_item_vinculo_motivo` | Criar |
 | `app/motos_assai/models/pos_venda.py` | Constantes `TIPO_*` + 3 colunas (`tipo`, `chassi_substituto`, `nf_qpa_id`) | Modificar |
 | `app/motos_assai/models/nf_qpa_vinculo.py` | Constante `VINCULO_MOTIVO_TROCA_GARANTIA` + set | Modificar |
 | `app/motos_assai/models/__init__.py` | Re-exportar as novas constantes | Modificar |
@@ -74,8 +74,8 @@ Processo de negócio não mapeado: vendemos motos ao Assaí (com NF Q.P.A.), o A
 ## Task 1: Migration + modelo (colunas pós-venda + motivo de vínculo)
 
 **Files:**
-- Create: `scripts/migrations/motos_assai_34_troca_garantia.sql`
-- Create: `scripts/migrations/motos_assai_34_troca_garantia.py`
+- Create: `scripts/migrations/motos_assai_36_troca_garantia.sql`
+- Create: `scripts/migrations/motos_assai_36_troca_garantia.py`
 - Modify: `app/motos_assai/models/pos_venda.py`
 - Modify: `app/motos_assai/models/nf_qpa_vinculo.py`
 - Modify: `app/motos_assai/models/__init__.py`
@@ -86,10 +86,10 @@ Processo de negócio não mapeado: vendemos motos ao Assaí (com NF Q.P.A.), o A
 
 - [ ] **Step 1: Escrever a migration SQL**
 
-Create `scripts/migrations/motos_assai_34_troca_garantia.sql`:
+Create `scripts/migrations/motos_assai_36_troca_garantia.sql`:
 
 ```sql
--- Migration 34: Troca em garantia.
+-- Migration 36: Troca em garantia.
 -- (1) Estende assai_pos_venda_ocorrencia com tipo/chassi_substituto/nf_qpa_id.
 -- (2) Adiciona TROCA_GARANTIA ao CHECK de assai_nf_qpa_item_vinculo_historico.motivo.
 -- Padrao idempotente (DROP IF EXISTS + ADD).
@@ -126,15 +126,15 @@ COMMIT;
 
 - [ ] **Step 2: Escrever o script Python da migration**
 
-Create `scripts/migrations/motos_assai_34_troca_garantia.py`:
+Create `scripts/migrations/motos_assai_36_troca_garantia.py`:
 
 ```python
 #!/usr/bin/env python3
-"""Migration 34 — Troca em garantia.
+"""Migration 36 — Troca em garantia.
 
 (1) Estende assai_pos_venda_ocorrencia: tipo / chassi_substituto / nf_qpa_id.
 (2) Adiciona TROCA_GARANTIA ao CHECK de assai_nf_qpa_item_vinculo_historico.motivo.
-Idempotente; espelha o DDL de motos_assai_34_troca_garantia.sql.
+Idempotente; espelha o DDL de motos_assai_36_troca_garantia.sql.
 """
 from __future__ import annotations
 
@@ -180,11 +180,11 @@ END $$;
 def main():
     app = create_app()
     with app.app_context():
-        print('Migration 34: troca em garantia (colunas pos-venda + motivo vinculo)...')
+        print('Migration 36: troca em garantia (colunas pos-venda + motivo vinculo)...')
         db.session.execute(text(SQL))
         db.session.execute(text(SQL_CHECK))
         db.session.commit()
-        print('✅ Migration 34 aplicada')
+        print('✅ Migration 36 aplicada')
 
 
 if __name__ == '__main__':
@@ -193,8 +193,8 @@ if __name__ == '__main__':
 
 - [ ] **Step 3: Rodar a migration no banco local de dev**
 
-Run: `source .venv/bin/activate && python scripts/migrations/motos_assai_34_troca_garantia.py`
-Expected: `✅ Migration 34 aplicada`
+Run: `source .venv/bin/activate && python scripts/migrations/motos_assai_36_troca_garantia.py`
+Expected: `✅ Migration 36 aplicada`
 
 - [ ] **Step 4: Adicionar constantes + colunas ao model `pos_venda.py`**
 
@@ -353,7 +353,7 @@ def _cenario(admin, *, chassi_a=None, chassi_b=None, mesmo_modelo=True,
 
 
 def test_pos_venda_ocorrencia_aceita_campos_de_troca(app, admin_user):
-    """A migration 34 adicionou tipo/chassi_substituto/nf_qpa_id — round-trip."""
+    """A migration 36 adicionou tipo/chassi_substituto/nf_qpa_id — round-trip."""
     with app.app_context():
         c = _cenario(admin_user)
         oc = AssaiPosVendaOcorrencia(
@@ -387,8 +387,8 @@ Confirme que `.claude/skills/consultando-sql/schemas/tables/assai_pos_venda_ocor
 - [ ] **Step 10: Commit**
 
 ```bash
-git add scripts/migrations/motos_assai_34_troca_garantia.* app/motos_assai/models/pos_venda.py app/motos_assai/models/nf_qpa_vinculo.py app/motos_assai/models/__init__.py tests/motos_assai/test_troca_garantia.py .claude/skills/consultando-sql/schemas/tables/assai_pos_venda_ocorrencia.json
-git commit -m "feat(motos-assai): migration 34 troca em garantia (colunas pos-venda + motivo vinculo)"
+git add scripts/migrations/motos_assai_36_troca_garantia.* app/motos_assai/models/pos_venda.py app/motos_assai/models/nf_qpa_vinculo.py app/motos_assai/models/__init__.py tests/motos_assai/test_troca_garantia.py .claude/skills/consultando-sql/schemas/tables/assai_pos_venda_ocorrencia.json
+git commit -m "feat(motos-assai): migration 36 troca em garantia (colunas pos-venda + motivo vinculo)"
 ```
 
 ---
@@ -1425,7 +1425,7 @@ In `app/motos_assai/CLAUDE.md`, add a new section (após "Guards de import de NF
 - O processo de Troca em Garantia (swap A→B na NF; B→FATURADA, A→PENDENTE; só controle interno; sem frete novo).
 - A extensão de `assai_pos_venda_ocorrencia` (`tipo`/`chassi_substituto`/`nf_qpa_id`) e o motivo `TROCA_GARANTIA`.
 - O serviço `troca_garantia_service.registrar_troca` (cirúrgico, **não** usa `_calcular_match`/`sincronizar_espelho` — explicar por quê) + `trocar_chassi_no_espelho` + `listar_substitutos`.
-- Migration 34 (se aplicada manualmente em prod, registrar aqui — padrão das 32/33).
+- Migration 36 (se aplicada manualmente em prod, registrar aqui — padrão das 32/33).
 - Ponteiro para a spec `docs/superpowers/specs/2026-06-30-motos-assai-troca-garantia-design.md`.
 
 Atualizar o campo `atualizado:` do header `doc:meta`. Seguir a skill `padronizando-docs`.

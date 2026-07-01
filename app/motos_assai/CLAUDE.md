@@ -970,7 +970,7 @@ pós-venda           : —                pós-venda           : ocorrência TRO
 **intocados**: B substitui A na mesma NF, o saldo de venda é idêntico; `recalcular_status_pedido`
 **não** é chamado. Sem NF de devolução; sem cotação/leg nova de frete.
 
-### Extensão de `assai_pos_venda_ocorrencia` (Migration 34)
+### Extensão de `assai_pos_venda_ocorrencia` (Migration 36)
 
 Três colunas adicionadas:
 
@@ -987,11 +987,14 @@ Index em `nf_qpa_id` para a query do Faturamento.
 (padrão idempotente DROP/ADD de Migration 33). Constante `VINCULO_MOTIVO_TROCA_GARANTIA`
 em `models/nf_qpa_vinculo.py`.
 
-⚠️ **A Migration 34 NÃO consta no build.sh**: foi aplicada manualmente no **dev e em PROD**
+⚠️ **A Migration 36 NÃO consta no build.sh**: foi aplicada manualmente no **dev e em PROD**
 (via `DATABASE_URL_PROD`, 2026-06-30 — padrão da 32/33); os arquivos
-`scripts/migrations/motos_assai_34_*` ficam como registro do DDL (idempotente — pode ser
+`scripts/migrations/motos_assai_36_*` ficam como registro do DDL (idempotente — pode ser
 re-rodado). Em prod o CHECK `ck_assai_nf_qpa_item_vinculo_motivo` estava **ausente** (a 26
-não chegou lá) — a 34 o criou já com os 4 motivos.
+não chegou lá) — a migration o criou já com os 4 motivos.
+> **Renumeração 34→36**: foi originalmente aplicada em dev+prod sob o nome `_34_troca_garantia`;
+> renumerada para `_36_` na integração com a feature Estoque de Peças (que já ocupava 34/35).
+> A renumeração é só do registro — o DDL já efetivado em prod é o mesmo (idempotente).
 
 ### Serviço `troca_garantia_service`
 
