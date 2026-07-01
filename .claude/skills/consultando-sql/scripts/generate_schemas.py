@@ -366,7 +366,7 @@ TABLE_DESCRIPTIONS = {
     'assai_peca_modelo': 'Compatibilidade N:N peca x modelo (assai_peca <-> assai_modelo). UNIQUE (peca_id, modelo_id).',
     'assai_pendencia': 'Ficha categorizada de pendencia de uma moto (chassi por valor). categoria (AVARIA/FALTA_PECA/REVISAO/VENDA/INDETERMINADA), origem (GALPAO/TRANSPORTE/POS_VENDA_CLIENTE/POS_VENDA_LOJA/DEVOLUCAO), tratativa (preenchida na resolucao), fase. Aberta = resolvida_em IS NULL AND cancelada_em IS NULL. evento_pendente_id NULL = nao afeta o estado da moto (pos-venda). pendencia_pai_id = filhas de REVISAO. Substitui a leitura de pendencias por eventos.',
     'assai_estoque_movimento': 'Ledger append-only de pecas (o elo central). tipo: ENTRADA/CONSUMO/CANIBALIZACAO/DESCARTE/AJUSTE. Saldo da peca = SUM(delta_almoxarifado) por peca_id (CANIBALIZACAO tem delta 0). custo_unitario congelado por linha; receita_* so em pendencia VENDA. Liga chassi_origem/chassi_destino, pendencia_id, compra_item_id.',
-    'assai_peca_compra': 'Cabecalho de pedido de compra/garantia de pecas a Motochefe. numero PC-AAAA-NNNN (sequence/retry). tipo GARANTIA/COMPRA; status ABERTA/PARCIAL/RECEBIDA/CANCELADA. Itens em assai_peca_compra_item.',
+    'assai_peca_compra': 'Cabecalho de pedido de compra/garantia de pecas a Motochefe. numero PC-AAAA-NNNN (sequence nextval). tipo GARANTIA/COMPRA; status ABERTA/PARCIAL/RECEBIDA/CANCELADA. Itens em assai_peca_compra_item.',
     'assai_peca_compra_item': 'Item de assai_peca_compra. quantidade vs quantidade_recebida (recebimento gera ENTRADA no ledger e recalcula o status do cabecalho). pendencia_id = a ficha que motivou o item.',
 }
 

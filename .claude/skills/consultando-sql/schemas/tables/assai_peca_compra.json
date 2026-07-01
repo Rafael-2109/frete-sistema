@@ -1,6 +1,6 @@
 {
   "name": "assai_peca_compra",
-  "description": "Cabecalho de pedido de compra/garantia de pecas a Motochefe. numero PC-AAAA-NNNN (sequence/retry). tipo GARANTIA/COMPRA; status ABERTA/PARCIAL/RECEBIDA/CANCELADA. Itens em assai_peca_compra_item.",
+  "description": "Cabecalho de pedido de compra/garantia de pecas a Motochefe. numero PC-AAAA-NNNN (sequence nextval). tipo GARANTIA/COMPRA; status ABERTA/PARCIAL/RECEBIDA/CANCELADA. Itens em assai_peca_compra_item.",
   "fields": [
     {
       "name": "id",

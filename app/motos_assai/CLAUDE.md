@@ -664,7 +664,7 @@ via `pendencia_service.detalhe_pendencia`).
 
 ### Status de implementação (2026-06-30)
 
-**Spec 1 (back-end) + Spec 2 (UI) IMPLEMENTADOS** — 6 tabelas + serviços + integração + backfill (Spec 1) e UI completa por-ficha (Spec 2); 34 commits (`125224c01`..`3cd815315`); **407 testes do módulo verdes, 0 falhas** (34 skipped — fixtures binárias não commitadas, pré-existente). **NÃO pushado** — deploy bundlado Spec 1+2, pendente de aval do dono.
+**Spec 1 (back-end) + Spec 2 (UI) IMPLEMENTADOS** — 6 tabelas + serviços + integração + backfill (Spec 1) e UI completa por-ficha (Spec 2); 34 commits (`125224c01`..`3cd815315`); **407 testes do módulo verdes, 0 falhas** (34 skipped — fixtures binárias não commitadas, pré-existente). **DEPLOYADO em PROD (2026-07-01)** — Spec 1+2 pushados; migration 34 (6 tabelas + sequence `assai_peca_compra_numero_seq`) + backfill 35 (35 fichas legadas, `--check` = 0 PENDENTE sem ficha) aplicados em prod; rotas no ar (health 302).
 
 **Spec 2 (UI) entregou:**
 - **Resolução por ficha**: tela `/pendencias/<id>/resolver` (`resolucao_service.resolver_com_tratativa`) + detalhe read-only `/pendencias/<id>` (visão 360 — ver seção "Resolução de pendência" acima).
@@ -676,7 +676,7 @@ via `pendencia_service.detalhe_pendencia`).
 - **Shim removido**: `montagem_service.resolver_pendencia` (por chassi), a rota JSON `POST /pendencias/resolver` e `pendencias_resolver.js` foram **REMOVIDOS** — resolução hoje é SEMPRE por `pendencia_id`.
 - **Follow-ups técnicos aplicados**: guards de canibalização (anti-cascata A→B→A, `_exigir_peca`, doador-vendido, em `movimento_service`); SA2.0 (`.query.get()`→`db.session.get()` nos services tocados; `lazy='joined'`→`select`+joinedload explícito nas 3 relations `Usuario` de `models/pendencia.py`); hint do `assai_pendencia.json` refinada (`afeta_estado_moto` agora cita `retorno_fisico`/origem física, não só pós-venda).
 
-**Deploy (quando for):** migration 34 → deploy do código → `motos_assai_35 --confirmar` → `--check`. Até o backfill 35 rodar, pendências legadas (evento `PENDENTE` sem ficha) não aparecem nas listas por-ficha; a UI de resolução opera sobre `assai_pendencia`, então rodar o backfill é pré-requisito para resolvê-las.
+**Deploy (REALIZADO 2026-07-01):** migration 34 → push/deploy do código → `motos_assai_35 --confirmar` (35 fichas) → `--check` (0 gap). A UI de resolução opera sobre `assai_pendencia`; o backfill já cobriu as pendências legadas (evento `PENDENTE` sem ficha).
 
 **Follow-ups remanescentes (não bloqueantes):** imports mortos `AssaiModelo` em `devolucao_service.py` e `recebimento_service.py` (não usados); imports não-usados residuais (`pytest`/símbolos) em vários testes do módulo. Todos detectados via pyflakes, sem efeito em runtime. Estado completo + prompt de continuação: `docs/superpowers/plans/2026-06-30-motos-assai-estoque-pendencia-spec1-handoff.md`.
 
@@ -684,7 +684,7 @@ via `pendencia_service.detalhe_pendencia`).
 
 ## Manutenção / Roadmap futuro
 
-Planos 1-5 completos (2026-05-12) + Spec 1 + Spec 2 (2026-06-30, ambos não pushados — deploy bundlado pendente de aval do dono). Evoluções futuras:
+Planos 1-5 completos (2026-05-12) + Spec 1 + Spec 2 (2026-06-30, ambos DEPLOYADOS em prod 2026-07-01). Evoluções futuras:
 
 - Permissões granulares (`assai_user_permissao`) — atualmente toggle único
 - Múltiplos CDs — transferência inter-CD
