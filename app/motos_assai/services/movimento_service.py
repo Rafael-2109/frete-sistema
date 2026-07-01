@@ -10,7 +10,7 @@ from sqlalchemy import func
 
 from app import db
 from app.motos_assai.models import (
-    AssaiPeca, AssaiEstoqueMovimento,
+    AssaiPeca, AssaiEstoqueMovimento, AssaiPendencia,
     MOVIMENTO_ENTRADA, MOVIMENTO_DESCARTE, MOVIMENTO_AJUSTE,
 )
 from app.utils.json_helpers import sanitize_for_json
@@ -178,6 +178,7 @@ def consumir(
     qtd = Decimal(str(quantidade))
     if qtd <= 0:
         raise EstoqueError('Quantidade deve ser positiva.')
+    _exigir_peca(peca_id)
     ficha = AssaiPendencia.query.get(pendencia_id)
     if ficha is None:
         raise EstoqueError(f'Pendencia {pendencia_id} nao encontrada.')
@@ -194,7 +195,7 @@ def consumir(
         custo_total=(qtd * custo).quantize(Decimal('0.01')),
         operador_id=operador_id,
         ocorrido_em=agora_brasil_naive(),
-        dados_extras={},
+        dados_extras=sanitize_for_json({}),
     )
     if ficha.categoria == PENDENCIA_CATEGORIA_VENDA and receita_unitaria is not None:
         rec = Decimal(str(receita_unitaria))
@@ -232,6 +233,24 @@ def canibalizar(
     qtd = Decimal(str(quantidade))
     if qtd <= 0:
         raise EstoqueError('Quantidade deve ser positiva.')
+    _exigir_peca(peca_id)
+    from app.motos_assai.models import AssaiMoto, PENDENCIA_CATEGORIA_FALTA_PECA
+    if not AssaiMoto.query.filter_by(chassi=origem).first():
+        raise EstoqueError(f'Doador {origem} nao encontrado em assai_moto.')
+    # anti-cascata A->B->A: doador ja tem FALTA_PECA aberta DESTA peca
+    ja_falta = (
+        AssaiPendencia.query.filter(
+            AssaiPendencia.chassi == origem,
+            AssaiPendencia.peca_id == peca_id,
+            AssaiPendencia.categoria == PENDENCIA_CATEGORIA_FALTA_PECA,
+            AssaiPendencia.resolvida_em.is_(None),
+            AssaiPendencia.cancelada_em.is_(None),
+        ).first()
+    )
+    if ja_falta is not None:
+        raise EstoqueError(
+            f'Cascata bloqueada: doador {origem} ja tem FALTA_PECA aberta desta peca.'
+        )
     ficha = AssaiPendencia.query.get(pendencia_id)
     if ficha is None:
         raise EstoqueError(f'Pendencia {pendencia_id} nao encontrada.')
@@ -248,7 +267,7 @@ def canibalizar(
         custo_total=Decimal('0'),
         operador_id=operador_id,
         ocorrido_em=agora_brasil_naive(),
-        dados_extras={'custo_estimado': True},
+        dados_extras=sanitize_for_json({'custo_estimado': True}),
     )
     if ficha.categoria == PENDENCIA_CATEGORIA_VENDA and receita_unitaria is not None:
         rec = Decimal(str(receita_unitaria))
