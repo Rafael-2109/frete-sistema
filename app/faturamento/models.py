@@ -116,3 +116,65 @@ class FaturamentoProduto(db.Model):
             'nota_credito_id': self.nota_credito_id,
             'data_reversao': self.data_reversao.strftime('%d/%m/%Y %H:%M') if self.data_reversao else None
         }
+
+
+class AlertaFaturamentoCnpj(db.Model):
+    """CNPJ monitorado: ao faturar para ele, dispara alerta para os e-mails."""
+    __tablename__ = 'alerta_faturamento_cnpj'
+
+    id = db.Column(db.Integer, primary_key=True)
+    cnpj = db.Column(db.String(20), nullable=False, unique=True, index=True)
+    nome_cliente = db.Column(db.String(255), nullable=True)
+    emails = db.Column(db.Text, nullable=False)  # lista separada por ; ou ,
+    ativo = db.Column(db.Boolean, default=True, nullable=False)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive)
+    criado_por = db.Column(db.String(100), nullable=True)
+    atualizado_em = db.Column(db.DateTime, default=agora_utc_naive, onupdate=agora_utc_naive)
+
+    def lista_emails(self):
+        import re
+        return [e.strip() for e in re.split(r'[;,\n]', self.emails or '') if e.strip()]
+
+    def __repr__(self):
+        return f"<AlertaFaturamentoCnpj {self.cnpj} ativo={self.ativo}>"
+
+
+class AlertaFaturamentoConfig(db.Model):
+    """Configuracao global (1 linha): canal fixo do Teams + liga/desliga."""
+    __tablename__ = 'alerta_faturamento_config'
+
+    id = db.Column(db.Integer, primary_key=True)
+    teams_webhook_url = db.Column(db.String(500), nullable=True)
+    teams_ativo = db.Column(db.Boolean, default=False, nullable=False)
+    email_ativo = db.Column(db.Boolean, default=True, nullable=False)
+    atualizado_em = db.Column(db.DateTime, default=agora_utc_naive, onupdate=agora_utc_naive)
+    atualizado_por = db.Column(db.String(100), nullable=True)
+
+    @classmethod
+    def get_config(cls):
+        cfg = cls.query.first()
+        if cfg is None:
+            cfg = cls()
+            db.session.add(cfg)
+            db.session.commit()
+        return cfg
+
+
+class AlertaFaturamentoEnviado(db.Model):
+    """Log/idempotencia: 1 linha por (numero_nf, canal). Evita reenvio."""
+    __tablename__ = 'alerta_faturamento_enviado'
+
+    id = db.Column(db.Integer, primary_key=True)
+    numero_nf = db.Column(db.String(20), nullable=False, index=True)
+    cnpj = db.Column(db.String(20), nullable=True, index=True)
+    canal = db.Column(db.String(10), nullable=False)  # 'email' | 'teams'
+    status = db.Column(db.String(10), nullable=False, default='ok')  # 'ok' | 'erro'
+    detalhe = db.Column(db.Text, nullable=True)
+    enviado_em = db.Column(db.DateTime, default=agora_utc_naive)
+
+    __table_args__ = (
+        db.UniqueConstraint('numero_nf', 'canal', name='uq_alerta_fat_enviado_nf_canal'),
+    )
+
+    def __repr__(self):
+        return f"<AlertaFaturamentoEnviado NF {self.numero_nf} {self.canal} {self.status}>"
