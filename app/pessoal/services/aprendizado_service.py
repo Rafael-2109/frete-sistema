@@ -28,6 +28,11 @@ from app.utils.timezone import agora_utc_naive
 
 logger = logging.getLogger(__name__)
 
+# Textos que NAO sao padrao real (placeholders de descricao ausente no import). Ja
+# normalizados (upper). 'NULL' viraria regra de substring que casa qualquer historico
+# contendo 'NULL' (bug auditado: regra 989).
+_PADROES_DEGENERADOS = {'NULL', 'NONE', 'NAN'}
+
 
 def _mesmo_escopo_regra(regra: 'PessoalRegraCategorizacao',
                          cpf_cnpj_norm, valor_min, valor_max,
@@ -102,6 +107,10 @@ def aprender_de_categorizacao(transacao_id: int, categoria_id: int,
         historico_norm = _normalizar(
             transacao.historico_completo or transacao.historico or ''
         )
+    # Padrao degenerado (placeholder 'NULL'/'NONE') nao vira regra de substring — descarta
+    # o texto e so cria regra se houver CPF/CNPJ.
+    if historico_norm in _PADROES_DEGENERADOS:
+        historico_norm = ''
     # Regra precisa de pelo menos um criterio: padrao textual OU CPF/CNPJ
     if (not historico_norm or len(historico_norm) < 3) and not cpf_cnpj_norm:
         return None
