@@ -38,13 +38,15 @@ def _p(msg):
 
 def passo_a2():
     """Compensavel (S/E) excluida indevidamente sem compensacao total -> excluir=FALSE."""
+    # Materialidade: residual > R$1 exclui casos de arredondamento (ex.: id=3286 residuo
+    # R$0,17 numa tx de R$70k essencialmente 100% compensada — o motor a trata como excluida).
     sel = text("""
         SELECT t.id, t.valor, t.valor_compensado
         FROM pessoal_transacoes t
         JOIN pessoal_categorias c ON c.id = t.categoria_id
         WHERE t.excluir_relatorio = TRUE
           AND c.compensavel_tipo IS NOT NULL
-          AND COALESCE(t.valor_compensado, 0) < t.valor
+          AND (t.valor - COALESCE(t.valor_compensado, 0)) > 1.00
           AND t.eh_pagamento_cartao = FALSE
           AND t.eh_transferencia_propria = FALSE
           AND c.grupo <> 'Desconsiderar'
