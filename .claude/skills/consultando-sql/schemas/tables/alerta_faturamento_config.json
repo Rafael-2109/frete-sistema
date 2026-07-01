@@ -1,0 +1,36 @@
+{
+  "name": "alerta_faturamento_config",
+  "description": "Configuracao global (1 linha) dos alertas de faturamento por CNPJ. Guarda a URL do webhook do canal fixo do Teams (teams_webhook_url) e as flags que ligam/desligam cada canal (teams_ativo, email_ativo). Acessada via get-or-create.",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key (sempre 1 linha)"
+    },
+    {
+      "name": "teams_webhook_url",
+      "type": "varchar(500)",
+      "description": "URL do webhook do canal fixo do Teams (destino de todos os avisos)"
+    },
+    {
+      "name": "teams_ativo",
+      "type": "boolean",
+      "description": "Liga/desliga o envio no Teams",
+      "nullable": false
+    },
+    {
+      "name": "email_ativo",
+      "type": "boolean",
+      "description": "Liga/desliga o envio por e-mail",
+      "nullable": false
+    },
+    {
+      "name": "atualizado_em",
+      "type": "timestamp"
+    },
+    {
+      "name": "atualizado_por",
+      "type": "varchar(100)"
+    }
+  ]
+}

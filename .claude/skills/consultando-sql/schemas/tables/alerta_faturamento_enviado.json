@@ -1,0 +1,43 @@
+{
+  "name": "alerta_faturamento_enviado",
+  "description": "Log/idempotencia dos alertas de faturamento. 1 linha por (numero_nf, canal) com UNIQUE — garante que a mesma NF nunca gera dois avisos no mesmo canal. status='ok'|'erro' (erro permite reenvio na proxima sync via upsert). canal='email'|'teams'.",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "numero_nf",
+      "type": "varchar(20)",
+      "description": "Numero da NF avisada",
+      "nullable": false
+    },
+    {
+      "name": "cnpj",
+      "type": "varchar(20)",
+      "description": "CNPJ do cliente (normalizado)"
+    },
+    {
+      "name": "canal",
+      "type": "varchar(10)",
+      "description": "Canal do aviso: 'email' ou 'teams'",
+      "nullable": false
+    },
+    {
+      "name": "status",
+      "type": "varchar(10)",
+      "description": "'ok' (enviado) ou 'erro' (falhou; sera retentado)",
+      "nullable": false
+    },
+    {
+      "name": "detalhe",
+      "type": "text",
+      "description": "message_id (sucesso) ou mensagem de erro"
+    },
+    {
+      "name": "enviado_em",
+      "type": "timestamp"
+    }
+  ]
+}
