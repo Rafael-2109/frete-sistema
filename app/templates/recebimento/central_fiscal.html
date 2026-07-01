@@ -137,6 +137,30 @@
             </div>
         </div>
 
+        <!-- ALERTAS DE FATURAMENTO -->
+        <div class="fin-section-card">
+            <div class="fin-section-card__header">
+                <div class="fin-section-card__icon fin-section-card__icon--amber">
+                    <i class="fas fa-bell"></i>
+                </div>
+                <div>
+                    <h3 class="fin-section-card__title">Alertas de Faturamento</h3>
+                    <p class="fin-section-card__desc">Avisa por e-mail/Teams ao faturar para CNPJs cadastrados</p>
+                </div>
+            </div>
+            <div class="fin-section-links">
+                <a href="{{ url_for('alertas_faturamento.index') }}" class="fin-section-link">
+                    <div class="fin-section-link__icon">
+                        <i class="fas fa-envelope text-warning"></i>
+                    </div>
+                    <div class="fin-section-link__text">
+                        <div class="fin-section-link__title">Configurar Alertas</div>
+                        <div class="fin-section-link__subtitle">CNPJs, e-mails e canal do Teams</div>
+                    </div>
+                </a>
+            </div>
+        </div>
+
     </div>
 </div>
 {% endblock %}

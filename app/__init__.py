@@ -939,6 +939,7 @@ def create_app(config_name=None):
     from app.embarques.routes import embarques_bp
     from app.faturamento.routes import faturamento_bp
     from app.faturamento.api.atualizar_nf_api import atualizar_nf_bp
+    from app.faturamento.routes_alertas import alertas_faturamento_bp
     from app.localidades.routes import localidades_bp
     from app.main.routes import main_bp
     from app.monitoramento.routes import monitoramento_bp
@@ -1003,6 +1004,7 @@ def create_app(config_name=None):
     app.register_blueprint(embarques_bp)
     app.register_blueprint(faturamento_bp)
     app.register_blueprint(atualizar_nf_bp)
+    app.register_blueprint(alertas_faturamento_bp)
 
     app.register_blueprint(localidades_bp)
     app.register_blueprint(main_bp)
