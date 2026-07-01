@@ -5,7 +5,7 @@
   <header class="fin-header">
     <div class="fin-header__content">
       <h1 class="fin-header__title"><i class="fas fa-bell"></i> Alertas de Faturamento</h1>
-      <p class="fin-header__subtitle">Ao faturar para um CNPJ cadastrado, avisa por e-mail e no Teams.</p>
+      <p class="fin-header__subtitle">Ao faturar para um CNPJ cadastrado, avisa por e-mail os endereços informados.</p>
     </div>
     <div class="fin-header__actions">
       <a href="{{ url_for('recebimento_views.central_fiscal') }}" class="btn btn-outline-light btn-sm">
@@ -18,38 +18,16 @@
     {% for cat, msg in msgs %}<div class="alert alert-{{ cat }}">{{ msg }}</div>{% endfor %}
   {% endwith %}
 
-  <!-- Configuração global -->
-  <div class="fin-section-card">
-    <h3 class="fin-section-card__title">Configuração</h3>
-    <form method="post" action="{{ url_for('alertas_faturamento.config') }}" class="row g-2">
-      <div class="col-12">
-        <label class="form-label">Endereço do canal do Teams (webhook)</label>
-        <input type="url" name="teams_webhook_url" class="form-control"
-               value="{{ config.teams_webhook_url or '' }}" placeholder="https://...">
-      </div>
-      <div class="col-auto form-check">
-        <input class="form-check-input" type="checkbox" name="email_ativo" id="email_ativo"
-               {% if config.email_ativo %}checked{% endif %}>
-        <label class="form-check-label" for="email_ativo">Enviar e-mail</label>
-      </div>
-      <div class="col-auto form-check">
-        <input class="form-check-input" type="checkbox" name="teams_ativo" id="teams_ativo"
-               {% if config.teams_ativo %}checked{% endif %}>
-        <label class="form-check-label" for="teams_ativo">Enviar Teams</label>
-      </div>
-      <div class="col-12"><button class="btn btn-primary btn-sm">Salvar configuração</button></div>
-    </form>
-  </div>
-
   <!-- Novo CNPJ -->
   <div class="fin-section-card">
     <h3 class="fin-section-card__title">Adicionar CNPJ</h3>
     <form method="post" action="{{ url_for('alertas_faturamento.novo') }}" class="row g-2">
       <div class="col-md-3"><input name="cnpj" class="form-control" placeholder="CNPJ" required></div>
       <div class="col-md-3"><input name="nome_cliente" class="form-control" placeholder="Nome (opcional)"></div>
-      <div class="col-md-4"><input name="emails" class="form-control" placeholder="e-mails (separados por ; ou ,)" required></div>
+      <div class="col-md-4"><input name="emails" class="form-control" value="{{ emails_padrao }}" placeholder="e-mails (separados por ; ou ,)" required></div>
       <div class="col-md-2"><button class="btn btn-success w-100">Adicionar</button></div>
     </form>
+    <small class="text-muted">Os e-mails já vêm preenchidos com a lista padrão — edite se este CNPJ precisar de outros destinatários.</small>
   </div>
 
   <!-- Lista -->

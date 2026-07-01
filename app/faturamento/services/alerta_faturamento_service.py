@@ -1,8 +1,8 @@
-"""Alertas de faturamento por CNPJ (e-mail + Teams).
+"""Alertas de faturamento por CNPJ (e-mail).
 
 Ao faturar (NF nova via sync Odoo) para um CNPJ cadastrado e ativo, dispara UM
-aviso por cliente (agrupando as NFs novas) por e-mail (lista do CNPJ, todos em
-cópia) e no Teams (canal fixo via webhook). Idempotente por (numero_nf, canal).
+aviso por cliente (agrupando as NFs novas) por e-mail — 1 e-mail com todos os
+endereços do CNPJ em cópia. Idempotente por (numero_nf, canal='email').
 
 `processar_alertas_faturamento` NUNCA levanta exceção (garantia p/ o hook da
 sync Odoo — nunca derruba o faturamento).
@@ -10,21 +10,26 @@ sync Odoo — nunca derruba o faturamento).
 import re
 import logging
 
-import requests
-
 from app import db
 from app.utils.timezone import agora_utc_naive
 from app.faturamento.models import (
     RelatorioFaturamentoImportado,
     AlertaFaturamentoCnpj,
-    AlertaFaturamentoConfig,
     AlertaFaturamentoEnviado,
 )
 from app.notificacoes.email_sender import email_sender, EmailTemplates, EmailConfig
 
 logger = logging.getLogger(__name__)
 
-TEAMS_TIMEOUT = 15
+# Lista de e-mails padrao dos alertas (time Conservas Campo Belo que acompanha
+# o faturamento do Atacadao RJ). Usada como valor inicial no cadastro de novos
+# CNPJs (tela) e na carga inicial (seed). Editavel por CNPJ na tela.
+EMAILS_PADRAO = (
+    "stephanie.chaves@conservascampobelo.com.br;"
+    "gislene.goes@conservascampobelo.com.br;"
+    "elane.souza@conservascampobelo.com.br;"
+    "sabrina.lima@conservascampobelo.com.br"
+)
 
 
 def normalizar_cnpj(cnpj):
@@ -47,7 +52,7 @@ def agrupar_por_cnpj(cabecalhos):
     return grupos
 
 
-def filtrar_nao_enviadas(cabecalhos, canal):
+def filtrar_nao_enviadas(cabecalhos, canal='email'):
     numeros = [n.numero_nf for n in cabecalhos]
     if not numeros:
         return []
@@ -81,14 +86,7 @@ def montar_dados_email(linhas, total):
     return dados
 
 
-def montar_texto_teams(nome, cnpj, linhas, total):
-    corpo = "\n".join(
-        f"- NF {l['numero_nf']} · {l['data']} · {l['valor']} · {l['cidade']}" for l in linhas
-    )
-    return f"**Faturamento — {nome or cnpj}** (CNPJ {cnpj})\n{corpo}\n**Total: {total}**"
-
-
-def registrar_envio(numero_nf, cnpj, canal, ok, detalhe=None):
+def registrar_envio(numero_nf, cnpj, ok, detalhe=None, canal='email'):
     """Upsert por (numero_nf, canal): evita violar o UNIQUE ao reprocessar erro."""
     reg = AlertaFaturamentoEnviado.query.filter_by(numero_nf=numero_nf, canal=canal).first()
     if reg is None:
@@ -118,37 +116,9 @@ def enviar_email(cnpj_cfg, nome, cnpj, linhas, total):
     )
 
 
-def enviar_teams(config, texto):
-    if not (config.teams_ativo and config.teams_webhook_url):
-        return {'success': False, 'error': 'Teams desativado ou sem URL'}
-    try:
-        resp = requests.post(config.teams_webhook_url, json={'text': texto}, timeout=TEAMS_TIMEOUT)
-        if 200 <= resp.status_code < 300:
-            return {'success': True}
-        return {'success': False, 'error': f'HTTP {resp.status_code}'}
-    except requests.RequestException as e:
-        return {'success': False, 'error': str(e)}
-
-
-def _processar_canal(nfs, cnpj, nome, canal, envia_fn):
-    """Filtra pendentes do canal, envia 1x agrupado, registra por NF. Retorna (ok, erro)."""
-    pend = filtrar_nao_enviadas(nfs, canal)
-    if not pend:
-        return None, None
-    linhas, total = montar_linhas(pend)
-    if canal == 'email':
-        r = envia_fn(nome, cnpj, linhas, total)
-    else:
-        r = envia_fn(montar_texto_teams(nome, cnpj, linhas, total))
-    ok = bool(r.get('success'))
-    for nf in pend:
-        registrar_envio(nf.numero_nf, cnpj, canal, ok, r.get('error') or r.get('message_id'))
-    return ok, (None if ok else r.get('error'))
-
-
 def processar_alertas_faturamento(nfs_novas):
     """Entrypoint do hook. NUNCA levanta exceção."""
-    resumo = {'cnpjs': 0, 'emails_ok': 0, 'teams_ok': 0, 'erros': []}
+    resumo = {'cnpjs': 0, 'emails_ok': 0, 'erros': []}
     try:
         if not nfs_novas:
             return resumo
@@ -158,7 +128,6 @@ def processar_alertas_faturamento(nfs_novas):
         ).all()
         if not cabecalhos:
             return resumo
-        config = AlertaFaturamentoConfig.get_config()
         for cnpj, nfs in agrupar_por_cnpj(cabecalhos).items():
             try:
                 cnpj_cfg = AlertaFaturamentoCnpj.query.filter_by(cnpj=cnpj, ativo=True).first()
@@ -166,22 +135,18 @@ def processar_alertas_faturamento(nfs_novas):
                     continue
                 resumo['cnpjs'] += 1
                 nome = cnpj_cfg.nome_cliente or (nfs[0].nome_cliente if nfs else None)
-                if config.email_ativo:
-                    ok, erro = _processar_canal(
-                        nfs, cnpj, nome, 'email',
-                        lambda n, c, l, t: enviar_email(cnpj_cfg, n, c, l, t))
-                    if ok:
-                        resumo['emails_ok'] += 1
-                    elif erro:
-                        resumo['erros'].append(f"email {cnpj}: {erro}")
-                if config.teams_ativo:
-                    ok, erro = _processar_canal(
-                        nfs, cnpj, nome, 'teams',
-                        lambda texto: enviar_teams(config, texto))
-                    if ok:
-                        resumo['teams_ok'] += 1
-                    elif erro:
-                        resumo['erros'].append(f"teams {cnpj}: {erro}")
+                pend = filtrar_nao_enviadas(nfs, 'email')
+                if not pend:
+                    continue
+                linhas, total = montar_linhas(pend)
+                r = enviar_email(cnpj_cfg, nome, cnpj, linhas, total)
+                ok = bool(r.get('success'))
+                for nf in pend:
+                    registrar_envio(nf.numero_nf, cnpj, ok, r.get('error') or r.get('message_id'))
+                if ok:
+                    resumo['emails_ok'] += 1
+                else:
+                    resumo['erros'].append(f"email {cnpj}: {r.get('error')}")
                 db.session.commit()
             except Exception as e:  # isola por CNPJ
                 db.session.rollback()
@@ -198,12 +163,10 @@ def processar_alertas_faturamento(nfs_novas):
         return resumo
 
 
-def enviar_teste(cnpj_cfg, config):
-    """Dispara um aviso de TESTE (linha fictícia) para o CNPJ. NÃO grava log."""
+def enviar_teste(cnpj_cfg):
+    """Dispara um e-mail de TESTE (linha fictícia) para o CNPJ. NÃO grava log."""
     linhas = [{'numero_nf': 'TESTE', 'data': _fmt_data(agora_utc_naive().date()),
                'valor': _fmt_moeda(0), 'cidade': ''}]
     total = _fmt_moeda(0)
     nome = cnpj_cfg.nome_cliente or cnpj_cfg.cnpj
-    r_email = enviar_email(cnpj_cfg, nome, cnpj_cfg.cnpj, linhas, total) if config.email_ativo else {'success': None}
-    r_teams = enviar_teams(config, montar_texto_teams(nome, cnpj_cfg.cnpj, linhas, total)) if config.teams_ativo else {'success': None}
-    return {'email': r_email, 'teams': r_teams}
+    return {'email': enviar_email(cnpj_cfg, nome, cnpj_cfg.cnpj, linhas, total)}

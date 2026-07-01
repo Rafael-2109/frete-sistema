@@ -1,5 +1,5 @@
 from app import db
-from app.faturamento.models import AlertaFaturamentoCnpj, AlertaFaturamentoConfig
+from app.faturamento.models import AlertaFaturamentoCnpj
 
 
 def test_index_200(client):
@@ -29,8 +29,7 @@ def test_editar_e_remover(client, db):
     assert db.session.get(AlertaFaturamentoCnpj, rid) is None
 
 
-def test_config_salva(client, db):
-    client.post('/faturamento/alertas/config', data={
-        'teams_webhook_url': 'https://hook.example/y', 'teams_ativo': 'on', 'email_ativo': 'on'})
-    cfg = AlertaFaturamentoConfig.get_config()
-    assert cfg.teams_webhook_url == 'https://hook.example/y' and cfg.teams_ativo is True
+def test_novo_prefill_emails_padrao(client):
+    """A tela pré-preenche os e-mails padrão no formulário de novo CNPJ."""
+    html = client.get('/faturamento/alertas/').get_data(as_text=True)
+    assert 'conservascampobelo.com.br' in html

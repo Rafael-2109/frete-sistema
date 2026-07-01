@@ -3,8 +3,10 @@ from flask import Blueprint, render_template, request, redirect, url_for, flash
 from flask_login import login_required, current_user
 
 from app import db
-from app.faturamento.models import AlertaFaturamentoCnpj, AlertaFaturamentoConfig
-from app.faturamento.services.alerta_faturamento_service import normalizar_cnpj, enviar_teste
+from app.faturamento.models import AlertaFaturamentoCnpj
+from app.faturamento.services.alerta_faturamento_service import (
+    normalizar_cnpj, enviar_teste, EMAILS_PADRAO,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -23,8 +25,7 @@ def index():
     cnpjs = AlertaFaturamentoCnpj.query.order_by(
         AlertaFaturamentoCnpj.ativo.desc(), AlertaFaturamentoCnpj.nome_cliente
     ).all()
-    config = AlertaFaturamentoConfig.get_config()
-    return render_template('faturamento/alertas/index.html', cnpjs=cnpjs, config=config)
+    return render_template('faturamento/alertas/index.html', cnpjs=cnpjs, emails_padrao=EMAILS_PADRAO)
 
 
 @alertas_faturamento_bp.route('/novo', methods=['POST'])
@@ -71,19 +72,6 @@ def remover(id):
     return redirect(url_for('alertas_faturamento.index'))
 
 
-@alertas_faturamento_bp.route('/config', methods=['POST'])
-@login_required
-def config():
-    cfg = AlertaFaturamentoConfig.get_config()
-    cfg.teams_webhook_url = (request.form.get('teams_webhook_url') or '').strip() or None
-    cfg.teams_ativo = request.form.get('teams_ativo') == 'on'
-    cfg.email_ativo = request.form.get('email_ativo') == 'on'
-    cfg.atualizado_por = _quem()
-    db.session.commit()
-    flash('Configuração salva.', 'success')
-    return redirect(url_for('alertas_faturamento.index'))
-
-
 @alertas_faturamento_bp.route('/<int:id>/testar', methods=['POST'])
 @login_required
 def testar(id):
@@ -91,6 +79,10 @@ def testar(id):
     if not reg:
         flash('Registro não encontrado.', 'warning')
         return redirect(url_for('alertas_faturamento.index'))
-    r = enviar_teste(reg, AlertaFaturamentoConfig.get_config())
-    flash(f"Teste enviado — e-mail: {r['email'].get('success')}, teams: {r['teams'].get('success')}", 'info')
+    r = enviar_teste(reg)
+    ok = r['email'].get('success')
+    if ok:
+        flash('E-mail de teste enviado.', 'success')
+    else:
+        flash(f"Falha ao enviar e-mail de teste: {r['email'].get('error')}", 'warning')
     return redirect(url_for('alertas_faturamento.index'))

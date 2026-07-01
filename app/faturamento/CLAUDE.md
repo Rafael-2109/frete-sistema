@@ -61,7 +61,7 @@ app/faturamento/
 
 ## Blueprints e Rotas
 
-Tres blueprints, todos `/faturamento`: `faturamento_bp` (`__init__.py:918`+`:982`), `atualizar_nf_bp` (`__init__.py:919`) e `alertas_faturamento_bp` (`routes_alertas.py`, prefix `/faturamento/alertas`). Rotas-chave: `api/sincronizar-odoo` (origem real dos dados), `listar`/`produtos`/`dashboard`, `dashboard-reconciliacao`/`conciliacao-manual`, `inativar-nfs`, `cancelar-nf-devolvida` (admin), `api/excluir-nf/<nf>` (DELETE hard), `api/atualizar-nf-embarques`. `alertas_faturamento_bp`: `index`/`novo`/`editar`/`remover`/`config`/`testar` (CRUD de CNPJs monitorados + config do canal Teams; acessado por um card na Central Fiscal).
+Tres blueprints, todos `/faturamento`: `faturamento_bp` (`__init__.py:918`+`:982`), `atualizar_nf_bp` (`__init__.py:919`) e `alertas_faturamento_bp` (`routes_alertas.py`, prefix `/faturamento/alertas`). Rotas-chave: `api/sincronizar-odoo` (origem real dos dados), `listar`/`produtos`/`dashboard`, `dashboard-reconciliacao`/`conciliacao-manual`, `inativar-nfs`, `cancelar-nf-devolvida` (admin), `api/excluir-nf/<nf>` (DELETE hard), `api/atualizar-nf-embarques`. `alertas_faturamento_bp`: `index`/`novo`/`editar`/`remover`/`testar` (CRUD de CNPJs monitorados + e-mail de teste; acessado por um card na Central Fiscal).
 
 ---
 
@@ -98,9 +98,8 @@ Existe um job RQ `sincronizar_entregas_batch`, mas ele foi **ROLLBACKED**: a ver
 |-------|--------|------------------|
 | `RelatorioFaturamentoImportado` | `relatorio_faturamento_importado` | CABECALHO (1/NF). `numero_nf` UNIQUE. Soft-delete `ativo`+`inativado_em/por`. NAO tem produtos |
 | `FaturamentoProduto` | `faturamento_produto` | ITEM (N/NF). `numero_nf` NAO unique. `origem`=num_pedido (chave do match). `status_nf` = maquina (R4). Campos de reversao: `revertida`, `nota_credito_id` |
-| `AlertaFaturamentoCnpj` | `alerta_faturamento_cnpj` | Cadastro CNPJ monitorado + `emails` (`;`/`,`). `cnpj` normalizado (so digitos), UNIQUE. Alerta so dispara se `ativo=True` |
-| `AlertaFaturamentoConfig` | `alerta_faturamento_config` | 1 linha (`get_config`): webhook Teams (`teams_webhook_url`) + flags `teams_ativo`/`email_ativo` |
-| `AlertaFaturamentoEnviado` | `alerta_faturamento_enviado` | Log/idempotencia. `UNIQUE(numero_nf, canal)`; `registrar_envio` faz upsert (erro permite retry na proxima sync) |
+| `AlertaFaturamentoCnpj` | `alerta_faturamento_cnpj` | Cadastro CNPJ monitorado + `emails` (`;`/`,`). `cnpj` normalizado (so digitos), UNIQUE. Alerta so dispara se `ativo=True`. Lista de e-mails padrao = `EMAILS_PADRAO` (service) |
+| `AlertaFaturamentoEnviado` | `alerta_faturamento_enviado` | Log/idempotencia. `canal='email'`. `UNIQUE(numero_nf, canal)`; `registrar_envio` faz upsert (erro permite retry na proxima sync) |
 
 > Modelos tocados (de outros modulos): `EmbarqueItem` (`nota_fiscal`/`erro_validacao`), `Separacao` (`sincronizado_nf`/`numero_nf`/FATURADO), `MovimentacaoEstoque` (baixa `-qtd`), `EntregaMonitorada` (sem UNIQUE em `numero_nf` — causa do O4). Produto **PALLET (208000012) e pulado** (gerido por `PalletSyncService` — esquecer causa dupla baixa).
 
@@ -108,7 +107,7 @@ Existe um job RQ `sincronizar_entregas_batch`, mas ele foi **ROLLBACKED**: a ver
 
 ## Fluxo (Odoo → 5 sincronizacoes)
 
-`api/sincronizar-odoo` → `importar_faturamento_odoo` (`app/odoo/services/faturamento_service.py`) persiste cabecalho + itens e, na MESMA sync, dispara em ordem: **(1)** `sincronizar_entrega_por_nf` (monitoramento, sincrono — R7); **(2)** `revalidar_embarques_pendentes` (re-roda `validar_cnpj_embarque_faturamento` para itens com `NF_PENDENTE_FATURAMENTO`); **(3)** NFs pendentes em embarques; **(4)** frete via `processar_lancamento_automatico_fretes(cnpj_cliente=...)` **por CNPJ** (nao por NF/embarque; conta como lancado so se o resultado contem `'lancado(s) automaticamente'`); **(5)** `processar_alertas_faturamento(nfs_novas)` (`services/alerta_faturamento_service.py`) — para cada NF NOVA (`nfs_novas`, nao `cnpjs_processados`) cujo `cnpj_cliente` esta cadastrado e ativo em `alerta_faturamento_cnpj`, dispara UM aviso agrupado por cliente (e-mail via `app/notificacoes/email_sender`, todos em copia; Teams via webhook `alerta_faturamento_config`). Idempotente por `UNIQUE(numero_nf, canal)`. **NUNCA levanta excecao** (o hook e envolto em try/except total — nao derruba a sync). O match NF↔Embarque (R2/R3) acontece dentro do `ProcessadorFaturamento`.
+`api/sincronizar-odoo` → `importar_faturamento_odoo` (`app/odoo/services/faturamento_service.py`) persiste cabecalho + itens e, na MESMA sync, dispara em ordem: **(1)** `sincronizar_entrega_por_nf` (monitoramento, sincrono — R7); **(2)** `revalidar_embarques_pendentes` (re-roda `validar_cnpj_embarque_faturamento` para itens com `NF_PENDENTE_FATURAMENTO`); **(3)** NFs pendentes em embarques; **(4)** frete via `processar_lancamento_automatico_fretes(cnpj_cliente=...)` **por CNPJ** (nao por NF/embarque; conta como lancado so se o resultado contem `'lancado(s) automaticamente'`); **(5)** `processar_alertas_faturamento(nfs_novas)` (`services/alerta_faturamento_service.py`) — para cada NF NOVA (`nfs_novas`, nao `cnpjs_processados`) cujo `cnpj_cliente` esta cadastrado e ativo em `alerta_faturamento_cnpj`, dispara UM aviso agrupado por cliente por e-mail (via `app/notificacoes/email_sender`, 1 e-mail com todos os enderecos do CNPJ em copia). Idempotente por `UNIQUE(numero_nf, canal='email')`. **NUNCA levanta excecao** (o hook e envolto em try/except total — nao derruba a sync). O match NF↔Embarque (R2/R3) acontece dentro do `ProcessadorFaturamento`. Carga inicial dos CNPJs do Atacadao RJ: `scripts/migrations/2026_07_01_seed_alertas_faturamento_atacadao_rj.py`.
 
 ---
 

@@ -13,6 +13,16 @@ atualizado: 2026-07-01
 > **Teams** (um canal fixo para todos). Cadastro e configuração vivem num card novo
 > da **Central Fiscal**. Aprovado por Marcus em 2026-07-01.
 
+> **⚠️ Atualização 2026-07-01 (pós-implementação, correções do Marcus):**
+> **(1) Teams removido** — o alerta é **somente por e-mail**. Removidos: `enviar_teams`,
+> `montar_texto_teams`, e a **tabela `alerta_faturamento_config`** (existia só para o
+> webhook/flags do Teams); o liga/desliga por CNPJ (`ativo`) é o único controle. Ficam
+> **2 tabelas** (`alerta_faturamento_cnpj` + `alerta_faturamento_enviado`, `canal='email'`).
+> **(2)** Lista de e-mails padrão (`EMAILS_PADRAO`, time Conservas Campo Belo) pré-preenche
+> o formulário de novo CNPJ. **(3)** Carga inicial dos **31 CNPJs do Atacadão RJ** via
+> `scripts/migrations/2026_07_01_seed_alertas_faturamento_atacadao_rj.py`. As seções abaixo
+> descrevem o desenho original (com Teams) e ficam como registro histórico.
+
 ## Indice
 
 - [1. Contexto e âncoras verificadas](#1-contexto-e-âncoras-verificadas)

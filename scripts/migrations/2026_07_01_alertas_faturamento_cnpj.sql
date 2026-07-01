@@ -1,5 +1,9 @@
--- Alertas de Faturamento por CNPJ (e-mail + Teams)
+-- Alertas de Faturamento por CNPJ (e-mail)
 -- Spec: docs/superpowers/specs/2026-07-01-alertas-faturamento-cnpj-design.md
+
+-- Teams foi removido: descarta a tabela de config (se existir de deploy anterior).
+-- Segura (tabela sem FKs, vazia/desusada); no-op se nunca foi criada.
+DROP TABLE IF EXISTS alerta_faturamento_config;
 
 CREATE TABLE IF NOT EXISTS alerta_faturamento_cnpj (
     id SERIAL PRIMARY KEY,
@@ -10,15 +14,6 @@ CREATE TABLE IF NOT EXISTS alerta_faturamento_cnpj (
     criado_em TIMESTAMP,
     criado_por VARCHAR(100),
     atualizado_em TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS alerta_faturamento_config (
-    id SERIAL PRIMARY KEY,
-    teams_webhook_url VARCHAR(500),
-    teams_ativo BOOLEAN NOT NULL DEFAULT FALSE,
-    email_ativo BOOLEAN NOT NULL DEFAULT TRUE,
-    atualizado_em TIMESTAMP,
-    atualizado_por VARCHAR(100)
 );
 
 CREATE TABLE IF NOT EXISTS alerta_faturamento_enviado (

@@ -1,6 +1,6 @@
 {
   "name": "alerta_faturamento_cnpj",
-  "description": "Cadastro de CNPJs monitorados para alerta de faturamento. Ao faturar (NF nova via sync Odoo) para um destes CNPJs (ativo=true), o sistema dispara um aviso agrupado por cliente para os e-mails cadastrados (campo emails, separados por ; ou ,) e no canal Teams (config em alerta_faturamento_config). cnpj e normalizado (so digitos) e UNIQUE.",
+  "description": "Cadastro de CNPJs monitorados para alerta de faturamento. Ao faturar (NF nova via sync Odoo) para um destes CNPJs (ativo=true), o sistema dispara um aviso agrupado por cliente por e-mail para os enderecos cadastrados (campo emails, separados por ; ou ,; 1 e-mail com todos em copia). cnpj e normalizado (so digitos) e UNIQUE.",
   "fields": [
     {
       "name": "id",

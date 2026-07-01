@@ -1,8 +1,11 @@
-"""Migration: Alertas de Faturamento por CNPJ (e-mail + Teams).
+"""Migration: Alertas de Faturamento por CNPJ (e-mail).
 
-Cria 3 tabelas: alerta_faturamento_cnpj, alerta_faturamento_config,
-alerta_faturamento_enviado. Idempotente (CREATE TABLE/INDEX IF NOT EXISTS).
-Semeia 1 linha de config (get-or-create).
+Cria 2 tabelas: alerta_faturamento_cnpj (cadastro CNPJ+emails) e
+alerta_faturamento_enviado (log/idempotencia). Idempotente
+(CREATE TABLE/INDEX IF NOT EXISTS).
+
+Carga inicial dos CNPJs do Atacadao RJ: rodar em seguida
+`2026_07_01_seed_alertas_faturamento_atacadao_rj.py`.
 
 Spec: docs/superpowers/specs/2026-07-01-alertas-faturamento-cnpj-design.md
 """
@@ -25,17 +28,8 @@ def main():
     with app.app_context():
         with open(SQL_PATH, 'r', encoding='utf-8') as f:
             db.session.execute(text(f.read()))
-        # Semear config única
-        existe = db.session.execute(
-            text("SELECT COUNT(*) FROM alerta_faturamento_config")
-        ).scalar()
-        if not existe:
-            db.session.execute(text(
-                "INSERT INTO alerta_faturamento_config "
-                "(teams_ativo, email_ativo) VALUES (FALSE, TRUE)"
-            ))
         db.session.commit()
-        print("OK: 3 tabelas de alertas de faturamento criadas/verificadas.")
+        print("OK: 2 tabelas de alertas de faturamento criadas/verificadas.")
 
 
 if __name__ == '__main__':

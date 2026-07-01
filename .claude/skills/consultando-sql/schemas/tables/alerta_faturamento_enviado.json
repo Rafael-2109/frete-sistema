@@ -1,6 +1,6 @@
 {
   "name": "alerta_faturamento_enviado",
-  "description": "Log/idempotencia dos alertas de faturamento. 1 linha por (numero_nf, canal) com UNIQUE — garante que a mesma NF nunca gera dois avisos no mesmo canal. status='ok'|'erro' (erro permite reenvio na proxima sync via upsert). canal='email'|'teams'.",
+  "description": "Log/idempotencia dos alertas de faturamento. 1 linha por (numero_nf, canal) com UNIQUE — garante que a mesma NF nunca gera dois avisos. status='ok'|'erro' (erro permite reenvio na proxima sync via upsert). canal='email' (unico canal atual).",
   "fields": [
     {
       "name": "id",
