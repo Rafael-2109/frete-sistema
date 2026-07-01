@@ -4,7 +4,7 @@ camada: L2
 sot_de: app/pessoal/services/pix_credito_service.py, app/pessoal/services/aportes_dono_service.py
 hub: CLAUDE.md
 superseded_by: —
-atualizado: 2026-06-30
+atualizado: 2026-07-01
 -->
 # Pessoal — "Pix no Credito" (Caso 1) e Regra por Conta (Caso 2)
 
@@ -49,6 +49,14 @@ fatura e importada e a deteccao seguinte fecha o trio.
 disparado automaticamente no fim de `routes/importacao.py` e `services/pluggy_merge_service.merge_item`.
 Idempotente via `eh_pix_credito` / `pix_credito_grupo` (campos em `PessoalTransacao`). Reversao manual:
 `pix_credito_service.reverter_grupo(grupo)`.
+
+**Guard B2 (nao des-excluir o principal):** apos o split, a compra-principal DEVE permanecer
+`excluir_relatorio=True` (o principal ja esta no Pix-saida). `deve_permanecer_excluida_pix_credito()`
+identifica a compra-principal (observacao carimbada por `_split_compra`) e o funding, e e chamado em
+TODOS os pontos que gravam `excluir_relatorio` (categorizacao_service.categorizar_lote; aprendizado_service
+propagar_*/despropagar; routes.transacoes categorizar/categorizar_lote/descategorizar). Sem esse guard,
+recategorizar a compra punha `excluir=False` e o principal contava 2x. Ver
+[CATEGORIZACAO_PIPELINE.md](CATEGORIZACAO_PIPELINE.md) (auditoria 2026-07-01).
 
 ---
 
