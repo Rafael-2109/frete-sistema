@@ -29,7 +29,7 @@ def _decimal(valor, campo):
 
 
 def _exigir_peca(peca_id):
-    peca = AssaiPeca.query.get(peca_id)
+    peca = db.session.get(AssaiPeca, peca_id)
     if not peca:
         raise EstoqueError(f'peca {peca_id} nao encontrada')
     return peca
@@ -60,7 +60,7 @@ def custo_medio(peca_id):
     if soma_delta and Decimal(soma_delta) > 0:
         return (Decimal(soma_valor) / Decimal(soma_delta)).quantize(Decimal('0.0001'))
 
-    peca = AssaiPeca.query.get(peca_id)
+    peca = db.session.get(AssaiPeca, peca_id)
     if peca and peca.custo_referencia is not None:
         return Decimal(peca.custo_referencia).quantize(Decimal('0.0001'))
 
@@ -179,7 +179,7 @@ def consumir(
     if qtd <= 0:
         raise EstoqueError('Quantidade deve ser positiva.')
     _exigir_peca(peca_id)
-    ficha = AssaiPendencia.query.get(pendencia_id)
+    ficha = db.session.get(AssaiPendencia, pendencia_id)
     if ficha is None:
         raise EstoqueError(f'Pendencia {pendencia_id} nao encontrada.')
 
@@ -251,7 +251,7 @@ def canibalizar(
         raise EstoqueError(
             f'Cascata bloqueada: doador {origem} ja tem FALTA_PECA aberta desta peca.'
         )
-    ficha = AssaiPendencia.query.get(pendencia_id)
+    ficha = db.session.get(AssaiPendencia, pendencia_id)
     if ficha is None:
         raise EstoqueError(f'Pendencia {pendencia_id} nao encontrada.')
 

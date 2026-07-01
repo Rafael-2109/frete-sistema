@@ -33,7 +33,7 @@ def criar_peca(*, nome, codigo=None, custo_referencia=None, modelo_ids=None, ope
 
 
 def editar_peca(*, peca_id, **campos):
-    peca = AssaiPeca.query.get(peca_id)
+    peca = db.session.get(AssaiPeca, peca_id)
     if not peca:
         raise PecaError(f'peca {peca_id} nao encontrada')
     for campo in ('nome', 'codigo', 'ativo'):
@@ -50,9 +50,9 @@ def vincular_modelo(*, peca_id, modelo_id):
     existente = AssaiPecaModelo.query.filter_by(peca_id=peca_id, modelo_id=modelo_id).first()
     if existente:
         return existente
-    if not AssaiPeca.query.get(peca_id):
+    if not db.session.get(AssaiPeca, peca_id):
         raise PecaError(f'peca {peca_id} nao encontrada')
-    if not AssaiModelo.query.get(modelo_id):
+    if not db.session.get(AssaiModelo, modelo_id):
         raise PecaError(f'modelo {modelo_id} nao encontrado')
     link = AssaiPecaModelo(peca_id=peca_id, modelo_id=modelo_id)
     db.session.add(link)

@@ -70,12 +70,12 @@ def criar_compra(*, tipo, itens, operador_id, fornecedor='MOTOCHEFE'):
 
 
 def adicionar_item(*, compra_id, peca_id, quantidade, custo_estimado=None, pendencia_id=None):
-    compra = AssaiPecaCompra.query.get(compra_id)
+    compra = db.session.get(AssaiPecaCompra, compra_id)
     if not compra:
         raise CompraPecaError(f'compra {compra_id} nao encontrada')
     if compra.status == COMPRA_PECA_STATUS_CANCELADA:
         raise CompraPecaError('compra cancelada nao aceita novos itens')
-    if not AssaiPeca.query.get(peca_id):
+    if not db.session.get(AssaiPeca, peca_id):
         raise CompraPecaError(f'peca {peca_id} nao encontrada')
     q = _decimal(quantidade, 'quantidade')
     if q <= 0:
@@ -96,7 +96,7 @@ def adicionar_item(*, compra_id, peca_id, quantidade, custo_estimado=None, pende
 
 
 def receber_item(*, compra_item_id, quantidade, custo_unitario, operador_id):
-    item = AssaiPecaCompraItem.query.get(compra_item_id)
+    item = db.session.get(AssaiPecaCompraItem, compra_item_id)
     if not item:
         raise CompraPecaError(f'item de compra {compra_item_id} nao encontrado')
     compra = item.compra
@@ -120,7 +120,7 @@ def receber_item(*, compra_item_id, quantidade, custo_unitario, operador_id):
 
 
 def cancelar_compra(*, compra_id, operador_id):
-    compra = AssaiPecaCompra.query.get(compra_id)
+    compra = db.session.get(AssaiPecaCompra, compra_id)
     if not compra:
         raise CompraPecaError(f'compra {compra_id} nao encontrada')
     if compra.status == COMPRA_PECA_STATUS_CANCELADA:

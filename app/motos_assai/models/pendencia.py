@@ -102,13 +102,13 @@ class AssaiPendencia(db.Model):
         backref=db.backref('pai', remote_side=[id]),
     )
     aberta_por = db.relationship(
-        'Usuario', foreign_keys=[aberta_por_id], lazy='joined',
+        'Usuario', foreign_keys=[aberta_por_id], lazy='select',
     )
     resolvida_por = db.relationship(
-        'Usuario', foreign_keys=[resolvida_por_id], lazy='joined',
+        'Usuario', foreign_keys=[resolvida_por_id], lazy='select',
     )
     cancelada_por = db.relationship(
-        'Usuario', foreign_keys=[cancelada_por_id], lazy='joined',
+        'Usuario', foreign_keys=[cancelada_por_id], lazy='select',
     )
 
     @property

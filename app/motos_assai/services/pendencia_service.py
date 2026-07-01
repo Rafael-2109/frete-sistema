@@ -416,7 +416,7 @@ def resolver_pendencia(
     de chamadas separadas a movimento_service (Task 8) ligadas por pendencia_id —
     esta funcao NAO movimenta estoque.
     """
-    ficha = AssaiPendencia.query.get(pendencia_id)
+    ficha = db.session.get(AssaiPendencia, pendencia_id)
     if ficha is None:
         raise PendenciaError(f'Pendencia {pendencia_id} nao encontrada.')
     if ficha.resolvida_em is not None or ficha.cancelada_em is not None:
@@ -451,7 +451,7 @@ def cancelar_pendencia(
     """Fecha a ficha SEM resolver (sem movimento de estoque). Mesmo gate fisico:
     se era a ultima fisica aberta, a moto volta a MONTADA. Idempotente.
     """
-    ficha = AssaiPendencia.query.get(pendencia_id)
+    ficha = db.session.get(AssaiPendencia, pendencia_id)
     if ficha is None:
         raise PendenciaError(f'Pendencia {pendencia_id} nao encontrada.')
     if ficha.resolvida_em is not None or ficha.cancelada_em is not None:
@@ -491,7 +491,7 @@ def solicitar_compra(
     """
     from app.motos_assai.services import compra_peca_service
 
-    ficha = AssaiPendencia.query.get(pendencia_id)
+    ficha = db.session.get(AssaiPendencia, pendencia_id)
     if ficha is None:
         raise PendenciaError(f'Pendencia {pendencia_id} nao encontrada.')
 
