@@ -140,7 +140,7 @@ def normalizar_valor(valor: Decimal) -> str:
     return f'{valor.quantize(Decimal("0.01"))}'
 
 
-def gerar_hash_transacao(conta_id: int, data: date, historico: str, valor: Decimal, tipo: str, documento: str = '', sequencia: int = 0) -> str:
+def gerar_hash_transacao(conta_id: int, data: date, historico: str, valor: Decimal, tipo: str, documento: str = '', sequencia: int = 0, documento_autoritativo: bool = False) -> str:
     """Gera hash SHA256 para deduplicacao.
 
     O parametro sequencia diferencia transacoes identicas no mesmo dia
@@ -150,10 +150,22 @@ def gerar_hash_transacao(conta_id: int, data: date, historico: str, valor: Decim
     - documento: trim + lstrip '0' (formato variavel do CSV)
     - valor: quantize 2 casas (parser as vezes produz '50' as vezes '50.00')
     - historico: upper + unidecode + colapsar espacos
+
+    documento_autoritativo (C1): quando True E o documento normalizado nao e vazio,
+    o hash IGNORA o historico. Motivo: no extrato Bradesco CC o Docto+data+valor+tipo
+    identifica unicamente a transacao real, mas o banco reexporta a MESMA transacao com
+    grafia diferente do historico ('Transferencia Pix' vs 'Transfe Pix'); incluir o
+    historico volatil no hash fazia a mesma tx entrar 2x (R$30.265 dobrados em producao).
+    A sequencia continua diferenciando transacoes de mesma chave dentro do arquivo.
+    Mantemos False (historico no hash) para OFX cartao, onde o FITID e reusado
+    (parcelas/estornos) e o historico e necessario para distinguir lancamentos.
     """
     doc_norm = normalizar_documento(documento)
     val_norm = normalizar_valor(valor)
-    conteudo = f"{conta_id}|{data.isoformat()}|{normalizar_historico(historico)}|{val_norm}|{tipo}|{doc_norm}|{sequencia}"
+    if documento_autoritativo and doc_norm:
+        conteudo = f"{conta_id}|{data.isoformat()}|{val_norm}|{tipo}|{doc_norm}|{sequencia}"
+    else:
+        conteudo = f"{conta_id}|{data.isoformat()}|{normalizar_historico(historico)}|{val_norm}|{tipo}|{doc_norm}|{sequencia}"
     return hashlib.sha256(conteudo.encode('utf-8')).hexdigest()
 
 

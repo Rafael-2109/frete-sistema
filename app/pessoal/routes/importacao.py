@@ -288,19 +288,29 @@ def _importar_transacoes(nome_arquivo: str, tipo_arquivo: str, conta, transacoes
     # Contador para diferenciar transacoes identicas no mesmo dia (dedup)
     contagem_chaves = {}
 
+    # C1: no extrato Bradesco CC (CSV) o Docto identifica unicamente a transacao;
+    # o historico e volatil entre reexports do banco. Nesse caso, dedup por documento
+    # (hash SEM historico). OFX cartao mantem historico (FITID reusado).
+    documento_autoritativo = (tipo_arquivo == 'extrato_cc' and origem_import == 'csv')
+
     for t_raw in transacoes_raw:
         # Gerar chave base para contagem de sequencia (DEVE espelhar o que
         # gerar_hash_transacao faz internamente — normalizar documento E valor
         # para que dois CSVs com formatacoes diferentes contem como mesma
-        # sequencia).
-        chave_base = f"{conta_id}|{t_raw.data.isoformat()}|{normalizar_historico(t_raw.historico)}|{normalizar_valor(t_raw.valor)}|{t_raw.tipo}|{normalizar_documento(t_raw.documento)}"
+        # sequencia; e omitir o historico quando o documento e autoritativo).
+        doc_norm = normalizar_documento(t_raw.documento)
+        if documento_autoritativo and doc_norm:
+            chave_base = f"{conta_id}|{t_raw.data.isoformat()}|{normalizar_valor(t_raw.valor)}|{t_raw.tipo}|{doc_norm}"
+        else:
+            chave_base = f"{conta_id}|{t_raw.data.isoformat()}|{normalizar_historico(t_raw.historico)}|{normalizar_valor(t_raw.valor)}|{t_raw.tipo}|{doc_norm}"
         seq = contagem_chaves.get(chave_base, 0)
         contagem_chaves[chave_base] = seq + 1
 
         # Gerar hash para deduplicacao (sequencia diferencia transacoes identicas)
         hash_t = gerar_hash_transacao(
             conta_id, t_raw.data, t_raw.historico,
-            t_raw.valor, t_raw.tipo, t_raw.documento or '', sequencia=seq
+            t_raw.valor, t_raw.tipo, t_raw.documento or '', sequencia=seq,
+            documento_autoritativo=documento_autoritativo,
         )
 
         # Verificar duplicata
