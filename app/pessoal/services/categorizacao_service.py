@@ -79,6 +79,22 @@ def eh_categoria_desconsiderar(categoria_id) -> bool:
     return bool(categoria_id) and categoria_id in _ids_desconsiderar()
 
 
+def _categoria_transferencia_contas_id() -> Optional[int]:
+    """ID da categoria canonica 'Transferencia entre contas' (grupo Desconsiderar).
+
+    Layer 0.7 usa para ATRIBUIR categoria (nao so a flag) as transferencias entre contas
+    proprias detectadas por _memo_cita_conta_propria — assim a perna nao aparece 'A definir'
+    na UI e converge com a perna do outro banco (que ja cai nessa categoria via regra).
+    None se a categoria nao existir (fallback: mantem so a flag, comportamento anterior).
+    """
+    cat = PessoalCategoria.query.filter(
+        PessoalCategoria.grupo == 'Desconsiderar',
+        PessoalCategoria.nome.ilike('transfer%entre%contas%'),
+        PessoalCategoria.ativa.is_(True),
+    ).first()
+    return cat.id if cat else None
+
+
 # Candidato a numero de conta no texto: bloco de digitos (>=6) com mascara opcional
 # (ponto/hifen), ex.: "128948-9", "63685323-8", "1847312458-4".
 _RE_NUM_CONTA = re.compile(r'\d[\d.\-]{4,}\d')
@@ -215,6 +231,11 @@ def categorizar_transacao(transacao: PessoalTransacao) -> ResultadoCategorizacao
     if _memo_cita_conta_propria(transacao.historico_completo or transacao.historico or ''):
         resultado.eh_transferencia_propria = True
         resultado.excluir_relatorio = True
+        # Atribui a categoria canonica 'Transferencia entre contas' (nao so a flag): sem
+        # isso a perna aparece 'A definir' apesar de excluida (raiz da queixa do usuario).
+        cat_id = _categoria_transferencia_contas_id()
+        if cat_id:
+            resultado.categoria_id = cat_id
         resultado.status = 'CATEGORIZADO'
         return resultado
 

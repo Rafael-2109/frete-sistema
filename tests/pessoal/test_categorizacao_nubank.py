@@ -49,6 +49,37 @@ def test_deposito_de_conta_propria_vira_transferencia(make_transacao, conta_brad
     assert r.status == 'CATEGORIZADO'
 
 
+def test_transferencia_propria_recebe_categoria_transferencia(
+    pessoal_ctx, make_transacao, conta_bradesco,
+):
+    """Layer 0.7 atribui a categoria 'Transferencia entre contas' (grupo Desconsiderar),
+    para a perna NAO aparecer 'A definir' e convergir com a perna do outro banco (cat 138)."""
+    from app.pessoal.models import PessoalCategoria
+
+    cat = PessoalCategoria.query.filter_by(
+        grupo='Desconsiderar', nome='Transferência entre contas',
+    ).first()
+    if cat is None:
+        cat = PessoalCategoria(
+            nome='Transferência entre contas', grupo='Desconsiderar', ativa=True,
+        )
+        _db.session.add(cat)
+        _db.session.commit()
+        pessoal_ctx['categorias'].append(cat.id)
+
+    t = make_transacao(
+        tipo='credito', valor=Decimal('3000.00'), hash_transacao='nb_dep_cat',
+        historico=(
+            'Transferência recebida pelo Pix - RENATA GALAFASSI DE QUEIROZ - '
+            '•••.529.541-•• - BCO BRADESCO S.A. (0237) Agência: 111 Conta: 128948-9'
+        ),
+    )
+    r = categorizar_transacao(t)
+    assert r.eh_transferencia_propria is True
+    assert r.excluir_relatorio is True
+    assert r.categoria_id == cat.id
+
+
 def test_pix_para_terceiro_nao_vira_transferencia(make_transacao, conta_bradesco):
     """Conta de terceiro no memo (Mercado Pago) NAO e transferencia propria."""
     t = make_transacao(
