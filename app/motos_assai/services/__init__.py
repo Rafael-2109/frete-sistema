@@ -108,6 +108,7 @@ from .devolucao_service import (
     get_devolucao, pendencias_do_chassi, itens_da_nf_para_tela,
     DevolucaoValidationError,
 )
+from .resolucao_service import resolver_com_tratativa, ResolucaoError
 
 __all__ = [
     'listar_lojas', 'criar_loja', 'atualizar_loja', 'get_loja', 'LojaJaExisteError',
@@ -165,4 +166,5 @@ __all__ = [
     'criar_devolucao', 'listar_devolucoes', 'listar_devolucoes_da_nf',
     'get_devolucao', 'pendencias_do_chassi', 'itens_da_nf_para_tela',
     'DevolucaoValidationError',
+    'resolver_com_tratativa', 'ResolucaoError',
 ]
