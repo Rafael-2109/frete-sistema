@@ -1,0 +1,161 @@
+{% extends "motos_assai/base_motos_assai.html" %}
+
+{% block motos_assai_content %}
+<header class="d-flex justify-content-between align-items-center mb-3">
+  <h2>{{ peca.nome }}
+    {% if peca.codigo %}<small class="text-muted">({{ peca.codigo }})</small>{% endif %}
+  </h2>
+  <div>
+    <button type="button" class="btn btn-outline-success" data-bs-toggle="modal" data-bs-target="#modal-entrada">
+      <i class="fas fa-plus"></i> Entrada
+    </button>
+    <button type="button" class="btn btn-outline-warning" data-bs-toggle="modal" data-bs-target="#modal-ajustar">
+      <i class="fas fa-sliders-h"></i> Ajustar
+    </button>
+    <button type="button" class="btn btn-outline-danger" data-bs-toggle="modal" data-bs-target="#modal-descartar">
+      <i class="fas fa-trash"></i> Descartar
+    </button>
+  </div>
+</header>
+
+<dl class="row">
+  <dt class="col-sm-3">Saldo em estoque</dt><dd class="col-sm-9">{{ saldo }}</dd>
+  <dt class="col-sm-3">Custo médio</dt>
+  <dd class="col-sm-9">
+    {% if custo_medio %}R$ {{ custo_medio|numero_br(2) }}{% else %}<span class="text-warning">sem movimentação</span>{% endif %}
+  </dd>
+</dl>
+
+<h4>Ledger de movimentações (últimas {{ movs|length }})</h4>
+<div class="table-responsive">
+<table class="table table-sm table-hover">
+  <thead>
+    <tr>
+      <th>Data</th><th>Tipo</th>
+      <th class="text-end">Quantidade</th><th class="text-end">Delta</th>
+      <th class="text-end">Custo unit.</th><th class="text-end">Custo total</th>
+      <th>Chassi origem/destino</th><th>Observação</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for m in movs %}
+    <tr>
+      <td><small>{{ m.ocorrido_em.strftime('%d/%m/%Y %H:%M') if m.ocorrido_em else '-' }}</small></td>
+      <td>
+        {% if m.tipo == 'ENTRADA' %}<span class="badge bg-success">ENTRADA</span>
+        {% elif m.tipo == 'DESCARTE' %}<span class="badge bg-danger">DESCARTE</span>
+        {% elif m.tipo == 'AJUSTE' %}<span class="badge bg-warning text-dark">AJUSTE</span>
+        {% elif m.tipo == 'CONSUMO' %}<span class="badge bg-secondary">CONSUMO</span>
+        {% elif m.tipo == 'CANIBALIZACAO' %}<span class="badge bg-info">CANIBALIZAÇÃO</span>
+        {% else %}<span class="badge bg-light text-dark">{{ m.tipo }}</span>{% endif %}
+      </td>
+      <td class="text-end">{{ m.quantidade }}</td>
+      <td class="text-end">{{ m.delta_almoxarifado }}</td>
+      <td class="text-end">{{ 'R$ ' ~ m.custo_unitario|numero_br(4) if m.custo_unitario is not none else '-' }}</td>
+      <td class="text-end">{{ 'R$ ' ~ m.custo_total|numero_br(2) if m.custo_total is not none else '-' }}</td>
+      <td><small>{{ m.chassi_origem or '' }}{% if m.chassi_origem and m.chassi_destino %} → {% endif %}{{ m.chassi_destino or '' }}{% if not m.chassi_origem and not m.chassi_destino %}-{% endif %}</small></td>
+      <td><small>{{ m.observacao or (m.dados_extras.get('recebimento_ref') if m.dados_extras else '') or '-' }}</small></td>
+    </tr>
+    {% else %}
+    <tr><td colspan="8" class="text-center text-muted">Nenhuma movimentação registrada.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+
+<a href="{{ url_for('motos_assai.estoque_peca_lista') }}" class="btn btn-outline-secondary">Voltar</a>
+
+{# ---- Modal Entrada ---- #}
+<div class="modal fade" id="modal-entrada" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form method="POST" action="{{ url_for('motos_assai.estoque_peca_entrada') }}">
+        {{ form.hidden_tag() }}
+        <input type="hidden" name="peca_id" value="{{ peca.id }}">
+        <div class="modal-header">
+          <h5 class="modal-title">Entrada avulsa</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label">Quantidade</label>
+            <input type="text" name="quantidade" class="form-control" required placeholder="Ex: 10">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Custo unitário (R$)</label>
+            <input type="text" name="custo_unitario" class="form-control" required placeholder="Ex: 12,50">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Referência do recebimento (opcional)</label>
+            <input type="text" name="recebimento_ref" class="form-control" placeholder="Ex: NF 12345 / lote">
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-success">Registrar entrada</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+{# ---- Modal Ajustar ---- #}
+<div class="modal fade" id="modal-ajustar" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form method="POST" action="{{ url_for('motos_assai.estoque_peca_ajustar') }}">
+        {{ form.hidden_tag() }}
+        <input type="hidden" name="peca_id" value="{{ peca.id }}">
+        <div class="modal-header">
+          <h5 class="modal-title">Ajuste de saldo</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label">Delta (positivo ou negativo)</label>
+            <input type="text" name="delta" class="form-control" required placeholder="Ex: -2 ou 5">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Motivo</label>
+            <textarea name="motivo" class="form-control" rows="2" required
+                      placeholder="Ex: contagem física, avaria..."></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-warning">Registrar ajuste</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+{# ---- Modal Descartar ---- #}
+<div class="modal fade" id="modal-descartar" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form method="POST" action="{{ url_for('motos_assai.estoque_peca_descartar') }}">
+        {{ form.hidden_tag() }}
+        <input type="hidden" name="peca_id" value="{{ peca.id }}">
+        <div class="modal-header">
+          <h5 class="modal-title">Descarte de peça</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label">Quantidade</label>
+            <input type="text" name="quantidade" class="form-control" required placeholder="Ex: 1">
+          </div>
+          <div class="alert alert-warning small mb-0">
+            Baixa o saldo do almoxarifado (peça danificada/perdida, sem origem em chassi).
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-danger">Registrar descarte</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

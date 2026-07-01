@@ -25,7 +25,9 @@
     {% else %}<span class="text-warning">sem movimentação</span>{% endif %}
   </dd>
   <dt class="col-sm-3">Ledger de movimentações</dt>
-  <dd class="col-sm-9 text-muted">(ver no Estoque de Peça)</dd>
+  <dd class="col-sm-9">
+    <a href="{{ url_for('motos_assai.estoque_peca_detalhe', peca_id=peca.id) }}">ver no Estoque de Peça</a>
+  </dd>
 </dl>
 
 <h4>Modelos compatíveis ({{ peca.modelos|length }})</h4>
