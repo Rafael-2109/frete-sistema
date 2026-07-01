@@ -514,6 +514,66 @@ def cancelar_pendencia(
     return ficha
 
 
+def detalhe_pendencia(pendencia_id):
+    """Visao 360 read-only de uma ficha (Spec 2 §4.4). Retorna dict ou None."""
+    from decimal import Decimal
+    from app.motos_assai.models import (
+        AssaiEstoqueMovimento, AssaiPecaCompraItem, AssaiPecaCompra,
+    )
+    ficha = db.session.get(AssaiPendencia, pendencia_id)
+    if ficha is None:
+        return None
+    moto = AssaiMoto.query.options(joinedload(AssaiMoto.modelo)).filter_by(chassi=ficha.chassi).first()
+
+    movs = (AssaiEstoqueMovimento.query
+            .options(joinedload(AssaiEstoqueMovimento.peca))
+            .filter(AssaiEstoqueMovimento.pendencia_id == pendencia_id)
+            .order_by(AssaiEstoqueMovimento.id.desc()).all())
+    custo_total = sum((m.custo_total or Decimal('0')) for m in movs) or Decimal('0')
+
+    itens = (AssaiPecaCompraItem.query
+             .filter(AssaiPecaCompraItem.pendencia_id == pendencia_id).all())
+    compra_ids = {it.compra_id for it in itens}
+    compras = (AssaiPecaCompra.query.filter(AssaiPecaCompra.id.in_(compra_ids)).all()
+               if compra_ids else [])
+
+    return {
+        'ficha': {
+            'id': ficha.id, 'chassi': ficha.chassi, 'categoria': ficha.categoria,
+            'origem': ficha.origem, 'fase': ficha.fase, 'tratativa': ficha.tratativa,
+            'descricao': ficha.descricao, 'resolucao_descricao': ficha.resolucao_descricao,
+            'esta_aberta': ficha.esta_aberta, 'chassi_doador': ficha.chassi_doador,
+            'aberta_em': ficha.aberta_em, 'aberta_por': ficha.aberta_por.nome if ficha.aberta_por else '-',
+            'resolvida_em': ficha.resolvida_em,
+            'resolvida_por': ficha.resolvida_por.nome if ficha.resolvida_por else None,
+            'cancelada_em': ficha.cancelada_em,
+            'devolucao_item_id': ficha.devolucao_item_id,
+            'pos_venda_ocorrencia_id': ficha.pos_venda_ocorrencia_id,
+            'divergencia_origem_id': ficha.divergencia_origem_id,
+            'detalhes': ficha.detalhes or {},
+        },
+        'moto': {
+            'modelo_codigo': moto.modelo.codigo if moto and moto.modelo else '-',
+            'modelo_nome': moto.modelo.nome if moto and moto.modelo else '-',
+            'cor': (moto.cor if moto else None) or '-',
+        } if moto else None,
+        'movimentos': [{
+            'tipo': m.tipo, 'peca_nome': m.peca.nome if m.peca else '-',
+            'quantidade': m.quantidade, 'custo_unitario': m.custo_unitario,
+            'custo_total': m.custo_total, 'receita_total': m.receita_total,
+            'chassi_origem': m.chassi_origem, 'chassi_destino': m.chassi_destino,
+            'ocorrido_em': m.ocorrido_em,
+        } for m in movs],
+        'custo_total': custo_total,
+        'compras': [{
+            'id': c.id, 'numero': c.numero, 'tipo': c.tipo, 'status': c.status,
+        } for c in compras],
+        'filhas': [{'id': fi.id, 'categoria': fi.categoria, 'esta_aberta': fi.esta_aberta}
+                   for fi in ficha.filhas],
+        'pai': ({'id': ficha.pai.id} if ficha.pai else None),
+    }
+
+
 def solicitar_compra(
     *, pendencia_id: int, tipo: str, itens, operador_id: int,
     fornecedor: str = 'MOTOCHEFE',
