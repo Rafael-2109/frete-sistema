@@ -8,10 +8,15 @@
   </a>
 </header>
 
-<form method="GET" class="row g-2 mb-3">
+<form method="GET" class="row g-2 mb-3 align-items-center">
   <div class="col-md-6">
     <input type="text" name="q" value="{{ q or '' }}" class="form-control"
            placeholder="Buscar por nome ou código...">
+  </div>
+  <div class="col-md-3 form-check">
+    <input type="checkbox" class="form-check-input" id="somenteAtivos" name="ativos" value="1"
+           {% if somente_ativos %}checked{% endif %}>
+    <label class="form-check-label" for="somenteAtivos">Somente ativas</label>
   </div>
   <div class="col-md-3">
     <button class="btn btn-outline-secondary w-100">Filtrar</button>
