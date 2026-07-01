@@ -11,6 +11,8 @@
  *   DELETE /motos-assai/pos-venda/ocorrencias/<oc_id>
  *   POST   /motos-assai/pos-venda/ocorrencias/<oc_id>/anexos    (multipart 'arquivos')
  *   DELETE /motos-assai/pos-venda/anexos/<anexo_id>
+ *   POST   /motos-assai/pos-venda/ocorrencias/<oc_id>/gerar-pendencia
+ *          { categoria: 'AVARIA'|'FALTA_PECA'|'REVISAO', retorno_fisico: bool }
  *
  * CSRF: token lido de meta[name="csrf-token"] (injetado pelo base.html).
  */
@@ -56,8 +58,17 @@
   }
 
   // -------------------------------------------------------------------------
-  // Modal: abrir
+  // Modal: abrir / recarregar
   // -------------------------------------------------------------------------
+
+  function buscarFragmentoOcorrencias(chassi) {
+    var url = '/motos-assai/pos-venda/ocorrencias/' + encodeURIComponent(chassi) + '?embed=1';
+    return fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+      .then(function (r) {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.text();
+      });
+  }
 
   function abrirModalOcorrencias(chassi, btn) {
     var modalEl = document.getElementById('modalOcorrencias');
@@ -72,12 +83,7 @@
     var modal = bootstrap.Modal.getOrCreateInstance(modalEl);
     modal.show();
 
-    var url = '/motos-assai/pos-venda/ocorrencias/' + encodeURIComponent(chassi) + '?embed=1';
-    fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
-      .then(function (r) {
-        if (!r.ok) throw new Error('HTTP ' + r.status);
-        return r.text();
-      })
+    buscarFragmentoOcorrencias(chassi)
       .then(function (html) {
         body.innerHTML = html;
         // Guarda referencia ao botao de origem (para atualizar contador)
@@ -87,6 +93,15 @@
         body.innerHTML = '<div class="alert alert-danger">Erro ao carregar ocorrencias: ' +
           escapeHtml(e.message) + '</div>';
       });
+  }
+
+  function recarregarModalOcorrencias(chassi) {
+    var body = document.getElementById('modal-ocorrencias-body');
+    if (!body || !chassi) return Promise.resolve();
+    return buscarFragmentoOcorrencias(chassi).then(function (html) {
+      body.innerHTML = html;
+      body.dataset.btnOrigemChassi = chassi;
+    });
   }
 
   // -------------------------------------------------------------------------
@@ -113,6 +128,19 @@
     badge.textContent = String(Math.max(0, atual + delta));
   }
 
+  function refrescarBadgePendencias(chassi, delta) {
+    var badge = document.querySelector(
+      '.badge-pendencias-abertas[data-chassi="' + chassi.replace(/"/g, '\\"') + '"]'
+    );
+    if (!badge) return;
+    var atual = parseInt(badge.dataset.qtd || '0', 10) || 0;
+    var novo = Math.max(0, atual + delta);
+    badge.dataset.qtd = String(novo);
+    var span = badge.querySelector('.qtd-pendencias');
+    if (span) span.textContent = String(novo);
+    badge.classList.toggle('d-none', novo === 0);
+  }
+
   function renderOcorrenciaCard(oc) {
     // HTML do card de ocorrencia (espelha o macro render_ocorrencia do Jinja).
     var anexosHtml = (oc.anexos || []).map(renderAnexoHtml).join('');
@@ -135,6 +163,26 @@
         '<div class="pos-venda-ocorrencia-body">' +
           '<p class="descricao-texto pos-venda-descricao">' +
             escapeHtml(oc.descricao) + '</p>' +
+          '<div class="pendencias-geradas mb-2"></div>' +
+          '<form class="form-gerar-pendencia d-flex flex-wrap align-items-end gap-2 mb-2 p-2 rounded border bg-body-tertiary" ' +
+            'data-ocorrencia-id="' + oc.id + '">' +
+            '<div>' +
+              '<label class="form-label small mb-1 text-muted">Gerar pendência</label>' +
+              '<select name="categoria" class="form-select form-select-sm" required>' +
+                '<option value="AVARIA">Avaria</option>' +
+                '<option value="FALTA_PECA">Falta de peça</option>' +
+                '<option value="REVISAO">Revisão</option>' +
+              '</select>' +
+            '</div>' +
+            '<div class="form-check mb-1">' +
+              '<input type="checkbox" class="form-check-input" name="retorno_fisico" ' +
+                'id="retorno-fisico-' + oc.id + '">' +
+              '<label class="form-check-label small" for="retorno-fisico-' + oc.id + '">' +
+                'Moto retornou fisicamente</label>' +
+            '</div>' +
+            '<button type="submit" class="btn btn-sm btn-outline-warning">' +
+              '<i class="fas fa-exclamation-triangle me-1"></i>Gerar pendência</button>' +
+          '</form>' +
           '<div class="anexos-wrapper">' +
             '<div class="anexos-grid d-flex flex-wrap gap-2 mb-2">' + anexosHtml + '</div>' +
             '<form class="form-upload-anexo d-flex align-items-center gap-2" ' +
@@ -228,6 +276,40 @@
             showAlert(body, 'Erro de rede: ' + err.message);
           })
           .finally(function () { btn.disabled = false; });
+        return;
+      }
+
+      // Gerar pendencia a partir da ocorrencia
+      if (form.classList.contains('form-gerar-pendencia')) {
+        e.preventDefault();
+        var ocIdPend = form.dataset.ocorrenciaId;
+        var categoriaPend = form.querySelector('[name="categoria"]').value;
+        var retornoFisico = form.querySelector('[name="retorno_fisico"]').checked;
+        var chassiPend = body.dataset.btnOrigemChassi;
+
+        var btnPend = form.querySelector('button[type="submit"]');
+        btnPend.disabled = true;
+        fetch('/motos-assai/pos-venda/ocorrencias/' + ocIdPend + '/gerar-pendencia', {
+          method: 'POST',
+          headers: jsonHeaders(),
+          body: JSON.stringify({ categoria: categoriaPend, retorno_fisico: retornoFisico }),
+        })
+          .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+          .then(function (res) {
+            if (!res.ok || !res.j.ok) {
+              showAlert(body, 'Erro ao gerar pendência: ' + (res.j.erro || 'falha desconhecida'));
+              return;
+            }
+            if (chassiPend) refrescarBadgePendencias(chassiPend, +1);
+            // Recarrega o modal para refletir a nova pendencia (badge + link).
+            return recarregarModalOcorrencias(chassiPend);
+          })
+          .catch(function (err) {
+            showAlert(body, 'Erro de rede: ' + err.message);
+          })
+          .finally(function () {
+            if (btnPend) btnPend.disabled = false;
+          });
         return;
       }
 

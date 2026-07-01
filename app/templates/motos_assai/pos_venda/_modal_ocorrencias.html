@@ -3,6 +3,7 @@
      - chassi (str)
      - ctx (dict)
      - oc_loja, oc_cliente (list[AssaiPosVendaOcorrencia])
+     - pendencias_map (dict oc.id -> list[AssaiPendencia], Spec 2 Task 13)
      - CATEGORIA_LOJA, CATEGORIA_CLIENTE (str)
 #}
 
@@ -64,9 +65,9 @@
 <div class="tab-content border border-top-0 p-3 mb-3"
      data-chassi="{{ chassi }}">
   <div class="tab-pane fade show active" id="tab-loja" role="tabpanel">
-    {{ secao_ocorrencias(oc_loja, CATEGORIA_LOJA, "Loja", chassi) }}
+    {{ secao_ocorrencias(oc_loja, CATEGORIA_LOJA, "Loja", chassi, pendencias_map) }}
   </div>
   <div class="tab-pane fade" id="tab-cliente" role="tabpanel">
-    {{ secao_ocorrencias(oc_cliente, CATEGORIA_CLIENTE, "Cliente", chassi) }}
+    {{ secao_ocorrencias(oc_cliente, CATEGORIA_CLIENTE, "Cliente", chassi, pendencias_map) }}
   </div>
 </div>

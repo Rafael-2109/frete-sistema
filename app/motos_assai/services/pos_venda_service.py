@@ -5,6 +5,7 @@ Funcionalidade:
   * agregar qtd_ocorrencias por chassi
   * CRUD de ocorrencia (LOJA ou CLIENTE)
   * upload/listagem/delete de anexos no S3
+  * gerar AssaiPendencia a partir de uma ocorrencia + acompanhar (Spec 2 Task 13)
 
 NF Q.P.A. importada e a fronteira: apenas chassis que aparecem em
 `assai_nf_qpa_item` sao considerados "vendidos".
@@ -22,7 +23,7 @@ from app.motos_assai.models import (
     AssaiMoto, AssaiModelo, AssaiLoja,
     AssaiNfQpa, AssaiNfQpaItem,
     AssaiPosVendaOcorrencia, AssaiPosVendaOcorrenciaAnexo,
-    CATEGORIAS_VALIDAS,
+    CATEGORIA_LOJA, CATEGORIAS_VALIDAS,
     ANEXO_TIPO_FOTO, ANEXO_TIPO_VIDEO, ANEXO_TIPO_AUDIO, ANEXO_TIPO_OUTRO,
 )
 from app.utils.file_storage import get_file_storage
@@ -76,6 +77,7 @@ class LinhaPosVenda:
     loja_numero: str | None
     loja_nome: str | None
     qtd_ocorrencias: int
+    qtd_pendencias_abertas: int = 0
 
 
 # ----- Listagem ---------------------------------------------------------------
@@ -444,3 +446,63 @@ def url_download_anexo(s3_key: str, nome_original: str | None = None) -> str | N
         return get_file_storage().get_download_url(s3_key, nome_original)
     except Exception:
         return None
+
+
+# ----- Pendencias (Spec 2 Task 13: gerar pendencia + acompanhar) --------------
+
+def gerar_pendencia_de_ocorrencia(
+    *, ocorrencia_id: int, categoria: str, retorno_fisico: bool, operador_id: int,
+):
+    """Abre uma AssaiPendencia a partir de uma ocorrencia de pos-venda.
+
+    Origem derivada da categoria da ocorrencia: LOJA -> POS_VENDA_LOJA,
+    CLIENTE -> POS_VENDA_CLIENTE. add+flush (via `abrir_pendencia`), SEM
+    commit — caller commita.
+    """
+    from app.motos_assai.models import (
+        PENDENCIA_ORIGEM_POS_VENDA_LOJA, PENDENCIA_ORIGEM_POS_VENDA_CLIENTE,
+    )
+    from app.motos_assai.services.pendencia_service import abrir_pendencia
+
+    oc = db.session.get(AssaiPosVendaOcorrencia, ocorrencia_id)
+    if oc is None:
+        raise PosVendaValidationError(f'Ocorrência {ocorrencia_id} não encontrada.')
+
+    origem = (
+        PENDENCIA_ORIGEM_POS_VENDA_LOJA if oc.categoria == CATEGORIA_LOJA
+        else PENDENCIA_ORIGEM_POS_VENDA_CLIENTE
+    )
+    return abrir_pendencia(
+        chassi=oc.chassi,
+        categoria=categoria,
+        origem=origem,
+        descricao=(oc.descricao or 'Ocorrência pós-venda')[:2000],
+        pos_venda_ocorrencia_id=oc.id,
+        retorno_fisico=bool(retorno_fisico),
+        operador_id=operador_id,
+    )
+
+
+def pendencias_da_ocorrencia(ocorrencia_id: int) -> list:
+    """Lista fichas AssaiPendencia geradas a partir desta ocorrencia (mais recente 1o)."""
+    from app.motos_assai.models import AssaiPendencia
+    return (
+        AssaiPendencia.query
+        .filter(AssaiPendencia.pos_venda_ocorrencia_id == ocorrencia_id)
+        .order_by(AssaiPendencia.aberta_em.desc())
+        .all()
+    )
+
+
+def contar_pendencias_abertas_por_chassi(chassi: str) -> int:
+    """Conta fichas AssaiPendencia abertas (nao resolvida/cancelada) do chassi."""
+    from app.motos_assai.models import AssaiPendencia
+    return (
+        AssaiPendencia.query
+        .filter(
+            AssaiPendencia.chassi == (chassi or '').strip().upper(),
+            AssaiPendencia.resolvida_em.is_(None),
+            AssaiPendencia.cancelada_em.is_(None),
+        )
+        .count()
+    )

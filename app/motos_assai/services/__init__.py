@@ -102,6 +102,8 @@ from .pos_venda_service import (
     url_visualizacao_anexo, url_download_anexo,
     detectar_tipo_anexo, EXTENSOES_PERMITIDAS,
     PosVendaValidationError, LinhaPosVenda,
+    gerar_pendencia_de_ocorrencia, pendencias_da_ocorrencia,
+    contar_pendencias_abertas_por_chassi,
 )
 from .devolucao_service import (
     criar_devolucao, listar_devolucoes, listar_devolucoes_da_nf,
@@ -163,6 +165,8 @@ __all__ = [
     'url_visualizacao_anexo', 'url_download_anexo',
     'detectar_tipo_anexo', 'EXTENSOES_PERMITIDAS',
     'PosVendaValidationError', 'LinhaPosVenda',
+    'gerar_pendencia_de_ocorrencia', 'pendencias_da_ocorrencia',
+    'contar_pendencias_abertas_por_chassi',
     'criar_devolucao', 'listar_devolucoes', 'listar_devolucoes_da_nf',
     'get_devolucao', 'pendencias_do_chassi', 'itens_da_nf_para_tela',
     'DevolucaoValidationError',

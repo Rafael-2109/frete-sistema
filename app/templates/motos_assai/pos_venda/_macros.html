@@ -1,11 +1,12 @@
 {# Macros do modulo Pos-Venda.
 
-   secao_ocorrencias(ocorrencias, categoria, categoria_label, chassi)
+   secao_ocorrencias(ocorrencias, categoria, categoria_label, chassi, pendencias_map={})
    -- Renderiza 1 secao (Loja OU Cliente) do modal de ocorrencias:
       formulario de criacao + N cards de ocorrencia com anexos.
+      `pendencias_map` mapeia oc.id -> list[AssaiPendencia] ja geradas (Spec 2 Task 13).
 #}
 
-{% macro secao_ocorrencias(ocorrencias, categoria, categoria_label, chassi) %}
+{% macro secao_ocorrencias(ocorrencias, categoria, categoria_label, chassi, pendencias_map={}) %}
 <form class="form-nova-ocorrencia mb-3 p-2 rounded border bg-white"
       data-categoria="{{ categoria }}"
       data-chassi="{{ chassi }}">
@@ -29,7 +30,7 @@
 <div class="lista-ocorrencias"
      data-categoria="{{ categoria }}">
   {% for oc in ocorrencias %}
-    {{ render_ocorrencia(oc) }}
+    {{ render_ocorrencia(oc, pendencias_map.get(oc.id, [])) }}
   {% else %}
   <div class="text-center text-muted py-3 empty-msg">
     Nenhuma ocorrência registrada nesta seção.
@@ -39,7 +40,7 @@
 {% endmacro %}
 
 
-{% macro render_ocorrencia(oc) %}
+{% macro render_ocorrencia(oc, pendencias=[]) %}
 <article class="ocorrencia-card pos-venda-ocorrencia-card border rounded"
          data-ocorrencia-id="{{ oc.id }}"
          data-categoria="{{ oc.categoria }}">
@@ -67,6 +68,34 @@
 
   <div class="pos-venda-ocorrencia-body">
     <p class="descricao-texto pos-venda-descricao">{{ oc.descricao }}</p>
+
+    <div class="pendencias-geradas mb-2">
+      {% for p in pendencias %}
+        {{ render_pendencia_badge(p) }}
+      {% endfor %}
+    </div>
+
+    <form class="form-gerar-pendencia d-flex flex-wrap align-items-end gap-2 mb-2 p-2 rounded border bg-body-tertiary"
+          data-ocorrencia-id="{{ oc.id }}">
+      <div>
+        <label class="form-label small mb-1 text-muted">Gerar pendência</label>
+        <select name="categoria" class="form-select form-select-sm" required>
+          <option value="AVARIA">Avaria</option>
+          <option value="FALTA_PECA">Falta de peça</option>
+          <option value="REVISAO">Revisão</option>
+        </select>
+      </div>
+      <div class="form-check mb-1">
+        <input type="checkbox" class="form-check-input" name="retorno_fisico"
+               id="retorno-fisico-{{ oc.id }}">
+        <label class="form-check-label small" for="retorno-fisico-{{ oc.id }}">
+          Moto retornou fisicamente
+        </label>
+      </div>
+      <button type="submit" class="btn btn-sm btn-outline-warning">
+        <i class="fas fa-exclamation-triangle me-1"></i>Gerar pendência
+      </button>
+    </form>
 
     <div class="anexos-wrapper">
       <div class="anexos-grid d-flex flex-wrap gap-2 mb-2">
@@ -129,4 +158,23 @@
     <i class="fas fa-times"></i>
   </button>
 </div>
+{% endmacro %}
+
+
+{% macro render_pendencia_badge(p) %}
+{% if p.resolvida_em %}
+  {% set status_cor = 'success' %}
+  {% set status_label = 'resolvida' %}
+{% elif p.cancelada_em %}
+  {% set status_cor = 'dark' %}
+  {% set status_label = 'cancelada' %}
+{% else %}
+  {% set status_cor = 'warning' %}
+  {% set status_label = 'aberta' %}
+{% endif %}
+<a href="{{ url_for('motos_assai.pendencia_detalhe', pid=p.id) }}"
+   class="badge bg-{{ status_cor }} text-decoration-none me-1 mb-1 pos-venda-pendencia-badge"
+   title="Pendência #{{ p.id }} — {{ p.categoria }} ({{ status_label }})">
+  #{{ p.id }} {{ p.categoria }} · {{ status_label }}
+</a>
 {% endmacro %}

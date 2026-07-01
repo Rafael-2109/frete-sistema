@@ -13,6 +13,7 @@ Telas:
   GET  /anexos/<anexo_id>/visualizar     -> redirect presigned URL inline
   GET  /anexos/<anexo_id>/download       -> redirect presigned URL download
   DELETE /anexos/<anexo_id>              -> AJAX: excluir anexo (JSON)
+  POST /ocorrencias/<oc_id>/gerar-pendencia -> AJAX: gera AssaiPendencia (JSON)
 """
 
 from flask import (
@@ -20,6 +21,7 @@ from flask import (
 )
 from flask_login import login_required, current_user
 
+from app import db
 from app.motos_assai.routes import motos_assai_bp
 from app.motos_assai.decorators import require_motos_assai
 from app.motos_assai.services import (
@@ -29,7 +31,10 @@ from app.motos_assai.services import (
     url_visualizacao_anexo, url_download_anexo,
     listar_lojas, listar_modelos,
     PosVendaValidationError,
+    gerar_pendencia_de_ocorrencia, pendencias_da_ocorrencia,
+    contar_pendencias_abertas_por_chassi,
 )
+from app.motos_assai.services.pendencia_service import PendenciaError
 from app.motos_assai.models import (
     AssaiPosVendaOcorrencia, AssaiPosVendaOcorrenciaAnexo,
     CATEGORIA_LOJA, CATEGORIA_CLIENTE,
@@ -68,6 +73,10 @@ def pos_venda_lista():
         chassi=chassi,
         limit=500,
     )
+    # Enriquece cada linha com a contagem de pendencias abertas do chassi
+    # (geradas via pos-venda ou qualquer outra origem) — badge "Pendências (N)".
+    for linha in linhas:
+        linha.qtd_pendencias_abertas = contar_pendencias_abertas_por_chassi(linha.chassi)
 
     return render_template(
         'motos_assai/pos_venda/lista.html',
@@ -107,6 +116,8 @@ def pos_venda_ocorrencias(chassi):
     todas = listar_ocorrencias(chassi)
     loja = [o for o in todas if o.categoria == CATEGORIA_LOJA]
     cliente = [o for o in todas if o.categoria == CATEGORIA_CLIENTE]
+    # Pendencias ja geradas por ocorrencia (Spec 2 Task 13 — acompanhar).
+    pendencias_map = {oc.id: pendencias_da_ocorrencia(oc.id) for oc in todas}
 
     template = (
         'motos_assai/pos_venda/_modal_ocorrencias.html'
@@ -119,6 +130,7 @@ def pos_venda_ocorrencias(chassi):
         ctx=ctx,
         oc_loja=loja,
         oc_cliente=cliente,
+        pendencias_map=pendencias_map,
         CATEGORIA_LOJA=CATEGORIA_LOJA,
         CATEGORIA_CLIENTE=CATEGORIA_CLIENTE,
     )
@@ -192,6 +204,54 @@ def pos_venda_ocorrencia_excluir(ocorrencia_id):
         current_app.logger.exception('Erro ao excluir ocorrencia')
         return jsonify({'ok': False, 'erro': 'Erro interno'}), 500
     return jsonify({'ok': True})
+
+
+# ---------------------------------------------------------------------------
+# Gerar pendencia a partir de uma ocorrencia (Spec 2 Task 13)
+# ---------------------------------------------------------------------------
+
+@motos_assai_bp.route(
+    '/pos-venda/ocorrencias/<int:oc_id>/gerar-pendencia', methods=['POST']
+)
+@login_required
+@require_motos_assai
+def pos_venda_gerar_pendencia(oc_id):
+    """POST AJAX: gera uma AssaiPendencia a partir de uma ocorrencia pos-venda.
+
+    Body JSON/form: {categoria: 'AVARIA'|'FALTA_PECA'|'REVISAO', retorno_fisico: bool}
+    Origem (POS_VENDA_LOJA/_CLIENTE) e derivada da categoria da ocorrencia, nao
+    do body. Rota commita (service so add+flush).
+    """
+    data = request.get_json(silent=True) or request.form
+    categoria = (data.get('categoria') or '').strip().upper()
+    retorno_fisico = str(data.get('retorno_fisico')) in ('1', 'true', 'on', 'True')
+
+    try:
+        ficha = gerar_pendencia_de_ocorrencia(
+            ocorrencia_id=oc_id,
+            categoria=categoria,
+            retorno_fisico=retorno_fisico,
+            operador_id=current_user.id,
+        )
+        db.session.commit()
+    except (PosVendaValidationError, PendenciaError) as e:
+        db.session.rollback()
+        return jsonify({'ok': False, 'erro': str(e)}), 400
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception('Erro ao gerar pendencia de ocorrencia pos-venda')
+        return jsonify({'ok': False, 'erro': 'Erro interno ao gerar pendência'}), 500
+
+    return jsonify({
+        'ok': True,
+        'pendencia_id': ficha.id,
+        'pendencia': {
+            'id': ficha.id,
+            'categoria': ficha.categoria,
+            'esta_aberta': ficha.esta_aberta,
+            'url': url_for('motos_assai.pendencia_detalhe', pid=ficha.id),
+        },
+    })
 
 
 # ---------------------------------------------------------------------------
