@@ -384,6 +384,40 @@ def abrir_pendencia(
     return ficha
 
 
+def reclassificar(*, pendencia_id, categoria, origem, operador_id):
+    """Reclassifica categoria/origem de uma ficha (S2 — INDETERMINADA -> real).
+
+    Guard S6: se a ficha ja trava a moto (evento_pendente_id) e a nova origem a
+    tornaria nao-fisica, levanta — nao da para destravar via troca de origem.
+    add+flush, SEM commit.
+    """
+    ficha = db.session.get(AssaiPendencia, pendencia_id)
+    if ficha is None:
+        raise PendenciaError(f'Pendencia {pendencia_id} nao encontrada.')
+    if categoria not in PENDENCIA_CATEGORIAS_VALIDAS:
+        raise PendenciaError(f'Categoria invalida: {categoria}.')
+    if origem not in PENDENCIA_ORIGENS_VALIDAS:
+        raise PendenciaError(f'Origem invalida: {origem}.')
+
+    de = {'categoria': ficha.categoria, 'origem': ficha.origem}
+    ficha.categoria = categoria
+    ficha.origem = origem
+    # guard S6: nao tornar nao-fisica uma ficha que ja trava a moto
+    if ficha.evento_pendente_id is not None and not afeta_estado_moto(ficha):
+        raise PendenciaError(
+            'Nao e possivel tornar nao-fisica uma pendencia que ja trava a moto '
+            '(evento PENDENTE ja emitido).')
+
+    det = dict(ficha.detalhes or {})
+    det['reclassificacao'] = {
+        'de': de, 'para': {'categoria': categoria, 'origem': origem},
+        'por_id': operador_id, 'em': agora_brasil_naive().isoformat(),
+    }
+    ficha.detalhes = sanitize_for_json(det)
+    db.session.flush()
+    return ficha
+
+
 # ===========================================================================
 # Fechamento: resolver_pendencia + cancelar_pendencia (Spec 1 Task 7)
 # ===========================================================================
