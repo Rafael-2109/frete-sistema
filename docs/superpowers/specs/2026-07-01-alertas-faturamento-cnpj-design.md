@@ -67,6 +67,7 @@ Tudo abaixo foi lido no código antes deste desenho:
 | D5 | Gatilho | Fim da sync Odoo, sobre `nfs_novas` cujo CNPJ está cadastrado e ativo |
 | D6 | Não repetir | Registro de envios por NF (idempotência) |
 | D7 | Falha isolada | Disparo NUNCA quebra o faturamento |
+| D8 | Envio do e-mail | **1 e-mail por CNPJ com todos os endereços em cópia** (1º em `to`, demais em `cc`) |
 
 ## 3. Arquitetura
 
@@ -175,10 +176,9 @@ Total: R$ 14.345,67
 
 ## 7. Canais de envio
 
-- **E-mail**: reusa `email_sender.send(to=..., subject=..., body_html=EmailTemplates.info(...))`.
-  Um envio por CNPJ com a lista do CNPJ (primeiro e-mail em `to`, restante em `cc`, ou um
-  envio por destinatário — decisão menor no plano). Se `EmailConfig.is_configured()` for
-  False, grava `erro` no log (não explode).
+- **E-mail (D8)**: reusa `email_sender.send(to=<1º e-mail>, cc=<demais>, subject=...,
+  body_html=EmailTemplates.info(...))` — **1 e-mail por CNPJ com todos os endereços em cópia**.
+  Se `EmailConfig.is_configured()` for False, grava `erro` no log (não explode).
 - **Teams**: `requests.post(teams_webhook_url, json={...}, timeout=15)` com card/texto simples
   (MessageCard/Adaptive básico). Timeout curto + captura de exceção → log `erro`.
 
