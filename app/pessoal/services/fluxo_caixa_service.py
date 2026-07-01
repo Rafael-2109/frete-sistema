@@ -10,8 +10,10 @@ Regras de inclusao (fluxo de caixa, conta corrente):
   (INCLUI eh_pagamento_cartao=True — pagamento de fatura e saida real de caixa)
 - Compras no cartao (conta.tipo=cartao_credito) NAO entram — estao refletidas na fatura
 - Transferencias proprias (eh_transferencia_propria=True) NAO entram em ambas pontas
-- Transacoes compensadas (valor_compensado > 0) ENTRAM com valor NOMINAL (o dinheiro
-  realmente saiu/entrou no caixa; a compensacao so afeta relatorio de competencia)
+- Transacoes compensadas (valor_compensado > 0) ENTRAM com valor EFETIVO
+  (valor - valor_compensado) via EXPR_VALOR_EFETIVO — a mesma expressao usada pelo
+  dashboard (competencia), para que as duas superficies concordem no mesmo evento.
+  So o residuo nao-compensado conta; a parte neutralizada (empresa transitoria) sai.
 
 Provisoes:
 - PessoalProvisao com status=PROVISIONADA e data_prevista no mes: entram como
@@ -30,6 +32,7 @@ from app.pessoal.models import (
     PessoalCategoria, PessoalConta, PessoalImportacao, PessoalOrcamento,
     PessoalProvisao, PessoalTransacao,
 )
+from app.pessoal.services.valores_efetivos import EXPR_VALOR_EFETIVO
 from app.utils.timezone import agora_utc_naive
 
 
@@ -110,11 +113,10 @@ def _filtros_caixa_base():
     ]
 
 
-# Expressao SQL para "valor efetivo" = valor - valor_compensado (nunca negativo).
-# Usada nas agregacoes mensais para refletir residuo de compensacoes parciais.
-_EXPR_VALOR_EFETIVO = (
-    PessoalTransacao.valor - func.coalesce(PessoalTransacao.valor_compensado, 0)
-)
+# Expressao SQL para "valor efetivo" = valor - valor_compensado.
+# Fonte UNICA compartilhada com dashboard_service (valores_efetivos.EXPR_VALOR_EFETIVO)
+# para que competencia e caixa concordem no mesmo evento.
+_EXPR_VALOR_EFETIVO = EXPR_VALOR_EFETIVO
 
 
 def _filtro_entrada():

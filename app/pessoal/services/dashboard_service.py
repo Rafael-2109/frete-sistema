@@ -5,6 +5,7 @@ from sqlalchemy import func, select
 
 from app import db
 from app.pessoal.models import PessoalTransacao, PessoalOrcamento, PessoalCategoria
+from app.pessoal.services.valores_efetivos import EXPR_VALOR_EFETIVO
 
 
 # Grupos excluidos do orcamento (nao sao despesas)
@@ -69,7 +70,7 @@ def calcular_resumo_mensal(ano, mes):
     # Totais do mes atual
     totais = db.session.query(
         PessoalTransacao.tipo,
-        func.sum(PessoalTransacao.valor),
+        func.sum(EXPR_VALOR_EFETIVO),
     ).filter(
         PessoalTransacao.excluir_relatorio.is_(False),
         PessoalTransacao.data >= inicio,
@@ -87,7 +88,7 @@ def calcular_resumo_mensal(ano, mes):
     # Totais do mes anterior
     totais_ant = db.session.query(
         PessoalTransacao.tipo,
-        func.sum(PessoalTransacao.valor),
+        func.sum(EXPR_VALOR_EFETIVO),
     ).filter(
         PessoalTransacao.excluir_relatorio.is_(False),
         PessoalTransacao.data >= inicio_ant,
@@ -143,7 +144,7 @@ def gastos_por_categoria(ano, mes):
     gastos = dict(
         db.session.query(
             PessoalTransacao.categoria_id,
-            func.sum(PessoalTransacao.valor),
+            func.sum(EXPR_VALOR_EFETIVO),
         ).filter(
             PessoalTransacao.tipo == 'debito',
             PessoalTransacao.excluir_relatorio.is_(False),
@@ -230,7 +231,7 @@ def tendencia_mensal(ano_ref, mes_ref, meses=6):
     rows = db.session.query(
         mes_col.label('mes'),
         PessoalTransacao.tipo,
-        func.sum(PessoalTransacao.valor),
+        func.sum(EXPR_VALOR_EFETIVO),
     ).filter(
         PessoalTransacao.excluir_relatorio.is_(False),
         PessoalTransacao.data >= primeiro_dia,
@@ -300,7 +301,7 @@ def evolucao_por_categoria(ano_ref, mes_ref, meses=6, categoria_ids=None, top_n=
     rows = db.session.query(
         mes_col.label('mes'),
         PessoalTransacao.categoria_id,
-        func.sum(PessoalTransacao.valor),
+        func.sum(EXPR_VALOR_EFETIVO),
     ).filter(
         PessoalTransacao.tipo == 'debito',
         PessoalTransacao.excluir_relatorio.is_(False),
@@ -440,7 +441,7 @@ def comparativo_anual(ano_ref):
         ano_col.label('ano'),
         mes_col.label('mes'),
         PessoalTransacao.tipo,
-        func.sum(PessoalTransacao.valor),
+        func.sum(EXPR_VALOR_EFETIVO),
     ).filter(
         PessoalTransacao.excluir_relatorio.is_(False),
         PessoalTransacao.data >= inicio,
