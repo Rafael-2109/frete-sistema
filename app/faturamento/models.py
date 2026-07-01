@@ -119,7 +119,7 @@ class FaturamentoProduto(db.Model):
 
 
 class AlertaFaturamentoCnpj(db.Model):
-    """CNPJ monitorado: ao faturar para ele, dispara alerta para os e-mails."""
+    """CNPJ monitorado: ao faturar para ele, dispara alerta por e-mail."""
     __tablename__ = 'alerta_faturamento_cnpj'
 
     id = db.Column(db.Integer, primary_key=True)
@@ -139,27 +139,6 @@ class AlertaFaturamentoCnpj(db.Model):
         return f"<AlertaFaturamentoCnpj {self.cnpj} ativo={self.ativo}>"
 
 
-class AlertaFaturamentoConfig(db.Model):
-    """Configuracao global (1 linha): canal fixo do Teams + liga/desliga."""
-    __tablename__ = 'alerta_faturamento_config'
-
-    id = db.Column(db.Integer, primary_key=True)
-    teams_webhook_url = db.Column(db.String(500), nullable=True)
-    teams_ativo = db.Column(db.Boolean, default=False, nullable=False)
-    email_ativo = db.Column(db.Boolean, default=True, nullable=False)
-    atualizado_em = db.Column(db.DateTime, default=agora_utc_naive, onupdate=agora_utc_naive)
-    atualizado_por = db.Column(db.String(100), nullable=True)
-
-    @classmethod
-    def get_config(cls):
-        cfg = cls.query.first()
-        if cfg is None:
-            cfg = cls()
-            db.session.add(cfg)
-            db.session.commit()
-        return cfg
-
-
 class AlertaFaturamentoEnviado(db.Model):
     """Log/idempotencia: 1 linha por (numero_nf, canal). Evita reenvio."""
     __tablename__ = 'alerta_faturamento_enviado'
@@ -167,7 +146,7 @@ class AlertaFaturamentoEnviado(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     numero_nf = db.Column(db.String(20), nullable=False, index=True)
     cnpj = db.Column(db.String(20), nullable=True, index=True)
-    canal = db.Column(db.String(10), nullable=False)  # 'email' | 'teams'
+    canal = db.Column(db.String(10), nullable=False, default='email')  # 'email'
     status = db.Column(db.String(10), nullable=False, default='ok')  # 'ok' | 'erro'
     detalhe = db.Column(db.Text, nullable=True)
     enviado_em = db.Column(db.DateTime, default=agora_utc_naive)

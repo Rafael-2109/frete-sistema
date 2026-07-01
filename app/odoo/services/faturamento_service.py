@@ -1141,7 +1141,7 @@ class FaturamentoService:
             except ImportError as e:
                 stats_sincronizacao['erros_sincronizacao'].append(f"Módulo fretes não disponível: {e}")
 
-            # 🚀 SINCRONIZAÇÃO 5: Alertas de faturamento por CNPJ (e-mail + Teams)
+            # 🚀 SINCRONIZAÇÃO 5: Alertas de faturamento por CNPJ (e-mail)
             try:
                 from app.faturamento.services.alerta_faturamento_service import processar_alertas_faturamento
                 if nfs_novas:

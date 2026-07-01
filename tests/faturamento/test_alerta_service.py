@@ -3,7 +3,6 @@ from app import db
 from app.faturamento.models import (
     RelatorioFaturamentoImportado,
     AlertaFaturamentoCnpj,
-    AlertaFaturamentoConfig,
     AlertaFaturamentoEnviado,
 )
 import app.faturamento.services.alerta_faturamento_service as svc
@@ -16,7 +15,7 @@ def _cab(nf, cnpj='12345678000199', valor=100.0, mun='São Paulo', uf='SP'):
     )
 
 
-# ── Task 2: helpers puros ────────────────────────────────────────────────
+# ── Helpers puros ────────────────────────────────────────────────────────
 
 def test_normalizar_cnpj():
     assert svc.normalizar_cnpj('12.345.678/0001-99') == '12345678000199'
@@ -58,13 +57,12 @@ def test_filtrar_nao_enviadas_erro_reenvia(db):
     assert {c.numero_nf for c in pend} == {'NF3'}  # erro não bloqueia retry
 
 
-def test_montar_texto_teams():
-    linhas, total = svc.montar_linhas([_cab('NF1', valor=100.0)])
-    txt = svc.montar_texto_teams('Cliente X', '12345678000199', linhas, total)
-    assert 'Cliente X' in txt and 'NF1' in txt and 'R$ 100,00' in txt and total in txt
+def test_emails_padrao_tem_quatro():
+    assert svc.EMAILS_PADRAO.count('@') == 4
+    assert svc.EMAILS_PADRAO == svc.EMAILS_PADRAO.lower()  # sempre minúsculo
 
 
-# ── Task 3: envio + orquestração ─────────────────────────────────────────
+# ── Envio + orquestração (só e-mail) ─────────────────────────────────────
 
 class _FakeSender:
     def __init__(self): self.calls = []
@@ -87,14 +85,13 @@ def test_processar_envia_email_agrupado(db, monkeypatch):
     fake = _FakeSender()
     monkeypatch.setattr(svc, 'email_sender', fake)
     monkeypatch.setattr(svc.EmailConfig, 'is_configured', classmethod(lambda cls: True))
-    cfg = AlertaFaturamentoConfig.get_config(); cfg.teams_ativo = False; db.session.commit()
 
     resumo = svc.processar_alertas_faturamento(['NF1', 'NF2'])
 
     assert resumo['emails_ok'] == 1           # 1 e-mail agrupado
     assert len(fake.calls) == 1
     assert fake.calls[0]['to'] == 'a@x.com'
-    assert fake.calls[0]['cc'] == ['b@x.com']  # demais em cópia (D8)
+    assert fake.calls[0]['cc'] == ['b@x.com']  # demais em cópia
     enviados = AlertaFaturamentoEnviado.query.filter_by(canal='email', status='ok').count()
     assert enviados == 2                        # 1 registro por NF
 
@@ -105,7 +102,6 @@ def test_processar_nao_reenvia(db, monkeypatch):
     fake = _FakeSender()
     monkeypatch.setattr(svc, 'email_sender', fake)
     monkeypatch.setattr(svc.EmailConfig, 'is_configured', classmethod(lambda cls: True))
-    cfg = AlertaFaturamentoConfig.get_config(); cfg.teams_ativo = False; db.session.commit()
 
     svc.processar_alertas_faturamento(['NF1'])
     svc.processar_alertas_faturamento(['NF1'])   # 2ª rodada
@@ -120,24 +116,6 @@ def test_processar_ignora_cnpj_nao_cadastrado(db, monkeypatch):
     assert resumo['cnpjs'] == 0 and len(fake.calls) == 0
 
 
-def test_processar_teams_ok(db, monkeypatch):
-    _cadastrar(db)
-    db.session.add(_cab('NFT', valor=10.0)); db.session.commit()
-    cfg = AlertaFaturamentoConfig.get_config()
-    cfg.teams_ativo = True; cfg.teams_webhook_url = 'https://hook.example/x'
-    cfg.email_ativo = False; db.session.commit()
-    posts = []
-
-    class _Resp:
-        status_code = 200
-
-    monkeypatch.setattr(svc.requests, 'post', lambda url, **kw: (posts.append((url, kw)), _Resp())[1])
-    resumo = svc.processar_alertas_faturamento(['NFT'])
-    assert resumo['teams_ok'] == 1 and len(posts) == 1
-    assert posts[0][0] == 'https://hook.example/x'
-    assert 'NFT' in posts[0][1]['json']['text']
-
-
 def test_processar_nunca_levanta(db, monkeypatch):
     _cadastrar(db)
     db.session.add(_cab('NFX')); db.session.commit()
@@ -148,4 +126,4 @@ def test_processar_nunca_levanta(db, monkeypatch):
 
 
 def test_processar_vazio_noop(db):
-    assert svc.processar_alertas_faturamento([]) == {'cnpjs': 0, 'emails_ok': 0, 'teams_ok': 0, 'erros': []}
+    assert svc.processar_alertas_faturamento([]) == {'cnpjs': 0, 'emails_ok': 0, 'erros': []}
