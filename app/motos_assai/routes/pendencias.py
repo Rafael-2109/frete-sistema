@@ -11,8 +11,9 @@ para autocomplete (datalist HTML5 + select).
 
 from datetime import date, datetime
 
-from flask import render_template, request, jsonify
+from flask import render_template, request, jsonify, flash, redirect, url_for
 from flask_login import login_required, current_user
+from app import db
 from app.motos_assai.routes import motos_assai_bp
 from app.motos_assai.decorators import require_motos_assai
 from app.motos_assai.models import EVENTO_PENDENTE, EVENTO_PENDENCIA_RESOLVIDA
@@ -145,3 +146,63 @@ def pendencias_criar():
     except MontagemValidationError as e:
         return jsonify({'ok': False, 'erro': str(e)}), 400
     return jsonify({'ok': True, **result})
+
+
+@motos_assai_bp.route('/pendencias/<int:pid>/resolver', methods=['GET', 'POST'])
+@login_required
+@require_motos_assai
+def pendencia_resolver_tela(pid):
+    """Tela de resolucao por ficha (Spec 2 Task 7): GET exibe form, POST processa acao."""
+    from app.motos_assai.services import pendencia_service, peca_service, movimento_service
+    from app.motos_assai.services.resolucao_service import resolver_com_tratativa, ResolucaoError
+    from app.motos_assai.services.pendencia_service import PendenciaError
+    from app.motos_assai.models import AssaiMoto
+
+    detalhe = pendencia_service.detalhe_pendencia(pid)
+    if detalhe is None:
+        flash('Pendência não encontrada.', 'danger')
+        return redirect(url_for('motos_assai.pendencias_abertas'))
+
+    if request.method == 'POST':
+        acao = request.form.get('acao')
+        try:
+            if acao == 'reclassificar':
+                pendencia_service.reclassificar(
+                    pendencia_id=pid, categoria=request.form.get('categoria'),
+                    origem=request.form.get('origem'), operador_id=current_user.id)
+                db.session.commit()
+                flash('Pendência reclassificada.', 'success')
+            elif acao == 'solicitar-compra':
+                itens = [{'peca_id': request.form.get('peca_id', type=int),
+                          'quantidade': request.form.get('quantidade', type=float)}]
+                pendencia_service.solicitar_compra(
+                    pendencia_id=pid, tipo=request.form.get('tipo'), itens=itens,
+                    operador_id=current_user.id)
+                db.session.commit()
+                flash('Compra/garantia solicitada.', 'success')
+            elif acao == 'resolver':
+                if detalhe['ficha']['categoria'] == 'INDETERMINADA':
+                    pendencia_service.reclassificar(
+                        pendencia_id=pid, categoria=request.form.get('categoria'),
+                        origem=request.form.get('origem'), operador_id=current_user.id)
+                resolver_com_tratativa(
+                    pendencia_id=pid, tratativa=request.form.get('tratativa'),
+                    resolucao_descricao=request.form.get('resolucao_descricao', ''),
+                    operador_id=current_user.id,
+                    peca_id=request.form.get('peca_id', type=int),
+                    quantidade=request.form.get('quantidade', type=float),
+                    chassi_doador=(request.form.get('chassi_doador') or '').strip().upper() or None)
+                db.session.commit()
+                flash('Pendência resolvida.', 'success')
+                return redirect(url_for('motos_assai.pendencias_abertas'))
+        except (ResolucaoError, PendenciaError) as e:
+            db.session.rollback()
+            flash(str(e), 'danger')
+        return redirect(url_for('motos_assai.pendencia_resolver_tela', pid=pid))
+
+    moto = AssaiMoto.query.filter_by(chassi=detalhe['ficha']['chassi']).first()
+    pecas = []
+    if moto:
+        for p in peca_service.listar_compativeis(moto.modelo_id):
+            pecas.append({'id': p.id, 'nome': p.nome, 'saldo': movimento_service.saldo(p.id)})
+    return render_template('motos_assai/pendencias/resolver.html', d=detalhe, pecas=pecas)

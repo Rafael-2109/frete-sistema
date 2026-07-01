@@ -1,0 +1,320 @@
+{% extends "motos_assai/base_motos_assai.html" %}
+
+{% block motos_assai_content %}
+<header class="d-flex justify-content-between align-items-center mb-3">
+  <h2 class="mb-0">
+    <i class="fas fa-wrench text-warning"></i> Resolver Pendência
+    <span class="badge bg-warning text-dark ms-1">#{{ d.ficha.id }}</span>
+  </h2>
+  <a href="{{ url_for('motos_assai.pendencias_abertas') }}" class="btn btn-sm btn-outline-secondary">
+    <i class="fas fa-arrow-left"></i> Voltar
+  </a>
+</header>
+
+{# Cabeçalho da ficha #}
+<div class="card mb-3">
+  <div class="card-body">
+    <div class="row g-2 align-items-center">
+      <div class="col-sm-6 col-md-4">
+        <small class="text-muted d-block">Chassi</small>
+        <code class="fs-6">{{ d.ficha.chassi }}</code>
+        {% if d.moto %}
+          &nbsp;<span class="text-muted">{{ d.moto.modelo_codigo }}</span>
+          <span class="badge bg-secondary ms-1">{{ d.moto.cor }}</span>
+        {% endif %}
+      </div>
+      <div class="col-sm-6 col-md-3">
+        <small class="text-muted d-block">Categoria</small>
+        {% set cat_cores = {'AVARIA': 'danger', 'FALTA_PECA': 'warning', 'REVISAO': 'info', 'VENDA': 'primary', 'INDETERMINADA': 'secondary'} %}
+        <span class="badge bg-{{ cat_cores.get(d.ficha.categoria, 'secondary') }}">{{ d.ficha.categoria }}</span>
+      </div>
+      <div class="col-sm-6 col-md-3">
+        <small class="text-muted d-block">Origem</small>
+        <span class="text-body">{{ d.ficha.origem }}</span>
+      </div>
+      <div class="col-sm-6 col-md-2">
+        <small class="text-muted d-block">Fase</small>
+        <span class="text-body">{{ d.ficha.fase }}</span>
+      </div>
+    </div>
+    <hr class="my-2">
+    <div>
+      <small class="text-muted">Descrição:</small>
+      <p class="mb-1">{{ d.ficha.descricao }}</p>
+      <small class="text-muted">Aberta em {{ d.ficha.aberta_em.strftime('%d/%m/%Y %H:%M') if d.ficha.aberta_em else '-' }} por {{ d.ficha.aberta_por }}</small>
+    </div>
+    {% if d.ficha.chassi_doador %}
+    <div class="mt-1">
+      <small class="text-muted">Chassi doador: <code>{{ d.ficha.chassi_doador }}</code></small>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+{% if not d.ficha.esta_aberta %}
+<div class="alert alert-info">
+  <i class="fas fa-info-circle"></i>
+  Esta pendência já foi <strong>{{ 'resolvida' if d.ficha.resolvida_em else 'cancelada' }}</strong>
+  {% if d.ficha.resolvida_em %}em {{ d.ficha.resolvida_em.strftime('%d/%m/%Y %H:%M') }} por {{ d.ficha.resolvida_por }}{% endif %}.
+  {% if d.ficha.resolucao_descricao %}<br><em>{{ d.ficha.resolucao_descricao }}</em>{% endif %}
+</div>
+{% else %}
+
+{# Bloco de reclassificação — só para INDETERMINADA #}
+{% if d.ficha.categoria == 'INDETERMINADA' %}
+<div class="card mb-3 border-warning">
+  <div class="card-header bg-warning text-dark">
+    <i class="fas fa-tag"></i> Reclassificar categoria (obrigatório antes de resolver)
+  </div>
+  <div class="card-body">
+    <form method="POST" id="form-reclassificar">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="acao" value="reclassificar">
+      <div class="row g-2">
+        <div class="col-sm-6">
+          <label class="form-label" for="rc-categoria">Categoria</label>
+          <select name="categoria" id="rc-categoria" class="form-select" required>
+            <option value="">Selecione...</option>
+            <option value="AVARIA">AVARIA</option>
+            <option value="FALTA_PECA">FALTA_PECA</option>
+            <option value="REVISAO">REVISAO</option>
+            <option value="VENDA">VENDA</option>
+          </select>
+        </div>
+        <div class="col-sm-6">
+          <label class="form-label" for="rc-origem">Origem</label>
+          <select name="origem" id="rc-origem" class="form-select" required>
+            <option value="">Selecione...</option>
+            <option value="GALPAO">GALPAO</option>
+            <option value="TRANSPORTE">TRANSPORTE</option>
+            <option value="POS_VENDA_CLIENTE">POS_VENDA_CLIENTE</option>
+            <option value="POS_VENDA_LOJA">POS_VENDA_LOJA</option>
+            <option value="DEVOLUCAO">DEVOLUCAO</option>
+          </select>
+        </div>
+        <div class="col-12">
+          <button type="submit" class="btn btn-warning">
+            <i class="fas fa-tag"></i> Reclassificar
+          </button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+{% endif %}
+
+{# Form principal de resolução #}
+<div class="card mb-3">
+  <div class="card-header">
+    <i class="fas fa-check-circle text-success"></i> Resolver pendência
+  </div>
+  <div class="card-body">
+    <form method="POST" id="form-resolver">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="acao" value="resolver">
+
+      {% if d.ficha.categoria == 'INDETERMINADA' %}
+      {# Reclassificação inline para resolver: inclui campos de categoria/origem no form de resolver #}
+      <div class="row g-2 mb-3">
+        <div class="col-sm-6">
+          <label class="form-label" for="res-categoria">Categoria <span class="text-danger">*</span></label>
+          <select name="categoria" id="res-categoria" class="form-select" required>
+            <option value="">Selecione...</option>
+            <option value="AVARIA">AVARIA</option>
+            <option value="FALTA_PECA">FALTA_PECA</option>
+            <option value="REVISAO">REVISAO</option>
+            <option value="VENDA">VENDA</option>
+          </select>
+        </div>
+        <div class="col-sm-6">
+          <label class="form-label" for="res-origem">Origem <span class="text-danger">*</span></label>
+          <select name="origem" id="res-origem" class="form-select" required>
+            <option value="">Selecione...</option>
+            <option value="GALPAO">GALPAO</option>
+            <option value="TRANSPORTE">TRANSPORTE</option>
+            <option value="POS_VENDA_CLIENTE">POS_VENDA_CLIENTE</option>
+            <option value="POS_VENDA_LOJA">POS_VENDA_LOJA</option>
+            <option value="DEVOLUCAO">DEVOLUCAO</option>
+          </select>
+        </div>
+      </div>
+      {% endif %}
+
+      {# Radios de tratativa #}
+      <div class="mb-3">
+        <label class="form-label fw-semibold">Tratativa <span class="text-danger">*</span></label>
+        <div class="d-flex flex-wrap gap-3">
+          <div class="form-check">
+            <input class="form-check-input" type="radio" name="tratativa" id="trat-consertar" value="CONSERTAR" required>
+            <label class="form-check-label" for="trat-consertar">
+              <i class="fas fa-tools text-success"></i> CONSERTAR
+            </label>
+          </div>
+          <div class="form-check">
+            <input class="form-check-input" type="radio" name="tratativa" id="trat-revisar" value="REVISAR">
+            <label class="form-check-label" for="trat-revisar">
+              <i class="fas fa-search text-info"></i> REVISAR
+            </label>
+          </div>
+          <div class="form-check">
+            <input class="form-check-input" type="radio" name="tratativa" id="trat-usar-estoque" value="USAR_ESTOQUE">
+            <label class="form-check-label" for="trat-usar-estoque">
+              <i class="fas fa-boxes text-warning"></i> USAR ESTOQUE
+            </label>
+          </div>
+          <div class="form-check">
+            <input class="form-check-input" type="radio" name="tratativa" id="trat-usar-outra-moto" value="USAR_OUTRA_MOTO">
+            <label class="form-check-label" for="trat-usar-outra-moto">
+              <i class="fas fa-motorcycle text-danger"></i> USAR OUTRA MOTO
+            </label>
+          </div>
+        </div>
+      </div>
+
+      {# Campos de peça + qtd (USAR_ESTOQUE / USAR_OUTRA_MOTO) #}
+      <div id="bloco-peca" class="d-none mb-3">
+        <div class="row g-2">
+          <div class="col-sm-6">
+            <label class="form-label" for="sel-peca">Peça</label>
+            <select name="peca_id" id="sel-peca" class="form-select">
+              <option value="">Selecione a peça...</option>
+              {% for p in pecas %}
+              <option value="{{ p.id }}" data-saldo="{{ p.saldo }}">
+                {{ p.nome }} (saldo: {{ p.saldo }})
+              </option>
+              {% endfor %}
+            </select>
+            {% if not pecas %}
+            <small class="text-muted">Nenhuma peça compatível cadastrada para este modelo.</small>
+            {% endif %}
+          </div>
+          <div class="col-sm-3">
+            <label class="form-label" for="inp-quantidade">Quantidade</label>
+            <input type="number" name="quantidade" id="inp-quantidade" class="form-control"
+                   min="0.01" step="0.01" placeholder="Ex: 1">
+          </div>
+        </div>
+        <div id="aviso-saldo" class="alert alert-warning mt-2 d-none">
+          <i class="fas fa-exclamation-triangle"></i>
+          Quantidade informada supera o saldo disponível em estoque. A resolução será registrada, mas o estoque ficará negativo.
+        </div>
+      </div>
+
+      {# Campo chassi doador (USAR_OUTRA_MOTO) #}
+      <div id="bloco-doador" class="d-none mb-3">
+        <label class="form-label" for="inp-chassi-doador">Chassi doador</label>
+        <input type="text" name="chassi_doador" id="inp-chassi-doador" class="form-control"
+               placeholder="Chassi da moto que cede a peça"
+               autocapitalize="characters" maxlength="50">
+      </div>
+
+      {# Descrição da resolução #}
+      <div class="mb-3">
+        <label class="form-label" for="inp-resolucao">Descrição da resolução</label>
+        <textarea name="resolucao_descricao" id="inp-resolucao" class="form-control" rows="3"
+                  placeholder="Ex: bateria substituída, retrovisor instalado..."></textarea>
+      </div>
+
+      <button type="submit" class="btn btn-success">
+        <i class="fas fa-check"></i> Resolver pendência
+      </button>
+      <a href="{{ url_for('motos_assai.pendencias_abertas') }}" class="btn btn-outline-secondary ms-2">
+        Cancelar
+      </a>
+    </form>
+  </div>
+</div>
+
+{# Form de solicitar compra/garantia #}
+<div class="card mb-3">
+  <div class="card-header">
+    <i class="fas fa-shopping-cart text-primary"></i> Solicitar compra / garantia
+  </div>
+  <div class="card-body">
+    <form method="POST" id="form-compra">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="acao" value="solicitar-compra">
+      <div class="row g-2 align-items-end">
+        <div class="col-sm-3">
+          <label class="form-label" for="comp-tipo">Tipo</label>
+          <select name="tipo" id="comp-tipo" class="form-select" required>
+            <option value="">Selecione...</option>
+            <option value="GARANTIA">GARANTIA</option>
+            <option value="COMPRA">COMPRA</option>
+          </select>
+        </div>
+        <div class="col-sm-5">
+          <label class="form-label" for="comp-peca">Peça</label>
+          <select name="peca_id" id="comp-peca" class="form-select" required>
+            <option value="">Selecione a peça...</option>
+            {% for p in pecas %}
+            <option value="{{ p.id }}">{{ p.nome }} (saldo: {{ p.saldo }})</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-sm-2">
+          <label class="form-label" for="comp-qtd">Qtd</label>
+          <input type="number" name="quantidade" id="comp-qtd" class="form-control"
+                 min="0.01" step="0.01" placeholder="1" required>
+        </div>
+        <div class="col-sm-2">
+          <button type="submit" class="btn btn-primary w-100">
+            <i class="fas fa-paper-plane"></i> Solicitar
+          </button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% endif %}{# fim d.ficha.esta_aberta #}
+
+{# Histórico de movimentos #}
+{% if d.movimentos %}
+<div class="card mb-3">
+  <div class="card-header">
+    <i class="fas fa-history"></i> Movimentos de estoque vinculados
+  </div>
+  <div class="table-responsive">
+    <table class="table table-sm table-hover mb-0">
+      <thead class="table-light">
+        <tr>
+          <th>Tipo</th><th>Peça</th><th>Qtd</th><th>Custo</th><th>Doador</th><th>Quando</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for m in d.movimentos %}
+        <tr>
+          <td><span class="badge bg-secondary">{{ m.tipo }}</span></td>
+          <td>{{ m.peca_nome }}</td>
+          <td>{{ m.quantidade }}</td>
+          <td>{{ 'R$ %.2f'|format(m.custo_total) if m.custo_total else '-' }}</td>
+          <td>{{ m.chassi_origem or '-' }}</td>
+          <td><small>{{ m.ocorrido_em.strftime('%d/%m/%Y %H:%M') if m.ocorrido_em else '-' }}</small></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+{# Compras vinculadas #}
+{% if d.compras %}
+<div class="card mb-3">
+  <div class="card-header">
+    <i class="fas fa-shopping-cart"></i> Pedidos de compra/garantia vinculados
+  </div>
+  <ul class="list-group list-group-flush">
+    {% for c in d.compras %}
+    <li class="list-group-item d-flex justify-content-between align-items-center">
+      <span><strong>{{ c.numero }}</strong> — {{ c.tipo }}</span>
+      <span class="badge bg-secondary">{{ c.status }}</span>
+    </li>
+    {% endfor %}
+  </ul>
+</div>
+{% endif %}
+
+<script src="{{ url_for('static', filename='motos_assai/js/pendencia_resolver.js') }}" defer></script>
+{% endblock %}
