@@ -27,7 +27,7 @@ total em texto + link para abrir a imagem.
 import io
 import logging
 import os
-from datetime import date
+from datetime import date, timedelta
 
 from PIL import Image, ImageDraw, ImageFont
 
@@ -106,11 +106,22 @@ def buscar_faturamento_mes(ano: int, mes: int) -> tuple[list[tuple[date, int]], 
 
 
 # ──────────────────────────────────────────────────────────────────
-# 2) Imagem (Pillow) — fonte embutida do Pillow (identica em qualquer SO)
+# 2) Imagem (Pillow) — DejaVu Sans versionada (tem acentos PT-BR)
 # ──────────────────────────────────────────────────────────────────
-def _fonte(size: int) -> ImageFont.FreeTypeFont:
-    """Fonte escalavel embutida no Pillow (>=10) — nao depende de fonte do SO."""
-    return ImageFont.load_default(size=size)
+_FONT_DIR = os.path.join(os.path.dirname(__file__), 'fonts')
+
+
+def _fonte(size: int, bold: bool = False) -> ImageFont.FreeTypeFont:
+    """DejaVu Sans (versionada no modulo) — tem acentos PT-BR e roda em qualquer SO.
+
+    Fallback para a fonte embutida do Pillow (Aileron) so se o arquivo faltar —
+    a embutida NAO tem acentos (á/ê/ã viram tofu), por isso a DejaVu e versionada.
+    """
+    nome = 'DejaVuSans-Bold.ttf' if bold else 'DejaVuSans.ttf'
+    try:
+        return ImageFont.truetype(os.path.join(_FONT_DIR, nome), size)
+    except Exception:
+        return ImageFont.load_default(size=size)
 
 
 def _br(v: int) -> str:
@@ -118,7 +129,7 @@ def _br(v: int) -> str:
 
 
 def gerar_imagem_bytes(linhas: list[tuple[date, int]], total: int,
-                       ano: int, mes: int) -> bytes:
+                       ano: int, mes: int, fechamento: bool = False) -> bytes:
     """Desenha a tabela (dias do mes + total) e devolve o PNG em bytes."""
     AZUL = (31, 78, 120)
     BRANCO = (255, 255, 255)
@@ -128,8 +139,11 @@ def gerar_imagem_bytes(linhas: list[tuple[date, int]], total: int,
     AMARELO = (255, 230, 153)
     LINHA = (210, 210, 210)
 
-    f_titulo, f_sub = _fonte(30), _fonte(15)
-    f_head, f_cel, f_tot = _fonte(19), _fonte(19), _fonte(21)
+    f_titulo = _fonte(28, bold=True)
+    f_sub = _fonte(14)
+    f_head = _fonte(17, bold=True)
+    f_cel = _fonte(18)
+    f_tot = _fonte(20, bold=True)
 
     W, pad, top = 560, 24, 18
     h_titulo, h_sub, h_head, h_lin, h_tot = 42, 28, 40, 34, 46
@@ -142,11 +156,11 @@ def gerar_imagem_bytes(linhas: list[tuple[date, int]], total: int,
     from app.utils.timezone import agora_utc_naive
     hoje = agora_utc_naive().strftime('%d/%m/%Y')
 
-    # Titulo (negrito via stroke) + subtitulo
-    dr.text((pad, top), 'FATURAMENTO', font=f_titulo, fill=AZUL,
-            stroke_width=1, stroke_fill=AZUL)
-    dr.text((pad, top + h_titulo),
-            f'CD + FB · somente vendas · atualizado em {hoje}', font=f_sub, fill=CINZA)
+    # Titulo + subtitulo
+    dr.text((pad, top), 'FATURAMENTO', font=f_titulo, fill=AZUL)
+    subtitulo = ('CD + FB · somente vendas · FECHAMENTO do mês' if fechamento
+                 else f'CD + FB · somente vendas · atualizado em {hoje}')
+    dr.text((pad, top + h_titulo + 4), subtitulo, font=f_sub, fill=CINZA)
 
     x0, x1 = pad, W - pad
     col_val = x1 - 12
@@ -154,29 +168,27 @@ def gerar_imagem_bytes(linhas: list[tuple[date, int]], total: int,
 
     # Cabecalho
     dr.rectangle([x0, y, x1, y + h_head], fill=AZUL)
-    dr.text((x0 + 14, y + 10), 'Data', font=f_head, fill=BRANCO, stroke_width=1, stroke_fill=AZUL)
+    dr.text((x0 + 14, y + 11), 'Data', font=f_head, fill=BRANCO)
     t = 'Faturamento (R$)'
-    dr.text((col_val - dr.textlength(t, font=f_head), y + 10), t, font=f_head,
-            fill=BRANCO, stroke_width=1, stroke_fill=AZUL)
+    dr.text((col_val - dr.textlength(t, font=f_head), y + 11), t, font=f_head, fill=BRANCO)
     y += h_head
 
     # Dias
     for i, (d, v) in enumerate(linhas):
         if i % 2 == 1:
             dr.rectangle([x0, y, x1, y + h_lin], fill=ZEBRA)
-        dr.text((x0 + 14, y + 8), d.strftime('%d/%m/%Y'), font=f_cel, fill=PRETO)
+        dr.text((x0 + 14, y + 7), d.strftime('%d/%m/%Y'), font=f_cel, fill=PRETO)
         s = _br(v)
-        dr.text((col_val - dr.textlength(s, font=f_cel), y + 8), s, font=f_cel, fill=PRETO)
+        dr.text((col_val - dr.textlength(s, font=f_cel), y + 7), s, font=f_cel, fill=PRETO)
         dr.line([x0, y + h_lin, x1, y + h_lin], fill=LINHA, width=1)
         y += h_lin
 
     # Total do mes
     dr.rectangle([x0, y, x1, y + h_tot], fill=AMARELO)
     rotulo_tot = f'TOTAL DO MÊS ({rotulo})'
-    dr.text((x0 + 14, y + 12), rotulo_tot, font=f_tot, fill=PRETO, stroke_width=1, stroke_fill=PRETO)
+    dr.text((x0 + 14, y + 12), rotulo_tot, font=f_tot, fill=PRETO)
     s = _br(total)
-    dr.text((col_val - dr.textlength(s, font=f_tot), y + 12), s, font=f_tot,
-            fill=PRETO, stroke_width=1, stroke_fill=PRETO)
+    dr.text((col_val - dr.textlength(s, font=f_tot), y + 12), s, font=f_tot, fill=PRETO)
 
     dr.rectangle([x0, top + h_titulo + h_sub + 8, x1, y + h_tot], outline=AZUL, width=2)
 
@@ -212,12 +224,42 @@ def _conversation_reference(conversation_id: str | None = None,
 
 
 # ──────────────────────────────────────────────────────────────────
+# 3.5) Periodo — mes corrente vs FECHAMENTO do mes anterior na virada
+# ──────────────────────────────────────────────────────────────────
+def _primeiro_dia_util(ano: int, mes: int) -> date:
+    """Primeiro dia UTIL (seg-sex) do mes."""
+    d = date(ano, mes, 1)
+    while d.weekday() >= 5:  # 5=sab, 6=dom
+        d += timedelta(days=1)
+    return d
+
+
+def _resolver_periodo(hoje: date) -> tuple[int, int, bool]:
+    """Decide qual mes o relatorio mostra.
+
+    Na VIRADA DE MES (primeiro dia util do mes) -> mes ANTERIOR (fechamento),
+    para o Marcus receber o fechamento do mes que terminou. Nos demais dias ->
+    mes corrente. Retorna (ano, mes, fechamento).
+    """
+    if hoje == _primeiro_dia_util(hoje.year, hoje.month):
+        anterior = date(hoje.year, hoje.month, 1) - timedelta(days=1)  # ultimo dia do mes anterior
+        return anterior.year, anterior.month, True
+    return hoje.year, hoje.month, False
+
+
+# ──────────────────────────────────────────────────────────────────
 # 4) Orquestracao — gera, sobe S3 e envia no Teams
 # ──────────────────────────────────────────────────────────────────
 def enviar_faturamento_diario_teams(conversation_id: str | None = None,
                                     user_id: int | None = None,
-                                    dry_run: bool = False) -> dict:
+                                    dry_run: bool = False,
+                                    ano: int | None = None, mes: int | None = None,
+                                    fechamento: bool | None = None) -> dict:
     """Gera a imagem do mes corrente e envia no Teams (entrega proativa).
+
+    Periodo automatico (ver `_resolver_periodo`): virada de mes -> fechamento do
+    mes anterior; demais dias -> mes corrente. Para REENVIAR um mes especifico
+    manualmente, passe `ano`, `mes` (e `fechamento=True` para rotular como fechado).
 
     Destino: por padrao o GRUPO "Financeiro - Nacom Goya"
     (DEFAULT_CONVERSATION_ID). Passe `conversation_id` para outra conversa, ou
@@ -236,14 +278,18 @@ def enviar_faturamento_diario_teams(conversation_id: str | None = None,
     conversation_id = conversation_id or (DEFAULT_CONVERSATION_ID or None)
     user_id = user_id or DEFAULT_USER_ID
     hoje = agora_utc_naive().date()
-    ano, mes = hoje.year, hoje.month
+    if ano and mes:
+        # override manual (ex.: reenviar o fechamento de um mes especifico)
+        fechamento = bool(fechamento)
+    else:
+        ano, mes, fechamento = _resolver_periodo(hoje)
 
-    # 1) dados + imagem
+    # 1) dados + imagem (mes corrente; na virada de mes, fechamento do anterior)
     linhas, total = buscar_faturamento_mes(ano, mes)
     if not linhas:
         logger.warning(f"[FAT-DIARIO] Sem faturamento em {mes:02d}/{ano} — nada a enviar")
         return {"ok": False, "motivo": "sem_dados", "dias": 0}
-    png = gerar_imagem_bytes(linhas, total, ano, mes)
+    png = gerar_imagem_bytes(linhas, total, ano, mes, fechamento=fechamento)
 
     # 2) sobe no S3 (presigned URL)
     from app.utils.file_storage import get_file_storage
@@ -266,9 +312,15 @@ def enviar_faturamento_diario_teams(conversation_id: str | None = None,
         return resultado
 
     # 3) mensagem (imagem inline via markdown + total em texto como fallback)
+    if fechamento:
+        titulo_msg = f"📊 **Fechamento do mês — {rotulo}**"
+        linha_total = f"Total faturado em {rotulo} (mês fechado): **{_br(total)}**"
+    else:
+        titulo_msg = f"📊 **Faturamento do mês — {rotulo}**"
+        linha_total = f"Total do mês até {hoje.strftime('%d/%m/%Y')}: **{_br(total)}**"
     mensagem = (
-        f"📊 **Faturamento do mês — {rotulo}**\n\n"
-        f"Total do mês até {hoje.strftime('%d/%m/%Y')}: **{_br(total)}**\n\n"
+        f"{titulo_msg}\n\n"
+        f"{linha_total}\n\n"
         f"![Faturamento {rotulo}]({url})\n\n"
         f"_Se a imagem não aparecer, [clique aqui para abrir]({url})._"
     )
